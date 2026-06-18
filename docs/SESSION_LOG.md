@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 财报质量① candidate-only guard)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-FINANCIAL-QUALITY-CANDIDATE-SCOPE-GUARD-GAP` 已在 working tree 修到位：`financial_quality` guard ⑮ 现在强制 candidate row / new_entry / public_tracked，并拒绝 held 报告。
+- **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: FinancialQualityImpactTests 12 OK；gap+MainWiring 99 OK；held mutation probe 已拒；doc-governance+route-doc 30 OK；stubbed no-network full discover 2451 OK；py_compile/diff-check/BOM/FFFD OK；未跑 live Tushare。
+- **Next**: 用户决定是否 `提交`；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-FINANCIAL-QUALITY-CANDIDATE-SCOPE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(guard ⑮ 声明"候选 only"却没真强制:**漏查 visibility_shape/impact_scope/privacy_class/position_state** → 手构 held 报告带 financial_quality(holding shape+private+marker)被接受;builder 本只产候选,但 guard 没焊边界 = 同 trade-event scope/privacy 那类 guard-vs-claim gap)。修:guard ⑮ 加 candidate_row_impact + new_entry + public_tracked + position_state==held 拒;+ 2 对抗测(held 报告带 fq 拒 / 候选改 holding shape 拒)。运行时零改(builder 不产 held fq)。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-FINANCIAL-QUALITY-CANDIDATE-SCOPE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: FinancialQualityImpactTests **12 OK**(+2 对抗);全量 **2451 OK**(零回归);doc-governance 30 OK。运行时(EGS/TopN/选股/动作/股数/provider/governance)未动。
+- **Next**: 审查(Codex re-审查 financial_quality candidate-scope guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 候选 only 四面焊全(visibility/scope/privacy/held)各配测:held 报告带 fq 拒、候选改 holding shape 拒;既有(hard_veto/非生产/marker/无红旗不发)不动。B 仅 guard ⑮ + 测试改;运行时(builder/helper/normalize/registry)未动;position_state 复用 guard 既读的 line1128 变量(不新引)。C 反向:正常候选红旗仍过(test_redflag)、clean/缺 fq 向后兼容、comparison-only 隔离不变(2451)。D N-A。E register+SESSION_LOG,未碰 CURRENT。F guard 焊死候选 only 四不变式、复用既有 position_state 读、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 财报质量① financial_quality)
+- **Verdict/Action**: FAIL. 方向可行，红旗落 M6.7/`operation_impact` 已有实现；但 guard ⑮ 没有真正强制 “候选 only”。
+- **Required**: `R-ASHORT-GAP42-ROUND5-FINANCIAL-QUALITY-CANDIDATE-SCOPE-GUARD-GAP`；详情见 `docs/system_risk_register.md`。
+- **Verify**: FinancialQualityImpactTests 10 OK；gap+MainWiring 97 OK(带 no-network `requests`/`tushare` stubs)；doc-governance+route-doc 30 OK；独立 held-impact mutation probe 被错误接受；`git diff --check` 仅 CRLF 警告；未跑 live Tushare。
+- **Next**: Claude 修复 financial_quality guard/测试；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 财报质量①复用: financial_quality comparison-only operation_impact)
+- **Verdict/Action**: 用户「做全」财报质量+行业基本面,按 §11.5 逐项。先 决策5 联网探可得性:forecast/income/balancesheet **全可得且 PIT(ann_date)干净**(income/balancesheet 仅单票取);hk_hold 外资 2024-08 后日度单票停发(仅季度+零散)→ **不做**(已记忆)。第一刀=**复用 egs_main 已取 fina_indicator 派生**(扣非净利/同比/ROE/现金流质量/ESP-Q 旗标),**零新取数**:候选行红旗(EGS 既有 ESP-Q 旗标 或 扣非净利同比<0)→ advisory priority_down operation_impact + 落 风控触发「财报质量对照」。**comparison-only:绝不 hard_veto/非生产/不改 EGS/选股/股数/否决**;红旗复用 EGS 既有判据 + 自然符号,**不新设阈值**(决策4);仅候选(持仓财报质量留后续刀)。
+- **Scope**: `normalize_candidate` 透传 `financial_quality`(fundamental.profitability/quality + scores.l2_flags);phase5_engine 新 `_financial_quality_operation_impacts`(有红旗才发,无红旗不发避噪声)+ `build_m67_report` 候选(not has_position)接线落 风控触发;engine guard ⑮(financial_quality 永 comparison-only advisory:structured/非生产/veto none/绝不 hard_veto/holding none + no-dangling marker)+ docstring 同步;registry +`financial_quality` 行(复用 egs_main fetch、needs_new_provider_call=false、implemented、advisory/非生产)。**无新 schema 字段**(复用既有 operation_impact 结构)、**无新 provider**、**无 render 改**(风控触发既有渲染)。
+- **Verify**: FinancialQualityImpactTests **10 OK**;gap+engine+pipeline 516 OK;全量 **2449 OK**(零回归);registry 过 schema;零新 fetch(复用 egs_main fina_indicator)。
+- **Next**: 审查(Codex 审 财报质量①复用 financial_quality);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口:红旗触发(ESP-Q / 扣非同比<0)发、无红旗不发、缺 fq 不发、持仓不发、guard 拒(hard_veto/非生产/缺 marker)各配测(10)。B normalize_candidate +financial_quality 加性(全量 2449 无回归);registry +行过 schema;guard ⑮ 同步 docstring(doc↔behavior);financial_quality 不含 top_list/top_inst/block_trade marker → provider-flag 测不约束(false 合法);无新 schema/provider/render。C 反向:无红旗不误发、clean 候选 操作/EGS/股数 不变(comparison-only)、缺 fq 向后兼容、bool/NaN 同比不误判 decline。D N-A。E SESSION_LOG 未碰 CURRENT。F 零新取数(复用 egs_main fina_indicator)、绝不 hard_veto(guard ⑮)、no-dangling marker、red-flag 复用 EGS 判据/自然符号不新设阈值(决策4)、无 BOM、diff clean。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易第三刀 price provenance)
 - **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-DISCOUNT-PRICE-COVERAGE-GUARD-GAP` 已在 working tree 修到位：缺 price 列 fail-closed；缺 price key 不再被 builder 伪造成空白 cell；合法 `price=None` 仍可表达 provider 空白单元格。
 - **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。

@@ -530,6 +530,59 @@ def _web_llm_error(web, sources):
         return f"web_llm 结构残缺:{e}"
 
 
+_FINANCIAL_QUALITY_MARKER = "财报质量对照"   # build_m67 落 风控触发 + guard ⑮ 据此判 no-dangling(单一来源)
+
+
+def _financial_quality_operation_impacts(fq, as_of):
+    """4.2 财报质量①(复用,comparison-only):把 egs_main 已取的 fina_indicator 派生(扣非净利/同比/ROE/现金流质量/质量旗标)
+    surface 成 advisory operation_impact —— **零新取数、绝不 hard_veto、production_effect_enabled=false、不改 EGS/选股/股数/否决**
+    (这些值本就已被 EGS 评分消费,此处只把红旗落地透明化)。仅候选行(new_entry);仅在有红旗(EGS 既有 ESP-Q 质量旗标 或
+    扣非净利同比<0 利润下滑)时发,无红旗不发(避免噪声)。持仓财报质量留后续刀。red-flag 复用 EGS 既有判据/自然符号,不新设阈值(决策4)。"""
+    fq = fq or {}
+    flags = str(fq.get("l2_flags") or "")
+    yoy = fq.get("q0_dt_yoy")
+    esp_q = "ESP-Q" in flags
+    decline = isinstance(yoy, (int, float)) and not isinstance(yoy, bool) and yoy < 0
+    if not (esp_q or decline):
+        return []
+    bits = []
+    if yoy is not None:
+        bits.append(f"扣非净利同比{yoy}%")
+    if fq.get("q0_profit_dedt") is not None:
+        bits.append(f"扣非净利{fq.get('q0_profit_dedt')}")
+    if fq.get("roe") is not None:
+        bits.append(f"ROE{fq.get('roe')}%")
+    if fq.get("ttm_ocf_ratio") is not None:
+        bits.append(f"经营现金流/利润{fq.get('ttm_ocf_ratio')}")
+    red = ([] + (["EGS扣非净利质量旗标(ESP-Q)"] if esp_q else [])
+           + (["扣非净利同比为负(利润下滑)"] if decline else []))
+    reason = (f"{_FINANCIAL_QUALITY_MARKER}(comparison-only,不改决策/EGS/选股/股数):{'、'.join(red)}"
+              + (f";{' / '.join(bits)}" if bits else "")
+              + "(财报质量红旗,仅 advisory 降优先级参考,绝不否决)")
+    return [{
+        "source_field": "financial_quality",
+        "field_class": "structured",
+        "visibility_shape": "candidate_row_impact",
+        "impact_scope": "new_entry",
+        "new_entry_effect": "priority_down",
+        "holding_effect": "none",
+        "blocked_add_required": False,
+        "veto_class": "none",
+        "reason": reason,
+        "evidence_ref": {"kind": "lineage_key",
+                         "value": "fundamental.profitability / fundamental.quality / scores.l2_flags",
+                         "as_of": str(as_of)},
+        "confidence": "high",
+        "pit_basis": "disclosure_date",
+        "production_effect_enabled": False,
+        "implementation_status": "implemented",
+        "m67_landing_surface": "精简结论区.风控触发(财报质量对照)",
+        "terminal_surface_target": "already_structured",
+        "pending_successor_slice": None,
+        "privacy_class": "public_tracked",
+    }]
+
+
 def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
     """4.2 第3轮:把已校验的 semantic 信号(official 证据齐全 high / web downgrade)统一成 advisory
     operation_impact(复用 build_m67/holding 已算标志,不重复校验,DRY 单一来源)。
@@ -878,6 +931,16 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # blocked_add、持有不否决)。semantic 永 advisory(production_effect_enabled=False、web_llm 绝不 hard_veto)。
     op_impacts.extend(_semantic_operation_impacts(
         high_full, web, web_downgrade, str(as_of), "existing_holding" if has_position else "new_entry"))
+    # 4.2 财报质量①(复用,comparison-only):候选行红旗(EGS 既有 ESP-Q / 扣非净利同比<0)→ advisory priority_down impact
+    # + 落 风控触发(财报质量对照)。零新取数、绝不 hard_veto、不改 EGS/选股/股数。仅候选(not has_position),持仓财报质量留后续刀。
+    if not has_position:
+        _fq_imps = _financial_quality_operation_impacts(inp.get("financial_quality"), str(as_of))
+        if _fq_imps:
+            op_impacts.extend(_fq_imps)
+            _fcut = m67["精简结论区"]
+            _fprev = _fcut.get("风控触发") or ""
+            _fcut["风控触发"] = (f"{_fprev}｜{_fq_imps[0]['reason']}" if _fprev and _fprev != "无"
+                                  else _fq_imps[0]["reason"])
     result = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -1048,6 +1111,9 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
       更严:无任何动作)。**+ 持仓 privacy/shape 闭合**:held(position_state==held)⟹ holding_row_impact/existing_holding/new_entry_effect=none/
       private_account;非 held ⟹ candidate_row_impact/public_tracked(涉真实持仓须私密;防 builder 漂移/手构混淆)。报告级任一该 impact
       ⟹ 板块资金事件含对应 marker(龙虎榜对照 / 大宗交易对照,同步 pipeline _DRAGON_LIST_MARKER / _BLOCK_TRADE_MARKER)。
+    ⑮【4.2 财报质量① 复用】source_field=='financial_quality' ⟹ 永久 comparison-only advisory(field_class=='structured'、
+      production_effect_enabled is False、veto_class=='none'、new_entry_effect∈{priority_down,informational,none} 绝不 hard_veto、
+      holding_effect=='none' 候选 only);报告级任一该 impact ⟹ 风控触发含 _FINANCIAL_QUALITY_MARKER「财报质量对照」(no-dangling)。
     operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
     mc = report.get("machine") or {}
     impacts = mc.get("operation_impact")
@@ -1162,6 +1228,32 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     for _te_src, _te_marker in _TRADE_EVENT_MARKERS.items():
         if any(str(imp.get("source_field", "")) == _te_src for imp in impacts) and _te_marker not in sector_text:
             raise ValueError(f"存在 {_te_src} impact 但 板块资金事件未含「{_te_marker}」(comparison-only 成交事实须落用户可见的板块资金事件)")
+    # ⑮ FINANCIAL-QUALITY(4.2 财报质量①复用):financial_quality impact ⟹ 永久 comparison-only advisory(structured,
+    #   绝不 hard_veto / 非生产 / 候选 only)+ 落 风控触发 marker(no-dangling;字面同步 _FINANCIAL_QUALITY_MARKER)。
+    for imp in impacts:
+        if str(imp.get("source_field", "")) != "financial_quality":
+            continue
+        if imp.get("field_class") != "structured":
+            raise ValueError("financial_quality impact field_class 须为 structured")
+        if imp.get("production_effect_enabled") is not False:
+            raise ValueError("financial_quality impact 须 production_effect_enabled=false(comparison-only,不改 EGS/选股)")
+        if imp.get("veto_class") != "none" or imp.get("new_entry_effect") == "hard_veto":
+            raise ValueError("financial_quality impact 绝不 hard_veto(第一类结构化但仅 advisory:priority_down/informational)")
+        if imp.get("new_entry_effect") not in ("priority_down", "informational", "none"):
+            raise ValueError(f"financial_quality impact new_entry_effect={imp.get('new_entry_effect')!r} 越界(仅 priority_down/informational/none)")
+        if imp.get("holding_effect") != "none":
+            raise ValueError("financial_quality impact 第一刀=候选 only,holding_effect 须 none(持仓财报质量留后续刀)")
+        # 候选 only 形态闭合(R-...-FINANCIAL-QUALITY-CANDIDATE-SCOPE-GUARD-GAP):必 candidate_row_impact/new_entry/public_tracked,
+        # 且持仓(held)报告绝不得带 financial_quality(持仓财报质量是后续刀,须单独审查;防 builder 漂移/手构混淆绕过候选 only 声明)。
+        if imp.get("visibility_shape") != "candidate_row_impact" or imp.get("impact_scope") != "new_entry":
+            raise ValueError(f"financial_quality impact 须 candidate_row_impact/new_entry(第一刀候选 only),"
+                             f"实为 {imp.get('visibility_shape')!r}/{imp.get('impact_scope')!r}")
+        if imp.get("privacy_class") != "public_tracked":
+            raise ValueError(f"financial_quality impact 须 public_tracked(候选行无账户隐私),实为 {imp.get('privacy_class')!r}")
+        if position_state == "held":
+            raise ValueError("持仓(position_state=held)报告不得带 financial_quality impact(第一刀候选 only,持仓财报质量留后续刀)")
+        if _FINANCIAL_QUALITY_MARKER not in risk_text:
+            raise ValueError(f"financial_quality impact 但 风控触发未含「{_FINANCIAL_QUALITY_MARKER}」(no-dangling:财报质量须落用户可见风控触发)")
 
 
 def validate_m67_consistency(report: dict) -> None:

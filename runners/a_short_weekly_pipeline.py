@@ -269,6 +269,9 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     susp = ev.get("suspension", {}) or {}
     liq = cand.get("liquidity", {}) or {}
     sc = cand.get("scores", {}) or {}
+    fund = cand.get("fundamental", {}) or {}
+    prof = fund.get("profitability", {}) or {}      # 4.2 财报质量①(复用):egs_main 已取的 fina_indicator 派生(零新取数)
+    fqual = fund.get("quality", {}) or {}
     return {
         "ts_code": cand.get("ts_code"), "name": cand.get("name"),
         "close": (cand.get("quote") or {}).get("close"),
@@ -306,6 +309,16 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         # 语义 web/LLM 层(Slice 2):{"web_llm": {...}, "sources": [...]} 或 None(无输入→引擎按 unknown 中性)。
         # DeepSeek 判官产出;引擎据此 downgrade(有 sources 证据的 risk/headwind;**绝不 hard_veto**);非法→中性化。
         "semantic_web_llm": semantic_web_llm,
+        # 4.2 财报质量①(复用,comparison-only):egs_main 已取的 fina_indicator 派生(扣非净利/同比/ROE/经营现金流质量/质量旗标),
+        # 仅作为 advisory operation_impact 在 M6.7 解释,**绝不改 EGS/选股/股数/否决**(这些值本就已被 EGS 评分消费,此处只落地透明化)。
+        "financial_quality": {
+            "roe": prof.get("roe"),
+            "q0_dt_yoy": prof.get("q0_dt_yoy"), "q1_dt_yoy": prof.get("q1_dt_yoy"),
+            "q0_profit_dedt": prof.get("q0_profit_dedt"), "ttm_profit_dedt": prof.get("ttm_profit_dedt"),
+            "q0_net_income": prof.get("q0_net_income"),
+            "ttm_ocf_ratio": fqual.get("ttm_ocf_ratio"),
+            "l2_flags": sc.get("l2_flags"),
+        },
     }
 
 

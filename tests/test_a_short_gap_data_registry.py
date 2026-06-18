@@ -527,5 +527,94 @@ class HoldingSemanticS2Tests(unittest.TestCase):
         validate_m67_consistency(r)
 
 
+class FinancialQualityImpactTests(unittest.TestCase):
+    """4.2 财报质量①(复用,comparison-only):候选行红旗(EGS 既有 ESP-Q 旗标 / 扣非净利同比<0)→ advisory priority_down
+    operation_impact + 落 风控触发「财报质量对照」;零新取数、绝不 hard_veto/非生产、不改 EGS/选股/股数;无红旗不发;持仓不发(候选 only)。"""
+
+    def _fq(self, **over):
+        fq = {"roe": 12.0, "q0_dt_yoy": -25.0, "q0_profit_dedt": 1e8, "ttm_profit_dedt": 4e8,
+              "q0_net_income": 1.5e8, "ttm_ocf_ratio": 0.6, "l2_flags": "ESP-Q"}
+        fq.update(over)
+        return fq
+
+    def _fqimps(self, r):
+        return [i for i in (r["machine"].get("operation_impact") or []) if i["source_field"] == "financial_quality"]
+
+    def test_redflag_emits_priority_down_and_lands(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        imps = self._fqimps(r)
+        self.assertEqual(len(imps), 1)
+        imp = imps[0]
+        self.assertEqual((imp["new_entry_effect"], imp["veto_class"], imp["production_effect_enabled"]),
+                         ("priority_down", "none", False))
+        self.assertEqual((imp["visibility_shape"], imp["field_class"], imp["holding_effect"]),
+                         ("candidate_row_impact", "structured", "none"))
+        self.assertEqual(imp["evidence_ref"]["kind"], "lineage_key")
+        self.assertIn("财报质量对照", r["m67"]["精简结论区"]["风控触发"])      # no-dangling 真落地
+        validate_operation_impact_no_dangling(r)
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_esp_q_flag_alone_triggers(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq(q0_dt_yoy=10.0, l2_flags="ESP-Q")), AS_OF, "t")
+        self.assertEqual(len(self._fqimps(r)), 1)        # 仅 ESP-Q(同比非负)→ 仍发(复用 EGS 既有判据)
+
+    def test_yoy_negative_alone_triggers(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq(q0_dt_yoy=-5.0, l2_flags="")), AS_OF, "t")
+        self.assertEqual(len(self._fqimps(r)), 1)        # 仅扣非同比<0(无 ESP-Q)→ 发(自然符号红旗)
+
+    def test_no_redflag_no_impact(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq(q0_dt_yoy=10.0, l2_flags="")), AS_OF, "t")
+        self.assertEqual(self._fqimps(r), [])            # 无红旗 → 不发(避免噪声)
+
+    def test_absent_financial_quality_no_impact(self):
+        self.assertEqual(self._fqimps(build_m67_report(_good_input(), AS_OF, "t")), [])   # 旧候选向后兼容零改动
+
+    def test_comparison_only_isolation(self):
+        base = build_m67_report(_good_input(), AS_OF, "t")["m67"]["table"]
+        red = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")["m67"]["table"]
+        self.assertEqual((red["操作"], red["EGS分"], red["股数"]), (base["操作"], base["EGS分"], base["股数"]))
+
+    def test_holding_no_financial_quality_impact(self):
+        # 第一刀=候选 only:持仓(has_position)不发 financial_quality(持仓财报质量留后续刀)
+        r = build_m67_report(_good_input(financial_quality=self._fq(), stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(self._fqimps(r), [])
+
+    def test_guard_rejects_hard_veto_effect(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        self._fqimps(r)[0]["new_entry_effect"] = "hard_veto"   # veto_class 保持 none → 专测 ⑮ never-hard-veto
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard_rejects_production_enabled(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        self._fqimps(r)[0]["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard_rejects_missing_marker(self):
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        r["m67"]["精简结论区"]["风控触发"] = "无"        # 抹掉 marker
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard_rejects_holding_shape_mutation(self):
+        # 候选报告但 impact 被改成持仓形态 → guard 拒(候选 only:须 candidate_row_impact/new_entry/public_tracked)
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        self._fqimps(r)[0]["visibility_shape"] = "holding_row_impact"
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+    def test_guard_rejects_held_report_financial_quality(self):
+        # Codex probe: 持仓(held)报告手构带 financial_quality(持仓 shape + private)→ guard 拒(持仓财报质量留后续刀,须单独审查)
+        r = build_m67_report(_good_input(financial_quality=self._fq()), AS_OF, "t")
+        r["machine"]["stateful_risk"] = {"position_state": "held"}
+        imp = self._fqimps(r)[0]
+        imp["visibility_shape"], imp["impact_scope"], imp["privacy_class"] = (
+            "holding_row_impact", "existing_holding", "private_account")
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(r)
+
+
 if __name__ == "__main__":
     unittest.main()
