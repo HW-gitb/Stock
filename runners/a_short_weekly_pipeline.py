@@ -641,6 +641,60 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
                 raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) 无匹配 checked upcoming_events 事件(impact 无证据/悬空)")
             if (_imp.get("evidence_ref") or {}).get("value") != f"upcoming_events.events[{_etype}]":
                 raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) evidence_ref.value 未对齐 upcoming_events.events[{_etype}]")
+    # 4.2 Round5 龙虎榜 dragon_list 一致性(analysis-only comparison-only;schema 管类型/pattern,此处管历法+PIT+窗口+张冠李戴+双向 no-dangling):
+    # unknown 必空 events;window_dates 合法且 <=as_of;checked 每 event: ts_code∈本周候选报告(events 只对候选生成)、trade_date 合法
+    # 且 <=as_of(PIT:龙虎榜盘后发布)、∈window_dates;unchecked_dates ⊆ window_dates。复用上面的 _asd/_dt。
+    _dl = weekly.get("dragon_list")
+    if _dl is not None:
+        if _dl.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"dragon_list.as_of {_dl.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        _wd = _dl.get("window_dates") or []
+        _dlevs = _dl.get("events") or []
+        if _dl.get("status") == "unknown_or_unavailable" and _dlevs:
+            raise ValueError("dragon_list status=unknown_or_unavailable 却带 events(unknown 不得带上榜记录)")
+        for _d in _wd:
+            try:
+                _dd = _dt.strptime(_d, "%Y%m%d")
+            except ValueError:
+                raise ValueError(f"dragon_list window_dates {_d} 非合法日历日")
+            if (_dd - _asd).days > 0:
+                raise ValueError(f"dragon_list window_dates {_d} 晚于 as_of(非 PIT)")
+        _wdset = set(_wd)
+        _dl_report_codes = {r["ts_code"] for r in weekly["reports"]}   # dragon events 只对候选生成 → 必 ∈ reports
+        for _e in _dlevs:
+            if _e["ts_code"] not in _dl_report_codes:
+                raise ValueError(f"dragon_list event ts_code {_e['ts_code']} 不在本周候选报告(张冠李戴/越界到非候选)")
+            try:
+                _td = _dt.strptime(_e["trade_date"], "%Y%m%d")
+            except ValueError:
+                raise ValueError(f"dragon_list event trade_date {_e['trade_date']} 非合法日历日({_e['ts_code']})")
+            if (_td - _asd).days > 0:
+                raise ValueError(f"dragon_list event trade_date 晚于 as_of(非 PIT;{_e['ts_code']})")
+            if _e["trade_date"] not in _wdset:
+                raise ValueError(f"dragon_list event trade_date {_e['trade_date']} 不在 window_dates(窗口外;{_e['ts_code']})")
+        for _ud in (_dl.get("unchecked_dates") or []):
+            if _ud not in _wdset:
+                raise ValueError(f"dragon_list unchecked_dates {_ud} 不在 window_dates")
+        # forward landing(checked):每 event 的候选 report 必须有 dragon_list_appearance impact(消费者强制,不靠 main 调用顺序)。
+        if _dl.get("status") == "checked":
+            _dl_rep_by = {r["ts_code"]: r for r in weekly["reports"]}
+            for _e in _dlevs:
+                _rep = _dl_rep_by.get(_e["ts_code"])
+                if _rep is not None and not any(
+                        i.get("source_field") == "dragon_list_appearance"
+                        for i in ((_rep.get("machine") or {}).get("operation_impact") or [])):
+                    raise ValueError(f"dragon_list event {_e['ts_code']} 未落到该 report 逐票 dragon_list_appearance impact(悬空)")
+    # 反向 evidence guard:每个 dragon_list_appearance impact 必须有匹配的 checked dragon_list 事件(同 ts_code)+ evidence_ref
+    # 对齐 _DRAGON_LIST_EVIDENCE_VALUE,否则=伪造/悬空(无上榜证据)。与正向落地成双向闭合;放 _dl block 外 catch _dl=None/unknown 却有 impact。
+    _dl_ev_codes = {_e["ts_code"] for _e in ((_dl or {}).get("events") or []) if (_dl or {}).get("status") == "checked"}
+    for _r in weekly["reports"]:
+        for _imp in ((_r.get("machine") or {}).get("operation_impact") or []):
+            if str(_imp.get("source_field", "")) != "dragon_list_appearance":
+                continue
+            if _r["ts_code"] not in _dl_ev_codes:
+                raise ValueError(f"operation_impact dragon_list_appearance({_r['ts_code']}) 无匹配 checked dragon_list 事件(impact 无证据/悬空)")
+            if (_imp.get("evidence_ref") or {}).get("value") != _DRAGON_LIST_EVIDENCE_VALUE:
+                raise ValueError(f"operation_impact dragon_list_appearance({_r['ts_code']}) evidence_ref.value 未对齐 {_DRAGON_LIST_EVIDENCE_VALUE}")
 
 
 def _reject_production_output_path(out_path: str) -> None:
@@ -968,6 +1022,161 @@ def _attach_forward_event_impacts(weekly, as_of):
             continue
         note = f"{_FORWARD_EVENT_MARKER}({len(evs)}项近端将至 → {_evtxt(evs)})(advisory,人工核查;不改决策)"
         h["reason"] = f"{h['reason']}｜{note}" if h.get("reason") else note
+
+
+# ── 4.2 Round5 龙虎榜(top_list)第一刀: analysis-only · comparison-only ───────────────────────
+# 只记候选近 N 交易日上榜事实 + 净买卖,落 板块资金事件 + operation_impact(source_field=dragon_list_appearance);
+# **绝不改 EGS/TopN/选股/股数/操作/否决**(comparison-only,阈值未定·4.2.md §9 决策4)。席位分析(top_inst)留第二刀。
+# 复用 forward_events analysis-only 模式: fail-closed provider / unknown-not-clear / 双向 no-dangling / source-isolation guard。
+DRAGON_LIST_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(§4.1/§11.5 prior,未来进 governance;非生产阈值,不静默写 runner 魔数)
+_DRAGON_LIST_MARKER = "龙虎榜对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑬ 据此判 row no-dangling(单一来源,防文案漂移)
+_DRAGON_LIST_EVIDENCE_VALUE = "dragon_list.events[appearance]"   # operation_impact.evidence_ref.value(_attach 写入 + 反向 evidence guard 校验共用单一来源)
+
+
+def _recent_trading_days(pro, as_of: str, n: int = DRAGON_LIST_LOOKBACK_TRADING_DAYS):
+    """最近 `n` 个 **<= as_of** 的 SSE 交易日(经 `trade_cal`,升序)。龙虎榜回望窗口的真交易日来源
+    (非日历日近似)。取不到/异常/列缺 → None(调用方退回 unknown,fail-closed,绝不静默当无窗口)。"""
+    from datetime import datetime, timedelta
+    start = (datetime.strptime(str(as_of), "%Y%m%d") - timedelta(days=max(40, n * 5))).strftime("%Y%m%d")
+    try:
+        cal = pro.trade_cal(exchange="SSE", start_date=start, end_date=str(as_of),
+                            is_open="1", fields="cal_date")
+    except Exception:
+        return None
+    if cal is None or len(cal) == 0 or "cal_date" not in cal.columns:
+        return None
+    days = sorted(str(d) for d in cal["cal_date"] if str(d) <= str(as_of))
+    return days[-n:] if days else None
+
+
+def _fetch_dragon_list(pro, trade_date: str):
+    """4.2 Round5 真龙虎榜 provider: tushare `pro.top_list(trade_date=)`(当日全市场上榜票,**收盘后发布 → trade_date<=as_of
+    即 PIT-safe**)→ [{"ts_code","name","net_amount"(净买卖原值),"reason"(上榜原因)}]。按 trade_date 查(已验证接口形态,
+    每日 ~数十行),builder 再过滤到候选。**fail-closed**: 缺 ts_code/net_amount/reason 列(数据形态异常)→ None(未查成,
+    builder 据此标该日 unchecked,绝不静默当无上榜);异常/None → None;空 → [](该日真无上榜,查成了)。net_amount 不做单位换算。"""
+    try:
+        df = pro.top_list(trade_date=str(trade_date), fields="trade_date,ts_code,name,net_amount,reason")
+    except Exception:
+        return None
+    if df is None:
+        return None
+    if not {"ts_code", "net_amount", "reason"}.issubset(set(getattr(df, "columns", []))):
+        return None
+    if getattr(df, "empty", True):
+        return []
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    def _num(v):
+        if v is None or str(v).strip() in ("", "nan", "None", "NaT"):
+            return None
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            return None
+        return f if (f == f and f not in (float("inf"), float("-inf"))) else None   # 非有限(NaN/Inf)→ None(防写出非法 JSON)
+    return [{"ts_code": _s(r.get("ts_code")), "name": _s(r.get("name")) or "",
+             "net_amount": _num(r.get("net_amount")), "reason": _s(r.get("reason"))}
+            for _, r in df.iterrows()]
+
+
+def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days,
+                        lookback=DRAGON_LIST_LOOKBACK_TRADING_DAYS):
+    """4.2 Round5 龙虎榜 builder(analysis-only,**不改任何决策**;只进 M6.7 板块资金事件对照)。
+    `dragon_provider(trade_date)` → list[{"ts_code","name","net_amount","reason"}]|None(失败)。`trade_days` =
+    近 N 个 SSE 交易日(均 <= as_of,见 `_recent_trading_days`)。PIT: 只收 trade_date<=as_of(provider 按 trade_days 查,
+    天然满足;再防御性核 as_of)。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
+    `unknown_or_unavailable`(绝不当「无上榜」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
+    只收候选(cand_names)上榜行(其它票丢弃 —— 第一刀只覆盖候选,持仓/席位留后续)。一票多日上榜 → 多条 event。"""
+    from datetime import datetime
+    wd = sorted({str(d) for d in (trade_days or [])})
+    base = {"as_of": str(as_of), "lookback_trading_days": lookback, "window_dates": wd}
+    if dragon_provider is None or not wd:
+        return {**base, "status": "unknown_or_unavailable", "events": []}
+    try:
+        as_of_d = datetime.strptime(str(as_of), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"dragon_list as_of {as_of!r} 非合法日历日")
+    name_by = {str(c): (n or "") for c, n in cand_names}
+    cand_codes = set(name_by)
+    events, any_ok, unchecked = [], False, []
+    for day in wd:
+        try:
+            rows = dragon_provider(day)
+        except Exception:
+            rows = None
+        if rows is None:
+            unchecked.append(day)                         # 该交易日取数失败 → 未查成(不当无上榜)
+            continue
+        any_ok = True                                     # 该日查成(含真无上榜的空 list)
+        try:
+            day_d = datetime.strptime(str(day), "%Y%m%d")
+        except ValueError:
+            continue                                      # 非法交易日(防御)→ 跳过
+        if (day_d - as_of_d).days > 0:
+            continue                                      # 防御: 未来交易日 → 非 PIT,跳过(trade_days 本就 <=as_of)
+        for row in rows:
+            code = (row or {}).get("ts_code")
+            if code not in cand_codes:
+                continue                                  # 非候选 → 第一刀不覆盖,丢弃
+            events.append({"ts_code": code, "name": name_by.get(code, ""), "trade_date": str(day),
+                           "net_amount": (row or {}).get("net_amount"), "reason": (row or {}).get("reason")})
+    if not any_ok:                                         # 有窗口但所有交易日都没查成 → unknown(绝不当无上榜)
+        return {**base, "status": "unknown_or_unavailable", "events": []}
+    events.sort(key=lambda e: (e["trade_date"], e["ts_code"]), reverse=True)
+    out = {**base, "status": "checked", "events": events}
+    if unchecked:
+        out["unchecked_dates"] = sorted(set(unchecked))
+    return out
+
+
+def _attach_dragon_list_impacts(weekly, as_of):
+    """4.2 Round5 龙虎榜 row landing: weekly-global dragon_list 的每条上榜按 ts_code 落到对应候选 report 的**逐票** M6.7 ——
+    精简结论区.板块资金事件 文本(含 `_DRAGON_LIST_MARKER`)+ machine.operation_impact(source_field=dragon_list_appearance)。
+    **comparison-only**: new_entry_effect=informational(候选)/none(held-candidate)、holding_effect=none、blocked_add=False、
+    veto_class=none、production_effect_enabled=False —— 绝不改 操作/EGS/选股/TopN/股数/否决(比 forward_event 更严:无任何动作)。
+    status!=checked(unknown/无)→ 不落(不伪造)。第一刀只覆盖候选行(events 本就只对候选生成);持仓(非候选)的龙虎榜 +
+    席位分析留第二刀(其中 Tier-3 account_position_only 的 板块资金事件 被 render 掩为「未核查」,需另设非掩面)。"""
+    dl = weekly.get("dragon_list") or {}
+    if dl.get("status") != "checked":
+        return
+    n = dl.get("lookback_trading_days")
+    by_code = {}
+    for e in (dl.get("events") or []):
+        by_code.setdefault(e["ts_code"], []).append(e)
+    for rep in weekly["reports"]:
+        evs = by_code.get(rep["ts_code"])
+        if not evs:
+            continue
+        held = ((rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held"
+        recent = max(evs, key=lambda e: e["trade_date"])
+        net = recent.get("net_amount")
+        detail = (f"最近{recent['trade_date']}"
+                  + (f",净额{net}" if net is not None else "")
+                  + (f",{recent['reason']}" if recent.get("reason") else ""))
+        txt = f"{_DRAGON_LIST_MARKER}(comparison-only,不改决策):近{n}交易日{len(evs)}次上龙虎榜({detail})"
+        cut = rep["m67"]["精简结论区"]
+        prev = cut.get("板块资金事件") or ""
+        cut["板块资金事件"] = f"{prev}｜{txt}" if prev and prev != "unknown" else txt
+        rep["machine"].setdefault("operation_impact", []).append({
+            "source_field": "dragon_list_appearance",
+            "field_class": "structured",
+            "visibility_shape": "holding_row_impact" if held else "candidate_row_impact",
+            "impact_scope": "existing_holding" if held else "new_entry",
+            "new_entry_effect": "none" if held else "informational",   # comparison-only: 只解释,不改动作
+            "holding_effect": "none",                                  # comparison-only: 不 hold_watch/reduce/clear
+            "blocked_add_required": False,                             # comparison-only: 不禁止加仓
+            "veto_class": "none",
+            "reason": f"近{n}交易日{len(evs)}次上龙虎榜 → 资金面对照(comparison-only,不改决策/EGS/选股/TopN;阈值未定)",
+            "evidence_ref": {"kind": "lineage_key", "value": _DRAGON_LIST_EVIDENCE_VALUE, "as_of": str(as_of)},
+            "confidence": "high",
+            "pit_basis": "trade_date_window",
+            "production_effect_enabled": False,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.板块资金事件(龙虎榜对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
+            "privacy_class": "private_account" if held else "public_tracked",
+        })
 # analysis_input.market_context.market_regime.status(EGS 英文枚举)→ 引擎中文 regime
 REGIME_MAP = {"attack": "进攻期", "shock": "震荡期", "defense": "防御期", "contraction": "收缩期"}
 
@@ -1165,7 +1374,7 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
-         earnings_provider=None):
+         earnings_provider=None, dragon_list_provider=None, dragon_list_days=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1266,6 +1475,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 forward_events 第2刀 真财报预约披露 provider(同上下文;pro.disclosure_date 仓库未测,真取数 gated 此处 --confirm)。
         if earnings_provider is None:
             earnings_provider = lambda code: _fetch_earnings_schedule(pro, code)
+        # 4.2 Round5 真龙虎榜 provider + 近 N 交易日窗口(同上下文;top_list 按 trade_date 查、trade_cal 取交易日;analysis-only comparison-only)。
+        if dragon_list_provider is None:
+            dragon_list_provider = lambda d: _fetch_dragon_list(pro, d)
+        if dragon_list_days is None:
+            dragon_list_days = _recent_trading_days(pro, args.as_of, DRAGON_LIST_LOOKBACK_TRADING_DAYS)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -1368,6 +1582,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["upcoming_events"] = _upcoming_events(_exdiv_codes, args.as_of, unlock_provider, earnings_provider)
     # 4.2 forward_events row landing: upcoming events 按 ts_code 落到对应 report 逐票 operation_impact + 风控触发文本(advisory,不改决策)。
     _attach_forward_event_impacts(weekly, args.as_of)
+    # 4.2 Round5 龙虎榜(comparison-only):候选近 N 交易日上榜对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。
+    # unknown-not-clear: provider 不可用(无 --confirm)/trade_cal 取不到 → status=unknown_or_unavailable(绝不当「无上榜」)。
+    _dragon_cand_names = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
+    weekly["dragon_list"] = _dragon_list_events(_dragon_cand_names, args.as_of, dragon_list_provider, dragon_list_days)
+    _attach_dragon_list_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)

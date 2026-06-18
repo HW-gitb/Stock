@@ -1042,6 +1042,10 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
       holding_effect∈{none,hold_watch}(source-class 级绑定,防篡改 veto_class/effect 伪装生产硬否决;呼应 semantic-isolation ⑧)。
     ⑫【4.2 forward_events ADVICE-LANDING】任一 forward_event_ impact ⟹ 操作建议含未来事件提示「未来已知事件」
       (候选/持仓不得仍像干净建仓——未来事件须落用户主看的操作建议,不只风控触发;字面同步 pipeline _FORWARD_EVENT_MARKER)。
+    ⑬【4.2 Round5 龙虎榜】source_field == 'dragon_list_appearance' ⟹ 永久 analysis-only + comparison-only(只记上榜事实+净买卖,
+      绝不改 EGS/TopN/选股/股数/操作/否决):field_class=='structured'、production_effect_enabled is False、veto_class=='none'、
+      new_entry_effect∈{informational,none}、holding_effect=='none'、blocked_add_required is False(比 forward_event 更严:无任何
+      建仓/持仓动作);且报告级任一 dragon_list_appearance impact ⟹ 板块资金事件含「龙虎榜对照」(comparison-only 事实须落用户可见面)。
     operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
     mc = report.get("machine") or {}
     impacts = mc.get("operation_impact")
@@ -1052,6 +1056,7 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     veto_text = str(cut.get("否决审查触发", ""))
     advice_text = str(cut.get("操作建议", ""))
     risk_text = str(cut.get("风控触发", ""))
+    sector_text = str(cut.get("板块资金事件", ""))
     for imp in impacts:
         sf = imp.get("source_field", "?")
         if not imp.get("m67_landing_surface"):
@@ -1111,6 +1116,22 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
                 raise ValueError(f"operation_impact {sf} forward_event 不得 new_entry_effect=hard_veto")
             if imp.get("holding_effect") not in ("none", "hold_watch"):
                 raise ValueError(f"operation_impact {sf} forward_event holding_effect={imp.get('holding_effect')!r} 越界(只允许 none/hold_watch)")
+        # ⑬ dragon_list 来源(source_field == 'dragon_list_appearance')= 永久 analysis-only + comparison-only(4.2 Round5 龙虎榜:
+        #   只记上榜事实+净买卖,绝不改 EGS/TopN/选股/股数/操作/否决)。比 forward_event 更严:new_entry_effect 仅 informational/none、
+        #   holding_effect 仅 none、blocked_add 仅 False(comparison-only 无任何建仓/持仓动作)。source-class 级绑定,防篡改伪装生产/动作。
+        if str(imp.get("source_field", "")) == "dragon_list_appearance":
+            if imp.get("field_class") != "structured":
+                raise ValueError(f"operation_impact {sf} dragon_list 必须 field_class=structured")
+            if imp.get("production_effect_enabled") is not False:
+                raise ValueError(f"operation_impact {sf} dragon_list 必须 production_effect_enabled=false(永久 analysis-only)")
+            if imp.get("veto_class") != "none":
+                raise ValueError(f"operation_impact {sf} dragon_list 必须 veto_class=none(comparison-only,绝不否决)")
+            if imp.get("new_entry_effect") not in ("informational", "none"):
+                raise ValueError(f"operation_impact {sf} dragon_list new_entry_effect={imp.get('new_entry_effect')!r} 越界(comparison-only 仅 informational/none,绝不 sizing/observe/veto)")
+            if imp.get("holding_effect") != "none":
+                raise ValueError(f"operation_impact {sf} dragon_list holding_effect={imp.get('holding_effect')!r} 越界(comparison-only 仅 none,绝不 hold_watch/reduce/clear)")
+            if imp.get("blocked_add_required"):
+                raise ValueError(f"operation_impact {sf} dragon_list 不得 blocked_add_required=true(comparison-only 不禁止加仓)")
     if any(imp.get("veto_class") == "m67_advisory_veto" for imp in impacts) and (
             ADVISORY_VETO_TAG not in veto_text and ADVISORY_VETO_TAG not in advice_text):
         raise ValueError(f"存在 m67_advisory_veto 但 否决审查触发/操作建议 未标「{ADVISORY_VETO_TAG}」(advisory 否决须显式标非生产)")
@@ -1121,6 +1142,10 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     #   未来事件须落用户主看的操作建议,不只风控触发)。字面「未来已知事件」同步 pipeline _FORWARD_EVENT_MARKER。
     if any(str(imp.get("source_field", "")).startswith("forward_event_") for imp in impacts) and "未来已知事件" not in advice_text:
         raise ValueError("存在 forward_event_ impact 但 操作建议未含未来事件提示「未来已知事件」(候选/持仓不得仍像干净建仓)")
+    # ⑬ DRAGON-LIST-LANDING(4.2 Round5):任一 dragon_list_appearance impact ⟹ 板块资金事件含「龙虎榜对照」
+    #   (comparison-only 上榜事实须落用户主看的 板块资金事件;字面同步 pipeline _DRAGON_LIST_MARKER)。
+    if any(str(imp.get("source_field", "")) == "dragon_list_appearance" for imp in impacts) and "龙虎榜对照" not in sector_text:
+        raise ValueError("存在 dragon_list_appearance impact 但 板块资金事件未含「龙虎榜对照」(comparison-only 上榜事实须落用户可见的板块资金事件)")
 
 
 def validate_m67_consistency(report: dict) -> None:

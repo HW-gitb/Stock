@@ -72,6 +72,22 @@ class RegistrySchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, self.schema)
 
+    def test_new_fetch_source_fields_flag_provider_call(self):
+        # R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP: 凡 owner/ref/落点 描述出现真新增取数来源
+        # (top_list/top_inst/block_trade 等收盘后专取接口)的字段,必须标 needs_new_provider_call=true ——
+        # 不得像复用 egs_main 既有 fetch 的字段(holder_reduction/share_float…)那样标 false(否则治理表误导:
+        # 看似无需取数,实则依赖新增 provider call)。复用既有 fetch 的字段不含这些 marker → 不受约束(可 false)。
+        markers = ("top_list", "top_inst", "block_trade")
+        scanned = 0
+        for f in self.example["fields"]:
+            blob = " ".join(str(f.get(k, "")) for k in
+                            ("field_id", "current_owner_file", "current_owner_ref", "m67_landing_surface"))
+            if any(m in blob for m in markers):
+                scanned += 1
+                self.assertTrue(f["needs_new_provider_call"],
+                                f"{f['field_id']} 提及新增取数来源{markers}却标 needs_new_provider_call=false(治理表误导)")
+        self.assertGreaterEqual(scanned, 1)   # 至少覆盖 dragon_list_appearance(防 marker 漂移致空扫=无效 guard)
+
     def test_out_of_scope_self_consistent(self):
         # out_of_scope 行被强制 operation_impact_target=none / out_of_scope_by_cadence / out_of_scope_no_landing
         bad = copy.deepcopy(self.example)
@@ -96,8 +112,11 @@ class GovernanceTests(unittest.TestCase):
         self.assertTrue(mr["anti_rescue_required"])
 
     def test_no_uningested_field_thresholds(self):
-        # 决策4: 第一刀不给未接入字段(北向/融资/龙虎榜/大宗)预写阈值块
-        for k in ("northbound", "margin", "lhb", "block_trade"):
+        # 决策4: 不给"无已定 effect 阈值"的字段预写阈值块。北向/融资/大宗仍未接入。
+        # 龙虎榜(lhb)Round5 已接入但 **comparison-only**(只记上榜事实+净买卖,无 effect 阈值;
+        # 近5交易日窗口是 module-level prior 常量 DRAGON_LIST_LOOKBACK_TRADING_DAYS,非 governance)→ 仍不进 gov,
+        # 与 forward_events(window=21 module 常量、无 gov 块)同例。转生产 sizing 时另起 governance 轮 + Gate A。
+        for k in ("northbound", "margin", "lhb", "block_trade", "dragon_list"):
             self.assertNotIn(k, self.gov)
 
 

@@ -268,6 +268,28 @@ def render_weekly_markdown(weekly: dict) -> str:
         else:
             out += ["", "## 📅 未来已知事件日历",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到未来事件日历(provider 未授权/不可用);**不代表无未来事件**,请人工核查解禁/财报等。"]
+    # 4.2 Round5 龙虎榜(近N交易日 · comparison-only · 不改决策/EGS/选股):checked 列上榜 / unknown 显未核查(unknown-not-clear)。
+    # 逐票 板块资金事件 已含「龙虎榜对照」(_card_field/逐票卡片自动渲染);此处为全局对照表 + unknown 可见性。
+    _dl = weekly.get("dragon_list")
+    if _dl:
+        _n = _dl.get("lookback_trading_days")
+        if _dl.get("status") == "checked":
+            _dlevs = _dl.get("events") or []
+            out += ["", f"## 🐯 龙虎榜(近{_n}交易日 · comparison-only · 不改决策/EGS/选股/股数)"]
+            if _dlevs:
+                out += ["| 票 | 名称 | 上榜日 | 净额(原值) | 原因 |", "|---|---|---|---|---|"]
+                out += [f"| {e['ts_code']} | {e['name']} | {e['trade_date']} | "
+                        f"{e['net_amount'] if e.get('net_amount') is not None else '—'} | {e.get('reason') or '—'} |"
+                        for e in _dlevs]
+            else:
+                out.append(f"> 本周已查:候选近{_n}交易日无上龙虎榜记录。")
+            _udl = _dl.get("unchecked_dates") or []
+            if _udl:                                  # per-交易日 unknown-not-clear:部分交易日取数失败,显式标(绝不当无上榜)
+                out.append(f"> ⚠️ 另有 {len(_udl)} 个交易日未能核查龙虎榜(取数失败),**不代表无上榜**,请人工核查:"
+                           + "、".join(_udl))
+        else:
+            out += ["", f"## 🐯 龙虎榜(近{_n}交易日)",
+                    "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到龙虎榜(provider 未授权/不可用);**不代表无上榜**,请人工核查。"]
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _excl = weekly.get("exclusion_summary")
     if _excl:

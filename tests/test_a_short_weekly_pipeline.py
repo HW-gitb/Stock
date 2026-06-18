@@ -28,7 +28,10 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
     _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
     FORWARD_EVENT_WINDOW_DAYS, _FORWARD_EVENT_SOURCE_ID, _FORWARD_EVENT_CONFIDENCE,
+    _dragon_list_events, _fetch_dragon_list, _attach_dragon_list_impacts, _recent_trading_days,
+    DRAGON_LIST_LOOKBACK_TRADING_DAYS, _DRAGON_LIST_EVIDENCE_VALUE, _DRAGON_LIST_MARKER,
 )
+from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
@@ -2209,6 +2212,359 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         w = self._w()
         _attach_forward_event_impacts(w, AS_OF)
         self.assertIn("未来已知事件", render_weekly_markdown(w))
+
+
+_DL_WINDOW = ["20260603", "20260604", "20260605", "20260608", "20260609"]   # 近5交易日 <= AS_OF(20260609)
+
+
+class DragonListTests(unittest.TestCase):
+    """4.2 Round5 龙虎榜第一刀(top_list, analysis-only · comparison-only):provider fail-closed / trade_cal 窗口 /
+    builder PIT+unknown-not-clear / 候选落 板块资金事件+operation_impact / 双向 no-dangling / comparison-only isolation
+    (绝不改 EGS/TopN/操作/股数/否决)/ render。第一刀只覆盖候选;非候选持仓 + 席位分析(top_inst)留第二刀。"""
+
+    # ── provider _fetch_dragon_list(fail-closed:缺列/异常→None 未查成;空→[] 真无;正常→清洗 dicts)──
+    def test_fetch_dragon_list_distinguishes_fail_from_empty(self):
+        class _Pro:
+            def __init__(self, df): self._df = df
+            def top_list(self, **kw): return self._df
+        self.assertIsNone(_fetch_dragon_list(_Pro(pd.DataFrame({"ts_code": ["600000.SH"], "reason": ["x"]})), "20260605"))  # 缺 net_amount 列
+        class _Boom:
+            def top_list(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_fetch_dragon_list(_Boom(), "20260605"))
+        self.assertEqual(_fetch_dragon_list(_Pro(pd.DataFrame({"ts_code": [], "net_amount": [], "reason": []})), "20260605"), [])
+        ok = _fetch_dragon_list(_Pro(pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"], "name": ["测试"],
+                                                   "net_amount": [1234.5], "reason": ["日涨幅偏离7%"]})), "20260605")
+        self.assertEqual(ok, [{"ts_code": "600000.SH", "name": "测试", "net_amount": 1234.5, "reason": "日涨幅偏离7%"}])
+
+    def test_fetch_dragon_list_cleans_blank(self):
+        class _Pro:
+            def top_list(self, **kw): return pd.DataFrame({"ts_code": ["600000.SH"], "name": [""], "net_amount": [None], "reason": [""]})
+        self.assertEqual(_fetch_dragon_list(_Pro(), "20260605"),
+                         [{"ts_code": "600000.SH", "name": "", "net_amount": None, "reason": None}])   # 空 net/reason → None(不伪造 0)
+
+    # ── _recent_trading_days(trade_cal,fail-closed,剔除 > as_of)──
+    def test_recent_trading_days_ok(self):
+        class _Pro:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": ["20260603", "20260604", "20260605", "20260608", "20260609", "20260610"]})
+        self.assertEqual(_recent_trading_days(_Pro(), "20260609", 5), _DL_WINDOW)   # 最近5个 <= as_of(剔除未来 20260610)
+
+    def test_recent_trading_days_fail_closed(self):
+        class _Boom:
+            def trade_cal(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_recent_trading_days(_Boom(), "20260609", 5))
+        class _NoCol:
+            def trade_cal(self, **kw): return pd.DataFrame({"x": [1]})
+        self.assertIsNone(_recent_trading_days(_NoCol(), "20260609", 5))
+
+    # ── builder _dragon_list_events(unknown-not-clear / PIT / 候选过滤)──
+    def test_builder_provider_none_unknown(self):
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, None, _DL_WINDOW)
+        self.assertEqual((dl["status"], dl["events"], dl["window_dates"]), ("unknown_or_unavailable", [], _DL_WINDOW))
+
+    def test_builder_no_trade_days_unknown(self):
+        self.assertEqual(_dragon_list_events([("600000.SH", "x")], AS_OF, lambda d: [], None)["status"], "unknown_or_unavailable")
+        self.assertEqual(_dragon_list_events([("600000.SH", "x")], AS_OF, lambda d: [], [])["status"], "unknown_or_unavailable")
+
+    def test_builder_all_days_fail_unknown(self):
+        self.assertEqual(_dragon_list_events([("600000.SH", "x")], AS_OF, lambda d: None, _DL_WINDOW)["status"], "unknown_or_unavailable")
+        def _boom(d):
+            raise RuntimeError("x")
+        self.assertEqual(_dragon_list_events([("600000.SH", "x")], AS_OF, _boom, _DL_WINDOW)["status"], "unknown_or_unavailable")
+
+    def test_builder_partial_day_fail_marks_unchecked(self):
+        prov = lambda d: [] if d == "20260609" else None      # 一天查成(真无)+ 其余取数失败
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertEqual((dl["status"], dl["events"]), ("checked", []))
+        self.assertEqual(dl["unchecked_dates"], ["20260603", "20260604", "20260605", "20260608"])   # 失败日显式列出,不当无上榜
+
+    def test_builder_emits_candidate_appearance(self):
+        prov = lambda d: ([{"ts_code": "600000.SH", "name": "测试", "net_amount": 1e6, "reason": "涨幅偏离"}] if d == "20260605" else [])
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertEqual(dl["status"], "checked")
+        e = dl["events"][0]
+        self.assertEqual((e["ts_code"], e["trade_date"], e["net_amount"], e["reason"]), ("600000.SH", "20260605", 1e6, "涨幅偏离"))
+
+    def test_builder_drops_non_candidate(self):
+        prov = lambda d: [{"ts_code": "600999.SH", "name": "非候选", "net_amount": 1e6, "reason": "x"}]
+        self.assertEqual(_dragon_list_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)["events"], [])   # 非候选丢弃
+
+    def test_builder_multi_day_appearance(self):
+        prov = lambda d: ([{"ts_code": "600000.SH", "name": "x", "net_amount": 1e6, "reason": "r"}] if d in ("20260605", "20260609") else [])
+        dl = _dragon_list_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)
+        self.assertEqual(sorted(e["trade_date"] for e in dl["events"]), ["20260605", "20260609"])   # 多日各一条(不去重)
+
+    def test_builder_uses_candidate_name(self):
+        prov = lambda d: ([{"ts_code": "600000.SH", "name": "provider名", "net_amount": 1e6, "reason": "r"}] if d == "20260605" else [])
+        self.assertEqual(_dragon_list_events([("600000.SH", "候选名")], AS_OF, prov, _DL_WINDOW)["events"][0]["name"], "候选名")
+
+    # ── attach _attach_dragon_list_impacts(候选/held-candidate;comparison-only;no-EGS-change)──
+    def _w_dl(self, status="checked", ts=None):
+        w = _weekly()
+        ts = ts or w["reports"][0]["ts_code"]
+        w["dragon_list"] = {"as_of": AS_OF, "status": status, "lookback_trading_days": 5, "window_dates": _DL_WINDOW,
+                            "events": ([{"ts_code": ts, "name": "x", "trade_date": "20260605", "net_amount": 1234.0,
+                                         "reason": "涨幅偏离"}] if status == "checked" else [])}
+        return w
+
+    def _dlimp(self, rep):
+        return [i for i in (rep["machine"].get("operation_impact") or []) if i["source_field"] == "dragon_list_appearance"]
+
+    def test_attach_candidate_landing(self):
+        w = self._w_dl()
+        rep = w["reports"][0]
+        before = (rep["m67"]["table"]["操作"], rep["m67"]["table"]["EGS分"], rep["m67"]["table"]["股数"])
+        _attach_dragon_list_impacts(w, AS_OF)
+        imp = self._dlimp(rep)
+        self.assertEqual(len(imp), 1)
+        self.assertEqual((imp[0]["visibility_shape"], imp[0]["new_entry_effect"], imp[0]["holding_effect"]),
+                         ("candidate_row_impact", "informational", "none"))
+        self.assertEqual((imp[0]["veto_class"], imp[0]["production_effect_enabled"], imp[0]["blocked_add_required"],
+                          imp[0]["pit_basis"], imp[0]["implementation_status"]),
+                         ("none", False, False, "trade_date_window", "implemented"))
+        self.assertIn("龙虎榜对照", rep["m67"]["精简结论区"]["板块资金事件"])   # 文本落地
+        # comparison-only: 操作/EGS分/股数 不被改
+        self.assertEqual((rep["m67"]["table"]["操作"], rep["m67"]["table"]["EGS分"], rep["m67"]["table"]["股数"]), before)
+        validate_weekly_report(w, _feed())                              # 双向 no-dangling + ⑬ 过
+
+    def test_attach_held_candidate_holding_impact(self):
+        w = self._w_dl()
+        rep = w["reports"][0]
+        rep["machine"]["stateful_risk"] = {"position_state": "held", "rule12": {"status": "inactive"},
+                                           "rule13": {"status": "none"}, "reasons": []}
+        _attach_dragon_list_impacts(w, AS_OF)
+        imp = self._dlimp(rep)[0]
+        self.assertEqual((imp["visibility_shape"], imp["new_entry_effect"], imp["holding_effect"], imp["blocked_add_required"]),
+                         ("holding_row_impact", "none", "none", False))   # held-candidate 也 comparison-only(无任何持仓动作)
+        self.assertEqual(imp["privacy_class"], "private_account")          # 涉持仓 → 私密
+        _vop(rep)                                                          # comparison-only isolation + marker 过
+
+    def test_attach_preserves_existing_sector_text(self):
+        # 反向(no-clobber): 已有 板块资金事件 内容(非 unknown)→ append 不覆盖(保留原文 + marker)
+        w = self._w_dl()
+        rep = w["reports"][0]
+        rep["m67"]["精简结论区"]["板块资金事件"] = "半导体景气上行"
+        _attach_dragon_list_impacts(w, AS_OF)
+        sector = rep["m67"]["精简结论区"]["板块资金事件"]
+        self.assertIn("半导体景气上行", sector)
+        self.assertIn("龙虎榜对照", sector)
+
+    def test_fetch_dragon_list_nonfinite_net_amount_nulled(self):
+        # 反向/pre-flight: net_amount 为 Inf/NaN → None(不写出非法 JSON;NaN 经 str 过滤、Inf 经 finite 门)
+        class _Pro:
+            def top_list(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "name": ["a", "b"],
+                                     "net_amount": [float("inf"), float("nan")], "reason": ["r", "r"]})
+        rows = _fetch_dragon_list(_Pro(), "20260605")
+        self.assertEqual([r["net_amount"] for r in rows], [None, None])
+
+    def test_attach_unknown_no_landing(self):
+        w = self._w_dl(status="unknown_or_unavailable")
+        _attach_dragon_list_impacts(w, AS_OF)
+        self.assertEqual(self._dlimp(w["reports"][0]), [])                # unknown → 不伪造逐票
+
+    def test_attach_no_event_for_code_no_landing(self):
+        w = self._w_dl(ts="600999.SH")                                    # event ts 不在 reports
+        _attach_dragon_list_impacts(w, AS_OF)
+        self.assertEqual(self._dlimp(w["reports"][0]), [])
+
+    # ── schema + validator(双向 no-dangling / PIT / 窗口 / 张冠李戴)──
+    def _dl_event(self, ts="600000.SH", trade_date="20260605", net_amount=1234.0, reason="涨幅偏离"):
+        return {"ts_code": ts, "name": "测试", "trade_date": trade_date, "net_amount": net_amount, "reason": reason}
+
+    def _weekly_dl(self, status="checked", events=None, window=None, **extra):
+        w = _weekly()
+        dl = {"as_of": AS_OF, "status": status, "lookback_trading_days": 5,
+              "window_dates": (window if window is not None else _DL_WINDOW), "events": events or []}
+        dl.update(extra)
+        w["dragon_list"] = dl
+        return w
+
+    def _fake_dl_impact(self, **over):
+        imp = {"source_field": "dragon_list_appearance", "field_class": "structured", "visibility_shape": "candidate_row_impact",
+               "impact_scope": "new_entry", "new_entry_effect": "informational", "holding_effect": "none",
+               "blocked_add_required": False, "veto_class": "none", "reason": "x",
+               "evidence_ref": {"kind": "lineage_key", "value": _DRAGON_LIST_EVIDENCE_VALUE, "as_of": AS_OF},
+               "confidence": "high", "pit_basis": "trade_date_window", "production_effect_enabled": False,
+               "implementation_status": "implemented", "m67_landing_surface": "精简结论区.板块资金事件",
+               "terminal_surface_target": "already_structured", "pending_successor_slice": None, "privacy_class": "public_tracked"}
+        imp.update(over)
+        return imp
+
+    def _schema(self):
+        return json.load(open(SCHEMA_PATH, encoding="utf-8"))
+
+    def test_schema_and_validator_accept(self):
+        w = self._weekly_dl(events=[self._dl_event()])
+        _attach_dragon_list_impacts(w, AS_OF)                             # 落地满足正向 no-dangling
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_absent_is_valid(self):
+        w = _weekly()                                                     # 无 dragon_list → 向后兼容
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_schema_accept_unknown(self):
+        w = self._weekly_dl(status="unknown_or_unavailable")
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_schema_accept_unchecked_dates(self):
+        w = self._weekly_dl(events=[self._dl_event()], unchecked_dates=["20260603"])
+        _attach_dragon_list_impacts(w, AS_OF)
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_dragon_impact_passes_m67_schema(self):
+        w = self._w_dl()
+        _attach_dragon_list_impacts(w, AS_OF)
+        jsonschema.validate(w["reports"][0], json.load(open(M67_SCHEMA, encoding="utf-8")))
+
+    def test_validator_unknown_with_events_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(status="unknown_or_unavailable", events=[self._dl_event()]), _feed())
+
+    def test_validator_foreign_ts_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(events=[self._dl_event(ts="600999.SH")]), _feed())   # 不在 reports(张冠李戴)
+
+    def test_validator_event_after_as_of_rejected(self):
+        with self.assertRaises(ValueError):                               # trade_date > as_of(非 PIT;不在 window→先命中 PIT 分支)
+            validate_weekly_report(self._weekly_dl(events=[self._dl_event(trade_date="20260610")]), _feed())
+
+    def test_validator_event_outside_window_rejected(self):
+        with self.assertRaises(ValueError):                               # <= as_of 但不在 window_dates
+            validate_weekly_report(self._weekly_dl(events=[self._dl_event(trade_date="20260601")]), _feed())
+
+    def test_validator_window_date_future_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(events=[], window=["20260605", "20260620"]), _feed())   # window 含未来
+
+    def test_validator_unchecked_outside_window_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(events=[], unchecked_dates=["20260601"]), _feed())
+
+    def test_validator_as_of_mismatch_rejected(self):
+        w = self._weekly_dl(events=[])
+        w["dragon_list"]["as_of"] = "20260101"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_reverse_evidence_no_event_rejected(self):
+        # impact 存在但 dragon_list 无匹配 event(伪造/空日历)→ 反向 evidence guard 拒
+        w = self._weekly_dl(events=[])                                    # checked,空 events
+        rep = w["reports"][0]
+        rep["machine"].setdefault("operation_impact", []).append(self._fake_dl_impact())
+        rep["m67"]["精简结论区"]["板块资金事件"] = "龙虎榜对照(伪造)"      # 过 ⑬ marker,只测反向证据
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_reverse_evidence_bad_ref_rejected(self):
+        w = self._weekly_dl(events=[self._dl_event()])
+        _attach_dragon_list_impacts(w, AS_OF)
+        self._dlimp(w["reports"][0])[0]["evidence_ref"]["value"] = "fake"
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_forward_landing_dangling_rejected(self):
+        # checked event 但对应 report 无 dragon_list_appearance impact(未 attach)→ 正向 no-dangling 拒
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_dl(events=[self._dl_event()]), _feed())
+
+    # ── engine guard ⑬(comparison-only isolation,source-class 级,防篡改)──
+    def _landed_rep(self):
+        w = self._w_dl()
+        _attach_dragon_list_impacts(w, AS_OF)
+        return w["reports"][0]
+
+    def test_guard_legal_passes(self):
+        _vop(self._landed_rep())                                          # 不 raise
+
+    def test_guard_production_enabled_rejected(self):
+        rep = self._landed_rep()
+        self._dlimp(rep)[0]["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_veto_class_rejected(self):
+        rep = self._landed_rep()
+        self._dlimp(rep)[0]["veto_class"] = "m67_advisory_veto"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_new_entry_effect_rejected(self):
+        rep = self._landed_rep()
+        self._dlimp(rep)[0]["new_entry_effect"] = "sizing_down"           # comparison-only 不许 sizing
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_holding_effect_rejected(self):
+        rep = self._landed_rep()
+        self._dlimp(rep)[0]["holding_effect"] = "hold_watch"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_blocked_add_rejected(self):
+        rep = self._landed_rep()
+        self._dlimp(rep)[0]["blocked_add_required"] = True
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_marker_removed_rejected(self):
+        rep = self._landed_rep()
+        rep["m67"]["精简结论区"]["板块资金事件"] = "unknown"               # 抹去「龙虎榜对照」marker
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    # ── render(checked 列上榜 / unknown 显未核查 / unchecked 警告)──
+    def test_render_checked_lists_appearances(self):
+        md = render_weekly_markdown(self._weekly_dl(events=[self._dl_event()]))
+        self.assertIn("龙虎榜", md)
+        self.assertIn("20260605", md)
+        self.assertIn("涨幅偏离", md)
+
+    def test_render_unknown_shows_unchecked(self):
+        self.assertIn("未核查/不可得", render_weekly_markdown(self._weekly_dl(status="unknown_or_unavailable")))
+
+    def test_render_checked_empty(self):
+        self.assertIn("本周已查", render_weekly_markdown(self._weekly_dl(status="checked", events=[])))
+
+    def test_render_unchecked_dates_warning(self):
+        md = render_weekly_markdown(self._weekly_dl(events=[self._dl_event()], unchecked_dates=["20260603", "20260604"]))
+        self.assertIn("未能核查龙虎榜", md)
+
+    # ── main wiring(注入 provider + trade_days → 端到端落盘 + 校验)──
+    def test_main_wires_dragon_list(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            prov = (lambda d: [{"ts_code": "600000.SH", "name": "测试", "net_amount": 1e6, "reason": "涨幅偏离"}]
+                    if d == "20260605" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), dragon_list_provider=prov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["dragon_list"]["status"], "checked")
+        self.assertEqual([e["ts_code"] for e in loaded["dragon_list"]["events"]], ["600000.SH"])
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
+        self.assertIn("龙虎榜对照", rep["m67"]["精简结论区"]["板块资金事件"])
+        self.assertTrue(any(i["source_field"] == "dragon_list_appearance" for i in (rep["machine"].get("operation_impact") or [])))
+
+    def test_main_no_provider_dragon_unknown(self):
+        # 无 --confirm / 不注入 dragon provider → dragon_list status=unknown_or_unavailable(unknown-not-clear,绝不当无上榜)
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series())
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["dragon_list"]["status"], "unknown_or_unavailable")
 
 
 if __name__ == "__main__":

@@ -8,6 +8,45 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜 registry + SESSION_LOG)
+- **Verdict/Action**: PASS. SESSION_LOG 模板修复已过门禁；registry provider-call 修复也仍成立：龙虎榜字段已标 `needs_new_provider_call=true`，新增来源 guard 覆盖 `top_list/top_inst/block_trade`，运行逻辑仍是 comparison-only。
+- **Required**: `R-ASHORT-GAP42-ROUND5-SESSION-LOG-MINIMAL-TEMPLATE-GAP` 与 `R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: doc-governance+route 30 OK；registry+DragonList 101 OK；独立探针 OK；py_compile OK；无网络假 `requests/tushare` 全量 2344 OK；`git diff --check` clean(仅 CRLF)。
+- **Next**: 用户决定是否提交；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-SESSION-LOG-MINIMAL-TEMPLATE-GAP)
+- **Verdict/Action**: 判定对(上条 `修复` entry 的 Pre-Codex bullet 682 字 > 500 模板上限,触 `test_doc_governance_guard` bullet-too-long)。压缩该 bullet 到极简(全细节留 register);仅改 SESSION_LOG 文字,业务/registry/代码零改。
+- **Required**: `R-ASHORT-GAP42-ROUND5-SESSION-LOG-MINIMAL-TEMPLATE-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 该 entry 各 bullet 现 ≤292 字;doc-governance + route-doc OK;registry/DragonList 未动仍绿;`git diff --check` clean。
+- **Next**: 审查(Codex re-审查 SESSION_LOG 模板合规);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 只 1 offender(682)已压,同 entry 其余 bullet 已测 ≤500。B 无符号/行为改动。C 未误删 label(5 个保留)。E register 记 closure、未碰 CURRENT。F 无 BOM、diff clean。
+
+## 2026-06-18 — Codex re-`审查 FAIL` (4.2 Round5 龙虎榜 registry re-review)
+- **Verdict/Action**: FAIL. registry 原问题已修到位：`dragon_list_appearance.needs_new_provider_call=true`，类级 guard 能防 `top_list/top_inst/block_trade` 这类新增来源误标 false；龙虎榜 no-dangling / comparison-only 探针也通过。但最新 Claude `修复` entry 自身超过 SESSION_LOG 极简模板长度，`test_doc_governance_guard` 失败。
+- **Required**: `R-ASHORT-GAP42-ROUND5-SESSION-LOG-MINIMAL-TEMPLATE-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: registry+DragonList targeted 101 OK；独立探针确认正常落地、悬空/坏证据/生产化篡改均拒；py_compile OK；diff-check OK；doc-governance+route-doc 组合因 SESSION_LOG bullet-too-long 失败。
+- **Next**: Claude 只压缩当前 `修复` entry 到极简模板，不改业务逻辑；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对——registry `dragon_list_appearance.needs_new_provider_call=false` 误导治理表:龙虎榜是 §5.3 真缺口、本轮新建 `top_list`+`trade_cal` 专取,与复用 egs_main 既有 fetch 的 `false` 字段(holder_reduction/share_float)本质不同。flip `false→true` + 加**类级** guard 防整类复发(不止改 dragon 这一实例)。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: planted-failure 确认 guard 抓 `false`(in-memory flip→assertTrue 失败);registry **55 OK**(+1 `test_new_fetch_source_fields_flag_provider_call`);**全量 discover 2344 OK(零回归)**;example 过 jsonschema;`git diff --check` clean(仅 CRLF)。**零运行逻辑改动**(仅 fixture 值 + 测试;dragon 运行/护栏/PIT 未动)。
+- **Next**: 审查(Codex re-审查 registry provider flag,据 working tree);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 类级修(guard 覆盖 top_list/top_inst/block_trade,非只 flip dragon)。B grep `needs_new_provider_call` 仅 registry/schema/history,无他处断言。C guard 仅约束含 marker 字段(复用既有 fetch 不误强制 true)。D N-A。E register 记 closure、未碰 CURRENT。F example 过 schema、current_status×needs 自洽、无 BOM、diff clean。详见 register。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 龙虎榜第一刀)
+- **Verdict/Action**: FAIL. 运行逻辑方向基本对：comparison-only、no-dangling、PIT/unknown guard、no EGS/TopN/股数/操作 change 都有测试和探针覆盖；但 registry 行把龙虎榜写成 `needs_new_provider_call=false`，与 4.2 决策5“龙虎榜是真缺口/新增 provider call”矛盾。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: DragonList+registry+render targeted 75 OK; DragonList+registry+doc-route 130 OK; custom probes confirmed normal path no action change, production mutation rejected, no-evidence impact rejected; schema check/py_compile/diff-check passed. Full weekly suite has 1 env error: local Codex lacks `tushare`, not accepted as PASS evidence.
+- **Next**: Claude 修 registry flag + guard test;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 龙虎榜第一刀: top_list comparison-only → 板块资金事件 + operation_impact)
+- **Verdict/Action**: 起草龙虎榜第一刀(§5.3/§11.5,decision5 优先级1)。**analysis-only · comparison-only**:只记**候选**近 5 交易日上榜事实 + 净买卖,落 `精简结论区.板块资金事件`(含 marker「龙虎榜对照」)+ `machine.operation_impact`(source_field=`dragon_list_appearance`)+ 周报全局 `dragon_list` 段;**绝不改 EGS/TopN/选股/股数/操作/否决**(比 forward_event 更严:new_entry_effect∈{informational,none}、holding_effect=none、blocked_add=False)。复用 forward_events analysis-only 模式:fail-closed provider / unknown-not-clear / 双向 no-dangling / source-isolation guard。席位分析(top_inst)留第二刀。
+- **Scope**: `schemas/a_short_weekly_report.schema.json`(加性可选 `dragon_list` 全局字段:as_of/status/lookback_trading_days/window_dates/events[ts_code·name·trade_date·net_amount·reason]/unchecked_dates;**m67_report schema 零改**——source_field 自由串、pit_basis `trade_date_window` + new_entry_effect `informational` 既存)·`runners/a_short_weekly_pipeline.py`(`DRAGON_LIST_LOOKBACK_TRADING_DAYS=5` prior 常量 + marker/evidence 常量;`_recent_trading_days`(trade_cal,fail-closed)、`_fetch_dragon_list(pro,trade_date)`(top_list,fail-closed,真取数 gated --confirm·HTTP 已验数据可得·in-pipeline live run 待 --confirm·mock 测)、`_dragon_list_events`(builder,PIT trade_date<=as_of,unknown-not-clear,unchecked_dates,只收候选)、`_attach_dragon_list_impacts`(候选/held-candidate 落 板块资金事件+impact);`validate_weekly_report` dragon_list 一致性 + **双向 no-dangling**(正向 forward-landing + 反向 evidence guard,evidence_ref 对齐);main 加 `dragon_list_provider`/`dragon_list_days` 参数 + --confirm 块接线)·`runners/a_short_phase5_engine.py`(`validate_operation_impact_no_dangling` 加 guard ⑬:dragon_list comparison-only isolation + 报告级 板块资金事件 marker 落地)·`runners/a_short_m67_render.py`(🐯 龙虎榜全局段:checked 列上榜/empty/unchecked_dates/unknown 未核查;逐票 板块资金事件 自动渲染)·`schemas/examples/a_short_gap_data_field_registry.example.json`(+ `dragon_list_appearance` 行:structured/already_fetched/candidate_row_impact/trade_date_window/public_tracked/production_effect_enabled=false/already_structured/implemented)·`tests/test_a_short_weekly_pipeline.py`(+DragonListTests 40)·`tests/test_a_short_gap_data_registry.py`(governance 注释更新)。**边界**:不改 egs_main/选股/result;无 governance 阈值块(comparison-only 无 effect 阈值;5 交易日窗=module prior 常量,同 forward_events window=21 例,decision4);主板;V14.2 frozen。**scope=候选 only**(held-candidate 经 has_position 路由为 holding_row_impact;非候选持仓延后——其 Tier-3 account_position_only 的 板块资金事件 被 render 掩为「未核查」,需另设非掩面,与席位分析同入第二刀)。
+- **Verify**: DragonListTests **40 OK**(provider fail/empty/clean/非有限 net_amount→None;trade_cal ok/fail-closed;builder unknown×3/partial-unchecked/emit/非候选丢弃/多日/候选名;attach 候选+held+no-clobber+unknown+无事件;schema+validator accept×4(含 absent 向后兼容)+ m67 schema;validator 拒 unknown带events/张冠李戴/event>as_of/窗外/window未来/unchecked窗外/as_of漂移/反向无证据/反向坏ref/正向悬空;guard ⑬ 篡改×6+marker抹除;render×4;main 接线+无provider→unknown)。affected 410(weekly+registry+phase5)+51(render+doc/route)OK;**全量 discover 2343 OK(零回归)**;`git diff --check` clean(仅 CRLF);无 BOM/FFFD;schema JSON valid;ripple grep dragon 符号仅在本切片文件、⑬ 无冲突。
+- **Next**: 审查(Codex 独立审 4.2 Round5 龙虎榜第一刀,据 working tree);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 缺陷×出口矩阵(provider/builder/attach/validator(正+反)/engine guard ⑬/schema/render/main)各配测,comparison-only 比 forward 更严已逐项篡改测。B 全仓 grep `dragon_list`/`DRAGON_LIST`/`龙虎榜对照`→ 仅本切片文件 + SESSION_LOG/4.2.md/register(append-only 历史);`⑬` 仅 phase5_engine 新增 3 处(⑪⑫ 后,无冲突;S3 doc 的 `⑬′` 是 doc-local 无关编号);weekly 全局字段枚举无 durable doc 需更新(4.2.md §1 是定稿桌面稿,描述 additive 字段前的原 schema,不改)。C 反向:no-clobber 测(保留既有 板块资金事件)、非有限 net_amount→None(防非法 JSON)、太严/太松双向(guard 合法过 + sizing/veto/hold_watch/blocked_add 篡改拒)、不改 操作/EGS/股数(before==after 断言)、unknown 不当无上榜。D N-A(reason/net_amount 原值直存,不分类 NL)。E route-doc 单态:起草 transient 只进 SESSION_LOG 顶部,未碰 CURRENT;registry 是 fixture 非 route doc。F 非有限值 guard;canonical 日期 strptime(window/event/trade_date);跨字段(双向 no-dangling + window 成员 + evidence_ref 对齐);PIT trade_date<=as_of 双层(builder+validator);doc↔behavior(docstring ⑬ 同步、registry 记 owner-ref);UTF-8 无 BOM;`git diff --check` clean。
+
 ## 2026-06-18 — Round 5 启动: 龙虎榜数据验证通过 + 第一刀设计定稿(待起草)
 - **数据验证(决策 5 第一步「先确认可得性」)**: HTTP 直连(HTTPS pinned)验 tushare `top_list`(净买卖 `net_amount`/上榜原因 `reason`/PIT `trade_date`,66 行/天,code=0 有权限)+ `top_inst`(席位 `exalter`/`net_buy`,690 行/天,第二刀用):**龙虎榜可做、可靠、PIT 干净**(trade_date=T 日盘后出 → ≤as_of)。
 - **第一刀设计(用户拍板)**: 最小范围=上榜事实+净买卖(席位分析留第二刀);回望窗口=as_of 前近 **5 交易日**;落点=复用现有「板块资金事件」「风控触发」+ `machine.operation_impact`(同 forward_events,零 schema 新字段除 source 枚举);effect=**comparison_only**(不改 EGS/TopN/选股/股数/操作,阈值未定·4.2.md 行627);provider `_fetch_dragon_list`(`top_list`,fail-closed,真取数 gated --confirm,mock 测);复用 analysis-only guard(`dragon_list_` source-isolation/不 hard_veto·rescue/PIT-safe)。

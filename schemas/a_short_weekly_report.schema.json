@@ -94,6 +94,39 @@
         }
       }
     },
+    "dragon_list": {
+      "type": ["object", "null"],
+      "description": "4.2 Round5 龙虎榜第一刀(analysis-only · comparison-only):只记候选近 N 交易日上榜事实 + 净买卖,落 精简结论区.板块资金事件 + machine.operation_impact(source_field=dragon_list_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only,见 4.2.md §9 决策4)。PIT:龙虎榜 T 日盘后发布 → trade_date<=as_of。席位分析(top_inst)留第二刀。status=unknown_or_unavailable(provider 不可用/取数全失败 → 绝不当「无上榜」) vs checked(已查;events 可空=候选近 N 日无上榜;部分交易日取数失败 → unchecked_dates)。可选/缺省 null。",
+      "additionalProperties": false,
+      "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "status": {"enum": ["checked", "unknown_or_unavailable"]},
+        "lookback_trading_days": {"type": "integer", "minimum": 1},
+        "window_dates": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "description": "本轮回望的近 N 个 SSE 交易日(均 <= as_of;PIT 窗口审计)。"},
+        "events": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "name", "trade_date", "net_amount", "reason"],
+            "properties": {
+              "ts_code": {"type": "string"},
+              "name": {"type": "string"},
+              "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+              "net_amount": {"type": ["number", "null"], "description": "龙虎榜净买卖额(tushare top_list.net_amount 原值,不做单位换算;缺失→null)"},
+              "reason": {"type": ["string", "null"], "description": "上榜原因(top_list.reason;缺失→null)"}
+            }
+          }
+        },
+        "unchecked_dates": {
+          "type": "array",
+          "description": "per-trade-day coverage(unknown-not-clear 逐日粒度):status=checked 但部分交易日取数失败 → 列出(绝不当「无上榜」)。⊆ window_dates。可选/缺省空。",
+          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+        }
+      }
+    },
     "exclusion_summary": {
       "type": ["object", "null"],
       "description": "4.2 Round2: 上游(L0/L2/Stage3)过滤、无 M6.7 个股行的批次级风险摘要(counts-only, 源 analysis_input.universe_summary.excluded_counts, 不改 egs_main)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无上游过滤)。",
