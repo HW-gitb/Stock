@@ -56,7 +56,7 @@
     },
     "upcoming_events": {
       "type": ["object", "null"],
-      "description": "4.2 forward_events 第1刀: 未来已知事件日历(analysis-only,只进 M6.7、不改 EGS/TopN/result/a_short、production_effect_enabled=false)。决策日已公告(observed_at<=as_of)、event_date 在未来 window 内的 A 股事件;第1刀只做限售解禁(limit_unlock)。status=unknown_or_unavailable(provider 不可用/没查到 → 绝不当「无未来事件」) vs checked(已查;events 可空=已查无近期事件)。可选/缺省 null。",
+      "description": "4.2 forward_events: 未来已知事件日历(analysis-only,只进 M6.7、不改 EGS/TopN/result/a_short、production_effect_enabled=false)。决策日已公告(observed_at<=as_of)、event_date 在未来 window 内的 A 股事件;第1刀=限售解禁(limit_unlock),第2刀=财报预约披露(earnings_disclosure)。status=unknown_or_unavailable(provider 不可用/没查到 → 绝不当「无未来事件」) vs checked(已查;events 可空=已查无近期事件;部分(票,类)失败→ unchecked_codes)。可选/缺省 null。",
       "additionalProperties": false,
       "required": ["as_of", "status", "events"],
       "properties": {
@@ -71,7 +71,7 @@
             "properties": {
               "ts_code": {"type": "string"},
               "name": {"type": "string"},
-              "event_type": {"enum": ["limit_unlock"]},
+              "event_type": {"enum": ["limit_unlock", "earnings_disclosure"]},
               "event_date": {"type": "string", "pattern": "^[0-9]{8}$"},
               "observed_at": {"type": "string", "pattern": "^[0-9]{8}$"},
               "source_id": {"type": "string", "minLength": 1},
@@ -87,8 +87,9 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name"],
-            "properties": {"ts_code": {"type": "string"}, "name": {"type": "string"}}
+            "required": ["ts_code", "name", "event_type"],
+            "properties": {"ts_code": {"type": "string"}, "name": {"type": "string"},
+                           "event_type": {"enum": ["limit_unlock", "earnings_disclosure"]}}
           }
         }
       }

@@ -262,9 +262,9 @@ def render_weekly_markdown(weekly: dict) -> str:
             else:
                 out.append("> 本周已查:候选/持仓近端无已公告的未来事件。")
             _unck = _ue.get("unchecked_codes") or []
-            if _unck:                                  # per-code unknown-not-clear:部分票取数失败,显式标未核查(绝不当无事件)
-                out.append(f"> ⚠️ 另有 {len(_unck)} 只未能核查未来事件(数据缺失/取数失败),**不代表无未来事件**,请人工核查:"
-                           + "、".join(f"{u['ts_code']}{u['name']}" for u in _unck))
+            if _unck:                                  # per-(票,类) unknown-not-clear:部分票/类取数失败,显式标未核查(绝不当无事件)
+                out.append(f"> ⚠️ 另有 {len(_unck)} 项未能核查未来事件(数据缺失/取数失败),**不代表无未来事件**,请人工核查:"
+                           + "、".join(f"{u['ts_code']}{u['name']}({u['event_type']})" for u in _unck))
         else:
             out += ["", "## 📅 未来已知事件日历",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到未来事件日历(provider 未授权/不可用);**不代表无未来事件**,请人工核查解禁/财报等。"]

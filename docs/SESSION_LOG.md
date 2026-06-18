@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP)
+- **Verdict/Action**: PASS. 反向 evidence guard 已补上；`forward_event_*` 逐票影响现在必须能匹配 checked 日历事件，伪造类型、空日历、错股票、错 evidence_ref 都会被拒。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源)，风险项仍等用户 `提交` 后才算闭环。
+- **Verify**: Codex probes rejected fake type, legal source without calendar evidence, wrong type, wrong code, bad evidence_ref; legal `limit_unlock`+`earnings_disclosure` pass. Targeted forward-event tests 52 passed; full unittest 2278 passed with no-network stubs; doc+route 30 passed; py_compile/schema/encoding/diff-check passed.
+- **Next**: Claude `提交` reviewed forward_events 第2刀 tracked files;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(guard 单向 event→impact,缺反向 impact→证据;伪造/空日历的 forward_event_ impact 仍过校验)。validate_weekly_report 末尾加反向 evidence guard(放 _ue block 外 catch _ue=None):每个 report 的 forward_event_ impact 必须 suffix∈允许枚举 + 匹配 checked event(同 ts_code+type)+ evidence_ref 对齐。双向闭合;保留 ⑫ marker guard 作第二层。详见 register。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 新 5 反向测(fake type 拒/无日历证据拒/type 无匹配 event 拒/另一 code 无 event 拒(2报告)/checked-空+无 impact 过)+ 第2刀全回归(52 targeted);全量 **2278 OK**(零回归);doc+route 30 OK;diff clean。
+- **Next**: 审查(Codex re-审查 反向 evidence guard)。
+- **Pre-Codex self-review**: A 反向×出口(fake/无证据/type 不匹配/code 不匹配 2报告/合法 checked-空过)各配测+正向落地保留。B 允许枚举用 _FORWARD_EVENT_DATE_FIELD keys(单一来源,加新类自动同步);放 _ue block 外故 _ue=None catch;不删 ⑫(双层)。C 伪造拒·合法过(不误拒)。D N-A。E draft。F evidence_ref.value 格式与 _attach 写入一致。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 forward_events 第2刀: earnings_disclosure + 多事件框架)
+- **Verdict/Action**: FAIL. 第2刀方向基本对，但逐票 `forward_event_*` 影响可在没有对应 `upcoming_events.events[]` 证据时通过写报告校验；完整问题只放 register。
+- **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-IMPACT-EVIDENCE-GUARD-GAP` — 完整问题、修复要求和边界见 `docs/system_risk_register.md`。
+- **Verify**: 4.2 refs reviewed; targeted forward-event tests 47 passed; reverse probe accepted legal/fake `forward_event_*` with empty calendar; full unittest 2273 passed with no-network stubs; doc+route 30 passed; py_compile passed; schema parse passed; `git diff --check` clean(CRLF warnings only)。
+- **Next**: Claude `修复` this Required;继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 forward_events 第2刀: 框架泛化 + 财报预约披露 earnings_disclosure)
+- **Verdict/Action**: forward_events 框架泛化支持多 event_type + 加第2类 earnings_disclosure(财报预约披露,disclosure_date pre_date,真取数 gated --confirm,mock 测)。builder 多 provider per-(票,类);_attach per-(票,类) impact(source_field=forward_event_{type})+文本 per-code 汇总一次;validator per-type 落地强制;engine ⑪⑫ guard 改 forward_event_ 前缀(覆盖新类不漏);schema event_type/unchecked_codes 加 earnings_disclosure;render 多类+unchecked 带 type。per-type 元数据集中 4 个 map(加第N类只扩 map+provider+enum,核心逻辑 type-agnostic)。
+- **Scope**: `runners/a_short_weekly_pipeline.py`(builder/provider/attach/validator/main)·`a_short_phase5_engine.py`(⑪⑫ 前缀泛化)·`a_short_m67_render.py`(unchecked type)·`schemas/a_short_weekly_report.schema.json`(enum)·`tests/test_a_short_weekly_pipeline.py`。**边界**: analysis-only/production_effect_enabled=false/不改 EGS·TopN·选股·result/不 hard_veto·rescue/真取数 gated --confirm(未测 pro.disclosure_date)/主板。
+- **Verify**: 新 10 测(earnings provider fail-closed·builder emit earnings/多类/per-type unchecked/双None unknown/earnings PIT·earnings per-type impact/多类分别落地/⑪⑫ guard 覆盖 earnings 正反/validator 拒未落地 earnings)+ 第1刀全回归(134 targeted);全量 **2273 OK**(零回归);schema JSON valid;diff clean。
+- **Next**: 审查(Codex 审 4.2 forward_events 第2刀)。
+- **Pre-Codex self-review**: A 缺陷×出口(builder 单/多类·partial per-type·双None·PIT;attach per-type+文本一次;validator per-type 落地;⑪⑫ 覆盖 earnings 正反)各配测。B grep `forward_event_limit_unlock` 无遗漏硬编码(engine startswith/pipeline per-type/attach 全改)、`_upcoming_events` 调用位置参数兼容、`m67_landing_surface` 无旧值 assert、schema desc+engine docstring 同步泛化。C earnings 合法过/未落地拒/篡改拒(不误拒不漏)。D N-A。E SESSION_LOG draft(未动 CURRENT)。F provider fail-closed(缺列 None/空 [])·PIT(ann<=as_of)·`_DATE_FIELD` per-type(不统一 provider 返回→不触第1刀 _fetch_unlocks/测试)·doc↔behavior 同步。
+
 ## 2026-06-17 — Codex re-`审查 PASS` (R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP)
 - **Verdict/Action**: PASS. `ADVICE-LANDING` 已闭合:候选/持仓有 forward event 时,`操作建议` 会显示「未来已知事件」和人工复核/观察提示;删掉该提示会被 guard 拒;`table.操作` 和 EGS 不变。
 - **Required**: `R-ASHORT-GAP42-FORWARD-EVENTS-ADVICE-LANDING-GAP` — addressed in working tree;完整 closure evidence 见 `docs/system_risk_register.md`(单一来源),风险项仍等用户 `提交` 后才算闭环。

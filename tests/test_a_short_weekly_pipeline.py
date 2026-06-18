@@ -26,8 +26,8 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
-    _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _attach_forward_event_impacts,
-    FORWARD_EVENT_WINDOW_DAYS,
+    _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
+    FORWARD_EVENT_WINDOW_DAYS, _FORWARD_EVENT_SOURCE_ID, _FORWARD_EVENT_CONFIDENCE,
 )
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
@@ -1739,10 +1739,10 @@ class ExclusionSummaryTests(unittest.TestCase):
 class UpcomingEventsTests(unittest.TestCase):
     """4.2 forward_events 第1刀: 未来已知事件日历(限售解禁, analysis-only advisory, PIT, unknown-not-clear)。"""
 
-    def _ue_event(self, ts="600000.SH", event_date="20260615", observed_at="20260601", days=6):
-        return {"ts_code": ts, "name": "测试", "event_type": "limit_unlock", "event_date": event_date,
-                "observed_at": observed_at, "source_id": "tushare.share_float",
-                "expected_effect": "manual_review", "confidence": "high", "days_to_event": days}
+    def _ue_event(self, ts="600000.SH", event_date="20260615", observed_at="20260601", days=6, event_type="limit_unlock"):
+        return {"ts_code": ts, "name": "测试", "event_type": event_type, "event_date": event_date,
+                "observed_at": observed_at, "source_id": _FORWARD_EVENT_SOURCE_ID[event_type],
+                "expected_effect": "manual_review", "confidence": _FORWARD_EVENT_CONFIDENCE[event_type], "days_to_event": days}
 
     def _weekly_ue(self, status="checked", events=None):
         w = _weekly()
@@ -1821,14 +1821,14 @@ class UpcomingEventsTests(unittest.TestCase):
         # per-code coverage:checked + unchecked_codes(ts ∈ universe)→ schema + validator 接受
         w = self._weekly_ue(events=[self._ue_event()])
         _attach_forward_event_impacts(w, AS_OF)
-        w["upcoming_events"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "测试"}]
+        w["upcoming_events"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "测试", "event_type": "limit_unlock"}]
         jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
         validate_weekly_report(w, _feed())
 
     def test_validator_unchecked_foreign_ts_rejected(self):
         w = self._weekly_ue(events=[self._ue_event()])
         _attach_forward_event_impacts(w, AS_OF)
-        w["upcoming_events"]["unchecked_codes"] = [{"ts_code": "000001.SZ", "name": "外"}]   # 不在 universe(张冠李戴)
+        w["upcoming_events"]["unchecked_codes"] = [{"ts_code": "000001.SZ", "name": "外", "event_type": "limit_unlock"}]   # 不在 universe(张冠李戴)
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
 
@@ -1904,23 +1904,74 @@ class UpcomingEventsTests(unittest.TestCase):
                                                "float_date": ["20260615"], "float_share": [1], "float_ratio": [1.0]})), "600000.SH")
         self.assertEqual(ok, [{"ann_date": "20260601", "float_date": "20260615"}])
 
+    # ── 第2刀: 财报预约披露(earnings_disclosure)+ 多 provider 框架 ──
+    def test_fetch_earnings_schedule_distinguishes_fail_from_empty(self):
+        # 财报预约 provider 同 fail-closed: 缺列/异常→None(未查成);空→[](真无预约);正常→[{ann_date,pre_date}]
+        import pandas as pd
+        class _Pro:
+            def __init__(self, df): self._df = df
+            def disclosure_date(self, **kw): return self._df
+        self.assertIsNone(_fetch_earnings_schedule(_Pro(pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260601"]})), "600000.SH"))   # 缺 pre_date 列
+        class _Boom:
+            def disclosure_date(self, **kw): raise RuntimeError("x")
+        self.assertIsNone(_fetch_earnings_schedule(_Boom(), "600000.SH"))
+        self.assertEqual(_fetch_earnings_schedule(_Pro(pd.DataFrame({"ts_code": [], "ann_date": [], "pre_date": []})), "600000.SH"), [])
+        ok = _fetch_earnings_schedule(_Pro(pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260601"],
+                                                         "pre_date": ["20260615"], "actual_date": [None]})), "600000.SH")
+        self.assertEqual(ok, [{"ann_date": "20260601", "pre_date": "20260615"}])
+
+    def test_builder_emits_earnings_event(self):
+        # 财报预约披露: earnings_provider(pre_date)→ event_type=earnings_disclosure, source_id=tushare.disclosure_date, confidence=medium
+        prov = lambda c: [{"ann_date": "20260601", "pre_date": "20260615"}]
+        ue = _upcoming_events([("600000.SH", "x")], AS_OF, None, earnings_provider=prov)
+        self.assertEqual(ue["status"], "checked")
+        e = ue["events"][0]
+        self.assertEqual((e["event_type"], e["event_date"], e["observed_at"], e["source_id"], e["confidence"], e["days_to_event"]),
+                         ("earnings_disclosure", "20260615", "20260601", "tushare.disclosure_date", "medium", 6))
+
+    def test_builder_multi_type_same_code_both_land(self):
+        # 同一票 unlock + earnings 都近端 → 两类 events 都收(不互相覆盖,key=(票,类))
+        unlock = lambda c: [{"ann_date": "20260601", "float_date": "20260612"}]
+        earn = lambda c: [{"ann_date": "20260601", "pre_date": "20260618"}]
+        ue = _upcoming_events([("600000.SH", "x")], AS_OF, unlock, earnings_provider=earn)
+        self.assertEqual(ue["status"], "checked")
+        self.assertEqual(sorted(e["event_type"] for e in ue["events"]), ["earnings_disclosure", "limit_unlock"])
+
+    def test_builder_one_type_fails_marks_unchecked_with_type(self):
+        # unlock 查成(真无→[])+ earnings 取数失败(None)→ checked 但 unchecked 标 earnings_disclosure(per-(票,类) unknown-not-clear)
+        ue = _upcoming_events([("600000.SH", "x")], AS_OF, (lambda c: []), earnings_provider=(lambda c: None))
+        self.assertEqual(ue["status"], "checked")
+        self.assertEqual([(u["ts_code"], u["event_type"]) for u in ue["unchecked_codes"]], [("600000.SH", "earnings_disclosure")])
+
+    def test_builder_both_providers_none_unknown(self):
+        # 两 provider 都 None(未授权/不可用)→ unknown(绝不当无事件)
+        self.assertEqual(_upcoming_events([("600000.SH", "x")], AS_OF, None, earnings_provider=None)["status"],
+                         "unknown_or_unavailable")
+
+    def test_builder_earnings_pit_lookahead_skipped(self):
+        # earnings 同 PIT: ann_date(预约公告)> as_of(look-ahead)→ 跳过(不伪造)
+        earn = lambda c: [{"ann_date": "20260610", "pre_date": "20260615"}]
+        self.assertEqual(_upcoming_events([("600000.SH", "x")], AS_OF, None, earnings_provider=earn)["events"], [])
+
 
 class ForwardEventRowLandingTests(unittest.TestCase):
     """4.2 forward_events row landing(R-...-ROW-LANDING-GUARD-GAP): upcoming events 落 per-stock operation_impact + 文本
     (advisory,不改 操作/EGS/选股/TopN、绝不 hard_veto/rescue);status!=checked 不落。"""
 
-    def _w(self, status="checked", ts=None, effect="manual_review"):
+    def _w(self, status="checked", ts=None, effect="manual_review", event_type="limit_unlock"):
         w = _weekly()
         ts = ts or w["reports"][0]["ts_code"]
         w["upcoming_events"] = {"as_of": AS_OF, "status": status,
-                                "events": ([{"ts_code": ts, "name": "x", "event_type": "limit_unlock",
+                                "events": ([{"ts_code": ts, "name": "x", "event_type": event_type,
                                              "event_date": "20260615", "observed_at": "20260601",
-                                             "source_id": "tushare.share_float", "expected_effect": effect,
-                                             "confidence": "high", "days_to_event": 6}] if status == "checked" else [])}
+                                             "source_id": _FORWARD_EVENT_SOURCE_ID[event_type], "expected_effect": effect,
+                                             "confidence": _FORWARD_EVENT_CONFIDENCE[event_type], "days_to_event": 6}] if status == "checked" else [])}
         return w
 
-    def _fwd(self, rep):
-        return [i for i in (rep["machine"].get("operation_impact") or []) if i["source_field"] == "forward_event_limit_unlock"]
+    def _fwd(self, rep, etype=None):
+        sf = f"forward_event_{etype}" if etype else None
+        return [i for i in (rep["machine"].get("operation_impact") or [])
+                if (i["source_field"] == sf if sf else str(i["source_field"]).startswith("forward_event_"))]
 
     def test_event_lands_on_candidate_row(self):
         w = self._w()
@@ -1978,7 +2029,7 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         _attach_forward_event_impacts(w, AS_OF)
         h = w["holdings_manual_review"][0]
         self.assertIn("停牌", h["reason"])                          # 原 reason 保留(append 不覆盖)
-        self.assertIn("解禁", h["reason"])                          # 事件落地到该持仓 reason
+        self.assertIn("未来已知事件", h["reason"])                  # 事件落地到该持仓 reason(marker)
         self.assertEqual(self._fwd(w["reports"][0]), [])           # 没串到候选行
         validate_weekly_report(w, _feed())                         # universe 接受 + 已落地,no-dangling 过
 
@@ -2011,6 +2062,109 @@ class ForwardEventRowLandingTests(unittest.TestCase):
             with self.assertRaises(ValueError):                    # 逐项隔离:每种篡改都被拒
                 validate_operation_impact_no_dangling(rep)
             imp[k] = good                                          # 复原
+
+    # ── 第2刀: earnings_disclosure 逐票落地 + per-type guard ──
+    def test_earnings_lands_per_type_impact(self):
+        # 财报预约披露 event → operation_impact source_field=forward_event_earnings_disclosure(per-type)+ 操作建议含 marker
+        w = self._w(event_type="earnings_disclosure")
+        rep = w["reports"][0]
+        _attach_forward_event_impacts(w, AS_OF)
+        imp = self._fwd(rep, "earnings_disclosure")
+        self.assertEqual(len(imp), 1)
+        self.assertEqual((imp[0]["visibility_shape"], imp[0]["veto_class"]), ("candidate_row_impact", "none"))
+        self.assertIn("未来已知事件", rep["m67"]["精简结论区"]["操作建议"])
+        validate_weekly_report(w, _feed())
+
+    def test_multi_type_lands_separate_impacts(self):
+        # 同票 unlock + earnings → 2 个 per-type impact(分别 source_field);文本面只汇总一次;两类都 no-dangling
+        w = self._w()
+        rep = w["reports"][0]
+        w["upcoming_events"]["events"].append({"ts_code": rep["ts_code"], "name": "x",
+                                               "event_type": "earnings_disclosure", "event_date": "20260618",
+                                               "observed_at": "20260601", "source_id": "tushare.disclosure_date",
+                                               "expected_effect": "manual_review", "confidence": "medium", "days_to_event": 9})
+        _attach_forward_event_impacts(w, AS_OF)
+        self.assertEqual(sorted(i["source_field"] for i in self._fwd(rep)),
+                         ["forward_event_earnings_disclosure", "forward_event_limit_unlock"])
+        validate_weekly_report(w, _feed())
+
+    def test_source_guard_covers_earnings(self):
+        # SOURCE-GUARD ⑪ 用 forward_event_ 前缀:earnings impact 篡改成生产硬否决也被拒(覆盖新类,不漏)
+        from runners.a_short_phase5_engine import validate_operation_impact_no_dangling
+        w = self._w(event_type="earnings_disclosure")
+        rep = w["reports"][0]
+        _attach_forward_event_impacts(w, AS_OF)
+        validate_operation_impact_no_dangling(rep)                 # 原始 advisory 过
+        imp = self._fwd(rep, "earnings_disclosure")[0]
+        imp["veto_class"] = "production_hard_veto"                  # ⑪: earnings 篡改生产硬否决 → 拒
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(rep)
+        imp["veto_class"] = "none"                                 # 复原
+        rep["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损,未验证"   # ⑫: 抹去 earnings 未来事件字样 → 拒
+        with self.assertRaises(ValueError):
+            validate_operation_impact_no_dangling(rep)
+
+    def test_validator_rejects_unlanded_earnings(self):
+        # per-type 落地强制:earnings event 但跳过 _attach(无 earnings impact)→ 拒(不靠 main 顺序)
+        w = self._w(event_type="earnings_disclosure")
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    # ── IMPACT-EVIDENCE 反向 guard(impact → 必须有匹配 checked calendar event,与正向落地双向闭合)──
+    def test_reverse_guard_rejects_fake_source_type(self):
+        # report 多一个 forward_event_fake impact(calendar 无此类型)→ 不在允许枚举 → 反向拒
+        w = self._w()
+        rep = w["reports"][0]
+        _attach_forward_event_impacts(w, AS_OF)
+        validate_weekly_report(w, _feed())                         # 正常(limit_unlock event↔impact)
+        fake = dict(self._fwd(rep, "limit_unlock")[0]); fake["source_field"] = "forward_event_fake"
+        rep["machine"]["operation_impact"].append(fake)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_reverse_guard_rejects_impact_without_calendar_evidence(self):
+        # impact 在,但清空 calendar events → (code,type) 无匹配 → 反向拒(伪造/悬空)
+        w = self._w()
+        _attach_forward_event_impacts(w, AS_OF)
+        validate_weekly_report(w, _feed())
+        w["upcoming_events"]["events"] = []                        # 清空日历(impact 还在)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_reverse_guard_rejects_impact_type_without_matching_event(self):
+        # report 多一个 earnings impact,但 calendar 只有 limit_unlock event → (code,earnings) 无匹配 → 反向拒
+        w = self._w()
+        rep = w["reports"][0]
+        _attach_forward_event_impacts(w, AS_OF)
+        fe = dict(self._fwd(rep, "limit_unlock")[0])
+        fe["source_field"] = "forward_event_earnings_disclosure"
+        fe["evidence_ref"] = dict(fe["evidence_ref"], value="upcoming_events.events[earnings_disclosure]")
+        rep["machine"]["operation_impact"].append(fe)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_reverse_guard_rejects_impact_for_code_without_event(self):
+        # 2 报告:calendar event 只给 600000.SH;同型 impact 复制到 600001.SH → (600001.SH,limit_unlock) 无匹配 → 反向拒
+        w = _weekly([_normalized(ts_code="600000.SH"), _normalized(ts_code="600001.SH")])
+        w["upcoming_events"] = {"as_of": AS_OF, "status": "checked",
+                                "events": [{"ts_code": "600000.SH", "name": "x", "event_type": "limit_unlock",
+                                            "event_date": "20260615", "observed_at": "20260601",
+                                            "source_id": "tushare.share_float", "expected_effect": "manual_review",
+                                            "confidence": "high", "days_to_event": 6}]}
+        _attach_forward_event_impacts(w, AS_OF)                    # 落到 600000.SH(匹配)
+        repA = next(r for r in w["reports"] if r["ts_code"] == "600000.SH")
+        repB = next(r for r in w["reports"] if r["ts_code"] == "600001.SH")
+        repB["machine"].setdefault("operation_impact", []).append(
+            dict(next(i for i in repA["machine"]["operation_impact"] if str(i["source_field"]).startswith("forward_event_"))))
+        repB["m67"]["精简结论区"]["操作建议"] = (repB["m67"]["精简结论区"].get("操作建议") or "") + "｜未来已知事件"   # 过 ⑫,隔离反向
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_reverse_guard_checked_empty_no_impact_passes(self):
+        # checked 空日历 + 无 forward impact → 正反向都不触发 → 过(不误拒正常态)
+        w = self._w()
+        w["upcoming_events"]["events"] = []                        # checked 但空(不调 _attach,无 impact)
+        validate_weekly_report(w, _feed())
 
     def test_advice_landing_on_candidate_row(self):
         # ADVICE-LANDING:候选有近端解禁 → 操作建议(用户主看)含未来事件/人工复核字样,不只风控触发;table 操作不变(analysis-only)
