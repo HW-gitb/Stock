@@ -208,6 +208,71 @@
         }
       }
     },
+    "financial_trends": {
+      "type": ["object", "null"],
+      "description": "4.2 财报质量趋势(财报报表 per-stock fetch, analysis-only · comparison-only · candidate-only):候选(非持仓)逐票新增报表取数 → 自然符号红旗(②业绩预告 forecast:tushare 预告 type 负面分类/p_change_max<0;③利润表 income;④资产负债表 balancesheet),落 精简结论区.风控触发(财报趋势对照)+ machine.operation_impact(source_field=financial_trend_{statement_type},new_entry_effect=priority_down、veto_class=none、production_effect_enabled=false);**绝不 hard_veto / 不改 EGS/TopN/选股/股数/否决**,不新设阈值(决策4:用 tushare 自有分类 + 同期方向比较)。仅有红旗才落 record(无红旗=查成无红旗,不落避噪声;coverage 由 status/unchecked_codes 体现)。PIT:仅用 ann_date<=as_of 已公告数据。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无红旗」) vs checked(部分(票,类)失败 → unchecked_codes)。可选/缺省 null。",
+      "additionalProperties": false,
+      "required": ["as_of", "status", "records"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "status": {"enum": ["checked", "unknown_or_unavailable"]},
+        "records": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "name", "statement_type", "period", "observed_at", "red_flags", "summary"],
+            "properties": {
+              "ts_code": {"type": "string"},
+              "name": {"type": "string"},
+              "statement_type": {"enum": ["forecast", "income", "balancesheet"]},
+              "period": {"type": "string", "pattern": "^[0-9]{8}$", "description": "报告期 end_date(YYYYMMDD)"},
+              "observed_at": {"type": "string", "pattern": "^[0-9]{8}$", "description": "公告日 ann_date(PIT:<=as_of)"},
+              "red_flags": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
+                "description": "自然符号红旗代码列表(非空才落 record)"},
+              "summary": {"type": "string", "minLength": 1, "description": "人读红旗摘要(含数值;render + operation_impact reason 复用)"}
+            }
+          }
+        },
+        "unchecked_codes": {
+          "type": "array",
+          "description": "per-(票,类) coverage(unknown-not-clear 逐票逐类粒度):status=checked 但部分 (票,类) 取数失败 → 列出(绝不当「无红旗」)。可选/缺省空。",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["ts_code", "name", "statement_type"],
+            "properties": {"ts_code": {"type": "string"}, "name": {"type": "string"},
+                           "statement_type": {"enum": ["forecast", "income", "balancesheet"]}}
+          }
+        }
+      }
+    },
+    "industry_fundamentals": {
+      "type": ["object", "null"],
+      "description": "4.2 财报质量趋势⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选财报红旗 → 行业上下文摘要。**candidate-scope**(scope=candidates_only:基于本周候选,非全行业普查);只列有≥1 红旗候选的行业;②预告 forecast 不计(行业基本面=已实现 income/balancesheet)。**无 operation_impact**(逐票红旗已由③④落地,本层只加行业摘要)。可选/缺省 null(本周无行业红旗)。",
+      "additionalProperties": false,
+      "required": ["as_of", "scope", "by_industry"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "scope": {"enum": ["candidates_only"], "description": "诚实标注:基于本周候选聚合,非全行业普查(真全行业需另起 slice)"},
+        "by_industry": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["sw_l2_name", "candidate_count", "red_flag_candidate_count", "red_flag_codes", "summary"],
+            "properties": {
+              "sw_l2_name": {"type": "string", "minLength": 1},
+              "candidate_count": {"type": "integer", "minimum": 1, "description": "该 SW L2 行业本周候选总数(分母,context)"},
+              "red_flag_candidate_count": {"type": "integer", "minimum": 1, "description": "其中有③④财报红旗的候选数"},
+              "red_flag_codes": {"type": "array", "minItems": 1, "items": {"type": "string"},
+                "description": "有红旗的候选 ts_code(均须在 financial_trends income/balancesheet 记录中)"},
+              "summary": {"type": "string", "minLength": 1}
+            }
+          }
+        }
+      }
+    },
     "exclusion_summary": {
       "type": ["object", "null"],
       "description": "4.2 Round2: 上游(L0/L2/Stage3)过滤、无 M6.7 个股行的批次级风险摘要(counts-only, 源 analysis_input.universe_summary.excluded_counts, 不改 egs_main)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无上游过滤)。",

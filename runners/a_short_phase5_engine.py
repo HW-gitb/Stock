@@ -1114,6 +1114,12 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     ⑮【4.2 财报质量① 复用】source_field=='financial_quality' ⟹ 永久 comparison-only advisory(field_class=='structured'、
       production_effect_enabled is False、veto_class=='none'、new_entry_effect∈{priority_down,informational,none} 绝不 hard_veto、
       holding_effect=='none' 候选 only);报告级任一该 impact ⟹ 风控触发含 _FINANCIAL_QUALITY_MARKER「财报质量对照」(no-dangling)。
+    ⑯【4.2 财报质量趋势 ②forecast/③income/④balancesheet】source_field 以 'financial_trend_' 开头 ⟹ 永久 comparison-only advisory +
+      candidate-only(field_class=='structured'、production_effect_enabled is False、veto_class=='none'、new_entry_effect∈{priority_down,
+      informational,none} 绝不 hard_veto、holding_effect=='none'、candidate_row_impact/new_entry/public_tracked、blocked_add=false、held 报告拒);
+      报告级任一该 impact ⟹ 风控触发含「财报趋势对照」(no-dangling;字面同步 pipeline _FIN_STATEMENT_MARKER)。
+    ⑰【4.2 财报质量趋势⑤ 行业基本面】source_field=='industry_fundamentals' ⟹ 拒(⑤ 是 summary_only 周报全局摘要,绝不产逐票 operation_impact;
+      逐票财报红旗已由③④ financial_trend_ 落地)。
     operation_impact 可选(缺省=无 impact)→ no-op,向后兼容。"""
     mc = report.get("machine") or {}
     impacts = mc.get("operation_impact")
@@ -1254,6 +1260,42 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
             raise ValueError("持仓(position_state=held)报告不得带 financial_quality impact(第一刀候选 only,持仓财报质量留后续刀)")
         if _FINANCIAL_QUALITY_MARKER not in risk_text:
             raise ValueError(f"financial_quality impact 但 风控触发未含「{_FINANCIAL_QUALITY_MARKER}」(no-dangling:财报质量须落用户可见风控触发)")
+    # ⑯ FINANCIAL-TRENDS(4.2 财报质量趋势 ②forecast/③income/④balancesheet 新增报表取数):source_field 以 `financial_trend_` 开头 ⟹ 永久
+    #   comparison-only advisory + **candidate-only**(财报报表红旗仅 advisory 降优先级,绝不 hard_veto/否决/改 EGS·选股·股数;持仓财报趋势留后续刀):
+    #   field_class=structured、production_effect_enabled=False、veto_class=none、new_entry_effect∈{priority_down,informational,none} 绝不 hard_veto、
+    #   holding_effect=none、candidate_row_impact/new_entry/public_tracked、blocked_add=false、held 报告拒。source-class 级绑定(不枚举具体类,
+    #   防"篡改 veto_class/shape/加新类漏覆盖"绕过候选 only)。报告级任一该 impact ⟹ 风控触发含「财报趋势对照」(no-dangling;字面同步 pipeline _FIN_STATEMENT_MARKER)。
+    _FIN_TREND_MARKER = "财报趋势对照"   # 字面同步 runners/a_short_weekly_pipeline.py::_FIN_STATEMENT_MARKER(emission 在 pipeline,guard 在此;镜像 forward_event ⑫)
+    for imp in impacts:
+        if not str(imp.get("source_field", "")).startswith("financial_trend_"):
+            continue
+        if imp.get("field_class") != "structured":
+            raise ValueError("financial_trend impact field_class 须为 structured")
+        if imp.get("production_effect_enabled") is not False:
+            raise ValueError("financial_trend impact 须 production_effect_enabled=false(comparison-only,不改 EGS/选股)")
+        if imp.get("veto_class") != "none" or imp.get("new_entry_effect") == "hard_veto":
+            raise ValueError("financial_trend impact 绝不 hard_veto(财报报表红旗仅 advisory:priority_down/informational)")
+        if imp.get("new_entry_effect") not in ("priority_down", "informational", "none"):
+            raise ValueError(f"financial_trend impact new_entry_effect={imp.get('new_entry_effect')!r} 越界(仅 priority_down/informational/none)")
+        if imp.get("holding_effect") != "none":
+            raise ValueError("financial_trend impact 候选 only,holding_effect 须 none(持仓财报趋势留后续刀)")
+        if imp.get("visibility_shape") != "candidate_row_impact" or imp.get("impact_scope") != "new_entry":
+            raise ValueError(f"financial_trend impact 须 candidate_row_impact/new_entry(candidate-only),"
+                             f"实为 {imp.get('visibility_shape')!r}/{imp.get('impact_scope')!r}")
+        if imp.get("privacy_class") != "public_tracked":
+            raise ValueError(f"financial_trend impact 须 public_tracked(候选行无账户隐私),实为 {imp.get('privacy_class')!r}")
+        if imp.get("blocked_add_required"):
+            raise ValueError("financial_trend impact 不得 blocked_add_required=true(comparison-only 不禁止加仓)")
+        if position_state == "held":
+            raise ValueError("持仓(position_state=held)报告不得带 financial_trend impact(candidate-only,持仓财报趋势留后续刀)")
+    if any(str(imp.get("source_field", "")).startswith("financial_trend_") for imp in impacts) and _FIN_TREND_MARKER not in risk_text:
+        raise ValueError(f"financial_trend impact 但 风控触发未含「{_FIN_TREND_MARKER}」(no-dangling:财报趋势须落用户可见风控触发)")
+    # ⑰ INDUSTRY-FUNDAMENTALS-SUMMARY-ONLY(4.2 财报质量趋势⑤):⑤ 行业基本面是 summary_only 周报全局摘要,**绝不产逐票 operation_impact**
+    #   (逐票财报红旗已由③④ financial_trend_ 落地)。任何 source_field=='industry_fundamentals' 的 row-level impact = 把 summary-only 层
+    #   伪装成逐票影响 → 拒(防 builder 漂移/手构把 ⑤ 提升为 row impact;呼应 weekly validator 的 ⑤ summary-only 契约)。
+    for imp in impacts:
+        if str(imp.get("source_field", "")) == "industry_fundamentals":
+            raise ValueError("operation_impact source_field=industry_fundamentals 非法(⑤ 行业基本面 summary_only,绝不产逐票 operation_impact)")
 
 
 def validate_m67_consistency(report: dict) -> None:

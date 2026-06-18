@@ -343,6 +343,34 @@ def render_weekly_markdown(weekly: dict) -> str:
         else:
             out += ["", f"## 💰 大宗交易(近{_bn}交易日)",
                     "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到大宗交易(provider 未授权/不可用);**不代表无大宗**,请人工核查。"]
+    # 4.2 财报质量趋势(②forecast/③income/④balancesheet · candidate-only · comparison-only · 不改决策/EGS/选股):checked 列红旗 / unknown 显未核查。
+    # 逐票 风控触发 已含「财报趋势对照」(逐票卡片自动渲染);此处为全局红旗汇总 + unknown 可见性。
+    _ft = weekly.get("financial_trends")
+    if _ft:
+        _ftlabel = {"forecast": "业绩预告", "income": "利润表", "balancesheet": "资产负债表"}
+        if _ft.get("status") == "checked":
+            _ftrecs = _ft.get("records") or []
+            out += ["", "## 📊 财报质量趋势(candidate-only · comparison-only · 不改决策/EGS/选股/股数)"]
+            if _ftrecs:
+                out += ["| 票 | 名称 | 报表 | 报告期 | 公告日(PIT) | 红旗摘要 |", "|---|---|---|---|---|---|"]
+                out += [f"| {r['ts_code']} | {r['name']} | {_ftlabel.get(r['statement_type'], r['statement_type'])} | "
+                        f"{r['period']} | {r['observed_at']} | {r['summary']} |" for r in _ftrecs]
+            else:
+                out.append("> 本周已查:候选财报报表无红旗。")
+            _ftu = _ft.get("unchecked_codes") or []
+            if _ftu:                                  # per-(票,类) unknown-not-clear:部分票/类取数失败,显式标(绝不当无红旗)
+                out.append(f"> ⚠️ 另有 {len(_ftu)} 项财报报表未能核查(数据缺失/取数失败),**不代表无红旗**,请人工核查:"
+                           + "、".join(f"{u['ts_code']}{u['name']}({_ftlabel.get(u['statement_type'], u['statement_type'])})" for u in _ftu))
+        else:
+            out += ["", "## 📊 财报质量趋势",
+                    "> ⚠️ 未核查/不可得(`unknown_or_unavailable`):本周未取到财报报表(provider 未授权/不可用);**不代表无红旗**,请人工核查业绩预告/利润表/资产负债表。"]
+    # 4.2 财报质量趋势⑤ 行业基本面(advisory-only · summary_only · 候选 scope · 不改决策):按 SW L2 行业聚合③④候选财报红旗。只列有红旗行业。
+    _indf = weekly.get("industry_fundamentals")
+    if _indf and (_indf.get("by_industry") or []):
+        out += ["", "## 🏭 行业基本面(advisory-only · 基于本周候选聚合③④财报红旗 · 非全行业普查 · 不改决策/EGS/选股)",
+                "| SW二级行业 | 候选数 | 有红旗 | 红旗候选 | 摘要 |", "|---|---|---|---|---|"]
+        out += [f"| {g['sw_l2_name']} | {g['candidate_count']} | {g['red_flag_candidate_count']} | "
+                f"{'、'.join(g['red_flag_codes'])} | {g['summary']} |" for g in _indf["by_industry"]]
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _excl = weekly.get("exclusion_summary")
     if _excl:

@@ -654,6 +654,118 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
                 raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) 无匹配 checked upcoming_events 事件(impact 无证据/悬空)")
             if (_imp.get("evidence_ref") or {}).get("value") != f"upcoming_events.events[{_etype}]":
                 raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) evidence_ref.value 未对齐 upcoming_events.events[{_etype}]")
+    # 4.2 财报质量趋势 financial_trends 一致性(analysis-only comparison-only **candidate-only**;schema 管类型/enum,此处管历法+PIT+张冠李戴+双向 no-dangling):
+    # unknown 必空 records;checked 每 record: ts_code∈本周候选报告(**非持仓**——financial_trends candidate-only)、period/observed_at 合法、observed_at<=as_of(PIT)、
+    # red_flags/summary 非空、且真落到该候选 report 逐票 operation_impact(financial_trend_{type})。复用上面的 _asd/_valid_codes/_dt。
+    _ft = weekly.get("financial_trends")
+    if _ft is not None:
+        if _ft.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"financial_trends.as_of {_ft.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        _ftrecs = _ft.get("records") or []
+        _ft_unck = _ft.get("unchecked_codes") or []
+        _ft_status = _ft.get("status")
+        if _ft_status == "unknown_or_unavailable" and _ftrecs:
+            raise ValueError("financial_trends status=unknown_or_unavailable 却带 records(unknown 不得带红旗)")
+        # COVERAGE-KEY-CONSISTENCY:unknown 路径不产 per-key 列表 → unknown 不得带 unchecked_codes
+        if _ft_status == "unknown_or_unavailable" and _ft_unck:
+            raise ValueError("financial_trends status=unknown_or_unavailable 却带 unchecked_codes(unknown 路径无 per-key 覆盖列表)")
+        _rep_by_ft = {r["ts_code"]: r for r in weekly["reports"]}
+        _rec_keys, _unck_keys = set(), set()
+        for _rec in _ftrecs:
+            if _rec["ts_code"] not in _valid_codes:
+                raise ValueError(f"financial_trends ts_code {_rec['ts_code']} 不在本周候选/持仓集(张冠李戴)")
+            try:
+                _obs = _dt.strptime(_rec["observed_at"], "%Y%m%d")
+                _per = _dt.strptime(_rec["period"], "%Y%m%d")
+            except (ValueError, KeyError):
+                raise ValueError(f"financial_trends period/observed_at 非合法日历日({_rec['ts_code']})")
+            if _obs > _asd:
+                raise ValueError(f"financial_trends observed_at 晚于 as_of(非 PIT/look-ahead;{_rec['ts_code']})")
+            # REALIZED-PERIOD-PIT:income/balancesheet 是**已实现**报表,报告期 end_date 不得晚于 as_of(未来报告期=PIT 不可能;forecast 业绩预告可指未来期,豁免)
+            if _rec.get("statement_type") in ("income", "balancesheet") and _per > _asd:
+                raise ValueError(f"financial_trends {_rec['statement_type']} record {_rec['ts_code']} 报告期 {_rec['period']} 晚于 as_of(已实现报表未来期=非 PIT)")
+            if not (_rec.get("red_flags") and _rec.get("summary")):
+                raise ValueError(f"financial_trends record 无 red_flags/summary({_rec['ts_code']})")
+            # COVERAGE-KEY-CONSISTENCY:(ts_code, statement_type) 是唯一覆盖键,records 内不得重复(同键证据重复 → 虚增/重复落点)
+            _k = (_rec["ts_code"], _rec.get("statement_type"))
+            if _k in _rec_keys:
+                raise ValueError(f"financial_trends 重复 record (ts_code,statement_type)={_k}(同键证据重复)")
+            _rec_keys.add(_k)
+            if _ft_status == "checked":
+                # row no-dangling(candidate-only):每个 checked 红旗 record 必须落到对应**候选**报告(非持仓)的逐票 operation_impact
+                _rep = _rep_by_ft.get(_rec["ts_code"])
+                if _rep is None:
+                    raise ValueError(f"financial_trends record {_rec['ts_code']} 无对应候选报告(candidate-only,持仓不产红旗)")
+                if ((_rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held":
+                    raise ValueError(f"financial_trends record {_rec['ts_code']} 落在持仓(held)报告(candidate-only,持仓财报趋势留后续刀)")
+                _expect_sf = f"financial_trend_{_rec['statement_type']}"
+                if not any(i.get("source_field") == _expect_sf
+                           for i in ((_rep.get("machine") or {}).get("operation_impact") or [])):
+                    raise ValueError(f"financial_trends record {_rec['ts_code']}/{_rec['statement_type']} 未落到该候选 report 逐票 operation_impact(财报趋势悬空)")
+        # per-(票,类) coverage(COVERAGE-KEY-CONSISTENCY):unchecked_codes ts_code ∈ 候选/持仓集、唯一键、不得与 records 同键、candidate-only(非 held)
+        for _uc in _ft_unck:
+            if _uc["ts_code"] not in _valid_codes:
+                raise ValueError(f"financial_trends unchecked_codes ts_code {_uc['ts_code']} 不在本周候选/持仓集")
+            _uk = (_uc["ts_code"], _uc.get("statement_type"))
+            if _uk in _unck_keys:
+                raise ValueError(f"financial_trends 重复 unchecked_codes 键 {_uk}")
+            _unck_keys.add(_uk)
+            if _uk in _rec_keys:
+                raise ValueError(f"financial_trends (ts_code,statement_type)={_uk} 同时为 record 与 unchecked(既查成又未查成,矛盾)")
+            # candidate-only:unchecked_codes 同样不得是持仓(held)——持仓财报趋势留后续刀,不得把 held scope 泄漏进 candidate-only 顶层字段
+            _ucrep = _rep_by_ft.get(_uc["ts_code"])
+            if _ucrep is not None and ((_ucrep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held":
+                raise ValueError(f"financial_trends unchecked_codes {_uc['ts_code']} 是持仓(held)(candidate-only,持仓财报趋势留后续刀)")
+    # 反向 evidence guard:每个 report 的 financial_trend_ impact 必须有匹配的 checked financial_trends 红旗 record(同 ts_code + statement_type),
+    # 否则=伪造/悬空 advisory。放 _ft block 外以 catch _ft=None/unknown 却有 impact 的伪造。与 engine guard ⑯ 双层(本层=证据对齐,engine=source-class 隔离)。
+    _ft_recs_keyed = {(_r["ts_code"], _r["statement_type"]) for _r in ((_ft or {}).get("records") or [])
+                      if (_ft or {}).get("status") == "checked"}
+    for _r in weekly["reports"]:
+        for _imp in ((_r.get("machine") or {}).get("operation_impact") or []):
+            _sf = str(_imp.get("source_field", ""))
+            if not _sf.startswith("financial_trend_"):
+                continue
+            _stype = _sf[len("financial_trend_"):]
+            if _stype not in _FIN_RED_FLAG_FN:                # 允许枚举=已注册类型(加新类先扩 _FIN_RED_FLAG_FN map + schema enum)
+                raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) statement_type={_stype!r} 不在允许枚举(伪造/未支持类型)")
+            if (_r["ts_code"], _stype) not in _ft_recs_keyed:
+                raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) 无匹配 checked financial_trends record(impact 无证据/悬空)")
+            if (_imp.get("evidence_ref") or {}).get("value") != f"financial_trends.records[{_stype}]":
+                raise ValueError(f"operation_impact {_sf}({_r['ts_code']}) evidence_ref.value 未对齐 financial_trends.records[{_stype}]")
+    # 4.2 财报质量趋势 ⑤ industry_fundamentals 一致性(advisory-only summary_only candidate-scope;schema 管形态,此处管历法+张冠李戴+rollup↔源双向 + summary-only 必产):
+    # SUMMARY-ONLY-ROLLUP(#4):financial_trends checked 有 income/balancesheet 红旗记录 ⟹ industry_fundamentals 必存在,并 roll 每个 unique 源码**恰一次**(不漏、不重);
+    # 行业内 red_flag_codes 不得重复、跨行业每码恰一次、count==唯一码数;scope 必 candidates_only;rollup↔源双向。(行级 operation_impact 伪装见 engine guard ⑰)
+    _bf_codes = {r["ts_code"] for r in ((_ft or {}).get("records") or [])
+                 if (_ft or {}).get("status") == "checked" and r.get("statement_type") in ("income", "balancesheet")}
+    _if = weekly.get("industry_fundamentals")
+    if _bf_codes and _if is None:
+        raise ValueError("financial_trends 有 income/balancesheet 红旗记录但缺 industry_fundamentals rollup(⑤ summary-only 必产行业上下文)")
+    if _if is not None:
+        if _if.get("as_of") != weekly["as_of"]:
+            raise ValueError(f"industry_fundamentals.as_of {_if.get('as_of')} != 周报 as_of {weekly['as_of']}")
+        if _if.get("scope") != "candidates_only":
+            raise ValueError("industry_fundamentals scope 必须 candidates_only(候选 scope,非全行业普查)")
+        _rolled = set()
+        for _ind in (_if.get("by_industry") or []):
+            _codes = _ind.get("red_flag_codes") or []
+            if not _codes:
+                raise ValueError(f"industry_fundamentals 行业 {_ind.get('sw_l2_name')} 无红旗候选(只列有红旗行业)")
+            if len(set(_codes)) != len(_codes):
+                raise ValueError(f"industry_fundamentals {_ind.get('sw_l2_name')} red_flag_codes 含重复码(同码聚合重复,虚增计数)")
+            if _ind.get("red_flag_candidate_count") != len(set(_codes)):
+                raise ValueError(f"industry_fundamentals {_ind.get('sw_l2_name')} red_flag_candidate_count 与 red_flag_codes 唯一数不符")
+            if _ind.get("candidate_count", 0) < len(set(_codes)):
+                raise ValueError(f"industry_fundamentals {_ind.get('sw_l2_name')} candidate_count(分母)< 红旗数")
+            for _c in _codes:
+                if _c not in _valid_codes:
+                    raise ValueError(f"industry_fundamentals red_flag_codes {_c} 不在本周候选/持仓集(张冠李戴)")
+                if _c not in _bf_codes:
+                    raise ValueError(f"industry_fundamentals red_flag_codes {_c} 无对应 income/balancesheet financial_trends 记录(rollup 无源)")
+                if _c in _rolled:
+                    raise ValueError(f"industry_fundamentals red_flag_codes {_c} 在多个行业重复 rollup(每 unique 源码恰一次)")
+                _rolled.add(_c)
+        if _bf_codes - _rolled:                       # 反向:income/balancesheet 记录未进 rollup(行业聚合漏票)
+            raise ValueError(f"financial_trends income/balancesheet 记录 {sorted(_bf_codes - _rolled)} 未进 industry_fundamentals rollup(行业聚合漏票)")
     # 4.2 Round5 龙虎榜 dragon_list 一致性(analysis-only comparison-only;schema 管类型/pattern,此处管历法+PIT+窗口+张冠李戴+双向 no-dangling):
     # unknown 必空 events;window_dates 合法且 <=as_of;checked 每 event: ts_code∈本周候选报告(events 只对候选生成)、trade_date 合法
     # 且 <=as_of(PIT:龙虎榜盘后发布)、∈window_dates;unchecked_dates ⊆ window_dates。复用上面的 _asd/_dt。
@@ -1157,6 +1269,392 @@ def _attach_forward_event_impacts(weekly, as_of):
             continue
         note = f"{_FORWARD_EVENT_MARKER}({len(evs)}项近端将至 → {_evtxt(evs)})(advisory,人工核查;不改决策)"
         h["reason"] = f"{h['reason']}｜{note}" if h.get("reason") else note
+
+
+# ── 4.2 财报质量趋势(财报报表 per-stock fetch · analysis-only · comparison-only · candidate-only)──────────
+# ②业绩预告 forecast / ③利润表 income / ④资产负债表 balancesheet:逐票新增报表取数 → **自然符号红旗**(tushare 自有分类 / 同期方向比较,
+# **不新设阈值**·决策4)→ advisory priority_down operation_impact + 落 精简结论区.风控触发(财报趋势对照)。**candidate-only**(镜像①
+# financial_quality;持仓财报趋势留后续刀,held 排除)、**绝不 hard_veto / 非生产 / 不改 EGS·TopN·选股·股数·否决**。镜像 forward_events
+# type-agnostic 框架:加第 N 类报表只扩 _FIN_STATEMENT_*/_FIN_RED_FLAG_FN map + provider + red-flag fn + schema enum,builder/attach/validator/render/guard 全 type-agnostic。
+# 与①区分:① 复用 egs_main 既有 fina_indicator(source_field=financial_quality、marker「财报质量对照」);本框架=**新增报表取数**(source_field=financial_trend_{type}、marker「财报趋势对照」)。
+_FIN_STATEMENT_MARKER = "财报趋势对照"   # 风控触发 落地标记:_attach 写入 + engine guard ⑯ 据此判 row no-dangling(单一来源;字面同步 phase5_engine guard ⑯)
+_FIN_STATEMENT_SOURCE_ID = {"forecast": "tushare.forecast", "income": "tushare.income", "balancesheet": "tushare.balancesheet"}
+_FIN_STATEMENT_LABEL = {"forecast": "业绩预告", "income": "利润表", "balancesheet": "资产负债表"}
+# tushare forecast.type 负面分类(自然分类红旗,**非阈值**;tushare 自有 enum,镜像①复用 EGS 既有 ESP-Q 旗标):预减/略减/首亏/续亏。
+# 不含 扭亏/续盈/略增/预增(正面)——「扭亏」含「亏」但不含下列任一,substring 匹配安全。
+_FORECAST_NEG_TYPES = ("预减", "略减", "首亏", "续亏")
+
+
+def _fin_num(v):
+    """财报字段数值清洗:非有限(NaN/Inf)/空/不可解析 → None(不伪造 0)。"""
+    if v is None or str(v).strip() in ("", "nan", "None", "NaT"):
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return f if (f == f and f not in (float("inf"), float("-inf"))) else None
+
+
+def _fin_pit_periods(recs, as_of, realized=False):
+    """财报报表 PIT helper:recs=[{"ann_date","end_date",...}],只保留 ann_date<=as_of(已公告,非 look-ahead)且 ann_date/end_date 合法,
+    按 end_date 去重(同一报告期多次公告取 ann_date 最新=最终数)后按 end_date 倒序。返回 [(end_date, rec)](最近报告期在前)。
+    非法/缺日期丢弃(不伪造)。**realized=True**(income/balancesheet 已实现报表):额外丢弃 end_date>as_of 的**未来报告期**
+    (已实现报表的未来期=PIT 不可能;REALIZED-PERIOD-PIT-GUARD)。forecast(业绩预告可指未来期)用 realized=False(默认),不丢未来 end_date。"""
+    from datetime import datetime
+    try:
+        as_of_d = datetime.strptime(str(as_of), "%Y%m%d")
+    except ValueError:
+        raise ValueError(f"financial_trends as_of {as_of!r} 非合法日历日")
+    best = {}   # end_date(str) -> (ann_date(str), rec)
+    for rec in (recs or []):
+        ann, end = (rec or {}).get("ann_date"), (rec or {}).get("end_date")
+        if not ann or not end:
+            continue                              # 无公告日/报告期 → 无法 PIT,丢弃
+        try:
+            ann_d = datetime.strptime(str(ann), "%Y%m%d")
+            end_d = datetime.strptime(str(end), "%Y%m%d")
+        except ValueError:
+            continue                              # 非法日期 → 丢弃
+        if ann_d > as_of_d:
+            continue                              # 公告晚于 as_of → look-ahead,丢弃
+        if realized and end_d > as_of_d:
+            continue                              # 已实现报表(income/balancesheet)未来报告期 → PIT 不可能,丢弃(forecast 豁免)
+        if str(end) not in best or str(ann) > best[str(end)][0]:
+            best[str(end)] = (str(ann), rec)      # 同报告期取最新公告(最终数,非更早预披)
+    return [(end, best[end][1]) for end in sorted(best, reverse=True)]
+
+
+def _yoy_period(end_date):
+    """同比基期(去年同报告期):20250930→20240930、20251231→20241231。返回 YYYYMMDD。"""
+    return f"{int(str(end_date)[:4]) - 1}{str(end_date)[4:]}"
+
+
+def _fin_assessable(recs, as_of, stype):
+    """coverage 判定(R-ASHORT-GAP42-FINANCIAL-TRENDS-PIT-FILTERED-COVERAGE-UNKNOWN-GAP):provider 返回**非空** recs 是否有
+    PIT-valid 评估基础——用于区分「PIT-valid 已查无红旗(checked)」与「非空但全被 PIT 过滤、无评估基础(→unchecked,绝不当 checked 空)」。
+    forecast/income:有任一 PIT-valid 期即可评(income q0 即可判亏损);balancesheet:全为 q0 vs 去年同期 q-4 比较,需 q0+q-4 都在才可评。
+    **仅对非空 recs 调用**(真空 [] = 查成真无数据,由 builder 另判 checked)。"""
+    realized = stype in ("income", "balancesheet")
+    periods = _fin_pit_periods(recs, as_of, realized=realized)
+    if not periods:
+        return False                                  # 非空 recs 但无 PIT-valid 期(全被 ann_date/end_date 过滤)→ 无评估基础
+    if stype == "balancesheet":
+        ends = {e for e, _ in periods}
+        return any(_yoy_period(e) in ends for e in ends)   # 全 YoY:需 q0 + 去年同期 q-4 都在,否则无可比基础
+    return True
+
+
+def _forecast_red_flags(recs, as_of):
+    """②业绩预告 forecast 自然符号红旗(comparison-only,**不新设阈值**):取 PIT 最近一期业绩预告,红旗 =
+    tushare 预告 type ∈ 负面分类(预减/略减/首亏/续亏,tushare 自有分类)**或** p_change_max<0(预告净利变动**上限**为负=必降,自然符号)。
+    返回 (red_flags[], summary, period, observed_at) 或 None(无红旗/无可用数据)。绝不据此否决/改决策。"""
+    periods = _fin_pit_periods(recs, as_of)
+    if not periods:
+        return None
+    end, rec = periods[0]                          # PIT 最近一期预告
+    ftype = str((rec or {}).get("type") or "").strip()
+    pmin, pmax = _fin_num((rec or {}).get("p_change_min")), _fin_num((rec or {}).get("p_change_max"))
+    flags = []
+    if ftype and any(t in ftype for t in _FORECAST_NEG_TYPES):
+        flags.append(f"业绩预告类型「{ftype}」(负面)")
+    if pmax is not None and pmax < 0:
+        flags.append(f"预告净利变动上限{pmax}%为负(必降)")
+    if not flags:
+        return None
+    rng = (f";预告净利变动 {pmin if pmin is not None else '?'}~{pmax if pmax is not None else '?'}%"
+           if (pmin is not None or pmax is not None) else "")
+    return (flags, f"{'、'.join(flags)}{rng}(报告期{end})", str(end), str((rec or {}).get("ann_date")))
+
+
+def _income_red_flags(recs, as_of):
+    """③利润表 income 自然符号红旗(comparison-only,**不新设阈值**,income-only):PIT 最近报告期 q0 与去年同期 q-4(均 ann_date<=as_of)——
+    红旗 = 归母净利润<0(亏损,q0 自然符号)/ 营收同比下滑(total_revenue q0<q-4)/ 毛利率同比下滑((revenue−oper_cost)/revenue q0<q-4)/
+    净利率同比下滑(归母净利/total_revenue q0<q-4)。同比类需 q-4 可得(缺则只判亏损,绝不伪造)。利润表 cumulative(YTD,合并报表 report_type=1)同口径可比。
+    返回 (red_flags[], summary, period, observed_at) 或 None。绝不据此否决/改决策。与①(扣非净利同比/ROE/现金流质量)互补,本刀聚焦 营收/毛利率/净利率/亏损。"""
+    periods = _fin_pit_periods(recs, as_of, realized=True)   # income 已实现报表:丢弃未来报告期(REALIZED-PERIOD-PIT)
+    if not periods:
+        return None
+    end, rec = periods[0]                          # PIT 最近报告期
+    by_end = {e: r for e, r in periods}
+    prior = by_end.get(_yoy_period(end))           # 去年同期(缺=None → 只判 q0 亏损)
+    def _profit(r):                                # 归母净利(缺退总净利)
+        v = _fin_num((r or {}).get("n_income_attr_p"))
+        return v if v is not None else _fin_num((r or {}).get("n_income"))
+    def _gm(r):                                    # 毛利率 =(营业收入−营业成本)/营业收入
+        rev, cost = _fin_num((r or {}).get("revenue")), _fin_num((r or {}).get("oper_cost"))
+        return (rev - cost) / rev if (rev not in (None, 0) and cost is not None) else None
+    def _nm(r):                                    # 净利率 = 归母净利 / 营业总收入
+        rev, ni = _fin_num((r or {}).get("total_revenue")), _profit(r)
+        return ni / rev if (rev not in (None, 0) and ni is not None) else None
+    flags, bits = [], []
+    p0 = _profit(rec)
+    if p0 is not None and p0 < 0:
+        flags.append("归母净利润为负(亏损)")
+        bits.append(f"归母净利{p0}")
+    if prior is not None:
+        r0, r1 = _fin_num((rec or {}).get("total_revenue")), _fin_num((prior or {}).get("total_revenue"))
+        if r0 is not None and r1 is not None and r0 < r1:
+            flags.append("营收同比下滑")
+            bits.append(f"营收 {r1}→{r0}")
+        g0, g1 = _gm(rec), _gm(prior)
+        if g0 is not None and g1 is not None and g0 < g1:
+            flags.append("毛利率同比下滑")
+            bits.append(f"毛利率 {round(g1 * 100, 2)}%→{round(g0 * 100, 2)}%")
+        n0, n1 = _nm(rec), _nm(prior)
+        if n0 is not None and n1 is not None and n0 < n1:
+            flags.append("净利率同比下滑")
+            bits.append(f"净利率 {round(n1 * 100, 2)}%→{round(n0 * 100, 2)}%")
+    if not flags:
+        return None
+    note = f"(报告期{end} vs {_yoy_period(end)})" if prior is not None else f"(报告期{end},无同期基数)"
+    return (flags, f"{'、'.join(flags)};{' / '.join(bits)}{note}", str(end), str((rec or {}).get("ann_date")))
+
+
+def _balancesheet_red_flags(recs, as_of):
+    """④资产负债表 balancesheet 自然符号红旗(comparison-only,**不新设阈值**,balancesheet-only):PIT 最近报告期 q0 与去年同期 q-4——
+    红旗(全为**同期方向比较**,非绝对阈值)= 资产负债率上升(total_liab/total_assets q0>q-4)/ 应收占总资产比上升(accounts_receiv/total_assets q0>q-4)/
+    存货占总资产比上升(inventories/total_assets q0>q-4)/ 商誉减值迹象(goodwill q0<q-4 且 q-4>0:CAS 商誉不摊销,YoY 降=减值/处置)。
+    **全为 YoY 比较,需 q-4 可得**(缺则无红旗,绝不伪造;无 q0-only 绝对阈值红旗——决策4 禁阈值)。返回 (red_flags[], summary, period, observed_at) 或 None。
+    绝不据此否决/改决策。与③(营收/毛利率/净利率/亏损)互补,本刀聚焦 应收/存货/商誉/负债。"""
+    periods = _fin_pit_periods(recs, as_of, realized=True)   # balancesheet 已实现报表:丢弃未来报告期(REALIZED-PERIOD-PIT)
+    if not periods:
+        return None
+    end, rec = periods[0]                          # PIT 最近报告期
+    prior = {e: r for e, r in periods}.get(_yoy_period(end))
+    if prior is None:
+        return None                               # 全为同期比较,无去年同期基数 → 无红旗(不伪造,不用绝对阈值兜底)
+
+    def _ratio(r, key):                           # 某项 / 总资产(总资产缺/0 → None,不除零)
+        num, ta = _fin_num((r or {}).get(key)), _fin_num((r or {}).get("total_assets"))
+        return num / ta if (ta not in (None, 0) and num is not None) else None
+    flags, bits = [], []
+    for key, label in (("total_liab", "资产负债率"), ("accounts_receiv", "应收占比"), ("inventories", "存货占比")):
+        c0, c1 = _ratio(rec, key), _ratio(prior, key)
+        if c0 is not None and c1 is not None and c0 > c1:      # 占比/比率同比上升(自然方向)
+            flags.append(f"{label}上升")
+            bits.append(f"{label} {round(c1 * 100, 2)}%→{round(c0 * 100, 2)}%")
+    g0, g1 = _fin_num((rec or {}).get("goodwill")), _fin_num((prior or {}).get("goodwill"))
+    if g0 is not None and g1 is not None and g1 > 0 and g0 < g1:   # 商誉 YoY 降 + 去年有商誉 → 减值/处置迹象(自然符号)
+        flags.append("商誉减值迹象")
+        bits.append(f"商誉 {g1}→{g0}")
+    if not flags:
+        return None
+    return (flags, f"{'、'.join(flags)};{' / '.join(bits)}(报告期{end} vs {_yoy_period(end)})",
+            str(end), str((rec or {}).get("ann_date")))
+
+
+_FIN_RED_FLAG_FN = {"forecast": _forecast_red_flags, "income": _income_red_flags,
+                    "balancesheet": _balancesheet_red_flags}   # type-agnostic builder 据此分派(加第 N 类只扩此表 + provider + schema enum)
+
+
+def _fetch_forecast(pro, ts_code: str):
+    """②业绩预告 forecast provider:tushare `pro.forecast(ts_code=)`(逐票业绩预告,**带公告日 ann_date 做 PIT**)→
+    [{"ann_date","end_date","type","p_change_min","p_change_max"}](YYYYMMDD/原值|None)。**fail-closed**:缺 ann_date/end_date/type 列 →
+    None(无法 PIT/数据形态异常 → 标未查成,不静默当真无);异常/None → None;空 → [](该票真无预告,查成了)。**仓库内未测真接口**:
+    `pro.forecast` 字段名据 tushare 文档(决策5 已探可得性),真取数 gated --confirm;mock 注入可单测。"""
+    try:
+        df = pro.forecast(ts_code=ts_code, fields="ts_code,ann_date,end_date,type,p_change_min,p_change_max")
+    except Exception:
+        return None                                   # 取数失败 → 未查成(区别于真无预告的 [])
+    if df is None:
+        return None
+    # fail-closed 要求**所有 red-flag 输入列**(非仅 PIT 列):type(分类红旗输入)+ p_change_min/p_change_max(数值红旗输入,
+    # p_change_max<0 是红旗判据)。缺任一 → None(无法跑声明的红旗判据 → 该(票,类)未查成,builder 标 unchecked/unknown,
+    # 绝不静默当「已查无红旗」)。列存在但单元格空白 → 值 None 合法(blank cell),仍算查成。(R-ASHORT-GAP42-FINANCIAL-TRENDS-PROVIDER-FIELD-COVERAGE-GUARD-GAP)
+    if not {"ann_date", "end_date", "type", "p_change_min", "p_change_max"}.issubset(set(getattr(df, "columns", []))):
+        return None                                   # 缺 PIT/分类/数值红旗输入列(数据形态异常)→ 未查成(不静默当真无)
+    if getattr(df, "empty", True):
+        return []                                     # 成功返回空 → 该票真无业绩预告(查成了)
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    return [{"ann_date": _s(r.get("ann_date")), "end_date": _s(r.get("end_date")), "type": _s(r.get("type")),
+             "p_change_min": _fin_num(r.get("p_change_min")), "p_change_max": _fin_num(r.get("p_change_max"))}
+            for _, r in df.iterrows()]
+
+
+def _fetch_income(pro, ts_code: str):
+    """③利润表 income provider: tushare `pro.income(ts_code=, report_type='1')`(逐票**合并报表** cumulative YTD 利润表,**带公告日 ann_date 做
+    PIT**)→ [{"ann_date","end_date","total_revenue","revenue","oper_cost","n_income","n_income_attr_p"}](YYYYMMDD/原值|None)。
+    **fail-closed**: 缺 ann_date/end_date 列 → None(无法 PIT/数据形态异常→标未查成);异常/None → None;空 → [](该票真无利润表,查成了)。
+    report_type='1' 取合并报表(避免单季/调整口径混淆 YoY)。**仓库内未测真接口**: 字段名据 tushare 文档(决策5 已探可得性),真取数 gated --confirm;mock 注入可单测。"""
+    try:
+        df = pro.income(ts_code=ts_code, report_type="1",
+                        fields="ts_code,ann_date,end_date,total_revenue,revenue,oper_cost,n_income,n_income_attr_p")
+    except Exception:
+        return None                                   # 取数失败 → 未查成(区别于真无利润表的 [])
+    if df is None:
+        return None
+    # fail-closed 要求**所有 red-flag 输入列**(非仅 PIT 列):total_revenue/revenue/oper_cost(营收·毛利率红旗输入)+ 至少一个利润列
+    # (n_income_attr_p 退 n_income,亏损·净利率红旗输入)。缺任一 → None(无法跑声明的红旗判据 → 未查成,builder 标 unchecked/unknown,
+    # 绝不静默当「已查无红旗」)。列存在但单元格空白 → 值 None 合法。(R-ASHORT-GAP42-FINANCIAL-TRENDS-PROVIDER-FIELD-COVERAGE-GUARD-GAP)
+    _cols = set(getattr(df, "columns", []))
+    if not {"ann_date", "end_date", "total_revenue", "revenue", "oper_cost"}.issubset(_cols):
+        return None                                   # 缺 PIT/营收/成本红旗输入列 → 未查成
+    if not ({"n_income_attr_p", "n_income"} & _cols):
+        return None                                   # 缺利润列(归母/总净利至少一个)→ 无法判亏损/净利率 → 未查成
+    if getattr(df, "empty", True):
+        return []                                     # 成功返回空 → 该票真无利润表记录(查成了)
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    return [{"ann_date": _s(r.get("ann_date")), "end_date": _s(r.get("end_date")),
+             "total_revenue": _fin_num(r.get("total_revenue")), "revenue": _fin_num(r.get("revenue")),
+             "oper_cost": _fin_num(r.get("oper_cost")), "n_income": _fin_num(r.get("n_income")),
+             "n_income_attr_p": _fin_num(r.get("n_income_attr_p"))}
+            for _, r in df.iterrows()]
+
+
+def _fetch_balancesheet(pro, ts_code: str):
+    """④资产负债表 balancesheet provider: tushare `pro.balancesheet(ts_code=, report_type='1')`(逐票**合并报表**资产负债表,**带公告日 ann_date 做
+    PIT**)→ [{"ann_date","end_date","total_assets","total_liab","accounts_receiv","inventories","goodwill"}](YYYYMMDD/原值|None)。
+    **fail-closed**: 缺 ann_date/end_date 列 → None(无法 PIT/数据形态异常→标未查成);异常/None → None;空 → [](该票真无资产负债表,查成了)。
+    **仓库内未测真接口**: 字段名据 tushare 文档(决策5 已探可得性),真取数 gated --confirm;mock 注入可单测。"""
+    try:
+        df = pro.balancesheet(ts_code=ts_code, report_type="1",
+                              fields="ts_code,ann_date,end_date,total_assets,total_liab,accounts_receiv,inventories,goodwill")
+    except Exception:
+        return None                                   # 取数失败 → 未查成(区别于真无资产负债表的 [])
+    if df is None:
+        return None
+    # fail-closed 要求**所有 red-flag 输入列**(非仅 PIT 列):total_assets/total_liab/accounts_receiv/inventories/goodwill
+    # (资产负债率·应收占比·存货占比·商誉减值红旗输入,均为 q0 vs q-4 方向比较的算子)。缺任一 → None(无法跑声明的红旗判据 →
+    # 未查成,builder 标 unchecked/unknown,绝不静默当「已查无红旗」)。列存在但单元格空白 → 值 None 合法。(R-ASHORT-GAP42-FINANCIAL-TRENDS-PROVIDER-FIELD-COVERAGE-GUARD-GAP)
+    if not {"ann_date", "end_date", "total_assets", "total_liab", "accounts_receiv",
+            "inventories", "goodwill"}.issubset(set(getattr(df, "columns", []))):
+        return None                                   # 缺 PIT/资产负债表红旗输入列(数据形态异常)→ 未查成(不静默当真无)
+    if getattr(df, "empty", True):
+        return []                                     # 成功返回空 → 该票真无资产负债表记录(查成了)
+    def _s(v):
+        return str(v) if (v is not None and str(v).strip() not in ("", "nan", "None", "NaT")) else None
+    return [{"ann_date": _s(r.get("ann_date")), "end_date": _s(r.get("end_date")),
+             "total_assets": _fin_num(r.get("total_assets")), "total_liab": _fin_num(r.get("total_liab")),
+             "accounts_receiv": _fin_num(r.get("accounts_receiv")), "inventories": _fin_num(r.get("inventories")),
+             "goodwill": _fin_num(r.get("goodwill"))}
+            for _, r in df.iterrows()]
+
+
+def _financial_trends(cand_names, as_of, forecast_provider=None, income_provider=None,
+                      balancesheet_provider=None, held_codes=frozenset()):
+    """4.2 财报质量趋势 builder(analysis-only · comparison-only · candidate-only)。
+    每 (provider, statement_type) × 候选(非持仓)ts_code:provider(ts_code)→报表 recs(list|None);PIT 过滤(_fin_pit_periods,ann_date<=as_of)
+    后由 `_FIN_RED_FLAG_FN[type]` 算**自然符号红旗**(无阈值·决策4);仅有红旗才落 record(无红旗=查成无红旗,不落、不噪声,镜像①)。
+    **unknown-not-clear**:全 provider None → status unknown_or_unavailable(绝不当无红旗);有 provider 但全(票,类)取数失败 → 同 unknown;
+    **部分(票,类)失败** → status checked 但失败项进 unchecked_codes(per-(票,类),绝不静默当无)。**held 排除**(持仓财报趋势留后续刀,镜像①候选 only)。
+    返回 {as_of,status,records[],unchecked_codes?}。type-agnostic:加第 N 类只扩 _FIN_STATEMENT_*/_FIN_RED_FLAG_FN map + provider + schema enum。"""
+    sources = [(forecast_provider, "forecast"), (income_provider, "income"), (balancesheet_provider, "balancesheet")]
+    if all(p is None for p, _ in sources):
+        return {"as_of": str(as_of), "status": "unknown_or_unavailable", "records": []}
+    held = {str(c) for c in (held_codes or ())}
+    records, any_ok, unchecked = [], False, []
+    for provider, stype in sources:
+        if provider is None:
+            continue                                  # 该类未启用(无 provider)→ 不标 unchecked(区别于查询失败)
+        red_fn = _FIN_RED_FLAG_FN[stype]
+        for ts_code, name in cand_names:
+            if str(ts_code) in held:
+                continue                              # candidate-only:持仓排除(持仓财报趋势留后续刀)
+            try:
+                recs = provider(ts_code)
+            except Exception:
+                recs = None                           # 单(票,类)查询失败 → 未查成
+            if recs is None:
+                unchecked.append({"ts_code": str(ts_code), "name": name or "", "statement_type": stype})   # 取数失败 → per-(票,类) unknown(不当无)
+                continue                              # 不计 any_ok(区别于真无红旗)
+            # PIT-filtered coverage(R-...-PIT-FILTERED-COVERAGE-UNKNOWN-GAP):provider **非空**但无 PIT-valid 评估基础
+            # (income 全未来报告期 / balancesheet 无可比 q-4 / 全 look-ahead ann_date)→ 未查成(false-clean 防护);**真空 [] 仍属查成**(真无数据)。
+            if recs and not _fin_assessable(recs, as_of, stype):
+                unchecked.append({"ts_code": str(ts_code), "name": name or "", "statement_type": stype})
+                continue                              # 不计 any_ok(无 PIT-valid 评估基础,绝不当「已查无红旗」)
+            any_ok = True                             # 真空 [] 或 有 PIT-valid 评估基础 → 查成(含真无红旗)
+            res = red_fn(recs, as_of)
+            if res is None:
+                continue                              # 查成但无红旗 → 不落(避免噪声;coverage 由 status/unchecked 体现)
+            flags, summary, period, observed_at = res
+            records.append({"ts_code": str(ts_code), "name": name or "", "statement_type": stype,
+                            "period": str(period), "observed_at": str(observed_at),
+                            "red_flags": list(flags), "summary": str(summary)})
+    if cand_names and not any_ok:                      # 有候选 + 有 provider 但全没查成 → unknown(绝不当无红旗)
+        return {"as_of": str(as_of), "status": "unknown_or_unavailable", "records": []}
+    records.sort(key=lambda r: (r["ts_code"], r["statement_type"]))
+    out = {"as_of": str(as_of), "status": "checked", "records": records}
+    if unchecked:                                     # 部分(票,类)未查成(全失败已上面 return unknown)→ per-(票,类) coverage,绝不静默当无
+        out["unchecked_codes"] = unchecked
+    return out
+
+
+def _attach_financial_trend_impacts(weekly, as_of):
+    """4.2 财报质量趋势 row landing(candidate-only · comparison-only):financial_trends 每条红旗 record 按 ts_code 落到对应**候选**
+    report 逐票 M6.7 —— machine.operation_impact(source_field=financial_trend_{type})+ 精简结论区.风控触发(含 _FIN_STATEMENT_MARKER)。
+    **绝不 hard_veto / 非生产 / 不改 操作·EGS·选股·TopN·股数·否决**(advisory priority_down,镜像①)。held(持仓)报告跳过
+    (财报趋势 candidate-only;builder 本已排除 held,此处兜底防漂移)。status!=checked(unknown/无)→ 不落(不伪造)。"""
+    ft = weekly.get("financial_trends") or {}
+    if ft.get("status") != "checked":
+        return
+    rep_by = {r["ts_code"]: r for r in weekly["reports"]}
+    for rec in (ft.get("records") or []):
+        rep = rep_by.get(rec["ts_code"])
+        if rep is None:
+            continue
+        if ((rep.get("machine") or {}).get("stateful_risk") or {}).get("position_state") == "held":
+            continue                                  # candidate-only:持仓跳过(builder 已排除,兜底)
+        stype = rec["statement_type"]
+        label = _FIN_STATEMENT_LABEL[stype]
+        cut = rep["m67"]["精简结论区"]
+        txt = f"{_FIN_STATEMENT_MARKER}({label}):{rec['summary']}(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)"
+        prev = cut.get("风控触发") or "无"
+        cut["风控触发"] = txt if prev in ("无", "") else f"{prev}｜{txt}"
+        rep["machine"].setdefault("operation_impact", []).append({
+            "source_field": f"financial_trend_{stype}",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": False,
+            "veto_class": "none",
+            "reason": f"{_FIN_STATEMENT_MARKER}({label}):{rec['summary']}(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {"kind": "lineage_key", "value": f"financial_trends.records[{stype}]", "as_of": str(as_of)},
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": False,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
+            "privacy_class": "public_tracked",
+        })
+
+
+def _industry_fundamentals(financial_trends, code_to_industry, as_of):
+    """⑤行业基本面(advisory-only · summary_only · **零新取数**):按 SW L2 行业聚合③④(income/balancesheet)候选财报红旗。
+    **candidate-scope**(基于本周候选,**非全行业普查** → scope=candidates_only 诚实标注,避免误读为完整行业景气;真全行业普查需另起单独 slice)。
+    只列有≥1 红旗候选的行业(无红旗行业不列,避噪声);②预告 forecast **不计**(行业基本面=已实现 income/balancesheet,非预告)。
+    financial_trends status!=checked → None(无可聚合)。**无 operation_impact**(summary_only,逐票红旗已由③④落地;本层只加行业上下文摘要)。
+    返回 {as_of,scope,by_industry[{sw_l2_name,candidate_count(分母,该行业候选总数),red_flag_candidate_count,red_flag_codes,summary}]} 或 None(无红旗行业)。"""
+    if (financial_trends or {}).get("status") != "checked":
+        return None
+    recs = [r for r in (financial_trends.get("records") or []) if r.get("statement_type") in ("income", "balancesheet")]
+    if not recs:
+        return None
+    ind_of = {str(c): (i or "未知") for c, i in (code_to_industry or {}).items()}
+    cand_count = {}                                    # 行业 → 候选总数(分母,context)
+    for ind in ind_of.values():
+        cand_count[ind] = cand_count.get(ind, 0) + 1
+    by_ind = {}                                        # 行业 → {codes:{ts:name}, flags:set}
+    for r in recs:
+        ind = ind_of.get(r["ts_code"], "未知")
+        slot = by_ind.setdefault(ind, {"codes": {}, "flags": set()})
+        slot["codes"][r["ts_code"]] = r.get("name", "")
+        slot["flags"].update(r.get("red_flags") or [])
+    out = []
+    for ind in sorted(by_ind):
+        codes = sorted(by_ind[ind]["codes"])
+        flags = sorted(by_ind[ind]["flags"])
+        denom = max(cand_count.get(ind, 0), len(codes))   # 分母 >= 红旗数 >= 1
+        out.append({"sw_l2_name": ind, "candidate_count": denom,
+                    "red_flag_candidate_count": len(codes), "red_flag_codes": codes,
+                    "summary": f"{ind}:{denom} 候选中 {len(codes)} 只有财报红旗({'、'.join(flags)})"})
+    return {"as_of": str(as_of), "scope": "candidates_only", "by_industry": out}
 
 
 # ── 4.2 Round5 龙虎榜(top_list)第一刀: analysis-only · comparison-only ───────────────────────
@@ -1837,7 +2335,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
-         dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None):
+         dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None,
+         forecast_provider=None, income_provider=None, balancesheet_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -1952,6 +2451,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 Round5 第三刀 折价率: 当日**未复权**收盘价 provider(同上下文;pro.daily raw close 按 trade_date 查;绝不复用前复权)。
         if daily_close_provider is None:
             daily_close_provider = lambda d: _fetch_daily_close(pro, d)
+        # 4.2 财报质量趋势 ②业绩预告 provider(analysis-only advisory 旁路;注入优先;同一已授权 fetch 上下文;pro.forecast 仓库未测真接口,gated --confirm)。
+        if forecast_provider is None:
+            forecast_provider = lambda code: _fetch_forecast(pro, code)
+        # 4.2 财报质量趋势 ③利润表 provider(同上下文;pro.income report_type=1 合并报表,仓库未测真接口,gated --confirm)。
+        if income_provider is None:
+            income_provider = lambda code: _fetch_income(pro, code)
+        # 4.2 财报质量趋势 ④资产负债表 provider(同上下文;pro.balancesheet report_type=1 合并报表,仓库未测真接口,gated --confirm)。
+        if balancesheet_provider is None:
+            balancesheet_provider = lambda code: _fetch_balancesheet(pro, code)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -2065,6 +2573,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["block_trade"] = _block_trade_events(_dragon_covered_names, args.as_of, block_trade_provider,
                                                 dragon_list_days, close_provider=daily_close_provider)
     _attach_block_trade_impacts(weekly, args.as_of)
+    # 4.2 财报质量趋势(②forecast/③income/④balancesheet, candidate-only · comparison-only):候选(**非持仓**)新增报表取数 → 自然符号红旗 →
+    # 风控触发(财报趋势对照)+ operation_impact(不改决策/EGS/选股/TopN/股数)。unknown-not-clear: provider 不可用(无 --confirm)→ status=unknown(绝不当无红旗)。
+    # held 排除(持仓财报趋势留后续刀,镜像①候选 only);universe = EGS 候选 ∖ 账户持仓。
+    _fin_trend_names = [(str(c.get("ts_code")), c.get("name", "")) for c in cands if str(c.get("ts_code")) not in held_codes_all]
+    weekly["financial_trends"] = _financial_trends(_fin_trend_names, args.as_of, forecast_provider=forecast_provider,
+                                                   income_provider=income_provider,
+                                                   balancesheet_provider=balancesheet_provider, held_codes=held_codes_all)
+    _attach_financial_trend_impacts(weekly, args.as_of)
+    # 4.2 财报质量趋势 ⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选红旗 → 行业上下文。
+    # candidate-scope(基于本周候选,非全行业普查);只列有红旗行业;无 operation_impact(逐票已由③④落地,本层只加行业摘要)。
+    _fin_trend_ind = {str(c.get("ts_code")): ((c.get("industry") or {}).get("sw_l2_name") or "未知")
+                      for c in cands if str(c.get("ts_code")) not in held_codes_all}
+    _indf = _industry_fundamentals(weekly.get("financial_trends"), _fin_trend_ind, args.as_of)
+    if _indf:
+        weekly["industry_fundamentals"] = _indf
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
     # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)

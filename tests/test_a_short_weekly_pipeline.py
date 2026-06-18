@@ -33,6 +33,8 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _fetch_dragon_inst, _sum_inst_net,
     _block_trade_events, _fetch_block_trade, _attach_block_trade_impacts,
     _fetch_daily_close, _attach_block_discount,
+    _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
+    _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
 )
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -3324,6 +3326,622 @@ class BlockTradeTests(unittest.TestCase):
         e = [x for x in loaded["block_trade"]["events"] if x["ts_code"] == "600000.SH"][0]
         self.assertEqual(e["close"], 10.0)
         self.assertAlmostEqual(e["parties"][0]["discount"], -0.05)
+
+
+class FinancialTrendsTests(unittest.TestCase):
+    """4.2 财报质量趋势 ②业绩预告 forecast(框架 + forecast):per-stock 新增报表取数 → 自然符号红旗(tushare 预告 type 负面分类 /
+    p_change_max<0)→ advisory priority_down operation_impact + 风控触发(财报趋势对照);comparison-only · candidate-only · 绝不
+    hard_veto/非生产/不改 EGS/选股/股数;unknown-not-clear;不新设阈值(决策4)。"""
+
+    def _rec(self, ts="600000.SH", stype="forecast", period="20260331", observed_at="20260415",
+             flags=None, summary="业绩预告类型「预减」(负面)(报告期20260331)"):
+        return {"ts_code": ts, "name": "测试", "statement_type": stype, "period": period,
+                "observed_at": observed_at, "red_flags": flags or ["业绩预告类型「预减」(负面)"], "summary": summary}
+
+    def _weekly_ft(self, status="checked", records=None):
+        w = _weekly()
+        w["financial_trends"] = {"as_of": AS_OF, "status": status, "records": records if records is not None else []}
+        return w
+
+    def _fc(self, ann="20260415", end="20260331", ftype="预减", pmin=None, pmax=None):
+        return {"ann_date": ann, "end_date": end, "type": ftype, "p_change_min": pmin, "p_change_max": pmax}
+
+    # ── forecast 自然符号红旗(不新设阈值)──
+    def test_forecast_neg_type_flags(self):
+        res = _forecast_red_flags([self._fc(ftype="预减")], AS_OF)
+        self.assertIsNotNone(res)
+        self.assertTrue(any("预减" in f for f in res[0]))
+
+    def test_forecast_positive_type_no_flag(self):
+        # 扭亏=正面(含「亏」但不含负面分类子串 预减/略减/首亏/续亏)+ p_change_max>0 → 无红旗(substring 不误撞)
+        self.assertIsNone(_forecast_red_flags([self._fc(ftype="扭亏", pmin=50, pmax=120)], AS_OF))
+
+    def test_forecast_续盈_no_flag(self):
+        self.assertIsNone(_forecast_red_flags([self._fc(ftype="续盈", pmin=5, pmax=20)], AS_OF))
+
+    def test_forecast_pchange_max_negative_flags(self):
+        # p_change_max<0 → 必降(自然符号),即使 type 非负面分类
+        res = _forecast_red_flags([self._fc(ftype="略增", pmin=-30, pmax=-5)], AS_OF)
+        self.assertIsNotNone(res)
+        self.assertTrue(any("上限" in f for f in res[0]))
+
+    def test_forecast_pchange_min_negative_alone_no_flag(self):
+        # 仅下限<0、上限>=0 → 区间含正,不武断红旗(不新设阈值)
+        self.assertIsNone(_forecast_red_flags([self._fc(ftype="略增", pmin=-5, pmax=20)], AS_OF))
+
+    def test_forecast_pit_lookahead_skipped(self):
+        # ann_date > as_of → look-ahead 丢弃 → 无可用 → None
+        self.assertIsNone(_forecast_red_flags([self._fc(ann="20260701", end="20260630")], AS_OF))
+
+    def test_forecast_nearest_period(self):
+        # PIT 最近报告期(20260331 预减红旗),不被更早 20250930 预增覆盖
+        recs = [self._fc(ann="20260415", end="20260331", ftype="预减"),
+                self._fc(ann="20251015", end="20250930", ftype="预增", pmin=10, pmax=30)]
+        res = _forecast_red_flags(recs, AS_OF)
+        self.assertIsNotNone(res)
+        self.assertEqual(res[2], "20260331")
+
+    def test_forecast_empty_no_flag(self):
+        self.assertIsNone(_forecast_red_flags([], AS_OF))
+
+    def test_forecast_missing_ann_skipped(self):
+        self.assertIsNone(_forecast_red_flags([self._fc(ann=None)], AS_OF))   # 无公告日 → 无法 PIT,丢弃
+
+    # ── ③ income 自然符号红旗(归母净利<0 / 营收·毛利率·净利率同比下滑;不新设阈值)──
+    def _inc(self, ann="20260415", end="20260331", trev=1000.0, rev=1000.0, cost=600.0, ni=100.0, napt=100.0):
+        return {"ann_date": ann, "end_date": end, "total_revenue": trev, "revenue": rev,
+                "oper_cost": cost, "n_income": ni, "n_income_attr_p": napt}
+
+    def test_income_loss_flags(self):
+        res = _income_red_flags([self._inc(napt=-50.0, ni=-50.0)], AS_OF)   # q0 only(无同期)→ 仅亏损
+        self.assertIsNotNone(res)
+        self.assertTrue(any("亏损" in f for f in res[0]))
+
+    def test_income_revenue_decline_yoy(self):
+        recs = [self._inc(end="20260331", ann="20260415", trev=800.0, rev=800.0, cost=480.0),
+                self._inc(end="20250331", ann="20250415", trev=1000.0, rev=1000.0, cost=600.0)]   # gm/nm 持平,仅营收降
+        res = _income_red_flags(recs, AS_OF)
+        self.assertTrue(any("营收同比下滑" in f for f in res[0]))
+
+    def test_income_gross_margin_decline_yoy(self):
+        recs = [self._inc(end="20260331", ann="20260415", cost=700.0),     # gm=(1000-700)/1000=0.30
+                self._inc(end="20250331", ann="20250415", cost=600.0)]     # gm=0.40 → q0<q1
+        res = _income_red_flags(recs, AS_OF)
+        self.assertTrue(any("毛利率同比下滑" in f for f in res[0]))
+
+    def test_income_net_margin_decline_yoy(self):
+        recs = [self._inc(end="20260331", ann="20260415", napt=80.0, ni=80.0),    # nm=0.08
+                self._inc(end="20250331", ann="20250415", napt=120.0, ni=120.0)]  # nm=0.12 → q0<q1
+        res = _income_red_flags(recs, AS_OF)
+        self.assertTrue(any("净利率同比下滑" in f for f in res[0]))
+
+    def test_income_healthy_no_flag(self):
+        recs = [self._inc(end="20260331", ann="20260415", trev=1100.0, rev=1100.0, cost=600.0, napt=150.0, ni=150.0),
+                self._inc(end="20250331", ann="20250415")]   # 营收↑/毛利率↑/净利率↑/盈利 → 无红旗
+        self.assertIsNone(_income_red_flags(recs, AS_OF))
+
+    def test_income_no_prior_yoy_skipped(self):
+        # 仅 q0、盈利、无同期基数 → 同比类不判(不伪造)→ None
+        self.assertIsNone(_income_red_flags([self._inc(napt=100.0)], AS_OF))
+
+    def test_income_pit_lookahead_skipped(self):
+        self.assertIsNone(_income_red_flags([self._inc(ann="20260701", end="20260630", napt=-50.0)], AS_OF))
+
+    def test_builder_income_emits(self):
+        # type-agnostic builder 分派 income red-flag fn
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, income_provider=lambda c: [self._inc(napt=-50.0, ni=-50.0)])
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual(ft["records"][0]["statement_type"], "income")
+
+    # ── ④ balancesheet 自然符号方向红旗(资产负债率↑/应收占比↑/存货占比↑/商誉减值;全 YoY,不新设阈值)──
+    def _bs(self, ann="20260415", end="20260331", ta=10000.0, liab=4000.0, ar=1000.0, inv=1000.0, gw=0.0):
+        return {"ann_date": ann, "end_date": end, "total_assets": ta, "total_liab": liab,
+                "accounts_receiv": ar, "inventories": inv, "goodwill": gw}
+
+    def test_bs_debt_ratio_rising(self):
+        recs = [self._bs(end="20260331", ann="20260415", liab=5000.0),    # 50%
+                self._bs(end="20250331", ann="20250415", liab=4000.0)]    # 40% → 上升(应收/存货/商誉 持平/0,仅负债率)
+        self.assertTrue(any("资产负债率上升" in f for f in _balancesheet_red_flags(recs, AS_OF)[0]))
+
+    def test_bs_receivables_rising(self):
+        recs = [self._bs(end="20260331", ann="20260415", ar=2000.0),     # 20%
+                self._bs(end="20250331", ann="20250415", ar=1000.0)]     # 10% → 上升
+        self.assertTrue(any("应收占比上升" in f for f in _balancesheet_red_flags(recs, AS_OF)[0]))
+
+    def test_bs_inventory_rising(self):
+        recs = [self._bs(end="20260331", ann="20260415", inv=2000.0),
+                self._bs(end="20250331", ann="20250415", inv=1000.0)]
+        self.assertTrue(any("存货占比上升" in f for f in _balancesheet_red_flags(recs, AS_OF)[0]))
+
+    def test_bs_goodwill_impairment(self):
+        recs = [self._bs(end="20260331", ann="20260415", gw=500.0),      # 商誉 500
+                self._bs(end="20250331", ann="20250415", gw=1000.0)]     # 商誉 1000 → q0<q1 且 q1>0 → 减值迹象
+        self.assertTrue(any("商誉减值迹象" in f for f in _balancesheet_red_flags(recs, AS_OF)[0]))
+
+    def test_bs_goodwill_increase_no_flag(self):
+        recs = [self._bs(end="20260331", ann="20260415", gw=1000.0),
+                self._bs(end="20250331", ann="20250415", gw=500.0)]      # 商誉↑(新并购)→ 非减值 → 无红旗(其余持平)
+        self.assertIsNone(_balancesheet_red_flags(recs, AS_OF))
+
+    def test_bs_healthy_no_flag(self):
+        recs = [self._bs(end="20260331", ann="20260415", liab=3000.0, ar=800.0, inv=800.0, gw=1000.0),   # 负债率/应收/存货↓、商誉↑
+                self._bs(end="20250331", ann="20250415", liab=4000.0, ar=1000.0, inv=1000.0, gw=500.0)]
+        self.assertIsNone(_balancesheet_red_flags(recs, AS_OF))
+
+    def test_bs_no_prior_no_flag(self):
+        # 全为同期比较,无去年同期基数 → 无红旗(不用绝对阈值兜底)
+        self.assertIsNone(_balancesheet_red_flags([self._bs(liab=9000.0)], AS_OF))
+
+    def test_bs_pit_lookahead_skipped(self):
+        self.assertIsNone(_balancesheet_red_flags([self._bs(ann="20260701", end="20260630", liab=9000.0)], AS_OF))
+
+    def test_builder_balancesheet_emits(self):
+        recs = [self._bs(end="20260331", ann="20260415", liab=5000.0), self._bs(end="20250331", ann="20250415", liab=4000.0)]
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, balancesheet_provider=lambda c: recs)
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual(ft["records"][0]["statement_type"], "balancesheet")
+
+    # ── ⑤ industry_fundamentals 行业基本面(advisory-only · summary_only · 候选 scope · 聚合③④ income/balancesheet)──
+    def _ft_bf(self, ts="600000.SH", stype="income", flags=None, summary="营收同比下滑(报告期20260331 vs 20250331)"):
+        return {"ts_code": ts, "name": "测试", "statement_type": stype, "period": "20260331",
+                "observed_at": "20260415", "red_flags": flags or ["营收同比下滑"], "summary": summary}
+
+    def test_indf_aggregates_by_industry(self):
+        ft = {"status": "checked", "records": [self._ft_bf("600000.SH", "income"),
+                                               self._ft_bf("000001.SZ", "balancesheet", flags=["资产负债率上升"])]}
+        indf = _industry_fundamentals(ft, {"600000.SH": "半导体", "000001.SZ": "半导体", "600519.SH": "白酒"}, AS_OF)
+        self.assertEqual(indf["scope"], "candidates_only")
+        names = [g["sw_l2_name"] for g in indf["by_industry"]]
+        self.assertIn("半导体", names)
+        self.assertNotIn("白酒", names)                      # 白酒无红旗候选 → 不列(避噪声)
+        g = [x for x in indf["by_industry"] if x["sw_l2_name"] == "半导体"][0]
+        self.assertEqual((g["candidate_count"], g["red_flag_candidate_count"]), (2, 2))
+        self.assertEqual(sorted(g["red_flag_codes"]), ["000001.SZ", "600000.SH"])
+
+    def test_indf_excludes_forecast(self):
+        # 行业基本面=已实现 income/balancesheet,②预告 forecast 不计
+        ft = {"status": "checked", "records": [self._ft_bf("600000.SH", "forecast", flags=["业绩预告类型「预减」(负面)"])]}
+        self.assertIsNone(_industry_fundamentals(ft, {"600000.SH": "半导体"}, AS_OF))
+
+    def test_indf_unknown_status_none(self):
+        self.assertIsNone(_industry_fundamentals({"status": "unknown_or_unavailable", "records": []}, {}, AS_OF))
+
+    def _weekly_indf(self, by_industry=None, ft_records=None):
+        w = _weekly()
+        recs = ft_records if ft_records is not None else [self._ft_bf("600000.SH", "income")]
+        w["financial_trends"] = {"as_of": AS_OF, "status": "checked", "records": recs}
+        _attach_financial_trend_impacts(w, AS_OF)            # 满足 financial_trends forward no-dangling(income 记录落逐票)
+        if by_industry is None:
+            by_industry = [{"sw_l2_name": "半导体", "candidate_count": 1, "red_flag_candidate_count": 1,
+                            "red_flag_codes": ["600000.SH"], "summary": "半导体:1 候选中 1 只有财报红旗(营收同比下滑)"}]
+        w["industry_fundamentals"] = {"as_of": AS_OF, "scope": "candidates_only", "by_industry": by_industry}
+        return w
+
+    def test_validator_indf_accept(self):
+        w = self._weekly_indf()
+        jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+        validate_weekly_report(w, _feed())
+
+    def test_validator_indf_bad_scope_rejected(self):
+        w = self._weekly_indf()
+        w["industry_fundamentals"]["scope"] = "full_industry"   # 必 candidates_only
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_indf_foreign_ts_rejected(self):
+        w = self._weekly_indf(by_industry=[{"sw_l2_name": "半导体", "candidate_count": 1, "red_flag_candidate_count": 1,
+                                            "red_flag_codes": ["600999.SH"], "summary": "x"}])   # 张冠李戴
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_indf_source_not_rolled_rejected(self):
+        # income 记录存在但未进任何行业 rollup → 反向 reject(行业聚合漏票)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_indf(by_industry=[]), _feed())
+
+    def test_render_indf(self):
+        self.assertIn("行业基本面", render_weekly_markdown(self._weekly_indf()))
+
+    def test_main_industry_fundamentals(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            iprov = lambda c: ([{"ann_date": "20260415", "end_date": "20260331", "total_revenue": 800.0,
+                                 "revenue": 800.0, "oper_cost": 700.0, "n_income": -50.0, "n_income_attr_p": -50.0}]
+                               if c == "600000.SH" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), income_provider=iprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        indf = loaded.get("industry_fundamentals")
+        self.assertIsNotNone(indf)
+        self.assertEqual(indf["scope"], "candidates_only")
+        self.assertTrue(any("600000.SH" in g["red_flag_codes"] for g in indf["by_industry"]))
+
+    # ── provider 字段覆盖 fail-closed(R-ASHORT-GAP42-FINANCIAL-TRENDS-PROVIDER-FIELD-COVERAGE-GUARD-GAP):
+    #    缺 red-flag 输入列 → None(未查成),绝不静默当「已查无红旗」;列存在值空(blank cell)仍查成 ──
+    def test_fetch_forecast_missing_metric_column_unchecked(self):
+        class _Pro:                                    # 有 PIT+type 但缺 p_change_max 列 → None(无法跑 p_change 红旗)
+            def forecast(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"], "type": ["预减"]})
+        self.assertIsNone(_fetch_forecast(_Pro(), "600000.SH"))
+
+    def test_fetch_forecast_blank_cells_checked(self):
+        class _Pro:                                    # 列全在、值空(blank cell)→ 返回行(查成),红旗经 type 判
+            def forecast(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"],
+                                     "type": ["预减"], "p_change_min": [None], "p_change_max": [None]})
+        recs = _fetch_forecast(_Pro(), "600000.SH")
+        self.assertEqual(len(recs), 1)
+        self.assertIsNone(recs[0]["p_change_max"])     # blank cell → None(合法,列在)
+
+    def test_fetch_income_missing_metric_column_unchecked(self):
+        class _Pro:                                    # 缺 total_revenue 等红旗输入列 → None
+            def income(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"]})
+        self.assertIsNone(_fetch_income(_Pro(), "600000.SH"))
+
+    def test_fetch_income_missing_profit_column_unchecked(self):
+        class _Pro:                                    # 有营收/成本但缺利润列(n_income_attr_p/n_income 都无)→ None
+            def income(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"],
+                                     "total_revenue": [1000.0], "revenue": [1000.0], "oper_cost": [600.0]})
+        self.assertIsNone(_fetch_income(_Pro(), "600000.SH"))
+
+    def test_fetch_income_blank_cells_checked(self):
+        class _Pro:                                    # 列全在(含一个利润列)、值空 → 查成
+            def income(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"],
+                                     "total_revenue": [None], "revenue": [None], "oper_cost": [None], "n_income": [None]})
+        self.assertEqual(len(_fetch_income(_Pro(), "600000.SH")), 1)
+
+    def test_fetch_balancesheet_missing_metric_column_unchecked(self):
+        class _Pro:                                    # 缺 goodwill 等红旗输入列 → None
+            def balancesheet(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"],
+                                     "total_assets": [1e4], "total_liab": [4e3], "accounts_receiv": [1e3], "inventories": [1e3]})
+        self.assertIsNone(_fetch_balancesheet(_Pro(), "600000.SH"))
+
+    def test_fetch_balancesheet_blank_cells_checked(self):
+        class _Pro:                                    # 列全在、值空 → 查成
+            def balancesheet(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"],
+                                     "total_assets": [None], "total_liab": [None], "accounts_receiv": [None],
+                                     "inventories": [None], "goodwill": [None]})
+        self.assertEqual(len(_fetch_balancesheet(_Pro(), "600000.SH")), 1)
+
+    def test_builder_missing_metric_column_marks_unchecked(self):
+        # 端到端:provider 缺 metric 列 → builder 标该(票,类)未查成 → 唯一(票,类)失败 → status unknown(绝不 checked 空 records 假「无红旗」)
+        class _Pro:
+            def income(self, **kw):
+                return pd.DataFrame({"ts_code": ["600000.SH"], "ann_date": ["20260415"], "end_date": ["20260331"]})
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, income_provider=lambda c: _fetch_income(_Pro(), c))
+        self.assertEqual(ft["status"], "unknown_or_unavailable")
+
+    # ── 再审查 #5 PIT-FILTERED-COVERAGE:provider 非空但无 PIT-valid 评估基础 → unchecked(false-clean 防护);真空 [] 仍查成 ──
+    def test_builder_income_future_only_unchecked(self):
+        # provider 非空但全是未来报告期(end>as_of)→ realized 全过滤 → 无评估基础 → 未查成 → unknown(非 checked 空)
+        prov = lambda c: [self._inc(ann="20260415", end="20260930", napt=-50.0, ni=-50.0)]
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, income_provider=prov)
+        self.assertEqual(ft["status"], "unknown_or_unavailable")
+        self.assertEqual(ft["records"], [])
+
+    def test_builder_balancesheet_no_prior_unchecked(self):
+        # provider 非空但只有 q0、无去年同期 q-4 → 全 YoY 无可比 → 无评估基础 → 未查成
+        prov = lambda c: [self._bs(ann="20260415", end="20260331", liab=5000.0)]
+        self.assertEqual(_financial_trends([("600000.SH", "x")], AS_OF, balancesheet_provider=prov)["status"],
+                         "unknown_or_unavailable")
+
+    def test_builder_true_empty_checked(self):
+        # provider 真空 [] → 查成、真无数据(诚实 clean,非 unchecked)
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, income_provider=lambda c: [])
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual(ft["records"], [])
+        self.assertNotIn("unchecked_codes", ft)
+
+    def test_builder_income_q0_only_loss_still_checked(self):
+        # income q0-only(无 q-4)有亏损 → q0 即可判亏损 → 有评估基础 → checked + record(亏损不需同期)
+        prov = lambda c: [self._inc(ann="20260415", end="20260331", napt=-50.0, ni=-50.0)]
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, income_provider=prov)
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual(ft["records"][0]["statement_type"], "income")
+
+    def test_builder_partial_pit_filtered_marks_unchecked(self):
+        # 一票 PIT-valid red flag + 一票全未来期 → checked + 失败票进 unchecked_codes(per-key,非整体 unknown)
+        prov = lambda c: ([self._inc(ann="20260415", end="20260331", napt=-50.0, ni=-50.0)] if c == "600000.SH"
+                          else [self._inc(ann="20260415", end="20260930", napt=-50.0, ni=-50.0)])
+        ft = _financial_trends([("600000.SH", "x"), ("000001.SZ", "y")], AS_OF, income_provider=prov)
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual([r["ts_code"] for r in ft["records"]], ["600000.SH"])
+        self.assertEqual([u["ts_code"] for u in ft["unchecked_codes"]], ["000001.SZ"])
+
+    # ── 再审查 #2 COVERAGE-KEY-CONSISTENCY:(ts_code,statement_type) 唯一键 / record↔unchecked 互斥 / unknown 不带 unchecked / unchecked candidate-only ──
+    def test_validator_unknown_with_unchecked_rejected(self):
+        w = self._weekly_ft(status="unknown_or_unavailable", records=[])
+        w["financial_trends"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "t", "statement_type": "forecast"}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_duplicate_records_rejected(self):
+        w = self._weekly_ft(records=[self._rec(), self._rec()])   # 同 (600000, forecast) 两次
+        _attach_financial_trend_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_duplicate_unchecked_rejected(self):
+        w = self._weekly_ft(records=[])
+        w["financial_trends"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "t", "statement_type": "forecast"},
+                                                    {"ts_code": "600000.SH", "name": "t", "statement_type": "forecast"}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_record_and_unchecked_same_key_rejected(self):
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        w["financial_trends"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "t", "statement_type": "forecast"}]
+        with self.assertRaises(ValueError):       # 同键既 record 又 unchecked
+            validate_weekly_report(w, _feed())
+
+    def test_validator_held_unchecked_rejected(self):
+        # candidate-only:持仓(held)不得进 financial_trends.unchecked_codes(持仓财报趋势留后续刀,不泄漏 held scope)
+        w = self._weekly_ft(status="checked", records=[])
+        w["reports"][0].setdefault("machine", {})["stateful_risk"] = {"position_state": "held"}
+        w["financial_trends"]["unchecked_codes"] = [{"ts_code": "600000.SH", "name": "t", "statement_type": "forecast"}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    # ── 再审查 #3 REALIZED-PERIOD-PIT:income/balancesheet 已实现报表报告期不得 > as_of;forecast 业绩预告可指未来期(豁免)──
+    def test_income_future_period_skipped(self):
+        # end>as_of(20260609)→ 已实现未来报告期丢弃 → 唯一记录被丢 → None
+        self.assertIsNone(_income_red_flags([self._inc(ann="20260415", end="20260930", napt=-50.0, ni=-50.0)], AS_OF))
+
+    def test_balancesheet_future_period_skipped(self):
+        self.assertIsNone(_balancesheet_red_flags([self._bs(ann="20260415", end="20260930", liab=9000.0)], AS_OF))
+
+    def test_forecast_future_period_allowed(self):
+        # forecast 业绩预告可指未来报告期(realized=False 豁免);ann_date<=as_of + 预减 → 仍红旗
+        res = _forecast_red_flags([self._fc(ann="20260415", end="20260930", ftype="预减")], AS_OF)
+        self.assertIsNotNone(res)
+        self.assertEqual(res[2], "20260930")
+
+    def test_validator_income_future_period_rejected(self):
+        w = self._weekly_ft(records=[self._rec(stype="income", period="20260930", flags=["归母净利润为负(亏损)"], summary="亏损")])
+        _attach_financial_trend_impacts(w, AS_OF)     # 落地满足 forward;唯一失败=realized-period PIT
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    # ── 再审查 #4 INDUSTRY-FUNDAMENTALS-SUMMARY-ONLY-ROLLUP:必产 rollup / dup-codes / 禁逐票 impact ──
+    def test_validator_missing_industry_rollup_rejected(self):
+        # income/bs 红旗记录存在但缺 industry_fundamentals → 拒(⑤ summary-only 必产行业上下文)
+        w = _weekly()
+        w["financial_trends"] = {"as_of": AS_OF, "status": "checked", "records": [self._ft_bf("600000.SH", "income")]}
+        _attach_financial_trend_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_duplicate_industry_code_rejected(self):
+        w = self._weekly_indf(by_industry=[{"sw_l2_name": "半导体", "candidate_count": 1, "red_flag_candidate_count": 1,
+                                            "red_flag_codes": ["600000.SH", "600000.SH"], "summary": "x"}])
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_guard_rejects_industry_fundamentals_row_impact(self):
+        # ⑰:⑤ summary_only,绝不产逐票 operation_impact(防把行业摘要伪装成 row impact)
+        rep = self._attached_report()
+        rep["machine"]["operation_impact"].append({
+            "source_field": "industry_fundamentals", "field_class": "structured",
+            "visibility_shape": "candidate_row_impact", "impact_scope": "new_entry", "new_entry_effect": "informational",
+            "holding_effect": "none", "blocked_add_required": False, "veto_class": "none", "reason": "x",
+            "evidence_ref": {"kind": "lineage_key", "value": "industry_fundamentals", "as_of": AS_OF}, "confidence": "high",
+            "pit_basis": "disclosure_date", "production_effect_enabled": False, "implementation_status": "implemented",
+            "m67_landing_surface": "x", "terminal_surface_target": "already_structured", "pending_successor_slice": None,
+            "privacy_class": "public_tracked"})
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    # ── builder(unknown-not-clear / PIT / candidate-only)──
+    def test_builder_provider_none_unknown(self):
+        ft = _financial_trends([("600000.SH", "x")], AS_OF)
+        self.assertEqual(ft["status"], "unknown_or_unavailable")     # 全 provider None → unknown(绝不当无红旗)
+        self.assertEqual(ft["records"], [])
+
+    def test_builder_all_fetch_fail_unknown(self):
+        self.assertEqual(_financial_trends([("600000.SH", "x")], AS_OF, forecast_provider=lambda c: None)["status"],
+                         "unknown_or_unavailable")
+        def _boom(c):
+            raise RuntimeError("x")
+        self.assertEqual(_financial_trends([("600000.SH", "x")], AS_OF, forecast_provider=_boom)["status"],
+                         "unknown_or_unavailable")
+
+    def test_builder_partial_fail_marks_unchecked(self):
+        prov = lambda c: ([self._fc(ftype="预减")] if c == "600000.SH" else None)
+        ft = _financial_trends([("600000.SH", "x"), ("000001.SZ", "y")], AS_OF, forecast_provider=prov)
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual([r["ts_code"] for r in ft["records"]], ["600000.SH"])
+        self.assertEqual([u["ts_code"] for u in ft["unchecked_codes"]], ["000001.SZ"])   # 失败票显式列出,不静默当无
+
+    def test_builder_checked_no_redflag_no_record(self):
+        # 查成但无红旗 → checked + 空 records(不噪声;coverage 由 status 体现,镜像①)
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, forecast_provider=lambda c: [self._fc(ftype="预增", pmin=10, pmax=30)])
+        self.assertEqual(ft["status"], "checked")
+        self.assertEqual(ft["records"], [])
+
+    def test_builder_emits_record(self):
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, forecast_provider=lambda c: [self._fc(ftype="预减", pmax=-10)])
+        self.assertEqual(ft["status"], "checked")
+        r = ft["records"][0]
+        self.assertEqual((r["ts_code"], r["statement_type"], r["period"], r["observed_at"]),
+                         ("600000.SH", "forecast", "20260331", "20260415"))
+        self.assertTrue(r["red_flags"] and r["summary"])
+
+    def test_builder_held_excluded(self):
+        ft = _financial_trends([("600000.SH", "x")], AS_OF, forecast_provider=lambda c: [self._fc(ftype="预减")],
+                               held_codes={"600000.SH"})
+        self.assertEqual(ft["records"], [])             # 持仓排除(candidate-only,持仓财报趋势留后续刀)
+
+    # ── attach + schema + validator(双向 no-dangling · PIT · 张冠李戴)──
+    def test_attach_lands_impact_and_text(self):
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        rep = w["reports"][0]
+        imps = [i for i in rep["machine"]["operation_impact"] if i["source_field"] == "financial_trend_forecast"]
+        self.assertEqual(len(imps), 1)
+        self.assertEqual((imps[0]["new_entry_effect"], imps[0]["veto_class"], imps[0]["production_effect_enabled"]),
+                         ("priority_down", "none", False))
+        self.assertEqual((imps[0]["visibility_shape"], imps[0]["impact_scope"], imps[0]["privacy_class"]),
+                         ("candidate_row_impact", "new_entry", "public_tracked"))
+        self.assertIn(_FIN_STATEMENT_MARKER, rep["m67"]["精简结论区"]["风控触发"])   # no-dangling 真落地
+        jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+        validate_weekly_report(w, _feed())             # 含 per-report 引擎 guard ⑯
+
+    def test_absent_is_valid(self):
+        w = _weekly()                                  # 无 financial_trends → 向后兼容
+        jsonschema.validate(w, json.load(open(SCHEMA_PATH, encoding="utf-8")))
+        validate_weekly_report(w, _feed())
+
+    def test_validator_unknown_with_records_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_ft(status="unknown_or_unavailable", records=[self._rec()]), _feed())
+
+    def test_validator_foreign_ts_rejected(self):
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_ft(records=[self._rec(ts="600999.SH")]), _feed())
+
+    def test_validator_observed_after_as_of_rejected(self):
+        with self.assertRaises(ValueError):       # observed_at > as_of(PIT/look-ahead)
+            validate_weekly_report(self._weekly_ft(records=[self._rec(observed_at="20260701")]), _feed())
+
+    def test_validator_record_without_landing_rejected(self):
+        # checked record 但未 attach(无逐票 impact)→ forward no-dangling 拒
+        with self.assertRaises(ValueError):
+            validate_weekly_report(self._weekly_ft(records=[self._rec()]), _feed())
+
+    def test_validator_impact_without_record_rejected(self):
+        # 反向 evidence guard:report 有 financial_trend_ impact 但 section 无匹配 record → 拒
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        w["financial_trends"]["records"] = []
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_unchecked_foreign_ts_rejected(self):
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        w["financial_trends"]["unchecked_codes"] = [{"ts_code": "000999.SZ", "name": "外", "statement_type": "forecast"}]
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    # ── engine guard ⑯(comparison-only + candidate-only isolation)──
+    def _attached_report(self):
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        return w["reports"][0]
+
+    def _ftimp(self, rep):
+        return [i for i in rep["machine"]["operation_impact"] if i["source_field"] == "financial_trend_forecast"][0]
+
+    def test_guard_accepts_normal(self):
+        _vop(self._attached_report())                  # 正常候选红旗 → 过
+
+    def test_guard_rejects_hard_veto(self):
+        rep = self._attached_report()
+        self._ftimp(rep)["new_entry_effect"] = "hard_veto"   # veto_class 保持 none → 专测 ⑯ never-hard-veto
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_rejects_production_enabled(self):
+        rep = self._attached_report()
+        self._ftimp(rep)["production_effect_enabled"] = True
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_rejects_missing_marker(self):
+        rep = self._attached_report()
+        rep["m67"]["精简结论区"]["风控触发"] = "无"        # 抹掉 marker
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_rejects_holding_shape(self):
+        rep = self._attached_report()
+        self._ftimp(rep)["visibility_shape"] = "holding_row_impact"
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    def test_guard_rejects_held_report(self):
+        # 持仓(held)报告带 financial_trend impact → guard 拒(candidate-only,持仓财报趋势留后续刀)
+        rep = self._attached_report()
+        rep["machine"]["stateful_risk"] = {"position_state": "held"}
+        with self.assertRaises(ValueError):
+            _vop(rep)
+
+    # ── render ──
+    def test_render_lists_redflag(self):
+        w = self._weekly_ft(records=[self._rec()])
+        _attach_financial_trend_impacts(w, AS_OF)
+        md = render_weekly_markdown(w)
+        self.assertIn("财报质量趋势", md)
+        self.assertIn("业绩预告", md)
+
+    def test_render_unknown_caveat(self):
+        md = render_weekly_markdown(self._weekly_ft(status="unknown_or_unavailable"))
+        self.assertIn("未取到财报报表", md)
+
+    # ── main 接线(注入 forecast_provider;无 --account → 候选全 eligible)──
+    def test_main_wires_forecast_provider(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            fprov = lambda c: ([self._fc(ftype="预减", pmax=-10)] if c == "600000.SH" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), forecast_provider=fprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(loaded["financial_trends"]["status"], "checked")
+        recs = [r for r in loaded["financial_trends"]["records"] if r["ts_code"] == "600000.SH"]
+        self.assertEqual(len(recs), 1)
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
+        self.assertTrue(any(i["source_field"] == "financial_trend_forecast" for i in rep["machine"]["operation_impact"]))
+
+    def test_main_wires_income_provider(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            iprov = lambda c: ([{"ann_date": "20260415", "end_date": "20260331", "total_revenue": 800.0,
+                                 "revenue": 800.0, "oper_cost": 700.0, "n_income": -50.0, "n_income_attr_p": -50.0}]
+                               if c == "600000.SH" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), income_provider=iprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        recs = [r for r in loaded["financial_trends"]["records"] if r["statement_type"] == "income"]
+        self.assertEqual(len(recs), 1)
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
+        self.assertTrue(any(i["source_field"] == "financial_trend_income" for i in rep["machine"]["operation_impact"]))
+
+    def test_main_wires_balancesheet_provider(self):
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            bs = lambda ta, liab, end, ann: {"ann_date": ann, "end_date": end, "total_assets": ta, "total_liab": liab,
+                                             "accounts_receiv": 1000.0, "inventories": 1000.0, "goodwill": 0.0}
+            bprov = lambda c: ([bs(10000.0, 5000.0, "20260331", "20260415"), bs(10000.0, 4000.0, "20250331", "20250415")]
+                               if c == "600000.SH" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--out", str(out)],
+                 price_provider=lambda code: _series(), balancesheet_provider=bprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        recs = [r for r in loaded["financial_trends"]["records"] if r["statement_type"] == "balancesheet"]
+        self.assertEqual(len(recs), 1)
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
+        self.assertTrue(any(i["source_field"] == "financial_trend_balancesheet" for i in rep["machine"]["operation_impact"]))
 
 
 if __name__ == "__main__":

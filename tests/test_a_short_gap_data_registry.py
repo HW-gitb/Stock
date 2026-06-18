@@ -89,10 +89,11 @@ class RegistrySchemaTests(unittest.TestCase):
 
     def test_new_fetch_source_fields_flag_provider_call(self):
         # R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP: 凡 owner/ref/落点 描述出现真新增取数来源
-        # (top_list/top_inst/block_trade 等收盘后专取接口)的字段,必须标 needs_new_provider_call=true ——
-        # 不得像复用 egs_main 既有 fetch 的字段(holder_reduction/share_float…)那样标 false(否则治理表误导:
-        # 看似无需取数,实则依赖新增 provider call)。复用既有 fetch 的字段不含这些 marker → 不受约束(可 false)。
-        markers = ("top_list", "top_inst", "block_trade")
+        # (top_list/top_inst/block_trade 龙虎榜/大宗;pro.forecast/pro.income/pro.balancesheet 财报报表 ②③④)的字段,必须标
+        # needs_new_provider_call=true —— 不得像复用 egs_main 既有 fetch 的字段(holder_reduction/share_float/financial_quality
+        # 复用 fina_indicator…)那样标 false(否则治理表误导:看似无需取数,实则依赖新增 provider call)。复用既有 fetch 的字段不含这些
+        # marker → 不受约束(可 false)。pro. 前缀避免与 net_income 等子串误撞(财报报表行 owner_ref 用 pro.X 记法,镜像 dragon 行 pro.top_list)。
+        markers = ("top_list", "top_inst", "block_trade", "pro.forecast", "pro.income", "pro.balancesheet")
         scanned = 0
         for f in self.example["fields"]:
             blob = " ".join(str(f.get(k, "")) for k in
