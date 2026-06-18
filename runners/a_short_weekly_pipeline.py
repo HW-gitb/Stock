@@ -660,7 +660,7 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             if (_dd - _asd).days > 0:
                 raise ValueError(f"dragon_list window_dates {_d} 晚于 as_of(非 PIT)")
         _wdset = set(_wd)
-        _dl_report_codes = {r["ts_code"] for r in weekly["reports"]}   # dragon events 只对候选生成 → 必 ∈ reports
+        _dl_report_codes = {r["ts_code"] for r in weekly["reports"]}   # dragon events 对候选+账户持仓生成,均 ∈ reports
         for _e in _dlevs:
             if _e["ts_code"] not in _dl_report_codes:
                 raise ValueError(f"dragon_list event ts_code {_e['ts_code']} 不在本周候选报告(张冠李戴/越界到非候选)")
@@ -1201,7 +1201,7 @@ def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days, inst_pro
     近 N 个 SSE 交易日(均 <= as_of,见 `_recent_trading_days`)。PIT: 只收 trade_date<=as_of(provider 按 trade_days 查,
     天然满足;再防御性核 as_of)。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
     `unknown_or_unavailable`(绝不当「无上榜」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
-    只收候选(cand_names)上榜行(其它票丢弃 —— 只覆盖候选,非候选持仓留后续)。一票多日上榜 → 多条 event。
+    只收 `cand_names`(第三刀起 = 候选 + 账户持仓,main 用 reports 行装配)上榜行,其它票丢弃。一票多日上榜 → 多条 event。
     第二刀 席位分析: 传 `inst_provider(trade_date)` 时,为有上榜的交易日抓 top_inst,join 到 event 的 `seats`/`inst_net_buy`
     (见 `_attach_seats`;不传则第一刀式输出不变)。"""
     from datetime import datetime
@@ -1234,7 +1234,7 @@ def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days, inst_pro
         for row in rows:
             code = (row or {}).get("ts_code")
             if code not in cand_codes:
-                continue                                  # 非候选 → 第一刀不覆盖,丢弃
+                continue                                  # 非覆盖票(既非候选也非账户持仓)→ 丢弃
             events.append({"ts_code": code, "name": name_by.get(code, ""), "trade_date": str(day),
                            "net_amount": (row or {}).get("net_amount"), "reason": (row or {}).get("reason")})
     if not any_ok:                                         # 有窗口但所有交易日都没查成 → unknown(绝不当无上榜)
@@ -1248,12 +1248,12 @@ def _dragon_list_events(cand_names, as_of, dragon_provider, trade_days, inst_pro
 
 
 def _attach_dragon_list_impacts(weekly, as_of):
-    """4.2 Round5 龙虎榜 row landing: weekly-global dragon_list 的每条上榜按 ts_code 落到对应候选 report 的**逐票** M6.7 ——
+    """4.2 Round5 龙虎榜 row landing: weekly-global dragon_list 的每条上榜按 ts_code 落到对应 report(候选/持仓)的**逐票** M6.7 ——
     精简结论区.板块资金事件 文本(含 `_DRAGON_LIST_MARKER`)+ machine.operation_impact(source_field=dragon_list_appearance)。
     **comparison-only**: new_entry_effect=informational(候选)/none(held-candidate)、holding_effect=none、blocked_add=False、
     veto_class=none、production_effect_enabled=False —— 绝不改 操作/EGS/选股/TopN/股数/否决(比 forward_event 更严:无任何动作)。
-    status!=checked(unknown/无)→ 不落(不伪造)。第一刀只覆盖候选行(events 本就只对候选生成);持仓(非候选)的龙虎榜 +
-    席位分析留第二刀(其中 Tier-3 account_position_only 的 板块资金事件 被 render 掩为「未核查」,需另设非掩面)。"""
+    status!=checked(unknown/无)→ 不落(不伪造)。第三刀起覆盖 reports 行(候选 + 账户持仓);held(持仓)→ holding_row_impact
+    (comparison-only,同候选无任何动作);Tier-3 account_position_only 的 板块资金事件 render 掩面已由 _card_field 放行『龙虎榜对照』(独立真取数,非 EGS 维度)。"""
     dl = weekly.get("dragon_list") or {}
     if dl.get("status") != "checked":
         return
@@ -1712,8 +1712,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _attach_forward_event_impacts(weekly, args.as_of)
     # 4.2 Round5 龙虎榜(comparison-only):候选近 N 交易日上榜对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。
     # unknown-not-clear: provider 不可用(无 --confirm)/trade_cal 取不到 → status=unknown_or_unavailable(绝不当「无上榜」)。
-    _dragon_cand_names = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
-    weekly["dragon_list"] = _dragon_list_events(_dragon_cand_names, args.as_of, dragon_list_provider,
+    # 第三刀: 覆盖**候选 + 账户持仓**(reports 行 = normalized 候选 ∪ holding_normalized);非候选持仓由此纳入龙虎榜/席位对照。
+    _dragon_covered_names = [(str(r["ts_code"]), r.get("name", "")) for r in weekly["reports"]]
+    weekly["dragon_list"] = _dragon_list_events(_dragon_covered_names, args.as_of, dragon_list_provider,
                                                 dragon_list_days, inst_provider=dragon_list_inst_provider)
     _attach_dragon_list_impacts(weekly, args.as_of)
     # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts

@@ -2219,9 +2219,9 @@ _DL_WINDOW = ["20260603", "20260604", "20260605", "20260608", "20260609"]   # �
 
 
 class DragonListTests(unittest.TestCase):
-    """4.2 Round5 龙虎榜第一刀(top_list, analysis-only · comparison-only):provider fail-closed / trade_cal 窗口 /
-    builder PIT+unknown-not-clear / 候选落 板块资金事件+operation_impact / 双向 no-dangling / comparison-only isolation
-    (绝不改 EGS/TopN/操作/股数/否决)/ render。第一刀只覆盖候选;非候选持仓 + 席位分析(top_inst)留第二刀。"""
+    """4.2 Round5 龙虎榜(top_list/top_inst, analysis-only · comparison-only):provider fail-closed / trade_cal 窗口 /
+    builder PIT+unknown-not-clear / 候选+持仓落 板块资金事件+operation_impact / 双向 no-dangling / 席位分析(第二刀)/
+    comparison-only isolation(绝不改 EGS/TopN/操作/股数/否决)/ render。第三刀覆盖候选 + 账户持仓(Tier-3 板块资金事件 render 掩面已放行『龙虎榜对照』);holdings_manual_review 留后续。"""
 
     # ── provider _fetch_dragon_list(fail-closed:缺列/异常→None 未查成;空→[] 真无;正常→清洗 dicts)──
     def test_fetch_dragon_list_distinguishes_fail_from_empty(self):
@@ -2737,6 +2737,38 @@ class DragonListTests(unittest.TestCase):
                  price_provider=lambda code: _series())
             loaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(loaded["dragon_list"]["status"], "unknown_or_unavailable")
+
+    # ── 第三刀: 非候选持仓纳入龙虎榜/席位对照 + Tier-3 板块资金事件 render 掩面放行 ──
+    def test_card_field_unmasks_dragon_for_tier3(self):
+        # Tier-3(account_position_only)的 板块资金事件 含「龙虎榜对照」(独立真取数,非 EGS 维度)→ render 不掩;无 marker → 仍掩
+        from runners.a_short_m67_render import _card_field
+        rep = {"row_source": "account_position_only",
+               "m67": {"精简结论区": {"板块资金事件": "龙虎榜对照(comparison-only,不改决策):近5交易日2次上龙虎榜"}}}
+        self.assertIn("龙虎榜对照", _card_field(rep, "板块资金事件"))
+        rep2 = {"row_source": "account_position_only", "m67": {"精简结论区": {"板块资金事件": "半导体景气上行"}}}
+        self.assertIn("未核查", _card_field(rep2, "板块资金事件"))   # 无 marker → 仍掩(EGS 维度未覆盖)
+
+    def test_main_dragon_covers_holdings(self):
+        # dragon universe = reports 行(候选 + 账户持仓);非候选持仓上榜 → 进 events + holding_row_impact(private_account)
+        with tempfile.TemporaryDirectory() as td:
+            ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+            acct = _account()
+            acct["positions"] = [{"ts_code": "600519.SH", "name": "持仓", "shares": 100,
+                                  "avg_cost": 10.0, "entry_date": "20260601", "stop_loss": 9.0}]
+            (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
+            (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
+            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            dprov = (lambda d: [{"ts_code": "600519.SH", "name": "持仓", "net_amount": 1e6, "reason": "涨幅偏离"}] if d == "20260605" else [])
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series(),
+                 dragon_list_provider=dprov, dragon_list_days=_DL_WINDOW)
+            loaded = json.loads(out.read_text(encoding="utf-8"))
+        self.assertIn("600519.SH", [e["ts_code"] for e in loaded["dragon_list"]["events"]])   # 持仓进 universe
+        rep = [r for r in loaded["reports"] if r["ts_code"] == "600519.SH"][0]
+        imp = [i for i in (rep["machine"].get("operation_impact") or []) if i["source_field"] == "dragon_list_appearance"][0]
+        self.assertEqual((imp["visibility_shape"], imp["privacy_class"]), ("holding_row_impact", "private_account"))
 
 
 if __name__ == "__main__":

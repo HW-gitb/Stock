@@ -65,12 +65,27 @@ class RegistrySchemaTests(unittest.TestCase):
             jsonschema.validate(bad, self.schema)
 
     def test_text_landing_requires_successor(self):
-        # 非 implemented(只落文本/未来结构化)却无 pending_successor_slice → schema 拒
+        # 非 implemented / 非 out_of_scope(只落文本/未来结构化)却无 pending_successor_slice → schema 拒
         bad = copy.deepcopy(self.example)
-        row = next(f for f in bad["fields"] if f["implementation_status"] == "design_only_current_text_landing")
+        row = next(f for f in bad["fields"]
+                   if f["implementation_status"] not in ("implemented", "out_of_scope_no_landing"))
         row["pending_successor_slice"] = None
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, self.schema)
+
+    def test_holding_capable_rows_private_holding_shape(self):
+        # R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP: 涉持仓的 registry 行必须用持仓侧表达
+        # (private_account + holding_row_impact),且不得 operation_impact_target=both —— 隐私/可见性是单值,
+        # 不能在一行同时表达候选(public/candidate)+持仓(private/holding)两侧,必须拆两行(§10.3/§12.2)。
+        for f in self.example["fields"]:
+            t = f["operation_impact_target"]
+            self.assertNotEqual(t, "both",
+                f"{f['field_id']}: operation_impact_target=both 须拆成 new_entry(public/candidate)+existing_holding(private/holding)两行")
+            if t == "existing_holding" or f["visibility_shape"] == "holding_row_impact":
+                self.assertEqual(f["visibility_shape"], "holding_row_impact",
+                    f"{f['field_id']}: 持仓侧 visibility 须 holding_row_impact")
+                self.assertIn(f["privacy_class"], ("private_account", "secret_or_raw_provider"),
+                    f"{f['field_id']}: 持仓侧涉真实持仓须 private_account/secret(§10.3/§12.2)")
 
     def test_new_fetch_source_fields_flag_provider_call(self):
         # R-ASHORT-GAP42-ROUND5-DRAGON-LIST-REGISTRY-PROVIDER-FLAG-GAP: 凡 owner/ref/落点 描述出现真新增取数来源

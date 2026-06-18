@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜第三刀 registry 隐私)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` 已在 working tree 修到位：龙虎榜和语义 registry 都拆成候选公开行 + 持仓私密行，已无 `operation_impact_target=both` 单行混写。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: registry+DragonList+doc-route targeted 155 OK；无网络假 `requests/tushare` 全量 2368 OK；py_compile OK；`git diff --check` OK(仅 CRLF)；独立探针确认 dragon/semantic 候选=public/candidate、持仓=private/holding，且无 `both`。
+- **Next**: 用户决定是否提交；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(registry 单行 `target=both` 但 privacy/visibility 单值、只标 public/candidate,与第三刀持仓 private/holding 矛盾 → 误导隐私治理;运行时不漏)。**类级修(不止 dragon)**:`dragon_list_appearance` + `a_short_semantic_risk` 各拆**候选行**(new_entry/public/candidate)+ **持仓行**(existing_holding/private/holding);顺带修 semantic 候选 stale(Round3 done → implemented)。运行时零改。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: registry 过 schema(11 fields,无 both-target);planted-failure 确认结构化 guard 抓 public-holding;registry **56 OK**;全量 **2368 OK**(零回归);diff clean(仅 CRLF);无 BOM。**仅 registry example + 测试**,运行时(builder/_attach/_card_field/⑬/provider)未动。
+- **Next**: 审查(Codex re-审查 registry 拆行 + guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 类级(dragon+semantic 同拆 + 结构化 guard 防 both/holding-public 整类,非只 dragon 实例)。B 仅 registry example+测试改;运行时未动;`test_text_landing_requires_successor` 改 robust(非 implemented 通用,不依赖 design_only 串)。C 反向:guard 用结构化字段判(target/visibility/privacy),不靠 prose → 候选行交叉引用持仓不误报;holding_management_effect(既有 existing_holding/private/holding)通过。D N-A。E register+SESSION_LOG,未碰 CURRENT。F registry 过 jsonschema、planted-failure 验 guard 局部性、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 龙虎榜第三刀: 持仓纳入)
+- **Verdict/Action**: FAIL. 运行方向基本对：非候选持仓进入龙虎榜/席位对照、Tier-3 展示放行、comparison-only 边界未发现被破坏；但 registry 仍把 `dragon_list_appearance` 标成 `privacy_class=public_tracked` / `visibility_shape=candidate_row_impact`，已与第三刀真实持仓覆盖不一致。
+- **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-HOLDING-REGISTRY-PRIVACY-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: DragonList+registry+doc-route targeted 154 OK；无网络假 `requests/tushare` 全量 2367 OK；py_compile OK；`git diff --check` OK(仅 CRLF)；独立探针确认 registry target=both 且 owner 提持仓/private，但 privacy 仍 public。
+- **Next**: Claude 只修 registry 持仓可见性/隐私表达和对应 guard 测试；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 龙虎榜第三刀: 非候选持仓纳入 + Tier-3 掩面放行)
+- **Verdict/Action**: 第三刀=账户持仓纳入龙虎榜/席位对照(第一二刀只候选)。dragon universe 从 cands 扩到 `weekly.reports`(候选 ∪ 持仓);`_attach` 既有 held 分支已产 holding_row_impact(comparison-only/private_account),无需改;`_card_field` 放行 Tier-3(account_position_only)的 板块资金事件「龙虎榜对照」(独立真取数,非 EGS 维度 → 不掩;EGS 未覆盖另有专门行)。holdings_manual_review(无价/停牌)留后续。
+- **Scope**: `a_short_weekly_pipeline.py`(main universe cands→reports 一行 + builder/_attach/validator docstring/comment doc-drift 修)·`a_short_m67_render.py`(_card_field 放行 dragon marker)·`schemas/examples/...gap_data_field_registry.example.json`(owner_ref 第三刀 + live 已验)·`tests/test_a_short_weekly_pipeline.py`(+2 + 类 docstring)。**边界**:comparison-only 不变(无新 operation_impact、guard ⑬ 不动)、不改 EGS/TopN/选股/股数/操作/否决、无 governance、主板、V14.2 frozen。
+- **Verify**: 2 新测(_card_field Tier-3 dragon 不掩/无 marker 仍掩;main 持仓 600519 上榜→events+holding_row_impact/private_account)+ DragonList+registry 124 OK;全量 **2367 OK**(零回归);diff clean(仅 CRLF);无 BOM;ripple `_dragon_cand_names`=0、`只覆盖候选` 仅 history。
+- **Next**: 审查(Codex 审第三刀);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 持仓纳入×出口(universe/_attach held/_card_field/validator)各覆盖(held 分支既有测+新 e2e)。B grep `_dragon_cand_names`=0、`只覆盖候选` 仅 append-only history、test 类 docstring 已同步;builder/validator/⑬ 逻辑未动(holdings 走既有 held 分支)。C 反向:无 marker Tier-3 仍掩(不误显)、manual_review 不覆盖(documented)、候选/一二刀零回归(2367)。D N-A。E SESSION_LOG,未碰 CURRENT。F live 取数已验、doc↔behavior(docstring/registry/test-docstring 同步)、无 BOM、diff clean。
+
+## 2026-06-18 — Claude `执行` (龙虎榜真取数验证: top_list/top_inst live 拉通,provider 无需改)
+- **Verdict/Action**: 用户「先验证再建第三刀」。联网真跑(HTTPS-pinned `init_tushare_pro`·token 不打印·无 --account):`_recent_trading_days(≤20260618)`=[0612,0615,0616,0617,0618];4 个已结算日 `_fetch_dragon_list` 返真数据(83~141 行/日,字段 ts_code/name/net_amount(float)/reason)+ `_fetch_dragon_inst`(849~1468 行/日,ts_code/exalter/side/net_buy,机构专用席位 196~384);今日 0618 盘后未出 → 返 `[]`(空≠None,unknown-not-clear 正确)。结论:龙虎榜/席位真取数拉通、字段契约与代码一致,**provider 无需改**(此前仅 HTTP+mock,现 in-pipeline live 验)。
+- **Verify**: dangerouslyDisableSandbox 联网;仅打印行数/字段名/机构席位计数,未 dump 个股值、未打印 token;**无代码改动**(纯验证)。
+- **Next**: 建龙虎榜第三刀(非候选持仓纳入对照 + Tier-3 板块资金事件 render 掩面修复)。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 龙虎榜第二刀: top_inst 席位 guard)
 - **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` 已在 working tree 修到位：席位状态与逐 event `seats/inst_net_buy` 现在双向闭合；comparison-only 边界未发现被破坏。
 - **Required**: `R-ASHORT-GAP42-ROUND5-DRAGON-SEATS-COVERAGE-GUARD-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。

@@ -108,8 +108,11 @@ def _card_field(report: dict, key: str) -> str:
     (语义未核查另由专门一行标,见 _render_holdings_section);候选不受影响。"""
     val = report["m67"]["精简结论区"].get(key, "")
     if report.get("row_source") == "account_position_only" and key in ("否决审查触发", "板块资金事件"):
-        # S2: 已跑语义的持仓,否决审查触发 含真实语义警告 → 不 mask(否则藏住 S2 警告);板块资金事件仍是 EGS 维度,保持未核查。
+        # S2: 已跑语义的持仓,否决审查触发 含真实语义警告 → 不 mask(否则藏住 S2 警告)。
         if key == "否决审查触发" and _has_semantic(report):
+            return val
+        # 第三刀: 板块资金事件 含「龙虎榜对照」= 独立真取数(top_list/top_inst,非 EGS 维度)→ 不掩;EGS 未覆盖另有专门一行标注。
+        if key == "板块资金事件" and "龙虎榜对照" in val:
             return val
         return "未核查(本周 EGS 粗筛未覆盖,请人工核查 ST/新闻/监管)"
     return val
