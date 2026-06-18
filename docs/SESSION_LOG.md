@@ -8,6 +8,11 @@
 
 ---
 
+## 2026-06-18 — Round 5 启动: 龙虎榜数据验证通过 + 第一刀设计定稿(待起草)
+- **数据验证(决策 5 第一步「先确认可得性」)**: HTTP 直连(HTTPS pinned)验 tushare `top_list`(净买卖 `net_amount`/上榜原因 `reason`/PIT `trade_date`,66 行/天,code=0 有权限)+ `top_inst`(席位 `exalter`/`net_buy`,690 行/天,第二刀用):**龙虎榜可做、可靠、PIT 干净**(trade_date=T 日盘后出 → ≤as_of)。
+- **第一刀设计(用户拍板)**: 最小范围=上榜事实+净买卖(席位分析留第二刀);回望窗口=as_of 前近 **5 交易日**;落点=复用现有「板块资金事件」「风控触发」+ `machine.operation_impact`(同 forward_events,零 schema 新字段除 source 枚举);effect=**comparison_only**(不改 EGS/TopN/选股/股数/操作,阈值未定·4.2.md 行627);provider `_fetch_dragon_list`(`top_list`,fail-closed,真取数 gated --confirm,mock 测);复用 analysis-only guard(`dragon_list_` source-isolation/不 hard_veto·rescue/PIT-safe)。
+- **Next**: 起草 Round5 龙虎榜第一刀(provider + builder + attach + validator + render + 测试,复用 forward_events analysis-only 模式)。
+
 ## 2026-06-18 — Claude 实测确认 weekly 取数 [OK](探针真跑 + pandas Index bug 已修)
 - **Verdict/Action**: 用户授权先跑真探针,实测发现并修自身 bug(`columns or []` 对真 pandas Index 报 bool ambiguous,fake list 掩盖→安全转 set/list+加真 pandas test)。**实测**:weekly pinned 3 接口全健康(trade_cal5/share_float339/disclosure1)→ **[OK]**,彻底确认 weekly 真取数正常(之前"broken"是探针 raw pro_api 误诊)。Codex re-审查已 **PASS**(含此 pandas 修复,note 证 real pandas passed)。
 - **Required**: `R-TUSHARE-HEALTH-PROBE-PLAINTEXT-TOKEN-AND-FALSE-OK-GAP` — Codex re-`审查 PASS`,详见 `docs/system_risk_register.md`(单一来源);用户「暂不提交」,探针+测试 working tree 保留。
