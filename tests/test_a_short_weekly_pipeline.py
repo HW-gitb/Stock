@@ -2806,8 +2806,10 @@ class BlockTradeTests(unittest.TestCase):
     builder PIT+unknown-not-clear+按(票,日)聚合(amount 合计+笔数)/ 候选+持仓落 板块资金事件+operation_impact /
     双向 no-dangling / comparison-only isolation(绝不改 EGS/TopN/操作/股数)/ render。买卖方营业部=第二刀。"""
 
-    def _bt_event(self, ts="600000.SH", trade_date="20260605", amount=5e7, trade_count=3):
-        return {"ts_code": ts, "name": "测试", "trade_date": trade_date, "amount": amount, "trade_count": trade_count}
+    def _bt_event(self, ts="600000.SH", trade_date="20260605", amount=5e7, trade_count=1):
+        # 第二刀:checked event 必有 parties 且 len==trade_count(helper 自动生成对齐)
+        return {"ts_code": ts, "name": "测试", "trade_date": trade_date, "amount": amount, "trade_count": trade_count,
+                "parties": [{"buyer": "机构专用", "seller": "游资", "amount": amount} for _ in range(trade_count)]}
 
     def _weekly_bt(self, status="checked", events=None, window=None, **extra):
         w = _weekly()
@@ -2821,7 +2823,8 @@ class BlockTradeTests(unittest.TestCase):
         w = _weekly()
         ts = ts or w["reports"][0]["ts_code"]
         w["block_trade"] = {"as_of": AS_OF, "status": status, "lookback_trading_days": 5, "window_dates": _DL_WINDOW,
-                            "events": ([{"ts_code": ts, "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 3}] if status == "checked" else [])}
+                            "events": ([{"ts_code": ts, "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 1,
+                                         "parties": [{"buyer": "机构专用", "seller": "游资", "amount": 5e7}]}] if status == "checked" else [])}
         return w
 
     def _btimp(self, rep):
@@ -2836,18 +2839,78 @@ class BlockTradeTests(unittest.TestCase):
             def __init__(self, df): self._df = df
             def block_trade(self, **kw): return self._df
         self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"]})), "20260605"))   # 缺 amount
+        self.assertIsNone(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": ["x"], "amount": [1.0]})), "20260605"))   # 第二刀 fail-closed:缺 buyer/seller 列
         class _Boom:
             def block_trade(self, **kw): raise RuntimeError("x")
         self.assertIsNone(_fetch_block_trade(_Boom(), "20260605"))
-        self.assertEqual(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": [], "amount": []})), "20260605"), [])
+        self.assertEqual(_fetch_block_trade(_Pro(pd.DataFrame({"ts_code": [], "amount": [], "buyer": [], "seller": []})), "20260605"), [])
         ok = _fetch_block_trade(_Pro(pd.DataFrame({"trade_date": ["20260605"], "ts_code": ["600000.SH"],
-                                                   "price": [10.0], "vol": [1.0], "amount": [5e7]})), "20260605")
-        self.assertEqual(ok, [{"ts_code": "600000.SH", "amount": 5e7}])
+                                                   "price": [10.0], "vol": [1.0], "amount": [5e7],
+                                                   "buyer": ["机构专用"], "seller": ["某游资"]})), "20260605")
+        self.assertEqual(ok, [{"ts_code": "600000.SH", "amount": 5e7, "buyer": "机构专用", "seller": "某游资"}])
+
+    # ── 第二刀: 买卖方营业部(parties)──
+    def test_builder_collects_parties(self):
+        prov = lambda d: ([{"ts_code": "600000.SH", "amount": 3e7, "buyer": "机构专用", "seller": "游资A"},
+                           {"ts_code": "600000.SH", "amount": 2e7, "buyer": "游资B", "seller": "机构专用"}] if d == "20260605" else [])
+        e = _block_trade_events([("600000.SH", "x")], AS_OF, prov, _DL_WINDOW)["events"][0]
+        self.assertEqual(e["trade_count"], 2)
+        self.assertEqual([(p["buyer"], p["seller"], p["amount"]) for p in e["parties"]],
+                         [("机构专用", "游资A", 3e7), ("游资B", "机构专用", 2e7)])
+
+    def test_render_shows_parties(self):
+        w = self._weekly_bt(events=[self._bt_event()])
+        w["block_trade"]["events"][0]["parties"] = [{"buyer": "机构专用", "seller": "游资A", "amount": 5e7}]
+        md = render_weekly_markdown(w)
+        self.assertIn("买卖方", md)
+        self.assertIn("机构专用→游资A", md)
+
+    def test_attach_text_mentions_parties(self):
+        w = self._w_bt()
+        w["block_trade"]["events"][0]["parties"] = [{"buyer": "机构专用", "seller": "游资A", "amount": 5e7}]
+        _attach_block_trade_impacts(w, AS_OF)
+        self.assertIn("买卖方机构专用→游资A", w["reports"][0]["m67"]["精简结论区"]["板块资金事件"])
+
+    def test_schema_accepts_parties(self):
+        w = self._weekly_bt(events=[self._bt_event()])
+        w["block_trade"]["events"][0]["parties"] = [{"buyer": "机构专用", "seller": "游资A", "amount": 5e7}]
+        _attach_block_trade_impacts(w, AS_OF)
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
+
+    def test_validator_missing_parties_rejected(self):
+        # checked block_trade event 无 parties → schema(required)+ validator(len) 双拒(第二刀 parties no-dangling)
+        ev = {"ts_code": "600000.SH", "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 1}
+        w = self._weekly_bt(events=[ev])
+        _attach_block_trade_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(w, self._schema())
+
+    def test_validator_party_count_mismatch_rejected(self):
+        # len(parties) != trade_count → validator 拒(买卖方逐笔须与笔数一致)
+        ev = {"ts_code": "600000.SH", "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 2,
+              "parties": [{"buyer": "机构专用", "seller": "游资", "amount": 5e7}]}   # 1 party != count 2
+        w = self._weekly_bt(events=[ev])
+        _attach_block_trade_impacts(w, AS_OF)
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_validator_blank_buyer_seller_legal(self):
+        # 正向: 单元格空白 → party buyer/seller=None(列存在),len==count → 合法接受
+        ev = {"ts_code": "600000.SH", "name": "x", "trade_date": "20260605", "amount": 5e7, "trade_count": 1,
+              "parties": [{"buyer": None, "seller": None, "amount": 5e7}]}
+        w = self._weekly_bt(events=[ev])
+        _attach_block_trade_impacts(w, AS_OF)
+        jsonschema.validate(w, self._schema())
+        validate_weekly_report(w, _feed())
 
     def test_fetch_block_trade_nonfinite_amount_nulled(self):
         class _Pro:
             def block_trade(self, **kw):
-                return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "amount": [float("inf"), float("nan")]})
+                return pd.DataFrame({"ts_code": ["600000.SH", "600001.SH"], "amount": [float("inf"), float("nan")],
+                                     "buyer": ["a", "b"], "seller": ["c", "d"]})
         self.assertEqual([r["amount"] for r in _fetch_block_trade(_Pro(), "20260605")], [None, None])
 
     # ── builder(unknown-not-clear / 聚合 / 候选过滤)──

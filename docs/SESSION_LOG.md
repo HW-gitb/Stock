@@ -8,6 +8,32 @@
 
 ---
 
+## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易第二刀 parties coverage)
+- **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-PARTIES-COVERAGE-GUARD-GAP` 已在 working tree 修到位：缺 buyer/seller 列会 fail-closed；checked event 必须有 parties，且 parties 数量必须等于 trade_count。
+- **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: block+dragon+registry+doc-route targeted 152 OK；no-network stubbed full discover 2414 OK；独立 probes 确认缺列/缺 parties/数量不符均拒，空白 buyer/seller 单元格合法；py_compile OK；`git diff --check` OK(仅 CRLF)；无 BOM/FFFD；未跑 live Tushare。
+- **Next**: 用户决定是否提交；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `修复` (R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-PARTIES-COVERAGE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 4 项全对(parties 覆盖/no-dangling + claim 过实)。① `_fetch_block_trade` fail-closed 加要求 buyer/seller 列(缺→None 该日 unchecked,不伪造 ?→?);② schema parties 改 required + validator 加 checked event⟹len(parties)==trade_count;③ 对抗+正向测(缺列/缺 parties/数量不符 拒 + 空白单元格合法);④ SESSION_LOG/docstring claim 修正(不声称 first-cut 探针验过 buyer/seller live,改 fail-closed 兜底)。运行时零回归(builder 本就逐笔 parties)。详见 register。
+- **Required**: `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-PARTIES-COVERAGE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: block+dragon+registry 171 OK;全量 **2414 OK**(零回归);schema valid(parties required);diff clean(仅 CRLF);无 BOM。运行时(EGS/TopN/选股/动作/股数/provider 行为/governance)未动。
+- **Next**: 审查(Codex re-审查 block_trade parties coverage guard);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 覆盖×出口(fetch fail-closed/schema required/validator len/builder)各配测。B grep parties 仅本切片;helper _bt_event/_w_bt 同步带对齐 parties(否则既有测撞新 len 门);`_fetch` required cols 变 → nonfinite/empty 测同步加 buyer/seller 列;guard ⑬⑭ 不动(parties 非 impact)。C 反向:空白 buyer/seller 单元格(列存在)合法不误拒、builder 零回归(2414)、缺列/缺 parties/数量不符 拒。D N-A。E register+SESSION_LOG,未碰 CURRENT;claim 过实已据 Codex part4 修正。F fetch fail-closed、schema↔validator 互补(present+keys vs 数量)、doc↔behavior 同步、无 BOM、diff clean。
+
+## 2026-06-18 — Codex `审查 FAIL` (4.2 Round5 大宗交易第二刀: 买卖方 parties)
+- **Verdict/Action**: FAIL. parties 方向对、仍是 comparison-only；但 buyer/seller 字段缺失时仍被当作 checked，且 checked event 没有 parties 也能过 schema/validator/guard，会把“买卖方第二刀”落成 `?→?` 或空落点。
+- **Required**: `R-ASHORT-GAP42-ROUND5-BLOCK-TRADE-PARTIES-COVERAGE-GUARD-GAP` — 详情见 `docs/system_risk_register.md`。
+- **Verify**: block+dragon+doc-route targeted 142 OK；独立 probes 复现 missing buyer/seller columns、missing parties 均被接受；py_compile OK；`git diff --check` OK(仅 CRLF)；未跑 live Tushare。
+- **Next**: Claude 修 buyer/seller 字段覆盖与 parties no-dangling guard；继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-18 — Claude `起草` (4.2 Round5 大宗交易第二刀: 买卖方营业部 parties)
+- **Verdict/Action**: 用户选「大宗第二刀:买卖方营业部」。block_trade buyer/seller 与 amount **同一 fetch**(无需另 provider/另 coverage 层,比龙虎榜席位简单);本刀 **fail-closed 要求 buyer/seller 列**(缺则该日 unchecked,绝不伪造 ?→?;**未经 --confirm 真验证 buyer/seller live 字段**——靠 fail-closed 兜底,不靠 first-cut 探针声称)。`_fetch_block_trade` 扩 fields buyer/seller + 返回;`_block_trade_events` 按(票,日)聚合逐笔 `parties{buyer,seller,amount}`;event += parties(schema 加性可选)。落点:render 大宗表加「买卖方(最大笔)」列 + attach 板块资金事件文本加最大笔 买→卖。**comparison-only 不变**(parties 是 event 内富化,无新 operation_impact、guard ⑬⑭ 不动)。折价率(需对齐 close)留后续。
+- **Required**: none(干净起草;折价率 / 机构席位检测留后续)。
+- **Verify**: 4 新测(provider 返 buyer/seller · builder 收 parties · render 买卖方列 · attach 文本 · schema parties)+ test_fetch 更新;block+dragon 112 OK;全量 **2411 OK**(零回归);schema valid(parties 加性可选);diff clean(仅 CRLF);无 BOM。
+- **Next**: 审查(Codex 审大宗第二刀 买卖方);继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口(provider/builder/render/attach/schema)各配测。B grep parties 仅本切片;无新 provider/coverage(buyer/seller 同 fetch);`_fetch` shape 变 → `test_fetch_block_trade_fail_closed` 同步更新;guard ⑬⑭/validator 不动(parties 非 impact)。C 反向:parties 加性可选(无 parties 旧 event 仍过)、amount None 安全(`or 0`)、零回归 2411。D N-A。E SESSION_LOG 未碰 CURRENT。F max amount-None 安全、doc↔behavior 同步、无 BOM、diff clean。
+
 ## 2026-06-18 — Codex re-`审查 PASS` (4.2 Round5 大宗交易 coverage/privacy guard)
 - **Verdict/Action**: PASS. `R-ASHORT-GAP42-ROUND5-TRADE-EVENT-COVERAGE-PRIVACY-GUARD-GAP` 已在 working tree 修到位：block_trade + sibling dragon_list 都有 checked 覆盖闭合，held trade-event impact 必须走 holding/private shape，comparison-only 边界未发现被破坏。
 - **Required**: addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。

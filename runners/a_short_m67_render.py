@@ -313,9 +313,15 @@ def render_weekly_markdown(weekly: dict) -> str:
             _btevs = _bt.get("events") or []
             out += ["", f"## 💰 大宗交易(近{_bn}交易日 · comparison-only · 不改决策/EGS/选股/股数)"]
             if _btevs:
-                out += ["| 票 | 名称 | 成交日 | 成交金额(原值) | 笔数 |", "|---|---|---|---|---|"]
+                def _btparty(e):                          # 第二刀 买卖方: 最大笔的 买→卖 营业部(+其余笔数);无 parties→「—」
+                    ps = e.get("parties") or []
+                    if not ps:
+                        return "—"
+                    top = max(ps, key=lambda p: (p.get("amount") or 0))
+                    return f"{top.get('buyer') or '?'}→{top.get('seller') or '?'}" + (f"(+{len(ps) - 1})" if len(ps) > 1 else "")
+                out += ["| 票 | 名称 | 成交日 | 成交金额(原值) | 笔数 | 买卖方(最大笔) |", "|---|---|---|---|---|---|"]
                 out += [f"| {e['ts_code']} | {e['name']} | {e['trade_date']} | "
-                        f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} |"
+                        f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} | {_btparty(e)} |"
                         for e in _btevs]
             else:
                 out.append(f"> 本周已查:候选近{_bn}交易日无大宗交易记录。")

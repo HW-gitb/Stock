@@ -759,6 +759,10 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
                 raise ValueError(f"block_trade event trade_date 晚于 as_of(非 PIT;{_e['ts_code']})")
             if _e["trade_date"] not in _btwdset:
                 raise ValueError(f"block_trade event trade_date {_e['trade_date']} 不在 window_dates(窗口外;{_e['ts_code']})")
+            # 第二刀 parties no-dangling:checked block_trade event 必有 parties 且 len==trade_count(schema 焊 required+buyer/seller/amount keys;此处焊数量,
+            # 防「买卖方第二刀」落成空/缺笔;party 值可 null=单元格空白,但每笔须有 buyer/seller/amount 键、笔数对齐)。
+            if len(_e.get("parties") or []) != _e.get("trade_count"):
+                raise ValueError(f"block_trade event {_e['ts_code']}/{_e['trade_date']} parties 数({len(_e.get('parties') or [])}) != trade_count({_e.get('trade_count')})(买卖方逐笔须与笔数一致)")
         for _ud in (_bt.get("unchecked_dates") or []):
             if _ud not in _btwdset:
                 raise ValueError(f"block_trade unchecked_dates {_ud} 不在 window_dates")
@@ -1370,15 +1374,17 @@ _BLOCK_TRADE_EVIDENCE_VALUE = "block_trade.events[appearance]"   # operation_imp
 
 def _fetch_block_trade(pro, trade_date: str):
     """4.2 Round5 真大宗交易 provider: tushare `pro.block_trade(trade_date=)`(当日全市场大宗成交,**收盘后发布 → trade_date<=as_of
-    PIT-safe**)→ [{"ts_code","amount"(成交金额原值)}]。按 trade_date 查,builder 按 (票,日) 聚合(笔数 + 金额合计)再过滤候选。
-    **fail-closed**: 缺 ts_code/amount 列 → None(未查成);异常/None → None;空 → [](该日真无大宗,查成了)。amount 不做单位换算;买卖方营业部 = 第二刀。"""
+    PIT-safe**)→ [{"ts_code","amount"(成交金额原值),"buyer"(买方营业部),"seller"(卖方营业部)}]。按 trade_date 查,builder 按 (票,日)
+    聚合(笔数 + 金额合计 + 第二刀逐笔买卖方 parties)再过滤候选。**fail-closed**: 缺 ts_code/amount 列 → None(未查成);异常/None → None;
+    空 → [](该日真无大宗,查成了)。amount 不做单位换算。**第二刀 buyer/seller 同一 fetch + fail-closed 要求该列**:缺 buyer/seller 列 → None
+    (该日 unchecked,绝不把 ?→? 当查成的买卖方;单元格本身空白→该笔 buyer/seller=None 合法,但列必须存在);折价率 = 后续。"""
     try:
-        df = pro.block_trade(trade_date=str(trade_date), fields="trade_date,ts_code,price,vol,amount")
+        df = pro.block_trade(trade_date=str(trade_date), fields="trade_date,ts_code,price,vol,amount,buyer,seller")
     except Exception:
         return None
     if df is None:
         return None
-    if not {"ts_code", "amount"}.issubset(set(getattr(df, "columns", []))):
+    if not {"ts_code", "amount", "buyer", "seller"}.issubset(set(getattr(df, "columns", []))):
         return None
     if getattr(df, "empty", True):
         return []
@@ -1392,7 +1398,8 @@ def _fetch_block_trade(pro, trade_date: str):
         except (TypeError, ValueError):
             return None
         return f if (f == f and f not in (float("inf"), float("-inf"))) else None
-    return [{"ts_code": _s(r.get("ts_code")), "amount": _num(r.get("amount"))} for _, r in df.iterrows()]
+    return [{"ts_code": _s(r.get("ts_code")), "amount": _num(r.get("amount")),
+             "buyer": _s(r.get("buyer")), "seller": _s(r.get("seller"))} for _, r in df.iterrows()]
 
 
 def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=BLOCK_TRADE_LOOKBACK_TRADING_DAYS):
@@ -1400,8 +1407,8 @@ def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=
     `block_provider(trade_date)` → list[{"ts_code","amount"}]|None(失败)。`trade_days` = 近 N 个 SSE 交易日(均 <= as_of)。
     PIT: 只收 trade_date<=as_of。**unknown-not-clear**: provider None / trade_days 空 / 全交易日取数失败 → status
     `unknown_or_unavailable`(绝不当「无大宗」);部分交易日失败 → status `checked` 但失败日进 `unchecked_dates`。
-    按 (票,日) 聚合: event = {ts_code,name,trade_date,amount(当日合计,全缺→None),trade_count(笔数)};只收 `cand_names`
-    (第一刀即 = 候选 + 账户持仓,main 用 reports 行装配),其它票丢弃。买卖方营业部 = 第二刀、折价率 = 后续。"""
+    按 (票,日) 聚合: event = {ts_code,name,trade_date,amount(当日合计,全缺→None),trade_count(笔数),parties(第二刀 逐笔买卖方
+    {buyer,seller,amount})};只收 `cand_names`(= 候选 + 账户持仓,main 用 reports 行装配),其它票丢弃。买卖方第二刀已含、折价率 = 后续。"""
     from datetime import datetime
     wd = sorted({str(d) for d in (trade_days or [])})
     base = {"as_of": str(as_of), "lookback_trading_days": lookback, "window_dates": wd}
@@ -1429,19 +1436,21 @@ def _block_trade_events(cand_names, as_of, block_provider, trade_days, lookback=
             continue
         if (day_d - as_of_d).days > 0:
             continue                                      # 防御: 未来交易日 → 跳过
-        agg = {}                                          # ts_code -> [amount_sum|None, count]
+        agg = {}                                          # ts_code -> [amount_sum|None, count, parties]
         for row in rows:
             code = (row or {}).get("ts_code")
             if code not in cand_codes:
                 continue                                  # 非覆盖票(既非候选也非账户持仓)→ 丢弃
-            cur = agg.setdefault(code, [None, 0])
+            cur = agg.setdefault(code, [None, 0, []])
             cur[1] += 1
             amt = (row or {}).get("amount")
             if amt is not None:
                 cur[0] = (cur[0] or 0.0) + amt
-        for code, (amt_sum, cnt) in agg.items():
+            cur[2].append({"buyer": (row or {}).get("buyer"), "seller": (row or {}).get("seller"), "amount": amt})   # 第二刀 逐笔买卖方
+        for code, (amt_sum, cnt, parties) in agg.items():
             events.append({"ts_code": code, "name": name_by.get(code, ""), "trade_date": str(day),
-                           "amount": (round(amt_sum, 2) if amt_sum is not None else None), "trade_count": cnt})
+                           "amount": (round(amt_sum, 2) if amt_sum is not None else None),
+                           "trade_count": cnt, "parties": parties})
     if not any_ok:                                         # 有窗口但所有交易日都没查成 → unknown(绝不当无大宗)
         return {**base, "status": "unknown_or_unavailable", "events": []}
     events.sort(key=lambda e: (e["trade_date"], e["ts_code"]), reverse=True)
@@ -1472,7 +1481,12 @@ def _attach_block_trade_impacts(weekly, as_of):
         recent = max(evs, key=lambda e: e["trade_date"])
         total_cnt = sum(e["trade_count"] for e in evs)
         amt = recent.get("amount")
-        detail = f"最近{recent['trade_date']}" + (f",成交{amt}" if amt is not None else "") + f",{recent['trade_count']}笔"
+        _bp = recent.get("parties") or []                         # 第二刀: 最近一次大宗的最大笔买卖方
+        _ptxt = ""
+        if _bp:
+            _top = max(_bp, key=lambda p: (p.get("amount") or 0))
+            _ptxt = f",买卖方{_top.get('buyer') or '?'}→{_top.get('seller') or '?'}"
+        detail = f"最近{recent['trade_date']}" + (f",成交{amt}" if amt is not None else "") + f",{recent['trade_count']}笔" + _ptxt
         txt = f"{_BLOCK_TRADE_MARKER}(comparison-only,不改决策):近{n}交易日{total_cnt}笔大宗交易({detail})"
         cut = rep["m67"]["精简结论区"]
         prev = cut.get("板块资金事件") or ""

@@ -151,7 +151,7 @@
     },
     "block_trade": {
       "type": ["object", "null"],
-      "description": "4.2 Round5 大宗交易(block_trade, analysis-only · comparison-only):候选近 N 交易日大宗成交事实 + 成交金额(第一刀:amount 当日合计 + trade_count 笔数;买卖方营业部=第二刀、折价率=后续)落 精简结论区.板块资金事件 + machine.operation_impact(source_field=block_trade_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only)。PIT:大宗交易 T 日盘后发布 → trade_date<=as_of。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无大宗」) vs checked(部分交易日失败 → unchecked_dates)。可选/缺省 null。",
+      "description": "4.2 Round5 大宗交易(block_trade, analysis-only · comparison-only):候选+账户持仓近 N 交易日大宗成交事实 + 成交金额(第一刀:amount 当日合计 + trade_count 笔数)+ 买卖方营业部(第二刀:逐笔 parties[buyer/seller/amount]);折价率=后续。落 精简结论区.板块资金事件 + machine.operation_impact(source_field=block_trade_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only)。PIT:大宗交易 T 日盘后发布 → trade_date<=as_of。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无大宗」) vs checked(部分交易日失败 → unchecked_dates)。可选/缺省 null。",
       "additionalProperties": false,
       "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
       "properties": {
@@ -165,13 +165,27 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "trade_date", "amount", "trade_count"],
+            "required": ["ts_code", "name", "trade_date", "amount", "trade_count", "parties"],
             "properties": {
               "ts_code": {"type": "string"},
               "name": {"type": "string"},
               "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
               "amount": {"type": ["number", "null"], "description": "当日大宗成交金额合计(tushare block_trade.amount 原值汇总,不做单位换算;全缺→null)"},
-              "trade_count": {"type": "integer", "minimum": 1, "description": "当日大宗成交笔数"}
+              "trade_count": {"type": "integer", "minimum": 1, "description": "当日大宗成交笔数"},
+              "parties": {
+                "type": "array",
+                "description": "第二刀 买卖方分析:该(票,日)逐笔大宗的买方/卖方营业部 + 金额(原值)。与 block_trade 同一 fetch(fail-closed 要求 buyer/seller 列),checked event **必有**且 len(parties)==trade_count(validator 强制)。comparison-only,不参与任何决策。",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["buyer", "seller", "amount"],
+                  "properties": {
+                    "buyer": {"type": ["string", "null"], "description": "买方营业部(block_trade.buyer)"},
+                    "seller": {"type": ["string", "null"], "description": "卖方营业部(block_trade.seller)"},
+                    "amount": {"type": ["number", "null"], "description": "该笔成交金额(原值,不换算)"}
+                  }
+                }
+              }
             }
           }
         },
