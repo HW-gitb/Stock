@@ -587,7 +587,7 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
     """4.2 第3轮:把已校验的 semantic 信号(official 证据齐全 high / web downgrade)统一成 advisory
     operation_impact(复用 build_m67/holding 已算标志,不重复校验,DRY 单一来源)。
     scope='new_entry'(候选行)→ candidate_row_impact / 已结构化落点;
-    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本、最终结构化列待 S3b。
+    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本 → R1+R2 结构化列 + R3 减仓价/清仓价(经合并引擎/_apply);主动到价动作待 R4。
     semantic 永远 advisory:production_effect_enabled=False;official→m67_advisory_veto、web_llm→veto_class=none
     (web/LLM 永久 advisory-only,绝不 hard_veto)。持仓 blocked_add=True(禁止加仓)、私密(private_account)。"""
     impacts, as_of = [], str(as_of)
@@ -602,7 +602,7 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
             "holding_effect": "clear_review" if is_holding else "none",
             "blocked_add_required": is_holding,
             "veto_class": "m67_advisory_veto",
-            "reason": ("持仓官方结构化 high+证据齐全 → 清仓复核建议(人工,不自动卖出;减仓价待 S3b)" if is_holding
+            "reason": ("持仓官方结构化 high+证据齐全 → 清仓复核建议(人工,不自动卖出;清仓价见 R3 结构化列、主动到价动作待 R4)" if is_holding
                        else f"官方结构化 high+证据齐全(非空 url_or_pdf) → M6.7 advisory 否决({ADVISORY_VETO_TAG},不进 EGS/回测)"),
             "evidence_ref": {"kind": "lineage_key",
                              "value": "machine.layer.semantic_risk.official_status/events",
@@ -689,10 +689,10 @@ def _consume_semantic(inp: dict, as_of: str) -> dict:
 
 def _semantic_holding_lines(sc: dict) -> list:
     """4.2 S2: 持仓 semantic 的用户可见文本行(build_m67 持仓分支 + build_holding_report 共用,防漂移)。
-    official 证据齐全 high → 清仓复核(标非生产 advisory);web → 持仓警戒;pending → 待核。持仓恒持有、不自动卖出、减仓价待 S3b。"""
+    official 证据齐全 high → 清仓复核(标非生产 advisory);web → 持仓警戒;pending → 待核。持仓恒持有、不自动卖出;减仓价/清仓价见 R3(advisory),主动到价动作待 R4。"""
     lines = []
     if sc["high_full"]:
-        lines.append(f"官方结构化 high({ADVISORY_VETO_TAG}):建议清仓复核(人工,不自动卖出,减仓价待 S3b)")
+        lines.append(f"官方结构化 high({ADVISORY_VETO_TAG}):建议清仓复核(人工,不自动卖出,清仓价见 R3 结构化列,主动到价动作待 R4)")
     if sc["web_downgrade"]:
         lines.append(f"web/LLM {sc['web_status']}({sc['web'].get('risk_level')}):持仓警戒(advisory)")
     if sc["sem_pending"]:
@@ -707,6 +707,7 @@ def _semantic_holding_lines(sc: dict) -> list:
 _HOLDING_SEVERITY = ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold"]   # 降序(§7.1;none/缺省=最低,默认 hold)
 _HOLDING_DISPOSITION_LABEL = {"hold": "持有", "hold_watch": "持有警戒", "reduce_review": "建议减仓复核",
                               "clear_review": "建议清仓复核", "manual_review": "立即人工复核"}
+_REDUCE_RATIO_ADVISORY = "1/3"   # S3b R3: reduce_review 的 advisory 减仓比例(固定档,人工复核定量;不自动执行=R4)
 
 
 def _is_held_signal(imp):
@@ -751,6 +752,19 @@ def _apply_holding_disposition(report):
     mc["blocked_add_required"] = blocked
     tbl["持仓处置"] = _HOLDING_DISPOSITION_LABEL[sig]
     tbl["禁止加仓"] = blocked
+    # S3b R3: 减仓价/清仓价/减仓比例 = **advisory 价位**,复用 S3a holding_levels(plan.stop=损 / plan.t1=盈一),仅 reduce/clear disposition;
+    # **不自动执行**(到价动作/移保本/ratchet=R4)。S3a 未算出/破位(plan 缺或对应位 None)→ 价位 None(诚实不伪造)。pop-then-set 保持幂等
+    # (signal 在 pipeline attach 后可能变,清旧价位防残留)。与 S3a 损/盈一/盈二(table 已显)是同值引用、两维共存,不重算。
+    plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+    for _k in ("减仓价", "清仓价", "减仓比例"):
+        tbl.pop(_k, None)
+    for _k in ("reduce_price", "clear_price", "reduce_ratio"):
+        mc.pop(_k, None)
+    if sig == "clear_review":
+        tbl["清仓价"] = mc["clear_price"] = plan.get("stop")          # 清仓价 = S3a 损(系统跟踪止损)
+    elif sig == "reduce_review":
+        tbl["减仓价"] = mc["reduce_price"] = plan.get("t1")           # 减仓价 = S3a 盈一(到盈一减仓锁利复核)
+        tbl["减仓比例"] = mc["reduce_ratio"] = _REDUCE_RATIO_ADVISORY
     return report
 
 
@@ -1055,7 +1069,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "event_hard_veto", "semantic_official", "stateful_risk")}
     # 4.2 S2: 持仓 semantic 数据接入(让持仓也抓 cninfo/web 语义)。复用 _consume_semantic(候选/持仓单一来源)+
     # _semantic_operation_impacts(scope=existing_holding → holding_row_impact: clear_review/hold_watch + blocked_add
-    # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价待 S3b);official 证据齐全 high → 清仓复核 advisory
+    # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价/清仓价见 R3,主动到价动作待 R4);official 证据齐全 high → 清仓复核 advisory
     # (标非生产)、web → 持仓警戒;web/LLM 永久 advisory-only、绝不 hard_veto。**无 semantic 输入(provider None)→ 全 unknown、
     # 零 op_impact、文本保持「未核查」(S1 向后兼容)**。涉真实持仓 → 私密路由(weekly_private,带 --account 自动私密)。
     has_semantic_input = inp.get("semantic") is not None or inp.get("semantic_web_llm") is not None
@@ -1411,8 +1425,14 @@ def validate_m67_consistency(report: dict) -> None:
     if action != "持有":
         if "持仓处置" in tbl or "禁止加仓" in tbl:
             raise ValueError("非持有行不得带 持仓处置/禁止加仓(S3b:持仓处置仅持仓行)")
-        if mc.get("holding_management_signal") is not None or mc.get("blocked_add_required") is not None:
+        if "holding_management_signal" in mc or "blocked_add_required" in mc:   # 键存在即泄漏(含显式 null)
             raise ValueError("非持有行 machine 不得带 holding_management_signal/blocked_add_required(S3b:持仓处置仅持仓行)")
+        # S3b R3: 减仓价/清仓价/减仓比例(table)+ reduce_price/clear_price/reduce_ratio(machine)同为持仓行专属,非持有行不得带
+        # (**按键存在判定**,含显式 null:R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP——present-but-None 也算泄漏)
+        if any(_k in tbl for _k in ("减仓价", "清仓价", "减仓比例")):
+            raise ValueError("非持有行不得带 减仓价/清仓价/减仓比例(S3b R3:价位仅持仓行)")
+        if any(_k in mc for _k in ("reduce_price", "clear_price", "reduce_ratio")):
+            raise ValueError("非持有行 machine 不得带 reduce_price/clear_price/reduce_ratio(S3b R3:价位仅持仓行)")
     # 4.2 第1轮: operation_impact no-dangling + advisory-isolation guard(仅当 machine.operation_impact 存在时生效)
     validate_operation_impact_no_dangling(report)
     if action == "建仓":
@@ -1518,7 +1538,7 @@ def validate_m67_consistency(report: dict) -> None:
                 raise ValueError("持有 系统位未算出但有手填参考止损,advice 须指示按手填参考止损执行")
         # S3b R1+R2: 持仓处置/禁止加仓 结构化列一致性 —— **独立重算** _merge_holding_disposition(不信任 builder),比对
         # machine.holding_management_signal/blocked_add_required + table.持仓处置/禁止加仓(映射)。持仓行(操作=持有)必带这 4 字段。
-        # 与 S3a holding_levels(被动止损/止盈价位:损/盈一/盈二,上方已校)是两个维度——持仓处置=advisory 处置档,不产减仓价(R3)。
+        # 与 S3a holding_levels(被动止损/止盈价位:损/盈一/盈二,上方已校)是两个维度——持仓处置=advisory 处置档;R3 价位见下(引用 S3a 同值)。
         _sig, _blk = _merge_holding_disposition(mc.get("operation_impact") or [])
         if mc.get("holding_management_signal") != _sig:
             raise ValueError(f"持有 machine.holding_management_signal={mc.get('holding_management_signal')!r} != 合并重算 {_sig!r}")
@@ -1528,6 +1548,32 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError(f"持有 table.持仓处置={tbl.get('持仓处置')!r} != machine.holding_management_signal 映射 {_HOLDING_DISPOSITION_LABEL[_sig]!r}")
         if "禁止加仓" not in tbl or bool(tbl["禁止加仓"]) != _blk:
             raise ValueError("持有 table.禁止加仓 缺失或 != machine.blocked_add_required")
+        # S3b R3: 减仓价/清仓价/减仓比例 = advisory 价位,仅 reduce/clear disposition 带。**显式 null no-dangling**(区分键缺失 vs 显式 null;
+        # R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP):按 disposition 焊死 table+machine **恰好这组键存在**(S3a 未算出也须显式 null 键、不得省略、
+        # 不得多带);值独立比对 S3a plan(清仓价==损 plan.stop、减仓价==盈一 plan.t1,含显式 None,不信任 builder/不重算 S3a)+ machine↔table 一致。不产自动执行(R4)。
+        _plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+        if _sig == "clear_review":
+            _exp_tbl, _exp_mc = {"清仓价"}, {"clear_price"}
+        elif _sig == "reduce_review":
+            _exp_tbl, _exp_mc = {"减仓价", "减仓比例"}, {"reduce_price", "reduce_ratio"}
+        else:                                                    # hold/hold_watch/manual_review → 无 R3 价位
+            _exp_tbl, _exp_mc = set(), set()
+        _got_tbl = {_k for _k in ("减仓价", "清仓价", "减仓比例") if _k in tbl}
+        _got_mc = {_k for _k in ("reduce_price", "clear_price", "reduce_ratio") if _k in mc}
+        if _got_tbl != _exp_tbl:
+            raise ValueError(f"持有 {_sig} R3 table 价位键集 {_got_tbl} != 期望 {_exp_tbl}(显式 null 也须键存在、不得缺/多带)")
+        if _got_mc != _exp_mc:
+            raise ValueError(f"持有 {_sig} R3 machine 价位键集 {_got_mc} != 期望 {_exp_mc}(显式 null 也须键存在、不得缺/多带)")
+        if _sig == "clear_review" and tbl.get("清仓价") != _plan.get("stop"):
+            raise ValueError(f"持有 clear_review table.清仓价={tbl.get('清仓价')!r} != S3a 损 plan.stop={_plan.get('stop')!r}")
+        if _sig == "reduce_review":
+            if tbl.get("减仓价") != _plan.get("t1"):
+                raise ValueError(f"持有 reduce_review table.减仓价={tbl.get('减仓价')!r} != S3a 盈一 plan.t1={_plan.get('t1')!r}")
+            if tbl.get("减仓比例") != _REDUCE_RATIO_ADVISORY:
+                raise ValueError(f"持有 reduce_review table.减仓比例={tbl.get('减仓比例')!r} != advisory {_REDUCE_RATIO_ADVISORY!r}")
+        if (mc.get("clear_price") != tbl.get("清仓价") or mc.get("reduce_price") != tbl.get("减仓价")
+                or mc.get("reduce_ratio") != tbl.get("减仓比例")):
+            raise ValueError("持有 machine reduce_price/clear_price/reduce_ratio 与 table 减仓价/清仓价/减仓比例 不一致")
     else:  # 观察 / 否决:交易字段必须全 null
         for k in ("股数", "入", "盈一", "盈二", "损"):
             if tbl[k] is not None:

@@ -22,6 +22,7 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     ADVISORY_VETO_TAG, build_m67_report, build_holding_report, validate_m67_consistency,
     validate_operation_impact_no_dangling, _semantic_operation_impacts,
     _merge_holding_disposition, _apply_holding_disposition, _HOLDING_DISPOSITION_LABEL,
+    _REDUCE_RATIO_ADVISORY,
 )
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
 
@@ -807,6 +808,151 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         r2["machine"]["blocked_add_required"] = True
         with self.assertRaises(ValueError):
             validate_m67_consistency(r2)
+
+    # ── S3b R3: 减仓价/清仓价/减仓比例 = advisory 价位(复用 S3a 损/盈一,不自动下单=R4)──
+    def _clean_held_inp(self):
+        # 非破位持仓(close 高于跟踪止损)→ S3a plan 有 stop+t1+t2,供 reduce_review 减仓价(=盈一)非 None 测试
+        series = [{"high": 9.0 + i * 0.05, "low": 8.9 + i * 0.05, "close": 9.0 + i * 0.05} for i in range(30)]
+        return _good_input(stateful_risk=_held_state(), close=10.6, price_series=series)
+
+    def test_r3_clear_review_clear_price_eq_s3a_stop(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(r["m67"]["table"]["清仓价"], plan["stop"])          # 清仓价 = S3a 损
+        self.assertEqual(r["machine"]["clear_price"], plan["stop"])
+        self.assertNotIn("减仓价", r["m67"]["table"])
+        self.assertNotIn("减仓比例", r["m67"]["table"])
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_r3_reduce_review_reduce_price_eq_s3a_t1(self):
+        r = build_m67_report(self._clean_held_inp(), AS_OF, "t")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertFalse(plan["breached"])
+        self.assertIsNotNone(plan["t1"])
+        r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertEqual(r["m67"]["table"]["减仓价"], plan["t1"])            # 减仓价 = S3a 盈一
+        self.assertEqual(r["m67"]["table"]["减仓比例"], _REDUCE_RATIO_ADVISORY)
+        self.assertEqual(r["machine"]["reduce_price"], plan["t1"])
+        self.assertNotIn("清仓价", r["m67"]["table"])
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_r3_hold_no_prices(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")   # 无 signal → hold
+        _apply_holding_disposition(r)
+        for k in ("减仓价", "清仓价", "减仓比例"):
+            self.assertNotIn(k, r["m67"]["table"])
+        validate_m67_consistency(r)
+
+    def test_r3_breached_reduce_price_null_not_fabricated(self):
+        # 破位 → plan.t1=None → reduce_review 减仓价=null(诚实不伪造),减仓比例仍 advisory
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
+        r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertIn("减仓价", r["m67"]["table"])
+        self.assertIsNone(r["m67"]["table"]["减仓价"])
+        self.assertEqual(r["m67"]["table"]["减仓比例"], _REDUCE_RATIO_ADVISORY)
+        validate_m67_consistency(r)
+
+    def test_r3_validator_rejects_wrong_disposition_price(self):
+        # clear_review 不得带 减仓价
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        r["m67"]["table"]["减仓价"] = 9.99
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_validator_rejects_clear_price_mismatch(self):
+        # 清仓价 != S3a 损 → 拒(独立比对 S3a plan,不信任 builder)
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        r["m67"]["table"]["清仓价"] = (r["machine"]["entry_exit_size_star"]["plan"]["stop"] or 0) + 1.0
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_validator_rejects_nonheld_price(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["m67"]["table"]["清仓价"] = 5.0
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+        r2 = build_m67_report(_good_input(), AS_OF, "t")
+        r2["machine"]["reduce_price"] = 5.0
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r2)
+
+    def test_r3_idempotent_signal_change_clears_stale(self):
+        # signal clear_review→hold 重算清掉旧清仓价(幂等)
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertIn("清仓价", r["m67"]["table"])
+        r["machine"]["operation_impact"] = []
+        _apply_holding_disposition(r)
+        self.assertNotIn("清仓价", r["m67"]["table"])
+        self.assertNotIn("clear_price", r["machine"])
+        validate_m67_consistency(r)
+
+    def test_r3_s3a_levels_coexist_unchanged(self):
+        # R3 价位与 S3a 损/盈一/盈二 两维共存:清仓价==损(引用同值),S3a 列不被 R3 改
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        s3a_stop = r["m67"]["table"]["损"]
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertEqual(r["m67"]["table"]["损"], s3a_stop)
+        self.assertEqual(r["m67"]["table"]["清仓价"], s3a_stop)
+
+    # ── R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP: 显式 null vs 键缺失(no-dangling)──
+    def test_r3_rejects_missing_reduce_price_key(self):
+        # breached reduce(减仓价=null present)删 table.减仓价 + machine.reduce_price(留减仓比例)→ 键缺失拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
+        _apply_holding_disposition(r)
+        validate_m67_consistency(r)                          # 正常显式 null present 先过
+        del r["m67"]["table"]["减仓价"]
+        del r["machine"]["reduce_price"]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_rejects_missing_clear_price_key(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        del r["m67"]["table"]["清仓价"]
+        del r["machine"]["clear_price"]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_rejects_missing_machine_null_with_table_null(self):
+        # 删 machine.clear_price 但留 table.清仓价 → machine 键集不符拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        del r["machine"]["clear_price"]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_rejects_stray_machine_null_wrong_disposition(self):
+        # clear_review 混入 machine.reduce_price=None(present null)→ machine 键集多带拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        r["machine"]["reduce_price"] = None
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r3_rejects_nonheld_machine_price_null(self):
+        # 非持有报告 machine.reduce_price=None(present null)→ 键存在即泄漏拒
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["machine"]["reduce_price"] = None
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
 
 
 if __name__ == "__main__":

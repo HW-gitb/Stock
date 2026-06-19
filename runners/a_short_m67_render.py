@@ -120,11 +120,18 @@ def _card_field(report: dict, key: str) -> str:
 
 def _disposition_line(t: dict):
     """S3b R1+R2: 持仓处置 + 禁止加仓 逐票行(仅持仓行 table 带 持仓处置;候选行返回 None 不渲染)。
-    advisory 复核档,不自动卖出;减仓价/清仓价 = R3。"""
+    S3b R3: reduce/clear disposition 附 advisory 减仓价/清仓价/减仓比例(复用 S3a 损/盈一,**不自动下单**=R4)。"""
     d = t.get("持仓处置")
     if not d:
         return None
-    return f"- 持仓处置:{d}（禁止加仓:{'是' if t.get('禁止加仓') else '否'}；advisory 复核建议,不自动卖出,减仓价/清仓价待 S3b）"
+    bits = [f"持仓处置:{d}（禁止加仓:{'是' if t.get('禁止加仓') else '否'}）"]
+    if "清仓价" in t:
+        _cp = t.get("清仓价")
+        bits.append(f"清仓价(=系统止损):{_cp if _cp is not None else '未算出'}")
+    if "减仓价" in t:
+        _rp = t.get("减仓价")
+        bits.append(f"减仓价(=盈一):{_rp if _rp is not None else '未算出'}、减仓比例:{t.get('减仓比例')}")
+    return "- " + "；".join(bits) + "（advisory 复核建议,不自动下单;到价减仓/止损触发/移保本/ratchet=R4）"
 
 
 def _render_holdings_section(holding_reports: list, manual_review: list) -> list:

@@ -8,11 +8,37 @@
 
 ---
 
+## 2026-06-19 — Codex re-`审查 PASS` (S3b R3 explicit-null price guard)
+- **Verdict/Action**: PASS. `R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP` 在当前 working tree 已修到位: R3 显式 null 键集/no-dangling guard 已闭合; 未发现新的 P0/P1/P2 Required。
+- **Required**: `R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
+- **Verify**: independent probes 7 项 OK; S3b targeted 39 OK; gap+weekly 535 OK; doc/route guard 30 OK; full discover 2578 OK; py_compile/diff-check/BOM OK; 未抓真实 Tushare。
+- **Next**: 用户决定是否 `提交`; 继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-19 — Codex `审查 FAIL` (S3b R3 explicit-null price guard)
+- **Verdict/Action**: FAIL. S3b R3 正常 builder 路径可落价位,但 validator 接受缺失显式 null 价位字段和非持有行 machine null 泄漏; 新增 1 个 P2 Required。
+- **Required**: `R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: probes 3 项复现 accepted; HoldingDispositionS3bTests 34 OK; gap+weekly 530 OK; doc/route 30 OK; full discover 2573 OK; py_compile/diff-check/BOM OK; 未抓真实 Tushare。
+- **Next**: 修复 R3 显式 null/字段存在性 guard; 继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
 ## 2026-06-19 — Codex re-`审查 PASS` (S3b 全局 holding-effect shape guard)
 - **Verdict/Action**: PASS. `R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP` 在当前 working tree 已修到位: generic/forward_event wrong-shape holding fields 全拒,合法 held shape 仍能落 `持仓处置`/`禁止加仓`; 未发现新的 P0/P1/P2 Required。
 - **Required**: `R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`。
 - **Verify**: independent probes 8 项 OK; S3b targeted 28 OK; gap+weekly 521 OK; doc/route guard 30 OK; full discover 2564 OK; py_compile/diff-check/BOM OK; 未抓真实 Tushare。
 - **Next**: 用户决定是否 `提交`; 继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+
+## 2026-06-19 — Claude `修复` (S3b R3 显式 null 价位 guard;R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP)
+- **Verdict/Action**: 判定 Codex FAIL 对(validator 用 `.get()` 把"键缺失"与"显式 null"等同 → 缺 减仓价/清仓价 键、非持有 machine 价位 present-null 都漏过)。修:① 持有分支按 disposition 焊死 **R3 键集**(clear→{清仓价}/{clear_price}、reduce→{减仓价,减仓比例}/{reduce_price,reduce_ratio}、其余→空),缺键/多带(含显式 null)即拒,值仍独立比对 S3a plan;② 非持有分支 machine 价位改**按键存在**(`_k in mc` 非 `is not None`),R1+R2 的 holding_management_signal/blocked_add 同类一并修。builder 不变(本就显式 null present)。详见 register。
+- **Required**: `R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: +5 对抗(缺 reduce/clear 价键 / 缺 machine null 留 table null / wrong-disposition machine null 多带 / 非持有 machine.reduce_price=None);复跑 Codex 3 探针全 rejected;gap+weekly 535 OK;全量 discover 2578 OK(零回归);py_compile/diff clean(仅 CRLF)/无 BOM。运行时(EGS/TopN/选股/动作/股数/否决/S3a 公式/builder)未动;未跑 live Tushare。本轮仅改 engine validator + tests。
+- **Next**: 审查(Codex re-审查 R3 显式 null 键集 guard);PASS 后用户「提交」(两段式)。之后 R4(主动动作+ratchet,单独批准)。继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口:缺 reduce/clear 价键、缺 machine null、wrong-disposition machine 多带、非持有 machine null 各配测 + 复跑 reviewer 3 探针。B ripple:键集判定同覆盖 table+machine、值比对/machine↔table 不变;非持有 R1+R2 machine 同类 present-null 一并修(非只点名 R3 实例);builder 已 present-null 不动。C 反向:正常显式 null present 仍过(builder 输出不变,2578 零回归)、hold/manual 无价位仍过、reduce/clear 正常价位仍过。D N-A(键集判定)。E route-doc:仅 SESSION_LOG+register。F 键存在≠值非 null、同 bug 类一次修全、doc↔behavior 同步、无 BOM、diff clean。
+
+## 2026-06-19 — Claude `起草` (S3b R3: 减仓价/清仓价/减仓比例 advisory 价位,复用 S3a)
+- **Verdict/Action**: 用户批准 R3 + 选定派生「复用 S3a 价位」。R1+R2 的 持仓处置 升级带具体 advisory 价位:clear_review→清仓价=S3a 损(plan.stop)、reduce_review→减仓价=S3a 盈一(plan.t1)+ 减仓比例(固定档 1/3 advisory)。**仅持仓行 + 仅 reduce/clear disposition · advisory 不自动下单 · 操作 enum 不扩 · 不接券商 · comparison-only · 主板 · 与 S3a 损/盈一/盈二 两维共存(引用同值不重算)**。S3a 未算出/破位(plan 缺/对应位 None)→ 价位 null(不伪造)。主动到价动作/止损触发/移保本/跨周 ratchet=R4(单独批准)。
+- **Scope**: `a_short_phase5_engine.py`(_REDUCE_RATIO_ADVISORY + _apply_holding_disposition 扩 R3 价位[pop-then-set 幂等、复用 mc.plan stop/t1];validate_m67 持有分支独立比对 S3a plan[清仓价==stop/减仓价==t1/比例==档]+ 非对应 disposition 拒 + machine↔table 一致、非持有行拒 R3 价位[table+machine]);`a_short_m67_report.schema.json`(table +减仓价/清仓价[number|null]/减仓比例[string|null]+ machine reduce_price/clear_price/reduce_ratio,加性);`a_short_m67_render.py`(_disposition_line 显价位 + advisory caveat)。**B-ripple**:registry 2 行 减仓价 R3 已实现·pending→R4;engine/pipeline 6 处「减仓价待 S3b」stale 文本更新。
+- **Verify**: HoldingDispositionS3bTests +9 R3(clear→清仓价==损 / reduce→减仓价==盈一+比例 / hold 无价位 / 破位→null / validator 拒 wrong-disposition·清仓价 mismatch·非持有价位 / 幂等清旧 / 与 S3a 共存损不变);gap+weekly 530 OK;全量 discover **2573 OK(零回归)**;m67 schema/registry JSON valid;无 BOM;diff clean(仅 CRLF)。未跑 live Tushare;运行时(EGS/TopN/选股/动作/股数/否决/S3a 价位公式)未动。
+- **Next**: 审查(Codex 审 S3b R3 价位派生 + S3a 边界 + scope guard);PASS 后用户「提交」。之后 R4(主动动作+到价减仓+移保本+跨周 ratchet,单独批准)。继续不要提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`。
+- **Pre-Codex self-review**: A 出口:clear→清仓价/reduce→减仓价+比例/hold·hold_watch·manual 无价位/破位·未算出→null/幂等清旧 + validator(wrong-disposition·mismatch·非持有 table+machine·machine↔table)各配测。B ripple:复用 S3a plan(不重算 holding_levels);schema/render/registry 2 行 + 6 处 stale 文本同步;impact 对象 implementation_status/pending 保留 S3b(沿 R1+R2 约定,test 490 不破)。C 反向:S3a 损/盈一/盈二 不被 R3 改(共存测)、未算出不伪造、非对应 disposition 不误带、价位漂移候选/非持仓被拒。D N-A(价位=S3a 引用)。E route-doc:仅 SESSION_LOG。F advisory-only 无自动执行(R4 边界)、减仓比例固定档非自动量、doc↔behavior 同步、无 BOM、diff clean。
 
 ## 2026-06-19 — Claude `修复` (S3b 持仓效应全局 shape guard;R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP round2)
 - **Verdict/Action**: 判定 Codex re-审查 FAIL 对(round1 只焊 forward_event source-class ⑪,generic source_field 不匹配任何 source-class guard 仍可夹带 wrong-shape holding_effect/blocked 过 no-dangling)。加 **source-class 无关全局闭合**(guard ⑧.5):任何 impact 带持仓效应(holding_effect∉{none,缺省} 或 blocked_add)⟹ (a) 必是 `_is_held_signal`(holding_row_impact/existing_holding/private,与 merge 同一判据·单一来源)且 (b) 仅 position_state==held 报告。两向闭合:generic 候选 shape 带持仓字段拒(a);持仓 shape 持仓字段落非持仓报告拒(b)。详见 register。
