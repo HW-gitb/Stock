@@ -74,9 +74,11 @@ class RegistrySchemaTests(unittest.TestCase):
     def test_text_landing_requires_successor(self):
         # 非 implemented / 非 out_of_scope(只落文本/未来结构化)却无 pending_successor_slice → schema 拒
         bad = copy.deepcopy(self.example)
-        row = next(f for f in bad["fields"]
-                   if f["implementation_status"] not in ("implemented", "out_of_scope_no_landing"))
+        row = copy.deepcopy(bad["fields"][0])
+        row["field_id"] = "synthetic_design_only_without_successor"
+        row["implementation_status"] = "design_only_current_text_landing"
         row["pending_successor_slice"] = None
+        bad["fields"].append(row)
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, self.schema)
 
@@ -492,7 +494,8 @@ class HoldingSemanticS2Tests(unittest.TestCase):
         self.assertTrue(imp["blocked_add_required"])
         self.assertEqual(imp["veto_class"], "m67_advisory_veto")
         self.assertFalse(imp["production_effect_enabled"])
-        self.assertEqual(imp["pending_successor_slice"], "S3b")        # 减仓价待 S3b
+        self.assertIsNone(imp["pending_successor_slice"])              # S3b 已承接完成
+        self.assertEqual(imp["implementation_status"], "implemented")
         self.assertEqual(imp["privacy_class"], "private_account")      # 涉真实持仓 → 私密
         self.assertIn(ADVISORY_VETO_TAG, r["m67"]["精简结论区"]["操作建议"])   # guard ⑨
         validate_m67_consistency(r)
@@ -634,8 +637,8 @@ class HoldingDispositionS3bTests(unittest.TestCase):
                 "blocked_add_required": blocked, "veto_class": "none",
                 "evidence_ref": {"kind": "lineage_key", "value": "x", "as_of": AS_OF},
                 "m67_landing_surface": "x", "terminal_surface_target": "s3b_持仓处置_列+减仓价",
-                "pending_successor_slice": "S3b", "production_effect_enabled": False,
-                "implementation_status": "future_s3b_schema_render_required", "privacy_class": "private_account"}
+                "pending_successor_slice": None, "production_effect_enabled": False,
+                "implementation_status": "implemented", "privacy_class": "private_account"}
 
     def _cand_imp(self, holding_effect="clear_review", blocked=False, source_field="x"):
         # 候选/公开 shape 却被篡改带上持仓效应——绝不应参与持仓处置合并(scope fail-closed 的对抗输入)。

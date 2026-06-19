@@ -587,7 +587,7 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
     """4.2 第3轮:把已校验的 semantic 信号(official 证据齐全 high / web downgrade)统一成 advisory
     operation_impact(复用 build_m67/holding 已算标志,不重复校验,DRY 单一来源)。
     scope='new_entry'(候选行)→ candidate_row_impact / 已结构化落点;
-    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本 → R1+R2 结构化列 + R3 减仓价/清仓价(经合并引擎/_apply);到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b。
+    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置列 + 禁止加仓 + R3 减仓价/清仓价(经合并引擎/_apply);到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b。
     semantic 永远 advisory:production_effect_enabled=False;official→m67_advisory_veto、web_llm→veto_class=none
     (web/LLM 永久 advisory-only,绝不 hard_veto)。持仓 blocked_add=True(禁止加仓)、私密(private_account)。"""
     impacts, as_of = [], str(as_of)
@@ -610,11 +610,11 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
             "confidence": "high",
             "pit_basis": "disclosure_date",
             "production_effect_enabled": False,
-            "implementation_status": "future_s3b_schema_render_required" if is_holding else "implemented",
-            "m67_landing_surface": ("精简结论区.操作建议+风控触发(持仓处置复核文本)" if is_holding
+            "implementation_status": "implemented",
+            "m67_landing_surface": ("持仓处置/禁止加仓 + 清仓价/减仓价 + 到价提示/移保本 + ratchet advisory" if is_holding
                                     else "table.操作=否决 + 精简结论区.否决审查触发"),
-            "terminal_surface_target": "s3b_持仓处置_列+减仓价" if is_holding else "already_structured",
-            "pending_successor_slice": "S3b" if is_holding else None,
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
             "privacy_class": "private_account" if is_holding else "public_tracked",
         })
     if web_downgrade and web:
@@ -636,11 +636,11 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
             "confidence": "medium",
             "pit_basis": "live_only",
             "production_effect_enabled": False,
-            "implementation_status": "future_s3b_schema_render_required" if is_holding else "implemented",
-            "m67_landing_surface": ("精简结论区.风控触发(持仓警戒文本)" if is_holding
+            "implementation_status": "implemented",
+            "m67_landing_surface": ("持仓处置/禁止加仓 + 清仓价/减仓价 + 到价提示/移保本 + ratchet advisory" if is_holding
                                     else "精简结论区.风控触发"),
-            "terminal_surface_target": "s3b_持仓处置_列+减仓价" if is_holding else "already_structured",
-            "pending_successor_slice": "S3b" if is_holding else None,
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": None,
             "privacy_class": "private_account" if is_holding else "public_tracked",
         })
     return impacts
