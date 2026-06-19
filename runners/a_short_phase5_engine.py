@@ -587,7 +587,7 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
     """4.2 第3轮:把已校验的 semantic 信号(official 证据齐全 high / web downgrade)统一成 advisory
     operation_impact(复用 build_m67/holding 已算标志,不重复校验,DRY 单一来源)。
     scope='new_entry'(候选行)→ candidate_row_impact / 已结构化落点;
-    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本 → R1+R2 结构化列 + R3 减仓价/清仓价(经合并引擎/_apply);主动到价动作待 R4。
+    scope='existing_holding'(持仓行)→ holding_row_impact / 持仓处置文本 → R1+R2 结构化列 + R3 减仓价/清仓价(经合并引擎/_apply);到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b。
     semantic 永远 advisory:production_effect_enabled=False;official→m67_advisory_veto、web_llm→veto_class=none
     (web/LLM 永久 advisory-only,绝不 hard_veto)。持仓 blocked_add=True(禁止加仓)、私密(private_account)。"""
     impacts, as_of = [], str(as_of)
@@ -602,7 +602,7 @@ def _semantic_operation_impacts(high_full, web, web_downgrade, as_of, scope):
             "holding_effect": "clear_review" if is_holding else "none",
             "blocked_add_required": is_holding,
             "veto_class": "m67_advisory_veto",
-            "reason": ("持仓官方结构化 high+证据齐全 → 清仓复核建议(人工,不自动卖出;清仓价见 R3 结构化列、主动到价动作待 R4)" if is_holding
+            "reason": ("持仓官方结构化 high+证据齐全 → 清仓复核建议(人工,不自动卖出;清仓价见 R3 结构化列、到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b)" if is_holding
                        else f"官方结构化 high+证据齐全(非空 url_or_pdf) → M6.7 advisory 否决({ADVISORY_VETO_TAG},不进 EGS/回测)"),
             "evidence_ref": {"kind": "lineage_key",
                              "value": "machine.layer.semantic_risk.official_status/events",
@@ -689,10 +689,10 @@ def _consume_semantic(inp: dict, as_of: str) -> dict:
 
 def _semantic_holding_lines(sc: dict) -> list:
     """4.2 S2: 持仓 semantic 的用户可见文本行(build_m67 持仓分支 + build_holding_report 共用,防漂移)。
-    official 证据齐全 high → 清仓复核(标非生产 advisory);web → 持仓警戒;pending → 待核。持仓恒持有、不自动卖出;减仓价/清仓价见 R3(advisory),主动到价动作待 R4。"""
+    official 证据齐全 high → 清仓复核(标非生产 advisory);web → 持仓警戒;pending → 待核。持仓恒持有、不自动卖出;减仓价/清仓价见 R3(advisory),到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b。"""
     lines = []
     if sc["high_full"]:
-        lines.append(f"官方结构化 high({ADVISORY_VETO_TAG}):建议清仓复核(人工,不自动卖出,清仓价见 R3 结构化列,主动到价动作待 R4)")
+        lines.append(f"官方结构化 high({ADVISORY_VETO_TAG}):建议清仓复核(人工,不自动卖出,清仓价见 R3 结构化列,到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b)")
     if sc["web_downgrade"]:
         lines.append(f"web/LLM {sc['web_status']}({sc['web'].get('risk_level')}):持仓警戒(advisory)")
     if sc["sem_pending"]:
@@ -702,12 +702,12 @@ def _semantic_holding_lines(sc: dict) -> list:
 
 # ── S3b R1+R2: 持仓处置 结构化列 + severity 合并引擎 ───────────────────────────────────────────
 # 把 held 报告各 holding_row_impact 的 holding_effect 合成一个结构化「持仓处置」(决策1:操作 enum 不扩,持仓处置是独立列)+
-# 「禁止加仓」布尔(blocked_add_required OR)。**advisory 复核建议、不自动卖出**;减仓价/清仓价=R3(单独批准)、主动动作+跨周 ratchet=R4。
+# 「禁止加仓」布尔(blocked_add_required OR)。**advisory 复核建议、不自动卖出**;减仓价/清仓价=R3、到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b。
 # severity-max = anti-rescue(正面/低信号不能压低高信号);仅 held 报告。S3a holding_levels(被动系统止损/止盈)是另一维(价格位),不冲突。
 _HOLDING_SEVERITY = ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold"]   # 降序(§7.1;none/缺省=最低,默认 hold)
 _HOLDING_DISPOSITION_LABEL = {"hold": "持有", "hold_watch": "持有警戒", "reduce_review": "建议减仓复核",
                               "clear_review": "建议清仓复核", "manual_review": "立即人工复核"}
-_REDUCE_RATIO_ADVISORY = "1/3"   # S3b R3: reduce_review 的 advisory 减仓比例(固定档,人工复核定量;不自动执行=R4)
+_REDUCE_RATIO_ADVISORY = "1/3"   # S3b R3: reduce_review 的 advisory 减仓比例(固定档,人工复核定量;advisory、不自动执行)
 
 
 def _is_held_signal(imp):
@@ -738,11 +738,45 @@ def _merge_holding_disposition(op_impacts):
     return best, blocked
 
 
+# ── S3b R4a: 持仓主动管理 within-week advisory(到价提示 price_cross + 移保本 move_to_breakeven)───────────────
+# 均 advisory:**不改 disposition/操作/不自动卖出/不改 plan.stop**;跨周持久化 + 单向收紧 ratchet = R4b(待用户批准)。
+# 到价复用 M6.7 价格钟现价(inp.close = machine.current_close,与 S3a/render 同一来源),比对 R3 减仓价(=S3a 盈一 plan.t1)/清仓价(=S3a 损 plan.stop)。
+# 移保本 1R 基准 = 成本价 − S3a 系统跟踪止损 plan.stop(用户拍板;无新阈值、不依赖可选手填止损):浮盈≥1R → 建议移止损到成本价(不自动改 plan.stop=R4b ratchet)。
+def _is_finite_num(x):
+    """有限数值(排除 None/bool/NaN/Inf)——价位/现价比较前的安全门(pre-flight F:非有限值)。"""
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+def _holding_active_alerts(close, sig, reduce_price, clear_price, plan_stop, avg_cost):
+    """S3b R4a within-week advisory(单一来源:_apply 设值 + validate 独立重算共用,防两份派生漂移)。返回 (price_cross, move_to_breakeven)。
+
+    **到价提示 price_cross**(由 disposition 决定哪个价位生效;不改 disposition/操作/不自动卖):
+      reduce_review & 现价 ≥ 减仓价(盈一 plan.t1)→ 'reduce_price_reached';
+      clear_review & 现价 ≤ 清仓价(损 plan.stop)→ 'clear_price_reached';其余 disposition / 缺价 → 'none'。
+      (减仓价=plan.t1 恒 > 现价[S3a holding_levels 构造,line 502],故周内基本不触发,跨周由 R4b 持久层激活;清仓价=plan.stop,现价≤stop = S3a 破位。)
+    **移保本 move_to_breakeven**(disposition 无关,仅看浮盈;1R 基准 = 成本价 − S3a plan_stop):
+      仅 plan_stop < 成本价(R>0)且 现价 ≥ 成本价 + R(= 2·成本价 − plan_stop)→ triggered + breakeven_price=成本价
+      (建议把保护止损上移到成本价;**不自动改 plan.stop** = R4b ratchet)。plan_stop ≥ 成本价(已无亏损风险)/缺价/缺成本/破位 → 不触发(breakeven_price=None)。"""
+    status = "none"
+    if sig == "reduce_review" and _is_finite_num(close) and _is_finite_num(reduce_price) and close >= reduce_price:
+        status = "reduce_price_reached"
+    elif sig == "clear_review" and _is_finite_num(close) and _is_finite_num(clear_price) and close <= clear_price:
+        status = "clear_price_reached"
+    triggered, breakeven_price = False, None
+    if _is_finite_num(close) and _is_finite_num(avg_cost) and _is_finite_num(plan_stop):
+        risk = avg_cost - plan_stop
+        if risk > 0 and close >= avg_cost + risk:
+            triggered, breakeven_price = True, avg_cost
+    return status, {"triggered": triggered, "breakeven_price": breakeven_price}
+
+
 def _apply_holding_disposition(report):
     """S3b R1+R2:对 **持仓行(table.操作=='持有')** 就地设 table.持仓处置/table.禁止加仓 + machine.holding_management_signal/
     blocked_add_required(从 machine.operation_impact 全量重算)。键于 `操作=='持有'`(与 validate_m67_consistency 持有分支对齐,
     覆盖 build_m67 held 候选 + build_holding Tier-3);非持有行 → no-op(候选行不带持仓处置)。build_m67_report/build_holding_report
-    末尾各调一次(独立 build 自洽);pipeline attach forward_event held 后再调一次纳入晚到信号;**每次重算 → 幂等**。返回 report(就地改)。"""
+    末尾各调一次(独立 build 自洽);pipeline attach forward_event held 后再调一次纳入晚到信号;**每次重算 → 幂等**。
+    R3 附 reduce/clear advisory 价位(减仓价/清仓价,复用 S3a 损/盈一);**R4a 末尾设 machine.price_cross(到价提示)+
+    machine.move_to_breakeven(移保本),均 within-week advisory:不自动下单/不自动改 plan.stop(跨周持久收紧=R4b)**。返回 report(就地改)。"""
     tbl = (report.get("m67") or {}).get("table") or {}
     if tbl.get("操作") != "持有":
         return report
@@ -753,7 +787,7 @@ def _apply_holding_disposition(report):
     tbl["持仓处置"] = _HOLDING_DISPOSITION_LABEL[sig]
     tbl["禁止加仓"] = blocked
     # S3b R3: 减仓价/清仓价/减仓比例 = **advisory 价位**,复用 S3a holding_levels(plan.stop=损 / plan.t1=盈一),仅 reduce/clear disposition;
-    # **不自动执行**(到价动作/移保本/ratchet=R4)。S3a 未算出/破位(plan 缺或对应位 None)→ 价位 None(诚实不伪造)。pop-then-set 保持幂等
+    # **不自动执行**(到价提示/移保本=R4a within-week advisory;跨周持久收紧 ratchet=R4b)。S3a 未算出/破位(plan 缺或对应位 None)→ 价位 None(诚实不伪造)。pop-then-set 保持幂等
     # (signal 在 pipeline attach 后可能变,清旧价位防残留)。与 S3a 损/盈一/盈二(table 已显)是同值引用、两维共存,不重算。
     plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
     for _k in ("减仓价", "清仓价", "减仓比例"):
@@ -765,6 +799,14 @@ def _apply_holding_disposition(report):
     elif sig == "reduce_review":
         tbl["减仓价"] = mc["reduce_price"] = plan.get("t1")           # 减仓价 = S3a 盈一(到盈一减仓锁利复核)
         tbl["减仓比例"] = mc["reduce_ratio"] = _REDUCE_RATIO_ADVISORY
+    # S3b R4a: within-week advisory 到价提示 + 移保本(复用价格钟 current_close + 本次 sig 对应的 R3 减仓价/清仓价 + S3a plan.stop + 成本价)。
+    # 全 advisory、**不改 disposition/操作/不自动卖/不改 plan.stop**;跨周持久 + 单向收紧 ratchet = R4b。在 R3 价位之后算;每次重算 → 幂等
+    # (pipeline attach forward_event held 后 sig 变 → price_cross 随之重算)。current_close 由 builder 在 held 行注入(非持有行不带 → 非持有 guard 拒键)。
+    pc, mtb = _holding_active_alerts(
+        mc.get("current_close"), sig, mc.get("reduce_price"), mc.get("clear_price"),
+        plan.get("stop"), ((mc.get("stateful_risk") or {}).get("position") or {}).get("avg_cost"))
+    mc["price_cross"] = pc
+    mc["move_to_breakeven"] = mtb
     return report
 
 
@@ -1033,7 +1075,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     }
     if op_impacts:                       # 仅命中时加 key,正常报告零改动(向后兼容)
         result["machine"]["operation_impact"] = op_impacts
-    _apply_holding_disposition(result)   # S3b R1+R2: held 报告设 持仓处置/禁止加仓(非 held no-op);pipeline attach forward_event held 后再调一次
+    if table["操作"] == "持有":           # S3b R4a: 价格钟现价(到价/移保本判定基准),仅持仓行注入;held+hard_veto(操作=否决)不注入 → 非持有 guard 拒键
+        result["machine"]["current_close"] = inp.get("close")
+    _apply_holding_disposition(result)   # S3b R1+R2: held 报告设 持仓处置/禁止加仓(非 held no-op)+ R4a 到价/移保本;pipeline attach forward_event held 后再调一次
     return result
 
 
@@ -1069,7 +1113,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "event_hard_veto", "semantic_official", "stateful_risk")}
     # 4.2 S2: 持仓 semantic 数据接入(让持仓也抓 cninfo/web 语义)。复用 _consume_semantic(候选/持仓单一来源)+
     # _semantic_operation_impacts(scope=existing_holding → holding_row_impact: clear_review/hold_watch + blocked_add
-    # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价/清仓价见 R3,主动到价动作待 R4);official 证据齐全 high → 清仓复核 advisory
+    # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价/清仓价见 R3,到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b);official 证据齐全 high → 清仓复核 advisory
     # (标非生产)、web → 持仓警戒;web/LLM 永久 advisory-only、绝不 hard_veto。**无 semantic 输入(provider None)→ 全 unknown、
     # 零 op_impact、文本保持「未核查」(S1 向后兼容)**。涉真实持仓 → 私密路由(weekly_private,带 --account 自动私密)。
     has_semantic_input = inp.get("semantic") is not None or inp.get("semantic_web_llm") is not None
@@ -1152,7 +1196,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
-    _apply_holding_disposition(_hr)       # S3b R1+R2: Tier-3 持仓(操作=持有)设 持仓处置/禁止加仓(从 sem_op_impacts 重算)
+    _hr["machine"]["current_close"] = inp.get("close")   # S3b R4a: 价格钟现价(到价/移保本判定基准;Tier-3 持仓恒 held)
+    _apply_holding_disposition(_hr)       # S3b R1+R2: Tier-3 持仓(操作=持有)设 持仓处置/禁止加仓(从 sem_op_impacts 重算)+ R4a 到价/移保本
     return _hr
 
 
@@ -1433,6 +1478,9 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError("非持有行不得带 减仓价/清仓价/减仓比例(S3b R3:价位仅持仓行)")
         if any(_k in mc for _k in ("reduce_price", "clear_price", "reduce_ratio")):
             raise ValueError("非持有行 machine 不得带 reduce_price/clear_price/reduce_ratio(S3b R3:价位仅持仓行)")
+        # S3b R4a: current_close/price_cross/move_to_breakeven(到价/移保本 advisory)同为持仓行专属,非持有行不得带(按键存在,含显式 null)
+        if any(_k in mc for _k in ("current_close", "price_cross", "move_to_breakeven")):
+            raise ValueError("非持有行 machine 不得带 current_close/price_cross/move_to_breakeven(S3b R4a:到价/移保本仅持仓行)")
     # 4.2 第1轮: operation_impact no-dangling + advisory-isolation guard(仅当 machine.operation_impact 存在时生效)
     validate_operation_impact_no_dangling(report)
     if action == "建仓":
@@ -1550,7 +1598,7 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError("持有 table.禁止加仓 缺失或 != machine.blocked_add_required")
         # S3b R3: 减仓价/清仓价/减仓比例 = advisory 价位,仅 reduce/clear disposition 带。**显式 null no-dangling**(区分键缺失 vs 显式 null;
         # R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP):按 disposition 焊死 table+machine **恰好这组键存在**(S3a 未算出也须显式 null 键、不得省略、
-        # 不得多带);值独立比对 S3a plan(清仓价==损 plan.stop、减仓价==盈一 plan.t1,含显式 None,不信任 builder/不重算 S3a)+ machine↔table 一致。不产自动执行(R4)。
+        # 不得多带);值独立比对 S3a plan(清仓价==损 plan.stop、减仓价==盈一 plan.t1,含显式 None,不信任 builder/不重算 S3a)+ machine↔table 一致。不产自动执行(到价提示/移保本=R4a advisory;跨周 ratchet=R4b)。
         _plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
         if _sig == "clear_review":
             _exp_tbl, _exp_mc = {"清仓价"}, {"clear_price"}
@@ -1574,6 +1622,21 @@ def validate_m67_consistency(report: dict) -> None:
         if (mc.get("clear_price") != tbl.get("清仓价") or mc.get("reduce_price") != tbl.get("减仓价")
                 or mc.get("reduce_ratio") != tbl.get("减仓比例")):
             raise ValueError("持有 machine reduce_price/clear_price/reduce_ratio 与 table 减仓价/清仓价/减仓比例 不一致")
+        # S3b R4a: within-week advisory 到价提示 price_cross + 移保本 move_to_breakeven —— 持仓行必带这三字段;**独立重算**(不信任 builder)。
+        # current_close = 价格钟现价,须 == 现价与成本 显示价(provenance bind:防 builder 篡改判定基准与用户可见价脱节);price_cross/move_to_breakeven
+        # 经 _holding_active_alerts(与 _apply 同一来源)从 current_close + R3 减仓价/清仓价 + S3a plan.stop + 成本价 重算比对。全 advisory:不改 disposition/操作/plan.stop(=R4b)。
+        if "current_close" not in mc:
+            raise ValueError("持有 machine 缺 current_close(S3b R4a 到价/移保本判定基准)")
+        _close = mc.get("current_close")
+        if not str(m67["精简结论区"].get("现价与成本", "")).startswith(f"{_close} "):
+            raise ValueError(f"持有 machine.current_close={_close!r} 与 现价与成本 显示价不符(到价/移保本判定基准须 == 价格钟现价)")
+        _avg_cost = ((mc.get("stateful_risk") or {}).get("position") or {}).get("avg_cost")
+        _exp_pc, _exp_mtb = _holding_active_alerts(_close, _sig, mc.get("reduce_price"), mc.get("clear_price"),
+                                                   _plan.get("stop"), _avg_cost)
+        if mc.get("price_cross") != _exp_pc:
+            raise ValueError(f"持有 machine.price_cross={mc.get('price_cross')!r} != 重算 {_exp_pc!r}(到价提示 advisory)")
+        if mc.get("move_to_breakeven") != _exp_mtb:
+            raise ValueError(f"持有 machine.move_to_breakeven={mc.get('move_to_breakeven')!r} != 重算 {_exp_mtb!r}(移保本 advisory)")
     else:  # 观察 / 否决:交易字段必须全 null
         for k in ("股数", "入", "盈一", "盈二", "损"):
             if tbl[k] is not None:

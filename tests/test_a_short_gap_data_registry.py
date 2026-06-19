@@ -22,8 +22,9 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     ADVISORY_VETO_TAG, build_m67_report, build_holding_report, validate_m67_consistency,
     validate_operation_impact_no_dangling, _semantic_operation_impacts,
     _merge_holding_disposition, _apply_holding_disposition, _HOLDING_DISPOSITION_LABEL,
-    _REDUCE_RATIO_ADVISORY,
+    _REDUCE_RATIO_ADVISORY, _holding_active_alerts,
 )
+from runners.a_short_m67_render import _active_alert_line  # noqa: E402
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
 
 REG_SCHEMA = ROOT / "schemas" / "a_short_gap_data_field_registry.schema.json"
@@ -953,6 +954,145 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         r["machine"]["reduce_price"] = None
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
+
+    # ── S3b R4a: 到价提示 price_cross + 移保本 move_to_breakeven(within-week advisory;不改 disposition/操作/不自动卖/不改止损)──
+    # 到价(_holding_active_alerts 纯函数:现价 vs R3 减仓价/清仓价,按 disposition)
+    def test_r4a_alerts_reduce_reached(self):
+        pc, mtb = _holding_active_alerts(10.0, "reduce_review", 9.0, None, None, None)
+        self.assertEqual(pc, "reduce_price_reached")
+        self.assertEqual(mtb, {"triggered": False, "breakeven_price": None})
+
+    def test_r4a_alerts_reduce_not_reached(self):
+        self.assertEqual(_holding_active_alerts(8.0, "reduce_review", 9.0, None, None, None)[0], "none")
+
+    def test_r4a_alerts_reduce_price_none(self):
+        self.assertEqual(_holding_active_alerts(10.0, "reduce_review", None, None, None, None)[0], "none")
+
+    def test_r4a_alerts_clear_reached(self):
+        self.assertEqual(_holding_active_alerts(5.0, "clear_review", None, 6.0, None, None)[0], "clear_price_reached")
+
+    def test_r4a_alerts_clear_not_reached(self):
+        self.assertEqual(_holding_active_alerts(7.0, "clear_review", None, 6.0, None, None)[0], "none")
+
+    def test_r4a_alerts_other_disposition_no_cross(self):
+        # hold/hold_watch/manual_review 无 R3 价位 → price_cross 恒 none(即便传入价位)
+        for sig in ("hold", "hold_watch", "manual_review"):
+            self.assertEqual(_holding_active_alerts(10.0, sig, 9.0, 9.0, None, None)[0], "none")
+
+    # 移保本(1R = 成本价 − S3a plan.stop;仅 plan.stop<成本价 且 现价≥成本价+R)
+    def test_r4a_breakeven_triggered(self):
+        pc, mtb = _holding_active_alerts(10.0, "hold", None, None, 6.0, 8.0)   # R=2,阈值 8+2=10,现价≥10
+        self.assertEqual(pc, "none")
+        self.assertEqual(mtb, {"triggered": True, "breakeven_price": 8.0})
+
+    def test_r4a_breakeven_not_reached(self):
+        self.assertFalse(_holding_active_alerts(9.9, "hold", None, None, 6.0, 8.0)[1]["triggered"])   # 9.9<10
+
+    def test_r4a_breakeven_stop_at_cost_not_triggered(self):
+        # plan.stop==成本价 → R=0(非>0)→ 不触发(已无亏损风险,移保本无意义)
+        self.assertFalse(_holding_active_alerts(12.0, "hold", None, None, 8.0, 8.0)[1]["triggered"])
+
+    def test_r4a_breakeven_stop_above_cost_not_triggered(self):
+        # plan.stop>成本价 → R<0 → 不触发
+        self.assertFalse(_holding_active_alerts(12.0, "hold", None, None, 9.0, 8.0)[1]["triggered"])
+
+    def test_r4a_breakeven_missing_inputs_not_triggered(self):
+        for close, stop, cost in ((10.0, 6.0, None), (10.0, None, 8.0), (None, 6.0, 8.0)):
+            self.assertFalse(_holding_active_alerts(close, "hold", None, None, stop, cost)[1]["triggered"])
+
+    def test_r4a_alerts_nonfinite_safe(self):
+        # NaN/bool 现价或价位 → 不触发(pre-flight F:非有限值安全门)
+        nan = float("nan")
+        self.assertEqual(_holding_active_alerts(nan, "reduce_review", 9.0, None, None, None)[0], "none")
+        self.assertFalse(_holding_active_alerts(10.0, "hold", None, None, 6.0, nan)[1]["triggered"])
+        self.assertEqual(_holding_active_alerts(True, "reduce_review", 9.0, None, None, None)[0], "none")   # bool 非数值
+
+    # build 接线(held 报告)
+    def test_r4a_held_fields_present_and_clean(self):
+        # 默认 held(破位)→ 三字段就位;hold disposition → price_cross none;avg_cost<plan.stop(破位)→ 移保本不触发
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertIn("current_close", r["machine"])
+        self.assertEqual(r["machine"]["price_cross"], "none")
+        self.assertEqual(r["machine"]["move_to_breakeven"], {"triggered": False, "breakeven_price": None})
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_r4a_clear_review_breached_price_cross_reached(self):
+        # 破位 held + clear_review → 清仓价=plan.stop≥现价 → price_cross=clear_price_reached(到价清仓=S3a 破位)
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertEqual(r["machine"]["price_cross"], "clear_price_reached")
+        validate_m67_consistency(r)
+
+    def test_r4a_breakeven_integration_and_s3a_stop_unchanged(self):
+        # 非破位 held,把成本价调到 plan.stop 与现价之间 → 移保本触发;**table.损 仍 = S3a plan.stop(R4a 不改止损,跨周收紧=R4b)**
+        r = build_m67_report(self._clean_held_inp(), AS_OF, "t")
+        stop = r["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        close = r["machine"]["current_close"]
+        avg = round(stop + 0.4 * (close - stop), 2)
+        r["machine"]["stateful_risk"]["position"]["avg_cost"] = avg
+        _apply_holding_disposition(r)
+        self.assertEqual(r["machine"]["move_to_breakeven"], {"triggered": True, "breakeven_price": avg})
+        self.assertEqual(r["m67"]["table"]["损"], stop)
+        validate_m67_consistency(r)
+
+    def test_r4a_holding_report_tier3_fields(self):
+        r = build_holding_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        for k in ("current_close", "price_cross", "move_to_breakeven"):
+            self.assertIn(k, r["machine"])
+        validate_m67_consistency(r)
+
+    def test_r4a_apply_idempotent(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        snap = (r["machine"]["price_cross"], dict(r["machine"]["move_to_breakeven"]))
+        _apply_holding_disposition(r)
+        self.assertEqual((r["machine"]["price_cross"], r["machine"]["move_to_breakeven"]), snap)
+
+    # validator(独立重算 + current_close provenance bind)
+    def test_r4a_validator_rejects_missing_current_close(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        del r["machine"]["current_close"]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4a_validator_rejects_current_close_mismatch_price(self):
+        # current_close 与 现价与成本 显示价不符 → provenance bind 拒(防判定基准与用户可见价脱节)
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["current_close"] = (r["machine"]["current_close"] or 0) + 5.0
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4a_validator_rejects_price_cross_mismatch(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["price_cross"] = "reduce_price_reached"   # 默认 hold → 重算 none,不符
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4a_validator_rejects_move_to_breakeven_mismatch(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["move_to_breakeven"] = {"triggered": True, "breakeven_price": 1.0}   # 破位实为 not triggered
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4a_validator_rejects_nonheld_r4a_keys(self):
+        for key, val in (("current_close", 2.9), ("price_cross", "none"),
+                         ("move_to_breakeven", {"triggered": False, "breakeven_price": None})):
+            r = build_m67_report(_good_input(), AS_OF, "t")     # 候选(非持有)
+            r["machine"][key] = val
+            with self.assertRaises(ValueError):
+                validate_m67_consistency(r)
+
+    # render(_active_alert_line 用户可见;无 advisory→None)
+    def test_r4a_render_active_alert_line(self):
+        none_mtb = {"triggered": False, "breakeven_price": None}
+        self.assertIsNone(_active_alert_line({"machine": {"price_cross": "none", "move_to_breakeven": none_mtb}}))
+        self.assertIn("已到清仓价", _active_alert_line({"machine": {"price_cross": "clear_price_reached", "move_to_breakeven": none_mtb}}))
+        self.assertIn("已到减仓价", _active_alert_line({"machine": {"price_cross": "reduce_price_reached", "move_to_breakeven": none_mtb}}))
+        self.assertIn("成本价 8.0", _active_alert_line({"machine": {"price_cross": "none", "move_to_breakeven": {"triggered": True, "breakeven_price": 8.0}}}))
 
 
 if __name__ == "__main__":

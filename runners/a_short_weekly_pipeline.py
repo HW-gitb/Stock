@@ -1207,7 +1207,7 @@ def _attach_forward_event_impacts(weekly, as_of):
     candidate_row_impact / 持仓→holding_row_impact)+ 精简结论区.风控触发 文本。**analysis-only**:veto_class=none、
     production_effect_enabled=False、new_entry_effect 非 hard_veto(绝不 hard_veto / 绝不 rescue 已有 hard veto /
     不改 操作·EGS·选股·TopN —— 只追加 advisory impact+文本)。status!=checked(unknown/无)→ 不落(不伪造逐票影响)。
-    §4.4 影响:候选→manual_review、持仓→hold_watch + blocked_add(临近解禁谨慎加仓);hold_watch 不产 R3 减仓/清仓价(仅 reduce/clear disposition),主动到价动作待 R4。"""
+    §4.4 影响:候选→manual_review、持仓→hold_watch + blocked_add(临近解禁谨慎加仓);hold_watch 不产 R3 减仓/清仓价(仅 reduce/clear disposition)→ price_cross 恒 none;移保本=R4a(disposition 无关,仅看浮盈);跨周持久收紧 ratchet=R4b。"""
     ue = weekly.get("upcoming_events") or {}
     if ue.get("status") != "checked":
         return

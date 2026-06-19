@@ -120,7 +120,7 @@ def _card_field(report: dict, key: str) -> str:
 
 def _disposition_line(t: dict):
     """S3b R1+R2: 持仓处置 + 禁止加仓 逐票行(仅持仓行 table 带 持仓处置;候选行返回 None 不渲染)。
-    S3b R3: reduce/clear disposition 附 advisory 减仓价/清仓价/减仓比例(复用 S3a 损/盈一,**不自动下单**=R4)。"""
+    S3b R3: reduce/clear disposition 附 advisory 减仓价/清仓价/减仓比例(复用 S3a 损/盈一,**不自动下单**);到价提示/移保本=R4a(见 _active_alert_line 行)、跨周持久收紧 ratchet=R4b。"""
     d = t.get("持仓处置")
     if not d:
         return None
@@ -131,7 +131,25 @@ def _disposition_line(t: dict):
     if "减仓价" in t:
         _rp = t.get("减仓价")
         bits.append(f"减仓价(=盈一):{_rp if _rp is not None else '未算出'}、减仓比例:{t.get('减仓比例')}")
-    return "- " + "；".join(bits) + "（advisory 复核建议,不自动下单;到价减仓/止损触发/移保本/ratchet=R4）"
+    return "- " + "；".join(bits) + "（advisory 复核建议,不自动下单;到价提示/移保本见 R4a 行、跨周持久收紧 ratchet=R4b）"
+
+
+def _active_alert_line(r: dict):
+    """S3b R4a: 持仓行 到价提示 + 移保本 逐票 advisory 行(读 machine.price_cross/move_to_breakeven,仅持仓行;无 advisory→None)。
+    全 advisory:**不自动卖出 / 不自动改止损**;跨周持久收紧 ratchet = R4b。"""
+    mc = r.get("machine") or {}
+    pc = mc.get("price_cross")
+    mtb = mc.get("move_to_breakeven") or {}
+    bits = []
+    if pc == "reduce_price_reached":
+        bits.append("⚠️ 已到减仓价(=盈一):建议复核减仓")
+    elif pc == "clear_price_reached":
+        bits.append("⚠️ 已到清仓价(=系统止损):建议复核清仓")
+    if mtb.get("triggered"):
+        bits.append(f"浮盈已达1R:建议把保护止损上移至成本价 {mtb.get('breakeven_price')}（保本）")
+    if not bits:
+        return None
+    return "- 到价/移保本:" + "；".join(bits) + "（advisory,不自动卖出 / 不自动改止损;跨周收紧=R4b）"
 
 
 def _render_holdings_section(holding_reports: list, manual_review: list) -> list:
@@ -163,6 +181,9 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
             _dl = _disposition_line(t)          # S3b R1+R2: 持仓处置 + 禁止加仓(持仓行)
             if _dl:
                 out.append(_dl)
+            _al = _active_alert_line(r)         # S3b R4a: 到价提示 + 移保本(持仓行)
+            if _al:
+                out.append(_al)
             if r.get("row_source") == "account_position_only":   # Tier-3:EGS 维度也未覆盖
                 out.append("- ⚠️ **EGS 未覆盖**:本周该持仓未进 EGS 评分集(粗筛排除),EGS 量化分/赛道未自动核查。")
             # S2: **真跑过语义**(_has_semantic: trace 非全 unknown)→ 显 S2 语义状态行(从 trace 渲染);未跑(无 trace / 全
@@ -262,6 +283,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         _dl = _disposition_line(t)          # S3b R1+R2: held 候选(操作=持有)显 持仓处置 + 禁止加仓
         if _dl:
             out.append(_dl)
+        _al = _active_alert_line(r)         # S3b R4a: 到价提示 + 移保本(held 候选)
+        if _al:
+            out.append(_al)
         if t["操作"] == "建仓":
             out.append(f"- 执行清单:入 {_cell(t['入'])} / 损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} "
                        f"/ 盈二 {_cell(t['盈二'])} / 股数 {_cell(t['股数'])}")
