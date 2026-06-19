@@ -39,6 +39,11 @@ OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
                                    "schemas", "a_short_theme_overlay_comparison.schema.json")
 ACCOUNT_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    "schemas", "a_short_account_state.schema.json")
+HOLDING_RATCHET_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                           "schemas", "a_short_holding_ratchet.schema.json")
+# S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
+HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                            "state", "a_short", "holding_ratchet", "ratchet_state.json")
 
 
 def _is_valid_date(s) -> bool:
@@ -1634,6 +1639,93 @@ def _attach_holding_disposition(weekly):
         _apply_holding_disposition(rep)
 
 
+# ── S3b R4b: 跨周持久收紧 ratchet 持久层(IO + apply;纯 ratchet 数学在 engine `_holding_ratchet`/`_ratchet_report_error`)──────
+# 镜像 V14.3 regime-ledger 的**结构**(gitignored sidecar、load→apply→validate→save、idempotent re-run、bootstrap、PIT envelope),
+# 但 ratchet 是**per-(ts_code,entry_date) 就地更新-单向只升不降**(非 regime 的 append-only-immutable-by-date)。涉真实持仓 → 私密路由。
+def _holding_ratchet_key(ts_code, entry_date):
+    return f"{ts_code}|{entry_date}"
+
+
+def load_holding_ratchet(path):
+    """读跨周 ratchet sidecar → dict{(ts_code|entry_date): row}。文件缺失 → {}(bootstrap)。读时过 schema(防损坏/手改污染)。
+    **(ts_code,entry_date) 复合唯一性 + 行 last_as_of ≤ envelope as_of 的 PIT 不变式由本函数在 Python 强制**(draft-07 schema 表达不了复合唯一/跨字段约束):
+    R-ASHORT-S3B-R4B-RATCHET-SIDECAR-DUPLICATE-PIT-BYPASS —— **dict 折叠前**检测重复 key,否则后一行会静默覆盖前一行,可把未来 last_as_of 行
+    藏在重复 key 后绕过 `_apply_holding_ratchet` 的 PIT future-state guard(损坏/手改/merge-conflict/未来写入的 sidecar 须 fail-closed)。"""
+    if not os.path.exists(path):
+        return {}
+    with open(path, "r", encoding="utf-8") as f:
+        doc = json.load(f)
+    with open(HOLDING_RATCHET_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(doc, json.load(f))
+    rows = doc.get("holdings") or []
+    keys = [_holding_ratchet_key(r["ts_code"], r["entry_date"]) for r in rows]
+    dup = sorted({k for k in keys if keys.count(k) > 1})
+    if dup:                                  # **折叠前**检测:dict 折叠会静默用后一行覆盖前一行、藏未来 last_as_of 绕 PIT → 重复 (ts_code,entry_date) 即拒
+        raise ValueError(f"R4b ratchet sidecar 含重复 (ts_code,entry_date) 行 {dup[:3]}(dict 折叠静默覆盖、可藏未来 last_as_of 绕过 PIT future-state guard;拒)")
+    env_as_of = str(doc.get("as_of") or "")
+    future = sorted({k for k, r in zip(keys, rows) if str(r.get("last_as_of") or "") > env_as_of})
+    if future:                               # envelope PIT:行 last_as_of 不得 > sidecar 自身 as_of(内部未来污染;load 时 fail-closed,不只靠 apply 时比 run as_of)
+        raise ValueError(f"R4b ratchet sidecar 行 last_as_of > envelope as_of {env_as_of} {future[:3]}(PIT envelope 未来污染;拒)")
+    return {k: dict(r) for k, r in zip(keys, rows)}
+
+
+def _apply_holding_ratchet(weekly, state, as_of):
+    """对每个持仓行(table.操作=='持有')应用跨周 ratchet:从 machine 取本周态 → engine `_holding_ratchet`(本周, 上周持久) →
+    set machine.ratchet + 更新 state[key]。持仓身份=(ts_code, entry_date)(entry_date 取 machine.stateful_risk.position;
+    无 entry_date → 无稳定身份,跳过 ratchet,诚实不伪造)。re-entry(新 entry_date)= 新 key → bootstrap。写后过 `_ratchet_report_error`
+    弱不变式(与 validate_m67_consistency 持有分支单一来源)。返回更新后的 state(就地)。非持仓行 no-op。"""
+    from runners.a_short_phase5_engine import _holding_ratchet, _ratchet_report_error
+    _future = [k for k, r in state.items() if str(r.get("last_as_of") or "") > str(as_of)]
+    if _future:                                     # PIT:sidecar 含未来态(乱序/replay 旧周配新 sidecar)→ 拒(镜像 regime ledger future-contamination)
+        raise ValueError(f"R4b ratchet sidecar 含未来态(last_as_of > as_of {as_of}):{_future[:3]}(PIT 违反/乱序 run)")
+    for rep in weekly.get("reports", []):
+        mc = rep.get("machine") or {}
+        if ((rep.get("m67") or {}).get("table") or {}).get("操作") != "持有":
+            continue
+        pos = (mc.get("stateful_risk") or {}).get("position") or {}
+        ed = pos.get("entry_date")
+        if not ed:                                  # 无 entry_date → 无稳定身份 → 不 ratchet(不伪造)
+            continue
+        ts = str(rep.get("ts_code") or "")
+        plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+        this_week = {"ts_code": ts, "entry_date": str(ed), "as_of": str(as_of),
+                     "close": mc.get("current_close"), "stop": plan.get("stop"),
+                     "breakeven": (mc.get("move_to_breakeven") or {}).get("breakeven_price"),
+                     "disposition": mc.get("holding_management_signal"),
+                     "reduce_price": mc.get("reduce_price"), "clear_price": mc.get("clear_price")}
+        key = _holding_ratchet_key(ts, str(ed))
+        machine_ratchet, row = _holding_ratchet(this_week, state.get(key))
+        mc["ratchet"] = machine_ratchet
+        _err = _ratchet_report_error(mc)
+        if _err:
+            raise ValueError(f"R4b ratchet apply 弱不变式失败({ts}/{ed}): {_err}")
+        state[key] = row
+    return state
+
+
+def save_holding_ratchet(path, state, as_of, generated_at):
+    """写跨周 ratchet sidecar(assemble envelope + boundary,过 schema)。调用方须先过私密路径守门(gitignored)。
+    rows = state 全量(含上轮持仓的历史行:无害,lookup 按当周身份;re-entry 留旧行不删——不剪枝避免误删暂离本周的持仓态)。"""
+    rows = sorted(state.values(), key=lambda r: (str(r.get("ts_code")), str(r.get("entry_date"))))
+    _keys = [_holding_ratchet_key(r.get("ts_code"), r.get("entry_date")) for r in rows]
+    if len(_keys) != len(set(_keys)):        # reader/writer 对称 fail-closed:state 是 dict 本就唯一,此 guard 防手构非-dict-derived state 写出重复行(同 load 复合唯一)
+        raise ValueError("R4b ratchet sidecar 写入含重复 (ts_code,entry_date) 行(reader/writer 须对称 fail-closed on duplicate)")
+    _fut = [k for k, r in zip(_keys, rows) if str(r.get("last_as_of") or "") > str(as_of)]
+    if _fut:                                 # save-time PIT envelope:行 last_as_of 不得 > 写回 as_of(reader/writer 对称,镜像 load envelope guard)
+        raise ValueError(f"R4b ratchet sidecar 写入行 last_as_of > as_of {as_of} {_fut[:3]}(PIT envelope;reader/writer 对称 fail-closed)")
+    doc = {"schema_name": "a_short_holding_ratchet", "schema_version": "1.0.0",
+           "generated_at": str(generated_at), "as_of": str(as_of),
+           "boundary": {"production": False, "comparison_only": True, "advisory_only": True},
+           "holdings": rows}
+    with open(HOLDING_RATCHET_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(doc, json.load(f))
+    os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+    tmp = str(path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(doc, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
+
+
 def _industry_fundamentals(financial_trends, code_to_industry, as_of):
     """⑤行业基本面(advisory-only · summary_only · **零新取数**):按 SW L2 行业聚合③④(income/balancesheet)候选财报红旗。
     **candidate-scope**(基于本周候选,**非全行业普查** → scope=candidates_only 诚实标注,避免误读为完整行业景气;真全行业普查需另起单独 slice)。
@@ -2370,6 +2462,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
                    help="显式放行:带 --account 时允许输出落仓库内非私密目录(默认拒,防真实持仓被 git 提交泄漏)")
+    p.add_argument("--ratchet-path", default=HOLDING_RATCHET_DEFAULT_PATH,
+                   help="S3b R4b 跨周持久收紧 ratchet sidecar 路径(默认 gitignored state/a_short/holding_ratchet/;含真实持仓,过私密路径守门)")
+    p.add_argument("--skip-ratchet", action="store_true",
+                   help="跳过 S3b R4b 跨周 ratchet 持久层(不读写 sidecar、不注入 machine.ratchet)")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
@@ -2593,6 +2689,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # S3b R1+R2: 所有持仓 operation_impact 已 attach(semantic 内联 + forward_event held);对每个持仓行(操作=持有)重算 持仓处置/禁止加仓,
     # 纳入 build 后晚到的 forward_event held 信号(幂等全量重算)。
     _attach_holding_disposition(weekly)
+    # S3b R4b: 跨周持久收紧 ratchet(仅 --account 真持仓 run;持仓处置/R4a 已就位后,沉淀 stop/disposition 跨周只升不降 + 滚动到价)。
+    # 涉真实持仓(entry_date/ratcheted_stop/prices)→ sidecar 必 gitignored(私密路径守门,git check-ignore 真值);re-entry 重置;bootstrap。
+    if args.account and not args.skip_ratchet:
+        _rt_path = os.path.abspath(args.ratchet_path)
+        _reject_nonprivate_account_output_path(_rt_path, True, args.allow_nonprivate_account_out)   # sidecar 含真实持仓,须 gitignored
+        _rt_state = load_holding_ratchet(_rt_path)
+        _apply_holding_ratchet(weekly, _rt_state, args.as_of)
+        save_holding_ratchet(_rt_path, _rt_state, args.as_of, gen)
     # 4.2 财报质量趋势 ⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选红旗 → 行业上下文。
     # candidate-scope(基于本周候选,非全行业普查);只列有红旗行业;无 operation_impact(逐票已由③④落地,本层只加行业摘要)。
     _fin_trend_ind = {str(c.get("ts_code")): ((c.get("industry") or {}).get("sw_l2_name") or "未知")

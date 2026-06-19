@@ -23,8 +23,12 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     validate_operation_impact_no_dangling, _semantic_operation_impacts,
     _merge_holding_disposition, _apply_holding_disposition, _HOLDING_DISPOSITION_LABEL,
     _REDUCE_RATIO_ADVISORY, _holding_active_alerts,
+    _holding_ratchet, _ratchet_report_error, _severity_max_disposition,
 )
-from runners.a_short_m67_render import _active_alert_line  # noqa: E402
+from runners.a_short_m67_render import _active_alert_line, _ratchet_line  # noqa: E402
+from runners.a_short_weekly_pipeline import (  # noqa: E402
+    load_holding_ratchet, _apply_holding_ratchet, save_holding_ratchet, _holding_ratchet_key,
+)
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
 
 REG_SCHEMA = ROOT / "schemas" / "a_short_gap_data_field_registry.schema.json"
@@ -1093,6 +1097,293 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         self.assertIn("已到清仓价", _active_alert_line({"machine": {"price_cross": "clear_price_reached", "move_to_breakeven": none_mtb}}))
         self.assertIn("已到减仓价", _active_alert_line({"machine": {"price_cross": "reduce_price_reached", "move_to_breakeven": none_mtb}}))
         self.assertIn("成本价 8.0", _active_alert_line({"machine": {"price_cross": "none", "move_to_breakeven": {"triggered": True, "breakeven_price": 8.0}}}))
+
+
+class HoldingRatchetS3bR4bTests(unittest.TestCase):
+    """S3b R4b: 跨周持久收紧 ratchet(stop 只升不降 / disposition 只升档不降 / 滚动到价 / re-entry 重置 / bootstrap / 同周幂等 / 私密 sidecar IO)。"""
+
+    def _tw(self, **over):
+        d = {"ts_code": "600000.SH", "entry_date": "20260601", "as_of": "20260115", "close": 10.0,
+             "stop": 8.0, "breakeven": None, "disposition": "hold", "reduce_price": 11.0, "clear_price": 8.0}
+        d.update(over)
+        return d
+
+    def _lw(self, **over):
+        d = {"ts_code": "600000.SH", "entry_date": "20260601", "last_as_of": "20260108",
+             "ratcheted_stop": 9.0, "last_disposition": "hold", "last_reduce_price": 12.0,
+             "last_clear_price": 9.0, "week_count": 1, "cross_week_price_cross": "none", "bootstrap": True}
+        d.update(over)
+        return d
+
+    # ── 纯函数 _holding_ratchet ──
+    def test_r4b_bootstrap(self):
+        mr, row = _holding_ratchet(self._tw(stop=8.0, breakeven=None, disposition="hold"), None)
+        self.assertEqual((mr["week_count"], mr["bootstrap"], mr["ratcheted_stop"], mr["cross_week_price_cross"]),
+                         (1, True, 8.0, "none"))
+        self.assertEqual(set(row), {"ts_code", "entry_date", "last_as_of", "ratcheted_stop", "last_disposition",
+                                    "last_reduce_price", "last_clear_price", "week_count", "cross_week_price_cross", "bootstrap"})
+        self.assertEqual(row["last_reduce_price"], 11.0)       # 本周 reduce_price 供下周滚动
+        self.assertEqual(row["last_clear_price"], 8.0)         # = ratcheted_stop
+
+    def test_r4b_reentry_reset(self):
+        mr, _ = _holding_ratchet(self._tw(entry_date="20260610"), self._lw(entry_date="20260601", week_count=5))
+        self.assertEqual((mr["week_count"], mr["bootstrap"]), (1, True))   # 换仓重置
+
+    def test_r4b_stop_only_up_keeps_last(self):
+        mr, _ = _holding_ratchet(self._tw(stop=8.0, breakeven=None, as_of="20260115"),
+                                 self._lw(ratcheted_stop=10.0, last_as_of="20260108"))
+        self.assertEqual(mr["ratcheted_stop"], 10.0)          # 本周 8<上周 10 → 保留 10(只升不降)
+        self.assertEqual(mr["week_count"], 2)
+
+    def test_r4b_stop_rises(self):
+        mr, _ = _holding_ratchet(self._tw(stop=11.0, breakeven=None), self._lw(ratcheted_stop=10.0))
+        self.assertEqual(mr["ratcheted_stop"], 11.0)          # 本周 11>上周 10 → 升
+
+    def test_r4b_breakeven_feeds_stop(self):
+        mr, _ = _holding_ratchet(self._tw(stop=6.0, breakeven=8.0), self._lw(ratcheted_stop=5.0))
+        self.assertEqual(mr["ratcheted_stop"], 8.0)           # eff=max(6,8)=8 > 上周 5
+
+    def test_r4b_disposition_only_up(self):
+        mr, _ = _holding_ratchet(self._tw(disposition="hold"), self._lw(last_disposition="clear_review"))
+        self.assertEqual(mr["ratcheted_disposition"], "clear_review")   # 本周 hold 不降上周 clear_review
+        mr2, _ = _holding_ratchet(self._tw(disposition="clear_review"), self._lw(last_disposition="hold"))
+        self.assertEqual(mr2["ratcheted_disposition"], "clear_review")  # 升档
+
+    def test_r4b_cross_week_reduce_reached(self):
+        mr, _ = _holding_ratchet(self._tw(close=13.0, stop=8.0), self._lw(ratcheted_stop=10.0, last_reduce_price=12.0))
+        self.assertEqual(mr["cross_week_price_cross"], "reduce_price_reached")   # 现价13≥上周减仓价12
+
+    def test_r4b_cross_week_clear_reached(self):
+        mr, _ = _holding_ratchet(self._tw(close=9.0, stop=8.0), self._lw(ratcheted_stop=10.0, last_reduce_price=12.0))
+        self.assertEqual(mr["cross_week_price_cross"], "clear_price_reached")    # 现价9<减仓价12 且 ≤ratcheted_stop10
+
+    def test_r4b_same_week_idempotent(self):
+        lw = self._lw(last_as_of="20260115", week_count=3, ratcheted_stop=10.0,
+                      last_disposition="clear_review", cross_week_price_cross="reduce_price_reached", bootstrap=False)
+        mr, row = _holding_ratchet(self._tw(as_of="20260115"), lw)
+        self.assertEqual(mr["week_count"], 3)                 # 同周 re-run 不增
+        self.assertEqual(mr["ratcheted_disposition"], "clear_review")
+        self.assertEqual(mr["cross_week_price_cross"], "reduce_price_reached")
+        self.assertEqual(row, lw)                              # row 原样
+
+    def test_r4b_week_count_increments(self):
+        mr, _ = _holding_ratchet(self._tw(as_of="20260115"), self._lw(week_count=4, last_as_of="20260108"))
+        self.assertEqual(mr["week_count"], 5)
+
+    # ── _severity_max_disposition ──
+    def test_r4b_severity_max(self):
+        self.assertEqual(_severity_max_disposition("hold", "clear_review"), "clear_review")
+        self.assertEqual(_severity_max_disposition("reduce_review", "hold_watch"), "reduce_review")
+        self.assertEqual(_severity_max_disposition("hold", "hold"), "hold")
+        self.assertEqual(_severity_max_disposition("bogus", "hold_watch"), "hold_watch")   # 非法按 hold(最低)
+
+    # ── _ratchet_report_error(within-report 弱不变式)──
+    def _mc_with_ratchet(self, ratchet, plan_stop=8.0, breakeven=None, disp="hold", close=10.0):
+        return {"entry_exit_size_star": {"plan": {"stop": plan_stop}},
+                "move_to_breakeven": {"triggered": breakeven is not None, "breakeven_price": breakeven},
+                "holding_management_signal": disp, "current_close": close, "ratchet": ratchet}
+
+    def _good_ratchet(self, **over):
+        d = {"ratcheted_stop": 9.0, "ratcheted_disposition": "hold", "week_count": 2,
+             "cross_week_price_cross": "none", "bootstrap": False}
+        d.update(over)
+        return d
+
+    def test_r4b_report_error_valid_none(self):
+        self.assertIsNone(_ratchet_report_error(self._mc_with_ratchet(self._good_ratchet())))
+
+    def test_r4b_report_error_no_ratchet(self):
+        self.assertIsNone(_ratchet_report_error({"entry_exit_size_star": {"plan": {"stop": 8.0}}}))
+
+    def test_r4b_report_error_missing_key(self):
+        r = self._good_ratchet()
+        del r["week_count"]
+        self.assertIsNotNone(_ratchet_report_error(self._mc_with_ratchet(r)))
+
+    def test_r4b_report_error_stop_below_eff(self):
+        # ratcheted_stop=7 < 本周 eff_stop=max(plan8, be9)=9 → 错(只升不降)
+        mc = self._mc_with_ratchet(self._good_ratchet(ratcheted_stop=7.0), plan_stop=8.0, breakeven=9.0)
+        self.assertIsNotNone(_ratchet_report_error(mc))
+
+    def test_r4b_report_error_disposition_below(self):
+        # ratcheted_disposition=hold 但本周 disposition=clear_review → 错(只升档不降)
+        mc = self._mc_with_ratchet(self._good_ratchet(ratcheted_disposition="hold"), disp="clear_review")
+        self.assertIsNotNone(_ratchet_report_error(mc))
+
+    def test_r4b_report_error_clear_inconsistent(self):
+        # cross_week=clear_price_reached 但 现价12 > ratcheted_stop9 → 错
+        mc = self._mc_with_ratchet(self._good_ratchet(cross_week_price_cross="clear_price_reached", ratcheted_stop=9.0), close=12.0)
+        self.assertIsNotNone(_ratchet_report_error(mc))
+
+    def test_r4b_report_error_week_count(self):
+        self.assertIsNotNone(_ratchet_report_error(self._mc_with_ratchet(self._good_ratchet(week_count=0))))
+
+    # ── validate_m67_consistency 集成 ──
+    def test_r4b_validator_held_with_ratchet_passes(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        plan_stop = r["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        r["machine"]["ratchet"] = self._good_ratchet(ratcheted_stop=plan_stop, week_count=1)
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_r4b_validator_held_bad_ratchet_raises(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        plan_stop = r["machine"]["entry_exit_size_star"]["plan"]["stop"]
+        r["machine"]["ratchet"] = self._good_ratchet(ratcheted_stop=(plan_stop or 0) - 5.0)   # < 本周 eff stop
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4b_validator_nonheld_ratchet_raises(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["machine"]["ratchet"] = self._good_ratchet()
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    # ── pipeline IO(load/apply/save;私密 sidecar)──
+    def _held_weekly(self):
+        return {"reports": [build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")]}
+
+    def test_r4b_pipeline_bootstrap_and_roundtrip(self):
+        import os
+        import tempfile
+        w = self._held_weekly()
+        state = _apply_holding_ratchet(w, {}, AS_OF)
+        rt = w["reports"][0]["machine"]["ratchet"]
+        self.assertEqual((rt["week_count"], rt["bootstrap"]), (1, True))
+        key = _holding_ratchet_key("600000.SH", "20260601")
+        self.assertIn(key, state)
+        path = os.path.join(tempfile.mkdtemp(), "ratchet_state.json")
+        save_holding_ratchet(path, state, AS_OF, "t")               # 过 schema
+        self.assertEqual(load_holding_ratchet(path), state)         # roundtrip 相等
+
+    def test_r4b_pipeline_idempotent_same_week(self):
+        w = self._held_weekly()
+        state = _apply_holding_ratchet(w, {}, AS_OF)
+        snap = {k: dict(v) for k, v in state.items()}
+        w2 = self._held_weekly()
+        state2 = _apply_holding_ratchet(w2, state, AS_OF)           # 同 as_of re-run
+        self.assertEqual(state2, snap)                              # 幂等:week_count 不增
+        self.assertEqual(w2["reports"][0]["machine"]["ratchet"]["week_count"], 1)
+
+    def test_r4b_pipeline_pit_future_rejected(self):
+        w = self._held_weekly()
+        bad = {_holding_ratchet_key("600000.SH", "20260601"):
+               {"ts_code": "600000.SH", "entry_date": "20260601", "last_as_of": "20991231",
+                "ratcheted_stop": 9.0, "last_disposition": "hold", "last_reduce_price": None,
+                "last_clear_price": 9.0, "week_count": 1, "cross_week_price_cross": "none", "bootstrap": True}}
+        with self.assertRaises(ValueError):
+            _apply_holding_ratchet(w, bad, AS_OF)                   # 未来态 PIT 拒
+
+    def test_r4b_pipeline_no_entry_date_skipped(self):
+        w = self._held_weekly()
+        w["reports"][0]["machine"]["stateful_risk"]["position"].pop("entry_date", None)
+        _apply_holding_ratchet(w, {}, AS_OF)
+        self.assertNotIn("ratchet", w["reports"][0]["machine"])     # 无稳定身份 → 跳过
+
+    def test_r4b_pipeline_nonheld_noop(self):
+        w = {"reports": [build_m67_report(_good_input(), AS_OF, "t")]}   # 候选(非持有)
+        state = _apply_holding_ratchet(w, {}, AS_OF)
+        self.assertEqual(state, {})
+        self.assertNotIn("ratchet", w["reports"][0]["machine"])
+
+    # ── sidecar 读入层 fail-closed(R-ASHORT-S3B-R4B-RATCHET-SIDECAR-DUPLICATE-PIT-BYPASS)──
+    def _row(self, **over):
+        d = {"ts_code": "600000.SH", "entry_date": "20260601", "last_as_of": "20260610",
+             "ratcheted_stop": 9.0, "last_disposition": "hold", "last_reduce_price": None,
+             "last_clear_price": 9.0, "week_count": 1, "cross_week_price_cross": "none", "bootstrap": True}
+        d.update(over)
+        return d
+
+    def _write_sidecar(self, holdings, as_of="20260617"):
+        import json as _json
+        import os
+        import tempfile
+        doc = {"schema_name": "a_short_holding_ratchet", "schema_version": "1.0.0", "generated_at": "t",
+               "as_of": as_of, "boundary": {"production": False, "comparison_only": True, "advisory_only": True},
+               "holdings": holdings}
+        path = os.path.join(tempfile.mkdtemp(), "rt.json")
+        with open(path, "w", encoding="utf-8") as f:
+            _json.dump(doc, f)
+        return path
+
+    def test_r4b_load_rejects_duplicate_key_hiding_future(self):
+        # 重复 (ts_code,entry_date),首行藏未来 last_as_of → dict 折叠前拒(否则后一行静默覆盖、藏未来行绕 PIT)
+        path = self._write_sidecar([self._row(last_as_of="20991231"), self._row(last_as_of="20260610")])
+        with self.assertRaises(ValueError):
+            load_holding_ratchet(path)
+
+    def test_r4b_load_rejects_row_future_envelope(self):
+        # 行 last_as_of(20991231)> envelope as_of(20260617)→ load 时 PIT envelope 拒
+        path = self._write_sidecar([self._row(last_as_of="20991231")], as_of="20260617")
+        with self.assertRaises(ValueError):
+            load_holding_ratchet(path)
+
+    def test_r4b_load_accepts_unique_valid(self):
+        # 反向:唯一 + last_as_of ≤ as_of 仍正常 load(不误拒合法 sidecar)
+        path = self._write_sidecar([self._row(ts_code="600000.SH"), self._row(ts_code="600001.SZ")], as_of="20260617")
+        self.assertEqual(len(load_holding_ratchet(path)), 2)
+
+    def test_r4b_save_rejects_duplicate_rows(self):
+        # writer 对称 fail-closed:两个不同 dict key 映射到同 (ts_code,entry_date) → save 拒
+        import os
+        import tempfile
+        state = {"a": self._row(), "b": self._row()}   # 同 (600000.SH,20260601)
+        with self.assertRaises(ValueError):
+            save_holding_ratchet(os.path.join(tempfile.mkdtemp(), "rt.json"), state, "20260617", "t")
+
+    # ── ratcheted_stop=null 在本周有效 stop 时跳过不变式(R-ASHORT-S3B-R4B-RATCHET-INVARIANT-GUARD-GAP)+ save PIT envelope ──
+    def test_r4b_report_error_null_stop_with_valid_eff(self):
+        # 本周有效 stop(plan 3.05)但 ratcheted_stop=null → 拒(ratchet 必随本周止损落地,不得 null)
+        mc = self._mc_with_ratchet(self._good_ratchet(ratcheted_stop=None), plan_stop=3.05, breakeven=None)
+        self.assertIsNotNone(_ratchet_report_error(mc))
+
+    def test_r4b_report_error_clear_null_stop(self):
+        # clear_price_reached 但 ratcheted_stop=null(本周无 stop)→ 拒(到价清仓需有效跨周止损;同类不变式跳过)
+        mc = self._mc_with_ratchet(self._good_ratchet(ratcheted_stop=None, cross_week_price_cross="clear_price_reached"),
+                                   plan_stop=None, breakeven=None)
+        self.assertIsNotNone(_ratchet_report_error(mc))
+
+    def test_r4b_report_error_null_stop_no_eff_ok(self):
+        # 反向:本周无 effective_stop(plan/breakeven 皆无)+ ratcheted_stop=null + cw none → 合法(不过度拒)
+        mc = self._mc_with_ratchet(self._good_ratchet(ratcheted_stop=None, cross_week_price_cross="none"),
+                                   plan_stop=None, breakeven=None)
+        self.assertIsNone(_ratchet_report_error(mc))
+
+    def test_r4b_validator_held_null_stop_with_valid_plan_raises(self):
+        # Codex 探针:held 报告本周有效 plan.stop 但 machine.ratchet.ratcheted_stop=null → validate_m67_consistency 拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertIsNotNone(r["machine"]["entry_exit_size_star"]["plan"]["stop"])
+        r["machine"]["ratchet"] = self._good_ratchet(ratcheted_stop=None)
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_r4b_save_rejects_future_envelope(self):
+        # save-time PIT envelope:行 last_as_of(20991231)> 写回 as_of(20260617)→ save 拒(reader/writer 对称)
+        import os
+        import tempfile
+        state = {"a": self._row(last_as_of="20991231")}
+        with self.assertRaises(ValueError):
+            save_holding_ratchet(os.path.join(tempfile.mkdtemp(), "rt.json"), state, "20260617", "t")
+
+    def test_r4b_write_m67_rejects_null_stop(self):
+        # Codex 探针:官方写边界 write_m67_report(engine,内含 validate_m67_consistency)对 held 报告本周有效 plan.stop 但 ratcheted_stop=null 也须拒
+        import os
+        import tempfile
+        from runners.a_short_phase5_engine import write_m67_report
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertIsNotNone(r["machine"]["entry_exit_size_star"]["plan"]["stop"])
+        r["machine"]["ratchet"] = self._good_ratchet(ratcheted_stop=None)                # 本周有效 stop 但 ratchet null
+        with self.assertRaises(ValueError):
+            write_m67_report(r, os.path.join(tempfile.mkdtemp(), "m67.json"))
+
+    # ── render _ratchet_line ──
+    def test_r4b_render_ratchet_line(self):
+        self.assertIsNone(_ratchet_line({"machine": {}}))
+        line = _ratchet_line({"machine": {"ratchet": {"ratcheted_stop": 9.5, "ratcheted_disposition": "hold",
+                              "week_count": 3, "cross_week_price_cross": "reduce_price_reached", "bootstrap": False}}})
+        self.assertIn("第3周", line)
+        self.assertIn("建议保护止损 9.5", line)
+        self.assertIn("已达上周减仓价", line)
 
 
 if __name__ == "__main__":

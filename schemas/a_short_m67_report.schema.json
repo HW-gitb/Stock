@@ -56,7 +56,7 @@
             "优先级": {"type": "string"},
             "触发条件": {"type": "string"},
             "持仓处置": {"enum": ["持有", "持有警戒", "建议减仓复核", "建议清仓复核", "立即人工复核"],
-                        "description": "S3b R1+R2: 持仓处置结构化列(决策1:操作 enum 不扩,持仓处置是独立列)。**仅 held 行**(操作=持有);候选行省略=向后兼容。由 severity 合并引擎从各 holding_row_impact 的 holding_effect 合成(machine.holding_management_signal 映射)。advisory 复核建议、**不自动卖出**;减仓价/清仓价/减仓比例 = R3(advisory 价位,复用 S3a 损/盈一;见 table.减仓价/清仓价);到价提示/移保本 = R4a(machine.price_cross/move_to_breakeven,within-week advisory);跨周持久收紧 ratchet = R4b(待批准)。"},
+                        "description": "S3b R1+R2: 持仓处置结构化列(决策1:操作 enum 不扩,持仓处置是独立列)。**仅 held 行**(操作=持有);候选行省略=向后兼容。由 severity 合并引擎从各 holding_row_impact 的 holding_effect 合成(machine.holding_management_signal 映射)。advisory 复核建议、**不自动卖出**;减仓价/清仓价/减仓比例 = R3(advisory 价位,复用 S3a 损/盈一;见 table.减仓价/清仓价);到价提示/移保本 = R4a(machine.price_cross/move_to_breakeven,within-week advisory);跨周持久收紧 ratchet = R4b(machine.ratchet,已实现)。"},
             "禁止加仓": {"type": "boolean",
                         "description": "S3b R1+R2: 禁止加仓独立布尔列(== machine.blocked_add_required,各 holding 信号 blocked_add_required 的 OR 合并)。**仅 held 行**;候选行省略。"},
             "减仓价": {"type": ["number", "null"],
@@ -97,6 +97,16 @@
           "required": ["triggered", "breakeven_price"],
           "properties": {"triggered": {"type": "boolean"}, "breakeven_price": {"type": ["number", "null"]}},
           "description": "S3b R4a: 移保本(advisory)。浮盈≥1R(1R=成本价−S3a系统跟踪止损 plan.stop;仅 plan.stop<成本价时)→ triggered + breakeven_price=成本价(建议移止损到成本价,**不自动改 plan.stop**=R4b ratchet)。仅 held。"},
+        "ratchet": {"type": "object", "additionalProperties": false,
+          "required": ["ratcheted_stop", "ratcheted_disposition", "week_count", "cross_week_price_cross", "bootstrap"],
+          "properties": {
+            "ratcheted_stop": {"type": ["number", "null"]},
+            "ratcheted_disposition": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review"]},
+            "week_count": {"type": "integer", "minimum": 1},
+            "cross_week_price_cross": {"enum": ["none", "reduce_price_reached", "clear_price_reached"]},
+            "bootstrap": {"type": "boolean"}
+          },
+          "description": "S3b R4b: 跨周持久收紧 ratchet(advisory)。ratcheted_stop=跨周只升不降建议保护止损=max(本周 max(S3a止损,R4a保本),上周 ratcheted_stop);ratcheted_disposition=跨周 severity-max 持仓处置(只升档不降);cross_week_price_cross=滚动到价(现价≥上周减仓价→reduce/现价≤ratcheted_stop→clear);bootstrap=首周/re-entry。**不自动卖/不改 plan.stop/table.损;re-entry(新 entry_date)重置**。仅 held(持久层在 pipeline,gitignored 私密 sidecar)。"},
         "operation_impact": {
           "type": "array",
           "description": "4.2 第1轮: 逐字段 operation_impact 记录(仍有 M6.7 候选/持仓行的字段). schema 层焊死 m67_landing_surface/terminal_surface_target 非空; 跨字段不变式(production_hard_veto⟹操作=否决 / production_effect_enabled=false 不得升格 / 只落文本须挂后继 slice)由 validate_operation_impact_no_dangling 守. 可选(缺省=无, 向后兼容; Tier-3 持仓粗覆盖不发).",

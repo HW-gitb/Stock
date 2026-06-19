@@ -739,7 +739,7 @@ def _merge_holding_disposition(op_impacts):
 
 
 # ── S3b R4a: 持仓主动管理 within-week advisory(到价提示 price_cross + 移保本 move_to_breakeven)───────────────
-# 均 advisory:**不改 disposition/操作/不自动卖出/不改 plan.stop**;跨周持久化 + 单向收紧 ratchet = R4b(待用户批准)。
+# 均 advisory:**不改 disposition/操作/不自动卖出/不改 plan.stop**;跨周持久化 + 单向收紧 ratchet = R4b(已实现,见 `_holding_ratchet`)。
 # 到价复用 M6.7 价格钟现价(inp.close = machine.current_close,与 S3a/render 同一来源),比对 R3 减仓价(=S3a 盈一 plan.t1)/清仓价(=S3a 损 plan.stop)。
 # 移保本 1R 基准 = 成本价 − S3a 系统跟踪止损 plan.stop(用户拍板;无新阈值、不依赖可选手填止损):浮盈≥1R → 建议移止损到成本价(不自动改 plan.stop=R4b ratchet)。
 def _is_finite_num(x):
@@ -768,6 +768,105 @@ def _holding_active_alerts(close, sig, reduce_price, clear_price, plan_stop, avg
         if risk > 0 and close >= avg_cost + risk:
             triggered, breakeven_price = True, avg_cost
     return status, {"triggered": triggered, "breakeven_price": breakeven_price}
+
+
+# ── S3b R4b: 跨周持久收紧 ratchet(纯函数;pipeline 持久层 apply + validate 共用单一来源)──────────────
+# 把 R4a 的 within-week advisory 沉淀成跨周状态:**止损只升不降、disposition 只升档不降(anti-rescue across weeks)**;
+# keyed on (ts_code, entry_date),re-entry(新 entry_date)重置(防永久 trap)。持久层 IO/私密路由在 pipeline(涉真实持仓)。
+def _severity_max_disposition(a, b):
+    """两个 disposition 取 severity-max(更严的,_HOLDING_SEVERITY 降序 index 越小越严);非法值按 hold(最低)。"""
+    ia = _HOLDING_SEVERITY.index(a) if a in _HOLDING_SEVERITY else _HOLDING_SEVERITY.index("hold")
+    ib = _HOLDING_SEVERITY.index(b) if b in _HOLDING_SEVERITY else _HOLDING_SEVERITY.index("hold")
+    return a if ia <= ib else b
+
+
+def _holding_ratchet(this_week, last_week):
+    """S3b R4b 跨周持久收紧 ratchet(纯函数,单一来源:pipeline apply + validate 共用,防漂移)。
+    this_week = {ts_code, entry_date, as_of, close(价格钟), stop(S3a plan.stop), breakeven(R4a move_to_breakeven.breakeven_price 或 None),
+                 disposition(holding_management_signal), reduce_price(R3), clear_price(R3)};
+    last_week = 上周持久行 {entry_date, ratcheted_stop, last_disposition, last_reduce_price, last_clear_price, week_count} 或 None。
+
+    **单向只升不降**(plan + 用户 Q2=只升):
+      ratcheted_stop = max(本周 effective_stop = max(S3a stop, R4a breakeven), 上周 ratcheted_stop) —— 止损只升不降;
+      ratcheted_disposition = severity-max(本周 disposition, 上周 last_disposition) —— disposition 只升档不降。
+    **re-entry 重置**:last_week 缺失 或 entry_date 变(换仓)→ bootstrap(ratcheted=本周值、week_count=1、无跨周到价)。
+    **跨周到价**(用户 Q1 滚动 + 清仓跟 ratcheted_stop):续持时 本周现价 ≥ **上周 last_reduce_price** → reduce_price_reached(滚动一周);
+      本周现价 ≤ ratcheted_stop → clear_price_reached(清仓价跟 ratcheted_stop);else none。advisory,不自动卖/不改 table.损。
+    返回 (machine_ratchet, persisted_row):machine_ratchet={ratcheted_stop,ratcheted_disposition,week_count,cross_week_price_cross,bootstrap};
+      persisted_row=写回 sidecar 新行(last_as_of=本周 as_of;last_reduce_price=**本周 reduce_price** 供下周滚动比对;last_clear_price=ratcheted_stop)。"""
+    ed = str(this_week.get("entry_date"))
+    as_of = str(this_week.get("as_of") or "")
+    # 同周 re-run 幂等(plan「跨周持久幂等」):last_week 已是本周态(同 entry_date 且 last_as_of==本次 as_of)→ 原样返回
+    # (不增 week_count、不重算跨周到价;ratcheted_stop max / disposition severity-max 本就幂等,但 week_count/cross_week 需显式幂等)。
+    if (last_week is not None and str(last_week.get("entry_date")) == ed
+            and str(last_week.get("last_as_of")) == as_of):
+        return ({"ratcheted_stop": last_week.get("ratcheted_stop"),
+                 "ratcheted_disposition": last_week.get("last_disposition"),
+                 "week_count": last_week.get("week_count"),
+                 "cross_week_price_cross": last_week.get("cross_week_price_cross"),
+                 "bootstrap": last_week.get("bootstrap")}, dict(last_week))
+    disp = this_week.get("disposition") if this_week.get("disposition") in _HOLDING_SEVERITY else "hold"
+    close = this_week.get("close")
+    eff_cands = [v for v in (this_week.get("stop"), this_week.get("breakeven")) if _is_finite_num(v)]
+    eff_stop = max(eff_cands) if eff_cands else None       # 本周 within-week 最紧止损(S3a 止损 vs R4a 保本)
+    cw = "none"
+    if last_week is not None and str(last_week.get("entry_date")) == ed:        # 续持(非 re-entry)
+        last_stop = last_week.get("ratcheted_stop")
+        stop_cands = [v for v in (eff_stop, last_stop) if _is_finite_num(v)]
+        ratcheted_stop = max(stop_cands) if stop_cands else None                # 只升不降:缺本周值则保留上周
+        ratcheted_disposition = _severity_max_disposition(disp, last_week.get("last_disposition") or "hold")
+        week_count = int(last_week.get("week_count") or 0) + 1
+        bootstrap = False
+        lrp = last_week.get("last_reduce_price")
+        if _is_finite_num(close) and _is_finite_num(lrp) and close >= lrp:
+            cw = "reduce_price_reached"                                         # 滚动:现价到上周减仓价(盈一)
+        elif _is_finite_num(close) and _is_finite_num(ratcheted_stop) and close <= ratcheted_stop:
+            cw = "clear_price_reached"                                          # 现价跌破跨周收紧止损
+    else:                                                                       # 首周 / re-entry(换仓)→ 重置
+        ratcheted_stop, ratcheted_disposition, week_count, bootstrap = eff_stop, disp, 1, True
+    machine_ratchet = {"ratcheted_stop": ratcheted_stop, "ratcheted_disposition": ratcheted_disposition,
+                       "week_count": week_count, "cross_week_price_cross": cw, "bootstrap": bootstrap}
+    persisted_row = {"ts_code": str(this_week.get("ts_code") or ""), "entry_date": ed,
+                     "last_as_of": as_of, "ratcheted_stop": ratcheted_stop,
+                     "last_disposition": ratcheted_disposition, "last_reduce_price": this_week.get("reduce_price"),
+                     "last_clear_price": ratcheted_stop, "week_count": week_count,
+                     "cross_week_price_cross": cw, "bootstrap": bootstrap}
+    return machine_ratchet, persisted_row
+
+
+def _ratchet_report_error(mc):
+    """S3b R4b: machine.ratchet 的 **within-report 弱不变式**(单一来源:validate_m67_consistency 持有分支 + pipeline _apply_holding_ratchet
+    写后共用,防两份漂移)。不依赖上周持久态(跨周 only-up vs 上周 / 滚动到价 / re-entry / 幂等的**强**不变式由 pipeline 持久层 + 跨周测试守)。
+    返回错误串或 None。无 ratchet → None(R4b 持久层仅 --account run 注入,可选)。检查:① shape 五键;② **本周有有效 effective_stop
+    (=max(S3a stop, R4a 保本))时 ratcheted_stop 必非空有限 且 ≥ 它**(ratchet 含本周值;堵「ratcheted_stop=null 在本周有效 stop 时跳过不变式」缺口
+    R-ASHORT-S3B-R4B-RATCHET-INVARIANT-GUARD-GAP);③ ratcheted_disposition severity ≥ 本周 disposition(只升档不降);④ cross_week_price_cross==
+    clear_price_reached ⟹ ratcheted_stop 有限 且 现价≤ratcheted_stop;⑤ week_count≥1。"""
+    rt = mc.get("ratchet")
+    if rt is None:
+        return None
+    if not isinstance(rt, dict) or any(k not in rt for k in
+            ("ratcheted_stop", "ratcheted_disposition", "week_count", "cross_week_price_cross", "bootstrap")):
+        return "machine.ratchet 形态不完整(R4b 跨周 ratchet 五键)"
+    rs = rt.get("ratcheted_stop")
+    plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+    eff = [v for v in (plan.get("stop"), (mc.get("move_to_breakeven") or {}).get("breakeven_price")) if _is_finite_num(v)]
+    if eff:                                  # 本周有有效 effective_stop → ratcheted_stop 必非空有限(=max(eff,上周)≥eff;堵 null 跳过不变式缺口)
+        if not _is_finite_num(rs):
+            return f"ratcheted_stop={rs!r} 为空/非有限,但本周 effective_stop={max(eff)!r} 有效(ratchet 必随本周止损落地,不得 null)"
+        if rs < max(eff) - 1e-9:
+            return f"ratcheted_stop={rs!r} < 本周 effective_stop={max(eff)!r}(跨周 ratchet 只升不降,不得低于本周最紧止损)"
+    rd, cur = rt.get("ratcheted_disposition"), (mc.get("holding_management_signal") or "hold")
+    if _severity_max_disposition(rd, cur) != rd:
+        return f"ratcheted_disposition={rd!r} 严重度 < 本周 disposition={cur!r}(跨周只升档不降)"
+    close = mc.get("current_close")
+    if rt.get("cross_week_price_cross") == "clear_price_reached":
+        if not _is_finite_num(rs):           # 同类:clear 到价需有效跨周止损,null rs 时不得标 clear(否则不变式被跳过)
+            return "cross_week_price_cross=clear_price_reached 但 ratcheted_stop 非有限(到价清仓需有效跨周止损)"
+        if _is_finite_num(close) and close > rs:
+            return "cross_week_price_cross=clear_price_reached 但 现价>ratcheted_stop(到价清仓口径不符)"
+    if not (isinstance(rt.get("week_count"), int) and rt["week_count"] >= 1):
+        return "ratchet week_count 须 ≥1 整数"
+    return None
 
 
 def _apply_holding_disposition(report):
@@ -1479,8 +1578,8 @@ def validate_m67_consistency(report: dict) -> None:
         if any(_k in mc for _k in ("reduce_price", "clear_price", "reduce_ratio")):
             raise ValueError("非持有行 machine 不得带 reduce_price/clear_price/reduce_ratio(S3b R3:价位仅持仓行)")
         # S3b R4a: current_close/price_cross/move_to_breakeven(到价/移保本 advisory)同为持仓行专属,非持有行不得带(按键存在,含显式 null)
-        if any(_k in mc for _k in ("current_close", "price_cross", "move_to_breakeven")):
-            raise ValueError("非持有行 machine 不得带 current_close/price_cross/move_to_breakeven(S3b R4a:到价/移保本仅持仓行)")
+        if any(_k in mc for _k in ("current_close", "price_cross", "move_to_breakeven", "ratchet")):
+            raise ValueError("非持有行 machine 不得带 current_close/price_cross/move_to_breakeven/ratchet(S3b R4a/R4b:到价/移保本/跨周 ratchet 仅持仓行)")
     # 4.2 第1轮: operation_impact no-dangling + advisory-isolation guard(仅当 machine.operation_impact 存在时生效)
     validate_operation_impact_no_dangling(report)
     if action == "建仓":
@@ -1637,6 +1736,11 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError(f"持有 machine.price_cross={mc.get('price_cross')!r} != 重算 {_exp_pc!r}(到价提示 advisory)")
         if mc.get("move_to_breakeven") != _exp_mtb:
             raise ValueError(f"持有 machine.move_to_breakeven={mc.get('move_to_breakeven')!r} != 重算 {_exp_mtb!r}(移保本 advisory)")
+        # S3b R4b: 跨周持久收紧 ratchet within-report 弱不变式(单一来源 `_ratchet_report_error`,与 pipeline _apply_holding_ratchet 写后共用)。
+        # **可选**(持久层在 pipeline,仅 --account 真持仓 run 注入;直接 build/观察 run 无 ratchet→None no-op)。跨周强不变式由 pipeline 持久层 + 测守。
+        _rt_err = _ratchet_report_error(mc)
+        if _rt_err:
+            raise ValueError(f"持有 {_rt_err}")
     else:  # 观察 / 否决:交易字段必须全 null
         for k in ("股数", "入", "盈一", "盈二", "损"):
             if tbl[k] is not None:

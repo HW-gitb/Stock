@@ -44,6 +44,8 @@ state/*/account_state_csv/
 # 持仓恒列入隐私护栏(固化):带 --account 的周报含真实持仓(代码/成本/止损)。固化方案 = 账户周报落
 # state/<系统类型>/weekly_private/<as_of>/(a_short/a_long/us_short/us_long 同一 scheme)→ 全部 gitignored,绝不入库。
 state/*/weekly_private/
+# S3b R4b 跨周持久收紧 ratchet sidecar:含真实持仓(ts_code/entry_date/ratcheted_stop/prices)→ 私密,绝不入库(同 weekly_private scheme,git check-ignore 守门)。
+state/*/holding_ratchet/
 
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
 research/results/a_short/m67_validation_*/

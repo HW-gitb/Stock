@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short S3b R4b holding ratchet sidecar",
+  "description": "跨周持久收紧 ratchet sidecar(system-maintained,与 account_state[用户输入]物理隔离)。per-(ts_code,entry_date) 行记上周收紧态,供本周 load→单向只升不降 ratchet→写回。**涉真实持仓 → gitignored 私密路由(state/*/holding_ratchet/,git check-ignore 守门)**;advisory-only、不自动卖/不接券商、不改 plan.stop/EGS/选股/否决。re-entry(新 entry_date)= 新行(旧行自然忽略)。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of", "boundary", "holdings"],
+  "properties": {
+    "schema_name": {"const": "a_short_holding_ratchet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "description": "provenance(自由串,镜像 m67 report generated_at);PIT 由 as_of/last_as_of 承担。"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "本次写回的运行日期(PIT;每行 last_as_of ≤ as_of)。"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "comparison_only", "advisory_only"],
+      "properties": {
+        "production": {"const": false},
+        "comparison_only": {"const": true},
+        "advisory_only": {"const": true}
+      }
+    },
+    "holdings": {
+      "type": "array",
+      "description": "per-(ts_code,entry_date) 跨周收紧态。**(ts_code,entry_date) 复合唯一 + 行 last_as_of ≤ envelope as_of 由 load_holding_ratchet/save_holding_ratchet 在 Python 强制**(draft-07 表达不了复合唯一/跨字段;重复 key 会在 dict 折叠时静默覆盖、藏未来 last_as_of 绕过 PIT,故 load 折叠前即拒)。re-entry=新行(新 entry_date)。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "entry_date", "last_as_of", "ratcheted_stop", "last_disposition",
+                     "last_reduce_price", "last_clear_price", "week_count", "cross_week_price_cross", "bootstrap"],
+        "properties": {
+          "ts_code": {"type": "string", "minLength": 1},
+          "entry_date": {"type": "string", "pattern": "^[0-9]{8}$", "description": "建仓日(= 持仓身份的一部分;变 = re-entry 重置)。"},
+          "last_as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "上次写回的运行日期(≤ 顶层 as_of)。同周 re-run(last_as_of==本次 as_of)→ 幂等原样返回(不增 week_count)。"},
+          "ratcheted_stop": {"type": ["number", "null"], "description": "跨周单向只升不降的建议保护止损 = max(本周 max(S3a 止损, R4a 保本), 上周 ratcheted_stop)。advisory,不改 table.损(S3a raw 供溯源)。"},
+          "last_disposition": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review"],
+            "description": "跨周 severity-max 的持仓处置档(只升档不降;re-entry 重置)。"},
+          "last_reduce_price": {"type": ["number", "null"], "description": "本周减仓价(=S3a 盈一 plan.t1)持久化;供下周滚动比对(下周现价≥本值→跨周到价减仓)。"},
+          "last_clear_price": {"type": ["number", "null"], "description": "= ratcheted_stop(清仓价跟跨周收紧止损)。"},
+          "week_count": {"type": "integer", "minimum": 1, "description": "该 (ts_code,entry_date) 连续持有的周计数(re-entry 重置为 1)。"},
+          "cross_week_price_cross": {"enum": ["none", "reduce_price_reached", "clear_price_reached"],
+            "description": "本周算出的跨周滚动到价(随 machine.ratchet 一并持久化,供同周 re-run 幂等原样返回)。"},
+          "bootstrap": {"type": "boolean", "description": "本周是否首周/re-entry 重置(随 machine.ratchet 持久化,供同周 re-run 幂等)。"}
+        }
+      }
+    }
+  }
+}

@@ -152,6 +152,24 @@ def _active_alert_line(r: dict):
     return "- 到价/移保本:" + "；".join(bits) + "（advisory,不自动卖出 / 不自动改止损;跨周收紧=R4b）"
 
 
+def _ratchet_line(r: dict):
+    """S3b R4b: 持仓行 跨周持久收紧 ratchet 逐票 advisory 行(读 machine.ratchet,仅持仓行;无 ratchet→None,如非 --account/--skip-ratchet run)。
+    建议保护止损 = 跨周只升不降 ratcheted_stop(不改系统止损 table.损);周数;跨周滚动到价(现价到上周减仓价/跌破跨周收紧止损)。全 advisory:不自动卖 / 不自动改止损。"""
+    mc = r.get("machine") or {}
+    rt = mc.get("ratchet")
+    if not rt:
+        return None
+    rs = rt.get("ratcheted_stop")
+    bits = [f"第{rt.get('week_count')}周{'·首周/换仓重置' if rt.get('bootstrap') else ''}",
+            f"建议保护止损 {rs if rs is not None else '未算出'}（只升不降；不改系统止损）"]
+    cw = rt.get("cross_week_price_cross")
+    if cw == "reduce_price_reached":
+        bits.append("⚠️ 现价已达上周减仓价(盈一):建议复核减仓")
+    elif cw == "clear_price_reached":
+        bits.append("⚠️ 现价已跌破跨周收紧止损:建议复核清仓")
+    return "- 跨周 ratchet:" + "；".join(bits) + "（advisory,不自动卖出 / 不自动改止损）"
+
+
 def _render_holdings_section(holding_reports: list, manual_review: list) -> list:
     """持仓恒列入 S1:渲染"账户持仓(非本周候选)"段 + "需人工管理(无价/停牌)"段。与"本周 EGS 候选"
     分区显示,避免把账户持仓误读成本周选中;partial 覆盖行显式标 EGS 未覆盖、不伪造安全。"""
@@ -184,6 +202,9 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
             _al = _active_alert_line(r)         # S3b R4a: 到价提示 + 移保本(持仓行)
             if _al:
                 out.append(_al)
+            _rl = _ratchet_line(r)              # S3b R4b: 跨周持久收紧 ratchet(持仓行)
+            if _rl:
+                out.append(_rl)
             if r.get("row_source") == "account_position_only":   # Tier-3:EGS 维度也未覆盖
                 out.append("- ⚠️ **EGS 未覆盖**:本周该持仓未进 EGS 评分集(粗筛排除),EGS 量化分/赛道未自动核查。")
             # S2: **真跑过语义**(_has_semantic: trace 非全 unknown)→ 显 S2 语义状态行(从 trace 渲染);未跑(无 trace / 全
@@ -286,6 +307,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         _al = _active_alert_line(r)         # S3b R4a: 到价提示 + 移保本(held 候选)
         if _al:
             out.append(_al)
+        _rl = _ratchet_line(r)              # S3b R4b: 跨周持久收紧 ratchet(held 候选)
+        if _rl:
+            out.append(_rl)
         if t["操作"] == "建仓":
             out.append(f"- 执行清单:入 {_cell(t['入'])} / 损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} "
                        f"/ 盈二 {_cell(t['盈二'])} / 股数 {_cell(t['股数'])}")
