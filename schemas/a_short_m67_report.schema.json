@@ -54,7 +54,11 @@
             "类型": {"type": "string"},
             "EGS分": {"type": ["number", "null"]},
             "优先级": {"type": "string"},
-            "触发条件": {"type": "string"}
+            "触发条件": {"type": "string"},
+            "持仓处置": {"enum": ["持有", "持有警戒", "建议减仓复核", "建议清仓复核", "立即人工复核"],
+                        "description": "S3b R1+R2: 持仓处置结构化列(决策1:操作 enum 不扩,持仓处置是独立列)。**仅 held 行**(操作=持有);候选行省略=向后兼容。由 severity 合并引擎从各 holding_row_impact 的 holding_effect 合成(machine.holding_management_signal 映射)。advisory 复核建议、**不自动卖出**;减仓价/清仓价 = R3(待单独批准)。"},
+            "禁止加仓": {"type": "boolean",
+                        "description": "S3b R1+R2: 禁止加仓独立布尔列(== machine.blocked_add_required,各 holding 信号 blocked_add_required 的 OR 合并)。**仅 held 行**;候选行省略。"}
           }
         }
       }
@@ -69,6 +73,10 @@
         "entry_exit_size_star": {"type": "object"},
         "iv_gate": {"type": "object"},
         "consumption": {"type": "object"},
+        "holding_management_signal": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review", "none"],
+          "description": "S3b R1+R2: 合并引擎从各 holding_row_impact 的 holding_effect 取 severity-max(clear_review>reduce_review>manual_review>hold_watch>hold>none;anti-rescue:正面不降级)。映射到 table.持仓处置。仅 held 报告;非生产/不自动卖出。"},
+        "blocked_add_required": {"type": "boolean",
+          "description": "S3b R1+R2: 各 holding 信号 blocked_add_required 的 OR 合并。映射到 table.禁止加仓。"},
         "operation_impact": {
           "type": "array",
           "description": "4.2 第1轮: 逐字段 operation_impact 记录(仍有 M6.7 候选/持仓行的字段). schema 层焊死 m67_landing_surface/terminal_surface_target 非空; 跨字段不变式(production_hard_veto⟹操作=否决 / production_effect_enabled=false 不得升格 / 只落文本须挂后继 slice)由 validate_operation_impact_no_dangling 守. 可选(缺省=无, 向后兼容; Tier-3 持仓粗覆盖不发).",

@@ -21,6 +21,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_phase5_engine import (  # noqa: E402
     ADVISORY_VETO_TAG, build_m67_report, build_holding_report, validate_m67_consistency,
     validate_operation_impact_no_dangling, _semantic_operation_impacts,
+    _merge_holding_disposition, _apply_holding_disposition, _HOLDING_DISPOSITION_LABEL,
 )
 from tests.test_a_short_phase5_engine import _good_input, _held_state  # noqa: E402
 
@@ -457,6 +458,7 @@ class SemanticGuardTests(unittest.TestCase):
     def test_holding_advisory_impact_legal_form_passes(self):
         r = self._veto_report()
         r["m67"]["table"]["操作"] = "持有"
+        r["machine"]["stateful_risk"] = {"position_state": "held"}        # 持仓 advisory impact 属于持仓报告(真 builder existing_holding ⟺ position_state=held)
         r["machine"]["operation_impact"] = [_holding_official_impact()]
         r["m67"]["精简结论区"]["操作建议"] = f"已有持仓,禁止加仓。清仓复核建议({ADVISORY_VETO_TAG})。"
         validate_operation_impact_no_dangling(r)                          # holding_row_impact 合法形态 → 不 raise
@@ -615,6 +617,196 @@ class FinancialQualityImpactTests(unittest.TestCase):
             "holding_row_impact", "existing_holding", "private_account")
         with self.assertRaises(ValueError):
             validate_operation_impact_no_dangling(r)
+
+
+class HoldingDispositionS3bTests(unittest.TestCase):
+    """S3b R1+R2: 持仓处置 结构化列 + severity 合并引擎(advisory · 不自动卖出 · 减仓价待 R3 · 操作 enum 不扩 · 仅持仓行)。"""
+
+    def _imp(self, holding_effect="hold_watch", blocked=False):
+        return {"source_field": "x", "field_class": "structured", "visibility_shape": "holding_row_impact",
+                "impact_scope": "existing_holding", "new_entry_effect": "none", "holding_effect": holding_effect,
+                "blocked_add_required": blocked, "veto_class": "none",
+                "evidence_ref": {"kind": "lineage_key", "value": "x", "as_of": AS_OF},
+                "m67_landing_surface": "x", "terminal_surface_target": "s3b_持仓处置_列+减仓价",
+                "pending_successor_slice": "S3b", "production_effect_enabled": False,
+                "implementation_status": "future_s3b_schema_render_required", "privacy_class": "private_account"}
+
+    def _cand_imp(self, holding_effect="clear_review", blocked=False, source_field="x"):
+        # 候选/公开 shape 却被篡改带上持仓效应——绝不应参与持仓处置合并(scope fail-closed 的对抗输入)。
+        return {"source_field": source_field, "field_class": "structured", "visibility_shape": "candidate_row_impact",
+                "impact_scope": "new_entry", "new_entry_effect": "none", "holding_effect": holding_effect,
+                "blocked_add_required": blocked, "veto_class": "none",
+                "evidence_ref": {"kind": "lineage_key", "value": "x", "as_of": AS_OF},
+                "m67_landing_surface": "x", "terminal_surface_target": "already_structured",
+                "pending_successor_slice": None, "production_effect_enabled": False,
+                "implementation_status": "implemented", "privacy_class": "public_tracked"}
+
+    # ── 合并引擎(severity-max + blocked_add OR + anti-rescue)──
+    def test_merge_severity_max(self):
+        self.assertEqual(_merge_holding_disposition(
+            [self._imp("hold_watch"), self._imp("clear_review"), self._imp("hold")])[0], "clear_review")
+
+    def test_merge_order_reduce_over_hold_watch(self):
+        self.assertEqual(_merge_holding_disposition([self._imp("hold_watch"), self._imp("reduce_review")])[0], "reduce_review")
+
+    def test_merge_anti_rescue(self):
+        # severity-max = anti-rescue:高信号不被正面/低信号压低
+        self.assertEqual(_merge_holding_disposition(
+            [self._imp("clear_review"), self._imp("hold"), self._imp("hold_watch")])[0], "clear_review")
+
+    def test_merge_blocked_add_or(self):
+        self.assertTrue(_merge_holding_disposition([self._imp("hold", False), self._imp("hold_watch", True)])[1])
+        self.assertFalse(_merge_holding_disposition([self._imp("hold"), self._imp("hold_watch")])[1])
+
+    def test_merge_empty_default_hold(self):
+        self.assertEqual(_merge_holding_disposition([]), ("hold", False))
+        self.assertEqual(_merge_holding_disposition(None), ("hold", False))
+
+    def test_merge_ignores_none_effect(self):
+        self.assertEqual(_merge_holding_disposition([self._imp("none"), self._imp("hold_watch")])[0], "hold_watch")
+
+    # ── build 接线(held 报告)──
+    def test_held_report_default_hold(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "持有")        # 无 holding 信号 → 默认 持有
+        self.assertIn("禁止加仓", r["m67"]["table"])
+        self.assertEqual(r["machine"]["holding_management_signal"], "hold")
+        validate_m67_consistency(r)
+        jsonschema.validate(r, _load(M67_SCHEMA))
+
+    def test_held_report_clear_review_disposition(self):
+        # held 报告注入 clear_review + blocked 信号 → 持仓处置=建议清仓复核 + 禁止加仓
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "建议清仓复核")
+        self.assertTrue(r["m67"]["table"]["禁止加仓"])
+        self.assertEqual(r["machine"]["holding_management_signal"], "clear_review")
+        validate_m67_consistency(r)
+
+    def test_candidate_no_disposition(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        self.assertNotIn("持仓处置", r["m67"]["table"])
+        self.assertNotIn("禁止加仓", r["m67"]["table"])
+        validate_m67_consistency(r)
+
+    def test_apply_idempotent(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
+        _apply_holding_disposition(r)
+        first = (r["m67"]["table"]["持仓处置"], r["m67"]["table"]["禁止加仓"])
+        _apply_holding_disposition(r)
+        self.assertEqual((r["m67"]["table"]["持仓处置"], r["m67"]["table"]["禁止加仓"]), first)
+
+    def test_held_holding_report_tier3(self):
+        r = build_holding_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIn("持仓处置", r["m67"]["table"])
+        validate_m67_consistency(r)
+
+    # ── validator(独立重算比对)──
+    def test_validator_rejects_candidate_disposition(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["m67"]["table"]["持仓处置"] = "持有"        # 非持有行不得带
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_signal_mismatch(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["holding_management_signal"] = "clear_review"   # op_impacts 空 → 重算 hold,不符
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_disposition_label_mismatch(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["m67"]["table"]["持仓处置"] = "建议清仓复核"   # machine.signal=hold,标签不符
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_blocked_mismatch(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["m67"]["table"]["禁止加仓"] = True          # machine.blocked=False
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    # ── S3a 边界 / 共存 ──
+    def test_s3a_boundary_no_reduce_price(self):
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual((r["m67"]["table"]["入"], r["m67"]["table"]["股数"]), (None, None))   # 持仓不新开仓/不重算股数
+        self.assertNotIn("减仓价", r["m67"]["table"])   # R3 才有
+        self.assertNotIn("清仓价", r["m67"]["table"])
+
+    def test_label_map_complete(self):
+        # 映射覆盖全 severity 档 + hold(默认)
+        for k in ("hold", "hold_watch", "reduce_review", "clear_review", "manual_review"):
+            self.assertIn(k, _HOLDING_DISPOSITION_LABEL)
+
+    # ── R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP: 合并/校验 fail-closed on scope ──
+    def test_merge_ignores_candidate_shape_holding_effect(self):
+        # 候选 shape 即便带 clear_review+blocked → 不是持仓侧信号 → 不参与合并 → 默认 ('hold', False)
+        self.assertEqual(_merge_holding_disposition([self._cand_imp("clear_review", True)]), ("hold", False))
+
+    def test_merge_ignores_public_privacy_holding_shape(self):
+        # holding shape/scope 但 public_tracked(非私密)→ 不算合法持仓信号(涉真实持仓须私密)
+        imp = self._imp("clear_review", True)
+        imp["privacy_class"] = "public_tracked"
+        self.assertEqual(_merge_holding_disposition([imp]), ("hold", False))
+
+    def test_validator_rejects_wrong_shape_forward_event_held(self):
+        # held 报告手构 forward_event 伪装成 candidate shape + 带持仓效应 → ⑪ 持仓 shape 闭合拒(否则会污染持仓处置)
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        fe = self._cand_imp("hold_watch", True, source_field="forward_event_limit_unlock")
+        r["machine"]["operation_impact"] = [fe]
+        r["m67"]["精简结论区"]["风控触发"] = "未来已知事件 禁止加仓"
+        r["m67"]["精简结论区"]["操作建议"] = "未来已知事件 禁止加仓"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_generic_candidate_holding_effect(self):
+        # held 报告注入 generic(非 source-class)候选 shape 带 holding_effect=clear_review → 全局持仓效应 shape 闭合(a)直接拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._cand_imp("clear_review", blocked=False)]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_generic_blocked_add_wrong_shape(self):
+        # held 报告:generic 候选 shape 仅带 blocked_add(holding_effect=none)→ blocked 也算持仓效应 → 全局闭合(a)拒
+        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r["machine"]["operation_impact"] = [self._cand_imp("none", blocked=True)]
+        r["m67"]["精简结论区"]["风控触发"] = "禁止加仓"
+        r["m67"]["精简结论区"]["操作建议"] = "禁止加仓"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_nonheld_generic_holding_effect(self):
+        # 非持有(候选)报告:generic 候选 shape 带持仓效应 → 全局闭合拒(候选 shape 非持仓侧)
+        r = build_m67_report(_good_input(), AS_OF, "t")              # 非 held
+        r["machine"]["operation_impact"] = [self._cand_imp("clear_review", blocked=False)]
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_nonheld_holding_shaped_effect(self):
+        # 非持有报告即便 impact 是合法持仓 shape(_is_held_signal True)但带持仓效应 → 全局闭合(b)拒(持仓效应仅持仓报告)
+        r = build_m67_report(_good_input(), AS_OF, "t")              # 非 held
+        imp = self._imp("clear_review", True)                        # holding_row_impact/existing_holding/private
+        imp["source_field"] = "x"
+        r["machine"]["operation_impact"] = [imp]
+        r["m67"]["精简结论区"]["风控触发"] = "禁止加仓"
+        r["m67"]["精简结论区"]["操作建议"] = "禁止加仓"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_validator_rejects_nonheld_machine_signal_leak(self):
+        # 非持有(候选)报告泄漏 machine.holding_management_signal/blocked_add_required → 拒(持仓处置仅持仓行)
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        r["machine"]["holding_management_signal"] = "clear_review"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+        r2 = build_m67_report(_good_input(), AS_OF, "t")
+        r2["machine"]["blocked_add_required"] = True
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r2)
 
 
 if __name__ == "__main__":

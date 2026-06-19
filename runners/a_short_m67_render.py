@@ -118,6 +118,15 @@ def _card_field(report: dict, key: str) -> str:
     return val
 
 
+def _disposition_line(t: dict):
+    """S3b R1+R2: 持仓处置 + 禁止加仓 逐票行(仅持仓行 table 带 持仓处置;候选行返回 None 不渲染)。
+    advisory 复核档,不自动卖出;减仓价/清仓价 = R3。"""
+    d = t.get("持仓处置")
+    if not d:
+        return None
+    return f"- 持仓处置:{d}（禁止加仓:{'是' if t.get('禁止加仓') else '否'}；advisory 复核建议,不自动卖出,减仓价/清仓价待 S3b）"
+
+
 def _render_holdings_section(holding_reports: list, manual_review: list) -> list:
     """持仓恒列入 S1:渲染"账户持仓(非本周候选)"段 + "需人工管理(无价/停牌)"段。与"本周 EGS 候选"
     分区显示,避免把账户持仓误读成本周选中;partial 覆盖行显式标 EGS 未覆盖、不伪造安全。"""
@@ -126,12 +135,13 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
         out += ["", "## 账户持仓(非本周 EGS 候选)",
                 "> 这些是你账户里、但**本周没进 EGS top-N** 的持仓。`复用egs_full`=本周已评分;"
                 "`EGS未覆盖(粗筛)`=本周 EGS 粗筛未覆盖,**仅价格/技术 + 账户状态;ST/新闻/监管未自动核查,请人工核查**。",
-                "| 票 | 名称 | 操作 | 持仓/冷静 | 覆盖 | 损(系统跟踪) | 盈一 | 盈二 | EGS分 |",
-                "|---|---|---|---|---|---|---|---|---|"]
+                "| 票 | 名称 | 操作 | 持仓处置 | 禁止加仓 | 持仓/冷静 | 覆盖 | 损(系统跟踪) | 盈一 | 盈二 | EGS分 |",
+                "|---|---|---|---|---|---|---|---|---|---|---|"]
         for r in holding_reports:
             t = r["m67"]["table"]
-            out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
+            out.append("| {} | {} | {} | {} | {} | {} | {} | {} | {} | {} | {} |".format(
                 _cell(r.get("ts_code")), _cell(r.get("name")), _cell(t["操作"]),
+                _cell(t.get("持仓处置")), ("是" if t.get("禁止加仓") else "否"),
                 _cell(_holding_state(r)[0]), _coverage_label(r),
                 _cell(t.get("损")), _cell(t.get("盈一")), _cell(t.get("盈二")), _cell(t.get("EGS分"))))
         out += ["", "### 账户持仓逐票"]
@@ -143,6 +153,9 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
             hs_label, hs_reason = _holding_state(r)
             if hs_label not in ("空仓", "—"):
                 out.append(f"- 持仓/冷静:{hs_label}" + (f"（{hs_reason}）" if hs_reason else ""))
+            _dl = _disposition_line(t)          # S3b R1+R2: 持仓处置 + 禁止加仓(持仓行)
+            if _dl:
+                out.append(_dl)
             if r.get("row_source") == "account_position_only":   # Tier-3:EGS 维度也未覆盖
                 out.append("- ⚠️ **EGS 未覆盖**:本周该持仓未进 EGS 评分集(粗筛排除),EGS 量化分/赛道未自动核查。")
             # S2: **真跑过语义**(_has_semantic: trace 非全 unknown)→ 显 S2 语义状态行(从 trace 渲染);未跑(无 trace / 全
@@ -239,6 +252,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         if sl:
             out.append(sl)
         out.append(f"- **操作建议**:{jq.get('操作建议', '')}")
+        _dl = _disposition_line(t)          # S3b R1+R2: held 候选(操作=持有)显 持仓处置 + 禁止加仓
+        if _dl:
+            out.append(_dl)
         if t["操作"] == "建仓":
             out.append(f"- 执行清单:入 {_cell(t['入'])} / 损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} "
                        f"/ 盈二 {_cell(t['盈二'])} / 股数 {_cell(t['股数'])}")

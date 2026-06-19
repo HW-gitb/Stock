@@ -700,6 +700,60 @@ def _semantic_holding_lines(sc: dict) -> list:
     return lines
 
 
+# ── S3b R1+R2: 持仓处置 结构化列 + severity 合并引擎 ───────────────────────────────────────────
+# 把 held 报告各 holding_row_impact 的 holding_effect 合成一个结构化「持仓处置」(决策1:操作 enum 不扩,持仓处置是独立列)+
+# 「禁止加仓」布尔(blocked_add_required OR)。**advisory 复核建议、不自动卖出**;减仓价/清仓价=R3(单独批准)、主动动作+跨周 ratchet=R4。
+# severity-max = anti-rescue(正面/低信号不能压低高信号);仅 held 报告。S3a holding_levels(被动系统止损/止盈)是另一维(价格位),不冲突。
+_HOLDING_SEVERITY = ["clear_review", "reduce_review", "manual_review", "hold_watch", "hold"]   # 降序(§7.1;none/缺省=最低,默认 hold)
+_HOLDING_DISPOSITION_LABEL = {"hold": "持有", "hold_watch": "持有警戒", "reduce_review": "建议减仓复核",
+                              "clear_review": "建议清仓复核", "manual_review": "立即人工复核"}
+
+
+def _is_held_signal(imp):
+    """S3b 持仓处置合并的**唯一合法输入** = 真正的持仓侧信号:visibility_shape==holding_row_impact + impact_scope==existing_holding +
+    私密(private_account/secret_or_raw_provider)。候选/公开 shape 的 impact(即便被篡改带上 holding_effect/blocked_add_required)绝不参与
+    持仓处置合并——**fail-closed on scope**(防 builder 漂移或手构报告把 public/candidate 证据提升成私密持仓处置;呼应 ⑬⑭/⑮⑯ 同类
+    guard-vs-claim 边界)。R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP。"""
+    return (imp.get("visibility_shape") == "holding_row_impact"
+            and imp.get("impact_scope") == "existing_holding"
+            and imp.get("privacy_class") in ("private_account", "secret_or_raw_provider"))
+
+
+def _merge_holding_disposition(op_impacts):
+    """S3b R1+R2 合并引擎:从持仓 machine.operation_impact 合成 (holding_management_signal, blocked_add_required)。
+    **仅 _is_held_signal(持仓侧 shape/scope/私密)的 impact 参与**(scope fail-closed;候选/公开 shape 即便带 holding_effect/blocked 也忽略)。
+    signal = 各合法 impact 的 holding_effect 取 **severity-max**(clear_review>reduce_review>manual_review>hold_watch>hold;none/缺省不计;
+    全无 → 默认 'hold'=持有)——severity-max 即 **anti-rescue**(正面/低信号不能压低高信号)。
+    blocked_add_required = 各合法 impact 的 blocked_add_required **OR**。op_impacts 缺省/空/无持仓侧信号 → ('hold', False)。"""
+    best, blocked = "hold", False
+    for imp in (op_impacts or []):
+        if not _is_held_signal(imp):
+            continue
+        if imp.get("blocked_add_required"):
+            blocked = True
+        eff = imp.get("holding_effect")
+        if eff in _HOLDING_SEVERITY and _HOLDING_SEVERITY.index(eff) < _HOLDING_SEVERITY.index(best):
+            best = eff
+    return best, blocked
+
+
+def _apply_holding_disposition(report):
+    """S3b R1+R2:对 **持仓行(table.操作=='持有')** 就地设 table.持仓处置/table.禁止加仓 + machine.holding_management_signal/
+    blocked_add_required(从 machine.operation_impact 全量重算)。键于 `操作=='持有'`(与 validate_m67_consistency 持有分支对齐,
+    覆盖 build_m67 held 候选 + build_holding Tier-3);非持有行 → no-op(候选行不带持仓处置)。build_m67_report/build_holding_report
+    末尾各调一次(独立 build 自洽);pipeline attach forward_event held 后再调一次纳入晚到信号;**每次重算 → 幂等**。返回 report(就地改)。"""
+    tbl = (report.get("m67") or {}).get("table") or {}
+    if tbl.get("操作") != "持有":
+        return report
+    mc = report.get("machine") or {}
+    sig, blocked = _merge_holding_disposition(mc.get("operation_impact") or [])
+    mc["holding_management_signal"] = sig
+    mc["blocked_add_required"] = blocked
+    tbl["持仓处置"] = _HOLDING_DISPOSITION_LABEL[sig]
+    tbl["禁止加仓"] = blocked
+    return report
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     fam = classify_risk_families(inp, ind)
@@ -965,6 +1019,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     }
     if op_impacts:                       # 仅命中时加 key,正常报告零改动(向后兼容)
         result["machine"]["operation_impact"] = op_impacts
+    _apply_holding_disposition(result)   # S3b R1+R2: held 报告设 持仓处置/禁止加仓(非 held no-op);pipeline attach forward_event held 后再调一次
     return result
 
 
@@ -1062,7 +1117,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
                    "overlay.eligible": "→ 未覆盖",
                    "stateful_risk": "→ 持仓管理 + Rule12/Rule13",
                    "egs_coverage": "未覆盖(粗筛排除;EGS/语义/ST 未自动核查)"}
-    return {
+    _hr = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "ts_code": str(inp.get("ts_code", "")), "name": str(inp.get("name", "")),
@@ -1083,6 +1138,8 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    _apply_holding_disposition(_hr)       # S3b R1+R2: Tier-3 持仓(操作=持有)设 持仓处置/禁止加仓(从 sem_op_impacts 重算)
+    return _hr
 
 
 def validate_operation_impact_no_dangling(report: dict) -> None:
@@ -1097,12 +1154,17 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
     ⑧【第3轮】field_class==semantic_advisory 或 source_field 以 semantic_ 开头 ⟹ production_effect_enabled==False
       且 veto_class!=production_hard_veto;semantic_official_high 必须保持 m67_advisory_veto;semantic_web_llm 必须保持 none
       且 new_entry_effect!='hard_veto'(web/LLM 永久 advisory-only,绝不 hard_veto)。
+    ⑧.5【S3b 全局持仓效应闭合,source-class 无关】任何 impact 带持仓效应(holding_effect∉{none,缺省} 或 blocked_add_required) ⟹ (a) 必是
+      `_is_held_signal`(holding_row_impact/existing_holding/private,= 持仓处置合并唯一合法输入,单一来源)且 (b) 仅持仓(position_state==held)报告;
+      补 ⑧⑪⑬⑭ 只覆盖具体 source-class 的缺口(generic source_field 夹带 wrong-shape 持仓字段 / 非持仓报告夹带持仓效应,均拒)。
     报告级(存在该类 impact 时):
     ⑨【第3轮】任一 m67_advisory_veto ⟹ 否决审查触发/操作建议 含 ADVISORY_VETO_TAG(advisory 否决须显式标非生产,与生产硬否决物理区分);
     ⑩【第3轮】任一 blocked_add_required==True ⟹ 操作建议/风控触发 含「禁止加仓」(独立旗标必用户可见,不被其它处置吞掉)。
     ⑪【4.2 forward_events】source_field 以 'forward_event_' 开头(覆盖 limit_unlock/earnings_disclosure/未来类) ⟹ 永久 analysis-only:
       field_class=='structured'、production_effect_enabled is False、veto_class=='none'、new_entry_effect!='hard_veto'、
       holding_effect∈{none,hold_watch}(source-class 级绑定,防篡改 veto_class/effect 伪装生产硬否决;呼应 semantic-isolation ⑧)。
+      **+ 持仓 shape/privacy 闭合(S3b 持仓处置输入)**:held ⟹ holding_row_impact/existing_holding/private;非 held ⟹ candidate_row_impact/
+      public_tracked 且 holding_effect=none/无 blocked(防手构把 public/candidate forward_event 提升成私密持仓处置;镜像 ⑬⑭)。
     ⑫【4.2 forward_events ADVICE-LANDING】任一 forward_event_ impact ⟹ 操作建议含未来事件提示「未来已知事件」
       (候选/持仓不得仍像干净建仓——未来事件须落用户主看的操作建议,不只风控触发;字面同步 pipeline _FORWARD_EVENT_MARKER)。
     ⑬⑭【4.2 Round5 龙虎榜/大宗交易 trade-event】source_field ∈ {dragon_list_appearance, block_trade_appearance} ⟹ 永久 analysis-only +
@@ -1163,6 +1225,18 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
             raise ValueError(f"operation_impact {sf} 声称 {imp.get('veto_class')} 硬否决却未否决(action={action})")
         if imp.get("veto_class") == "m67_advisory_veto" and imp.get("production_effect_enabled") is not False:
             raise ValueError(f"operation_impact {sf} m67_advisory_veto 却 production_effect_enabled!=false(advisory 否决必非生产)")
+        # 【S3b 全局持仓效应闭合,source-class 无关】(R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP):任何 operation_impact 只要带持仓效应
+        #   (holding_effect ∉ {none,缺省} 或 blocked_add_required)就 (a) 必须是真持仓侧信号 `_is_held_signal`(holding_row_impact/existing_holding/
+        #   private,= `_merge_holding_disposition` 合并的唯一合法输入,单一来源判据),且 (b) 只能出现在持仓(position_state==held)报告。
+        #   补 ⑧⑪⑬⑭ 只覆盖具体 source-class 的缺口——generic source_field(不匹配任何 source-class guard)夹带 wrong-shape holding_effect/blocked、
+        #   或非持仓报告夹带持仓效应,均直接拒(否则会污染持仓处置合并)。
+        _he = imp.get("holding_effect")
+        if (_he not in (None, "none")) or imp.get("blocked_add_required"):
+            if not _is_held_signal(imp):
+                raise ValueError(f"operation_impact {sf} 带持仓效应(holding_effect={_he!r}/blocked_add)但非持仓侧 shape"
+                                 "(须 holding_row_impact/existing_holding/private;持仓处置合并仅认持仓侧信号)")
+            if position_state != "held":
+                raise ValueError(f"operation_impact {sf} 带持仓效应但报告非持仓(position_state={position_state!r}!=held)——持仓效应仅持仓报告")
         # ⑧ semantic 来源(field_class==semantic_advisory 或 source_field 以 semantic_ 开头)= 永久 advisory。
         #   source-class 级绑定(不只按 veto_class 分支,防"改 veto_class/丢分类绕过";堵三类伪装:official→production_hard_veto+enabled /
         #   official hard_veto 丢 advisory 分类 / web_llm production-enabled):一律非生产、绝不 production_hard_veto;
@@ -1192,6 +1266,19 @@ def validate_operation_impact_no_dangling(report: dict) -> None:
                 raise ValueError(f"operation_impact {sf} forward_event 不得 new_entry_effect=hard_veto")
             if imp.get("holding_effect") not in ("none", "hold_watch"):
                 raise ValueError(f"operation_impact {sf} forward_event holding_effect={imp.get('holding_effect')!r} 越界(只允许 none/hold_watch)")
+            # 持仓 shape/privacy/effect 闭合(R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP;镜像 ⑬⑭ trade-event):forward_event held
+            # 信号(holding_effect=hold_watch/blocked)是 S3b 持仓处置合并的输入,必须焊死持仓侧 shape——held(position_state==held)⟹
+            # holding_row_impact/existing_holding/private;非 held(候选)⟹ candidate_row_impact/public_tracked 且 holding_effect=none/无 blocked
+            # (候选 forward_event 绝不带持仓效应)。防手构把 public/candidate forward_event 提升成私密持仓处置输入(_merge_holding_disposition 同步 fail-closed)。
+            if position_state == "held":
+                if not (imp.get("visibility_shape") == "holding_row_impact" and imp.get("impact_scope") == "existing_holding"
+                        and imp.get("privacy_class") in ("private_account", "secret_or_raw_provider")):
+                    raise ValueError(f"operation_impact {sf} forward_event 在持仓(held)行必须 holding_row_impact/existing_holding/private(涉真实持仓须私密 shape)")
+            else:
+                if not (imp.get("visibility_shape") == "candidate_row_impact" and imp.get("privacy_class") == "public_tracked"):
+                    raise ValueError(f"operation_impact {sf} forward_event 在非持仓(候选)行必须 candidate_row_impact/public_tracked")
+                if imp.get("holding_effect") != "none" or imp.get("blocked_add_required"):
+                    raise ValueError(f"operation_impact {sf} forward_event 在非持仓(候选)行不得带持仓效应(holding_effect/blocked_add)")
         # ⑬⑭ trade-event 来源(dragon_list_appearance / block_trade_appearance)= 永久 analysis-only + comparison-only(4.2 Round5 龙虎榜/大宗:
         #   只记成交事实,绝不改 EGS/TopN/选股/股数/操作/否决):field_class=structured、production=false、veto=none、
         #   new_entry_effect∈{informational,none}、holding_effect=none、blocked_add=false(比 forward_event 更严,无任何动作)。
@@ -1319,6 +1406,13 @@ def validate_m67_consistency(report: dict) -> None:
     # table 操作必须 == machine action
     if tbl["操作"] != action:
         raise ValueError("M6.7 table 操作 与 machine action 不一致")
+    # S3b R1+R2: 持仓处置/禁止加仓(table)+ holding_management_signal/blocked_add_required(machine)是**持仓行(操作=持有)专属**结构化字段;
+    # 非持有(建仓/观察/否决)行 table+machine 都不得带(防漂移/手构把持仓处置或 machine 信号泄漏到候选行;R-ASHORT-S3B-HOLDING-DISPOSITION-SCOPE-GUARD-GAP)。
+    if action != "持有":
+        if "持仓处置" in tbl or "禁止加仓" in tbl:
+            raise ValueError("非持有行不得带 持仓处置/禁止加仓(S3b:持仓处置仅持仓行)")
+        if mc.get("holding_management_signal") is not None or mc.get("blocked_add_required") is not None:
+            raise ValueError("非持有行 machine 不得带 holding_management_signal/blocked_add_required(S3b:持仓处置仅持仓行)")
     # 4.2 第1轮: operation_impact no-dangling + advisory-isolation guard(仅当 machine.operation_impact 存在时生效)
     validate_operation_impact_no_dangling(report)
     if action == "建仓":
@@ -1422,6 +1516,18 @@ def validate_m67_consistency(report: dict) -> None:
             # 系统位未算出 + 有手填参考 → 须指示按手填参考止损执行
             if not instructs_ref:
                 raise ValueError("持有 系统位未算出但有手填参考止损,advice 须指示按手填参考止损执行")
+        # S3b R1+R2: 持仓处置/禁止加仓 结构化列一致性 —— **独立重算** _merge_holding_disposition(不信任 builder),比对
+        # machine.holding_management_signal/blocked_add_required + table.持仓处置/禁止加仓(映射)。持仓行(操作=持有)必带这 4 字段。
+        # 与 S3a holding_levels(被动止损/止盈价位:损/盈一/盈二,上方已校)是两个维度——持仓处置=advisory 处置档,不产减仓价(R3)。
+        _sig, _blk = _merge_holding_disposition(mc.get("operation_impact") or [])
+        if mc.get("holding_management_signal") != _sig:
+            raise ValueError(f"持有 machine.holding_management_signal={mc.get('holding_management_signal')!r} != 合并重算 {_sig!r}")
+        if bool(mc.get("blocked_add_required")) != _blk:
+            raise ValueError(f"持有 machine.blocked_add_required != 合并重算 {_blk}")
+        if tbl.get("持仓处置") != _HOLDING_DISPOSITION_LABEL[_sig]:
+            raise ValueError(f"持有 table.持仓处置={tbl.get('持仓处置')!r} != machine.holding_management_signal 映射 {_HOLDING_DISPOSITION_LABEL[_sig]!r}")
+        if "禁止加仓" not in tbl or bool(tbl["禁止加仓"]) != _blk:
+            raise ValueError("持有 table.禁止加仓 缺失或 != machine.blocked_add_required")
     else:  # 观察 / 否决:交易字段必须全 null
         for k in ("股数", "入", "盈一", "盈二", "损"):
             if tbl[k] is not None:

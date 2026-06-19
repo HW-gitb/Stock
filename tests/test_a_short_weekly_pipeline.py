@@ -35,6 +35,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _fetch_daily_close, _attach_block_discount,
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
+    _attach_holding_disposition,
 )
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
@@ -3942,6 +3943,44 @@ class FinancialTrendsTests(unittest.TestCase):
         self.assertEqual(len(recs), 1)
         rep = [r for r in loaded["reports"] if r["ts_code"] == "600000.SH"][0]
         self.assertTrue(any(i["source_field"] == "financial_trend_balancesheet" for i in rep["machine"]["operation_impact"]))
+
+
+class S3bHoldingDispositionPipelineTests(unittest.TestCase):
+    """S3b R1+R2: pipeline _attach_holding_disposition 在 attach 后对持仓行重算(纳入 forward_event held 晚到信号)+ render 持仓处置列。"""
+
+    def _held_rep(self, signal="hold_watch", blocked=True, row_source="account_position_only"):
+        return {"ts_code": "600000.SH", "name": "测试", "row_source": row_source, "coverage_status": "partial",
+                "m67": {"精简结论区": {k: "" for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发",
+                                                       "板块资金事件", "风控触发", "操作建议")},
+                        "table": {"操作": "持有", "股数": None, "入": None, "盈一": None, "盈二": None, "损": None,
+                                  "类型": "已有持仓", "EGS分": None, "优先级": "—", "触发条件": ""}},
+                "machine": {"stateful_risk": {"position_state": "held"},
+                            "operation_impact": [{"source_field": "forward_event_limit_unlock", "holding_effect": signal,
+                                                  "blocked_add_required": blocked, "visibility_shape": "holding_row_impact",
+                                                  "impact_scope": "existing_holding", "privacy_class": "private_account"}]}}
+
+    def test_attach_folds_forward_event_held(self):
+        # build 后 attach 追加的 forward_event held 信号 → _attach_holding_disposition 重算纳入
+        w = {"reports": [self._held_rep("hold_watch", True)]}
+        _attach_holding_disposition(w)
+        t = w["reports"][0]["m67"]["table"]
+        self.assertEqual(t["持仓处置"], "持有警戒")
+        self.assertTrue(t["禁止加仓"])
+        self.assertEqual(w["reports"][0]["machine"]["holding_management_signal"], "hold_watch")
+
+    def test_attach_noop_on_candidate(self):
+        rep = self._held_rep()
+        rep["m67"]["table"]["操作"] = "建仓"      # 非持有 → no-op
+        rep["machine"]["stateful_risk"] = {}
+        _attach_holding_disposition({"reports": [rep]})
+        self.assertNotIn("持仓处置", rep["m67"]["table"])
+
+    def test_render_shows_disposition(self):
+        rep = self._held_rep("clear_review", True)
+        _attach_holding_disposition({"reports": [rep]})
+        md = render_weekly_markdown({"as_of": AS_OF, "reports": [rep], "run_lineage": {}})
+        self.assertIn("持仓处置", md)
+        self.assertIn("建议清仓复核", md)
 
 
 if __name__ == "__main__":

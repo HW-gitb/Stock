@@ -1625,6 +1625,15 @@ def _attach_financial_trend_impacts(weekly, as_of):
         })
 
 
+def _attach_holding_disposition(weekly):
+    """S3b R1+R2: pipeline 在 attach 各持仓信号(build 时内联 semantic + attach 后 forward_event held)之后,对每个持仓行
+    (table.操作=='持有')**重算** 持仓处置/禁止加仓(machine.holding_management_signal/blocked_add_required),纳入 build 后晚到的
+    forward_event held 信号。复用 engine `_apply_holding_disposition`(从全量 operation_impact 重算 → 幂等;非持有行 no-op)。"""
+    from runners.a_short_phase5_engine import _apply_holding_disposition
+    for rep in weekly.get("reports", []):
+        _apply_holding_disposition(rep)
+
+
 def _industry_fundamentals(financial_trends, code_to_industry, as_of):
     """⑤行业基本面(advisory-only · summary_only · **零新取数**):按 SW L2 行业聚合③④(income/balancesheet)候选财报红旗。
     **candidate-scope**(基于本周候选,**非全行业普查** → scope=candidates_only 诚实标注,避免误读为完整行业景气;真全行业普查需另起单独 slice)。
@@ -2581,6 +2590,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                                    income_provider=income_provider,
                                                    balancesheet_provider=balancesheet_provider, held_codes=held_codes_all)
     _attach_financial_trend_impacts(weekly, args.as_of)
+    # S3b R1+R2: 所有持仓 operation_impact 已 attach(semantic 内联 + forward_event held);对每个持仓行(操作=持有)重算 持仓处置/禁止加仓,
+    # 纳入 build 后晚到的 forward_event held 信号(幂等全量重算)。
+    _attach_holding_disposition(weekly)
     # 4.2 财报质量趋势 ⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选红旗 → 行业上下文。
     # candidate-scope(基于本周候选,非全行业普查);只列有红旗行业;无 operation_impact(逐票已由③④落地,本层只加行业摘要)。
     _fin_trend_ind = {str(c.get("ts_code")): ((c.get("industry") or {}).get("sw_l2_name") or "未知")
