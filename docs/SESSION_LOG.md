@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-06-19 — Codex re-`审查 PASS` (A-long value-yield forward-paper accumulator frozen-horizon guard)
+- **Verdict/Action**: PASS. 当前 working tree 已关掉 `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` 的 accumulator schema / writer contract gaps；未发现新的 P0/P1/P2 Required。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` addressed in working tree；closure 仍等用户 `提交`，详情见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: independent probes confirmed old residuals + round3 frozen-horizon probes REJECTED and legal baselines ACCEPTED；targeted accumulator+tracking schema tests 63 OK；doc/route 30 OK；full discover 2675 OK；py_compile/schema meta/BOM/FFFD/diff-check OK(CRLF warning only)；未跑 provider/fetch/capture/ledger。
+- **Next**: 用户若认可本轮审查结果，说 `提交`；继续不提交 `research/results/a_short/iv_feed_20260605/iv_feed.json`，且不执行 capture / fetch / real-money / promotion。
+
+## 2026-06-19 — Claude `修复` (A-long value-yield forward-paper accumulator frozen-horizon guard round3)
+- **Verdict/Action**: 判定 Codex re-`审查 FAIL` 对(round2 后 frozen-horizon 元数据漂移仍过 write_accumulator)。纯值/形状 pin→schema 层:`forward_window.interim_horizons_trading_days` 改 `const [21,63,126,252]`(拒空/重复/未知/重排);每 construction `horizons` 加 `required:["504"]`。显式决策:主 504 必含、interim 可选(早读回填)。proactive sibling:`as_of_latest_capture==max(cohort as_of)` 跨字段一致(validator)。完整修复/风险/边界/验证见 `docs/system_risk_register.md`(单一来源)。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 复跑 Codex round3 4 探针(interim 空/重复 / 主缺504 / 只21无504)经 write_accumulator 全 REJECTED(ValidationError)、legal+only504+interim-present 均 ACCEPTED;+6 测;本模块 37 OK;全量 discover 2675 OK(零回归);doc/route 30 OK;py_compile/schema(json+draft-07 meta)OK;diff clean(仅 CRLF);无 BOM;未跑 provider/fetch/capture/ledger。
+- **Next**: Codex re-`审查`;PASS 后用户「提交」。Boundary 守(未抓数/未花 ledger/未改冻结 prereg·horizon/未升单因子/未声称 alpha·production·ship-gate·real-money);capture live-fetch 数据层仍后续单独 slice。
+- **Pre-Codex self-review**: A 一次覆盖(frozen-horizon 类:interim const + per-construction 504 required 同轮全焊,非只补点名 interim);B 连带:schema desc 决策↔validator docstring↔register 同步、interim const 与 runner INTERIM_HORIZONS 一致(build 漂移即 schema 拒);C 反向正测:only-504 合法、interim-present 合法、legal pending/matured 仍过(37 OK)、as_of 两 fixture 零误拒;D 显式决策(interim 可选)落 schema/test 非穷举关键词;E 仅 SESSION_LOG+register;F const/required 归 schema(draft-07 可表达)、跨字段 as_of 归 validator、无 BOM、diff clean。
+
+## 2026-06-19 — Codex re-`审查 FAIL` (A-long value-yield forward-paper accumulator frozen-horizon guard)
+- **Verdict/Action**: FAIL. Claude round2 已关掉上轮 4 个 residual：重复 `construction_metrics`、cohort 内重复 construction、cohort 缺 primary、伪 source-ref 子串路径；legal pending / legal matured-promote baseline 也能通过。但同一 Required 还没完全关：`write_accumulator()` 仍接受 frozen horizon 元数据漂移。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` remains open；详情见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: independent probes confirmed residual duplicates/missing/source-ref now REJECTED and legal baselines ACCEPTED；new probes showed `interim_horizons_trading_days=[]`、`[21,21]`、primary pending construction 缺 `"504"` horizon / 只含 `"21"` horizon 仍 ACCEPTED。`py_compile` OK；targeted accumulator+tracking schema tests 57 OK；doc/route 30 OK；未跑 provider/fetch/capture/ledger。
+- **Next**: 修复 accumulator schema/validator/tests，使 `forward_window.interim_horizons_trading_days` 精确等于 frozen `[21,63,126,252]`，并至少要求每个 construction 都有 primary `"504"` horizon 状态；继续不执行 capture / fetch / real-money / promotion。
+
+## 2026-06-19 — Claude `修复` (A-long value-yield forward-paper accumulator residual contract gaps round2)
+- **Verdict/Action**: 判定 Codex re-`审查 FAIL` 对(身份/覆盖类契约旧实现只焊 count/set、漏跨行 multiset 身份;source_refs 子串匹配)。类级修:新增 `_check_construction_id_coverage` 焊 `construction_metrics` 与每 cohort `constructions` 各恰好覆盖 3 冻结构造一次(无重/缺);schema 两数组加 `minItems/maxItems:3` defense-in-depth;source_refs 改精确路径集合(`REQUIRED_SOURCE_REF_PATHS`,build+validate 单一来源)取代子串;+sibling cohort `as_of` 唯一。完整修复/风险/边界/验证见 `docs/system_risk_register.md`(单一来源)。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` — closure 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 复跑 Codex 4 残留探针经 `write_accumulator` 全 REJECTED(3 ValidationError+1 ValueError)、legal baseline 仍 ACCEPTED;+6 测;本模块 31 OK;全量 discover 2669 OK(零回归);doc/route 30 OK;py_compile/schema(json+draft-07 meta)OK;diff clean(仅 CRLF);无 BOM;未跑 provider/fetch/capture/ledger。
+- **Next**: Codex re-`审查`;PASS 后用户「提交」。Boundary 守(未抓数/未花 ledger/未改冻结 prereg/未升单因子/未声称 alpha·production·ship-gate·real-money);capture live-fetch 数据层仍后续单独 slice。
+- **Pre-Codex self-review**: A 一次覆盖(身份唯一+全覆盖同一 helper 同时用于 metrics+每 cohort constructions,非只补点名实例);B 连带:build 与 validator 共用 `REQUIRED_SOURCE_REF_PATHS`/`FROZEN_CONSTRUCTION_IDS` 单一来源防漂移、schema desc note↔validator docstring 同步;C 反向:legal pending/matured-promote 双 fixture 仍过(31 OK)、exact-path 不误拒 canonical 4 路径(prereg+磁盘核实);D N-A;E 仅 SESSION_LOG+register;F schema minItems/maxItems 与 validator multiset 双焊、子串→精确、无 BOM、diff clean。
+
+## 2026-06-19 — Codex re-`审查 FAIL` (A-long value-yield forward-paper accumulator residual contract gaps)
+- **Verdict/Action**: FAIL. 上轮两个坏 accumulator 已被 schema/validator 挡住，但同类 contract 仍未收完：重复 `construction_metrics`、重复 cohort construction、cohort 缺 primary construction、伪 ledger source ref 仍能通过 `write_accumulator()`。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` remains open — 详情见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: py_compile OK；targeted forward-paper capture + tracking schema tests 51 OK；independent probes confirmed prior bad samples REJECTED, but residual duplicate/missing/source-ref probes ACCEPTED；未跑 provider/fetch/capture。
+- **Next**: 继续修复 accumulator schema/validator/tests；不要执行 capture / fetch / real-money / promotion。
+
+## 2026-06-19 — Codex `审查 FAIL` (A-long value-yield forward-paper accumulator schema)
+- **Verdict/Action**: FAIL. 当前唯一未跟踪文件 `schemas/a_long_large_cap_value_yield_forward_paper_accumulator.schema.json` 可解析、meta-schema OK，但 promotion/read schema 约束太松，会放行不足 cohort 也 promote、单因子冒充 primary、pre-start cohort、空篮子、未知 horizon、matured 但收益为空等坏 artifact。
+- **Required**: `R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP` — 详情见 `docs/system_risk_register.md`(register 单一来源)。
+- **Verify**: independent jsonschema probes 复现 2 个坏 accumulator 均 ACCEPTED；existing forward-paper schema + doc/route tests 56 OK；`git diff --check` OK。未跑 provider/fetch/capture。
+- **Next**: Claude 修复 accumulator schema 与 adversarial tests；不要执行 capture / fetch / real-money / promotion。
+
 ## 2026-06-19 — Codex re-`审查 PASS` (S3b R4b ratchet invariant + sidecar PIT guards)
 - **Verdict/Action**: PASS. 当前 working tree 已关闭 R4b duplicate-key PIT bypass 与 null-stop invariant gap；未发现新的 P0/P1/P2 Required。
 - **Required**: `R-ASHORT-S3B-R4B-RATCHET-SIDECAR-DUPLICATE-PIT-BYPASS` 与 `R-ASHORT-S3B-R4B-RATCHET-INVARIANT-GUARD-GAP` 均已在 working tree addressed；详情见 `docs/system_risk_register.md`(register 单一来源)，closure 仍等用户 `提交`。

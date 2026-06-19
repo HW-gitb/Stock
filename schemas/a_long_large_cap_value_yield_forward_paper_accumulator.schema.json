@@ -1,0 +1,192 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-long large-cap value-yield forward-PAPER capture accumulator",
+  "description": "Output contract for the A-long forward-paper capture runner (the separate slice the reviewed prereg `a_long_large_cap_value_yield_forward_paper_tracking_20260609` authorizes). Holds the monthly-snapshot + backfill-as-mature accumulator for the 2 surviving research-only clues + the 1 promotion-eligible composite. **PAPER evidence only — NOT ship-gate, NOT alpha-validated, NOT real-money.** The frozen construction (universe / neutralization / basket / return / horizons) is NOT duplicated here — it lives in the prereg (single source); this artifact references it and records observed forward cohorts + per-construction metrics + the paper-read status. Per-monthly captures do NOT spend the singleton ledger; only the post-window promotion decision does (a separate reviewed artifact). The runner that writes this is commit-safe but execution-gated (each forward data pull needs its own user authorization). **draft-07 只能焊 shape/enum/promotion_role↔construction_id(if/then)/matured⟹非空(if/then)/horizon 键集(propertyNames)/每 construction 必含 504 horizon(required)/interim 集 const=[21,63,126,252]/symbol 唯一/每 block 恰 3 项(minItems+maxItems);跨字段/跨行不变式(read_available↔matured_cohort_count↔routing 的 promote/insufficient 门、primary==composite、no pre-start-floor cohort、cohort as_of 唯一、as_of_latest_capture==最新 cohort as_of、construction_metrics 与每 cohort 的 constructions 各恰好覆盖 3 冻结构造一次(无重/缺)、basket_size==selected_symbols 数、matured_cohort_count==实际 504-matured cohort 数、必备 source_refs 精确路径)由 `runners/a_long_large_cap_value_yield_forward_paper_capture.py::validate_accumulator_consistency` 在 Python 强制(write_accumulator schema 校验后调,fail-closed)** —— R-ALONG-VY-FP-ACCUMULATOR-SCHEMA-PROMOTION-GATE-GAP。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "as_of_latest_capture", "scope",
+               "source_refs", "frozen_construction_ref", "forward_window", "cohorts",
+               "construction_metrics", "paper_read", "prohibited_claims", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_long_large_cap_value_yield_forward_paper_accumulator"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "description": "provenance(自由串);PIT 由 as_of/各 cohort as_of 承担。"},
+    "as_of_latest_capture": {"type": "string", "pattern": "^[0-9]{8}$", "description": "最近一次 snapshot 的 month-end as_of(YYYYMMDD)。"},
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lane_id", "research_only", "evidence_level", "paper_evidence_satisfies_ship_gate",
+                   "real_money_committed", "production_use_allowed", "out_of_sample_only"],
+      "properties": {
+        "lane_id": {"const": "a_long"},
+        "research_only": {"const": true},
+        "evidence_level": {"const": "paper"},
+        "paper_evidence_satisfies_ship_gate": {"const": false},
+        "real_money_committed": {"const": false},
+        "production_use_allowed": {"const": false},
+        "out_of_sample_only": {"const": true}
+      }
+    },
+    "source_refs": {
+      "type": "array", "minItems": 1,
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["path", "role"],
+        "properties": {"path": {"type": "string", "minLength": 1}, "role": {"type": "string", "minLength": 1}}
+      },
+      "description": "至少含: 该 forward-paper prereg、其 ledger、被验证的 batch execution_summary、本 accumulator 设计。"
+    },
+    "frozen_construction_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prereg_artifact_id", "prereg_path", "reuses_frozen_rules_unchanged"],
+      "properties": {
+        "prereg_artifact_id": {"const": "a_long_large_cap_value_yield_forward_paper_tracking_20260609"},
+        "prereg_path": {"const": "research/preregistrations/a_long_large_cap_value_yield_forward_paper_tracking_20260609.json"},
+        "reuses_frozen_rules_unchanged": {"const": true}
+      },
+      "description": "冻结构造(universe/neutralization/basket/return/horizons)的单一来源 = prereg;本 accumulator 不复制规则,只引用 + 记录观测。"
+    },
+    "forward_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start_floor", "capture_cadence", "minimum_monthly_cohorts_for_paper_read",
+                   "primary_horizon_trading_days", "interim_horizons_trading_days"],
+      "properties": {
+        "start_floor": {"const": "20260630"},
+        "capture_cadence": {"const": "monthly"},
+        "minimum_monthly_cohorts_for_paper_read": {"const": 12},
+        "primary_horizon_trading_days": {"const": 504},
+        "interim_horizons_trading_days": {"const": [21, 63, 126, 252], "description": "诊断早读,**精确等于冻结集 [21,63,126,252]**(const:order-sensitive,拒空/重复/未知/重排);非主判据。"}
+      }
+    },
+    "cohorts": {
+      "type": "array",
+      "description": "每月 month-end as_of 一个 cohort(无 as_of < start_floor 计入)。snapshot 追加;backfill 随各 horizon 成熟回填。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["as_of", "captured_at", "universe_size", "pit_source", "constructions"],
+        "properties": {
+          "as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "month-end 决策日(last open A-share trading day of the month)。"},
+          "captured_at": {"type": "string"},
+          "universe_size": {"type": "integer", "minimum": 0, "description": "该 as_of PIT 冻结的 top-500 候选数(可 < 500,真实 PIT)。"},
+          "pit_source": {"enum": ["forward_live_frozen_at_as_of"], "description": "前向 = 决策当日 live 冻结(out-of-sample,无 look-ahead)。"},
+          "constructions": {
+            "type": "array", "minItems": 3, "maxItems": 3,
+            "description": "每 cohort 恰好 3 个构造行(2 单因子 + 1 合成;身份唯一/全覆盖由 validator 焊)。",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["construction_id", "promotion_role", "basket_size", "selected_symbols",
+                           "entry_date", "entry_status", "horizons"],
+              "properties": {
+                "construction_id": {"enum": ["cash_flow_to_circ_mv", "sales_to_circ_mv", "value_yield_composite_cf_sales"]},
+                "promotion_role": {"enum": ["diagnostic_supporting_only", "primary_promotion_construction"]},
+                "basket_size": {"type": "integer", "minimum": 0, "description": "选中篮子股数(top 20%,≥10;< 10 → 该月该构造跳过,basket_size=0)。"},
+                "selected_symbols": {"type": "array", "items": {"type": "string"}, "uniqueItems": true, "description": "篮子成分(等权;provenance + backfill);唯一,数 == basket_size(跨字段由 validator 焊)。"},
+                "entry_date": {"type": ["string", "null"], "description": "as_of 后第一个交易日收盘(建仓基准);算不出→null。"},
+                "entry_status": {"type": "string", "description": "ok / pending_capture / insufficient_basket / missing_entry_close 等。"},
+                "horizons": {
+                  "type": "object",
+                  "required": ["504"],
+                  "propertyNames": {"enum": ["21", "63", "126", "252", "504"]},
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["status", "relative_excess_net", "exit_date", "exit_policy"],
+                    "properties": {
+                      "status": {"enum": ["pending", "matured", "terminal_delist", "missing_exit_close", "missing_entry_close", "insufficient_basket"]},
+                      "relative_excess_net": {"type": ["number", "null"], "description": "篮子总收益(adj,扣 round-trip 0.0026)− 基准总收益;pending/缺数→null。"},
+                      "exit_date": {"type": ["string", "null"]},
+                      "exit_policy": {"type": ["string", "null"]}
+                    },
+                    "allOf": [{"if": {"properties": {"status": {"const": "matured"}}},
+                               "then": {"properties": {"relative_excess_net": {"type": "number"},
+                                                       "exit_date": {"type": "string"}, "exit_policy": {"type": "string"}}}}]
+                  },
+                  "description": "键 ∈ 21/63/126/252/504(propertyNames 焊)。**决策(显式):主 horizon `504` 每 construction 必含**(required 焊,gate 判据);**interim 21/63/126/252 可选**(诊断早读,随各自成熟回填,缺=尚未到期/未回填,非违规)。matured ⟹ relative_excess_net 为数值 + exit_date/policy 非空(if/then 焊)。"
+                }
+              },
+              "allOf": [
+                {"if": {"properties": {"construction_id": {"const": "value_yield_composite_cf_sales"}}},
+                 "then": {"properties": {"promotion_role": {"const": "primary_promotion_construction"}}}},
+                {"if": {"properties": {"construction_id": {"enum": ["cash_flow_to_circ_mv", "sales_to_circ_mv"]}}},
+                 "then": {"properties": {"promotion_role": {"const": "diagnostic_supporting_only"}}}}
+              ]
+            }
+          }
+        }
+      }
+    },
+    "construction_metrics": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "description": "每构造跨已成熟 monthly cohorts 的聚合(主判据 = 504d primary horizon vs CSI300)。恰好 3 行(每冻结构造一行;身份唯一/全覆盖由 validator 焊)。",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["construction_id", "promotion_role", "matured_cohort_count", "mean_relative_excess",
+                     "hac_t", "hac_p", "rolling_relative_nav_max_drawdown", "persistence_positive"],
+        "properties": {
+          "construction_id": {"enum": ["cash_flow_to_circ_mv", "sales_to_circ_mv", "value_yield_composite_cf_sales"]},
+          "promotion_role": {"enum": ["diagnostic_supporting_only", "primary_promotion_construction"]},
+          "matured_cohort_count": {"type": "integer", "minimum": 0, "description": "504d 已成熟的 monthly cohort 数。"},
+          "mean_relative_excess": {"type": ["number", "null"]},
+          "hac_t": {"type": ["number", "null"], "description": "Newey-West HAC t(月度 overlapping cohorts);< 阈值不构成 alpha 证明。"},
+          "hac_p": {"type": ["number", "null"]},
+          "rolling_relative_nav_max_drawdown": {"type": ["number", "null"], "description": "滚动相对净值最大回撤(负);tradeable 门 = ≥ -0.15。"},
+          "persistence_positive": {"type": ["boolean", "null"], "description": "OOS 均超额是否持续为正(matured + interim 方向一致)。"}
+        },
+        "allOf": [
+          {"if": {"properties": {"construction_id": {"const": "value_yield_composite_cf_sales"}}},
+           "then": {"properties": {"promotion_role": {"const": "primary_promotion_construction"}}}},
+          {"if": {"properties": {"construction_id": {"enum": ["cash_flow_to_circ_mv", "sales_to_circ_mv"]}}},
+           "then": {"properties": {"promotion_role": {"const": "diagnostic_supporting_only"}}}}
+        ]
+      }
+    },
+    "paper_read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_construction_id", "matured_cohort_count", "min_cohorts_required",
+                   "read_available", "tradeable_drawdown_floor", "routing", "decision_is_advisory_not_authorization"],
+      "properties": {
+        "primary_construction_id": {"const": "value_yield_composite_cf_sales", "description": "唯一可升级构造;2 单因子仅诊断,不得 best-of-three。"},
+        "matured_cohort_count": {"type": "integer", "minimum": 0},
+        "min_cohorts_required": {"const": 12},
+        "read_available": {"type": "boolean", "description": "matured_cohort_count ≥ 12 才 true(否则 insufficient,不评)。"},
+        "tradeable_drawdown_floor": {"const": -0.15},
+        "meets_persistence": {"type": ["boolean", "null"]},
+        "meets_drawdown": {"type": ["boolean", "null"]},
+        "routing": {"enum": ["insufficient_cohorts", "promote_eligible_pending_new_reviewed_real_money_prereg",
+                              "stay_research_only_or_drop"],
+                    "description": "据 primary 构造的 OOS 持续性 + 回撤算出;promote_eligible **不授权真钱**,仅意味着可提一份新 reviewed real-money prereg。"},
+        "decision_is_advisory_not_authorization": {"const": true}
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_is_ship_gate_evidence", "alpha_validated", "tradeable_candidate_confirmed",
+                   "real_money_authorized", "production_ready", "full_size_allowed"],
+      "properties": {
+        "paper_is_ship_gate_evidence": {"const": false},
+        "alpha_validated": {"const": false},
+        "tradeable_candidate_confirmed": {"const": false},
+        "real_money_authorized": {"const": false},
+        "production_ready": {"const": false},
+        "full_size_allowed": {"const": false}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "real_money", "is_validated_alpha", "satisfies_ship_gate"],
+      "properties": {
+        "production": {"const": false},
+        "real_money": {"const": false},
+        "is_validated_alpha": {"const": false},
+        "satisfies_ship_gate": {"const": false}
+      }
+    }
+  }
+}
