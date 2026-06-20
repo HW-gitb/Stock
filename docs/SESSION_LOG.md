@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 weekly_report output contract re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` closed and no new material Required in this offline weekly_report output-contract slice.
+- **Required**: None new. `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/risk/design anchors; targeted weekly-report/doc/route 60 OK; full discover 2940 OK; independent mutation probe rejects same-count section rename/reorder, lifecycle-rule drift, banner-tag drift, and price_clock-field drift; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for field_registry/remaining governance/provider/DataHub/live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED)
+- **Verdict/Action**: 判定成立、接受(schema 只钉结构、靠测试守中文内容,留了 3 个 schema 自身接受的 same-shape drift 洞;「避免硬编码中文」over-cautious——Write UTF-8 没问题 + 三角测试兜转写。同 scoring-profile underpinned 一课:契约 schema 必须 const-pin 治理身份)。**全类修**(审计每属性、非只 3 个被点名):① `sections` schema 内 const 钉死(13 确切中文串)+ 三角测试 schema==preset==design;② banner `tag` 逐元素 const;③ lifecycle 规则 free string→const 对象(section 1==12 须一致)。完整见 register。
+- **Required**: `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` — 完整 judgment / 全类修 / closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: weekly_report 契约测 19→**24 OK**(+三角测试 + lifecycle 结构化 + banner tag 正向 + 4 新负向:节 rename/reorder、tag 漂移、lifecycle weaken/section-number 漂移);独立 probe 确认 schema 现拒 Codex 全部 3 个 same-shape drift;full discover **2940 OK**(零回归,+5 净);BOM=0;diff-check CLEAN。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩 field_registry(§10,留最后)/ 其余治理。
+- **Pre-Codex self-review**: A-F。**A(整类非实例)**:不止补 3 个被点名洞——审计 schema 每属性,确认仅这 3 个是「治理身份却没 const」;`status`/`ref`/`notes` 留 typed 因合法可变/描述项(同已 PASS 的 action_table),非漏。B:无既有消费者;README 行 + schema 两处过时 description + preset notes 同步改。C:反向控——4 新负向测(FN)+ real preset 仍过 + 三角 schema==preset==design(FP/漏/转写)+ 独立 probe 验真。E:register 单态。F:BOM=0/diff CLEAN。Tests passing ≠ design closure(批1 未完;渲染=batch-3;provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 weekly_report output contract full review)
+- **Verdict/Action**: FAIL. Current weekly_report preset matches design and tests pass, but the schema accepts same-shape drift in report sections / lifecycle consistency / banner tags.
+- **Required**: `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/risk/design anchors; targeted weekly-report/doc/route 55 OK; full discover 2935 OK; mutation probe accepts same-count section rename/reorder, lifecycle-rule drift, and banner-tag drift; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit or start renderer/field_registry/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude (US-short 批1 weekly_report 输出契约 起草)
+
+**Worked on**: 自决批1 下一刀 = §11.2 `weekly_report.md` 节契约(与已冻的 §11.3 action_table 契约配对、共同冻死 §11 输出面;batch-3 renderer 消费;field_registry 落点校验的前置)。新 3 文件:`schemas/us_short_weekly_report_contract.schema.json` + `presets/us_short_weekly_report_contract_20260620.json` + `tests/schema/test_us_short_weekly_report_contract_schema.py`。
+
+**Key decisions / boundary**: 冻 **13 个有序节**(§11.2)+ **必显诚实横幅 5 元素 ①-⑤**(④ `price_clock` const `always_shown=true` 必显 + 4 const 字段 `price_data_through/news_window_through/session_scope/decision_date`,杜绝隐藏用了哪天的价)+ lifecycle 计数一致性规则(第1节==第12节)。**节标题是 Chinese → 为杜绝手抄转写错,preset 用 Python 从设计字节级生成,schema 只 const-pin 结构(恰 13 个 string 节),确切 Chinese 内容+顺序由测试对 §11.2 单源反查守护(schema/test 零硬编码 Chinese)**;ASCII 事实(price_clock 字段/always_shown、banner ids/count/always_shown)在 schema const 钉死。banner `tag` 留 typed 不 const(避免 prose token 抬杠,§D)。**纯声明输出面契约:不渲染 / 不抓数 / 不交叉 A 股**。
+
+**Verify**: weekly_report 契约测 **19 OK**(schema 合法 + preset 校验 + 13 节计数/唯一/**逐字节忠于 §11.2** + price_clock always_shown+4 字段 + 字段对设计反查 + banner 5 元素 ids 有序 + 仅 ④ always_shown + lifecycle 规则 + 与 action_table 契约配对 + 9 负向 schema 测:丢/加节、price_clock 漂移/非必显、banner 计数/④非必显/id 漂移/多元素、未知顶层键);full discover **2935 OK**(零回归,+19);BOM=0;diff-check CLEAN。未跑 provider。
+
+**Next**: Codex `审查` 本 weekly_report 契约 slice;PASS 后用户 `提交`(push 须明确命令)。批1 剩:field_registry(§10,消费全部输出面+治理,留最后)/ 其余 §13.1 结构治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F。**A(可枚举集→全员)**:§11.2 design-locked 集 = 13 节 + 5 banner 元素 + price_clock 4 字段,全冻;grep §11.2 区无遗漏 `∈{}`/`（v/v）` 字段 vocab(其余如 portfolio_guard_status/observe_reason_type 是对他处已定契约的引用、非新 vocab)。B:全仓 grep `weekly_report_contract` = 0 既有消费者/重复;加 README 路由行;无符号重命名。C:反向控——9 负向 schema 测(FN)+ real preset 仍过 + 节内容/price_clock 字段对设计反查(FP/漏/臆造);reorder 由设计反查测捕(schema 只钉数,故内容守护落测试——已在 notes.schema_vs_test_split 说明)。E:README durable 指针。F:BOM=0(含 Python 生成的 preset 实测)/diff CLEAN/JSON 合法。Tests passing ≠ design closure(批1 未完:field_registry + 其余治理待续;banner 横幅渲染/lifecycle 计数实算 = batch-3;provider/live gated)。
+
 ## 2026-06-20 — Codex `全量审查 PASS`(US-short batch 1 action_table output contract re-review)
 - **Verdict/Action**: PASS. Full current-tree review found `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` closed and no new material Required in this offline action_table output-contract slice.
 - **Required**: None new. `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` remains resolved in `docs/system_risk_register.md`.

@@ -1,0 +1,68 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_weekly_report_contract",
+  "title": "US-short weekly_report.md output contract (design §11.2) — const-pins the section set/order + mandatory honest-banner + price_clock fields",
+  "description": "Batch-1 declarative shared contract for the human-readable weekly report. Pairs with us_short_action_table_contract (§11.3) to freeze the §11 output surface so the batch-3 renderer cannot drop/reorder/rename a section, drift a banner tag, weaken the lifecycle-count invariant, or omit a mandatory banner element. ALL governed identity is const-pinned here (the 13 sections incl. exact Chinese content+order, the 5 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant) — the schema is a self-sufficient validator, not shape-only. A test triangulates the sections const == preset == design §11.2 so the byte-exact Chinese never silently diverges. No report rendered, no data fetched.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "sections", "price_clock", "mandatory_banner", "lifecycle_reminder_count_consistency", "notes"],
+  "properties": {
+    "schema_name": {"const": "us_short_weekly_report_contract"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "sections": {
+      "description": "§11.2 the 13 ordered weekly_report.md sections — const-pinned (exact content AND order). Byte-faithful to design §11.2; a test triangulates this const == preset == design extraction so the three never silently diverge.",
+      "const": ["本周运行状态", "账户风控状态(`portfolio_guard_status`)", "市场环境(两轴：`market_risk_regime` + `theme_opportunity_state`)", "本周核心结论", "最终操作表(精简一眼表)", "当前持仓复核", "Top15 选股", "Top6-15 观察池", "本周剔除摘要(exclusion_summary)", "风险与降级", "数据源健康摘要", "字段·模块生命周期提醒", "本周不 clean 项"]
+    },
+    "price_clock": {
+      "description": "§11.2 ④ price clock — 必显 (always_shown) + the 4 design-locked fields, so a render cannot omit the 'which prices/dates were used' disclosure.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["always_shown", "fields"],
+      "properties": {
+        "always_shown": {"const": true},
+        "fields": {"const": ["price_data_through", "news_window_through", "session_scope", "decision_date"]}
+      }
+    },
+    "mandatory_banner": {
+      "description": "§11.2 top honest banner — exactly 5 mandatory elements ①-⑤; id + tag + always_shown const-pinned per element (④ price_clock is always shown, the rest are conditional). ref stays descriptive (typed) — it carries the prose design anchor, not governed identity.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "elements"],
+      "properties": {
+        "count": {"const": 5},
+        "elements": {
+          "type": "array",
+          "minItems": 5,
+          "maxItems": 5,
+          "items": [
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "①"}, "tag": {"const": "true_false_observe_split"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "②"}, "tag": {"const": "macro_cluster_warning"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "③"}, "tag": {"const": "ship_gate_progress"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "④"}, "tag": {"const": "price_clock"}, "always_shown": {"const": true}, "ref": {"type": "string"}}},
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "⑤"}, "tag": {"const": "hot_excluded_notice"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
+          ]
+        }
+      }
+    },
+    "lifecycle_reminder_count_consistency": {
+      "description": "§11.2 design invariant — the lifecycle-reminder count in section 1 (本周运行状态) MUST equal the count in section 12 (字段·模块生命周期提醒). Pinned structurally (not prose) so the rule itself can't drift; the render-time count check is the batch-3 renderer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "section_number_a", "section_number_b", "must_match"],
+      "properties": {
+        "rule": {"const": "lifecycle_reminder_count_must_match_across_sections"},
+        "section_number_a": {"const": 1},
+        "section_number_b": {"const": 12},
+        "must_match": {"const": true}
+      }
+    },
+    "notes": {"type": "object"}
+  }
+}

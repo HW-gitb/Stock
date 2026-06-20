@@ -1,0 +1,78 @@
+{
+  "schema_name": "us_short_weekly_report_contract",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "initial_v1_frozen_sections_pending_forward_calibration",
+  "sections": [
+    "本周运行状态",
+    "账户风控状态(`portfolio_guard_status`)",
+    "市场环境(两轴：`market_risk_regime` + `theme_opportunity_state`)",
+    "本周核心结论",
+    "最终操作表(精简一眼表)",
+    "当前持仓复核",
+    "Top15 选股",
+    "Top6-15 观察池",
+    "本周剔除摘要(exclusion_summary)",
+    "风险与降级",
+    "数据源健康摘要",
+    "字段·模块生命周期提醒",
+    "本周不 clean 项"
+  ],
+  "price_clock": {
+    "always_shown": true,
+    "fields": [
+      "price_data_through",
+      "news_window_through",
+      "session_scope",
+      "decision_date"
+    ]
+  },
+  "mandatory_banner": {
+    "count": 5,
+    "elements": [
+      {
+        "id": "①",
+        "tag": "true_false_observe_split",
+        "always_shown": false,
+        "ref": "aggregate observe_reason_type into real-vs-fake observe split (no-account/no-cash = sizing artifact, not disfavor)"
+      },
+      {
+        "id": "②",
+        "tag": "macro_cluster_warning",
+        "always_shown": false,
+        "ref": "sec.8 N builds share cluster X, Y% total exposure"
+      },
+      {
+        "id": "③",
+        "tag": "ship_gate_progress",
+        "always_shown": false,
+        "ref": "ship-gate progress + matured lifecycle-item count reconciliation"
+      },
+      {
+        "id": "④",
+        "tag": "price_clock",
+        "always_shown": true,
+        "ref": "price clock 必显 (always shown): price_data_through/news_window_through/session_scope/decision_date"
+      },
+      {
+        "id": "⑤",
+        "tag": "hot_excluded_notice",
+        "always_shown": false,
+        "ref": "sec.11.4 N high-theme-heat names excluded (safety/liquidity/data), see hot_excluded"
+      }
+    ]
+  },
+  "lifecycle_reminder_count_consistency": {
+    "rule": "lifecycle_reminder_count_must_match_across_sections",
+    "section_number_a": 1,
+    "section_number_b": 12,
+    "must_match": true
+  },
+  "notes": {
+    "scope": "declarative output-surface contract — freezes sec.11.2 weekly_report.md section set/order + mandatory honest-banner (sec.11.2 elements 1-5) + price_clock fields. Renders no report, fetches no data, no A-share crossing. Rendering = batch-3 (consumes this); pairs with us_short_action_table_contract (sec.11.3) to complete the sec.11 output surface.",
+    "sections_source": "13 section titles stored byte-faithful from sec.11.2 (generated from the design, single-source-guarded by test); parenthetical/backtick annotations indicate the field(s) each section surfaces.",
+    "governed_identity_all_const": "the schema const-pins ALL governed identity (the 13 sections incl. exact Chinese content+order, the 5 banner ids+tags+always_shown, price_clock fields+always_shown, the lifecycle-count invariant rule/section_number_a=1/section_number_b=12/must_match). The schema is a self-sufficient validator (not shape-only); a test triangulates sections const == preset == design sec.11.2 so the byte-exact Chinese never silently diverges.",
+    "lifecycle_rule_prose": "sec.11.2 invariant — the lifecycle-reminder count in section 1 (本周运行状态) must equal the count in section 12 (字段·模块生命周期提醒); the render-time count check is the batch-3 renderer, this contract pins the rule structurally.",
+    "price_clock_values": "v1 design-locked semantics — price_data_through=last Fri close / news_window_through=pre-Mon-run (incl weekend) / session_scope=RTH / decision_date=Mon."
+  }
+}
