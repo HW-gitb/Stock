@@ -11,7 +11,8 @@
 1. 先写下**完整矩阵**:`缺陷类 × 所有出口`。出口至少含:per-row → per-candidate → **聚合/batch** → validator → schema → render/panel → 下游消费者。
 2. **每个 cell 一次覆盖、一条测试**。不要只覆盖被点名的那个输入/那个出口。
 3. 问自己:"被点名的 finding 属于哪个**一般类**?这个类还会从哪些输入/出口冒出来?"
-- 反例(本项目真实):PIT 在 future 出口修了,漏了 bad-shape/unparseable/status;feasibility 在 per-candidate 修了,漏了 batch。
+4. **可枚举命名集 → 全员一次覆盖**(本会话反复栽在此处):若 finding 点名的是**某个可枚举集合里的一/几个成员**(4 档 profile 里的 2 档、9 个 enum 值里的 1 个、K 个字段里的 1 个、N 个出口里的 1 个),**先列全该集合的所有成员**,对**每一个**施加并验证同一修复——`const-pin` / 严格化 / 拒未知 / 改 enum / 加不变式 这类**结构性**修复尤其要**全员一次到位**,别只动被点名的成员。**Proof-of-use 的 A 行必须写出枚举的完整集合 + 确认全覆盖**(如「profile 4 档全 const」「§9 动作 9 值全钉」),**不许只写「A checked」糊弄**——让"修没修整类"对用户/Codex 可检。
+- 反例(本项目真实):PIT 在 future 出口修了,漏了 bad-shape/unparseable/status;feasibility 在 per-candidate 修了,漏了 batch;**(本会话)scoring-profile `const-pin` 钉了 4 档里的 balanced+theme_off 两档就交,漏了 theme_plus/aggressive → Codex 同类 re-FAIL**。
 
 ## B. 连带 grep(ripple grep,机械步,**改完必做;一次全仓 + 贴零残留证据**)
 任何**行为 / 符号名 / 机制 / 规则措辞**改动后,做**一次全仓 grep 旧形态**(`rg` 跨 `*.py` + `*.md` + 测试),逐一更新或确认,并把**零残留证据**(实际命令 + `0 hits`,排除档案/历史/无关同名)贴进 proof-of-use 行——"我 grep 了"不算,要"0 残留":

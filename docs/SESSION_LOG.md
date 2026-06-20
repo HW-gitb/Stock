@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-20 — Claude (强化 pre-Codex checklist §A:可枚举命名集→全员覆盖)
+
+**Worked on**: 用户指出我反复「只修被点名、没修整类」,问修复标准是否已规定。核实=**已规定**(`docs/pre_codex_self_review_checklist.md` §A「类不修实例」+ 收尾门 line 63 + `AGENTS.md` §Codex review standard 16「one-pass defect-class matrix」对 Codex)。非缺规则、是我没遵守。按 §B2 单一来源**不新增重复**,改而**强化 §A 这个唯一权威**:加第 4 点「可枚举命名集 → 全员一次覆盖」(集合某成员被点名 → 列全集合、每个都施加并验证同一修复;const-pin/严格化/拒未知/改 enum 尤其全员到位)+ 要求 **Proof-of-use 的 A 行写出完整枚举集**(不许只写「A checked」)+ 加本会话 scoring-profile 2-of-4 反例。
+
+**Key decisions**: 不新增重复规则(会违 §B2 单一来源 + doc-drift);改既有 §A 权威使其具体可检、堵「N-of-M 成员只修一部分」。纯过程文档、零代码改动。doc-governance guard 22 OK(checklist 单一来源 / AGENTS-item7-only-points 未破)。
+
+**Next**: scoring-profile 治理已 commit `456de74`;本 checklist 强化独立 commit。两者均 Codex re-审查 PASS(见下条 Verify「+ checklist hardening」)。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short scoring-profile governance full re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` closed and no new material Required in this offline scoring-profile governance slice.
 - **Required**: None new. `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` and `R-USSHORT-SCORING-PROFILE-GOVERNANCE-SCHEMA-UNDERPINNED` remain resolved in `docs/system_risk_register.md`.
