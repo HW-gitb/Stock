@@ -1,0 +1,42 @@
+{
+  "schema_name": "us_short_scoring_profile_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "initial_prior_pre_forward_calibration",
+  "core_score_components": ["momentum", "theme", "catalyst"],
+  "primary_profile": "balanced",
+  "profiles": {
+    "balanced": {
+      "weights": {"momentum": 0.40, "theme": 0.35, "catalyst": 0.25},
+      "role": "primary",
+      "live_eligible": true,
+      "shadow_only": false,
+      "value_source": "design_§4.2_locked_v1_default"
+    },
+    "theme_plus": {
+      "weights": {"momentum": 0.30, "theme": 0.50, "catalyst": 0.20},
+      "role": "shadow_comparison",
+      "live_eligible": false,
+      "shadow_only": true,
+      "value_source": "prior_unconfirmed_heavier_theme"
+    },
+    "theme_aggressive": {
+      "weights": {"momentum": 0.25, "theme": 0.55, "catalyst": 0.20},
+      "role": "shadow_comparison",
+      "live_eligible": false,
+      "shadow_only": true,
+      "value_source": "prior_unconfirmed_heaviest_theme"
+    },
+    "theme_off": {
+      "weights": {"momentum": 0.6154, "theme": 0.0, "catalyst": 0.3846},
+      "role": "attribution_baseline_and_rollback_anchor",
+      "live_eligible": false,
+      "shadow_only": true,
+      "value_source": "design_§4.2/§12.2_theme_weight_redistributed_proportionally_to_momentum_catalyst"
+    }
+  },
+  "min_comparison_weeks": 12,
+  "primary_weight_calibration_item_id": 1,
+  "comparison_profile_calibration_item_id": 28,
+  "reminder_threshold": "≥12 周 + 双向全口径净值(含亏损票)对比后再升硬约束 (§13.2 / §12.2)"
+}

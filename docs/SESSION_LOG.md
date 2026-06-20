@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short scoring-profile governance full re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` closed and no new material Required in this offline scoring-profile governance slice.
+- **Required**: None new. `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` and `R-USSHORT-SCORING-PROFILE-GOVERNANCE-SCHEMA-UNDERPINNED` remain resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + route docs/design anchors + checklist hardening; targeted schema/doc/route 53 OK; full discover 2869 OK; probes reject prior and shadow-weight mutations; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for remaining batch 1 schemas / provider / DataHub / live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP)
+- **Verdict/Action**: 判定成立、接受(我上轮自己的修没做彻底:const 钉了 balanced+theme_off,却把 theme_plus/aggressive 留 shape-only)。选 preferred:theme_plus/aggressive 也 const 钉死 v1 prior 权重(0.30/0.50/0.20、0.25/0.55/0.20),拆 shadowComparisonProfile→themePlus/themeAggressiveProfile、删 weightsShape。4 档权重现全 const 钉死,校准走版本升级。加 2 负向 schema 测。
+- **Required**: `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: scoring-profile schema 测 17 OK(+2 负向 shadow-weight);full discover `python -m unittest discover -s tests` **2869 OK**(零回归,+2 净);两 shadow-weight 变异现拒 + real preset 仍过;BOM/FFFD=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩 schema 顺序我自决。
+- **Pre-Codex self-review**: A-F。A:shadow 权重缺陷类一次补净(4 档全 const + 2 负向测)= 上轮 const 钉死类的剩余出口。B:schema(删 weightsShape + 拆 2 def)+ preset 不变(值已匹配)+ README/描述同步;cross-field sum/ordering 测留作 const 值 sanity。C:反向控——2 负向 schema 测(FN)+ real preset 仍校验(FP)。E:register 单态。F:diff/BOM OK。Tests passing ≠ design closure(批1 未完,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short scoring-profile governance re-review)
+- **Verdict/Action**: FAIL. The prior four schema mutations are repaired, but shadow comparison weights still accept invalid schema drift.
+- **Required**: `R-USSHORT-SCORING-PROFILE-SHADOW-WEIGHT-SCHEMA-GAP` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed scoring-profile schema/preset/tests + route docs/design anchors; targeted schema/doc/route 51 OK; full discover 2867 OK; probes reject prior 4 cases but accept bad theme_plus/theme_aggressive weights; py_compile OK; diff-check only CRLF; BOM/FFFD=0.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit this slice or start remaining batch 1/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-SCORING-PROFILE-GOVERNANCE-SCHEMA-UNDERPINNED)
+- **Verdict/Action**: 判定两点成立、接受(又是我自找:有 A 股 egs_industry_heat_governance const 钉死先例没跟)。**schema 欠钉**:profile $def 拆 3 个 per-profile,schema 内 const 钉死 balanced 40/35/25 + theme_off 0.6154/0/0.3846 + 各档 role/live/shadow + min_comparison_weeks=12 → Codex 4 变异全被 schema 拒。**calibration routing**:拆单 ID → `primary_weight…=1`(§13.1#1)+ `comparison_profile…=28`(#28)。完整逐项见 register。
+- **Required**: `R-USSHORT-SCORING-PROFILE-GOVERNANCE-SCHEMA-UNDERPINNED` — 完整 judgment/双修/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: scoring-profile schema 测 15 OK(+6:5 负向 schema 测 ValidationError + calibration routing);full discover `python -m unittest discover -s tests` **2867 OK**(零回归,+6 净);4 变异 probe 现拒;BOM/FFFD=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩 schema 顺序我自决。
+- **Pre-Codex self-review**: A-F。A:治理常量缺陷类一次覆盖(schema const 钉死 4 类 + 负向测 5)。B:preset(calibration ID 拆)+ README(routing 措辞)+ schema 同步;theme_plus/aggressive 权重 prior 留开(cross-field sum/ordering 仍 test,draft-07 表达不了)。C:反向控——5 负向 schema 测(FN 控)+ 真 preset 仍校验过(FP 控)。E:register 单态。F:diff/BOM OK;float const 0.40→0.4 相等已核。Tests passing ≠ design closure(批1 未完,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 scoring-profile governance full review)
+- **Verdict/Action**: FAIL. Current preset values align with the design, but the schema does not reject critical scoring-profile governance drift.
+- **Required**: `R-USSHORT-SCORING-PROFILE-GOVERNANCE-SCHEMA-UNDERPINNED` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/design anchors; targeted schema/doc/route 45 OK; full discover 2861 OK; mutation probe proves schema accepts 4 bad cases; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit this slice or start remaining batch 1 schemas / provider / DataHub / live work yet.
+
+## 2026-06-20 — Claude (US-short 批1 scoring-profile 治理 起草)
+
+**Worked on**: 用户固化「执行顺序你自行决定、别问」(memory `decide-execution-order-autonomously`)→ 我自决下一刀 = §4.2 打分档治理(core_score 选股核心的基础声明式配置)。新 3 文件:schema + preset + test。
+
+**Key decisions / boundary**: scoring_profile 单一来源——balanced 40/35/25 = **唯一 primary / live-eligible model_paper 主轨**;theme_plus(30/50/20)/theme_aggressive(25/55/20)= shadow 比较档(prior、未确认权重占位);theme_off(theme 0、按比例重分配给动量+催化 0.6154/0/0.3846)= 归因基准 + 回滚锚(design-derived)。**全 shadow 档永不计 ship-gate**(§12.2 隔离)。v1 权重 = initial prior(美股 active-only 证不了 alpha)→ forward+lifecycle 校准(§13 #28)。**纯声明式 config:不选股 / 不抓数 / 不接券商 / 非生产 / 不交叉 A 股**。
+
+**Verify**: scoring-profile 测 9 OK(schema 合法 + preset 校验 + 权重和=1 + balanced 唯一 primary/live + theme_off=0 + theme 递增 + 2 planted-failure 漂移控);full discover **2861 OK**(零回归,+9);BOM/FFFD=0(中文 UTF-8);diff-check 仅 CRLF。
+
+**Next**: Codex `审查` 本治理 slice;PASS 后用户 `提交`(push 须明确命令)。批1 剩:其余 §13.1 治理 / theme_lifecycle / 输出契约 / field_registry(顺序我自决)。
+
+**Pre-Codex self-review**: A-F。A:profile 不变式一次覆盖(权重和 / primary 唯一 / shadow 隔离 / theme_off=0 / theme 递增)。B:无既有消费者(engine 批2);README 加路由行;preset 命名 `presets/*_governance_<date>.json` 沿 A 股惯例。C:反向控——2 planted-failure(shadow 翻 live / 权重和漂移可检)+ 正控(真 preset 校验过)。D:n/a。E:README durable 指针。F:diff/BOM OK;weights JSON 0.40→0.4 float 相等已核。**Tests passing ≠ design closure**:批1 未完、provider/live gated;theme_plus/aggressive 权重是 prior 占位、待 forward 校准。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 slice 1b full re-review)
 - **Verdict/Action**: PASS. Full current-tree review found `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` closed and no new material Required in the reviewed US-short batch 1 slice 1b boundary.
 - **Required**: None new. `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` remains resolved in `docs/system_risk_register.md`.

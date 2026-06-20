@@ -1,0 +1,87 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_scoring_profile_governance",
+  "description": "US-short core_score scoring-profile governance (design §4.2 / §12.2). Single source for the named weight profiles and their roles. `balanced` (40/35/25) is the ONLY primary / live-eligible model_paper main track; `theme_plus` / `theme_aggressive` / `theme_off` are shadow-comparison only and NEVER count toward the ship gate. `theme_off` is the attribution / rollback baseline (theme weight 0, redistributed proportionally to momentum+catalyst). The schema CONST-PINS the governed constants (every profile's weights, role, and live/shadow flags, `min_comparison_weeks`, and the calibration-item routing) so a future consumer that trusts schema validation rejects governance drift. `theme_plus` / `theme_aggressive` weights are initial priors FROZEN for v1 (const-pinned, mirroring the local `egs_industry_heat_governance` precedent); a reviewed §13.1 #28 forward calibration changes the schema + preset together with a version bump, config-not-code. The governance tests additionally verify the frozen weights satisfy sum-to-one and the ordering balanced.theme < theme_plus.theme < theme_aggressive.theme. US active-only backtests cannot prove alpha, so these are priors, not validated optima. Declarative governance: selects no stock, fetches no data, authorizes no live trading.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "core_score_components",
+               "profiles", "primary_profile", "min_comparison_weeks",
+               "primary_weight_calibration_item_id", "comparison_profile_calibration_item_id",
+               "reminder_threshold"],
+  "properties": {
+    "schema_name": {"const": "us_short_scoring_profile_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"const": "initial_prior_pre_forward_calibration"},
+    "core_score_components": {
+      "type": "array", "items": {"enum": ["momentum", "theme", "catalyst"]},
+      "minItems": 3, "maxItems": 3, "uniqueItems": true
+    },
+    "primary_profile": {"const": "balanced"},
+    "profiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced", "theme_plus", "theme_aggressive", "theme_off"],
+      "properties": {
+        "balanced": {"$ref": "#/$defs/primaryProfile"},
+        "theme_plus": {"$ref": "#/$defs/themePlusProfile"},
+        "theme_aggressive": {"$ref": "#/$defs/themeAggressiveProfile"},
+        "theme_off": {"$ref": "#/$defs/themeOffProfile"}
+      }
+    },
+    "min_comparison_weeks": {"const": 12},
+    "primary_weight_calibration_item_id": {"const": 1},
+    "comparison_profile_calibration_item_id": {"const": 28},
+    "reminder_threshold": {"type": "string", "minLength": 1}
+  },
+  "$defs": {
+    "primaryProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weights", "role", "live_eligible", "shadow_only", "value_source"],
+      "properties": {
+        "weights": {"const": {"momentum": 0.40, "theme": 0.35, "catalyst": 0.25}},
+        "role": {"const": "primary"},
+        "live_eligible": {"const": true},
+        "shadow_only": {"const": false},
+        "value_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "themePlusProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weights", "role", "live_eligible", "shadow_only", "value_source"],
+      "properties": {
+        "weights": {"const": {"momentum": 0.30, "theme": 0.50, "catalyst": 0.20}},
+        "role": {"const": "shadow_comparison"},
+        "live_eligible": {"const": false},
+        "shadow_only": {"const": true},
+        "value_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "themeAggressiveProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weights", "role", "live_eligible", "shadow_only", "value_source"],
+      "properties": {
+        "weights": {"const": {"momentum": 0.25, "theme": 0.55, "catalyst": 0.20}},
+        "role": {"const": "shadow_comparison"},
+        "live_eligible": {"const": false},
+        "shadow_only": {"const": true},
+        "value_source": {"type": "string", "minLength": 1}
+      }
+    },
+    "themeOffProfile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["weights", "role", "live_eligible", "shadow_only", "value_source"],
+      "properties": {
+        "weights": {"const": {"momentum": 0.6154, "theme": 0.0, "catalyst": 0.3846}},
+        "role": {"const": "attribution_baseline_and_rollback_anchor"},
+        "live_eligible": {"const": false},
+        "shadow_only": {"const": true},
+        "value_source": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}
