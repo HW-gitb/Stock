@@ -391,6 +391,17 @@ class DocGovernanceGuard(unittest.TestCase):
     MAX_BULLET_LEN = 500          # real entries top out ~260; >500 means crammed copied detail
     ADOPTION_MARKER = "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER"
     _BULLET = re.compile(r"-\s+\*\*(.+?)\*\*\s*[:：]")
+    # Draft-class (起草/强化) handoff proof gate (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP):
+    # checklist line 62 requires a `Pre-Codex self-review` line on every 起草/修复 handoff. 修复 entries
+    # are caught by the review-cycle minimal template (missing-proof-of-use); this closes the 起草/强化
+    # gap where a non-review-cycle header skipped proof enforcement. Marker-gated like the review-cycle
+    # one: entries above DRAFT_PROOF_MARKER are post-adoption (enforced); below = grandfathered history.
+    DRAFT_HEADER_KEYS = ("起草", "强化")
+    DRAFT_PROOF_MARKER = "DRAFT-HANDOFF-PROOF-MARKER"
+    # require an ACTUAL labeled proof line (optional list marker, half/full-width colon), NOT a prose
+    # mention of the token (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE — the same prose-vs-
+    # labeled-line class as the original bug, this time in the guard itself).
+    _PROOF_LINE = re.compile(r"(?m)^\s*(?:-\s+)?\*\*(?:Pre-Codex self-review|Proof-of-use)\*\*\s*[:：]")
 
     @classmethod
     def _review_cycle_offenders(cls, zone_text):
@@ -435,6 +446,24 @@ class DocGovernanceGuard(unittest.TestCase):
                 offenders.append(("missing-proof-of-use", tag))
             if "register" not in block:
                 offenders.append(("no-register-pointer", tag))
+        return offenders
+
+    @classmethod
+    def _draft_handoff_proof_offenders(cls, zone_text):
+        # Checklist line 62: every 起草/修复 handoff SESSION_LOG entry must carry a `Pre-Codex
+        # self-review` line. 修复 is enforced by _review_cycle_offenders (missing-proof-of-use); this
+        # closes the 起草/强化 (draft-class, non-review-cycle header) gap that let a session-style
+        # handoff omit the line. A Claude entry whose header names draft work must carry the proof line.
+        offenders = []
+        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) — ", zone_text)
+        for i in range(1, len(parts), 2):
+            block = parts[i + 1]
+            lines = block.splitlines()
+            header = lines[0] if lines else ""
+            if "Claude" not in header or not any(k in header for k in cls.DRAFT_HEADER_KEYS):
+                continue
+            if not cls._PROOF_LINE.search(block):    # actual labeled line, not a prose token mention
+                offenders.append(("missing-pre-codex-self-review", header[:50]))
         return offenders
 
     def test_review_cycle_minimal_template_enforced_above_marker(self):
@@ -499,6 +528,46 @@ class DocGovernanceGuard(unittest.TestCase):
                      "- **Pre-Codex self-review**: A-F checked — evidence\n- **Next**: 审查\n")
         self.assertEqual(self._review_cycle_offenders(compliant), [],
                          "guard false-positives a compliant minimal entry")
+
+    def test_draft_handoff_proof_enforced_above_marker(self):
+        # R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP: a 起草/强化 handoff that omits the required
+        # `Pre-Codex self-review` line must fail automatically (the rule can no longer rely on memory).
+        # MARKER-gated: entries above DRAFT_PROOF_MARKER are enforced; below = grandfathered history.
+        log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
+        self.assertIn(self.DRAFT_PROOF_MARKER, log,
+                      "SESSION_LOG lost the draft-handoff proof adoption marker")
+        zone = log.split(self.DRAFT_PROOF_MARKER, 1)[0]
+        offenders = self._draft_handoff_proof_offenders(zone)
+        self.assertEqual(offenders, [],
+                         f"draft-class (起草/强化) handoff entries missing the Pre-Codex self-review line: {offenders}")
+
+    def test_draft_handoff_proof_guard_planted(self):
+        # planted-failure + false-positive controls (so the guard and its proof can't drift apart).
+        missing = ("## 2026-06-20 — Claude (US-short 批X foo 起草)\n"
+                   "**Worked on**: did a thing\n**Next**: Codex `审查`\n")
+        present = ("## 2026-06-20 — Claude (US-short 批X foo 起草)\n"
+                   "**Worked on**: did a thing\n**Next**: Codex `审查`\n"
+                   "**Pre-Codex self-review**: A-F checked — evidence\n")
+        harden_missing = ("## 2026-06-20 — Claude (强化 some checklist 规则)\n"
+                          "**Worked on**: hardened a rule\n**Next**: Codex `审查`\n")
+        prose_token_no_label = ("## 2026-06-20 — Claude (US-short 批X foo 起草)\n"
+                                "**Worked on**: discussed Proof-of-use / Pre-Codex self-review wording, left no labeled line\n"
+                                "**Next**: Codex `审查`\n")  # token in prose only → must still be flagged
+        not_draft = ("## 2026-06-20 — Claude `执行` (run something)\n"
+                     "**Worked on**: ran it\n**Next**: 提交\n")     # 执行 ≠ 起草/强化 → not required
+        codex_entry = ("## 2026-06-20 — Codex `审查` PASS (R-X)\n- **Verdict/Action**: PASS\n")
+        self.assertTrue(self._draft_handoff_proof_offenders(missing),
+                        "guard must flag a 起草 handoff missing the Pre-Codex line")
+        self.assertTrue(self._draft_handoff_proof_offenders(harden_missing),
+                        "guard must flag a 强化 handoff missing the Pre-Codex line")
+        self.assertTrue(self._draft_handoff_proof_offenders(prose_token_no_label),
+                        "guard must flag a draft handoff that only MENTIONS the token in prose (no labeled line)")
+        self.assertEqual(self._draft_handoff_proof_offenders(present), [],
+                         "guard must not flag a 起草 handoff that has the line")
+        self.assertEqual(self._draft_handoff_proof_offenders(not_draft), [],
+                         "guard must not flag a non-draft (执行) entry")
+        self.assertEqual(self._draft_handoff_proof_offenders(codex_entry), [],
+                         "guard must not flag a Codex review entry")
 
     PRE_CODEX_CHECKLIST = ROOT / "docs" / "pre_codex_self_review_checklist.md"
     # Pre-Codex gate single-source contract (2026-06-13 refactor): the checklist is the SOLE rule

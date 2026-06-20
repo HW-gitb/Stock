@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(draft-handoff proof guard re-review)
+- **Verdict/Action**: PASS. Full current-tree review found `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` closed and no new material Required in this docs/test-only proof-guard slice.
+- **Required**: None new. `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` and `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` remain resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed guard/log/register/checklist; independent probes flag prose-only and bold-prose token handoffs, pass real labeled lines, and flag the original strengthening handoff without proof; doc-governance/route 38 OK; full discover 2942 OK; diff-check only CRLF; BOM/FFFD=0; no provider/business/live path.
+- **Next**: User may command `提交` for this docs/test guard slice; separate explicit command required for any business work.
+
+## 2026-06-20 — Claude `修复` (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE)
+- **Verdict/Action**: 判定两点成立、接受。① **proof-label false negative**(讽刺:正是我原 bug 的同类 prose-vs-labeled-line、这次在 guard 里):裸子串 `any(p in block for p in PROOF_LABELS)` 换成 line-level 正则 `_PROOF_LINE`(只认真正的 `**Pre-Codex self-review**:`/`**Proof-of-use**:` labeled 行,可选 list marker、半/全角冒号)+ 加 planted `prose_token_no_label`。② **register hygiene**:删与 round-2 resolved 矛盾的 stale「still FAIL / open」段落。完整见 register。
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` — 完整 judgment / 双修 / closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: doc-governance **24 OK**(planted prose-only token 现被旗标;执行/Codex/真 labeled 行不旗标);独立 probe:prose-only→判缺失、真 dash+bold proof 行→满足;full discover re-run 零回归;BOM=0;diff-check CLEAN。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(整类非实例):本 finding 是 guard 的弱检查、与原 bug 同类(prose vs labeled 行)——改成结构性 labeled-line 正则,根除该类(不再认任何裸 token)。B:guard 逻辑与 planted 共享 `_PROOF_LINE`(不漂移);register 删 stale 段落使单态;无符号重命名。C:反向控——planted 加 prose-only FN + 保留 执行/Codex/真行 FP 控;probe 双向验。D:N-A。E:register 单态(本次正是修复 dual-state)。F:doc-governance 24 OK、full re-run、BOM=0、diff CLEAN。Tests passing ≠ closure。
+
+## 2026-06-20 — Codex `审查 FAIL`(draft-handoff proof guard re-review)
+- **Verdict/Action**: FAIL. The new recurrence guard catches the original draft-class bypass, but it still accepts a draft handoff that merely mentions `Proof-of-use` in prose instead of carrying an actual proof line.
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed `tests/test_doc_governance_guard.py`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, and the checklist; adversarial probe on a Claude `起草` handoff with prose `Proof-of-use` mention, no `Pre-Codex self-review` line, and `Next: Codex 审查` returned `[]`; targeted doc-governance/route tests are 38 OK.
+- **Next**: Claude `修复` the proof-line guard false negative only, then Codex re-`审查`; do not commit or start business work.
+
+## 2026-06-20 — Claude `修复` (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP round 2 — recurrence guard)
+- **Verdict/Action**: 判定成立、接受(只补实例不加 guard = 没根治,正违我刚强化的 §B2「同类必须被守护、绝不退回靠人记」)。加 `_draft_handoff_proof_offenders` + marker-gated enforce 测 + planted 测(含 执行/Codex false-positive 控)+ SESSION_LOG 置 `DRAFT-HANDOFF-PROOF-MARKER`(在最高 committed offender 之上、grandfather append-only 历史)。**信号 scope 我按 checklist 收窄、需 Codex 评判**:keyed on header 含 起草/强化,非「所有 route-to-审查」——探针实测宽信号旗标 10 个 committed 执行/提交/session-handoff/note(checklist line 5/62 只对 起草/修复 要求该行,宽信号 over-capture)。完整见 register。
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` — 完整 judgment / round-2 guard / scope 说明 / closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution round 2)。
+- **Verify**: doc-governance 22→**24 OK**(enforce 在当前 log 通过=marker 之上 4 个 起草/强化 entry 全带行;planted 验真:起草/强化 缺行被旗标、执行/Codex/带行 不旗标);full discover **2942 OK**(零回归,+2);BOM=0;diff-check CLEAN;temp probe 已删。未跑 provider。
+- **Next**: Codex full re-`审查`(尤其评判信号 scope:起草/强化 header vs 宽 route-to-审查);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(整类非实例):本轮正是把实例修升级为**机器 guard**;探针穷举 compliant zone 找全 10 个潜在 offender、据此定 grandfather 边界与信号 scope(非拍脑袋)。B:guard 逻辑与 planted 共享单一 helper(不漂移);marker mirror 现有 review-cycle marker 风格;无符号重命名。C:反向控——planted 含 FN(起草/强化缺行)+ FP(执行/Codex/带行不旗标);enforce 在真 log 不误报。D:N-A。E:register 单态、marker「勿删勿移」注明 grandfather。F:doc-governance 24 OK、full 2942 OK、BOM=0、diff CLEAN。Tests passing ≠ closure(信号 scope 待 Codex 评判)。
+
+## 2026-06-20 — Codex `审查 FAIL`(pre-Codex checklist proof-of-use guard re-review)
+- **Verdict/Action**: FAIL. The current handoff proof line is fixed, but the required doc-governance guard extension is still missing, so the same session-style bypass can recur.
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` — still open; full detail remains in `docs/system_risk_register.md`.
+- **Verify**: reviewed `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `docs/pre_codex_self_review_checklist.md`, and `tests/test_doc_governance_guard.py`; targeted probe of `_review_cycle_offenders` on a Claude session-style handoff with `Next: Codex 审查` and no proof returned `[]`; `tests/test_doc_governance_guard.py` has no diff, and current logic only keys on headers containing review-cycle tokens.
+- **Next**: Claude `修复` the missing guard piece only, then Codex re-`审查`; do not commit or start business work.
+
+## 2026-06-20 — Claude `修复` (R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP)
+- **Verdict/Action**: 判定成立、接受(checklist line 62 Proof-of-use 硬契约要求每个 起草/修复 SESSION_LOG entry 带 `Pre-Codex self-review: A-F` 行;我的 强化 entry 把自审证据折进 **Verify**、漏了那条显式标注行——本 slice 恰是强化 Proof-of-use 纪律,自身更该合规。反讽但有效)。给 强化 entry 补显式 **Pre-Codex self-review** bullet(A-F,B/C/E 证据)。
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: doc-governance guard 22 OK(含 minimal-template + Proof-of-use guards);**全类核查**=本树未提交的自撰 handoff 仅此 强化 entry(其余 起草/修复 entry 已带该行)→ 单实例已补;diff-check CLEAN;BOM=0。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A:单实例(本树唯一未提交 handoff=强化 entry)已补、非可枚举集漏修。B:无符号/行为改动,纯 SESSION_LOG entry 补行 + register flip 同步;无下游消费者。C:N-A(无取值/分类改动)。D:N-A。E:register 单态、无 transient gate 进 CURRENT。F:doc-governance 22 OK、diff CLEAN、BOM=0。
+
+## 2026-06-20 — Codex `审查 FAIL`(pre-Codex checklist reinforcement review)
+- **Verdict/Action**: FAIL. The checklist content direction is sound, but the current Claude handoff for this checklist reinforcement omits the very Proof-of-use line the checklist requires.
+- **Required**: `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed checklist diff + SESSION_LOG top entry + AGENTS item 7 / closeout rules + README route pointer; doc-governance/route 36 OK; grep shows the new rule body lives only in checklist plus current SESSION_LOG handoff; diff-check only CRLF; BOM/FFFD=0; no business schema/runner/provider/DataHub/live path.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit or start field_registry/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude (强化 pre-Codex checklist §A:const-pin 必须落 schema、不止测试)
+
+**Worked on**: 用户授权(「行」)把连撞两次的「契约/治理 schema 欠钉」教训固化进 `docs/pre_codex_self_review_checklist.md` §A——加 point 5 + 一条反例。
+
+**Key decisions**: 按 §B2 单一来源**不新增重复规则、不写进 AGENTS**(item 7 只点名指向 checklist);改既有 §A 唯一权威。point 5 = 被治理身份(权重 / 枚举 / 列集 / 节集 / 不变式 / banner)必须 const-pin **进 schema**(自足校验器 = 矩阵里的一个出口);只在测试断言「当前 preset 对」而 schema 仍接受 same-shape drift(同形改值 / 改名 / 乱序)= 漏 schema 出口、schema-only 消费者会放行;测试留给 draft-07 表达不了的跨字段不变式 + 单源/三角守护;非 ASCII 别因怕硬编码退回只测(权威源字节生成 + 三角兜转写)。反例 = scoring-profile 权重起初 shape-only + weekly_report 节/banner-tag/lifecycle 只靠测试守,各 Codex FAIL 一轮。纯过程文档、零代码改动。
+
+**Verify**: doc-governance guard 22 OK(checklist 单源 / AGENTS-item7-only-points 未破);§B grep 无他处重复该规则(README 命中是描述 weekly_report 合约本身、非规则复述);BOM=0;diff-check CLEAN。
+
+**Next**: Codex `审查` 本 checklist 强化;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:field_registry(§10,留最后)+ 其余 §13.1 结构治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。A(类):纯过程文档,无 classifier/enum/schema 缺陷类出口;改的是 §A 规则正文(单点权威)本身、非可枚举集成员漏修。B(单源):全仓 grep 该规则无他处复述(README 命中=描述 weekly_report 合约本身、非规则);**未写进 AGENTS**(item 7 只点名指向 checklist)。C:N-A(无行为/取值/分类改动,无误报↔漏报方向)。D:N-A(无歧义 NL 分类)。E:checklist=单一权威,无 transient gate 进 CURRENT;handoff 记 SESSION_LOG。F:doc-governance 22 OK(checklist 单源 / AGENTS-item7-only-points 未破)、BOM=0、diff-check CLEAN。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 weekly_report output contract re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` closed and no new material Required in this offline weekly_report output-contract slice.
 - **Required**: None new. `R-USSHORT-WEEKLY-REPORT-SCHEMA-UNDERPINNED` remains resolved in `docs/system_risk_register.md`.
@@ -100,6 +157,8 @@
 **Next**: Codex `审查` 本治理 slice;PASS 后用户 `提交`(push 须明确命令)。批1 剩:输出契约 / field_registry / 其余 §13.1 治理(顺序我自决)。
 
 **Pre-Codex self-review**: A-F。**A(套刚强化的「可枚举集→全员覆盖」)**:可枚举集 = 5 态 × 动作字段;schema 把**全 5 态动作 + 防抖 + 状态集 + calibration-id** 全 const 钉死;负向测覆盖 mechanical_clear(decayed)/seats(cooling)/in_table(retired)/routing(decayed)/probe(confirmed)/anti_chatter/extra_state/calibration-id = **跨多态多字段、非单点**。B:无既有消费者(classifier 批2);加 README 路由行;preset 沿 governance 命名惯例。C:反向控——8 负向 schema 测(FN)+ real preset 仍过(FP)。E:README durable 指针。F:diff/BOM OK。Tests passing ≠ design closure(批1 未完,阈值数值=batch2,provider/live gated)。
+
+<!-- DRAFT-HANDOFF-PROOF-MARKER (adopted 2026-06-20, R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP): 起草/强化(draft-class)的 Claude handoff entry 一律 prepend 到本行之上,且必须带一行 `Pre-Codex self-review`(checklist line 62 Proof-of-use 契约;修复 entry 由评审循环 minimal-template guard 单独焊住)。本行之下为 adoption 前历史,grandfather。勿删勿移。 -->
 
 ## 2026-06-20 — Claude (强化 pre-Codex checklist §A:可枚举命名集→全员覆盖)
 
