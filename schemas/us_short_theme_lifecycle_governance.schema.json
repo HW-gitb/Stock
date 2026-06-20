@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_theme_lifecycle_governance",
+  "description": "US-short theme lifecycle governance (design §4.3, a §18.0 P0 gate's declarative half). Single source for the five `theme_lifecycle_state` values and the design-locked state-transition action table (how each state affects theme seats / theme_probe / new-entry routing / holdings), plus the anti-chatter rule (down fast, up slow, retired must re-confirm). The schema CONST-PINS the full action table (every state, every effect) and the anti-chatter rule so a future consumer that trusts schema validation cannot drift the lifecycle behavior; the breadth / leader_rs / persistence threshold VALUES that drive state transitions are forward-calibrated priors routed to §13.1 #30 (their numeric cutoffs live with the batch-2 classifier, not here). This is declarative governance: it runs no classifier, selects no stock, fetches no data, and NEVER mechanically clears a holding (cooling/decayed/retired tag + re-evaluate only).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "states", "transition_actions",
+               "anti_chatter", "threshold_calibration_item_id", "reminder_threshold"],
+  "properties": {
+    "schema_name": {"const": "us_short_theme_lifecycle_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"const": "initial_prior_pre_forward_calibration"},
+    "states": {"const": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
+    "transition_actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"],
+      "properties": {
+        "provisional_active": {"const": {"new_theme_probe_allowed": true, "theme_seats_multiplier": 1.0,
+          "new_entry_routing": "normal", "in_theme_table": true,
+          "holding_effects": {"action_confidence_down": false, "theme_decay_tag": false, "section9_reeval": false, "mechanical_clear": false}}},
+        "confirmed_active": {"const": {"new_theme_probe_allowed": true, "theme_seats_multiplier": 1.0,
+          "new_entry_routing": "normal", "in_theme_table": true,
+          "holding_effects": {"action_confidence_down": false, "theme_decay_tag": false, "section9_reeval": false, "mechanical_clear": false}}},
+        "cooling": {"const": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.5,
+          "new_entry_routing": "normal", "in_theme_table": true,
+          "holding_effects": {"action_confidence_down": true, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}}},
+        "decayed": {"const": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.0,
+          "new_entry_routing": "observe", "in_theme_table": true,
+          "holding_effects": {"action_confidence_down": false, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}}},
+        "retired": {"const": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.0,
+          "new_entry_routing": "blocked_from_theme", "in_theme_table": false,
+          "holding_effects": {"action_confidence_down": false, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}}}
+      }
+    },
+    "anti_chatter": {
+      "const": {
+        "downgrade": "immediate_on_first_deterioration",
+        "upgrade": "requires_consecutive_confirmation",
+        "retired_reentry": "full_provisional_re_confirmation"
+      }
+    },
+    "threshold_calibration_item_id": {"const": 30},
+    "reminder_threshold": {"type": "string", "minLength": 1}
+  }
+}

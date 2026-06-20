@@ -1,0 +1,31 @@
+{
+  "schema_name": "us_short_theme_lifecycle_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "initial_prior_pre_forward_calibration",
+  "states": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"],
+  "transition_actions": {
+    "provisional_active": {"new_theme_probe_allowed": true, "theme_seats_multiplier": 1.0,
+      "new_entry_routing": "normal", "in_theme_table": true,
+      "holding_effects": {"action_confidence_down": false, "theme_decay_tag": false, "section9_reeval": false, "mechanical_clear": false}},
+    "confirmed_active": {"new_theme_probe_allowed": true, "theme_seats_multiplier": 1.0,
+      "new_entry_routing": "normal", "in_theme_table": true,
+      "holding_effects": {"action_confidence_down": false, "theme_decay_tag": false, "section9_reeval": false, "mechanical_clear": false}},
+    "cooling": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.5,
+      "new_entry_routing": "normal", "in_theme_table": true,
+      "holding_effects": {"action_confidence_down": true, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}},
+    "decayed": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.0,
+      "new_entry_routing": "observe", "in_theme_table": true,
+      "holding_effects": {"action_confidence_down": false, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}},
+    "retired": {"new_theme_probe_allowed": false, "theme_seats_multiplier": 0.0,
+      "new_entry_routing": "blocked_from_theme", "in_theme_table": false,
+      "holding_effects": {"action_confidence_down": false, "theme_decay_tag": true, "section9_reeval": true, "mechanical_clear": false}}
+  },
+  "anti_chatter": {
+    "downgrade": "immediate_on_first_deterioration",
+    "upgrade": "requires_consecutive_confirmation",
+    "retired_reentry": "full_provisional_re_confirmation"
+  },
+  "threshold_calibration_item_id": 30,
+  "reminder_threshold": "≥12 周 + 双向全口径净值(含亏损票)对比后再升硬约束;赛道退场/衰减阈值(breadth/leader_rs 跌破线、persistence 重置)+ 状态防抖(降快升慢)= §13.1 #30,数值由 batch-2 classifier 持有"
+}

@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short theme-lifecycle governance re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` closed and no new material Required in this offline theme-lifecycle governance slice.
+- **Required**: None new. `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/risk/design anchors; targeted schema/doc/route 57 OK; full discover 2890 OK; probes reject effect-matrix drift and show cooling has confidence+decay+§9 with no mechanical clear; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for output/field_registry/remaining governance/provider/DataHub/live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP)
+- **Verdict/Action**: 判定成立、接受(单 `holding_effect` enum 把多维效应压扁:cooling 设计要同时 confidence 降 + decay 标 + §9 重评,我只给了 confidence_down,漏 decay-review 路径)。重构为结构化 `holding_effects` 对象 const 钉死/态:{action_confidence_down, theme_decay_tag, section9_reeval, mechanical_clear}。cooling=confidence/decay/reeval true、clear false;decayed/retired=decay+reeval;active 全 false。删顶层 mechanical_clear。
+- **Required**: `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` — 完整 judgment/重构/测/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: theme-lifecycle 测 21 OK(+5:退化态全 decay+reeval / 仅 cooling 降 confidence / 3 负向 cooling 丢任一被拒);full discover `python -m unittest discover -s tests` **2890 OK**(零回归,+5 净);cooling probe 现拒;BOM=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩 schema 顺序我自决。
+- **Pre-Codex self-review**: A-F。**A(刚强化的 §A 实战)**:缺陷正是「效应维度 × 态矩阵」没覆盖全——重构后 holding_effects 4 维 × 5 态全 const 钉死,正向测退化态全 decay+reeval + 仅 cooling confidence,负向测 cooling 丢 decay/reeval/confidence 任一。B:schema+preset+README+test 同步(holding_effect→holding_effects);既有测无回退。C:反向控——3 负向 schema(FN)+ real preset 仍过(FP)。E:register 单态。F:diff/BOM OK。Tests passing ≠ design closure。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 theme-lifecycle governance full review)
+- **Verdict/Action**: FAIL. Current schema/preset/tests are offline and regression-clean, but `cooling` holding effects under-spec the design-required theme-decay tag + §9 re-evaluation path.
+- **Required**: `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/risk/design anchors; targeted schema/doc/route 52 OK; full discover 2885 OK; probe shows cooling lacks theme_decay/reeval while decayed/retired have it; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit or start output/field_registry/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude (US-short 批1 theme-lifecycle 治理 起草)
+
+**Worked on**: 自决批1 下一刀 = §4.3 赛道生命周期治理(§18.0 P0 门、声明式)。新 3 文件:schema + preset + test。
+
+**Key decisions / boundary**: 5 态(provisional/confirmed/cooling/decayed/retired)+ design-locked 状态转移动作表(cooling 停 probe + 席位×0.5 + 持仓 confidence 降;decayed 无席位 + 新建仓→观察;retired 移出主题表 + 新建仓 blocked)+ 防抖(降快/升慢/retired 须重确认)。**全 5 态 mechanical_clear=false**(§4.3:打标 + §9 重评、绝不机械清仓)。schema **const 钉死整个动作表 + 防抖 + 状态集**;退场/衰减阈值数值 = §13.1 #30 forward 校准、由 batch-2 classifier 持有。**纯声明式 config:不跑 classifier / 不选股 / 不抓数 / 不接券商 / 非生产 / 不交叉 A 股**。
+
+**Verify**: theme-lifecycle 测 16 OK(schema 合法 + preset 校验 + 5 态全字段不变式 + 8 负向 schema 测);full discover **2885 OK**(零回归,+16);BOM/FFFD=0;diff-check 干净。
+
+**Next**: Codex `审查` 本治理 slice;PASS 后用户 `提交`(push 须明确命令)。批1 剩:输出契约 / field_registry / 其余 §13.1 治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F。**A(套刚强化的「可枚举集→全员覆盖」)**:可枚举集 = 5 态 × 动作字段;schema 把**全 5 态动作 + 防抖 + 状态集 + calibration-id** 全 const 钉死;负向测覆盖 mechanical_clear(decayed)/seats(cooling)/in_table(retired)/routing(decayed)/probe(confirmed)/anti_chatter/extra_state/calibration-id = **跨多态多字段、非单点**。B:无既有消费者(classifier 批2);加 README 路由行;preset 沿 governance 命名惯例。C:反向控——8 负向 schema 测(FN)+ real preset 仍过(FP)。E:README durable 指针。F:diff/BOM OK。Tests passing ≠ design closure(批1 未完,阈值数值=batch2,provider/live gated)。
+
 ## 2026-06-20 — Claude (强化 pre-Codex checklist §A:可枚举命名集→全员覆盖)
 
 **Worked on**: 用户指出我反复「只修被点名、没修整类」,问修复标准是否已规定。核实=**已规定**(`docs/pre_codex_self_review_checklist.md` §A「类不修实例」+ 收尾门 line 63 + `AGENTS.md` §Codex review standard 16「one-pass defect-class matrix」对 Codex)。非缺规则、是我没遵守。按 §B2 单一来源**不新增重复**,改而**强化 §A 这个唯一权威**:加第 4 点「可枚举命名集 → 全员一次覆盖」(集合某成员被点名 → 列全集合、每个都施加并验证同一修复;const-pin/严格化/拒未知/改 enum 尤其全员到位)+ 要求 **Proof-of-use 的 A 行写出完整枚举集**(不许只写「A checked」)+ 加本会话 scoring-profile 2-of-4 反例。
