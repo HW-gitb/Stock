@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short §18.2 implementation batching strategy)
+- **Verdict/Action**: PASS. The §18.2 docs-only addition preserves bounded batching: offline batches may reduce handoff/review overhead, but provider/live authorization, Codex review, and §18.0 P0 gates are not batched or weakened.
+- **Required**: None new.
+- **Verify**: current dirty tree reviewed; `docs/us_short_system_design.md` §18.2/§19 diff read; §13.1=39 / §18.0=7 / §18.1=30 / §18.2 present; `jsonschema` import OK in review runtime; `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency -v` 36 OK; `git diff --check` clean except existing CRLF warning; no provider/pipeline run.
+- **Next**: User may `提交` the §18.2 docs-only addition; US-short implementation/provider/DataHub work remains separately gated and needs an explicit future command.
+
+## 2026-06-20 — Claude (US-short 设计补 §18.2 实现执行顺序 / 并轮策略)
+
+**Worked on**: 用户问「能并轮就并、先输出论述」→ 我先在 chat 出并轮论述 → 用户转达 Codex「有边界地认可」5 点 → 我逐条 judge(同意、非橡皮图章)+ 加 1 条强化 → 写入 `docs/us_short_system_design.md` 新 §18.2 + §19 指针。纯增 docs、不动代码/schema。
+
+**Key decisions**: §18.2 落 **Codex bounded 版**(比我原版收紧):~4 离线批(契约→引擎→校验/输出/纸面→pipeline 接线)+ 批5 provider/live 单独 gated。**明确边界 = 并的只是离线实现 + 审查 overhead,不并授权门 / 不并 provider·live / 不免 Codex 审查 / 不放宽 §18.0 P0**;批内仍要 per-slice 边界 + 测试清单 + 反向失败用例 + hunk/stage;跨模块共享契约先冻(schema-first);真省时杠杆 = 减 FAIL→修复(自审反向用例不足才是主耗时源)。**我的 judge-add**:provider 健康检查拆分——离线策略/结构 + 「绝不触达未授权源」单测属离线批,只 live 探活进批5。
+
+**Verify**: §13.1=39 / §18.1=30 / §18.0=7 P0 零漏项保持;§18.2 在场;doc-governance+route-doc 36 OK;BOM/FFFD=0;`git diff --check` 仅 CRLF。
+
+**Next**: Codex `审查` 本 §18.2 docs 增补(是否忠实捕捉 bounded 5 点 + 边界措辞、不误读成"批量化=免门/免审");PASS 后用户 `提交` + push。US-short 实现仍 gated、需单独授权。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short active-contract guard dual-live repair)
 - **Verdict/Action**: PASS. `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` is closed in the reviewed working tree; no new material Required found.
 - **Required**: None new. `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` closure detail is in `docs/system_risk_register.md` (single source).

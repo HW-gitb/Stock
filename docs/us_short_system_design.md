@@ -439,7 +439,26 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 29. 复权/公司行动门（§12.1）：无 `adjustment_mode` + split/dividend + 除权价位一致确认 → `paper_performance=not_evaluable/data_degraded`，不进 ship-gate/alpha 单测。
 30. `forward_universe_snapshot` artifact（§12）：forward 起点 PIT 冻结落地物——active symbol list + listing status + provider/as_of + hash + row_count + 后续 delist/halt/merger/no-trade 事件保留规则（不删除、真实捕捉）。
 
+### 18.2 实现执行顺序（并轮策略；有边界地批量化）
+
+> **可审查依据，非 memory 口述**：实现要省时间可以**并轮**——把可离线、同依赖、同审查面的实现刀合成批次，明显减少交接和审查往返。但**并的只是离线实现 + 审查 overhead**：**不并 provider 授权门、不并 provider/live、不免 Codex 审查、不放宽 §18.0 P0**。（2026-06-20 Claude 起草 + Codex 有边界地认可。）
+
+- **并轮判据**：两刀共用一次起草/审查/执行，当且仅当 ① 都纯/离线（fixture 可单测、不碰 provider/真数据/真钱）或同被一个授权门 gated；② 彼此无 schema 契约的跨批先后依赖；③ 一次审查覆盖得动。必须拆轮：**跨模块消费的共享契约要先冻结**（schema-first，否则按规则打回）；任何 live/数据刀被 provider 门 gated；ship-gate 12 月时间门压不掉。
+- **批次（~4 离线批 + gated provider，替代 ~30 串行小轮）**：
+
+| 批 | 内容（§18.1 项） | 性质 | 依赖 |
+|---|---|---|---|
+| 批1 数据契约 + 手工输入 | 全部 schema + governance preset（§13.1 priors + scoring_profile 权重）+ CSV→`us_short_account_state` 转换器/对账（#1,#4,#11/#13-schema） | 纯/声明式 | **最先**（共享契约先冻） |
+| 批2 纯决策引擎 | 价格引擎 + 两轴环境 + 仓位（含试探仓成本地板/现金分配/熔断/冷静期）+ hard veto 分层 + core_score/赛道正交/确认门连续打分/过热分档/赛道生命周期/动态席位/macro_cluster + 未来事件效应 + action_rank（#5–#7,#14–#17,#22,#23,#25,#26） | 纯（VIX 等走 unknown 路径） | 批1 冻结后 |
+| 批3 校验+输出+纸面+比较+lifecycle eval | no-dangling validator + 证据反查 + registry 强制 + 输出渲染（price clock/exclusion_summary/hot_excluded/覆盖诚实）+ 纸面成交确定性规则 + 比较轨 shadow + 升级闸防自欺 + lifecycle eval 运行时阶段 + 提醒机制 + 边界回归 + **provider 健康检查的离线策略/结构 + 「绝不触达未授权源」单测**（#3-离线,#8–#10,#12,#13,#19–#21,#24） | 纯 | 消费批2 |
+| 批4 周末 pipeline 接线（离线） | universe→Pass1→Pass2→engine→output 编排 + consumer-validation，全程 fixture/注入、不 live 抓数 | 纯 | 消费批2/3 |
+| 批5+ provider/live | **GATED，单独授权、小样本先行**：FMP 全市场 / SEC parser / yfinance / Web·X / 生产存储 / DataHub 消费 / 两遍打分真跑 / 复权·公司行动门 live / `forward_universe_snapshot` 真捕获（#2,#3-live；§18.0 provider 门 / `SR-PROVIDER-001`） | gated | **不与批1–4 同批** |
+
+- **批内纪律（不是把 30 项塞一个大 diff）**：每批内部仍要清楚的 **per-slice 边界 + 测试清单 + 反向失败用例 + hunk/stage 边界**；契约+直接消费者可同批，但跨模块消费的共享契约先冻结。批越大 FAIL 时重判 diff 越大、blast radius 越广——甜点是「一个子系统的纯刀 + 严格自审」、非 monolith。
+- **健康检查拆分**：provider 健康检查的离线策略/结构 + 「健康检查绝不触达未授权源」单测属离线批（live 调用前就证明 fail-closed）；只有对已授权 FMP/SEC 的 **live 探活**进批5。
+- **真正的省时杠杆**：并轮省的是交接 overhead；真正吃时间的是 **FAIL→修复 来回**。批次大小不是主因，**自审反向用例不足才是主要耗时源**（本设计落地时一条 guard 因缺 dual-live 反向用例连续 FAIL = 典型自致来回）。所以每批交 Codex 前必跑足 `docs/pre_codex_self_review_checklist.md`——尤其**对自己的 validator/guard 用对抗坏输入打一遍**——让每批 1 轮 PASS、而非 2–3 轮。
+
 ---
 
 ## 19. 设计结论
-US Short System 是一次性完整设计；进攻在选股/发现、克制在执行/下注、同一风险只罚一次；所有"暂定值"挂 forward 校准提醒（§13）。**设计层定稿；本 docs-only landing 已将设计写进 repo（本稿 = 单一权威）+ 降级旧 `docs/us_short_spec.md` 为归档指针 + 更新路由（`docs/README.md` / `AGENTS.md` / `docs/CURRENT.md` / `docs/strategy_design_synthesis.md`）+ 补 `.gitignore` private 路径 + 登记 §18.0 P0 硬门进 register**。**尚未实现进代码**。下一步：schema-first 分片实现，每片 tests + Codex 审查、多 LLM 串行、不交叉 A 股；每个实现 slice 均需用户单独授权。
+US Short System 是一次性完整设计；进攻在选股/发现、克制在执行/下注、同一风险只罚一次；所有"暂定值"挂 forward 校准提醒（§13）。**设计层定稿；本 docs-only landing 已将设计写进 repo（本稿 = 单一权威）+ 降级旧 `docs/us_short_spec.md` 为归档指针 + 更新路由（`docs/README.md` / `AGENTS.md` / `docs/CURRENT.md` / `docs/strategy_design_synthesis.md`）+ 补 `.gitignore` private 路径 + 登记 §18.0 P0 硬门进 register**。**尚未实现进代码**。下一步：schema-first 分片实现（执行顺序 / 并轮策略见 §18.2——离线实现 + 审查 overhead 可并批，provider 授权门 / provider·live / Codex 审查 / §18.0 P0 不并），每片 tests + Codex 审查、多 LLM 串行、不交叉 A 股；每个实现 slice 均需用户单独授权。
