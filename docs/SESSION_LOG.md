@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(35cc36f6 block-level stale-open guard)
+- **Verdict/Action**: PASS. The two `9a8184dc` closeout Required are closed in committed `35cc36f6`: the live-state top entry is refreshed, and the stale-open guard now catches batch-header regressions where status is on the header and R-IDs are in bullets.
+- **Required**: None new. `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` / `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` closure detail is in `docs/system_risk_register.md`(single source).
+- **Verify**: current worktree clean before review; `35cc36f6` + `52aea594` diff read; doc-governance+slice3+route-doc 40 OK; real-register item-1-4 mutation probe catches 4/4 committed R-IDs; `git diff --check HEAD~2..HEAD` clean; no provider/pipeline run.
+- **Next**: No repair Required. If preserving the review closeout, Claude can commit this PASS log/register update; otherwise proceed only under normal execution gates.
+
 ## 2026-06-20 — Claude `修复`(R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE + R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP)
 - **Verdict/Action**: 接受 Codex `审查 FAIL`(9a8184dc closeout review)两 docs/guard Required。**F1**:9a8184dc 已 landed,旧 closeout entry 的 `Next: 提交` 已成 stale live-state → 本 `修复` entry 即新 live-state 顶、Next 指 Codex re-审查。**F2**:stale-open guard 由 same-line 重写为 block-level `_stale_open_committed_rids`(覆盖 batch header status-on-header + R-ID-in-bullets,如 item 1-4 / Slice 3)+ planted-failure + false-positive 控;allowlist 纳本 2 R-ID。**纯文档 + guard,无业务代码**。
 - **Required**: `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` + `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` — full detail 见 `docs/system_risk_register.md`(单一来源;两条 flip resolved + Resolution)。
