@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_account_state_lineage",
+  "description": "Provenance sidecar for us_short_account_state: which CSV each fact came from (sha256 + row_count), facts-vs-decision as-of separation, and how the US-short bucket capital was derived. This sidecar is NOT consumed by the engine/report; it exists for audit/reproducibility only. It carries real account figures, so it MUST be written to a gitignored private path (same fail-closed guard as the state file).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "decision_as_of", "facts_as_of", "facts_staleness",
+               "bucket_basis", "source_tables", "consistency_warnings"],
+  "properties": {
+    "schema_name": {"const": "us_short_account_state_lineage"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": ["string", "null"], "description": "Wall-clock stamp filled by main(); null in the pure build (kept out of deterministic core)."},
+    "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "facts_as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "account.csv as_of; must be <= decision_as_of (no future facts)."},
+    "facts_staleness": {"enum": ["current", "stale_warning"]},
+    "bucket_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["us_market_equity", "divisor", "us_short_bucket_capital"],
+      "properties": {
+        "us_market_equity": {"type": "number", "exclusiveMinimum": 0},
+        "divisor": {"const": 3},
+        "us_short_bucket_capital": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "source_tables": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "sha256", "row_count"],
+        "properties": {
+          "name": {"type": "string"},
+          "path": {"type": "string"},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "row_count": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
+    "consistency_warnings": {
+      "type": "array",
+      "description": "Advisory trades<->positions reconciliation warnings (populated by the trades slice; empty here). WARN-only, never overrides positions.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ticker", "kind", "message"],
+        "properties": {
+          "ticker": {"type": "string"},
+          "kind": {"type": "string"},
+          "message": {"type": "string"}
+        }
+      }
+    }
+  }
+}

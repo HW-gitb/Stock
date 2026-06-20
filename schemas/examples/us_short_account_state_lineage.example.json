@@ -1,0 +1,28 @@
+{
+  "schema_name": "us_short_account_state_lineage",
+  "schema_version": "1.0.0",
+  "generated_at": null,
+  "decision_as_of": "20260622",
+  "facts_as_of": "20260622",
+  "facts_staleness": "current",
+  "bucket_basis": {
+    "us_market_equity": 30000.0,
+    "divisor": 3,
+    "us_short_bucket_capital": 10000.0
+  },
+  "source_tables": [
+    {
+      "name": "account",
+      "path": "state/us_short/account_state_csv/account.csv",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "row_count": 1
+    },
+    {
+      "name": "positions",
+      "path": "state/us_short/account_state_csv/positions.csv",
+      "sha256": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08",
+      "row_count": 2
+    }
+  ],
+  "consistency_warnings": []
+}

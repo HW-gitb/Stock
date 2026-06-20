@@ -1,0 +1,3 @@
+ticker,shares,avg_cost_usd,entry_date,current_stop,notes
+AAPL,10,180,20260601,165,core_top
+BRK.B,5,410,20260520,,

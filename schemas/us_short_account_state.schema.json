@@ -1,0 +1,43 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_account_state",
+  "description": "Manual US-short account/position state, produced by the manual-tables converter and (later) consumed by the US-short weekly report for holdings re-evaluation. User-maintained local input only: it does NOT connect to brokers, place orders, fetch account/market data, or authorize real-money automation. US-short bucket capital = us_market_equity / 3 (the system computes it; it never guesses from a vague total). v1 is long-only: every position carries direction=long (the marked door for a future independent short channel). This schema is US-short's own contract; it does NOT share the A-share a_short_account_state schema and uses US tickers (not A-share codes), with no A-share Rule12/Rule13 circuit-breaker/cooldown fields (US portfolio_guard / symbol_cooldown are paper-track / fill driven and derived later, not manual input).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "us_market_equity", "us_short_bucket_capital",
+               "us_short_available_cash", "positions", "manual_order_only", "broker_connection_allowed"],
+  "properties": {
+    "schema_name": {"const": "us_short_account_state"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$", "description": "Decision date YYYYMMDD (= weekly report --as-of)."},
+    "us_market_equity": {"type": "number", "exclusiveMinimum": 0,
+                         "description": "US market equity. The US-short bucket = this / 3 (per project capital policy)."},
+    "us_short_bucket_capital": {"type": "number", "exclusiveMinimum": 0,
+                                "description": "Computed = us_market_equity / 3. The sizing ceiling for the US-short bucket; the cross-field invariant (== us_market_equity/3) is enforced by validate_account_state, not by JSON Schema."},
+    "us_short_available_cash": {"type": "number", "minimum": 0,
+                                "description": "Cash available to the US-short bucket (>= 0; a fully-deployed bucket can be 0). Must not exceed us_short_bucket_capital — bucket-local cash cannot be larger than the bucket (cross-field invariant enforced by validate_account_state; capital policy: per-market 1/3 buckets, A/US cash non-fungible)."},
+    "portfolio_total_equity": {"type": ["number", "null"], "exclusiveMinimum": 0,
+                               "description": "Optional, reference only. Not used for sizing (per-market buckets are non-fungible)."},
+    "positions": {"type": "array", "items": {"$ref": "#/$defs/position"}},
+    "manual_order_only": {"const": true},
+    "broker_connection_allowed": {"const": false}
+  },
+  "$defs": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "direction", "shares", "avg_cost_usd", "entry_date"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$",
+                   "description": "US listing symbol (uppercase; optional .CLASS / -CLASS suffix, e.g. BRK.B). Must start with a letter, so A-share digit codes (e.g. 000001.SZ) are rejected."},
+        "direction": {"const": "long", "description": "v1 long-only marked door (a future short channel needs its own borrow/locate/SSR/Reg SHO design)."},
+        "shares": {"type": "integer", "exclusiveMinimum": 0},
+        "avg_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+        "entry_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "current_stop": {"type": ["number", "null"], "exclusiveMinimum": 0,
+                         "description": "Optional user-recorded manual stop. The system computes its own stop levels later; this is the user's own reference, never a broker order."},
+        "notes": {"type": ["string", "null"]}
+      }
+    }
+  }
+}

@@ -8,6 +8,63 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 slice 1a full review)
+- **Verdict/Action**: PASS. Full current-tree review found batch 1 slice 1a inside the approved offline account-state boundary; no new material Required.
+- **Required**: None new. Prior `R-USSHORT-ACCTSTATE-*` closures remain registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed dirty/untracked slice files; adversarial probes reject unknown/overflow/dupe columns, cash>bucket, invalid/future dates, and nonignored in-repo output; 93 targeted guards OK; local Python 3.13 full discover 2832 OK; bundled runtime RED only from unrelated missing deps/env; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/market-fetch path.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for slice 1b / provider / DataHub / live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACCTSTATE-UNKNOWN-CSV-COLUMNS-SILENT-DROP)
+- **Verdict/Action**: 判定成立、接受——我把 fail-fast 只用在**值**(anti-Excel-coercion)、没用在**结构**(列/键),致 out-of-contract 列(如 `direction=short`,v1 long-only 会静默输出成 long)被丢。修:加 `EXPECTED_COLUMNS`(允许=必需+可选)+ `_reject_unknown_columns`(拒任何非允许列,含 csv.DictReader 的 None restkey=行溢出);**双侧焊**——`_read_csv_table` 拒未知 header(含 0 行 CSV)+ `build_account_state` 拒未知 row key(纯 dict 路径 + None restkey,两条路都堵)。
+- **Required**: `R-USSHORT-ACCTSTATE-UNKNOWN-CSV-COLUMNS-SILENT-DROP` — 完整 judgment/双侧焊/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: account-state+schema+doc/route guards 93 OK;full discover `python -m unittest discover -s tests` **2832 OK**(零回归,+6 净;dep-light runtime RED=无关 A-short 环境);direction=short CSV probe 现拒;py_compile OK;diff-check 仅 CRLF;BOM=0。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 仍须明确命令)。之后 slice 1b = trades 对账/execution_log。
+- **Pre-Codex self-review**: A-F。A:畸形结构/静默丢 类一次覆盖 6 出口(CSV header / None restkey / 纯 dict / direction=short / account 未知 / **重复表头**=checklist A 主动补类、preempt 下一轮)。**B-ripple**:templates(schemas/examples)+ happy-path 列恰=允许集→仍绿(已核 _acct/_pos 键全在 EXPECTED);main 端到端 + 既有测无回退(2831 OK)。C:反向控——5 拒测(FN 控)+ 模板/happy-path 放行(FP 控)。E:register 单态(R-ID flip resolved + Resolution)。F:diff/BOM/py_compile OK。Tests passing ≠ design closure(仅批1 slice 1a,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 slice 1a full re-review)
+- **Verdict/Action**: FAIL. Full first-slice review found the prior four account-state Required items closed, but the CSV/manual-input contract still silently accepts unknown columns.
+- **Required**: `R-USSHORT-ACCTSTATE-UNKNOWN-CSV-COLUMNS-SILENT-DROP` — full detail is registered in `docs/system_risk_register.md` (single source).
+- **Verify**: current dirty tree reviewed beyond repair items; account-state/schema/doc guards 87 OK; `py_compile` OK; probes confirm privacy/date/cash repairs are closed, no provider/broker/market-fetch path, but `positions.csv` with extra `direction=short` and account extra columns is accepted and output as `direction=long`; `git check-ignore` covers private outputs/tmp; BOM/FFFD=0.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit, start slice 1b, or run provider/DataHub work yet.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACCTSTATE-CASH-BUCKET-CEILING-GAP)
+- **Verdict/Action**: 判定成立、接受——`us_short_available_cash` 可 > bucket(equity 30000→bucket 10000 却 cash 50000 能过),等于把美股长线/流动资金钱混进短线 sizing,违反 per-market 1/3 桶 + A/US cash 不互通。修:**build + validate 双侧焊 `cash ≤ bucket`**(`_REL_EPS` 容差:cash==bucket 全现金桶放行、仅有意义超额拒);schema description 注明跨字段不变式。
+- **Required**: `R-USSHORT-ACCTSTATE-CASH-BUCKET-CEILING-GAP` — 完整 judgment/双侧焊/B-ripple/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: account-state+schema+doc/route guards 87 OK;full discover `python -m unittest discover -s tests` **2826 OK**(我 runtime 有 jsonschema/requests/tushare;零回归,+3 净;dep-light runtime 会因无关 A-short requests/tushare 报 RED=环境非本刀);py_compile OK;diff-check 仅 CRLF;BOM=0。未跑 provider。
+- **Next**: Codex re-`审查` 本 cash-ceiling 修;PASS 后用户 `提交`(push 仍须用户明确命令)。之后 slice 1b = trades 对账/execution_log。
+- **Pre-Codex self-review**: A-F。A:cash-ceiling 一次双侧覆盖(build fail-fast + validate 单一真相源)。**B-ripple(本轮重点)**:新不变式让既有 `test_bucket_is_equity_over_three`(equity 1000+默认 cash 4000)正确被拒 → 已降该测 cash 到 100;确认无其它「小 equity+默认 cash」测试。C:反向控——cash>bucket build+validate 双拒(FN 控)、cash==bucket 边界放行(FP 控)。E:register 单态(R-ID flip resolved + Resolution)。F:diff/BOM/py_compile OK。Tests passing ≠ design closure(仅批1 slice 1a,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 slice 1a account-state converter re-review)
+- **Verdict/Action**: FAIL. The prior three account-state Required items are closed, but the current account-state contract still accepts over-bucket US-short cash.
+- **Required**: `R-USSHORT-ACCTSTATE-CASH-BUCKET-CEILING-GAP` — full detail is registered in `docs/system_risk_register.md` (single source).
+- **Verify**: current dirty tree reviewed; account-state/schema/doc guards 84 OK; `py_compile` OK; probes confirm no in-repo override and validator rejects future/impossible dates; cash>bucket probe is accepted; full discover is RED in this bundled runtime due missing `requests`/`tushare` plus unrelated A-short `pro=None`, so it is not PASS evidence; `git diff --check` only CRLF warnings.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit, start slice 1b, or run provider/DataHub work yet.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACCTSTATE-{PRIVATE-OUTPUT-OVERRIDE-BYPASS,VALIDATOR-PIT-DATE-GAP,REGISTER-BOUNDARY-DRIFT})
+- **Verdict/Action**: 三条 Required 逐条独立判定全成立、接受(F1/F2 是我自致:借 A 股转换器工程却没核 US §11.6 更严的 fail-closed、validator 没直接对抗自测)。**F1(P0)**:选项A 整删 `--allow-nonprivate-account-out` + guard 的 allow 参数,in-repo 非忽略路径**无逃生门**恒 FATAL(仅仓库外/gitignored 放行),换 `test_no_inrepo_override_exists`。**F2(P1)**:`validate_account_state` 加 as_of+每 entry_date 日历有效性(strptime 拒 20260631)+ PIT(entry≤as_of),手改 JSON 也拦,加 3 validator 级日期测。**F3(P2)**:register Boundary 段把旧「docs+.gitignore only」限定到原 landing + 加本刀真边界。
+- **Required**: `R-USSHORT-ACCTSTATE-PRIVATE-OUTPUT-OVERRIDE-BYPASS` / `R-USSHORT-ACCTSTATE-VALIDATOR-PIT-DATE-GAP` / `R-USSHORT-ACCTSTATE-REGISTER-BOUNDARY-DRIFT` — 完整 judgment/逐修/选项A理由/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: 全量 discover `python -m unittest discover -s tests` **2823 OK**(零回归,+3 净);account-state 测含 override-removal + validator-date;py_compile OK;`git diff --check` 仅 CRLF;BOM/FFFD=0。未跑 provider。
+- **Next**: Codex re-`审查` 本 3 修;PASS 后用户 `提交`(push 仍须用户明确命令)。之后 slice 1b = trades 对账/execution_log。
+- **Pre-Codex self-review**: A-F。A:F1 隐私护栏出口一次覆盖(无 override + 6 分支测),F2 日期类一次覆盖(future/impossible entry + impossible as_of,直打 validator 非 builder)。B:删 flag 后 main 调用点+argparse+docstring+register 进度记一并更新;grep `allow_nonprivate` 仅注释/测试断言其不存在。C:反向控——test_no_inrepo_override_exists 证无逃生门、validator 日期 FN 控、outside/gitignored FP 控仍绿。E:register 单态(3 R-ID flip resolved+Resolution)。F:diff/BOM/py_compile OK。Tests passing ≠ design closure(仅批1 slice 1a,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 slice 1a account-state converter)
+- **Verdict/Action**: FAIL. The offline schema/converter direction is correct, but the reviewed slice has a private-output bypass, a validator PIT/date gap, and a register boundary drift.
+- **Required**: `R-USSHORT-ACCTSTATE-PRIVATE-OUTPUT-OVERRIDE-BYPASS`; `R-USSHORT-ACCTSTATE-VALIDATOR-PIT-DATE-GAP`; `R-USSHORT-ACCTSTATE-REGISTER-BOUNDARY-DRIFT` — full details are in `docs/system_risk_register.md` (single source).
+- **Verify**: current dirty tree reviewed; account-state tests+schema+doc guards 81 OK; `py_compile` OK; `git diff --check` only CRLF warnings; probes show allow override bypass and validator accepts future/impossible dates; no provider/broker/market-fetch path found.
+- **Next**: Claude `修复` these three Required only, then Codex re-`审查`; do not commit or run US-short implementation/provider/DataHub work yet.
+
+## 2026-06-20 — Claude (US-short 批1 slice 1a 起草:account_state 手工表格转换器)
+
+**Worked on**: 用户授权「执行批1」→ 按 §18.2 批内 per-slice 边界,起草批1 第一刀(最自包含、有 A 股 proven 模板):US-short 手工输入层 account + positions → `us_short_account_state`。**只借 A 股 4.3 的工程机制(ConvertError fail-fast / anti-Excel-coercion 显式解析 / 纯 build 核心 / lineage 旁产物 / git check-ignore 隐私护栏),换 US 字段+规则,不交叉 A 股**。新 8 文件:2 schema(account_state + lineage)、转换器、2 example、2 CSV 模板、2 测试。
+
+**Key decisions / boundary**: US-short **自有** schema(非 A 股 a_short_account_state);**US ticker 拒 A 股码**(letter-first pattern + 显式 `\d{6}\.(SH|SZ|BJ)` 拒);**无 A 股 Rule12/13**(US portfolio_guard/symbol_cooldown 是 paper/fill 驱动、批3 派生,非手工输入);**bucket = us_market_equity/3** 计算 + 溯源(validator 焊死跨字段不变式);**v1 long-only** direction=long 标记门(§1);facts_as_of vs decision 分离;**fail-closed 隐私护栏**(`_reject_nonprivate_account_output_path` git check-ignore 真值,仓库内未忽略/git 不可用/git 报错 → FATAL)=**部分兑现 §18.0 私密路径 P0**(account-state 出口;其余出口随各自刀)。**纯离线 / 不接券商 / 不抓行情 / 不碰 provider / 非生产**。trades↔positions 对账 + execution_log = 紧接的 slice 1b。
+
+**Verify**: 转换器+schema 测 **45 OK**(对抗:Excel 强转[shares float/日期/bool]、未来日、A 股码拒、dup、bucket=÷3、cash 0 ok/负拒、隐私护栏 5 分支含 git fail-closed mock、main 端到端);doc-governance+route-doc 36 OK;py_compile OK;BOM/FFFD=0;`git diff --check` 仅 CRLF。
+
+**Next**: Codex `审查` 批1 slice 1a(US 不交叉 A 股、schema-first、隐私护栏 fail-closed、anti-coercion、bucket 不变式、纯离线无 provider);PASS 后用户 `提交`(push 仍须我**明确命令**才推)。之后 slice 1b = trades 对账/execution_log,再批1 其余 schema(weekly_report/field_registry/theme_lifecycle/governance preset)。
+
+**Pre-Codex self-review**: A–F。A(类非实例):Excel-coercion 一次覆盖 shares/日期/bool/科学计数;隐私护栏 5 出口(外/忽略/未忽略/override/git-fail)。B(ripple):新代码无既有消费者(pipeline 批4);README 加路由行、register 加 P0 进度记;`schemas/examples/us_short_account_state_csv/` 模板 tracked、真数据走 gitignored `state/*/account_state_csv/`。C(反向失败):FP 控(BRK.B/lowercase 接受、cash 0 接受)+ FN 控(A 股码/short/dup/负 cash/bucket 漂移 拒)+ git fail-closed mock。**自审当场抓掉自己一处 dead code**(`_build_positions` 误读 `us_short_available_cash` 的 `and False` 残留,已删)。D:n/a。E:README durable 指针、无 CURRENT gate 词。F:diff/BOM/py_compile OK。**Tests passing ≠ design closure**:仅批1 第一刀,provider/live/ship-gate 全未动、仍 gated。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short §18.2 implementation batching strategy)
 - **Verdict/Action**: PASS. The §18.2 docs-only addition preserves bounded batching: offline batches may reduce handoff/review overhead, but provider/live authorization, Codex review, and §18.0 P0 gates are not batched or weakened.
 - **Required**: None new.

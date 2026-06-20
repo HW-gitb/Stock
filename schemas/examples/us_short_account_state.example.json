@@ -1,0 +1,31 @@
+{
+  "schema_name": "us_short_account_state",
+  "schema_version": "1.0.0",
+  "as_of": "20260622",
+  "us_market_equity": 30000.0,
+  "us_short_bucket_capital": 10000.0,
+  "us_short_available_cash": 4000.0,
+  "portfolio_total_equity": 90000.0,
+  "positions": [
+    {
+      "ticker": "AAPL",
+      "direction": "long",
+      "shares": 10,
+      "avg_cost_usd": 180.0,
+      "entry_date": "20260601",
+      "current_stop": 165.0,
+      "notes": "core_top"
+    },
+    {
+      "ticker": "BRK.B",
+      "direction": "long",
+      "shares": 5,
+      "avg_cost_usd": 410.0,
+      "entry_date": "20260520",
+      "current_stop": null,
+      "notes": null
+    }
+  ],
+  "manual_order_only": true,
+  "broker_connection_allowed": false
+}
