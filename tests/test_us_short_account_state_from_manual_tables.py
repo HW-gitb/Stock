@@ -48,6 +48,20 @@ _GOOD_ACCOUNT_CSV = (
     "20260622,30000,4000,90000,TRUE,FALSE\n")
 
 
+def _trade(**o):
+    base = {"decision_date": "20260601", "ticker": "AAPL", "suggested_action": "建仓",
+            "executed": "TRUE", "fill_price": "180", "fill_shares": "10",
+            "skip_reason": "", "manual_override": ""}
+    base.update(o)
+    return base
+
+
+def _reconcile(trades, positions=None, as_of="20260622"):
+    if positions is None:
+        positions = conv._build_positions([_pos()], "20260622")   # default AAPL 10 long
+    return conv.reconcile_trades_positions(trades, positions, as_of)
+
+
 class BuildTests(unittest.TestCase):
     def test_happy_build_validates(self):
         state, lineage = _build()
@@ -228,6 +242,89 @@ class ValidateTests(unittest.TestCase):
             conv.validate_account_state(state, "20260622")
 
 
+class ReconcileTests(unittest.TestCase):
+    def test_consistent_no_warnings(self):
+        self.assertEqual(_reconcile([_trade()]), [])            # AAPL 建仓 10 vs positions AAPL 10
+
+    def test_net_buy_not_in_positions(self):
+        w = _reconcile([_trade(ticker="TSLA")])                 # TSLA bought, not in positions
+        self.assertEqual([x["kind"] for x in w], ["net_buy_not_in_positions"])
+
+    def test_shares_mismatch(self):
+        w = _reconcile([_trade(fill_shares="7")])               # AAPL net 7 vs positions 10
+        self.assertEqual([x["kind"] for x in w], ["shares_mismatch"])
+
+    def test_sell_reduces_net(self):
+        w = _reconcile([_trade(), _trade(suggested_action="减仓", fill_shares="3")])   # net 10-3=7 vs 10
+        self.assertEqual([x["kind"] for x in w], ["shares_mismatch"])
+
+    def test_skipped_trade_not_counted(self):
+        w = _reconcile([_trade(executed="FALSE", fill_price="", fill_shares="", skip_reason="价位超带")])
+        self.assertEqual(w, [])                                 # non-executed -> not in net -> no mismatch
+
+    def test_invalid_action_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(suggested_action="buy")])        # not the §9 vocab
+
+    def test_executed_nofill_action_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(suggested_action="持有")])       # 持有 cannot be executed=TRUE
+
+    def test_executed_without_fill_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(fill_price="", fill_shares="")])
+
+    def test_not_executed_with_fill_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(executed="FALSE", skip_reason="x")])   # still carries fill_price/shares
+
+    def test_not_executed_without_skip_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(executed="FALSE", fill_price="", fill_shares="", skip_reason="")])
+
+    def test_future_trade_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(decision_date="20260701")], as_of="20260622")
+
+    def test_a_share_ticker_in_trades_rejected(self):
+        with self.assertRaises(CE):
+            _reconcile([_trade(ticker="000001.SZ")])
+
+    def test_trades_extra_column_rejected_pure_path(self):
+        with self.assertRaises(CE):
+            conv.build_account_state(
+                {"account": [_acct()], "positions": [_pos()], "trades": [_trade(foo="bar")]}, "20260622")
+
+    def test_build_populates_consistency_warnings(self):
+        _, lineage = conv.build_account_state(
+            {"account": [_acct()], "positions": [_pos()], "trades": [_trade(fill_shares="7")]}, "20260622")
+        self.assertEqual([w["kind"] for w in lineage["consistency_warnings"]], ["shares_mismatch"])
+
+    def test_action_vocab_matches_design_section9(self):
+        # drift-guard: the trade action vocab must be EXACTLY the §9 final_action set (no alias/omission)
+        self.assertEqual(
+            set(conv.TRADE_ACTIONS),
+            {"建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开"})
+
+    def test_all_design_actions_accepted(self):
+        for a in ("建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件"):
+            _reconcile([_trade(suggested_action=a, ticker="TSLA")])                 # executed buy/sell parses
+        for a in ("持有", "观察", "否决/避开"):
+            _reconcile([_trade(suggested_action=a, executed="FALSE",
+                               fill_price="", fill_shares="", skip_reason="x")])     # non-fill parses
+
+    def test_canonical_veto_action_accepted(self):
+        w = _reconcile([_trade(suggested_action="否决/避开", executed="FALSE",
+                               fill_price="", fill_shares="", skip_reason="avoid")])
+        self.assertEqual(w, [])
+
+    def test_veto_alias_without_suffix_rejected(self):
+        # `否决` (without /避开) is NOT the §9 value -> rejected, so no hidden second vocabulary
+        with self.assertRaises(CE):
+            _reconcile([_trade(suggested_action="否决", executed="FALSE",
+                               fill_price="", fill_shares="", skip_reason="x")])
+
+
 class PrivacyGuardTests(unittest.TestCase):
     def test_outside_repo_ok(self):
         with tempfile.TemporaryDirectory() as d:
@@ -325,6 +422,33 @@ class MainEndToEndTests(unittest.TestCase):
                 "AAPL,MSFT,10,180,20260601,165,x\n", encoding="utf-8")
             with self.assertRaises(CE):
                 conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+
+    def test_main_without_trades_empty_warnings(self):
+        with tempfile.TemporaryDirectory() as d:
+            dp = Path(d)
+            (dp / "account.csv").write_text(_GOOD_ACCOUNT_CSV, encoding="utf-8")
+            (dp / "positions.csv").write_text(
+                "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\nAAPL,10,180,20260601,165,x\n",
+                encoding="utf-8")
+            rc = conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+            self.assertEqual(rc, 0)
+            lineage = json.loads((dp / "o_lineage.json").read_text(encoding="utf-8"))
+            self.assertEqual(lineage["consistency_warnings"], [])   # trades.csv absent -> no reconcile
+
+    def test_main_with_trades_mismatch_warns(self):
+        with tempfile.TemporaryDirectory() as d:
+            dp = Path(d)
+            (dp / "account.csv").write_text(_GOOD_ACCOUNT_CSV, encoding="utf-8")
+            (dp / "positions.csv").write_text(
+                "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\nAAPL,10,180,20260601,165,x\n",
+                encoding="utf-8")
+            (dp / "trades.csv").write_text(   # AAPL net 7 vs positions 10 -> advisory mismatch
+                "decision_date,ticker,suggested_action,executed,fill_price,fill_shares,skip_reason,manual_override\n"
+                "20260601,AAPL,建仓,TRUE,180,7,,\n", encoding="utf-8")
+            conv.main(["--input-dir", str(dp), "--as-of", "20260622", "--out", str(dp / "o.json")])
+            lineage = json.loads((dp / "o_lineage.json").read_text(encoding="utf-8"))
+            self.assertEqual([w["kind"] for w in lineage["consistency_warnings"]], ["shares_mismatch"])
+            self.assertIn("trades", {t["name"] for t in lineage["source_tables"]})
 
 
 if __name__ == "__main__":

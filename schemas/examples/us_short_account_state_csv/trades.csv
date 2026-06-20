@@ -1,0 +1,3 @@
+decision_date,ticker,suggested_action,executed,fill_price,fill_shares,skip_reason,manual_override
+20260601,AAPL,建仓,TRUE,180,10,,
+20260520,BRK.B,建仓,TRUE,410,5,,

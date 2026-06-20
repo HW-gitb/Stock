@@ -2,10 +2,12 @@
 # -*- coding: utf-8 -*-
 """US-short manual tables -> us_short_account_state.json converter (batch 1, slice 1a).
 
-Converts the user's locally maintained CSV tables (account / positions) into
+Converts the user's locally maintained CSV tables (account / positions / optional trades) into
 `schemas/us_short_account_state.schema.json` v1.0.0, to be consumed (later) by the US-short
-weekly report for holdings re-evaluation. This slice covers the ACCOUNT + POSITIONS input only;
-the trades <-> positions reconcile / execution-log slice (1b) follows next within batch 1.
+weekly report for holdings re-evaluation. Slice 1a built the account + positions input; slice 1b
+adds the optional trades.csv (= §12 manual_actual_track / execution log) and an advisory
+trades<->positions reconcile whose WARN-only result lands in the lineage sidecar (never overrides
+positions).
 
 Design boundaries (us_short_system_design §3.6 / §1 / §8 / §11.6 / §18):
 - US-short OWN schema (not the A-share a_short_account_state); US tickers, NOT A-share codes; no
@@ -55,11 +57,13 @@ _REL_EPS = 1e-9
 ACCOUNT_SCHEMA_PATH = ROOT / "schemas" / "us_short_account_state.schema.json"
 
 REQUIRED_TABLES = ("account", "positions")
+OPTIONAL_TABLES = ("trades",)   # slice 1b: trades.csv (= §12 manual_actual_track / execution_log); optional
 
 REQUIRED_COLUMNS = {
     "account": ("as_of", "us_market_equity", "us_short_available_cash",
                 "manual_order_only", "broker_connection_allowed"),
     "positions": ("ticker", "shares", "avg_cost_usd", "entry_date"),
+    "trades": ("decision_date", "ticker", "suggested_action", "executed"),
 }
 # Allowed columns (required + optional). Any column OUTSIDE this set is rejected (fail-fast, no silent
 # drop): a typo'd / out-of-contract column — e.g. `direction=short` in positions, which v1 long-only
@@ -69,7 +73,16 @@ EXPECTED_COLUMNS = {
     "account": ("as_of", "us_market_equity", "us_short_available_cash", "portfolio_total_equity",
                 "manual_order_only", "broker_connection_allowed"),
     "positions": ("ticker", "shares", "avg_cost_usd", "entry_date", "current_stop", "notes"),
+    "trades": ("decision_date", "ticker", "suggested_action", "executed",
+               "fill_price", "fill_shares", "skip_reason", "manual_override"),
 }
+
+# trades.suggested_action = the §9 final_action vocab (user-chosen 2026-06-20, Chinese values).
+# Reconcile maps buy/sell direction; the execution log stores the action verbatim.
+TRADE_BUY_ACTIONS = ("建仓", "加仓")
+TRADE_SELL_ACTIONS = ("减仓", "清仓-止损", "清仓-止盈", "清仓-事件")
+TRADE_NOFILL_ACTIONS = ("持有", "观察", "否决/避开")   # design-exact §9 values (no `否决` alias)
+TRADE_ACTIONS = TRADE_BUY_ACTIONS + TRADE_SELL_ACTIONS + TRADE_NOFILL_ACTIONS
 
 # US listing symbol: uppercase, starts with a LETTER (so A-share digit codes like 000001.SZ are
 # rejected), 1..6 leading alnum + optional .CLASS / -CLASS suffix (e.g. BRK.B, RDS-A).
@@ -175,12 +188,13 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
     ticker; no wall-clock). Raises ConvertError (FATAL) on any malformed / out-of-contract input.
     """
     decision_as_of = _parse_date(decision_as_of, "--as-of")
-    for _name in ("account", "positions"):           # strict input: reject unknown keys (pure path too)
+    for _name in ("account", "positions", "trades"):  # strict input: reject unknown keys (pure path too)
         for _row in tables.get(_name, []):
             _reject_unknown_columns(_row.keys(), _name)
     facts_as_of, acct = _build_account_fields(tables["account"], decision_as_of)
     facts_staleness = "current" if facts_as_of == decision_as_of else "stale_warning"
     positions = _build_positions(tables["positions"], decision_as_of)
+    consistency_warnings = reconcile_trades_positions(tables.get("trades", []), positions, decision_as_of)
 
     bucket = acct["us_market_equity"] / BUCKET_DIVISOR
     if acct["us_short_available_cash"] - bucket > _REL_EPS * max(1.0, bucket):
@@ -213,7 +227,7 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
             "us_short_bucket_capital": bucket,
         },
         "source_tables": [],          # filled by main() (needs file paths/hashes)
-        "consistency_warnings": [],   # populated by the trades-reconcile slice (1b); empty here
+        "consistency_warnings": consistency_warnings,   # slice 1b trades<->positions reconcile (advisory)
     }
     return account_state, lineage
 
@@ -262,6 +276,53 @@ def _build_positions(rows: list, decision_as_of: str) -> list:
         })
     positions.sort(key=lambda p: p["ticker"])
     return positions
+
+
+# -- slice 1b: trades<->positions reconcile (advisory WARN-only; never overrides positions) ----------
+def reconcile_trades_positions(trades: list, positions: list, decision_as_of: str) -> list:
+    """Parse each trade row strictly, net the EXECUTED buy/sell fills per ticker, and compare to
+    positions.shares. WARN-only: positions stay authoritative (a mismatch can be partial history,
+    dividends/splits, or fees). Returns [{ticker, kind, message}, ...]. Raises ConvertError on any
+    malformed / out-of-contract trade row (fail-fast, same discipline as the rest of the input).
+    `trades` is the execution log (§12 manual_actual_track); this slice only reconciles it."""
+    pos_shares = {p["ticker"]: p["shares"] for p in positions}
+    net = {}
+    for i, r in enumerate(trades):
+        ticker = _parse_us_ticker(r.get("ticker"), f"trades[{i}].ticker")
+        decision_date = _parse_date(r.get("decision_date"), f"trades[{i}].decision_date")
+        if decision_date > decision_as_of:
+            raise ConvertError(f"trades[{i}].decision_date {decision_date} > --as-of {decision_as_of} (future trade)")
+        action = _opt_str(r.get("suggested_action"))
+        if action not in TRADE_ACTIONS:
+            raise ConvertError(f"trades[{i}].suggested_action={r.get('suggested_action')!r} must be one of {list(TRADE_ACTIONS)} (§9 final_action vocab)")
+        executed = _parse_bool(r.get("executed"), f"trades[{i}].executed")
+        fill_price = _parse_optional_float(r.get("fill_price"), f"trades[{i}].fill_price", positive=True)
+        fs_raw = _opt_str(r.get("fill_shares"))
+        fill_shares = _parse_int_shares(fs_raw, f"trades[{i}].fill_shares") if fs_raw is not None else None
+        skip_reason = _opt_str(r.get("skip_reason"))
+        if executed:
+            if action in TRADE_NOFILL_ACTIONS:
+                raise ConvertError(f"trades[{i}] executed=TRUE but suggested_action={action} is a non-fill action; only {list(TRADE_BUY_ACTIONS + TRADE_SELL_ACTIONS)} can be executed")
+            if fill_price is None or fill_shares is None:
+                raise ConvertError(f"trades[{i}] executed=TRUE requires fill_price and fill_shares")
+            sign = 1 if action in TRADE_BUY_ACTIONS else -1
+            net[ticker] = net.get(ticker, 0) + sign * fill_shares
+        else:
+            if fill_price is not None or fill_shares is not None:
+                raise ConvertError(f"trades[{i}] executed=FALSE must leave fill_price/fill_shares empty")
+            if skip_reason is None:
+                raise ConvertError(f"trades[{i}] executed=FALSE requires a skip_reason")
+    warnings = []
+    for ticker in sorted(net):
+        n = net[ticker]
+        if ticker not in pos_shares:
+            if n > 0:   # net buy with no recorded position (net sell / 0 = normal full exit, not a warning)
+                warnings.append({"ticker": ticker, "kind": "net_buy_not_in_positions",
+                                 "message": f"trades net buy {n} shares but positions has no {ticker} (possible un-recorded holding; please verify)"})
+        elif n != pos_shares[ticker]:
+            warnings.append({"ticker": ticker, "kind": "shares_mismatch",
+                             "message": f"{ticker}: positions {pos_shares[ticker]} shares vs trades net {n} (diff {pos_shares[ticker] - n}; may be partial history / dividends / splits / fees — advisory, please verify)"})
+    return warnings
 
 
 # -- single validation source: JSON Schema + cross-field invariants ---------------------------------
@@ -378,10 +439,13 @@ def main(argv=None) -> int:
 
     tables = {}
     source_tables = []
-    for name in REQUIRED_TABLES:
+    for name in REQUIRED_TABLES + OPTIONAL_TABLES:
         path = input_dir / f"{name}.csv"
         if not path.is_file():
-            raise ConvertError(f"missing required table {name}.csv ({path})")
+            if name in REQUIRED_TABLES:
+                raise ConvertError(f"missing required table {name}.csv ({path})")
+            tables[name] = []   # optional table (trades) absent -> no reconcile
+            continue
         rows = _read_csv_table(path, name)
         tables[name] = rows
         source_tables.append({"name": name, "path": str(path).replace("\\", "/"),
@@ -416,6 +480,8 @@ def _print_plain_summary(account_state: dict, lineage: dict) -> None:
     if lineage["facts_staleness"] == "stale_warning":
         print(f"[WARN] facts as-of {lineage['facts_as_of']} is earlier than decision {account_state['as_of']}: "
               "later fills/holding changes may be missing; confirm the tables are up to date.")
+    for w in (lineage.get("consistency_warnings") or []):   # slice 1b advisory reconcile (never overrides)
+        print(f"[reconcile] {w['message']}")
 
 
 if __name__ == "__main__":

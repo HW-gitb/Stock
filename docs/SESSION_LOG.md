@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 slice 1b full re-review)
+- **Verdict/Action**: PASS. Full current-tree review found `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` closed and no new material Required in the reviewed US-short batch 1 slice 1b boundary.
+- **Required**: None new. `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed current dirty/untracked slice files plus `docs/us_short_system_design.md` §3.6/§9/§12/§18.1; targeted converter/schema/doc/route tests 113 OK; local Python 3.13 full discover 2852 OK; probe confirms `否决/避开` accepted, `否决` rejected, and executed non-fill rejected; py_compile OK; diff-check only CRLF; private-path check-ignore guard still covers `state/us_short/*`; no provider/broker/market-fetch path found.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for remaining batch 1 schemas / provider / DataHub / live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT)
+- **Verdict/Action**: 判定成立、接受——设计 §9 末值是 `否决/避开`,我实现成别名 `否决`(漂移源于我 AskUserQuestion 里就缩写了该值、再写进枚举)。选 preferred 修法(设计精确值、**不留 `否决` 别名**):`TRADE_NOFILL_ACTIONS=("持有","观察","否决/避开")`。加 4 测:钉死 §9 完整 9 值集(drift-guard)+ 全值可解析 + `否决/避开` 接受 + `否决` 拒。保 executed/非executed fill 不变式。
+- **Required**: `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` — 完整 judgment/修/4测/closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: 转换器测 64 OK;full discover `python -m unittest discover -s tests` **2852 OK**(零回归,+4 净);probe `否决/避开` 接受 / `否决` 拒;py_compile OK;diff-check 仅 CRLF;BOM=0。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩:其余 schema。
+- **Pre-Codex self-review**: A-F。A:动作 vocab 一次覆盖(精确集钉死 + 全 9 值解析 + canonical/alias 双控)。**B-ripple(根因)**:vocab 改动逐字回 §9 核对——9 值已逐字一致;README「§9 vocab」措辞不变、SESSION_LOG 1b entry `否决`→`否决/避开`;trades 模板用建仓不含 veto、无需改。C:反向控——`否决/避开` 接受(FP 控)+ `否决` 拒(FN 控,防别名第二套词表)。E:register 单态。F:diff/BOM/py_compile OK。Tests passing ≠ design closure(批1 未完,provider/live gated)。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 slice 1b full review)
+- **Verdict/Action**: FAIL. Full current-tree review found the offline slice mostly inside scope, but `trades.csv.suggested_action` does not accept the design's exact §9 `final_action` value `否决/避开`.
+- **Required**: `R-USSHORT-ACCTSTATE-TRADE-ACTION-VOCAB-DRIFT` — full detail is registered in `docs/system_risk_register.md` (single source).
+- **Verify**: reviewed current dirty/untracked slice files and `docs/us_short_system_design.md` §3.6/§9/§12/§18.1; targeted converter/schema/doc/route tests 109 OK; local Python 3.13 full discover 2848 OK; bundled runtime RED only from unrelated missing deps/env; py_compile OK; diff-check only CRLF; BOM/FFFD=0; privacy guard still rejects nonignored in-repo output; no provider/broker/market-fetch path found; adversarial probe rejects `否决/避开` but accepts `否决`.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit or start batch 1 remaining schemas/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude (US-short 批1 slice 1b 起草:trades 对账 + execution_log)
+
+**Worked on**: 用户 commit slice 1a(`531d4365`)后「执行下一步」+ 选定 `suggested_action`=§9 中文词表 → 起草批1 slice 1b:account_state 转换器加**可选 `trades.csv`**(= §12 manual_actual_track / execution log)+ **advisory trades↔positions 对账**(net 已成交买/卖 vs positions.shares → lineage `consistency_warnings`,WARN-only、绝不覆盖 positions)。扩既有转换器(非新文件)+ 新 trades.csv 模板。
+
+**Key decisions / boundary**: `suggested_action`=§9 中文 final_action(建仓/加仓=买,减仓/清仓-*=卖,持有/观察/`否决/避开`=不成交,**用户选;逐字 §9、不留 `否决` 别名**);trades 严格解析(anti-coercion + 未知列拒 + PIT decision_date + US ticker 拒 A 股 + executed↔fill 不变式:executed⟹买卖动作+fill_price/shares,非executed⟹无fill+必skip_reason);对账镜像 A 股(net_buy_not_in_positions / shares_mismatch,advisory)。**纯离线 / 不接券商 / 不抓行情 / 非生产 / 不交叉 A 股**;trades=execution log 但 ship-gate 证据消费=批3。
+
+**Verify**: 转换器+schema 测 73 OK(+16 1b);full discover **2848 OK**(零回归,+16);py_compile OK;BOM/FFFD=0(trades.csv 中文 UTF-8 无 BOM);diff-check 仅 CRLF。
+
+**Next**: Codex `审查` slice 1b;PASS 后用户 `提交`(push 须明确命令)。批1 剩:其余 schema(weekly_report / field_registry / theme_lifecycle / governance preset)。
+
+**Pre-Codex self-review**: A-F。A:trades 解析缺陷类一次覆盖(action 枚举 / executed↔fill 双向 / PIT / A股码 / 未知列 / 买卖方向)。B-ripple:trades 接进 build unknown-column loop + lineage consistency_warnings(原 [] → 实算)+ main 可选表读取 + _print_plain_summary 打印 + docstring/README 更新;既有 1a 测无回退(2848 OK)、lineage example 仍 [](无 trades 合法)。C:反向控——对账 4 类/无警告 + 7 拒测(FN)+ consistent/skipped 放行(FP)。D:n/a。E:README durable 指针、无 CURRENT gate 词。F:diff/BOM/py_compile OK。**Tests passing ≠ design closure**:批1 未完(剩其余 schema),provider/live gated。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short batch 1 slice 1a full review)
 - **Verdict/Action**: PASS. Full current-tree review found batch 1 slice 1a inside the approved offline account-state boundary; no new material Required.
 - **Required**: None new. Prior `R-USSHORT-ACCTSTATE-*` closures remain registered in `docs/system_risk_register.md`.
