@@ -74,6 +74,25 @@ def _holding_state(report: dict):
 # 持仓恒列入 S1: 账户持仓(非本周候选)的行来源(渲染分区用);其余 row_source(egs_candidate /
 # egs_candidate_with_position / 缺省)归"本周 EGS 候选"段,保持既有渲染不变。
 _HOLDING_SOURCES = ("account_position_egs_full", "account_position_only")
+_ACCOUNT_ROW_SOURCES = _HOLDING_SOURCES + ("egs_candidate_with_position",)
+
+
+def _weekly_has_account_data(weekly: dict) -> bool:
+    """判断 weekly 是否含真实账户/持仓私密信息(决定 standalone 渲染是否需私密路径守门)。判据(任一):
+    run_lineage.account_status=='provided'(带 --account 跑)/ 有 holdings_manual_review(真持仓无价旁路)/ 任一 report
+    row_source 是账户持仓源 / 任一 operation_impact privacy_class 私密。无账户的 observation-only 周报 → False(不过度守门)。"""
+    rl = weekly.get("run_lineage") or {}
+    if rl.get("account_status") == "provided":
+        return True
+    if weekly.get("holdings_manual_review"):
+        return True
+    for rep in (weekly.get("reports") or []):
+        if rep.get("row_source") in _ACCOUNT_ROW_SOURCES:
+            return True
+        for imp in ((rep.get("machine") or {}).get("operation_impact") or []):
+            if imp.get("privacy_class") in ("private_account", "secret_or_raw_provider"):
+                return True
+    return False
 
 
 def _has_semantic(report: dict) -> bool:
@@ -362,7 +381,7 @@ def render_weekly_markdown(weekly: dict) -> str:
                         f"{e['net_amount'] if e.get('net_amount') is not None else '—'} | {_seatcell(e)} | {e.get('reason') or '—'} |"
                         for e in _dlevs]
             else:
-                out.append(f"> 本周已查:候选近{_n}交易日无上龙虎榜记录。")
+                out.append(f"> 本周已查:候选+持仓近{_n}交易日无上龙虎榜记录。")
             _udl = _dl.get("unchecked_dates") or []
             if _udl:                                  # per-交易日 unknown-not-clear:部分交易日取数失败,显式标(绝不当无上榜)
                 out.append(f"> ⚠️ 另有 {len(_udl)} 个交易日未能核查龙虎榜(取数失败),**不代表无上榜**,请人工核查:"
@@ -402,7 +421,7 @@ def render_weekly_markdown(weekly: dict) -> str:
                         f"{e['amount'] if e.get('amount') is not None else '—'} | {e['trade_count']} | {_btparty(e)} | {_btdisc(e)} |"
                         for e in _btevs]
             else:
-                out.append(f"> 本周已查:候选近{_bn}交易日无大宗交易记录。")
+                out.append(f"> 本周已查:候选+持仓近{_bn}交易日无大宗交易记录。")
             _btu = _bt.get("unchecked_dates") or []
             if _btu:
                 out.append(f"> ⚠️ 另有 {len(_btu)} 个交易日未能核查大宗交易(取数失败),**不代表无大宗**,请人工核查:" + "、".join(_btu))
@@ -453,10 +472,21 @@ def render_weekly_markdown(weekly: dict) -> str:
     return "\n".join(out)
 
 
-def write_weekly_markdown(weekly: dict, out_path: str) -> None:
+def write_weekly_markdown(weekly: dict, out_path: str, allow_nonprivate_account_out: bool = False) -> None:
     """渲染周报 .md。语义风险 advisory 自 Slice 3b 起**逐票行内化**(见 `_semantic_line`,从每票
     `machine.layer.semantic_risk` 渲染),不再有独立面板参数;advisory 仍只是引擎层 trace 的渲染,
-    不进确定性周报 JSON、不改任何结论。"""
+    不进确定性周报 JSON、不改任何结论。
+
+    **隐私/生产路径守门(standalone 第三写出路径)**:复用 weekly pipeline 同口径守门——无条件拒生产桶
+    `result/a_short/<date>`;weekly 含真实账户/持仓数据时(`_weekly_has_account_data`)拒落仓库内非 gitignored 路径
+    (防 git 提交泄漏持仓 .md),仓库外 / gitignored `state/a_short/weekly_private/<as_of>/` 放行,
+    `--allow-nonprivate-account-out` 可显式放行。pipeline 主路径在入口已守门(本守门幂等、再确认);standalone
+    main / 任意 caller 经本函数得同等守门(R-ASHORT-M67-RENDER-STANDALONE-PRIVACY-PROD-GUARD-GAP)。"""
+    from runners.a_short_weekly_pipeline import (  # 延迟导入避免与 pipeline 形成模块级循环依赖
+        _reject_production_output_path, _reject_nonprivate_account_output_path)
+    _reject_production_output_path(out_path)                        # 无条件拒生产桶
+    if _weekly_has_account_data(weekly):                            # 含账户/持仓 → 私密路径守门(git check-ignore 真值)
+        _reject_nonprivate_account_output_path(out_path, True, allow_nonprivate_account_out)
     md = render_weekly_markdown(weekly)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
@@ -469,11 +499,13 @@ def main(argv=None):
     p = argparse.ArgumentParser(description="Render A-short weekly M6.7 JSON → readable Markdown panel")
     p.add_argument("--weekly", required=True, help="weekly_m67.json path")
     p.add_argument("--out", help="output .md path (default: alongside the json as weekly_m67.md)")
+    p.add_argument("--allow-nonprivate-account-out", action="store_true",
+                   help="显式放行:weekly 含真实账户/持仓时允许输出落仓库内非私密目录(默认拒,防持仓 .md 被 git 提交泄漏)")
     args = p.parse_args(argv)
     with open(args.weekly, encoding="utf-8") as f:
         weekly = json.load(f)
     out = args.out or os.path.join(os.path.dirname(os.path.abspath(args.weekly)), "weekly_m67.md")
-    write_weekly_markdown(weekly, out)
+    write_weekly_markdown(weekly, out, allow_nonprivate_account_out=args.allow_nonprivate_account_out)
     print(f"[m67_render] {len(weekly.get('reports', []))} 票 -> {out}")
 
 

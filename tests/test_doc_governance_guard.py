@@ -21,6 +21,9 @@ HANDOFF_INDEX = HANDOFF_DIR / "README.md"
 ARCHIVE_SESSION_LOG_DIR = ROOT / "docs" / "archive" / "session_log"
 ACTIVE_DESIGN_DOCS = (
     ROOT / "docs" / "a_short_weekly_pipeline_design_20260610.md",
+    ROOT / "docs" / "CURRENT.md",
+    ROOT / "docs" / "a_short_holdings_in_m67_design.md",
+    ROOT / "docs" / "a_short_holdings_s3_system_levels_design.md",
 )
 CURRENT_FACT_REGISTRY = (
     {
@@ -50,6 +53,31 @@ CURRENT_FACT_REGISTRY = (
             )),
         ),
     },
+    {
+        # 2026-06-20: 4.2 缺口数据接入(全 5 轮)+ S3b 持仓主动管理(R1-R4b)均已实现并提交。
+        # 防 durable 文档(CURRENT/持仓 design docs)把已收官的 4.2/S3b 写成「未起草/待实现」(misroute 新会话)。
+        "name": "a_short_4_2_s3b_complete",
+        "future_terms": (
+            "4.2",
+            "S3b",
+            "持仓处置",
+            "减仓价",
+        ),
+        "anchors": (
+            (ROOT / "schemas" / "examples" / "a_short_gap_data_field_registry.example.json", (
+                "holding_management_effect",
+                "block_trade_appearance",
+            )),
+            (ROOT / "runners" / "a_short_phase5_engine.py", (
+                "_merge_holding_disposition",
+                "_holding_ratchet",
+            )),
+            (ROOT / "runners" / "a_short_weekly_pipeline.py", (
+                "_attach_holding_disposition",
+                "save_holding_ratchet",
+            )),
+        ),
+    },
 )
 FUTURE_WORK_MARKERS = (
     "仍未来",
@@ -58,6 +86,10 @@ FUTURE_WORK_MARKERS = (
     "尚未接线",
     "not wired",
     "stub",
+    "未起草",
+    "待起草",
+    "待实现",
+    "未实现",
 )
 
 
@@ -115,6 +147,17 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard must not flag a completed-fact line that states it is done")
         self.assertFalse(self._line_lists_completed_fact_as_future(unrelated_future, fact),
                          "guard must not block unrelated true future work such as regime classifier")
+        # 2026-06-20 new fact: 4.2/S3b 已收官,防 durable doc 写成「未起草/待实现」(misroute 新会话)
+        s3b_fact = CURRENT_FACT_REGISTRY[1]
+        s3b_stale = "持仓/风险侧剩余两大块(均未起草):① 4.2 ② S3b 持仓处置/减仓价"
+        s3b_done = "4.2 与 S3b(持仓处置/减仓价)均已实现并提交"
+        s3b_unrelated = "- 仍未来: US-short burst 尚未起草"
+        self.assertTrue(self._line_lists_completed_fact_as_future(s3b_stale, s3b_fact),
+                        "guard must catch 4.2/S3b listed as 未起草")
+        self.assertFalse(self._line_lists_completed_fact_as_future(s3b_done, s3b_fact),
+                         "guard must not flag a 4.2/S3b line that states it is done")
+        self.assertFalse(self._line_lists_completed_fact_as_future(s3b_unrelated, s3b_fact),
+                         "guard must not block unrelated future work (US-short burst)")
 
     def test_session_log_entry_rule_teaches_archive_pointer_exception(self):
         text = AGENTS.read_text(encoding="utf-8")
@@ -169,6 +212,64 @@ class DocGovernanceGuard(unittest.TestCase):
                       "AGENTS lost the register-single-source rule")
         self.assertIn("### 评审循环 entry 极简模板", text,
                       "AGENTS lost the minimal review-cycle SESSION_LOG template")
+
+    # R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP: the front short entry must front-load BOTH
+    # the four output sections AND the 大白话 plain-language layer. Single-source check for the live
+    # guard and its planted-failure proof so the two can't drift apart (the previous front entry
+    # complied with the four-section shape while omitting the user-required 大白话 layer).
+    FRONT_OUTPUT_SECTIONS = ("Verdict", "Findings", "Required / Optional / Options", "下一步")
+    PLAIN_LANGUAGE_FRONT_ANCHOR = "大白话"
+
+    @classmethod
+    def _front_review_output_gaps(cls, front):
+        gaps = []
+        if not all(s in front for s in cls.FRONT_OUTPUT_SECTIONS):
+            gaps.append("four-section-list")
+        if cls.PLAIN_LANGUAGE_FRONT_ANCHOR not in front:
+            gaps.append("plain-language-大白话")
+        return gaps
+
+    def test_agents_front_loads_codex_review_output_short_entry(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        front = "\n".join(text.splitlines()[:60])
+
+        expected = (
+            "## 审查输出/落盘短入口",
+            "Codex",
+            "docs/SESSION_LOG.md",
+            "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER",
+            "docs/system_risk_register.md",
+            "Verdict",
+            "Findings",
+            "Required / Optional / Options",
+            "下一步",
+            "不得发送",
+        )
+        for anchor in expected:
+            self.assertIn(
+                anchor,
+                front,
+                "AGENTS.md front matter must expose the Codex review output/logging closeout contract.",
+            )
+        # the four-section shape alone is not enough — the 大白话 plain-language layer must be front-loaded too.
+        self.assertEqual(
+            self._front_review_output_gaps(front), [],
+            "AGENTS.md front short entry must front-load the four output sections AND the 大白话 layer.",
+        )
+
+    def test_agents_front_entry_without_plain_language_fails(self):
+        # planted-failure + positive control: a front entry that lists only the four section names but
+        # omits the 大白话 layer must be flagged; the real AGENTS front (with 大白话) must pass the
+        # same single-source checker.
+        four_sections_only = (
+            "## 审查输出/落盘短入口（Codex 必读）\n"
+            "屏幕最终回复固定四段：`Verdict`、`Findings`、`Required / Optional / Options`、`下一步`。\n"
+        )
+        self.assertIn("plain-language-大白话", self._front_review_output_gaps(four_sections_only),
+                      "a four-section-only front entry without 大白话 must fail the plain-language gate")
+        real_front = "\n".join(AGENTS.read_text(encoding="utf-8").splitlines()[:60])
+        self.assertEqual(self._front_review_output_gaps(real_front), [],
+                         "the real AGENTS front entry must satisfy both the four-section and 大白话 gates")
 
     def test_agents_codex_review_requires_one_pass_defect_matrix(self):
         # User-directed 2026-06-13 correction: Codex review must not drip-feed one issue per

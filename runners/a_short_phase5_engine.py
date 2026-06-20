@@ -1220,9 +1220,11 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     iv_hv_note, iv_hv_regime, iv_hv_ratio = iv_hv_vol_note(
         (inp.get("iv") or {}).get("iv_value"), (inp.get("iv") or {}).get("hv_value"))
     # EGS 派生风险族一律 not-evaluated(未核查,非 hit);stateful_risk 从真实 Rule12/Rule13。
+    # Tier-3 placeholder 风险族用 canonical 键(与主引擎 RISK_FAMILIES 对齐,Codex S3#2-1):全 not-evaluated
+    # (未核查、非 hit);此前用非 canonical liquidity_impact/event_hard_veto 会让按 canonical 键聚合的下游漏读。
     fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
-           ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_impact",
-            "event_hard_veto", "semantic_official", "stateful_risk")}
+           ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_execution",
+            "negative_event", "semantic_official", "stateful_risk")}
     # 4.2 S2: 持仓 semantic 数据接入(让持仓也抓 cninfo/web 语义)。复用 _consume_semantic(候选/持仓单一来源)+
     # _semantic_operation_impacts(scope=existing_holding → holding_row_impact: clear_review/hold_watch + blocked_add
     # + pending S3b)。持仓 action 恒「持有」(不否决/不自动卖出,减仓价/清仓价见 R3,到价提示/移保本=R4a(within-week advisory)、跨周持久收紧 ratchet=R4b);official 证据齐全 high → 清仓复核 advisory

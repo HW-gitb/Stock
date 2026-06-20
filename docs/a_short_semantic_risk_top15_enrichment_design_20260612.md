@@ -5,6 +5,8 @@
 **类型**: **design-only**。不解冻 V14.2 spec、不改 production scoring、不接券商。本文是总设计 + 三切片落地计划;具体 schema/runner/skill/测试在各自切片产出。
 **前置事实(已读真代码)**: `A-EGS/egs_main.py::stage3_ai_clearing` 已有 ① 巨潮 cninfo 监管公告检查(`hisAnnouncement/query`,关键词 `问询函/立案调查/监管关注/警示函`→`cninfo_flag`,跑 top50、回测跳过)② DeepSeek+东财行业新闻→`POL-RISK-VETO` 行业硬剔除。所以**缺口不是"零覆盖"**。
 
+> **⚠️ SUPERSEDED-IN-PART(Slice 3 已 land 2026-06-20)**:下文一切「本切片不碰 production stage3 / 不改 DeepSeek POL-RISK-VETO / POL-RISK-VETO 标 legacy-conflict / Slice 3 待决」均为**历史设计态**。实况:Slice 3 reconciliation 已落地——egs_main stage3 的 DeepSeek `POL-RISK-VETO` **整段移除**、cninfo `REGULATOR-VETO` **降为 advisory**(`REGULATOR-ADVISORY`,不删生产候选)+ 修「空=通过」假清白。真生产监管硬否决 = 未来 opt-in (b)。详见 `docs/system_risk_register.md` Slice-3 Required 条目 + `tests/test_semantic_risk_slice3_guard.py`。
+
 ## 0. 缺口的准确表述
 现有 stage3 有 cninfo_flag 与 DeepSeek 政策硬否决,但:仅 4 关键词、只在 production run 内、非 PIT(无披露日证据)、覆盖内部 top50 而非用户观察 Top15、结果未结构化进 M6.7/周报面板、DeepSeek 是 LLM 直接硬否决(advisory 原则相悖)。
 > **真缺口 = 缺一个可审计、PIT、Top15 主板全覆盖、可在 M6.7/周报面板消费、且 LLM 部分只 advisory 不硬否决 的语义风险层。** 本设计补这一层,**与现有 production stage3 隔离**(不改其行为)。

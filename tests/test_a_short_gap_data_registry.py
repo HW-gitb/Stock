@@ -318,7 +318,7 @@ def _sem_impacts(r):
 
 def _holding_official_impact():
     """引擎 helper 产的合法持仓 semantic advisory impact(official high, existing_holding):
-    holding_row_impact / clear_review / blocked_add / m67_advisory_veto / future_s3b + pending S3b / private_account。"""
+    holding_row_impact / clear_review / blocked_add / m67_advisory_veto / implemented(S3b 已收官,经合并引擎落持仓处置) / private_account。"""
     return _semantic_operation_impacts([_OFFICIAL_HIGH["events"][0]], None, False, AS_OF, "existing_holding")[0]
 
 

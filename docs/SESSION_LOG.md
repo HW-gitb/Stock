@@ -8,6 +8,62 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT + R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP)
+- **Verdict/Action**: PASS. Round-2 repairs close both Required in the reviewed working tree; no new material Required found.
+- **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT` / `R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP` — closure detail lives in `docs/system_risk_register.md`(single source)。
+- **Verify**: doc-governance+slice3+route-doc 39 OK; in-memory compile 7 OK; `git diff --check` clean(CRLF warnings); A-short targeted tests blocked in bundled Python by missing `jsonschema`.
+- **Next**: User may ask Claude `提交` the current A-short batch; include the intentional staged POL-RISK prompt-guard test deletion and avoid unrelated paths.
+
+## 2026-06-20 — Claude `修复`(R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT round 2 + R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP)
+- **Verdict/Action**: 接受 Codex re-`审查 FAIL` 两 Required。**只改文档 + guard、不改业务代码**。R1:CURRENT:124 残留「待决 Slice 3」→ Slice-3-landed;slice3_guard 由纯 positive-marker 升级为负向扫描(unqualified stale-phrase + planted-failure + 历史叙述正控 + egs-post-Slice3 gate)。R2:AGENTS 前置短入口加「大白话」层要求 + doc-governance guard 加 `_front_review_output_gaps` checker + planted-failure 测。working tree 已修, 未 commit。
+- **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT`(round 2)+ `R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP` — full detail + 逐项见 `docs/system_risk_register.md`(单一来源;两条均 flip → resolved + Resolution)。
+- **Verify**: 全量 discover **2771 OK**(零回归,+4 测);slice3_guard 7(3 新:负向 doc-scan + planted-failure + 历史正控)/ doc-governance front 2 测(live + planted)OK;AGENTS 前 60 行含「大白话」grep=1;5 doc 正 marker grep 全在;diff-check clean(仅 CRLF);无 BOM。未跑 live provider。
+- **Next**: Codex re-`审查`(本两 Required 修 + 整批 working tree);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F。A:两 checker 缺陷类一次覆盖(7 stale 短语 / 四段+大白话双面)。B ripple:re-grep `待决 Slice 3`/`production stage3 untouched` 于 active docs——仅 CURRENT:124(已修);README:75/82 untouched=frozen-report/l4 噪声非 drift;exact 短语只在 archive+register、非 active-doc 集。C:planted-failure 证两 checker 非空绿、historical 正控不误伤 archive/banner、egs-gate 防 code 回退误 fire。E:register 两条单态 resolved。F:diff/BOM OK。
+
+## 2026-06-20 — Codex `审查 FAIL`(A-short v3/Slice 3 re-review + review-output protocol)
+- **Verdict/Action**: FAIL. Slice 3 route-doc repair is partial, not closure-clean; Codex review-output short entry/guard still omits the required `大白话` layer.
+- **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT` / `R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP` — full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: bootstrap+current diff read; doc-governance+slice3_guard 21 OK; route-doc guard 14 OK; in-memory compile 7 OK; diff-check clean(CRLF warnings); A-short targeted tests blocked in bundled Python by missing `jsonschema`.
+- **Next**: Claude `修复` the two Required only, then Codex re-`审查`; do not commit current batch before PASS。
+
+## 2026-06-20 — Claude `修复`(R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT:Slice 3 后 active route-doc 漂移)
+- **Verdict/Action**: 判定 Codex `审查 FAIL` Required 成立(Slice 3 代码已落地、漏跑 active route-doc ripple-grep)。**只改文档 + guard、不改业务代码**:CURRENT §5 item4 / README 语义+probe 行 / coverage / top15-design(顶部 SUPERSEDED marker)/ overlay-spec §legacy / register 旧 tracker prose 全更新为 Slice-3-resolved(嵌「Slice 3 已 land」marker);slice3_guard 加 active-doc resolution-marker 守护。working tree 已修, 未 commit。
+- **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT` — full detail + 6 处逐项见 `docs/system_risk_register.md`(单一来源;同 flip Codex FAIL 条目 → resolved)。
+- **Verify**: 全量 discover **2767 OK**(零回归,+1 guard 测);slice3_guard 4(含新 active-doc resolution)/ doc-governance 17 / route-doc OK;5 active doc「Slice 3 已 land」marker grep 全在;diff-check clean(仅 CRLF);无 BOM。未跑 live provider。
+- **Next**: Codex re-`审查`(本 route-doc 修 + 整批 working tree);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F checked。**B ripple(根因)**:全仓 grep `POL-RISK|REGULATOR-VETO|production stage3` over docs/——active docs 全更新、archive(append-only 历史)留;README:82=`hard_veto` 泛匹配噪声(industry_heat)非 drift、不动。C reverse:guard 用 positive marker(「Slice 3 已 land」)断言 resolution 在场、revert 即 FAIL,不误伤 archive。E register/SESSION_LOG 单态(Codex FAIL 条目 flip resolved + Resolution 单一来源)。A 出口:5 active doc + register prose 一次覆盖。F diff-check/BOM OK。
+
+## 2026-06-20 — Codex `审查 FAIL`(v3 repair full review: item 1-5 + Slice 3)
+- **Verdict/Action**: FAIL. v3 item 1-4 代码修复、item 5 低危批量、Slice 3 代码 reconciliation 主体方向成立;但 active route docs 仍把旧 Slice 3 写成待决/现行 `POL-RISK-VETO` + cninfo production hard-veto 状态。
+- **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT` — full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: read desktop `a_short_review_codex_v3.md` + current diff; targeted 54 OK; route-doc + forward_event 36 OK; weekly full 448 had 1 env error(`ModuleNotFoundError: tushare`); in-memory compile 5 OK; no provider/pipeline run。
+- **Next**: Claude `修复` this route-doc/guard Required only, then Codex re-`审查`; do not commit current batch before PASS。
+
+## 2026-06-20 — Claude `修复`(item 5 低危批量清理:_board_from_code / excluded_counts / SkipSemanticRisk / 龙虎榜空态 / Tier-3 键)
+- **Verdict/Action**: v3 item 5「可批量排期」低危项 + Slice 1 P2-1/P2-2 + Codex S3#2-1/S4#2-2/S5#2-2 一次清:_board_from_code 默认 main→inclusion-based(非主板→unknown)、excluded_counts m67_text 诚实标签、-SkipSemanticRisk help 澄清跳整 M6.7、龙虎榜/大宗空态「候选」→「候选+持仓」、Tier-3 risk_families 键对齐 canonical。**无生产行为改动**。working tree 已修, 未 commit(第 3 scope)。
+- **Required**: `R-ASHORT-ITEM5-LOWRISK-BATCH` — full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 discover **2765 OK**(零回归);py_compile×4 OK;diff-check clean(仅 CRLF);无 BOM。B-ripple:无 test 依赖旧字符串/键(摘要=header / 无大宗交易记录=substring 保留 / Tier-3 旧键 + _board_from_code 无 test 引用)。未跑 live provider。
+- **Next**: Codex re-`审查`(item 1-4 + Slice 3 + 本低危批 3 scope);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F checked。A 类×出口:_board_from_code 三出口(主板/known 非主板/unknown);Tier-3 两个非 canonical 键全改。B ripple:grep tests 无依赖旧字符串/键。C reverse:真主板仍 'main' 不误判、空态加「持仓」不丢「无记录」substring、excluded label 不改计数逻辑。E register/SESSION_LOG 单态。F py_compile/diff-check/BOM OK。低危、无生产行为改动。
+
+## 2026-06-20 — Claude 决策落地(item 5 口径:行业中位数 / overlay 含全行业)
+用户拍板「含全行业」→ 行业 ESP 基准(`global_ind_med`)/ overlay 行业热度保持全 universe 样本(非主板过滤),Codex S2#2 驳回为 by-design 非缺陷:ChiNext/STAR 是合法行业成员、纳入更稳健;候选打分仍只限主板(`filter_l0` strict),B 股无 SW 映射落「未知」桶不污染。**无行为改动**,仅加 `egs_main` 注释(决策单一来源)+ register disposition。item 5 至此全部处置完毕(legacy cninfo/POL-RISK 已 Slice 3 拆除/降级;行业中位数 = 含全行业 by-design)。
+
+## 2026-06-20 — Claude `修复`(Slice 3 reconciliation:legacy 生产语义/政策硬否决 拆除/降级)
+- **Verdict/Action**: 用户拍板执行思路(桌面 `a_short_review_codex_v3.md` 区分)→ `POL-RISK-VETO` 整段移除(+孤立 helpers/常量)、cninfo `REGULATOR-VETO` 降 advisory(不删生产候选)+ 修「空=通过」假清白(空公告→未核查)、真生产监管否决另开 opt-in (b)。**与 item 1-4 独立 scope**(本条 = production egs_main veto 拆除)。working tree 已修+测, 未 commit。
+- **Required**: `R-ASHORT-SLICE3-LEGACY-PRODUCTION-VETO-RECONCILIATION` — full detail 见 `docs/system_risk_register.md`(单一来源;并 flip 该处 deferred tracker → resolved)。
+- **Verify**: 全量 discover **2765 OK**(零回归:删 1 dead 测、guard 重写 +2); phase6 63 / slice3_guard 3 / doc-governance 16 / route-doc OK; py_compile egs_main OK; 0 orphan code ref(POL-RISK helpers 全清); git diff --check clean(仅 CRLF); 无 BOM。未跑 live provider/抓数。
+- **Next**: Codex re-`审查`(item 1-4 + 本 Slice 3 两 scope);PASS 后用户 `提交`(建议两 commit:item 1-4 / Slice 3)。真生产监管硬否决 = opt-in (b) 待用户另开。
+- **Pre-Codex self-review**: A-F checked。A 类×出口: POL-RISK 块 + 全部孤立 helpers/常量一次删净(grep 0 orphan); cninfo veto→advisory 两面(caller 不 drop + `_cninfo_check` 空→None)同改。B ripple: POL-RISK 代码符号 grep 0 残(注释保留历史名)、dead 测删、guard 重写、register tracker flip resolved。C reverse: cninfo 命中仍标(不漏)、空→未核查(不伪装通过、也不误删)、减持/解禁 production veto ①② 保留(不误拆真 veto)。E register 单态(tracker flip + closure 指针、新 Required 单一来源)。F py_compile/BOM/diff-check OK。guard 重写为 stays-resolved 回归(禁 POL-RISK 复活)。
+
+## 2026-06-20 — Claude `修复`(Codex v3 修复清单 item 1-4:standalone renderer 隐私守门 + analysis_input 历法日 + forward_event 状态漂移 + route-doc drift cluster)
+- **Verdict/Action**: 按桌面 `a_short_review_codex_v3.md` 修复顺序修 item 1-4(item 5 行业中位数/overlay 限主板待用户定口径, 不动; legacy cninfo/POL-RISK 归 Slice 3, 不孤立 patch); 三方收敛(Codex v2→Claude 判断→Codex v3)findings 独立验证全成立。working tree 已修+测, 未 commit。
+- **Required**: `R-ASHORT-M67-RENDER-STANDALONE-PRIVACY-PROD-GUARD-GAP` / `R-ASHORT-ANALYSIS-INPUT-CONTRACT-CALENDAR-DATE-GAP` / `R-ASHORT-FORWARD-EVENT-HELD-IMPL-STATUS-STALE-S3B` / `R-ASHORT-ROUTE-DOC-42-S3B-COMPLETED-FACT-AS-FUTURE-DRIFT` — 全 ID + full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 全量 discover **2766 OK**(零回归, +19 测); targeted m67_render 26 / contract 8 / weekly 434 / doc-governance 16(含 4.2-S3b completed-fact planted)/ route-doc 200 / registry / semantic-contract-docs; git diff --check clean(仅 CRLF); 无 BOM; ripple future_s3b/未起草+S3b/§0.5 零残留。未跑 live provider/抓数/capture。
+- **Next**: Codex re-`审查` 本修复批; PASS 后用户 `提交`(13 文件, 不带 iv_feed.json)。item 5 待用户定口径。
+- **Pre-Codex self-review**: A-F checked。A 类×出口: Fix1 守门置 write_weekly_markdown(覆盖 pipeline+standalone+任意 caller); Fix2 单一 _parse_date8 覆盖 trade_date/l3/earnings 三出口。B ripple: future_s3b(仅 schema enum)/未起草+S3b/§0.5 = 0 残留。C reverse: no-account 不误拒 + 合法历法日过 + 已完成 4.2/S3b 不误判(均配测)。E route-doc 单态(CURRENT §5 settled 指针, 无 transient gate)。F BOM/diff-check/strptime canonical OK。+9 针对性测。
+
 ## 2026-06-20 — Claude `提交`(a-short 自审+Codex审查修复批 closeout @d1857ef1)
 - **Verdict/Action**: a-short 修复批 + A-long forward-paper 2 条 status closeout 已提交 master **@d1857ef1**(13 files, +545/−32; pre-commit hook 测试 14 OK)。register a-short entry status `open`→`resolved`、A-long 两条 status `open`→`resolved` 同 commit。**AGENTS.md 并发改动(`审查` 四段输出格式固化)被 `git add -A` 误入 → 已 `git restore --staged` unstage,未带入本 commit**(非本 scope,留 working tree 由其来源处理)。
 - **Required**: 10 条 `R-ASHORT-*` 全 `resolved` @d1857ef1;A-long `R-ALONG-VY-FP-{DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT,FORWARD-CAPTURE-EVIDENCE-INTEGRITY}-GAP` 两条 status closeout(code 早 @e5bd1902、review docs @7b1280bf,本次仅补 register status)— 全 ID + full detail 见 `docs/system_risk_register.md`(单一来源)。

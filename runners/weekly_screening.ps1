@@ -29,7 +29,7 @@
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
-#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # skip the M6.7 advisory (semantic)
+#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 跳过【整个】M6.7 advisory 周报(IV/价/account/语义全跳;非仅 semantic — Slice 3b-2 起语义已行内化)
 #   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
 #                                                                     # 带 -Account 报告含真实持仓 → 自动落 gitignored 私密目录 state\a_short\weekly_private\<as_of>\(防提交泄漏);无 -Account 走标准 research lane
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard

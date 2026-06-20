@@ -13,7 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
+from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 
 
 def _report(ts_code, action, **tbl):
@@ -236,6 +236,72 @@ class HoldingStateTests(unittest.TestCase):
         # reverse: holding-state column is explanation-only; the 操作 cell still reflects the engine action
         md = self._md(_sr(r13="active_cooldown"), action="否决")
         self.assertIn("| 600000.SH | 测试 | 否决 | Rule13冷静 |", md)   # action unchanged by the new column
+
+
+def _guard_weekly(account: bool, reports=None) -> dict:
+    rl = {"analysis_input": "", "selection_bucket": "", "iv_feed": "x", "account_ref": "",
+          "account_status": "provided" if account else "absent",
+          "sizing_mode": "sized" if account else "observation_only_no_account",
+          "price_freshness": {"mode": "strict_as_of", "run_date": None,
+                              "accepted_prior_settled_date": None, "price_data_through": "20260616"}}
+    reps = reports if reports is not None else [_report("000001.SZ", "观察")]
+    return {"schema_name": "a_short_weekly_report", "schema_version": "1.0.0",
+            "generated_at": "2026-06-16T15:00:00+08:00", "as_of": "20260616",
+            "iv_feed_ref": "x", "n_stocks": len(reps), "reports": reps,
+            "cash_allocation": None, "run_lineage": rl,
+            "boundary": {"production": False, "real_money": False,
+                         "is_validated_alpha": False, "satisfies_ship_gate": False}}
+
+
+class WriteGuardTests(unittest.TestCase):
+    """standalone renderer 写盘前隐私/生产路径守门(R-ASHORT-M67-RENDER-STANDALONE-PRIVACY-PROD-GUARD-GAP):
+    无条件拒生产桶;含账户/持仓 weekly 拒落仓库内非 gitignored 路径;无账户 weekly 不过度守门(reverse)。"""
+
+    def test_production_bucket_always_rejected(self):
+        leak = ROOT / "result" / "a_short" / "__probe_m67__" / "weekly_m67.md"   # 生产桶
+        with self.assertRaises(ValueError):                                       # _reject_production_output_path
+            write_weekly_markdown(_guard_weekly(account=False), str(leak))
+        self.assertFalse(leak.exists())                                           # 守门在写盘前 raise → 不创建
+
+    def test_account_weekly_rejected_on_tracked_repo_path(self):
+        leak = ROOT / "__m67_render_leak_probe__.md"                              # repo 根,git 不忽略
+        try:
+            with self.assertRaises(SystemExit):                                   # _reject_nonprivate_account_output_path
+                write_weekly_markdown(_guard_weekly(account=True), str(leak))
+        finally:
+            if leak.exists():
+                leak.unlink()
+        self.assertFalse(leak.exists())
+
+    def test_account_weekly_allowed_on_gitignored_private_path(self):
+        import shutil
+        base = ROOT / "state" / "a_short" / "weekly_private" / "__probe_m67__"
+        out = base / "weekly_m67.md"
+        try:
+            write_weekly_markdown(_guard_weekly(account=True), str(out))
+            self.assertTrue(out.exists())
+        finally:
+            if base.exists():
+                shutil.rmtree(base, ignore_errors=True)
+
+    def test_no_account_weekly_allowed_on_tracked_path(self):
+        # reverse-failure: 无账户 observation-only 周报无持仓数据 → 不应被私密守门误拒(只挡生产桶)。
+        out = ROOT / "__m67_render_obs_probe__.md"                                # repo 根 tracked,但无账户数据
+        try:
+            write_weekly_markdown(_guard_weekly(account=False), str(out))
+            self.assertTrue(out.exists())
+        finally:
+            if out.exists():
+                out.unlink()
+
+    def test_account_weekly_allowed_on_tracked_path_with_override(self):
+        out = ROOT / "__m67_render_override_probe__.md"
+        try:
+            write_weekly_markdown(_guard_weekly(account=True), str(out), allow_nonprivate_account_out=True)
+            self.assertTrue(out.exists())
+        finally:
+            if out.exists():
+                out.unlink()
 
 
 if __name__ == "__main__":

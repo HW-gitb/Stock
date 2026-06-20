@@ -1,7 +1,7 @@
 # A-short 持仓恒列入 S3a — 系统计算止损/止盈(被动显示) + account_state schema v1.1
 
 **owner**:让系统自动算持仓的**止损 / 止盈**位(用户不再手填),落实桌面 `持仓恒列入.md §14`"系统算决策、用户只填事实"的核心。S3a = **被动**第一刀(算 + 显示,动作恒「持有」);主动动作(减仓 / 止损触发 / 加仓)+ 跨周持久化 ratchet 留 **S3b**。
-**状态**:设计稿(2026-06-16,口径已与用户确认);待 `起草` 实现。S1 见 `docs/a_short_holdings_in_m67_design.md`。
+**状态**:S3a(被动止损/止盈 + account_state v1.1)与 S3b(R1-R4b 主动持仓管理:持仓处置/减仓价/清仓价/到价提示/移保本/跨周 ratchet)均已实现并提交(详 `docs/CURRENT.md` §0)。本文件为 S3a/S3b 的 in-repo 权威设计摘要。S1 见 `docs/a_short_holdings_in_m67_design.md`。
 
 ## 0. 用户已定口径(2026-06-16 Q&A,不可猜)
 - **止损 = 跟踪止损(ratchet)**:`近 N 日最高 − ATR_MULT[regime] × ATR`;随新高上移,无状态(从 price_series 重算)。**#6 更新(2026-06-17,用户已确认):** `近 N 日最高` 改用去单日插针的**有效压力** `ind['resistance']`(effective_resistance),避免上插针把跟踪止损顶得过紧而提前出局。

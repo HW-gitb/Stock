@@ -15,6 +15,14 @@
 - `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
 - `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
+## 审查输出/落盘短入口（Codex 必读）
+
+用户下达 `审查` 或要求按审查流程收口时，Codex 在发送最终回复前必须先完成落盘：把 `docs/SESSION_LOG.md` 顶部、`REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER` 之上 prepend 一条极简 review-cycle entry（`Verdict/Action` / `Required` / `Verify` / `Next`）；material Required 的完整细节只写 `docs/system_risk_register.md`。
+
+屏幕最终回复固定四段且只用这四段：`Verdict`、`Findings`、`Required / Optional / Options`、`下一步`。无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界”等额外栏目。**且每段都必须带一句大白话**：`Verdict` / `Findings` / `下一步` 各一句大白话（能不能过 / 主要问题 / 谁该做什么），`Required / Optional / Options` 下**每条具体项**都带 `大白话：…` 说清后果或怎么选；任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
+
+若没有写入 SESSION_LOG 极简 entry，Codex 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
+
 **Route-doc 稳定性约定 (v3)**：**单一 live-state 真相源 = `docs/SESSION_LOG.md` 顶部最新 verdict + artifact 本身**(ledger 的 `tests_spent_count`、`research/results/.../execution_summary.json`)。
 
 - `docs/CURRENT.md` **§0 Latest Delta** 是**唯一**允许重述当前态的短摘要(每轮更新),但**只放已 settled 的事实**(verdict / 度量 / ledger 已花 / 线已关闭 / 下一步目标);**实时 review/commit-cycle gate(pending review / before commit / 谁审谁提交 / routed-to / uncommitted / 在飞的 PASS·FAIL)绝不进 `CURRENT` 任何位置(含 §0 与 header)——只进 `docs/SESSION_LOG.md` 顶部**。这是 v2 的修正:v2 曾允许 §0 含 pending / 下一步周期词,导致 `result-closeout 待 Codex 审查` 这类 gate 词在 commit 后立即陈旧(`R-EP-CURRENT-TRANSIENT-GATE-WORDING`)。"下一步目标"指 settled 的研究方向(如"下一步 batch+FDR"),不是"下一条命令是谁的 `审查`/`提交`"。

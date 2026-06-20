@@ -4,7 +4,7 @@
 
 **Status**: governance contract only. This file does not auto-enable production scoring, hard vetoes, sizing changes, EGS ranking changes, broker/order behavior, or real-money use.
 
-**Source**: consolidated from desktop `price calc.md` §12 into the repo so the rule no longer lives only in a local draft.
+**Source**: 已固化进 repo,本文件是 4.2 字段转正提醒治理的单一权威(不再只存于本地草稿)。桌面 4.2 设计权威 = `4.2.md`(转正 Gate 见其 §12 Gate A/B/C);旧本地 `price calc.md` 草稿引用已被本 repo 文件 supersede。
 
 ## 1. Core Rule
 
@@ -57,7 +57,7 @@ Formal promotion still requires a separate review, explicit user approval, and a
 
 Structured fields may request promotion into scoring, risk deduction, sizing adjustment, or advisory-only display, depending on their evidence.
 
-LLM / web advisory fields default to display, explanation, and manual review only. Any move into build/position sizing/hard-veto behavior requires a stricter separate review.
+LLM / web advisory fields are **permanently advisory-only**: display, explanation, and manual review only, and they can **never** become a production hard veto or a buy factor (enforced in code by the Phase 5 `semantic_web_llm` isolation guard). Only `official_structured` high + evidence-full may, through a separate PIT-source review (Slice 3), be studied for a deterministic production veto — `web_llm` is **not** promotable to hard-veto by any review.
 
 No 4.2 field may rescue a production hard veto. Anti-rescue stays mandatory.
 

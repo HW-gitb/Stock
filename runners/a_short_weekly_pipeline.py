@@ -431,7 +431,7 @@ def _build_exclusion_summary(excluded_counts: dict, as_of: str):
     if total == 0:
         return None
     return {"as_of": str(as_of), "total_excluded": total, "by_reason": by_reason,
-            "m67_text": "本轮上游过滤(无 M6.7 个股行,批次级): " + "、".join(parts) + "。",
+            "m67_text": "本轮上游过滤(无 M6.7 个股行,批次级;按原因计数、可能重叠、非去重票数): " + "、".join(parts) + "。",
             "evidence_ref": {"kind": "lineage_key",
                              "value": _EXCL_EVIDENCE_LINEAGE_KEY,
                              "as_of": str(as_of)}}
@@ -1271,10 +1271,10 @@ def _attach_forward_event_impacts(weekly, as_of):
                 "confidence": "high",
                 "pit_basis": "disclosure_date",
                 "production_effect_enabled": False,
-                "implementation_status": "future_s3b_schema_render_required" if held else "implemented",
+                "implementation_status": "implemented",  # S3b 已收官:held 信号经 _merge_holding_disposition 落持仓处置(已结构化),非 held 落操作建议
                 "m67_landing_surface": "精简结论区.风控触发+操作建议(未来事件)",
                 "terminal_surface_target": "s3b_持仓处置_列+减仓价" if held else "already_structured",
-                "pending_successor_slice": "S3b" if held else None,
+                "pending_successor_slice": None,  # S3b R1-R4b 已实现,held forward_event 不再 pending
                 "privacy_class": "private_account" if held else "public_tracked",
             })
     # 4.2 forward_events: holdings_manual_review(无价/停牌/价格陈旧旁路持仓,无 machine 结构、只 ts_code/name/reason、不进
@@ -2728,7 +2728,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
     write_weekly_report(weekly, feed, args.out)
-    write_weekly_markdown(weekly, md_path)
+    write_weekly_markdown(weekly, md_path, allow_nonprivate_account_out=args.allow_nonprivate_account_out)
     actions = {}
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1

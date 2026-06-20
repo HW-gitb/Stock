@@ -56,6 +56,22 @@ class AnalysisInputContractTest(unittest.TestCase):
         with self.assertRaisesRegex(AnalysisInputContractError, "earnings_report_date"):
             validate_analysis_input_contract(payload)
 
+    def test_illegal_calendar_trade_date_is_rejected(self) -> None:
+        # 8 位数字但非法历法日(六月0日 / 二月31日 / 六月31日)须拒,不得通过 schema 正则 + PIT 字典序比较。
+        # 与 engine/weekly 已严格的 _is_valid_date 同口径(shared contract 是跨消费者防线)。
+        for bad in ("20260600", "20260231", "20260631"):
+            payload = cloned_minimal_analysis_input_payload()
+            payload["trade_date"] = bad
+            with self.assertRaisesRegex(AnalysisInputContractError, "calendar date"):
+                validate_analysis_input_contract(payload)
+
+    def test_illegal_calendar_earnings_report_date_is_rejected(self) -> None:
+        # 非法历法日的 earnings_report_date(20260231)曾因字典序 < trade_date 被当合法过去日静默放行 → 须拒。
+        payload = cloned_minimal_analysis_input_payload()
+        payload["candidates"][0]["fundamental"]["expectation"]["earnings_report_date"] = "20260231"
+        with self.assertRaisesRegex(AnalysisInputContractError, "calendar date"):
+            validate_analysis_input_contract(payload)
+
 
 if __name__ == "__main__":
     unittest.main()

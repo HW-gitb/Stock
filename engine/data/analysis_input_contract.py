@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -99,8 +100,15 @@ def _validate_candidate_date(value: Any, field_path: str, trade_date: str, label
 
 
 def _parse_date8(value: Any, field_path: str, label: str) -> str:
-    if not isinstance(value, str) or not _DATE8_RE.match(value):
-        raise AnalysisInputContractError(
-            f"{label} PIT validation failed: {field_path} must be YYYYMMDD, got {value!r}"
-        )
-    return value
+    # 严格 canonical(与 engine/weekly 的 _is_valid_date 同口径):8 位 ASCII 数字 + strptime 历法校验。
+    # 仅正则会让 20260600 / 20260231 / 20260631 等非法历法日通过共享契约的 schema/PIT 字典序比较(跨消费者防线)。
+    if isinstance(value, str) and _DATE8_RE.match(value):
+        try:
+            datetime.strptime(value, "%Y%m%d")
+        except ValueError:
+            pass
+        else:
+            return value
+    raise AnalysisInputContractError(
+        f"{label} PIT validation failed: {field_path} must be a canonical YYYYMMDD calendar date, got {value!r}"
+    )

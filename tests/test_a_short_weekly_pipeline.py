@@ -2008,7 +2008,8 @@ class ForwardEventRowLandingTests(unittest.TestCase):
         _attach_forward_event_impacts(w, AS_OF)
         imp = self._fwd(rep)[0]
         self.assertEqual((imp["visibility_shape"], imp["holding_effect"], imp["blocked_add_required"], imp["pending_successor_slice"]),
-                         ("holding_row_impact", "hold_watch", True, "S3b"))
+                         ("holding_row_impact", "hold_watch", True, None))   # S3b 已收官:held forward_event 经合并引擎落持仓处置,不再 pending S3b
+        self.assertEqual(imp["implementation_status"], "implemented")        # 非 future_s3b(已实现)
         validate_operation_impact_no_dangling(rep)                 # row no-dangling + ⑩ blocked_add 文本 过
 
     def test_no_hard_veto_rescue(self):
