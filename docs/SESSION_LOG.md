@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-20 — Codex `全量审查 PASS`(US-short batch 1 action_table output contract re-review)
+- **Verdict/Action**: PASS. Full current-tree review found `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` closed and no new material Required in this offline action_table output-contract slice.
+- **Required**: None new. `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/risk/design anchors; independent mutation probe rejects theme_source/warning-level/drop/reorder/unknown-enum drift; targeted action-table/doc/route 62 OK; full discover 2916 OK; py_compile OK; diff-check only CRLF; BOM/FFFD=0; no provider/broker/fetch path.
+- **Next**: User may command `提交` for this slice. Separate explicit command required for field_registry/remaining governance/provider/DataHub/live work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP)
+- **Verdict/Action**: 判定成立、接受(独立重读设计:`theme_source` §4.3 l148 `（gics_established / provisional_discovered）`词表锁定;`macro_cluster_warning_level` §8 l228 `（none / elevated / high）`档名锁定——仅 frac 阈值 §13 #31 forward,与我已钉的 `portfolio_guard_status` 同构)。两列 const 钉死(schema required enum 12→14)+ preset + `EXPECTED_ENUMS`。根因=我 §A sweep 只覆盖 `∈{}` 约定、漏 `字段（v/v）` 等价约定。
+- **Required**: `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` — 完整 judgment / 全类修 / closure 见 `docs/system_risk_register.md`(单一来源;flip→resolved + Resolution)。
+- **Verify**: action_table 测 21→**26 OK**(+3 负向[theme_source/warning_level drift + dropped-required-enum] + `∈{}` 覆盖守护[planted-failure 验真能抓未钉列] + 括号词表值对设计单源反查);full discover **2916 OK**(零回归,+5 净);BOM=0;diff-check CLEAN。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。批1 剩 field_registry(§10)/ 其余 §13.1 治理(顺序我自决)。
+- **Pre-Codex self-review**: A-F。**A(整类非实例,本会话反复栽处)**:不止补被点名 2 列——**穷举复查全部 16 个 deferred 列 × 两种约定**,确认无第 3 个 value 词表(其余 = 字段名清单 / 数值 / 自由 tag / 散文);两新成员各加负向 drift 测。B:全仓 grep `us_short_action_table` 仍 0 外部消费者;README 12→14 + 删"theme_source NOT pinned"暗示 + 补两约定说明;register/preset notes 同步。C:反向控——3 负向 schema 测(FN)+ real preset 仍校验过 + 新值对设计反查(FP/臆造防控)。E:register 单态。F:BOM=0/diff CLEAN/JSON 合法。**加 recurrence guard**(∈{} 自动覆盖 + 括号单源)防同类复发——非靠记性。Tests passing ≠ design closure。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short batch 1 action_table output contract full review)
+- **Verdict/Action**: FAIL. Current contract freezes the §11.3 column set and many vocabularies, but two design-locked action_table vocabularies remain deferred/unpinned.
+- **Required**: `R-USSHORT-ACTION-TABLE-DESIGN-LOCKED-VOCAB-GAP` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/design anchors; targeted action-table/doc/route 57 OK; full discover 2911 OK; probe shows `theme_source` and `macro_cluster_warning_level` are core columns with design vocab but absent from `design_locked_enums`; py_compile OK; diff-check only CRLF.
+- **Next**: Claude `修复` this Required only, then Codex full re-`审查`; do not commit or start field_registry/provider/DataHub/live work yet.
+
+## 2026-06-20 — Claude (US-short 批1 action_table 输出契约 起草)
+
+**Worked on**: 自决批1 下一刀 = §11.3 `action_table` 输出契约(终端共享面:field_registry `landing_surface` 指向它、batch-2 引擎产出、batch-3 no-dangling validator + renderer 消费——先冻最合理)。新 3 文件:`schemas/us_short_action_table_contract.schema.json` + `presets/us_short_action_table_contract_20260620.json` + `tests/schema/test_us_short_action_table_contract_schema.py`。
+
+**Key decisions / boundary**: const 钉死 §11.3 **完整 51 列**(集合 + 顺序;单源守护:测试在运行时从设计 §11.3 逐字节反查,设计改→测试红)+ **12 个 design-locked 列枚举逐字钉**(`row_source` / `final_action`[= §9 9 值,**跨 schema 核对转换器 `TRADE_ACTIONS`**] / `observe_reason_type` / `order_type` / `order_expiry`[v1 单值 `first_regular_session_only`] / `price_engine_used`[v1 2 真引擎;ema/earnings = §13 #6 候选、**v1 不 emit**] / `price_sub_mode` / `overextension_state` / `portfolio_guard_status` / `live_permission_status` / `coverage_status` / `theme_lifecycle_state`[**跨 schema 核对 lifecycle preset**])。设计未 tokenize 的类别列(selection_bucket/gap_policy/structure_quality/各 *_status 等)**不臆造枚举**、留 §13 校准指针(§C 安全侧:猜的 vocab 会误拒合法 token)。`extension_policy`:候选增强字段 append-after-core + 必须登记 field_registry + 不得 shadow core。**纯声明契约:不产 row / 不跑引擎 / 不抓数 / 不交叉 A 股**;运行时 no-dangling/证据反查 = batch-3 消费本契约。
+
+**Verify**: action_table 契约测 **21 OK**(schema 合法 + preset 校验 + 51 列计数/唯一/**逐字节忠于设计 §11.3** + 枚举键 ⊆ 列 + 12 枚举逐一 exact + `final_action`↔`TRADE_ACTIONS` 跨 schema + `theme_lifecycle_state`↔lifecycle preset 跨 schema + price_engine v1-only + 11 负向 schema 测:丢列/加列/乱序/各枚举 drift/候选引擎泄漏/未知枚举键/extension 放宽);`tests/schema` 全目录 **788 OK**;转换器(跨引用源)OK;doc-governance **22 OK**;BOM=0;diff-check CLEAN。未跑 provider。
+
+**Next**: Codex `审查` 本输出契约 slice;PASS 后用户 `提交`(push 须明确命令)。批1 剩:field_registry(§10)/ 其余 §13.1 结构治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F。**A(可枚举集→全员覆盖)**:枚举集 = 设计**全部** 5 个 `X ∈ {…}` 字段声明 → 4 个属 action_table 列(theme_lifecycle/overextension/price_sub_mode/portfolio_guard)**全钉**,`scaling_mode` 是 §12 ship-gate evidence 字段、非本契约列、正确排除;另 8 个词表/list 声明枚举逐一溯源(§6.1/§7/§11.5/§12/§12.1);51 列 const 全集合 + 顺序。B:全仓 grep `us_short_action_table|action_table_contract` = **0 既有消费者/重复权威**;加 README 路由行;无符号重命名(新契约)。C:反向控——11 负向 schema 测(FN)+ real preset 仍校验过 + 对设计 §11.3 逐字节反查(FP/漏列/错列);所有 v1-tightness(order_expiry 单值 / price_engine 2 真引擎)均设计明示锁定、非臆造收窄。E:README durable 指针;无 transient gate 进 CURRENT。F:BOM=0;diff-check CLEAN;JSON 合法;无 NaN/Inf/日期解析面。Tests passing ≠ design closure(批1 未完:field_registry + 其余治理待续;阈值数值 = batch-2;provider/live gated)。
+
 ## 2026-06-20 — Codex `审查 PASS`(US-short theme-lifecycle governance re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` closed and no new material Required in this offline theme-lifecycle governance slice.
 - **Required**: None new. `R-USSHORT-THEME-LIFECYCLE-COOLING-HOLDING-EFFECT-GAP` remains resolved in `docs/system_risk_register.md`.

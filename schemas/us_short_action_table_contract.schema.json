@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_action_table_contract",
+  "title": "US-short action_table.csv output contract (design §11.3) — const-pins the frozen column set/order + design-locked column vocabularies",
+  "description": "Batch-1 declarative shared contract. Freezes the §11.3 action_table column set (exact order) + the column vocabularies the design locks verbatim, so batch-2 (engine row production), batch-3 (no-dangling / evidence-traceback validator + renderer), and the field registry (landing_surface targets) cannot drift column names/order/vocab. Numeric/free-text columns and not-yet-tokenized categorical columns carry no enum here (no guessed vocab). draft-07 cannot express the cross-schema final_action == TRADE_ACTIONS and theme_lifecycle_state == lifecycle-governance equalities — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "core_columns", "design_locked_enums", "extension_policy", "notes"],
+  "properties": {
+    "schema_name": {"const": "us_short_action_table_contract"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "core_columns": {
+      "description": "§11.3 完整列 — exact set AND order, const-pinned. Candidate enhancement fields are appended after these per extension_policy, never inserted/reordered.",
+      "const": ["ticker", "row_source", "selection_bucket", "theme_source", "theme_lifecycle_state", "final_action", "action_rank", "action_confidence", "observe_reason_type", "order_type", "entry_plan", "pullback_entry_price", "breakout_entry_price", "limit_order_price", "valid_entry_low", "valid_entry_high", "order_expiry", "gap_policy", "effective_support", "effective_resistance", "structure_quality", "stop_clear_price", "take_profit_reduce_price", "take_profit_exit_price", "event_clear_reference_price", "risk_reward_ratio", "min_rr_gate_status", "post_round_rr_status", "price_engine_used", "price_sub_mode", "model_position_size_amount", "model_position_size_shares", "live_permission_status", "live_size_warning", "cash_allocation_status", "portfolio_guard_status", "symbol_cooldown_status", "coverage_status", "coverage_gap_tags", "trigger_conditions", "invalid_conditions", "risk_tags", "overextension_state", "macro_cluster", "macro_cluster_exposure_frac", "macro_cluster_warning_level", "macro_cluster_size_adjustment", "data_quality_tags", "execution_constraints", "upcoming_events", "decision_trace"]
+    },
+    "design_locked_enums": {
+      "description": "Per-column frozen vocabularies the design pins verbatim. Keys must be exactly these 14 (additionalProperties false); each value const-pinned.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["row_source", "final_action", "observe_reason_type", "order_type", "order_expiry", "price_engine_used", "price_sub_mode", "overextension_state", "portfolio_guard_status", "live_permission_status", "coverage_status", "theme_lifecycle_state", "theme_source", "macro_cluster_warning_level"],
+      "properties": {
+        "row_source": {"const": ["top15_candidate", "holding_in_top15", "holding_pass2_only", "holding_account_only"]},
+        "final_action": {"const": ["建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开"]},
+        "observe_reason_type": {"const": ["signal_not_ready", "price_not_executable", "cash_or_account_missing", "risk_cooldown", "data_restricted", "event_window", "cost_inefficient_min_size"]},
+        "order_type": {"const": ["pullback_limit", "breakout_stop_limit"]},
+        "order_expiry": {"const": ["first_regular_session_only"]},
+        "price_engine_used": {"const": ["support_atr_engine", "holding_exit_engine"]},
+        "price_sub_mode": {"const": ["pullback", "breakout"]},
+        "overextension_state": {"const": ["none", "warning", "chasing_extreme"]},
+        "portfolio_guard_status": {"const": ["normal", "caution", "cooldown", "recovery"]},
+        "live_permission_status": {"const": ["paper_or_minimal_only", "not_full_size_eligible", "full_size_eligible"]},
+        "coverage_status": {"const": ["full", "partial", "restricted", "blocked"]},
+        "theme_lifecycle_state": {"const": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
+        "theme_source": {"const": ["gics_established", "provisional_discovered"]},
+        "macro_cluster_warning_level": {"const": ["none", "elevated", "high"]}
+      }
+    },
+    "extension_policy": {
+      "description": "Candidate enhancement fields ('+候选增强字段') are allowed but bounded: appended after core, must register in the field registry (§10), must not shadow a core column.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_fields_allowed", "appended_after_core", "must_register_in_field_registry", "must_not_shadow_core_columns"],
+      "properties": {
+        "candidate_fields_allowed": {"const": true},
+        "appended_after_core": {"const": true},
+        "must_register_in_field_registry": {"const": true},
+        "must_not_shadow_core_columns": {"const": true}
+      }
+    },
+    "notes": {"type": "object"}
+  }
+}

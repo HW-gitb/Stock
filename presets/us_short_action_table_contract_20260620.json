@@ -1,0 +1,38 @@
+{
+  "schema_name": "us_short_action_table_contract",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "initial_v1_frozen_columns_pending_forward_calibration",
+  "core_columns": ["ticker", "row_source", "selection_bucket", "theme_source", "theme_lifecycle_state", "final_action", "action_rank", "action_confidence", "observe_reason_type", "order_type", "entry_plan", "pullback_entry_price", "breakout_entry_price", "limit_order_price", "valid_entry_low", "valid_entry_high", "order_expiry", "gap_policy", "effective_support", "effective_resistance", "structure_quality", "stop_clear_price", "take_profit_reduce_price", "take_profit_exit_price", "event_clear_reference_price", "risk_reward_ratio", "min_rr_gate_status", "post_round_rr_status", "price_engine_used", "price_sub_mode", "model_position_size_amount", "model_position_size_shares", "live_permission_status", "live_size_warning", "cash_allocation_status", "portfolio_guard_status", "symbol_cooldown_status", "coverage_status", "coverage_gap_tags", "trigger_conditions", "invalid_conditions", "risk_tags", "overextension_state", "macro_cluster", "macro_cluster_exposure_frac", "macro_cluster_warning_level", "macro_cluster_size_adjustment", "data_quality_tags", "execution_constraints", "upcoming_events", "decision_trace"],
+  "design_locked_enums": {
+    "row_source": ["top15_candidate", "holding_in_top15", "holding_pass2_only", "holding_account_only"],
+    "final_action": ["建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开"],
+    "observe_reason_type": ["signal_not_ready", "price_not_executable", "cash_or_account_missing", "risk_cooldown", "data_restricted", "event_window", "cost_inefficient_min_size"],
+    "order_type": ["pullback_limit", "breakout_stop_limit"],
+    "order_expiry": ["first_regular_session_only"],
+    "price_engine_used": ["support_atr_engine", "holding_exit_engine"],
+    "price_sub_mode": ["pullback", "breakout"],
+    "overextension_state": ["none", "warning", "chasing_extreme"],
+    "portfolio_guard_status": ["normal", "caution", "cooldown", "recovery"],
+    "live_permission_status": ["paper_or_minimal_only", "not_full_size_eligible", "full_size_eligible"],
+    "coverage_status": ["full", "partial", "restricted", "blocked"],
+    "theme_lifecycle_state": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"],
+    "theme_source": ["gics_established", "provisional_discovered"],
+    "macro_cluster_warning_level": ["none", "elevated", "high"]
+  },
+  "extension_policy": {
+    "candidate_fields_allowed": true,
+    "appended_after_core": true,
+    "must_register_in_field_registry": true,
+    "must_not_shadow_core_columns": true
+  },
+  "notes": {
+    "final_action_cross_ref": "= the 9 design §9/§6.1 trade-action values pinned in runners/us_short_account_state_from_manual_tables.py TRADE_ACTIONS (no `否决` alias)",
+    "theme_lifecycle_state_cross_ref": "= us_short_theme_lifecycle_governance preset states (§4.3)",
+    "price_engine_used_v1": "v1 emits only the 2 real engines (support_atr_engine / holding_exit_engine); ema_trailing_engine / earnings_gap_engine are §13 #6 registered-not-implemented candidates, NOT emitted in v1",
+    "deferred_vocab_columns": "categorical columns whose vocabulary the design does NOT tokenize are intentionally NOT in design_locked_enums (no guessed enum); values stay typed strings until forward-calibrated — gap_policy(§13 #13) / structure_quality(§13 #24, field-name list only) / min_rr_gate_status+post_round_rr_status(§13 #16, field-name list only) / cash_allocation_status(§13 #25, field-name list only) / symbol_cooldown_status(§13 #23, field-name list only) / macro_cluster_size_adjustment(§13 #31, NUMERIC reduction amount) / selection_bucket / live_size_warning. Verified by exhaustive design re-sweep: these carry NO design value vocabulary (only field-name lists / numerics / free tags / prose).",
+    "design_vocab_two_conventions": "the design locks a column vocabulary via TWO equivalent conventions — `field ∈ {v1, v2}` AND `` `field`（v1 / v2）`` (incl. `词表：` lists). theme_source(§4.3 l148: gics_established/provisional_discovered) and macro_cluster_warning_level(§8 l228: none/elevated/high — only the frac thresholds are §13 #31 forward, labels are locked) use the parenthetical form and ARE pinned. The test sweeps BOTH conventions for coverage.",
+    "one_glance_table": "§11.3 精简一眼表 (~8 cols) is a weekly_report rendering projection of these columns, not a separate csv contract; deferred to batch-3 renderer",
+    "scope": "declarative output contract only — freezes the §11.3 column set/order + design-locked column vocabularies; no row produced, no engine run, no data fetch, no A-share crossing. Runtime row validation (no-dangling / evidence-traceback) is batch-3 and CONSUMES this contract."
+  }
+}
