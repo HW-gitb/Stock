@@ -18,8 +18,10 @@ NOT-tradeable 的研究线索(`cash_flow_to_circ_mv` / `sales_to_circ_mv`)+ 1 �
 
 **Commit-safe but NOT execution-safe**:实盘前向数据(月末 PIT top-500 + cashflow/revenue TTM + 价格 + 基准)
 样本内面板(2018-2025)没有,需逐月 gated 抓数;**每次抓数需用户单独授权**;第一笔 as_of ≥ 2026-06-30。本切片
-落 analysis/accumulator 核心 + 前向 rolling-NAV(parity);**live-fetch 数据层 + cohort-from-data 编排是下一刀**
-(标 `_DEFERRED`,需另读 bf.batch_factor_values / base.compute_return / base.add_industry_neutral_scores 主体并接 gated 抓数)。
+落 analysis/accumulator 核心 + 前向 rolling-NAV(parity)+ **编排核心 brain(`build_forward_accumulator`)+ lean top-500
+数据层(`..._data_layer.py`:gated fetch + 纯装配,复用冻结 bf/base 因子·收益·行业·name-veto 函数)+ main 接线
+(`run_forward_capture`)全建、mock 测**;**只剩第一笔真捕获(as_of≥20260630)的 live provider 形状现写现验**(可能按
+真返回字段微调 `dl.fetch_forward_panel`)。lean = 只 top-500、只拉算 2 value 因子 + 收益 + 中性化所需表(非全主板 materialization)。
 
 升级:per-monthly capture **不花** singleton ledger;只有 paper window 结束后对**唯一** primary 构造
 `value_yield_composite_cf_sales` 的 promote/stay/drop 决策花掉(且 promote 仅意味着可提一份**新 reviewed real-money
@@ -34,6 +36,7 @@ from statistics import mean
 
 from runners import a_long_large_cap_batch_factor_search_signal_search as bf
 from runners import a_long_full_main_board_signal_search as base
+from runners import a_long_large_cap_value_yield_forward_paper_data_layer as dl
 
 SCHEMA_NAME = "a_long_large_cap_value_yield_forward_paper_accumulator"
 SCHEMA_VERSION = "1.0.0"
@@ -51,6 +54,8 @@ REQUIRED_SOURCE_REF_PATHS = (PREREG_PATH, LEDGER_PATH, BATCH_EXECUTION_SUMMARY_P
 # ── 冻结常量 parity-pin(与冻结 bf 逐字相等;漂移即 import 期 AssertionError,杜绝静默偏离冻结构造)──
 PRIMARY_HORIZON = 504
 INTERIM_HORIZONS = [21, 63, 126, 252]
+ALL_HORIZONS = INTERIM_HORIZONS + [PRIMARY_HORIZON]   # [21,63,126,252,504];accumulator horizon 键集(504 主判据,interim 诊断早读)
+VALUE_YIELD_FAMILIES = ("cash_flow_to_circ_mv", "sales_to_circ_mv")  # 合成的 2 个成分单因子
 MIN_MONTHLY_COHORTS_FOR_PAPER_READ = 12
 TRADEABLE_DRAWDOWN_FLOOR = -0.15
 START_FLOOR = "20260630"
@@ -282,19 +287,21 @@ def validate_accumulator_consistency(acc: dict) -> None:
         latest = max(cohort_as_ofs)
         if acc["as_of_latest_capture"] != latest:
             raise ValueError(f"as_of_latest_capture({acc['as_of_latest_capture']})≠ 最新 cohort as_of({latest})")
-    # construction_metrics:恰好覆盖 3 构造各一次(无重/缺)+ role↔id + primary matured == paper_read.matured
+    # construction_metrics:恰好覆盖 3 构造各一次(无重/缺)+ role↔id + **每个构造**(O1:不只 primary——诊断构造计数也不得伪造)
+    # matured_cohort_count == 该构造实际 504-horizon matured cohort 数;primary 的再 == paper_read.matured(防虚报成熟数越 12 门 promote)。
     _check_construction_id_coverage(acc["construction_metrics"], "construction_metrics")
+
+    def _actual_504_matured(construction_id: str) -> int:
+        return sum(1 for c in acc["cohorts"] for con in c["constructions"]
+                   if con["construction_id"] == construction_id
+                   and (con["horizons"].get(str(PRIMARY_HORIZON)) or {}).get("status") == "matured")
     for m in acc["construction_metrics"]:
         _check_role_id(m)
+        actual = _actual_504_matured(m["construction_id"])
+        if m["matured_cohort_count"] != actual:
+            raise ValueError(f"{m['construction_id']} matured_cohort_count({m['matured_cohort_count']})≠ 实际 {PRIMARY_HORIZON}-horizon matured cohort 数({actual})")
         if m["construction_id"] == PRIMARY_CONSTRUCTION_ID and m["matured_cohort_count"] != n:
             raise ValueError(f"primary 构造 matured_cohort_count({m['matured_cohort_count']})≠ paper_read({n})")
-    # matured_cohort_count 必须 == 实际 primary(composite)504-horizon 已 matured 的 cohort 数(防虚报成熟数越过 12 门 promote)
-    actual_matured = sum(
-        1 for c in acc["cohorts"] for con in c["constructions"]
-        if con["construction_id"] == PRIMARY_CONSTRUCTION_ID
-        and (con["horizons"].get(str(PRIMARY_HORIZON)) or {}).get("status") == "matured")
-    if n != actual_matured:
-        raise ValueError(f"paper_read.matured_cohort_count({n})≠ 实际 primary {PRIMARY_HORIZON}-horizon matured cohort 数({actual_matured})")
     # source_refs 必含 prereg/ledger/batch/schema 四类**精确路径**(exact match,非子串:防 evil/...含子串却脱离血缘的伪路径)
     present = {r["path"] for r in acc["source_refs"]}
     for need in REQUIRED_SOURCE_REF_PATHS:
@@ -302,12 +309,17 @@ def validate_accumulator_consistency(acc: dict) -> None:
             raise ValueError(f"source_refs 缺必备精确引用(exact path,非子串匹配):{need}")
 
 
-def write_accumulator(acc: dict, out_path: str) -> None:
-    """唯一 sanctioned 写盘:schema(shape/enum/if-then)+ 跨字段一致性 双校验后原子写。"""
+def validate_accumulator_dict(acc: dict) -> None:
+    """Shared accumulator guard: schema(shape/enum/if-then) + cross-field consistency."""
     import jsonschema
     with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
         jsonschema.validate(acc, json.load(f))
     validate_accumulator_consistency(acc)
+
+
+def write_accumulator(acc: dict, out_path: str) -> None:
+    """唯一 sanctioned 写盘:schema(shape/enum/if-then)+ 跨字段一致性 双校验后原子写。"""
+    validate_accumulator_dict(acc)
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     tmp = str(out_path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -315,10 +327,298 @@ def write_accumulator(acc: dict, out_path: str) -> None:
     os.replace(tmp, out_path)
 
 
+# ── 编排核心(brain):scored items + 价格缓存 → cohort snapshot + backfill 收益 + 构造指标 + accumulator ──
+# 数据层(6-30 单独建,gated)产出 scored_items(每项已含 cash_flow_to_circ_mv/sales_to_circ_mv/industry_l2/
+# industry_l1/size_bucket/market_cap/symbol/as_of,由月末 PIT 抓数 + bf.batch_factor_values 算)+ stock_price_cache
+# (total-return adj close,base.stock_total_return_close_rows)+ csi300_prices + trade_dates + delist_by_symbol。
+# 本层纯函数、复用冻结 bf/base pure fn、可用 synthetic items/prices 单测;不碰 store/抓数。
+
+def _construction_in(cohort: dict, construction_id: str):
+    for con in cohort["constructions"]:
+        if con["construction_id"] == construction_id:
+            return con
+    return None
+
+
+def _first_trade_day_after(as_of: str, trade_dates: list):
+    return next((d for d in trade_dates if d > as_of), None)
+
+
+def neutralize_value_yield_scores(items: list) -> None:
+    """对 scored items 原地跑冻结中性化序列(仅 2 个 value-yield family + 合成),写 3 个 score_field:
+    cash_flow/sales 的 `__industry_size_neutral` + 合成 `value_yield_composite_cf_sales__industry_size_neutral`。
+    镜像 batch monthly_cohort_rows 920-927:percentile→industry→size→marginal (industry+size)/2;**合成 = 2 个
+    isn 等权均值**(prereg 冻结,**非** bf.add_composite_scores 的全 9-family COMPOSITE_ID)。size 中性需该 bucket
+    ≥ MIN_SIZE_BUCKET_COUNT_FOR_PRIMARY、industry 中性需该组够数(冻结 bf/base 内部门限),不足则该项 isn 缺→合成 None。"""
+    for family in VALUE_YIELD_FAMILIES:
+        base.percentile_scores(items, family, f"{family}__non_neutral")
+        base.add_industry_neutral_scores(items, family)
+        bf.add_size_neutral_scores(items, family)
+    bf.add_marginal_industry_size_neutral_scores(items, list(VALUE_YIELD_FAMILIES))
+    for item in items:
+        composite = value_yield_composite_score(item)
+        if composite is not None:
+            item[f"{PRIMARY_CONSTRUCTION_ID}__industry_size_neutral"] = composite
+
+
+def select_basket(items: list, score_field: str) -> list:
+    """forward 篮子(**entry 即定,只按 score,不看未来收益**——in-sample cohort_excess_by_as_of 的 excess-present
+    过滤是 look-ahead,forward 不可用)。镜像其 sort+top-fraction:score 非 None 的项 < MIN_TOP_COUNT 则空篮子;
+    按 score desc 取 max(MIN_TOP_COUNT, int(n*TOP_FRACTION))。返回 **sorted-by-symbol**(确定序,配 schema uniqueItems;
+    等权篮子成员身份才重要、序无关)。"""
+    scored = [it for it in items if it.get(score_field) is not None]
+    if len(scored) < bf.MIN_TOP_COUNT:
+        return []
+    scored.sort(key=lambda it: it[score_field], reverse=True)
+    target = max(bf.MIN_TOP_COUNT, int(len(scored) * bf.TOP_FRACTION))
+    return sorted(str(it["symbol"]) for it in scored[:target])
+
+
+def build_cohort_snapshot(as_of: str, scored_items: list, *, captured_at: str, universe_size: int,
+                          trade_dates: list) -> dict:
+    """本月 as_of 的 cohort snapshot:3 构造各 select_basket;horizons 全 pending(收益随后 backfill 回填)。
+    空篮子→entry_status/horizon=insufficient_basket、entry_date=None;有篮子但无 entry 交易日→missing_entry_close。
+    **必须先对 scored_items 跑 neutralize_value_yield_scores**(否则 score_field 缺、篮子空)。"""
+    entry_date = _first_trade_day_after(as_of, trade_dates)
+    constructions = []
+    for con in CONSTRUCTIONS:
+        basket = select_basket(scored_items, con["score_field"])
+        if not basket:
+            entry_status, hz_status, eff_entry = "insufficient_basket", "insufficient_basket", None
+        elif entry_date is None:
+            entry_status, hz_status, eff_entry = "missing_entry_date", "missing_entry_close", None
+        else:
+            entry_status, hz_status, eff_entry = "ok", "pending", entry_date
+        horizons = {str(h): {"status": hz_status, "relative_excess_net": None,
+                             "exit_date": None, "exit_policy": None} for h in ALL_HORIZONS}
+        constructions.append({
+            "construction_id": con["construction_id"], "promotion_role": con["promotion_role"],
+            "basket_size": len(basket), "selected_symbols": basket,
+            "entry_date": eff_entry, "entry_status": entry_status, "horizons": horizons})
+    return {"as_of": as_of, "captured_at": str(captured_at), "universe_size": int(universe_size),
+            "pit_source": "forward_live_frozen_at_as_of", "constructions": constructions}
+
+
+def backfill_cohort(cohort: dict, *, stock_price_cache: dict, csi300_prices: dict,
+                    trade_dates: list, delist_by_symbol: dict) -> None:
+    """原地回填一个 cohort。**Finding 1(PIT 冻结锚)**:用快照里**冻结的** `entry_date` 当锚、**绝不重算**;
+    entry_status==ok ⟹ 冻结 entry 必须存在、在 trade_dates、且 == 当前日历重算的 first-open-after-as_of(不符 =
+    历史日历被改 → fail-closed 拒绝静默重锚,防 OOS 证据被污染)。**Finding 2(实际 exit 政策)**:保留
+    base.resolve_return_dates 的真实 exit 政策——全 scheduled 才标 `scheduled_exit_basket_equal_weight`;含
+    delist/terminal/next-available → `mixed_member_exits:<组成>` 审计串(绝不把 delist 篮子伪装成 scheduled,保 survivorship 证据)。
+    每 horizon:scheduled exit(冻结 entry_idx+horizon)在 trade_dates 内则算等权篮子相对超额 =
+    mean_member(compute_return stock_net − bench)→ matured;未到期→pending;0 成员可算→missing_exit_close。
+    exit_date 恒为 scheduled horizon 锚(PIT);实际成员 exit 组成进 exit_policy。**幂等**;空篮子/无可用冻结 entry 不动。"""
+    as_of = cohort["as_of"]
+    recomputed_entry = _first_trade_day_after(as_of, trade_dates)
+    for con in cohort["constructions"]:
+        basket = con["selected_symbols"]
+        frozen_entry = con.get("entry_date")
+        if not basket:
+            continue
+        if con.get("entry_status") == "ok":
+            if not frozen_entry:
+                raise ValueError(f"{as_of}/{con['construction_id']}: entry_status=ok 但缺冻结 entry_date(PIT 锚缺失)")
+            if frozen_entry not in trade_dates:
+                raise ValueError(f"{as_of}/{con['construction_id']}: 冻结 entry_date {frozen_entry} 不在 trade_dates(日历漂移)")
+            if recomputed_entry is not None and recomputed_entry != frozen_entry:
+                raise ValueError(f"{as_of}/{con['construction_id']}: 冻结 entry_date {frozen_entry} ≠ 当前 first-open-after-as_of "
+                                 f"{recomputed_entry}(历史日历被改,拒绝静默重锚)")
+        if not frozen_entry or frozen_entry not in trade_dates:
+            continue
+        entry_idx = trade_dates.index(frozen_entry)
+        for h in ALL_HORIZONS:
+            rec = con["horizons"][str(h)]
+            exit_idx = entry_idx + h
+            if exit_idx >= len(trade_dates):
+                rec.update({"status": "pending", "relative_excess_net": None,
+                            "exit_date": None, "exit_policy": None})
+                continue
+            scheduled_exit = trade_dates[exit_idx]
+            excesses, policy_counts = [], {}
+            for sym in basket:
+                prices = stock_price_cache.get(sym) or {}
+                delist = delist_by_symbol.get(sym)
+                _en, _sched, _act, policy = base.resolve_return_dates(prices, trade_dates, as_of, h, delist_date=delist)
+                sret, bret, _e, _x = base.compute_return(prices, csi300_prices, trade_dates, as_of, h, delist_date=delist)
+                if sret is not None and bret is not None:
+                    excesses.append(sret - bret)
+                    policy_counts[policy] = policy_counts.get(policy, 0) + 1
+            if not excesses:
+                rec.update({"status": "missing_exit_close", "relative_excess_net": None,
+                            "exit_date": scheduled_exit, "exit_policy": "no_basket_member_resolved"})
+                continue
+            if set(policy_counts) == {"scheduled_exit"}:
+                exit_policy = "scheduled_exit_basket_equal_weight"
+            else:
+                exit_policy = "mixed_member_exits:" + ",".join(f"{k}={v}" for k, v in sorted(policy_counts.items()))
+            rec.update({"status": "matured", "relative_excess_net": round(mean(excesses), 10),
+                        "exit_date": scheduled_exit, "exit_policy": exit_policy})
+
+
+def _matured_504_excess(cohorts: list, construction_id: str) -> list:
+    out = []
+    for c in sorted(cohorts, key=lambda x: x["as_of"]):
+        con = _construction_in(c, construction_id)
+        rec = (con or {}).get("horizons", {}).get(str(PRIMARY_HORIZON)) if con else None
+        if rec and rec.get("status") == "matured" and rec.get("relative_excess_net") is not None:
+            out.append(float(rec["relative_excess_net"]))
+    return out
+
+
+def _interim_direction_positive(cohorts: list, construction_id: str) -> bool:
+    """每个「有 matured cohort」的 interim horizon 的 mean excess 都 > 0(prereg「consistent direction」窄安全侧:
+    promote-gate 取严——任何 interim 方向转负即不算 persistent)。无 matured interim 不构成否定。"""
+    for h in INTERIM_HORIZONS:
+        vals = []
+        for c in cohorts:
+            con = _construction_in(c, construction_id)
+            rec = (con or {}).get("horizons", {}).get(str(h)) if con else None
+            if rec and rec.get("status") == "matured" and rec.get("relative_excess_net") is not None:
+                vals.append(float(rec["relative_excess_net"]))
+        if vals and mean(vals) <= 0:
+            return False
+    return True
+
+
+def _validate_new_capture_order(prior_accumulator, as_of: str) -> None:
+    """Forward-paper cohorts are immutable live snapshots: never replace an existing as_of or backfill an older month."""
+    if not prior_accumulator:
+        return
+    prior_asofs = sorted(str(c.get("as_of")) for c in prior_accumulator.get("cohorts", []) if c.get("as_of"))
+    if not prior_asofs:
+        return
+    if as_of in prior_asofs:
+        raise ValueError(f"forward capture as_of {as_of} already exists in prior accumulator; refusing to replace frozen cohort")
+    latest = max(prior_asofs)
+    if as_of < latest:
+        raise ValueError(f"forward capture as_of {as_of} is older than latest prior cohort {latest}; refusing retroactive capture")
+
+
+def assemble_construction_metrics(cohorts: list, *, stock_price_cache: dict, csi300_prices: dict,
+                                  trade_dates: list) -> list:
+    """每构造跨 504-matured cohorts 聚合(主判据 504d vs CSI300)+ rolling relative-NAV 回撤 + persistence。
+    persistence(prereg evidence_and_decision_rule.persistence_check,**窄安全侧**):504 mean>0 ∧ 504 HAC-t>0 ∧
+    每个有 matured cohort 的 interim mean>0。matured_cohort_count = 该构造 504-matured cohort 数。"""
+    metrics = []
+    for con in CONSTRUCTIONS:
+        cid = con["construction_id"]
+        excesses = _matured_504_excess(cohorts, cid)
+        n = len(excesses)
+        mean_excess = round(mean(excesses), 10) if excesses else None
+        hac_t, hac_p = (None, None)
+        if n >= 2:
+            hac_t, hac_p, _lag = base.newey_west_hac_t_stat(excesses, horizon=PRIMARY_HORIZON)
+        primary_selections = {}
+        for c in cohorts:
+            cc = _construction_in(c, cid)
+            if cc and cc["selected_symbols"]:
+                primary_selections[c["as_of"]] = cc["selected_symbols"]
+        dd = None
+        if primary_selections:
+            dd = forward_rolling_relative_nav_drawdown(
+                primary_selections=primary_selections, stock_price_cache=stock_price_cache,
+                csi300_prices=csi300_prices, trade_dates=trade_dates,
+                checkpoints=sorted(c["as_of"] for c in cohorts))["relative_nav_max_drawdown"]
+        persistence = None
+        if n:
+            persistence = bool(mean_excess is not None and mean_excess > 0
+                               and hac_t is not None and hac_t > 0
+                               and _interim_direction_positive(cohorts, cid))
+        metrics.append({
+            "construction_id": cid, "promotion_role": con["promotion_role"],
+            "matured_cohort_count": n, "mean_relative_excess": mean_excess,
+            "hac_t": hac_t, "hac_p": hac_p,
+            "rolling_relative_nav_max_drawdown": dd, "persistence_positive": persistence})
+    return metrics
+
+
+def build_forward_accumulator(*, prior_accumulator, as_of: str, captured_at: str, universe_size: int,
+                              scored_items: list, stock_price_cache: dict, csi300_prices: dict,
+                              trade_dates: list, delist_by_symbol: dict, generated_at: str) -> dict:
+    """brain 入口:上月 accumulator(或 None bootstrap)+ 本月 as_of 的 scored_items(数据层产)+ 价格缓存 →
+    neutralize → 追加本月 cohort snapshot(重复/倒序 as_of 拒绝,不替换冻结快照)→ 回填所有 cohort 已成熟 horizon → 重算
+    construction_metrics + paper_read → 新 accumulator dict(未写盘;调用方用 write_accumulator 校验+原子写)。"""
+    _validate_new_capture_order(prior_accumulator, as_of)
+    neutralize_value_yield_scores(scored_items)
+    new_cohort = build_cohort_snapshot(as_of, scored_items, captured_at=captured_at,
+                                       universe_size=universe_size, trade_dates=trade_dates)
+    prior = list((prior_accumulator or {}).get("cohorts", []))
+    cohorts = sorted(prior + [new_cohort], key=lambda c: c["as_of"])
+    for c in cohorts:
+        backfill_cohort(c, stock_price_cache=stock_price_cache, csi300_prices=csi300_prices,
+                        trade_dates=trade_dates, delist_by_symbol=delist_by_symbol)
+    metrics = assemble_construction_metrics(cohorts, stock_price_cache=stock_price_cache,
+                                            csi300_prices=csi300_prices, trade_dates=trade_dates)
+    primary = next(m for m in metrics if m["construction_id"] == PRIMARY_CONSTRUCTION_ID)
+    paper_read = compute_paper_read(
+        {"persistence_positive": primary["persistence_positive"],
+         "rolling_relative_nav_max_drawdown": primary["rolling_relative_nav_max_drawdown"]},
+        primary["matured_cohort_count"])
+    return build_accumulator(cohorts=cohorts, construction_metrics=metrics, paper_read=paper_read,
+                             as_of_latest_capture=max(c["as_of"] for c in cohorts), generated_at=generated_at)
+
+
+def _prior_basket_symbols(prior_accumulator) -> tuple:
+    """上月 accumulator 所有 cohort 篮子成员并集(供本月 fetch 把它们的价格也拉到 → backfill 旧 cohort 收益)。"""
+    if not prior_accumulator:
+        return ()
+    syms: set = set()
+    for cohort in prior_accumulator.get("cohorts", []):
+        for con in cohort.get("constructions", []):
+            syms.update(con.get("selected_symbols", []))
+    return tuple(sorted(syms))
+
+
+def _validate_capture_args(as_of: str, out: str) -> None:
+    """Finding 4 pre-fetch fail-closed:as_of 须 8 位 YYYYMMDD 且 ≥ START_FLOOR(20260630);out 须 research-only
+    (路径含 `research/`、且任意 segment 不得是生产 `result/`),拒绝把 paper artifact 写进生产线。"""
+    if not (isinstance(as_of, str) and len(as_of) == 8 and as_of.isdigit()):
+        raise SystemExit(f"[FATAL] --as-of 须 8 位 YYYYMMDD,实为 {as_of!r}")
+    if as_of < START_FLOOR:
+        raise SystemExit(f"[FATAL] --as-of {as_of} < start_floor {START_FLOOR}(forward-paper 首笔 ≥ 20260630)")
+    # round 3(Codex re-审查):先 os.path.normpath 解析 `..`、再按 segment **小写**比对(Windows case-insensitive FS),
+    # 防 `research/../RESULT/x`(resolve 到生产 result 却仍含 research segment)绕过 + 防 traversal 逃出 research 子树。
+    normalized = os.path.normpath(str(out)).replace("\\", "/")
+    parts = [p for p in normalized.split("/") if p and p != "."]
+    lower_parts = [p.lower() for p in parts]
+    if ".." in parts:
+        raise SystemExit(f"[FATAL] --out 含 `..` 路径穿越(normpath 后仍残留),拒绝,实为 {out!r}")
+    if "research" not in lower_parts:
+        raise SystemExit(f"[FATAL] --out 必须在 research/ 下(research-only paper artifact),实为 {out!r}")
+    if "result" in lower_parts:
+        raise SystemExit(f"[FATAL] --out 不得写生产 result/ 路径(production lane),实为 {out!r}")
+
+
+def run_forward_capture(*, as_of: str, out: str, prior_accumulator, pro, generated_at: str, captured_at: str,
+                        data_through: str | None = None) -> dict:
+    """完整 forward capture(段5 接线,`pro` 注入 → mock 可测):**arg 守门(Finding 4)** → prior 篮子(供价格 backfill)
+    → `dl.fetch_forward_panel`(gated,explicit window 到 data_through;**月末 + entry-anchor 守门已前移进 fetch pre-broad**,
+    见 `dl.validate_as_of_month_end` / `dl.validate_entry_anchor`)→ `dl.assemble_forward_inputs`
+    → `build_forward_accumulator`(brain)→ `write_accumulator`。返回 accumulator。data_through 默认由数据层取 as_of 后短窗口,
+    只保证冻结 next-open entry anchor;更长 backfill 窗口必须显式传入。"""
+    _validate_capture_args(as_of, out)
+    if prior_accumulator is not None:
+        validate_accumulator_dict(prior_accumulator)
+    extra = _prior_basket_symbols(prior_accumulator)
+    panel = dl.fetch_forward_panel(as_of=as_of, pro=pro, extra_price_symbols=extra, data_through=data_through)
+    inputs = dl.assemble_forward_inputs(**panel)
+    acc = build_forward_accumulator(
+        prior_accumulator=prior_accumulator, as_of=as_of, captured_at=captured_at,
+        universe_size=inputs["universe_size"], scored_items=inputs["scored_items"],
+        stock_price_cache=inputs["stock_price_cache"], csi300_prices=inputs["csi300_prices"],
+        trade_dates=inputs["trade_dates"], delist_by_symbol=inputs["delist_by_symbol"], generated_at=generated_at)
+    write_accumulator(acc, out)
+    return acc
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description="A-long value-yield forward-PAPER capture (research-only, paper, gated)")
     p.add_argument("--as-of", required=True, help="month-end YYYYMMDD (last open A-share trading day of the month; ≥ 20260630)")
     p.add_argument("--out", required=True, help="accumulator artifact path (research/results/...)")
+    p.add_argument("--prior", default=None, help="上月 accumulator json 路径(增量;首月 bootstrap 留空)")
+    p.add_argument("--data-through", default=None,
+                   help="价格/日历拉取截止日 YYYYMMDD(backfill 旧 cohort 收益;默认=as_of 后短窗口以冻结 entry anchor)")
     p.add_argument("--confirm-fetch-authorized", action="store_true",
                    help="per-run authorization for the live month-end PIT pull (no standing grant)")
     p.add_argument("--confirm-research-paper", action="store_true",
@@ -327,14 +627,23 @@ def main(argv=None):
     if not (args.confirm_research_paper and args.confirm_fetch_authorized):
         raise SystemExit("[FATAL] 需 --confirm-research-paper + --confirm-fetch-authorized:本 runner 仅 research/paper、"
                          "且每次前向抓数需单独授权(prereg: ongoing pulls require separate authorization)。")
-    # _DEFERRED(下一刀):live month-end PIT 抓数(gated)→ 装配 bf.batch_factor_values 所需 panel → 中性化
-    # (base.add_industry_neutral_scores + bf.add_size_neutral_scores + bf.add_marginal_industry_size_neutral_scores)
-    # + value_yield_composite_score → 单 as_of cohort(bf.cohort_excess_by_as_of)→ snapshot 追加 + backfill-as-mature
-    # (base.compute_return per 成熟 horizon)→ construction_metrics(base.newey_west_hac_t_stat +
-    # forward_rolling_relative_nav_drawdown)→ compute_paper_read → build_accumulator → write_accumulator。
-    raise SystemExit("[INFO] live-fetch data layer + cohort-from-data orchestration are the deferred next slice "
-                     "(see module docstring _DEFERRED). This slice lands the parity-pinned forward rolling-NAV + "
-                     "paper-read + accumulator assembly/schema. First real capture as_of ≥ 20260630, per-pull authorized.")
+    _validate_capture_args(args.as_of, args.out)   # O2:as_of/research-only-out fail-closed 在建 tushare 客户端 + 抓数之前
+    prior = None
+    if args.prior:
+        with open(args.prior, "r", encoding="utf-8") as f:
+            prior = json.load(f)
+    if not os.environ.get("TUSHARE_TOKEN"):       # O2:缺 token 友好报错(非裸 KeyError)
+        raise SystemExit("[FATAL] 缺 TUSHARE_TOKEN 环境变量(forward 月末抓数需 pinned tushare token)")
+    # gated 才 import 共享 pinned init + 时间戳(provenance);mock 测走 run_forward_capture 不经此处。
+    # **第一笔真捕获(as_of≥20260630)是 live provider 形状的现写现验点**(可能要按真返回字段微调 dl.fetch_forward_panel)。
+    from datetime import datetime, timezone
+    from runners.a_short_iv_feed_probe import init_tushare_pro
+    pro = init_tushare_pro(os.environ["TUSHARE_TOKEN"])
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    acc = run_forward_capture(as_of=args.as_of, out=args.out, prior_accumulator=prior, pro=pro,
+                              generated_at=stamp, captured_at=stamp, data_through=args.data_through)
+    print(f"[OK] wrote {args.out}: cohorts={len(acc['cohorts'])} routing={acc['paper_read']['routing']} "
+          f"matured={acc['paper_read']['matured_cohort_count']}")
 
 
 if __name__ == "__main__":
