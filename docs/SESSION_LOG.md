@@ -8,6 +8,19 @@
 
 ---
 
+## 2026-06-20 — Claude `修复`(register docs-hygiene closeout:cfc0aa63 批 stale-open sweep)
+- **Verdict/Action**: 接受 Codex execution-blocker sweep 的 docs-hygiene Optional——register 顶部 cfc0aa63 批 5 条仍写 `OPEN`/`status open`/`未 commit`/`closeout on 用户提交`,实际已 committed cfc0aa63(我引入的 transient-state-in-durable-doc 漂移)。5 条翻 `RESOLVED`+`status resolved(committed cfc0aa63)`、清 `未 commit` 字样;extend `test_committed_required_entries_are_resolved_not_stale_open` allowlist 纳 8 个 cfc0aa63 R-ID(防回退 stale-open)。**纯文档 + guard allowlist,无业务代码**。
+- **Required**: 无新 Required;本轮 closeout 既有 cfc0aa63(已 resolved)条目 — 完整状态见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: doc-governance(含 stale-open 测,allowlist 扩后绿)+ route-doc + slice3 全绿;`git diff --check` clean(仅 CRLF);无 BOM。未跑 live provider。
+- **Next**: 提交本 docs/guard closeout。
+- **Pre-Codex self-review**: A-F。A:5 条 cfc0aa63 entry 一次全扫(OPEN 前缀 / status open / 未commit / closeout-on-提交)。B:grep 确认 cfc0aa63 批 stale 字样已清;d1857ef1 旧 entry 同类但非本 scope、其 header 已带 commit hash。C:allowlist 扩后 stale-open 测仍绿、entry 若回退 open(同行 R-ID)会被抓。E:register 单态。F:diff-check/BOM OK。Codex #3(tushare 无 per-call timeout)已驳:`DataApi(timeout=30)` SDK 默认绑死每次 requests.post。
+
+## 2026-06-20 — Codex `审查 PASS`(A-short full-system execution-blocker sweep)
+- **Verdict/Action**: PASS. No new code-level A-short execution blocker found; current local shell still lacks a runnable project Python/jsonschema environment.
+- **Required**: None. No new material Required was found for A-short runtime execution; existing A-short fixes are in HEAD `cfc0aa63`.
+- **Verify**: bootstrap docs + A-short execution paths read; doc-governance+slice3+route-doc 39 OK; in-memory compile 11 OK; `git diff --check` clean; bundled Python lacks `jsonschema`.
+- **Next**: Execution may proceed only with a project Python that has dependencies plus `TUSHARE_TOKEN` and required confirm gates; optionally sweep stale Hot Queue/SESSION_LOG closeout wording for `cfc0aa63`.
+
 ## 2026-06-20 — Codex `审查 PASS`(R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT + R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP)
 - **Verdict/Action**: PASS. Round-2 repairs close both Required in the reviewed working tree; no new material Required found.
 - **Required**: `R-ASHORT-SLICE3-SEMANTIC-ROUTE-DOC-DRIFT` / `R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP` — closure detail lives in `docs/system_risk_register.md`(single source)。
