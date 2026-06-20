@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 FAIL`(9a8184dc register closeout review)
+- **Verdict/Action**: FAIL. Commit `9a8184dc` fixes the visible cfc0aa63 stale-open text, but leaves the top live-state `Next` stale and does not guard the item 1-4 batch-header regression path.
+- **Required**: `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` / `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` — full detail in `docs/system_risk_register.md`(single source).
+- **Verify**: bootstrap docs + current route docs read; clean worktree before review; latest commit `9a8184dc` reviewed; doc-governance stale-open guard inspected; no provider/pipeline run.
+- **Next**: Claude `修复` these docs/guard Required only, then Codex re-`审查`; do not route this as another commit-only closeout.
+
 ## 2026-06-20 — Claude `修复`(register docs-hygiene closeout:cfc0aa63 批 stale-open sweep)
 - **Verdict/Action**: 接受 Codex execution-blocker sweep 的 docs-hygiene Optional——register 顶部 cfc0aa63 批 5 条仍写 `OPEN`/`status open`/`未 commit`/`closeout on 用户提交`,实际已 committed cfc0aa63(我引入的 transient-state-in-durable-doc 漂移)。5 条翻 `RESOLVED`+`status resolved(committed cfc0aa63)`、清 `未 commit` 字样;extend `test_committed_required_entries_are_resolved_not_stale_open` allowlist 纳 8 个 cfc0aa63 R-ID(防回退 stale-open)。**纯文档 + guard allowlist,无业务代码**。
 - **Required**: 无新 Required;本轮 closeout 既有 cfc0aa63(已 resolved)条目 — 完整状态见 `docs/system_risk_register.md`(单一来源)。
