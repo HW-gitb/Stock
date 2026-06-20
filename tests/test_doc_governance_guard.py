@@ -353,6 +353,27 @@ class DocGovernanceGuard(unittest.TestCase):
                    "instead of drip-feeding one issue per round"):
             self.assertIn(kw, section, f"Codex one-pass review matrix rule lost anchor: {kw}")
 
+    def test_agents_codex_review_requires_design_code_authority_matrix(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^## Codex adversarial review standard.*?(?=^### Codex review closeout gate)", text)
+        self.assertIsNotNone(m, "AGENTS lost the Codex adversarial review standard section")
+        section = m.group(0)
+        for kw in (
+            "Authority-vs-implementation design-code matrix",
+            "user-supplied authority artifact",
+            "authority / routing consistency",
+            "claimed landing surfaces",
+            "git status",
+            "git diff",
+            "design-only / schema-first / user-approval",
+            "provider / DataHub / runner consumption",
+            "paper / manual_actual / live_normalized",
+            "private / gitignored",
+            "A/US isolation",
+            "no reviewable implementation",
+        ):
+            self.assertIn(kw, section, f"Codex design-code authority matrix lost anchor: {kw}")
+
     # STRUCTURAL minimal-template contract (allowlist, not keyword blacklist — a blacklist is
     # whack-a-mole: alternate wording / another language escapes it). A compliant-zone review-cycle
     # entry's body may contain ONLY these labelled bullets; any free-form paragraph or extra
