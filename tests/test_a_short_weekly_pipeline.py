@@ -3983,5 +3983,79 @@ class S3bHoldingDispositionPipelineTests(unittest.TestCase):
         self.assertIn("建议清仓复核", md)
 
 
+class NormalizeContractParityTests(unittest.TestCase):
+    """normalize_candidate ↔ analysis_input 契约 parity(堵"未来键改名静默 suppress veto"这一最坏失败模式):
+    用 canonical analysis_input fixture(= EGS 导出契约形状)构造"全危险"候选,过 analysis_input schema 校验后跑
+    normalize_candidate,断言引擎侧每个硬风险旗标都真映射;若 normalize 读取键与契约漂移,这些断言会失败。"""
+
+    def _payload(self):
+        from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
+        return cloned_minimal_analysis_input_payload()
+
+    def test_dangerous_flags_map_through_not_silently_dropped(self) -> None:
+        payload = self._payload()
+        cand = payload["candidates"][0]
+        cand["derived_flags"].update({
+            "overheat_flag": True, "chasing_high": True, "is_breakout": True,
+            "vol_confirm": True, "has_crash_veto": True, "is_lock": True, "hard_veto": True,
+        })
+        cand["event_risk"]["holder_reduction"]["active_plan"] = True
+        cand["event_risk"]["suspension"]["is_suspended"] = True
+        cand["event_risk"]["delisting"]["st_flag"] = True
+        cand["liquidity"]["avg_amount_5d"] = 1.0e8
+        schema = json.loads((ROOT / "schemas" / "analysis_input.schema.json").read_text(encoding="utf-8"))
+        jsonschema.validate(payload, schema)   # "全危险"候选仍是合法契约(否则下面映射断言无意义)
+        norm = normalize_candidate(cand, [], {}, 55.0, {}, "震荡期")
+        for key in ("hard_veto", "crash_veto", "limit_locked", "suspended", "overheat", "chasing_high"):
+            self.assertTrue(norm["derived"][key], f"derived.{key} 未从契约映射(疑似键漂移静默 suppress veto)")
+        self.assertTrue(norm["event"]["holder_reduction_active"])
+        self.assertTrue(norm["event"]["st_or_delisting"])
+        self.assertEqual(norm["liquidity"]["avg_amount_5d"], 1.0e8)
+
+    def test_clean_candidate_maps_to_false_not_constant_true(self) -> None:
+        # 反向:干净候选 → 引擎侧 False(证明上面的 True 不是恒真映射)
+        cand = self._payload()["candidates"][0]
+        norm = normalize_candidate(cand, [], {}, 55.0, {}, "震荡期")
+        self.assertFalse(norm["derived"]["hard_veto"])
+        self.assertFalse(norm["derived"]["crash_veto"])
+        self.assertFalse(norm["event"]["st_or_delisting"])
+        self.assertFalse(norm["event"]["holder_reduction_active"])
+
+
+class PipelineCanonicalDateStrictnessTests(unittest.TestCase):
+    """P1(defect-class,与 engine 同口径):pipeline _is_valid_date 严格 canonical(account/事件日期等契约门)。"""
+
+    def test_pipeline_is_valid_date_strict(self):
+        from runners.a_short_weekly_pipeline import _is_valid_date as pv
+        self.assertTrue(pv("20260605"))
+        for bad in ("202606 5", "2026065", "20260631", "2026060a", ""):
+            self.assertFalse(pv(bad), f"应拒非 canonical {bad!r}")
+
+
+class AccountMainBoardAndOutputPrivacyTests(unittest.TestCase):
+    """P1(Codex Slice4):validate_account_state 强制主板;P0(Slice2/4):账户输出守门须同守 .md sibling(非只 .json)。"""
+
+    def _acct(self):
+        return json.loads((ROOT / "schemas" / "examples" / "a_short_account_state.example.json").read_text(encoding="utf-8"))
+
+    def test_validate_account_state_rejects_b_share_position(self):
+        a = self._acct()
+        a["positions"][0]["ts_code"] = "200001.SZ"
+        with self.assertRaises(SystemExit):
+            validate_account_state(a, a["as_of"])
+
+    def test_main_board_position_still_passes(self):
+        a = self._acct()
+        validate_account_state(a, a["as_of"])   # 主板不破
+
+    def test_md_sibling_guarded_not_only_json(self):
+        from runners.a_short_weekly_pipeline import _reject_nonprivate_account_output_path as g
+        repo = str(ROOT)
+        g(f"{repo}/state/a_short/__probe__.json", True, False)        # .json 被 state/*/*.json 忽略 → 放行(JSON-only 守的盲点)
+        with self.assertRaises(SystemExit):
+            g(f"{repo}/state/a_short/__probe__.md", True, False)      # .md 不被同规则忽略 → 必须拒(P0 根因)
+        g(f"{repo}/state/a_short/weekly_private/20260615/__probe__.md", True, False)  # weekly_private 下 → 放行
+
+
 if __name__ == "__main__":
     unittest.main()

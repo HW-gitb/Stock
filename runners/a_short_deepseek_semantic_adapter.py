@@ -53,7 +53,7 @@ def build_deepseek_client():
         return None
     try:
         from openai import OpenAI
-        return OpenAI(api_key=key, base_url=DEEPSEEK_BASE_URL)
+        return OpenAI(api_key=key, base_url=DEEPSEEK_BASE_URL, timeout=30)  # 显式超时:防网络停滞挂住周报(advisory,失败仍中性 unknown)
     except Exception:
         return None
 

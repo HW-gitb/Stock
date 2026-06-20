@@ -47,9 +47,14 @@ HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.p
 
 
 def _is_valid_date(s) -> bool:
+    # 严格 canonical(P1 修复,与 engine _is_valid_date 同口径):strptime 单用会接受 '202606 5'/'2026065',
+    # 非真 canonical;account/事件日期等契约门必须拒非规范值。要求恰好 8 个 ASCII 数字 + 合法历法日。
     from datetime import datetime
+    t = str(s)
+    if len(t) != 8 or not (t.isascii() and t.isdigit()):
+        return False
     try:
-        datetime.strptime(str(s), "%Y%m%d")
+        datetime.strptime(t, "%Y%m%d")
         return True
     except ValueError:
         return False
@@ -83,9 +88,14 @@ def validate_account_state(account: dict, as_of: str) -> dict:
     if str(account.get("as_of")) != str(as_of):
         raise SystemExit(f"[FATAL] --account as_of {account.get('as_of')} != --as-of {as_of}(账户状态错批/陈旧/未来)")
 
+    # A-short 主板边界(消费真相源处强制,P1 修复):converter 输入层已校 is_a_share_main_board,但手写/外部生成的
+    # account_state.json 可绕过 converter → 在此对 positions/rule13 的 ts_code 同样校验,拒 B股/非主板/畸形码进持仓状态。
+    from engine.data.a_share_board_scope import is_a_share_main_board
     seen_pos = set()
     for idx, pos in enumerate(account.get("positions") or []):
         code = str(pos.get("ts_code"))
+        if not is_a_share_main_board(code):
+            raise SystemExit(f"[FATAL] --account positions[{idx}].ts_code {code} 非 A 股主板(A-short 只操作主板)")
         if code in seen_pos:
             raise SystemExit(f"[FATAL] --account positions 含重复 ts_code {code}")
         seen_pos.add(code)
@@ -102,6 +112,8 @@ def validate_account_state(account: dict, as_of: str) -> dict:
     seen_cd = set()
     for idx, cd in enumerate(account.get("rule13_cooldowns") or []):
         code = str(cd.get("ts_code"))
+        if not is_a_share_main_board(code):
+            raise SystemExit(f"[FATAL] --account rule13_cooldowns[{idx}].ts_code {code} 非 A 股主板(A-short 只操作主板)")
         if code in seen_cd:
             raise SystemExit(f"[FATAL] --account rule13_cooldowns 含重复 ts_code {code}")
         seen_cd.add(code)
@@ -2479,6 +2491,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 持仓恒列入隐私护栏(固化):带 --account 的周报含真实持仓 → 拒绝落仓库内非私密目录(防 git 提交泄漏)。
     # 早于任何取数/落盘,fail-fast。
     _reject_nonprivate_account_output_path(args.out, bool(args.account), args.allow_nonprivate_account_out)
+    # 同守自动派生的 Markdown 旁产物(P0 修复):write_weekly_markdown 写 <out>.md,同含真实持仓;.json 可能被
+    # state/*/*.json 忽略而放行,但 .md 不被同一规则覆盖、会落未忽略路径泄漏 → 必须用同守门先校验(fail-fast,早于任何写盘)。
+    _reject_nonprivate_account_output_path(os.path.splitext(args.out)[0] + ".md", bool(args.account),
+                                           args.allow_nonprivate_account_out)
 
     def _load(path):
         with open(path, encoding="utf-8") as f:

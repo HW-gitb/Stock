@@ -330,20 +330,27 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
     if ner:
         fam["negative_event"].update(hit=True, action="hard_veto", reasons=ner)
 
-    # market_regime(IV 闸门 + 防御/收缩)
+    # market_regime(IV 闸门 + 防御/收缩)。**新建仓限制 vs 持仓管理**:IV>90/收缩期 是 v14.2 的
+    # "终止所有建仓 / 禁新建仓"语义(Rule3 / M1),只约束**新开仓**,对**已有持仓**不应硬否决——持仓管理
+    # (S3a 系统止损/止盈、S3b 处置)须继续。故市场级 hard_veto 仅对空仓(not has_position);持仓侧降为
+    # advisory downgrade(reason 仍捕获、进 M6.7 降级文案,但不抹掉 持有 分支的 S3a/S3b)。镜像本函数
+    # stateful_risk 的"新建仓硬限制仅空仓"范式;对齐 Tier-3 build_holding_report(持仓恒「持有」)。
     mr = []
     if regime_unknown_fallback:
         mr.append(regime_fallback_reason)
-    if iv_pct is not None and iv_pct > IV_NOBUILD_PCT:
-        mr.append(f"IV分位{iv_pct}>{IV_NOBUILD_PCT} 不可建仓")
-        fam["market_regime"].update(hit=True, action="hard_veto", reasons=mr)
+    nobuild_iv = iv_pct is not None and iv_pct > IV_NOBUILD_PCT
+    held_suffix = "(已有持仓:持仓管理继续,advisory)" if has_position else ""
+    if nobuild_iv:
+        mr.append(f"IV分位{iv_pct}>{IV_NOBUILD_PCT} 不可建仓{held_suffix}")
     elif regime == "收缩期":
-        mr.append("收缩期禁新建仓")
-        fam["market_regime"].update(hit=True, action="hard_veto", reasons=mr)
+        mr.append(f"收缩期禁新建仓{held_suffix}")
     elif iv_pct is not None and iv_pct > IV_HALVE_PCT:
         mr.append(f"IV分位{iv_pct}>{IV_HALVE_PCT} 减半")
-        fam["market_regime"].update(hit=True, action="downgrade", reasons=mr)
-    elif regime_unknown_fallback:
+    if (nobuild_iv or regime == "收缩期") and not has_position:
+        fam["market_regime"].update(hit=True, action="hard_veto", reasons=mr)  # 空仓:新建仓硬否决
+    elif mr:
+        # 持仓遇 IV>90/收缩期 → advisory downgrade(不硬否决,持有分支照走 holding_levels);
+        # 空仓 IV>80 → 减半 downgrade;regime unknown → 保守 downgrade。
         fam["market_regime"].update(hit=True, action="downgrade", reasons=mr)
 
     # portfolio_concentration
@@ -1181,9 +1188,15 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
 
 
 def _is_valid_date(s) -> bool:
+    # 严格 canonical(P1 修复):strptime("%Y%m%d") 单用会接受 '202606 5'/'2026065'(解析成 20260605),
+    # 非真 canonical。要求**恰好 8 个 ASCII 数字** + 合法历法日;否则 disclosure_date / as_of 的非规范值会
+    # 既过 canonical 声称、又因 PIT 字符串比较(空格<数字)被当成 <= as_of。镜像 ledger 的 _is_canonical_date。
     from datetime import datetime
+    t = str(s)
+    if len(t) != 8 or not (t.isascii() and t.isdigit()):
+        return False
     try:
-        datetime.strptime(str(s), "%Y%m%d")
+        datetime.strptime(t, "%Y%m%d")
         return True
     except ValueError:
         return False
@@ -1550,6 +1563,18 @@ def validate_m67_consistency(report: dict) -> None:
     m67 = report["m67"]
     tbl = m67["table"]
     action = mc["entry_exit_size_star"]["action"]
+    # held-state 不变式(P1 修复 R-ASHORT-M67-HELD-STATE-ACTION-BIND):action=持有 必须真持仓(stateful_risk.position_state==held
+    # + position 非空且 ts_code 与 report 一致),防 flat 候选冒充持仓行过 validator(候选/持仓串线);建仓/观察 反向必非 held;
+    # 否决可 held+hard-veto(其 S3b 持仓字段由下方非持有 guard 另禁)。正常 builder 已满足(build_m67/holding 据 position_state 分流)。
+    _sr = mc.get("stateful_risk") or {}
+    _ps, _pos = _sr.get("position_state"), (_sr.get("position") or None)
+    if action == "持有":
+        if _ps != "held" or not _pos:
+            raise ValueError(f"持有 action 但 machine.stateful_risk 非持仓(position_state={_ps!r}/position 空)——候选/持仓串线")
+        if str((_pos or {}).get("ts_code") or "") != str(report.get("ts_code") or ""):
+            raise ValueError("持有 action 但 position.ts_code 与 report ts_code 不一致(持仓串线)")
+    elif action in ("建仓", "观察") and _ps == "held":
+        raise ValueError(f"{action} action 但 position_state=held(候选/持仓串线;持仓应走 持有/否决)")
     plan = mc["entry_exit_size_star"].get("plan")
     # as_of 历法
     if not _is_valid_date(report["as_of"]):

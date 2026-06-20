@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-06-20 — Codex re-`审查 PASS-with-P2`(a-short 修复批)→ Claude P2 `修复`
+- **Verdict/Action**: Codex 复审认可 a-short 修复主体、**无新 P0/P1**(10 条 Required 方向 + 目标测试均确认); 2 个 P2 已处理 — scope-mixed(已解 @7b1280bf: README/handoff = A-long review docs, 单独提交)+ phase6 import 测试非 hermetic(已修: 加 `setUpModule` 自注入 dummy token)。full detail 见 register a-short entry addendum。
+- **Required**: 同批 10 条 `R-ASHORT-*`(working-tree 已修+测); P2 hermetic 并入 `tests/phase6/test_egs_main_board_and_holder_pit.py` — 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: **no-`TUSHARE_TOKEN` 复现** phase6 文件 **4 OK**(hermetic, 不再 `mod.pro is None`); 全 phase6 discover **66 OK**; a-short discover 1399 OK。未 commit。
+- **Next**: 用户提交 a-short(代码+测试+registry schema + register/SESSION_LOG; 顺带 closeout A-long 两条 status @e5bd1902)。
+- **Proof-of-use**: 移除 `TUSHARE_TOKEN` 后 `setUpModule` 注入 dummy → `EgsImportNoTokenSideEffectTest` + `HolderReductionPitTest`(依赖 pro)均过(4 OK), 复现并验证 Codex P2 已闭。
+
+## 2026-06-20 — Claude `审查`(a-short 自审 6 段)+ `修复`(复核 Codex 桌面审查 `a_short_review_codex.md` Slice1-6)
+- **Verdict/Action**: A-short 全系统自审(`Desktop/a_short_review_cc.md` 6 段)+ Codex 桌面审查 Slice1-6 逐条复核(读码+探针独立验证, 无误报、全成立); **10 条真问题(3 P0+7 P1)working tree 已修+测**。澄清: working tree 的 a-short/EGS/phase5/weekly/converter/registry/phase6 改动是本对话 Claude 的 a-short slice, **非 A-long、非「Codex 越界」**(并发 A-long register entry 误标, 已在 register 更正)。
+- **Required**: 10 条 `R-ASHORT-*`(3 P0 + 7 P1; 含 egs-import-token-side-effect、weekly-md-sibling + converter account-privacy、holder-future-lookahead、m67-held-market-veto、filter-l0-mainboard-strict、validate-date-canonical、account-state-validator-mainboard、m67-held-state-bind、registry-schema-invariant)— 全 ID + full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: a-short discover **1395 OK**(+12 新测); phase6 **66 OK**; py_compile 5 + registry schema json OK; 探针实证(token 不写 tk.csv / `_is_valid_date('202606 5')=False` / filter_l0 拒 B股+畸形码 / held+flat·建仓+held 被拒 / `.md` sibling·converter tracked 路径被拒 / registry both·existing_holding-public schema 拒); 零回归。未碰三个 route-doc(本 entry + register 除外); 未 commit; 未触发 Codex。
+- **Next**: 用户交 Codex re-`审查` a-short 这批; PASS 后用户提交(只 add a-short/EGS/phase6 代码+测试+registry schema, **不带 A-long**; A-long 另线另提交)。Remaining(未修): D类 route-doc/doc drift、E类 POL-RISK legacy(Slice 3)、`_board_from_code`/contract defense-in-depth — 见 register。
+- **Proof-of-use**: 每修复分支实走对应针对性测(held-state 4 / account-board+md 3 / converter guard 2 / registry mutation 3 / filter_l0 strict+畸形码 / held-market-veto / holder-PIT / token-no-set_token / canonical-date 2); 16 针对性测 + 1395 全绿 = 每分支实测覆盖。
+
 ## 2026-06-20 — Codex re-`审查 PASS` (R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP + R-ALONG-VY-FP-FORWARD-CAPTURE-EVIDENCE-INTEGRITY-GAP round 3)
 - **Verdict/Action**: PASS. Current A-long forward-paper data-layer/capture repair closes the round-2 D-origin consumer, empty-universe, data_through, and output-path guard gaps in working tree.
 - **Required**: `R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP` + `R-ALONG-VY-FP-FORWARD-CAPTURE-EVIDENCE-INTEGRITY-GAP` — full closure evidence and remaining boundary live in `docs/system_risk_register.md` only.

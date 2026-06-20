@@ -525,6 +525,8 @@ def main(argv=None) -> int:
     p.add_argument("--as-of", required=True, help="决策日 YYYYMMDD（= 输出 account_state.as_of = 周报 --as-of）")
     p.add_argument("--out", required=True, help="输出 account_state.json 路径")
     p.add_argument("--lineage-out", help="输出 lineage 旁产物路径（默认 <out 同目录>/<out 主名>_lineage.json）")
+    p.add_argument("--allow-nonprivate-account-out", action="store_true",
+                   help="显式允许把 account_state/lineage 写到仓库内非 gitignored 路径（默认拒，防账户隐私被提交泄漏）")
     args = p.parse_args(argv)
 
     input_dir = Path(args.input_dir)
@@ -554,9 +556,14 @@ def main(argv=None) -> int:
     validate_account_state(account_state, account_state["as_of"])
 
     out_path = Path(args.out)
-    _write_json_atomic(out_path, account_state)
     lineage_path = Path(args.lineage_out) if args.lineage_out else \
         out_path.with_name(out_path.stem + "_lineage.json")
+    # 隐私护栏(P0 修复):account_state + lineage 含真实 cash/positions/cost/stop/cooldown → 拒落仓库内 git 未忽略路径
+    # (fail-fast,早于任何写盘);复用 weekly 同守门(git check-ignore 真值)。默认私密目录 = gitignored state/a_short/。
+    from runners.a_short_weekly_pipeline import _reject_nonprivate_account_output_path
+    for _p in (out_path, lineage_path):
+        _reject_nonprivate_account_output_path(str(_p), True, args.allow_nonprivate_account_out)
+    _write_json_atomic(out_path, account_state)
     _write_json_atomic(lineage_path, lineage)
 
     _print_plain_summary(account_state, lineage)

@@ -46,7 +46,7 @@
         "backtest_evidence_capable": {"type": "boolean"},
         "production_effect_enabled": {"type": "boolean"},
         "veto_class": {"enum": ["none", "production_hard_veto", "m67_advisory_veto"]},
-        "operation_impact_target": {"enum": ["new_entry", "existing_holding", "both", "none"]},
+        "operation_impact_target": {"enum": ["new_entry", "existing_holding", "none"]},
         "implementation_status": {"enum": ["implemented", "design_only_current_text_landing", "future_s3b_schema_render_required", "pending_slice_not_yet_landed", "out_of_scope_no_landing"]},
         "evidence_ref_kind": {"enum": ["artifact_path", "lineage_key", "source_id", "none"]},
         "privacy_class": {"enum": ["public_tracked", "private_account", "secret_or_raw_provider"]},
@@ -70,6 +70,11 @@
           "comment": "out_of_scope 字段必须自洽: 不接入(none target / out_of_scope_by_cadence / out_of_scope_no_landing)",
           "if": {"properties": {"visibility_shape": {"const": "out_of_scope"}}},
           "then": {"properties": {"operation_impact_target": {"const": "none"}, "cadence_scope": {"const": "out_of_scope_by_cadence"}, "implementation_status": {"const": "out_of_scope_no_landing"}}}
+        },
+        {
+          "comment": "P1: 持仓侧字段(operation_impact_target=existing_holding)涉真实持仓 → 必须 holding_row_impact 形态 + 私密(private_account/secret_or_raw_provider);防候选/持仓串线 + 隐私边界误判",
+          "if": {"properties": {"operation_impact_target": {"const": "existing_holding"}}},
+          "then": {"properties": {"visibility_shape": {"const": "holding_row_impact"}, "privacy_class": {"enum": ["private_account", "secret_or_raw_provider"]}}}
         }
       ]
     }

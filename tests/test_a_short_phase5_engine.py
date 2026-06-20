@@ -685,6 +685,29 @@ class BuildReportTests(unittest.TestCase):
             self.assertIsNone(r["m67"]["table"][k])
         validate_m67_consistency(r)
 
+    def test_existing_position_with_market_veto_stays_held_not_denied(self):
+        # 市场级否决(IV>90 / 收缩期)是 v14.2「终止所有建仓 / 禁新建仓」语义,只约束**新建仓**;
+        # 对**已有持仓**不得硬否决——持仓须保持「持有」+ S3a 系统止损/止盈不被抹掉(对齐 Tier-3
+        # build_holding_report;镜像 stateful_risk 新建仓硬限制仅空仓)。回归 held+IV>90/收缩期 抹掉持仓管理层 bug。
+        r = build_m67_report(_good_input(iv={"iv_percentile_252d": 95.0},
+                                         stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")                 # 不再误判 否决
+        self.assertEqual(r["machine"]["layer"]["hard_veto"], [])            # 市场级 veto 对持仓非 hard
+        self.assertEqual(r["machine"]["risk_families"]["market_regime"]["action"], "downgrade")  # 降为 advisory
+        self.assertIsNotNone(r["m67"]["table"]["损"])                       # S3a 系统跟踪止损未被抹掉
+        self.assertIn("系统跟踪止损", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)
+        # 收缩期同理:持仓不被否决、S3a 保留。
+        r2 = build_m67_report(_good_input(market_regime="收缩期",
+                                          stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r2["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r2["machine"]["risk_families"]["market_regime"]["action"], "downgrade")
+        self.assertIsNotNone(r2["m67"]["table"]["损"])
+        validate_m67_consistency(r2)
+        # 对照(新建仓限制不变):空仓 + IV>90 仍硬否决。
+        flat = build_m67_report(_good_input(iv={"iv_percentile_252d": 95.0}), AS_OF, "t")
+        self.assertEqual(flat["m67"]["table"]["操作"], "否决")
+
     def test_rule12_active_flat_candidate_is_denied(self):
         r = build_m67_report(_good_input(stateful_risk=_flat_rule12_active()), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "否决")
@@ -1005,6 +1028,64 @@ class IvHvConsistencyTests(unittest.TestCase):
         r = self._good()
         r["machine"]["iv_gate"]["iv_hv_regime"] = "unknown"
         r["machine"]["iv_gate"]["iv_hv_ratio"] = None
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+
+class CanonicalDateStrictnessTests(unittest.TestCase):
+    """P1(Codex 审查补漏):_is_valid_date / _validate_semantic_official 必须严格 canonical(8 ASCII 数字),
+    拒 strptime 宽松接受的 '202606 5'/'2026065'(否则非规范 disclosure_date 既过 canonical 声称、又因
+    PIT 字符串比较[空格<数字]被当成 <= as_of)。"""
+
+    def test_is_valid_date_strict(self):
+        from runners.a_short_phase5_engine import _is_valid_date
+        self.assertTrue(_is_valid_date("20260605"))
+        for bad in ("202606 5", "2026065", "2026/6/5", "20260631", "", "2026060a"):
+            self.assertFalse(_is_valid_date(bad), f"应拒非 canonical {bad!r}")
+
+    def test_validate_semantic_official_rejects_noncanonical_disclosure_date(self):
+        from runners.a_short_phase5_engine import _validate_semantic_official
+        for bad in ("202606 5", "2026065"):
+            sem = {"status": "risk", "had_pit_announcements": True, "events": [{
+                "source": "cninfo", "title": "t", "category": "c", "disclosure_date": bad,
+                "risk_type": "r", "severity": "high", "url_or_pdf": ""}]}
+            with self.assertRaises(ValueError):
+                _validate_semantic_official(sem, "20260630")
+        ok = {"status": "risk", "had_pit_announcements": True, "events": [{
+            "source": "cninfo", "title": "t", "category": "c", "disclosure_date": "20260605",
+            "risk_type": "r", "severity": "high", "url_or_pdf": "http://x"}]}
+        self.assertIsNotNone(_validate_semantic_official(ok, "20260630"))
+
+
+class HeldStateActionBindTests(unittest.TestCase):
+    """P1(Codex Slice4):validate_m67_consistency 必须绑 action=持有 ⟺ position_state=held + position,
+    防 flat 候选冒充持仓行(候选/持仓串线);建仓/观察 反向不得 held。"""
+
+    def _held_report(self):
+        return build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+
+    def test_normal_held_passes(self):
+        r = self._held_report()
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        validate_m67_consistency(r)
+
+    def test_held_action_with_flat_state_rejected(self):
+        r = self._held_report()
+        r["machine"]["stateful_risk"]["position_state"] = "flat"
+        r["machine"]["stateful_risk"]["position"] = None
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_held_action_with_mismatched_position_ts_code_rejected(self):
+        r = self._held_report()
+        r["machine"]["stateful_risk"]["position"]["ts_code"] = "600519.SH"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_build_action_with_held_state_rejected(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        r["machine"]["stateful_risk"] = {"position_state": "held", "position": {"ts_code": "600000.SH"}}
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
 

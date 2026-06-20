@@ -107,6 +107,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from engine.data.analysis_input_contract import validate_analysis_input_contract, validate_json_schema
+from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
     write_weight_comparison,
@@ -161,8 +162,10 @@ def _pin_tushare_base_url():
 
 if TOKEN and ts is not None:
     _pin_tushare_base_url()
-    ts.set_token(TOKEN)
-    pro = ts.pro_api()
+    # 直接把 token 传给 pro_api,**不调 ts.set_token**:set_token 会在 import 期写 ~/tk.csv(import 文件副作用 +
+    # 沙箱/受限环境 PermissionError → 卡住只读单测),且 egs_main 全程用本地 `pro` 客户端、不依赖全局 token
+    # (weekly pipeline 等都 api=pro)。与 runners/a_short_iv_feed_probe.py::init_tushare_pro 同一 sanctioned 口径(no set_token)。
+    pro = ts.pro_api(TOKEN)
 else:
     pro = None
 
@@ -1981,18 +1984,11 @@ def get_holder_reductions():
     cut10 = TODAY_DT - timedelta(days=10)
     v10   = set(df[df["ann_dt"] >= cut10]["ts_code"])
     v30   = set(df["ts_code"]) - v10
-
-    # 额外查询未来30日内已公告的减持记录
-    df_de = safe_api(pro.stk_holdertrade, start_date=TODAY, end_date=dfuture(30),
-                     fields="ts_code,ann_date,in_de")
-    if df_de is not None and not df_de.empty:
-        de_codes  = set(df_de[df_de["in_de"] == "DE"]["ts_code"].dropna().tolist())
-        new_count = len(de_codes - v10)
-        v10 |= de_codes
-        log.info(f"减持计划预告：新增 {new_count} 只加入 veto_10d")
-    else:
-        log.warning("减持计划预告查询失败或返回空，跳过")
-
+    # PIT 修复(未来函数 look-ahead):移除原"未来30日"第二段查询。原 start=TODAY / end=dfuture(30) 按
+    # ann_date 抓 as_of **之后**才公告的减持 → 历史 --as-of / 回测 look-ahead(把 as_of 时点尚不可知的未来
+    # 减持并入 veto_10d、提前剔除候选、回测虚高)。对实盘(as_of==今天)该段恒**冗余**:今日公告 ann_date==as_of
+    # 已被上面第一段(as_of-30 ≤ ann_date ≤ as_of)纳入 v10,故移除后**实盘行为不变、仅消除历史污染**。
+    # 已公告且执行在未来的减持计划由第一段按 ann_date 捕获(ann_date≤as_of);未来才公告的不属 PIT 可知。
     result = {"veto_10d": v10, "deduct_30d": v30}
     save_cache(key, result)
     return result
@@ -2074,6 +2070,11 @@ def precompute_stock_stats(codes, all_daily):
             and not pd.isna(amt0) and not pd.isna(amt5) and amt5 > 0 and amt0 > amt5 * 1.2
         )
 
+        # 闪崩/断头铡刀检测。**有意偏离 v14.2 Rule6「5日内放量跌>8%」**(2026-06-19 审查决定保留):此处用更稳健的
+        # **价格结构**口径——单日跌>5% ∧ 收在当日振幅下 20%(收得弱) ∧ 次日收盘<(pre_close+close)/2(不修复)。
+        # 不依赖含糊的「放量」量级,且加「弱收 + 次日不修复」两道结构确认,对 risk_filter_only 系统更保守可靠。
+        # 阈值 −5(非 −8)+ 结构门是 deliberate(非把 8 打错成 5);改 −8 / 加放量 = 放松一条硬否决,故不改。
+        # 行为由 tests/phase6/test_egs_main_board_and_holder_pit.py::HasCrashVetoSpecDeviationTest 钉住。
         has_crash_veto = False
         for i in range(1, min(5, len(grp))):
             day_chg = grp.iloc[i].get("pct_chg", 0)
@@ -2128,8 +2129,11 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
     df = df_stocks.copy()
     n0 = len(df)
 
-    df = df[~df["ts_code"].str.endswith(".BJ")].copy()
-    df = df[~df["symbol"].str.startswith(("300","301","688","689","920"))].copy()
+    # 主板 only(用户硬口径,**strict INCLUSION**):只保留 A 股主板规范码(SSE 600/601/603/605 + SZSE 000/001/002/003,
+    # 6 位 ASCII 数字)。用 is_a_share_main_board 一次性排除 创业板(300/301)/科创板(688/689)/北交所(920/.BJ)/
+    # **B股(沪900·深200)**/畸形码——比逐个加排除前缀(原 `~startswith(300/301/688/689/920/900/200)`)更彻底:
+    # 畸形码(如 600ABC.SH)、未来新非主板前缀都拒,_board_from_code 之后只会见到主板码。
+    df = df[df["ts_code"].map(is_a_share_main_board)].copy()
     df = df[~df["name"].str.contains(r"ST|退市|暂停", na=False, case=False, regex=True)].copy()
 
     if suspended_set: df = df[~df["ts_code"].isin(suspended_set)].copy()
@@ -3014,7 +3018,7 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
     if api_key:
         try:
             from openai import OpenAI as _OpenAI
-            ds_client = _OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+            ds_client = _OpenAI(api_key=api_key, base_url="https://api.deepseek.com", timeout=30)  # 显式超时:防网络停滞挂住整轮
         except ImportError:
             log.warning("[Stage3] openai 库未安装，DeepSeek 行业政策检查跳过")
     else:
@@ -3024,6 +3028,12 @@ def stage3_ai_clearing(top50_df, red_dict, unlock_set, backtest_mode=False):
         """
         依次尝试新浪财经和百度新闻，返回 (titles: list[str], ok: bool)。
         ok=False 表示两个来源均失败；ok=True 且 titles 为空表示无新闻。
+
+        **已知陈旧(2026-06-19 审查)**:主源新浪 roll 端点已失效(对任意关键词返回空,见
+        docs/a_short_semantic_risk_contract.md §web_llm 产出路径),故本 POL-RISK-VETO 当前**基本失效**;
+        且「web/LLM → 生产硬否决」与系统现行「web 绝不自动 hard-veto」原则冲突。**刻意不在此迁移到 em**
+        (迁移=复活一条违反原则的生产 web-veto);该 legacy 的处置(降级 advisory / 换 PIT 源)归已登记的
+        语义层 Slice 3 reconciliation。非生产 advisory 语义已在 weekly pipeline 走 em 现行源。
         """
         POLICY_KEYWORDS = ["限制","整治","集采","反垄断","监管","处罚","立案","查处","专项","禁止","停产","降价令","约谈"]
 

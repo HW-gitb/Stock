@@ -1389,5 +1389,38 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
         self.assertIn("已达上周减仓价", line)
 
 
+class RegistrySchemaMutationTests(unittest.TestCase):
+    """P1(Codex Slice5):schema contract 本身须拒未来坏 registry(不只循环当前 example):both / 持仓侧公开形态 由 schema 焊;
+    field_id 唯一由 Python 焊(draft-07 表达不了数组内字段唯一)。"""
+
+    def setUp(self):
+        self.schema = _load(REG_SCHEMA)
+        self.example = _load(REG_EXAMPLE)
+
+    def test_operation_impact_target_both_rejected(self):
+        bad = copy.deepcopy(self.example)
+        bad["fields"][0]["operation_impact_target"] = "both"   # 去 enum 后 → schema 拒
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad, self.schema)
+
+    def test_existing_holding_candidate_public_shape_rejected(self):
+        bad = copy.deepcopy(self.example)
+        src = next(f for f in bad["fields"] if f["operation_impact_target"] != "existing_holding")
+        row = copy.deepcopy(src)
+        row["field_id"] = "synthetic_existing_holding_wrong_shape"
+        row["operation_impact_target"] = "existing_holding"
+        row["visibility_shape"] = "candidate_row_impact"   # 持仓侧却用候选形态 → existing_holding if-then 拒
+        row["privacy_class"] = "public_tracked"
+        bad["fields"].append(row)
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad, self.schema)
+
+    def test_duplicate_field_id_python_uniqueness(self):
+        ids = [f["field_id"] for f in self.example["fields"]]
+        self.assertEqual(len(ids), len(set(ids)), "example field_id 必须唯一")
+        dup = ids + [ids[0]]
+        self.assertTrue([i for i in set(dup) if dup.count(i) > 1])   # field_id 唯一 draft-07 焊不了 → Python 检查兜
+
+
 if __name__ == "__main__":
     unittest.main()

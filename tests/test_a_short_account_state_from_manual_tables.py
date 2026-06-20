@@ -431,5 +431,46 @@ class ConsistencyCheckTests(unittest.TestCase):
         self.assertEqual(warns[0]["kind"], "net_buy_not_in_positions")
 
 
+class ConverterOutputPrivacyGuardTests(unittest.TestCase):
+    """P0(Codex Slice4):converter 写 account_state/lineage 前过私密守门,拒仓库内 git 未忽略路径(防账户隐私被提交)。"""
+
+    def _write_csvs(self, d):
+        import csv
+        for name, rows in _tables().items():
+            with open(Path(d) / f"{name}.csv", "w", newline="", encoding="utf-8") as f:
+                w = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
+                w.writeheader()
+                w.writerows(rows)
+
+    def test_converter_rejects_tracked_repo_output_path(self):
+        import tempfile
+        leak = ROOT / "__converter_leak_probe__.json"   # repo 根,git 不忽略
+        lin = leak.with_name(leak.stem + "_lineage.json")
+        with tempfile.TemporaryDirectory() as d:
+            self._write_csvs(d)
+            try:
+                with self.assertRaises(SystemExit):
+                    conv.main(["--input-dir", d, "--as-of", "20260615", "--out", str(leak)])
+            finally:
+                for p in (leak, lin):
+                    if p.exists():
+                        p.unlink()
+        self.assertFalse(leak.exists())   # guard 在写盘前 raise → 不创建
+
+    def test_converter_allows_gitignored_private_path(self):
+        import tempfile
+        import shutil
+        base = ROOT / "state" / "a_short" / "weekly_private" / "__probe_conv__"
+        out = base / "account_state.json"
+        with tempfile.TemporaryDirectory() as d:
+            self._write_csvs(d)
+            try:
+                conv.main(["--input-dir", d, "--as-of", "20260615", "--out", str(out)])
+                self.assertTrue(out.exists())
+            finally:
+                if base.exists():
+                    shutil.rmtree(base, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
