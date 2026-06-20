@@ -8,6 +8,70 @@
 
 ---
 
+## 2026-06-20 — Codex `审查 PASS`(US-short active-contract guard dual-live repair)
+- **Verdict/Action**: PASS. `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` is closed in the reviewed working tree; no new material Required found.
+- **Required**: None new. `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` closure detail is in `docs/system_risk_register.md` (single source).
+- **Verify**: current dirty tree reviewed; guard diff read; `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency -v` 36 OK; independent probe catches `/` and `and` dual-live strings and allows the archived/superseded framed lines; `git diff --check` clean except existing CRLF warnings; no provider/pipeline run.
+- **Next**: User may `提交` the reviewed US-short docs-only + guard batch with hunk-level staging discipline; do not start US-short implementation/provider/DataHub work without a separate command.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS)
+- **Verdict/Action**: 判定 Codex `审查 FAIL` 成立——是我上轮加的 guard 自己的 bug:`_usshort_old_spec_live_input_offenders` 豁免 token 里多放了 `us_short_system_design`,致一行同列旧 spec+新权威(无 archive 字样)被误放行=dual-live false-negative。修=**删该过宽 token**,豁免只认 archive-framing(archived/superseded/pointer/归档/指针);合法框定行靠既有「supersedes archived」仍豁免→无需改任何 live 合约 doc。补 `/` 和 `and` 两形态 dual-live planted。
+- **Required**: `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` — 完整 judgment/fix/planted/probe/closure 见 `docs/system_risk_register.md`(单一来源;flip → resolved + Resolution)。
+- **Verify**: `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` 36 OK;独立探针 `/` 与 `and` 两 dual-live 串均返回 offender、框定行返回 [];3 活跃合约仍过 live-authority 测;BOM/FFFD=0;`git diff --check` 仅 CRLF。未跑 live provider。
+- **Next**: Codex re-`审查` 本 guard 修;PASS 后用户 `提交`(AGENTS.md hunk 级 stage、剔外部 16c/test)。
+- **Pre-Codex self-review**: A-F。A:豁免 token 缺陷一次修净 + 两 dual-live 形态 planted 全覆盖。B:删 token 不破坏既有放行(仅 provider_data_requirements_audit 框定行同带两名、该行有 supersedes archived→仍豁免);grep 确认 3 合约仅该行带旧名。C:probe 证两 bypass 串被抓、框定行/归档 note 放行(FP 控)。E:register/SESSION_LOG 单态。F:diff-check/BOM OK。Tests passing ≠ design closure。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short active-contract repair guard)
+- **Verdict/Action**: FAIL. The three active provider/evidence contract references are repaired, but the new doc-governance guard still lets an archived old spec and new authority appear as dual live inputs on the same line.
+- **Required**: `R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS` — full detail is registered in `docs/system_risk_register.md` (single source).
+- **Verify**: current dirty tree reviewed; `git diff` for the three contract docs + guard read; `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency -v` 36 OK; independent probe shows `_usshort_old_spec_live_input_offenders("- `docs/us_short_spec.md` / `docs/us_short_system_design.md`") == []`; `git diff --check` clean except existing CRLF warnings.
+- **Next**: Claude `修复` the guard false-negative and planted failures only, then Codex re-`审查`; do not start US-short implementation or provider/DataHub work.
+
+## 2026-06-20 — Claude `修复` (R-USSHORT-ACTIVE-PROVIDER-DOC-OLD-SPEC-SECTION-DRIFT)
+- **Verdict/Action**: 判定 Codex `审查 FAIL` Required 成立(我自审曾误判这 3 处 non-material;retire-not-chase 管追散文同义词、不管活跃合约死依赖)。修 3 处活跃合约输入:`provider_data_requirements_audit` 死锚 §9→`us_short_system_design` §3、`provider_priority_benchmark_contract`+`evidence_feasibility_controls` flat 旧名→新权威;历史 JSON/handoff/archive/register-prose 不动;加 doc-governance guard(live+planted+FP 控)。
+- **Required**: `R-USSHORT-ACTIVE-PROVIDER-DOC-OLD-SPEC-SECTION-DRIFT` — 完整 judgment/3处逐项/guard/closure 见 `docs/system_risk_register.md`(单一来源;flip → resolved + Resolution)。
+- **Verify**: `python -m unittest tests.test_doc_governance_guard tests.test_route_doc_ledger_status_consistency` 36 OK(+2 新 guard);`git grep us_short_spec` 活跃合约已净;BOM/FFFD=0;`git diff --check` 仅 CRLF。未跑 live provider。
+- **Next**: Codex re-`审查` 本修(3 合约输入 + guard);PASS 后用户 `提交`(AGENTS.md hunk 级 stage、剔外部 16c/test)。
+- **Pre-Codex self-review**: A-F。A:3 活跃合约一次全覆盖(死锚+2 flat)。B ripple:`git grep us_short_spec` active docs 仅剩归档指针文件本身 + 历史面(JSON/handoff/archive/register:648 prose),均不动。C:planted 证 guard 非空绿、FP 控放行归档框定。E:register/SESSION_LOG 单态(R-ID flip resolved 单一来源)。F:diff-check/BOM OK。Tests passing ≠ design closure。
+
+## 2026-06-20 — Codex `审查 FAIL`(US-short docs-only landing + review-standard guard)
+- **Verdict/Action**: FAIL. The US-short design authority landing is directionally sound and the review-standard guard additions pass, but one active provider/evidence route chain still points at the archived old US-short spec as if it were live.
+- **Required**: `R-USSHORT-ACTIVE-PROVIDER-DOC-OLD-SPEC-SECTION-DRIFT` — full detail is registered in `docs/system_risk_register.md` (single source).
+- **Verify**: dirty tree reviewed; desktop `us_short_designs_final.md` compared to `docs/us_short_system_design.md`; `.gitignore` private paths verified with `git check-ignore`; `docs/us_short_system_design.md` §13.1/§18.0/§18.1 counts checked; `python -m unittest tests.test_route_doc_ledger_status_consistency -v` OK; `python -m unittest tests.test_doc_governance_guard -v` OK; `git diff --check` clean except existing CRLF warnings.
+- **Next**: Claude `修复` the active provider/evidence contract references only, then Codex re-`审查`; do not start US-short implementation, provider calls, DataHub, runner, Skill, preset, or state work in this repair.
+
+## 2026-06-20 — Claude (US-short 设计 docs-only 写入 repo:新权威稿 + 降级旧 spec + gitignore + register P0)
+
+**Commits**: 无（working tree；待 Codex `审查` PASS 后由用户 `提交`）
+
+**Relationship to prior session(s)**:
+- Initial session for US-short subsystem **repo landing**。串行门已满足（A 股本日到干净检查点、push HEAD `1a4b8dd`），用户授权把 US-short 设计 docs-only 写入 repo（memory `us-short-v1-design-in-progress`）。唯一权威稿 = 桌面 `us_short_designs_final.md`。
+
+**Worked on**:
+1. 新建 US-short **单一设计权威** `docs/us_short_system_design.md`——忠实移植桌面定稿 §0–§19，保留零漏项（§13.1=39 / §18.1=30 / §18.0=7 P0），仅改 repo-status 框架 + 三闸钩子。
+2. 写 repo 三道硬闸：① 旧 `docs/us_short_spec.md` 降级归档指针（不两权威并存）；② §18.0 7 道 P0 登记 register `R-USSHORT-V1-P0-IMPLEMENTATION-GATES`（open/binding 硬规则、非 TODO）+ fail-closed 私密路径 guard test 列 `R-USSHORT-PRIVATE-PATH-FAILCLOSED-GUARD-TEST`（实现期代码、本轮不写）；③ 实跑 `git check-ignore` 核验 6 private 路径 → 补 `.gitignore` 缺的 4 行（runs_private/model_paper_private/lifecycle/shadow_compare_private，沿 `state/*/` scheme），re-verify 全 ignored（a_short/a_long/us_short/us_long 四子系统）。
+3. 路由更新 4 面：`docs/README.md`（新权威 row + 旧 spec 指针 row）、`AGENTS.md`（§当前进度/§Reference policy/§文件参考 共 3 处）、`docs/CURRENT.md`（lane-owner）、`docs/strategy_design_synthesis.md`（ownership）。
+
+**Key decisions**:
+- 单文件权威（不拆多文件）——桌面稿密集交叉引用 + 零漏项核验属性，拆分会破坏；镜像 `burst_lane_spec`/`long_alpha_spec` 单 lane 单文件。
+- gate ③ 把 `.gitignore` 实际补齐（非仅 doc 声明）——`.gitignore` 是仓库级安全边界、非 US-short 实现代码，仍在「docs-only」内；fail-closed guard test 是代码 → 列实现期 Required、本轮不写。
+- 旧 spec 降级为指针（非删除）——retire-not-chase：provider 文档对 us_short_spec 的历史交叉引用经指针自动转发，只更新顶层活跃权威路由。
+
+**Alternatives considered and rejected**:
+- 「把设计拆成多个 docs（screening/analysis/governance 分文件）」——否决。破坏密集交叉引用 + 零漏项核验；单一权威契合稿子自我定位。
+- 「gate ③ 只在 doc 声明私密路径、.gitignore 留实现期补」——否决。memory 明确『别只靠 .gitignore 文档声明、必须实际落地』；不补则新 doc 的私密声明入库即假。
+
+**Open questions handed off**:
+- ⚠️ **并发外部改动（非本 scope、非我所写）**：本会话期间 `AGENTS.md` §Codex adversarial review standard 被加入 `16c. Authority-vs-implementation design-code matrix` + 改写 Codex 输出行，并 `tests/test_doc_governance_guard.py` 新增 `test_agents_codex_review_requires_design_code_authority_matrix`——会话起始 git status 干净，故均为外部（疑用户/Codex 为审查本 landing 预置 review 规则）。自检已通过（55 guard OK、自洽）。**提交时 AGENTS.md 须 hunk 级只 stage US-short 路由 3 处，把 16c/输出行两 hunk + 该 test 留其 owner 单独提交，勿 `git add -A`**（同 52aea594「误扫 entry 入提交」教训）。
+- 实现层一切仍 gated（provider/schema/runner/Skill/preset/state），每片需用户单独授权。
+
+**Next natural step from my view**:
+1. Codex `审查` 本 US-short docs-only landing（authority/路由一致、design-only 边界、provider/DataHub 未授权、A/US 隔离、私密路径、§18.0 P0 登记、不交叉 A 股）。
+2. PASS 后用户 `提交`（一 scope 一 commit；AGENTS.md hunk 级选择性 stage、剔外部 16c/test）。
+3. 实现 = schema-first 分片、每片 tests + 审查 + 串行、单独授权。
+
+**Pre-Codex self-review**: A–F。A（类非实例）：旧 spec 降级为指针一次性覆盖所有引用转发、非逐处追。B（ripple-grep）：`git grep us_short_spec` active docs——顶层权威 4 面全改指新稿；剩 evidence_feasibility/provider_data_requirements/provider_priority 3 处=provider 文档历史交叉引用（经指针转发、非 material、retire-not-chase 不追）、register:648=历史 guard-rationale prose。C（reverse-failure）：55 guard 全绿（doc-governance/route-doc/semantic-contract/slice3），含我改的 README strict surface + CURRENT 无 gate 词。D：n/a。E（route-doc 单态）：CURRENT 只加 settled 指针、无瞬态 gate 词。F（pre-flight）：`git diff --check` 仅 CRLF 无空白错误；8 改/新文件 BOM/FFFD=0；git check-ignore 6 路径全 ignored。**Tests passing ≠ design closure**：US-short 仅 docs-only、未实现；§18.0 P0 + private guard test 是实现期硬门。
+
 ## 2026-06-20 — Codex `审查 PASS`(35cc36f6 block-level stale-open guard)
 - **Verdict/Action**: PASS. The two `9a8184dc` closeout Required are closed in committed `35cc36f6`: the live-state top entry is refreshed, and the stale-open guard now catches batch-header regressions where status is on the header and R-IDs are in bullets.
 - **Required**: None new. `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` / `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` closure detail is in `docs/system_risk_register.md`(single source).

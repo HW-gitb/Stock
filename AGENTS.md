@@ -57,7 +57,7 @@
 - ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
 - ✅ Phase 6c burst lane 规格：`docs/burst_lane_spec.md` 已建立 A / US 短线 burst lane docs-only baseline（独立 signal / risk / sizing / ship gate；provider/data audit baseline 已补；provider 选择仍未锁）
 - ✅ Phase 6d 长线规格：`docs/long_alpha_spec.md` 已建立长线 alpha 共同规格、US 长线 skeleton、A 股长线 skeleton（docs-only；provider/data audit baseline 已补；provider 选择仍未锁）
-- ✅ Phase 6d US-short 规格：`docs/us_short_spec.md` 已把 `skills/us_short_analysis/reference/` 资料规范成 production-facing docs-only baseline（provider / DataHub / runner / Skill 尚待后续）
+- ✅ Phase 6d US-short 规格：US-short 设计权威已升级为 `docs/us_short_system_design.md`（单一权威，2026-06-20 docs-only 写入 repo，移植桌面定稿 `us_short_designs_final.md`：安全闸 + 两遍打分 + 赛道生命周期 + 两轴环境 + theme_probe 成本地板 + paper/live_normalized 双轨 + 比较轨 shadow + §18.0 7 道 P0 硬门）；旧 `docs/us_short_spec.md` 已降级为归档指针（不两个权威并存）。design-only / 实现 gated（须单独授权 + schema-first + tests + 审查 + 串行、不交叉 A 股）；provider / DataHub / runner / Skill 仍待后续
 - ✅ Phase 6e provider/data requirements audit：`docs/provider_data_requirements_audit.md` 已汇总 4 套系统字段、PIT、频率、lineage、授权/成本、稳定性和 fallback 要求（docs-only；不锁最终 provider）
 - ✅ Phase 7 provider capability / field catalog contract：`schemas/provider_capability_catalog.schema.json` v1.0.0 已建立 schema-first contract（不选 provider、不抓数据、不建 adapter / DataHub table）
 - ✅ Phase 7a alpha-validation route：`docs/alpha_plausibility_audit.md` 与 `docs/evidence_capital_policy.md` 已建立设计路由；后续在大规模 DataHub / runner implementation 前，先用 schema-first alpha audit 判断 lane objective / provider priority / evidence horizon，并用 paper vs live-normalized evidence policy 约束 ship-gate 证据
@@ -92,7 +92,7 @@
 - `skills/us_short_analysis/reference/` 下的两个 Markdown 是 **美股短线选股框架** 与 **美股短线分析框架参考源**。
 - A 股短线框架与美股短线框架虽然都可能使用 `v14.x` 版本号，但它们是两套独立框架；不是前后版本关系，也不能把一个市场的 v14.x 当作另一个市场的升级版或替代版。
 - 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
-- US-short normalized spec 已在 `docs/us_short_spec.md` 建立；reference docs 继续作为源资料归档，`skills/us_short_analysis/SKILL.md` 在 Phase 7 / Phase 8 前仍保持 reserved。
+- US-short 设计权威 = `docs/us_short_system_design.md`（单一权威；旧 `docs/us_short_spec.md` 已降级归档指针）；reference docs 继续作为源资料归档，`skills/us_short_analysis/SKILL.md` 在 Phase 7 / Phase 8 前仍保持 reserved。
 - 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
 - 长线共同规格、US 长线 skeleton、A 股长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；provider/data audit baseline 已在 `docs/provider_data_requirements_audit.md` 建立；后续 provider 选择、schema 和 implementation 仍待后续 Phase。不得用短线框架硬套长线系统。
 
@@ -559,7 +559,8 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 - `skills/a_short_analysis/reference/v14.2_spec.md` — A 股短线分析框架规格说明书
 - `skills/us_short_analysis/reference/us_short_analysis_spec.md` — 美股短线分析框架资料
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料
-- `docs/us_short_spec.md` — Phase 6d US-short steady-lane normalized spec（docs-only；不锁 provider / runner / schema / Skill）
+- `docs/us_short_system_design.md` — US-short 子系统**单一设计权威**（docs-only；移植桌面定稿；§18.0 7 道 P0 硬门已登记 register `R-USSHORT-V1-P0-IMPLEMENTATION-GATES`；不锁 provider / runner / schema / Skill；实现 gated + 不交叉 A 股）
+- `docs/us_short_spec.md` — 已降级为指向 `docs/us_short_system_design.md` 的归档指针（2026-06-20；不再是权威）
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南（alpha 真实性、业务漏洞、执行路线和后续 phase 挂载）
 - `docs/alpha_plausibility_audit.md` — Phase 7a alpha plausibility / lane objective owner（schema-first audit route；决定 continue / risk-filter / redesign / defer / do-not-implement）
 - `docs/evidence_capital_policy.md` — Phase 7a paper vs live-normalized evidence owner（不改变资金政策；ship gate 证据必须区分 paper / live_normalized）

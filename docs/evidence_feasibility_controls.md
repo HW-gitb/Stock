@@ -16,7 +16,7 @@ This contract consumes:
 - `docs/provider_priority_benchmark_contract.md`
 - `docs/evidence_capital_policy.md`
 - `docs/burst_lane_spec.md`
-- `docs/us_short_spec.md`
+- `docs/us_short_system_design.md`
 - `docs/portfolio_allocation_policy.md`
 - `schemas/alpha_plausibility_audit.schema.json`
 - `schemas/provider_capability_catalog.schema.json`

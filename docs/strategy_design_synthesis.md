@@ -365,7 +365,7 @@ Write long-term specs as alpha-push systems and normalize US-short before DataHu
 - US-long annex: GICS, 10-K / 10-Q, FCF margin, ROIC, buyback efficiency, guidance credibility, US benchmarks,
 - US-short normalization: convert the existing US-short references into a spec shape parallel to A-short.
 
-Detailed long-alpha ownership, including the A-long and US-long annex skeletons, now lives in `docs/long_alpha_spec.md`. Detailed US-short normalization ownership now lives in `docs/us_short_spec.md`. This synthesis document keeps the route and architecture only.
+Detailed long-alpha ownership, including the A-long and US-long annex skeletons, now lives in `docs/long_alpha_spec.md`. Detailed US-short ownership now lives in the single design authority `docs/us_short_system_design.md` (the old `docs/us_short_spec.md` is downgraded to an archive pointer). This synthesis document keeps the route and architecture only.
 
 ### Phase 6e - Provider / Data Requirements Audit
 

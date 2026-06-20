@@ -54,7 +54,8 @@ Use this routing table instead of guessing which file to read.
 | US active-only + forward-live operating model and remaining `SR-PROVIDER-001` boundary | `AGENTS.md` fixed decision #26, `docs/system_risk_register.md`, `docs/CURRENT.md` |
 | Paper vs live-normalized evidence and capital-governance-safe ship-gate evidence policy; reviewed forward-live evidence artifact contract | `docs/evidence_capital_policy.md`, `schemas/forward_live_evidence.schema.json` |
 | A/US short-term burst lane detailed baseline | `docs/burst_lane_spec.md` |
-| US-short normalized production-facing spec | `docs/us_short_spec.md` |
+| US-short system design (single authority; weekly long-only US short-term assist; 进攻在选股/克制在执行/同一风险只罚一次; safety gate + two-pass scoring + theme lifecycle + two-axis regime + theme_probe cost-floor + paper/live_normalized dual track + comparison shadow tracks + §18.0 P0 hard gates; design-only, implementation gated, serial-after-A-share, no A-share crossing) | `docs/us_short_system_design.md` |
+| US-short normalized spec — ARCHIVED POINTER (superseded by `docs/us_short_system_design.md`; downgraded 2026-06-20 to avoid dual authority) | `docs/us_short_spec.md` |
 | Long alpha common spec and A/US long annex skeletons | `docs/long_alpha_spec.md` |
 | Provider / data requirements audit before Phase 7 DataHub | `docs/provider_data_requirements_audit.md` |
 | Phase 7 provider capability / field catalog schema contract | `schemas/provider_capability_catalog.schema.json` |

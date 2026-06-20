@@ -106,7 +106,7 @@
 - `docs/alpha_plausibility_audit.md` / `schemas/alpha_plausibility_audit.schema.json` - Phase 7a-1 audit owner and contract。
 - `docs/evidence_capital_policy.md` - paper vs live-normalized evidence owner。
 - `docs/strategy_design_synthesis.md` - 总体策略架构 owner。
-- `docs/burst_lane_spec.md` / `docs/us_short_spec.md` / `docs/long_alpha_spec.md` - lane owner specs。
+- `docs/burst_lane_spec.md` / `docs/us_short_system_design.md`（US-short 单一设计权威；旧 `docs/us_short_spec.md` 已降级归档指针）/ `docs/long_alpha_spec.md` - lane owner specs。
 - `docs/provider_data_requirements_audit.md` / `schemas/provider_capability_catalog.schema.json` - provider requirements / capability contract。
 - `docs/portfolio_allocation_policy.md` - 35/65、bucket、cash non-fungibility、manual-only capital policy。
 - `docs/datahub_design.md` / `engine/datahub/job_spec_contract.py` / `schemas/datahub_local_resource_budget.schema.json` / `schemas/datahub_job_spec.schema.json` / `schemas/datahub_shared_layer_contract.schema.json` / `schemas/datahub_report_contract.schema.json` / `schemas/datahub_reproducibility_manifest.schema.json` / `schemas/datahub_data_quality_monitor_contract.schema.json` / `schemas/datahub_minimal_a_share_read_path_plan.schema.json` - DataHub / provider / factor-layer guardrails, job-spec enforcement, shared-layer/report/reproducibility/data-quality/minimal-read-path contracts。

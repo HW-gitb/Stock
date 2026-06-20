@@ -10,7 +10,7 @@ This audit consumes:
 
 - `docs/long_alpha_spec.md` section 9, section 10.4, and section 11.8,
 - `docs/burst_lane_spec.md` section 11,
-- `docs/us_short_spec.md` section 9,
+- `docs/us_short_system_design.md` section 3 (data sources, classes, microstructure — the live US-short authority; supersedes archived `docs/us_short_spec.md`),
 - `docs/datahub_design.md` as the DataHub guardrail.
 
 It covers provider requirements for:

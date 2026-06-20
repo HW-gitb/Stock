@@ -19,6 +19,19 @@ AGENTS = ROOT / "AGENTS.md"
 HANDOFF_DIR = ROOT / "docs" / "handoff"
 HANDOFF_INDEX = HANDOFF_DIR / "README.md"
 ARCHIVE_SESSION_LOG_DIR = ROOT / "docs" / "archive" / "session_log"
+# US-short authority demotion (2026-06-20, R-USSHORT-ACTIVE-PROVIDER-DOC-OLD-SPEC-SECTION-DRIFT):
+# after docs/us_short_spec.md was demoted to an archive pointer and docs/us_short_system_design.md
+# became the single design authority, active provider/evidence CONTRACT INPUT lists must consume the
+# live authority, not the archived pointer (a stale "consumes:" dependency — or a dead section anchor
+# such as the old "section 9" — would misroute a future US-short provider/DataHub/implementation slice
+# past the new authority + its §18.0 P0 gates). Historical JSON/handoff/archive/SESSION_LOG mentions
+# are intentionally NOT scanned (retire-not-chase: do not rewrite append-only history to chase mentions).
+USSHORT_LIVE_AUTHORITY = "docs/us_short_system_design.md"
+USSHORT_ACTIVE_CONTRACT_DOCS = (
+    ROOT / "docs" / "provider_data_requirements_audit.md",
+    ROOT / "docs" / "provider_priority_benchmark_contract.md",
+    ROOT / "docs" / "evidence_feasibility_controls.md",
+)
 ACTIVE_DESIGN_DOCS = (
     ROOT / "docs" / "a_short_weekly_pipeline_design_20260610.md",
     ROOT / "docs" / "CURRENT.md",
@@ -158,6 +171,60 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard must not flag a 4.2/S3b line that states it is done")
         self.assertFalse(self._line_lists_completed_fact_as_future(s3b_unrelated, s3b_fact),
                          "guard must not block unrelated future work (US-short burst)")
+
+    @staticmethod
+    def _usshort_old_spec_live_input_offenders(text: str) -> list:
+        # An active contract line naming the archived `us_short_spec.md` is an offender UNLESS the same
+        # line carries an explicit ARCHIVE-FRAMING token (archived / superseded / pointer / 归档 / 指针).
+        # Merely also naming the live authority `us_short_system_design.md` on the line does NOT exempt
+        # it — a "- us_short_spec.md / us_short_system_design.md" line lists BOTH as live inputs, a
+        # dual-live consumed-input regression, not an archive-pointer note
+        # (R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS). The legitimate framed line in
+        # provider_data_requirements_audit.md is exempted by its "supersedes archived" wording, not by
+        # the new authority's mere presence.
+        out = []
+        for ln in text.splitlines():
+            if "us_short_spec.md" not in ln:
+                continue
+            low = ln.lower()
+            if any(q in low for q in (
+                "archive", "archived", "归档", "pointer", "指针", "superseded", "supersedes",
+            )):
+                continue
+            out.append(ln.strip()[:200])
+        return out
+
+    def test_active_contracts_consume_live_us_short_authority_not_archived_spec(self):
+        # R-USSHORT-ACTIVE-PROVIDER-DOC-OLD-SPEC-SECTION-DRIFT: after the archive demotion, active
+        # provider/evidence contract input lists must consume the live `us_short_system_design.md`,
+        # not the archived `us_short_spec.md` (which no longer has the old "section 9" anchor).
+        for path in USSHORT_ACTIVE_CONTRACT_DOCS:
+            text = path.read_text(encoding="utf-8")
+            self.assertIn(USSHORT_LIVE_AUTHORITY, text,
+                          f"{path.name} must consume the live US-short authority {USSHORT_LIVE_AUTHORITY}")
+            self.assertEqual(
+                self._usshort_old_spec_live_input_offenders(text), [],
+                f"{path.name} still names archived us_short_spec.md as a live input")
+
+    def test_usshort_old_spec_live_input_guard_planted(self):
+        bare = "- `docs/us_short_spec.md` section 9,"
+        dual_live_slash = "- `docs/us_short_spec.md` / `docs/us_short_system_design.md`"
+        dual_live_and = "`docs/us_short_spec.md` and `docs/us_short_system_design.md`"
+        framed_authority = "- `docs/us_short_system_design.md` (supersedes archived `docs/us_short_spec.md`),"
+        archived_note = "see `docs/us_short_spec.md` (archived pointer)"
+        self.assertTrue(self._usshort_old_spec_live_input_offenders(bare),
+                        "guard must catch a bare archived-spec consumed-input line")
+        # R-USSHORT-ACTIVE-PROVIDER-DOC-GUARD-DUAL-LIVE-BYPASS: naming both old + new on one line (no
+        # archive framing) is a dual-live consumed-input regression and must NOT be exempted by the
+        # mere presence of the new authority's name. Both separator forms Codex named are covered.
+        self.assertTrue(self._usshort_old_spec_live_input_offenders(dual_live_slash),
+                        "guard must catch a dual-live old/new consumed-input line lacking archive framing")
+        self.assertTrue(self._usshort_old_spec_live_input_offenders(dual_live_and),
+                        "guard must catch a dual-live old-and-new consumed-input line lacking archive framing")
+        self.assertEqual(self._usshort_old_spec_live_input_offenders(framed_authority), [],
+                         "guard must allow a line that consumes the live authority and frames the old as superseded/archived")
+        self.assertEqual(self._usshort_old_spec_live_input_offenders(archived_note), [],
+                         "guard must allow an explicit archived-pointer mention")
 
     def test_session_log_entry_rule_teaches_archive_pointer_exception(self):
         text = AGENTS.read_text(encoding="utf-8")

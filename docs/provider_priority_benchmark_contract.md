@@ -16,7 +16,7 @@ This contract consumes:
 - `docs/strategy_design_synthesis.md`
 - `docs/burst_lane_spec.md`
 - `docs/long_alpha_spec.md`
-- `docs/us_short_spec.md`
+- `docs/us_short_system_design.md`
 - `docs/evidence_capital_policy.md`
 - `schemas/provider_capability_catalog.schema.json`
 
