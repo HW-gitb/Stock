@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-06-20 — Claude `提交`(a-short 自审+Codex审查修复批 closeout @d1857ef1)
+- **Verdict/Action**: a-short 修复批 + A-long forward-paper 2 条 status closeout 已提交 master **@d1857ef1**(13 files, +545/−32; pre-commit hook 测试 14 OK)。register a-short entry status `open`→`resolved`、A-long 两条 status `open`→`resolved` 同 commit。**AGENTS.md 并发改动(`审查` 四段输出格式固化)被 `git add -A` 误入 → 已 `git restore --staged` unstage,未带入本 commit**(非本 scope,留 working tree 由其来源处理)。
+- **Required**: 10 条 `R-ASHORT-*` 全 `resolved` @d1857ef1;A-long `R-ALONG-VY-FP-{DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT,FORWARD-CAPTURE-EVIDENCE-INTEGRITY}-GAP` 两条 status closeout(code 早 @e5bd1902、review docs @7b1280bf,本次仅补 register status)— 全 ID + full detail 见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: commit 成功 @d1857ef1;提交前 `git diff --cached` 确认 staged 纯 a-short(13: EGS/phase5/weekly/converter/adapter/registry-schema/4 测/phase6 新)+ register/SESSION_LOG;pre-commit hook 14 OK;commit 后 `git status` 剩 `M AGENTS.md`(并发,不归本 scope)。register a-short entry + A-long 两条 status diff 均已核。
+- **Next**: a-short 自审修复线闭环。CURRENT §0 加 settled delta(体例一致)。Remaining(未修)D类 route-doc/doc drift、E类 A-EGS POL-RISK legacy(Slice 3)见 register entry「Remaining open」。
+- **Proof-of-use**: `git log --oneline` 顶部 = `d1857ef1`;`git show --stat d1857ef1` 含 13 文件 + 2 批 status resolved diff(A-long 两条 @e5bd1902 + a-short entry @d1857ef1 自指)已核;working tree 仅余 AGENTS.md。
+
 ## 2026-06-20 — Codex re-`审查 PASS-with-P2`(a-short 修复批)→ Claude P2 `修复`
 - **Verdict/Action**: Codex 复审认可 a-short 修复主体、**无新 P0/P1**(10 条 Required 方向 + 目标测试均确认); 2 个 P2 已处理 — scope-mixed(已解 @7b1280bf: README/handoff = A-long review docs, 单独提交)+ phase6 import 测试非 hermetic(已修: 加 `setUpModule` 自注入 dummy token)。full detail 见 register a-short entry addendum。
 - **Required**: 同批 10 条 `R-ASHORT-*`(working-tree 已修+测); P2 hermetic 并入 `tests/phase6/test_egs_main_board_and_holder_pit.py` — 见 `docs/system_risk_register.md`(单一来源)。

@@ -33,7 +33,7 @@ Status:
 
 ## Hot Queue
 
-OPEN P0 (2026-06-20): A-short 全系统自审 + Codex 桌面审查复核修复批(Claude, 本对话独立 a-short slice). status `open` until Codex re-`审查 PASS` + 用户 `提交`; severities P0×3 + P1×7.
+OPEN P0 (2026-06-20): A-short 全系统自审 + Codex 桌面审查复核修复批(Claude, 本对话独立 a-short slice). status `resolved` (committed master 2026-06-20 @d1857ef1; Codex re-`审查 PASS-with-P2`, P2 hermetic 已修); severities P0×3 + P1×7.
 
 来源澄清(重要): 本批 working-tree 的 a-short/EGS/phase5/weekly/converter/registry-schema/phase6 改动 = 本对话 Claude 的 a-short 审查(`Desktop/a_short_review_cc.md` 6 段自审)+ Codex 桌面审查(`Desktop/a_short_review_codex.md` Slice 1-6)逐条复核(读码 + 探针, 无误报、全成立)+ 修复。**非 A-long、非「Codex 越界」** —— 上方/下方 A-long entry(`R-ALONG-VY-FP-DATALAYER-...`)的 "SEPARATE SCOPE FLAG: Codex 越界 a-short" 是并发 A-long 会话不知本对话在做 a-short 而误标; 此处更正。commit scope 独立(只 a-short/EGS/phase6 代码+测试+registry schema, 不带 A-long)。
 
@@ -59,9 +59,9 @@ Boundary: a-short EGS 选股 / M6.7 引擎 / weekly / account / registry schema 
 
 Remaining open(未修, 留后续/Codex 复审): (D) route-doc/doc drift — CURRENT §5「4.2/S3b 未起草」stale(line 122)、持仓 design docs「S1 drafted」、4.2 source pointer(price calc.md vs 4.2.md)、governance web/LLM hard-veto 措辞偏松、excluded_counts 非完整 L0 ledger + route-doc 夸大、test docstring future_s3b — 留并发文档落地后批量回扫; (E) A-EGS legacy POL-RISK-VETO/cninfo hard-veto — 已 DEFERRED tracked, 归 Slice 3 reconciliation.
 
-Closure on Codex re-`审查 PASS` + 用户 `提交`(只 add a-short/EGS/phase6 代码+测试+registry schema).
+Closure: committed master 2026-06-20 @d1857ef1(a-short/EGS/phase6 代码+测试+registry schema + register/SESSION_LOG; Codex re-`审查 PASS-with-P2`, P2 已修; 误入的 AGENTS.md 并发改动已 unstage、未带入本 commit).
 
-Codex re-`审查 PASS-with-P2` (2026-06-20): 认可 a-short 修复主体, 未发现新 P0/P1; 上述 10 条 Required 修复方向 + 目标测试均确认成立. 2 个 P2 均已处理: (P2a) a-short scope 混 A-long doc diffs — 已解(README/handoff = A-long review docs, 单独提交 @7b1280bf, working tree 现纯 a-short); (P2b) `tests/phase6/test_egs_main_board_and_holder_pit.py` import 回归测试非 hermetic(无 `TUSHARE_TOKEN` 环境 `mod.pro is None` → fail)— 已修(加 module-level `setUpModule`/`tearDownModule` 自注入 dummy token, `pro_api(token)` 不写 ~/tk.csv/不联网; 复现: 移除 `TUSHARE_TOKEN` 跑该文件 4 OK, 全 phase6 discover 66 OK). 仍 status `open` until 用户 `提交`.
+Codex re-`审查 PASS-with-P2` (2026-06-20): 认可 a-short 修复主体, 未发现新 P0/P1; 上述 10 条 Required 修复方向 + 目标测试均确认成立. 2 个 P2 均已处理: (P2a) a-short scope 混 A-long doc diffs — 已解(README/handoff = A-long review docs, 单独提交 @7b1280bf, working tree 现纯 a-short); (P2b) `tests/phase6/test_egs_main_board_and_holder_pit.py` import 回归测试非 hermetic(无 `TUSHARE_TOKEN` 环境 `mod.pro is None` → fail)— 已修(加 module-level `setUpModule`/`tearDownModule` 自注入 dummy token, `pro_api(token)` 不写 ~/tk.csv/不联网; 复现: 移除 `TUSHARE_TOKEN` 跑该文件 4 OK, 全 phase6 discover 66 OK). 已提交 master @d1857ef1 (2026-06-20).
 
 OPEN P1 (2026-06-19): A-long value-yield forward-paper data-layer industry-membership + active/delisted classification + index_member_all provider-contract gap. Required ID `R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP`; status `resolved` (committed master 2026-06-20: code @e5bd1902, review docs @7b1280bf; Codex round-3 PASS); severity `P1`; scope reviewed: `runners/a_long_large_cap_value_yield_forward_paper_data_layer.py`, `runners/a_long_large_cap_value_yield_forward_paper_capture.py`, `tests/test_a_long_value_yield_forward_paper_data_layer.py`, `tests/test_a_long_value_yield_forward_paper_capture.py`; consumed frozen owners `runners/a_long_full_main_board_signal_search.py` (`industry_context_for_symbol`/`build_signal_context`/`load_industry_records`), `runners/a_long_full_main_board_materialization_packet.py` (bulk `index_member_all`); PIT label `A-long value-yield forward PAPER / lean data layer / SW industry membership / active-delisted classification / index_member_all provider shape / first-capture robustness`. Reviewer: Claude acting-as-reviewer (user-authorized, because Codex mistakenly performed the `修复` as implementer).
 
