@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-06-20 — Claude `修复`(R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE + R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP)
+- **Verdict/Action**: 接受 Codex `审查 FAIL`(9a8184dc closeout review)两 docs/guard Required。**F1**:9a8184dc 已 landed,旧 closeout entry 的 `Next: 提交` 已成 stale live-state → 本 `修复` entry 即新 live-state 顶、Next 指 Codex re-审查。**F2**:stale-open guard 由 same-line 重写为 block-level `_stale_open_committed_rids`(覆盖 batch header status-on-header + R-ID-in-bullets,如 item 1-4 / Slice 3)+ planted-failure + false-positive 控;allowlist 纳本 2 R-ID。**纯文档 + guard,无业务代码**。
+- **Required**: `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` + `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` — full detail 见 `docs/system_risk_register.md`(单一来源;两条 flip resolved + Resolution)。
+- **Verify**: doc-governance 全绿(含 block-level guard + planted-failure batch-header 测);route-doc OK;diff-check clean(仅 CRLF);无 BOM。未跑 live provider。
+- **Next**: Codex re-`审查` 本 docs/guard 修;PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F。补:52aea594 我误把 Codex 本 FAIL 的 SESSION_LOG entry 随 `git add -A` 扫入提交(entry 合法、已在史;教训=commit 前必重读 SESSION_LOG 顶,非只 register)。A:guard 一次覆盖 same-line+batch-header 两面。B:重读 register top 确认 2 Required entry flip resolved + allowlist 同步;d1857ef1「OPEN P0 … status resolved」header 词与 inline 矛盾,新 guard 取 header 行 inline status→不误报。C:planted batch-header regress→open 被抓(非空绿)、resolved/in-flight 不抓。E:register/SESSION_LOG 单态。F:diff/BOM OK。
+
 ## 2026-06-20 — Codex `审查 FAIL`(9a8184dc register closeout review)
 - **Verdict/Action**: FAIL. Commit `9a8184dc` fixes the visible cfc0aa63 stale-open text, but leaves the top live-state `Next` stale and does not guard the item 1-4 batch-header regression path.
 - **Required**: `R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE` / `R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP` — full detail in `docs/system_risk_register.md`(single source).

@@ -499,13 +499,57 @@ class DocGovernanceGuard(unittest.TestCase):
             "R-ASHORT-ANALYSIS-INPUT-CONTRACT-CALENDAR-DATE-GAP",
             "R-ASHORT-FORWARD-EVENT-HELD-IMPL-STATUS-STALE-S3B",
             "R-ASHORT-ROUTE-DOC-42-S3B-COMPLETED-FACT-AS-FUTURE-DRIFT",
+            # 9a8184dc closeout review (this fix: block-level guard + stale Next)
+            "R-ASHORT-CFC0AA63-SESSIONLOG-CLOSEOUT-NEXT-STALE",
+            "R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP",
         }
-        stale = []
-        for line in reg.split("\n"):
-            m = re.search(r"Required ID `(R-[A-Z0-9-]+)`", line)
-            if m and m.group(1) in committed_resolved and "status `open`" in line:
-                stale.append(m.group(1))
-        self.assertEqual(stale, [], f"committed-and-fixed entries still stale `status open`: {stale}")
+        self.assertEqual(
+            self._stale_open_committed_rids(reg, committed_resolved), [],
+            "committed-and-fixed entries still declared in a stale-open block",
+        )
+
+    @staticmethod
+    def _stale_open_committed_rids(reg, committed):
+        # Block-level scan (R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP): a committed R-ID can be
+        # DECLARED in a batch entry whose status lives on the header line while the R-IDs live in later
+        # bullets, so a same-line scan misses it. Split the register into entries (status-token header
+        # lines); an R-ID is DECLARED via `Required ID `R-X`` OR a `- R-X ...` bullet (a mid-sentence
+        # cross-reference does NOT count → no false positive); an entry's status is its header-line
+        # `status `X`` (or the header's leading status word). A committed R-ID declared in an `open`
+        # entry is stale. In-flight (not-yet-committed) R-IDs are absent from `committed` → not flagged.
+        committed = set(committed)
+        header_re = re.compile(r"^(OPEN|RESOLVED|IN_PROGRESS|BLOCKED)\b[^\n]*\):", re.M)
+        decl_re = re.compile(r"Required ID `(R-[A-Z0-9-]+)`|^- (R-[A-Z0-9-]+)\b", re.M)
+        starts = [m.start() for m in header_re.finditer(reg)]
+        stale = set()
+        for i, s in enumerate(starts):
+            block = reg[s:(starts[i + 1] if i + 1 < len(starts) else len(reg))]
+            header = block.split("\n", 1)[0]
+            mstat = re.search(r"status `(\w+)`", header)
+            is_open = (mstat.group(1) == "open") if mstat else header.startswith("OPEN")
+            if not is_open:
+                continue
+            declared = {a or b for a, b in decl_re.findall(block)}
+            stale |= declared & committed
+        return sorted(stale)
+
+    def test_stale_open_guard_covers_batch_header_without_inline_required_id(self):
+        # R-ASHORT-CFC0AA63-STALE-OPEN-GUARD-BATCH-HEADER-GAP planted-failure + false-positive controls:
+        # a committed batch header (status on the header line, R-ID only in a later bullet) that regressed
+        # to `status open` MUST be caught; a resolved one must not; an in-flight R-ID must not.
+        committed = {"R-TEST-BATCH-FOO"}
+        batch_open = ("OPEN P1/P2 (2026-06-20): some committed batch. status `open`(未 commit).\n"
+                      "scope changed: a.py, b.py.\n"
+                      "- R-TEST-BATCH-FOO (P2): fixed in the batch.\n")
+        self.assertEqual(self._stale_open_committed_rids(batch_open, committed), ["R-TEST-BATCH-FOO"],
+                         "batch header (status on header, R-ID in bullet) regressed to open must be caught")
+        batch_resolved = (batch_open.replace("OPEN P1/P2", "RESOLVED P1/P2")
+                          .replace("status `open`(未 commit)", "status `resolved`(committed abc1234)"))
+        self.assertEqual(self._stale_open_committed_rids(batch_resolved, committed), [],
+                         "a resolved batch header must not be flagged")
+        in_flight = batch_open.replace("R-TEST-BATCH-FOO", "R-TEST-INFLIGHT-NEW")
+        self.assertEqual(self._stale_open_committed_rids(in_flight, committed), [],
+                         "in-flight (not-yet-committed) R-ID must not be flagged (false-positive control)")
 
     def test_ai_review_protocol_has_no_first_review_doublewrite_carveout(self):
         # Fixes R-DOCGOV-AI-REVIEW-FIRST-REVIEW-DOUBLEWRITE-LOOPHOLE: the protocol must not exempt
