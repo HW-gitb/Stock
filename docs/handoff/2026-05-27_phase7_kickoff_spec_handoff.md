@@ -1,5 +1,77 @@
 # Phase 7 Kickoff Spec Handoff
 
+## 2026-06-20 append: A-long value-yield forward-paper round-3 re-review PASS
+
+**Changed**:
+- Codex re-reviewed only the A-long value-yield forward-paper round-3 data-layer/capture repair.
+- Review verdict was recorded in `docs/SESSION_LOG.md`.
+- Full closure evidence was recorded under `R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP` and `R-ALONG-VY-FP-FORWARD-CAPTURE-EVIDENCE-INTEGRITY-GAP` in `docs/system_risk_register.md`.
+
+**Plain result**:
+- Verdict is PASS in working tree.
+- D-origin blank delist, D-origin scored-item leakage, empty live universe, noncanonical `data_through`, and `research/../RESULT` path bypass are now guarded.
+- The two Required entries remain open only because the fix is not committed yet.
+- No live provider call, real capture, ledger spend, production route, ship-gate evidence, broker/order behavior, or A-short review is authorized by this entry.
+
+**Verification**:
+- A-long targeted + doc-route tests: 129 OK.
+- Full `unittest discover`: 2747 OK.
+- `py_compile` for the 4 A-long forward-paper files: OK.
+- Independent probes used fake providers only.
+
+**Next**:
+- User may commit only the A-long forward-paper 4 files plus review docs.
+- Keep A-short/EGS/phase6 working-tree changes out of this A-long commit path.
+
+---
+
+## 2026-06-19 append: A-long value-yield forward-paper round-2 re-review FAIL
+
+**Changed**:
+- Codex re-reviewed only the A-long value-yield forward-paper round-2 repair.
+- Review verdict was recorded in `docs/SESSION_LOG.md`.
+- Full Required detail was recorded under `R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP` and `R-ALONG-VY-FP-FORWARD-CAPTURE-EVIDENCE-INTEGRITY-GAP` in `docs/system_risk_register.md`.
+
+**Plain result**:
+- Verdict is FAIL.
+- The calendar guard now rejects before broad fetch, but provider/data evidence guards still have material holes.
+- `list_status` is threaded into context, but D-origin blank-`delist_date` rows can still reach scoring / return lineage.
+- No live provider call, real capture, ledger spend, production route, ship-gate evidence, broker/order behavior, or A-short review is authorized by this entry.
+
+**Verification**:
+- A-long forward-paper + doc/route targeted tests: 122 OK.
+- `py_compile` for the 4 A-long forward-paper files: OK.
+- Independent probes reproduced the remaining bad shapes; all probes used fake providers only.
+
+**Next**:
+- Repair only the remaining A-long data-layer/capture Required gaps.
+- Do not include A-short/EGS/phase6 working-tree changes in this A-long review/repair/commit path.
+
+---
+
+## 2026-06-19 append: A-long value-yield forward-paper re-review FAIL
+
+**Changed**:
+- Codex re-reviewed only the A-long value-yield forward-paper capture/data-layer repair.
+- Review verdict was recorded in `docs/SESSION_LOG.md`.
+- Full Required detail was recorded under `R-ALONG-VY-FP-DATALAYER-INDUSTRY-CLASSIFICATION-CONTRACT-GAP` and `R-ALONG-VY-FP-FORWARD-CAPTURE-EVIDENCE-INTEGRITY-GAP` in `docs/system_risk_register.md`.
+
+**Plain result**:
+- Verdict is FAIL.
+- The missing-SW exclusion and diagnostic matured-count forgery paths are repaired, but two material gaps remain: security-master origin/list_status is still not preserved, and calendar/entry-anchor guards still run after broad provider fetch.
+- No live provider call, capture execution, ledger spend, production route, ship-gate evidence, broker/order behavior, or A-short review is authorized by this entry.
+
+**Verification**:
+- A-long forward-paper + doc/route targeted tests: 118 OK.
+- `py_compile` for the 4 A-long forward-paper files: OK.
+- Doc governance + route-doc tests after review-record edits: 30 OK.
+
+**Next**:
+- Repair only the two A-long Required gaps above.
+- Do not include A-short/EGS/phase6 working-tree changes in this A-long review/repair/commit path.
+
+---
+
 ## 2026-06-07 append: A-long large-cap signal-search package ready for review
 
 **Changed**:
@@ -4067,3 +4139,29 @@ git diff --check
 1. Claude should re-review only this R1/O2 delta plus the unchanged no-run state.
 2. If Claude passes and the user commits, a later explicit `执行` may run the frozen signal search.
 3. No signal result, alpha, production, ship-gate evidence, or full-size permission exists yet.
+
+## 2026-06-19 append: A-long value-yield forward-paper capture repair closeout
+
+**Plain result**:
+
+- The A-long value-yield forward-paper capture implementation is now coherent as a research-only, per-run-gated monthly accumulator path.
+- This did not run Tushare, capture a real month, spend the singleton ledger, authorize production, or authorize real-money use.
+
+**What changed**:
+
+- `runners/a_long_large_cap_value_yield_forward_paper_capture.py` now validates prior accumulators before fetch, rejects duplicate/out-of-order monthly `as_of`, preserves frozen cohort entry anchors, rejects incomplete month calendars / any `result/` output path, and records mixed member exit policy instead of labeling delist/terminal exits as scheduled.
+- `runners/a_long_large_cap_value_yield_forward_paper_data_layer.py` now uses explicit date windows, member-scoped `index_member_all` / `namechange`, stricter min-field and returned-row lineage checks, stock-basic security-master coverage checks, and a short default post-`as_of` window to freeze the next-open entry anchor.
+- `docs/README.md` now routes the capture implementation separately from the design artifact; `docs/CURRENT.md` no longer says the data layer is future work.
+
+**Validation**:
+
+- A-long forward-paper target modules: 84 tests OK.
+- Doc-governance + route-doc guards: 30 tests OK.
+- Full `unittest discover`: 2723 tests OK.
+- `py_compile`, `git diff --check`, and BOM/FFFD checks passed; only CRLF warnings were reported.
+
+**Next route**:
+
+1. Review this A-long forward-paper repair only; do not mix in A-short, US lanes, provider selection, DataHub, or broker/order work.
+2. Any real monthly capture still requires separate user authorization and the runner confirmation flags.
+3. Full-size / production / ship-gate claims remain blocked until the separate forward evidence policy is met.
