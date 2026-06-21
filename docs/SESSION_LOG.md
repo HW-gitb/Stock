@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 portfolio guard repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: portfolio/symbol/macro target 35 OK; `*us_short*` 701 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes: malformed stop-count / prior-state -> caution; legal integer counts and legal prior transitions still work.
+- **Next**: User may command `提交`; cash_allocation, ship_gate_sizing, 35%-block assembly, sizing core, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP)
+- **Verdict/Action**: 两点判定成立、接受(都在 scope、材料、= slices 5-8 同款 whole-class 校验自失:整数计数用错校验器 + enum 入参 prior_state 没校)。先 whole-class 审兄弟两引擎 → 同类只在 portfolio_guard(symbol_cooldown 无计数/无未校验枚举直落、macro_cluster exposure 是真分数 + warning_level 已校),不动兄弟。窄修该引擎:加 strict `_count`(非负整数,拒分数/3.0/bool/串/负)校验 consecutive_stops + prior_state 对 `PORTFOLIO_GUARD_STATES` 校验,二者坏值均 fail-closed caution 非 normal。完整修/测试见 register Resolution。
+- **Required**: `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: portfolio_guard 15 OK;全 us_short 套件 293 OK(零回归,本机 deps-complete);探针 stops 2.9/0.5/3.1→caution malformed、prior bogus/None/True→caution malformed_prior_state、正控 0/2→normal·3→cooldown·cooldown→recovery;grep `_finite(`=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交并执行下一步`(→ 并轮组② cash_allocation + ship_gate_sizing)。
+- **Pre-Codex self-review**: A-F。A(类):整数计数(分数/3.0/bool/串/负)+ prior_state(未知/None/bool/空/错大小写)全覆盖,含正控防过度抑制。B:仅改 1 引擎 1 测试 + docstring;whole-class 审兄弟两引擎=同类只此处;无下游消费者;grep `_finite(`=0。C(反向):坏计数/坏 prior→caution 非 normal、合法整数/合法 prior 不被误抑制,测**设计意图**。D:N-A。E:register 单态。F:`_count` strict int-not-bool(承接 count 教训)、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 portfolio guard / symbol cooldown / macro cluster)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` is open; portfolio guard can return `normal` for malformed stop-count / prior-state inputs.
+- **Required**: `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` - full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: target 32 OK; `*us_short*` 698 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes reproduced fractional `consecutive_stops=2.9/0.5 -> normal` and malformed `prior_state=bogus/None/True -> normal`.
+- **Next**: Claude Code `修复` this Required only; do not start cash_allocation, ship_gate_sizing, 35%-block assembly, sizing core, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第九刀 并轮 — §8 组合熔断 + 单票冷静期 + 宏观集群集中度)
+
+**Worked on**: 批2 第九刀(并轮组①,3 个互相独立的纯状态分类器一次起草/一次审查)。① `engine/us_short_portfolio_guard.py` `classify_portfolio_guard`:model_paper_track→`portfolio_guard_status`{normal/caution/cooldown/recovery}(≥3 连续止损 OR ≥10% 纸面回撤→cooldown[禁新/禁加/仅持仓风控];≥5%→caution[减仓+减周新];cooldown 前态现达标→recovery)。② `engine/us_short_symbol_cooldown.py`:`enters_cooldown`(严格成员 filled_then_stop_loss/filled_then_breakout_failure)+ `reentry_allowed`(三条全 strict True)+ `symbol_cooldown_status`。③ `engine/us_short_macro_cluster.py`:`classify_macro_cluster_warning`(exposure→none/elevated/high)+ `macro_cluster_effects_for`(v1 软、hard_cap 恒 False)。+ README 1 路由行。
+
+**Key decisions**: ① **fail-safe/fail-closed 三处都钉死**:portfolio paper 不可评估/坏 metrics→caution 绝不 clean(无数据≠安全);symbol 未成交/未知 trigger→不进冷静期(没进场不罚)、再入三条 AND 全 strict True、**in_cooldown strict 3-way——malformed→fail-closed 进 observe(不放行无约束票)**;macro 坏/越界 exposure→fail-closed elevated(非宽松 none)、effects_for 未知 level→ValueError。② v1 macro **软无硬上限**:`hard_cap` 展开顺序反置(`{**high_effects, "hard_cap": False}`)使 preset 永远压不出硬帽。③ 阈值 §13#22/#23/#31 forward、模块常量非入参(防 bypass);三引擎各 LOAD 自己批1 冻结 preset、effects 返 deepcopy。④ 全输入 strict(`_finite_number` 拒 bool/数字串;`is True`)。
+
+**Verify**: 新测试 **32 OK**(portfolio:fail-safe 不可评估/坏metrics、触发映射、per-state 效应+copy-safe+conformance;symbol:未成交不进、三条全需、truthy-non-True 不开门、malformed in_cooldown→observe;macro:边界 inclusive、坏 exposure→elevated、v1 无硬帽、未知 level→ValueError、copy-safe)。**零 us_short 回归**:全 us_short 套件 **290 OK**(本机 deps-complete);6 新文件 BOM=0;diff-check 无 whitespace 错。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第九刀(3 引擎 + 3 测试 + README);PASS 后用户 `提交`。后续批2:并轮组②(cash_allocation + ship_gate_sizing);§4.3 35%块方向合成;§8 sizing 核(风险定仓+削减叠法+成本地板 P0 真拦单+theme_probe+防守入场);§9 action_rank。
+
+**Pre-Codex self-review**: A-F。A(类):三引擎每个 fail-safe/fail-closed 分支 + conformance + copy-safe 全覆盖,含 in_cooldown malformed、macro 坏 exposure、未知 level/state/trigger。B:纯新增、无重命名、无下游消费者,README 1 行;grep `_finite(`=0(我 3 新引擎用 strict `_finite_number`/无数值解析)。**B 观察(出 scope·不改)**:overextension/theme_heat 的旧 `_finite`(float() try/except)对 bool/数字串宽松——同 slice-5 宽松类,但属已提交并 Codex-PASS 的旧刀,按 surgical-scope 不折进本刀 diff;在此显式记录供 Codex 知悉,是否单开清理刀由用户定。C(反向):malformed in_cooldown→observe 非 none、坏 exposure→elevated 非 none、未评估→caution 非 clean,均测**设计意图**非代码产物(承接正交/事件两刀的 C 教训)。D:N-A。E:README 1 行、无 transient gate 进 CURRENT。F:strict 贯穿、hard_cap 不变式、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 forward known-date events repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
