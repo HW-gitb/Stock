@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short batch2 hard-veto/regime repair re-review)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP` is closed in the current working tree; no new material Required found in this batch2 second-slice scope.
+- **Required**: None new. `R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current dirty tree; bundled Python ran hard-veto+regime 38 OK, `tests -p '*us_short*'` 555 OK, `tests/schema -p '*us_short*'` 408 OK, and doc/route guards 38 OK. Probes confirmed `severe_liquidity`/`severe_spread` hard-veto, bad contexts raise, row_source mapping is exact, and regime unknown/all-missing/anti-chatter stays conservative. No provider/live/network/DataHub/A-share path.
+- **Next**: User may command `提交`; next batch2 slice and any provider/live/DataHub/Skill/production work remain separately authorized.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP)
+- **Verdict/Action**: 三点 Required 均判定成立、接受(整类覆盖/validity-gate 类)。修 `us_short_hard_veto`:① 加 §5.1a 严重流动性/spread 可靠硬触发(severe_liquidity/severe_spread,candidate→entry/holding→position);② row_context 严格化——非 candidate/holding 一律 ValueError(fail-closed,不再静默 entry-only)+ `row_source_to_context()` 映射 4 个冻结 row_source;③ golden 锚定测试(非自指 loop)+ bad-context 反向 + §5.3 精确成员映射。+ README §5.1a 更新(历史 起草 entry 保留为草稿态、本 entry 即 live 修正)。
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: hard-veto+regime 38 OK(+8);tests/ 555 + tests/schema 408 OK(零回归,本机 deps-complete);独立探针 severe_liquidity/spread→硬否决、4 个 bad-context 全 fail-closed raise;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修 + README);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(类):golden 集锚定设计(非 loop `_RELIABLE_HARD`)抓漏触发、§5.3 精确成员、row_source 映射器 conformance 覆盖冻结 enum、row_context 全 bad 值反向。B(连带):仅改 1 引擎+1 测试、README §5.1a 同步(加 liquidity/spread + 严格 context);无下游消费者(sizing/action_rank 未建)。C(反向):bad-context 全 raise(非静默)、severe-liquidity/spread 正控、golden-missing 会 fail。D:N-A。E:README 1 行更新、无 transient gate 进 CURRENT。F:UTF-8 无 BOM、diff-check clean、ValueError fail-closed。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short batch2 second slice: regime + hard veto)
+
+- **Verdict/Action**: FAIL. Regime classifier is directionally OK in this scope, but the §5 hard-veto classifier misses a design-required reliable liquidity/spread hard trigger and silently maps bad row contexts to candidate hard-veto behavior.
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP` - full material detail is registered in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current dirty tree; bundled Python ran 30 target regime/hard-veto tests OK, 547 `*us_short*` discover tests OK, 408 `tests/schema *us_short*` tests OK, and 38 doc/route guard tests OK; Codex probes reproduced liquidity/spread signals returning no veto and invalid row contexts returning `entry_hard_veto`. No provider/live/network/DataHub/A-share path.
+- **Next**: Claude Code `修复` this Required only. Do not start another batch2 slice, provider/live/DataHub/Skill/production work, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第二刀 — §7 两轴风控环境 + §5 hard veto 分层,并轮)
+
+**Worked on**: 批2 第二刀,自决执行顺序 + 并轮两道纯独立分类器(都消费各自批1 冻结 preset、都 upstream of §8 sizing/§9 action_rank、彼此无依赖、一次审查覆盖)。① `engine/us_short_regime.py` `compute_market_risk_regime`:§7 worst_of(VIX/market_trend/breadth)→ 冻结仓位上限(进攻1.0/震荡0.8/防御0.5/极度防御0)+ anti-chatter(降立即/升需连2次更好)+ unknown 降级(**绝不默认进攻**:每缺一轴降一档、缺关键 trend 轴≥防御、全缺→restricted+极度防御+禁新建)+ `classify_vix`(§13#3 forward 18/25/35,None/非有限→unknown)。**只做 risk 轴**(theme_opportunity_state 是 §4.3 驱动+vocab deferred,本刀外);VIX 是输入、绝不抓。② `engine/us_short_hard_veto.py` `classify_hard_veto`:§5 severity-max 进冻结 5 档阶梯——§5.1a 可靠触发(退市/停牌/破产/OTC/关键数据缺失→硬;SEC 增发**仅近期+已激活+重大才硬**,陈旧/未激活/小额→仅标签)+ §5.1b 语义 advisory-first(unavailable→降级+观察、高可信不利→strong_downgrade,**v1 永不硬 block**)+ §5.3 never-solo(6 个单独信号任一**单独绝不硬否决**)。§5.2 候选否决 forward-gated(§13#7)不升。+ README 路由行。
+
+**Key decisions**: ① 并轮判据(§18.2)满足:两刀都纯/离线(fixtured)、无跨批 schema 依赖、一次审查覆盖;非 monolith(两独立文件+独立测试+独立自审)。② **无新 schema**:输出 vocab(regime 档/cap、veto 5 档/effect/solo 集)已被批1 schema const-pin,引擎消费 + conformance 测试三角(engine==preset)兜消费侧 drift。③ regime **risk 轴 only**:theme_opportunity_state vocab 设计 deferred(只 'extreme' 出现),不臆造;两轴 split 的 theme 侧在 §8 sizing 合。④ VIX-unavailable 按 §7 原文「退 SPY/QQQ+breadth + unknown 降级规则保守处理」= 走 unknown-degradation(缺轴降档+fallback),非额外 distinct 双罚(避免 over-penalty)。⑤ hard veto **landing(final_action/risk_tags)= §9/批3**,本刀只产 tier;no-dangling 强制 = 批3。⑥ §5.1a 类别集 = 本分类器契约(设计 prose、非 locked vocab),按 §5 原文落。
+
+**Verify**: 新测试 **30 OK**(regime 13:vix 分档/边界/unknown、worst_of、**unknown 绝不进攻 reverse**、缺关键轴≥防御、全缺 restricted、降立即/升连2、cap 阶梯 conformance、scope 非 veto;hard veto 17:5 可靠全覆盖、SEC 近期×3 失效维度、语义 3 态、**§5.3 全 6 solo×2 ctx 绝不硬否决 reverse**、severity-max solo 不弱化真否决、阶梯/effect/solo 集 conformance)。**零 us_short 回归**:tests/ 547 + tests/schema 408 OK(本机 deps-complete:装 requests/tushare;缺该依赖环境另有 A 股 import-error、与本批无关)。BOM=0;diff-check 仅 CRLF;doc-governance/route 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第二刀(2 引擎 + 2 测试 + README);PASS 后用户 `提交`(push 须明确命令)。后续批2:§4.2 core_score + §4.3 theme(选股层,可并)、§8 sizing(消费本刀 regime cap + hard veto)、§9 action_rank;no-dangling validator / 渲染 / 纸面 / lifecycle eval = 批3。
+
+**Pre-Codex self-review**: A-F checked。**A(类)**:regime cap 阶梯 conformance sweep 全4档、vix 全4档+边界;hard veto §5.3 全6 solo×2ctx loop、§5.1a 全5 可靠 loop、SEC 失效3维。const-pin 在批1 schema、引擎消费侧 conformance==preset 三角。**B(连带)**:纯新增、无重命名、无下游消费者(sizing/action_rank 未建),README 加 1 行(grep 验 engine/us_short_regime|hard_veto 无重名)。**C(反向)**:regime unknown 绝不进攻(+全数据进攻正控、equal 无 chatter);hard veto solo 绝不硬否决 + SEC 陈旧不硬 + 语义 advisory 不硬(+可靠硬否决/recent-active-material/高可信 strong_downgrade 正控 + severity-max solo 不弱化)。**D**:N-A(输入结构化字段非自由文本)。**E**:README 加 1 行;无 transient gate 进 CURRENT。**F**:NaN/Inf→unknown(测)、None-safe(`x or {}`)、跨档/跨 tier severity 一致、UTF-8 无 BOM、diff-check clean。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short batch2 price-engine repair re-review)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP` is closed in the current working tree; no new material Required found in this batch2 first-slice scope.
