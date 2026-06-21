@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 core_score repair re-review)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` is closed in the current working tree; no new material Required found in this batch2 sixth-slice repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: core-score 16 OK; `*us_short*` 640 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes: bad/out-of-domain neutral_block falls to 50 without crash/NaN/Inf/boost; legal 0/40/100 applies. No provider/live/DataHub/A-share/Skill/production path.
+- **Next**: User may command `提交`; orthogonalization, sizing, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP)
+- **Verdict/Action**: 判定成立、接受 —— 同 whole-class 输入校验类、且诚实漏:审了 blocks 值 + risk_downgrade,**漏了 `neutral_block` 这个 fallback 参数**(刚写完该 memory 还漏)。修:`core_score` 对 `neutral_block` 加 `_finite_number` + 0-100 域校验,坏(`"50"`/None/bool/NaN/Inf)或超域(1000/-10)→退冻结 50(不崩/不传 NaN/不超域膨胀),合法域内(如 40)仍生效。两公共函数每个参数现已全校验。+ NeutralBlockValidationTests。
+- **Required**: `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: core-score 16 OK(+2);tests/ 640 + tests/schema 408 OK(零回归,本机 deps-complete);探针 `"50"` 不崩、Inf/1000→core_score 65.5(域内)、合法 40 生效;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F。A(类):本轮**显式列 core_score/profile_weights 全部参数**逐个确认已校验(blocks/profile/risk_downgrade/**neutral_block** 补漏),坏+超域+合法正控;教训=输入审计含 default/fallback 参数,非只数据 args。B:仅改 1 引擎 1 测试,README/起草仍准;无下游消费者。C(反向):坏/超域 neutral→冻结 50 留域内、合法生效。D:N-A。E:register 单态。F:strict+域 clamp、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 core_score assembly)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` is open; `neutral_block` can crash or contaminate `core_score`.
+- **Required**: `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` — full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: core-score 14 OK; `*us_short*` 638 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes reproduced bad `neutral_block` crash / NaN / Inf / score boost. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: Claude Code `修复` this Required only; do not start orthogonalization, sizing, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第六刀 — §4.2 core_score 加权装配)
+
+**Worked on**: 批2 第六刀,§4.2 core_score 装配。`engine/us_short_core_score.py`:`core_score` = Σ 权重[c]×块[c](动量/赛道/催化)− risk_downgrade;命名权重档(balanced 40/35/25 主档;theme_plus/aggressive/off shadow)**LOAD 自冻结 scoring_profile preset = 单一来源**(`profile_weights` 返回 **copy**)。缺/坏块→**中性 50 + 标记、权重不重归一**(§4.2 不偷偷放大);真块 clamp 0-100;score clamp ≥0。+ README 路由行。
+
+**Key decisions**: ① **横截面 industry⊥theme 正交去重(35% 块构成)不在本刀**——池级操作、独立关注;本刀消费已合成的 theme 块。② **前几轮两个教训前置**:(a)**全输入严格 fail-closed**——block/risk_downgrade 用 strict `_finite_number`(拒 bool+numeric-string)、unknown profile raise,grep `_finite(`=0 自检;(b)`profile_weights` 返回 dict **copy**(防下游改冻结表,= lifecycle 教训)。③ 缺块→中性非排除/重归一(设计明令);权重冻结 const、中性值 §13 forward。④ landing(§8/§9 消费 score+rank)/正交去重/no-dangling = 后续刀/批3。
+
+**Verify**: 新测试 **14 OK**(装配:加权和/减 rd/never-negative/clamp/theme_off-零赛道;**缺块中性不重归一 reverse**;坏输入:坏块→中性、坏 rd→0、unknown profile→KeyError、非dict blocks;conformance:4 档权重==preset、balanced 主档 40/35/25、components==preset、**weights copy-safe**)。**零 us_short 回归**:tests/ 638 + tests/schema 408 OK(本机 deps-complete);grep `_finite(`=0。BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第六刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续批2:§4.3 横截面正交去重(35% 块构成)、§8 sizing(消费 regime cap/veto/core_score/价位)、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F。A(类):权重 4 档 conformance、缺块/坏块/坏rd/unknown-profile/非dict 全输入覆盖。B:纯新增、无重命名、无下游消费者,README 1 行(明标正交去重不在本刀防误读 scope)。C(反向):缺块不重归一、坏输入 fail-closed、never-negative、copy-safe。D:N-A。E:README 1 行、无 transient gate 进 CURRENT。F:strict `_finite_number` 贯穿(grep `_finite(`=0)、copy-safe、无 BOM、diff clean。Tests passing≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 risk_downgrade repair re-review)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` is closed in the current working tree; no new material Required found in this batch2 fifth-slice repair scope.
