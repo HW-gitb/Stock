@@ -8,6 +8,25 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 theme-heat scoring review)
+
+- **Verdict/Action**: PASS. Current dirty fourth slice implements the §4.3 per-stock theme-heat confirmation gate and continuous score within scope; no material Required found.
+- **Required**: None new. Register: non-material/no new material finding, so `docs/system_risk_register.md` was not updated.
+- **Verify**: Reviewed current status/diff/design; bundled Python ran theme-heat 15 OK, `tests -p '*us_short*'` 601 OK, `tests/schema -p '*us_short*'` 408 OK, doc/route guards 38 OK, manual probes OK, and `git diff --check` clean except CRLF warnings. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: User may command `提交`; §4.2 core_score/industry-theme orthogonalization, sizing, action_rank, batch3, provider/live/DataHub/Skill/production work remain separately gated.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第四刀 — §4.3 per-stock 赛道热度打分)
+
+**Worked on**: 批2 第四刀,§4.3 per-stock 赛道热度「赚不赚分 + 连续打分」。`engine/us_short_theme_heat.py`:① `market_confirmation_passed`(provisional 主题须 **≥3 of 7 确认项 + 个股自身也强**[个股闸];弱票/不足 3 项即使高热度也 0;未知键不能凑数)② `fit_mult_from_score`(theme_fit_score→fit 乘子:低于 FIT_FLOOR 门→0,否则 clamp 连续)③ `continuous_theme_score`(= heat × max(persistence_mult, 地板) × fit_mult,**门后**——连续非平铺、刚过门高热度按比例给分;persistence **地板仅门后**应用[防爆发主题被低乘子压扁];门不过 / chasing_extreme[§4.3 过热剥赛道分]→0)。+ README 路由行。
+
+**Key decisions**: ① **横截面正交去重(industry⊥theme,防双重计数)不在本刀**——它是池级回归操作(A-short `orthogonalize_industry_on_theme` 横截面 regress+residual+percentile),属 §4.2 core_score 的 35% 块装配(池在那里);本刀聚焦 per-stock、纯、形状与前面引擎一致。② 镜像 A-short `theme_eff`(heat×persistence×fit)但 fit **连续映射**(US 设计「fit_mult 由 fit_score 映射」)非纯布尔,门后 persistence **地板**(US 设计新增、A-short 无)。③ 阈值(min 项数/fit 门/persistence 地板)= §13#32 forward,无新 schema。④ chasing_extreme 剥分 = 消费上一刀 overextension 的 strips_theme_score。⑤ landing(35% 块装配)= §4.2;no-dangling = 批3。
+
+**Verify**: 新测试 **15 OK**(确认门:≥3 边界/恰好3/2 失败/**弱票即使确认也 0 reverse**/0 项/**未知键不凑数**;fit:门上连续/门下 0/None-nan/clamp;连续:**比例非平铺**/门后地板/门不过 0/**chasing 剥分 reverse**/缺数据 0/fit clamp)。**零 us_short 回归**:tests/ 601 + tests/schema 408 OK(本机 deps-complete)。BOM=0;diff-check 仅 CRLF;doc-governance/route 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第四刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续批2:§4.2 core_score(40/35/25 装配 + **横截面正交去重** + risk_downgrade,消费本刀 theme_score)、§8 sizing、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F checked。**A(类)**:确认门 6 例(边界/弱票/未知键/0)、fit 4 例、连续 6 例覆盖整类。**B(连带)**:纯新增、无重命名、无下游消费者(§4.2/§8 未建),README 加 1 行 + 明确正交去重不在本刀(防误读 scope);grep 验无重名。**C(反向)**:弱票 0、chasing 剥分、门不过 0、缺数据 0、未知键不凑数——双向。**D**:N-A。**E**:README 1 行、无 transient gate 进 CURRENT。**F**:NaN/Inf→0(_finite)、None-safe(`flags or {}`)、clamp [0,1]、UTF-8 无 BOM、diff clean。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short batch2 lifecycle repair re-review)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP` is closed in the current working tree; no new material Required found in this batch2 third-slice repair scope.
