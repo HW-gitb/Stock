@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 — Codex `审查 PASS`(US-short hard-veto governance)
+- **Verdict/Action**: PASS. Full current-tree review found the §5 hard-veto governance schema/preset/test slice and lifecycle sibling-glob ripple match the live US-short design authority, with no material Required.
+- **Required**: None new.
+- **Verify**: reviewed `schemas/us_short_hard_veto_governance.schema.json`, `presets/us_short_hard_veto_governance_20260620.json`, `tests/schema/test_us_short_hard_veto_governance_schema.py`, `tests/schema/test_us_short_lifecycle_calibration_governance_schema.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, and `docs/us_short_system_design.md` §5/§13. Target schema/doc set 84 OK; full discover 2988 OK via local Python; `git diff --check` had only CRLF normalization warnings; BOM/FFFD=0; no provider/live/DataHub/runner path in the reviewed slice; git status shows no tracked test byproduct.
+- **Next**: User may command `提交` for this slice; field_registry and remaining US-short governance/provider/DataHub/live work still require separate explicit authorization and review.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 hard-veto governance schema §5)
+
+**Worked on**: 新增 `us_short_hard_veto_governance` 治理契约——把 §5 Hard Veto 分层 const-pin 成 severity-ordered tier ladder(entry_hard_veto > position_hard_veto > strong_downgrade > soft_risk_tag > shadow_record,顺序=严重度)+ §5.3「不应单独硬否决」安全清单(6 项,单独任一不足以硬否决)+ §5.1b 语义先 advisory 政策(`semantic_audit_unavailable`→降级+观察、不硬 block;高可信→≥restricted、不 clean)。§5.2 候选硬否决 → §13.1 #7(`candidate_veto_calibration_item_id`)。schema + preset(`_20260620`)+ 22 测试。纯声明式(不否决任何东西/不选股/不取数/不交叉 A 股)。
+
+**Key decisions**: ① 选此切片依据=**保护核心**(veto=保命层)且**完全未 schema 化**;§10 field_registry 的 `operation_impact`(硬否决/降仓/调信心/仅标签)正映射到这 5 级 ladder → 先冻结 veto 分层、field_registry 才有 operation_impact 权威词表(field_registry 留最后)。② const-pin 进 schema 本身(§A point5):ladder/清单/policy 全 const,拒 same-shape drift(改名/改 effect/reorder/增删/policy 翻转/token 改/calibration 改)。③ 字节生成(生成器跑完即删,三角测试在 test 时重抽):**当场抓到 §5.3 末项「高波动。」带句末全角句号**——剥除句末 `。`(生成器+测试同一逻辑保三角一致),否则会把标点钉进 vocab。④ **scope 自律**:§5.1a 可靠触发类是 batch-2 veto-classifier 的 prose(不是锁定词表)→ **故意不半钉**(mirror action_table「genuinely un-tokenized 列不猜 vocab」);§5.2 候选=forward §13 #7、不钉值。⑤ **fix-the-class ripple**:本切片新增第 3 个 `*_calibration_item_id` 载体(hard_veto #7)→ 把上一切片 lifecycle 测试的 sibling 校验从**手维护清单升级为 glob 自动发现**(`presets/us_short_*_governance_*.json`),未来任何带 calibration id 的 governance preset 自动纳入交叉校验、无需再改测试;anchor 扩到 {1,7,28,30}。
+
+**Verify**: 新 hard_veto 测试 **22 OK** + 改后 lifecycle **24 OK**(glob 现发现 #7);BOM=0;`git diff --check` clean;dup 检查=veto tier token 无别处 pin(无重复权威);源码无 SIBLING_PRESETS 悬挂引用(仅 .pyc 旧字节码,下次运行重生);README 路由行已补;生成器已删。(full discover 见下条 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 hard-veto 治理切片(+ 顺带评判 lifecycle sibling 校验 glob 化是否合理);PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后,消费 operation_impact + lifecycle_item_id)** + 其余结构治理(§9 action↔price 映射 / §7 两轴 regime / §8 portfolio_guard 等,顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类非实例)**:枚举集=§5 ladder 5 级 + §5.3 6 项 + semantic policy,全经字节生成全员覆盖、const-pin 落 schema;负向用例覆盖整类 drift;**ripple 升级为 glob = 修类非实例**(未来 sibling 自动覆盖)。**B(连带 grep)**:全仓 veto tier token 无别处 pin(无 dup);新 `*_calibration_item_id` 载体接进 lifecycle glob 校验(anchor#7 验真);源码无 SIBLING_PRESETS 残留(removed def+唯一 user);README route 补齐。**C(反向失败)**:剥句号正则 `。$` 只去末尾、不伤项内(项无内嵌句号);glob 只匹配 `*_governance_*` + 只查 `*_calibration_item_id` key、不误纳非载体;semantic policy const 拒「unavailable 即硬 block」反向配置。**D**:N-A。**E**:README 加 2 行陈述当前机制、无 transient gate 进 CURRENT;handoff 入 SESSION_LOG。**F**:UTF-8 无 BOM、无 mojibake、diff-check clean、draft7 校验过、as_of/version 格式 OK。Tests passing ≠ closure。
+
 ## 2026-06-21 — Codex `审查 PASS`(US-short lifecycle-calibration governance)
 - **Verdict/Action**: PASS. Full current-tree review found the §13.1/§13.2 lifecycle-calibration governance schema/preset/test slice matches the design authority and has no material Required.
 - **Required**: None new.

@@ -27,15 +27,14 @@ SCHEMA = ROOT / "schemas" / "us_short_lifecycle_calibration_governance.schema.js
 PRESET = ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json"
 DESIGN = ROOT / "docs" / "us_short_system_design.md"
 
-# sibling governance presets that reference §13.1 item numbers via *_calibration_item_id
-SIBLING_PRESETS = [
-    ROOT / "presets" / "us_short_scoring_profile_governance_20260620.json",      # #1, #28
-    ROOT / "presets" / "us_short_theme_lifecycle_governance_20260620.json",      # #30
-]
-
-
 def _load(p):
     return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _sibling_governance_presets():
+    """Every us_short governance preset except this registry itself. Glob (not a hand-kept list)
+    so a future *_calibration_item_id carrier is auto-covered without editing this test."""
+    return sorted(p for p in (ROOT / "presets").glob("us_short_*_governance_*.json") if p != PRESET)
 
 
 def _design_13_1_items():
@@ -145,14 +144,14 @@ class UsShortLifecycleCalibrationGovernance(unittest.TestCase):
     def test_sibling_calibration_item_ids_resolve(self):
         valid = set(self.numbers)
         seen = []
-        for p in SIBLING_PRESETS:
-            ids = _collect_calibration_item_ids(_load(p))
-            self.assertTrue(ids, f"{p.name} declares no *_calibration_item_id (expected references)")
-            for n in ids:
+        for p in _sibling_governance_presets():
+            for n in _collect_calibration_item_ids(_load(p)):
                 self.assertIn(n, valid, f"{p.name} references calibration item #{n} not in registry")
-            seen.extend(ids)
-        # anchors: the known references must be present (a silent field rename would drop them)
-        for anchor in (1, 28, 30):
+                seen.append(n)
+        self.assertGreaterEqual(len(seen), 4, "sibling glob found too few calibration refs — discovery likely broken")
+        # anchors: every known carrier's reference must be present (a silent field rename would drop it)
+        # 1/28 = scoring_profile, 30 = theme_lifecycle, 7 = hard_veto candidate-veto route (§5.2)
+        for anchor in (1, 7, 28, 30):
             self.assertIn(anchor, seen, f"expected sibling reference to #{anchor} missing")
 
     # --- governance policy ---

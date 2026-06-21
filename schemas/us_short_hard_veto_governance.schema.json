@@ -1,0 +1,104 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_hard_veto_governance",
+  "title": "US-short §5 Hard Veto 分层 governance — const-pins the severity-ordered veto tier ladder + the design's never-solo-veto safety list + the semantic-advisory-first policy",
+  "description": "Batch-1 declarative governance contract. Freezes the §5 hard-veto severity ladder (entry_hard_veto > position_hard_veto > strong_downgrade > soft_risk_tag > shadow_record — ORDER = severity, const-pinned) so the batch-2 veto classifier and the field-registry operation_impact vocabulary (§10) cannot drift tier identity/effect/order; the §5.3 'must never solo-veto' safety list (none of these alone justifies a hard veto); and the §5.1b semantic-veto advisory-first policy. §5.2 candidate hard-vetoes are forward-calibration-gated and routed to §13.1 #7 (candidate_veto_calibration_item_id), not pinned. §5.1a reliable-trigger categories are batch-2 veto-classifier prose, intentionally NOT enumerated here (no half-pinned vocab). draft-07 cannot express: ladder byte-faithfulness to §5, the §5.3 list single-source, and candidate_veto_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "veto_tiers",
+    "must_not_solo_veto",
+    "semantic_veto_policy",
+    "candidate_veto_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_hard_veto_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "veto_tiers": {
+      "description": "§5 表 — severity-ordered ladder (strongest first), const-pinned {tier, effect} byte-faithful to design.",
+      "const": [
+        {
+          "tier": "entry_hard_veto",
+          "effect": "禁新建/加仓"
+        },
+        {
+          "tier": "position_hard_veto",
+          "effect": "持仓强制重评/减/清（不是沉默）"
+        },
+        {
+          "tier": "strong_downgrade",
+          "effect": "降优先级/仓位/可信度"
+        },
+        {
+          "tier": "soft_risk_tag",
+          "effect": "提示/小幅扣分"
+        },
+        {
+          "tier": "shadow_record",
+          "effect": "只记录、不影响输出"
+        }
+      ]
+    },
+    "must_not_solo_veto": {
+      "description": "§5.3 不应单独硬否决 — design-locked safety list; NONE of these alone justifies a hard veto.",
+      "const": [
+        "单独高 SI",
+        "单独网络热度",
+        "单个技术指标",
+        "目标价低于现价",
+        "主题拥挤",
+        "高波动"
+      ]
+    },
+    "semantic_veto_policy": {
+      "description": "§5.1b 正文语义/新闻类 — advisory-first; escalate only on reliable evidence.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory_first",
+        "unavailable_token",
+        "unavailable_not_hard_block",
+        "high_confidence_min_restricted_not_clean"
+      ],
+      "properties": {
+        "advisory_first": {
+          "const": true
+        },
+        "unavailable_token": {
+          "const": "semantic_audit_unavailable"
+        },
+        "unavailable_not_hard_block": {
+          "const": true
+        },
+        "high_confidence_min_restricted_not_clean": {
+          "const": true
+        }
+      }
+    },
+    "candidate_veto_calibration_item_id": {
+      "description": "§5.2 候选硬否决 forward-calibration route → §13.1 #7 (攒触发+人工复核才升).",
+      "const": 7
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}

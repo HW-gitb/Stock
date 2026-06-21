@@ -1,0 +1,49 @@
+{
+  "schema_name": "us_short_hard_veto_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "veto_tiers": [
+    {
+      "tier": "entry_hard_veto",
+      "effect": "禁新建/加仓"
+    },
+    {
+      "tier": "position_hard_veto",
+      "effect": "持仓强制重评/减/清（不是沉默）"
+    },
+    {
+      "tier": "strong_downgrade",
+      "effect": "降优先级/仓位/可信度"
+    },
+    {
+      "tier": "soft_risk_tag",
+      "effect": "提示/小幅扣分"
+    },
+    {
+      "tier": "shadow_record",
+      "effect": "只记录、不影响输出"
+    }
+  ],
+  "must_not_solo_veto": [
+    "单独高 SI",
+    "单独网络热度",
+    "单个技术指标",
+    "目标价低于现价",
+    "主题拥挤",
+    "高波动"
+  ],
+  "semantic_veto_policy": {
+    "advisory_first": true,
+    "unavailable_token": "semantic_audit_unavailable",
+    "unavailable_not_hard_block": true,
+    "high_confidence_min_restricted_not_clean": true
+  },
+  "candidate_veto_calibration_item_id": 7,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §5 (table + §5.1b + §5.2 + §5.3)",
+    "ladder_order_is_severity": "veto_tiers order = strongest→weakest; reorder is a drift the schema rejects",
+    "operation_impact_link": "field_registry (§10) operation_impact (硬否决/降仓/调信心/仅标签) maps onto this ladder",
+    "not_pinned_here": "§5.1a reliable-trigger categories = batch-2 veto-classifier (prose, not a locked vocab); §5.2 candidate vetoes = forward §13 #7"
+  }
+}
