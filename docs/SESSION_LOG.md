@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short two-axis regime governance re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` closed and no new material Required in the US-short regime-governance slice.
+- **Required**: None new. `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed regime schema/preset/test plus README, SESSION_LOG, risk register, and design sections. Target 101 OK; full discover 3056 OK via local Python; mutation probes reject QQQ, breadth, VIX, unknown, upgrade, cap, scope, and threshold-id drift; diff-check has only CRLF warnings; BOM/FFFD=0; no provider/runtime path.
+- **Next**: User may command `提交` for this slice; field_registry, section 8 portfolio guard, provider, DataHub, and live work still require separate authorization and review.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED)
+- **Verdict/Action**: 判定成立、接受(同 scoring-profile/weekly_report/action_table 的 under-pinning 同类:headline 钉了、设计锁定机制留作散文)。按 complete 一次修全 §7 整类:const-pin 进 schema `risk_axis_components`[vix,market_trend,breadth] + `market_trend_axis`(SPY+QQQ,qqq_required)+ `breadth_axis`(base_universe,无 paid ETF)+ `vix_axis_policy`(§3 授权门/unapproved/unavailable→unknown+回退+保守降级)+ `unknown_degradation_policy` 三档(替换塌缩的 `unknown_defaults_defensive`)+ `anti_chatter` 扩(升档=2 连续周跑/阈值缓冲)。完整见 register(单一来源)。
+- **Required**: `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` — 完整 judgment/全类修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: regime 测试 24→**39 OK**(含 Codex 指定 6 反向:drop QQQ/drop breadth/VIX-unavailable→aggressive/paid-ETF breadth/weaken unknown/1周 upgrade 全拒)+ 14 机制 provenance 全在 §7;lifecycle glob 仍 24 OK(#3 仍解析);`unknown_defaults_defensive` 移除零悬挂;BOM=0;diff-check clean。full discover 见下条 closeout。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:不止修点名的 6 条——重读 §7 把全部设计锁定机制(3 输入轴策略 + unknown 三档 + 升档确认)列尽 const-pin 进 schema;负向覆盖整类 drift。**B(连带)**:移除 `unknown_defaults_defensive` 全仓零悬挂(仅 register 历史文本提及);README 同步富化;lifecycle glob #3 仍绿。**C(反向)**:VIX-unavailable→unknown 非 aggressive、极度防御 cap 须 0、breadth 不依赖 paid ETF、升档 2 周非 1 均加拒绝。**D**:N-A。**E**:register 单态(flip+Resolution)、无 transient gate 进 CURRENT。**F**:无 BOM、diff-check clean、draft7 过、14 provenance 生成时已 assert。
+
+## 2026-06-21 — Codex `审查 FAIL`(US-short two-axis regime governance)
+- **Verdict/Action**: FAIL. Full current-tree review found the §7 regime governance slice under-pins design-locked input-axis and safety mechanics, even though the existing tests pass.
+- **Required**: `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed regime schema/preset/test + README/SESSION_LOG/register/design §7/§8/§13. Target 86 OK; full discover 3041 OK via local Python; mutation probes pass; §7 coverage probe found the missing const-pins.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit or start batch-2 engine/provider/DataHub/live work.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 two-axis regime governance schema §7)
+
+**Worked on**: 新增 `us_short_regime_governance` 治理契约——把 §7 市场环境两轴 const-pin:① **market_risk_regime→仓位上限 ladder**(进攻 1.0 / 震荡 0.8 / 防御 0.5 / 极度防御 0,严重度降序)② 反保守两轴 policy(风控轴=worst_of(VIX,SPY/QQQ,breadth)定仓位上限;theme_opportunity_state 是**独立轴、不并进 worst_of** → 弱市极强赛道仍低仓试探、不全转观察)③ 防抖(快防守慢进攻:降档立即/升档要确认)④ unknown→防御 ⑤ 作用域(影响仓位/新建仓许可/可选 action_confidence;**绝不 hard-veto、不替代个股分析**)。阈值(VIX 18/25/35 等)= §13 #3 forward、不钉。schema + preset + 24 测试。纯声明式。
+
+**Key decisions**: ① 选此切片依据=设计的**招牌反保守机制**(显式「别只 worst_of」),仓位上限是清晰的设计锁定数,未 schema 化。② const-pin 进 schema;negative 含**安全 drift**(极度防御 cap 抬离 0 被拒、scope not_hard_veto 翻转被拒、cap reorder 被拒)。③ 字节生成(生成器跑完即删):解析 §7 line209 的**全角** `（进攻 1.0 / …）`,**避开半角** `worst_of(VIX, …)`(正则锚 `（进攻`)。④ **scope 自律**:`theme_opportunity_state` 全词表设计未枚举(§8 仅出现 `extreme`)→ **故意不钉**(no guessed vocab,mirror action_table);regime 阈值 forward #3、不钉值。⑤ `threshold_calibration_item_id: 3`(§13 #3 环境阈值)=**第 4 个 lifecycle-registry 消费者**,被上一轮 glob 升级**自动纳入**交叉校验(已验 lifecycle 仍 24 OK)、**无需改 lifecycle 测试**——fix-the-class 红利再次兑现。
+
+**Verify**: 新测试 **24 OK**;lifecycle glob 仍 **24 OK**(现纳入 regime #3、anchor 1/7/28/30 仍齐);dup 检查=caps/two_axis 块无别处 pin;BOM=0;`git diff --check` clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 two-axis regime 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后)** + §8 portfolio_guard/仓位预算/macro_cluster/cooldown/cash 等结构治理(§8 体量大、可能拆多片;顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类非实例)**:枚举集=4 regime cap + 各 policy 块,全字节生成全员覆盖、const-pin 落 schema;负向覆盖整类 drift(值/序/改名/增删/flag)。**B(连带 grep)**:caps/two_axis 块无别处 pin(无 dup);新 `threshold_calibration_item_id` 载体被 lifecycle glob 自动纳入(已验仍绿)、无需改测试;无符号重命名;README route 补齐。**C(反向失败)**:极度防御 cap 须=0(抬高=安全 drift,已加拒绝测试);scope not_hard_veto 翻转被拒;caps 严格降序断言。**D**:N-A。**E**:README 加 1 行、无 transient gate 进 CURRENT;handoff 入 SESSION_LOG。**F**:UTF-8 无 BOM、无 mojibake(控制台 GBK 乱码已核实文件 UTF-8 正确)、diff-check clean、draft7 校验过、解析器锚全角括号避开半角 worst_of()。Tests passing ≠ closure。
+
 ## 2026-06-21 — Codex `审查 PASS`(US-short action-layer governance)
 - **Verdict/Action**: PASS. Full current-tree review found the §9/§6.1 action-layer governance schema/preset/test slice matches the live US-short design authority and has no material Required.
 - **Required**: None new.

@@ -1,0 +1,84 @@
+{
+  "schema_name": "us_short_regime_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "market_risk_regime_caps": [
+    {
+      "regime": "进攻",
+      "position_cap": 1.0
+    },
+    {
+      "regime": "震荡",
+      "position_cap": 0.8
+    },
+    {
+      "regime": "防御",
+      "position_cap": 0.5
+    },
+    {
+      "regime": "极度防御",
+      "position_cap": 0.0
+    }
+  ],
+  "risk_axis_components": [
+    "vix",
+    "market_trend",
+    "breadth"
+  ],
+  "vix_axis_policy": {
+    "target_source": "FMP ^VIX",
+    "provider_authorization_gated": true,
+    "unapproved_until_gate_passed": true,
+    "unapproved_or_unavailable_becomes_unknown": true,
+    "fallback_axes": [
+      "market_trend",
+      "breadth"
+    ],
+    "conservative_downgrade_on_unavailable": true
+  },
+  "market_trend_axis": {
+    "components": [
+      "SPY",
+      "QQQ"
+    ],
+    "qqq_required": true
+  },
+  "breadth_axis": {
+    "source": "base_universe_constituents",
+    "depends_on_paid_industry_etf": false
+  },
+  "two_axis_policy": {
+    "risk_regime_is_worst_of": true,
+    "risk_regime_decides_position_cap": true,
+    "theme_state_decides_opportunity_not_worst_of": true,
+    "weak_market_strong_theme_allows_probe": true
+  },
+  "anti_chatter": {
+    "downgrade_immediate": true,
+    "upgrade_requires_confirmation": true,
+    "upgrade_confirmation_weekly_runs": 2,
+    "upgrade_threshold_buffer_alternative": true
+  },
+  "unknown_degradation_policy": {
+    "never_default_aggressive": true,
+    "missing_one_downgrade": true,
+    "missing_critical_at_least_defensive": true,
+    "severe_restricted": true
+  },
+  "scope": {
+    "affects_position_size": true,
+    "affects_new_entry_permission": true,
+    "affects_action_confidence_optional": true,
+    "not_hard_veto": true,
+    "not_replace_stock_analysis": true
+  },
+  "threshold_calibration_item_id": 3,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §7",
+    "anti_conservative_intent": "two-axis split (别只 worst_of): a weak risk regime caps size, but a strong theme still gets probe priority — the design's core anti-over-conservative mechanism",
+    "thresholds_are_forward": "regime cut thresholds (VIX 18/25/35, MA, breadth lines, two-axis split lines) = §13.1 #3 prior, not pinned here",
+    "theme_state_vocab_deferred": "theme_opportunity_state full vocab not design-enumerated (only 'extreme' appears in §8); intentionally not pinned (no guessed vocab)",
+    "theme_probe_counts_are_section8": "this slice pins only the §7-level 'weak market strong theme allows probe' policy; theme_probe seat counts/floors are §8 / §13 #27, out of scope"
+  }
+}

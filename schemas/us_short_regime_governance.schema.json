@@ -1,0 +1,255 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_regime_governance",
+  "title": "US-short §7 two-axis market regime governance — const-pins the market_risk_regime→cap ladder + the 3 worst_of input axes (VIX/SPY+QQQ/breadth) + unknown-severity tiers + upgrade-confirmation + two-axis policy + scope",
+  "description": "Batch-1 declarative governance contract. Freezes the §7 market_risk_regime→position-cap mapping (进攻 1.0 / 震荡 0.8 / 防御 0.5 / 极度防御 0, severity-ordered) AND the design-locked input-axis + safety mechanics so a future batch-2 regime/sizing engine cannot drop QQQ, treat VIX provider-unavailable as clean/aggressive, source breadth from paid industry ETFs, weaken missing-input downgrades, or upgrade after one good week while staying schema-valid. Pins: the worst_of input set (vix/market_trend/breadth); vix_axis_policy (§3 provider-authorization-gated, unapproved-until-passed, unapproved/unavailable→unknown axis with fallback to SPY/QQQ+breadth + conservative downgrade); market_trend_axis (SPY+QQQ, QQQ required); breadth_axis (base-universe source, no paid industry ETF); the two-axis anti-worst_of policy; anti_chatter (down fast / up slow, upgrade needs 2 consecutive weekly runs or threshold buffer); unknown_degradation_policy (never default aggressive / missing-one downgrade / missing-critical at-least-defensive / severe restricted); and scope (affects sizing/new-entry/optional action_confidence; never hard-veto; never replaces per-stock analysis). Regime threshold VALUES (VIX 18/25/35 etc.) are forward priors routed to §13.1 #3, not pinned. theme_opportunity_state vocab not yet design-enumerated, intentionally NOT pinned. draft-07 cannot express: cap byte-faithfulness, descending caps, provenance of every pinned mechanic in §7, and threshold_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "market_risk_regime_caps",
+    "risk_axis_components",
+    "vix_axis_policy",
+    "market_trend_axis",
+    "breadth_axis",
+    "two_axis_policy",
+    "anti_chatter",
+    "unknown_degradation_policy",
+    "scope",
+    "threshold_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_regime_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "market_risk_regime_caps": {
+      "description": "§7 — market_risk_regime → position cap, severity-ordered (进攻→极度防御), const-pinned byte-faithful.",
+      "const": [
+        {
+          "regime": "进攻",
+          "position_cap": 1.0
+        },
+        {
+          "regime": "震荡",
+          "position_cap": 0.8
+        },
+        {
+          "regime": "防御",
+          "position_cap": 0.5
+        },
+        {
+          "regime": "极度防御",
+          "position_cap": 0.0
+        }
+      ]
+    },
+    "risk_axis_components": {
+      "description": "§7 三类输入 — the exact worst_of component set market_risk_regime aggregates over.",
+      "const": [
+        "vix",
+        "market_trend",
+        "breadth"
+      ]
+    },
+    "vix_axis_policy": {
+      "description": "§7 input ① VIX — provider-authorization-gated (§3); unapproved/unavailable → unknown axis, fallback to SPY/QQQ+breadth + conservative downgrade; never treated as verified until the gate passes.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target_source",
+        "provider_authorization_gated",
+        "unapproved_until_gate_passed",
+        "unapproved_or_unavailable_becomes_unknown",
+        "fallback_axes",
+        "conservative_downgrade_on_unavailable"
+      ],
+      "properties": {
+        "target_source": {
+          "const": "FMP ^VIX"
+        },
+        "provider_authorization_gated": {
+          "const": true
+        },
+        "unapproved_until_gate_passed": {
+          "const": true
+        },
+        "unapproved_or_unavailable_becomes_unknown": {
+          "const": true
+        },
+        "fallback_axes": {
+          "const": [
+            "market_trend",
+            "breadth"
+          ]
+        },
+        "conservative_downgrade_on_unavailable": {
+          "const": true
+        }
+      }
+    },
+    "market_trend_axis": {
+      "description": "§7 input ② 大盘趋势 — SPY + QQQ; QQQ is REQUIRED (pool skews AI/semis/growth).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "components",
+        "qqq_required"
+      ],
+      "properties": {
+        "components": {
+          "const": [
+            "SPY",
+            "QQQ"
+          ]
+        },
+        "qqq_required": {
+          "const": true
+        }
+      }
+    },
+    "breadth_axis": {
+      "description": "§7 input ③ 板块/市场广度 — sourced from base-universe constituents; does NOT depend on paid industry ETFs.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source",
+        "depends_on_paid_industry_etf"
+      ],
+      "properties": {
+        "source": {
+          "const": "base_universe_constituents"
+        },
+        "depends_on_paid_industry_etf": {
+          "const": false
+        }
+      }
+    },
+    "two_axis_policy": {
+      "description": "§7 两轴拆分（关键反保守）— risk axis worst_of decides cap; theme axis separate (not worst_of); weak market + strong theme still allows low-size probe.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_regime_is_worst_of",
+        "risk_regime_decides_position_cap",
+        "theme_state_decides_opportunity_not_worst_of",
+        "weak_market_strong_theme_allows_probe"
+      ],
+      "properties": {
+        "risk_regime_is_worst_of": {
+          "const": true
+        },
+        "risk_regime_decides_position_cap": {
+          "const": true
+        },
+        "theme_state_decides_opportunity_not_worst_of": {
+          "const": true
+        },
+        "weak_market_strong_theme_allows_probe": {
+          "const": true
+        }
+      }
+    },
+    "anti_chatter": {
+      "description": "§7 防抖（快防守慢进攻）— downgrade immediate; upgrade needs confirmation = 2 consecutive better weekly runs OR back above the threshold buffer.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "downgrade_immediate",
+        "upgrade_requires_confirmation",
+        "upgrade_confirmation_weekly_runs",
+        "upgrade_threshold_buffer_alternative"
+      ],
+      "properties": {
+        "downgrade_immediate": {
+          "const": true
+        },
+        "upgrade_requires_confirmation": {
+          "const": true
+        },
+        "upgrade_confirmation_weekly_runs": {
+          "const": 2
+        },
+        "upgrade_threshold_buffer_alternative": {
+          "const": true
+        }
+      }
+    },
+    "unknown_degradation_policy": {
+      "description": "§7 unknown 按防御 — never default 进攻; missing one input → downgrade; missing a critical input → at least 防御; severe → restricted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "never_default_aggressive",
+        "missing_one_downgrade",
+        "missing_critical_at_least_defensive",
+        "severe_restricted"
+      ],
+      "properties": {
+        "never_default_aggressive": {
+          "const": true
+        },
+        "missing_one_downgrade": {
+          "const": true
+        },
+        "missing_critical_at_least_defensive": {
+          "const": true
+        },
+        "severe_restricted": {
+          "const": true
+        }
+      }
+    },
+    "scope": {
+      "description": "§7 作用域 — affects sizing/new-entry/(optional)action_confidence; NEVER hard-veto; NEVER replaces per-stock analysis.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "affects_position_size",
+        "affects_new_entry_permission",
+        "affects_action_confidence_optional",
+        "not_hard_veto",
+        "not_replace_stock_analysis"
+      ],
+      "properties": {
+        "affects_position_size": {
+          "const": true
+        },
+        "affects_new_entry_permission": {
+          "const": true
+        },
+        "affects_action_confidence_optional": {
+          "const": true
+        },
+        "not_hard_veto": {
+          "const": true
+        },
+        "not_replace_stock_analysis": {
+          "const": true
+        }
+      }
+    },
+    "threshold_calibration_item_id": {
+      "description": "§7 阈值全 prior → §13.1 #3 (环境阈值: VIX 18/25/35、均线、广度线、两轴拆分阈值).",
+      "const": 3
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}
