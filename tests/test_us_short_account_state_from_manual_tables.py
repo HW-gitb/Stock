@@ -451,5 +451,52 @@ class MainEndToEndTests(unittest.TestCase):
             self.assertIn("trades", {t["name"] for t in lineage["source_tables"]})
 
 
+class ReviewHygieneFixTests(unittest.TestCase):
+    """2026-06-21 batch-1 review hygiene fixes (converter footguns F-2..F-5)."""
+
+    # F-2: _parse_float rejects scientific notation / underscore / thousands separator (Excel & Python coercion)
+    def test_float_scientific_notation_rejected(self):
+        for bad in ("3e4", "1.8E2"):
+            with self.assertRaises(CE):
+                _build(account=_acct(us_market_equity=bad))
+
+    def test_float_underscore_literal_rejected(self):
+        with self.assertRaises(CE):
+            _build(positions=[_pos(avg_cost_usd="1_8")])   # Python literal 1_8 -> 18 silently; must reject
+
+    def test_float_thousands_separator_rejected(self):
+        with self.assertRaises(CE):
+            _build(account=_acct(us_market_equity="30,000"))
+
+    def test_plain_decimal_float_still_ok(self):
+        st, _ = _build(positions=[_pos(avg_cost_usd="180.5")])
+        self.assertEqual(st["positions"][0]["avg_cost_usd"], 180.5)
+
+    # F-3: the write primitive itself fail-closed-guards an in-repo non-private path (defense-in-depth)
+    def test_write_primitive_guards_inrepo_nonprivate_path(self):
+        probe = ROOT / "docs" / "zz_hygiene_write_primitive_probe.json"
+        with self.assertRaises(CE):
+            conv._write_json_atomic(probe, {"x": 1})
+        self.assertFalse(probe.exists())   # nothing written
+
+    # F-4: main() rejects --out == --lineage-out (lineage would silently overwrite the account_state)
+    def test_main_rejects_same_out_and_lineage(self):
+        with tempfile.TemporaryDirectory() as d:
+            dp = Path(d)
+            (dp / "account.csv").write_text(_GOOD_ACCOUNT_CSV, encoding="utf-8")
+            (dp / "positions.csv").write_text(
+                "ticker,shares,avg_cost_usd,entry_date,current_stop,notes\nAAPL,10,180,20260601,165,x\n",
+                encoding="utf-8")
+            same = dp / "same.json"
+            with self.assertRaises(CE):
+                conv.main(["--input-dir", str(dp), "--as-of", "20260622",
+                           "--out", str(same), "--lineage-out", str(same)])
+
+    # F-5: the lineage sidecar is validated against its own schema at runtime
+    def test_validate_lineage_rejects_malformed(self):
+        with self.assertRaises(CE):
+            conv._validate_lineage({"schema_name": "us_short_account_state_lineage"})   # missing required fields
+
+
 if __name__ == "__main__":
     unittest.main()

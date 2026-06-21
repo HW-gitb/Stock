@@ -55,6 +55,7 @@ BUCKET_DIVISOR = 3  # per-market capital policy: US-short bucket = us_market_equ
 _REL_EPS = 1e-9
 
 ACCOUNT_SCHEMA_PATH = ROOT / "schemas" / "us_short_account_state.schema.json"
+LINEAGE_SCHEMA_PATH = ROOT / "schemas" / "us_short_account_state_lineage.schema.json"
 
 REQUIRED_TABLES = ("account", "positions")
 OPTIONAL_TABLES = ("trades",)   # slice 1b: trades.csv (= §12 manual_actual_track / execution_log); optional
@@ -127,11 +128,13 @@ def _parse_float(raw, field: str, *, positive=False, allow_zero=True):
     s = ("" if raw is None else str(raw)).strip()
     if s == "":
         raise ConvertError(f"{field} is missing (required numeric)")
-    try:
-        v = float(s)
-    except ValueError:
-        raise ConvertError(f"{field}={raw!r} is not a valid number")
-    if not math.isfinite(v):
+    if not re.fullmatch(r"-?\d+(\.\d+)?", s):
+        # plain decimal only — reject scientific notation (1e3), Python underscores (1_8 -> 18),
+        # thousands separators (1,800), inf/nan: all are Excel/Python coercion vectors the strict
+        # input contract must not silently accept (docstring: "reject Excel coercions").
+        raise ConvertError(f"{field}={raw!r} is not a plain decimal number (no scientific notation / underscore / thousands separator / inf/nan)")
+    v = float(s)
+    if not math.isfinite(v):   # defensive; the regex already excludes inf/nan/exponent/underscore
         raise ConvertError(f"{field}={raw!r} is not finite (NaN/Inf rejected)")
     if positive and v <= 0:
         raise ConvertError(f"{field}={raw!r} must be > 0")
@@ -416,7 +419,25 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _validate_lineage(lineage: dict) -> None:
+    """Validate the lineage sidecar against its own schema at runtime (mirrors validate_account_state;
+    catches future builder/schema drift, not only the schema test's example)."""
+    try:
+        import jsonschema
+    except ImportError:
+        raise ConvertError("jsonschema is required to validate the lineage sidecar; install it for this runtime")
+    schema = json.loads(LINEAGE_SCHEMA_PATH.read_text(encoding="utf-8"))
+    try:
+        jsonschema.validate(lineage, schema)
+    except jsonschema.ValidationError as e:
+        raise ConvertError(f"us_short_account_state_lineage failed schema: {e.message} (at {list(e.absolute_path)})")
+
+
 def _write_json_atomic(path: Path, payload) -> None:
+    # Fail-closed privacy guard on EVERY write of account/lineage data (§11.6: "绕过脚本直接调管线也拦得住").
+    # main() also pre-checks both paths up front (fail-fast atomicity); this guards any direct/future caller
+    # of the write primitive so real holdings can never reach a non-gitignored in-repo path.
+    _reject_nonprivate_account_output_path(str(path))
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     with open(tmp, "w", encoding="utf-8", newline="\n") as f:
@@ -459,8 +480,12 @@ def main(argv=None) -> int:
 
     out_path = Path(args.out)
     lineage_path = Path(args.lineage_out) if args.lineage_out else out_path.with_name(out_path.stem + "_lineage.json")
+    if out_path.resolve() == lineage_path.resolve():
+        raise ConvertError(f"--out and --lineage-out must be different paths (both resolve to {out_path.resolve()}); "
+                           f"the lineage write would silently overwrite the account_state")
+    _validate_lineage(lineage)   # lineage must satisfy its own schema at runtime (account_state already validated above)
     for _p in (out_path, lineage_path):
-        _reject_nonprivate_account_output_path(str(_p))
+        _reject_nonprivate_account_output_path(str(_p))   # fail-fast: check both before any write (atomicity)
     _write_json_atomic(out_path, account_state)
     _write_json_atomic(lineage_path, lineage)
 

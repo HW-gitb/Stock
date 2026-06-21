@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short batch-1 hygiene closeout re-review)
+- **Verdict/Action**: PASS. Current re-review found `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` closed; no new material Required in the US-short batch-1 hygiene scope.
+- **Required**: None new. `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: target const+converter 74 OK; doc/route guard 38 OK; US-short discover 479 OK; evidence wording now scopes full discover to deps-complete env and states Codex env has 17 unrelated A-share errors. No provider/live/DataHub path.
+- **Next**: User may command `提交`; batch2/provider/live/DataHub remain separate authorization.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM)
+- **Verdict/Action**: 判定成立、接受 —— **同类 env-dependent full-tree overclaim,本会话第 3 次**(cc_review 头部已更正、又在 hygiene SESSION_LOG Verify + Pre-Codex F 复犯)。只改本批 hygiene closeout 的验证措辞:把无限定「full discover 3256 OK 零回归」改为「US-short 目标全绿 + 零 us_short 回归;full discover 3256 OK **仅 deps-complete 环境(本机装 requests/tushare)**,Codex 缺该依赖有 17 个 A-share import-error、与本批无关」。不动 converter/schema/guard。存 memory 防再犯。详见 register。
+- **Required**: `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: doc-governance/route guard green;US-short 目标 suites 全绿(const-coverage/转换器/discover);本机 full discover 3256 OK(deps-complete);Verify + Pre-Codex F 两处措辞已限定环境;diff-check clean;BOM=0。未跑 provider。
+- **Next**: Codex re-`审查`(本批 + 措辞修正);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:这是行为类(overclaim)非代码;根治 = 改措辞 + 存 memory「永不无限定写 full discover N OK」,不是只改这一处。**B(连带)**:同句出现在 Verify + Pre-Codex F 两处、都改;旧 committed entry 的同款措辞不 mass-rewrite(committed 历史、同 item-2 broad-rewrite 戒)。**C(反向)**:措辞改后未弱化真证据(US-short 目标全绿仍如实陈述)。**D**:N-A。**E**:register flip 单态、SESSION_LOG 单态。**F**:diff-check clean、BOM=0、doc-governance 绿。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short batch-1 hygiene closeout)
+- **Verdict/Action**: FAIL. Current US-short batch-1 design/status, const-guard, and converter hygiene changes look valid, but the top handoff overclaims full-tree verification as `full discover 3256 OK` while Codex still reproduces 17 known A-share env/provider errors.
+- **Required**: `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` - full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: target const+converter 74 OK; doc/route guard 38 OK; US-short discover 479 OK; full discover 3256 ran with 17 unrelated A-share errors; probes found 16 schema pairs / 191 const paths and rejected bad float forms.
+- **Next**: Claude `修复` only the verification-evidence wording, then Codex re-`审查`; do not start batch2/provider/live/DataHub.
+
+## 2026-06-21 — Claude `修复` (清这批 hygiene: Codex Required STATUS-DRIFT + cc_review F-1 / F-2~F-5)
+- **Verdict/Action**: 用户「清这批 hygiene」一次执行、3 切片并轮交一次审查。① **修 Codex Required**:design doc line3+464「尚未实现进代码」→「批1 已实现+审查;批2-5 gated」(只动状态、不动 rules/§18.0/provider 门)。② **F-1 根治**:新增中心化 `tests/schema/test_us_short_const_coverage.py`(golden-count + drift-reject,16 schema/191 const,删 const→计数降→失败)。③ **F-2~F-5 转换器**:`_parse_float` 拒科学计数法/下划线/千分位 + 护栏下沉 `_write_json_atomic` + `--out≠--lineage-out` + lineage 运行时校验。**Item-2(register pending-提交 19 处)按 Codex「别 broad-rewrite」DEFER**。详见 register。
+- **Required**: `R-USSHORT-BATCH1-DESIGN-AUTHORITY-IMPLEMENTATION-STATUS-DRIFT` — 完整 judgment/修/closure + item-2 defer 说明见 `docs/system_risk_register.md`(flip→resolved + Resolution)。F-1/F-2~F-5 = cc_review 自查项(非 Codex Required)、随本批一并清。
+- **Verify**: US-short 目标全绿:const-coverage 3 + 转换器 77(含 7 新)+ US-short discover 479 + doc-governance/route;const-coverage 实证抓删 const(13→12 计数失配);F-2 实拒 `1_8`/`3e4`/`30,000`、保留 `180.5`;BOM=0;diff-check clean;design doc grep 无残留「尚未实现」;ripple 仅 a_short 独立文件(未碰、A 股不交叉)。**full discover 3256 OK = 仅本机(装 requests/tushare)** —— 缺该依赖的环境(Codex)有 17 个 A-share import-error、与本批无关、零 us_short 失败。未跑 provider。
+- **Next**: Codex full `审查`(本批 3 切片);PASS 后用户 `提交`(push 须明确命令)。然后可开批2。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:F-1 提中心化 golden guard 根治全 16 schema、非逐对象;F-2 正则一拒所有 coercion 向量。**B(连带)**:design doc 双处改全 + grep 无残留;converter ripple 仅本文件(a_short 独立未碰);README 行措辞仍准;register 单态。**C(反向)**:F-2 保留 180.5/30000;F-1 实证抓删 const(13→12);F-3 probe 不写出。**D**:N-A。**E**:design doc 仅状态措辞、item-2 按 Codex 警告 defer、无 transient gate 进 CURRENT。**F**:无 BOM、diff-check clean、US-short 目标全绿 + 零 us_short 回归(full discover env-scoped,见 Verify)。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short batch-1 full strict review)
+- **Verdict/Action**: FAIL for one material route/design-authority status drift. Batch-1 design/code are directionally correct and target-tested, but `docs/us_short_system_design.md` still says US-short has not been implemented in code after batch 1 is already in HEAD.
+- **Required**: `R-USSHORT-BATCH1-DESIGN-AUTHORITY-IMPLEMENTATION-STATUS-DRIFT` - full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed HEAD through `b96976c2`, US-short authority/route/register/log, all batch-1 US-short schemas/presets/tests, and the account-state converter. US-short schema suite 405 OK; converter+doc/route guard suite 102 OK; full discover 3246 ran with 17 existing A-share env/provider errors.
+- **Next**: `修复` only the US-short design-authority status wording, then Codex re-`审查`; do not start batch-2/3, provider/live, DataHub, Skill, or production work in that repair.
+
 ## 2026-06-21 - Codex `review PASS` (US-short field-registry governance capstone)
 - **Verdict/Action**: PASS. Full current-tree review found the US-short §10 field-registry governance capstone matches the live design authority and has no material Required.
 - **Required**: None new.
