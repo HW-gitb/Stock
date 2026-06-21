@@ -8,6 +8,25 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 cost-floor P0)
+
+- **Verdict/Action**: PASS. US-short batch2 12th slice `engine/us_short_cost_floor.py` is review-clean in the current working tree; no new material Required found.
+- **Required**: None new. No register entry needed; `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` remains committed/resolved.
+- **Verify**: target cost-floor 9 OK; `*us_short*` discover 765 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; `diff --check` clean except CRLF warnings. Probes confirmed hard zero-share observe on low-profit / malformed / unverifiable cost inputs, inclusive cost-floor boundary blocks, far-above-floor clears, and no provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; theme_probe seats, defensive-entry mode, 35%-block assembly, action_rank, batch3 renderer/validator, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第十二刀 — §8 最小仓成本地板 P0 真拦单)
+
+**Worked on**: 批2 第十二刀,§8 最小仓成本地板(P0)。`engine/us_short_cost_floor.py`:① `round_trip_cost`(往返成本=佣金+滑点+点差,坏/负分量→None)② `apply_cost_floor`(到盈一毛利润 = shares×(tp1−entry) ≤ 往返成本×COST_SAFETY_MULT → **拦单=硬 0 仓 observe** cost_inefficient_min_size,非加 tag;≤ 边界拦)。+ README 1 路由行。
+
+**Key decisions**: ① **真拦单 = 返回硬 0 仓 observe**(非活仓加 tag)——满足 line 224「必须真拦单」;函数直产 shares=0 observe、caller 无法忽略。② **安全倍数 COST_SAFETY_MULT 模块常量非入参**(§13#27 forward)——防 caller 传小倍数绕地板(承接 neutral_block default-param bypass 教训)。③ **全 fail-closed 拦单**:坏 shares/非正价/tp1≤entry/不可验成本 → observe(unverifiable_cost_inputs),不可验成本效率绝不下活单。④ observe_reason_type 用**冻结 §9 词表** cost_inefficient_min_size(conformance 钉 ∈ const)、不自造;无 preset(forward prior)。
+
+**Verify**: 新测试 **9 OK**(往返成本求和+坏/负分量→None;清过[毛利远超]、拦截[毛利≤地板、硬 0 仓]、≤边界含、坏 shares/非正价/tp1≤entry/坏成本→拦 unverifiable;observe_reason_type ∈ 冻结词表 conformance)。**零 us_short 回归**:全套件 **357 OK**(本机 deps-complete);grep `_finite(`=0;BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十二刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续 §8 子刀:theme_probe 强赛道试探名额(强制最小仓+绕风险预算但受全约束、极度防御/veto/cooldown=0)、防御档入场(pullback-only + extreme breakout 例外);再 §4.3 35%块、§9 action_rank。
+
+**Pre-Codex self-review**: A-F。A(类):成本分量坏/负、shares 坏、非正价/tp1≤entry、坏成本、≤边界、清过正控全覆盖。B:纯新增、无重命名、无下游消费者(sizing pipeline 按值用),README 1 行;grep `_finite(`=0。C(反向):坏→拦非放行、毛利≤地板→拦、真拦单硬 0 仓非 tag,测**设计意图**。D:N-A。E:README 1 行、无 transient 进 CURRENT。F:安全倍数模块常量防 bypass、strict 校验、无容器入参、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 position sizing repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
