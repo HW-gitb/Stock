@@ -8,6 +8,25 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 action_rank)
+
+- **Verdict/Action**: PASS. US-short batch2 13th slice `engine/us_short_action_rank.py` is review-clean in the current working tree; no new material Required found.
+- **Required**: None new. No register entry needed.
+- **Verify**: target action-rank 12 OK; `*us_short*` discover 777 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; `diff --check` clean except CRLF warnings. Probes confirmed group-major survival-first ordering, frozen final_action strictness, malformed `selection_rank` sinking within group, holding-exit final_actions mapping to group 1, and no provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; theme_probe seats, defensive-entry mode, 35%-block assembly, batch3 renderer/validator, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第十三刀 — §9 action_rank 保命优先 5 组骨架)
+
+**Worked on**: 批2 第十三刀,§9 操作排名。`engine/us_short_action_rank.py`:`action_group`(final_action → 保命优先组 1-5:持仓减/清[减仓/清仓-止损/止盈/事件]→1、建仓→2、加仓→3、持有/观察→4、否决/避开→5)+ `rank_actions`(每行出 {action_group, action_rank},全局 action_rank **组主序**:组1全排在组2前;组内按 selection_rank)。LOADS action_governance preset。+ README 1 路由行。
+
+**Key decisions**: ① **final_action→组 映射我据 §9+line248 定(交审)**:line248「持仓侧并入①/③」+ preset 持仓退出动作(减仓/清仓-*)price_target ∈ holding_exit_fields → 都归组1(含 take-profit 减/清)。② **分组不加权=组序绝对**:组1恒在组2前(测证:建仓 sr=1 仍排在清仓-止损 sr=99 后),持仓必须处理永不排到新买点后。③ **final_action 冻结词表→strict raise**(未知/非dict/非list ValueError,同 §5 row_context)不静默错排;selection_rank 噪声数值→fail-closed 组内垫底。④ 映射 conformance 钉 preset(键==词表、组⊆骨架、持仓退出→组1)。
+
+**Verify**: 新测试 **12 OK**(9 动作组映射、未知 raise;组主序持仓恒先于新买、组2按 selection_rank、坏 rank 垫底、全 5 组主序、结果对齐输入序、非dict/未知/非list raise;映射覆盖冻结词表==、组⊆骨架、持仓退出→组1、policy)。**零 us_short 回归**:全套件 **369 OK**(本机 deps-complete);grep `_finite(`=0;BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十三刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。批2 剩:theme_probe 名额 + 防御档入场(**依赖 theme_opportunity_state 词表 design-deferred + §13#27 席位矩阵未指定——建前需用户/设计定**)、§4.3 35%块方向合成(generalize 第七刀正交+swap)。
+
+**Pre-Codex self-review**: A-F。A(类):9 动作组、未知 raise、坏 selection_rank 垫底、非dict/非list raise、组主序全覆盖。B:纯新增、无重命名、无下游消费者(batch3 才消费),README 1 行;grep `_finite(`=0。C(反向):持仓恒先于新买(测**设计意图**非代码产物)、未知→raise 非静默、坏 rank→垫底非队首。D:final_action→组 是冻结 categorical,走 §9+line248 最有据映射 + conformance 钉 preset,非穷举猜。E:README 1 行、无 transient 进 CURRENT。F:strict 词表 raise、`_rank_value` 正整数、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 cost-floor P0)
 
 - **Verdict/Action**: PASS. US-short batch2 12th slice `engine/us_short_cost_floor.py` is review-clean in the current working tree; no new material Required found.
