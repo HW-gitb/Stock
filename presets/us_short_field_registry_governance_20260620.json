@@ -1,0 +1,82 @@
+{
+  "schema_name": "us_short_field_registry_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "registry_record_fields": [
+    "field_id",
+    "owner_module",
+    "data_source",
+    "pit_basis",
+    "privacy_class",
+    "current_landing_surface",
+    "terminal_surface_target",
+    "operation_impact",
+    "evidence_ref_kind",
+    "lifecycle_item_id"
+  ],
+  "operation_impact_levels": [
+    "硬否决",
+    "降仓",
+    "调信心",
+    "仅标签"
+  ],
+  "core_field_classes": [
+    "hard veto",
+    "risk downgrade",
+    "data quality",
+    "selection",
+    "price",
+    "sizing",
+    "trigger",
+    "market_risk_regime",
+    "theme_opportunity_state",
+    "theme_lifecycle_state"
+  ],
+  "impact_targets": [
+    "final_action",
+    "action_rank",
+    "position_size",
+    "price",
+    "action_confidence",
+    "risk_tags"
+  ],
+  "evidence_claim_types": [
+    "临近财报",
+    "S-3",
+    "FDA",
+    "做空报告",
+    "赛道热度",
+    "新闻催化"
+  ],
+  "evidence_ref_kinds": [
+    "provider row",
+    "SEC filing",
+    "source_id"
+  ],
+  "no_dangling_policy": {
+    "compute_without_landing_invalid": true,
+    "advisory_shadow_label_is_valid_landing": true,
+    "core_field_must_hit_impact_target_or_shadow_or_drop": true
+  },
+  "evidence_traceback_policy": {
+    "every_claim_must_trace": true,
+    "untraceable_not_output_as_operation_impact": true
+  },
+  "pre_generation_checks": [
+    "every_field_has_landing",
+    "every_claim_traceable",
+    "hard_veto_covers_final_action",
+    "risk_downgrade_affects_size_confidence_or_tag",
+    "selection_vs_action_rank_explained",
+    "no_dangling",
+    "no_unevidenced_claim"
+  ],
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §10",
+    "capstone": "batch-1 capstone — registers every field's landing + evidence; consumes action_table columns, weekly_report sections, all governance, and §13.1 lifecycle_item_id",
+    "lifecycle_link": "each registry record's lifecycle_item_id resolves against the §13.1 calibration registry (us_short_lifecycle_calibration_governance)",
+    "no_dangling": "有计算无落点 → 报告不合格; advisory/shadow explanatory label counts as a valid landing only for soft hints",
+    "evidence_traceback": "untraceable claim → 不许输出成操作影响 (防造假)"
+  }
+}

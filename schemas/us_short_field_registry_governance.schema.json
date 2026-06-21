@@ -1,0 +1,163 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_field_registry_governance",
+  "title": "US-short §10 field registry governance (batch-1 capstone) — const-pins the per-field registry record schema, the operation_impact levels, the core-field classes + impact targets, the evidence claim types + traceback kinds, the no-dangling policy, and the pre-generation checks",
+  "description": "Batch-1 declarative governance contract (capstone — consumes all output surfaces + governance). Freezes §10 machine-enforced no-dangling + evidence-traceback + field registry: the per-field registry record schema (field_id … lifecycle_item_id, 10 keys, the last linking each field to the §13.1 lifecycle calibration registry); the operation_impact levels (硬否决/降仓/调信心/仅标签); the core-field classes that MUST hit ≥1 impact target (final_action/action_rank/position_size/price/action_confidence/risk_tags) else become shadow_record or be dropped; the evidence claim types that must each trace to a provider row / SEC filing / source_id (untraceable ⟹ never emitted as an operation impact); the forward no-dangling policy (compute-without-landing → report invalid; an advisory/shadow explanatory label is a valid landing); and the pre-generation checks whose failure makes the report not clean. draft-07 cannot express: byte-faithfulness of every set to §10, provenance, impact targets ⊆ action_table where applicable, and lifecycle_item_id presence — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "registry_record_fields",
+    "operation_impact_levels",
+    "core_field_classes",
+    "impact_targets",
+    "evidence_claim_types",
+    "evidence_ref_kinds",
+    "no_dangling_policy",
+    "evidence_traceback_policy",
+    "pre_generation_checks",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_field_registry_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "registry_record_fields": {
+      "description": "§10 完整字段 registry — per-field record keys, byte-faithful (lifecycle_item_id links to §13.1).",
+      "const": [
+        "field_id",
+        "owner_module",
+        "data_source",
+        "pit_basis",
+        "privacy_class",
+        "current_landing_surface",
+        "terminal_surface_target",
+        "operation_impact",
+        "evidence_ref_kind",
+        "lifecycle_item_id"
+      ]
+    },
+    "operation_impact_levels": {
+      "description": "§10 影响强度 levels (硬否决/降仓/调信心/仅标签), byte-faithful.",
+      "const": [
+        "硬否决",
+        "降仓",
+        "调信心",
+        "仅标签"
+      ]
+    },
+    "core_field_classes": {
+      "description": "§10 核心字段 classes that MUST hit ≥1 impact target (else shadow_record/drop), byte-faithful.",
+      "const": [
+        "hard veto",
+        "risk downgrade",
+        "data quality",
+        "selection",
+        "price",
+        "sizing",
+        "trigger",
+        "market_risk_regime",
+        "theme_opportunity_state",
+        "theme_lifecycle_state"
+      ]
+    },
+    "impact_targets": {
+      "description": "§10 the impact targets a core field must affect at least one of, byte-faithful.",
+      "const": [
+        "final_action",
+        "action_rank",
+        "position_size",
+        "price",
+        "action_confidence",
+        "risk_tags"
+      ]
+    },
+    "evidence_claim_types": {
+      "description": "§10 claim types that must each trace to evidence, byte-faithful.",
+      "const": [
+        "临近财报",
+        "S-3",
+        "FDA",
+        "做空报告",
+        "赛道热度",
+        "新闻催化"
+      ]
+    },
+    "evidence_ref_kinds": {
+      "description": "§10 evidence reference kinds (provider row / SEC filing / source_id), byte-faithful.",
+      "const": [
+        "provider row",
+        "SEC filing",
+        "source_id"
+      ]
+    },
+    "no_dangling_policy": {
+      "description": "§10 正向 no-dangling — compute-without-landing → report invalid; advisory/shadow label is a valid landing; core field must hit an impact target or become shadow_record / be dropped.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "compute_without_landing_invalid",
+        "advisory_shadow_label_is_valid_landing",
+        "core_field_must_hit_impact_target_or_shadow_or_drop"
+      ],
+      "properties": {
+        "compute_without_landing_invalid": {
+          "const": true
+        },
+        "advisory_shadow_label_is_valid_landing": {
+          "const": true
+        },
+        "core_field_must_hit_impact_target_or_shadow_or_drop": {
+          "const": true
+        }
+      }
+    },
+    "evidence_traceback_policy": {
+      "description": "§10 反向证据反查 — every claim must trace; untraceable ⟹ never emitted as an operation impact.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "every_claim_must_trace",
+        "untraceable_not_output_as_operation_impact"
+      ],
+      "properties": {
+        "every_claim_must_trace": {
+          "const": true
+        },
+        "untraceable_not_output_as_operation_impact": {
+          "const": true
+        }
+      }
+    },
+    "pre_generation_checks": {
+      "description": "§10 报告生成前必检 — failure ⟹ report not clean.",
+      "const": [
+        "every_field_has_landing",
+        "every_claim_traceable",
+        "hard_veto_covers_final_action",
+        "risk_downgrade_affects_size_confidence_or_tag",
+        "selection_vs_action_rank_explained",
+        "no_dangling",
+        "no_unevidenced_claim"
+      ]
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}

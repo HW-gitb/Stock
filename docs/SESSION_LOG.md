@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short field-registry governance capstone)
+- **Verdict/Action**: PASS. Full current-tree review found the US-short §10 field-registry governance capstone matches the live design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design §10 plus action-table/lifecycle anchors. Target 106 OK; independent probe rejects drop/drift for all 7 const arrays and flips for all nested policy consts. Full discover attempted: 3246 ran / 17 A-share env/provider errors (`requests`/`tushare`/`pro=None`), so no whole-repo clean-test claim. `git diff --check` only CRLF warning; no provider/runtime path.
+- **Next**: User may command `提交`; batch-2 engine, batch-3 validator/renderer, provider/DataHub/live work remain separate authorization/review items.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 field-registry governance schema §10 — 批1 capstone)
+
+**Worked on**: 新增 `us_short_field_registry_governance` 治理契约(**批1 最后一片、capstone**)——把 §10 机器强制 no-dangling + 证据反查 + 字段 registry const-pin:① per-field registry record schema(field_id…lifecycle_item_id 10 键,`lifecycle_item_id` 链到 §13.1)② operation_impact 4 级(硬否决/降仓/调信心/仅标签)③ 10 个核心字段类(必影响 6 个 impact target 至少一个,否则 shadow_record/删)④ 6 个 evidence claim 类(各须反查到 provider row/SEC filing/source_id,查不到=不输出成操作影响)⑤ no-dangling 政策 + ⑥ 7 个报告生成前必检(失败=报告不 clean)。schema + preset + 18 测试。纯声明式。
+
+**Key decisions**: ① capstone 消费全部输出面+治理:impact_targets 中是 action_table 列的(final_action/action_rank/action_confidence/risk_tags)交叉校验 ⊆ action_table;lifecycle_item_id 链 §13.1 registry。② **应用上一片教训:对每层都套 class loop** —— `test_every_const_array_rejects_drop/drift`(全 7 个 const 数组)+ `test_every_nested_policy_const_guarded`(两个嵌套政策对象的全部 const,schema==preset + flip 拒)。起手即套嵌套、不再漏。③ 字节抽取 6 个设计集(registry 字段/operation_impact/core 类/impact 目标/claim 类/ref 种);ref_kinds 在**粗体**非 backtick(生成时发现、改抽取)。④ pre_generation_checks 用英文 token(prose 不可净 split)+ provenance 兜底。
+
+**Verify**: 新测试 **18 OK**;6 设计集字节忠实;impact target 列 ⊆ action_table;lifecycle registry 1..39 可解析;class loop 实测全 const 数组 drop/drift 拒 + 两政策对象 const flip 拒;dup 无别处 pin;BOM=0;diff-check clean;README 路由行已补(grep 验含 lifecycle_item_id);生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 field-registry capstone;PASS 后用户 `提交`(push 须明确命令)。**PASS+提交后,批1(US-short 全部 schema + governance preset + CSV→account_state 转换器)= 工程 COMPLETE**(§18.2 批1 范围)。批2(引擎行产出)/批3(no-dangling·证据反查 validator + renderer)需用户单独授权 + serial-after-A-share。顺序我自决仅限批1 内;批2/3 是新授权门。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:6 设计集字节抽取全员覆盖 + **class loop 套到每层**(7 const 数组 + 2 嵌套政策对象全 const),根治枚举漏 member(顶层+嵌套);anchor size 断言防 silent shrink。**B(连带)**:六块无别处 pin(无 dup);capstone 交叉校验 action_table 列 + §13.1 registry;README grep 验。**C(反向)**:全 const 数组 drop/drift 拒、政策 const flip 拒、operation_impact 加级拒、registry 加字段拒。**D**:N-A。**E**:README 加 1 行、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、11 provenance 生成时已 assert、ref_kinds 粗体抽取已修。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short exclusion-summary governance re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` closed; no new material Required in this US-short §11.4 governance slice.
 - **Required**: None new. `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` remains resolved in `docs/system_risk_register.md`.
