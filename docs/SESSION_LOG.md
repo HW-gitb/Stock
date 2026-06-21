@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short batch2 lifecycle repair re-review)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP` is closed in the current working tree; no new material Required found in this batch2 third-slice repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current dirty tree; bundled Python ran lifecycle+overextension 31 OK, `tests -p '*us_short*'` 586 OK, `tests/schema -p '*us_short*'` 408 OK, and doc/route guards 38 OK. Probes confirmed returned-effect mutation is harmless, 0/1/bad upgrade thresholds fail closed, 2-run/3-run upgrade controls remain valid, and overextension single-condition/K-1/warning/missing-ATR controls remain intact. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: User may command `提交`; next batch2 slice and any provider/live/DataHub/Skill/production work remain separately authorized.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP)
+- **Verdict/Action**: 两点 Required 均判定成立、接受(API 边界安全类)。修 `us_short_theme_lifecycle`:① `lifecycle_effects` 返回 `copy.deepcopy` —— 下游改返回值不再 process-wide 污染冻结单一来源表;② `next_theme_lifecycle_state` 对 `upgrade_confirm_runs` 边界 fail-closed(非int/bool/<2 → ValueError),0/1 不再绕过 up-slow 连续确认(3+ 仍允许)。+ copy-safe / 0-1-fail / 3-run 三测。overextension 未动。
+- **Required**: `R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: lifecycle+overext 31 OK(+3);tests/ 586 + tests/schema 408 OK(零 us_short 回归,本机 deps-complete);独立探针 returned-mutation harmless + 0/1 raise;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(类):copy-safety 证公共 API immutable(非只 planted 改全局表)、upgrade 边界全 bad 值(0/1/-1/bool/float/None)反向 + 3-run 正控;既有 down-fast/up-slow/retired/stable 正控留。B(连带):仅改 1 引擎+1 测试,README「single source」仍准(未动);无下游消费者。C(反向):returned-mutation 无害、0/1 fail-closed、3-run 仍升;deterioration 优先等正控留。D:N-A。E:register 单态、无 transient gate 进 CURRENT。F:deepcopy 防共享可变态、ValueError fail-closed、UTF-8 无 BOM、diff clean。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short batch2 third slice: theme lifecycle + overextension)
+
+- **Verdict/Action**: FAIL. Overextension tiering is directionally OK in this reviewed scope, but the lifecycle engine exposes mutable frozen effects and lets the up-slow confirmation guard be bypassed.
+- **Required**: `R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP` - full material detail is registered in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current dirty tree; bundled Python ran lifecycle+overextension target tests 28 OK, `tests -p '*us_short*'` 583 OK, `tests/schema -p '*us_short*'` 408 OK, and doc/route guards 38 OK; `git diff --check` returned 0 with CRLF warnings only. Codex probes reproduced returned-effect mutation corrupting lifecycle validation and `upgrade_confirm_runs=0/1` bypassing consecutive confirmation. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: Claude Code `修复` this Required only. Do not start another batch2 slice, batch3 validator/renderer, provider/live/DataHub/Skill/production work, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第三刀 — §4.3 赛道生命周期 + §4.3 过热分档,并轮)
+
+**Worked on**: 批2 第三刀,自决 + 并轮两道纯独立 §4.3 状态产出模块(都喂下游 §4.2/§8/§9、彼此无依赖、一次审查覆盖)。① `engine/us_short_theme_lifecycle.py`(§18.0 P0 #3):5 态机 `next_theme_lifecycle_state`(降立即/升需连确认/**retired 仅经全 provisional 重确认再入**,deterioration 优先)+ `lifecycle_effects`(每态动作表 **LOAD 自冻结 preset = 单一来源**:seats×/probe/routing/holding_effects)+ `validate_lifecycle_landing`(§18.1 #14:每态必落效应、非 dangling;**不变式:任何态都不机械清仓** mechanical_clear 恒 False、衰减态只标记+§9 重评)。转移阈值=§13#30 forward。② `engine/us_short_overextension.py`:`classify_overextension` 三值 overheat(none/warning/chasing_extreme,冻结 vocab)——warning 温和=**仅执行侧**(强制 pullback+压仓+抬 RR、**保留赛道分**)、chasing_extreme 抛物线=**选股侧剥赛道分** 且**须 ≥K 条件共现(单条件绝不触发)**;两档互斥(chasing 优先、单罚)。阈值 k1/m/K=§13#36 forward。+ README 路由行。
+
+**Key decisions**: ① 并轮判据满足(都纯/离线 fixtured、无跨批 schema 依赖、一次审查);非 monolith(两独立文件+测试+自审)。② lifecycle 动作表 **LOAD 自 preset 而非 hardcode**:5×9 数据表,load = 单一来源(消费 batch-1 const-pin 的权威、零 const 重复 drift);只 hardcode 状态机 LOGIC(down-fast/up-slow/retired-gate),并加 conformance 把逻辑三角到 preset.anti_chatter 声明。③ overextension **诚实诊断**:落 none 也报真实 conditions_met(写测试时 catch 到 none_out 硬编 0 丢计数 → 先修,仅缺数据早 none 保持 0)。④ chasing **AND ≥K**(= §5.3 never-solo 同类对抗:单条件绝不升级);warning **绝不剥赛道分**(strips_theme_score=False)。⑤ 无新 schema(消费冻结 preset + conformance);**landing 强制 = 批3**,本刀产状态/效应。
+
+**Verify**: 新测试 **28 OK**(lifecycle 16:降立即逐级/升连确认/deterioration 优先/retired-gate/stable-reset/unknown→raise、每态效应、validator 全态非dangling+**no-mechanical-clear 不变式+planted 控制**、state-set/effect-keys/anti-chatter conformance;overextension 12:多条件 chasing+strip、**单条件绝不 chasing reverse**、K-1 边界、warning 仅执行侧+**绝不 strip reverse**、none、互斥 chasing 优先、缺数据→none 不伪造、vocab conformance)。**零 us_short 回归**:tests/ 582 + tests/schema 408 OK(本机 deps-complete)。BOM=0;diff-check 仅 CRLF;doc-governance/route 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第三刀(2 引擎 + 2 测试 + README);PASS 后用户 `提交`。后续批2:§4.2 core_score + §4.3 theme heat(orthogonalize+连续门,消费本刀 lifecycle/overextension)、§8 sizing、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F checked。**A(类)**:lifecycle 全 5 态转移(每态 down、provisional/cooling up、retired-gate、stable、unknown)+ 全态效应/validator/conformance;overextension chasing/单条件/K-1/warning/none/互斥/缺数据/vocab。**B(连带)**:纯新增、无重命名、无下游消费者(§4.2/§8/§9 未建),README 加 1 行(grep 验无重名)。**C(反向)**:no-mechanical-clear 不变式(+planted 控制)、单条件绝不 chasing、warning 绝不 strip、K-1 边界、缺数据 none 不伪造、deterioration 优先、retired 不直接弹回——双向覆盖。**D**:N-A(结构化输入)。**E**:README 1 行、无 transient gate 进 CURRENT。**F**:NaN/Inf→none(_finite)、unknown 态→raise fail-closed、lifecycle load committed 工件、UTF-8 无 BOM、diff-check clean、none 诚实计数。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short batch2 hard-veto/regime repair re-review)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP` is closed in the current working tree; no new material Required found in this batch2 second-slice scope.
