@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 risk_downgrade repair re-review)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` is closed in the current working tree; no new material Required found in this batch2 fifth-slice repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: risk-downgrade 23 OK; `*us_short*` 624 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes: bool/string returns + malformed flags/events/margins fail closed; float/exemption/boundary/margin controls pass. No provider/live/DataHub/A-share/Skill/production path.
+- **Next**: User may command `提交`; core_score, sizing, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP — 残留 return-input bool leg + 整类扫净)
+- **Verdict/Action**: 判定成立、接受 —— 同 bad-shape 类第 3 条腿(stock/market return 仍用宽松 `_finite`、bool/numeric-string 被解析伪造事件)。**本轮审计全文件、整类扫净**:每个数值输入统一 `_finite_number`(两个 return 也改),删掉随之失用的 `_finite` 孤儿(grep `_finite(` 验=0)。Codex 允许保留 numeric-string 解析为可选,我为整类一致**一并拒**(全引擎数值输入唯一严格策略)。+ bool/string return 测试 + float 正控。无其他改动。
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,re-flip→resolved + Resolution 3)。
+- **Verify**: risk-downgrade 23 OK;tests/ 624 + tests/schema 408 OK(零回归,本机 deps-complete);探针 market/stock bool returns→no event、float 仍生效;`_finite(` grep=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本残留修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F。A(类)根治:审计全文件每个输入→数值统一 `_finite_number`、bool 统一 `_strict_true`、history isinstance-int-not-bool,grep `_finite(`=0 无宽松残留(前 3 轮逐腿修=class-not-instance,本轮一次扫净)。B:删 `_finite` 孤儿+仅改 1 引擎 1 测试,无下游。C(反向):bool/string return→no event 双侧 + float/豁免/边界正控。D:N-A。E:register 单态。F:strict 贯穿、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 risk_downgrade repair re-review 2)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` remains open because a sibling return-input bool bad-shape path is still live.
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — residual bool return parsing details and narrow repair boundary are in `docs/system_risk_register.md` (single source).
+- **Verify**: Reviewed current dirty tree; bundled Python ran risk-downgrade 22 OK, `tests -p '*us_short*'` 623 OK, `tests/schema -p '*us_short*'` 408 OK, doc/route guards 38 OK, and `git diff --check` clean except CRLF warnings. Probes confirmed margin numeric-string/bool is fixed, but `market_next_day_return=True/False` can still fabricate a current soft event. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: Claude Code `修复` this residual return-input bool Required only; do not start core_score, sizing, action_rank, batch3, provider/live/DataHub/Skill/production work, or commit until re-reviewed.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP — 残留 margin-override leg)
+- **Verdict/Action**: 判定成立、接受 —— 同 bad-shape 类残留腿(class-not-instance 漏:首修把 soft_penalty/history 严格化、却漏给 `_safe_margin` 套同策略,`exempt_margin` 的 numeric-string/bool 仍被解析成 live override)。修:`_safe_margin` 改 `_finite_number`(拒 numeric-string + bool → 退默认),坏 margin 不能翻/抑制/反转豁免门;合法数值(含 0)仍生效。+ 强化 margin 测试(numeric-string/bool × 豁免态/事件态双向)+ 合法 0.05 正控。无其他改动。
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,re-flip→resolved + Resolution 2)。
+- **Verify**: risk-downgrade 22 OK;tests/ 623 + tests/schema 408 OK(零回归,本机 deps-complete);独立探针 margin `"0.0"`/`"999"`/`True` 不再改门、`0.05` 仍生效;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本残留修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(类):**本轮把整类一次扫净**——所有 point/threshold 数值字段(soft_penalty/history/margin)统一 `_finite_number` 严格策略(上轮漏 margin = class-not-instance,本轮根治);margin 测双向(豁免/事件)+ numeric-string + bool + 合法正控。B(连带):仅改 1 引擎 1 测试,README 仍准(未动);无下游消费者。C(反向):坏 margin 双向不翻门 + 合法 0.05/0 仍生效。D:N-A。E:register 单态(re-flip + Resolution 2)、无 transient gate 进 CURRENT。F:strict 类型门、UTF-8 无 BOM、diff clean。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 risk_downgrade repair re-review)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` remains open because the margin-override bad-shape class is not fully closed.
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — residual `_safe_margin` numeric-string / bool override details and repair boundary are in `docs/system_risk_register.md` (single source).
+- **Verify**: Reviewed current dirty tree; bundled Python ran risk-downgrade 21 OK, `tests -p '*us_short*'` 622 OK, `tests/schema -p '*us_short*'` 408 OK, doc/route guards 38 OK, and `git diff --check` clean except CRLF warnings. Probes confirmed fixed bool/event/penalty paths, but `exempt_margin="0.0"` / `"999"` / bool values still alter the relative-exemption gate. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: Claude Code `修复` this residual margin-override Required only; do not start core_score, sizing, action_rank, batch3, provider/live/DataHub/Skill/production work, or commit until re-reviewed.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP)
+- **Verdict/Action**: 四点 Required 均判定成立、接受(公共 API 坏形状/fail-closed 类——最危险:`soft_penalty=-100` 把降级变**加分**)。修 `us_short_risk_downgrade`:① bool 门严格化(`_strict_true`:earnings_beat/analyst 仅 `is True`,truthy-string 不触发);② risk_downgrade 校验 current_event 形状(`_finite_number`:is_event 严格 True + soft_penalty 真数字·有限·非负才计,坏 event→0、不崩不加分不传 NaN;history 同);③ exempt_margin 经 `_safe_margin`(有限≥0 否则默认,不崩不反转豁免门)。+ BadShapeInputTests。无其他改动。
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: risk-downgrade 21 OK(+8);tests/ 622 + tests/schema 408 OK(零回归,本机 deps-complete);独立探针 soft_penalty=-100→points 0(不加分)、truthy-string beat/analyst→0、NaN→0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(类):坏形状整类——truthy-string beat/analyst/is_event、string/None/负/NaN/Inf/bool penalty、非dict event、坏 history、坏 margin,各配 True 正控。B(连带):仅改 1 引擎+1 测试,README 行为描述仍准(未动);无下游消费者。C(反向):-100 不加分、NaN 不传染、坏值 fail-closed;合法 True/豁免/两字段正控保留。D:N-A。E:register 单态、无 transient gate 进 CURRENT。F:strict bool/number 类型门、margin fail-closed、UTF-8 无 BOM、diff clean。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 risk_downgrade soft signals)
+
+- **Verdict/Action**: FAIL. The §4.2/§5.2 soft-downgrade logic matches the main design path, but its public inputs can treat malformed truthy flags/events as penalties, negative points, NaN/Inf, or TypeError.
+- **Required**: `R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`(单一来源,本处不复述)。
+- **Verify**: Reviewed current dirty tree; bundled Python ran risk-downgrade 13 OK, `tests -p '*us_short*'` 614 OK, `tests/schema -p '*us_short*'` 408 OK, doc/route guards 38 OK, and probes reproduced malformed flag/event/margin failures. No provider/live/network/DataHub/A-share/Skill/production path.
+- **Next**: Claude Code `修复` this Required only; do not start core_score, sizing, action_rank, batch3, provider/live/DataHub/Skill/production work, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第五刀 — §4.2/§5.2 risk_downgrade 软信号)
+
+**Worked on**: 批2 第五刀,§4.2 risk_downgrade 软降级(§18.1 #26)。`engine/us_short_risk_downgrade.py`:① `current_good_data_bad_reaction_event`(§5.2:财报好但次日跌**只在跑输大盘时**算降级——**SPY/QQQ 相对豁免**:次日个股 > 大盘 − X → 系统性、不降级;严格边界 s==mkt−X 算降级)② `earnings_reaction_history_score`(多季慢变习惯、capped;**本期事件不写进历史**——两字段分离,一次大盘普跌日不把票长期贴坏反应)③ `risk_downgrade`(历史 + 本期 + 分析师下调 求和,components 分开,**永不硬否决**——升 hard veto 走 §5.2 候选路径/§13#7)。+ README 路由行。
+
+**Key decisions**: ① 豁免方向:次日个股 > 大盘−X → 系统性豁免(跌得不比大盘多);个股 ≤ 大盘−X(跑输)才 stock-specific 降级。② **两字段物理分离**:history 与 current 是两个独立函数、risk_downgrade 里 components 分列,current 不污染 history(测证)。③ **soft-only**:hard_veto 恒 False,即使 history=999+最差组合也不硬否决(reverse 测)。④ 阈值(豁免 X/分值/历史 cap)= §13#7 forward,无新 schema。⑤ landing(core_score 减分)= §4.2;no-dangling = 批3。
+
+**Verify**: 新测试 **13 OK**(current:跑输→event/**豁免系统性不降 reverse**/涨了不算/无好数据/严格边界/缺数据;history:scale+cap/坏输入 0;risk_downgrade:求和/**永不硬否决 reverse**/**两字段分离**/豁免不加分/无信号 0)。**零 us_short 回归**:tests/ 614 + tests/schema 408 OK(本机 deps-complete)。BOM=0;diff-check 仅 CRLF;doc-governance/route 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第五刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续批2:§4.2 core_score 装配(40/35/25 + 横截面正交去重 + 减 risk_downgrade,消费 theme_heat+本刀)、§8 sizing、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F checked。**A(类)**:current 6 例(event/豁免/涨/无数据/边界/缺)、history(scale/cap/坏输入全)、risk_downgrade(求和/硬否决/两字段/豁免/无信号)覆盖整类。**B(连带)**:纯新增、无重命名、无下游消费者(core_score 未建),README 1 行;grep 验无重名。**C(反向)**:豁免不降、永不硬否决、涨了不算、豁免事件不加分——双向。**D**:N-A。**E**:README 1 行、无 transient gate 进 CURRENT。**F**:NaN/Inf→None 处理、bool 排除出 int(history)、UTF-8 无 BOM、diff clean。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 theme-heat scoring review)
 
 - **Verdict/Action**: PASS. Current dirty fourth slice implements the §4.3 per-stock theme-heat confirmation gate and continuous score within scope; no material Required found.
