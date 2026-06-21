@@ -1,0 +1,44 @@
+{
+  "schema_name": "us_short_macro_cluster_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "warning_levels": [
+    "none",
+    "elevated",
+    "high"
+  ],
+  "macro_cluster_fields": [
+    "macro_cluster",
+    "macro_cluster_exposure_frac",
+    "macro_cluster_warning_level",
+    "macro_cluster_size_adjustment"
+  ],
+  "macro_cluster_vocab_is_open": true,
+  "v1_policy": {
+    "no_hard_cap": true,
+    "soft_effect_and_banner": true
+  },
+  "high_warning_effects": {
+    "risk_tag": true,
+    "lower_action_confidence": true,
+    "shrink_model_position_size": true,
+    "via_sizing_stack_step3_no_extra_compound": true,
+    "records_macro_cluster_size_adjustment": true,
+    "report_banner": true
+  },
+  "hard_cap_calibration_item_id": 31,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (宏观集群集中度 lines)",
+    "pseudo_diversification_intent": "同主题上限拦不住'不同主题、同一宏观大注' (e.g. AI 存储/半导体/AI 基建/数据中心核电 同属 ai_complex)",
+    "illustrative_clusters": [
+      "ai_complex",
+      "rates_sensitive",
+      "commodity",
+      "defensive"
+    ],
+    "illustrative_clusters_are_open": "如 … … — examples only; macro_cluster tag vocab is open, not a closed enum (macro_cluster_vocab_is_open)",
+    "no_double_shrink": "size shrink folds into 削减叠法 step ③ '取最狠的一个'、不额外连乘 (see us_short_sizing_stack_governance)",
+    "hard_cap_is_forward": "硬集群上限 = §13.1 #31 prior, attng months of data; v1 = no hard cap"
+  }
+}

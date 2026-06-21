@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short macro-cluster governance)
+- **Verdict/Action**: PASS. Full current-tree review found the section 8 macro-cluster governance schema/preset/test slice matches the live US-short design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed schema, preset, tests, README, SESSION_LOG, risk register, and design section 8/11/13/18 anchors. Target 138 OK; full discover 3134 OK via local Python 3.13; mutation probes reject warning-level, field, open-vocab, hard-cap, high-effect, extra-compounding, and calibration-id drifts; diff-check has only CRLF warning; BOM/FFFD=0; no provider/runtime path.
+- **Next**: User may command `提交` for this slice; field_registry and remaining section 8 sub-slices (symbol_cooldown, cash_allocation, ship-gate sizing) still require separate authorization and review.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 macro-cluster governance schema §8 宏观集群集中度)
+
+**Worked on**: 新增 `us_short_macro_cluster_governance` 治理契约——把 §8 宏观集群集中度(伪分散后闸)const-pin:① `macro_cluster_warning_level {none, elevated, high}`(字节抽取、== action_table)② 4 个治理字段(macro_cluster/exposure_frac/warning_level/size_adjustment,⊆ action_table 列)③ v1 政策(**不设硬上限**——阈值无证据——只软影响+横幅)④ high 效应(risk_tag + 压 action_confidence + 缩 model_position_size 作为**削减叠法③一项、取最狠、不额外连乘** + 记 size_adjustment + 横幅)⑤ cluster 标签 vocab **显式开放**(如…;`macro_cluster_vocab_is_open=true`)。硬上限→§13 #31。schema + preset + 24 测试。纯声明式。
+
+**Key decisions**: ① 选此切片依据=与刚建 sizing-stack 直接衔接(效应缩仓 = 削减叠法③、不额外连乘)。② **开放 vocab 不当 closed enum**(checklist §D 实践):cluster 标签是"如…"开放集,const `macro_cluster_vocab_is_open=true` 并 negative 测「关闭开放 vocab」被拒——防未来消费者把 macro_cluster 当封闭枚举拒掉合法新集群;只 warning_level {none/elevated/high} 是 closed。③ **v1 无硬上限是设计硬态**:negative 测「v1 设硬上限」被拒(硬上限=§13 #31 forward)。④ 字节抽取 warning_level + cluster 示例从 backtick span;cluster 示例只入 notes(非规范)。⑤ 交叉校验:warning_level == action_table、4 字段 ⊆ action_table 列、`hard_cap_calibration_item_id:31`=第 7 个 lifecycle 消费者(glob 自动纳入)。
+
+**Verify**: 新测试 **24 OK**;lifecycle glob 仍 OK(纳入 #31);warning_level==action_table、字段⊆列;dup 无别处 pin;BOM=0;diff-check clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 macro-cluster 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后)** + §8 其余子片(symbol_cooldown #23 / cash_allocation #25 / ship-gate sizing;顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:warning_level/字段/v1政策/high效应全 const-pin 进 schema、字节抽取全员覆盖;负向覆盖整类 drift(level/field/vocab-open/hard-cap/compound)。**B(连带)**:三块无别处 pin(无 dup);#31 载体 lifecycle glob 自动纳入(仍绿);warning_level/字段交叉校验 action_table;效应衔接 sizing-stack③;README 同步。**C(反向)**:**开放 vocab 关闭被拒**(防误拒合法新集群)、**v1 硬上限被拒**(防越过 #31 校准)、**额外连乘被拒**(防双重缩仓)、high 须软非硬。**D(开放 NL 集)**:cluster 标签走开放侧、不强行枚举(正是 §D)。**E**:README 加 1 行、scope 边界明示、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、8 provenance 生成时已 assert。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short sizing-stack governance)
 - **Verdict/Action**: PASS. Full current-tree review found the section 8 sizing-stack governance schema/preset/test slice matches the live US-short design authority and has no material Required.
 - **Required**: None new.

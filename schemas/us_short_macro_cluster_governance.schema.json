@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_macro_cluster_governance",
+  "title": "US-short §8 宏观集群集中度 (macro_cluster pseudo-diversification gate) governance — const-pins the warning-level vocab + the v1 soft-effect/no-hard-cap policy + the high-warning effects, with the cluster TAG vocab explicitly open",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 macro_cluster pseudo-diversification back-gate: the macro_cluster_warning_level vocab {none, elevated, high} (== action_table), the four governed fields, the v1 policy (NO hard cap — thresholds unproven — only soft effect + report banner), and the high-warning effects (risk_tag + lower action_confidence + shrink model_position_size as ONE 削减叠法 step-③ risk discount folded into take-harshest-single with NO extra compounding + record macro_cluster_size_adjustment + report banner). The macro_cluster TAG vocabulary is OPEN/illustrative (如 ai_complex / rates_sensitive / commodity / defensive …), const `macro_cluster_vocab_is_open=true`, so a future consumer must not treat it as a closed enum. Hard cluster-exposure cap is forward-routed to §13.1 #31, not set in v1. draft-07 cannot express: warning_level == action_table, fields ⊆ action_table columns, provenance in §8, and hard_cap_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "warning_levels",
+    "macro_cluster_fields",
+    "macro_cluster_vocab_is_open",
+    "v1_policy",
+    "high_warning_effects",
+    "hard_cap_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_macro_cluster_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "warning_levels": {
+      "description": "§8 macro_cluster_warning_level vocab, byte-faithful (frac 分档 = §13 #31); == action_table macro_cluster_warning_level.",
+      "const": [
+        "none",
+        "elevated",
+        "high"
+      ]
+    },
+    "macro_cluster_fields": {
+      "description": "§8 the four governed macro_cluster fields (⊆ action_table columns).",
+      "const": [
+        "macro_cluster",
+        "macro_cluster_exposure_frac",
+        "macro_cluster_warning_level",
+        "macro_cluster_size_adjustment"
+      ]
+    },
+    "macro_cluster_vocab_is_open": {
+      "description": "§8 macro_cluster TAG vocab is illustrative/open (如 … …) — NOT a closed enum; a consumer must not reject unseen cluster tags.",
+      "const": true
+    },
+    "v1_policy": {
+      "description": "§8 v1 — NO hard cap (thresholds unproven), only soft effect + report banner.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "no_hard_cap",
+        "soft_effect_and_banner"
+      ],
+      "properties": {
+        "no_hard_cap": {
+          "const": true
+        },
+        "soft_effect_and_banner": {
+          "const": true
+        }
+      }
+    },
+    "high_warning_effects": {
+      "description": "§8 warning_level=high effects — soft only; the size shrink is ONE 削减叠法 step-③ discount (take-harshest-single, no extra compounding).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "risk_tag",
+        "lower_action_confidence",
+        "shrink_model_position_size",
+        "via_sizing_stack_step3_no_extra_compound",
+        "records_macro_cluster_size_adjustment",
+        "report_banner"
+      ],
+      "properties": {
+        "risk_tag": {
+          "const": true
+        },
+        "lower_action_confidence": {
+          "const": true
+        },
+        "shrink_model_position_size": {
+          "const": true
+        },
+        "via_sizing_stack_step3_no_extra_compound": {
+          "const": true
+        },
+        "records_macro_cluster_size_adjustment": {
+          "const": true
+        },
+        "report_banner": {
+          "const": true
+        }
+      }
+    },
+    "hard_cap_calibration_item_id": {
+      "description": "§8 hard cluster-exposure cap = forward → §13.1 #31 (macro_cluster 定义 + warning_level 分档 + 集群暴露硬上限).",
+      "const": 31
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}
