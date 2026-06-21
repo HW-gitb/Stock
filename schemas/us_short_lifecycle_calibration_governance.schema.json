@@ -1,0 +1,266 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_lifecycle_calibration_governance",
+  "title": "US-short §13.1 calibration-item registry + §13.2 reminder-threshold priors — const-pins the stable-numbered lifecycle item set that the reminder mechanism (us_short_lifecycle_eval) must traverse",
+  "description": "Batch-1 declarative governance contract. Freezes the §13.1 待校准清单 (stable-numbered items, '编号稳定，正文按号引用') so every '§13 #N' cross-reference in the design, every field-registry lifecycle_item_id (§10), and every sibling governance schema's *_calibration_item_id resolves to a real item; and pins the §13.2 default reminder-threshold priors + the §13 governing policy. item_count is the authoritative count; the eval must DERIVE its traversal from this registry, never hardcode the literal (§13 '动态、不硬编码条数'). draft-07 cannot express: contiguity (1..N no gap/dupe), schema==preset==design byte-faithful triangulation, '§13 #N' cross-ref integrity, and sibling *_calibration_item_id ∈ this set — all enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "calibration_items",
+    "item_count",
+    "default_reminder_thresholds",
+    "governance_policy",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_lifecycle_calibration_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "calibration_items": {
+      "description": "§13.1 待校准清单 — exact stable-numbered set AND order, const-pinned. number = stable key (referenced doc-wide by '§13 #N'); title = byte-faithful design text.",
+      "const": [
+        {
+          "number": 1,
+          "title": "选股权重 40/35/25"
+        },
+        {
+          "number": 2,
+          "title": "安全闸阈值（流动性/价格/市值）"
+        },
+        {
+          "number": 3,
+          "title": "环境阈值（VIX 18/25/35、均线、广度线、两轴拆分阈值）"
+        },
+        {
+          "number": 4,
+          "title": "仓位参数（单笔/单票/总仓/同主题/环境乘数 + 每周建仓上限 3/2/1 + 财报前窗口）"
+        },
+        {
+          "number": 5,
+          "title": "benchmark"
+        },
+        {
+          "number": 6,
+          "title": "候选价格引擎（`ema_trailing_engine` / `earnings_gap_engine`）"
+        },
+        {
+          "number": 7,
+          "title": "§5.2 候选硬否决（含好数据坏反应 soft/hard 阈值 + 相对豁免 X）"
+        },
+        {
+          "number": 8,
+          "title": "赛道软信号 + AI 发现候选主题 + `provisional_theme_lane` 拉入数量/席位"
+        },
+        {
+          "number": 9,
+          "title": "低信任 yfinance PCR/IV（需先授权）"
+        },
+        {
+          "number": 10,
+          "title": "挂账付费数据（借券费/期权异动/暗池/实时空头）"
+        },
+        {
+          "number": 11,
+          "title": "provider/源 fallback 频率"
+        },
+        {
+          "number": 12,
+          "title": "ship-gate 毕业门槛 + `live_permission_status` / 成熟度提醒阈值（提醒，非自动 sizing 档）"
+        },
+        {
+          "number": 13,
+          "title": "周一跳空 `valid_entry_band` 带宽"
+        },
+        {
+          "number": 14,
+          "title": "打分标准化口径"
+        },
+        {
+          "number": 15,
+          "title": "未来事件窗口 + 各事件效应"
+        },
+        {
+          "number": 16,
+          "title": "`min_rr_gate`（突破型更高）"
+        },
+        {
+          "number": 17,
+          "title": "S-3 / offering recency / materiality"
+        },
+        {
+          "number": 18,
+          "title": "纸面成交成本（佣金/滑点/spread）"
+        },
+        {
+          "number": 19,
+          "title": "universe 上限 / 候选集大小 / FMP 调用预算"
+        },
+        {
+          "number": 20,
+          "title": "突破 tp ATR 倍数 k"
+        },
+        {
+          "number": 21,
+          "title": "`catalyst_recall_lane` 判据/数量"
+        },
+        {
+          "number": 22,
+          "title": "组合熔断阈值（连续止损/回撤）+ 各状态档"
+        },
+        {
+          "number": 23,
+          "title": "单票冷静期长度 + 恢复条件"
+        },
+        {
+          "number": 24,
+          "title": "去插针 ATR 倍数"
+        },
+        {
+          "number": 25,
+          "title": "全局现金分配排序权重"
+        },
+        {
+          "number": 26,
+          "title": "provider 健康检查阈值"
+        },
+        {
+          "number": 27,
+          "title": "`theme_opportunity` 强赛道试探仓封顶（防御1 / 进攻+极强2）+ 试探仓最小仓成本地板（安全倍数）"
+        },
+        {
+          "number": 28,
+          "title": "`scoring_profile` 比较档权重（theme_plus / theme_aggressive / theme_off 归因基准）+ 最低比较周数"
+        },
+        {
+          "number": 29,
+          "title": "动态席位比例（强赛道 8+7 / 无强赛道 12+3 的触发与配比）"
+        },
+        {
+          "number": 30,
+          "title": "赛道退场/衰减阈值（breadth / leader_rs 跌破线、persistence 重置）+ 状态转移防抖（降快升慢）"
+        },
+        {
+          "number": 31,
+          "title": "`macro_cluster` 定义 + `warning_level` 分档 + 集群暴露硬上限"
+        },
+        {
+          "number": 32,
+          "title": "`provisional_theme` 公式阈值（≥3 项、各字段判定线、薄来源降权、门内连续乘子窗口/映射、`persistence_mult` 门后地板 floor）"
+        },
+        {
+          "number": 33,
+          "title": "`breakout_mode` 参数（突破失效线、追价上限）"
+        },
+        {
+          "number": 34,
+          "title": "`active_scale_out_candidate`（主动减仓/移保本/ratchet 持仓管理；攒持仓管理数据再决定启用）"
+        },
+        {
+          "number": 35,
+          "title": "`multi_day_order_expiry_candidate`（多日 GTC 订单有效期；靠纸面成交数据决定启用）"
+        },
+        {
+          "number": 36,
+          "title": "过热分档阈值（`overextension_warning` 的 k1；`chasing_extreme` 的 k2/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）"
+        },
+        {
+          "number": 37,
+          "title": "强赛道周 Top6–15 额外完整分析名额数（1–2，按 `theme_leader_rs`；确认优先，严格筛选下可含 `provisional_active`、仅最小/试探仓的纳入门）"
+        },
+        {
+          "number": 38,
+          "title": "赛道热度正交残差合成系数 + `macro_cluster` 重复热度检查口径（方向已固定为规则：跨界主题→theme 基、纯 GICS→industry 基；macro_cluster 不硬扣、只去重+横幅）"
+        },
+        {
+          "number": 39,
+          "title": "`financial_trends` 财报质量趋势（候选、默认不启用；启用仅 advisory `risk_downgrade`、绝不设门/否决；指标口径借 A 股框架）"
+        }
+      ]
+    },
+    "item_count": {
+      "description": "Authoritative count of §13.1 items. The eval traverses the registry (dynamic); this pins the current authoritative N and must equal len(calibration_items).",
+      "const": 39
+    },
+    "default_reminder_thresholds": {
+      "description": "§13.2 默认提醒门槛 (prior) — byte-faithful {object, min_condition} rows, const-pinned.",
+      "const": [
+        {
+          "object": "scoring weight",
+          "min_condition": "≥12 周 forward 或 ≥30 有效样本"
+        },
+        {
+          "object": "price_engine",
+          "min_condition": "≥20 触发样本，覆盖 ≥2 种市场环境"
+        },
+        {
+          "object": "hard_veto candidate",
+          "min_condition": "≥10 次触发 + 人工复核"
+        },
+        {
+          "object": "provider fallback",
+          "min_condition": "≥8 次 + 口径一致性对比"
+        },
+        {
+          "object": "X/网络/LLM / 主题发现",
+          "min_condition": "≥12 周记录 + 市场数据交叉确认"
+        },
+        {
+          "object": "future_event / 熔断 / 冷静期 等",
+          "min_condition": "≥12 周 + 足量实例后复审效应"
+        },
+        {
+          "object": "赛道退场 / 集群上限 / 比较档权重",
+          "min_condition": "≥12 周 + 双向全口径净值（含亏损票）对比后再升硬约束"
+        }
+      ]
+    },
+    "governance_policy": {
+      "description": "§13 / §13.1 governing rules pinned as invariants (each traceable to a verbatim design phrase).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "numbering_stable_referenced_by_number",
+        "all_items_enrolled_in_reminder_mechanism",
+        "eval_traverses_all_items_dynamic_count",
+        "eval_runs_before_weekly_report_render",
+        "upgrade_requires_user_decision_never_auto_production"
+      ],
+      "properties": {
+        "numbering_stable_referenced_by_number": {
+          "const": true
+        },
+        "all_items_enrolled_in_reminder_mechanism": {
+          "const": true
+        },
+        "eval_traverses_all_items_dynamic_count": {
+          "const": true
+        },
+        "eval_runs_before_weekly_report_render": {
+          "const": true
+        },
+        "upgrade_requires_user_decision_never_auto_production": {
+          "const": true
+        }
+      }
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}

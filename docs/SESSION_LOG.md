@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 — Codex `审查 PASS`(US-short lifecycle-calibration governance)
+- **Verdict/Action**: PASS. Full current-tree review found the §13.1/§13.2 lifecycle-calibration governance schema/preset/test slice matches the design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed schema/preset/test + README/SESSION_LOG/design/risk; lifecycle schema 24 OK; doc-governance/route 38 OK; full discover 2966 OK via local Python; schema const==preset, design §13.1=39, §13.2=7 data rows, `§13 #N` refs=33 all valid; diff-check clean except CRLF warning; BOM/FFFD=0; no provider/business/live path in this slice.
+- **Next**: User may command `提交` for this slice; separate explicit command required for field_registry/remaining governance/provider/DataHub/live work.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 lifecycle-calibration governance schema §13.1 + §13.2 + §13 policy)
+
+**Worked on**: 新增 `us_short_lifecycle_calibration_governance` 治理契约——把 §13.1 待校准清单(39 条 stable-numbered)const-pin 成「提醒机制(`us_short_lifecycle_eval`)必遍历的权威 registry」+ §13.2 默认提醒门槛(7 行 prior)+ §13 治理 policy(5 旗标)。schema + preset(`_20260620`,与批1 同冻结戳)+ 24 测试。零代码行为、纯声明式契约(不跑 eval / 不选股 / 不取数 / 不交叉 A 股)。
+
+**Key decisions**: ① 选此切片为下一步的依据=**§13.1 是设计里被引用最密集的治理身份**(全文 33 处 `§13 #N`、#1–#38),且 §10 field_registry 每字段的 `lifecycle_item_id` 指回它 → **必须先冻结本 registry,field_registry 才能建**(契合「field_registry 留最后」)。② const-pin **进 schema 本身**(checklist §A point5):items/thresholds/policy 全 const,schema = 自足校验器,拒 same-shape drift(renumber / retitle / reorder / 增删 / count 错配 / 旗标翻转)。③ **从设计字节生成 schema+preset**(一次性生成器跑完即删,durable guard=三角测试在 test 时重抽):此举当场抓到 §13.2 表**实为 7 行**(我上次 Read 窗口只到第 5 行,差点漏钉第 6/7 行)——正是 checklist §A「枚举集全员一次覆盖」的价值。④ **杀手级不变式**(draft-07 表达不了、入测试):连续 1..39 无缺/重、item_count 一致、**全文每个 `§13 #N` 交叉引用必解析到真 item**(found≥30 false-positive 控)、**sibling `*_calibration_item_id` 必 ∈ registry**(scoring_profile #1/#28 + theme_lifecycle #30 自动收集 + anchor 断言)、policy provenance 短语在设计中存在。⑤ `item_count=39` 是**权威计数**、与「eval 不硬编码条数」不矛盾:policy 旗标 `eval_traverses_all_items_dynamic_count` 要求 eval 从 registry 派生遍历,literal 39 只是当前权威 N(eval 实现是未来切片)。
+
+**Verify**: 新测试 **24 OK**;full discover **2966 OK**(原 2942 +24,**零回归**);sibling 完整性=全仓仅 scoring_profile+theme_lifecycle 带 `*_calibration_item_id`(我的 SIBLING_PRESETS 全覆盖);BOM=0(三文件头非 EF BB BF);`git diff --check` clean;README 路由行已补;一次性生成器已删。未跑 provider/网络。
+
+**Next**: Codex `审查` 本 lifecycle-calibration 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后,消费本 registry 的 `lifecycle_item_id`)** + 其余结构治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类非实例)**:枚举集=§13.1 39 条 + §13.2 7 行 + 5 policy 旗标,全部经**字节生成全员一次覆盖**(非手抄被看到的几条;当场补回差点漏的 §13.2 第 6/7 行);const-pin 落 schema 本身(point5)、非只测试;负向用例覆盖整类 drift(增/删/renumber/retitle/reorder/count/threshold/policy-flip/unknown-key)。**B(连带 grep)**:全仓 `calibration_item_id` → 仅 2 sibling preset+其 schema 引用,已纳入交叉校验;无符号重命名;README route 行补齐;无 doc 声称「§13.1 未 schema 化」需翻新。**C(反向失败)**:cross-ref 正则只匹配 `§13(.1)? #N`、不误伤 §13.2;sibling guard 用 anchor 防「静默改名丢字段」漏报;item_count 钉死防「加项不更新计数」。**D**:N-A(无歧义 NL 分类)。**E(route 单态)**:README 仅加 1 行陈述当前机制、无 transient gate 进 CURRENT;handoff 入 SESSION_LOG。**F(pre-flight)**:UTF-8 无 BOM、无 mojibake、diff-check clean、jsonschema draft7 校验过、as_of/version 格式 OK、生成器无 generator 双消费类 footgun。Tests passing ≠ closure。
+
 ## 2026-06-20 — Codex `审查 PASS`(draft-handoff proof guard re-review)
 - **Verdict/Action**: PASS. Full current-tree review found `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` closed and no new material Required in this docs/test-only proof-guard slice.
 - **Required**: None new. `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-LABEL-FALSE-NEGATIVE` and `R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP` remain resolved in `docs/system_risk_register.md`.
