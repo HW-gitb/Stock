@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short sizing-stack governance)
+- **Verdict/Action**: PASS. Full current-tree review found the section 8 sizing-stack governance schema/preset/test slice matches the live US-short design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed schema, preset, tests, README, SESSION_LOG, risk register, and design section 8/13/18 anchors. Target 127 OK; full discover 3110 OK via local Python; mutation probes reject pipeline, risk-discount, min-cap, floor, environment-source, and calibration-id drifts; diff-check has only CRLF warning; BOM/FFFD=0; no provider/runtime path.
+- **Next**: User may command `提交` for this slice; field_registry and remaining section 8 sub-slices (macro_cluster, symbol_cooldown, cash_allocation, ship-gate sizing) still require separate authorization and review.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 sizing-stack governance schema §8 削减叠法)
+
+**Worked on**: 新增 `us_short_sizing_stack_governance` 治理契约——把 §8 削减叠法仓位算法骨架 const-pin:① 有序 5 步管线(底仓股数 → ×环境乘数[market_risk_regime] → ×风险折扣 → min(上限) → <最小→观察)② 风险折扣因子集(数据降级/主题拥挤/集群超集中/财报前,字节抽取)+ **安全不变式「取最狠的一个、不连乘」**(take_harshest_single + no_compounding)③ min() 6 上限集(单票/剩余总仓/剩余主题容量/流动性/可用现金/全局现金分配额,字节抽取)④ below_min→观察 floor。cap 值→§13 #4。schema + preset + 26 测试。纯声明式。
+
+**Key decisions**: ① 选此切片依据=§8 仓位算法**骨架/整合层**(把 regime 环境乘数、各风险折扣、各上限整合);全可枚举、设计硬锁。② **关键安全不变式 = 「不连乘」**:风险折扣只取最狠单项、绝不相乘(否则票被双/三重缩仓或错配),negative 测 `no_compounding` 翻转被拒。③ 紧 scope:仅 削减叠法(macro_cluster/symbol_cooldown/cash_allocation/ship-gate sizing 留各自后续 §8 子片)。④ 字节抽取 ③ 因子(全角 `（…——…）` 取 —— 前)+ ④ 上限(半角 `(…)`);5 步用语义 token + provenance 9 phrase 兜底。⑤ `environment_multiplier_source=market_risk_regime` 对接 regime governance(cross-check regime preset 有 caps);`cap_value_calibration_item_id:4`=第 6 个 lifecycle 消费者(glob 自动纳入)。
+
+**Verify**: 新测试 **26 OK**;lifecycle glob 仍 24 OK(纳入 #4);dup 检查无别处 pin;BOM=0;diff-check clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 sizing-stack 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后)** + §8 其余子片(macro_cluster #31 / symbol_cooldown #23 / cash_allocation #25 / ship-gate sizing;顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:5 步管线 + 4 因子 + 6 上限全 const-pin 进 schema、字节抽取全员覆盖;负向覆盖整类 drift(reorder/drop/op/factor/cap/policy)。**B(连带)**:pipeline/factors/caps 无别处 pin(无 dup);#4 载体被 lifecycle glob 自动纳入(仍绿);environment source 对接 regime preset 已 cross-check;README 同步。**C(反向)**:`no_compounding` 翻转被拒(防连乘超缩)、pipeline reorder 被拒、min cap 丢失被拒、below_min floor 移除被拒。**D**:N-A。**E**:README 加 1 行、scope 边界明示、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、9 provenance 生成时已 assert、③全角/④半角括号分别锚定。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short portfolio-guard governance)
 - **Verdict/Action**: PASS. Full current-tree review found the section 8 `portfolio_guard` governance schema/preset/test slice matches the live US-short design authority and has no material Required.
 - **Required**: None new.

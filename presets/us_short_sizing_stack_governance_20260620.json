@@ -1,0 +1,56 @@
+{
+  "schema_name": "us_short_sizing_stack_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "sizing_pipeline": [
+    {
+      "step": 1,
+      "op": "base_shares"
+    },
+    {
+      "step": 2,
+      "op": "multiply_environment_multiplier"
+    },
+    {
+      "step": 3,
+      "op": "multiply_risk_discount"
+    },
+    {
+      "step": 4,
+      "op": "min_of_caps"
+    },
+    {
+      "step": 5,
+      "op": "below_min_to_observe"
+    }
+  ],
+  "risk_discount_factors": [
+    "数据降级",
+    "主题拥挤",
+    "集群超集中",
+    "财报前"
+  ],
+  "risk_discount_policy": {
+    "take_harshest_single": true,
+    "no_compounding": true
+  },
+  "min_caps": [
+    "单票上限",
+    "剩余总仓",
+    "剩余主题容量",
+    "流动性上限",
+    "可用现金",
+    "全局现金分配额"
+  ],
+  "below_min_executable_to_observe": true,
+  "environment_multiplier_source": "market_risk_regime",
+  "cap_value_calibration_item_id": 4,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (削减叠法 line)",
+    "anti_compounding_intent": "取最狠的一个、不连乘 — risk discounts are NOT multiplied together; only the single harshest applies, so a stock isn't double/triple-shrunk",
+    "min_floor_intent": "below minimum executable size → observe (never place a sub-minimum order)",
+    "cap_values_are_forward": "单票 10% / 总仓 60% / 同主题 30% / 单笔风险 0.75% etc. = §13.1 #4 prior, not pinned",
+    "scope": "削减叠法 pipeline only; macro_cluster (#31) / symbol_cooldown (#23) / cash_allocation (#25) / ship-gate sizing = separate §8 slices"
+  }
+}

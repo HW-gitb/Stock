@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_sizing_stack_governance",
+  "title": "US-short §8 削减叠法 (position sizing reduction stack) governance — const-pins the ordered 5-step pipeline + the take-harshest-not-compound risk-discount rule + the min() cap set + the below-min→observe floor",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 削减叠法 sizing pipeline so a future batch-2 sizing engine cannot reorder the steps, compound risk discounts, drop a cap from the min(), or skip the below-minimum→observe floor. Pins: the 5-step order (base shares → × environment multiplier [market_risk_regime] → × risk discount → min(caps) → below-min→observe); the risk-discount factor set (数据降级/主题拥挤/集群超集中/财报前) with the SAFETY rule take-harshest-single + NO compounding (取最狠的一个、不连乘); the min() cap set (单票上限/剩余总仓/剩余主题容量/流动性上限/可用现金/全局现金分配额); and below_min_executable→observe. Cap VALUES (单票 10% / 总仓 60% / 同主题 30% / 单笔风险 0.75% etc.) are forward priors routed to §13.1 #4, not pinned. draft-07 cannot express: byte-faithfulness of factors/caps to §8, provenance of each mechanic, and cap_value_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "sizing_pipeline",
+    "risk_discount_factors",
+    "risk_discount_policy",
+    "min_caps",
+    "below_min_executable_to_observe",
+    "environment_multiplier_source",
+    "cap_value_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_sizing_stack_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sizing_pipeline": {
+      "description": "§8 削减叠法 ①-⑤ ordered steps; ORDER is design-locked (a must-stop floor at the end).",
+      "const": [
+        {
+          "step": 1,
+          "op": "base_shares"
+        },
+        {
+          "step": 2,
+          "op": "multiply_environment_multiplier"
+        },
+        {
+          "step": 3,
+          "op": "multiply_risk_discount"
+        },
+        {
+          "step": 4,
+          "op": "min_of_caps"
+        },
+        {
+          "step": 5,
+          "op": "below_min_to_observe"
+        }
+      ]
+    },
+    "risk_discount_factors": {
+      "description": "§8 step ③ risk-discount factor set, byte-faithful (取最狠的一个、不连乘 applies across these).",
+      "const": [
+        "数据降级",
+        "主题拥挤",
+        "集群超集中",
+        "财报前"
+      ]
+    },
+    "risk_discount_policy": {
+      "description": "§8 step ③ SAFETY rule — take the single harshest discount, never compound them.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "take_harshest_single",
+        "no_compounding"
+      ],
+      "properties": {
+        "take_harshest_single": {
+          "const": true
+        },
+        "no_compounding": {
+          "const": true
+        }
+      }
+    },
+    "min_caps": {
+      "description": "§8 step ④ min() cap set, byte-faithful — the sized shares must be ≤ the minimum of all of these.",
+      "const": [
+        "单票上限",
+        "剩余总仓",
+        "剩余主题容量",
+        "流动性上限",
+        "可用现金",
+        "全局现金分配额"
+      ]
+    },
+    "below_min_executable_to_observe": {
+      "description": "§8 step ⑤ — below minimum executable size ⟹ downgrade to observe (no sub-minimum order).",
+      "const": true
+    },
+    "environment_multiplier_source": {
+      "description": "§8 step ② environment multiplier source = market_risk_regime (us_short_regime_governance caps).",
+      "const": "market_risk_regime"
+    },
+    "cap_value_calibration_item_id": {
+      "description": "§8 cap VALUES (单笔/单票/总仓/同主题/环境乘数 + 财报前窗口) = prior → §13.1 #4.",
+      "const": 4
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}
