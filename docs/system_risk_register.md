@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP - US-short cash allocator can fund malformed-rank or non-buildable rows
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` ×2 2026-06-21; round-1 repair fixed rank-domain but used an English deny-list).
+- Status: **resolved** (committed `b79073e3`, Codex re-`审查 PASS` 2026-06-21). Was open P1 (Codex `审查 FAIL` ×2 2026-06-21; round-1 repair fixed rank-domain but used an English deny-list).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 tenth slice (`engine/us_short_cash_allocation.py`, `engine/us_short_ship_gate_sizing.py`, their two tests, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Current technical finding:
