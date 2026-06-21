@@ -1,0 +1,42 @@
+{
+  "schema_name": "us_short_exclusion_summary_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "exclusion_categories": [
+    "流动性",
+    "价格市值",
+    "停牌退市破产",
+    "增发SEC",
+    "数据unknown",
+    "事件unknown",
+    "数据源失败",
+    "分不够"
+  ],
+  "covers_passes": [
+    "pass1_eligibility",
+    "pass2_audit_gate"
+  ],
+  "purpose": "prevent_mistaken_kills_and_check_overconservatism",
+  "privacy": {
+    "real_holding_exclusion_private": true,
+    "public_universe_count_trackable": true
+  },
+  "hot_excluded": {
+    "enabled": true,
+    "criteria": "theme_heat_score_at_percentile_but_dropped_at_safety_liquidity_data_gate",
+    "purpose": "find_mistaken_kills_only",
+    "never_rescue_hard_veto": true,
+    "never_change_admission": true,
+    "holding_rows_private": true,
+    "public_universe_heat_count_trackable": true,
+    "feeds_section13_review": true
+  },
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §11.4",
+    "hot_excluded_audit_only": "绝不救回 hard veto / 不改准入 — hot_excluded is a visibility audit only, never an admission/veto override",
+    "privacy_split": "real-holding exclusions → private path; pure public-universe counts → tracked (mirrors A-share overlay dropped_at_l0_l5)",
+    "feeds_review": "喂 §13 复审赛道权重(#1)/安全闸阈值(#2); the percentile threshold itself is forward, not pinned",
+    "is_weekly_report_section": "exclusion_summary is the §11.2 weekly_report 本周剔除摘要 section"
+  }
+}

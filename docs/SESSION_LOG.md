@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short exclusion-summary governance re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` closed; no new material Required in this US-short §11.4 governance slice.
+- **Required**: None new. `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design §11.2/§11.4/§13.1. Target 81 OK; probe rejects drift for all 8 `hot_excluded` consts. Full discover attempted: 3228 ran / 17 A-share env/provider errors (`requests`/`tushare`/`pro=None`), so no whole-repo clean-test claim. `git diff --check` only CRLF warnings; no provider/runtime path.
+- **Next**: User may command `提交`; field_registry, renderer, provider, DataHub, live, and batch-2/3 runtime work remain separate authorization/review items.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP)
+- **Verdict/Action**: 判定成立、接受。同 ship-gate 枚举集覆盖类、但在**嵌套 hot_excluded 对象**:8 个 required const 只 guard 了 3(rescue/admission/holding),漏 enabled/criteria/public_universe_heat_count_trackable/feeds_section13_review。讽刺:上片刚加的 class loop 只用在 ship-gate 顶层布尔、没转移到本片嵌套对象。test-only 修复:加 `test_hot_excluded_const_contract_fully_guarded`(读 required、断言 key 集==preset==恰 8 字段、逐个 schema const==preset + drift 拒)。完整见 register。
+- **Required**: `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: exclusion-summary 18→**19 OK**;loop 实测 8 个 hot_excluded const drift 全拒 + schema==preset;补了 test_schema_const_equals_preset 漏的 nested const;README 加 class guard 说明(grep 验);doc-governance 24 OK;BOM=0;diff-check clean。full discover 见下条 closeout。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:loop 覆盖全 8 个 hot_excluded const(schema==preset + anchor 集防 silent shrink),根治嵌套对象漏 member。**B(连带)**:README class-guard 说明已补(grep 验);schema/preset 未动;既有 rescue/admission/holding 负向保留。**C(反向)**:enabled/criteria/feeds/heat-count drift 全拒。**D**:N-A。**E**:register 单态(flip+Resolution)。**F**:无 BOM、diff-check clean、doc-governance 24 OK。**教训**:class loop 要对每个 schema 每层(顶层+嵌套对象)都套——下片 field_registry 起手即套嵌套 const。
+
+## 2026-06-21 - Codex `review FAIL` (US-short exclusion-summary governance)
+- **Verdict/Action**: FAIL. Full current-tree review found the §11.4 exclusion-summary contract currently pins `hot_excluded`, but its adversarial tests do not guard the audit presence / criteria class.
+- **Required**: `R-USSHORT-EXCLUSION-SUMMARY-HOT-EXCLUDED-AUDIT-GUARD-GAP` - full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design §11.2/§11.4/§13.1. Target 80 OK on bundled Python; probe shows `hot_excluded` has 8 required consts, while tests mention 0 of `enabled` / `criteria` / `public_universe_heat_count_trackable` / `feeds_section13_review`. Full discover attempted: 3227 ran / 17 errors from A-share env/provider deps (`requests`/`tushare`/`pro=None`), not a clean PASS; no provider/runtime path in this slice.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit or start field_registry / renderer / provider / DataHub / live work.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 exclusion-summary governance schema §11.4)
+
+**Worked on**: 新增 `us_short_exclusion_summary_governance` 治理契约——把 §11.4 exclusion_summary const-pin:① 8 类剔除分类(流动性/价格市值/停牌退市破产/增发SEC/数据unknown/事件unknown/数据源失败/分不够,字节抽取)② 两遍覆盖(Pass-1 资格 + Pass-2 审计闸)③ 隐私拆分(真实持仓被剔→私密、公开 universe 计数→tracked)④ **hot_excluded 高热度被剔除审计**(theme_heat 达分位却在安全/流动/数据 gate 出局,**只发现误杀、绝不救回 hard veto、不改准入**、持仓私密、喂 §13 复审)。schema + preset + 18 测试。纯声明式。
+
+**Key decisions**: ① 选此切片=field_registry 前剩余的自足治理面(§11.5 coverage vocab 已在 action_table、不另起)。② **hot_excluded 是审计非准入**:绝不救回 hard veto / 不改准入,negative 测两条翻转全拒(防未来把热度审计变准入后门)。③ 隐私:真实持仓被剔须私密,negative 测翻转被拒(防泄持仓)。④ 字节抽取 8 分类;交叉校验 exclusion_summary ∈ weekly_report §11.2 section 集。⑤ 无 calibration_item_id(本身是审计面、非校准参数;hot_excluded 分位阈值 forward 不钉)。⑥ weekly_report banner ⑤ `hot_excluded_notice` 是互补元素(surface 本面)、非 dup。
+
+**Verify**: 新测试 **18 OK**;exclusion_summary ∈ weekly_report sections(交叉验);dup 检查=weekly_report 命中是 banner ⑤ 互补元素非重复权威;BOM=0;diff-check clean;README 路由行已补(**先 grep 确认含 hot_excluded 再写**);生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 exclusion-summary 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后,消费全部输出面+治理+lifecycle_item_id)** —— 应为批1 最后一片(§11.5 coverage vocab 已在 action_table)。顺序我自决。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:8 分类/两遍/隐私/hot_excluded 全 const-pin、字节抽取全员覆盖;负向覆盖整类 drift(category/passes/privacy/hot_excluded 两安全规则)。**B(连带)**:exclusion 块无别处 pin(weekly_report 命中=banner 互补);exclusion_summary ∈ weekly_report section 交叉验;README 改后 grep 确认含 hot_excluded 再写(overclaim 教训续)。**C(反向)**:hot_excluded 救回 hard veto 被拒、改准入被拒、持仓公开被拒、真实持仓剔曝光被拒——审计非后门、隐私不泄。**D**:N-A。**E**:README 加 1 行、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、8 provenance 生成时已 assert。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short ship-gate sizing governance re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP` closed; no new material Required.
 - **Required**: None new. The prior Required remains resolved in `docs/system_risk_register.md`.
