@@ -1,0 +1,112 @@
+{
+  "schema_name": "us_short_action_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "final_action_price_map": [
+    {
+      "final_action": "建仓",
+      "price_target": "entry",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "加仓",
+      "price_target": "entry",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "减仓",
+      "price_target": "take_profit_reduce_price",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "清仓-止损",
+      "price_target": "stop_clear_price",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "清仓-止盈",
+      "price_target": "take_profit_exit_price",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "清仓-事件",
+      "price_target": "event_clear_reference_price",
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "持有",
+      "price_target": null,
+      "carries_observe_reason": false
+    },
+    {
+      "final_action": "观察",
+      "price_target": null,
+      "carries_observe_reason": true
+    },
+    {
+      "final_action": "否决/避开",
+      "price_target": null,
+      "carries_observe_reason": false
+    }
+  ],
+  "holding_exit_price_fields": [
+    {
+      "field": "stop_clear_price",
+      "meaning": "止损清仓价"
+    },
+    {
+      "field": "take_profit_reduce_price",
+      "meaning": "盈一减仓价"
+    },
+    {
+      "field": "take_profit_exit_price",
+      "meaning": "盈二/跟踪止盈价"
+    },
+    {
+      "field": "event_clear_reference_price",
+      "meaning": "事件硬风险清仓参考价，标\"人工执行、非技术价\""
+    }
+  ],
+  "action_rank_skeleton": [
+    {
+      "group": 1,
+      "label": "持仓强制减/清（触发止损或 position veto）"
+    },
+    {
+      "group": 2,
+      "label": "可建仓新机会（过闸+可操作+触发/临近，按选股排名）"
+    },
+    {
+      "group": 3,
+      "label": "加仓"
+    },
+    {
+      "group": 4,
+      "label": "持有/观察"
+    },
+    {
+      "group": 5,
+      "label": "否决/放弃"
+    }
+  ],
+  "observe_reason_types": [
+    "signal_not_ready",
+    "price_not_executable",
+    "cash_or_account_missing",
+    "risk_cooldown",
+    "data_restricted",
+    "event_window",
+    "cost_inefficient_min_size"
+  ],
+  "action_rank_policy": {
+    "grouping_not_weighting": true,
+    "survival_first": true
+  },
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §9 (+ §6.1 price fields)",
+    "no_state_price_decoupling": "§9 locks final_action ↔ price one-to-one; a wrong action→price pairing is the drift this contract rejects",
+    "entry_marker": "建仓/加仓 price_target='entry' = the entry-price complex (pullback_entry_price/breakout_entry_price/limit_order_price per order_type/price_sub_mode), not a single column",
+    "grouping_not_weighting": "§9 uses 5 groups not a weighted score, so a must-stop holding can never rank below a new buy"
+  }
+}

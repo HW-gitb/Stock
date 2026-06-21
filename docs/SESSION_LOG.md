@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 — Codex `审查 PASS`(US-short action-layer governance)
+- **Verdict/Action**: PASS. Full current-tree review found the §9/§6.1 action-layer governance schema/preset/test slice matches the live US-short design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed `schemas/us_short_action_governance.schema.json`, `presets/us_short_action_governance_20260620.json`, `tests/schema/test_us_short_action_governance_schema.py`, `docs/README.md`, `docs/SESSION_LOG.md`, `docs/us_short_system_design.md`, the action_table contract, and the US-short converter action vocab. Target schema/doc set 117 OK; full discover 3017 OK via local Python; independent mutation probes reject wrong action→price pairing, observe-flag flip, rank-group reorder, and observe-reason drift; `git diff --check` had only CRLF normalization warnings; BOM/FFFD=0; no provider/broker/DataHub/runtime path in the reviewed slice.
+- **Next**: User may command `提交` for this slice; field_registry and remaining US-short governance/provider/DataHub/live work still require separate explicit authorization and review.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 action-layer governance schema §9 + §6.1)
+
+**Worked on**: 新增 `us_short_action_governance` 治理契约——把 §9 操作层 const-pin:① **final_action→price 一一对应映射**(设计显式锁「避免状态/价位脱钩」:建仓/加仓→entry、减仓→take_profit_reduce_price、清仓-止损→stop_clear_price、清仓-止盈→take_profit_exit_price、清仓-事件→event_clear_reference_price、持有/否决-避开→none、观察→none+carries observe_reason)② §6.1 holding-exit 4 价位字段+含义 ③ §9 保命优先 5 组 action_rank 骨架(顺序 const)④ §9 observe_reason_type 7 值。schema + preset + 29 测试。纯声明式(不排名/不定价/不选股/不交叉 A 股)。
+
+**Key decisions**: ① 选此切片依据=**设计唯一显式点名的脱钩风险**(「避免状态/价位脱钩」),且目前完全未捕获——action_table 只分别钉了动作词表和价格列、没钉**对应关系**,错配(减仓→stop_clear_price)会绕过所有现有 schema。② const-pin 进 schema(§A point5),负向用例含**核心脱钩 drift**(减仓 误指 stop_clear_price 被拒)+ reorder/增删/observe-flag 翻转/骨架 reorder/label drift/policy flip。③ 字节生成(生成器跑完即删,三角在 test 时重抽):解析 §9 line245(8 段→9 动作,处理「建仓/加仓 共享 entry」「否决/避开 内含斜杠」)+ line247(①-⑤ split)+ line249(单 backtick span split)+ §6.1 line202(field（meaning）)。④ **三重交叉校验**:final_action == action_table.final_action(同序)== converter `TRADE_ACTIONS`(集合);卖出 price_target == 4 个 §6.1 holding 字段 ⊆ action_table 列;observe_reason == action_table;仅 观察 carries_observe_reason。⑤ `entry` 是标记(=pullback/breakout/limit entry 复合,非单列)、不对单列交叉校验,notes 说明。
+
+**Verify**: 新测试 **29 OK**;lifecycle glob 仍 **24 OK**(新 governance preset 现匹配 `us_short_*_governance_*.json` glob 但无 calibration id→贡献 0,证明 glob 对无-id governance preset 鲁棒);dup 检查=映射/骨架/字段块无别处 pin;BOM=0;`git diff --check` clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 action-layer 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后,消费 action/price 字段 + operation_impact + lifecycle_item_id)** + §7 两轴 regime / §8 portfolio_guard 等结构治理(顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类非实例)**:枚举集=9 动作映射 + 4 价位字段 + 5 骨架组 + 7 observe,全经字节生成全员覆盖、const-pin 落 schema;负向用例覆盖整类 drift(尤其脱钩 pairing)。**B(连带 grep)**:全仓三块 const 无别处 pin(无 dup);新 preset 匹配 lifecycle glob 已验仍绿;无符号重命名;README route 补齐;只读 import action_table/converter 无改动。**C(反向失败)**:脱钩拒绝测试验真;`entry` 标记不被误当单列;const 拒「卖出动作配错价位/observe flag 错挂」反向。**D**:N-A。**E**:README 加 1 行、无 transient gate 进 CURRENT;handoff 入 SESSION_LOG。**F**:UTF-8 无 BOM、无 mojibake(控制台 GBK 显示乱码已核实文件 UTF-8 正确)、diff-check clean、draft7 校验过、as_of/version 格式 OK、解析器无 generator 双消费 footgun。Tests passing ≠ closure。
+
 ## 2026-06-21 — Codex `审查 PASS`(US-short hard-veto governance)
 - **Verdict/Action**: PASS. Full current-tree review found the §5 hard-veto governance schema/preset/test slice and lifecycle sibling-glob ripple match the live US-short design authority, with no material Required.
 - **Required**: None new.
