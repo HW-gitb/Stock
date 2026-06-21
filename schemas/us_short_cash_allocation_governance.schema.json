@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_cash_allocation_governance",
+  "title": "US-short §8 全局现金分配 (global cash allocation) governance — const-pins the field set, the ordering keys, the conservative valid_entry_high basis, sequential allocation, and the insufficient-cash→observe floor",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 global cash allocation: buildable tickers are ordered by 排名/置信/RR/流动性, occupied cash is computed at the MOST CONSERVATIVE valid_entry_high, allocated sequentially, and a ticker that runs out of cash is downgraded to observe (never over-allocated). The 5 cash_allocation fields are pinned; cash_allocation_status is cross-checked against the action_table column set. Ordering WEIGHTS are forward priors routed to §13.1 #25, not pinned. draft-07 cannot express: field/ordering byte-faithfulness, provenance in §8, cash_allocation_status ∈ action_table, and ordering_weight_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "allocation_scope",
+    "cash_allocation_fields",
+    "ordering_keys",
+    "conservative_entry_basis",
+    "sequential_allocation",
+    "insufficient_cash_to_observe",
+    "ordering_weight_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_cash_allocation_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "allocation_scope": {
+      "description": "§8 input-scope precondition — allocation applies ONLY to 可建仓票 (buildable tickers); it never allocates cash to / rescues non-buildable rows (hold/observe/veto).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["scope", "only_buildable_tickers", "never_rescue_non_buildable"],
+      "properties": {
+        "scope": {"const": "buildable_only"},
+        "only_buildable_tickers": {"const": true},
+        "never_rescue_non_buildable": {"const": true}
+      }
+    },
+    "cash_allocation_fields": {
+      "description": "§8 cash allocation field set, byte-faithful.",
+      "const": [
+        "cash_allocation_rank",
+        "cash_required_at_entry_high",
+        "allocated_model_shares",
+        "remaining_cash_after",
+        "cash_allocation_status"
+      ]
+    },
+    "ordering_keys": {
+      "description": "§8 allocation ordering keys (buildable tickers ranked by these), byte-faithful.",
+      "const": [
+        "排名",
+        "置信",
+        "RR",
+        "流动性"
+      ]
+    },
+    "conservative_entry_basis": {
+      "description": "§8 occupied cash computed at the MOST CONSERVATIVE valid_entry_high.",
+      "const": "valid_entry_high"
+    },
+    "sequential_allocation": {
+      "description": "§8 依次分配 — cash is allocated sequentially down the order.",
+      "const": true
+    },
+    "insufficient_cash_to_observe": {
+      "description": "§8 轮到现金不够 → 降观察 — a ticker that runs out of cash is downgraded to observe, never over-allocated.",
+      "const": true
+    },
+    "ordering_weight_calibration_item_id": {
+      "description": "§8 排序权重 = prior → §13.1 #25 (全局现金分配排序权重).",
+      "const": 25
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_name": "us_short_cash_allocation_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "allocation_scope": {
+    "scope": "buildable_only",
+    "only_buildable_tickers": true,
+    "never_rescue_non_buildable": true
+  },
+  "cash_allocation_fields": [
+    "cash_allocation_rank",
+    "cash_required_at_entry_high",
+    "allocated_model_shares",
+    "remaining_cash_after",
+    "cash_allocation_status"
+  ],
+  "ordering_keys": [
+    "排名",
+    "置信",
+    "RR",
+    "流动性"
+  ],
+  "conservative_entry_basis": "valid_entry_high",
+  "sequential_allocation": true,
+  "insufficient_cash_to_observe": true,
+  "ordering_weight_calibration_item_id": 25,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (全局现金分配 line)",
+    "buildable_only_scope": "§8 可建仓票 — allocation ranks/allocates only buildable tickers; non-buildable rows (hold/observe/veto) are never allocated cash or rescued",
+    "conservative_basis": "occupied cash uses the most conservative valid_entry_high so allocation never under-reserves",
+    "no_over_allocation": "轮到现金不够 → 降观察 — never place an order the remaining cash cannot cover",
+    "fields_not_all_in_action_table": "only cash_allocation_status is an action_table column; rank/required/allocated/remaining are machine-layer fields",
+    "weights_are_forward": "ordering weights = §13.1 #25 prior, not pinned"
+  }
+}
