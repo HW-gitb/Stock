@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 industry-theme orthogonalization repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` is closed in the current working tree; no new material Required found in this repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: theme-orthogonalize 12 OK; `*us_short*` 652 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes: perfect overlap -> `[0,0,0,0]`; `min_paired=2` -> `[50,100]`.
+- **Next**: User may command `提交`; 35%-block assembly, sizing, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP)
+- **Verdict/Action**: 两点判定成立、接受。① 语义 bug + **测试锁错**:完美重叠残差全 0→percentile `≤` 映成全 100(最高 boost),设计是「重叠只计一次→应 0」;我测试还把 all-100 锁成「正确」(自审 C 反向失败:断言了代码产物而非设计意图)。修:OLS 后残差零离散(`_variance<1e-9`)→ 非 boost 0;真离群路径不变(仍 percentile、离群仍 100)。② min_paired 硬底 3:`_safe_min_paired` 要求 ≥MIN_PAIRED(2 点必完美拟合无意义),int 2 也退默认;可上调校准。+ 改/加 4 测试。
+- **Required**: `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: orthogonalize 12 OK;tests/ 652 + tests/schema 408 OK(零回归,本机 deps-complete);探针 完美重叠→[0,0,0,0]、min_paired=2→[50,100] 退化;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F。A(类):perfect-fit 非 boost + min_paired 底/上调/2点不回归全覆盖。**C 教训(重)**:测试断言要对**设计意图**(重叠只计一次→0)、非代码恰好产物——本次自审 C 漏在此、被 Codex 抓。B:仅改 1 引擎 1 测试,README/起草仍准;无下游消费者。D:N-A。E:register 单态。F:残差零离散守、min_paired 不变式守、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 industry-theme orthogonalization)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` is open; perfect industry/theme overlap emits max orthogonal residual instead of a non-boosting residual.
+- **Required**: `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` - full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: theme-orthogonalize 10 OK; `*us_short*` 650 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes reproduced perfect-overlap `[100,100,100,100]` and `min_paired=2` bypass.
+- **Next**: Claude Code `修复` this Required only; do not start 35%-block assembly, sizing, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第七刀 — §4.3 industry⊥theme 横截面正交去重)
+
+**Worked on**: 批2 第七刀,§4.3 防双重计数。`engine/us_short_theme_orthogonalize.py`:`orthogonalize_industry_on_theme` —— 横截面回归 industry_heat on theme_heat → 残差 → 百分位归一 0-100(industry/theme 热度重叠只计一次),纯 Python OLS+percentile、镜像 A-short overlay;degenerate(<min_paired 双值行 / theme 零方差)→ industry 百分位退化;返回与 pool 对齐 list(industry 缺→None)。**只产正交 industry 残差**;方向合成(theme/industry 谁为基 + residual_coef §13#38)是独立装配步、不在本刀。+ README 路由行。
+
+**Key decisions**: ① 35% 块方向合成不在本刀(独立装配)——本刀只产 industry 正交残差,§4.2 core_score 块装配消费。② **整类输入校验前置(含 default 参数,接 neutral_block 教训)**:pool 行值 strict `_finite_number`、非 list pool/非 dict 行→空、坏 `min_paired`→默认;grep `_finite(`=0 自检。③ 镜像 A-short:regression 案只给双值行残差(industry-only 行→None);degenerate 退 industry 百分位。④ MIN_PAIRED=3 镜像 A-short(<3 不回归);残差系数/合成方向 = §13#38 后续。
+
+**Verify**: 新测试 **10 OK**(正交:未被 theme 解释的 industry→最高残差百分位、完美解释→全 100 无正交信号、<3 双值退化、零方差退化;对齐:industry 缺→None、industry-only→None、空 pool;坏输入:非 list→空、非 dict/坏值行→None、**坏 min_paired→默认**)。**零 us_short 回归**:tests/ 650 + tests/schema 408 OK(本机 deps-complete);grep `_finite(`=0。BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第七刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续批2:35% 块方向合成(theme/industry base + residual_coef)、§8 sizing(分多刀:风险定仓/削减叠法/成本地板 P0/macro_cluster/冷静期/熔断/现金)、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F。A(类):正交/退化/对齐/坏输入全覆盖,**含 min_paired default 参数**(neutral_block 教训:default 参数也审),grep `_finite(`=0。B:纯新增、无重命名、无下游消费者,README 1 行(明标方向合成不在本刀防误读 scope)。C(反向):degenerate 退化、坏值→None、坏 min_paired→默认、industry-only→None。D:N-A。E:README 1 行、无 transient gate 进 CURRENT。F:strict `_finite_number` 贯穿(grep 验)、OLS sxx>0 守、percentile 空→空、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 core_score repair re-review)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP` is closed in the current working tree; no new material Required found in this batch2 sixth-slice repair scope.
