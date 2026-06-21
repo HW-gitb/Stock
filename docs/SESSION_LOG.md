@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 position sizing repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: target position-sizing 24 OK; `*us_short*` discover 756 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; `diff --check` clean except CRLF warnings. Probes confirmed non-positive prices -> 0, malformed / empty cap containers -> observe 0, malformed discount containers -> 0, empty discount list -> no reduction, valid formula/caps still work. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; cost-floor P0, theme_probe seats, defensive-entry mode, 35%-block assembly, action_rank, batch3 renderer/validator, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP)
+- **Verdict/Action**: 三点全成立、接受。同款 whole-class fail-closed,这次在**容器/域层**:校了元素、漏了①价格正性域 ②cap_shares/discount_mults **非 list 容器**落宽松默认(= slice-6 neutral_block / slice-8 window 同款)。修:① `risk_based_base_shares` 要 entry/stop 为正价且 entry>stop(entry=0/stop=-1、entry=1/stop=0→0);② `reduction_stack` 非list/空 cap_shares→observe 0(仓位必有 cap、旧码跳过全 cap 出满仓);③ `harshest_risk_discount` 区分显式空 list→1.0 vs 非 list 容器→0.0(最狠)。+5 测试、修一过时断言。完整见 register Resolution。
+- **Required**: `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: position_sizing 24 OK;全 us_short 套件 348 OK(零回归,本机 deps-complete);探针 非正价(entry=0/-1、stop=0)→0、非list/空 cap→observe、非list discount→0 shares、空 discount list→满仓正控;grep `_finite(`=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交并执行下一步`。
+- **Pre-Codex self-review**: A-F。**容器层教训(复发·记牢)**:whole-class 不只校元素,**非 list/空容器 + 域(价格正性)也必 fail-closed**,别落 lenient 默认(neutral_block/window/今 cap+discount 同款)。A(类):非正价(entry>stop 仍)/坏cap容器(None/串/int/bool/dict/空)/坏discount容器 + 空list正控全覆盖。B:仅改 1 引擎 1 测试 + docstring;无下游消费者;grep `_finite(`=0。C(反向):坏→0/observe 非放大、显式空≠坏容器,测**设计意图**。D:N-A。E:register 单态。F:正价域 + 容器 fail-closed、floor、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 position sizing)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` is open; position sizing can emit positive shares for non-positive prices and can bypass caps / risk discounts when the whole cap or discount container is malformed.
+- **Required**: `R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP` - full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: target position-sizing 19 OK; `*us_short*` 751 OK; schema `*us_short*` 408 OK. Probes reproduced `entry=0, stop=-1 -> 75 shares`, `entry=-1, stop=-2 -> 75 shares`, non-list `cap_shares` returning sized 100 with caps skipped, and non-list `discount_mults` returning 1.0/no discount. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` this Required only; do not start cost-floor, theme_probe, defensive-entry mode, 35%-block assembly, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第十一刀 — §8 风险定仓 + 削减叠法)
+
+**Worked on**: 批2 第十一刀,§8 仓位核心计算(产出 model_position_size_shares)。`engine/us_short_position_sizing.py`:① `risk_based_base_shares`(底仓 = ⌊bucket×风险% ÷ (入场−止损)⌋,long-only)② `harshest_risk_discount`(③ 取最狠 = min 多个折扣、**不连乘**)③ `reduction_stack`(② ×regime乘数 ③ ×最狠折扣 → ④ min(caller 的股数 caps) → ⑤ <最小可执行→observe)。+ README 1 路由行。
+
+**Key decisions**: ① **「取最狠不连乘」用 min 不用乘积**(0.8×0.5×0.9=0.36 双重惩罚;应 0.5)——§8 line 226 明文。② **无 preset**:per-trade-risk%/§13#4 限额/min-executable 是 forward priors→模块常量(不可入参覆盖防 bypass),同 price engine。③ **caps 由 caller 传股数 list、引擎只 min**:换算+组合态在上游;引擎不重复 cash_allocation 的全局分配(独立刀)、只做本行 stack 算术。④ **全 fail-closed 向保守**:坏 bucket/价/regime/cap→0、坏折扣→0.0(最狠)、regime 0→0、long-only entry≤stop→base 0。
+
+**Verify**: 新测试 **19 OK**(风险公式+floor非round+entry≤stop/坏输入→0;harshest=min非product、空→1、坏mult→0、合法0=全杀;stack regime乘/最狠折扣/min caps/不超base·regime·disc·cap/<min→observe/regime0→0/坏regime·cap·base→0/坏min_executable用默认)。**零 us_short 回归**:全套件 **343 OK**(本机 deps-complete);grep `_finite(`=0;BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十一刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续 §8 子刀:cost-floor P0 最小仓成本地板(真拦单、非打标签)、theme_probe 强赛道试探名额(强制最小仓+绕风险预算但受全约束)、防御档入场(pullback-only + extreme 例外);再 §4.3 35%块、§9 action_rank。
+
+**Pre-Codex self-review**: A-F。A(类):risk 公式/floor/entry≤stop/坏bucket·价 + discount min·空·坏·合法0 + stack regime·折扣·caps·min·各坏输入全覆盖。B:纯新增、无重命名、无下游消费者(batch3/ship-gate/cash 均按值消费),README 1 行;grep `_finite(`=0。C(反向):坏输入→小/0 非放大、entry≤stop→0、最狠用 min,测**设计意图**(不连乘、fail-closed-conservative)。D:N-A。E:README 1 行、无 transient 进 CURRENT。F:strict `_finite_number`/`_frac_0_1`/`_nonneg_int`、floor 取整、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 cash allocation repair round2)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
