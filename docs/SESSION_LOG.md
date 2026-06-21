@@ -8,6 +8,24 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short portfolio-guard governance)
+- **Verdict/Action**: PASS. Full current-tree review found the section 8 `portfolio_guard` governance schema/preset/test slice matches the live US-short design authority and has no material Required.
+- **Required**: None new.
+- **Verify**: reviewed schema, preset, tests, README, SESSION_LOG, risk register, and design section 8/12/13/18 anchors. Target 116 OK; full discover 3084 OK via local Python; mutation probes reject cooldown/fail-safe/advisory/trigger/state/threshold drifts; diff-check has only CRLF warning; BOM/FFFD=0; no provider/runtime path.
+- **Next**: User may command `提交` for this slice; field_registry and remaining section 8 sub-slices (symbol_cooldown, cash_allocation, macro_cluster, sizing stack, ship-gate sizing) still require separate authorization and review.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 portfolio-guard governance schema §8)
+
+**Worked on**: 新增 `us_short_portfolio_guard_governance` 治理契约——把 §8 组合级熔断(账户层风控)const-pin:① 状态集 `portfolio_guard_status {normal, caution, cooldown, recovery}`(从 `∈{}` 字节抽取、== action_table 词表)② 每态设计锁定效应(caution=降仓+减每周新增数;cooldown=禁新建+禁加仓+只持仓风控;recovery=只少量高置信;normal=baseline)③ 触发模型(主=model_paper_track §12 可评估时:连续止损/纸面回撤超阈值;次=手动真实账户=advisory)④ **fail-safe**(paper not_evaluable/data_degraded ⟹ 不得 clean,默认 restricted/caution 或只持仓风控——没数据不当"安全")⑤ advisory_only(只影响建议、不自动交易)。阈值→§13 #22。schema + preset + 28 测试。纯声明式。
+
+**Key decisions**: ① 选此切片依据=§8 里最自足的保命件(账户层熔断状态机),mirror theme_lifecycle 治理(状态+每态效应)+ hard_veto(fail-safe)。② **紧 scope 防 under-pinning**(吸取 regime 教训):仅 portfolio_guard(line 230),削减叠法/macro_cluster/symbol_cooldown/cash_allocation/ship-gate sizing 明确留作各自后续 §8 子片(notes+README 标注)。③ const-pin 进 schema,**一次钉全**该件全部设计锁定机制(状态/每态效应/触发/fail-safe/advisory),negative 含**安全 drift**(cooldown 放行新建被拒、fail-safe 弱化成 clean 被拒、advisory→auto-trade 被拒)。④ 字节抽取状态 + 交叉校验 action_table portfolio_guard_status;state_effects 用固定 6 布尔/态(mirror theme_lifecycle holding_effects),provenance 测 11 phrase 全在 §8。⑤ `threshold_calibration_item_id:22`=第 5 个 lifecycle 消费者,glob 自动纳入(已验仍 24 OK)。
+
+**Verify**: 新测试 **28 OK**;lifecycle glob 仍 **24 OK**(纳入 #22);states == action_table 词表;dup 检查无别处 pin;BOM=0;diff-check clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 portfolio-guard 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后)** + §8 其余子片(symbol_cooldown #23 / cash_allocation #25 / macro_cluster #31 / 削减叠法 / ship-gate sizing;顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:吸取 regime under-pinning 教训,本件全部设计锁定机制(状态/每态效应/触发/fail-safe/advisory)一次 const-pin 进 schema、非只 headline;每态效应固定 6 布尔全员覆盖;负向覆盖整类 drift。**B(连带)**:states/state_effects 无别处 pin(无 dup);新 #22 载体被 lifecycle glob 自动纳入(仍绿);states 交叉校验 action_table;README 同步。**C(反向)**:cooldown 须禁新建(放行被拒)、fail-safe 须不得 clean(弱化被拒)、advisory_only 须 true(auto-trade 被拒)、caution 是降不是禁。**D**:N-A。**E**:README 加 1 行、scope 边界明示、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、11 provenance 生成时已 assert。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short two-axis regime governance re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` closed and no new material Required in the US-short regime-governance slice.
 - **Required**: None new. `R-USSHORT-REGIME-GOVERNANCE-INPUT-AXES-UNDERPINNED` remains resolved in `docs/system_risk_register.md`.

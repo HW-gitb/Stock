@@ -1,0 +1,82 @@
+{
+  "schema_name": "us_short_portfolio_guard_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "portfolio_guard_states": [
+    "normal",
+    "caution",
+    "cooldown",
+    "recovery"
+  ],
+  "state_effects": [
+    {
+      "state": "normal",
+      "effects": {
+        "block_new_entry": false,
+        "block_add": false,
+        "reduce_position_size": false,
+        "reduce_weekly_new_count": false,
+        "holding_risk_control_only": false,
+        "only_few_high_confidence_new": false
+      }
+    },
+    {
+      "state": "caution",
+      "effects": {
+        "block_new_entry": false,
+        "block_add": false,
+        "reduce_position_size": true,
+        "reduce_weekly_new_count": true,
+        "holding_risk_control_only": false,
+        "only_few_high_confidence_new": false
+      }
+    },
+    {
+      "state": "cooldown",
+      "effects": {
+        "block_new_entry": true,
+        "block_add": true,
+        "reduce_position_size": false,
+        "reduce_weekly_new_count": false,
+        "holding_risk_control_only": true,
+        "only_few_high_confidence_new": false
+      }
+    },
+    {
+      "state": "recovery",
+      "effects": {
+        "block_new_entry": false,
+        "block_add": false,
+        "reduce_position_size": false,
+        "reduce_weekly_new_count": false,
+        "holding_risk_control_only": false,
+        "only_few_high_confidence_new": true
+      }
+    }
+  ],
+  "triggers": {
+    "primary_source": "model_paper_track",
+    "primary_evaluable_required": true,
+    "primary_conditions": [
+      "consecutive_stops",
+      "paper_account_drawdown_over_threshold"
+    ],
+    "secondary_source": "manual_actual_account",
+    "secondary_is_advisory": true
+  },
+  "fail_safe": {
+    "paper_not_evaluable_forbids_clean": true,
+    "no_data_is_not_safe": true,
+    "default_when_not_evaluable": "restricted_caution_or_holding_risk_only"
+  },
+  "advisory_only": true,
+  "threshold_calibration_item_id": 22,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (组合级熔断 line)",
+    "state_set_source": "== action_table portfolio_guard_status design-locked vocab",
+    "fail_safe_intent": "没数据不当安全 — if model_paper_track can't be evaluated (§12.1 adjustment/corporate-action gate), guard must default restricted/caution or holding-risk-only, never clean",
+    "thresholds_are_forward": "consecutive-stop count + drawdown % = §13.1 #22 prior, not pinned",
+    "scope": "portfolio_guard only; 削减叠法/macro_cluster/symbol_cooldown/cash_allocation/ship-gate sizing = separate §8 slices"
+  }
+}

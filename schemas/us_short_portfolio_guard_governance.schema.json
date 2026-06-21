@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_portfolio_guard_governance",
+  "title": "US-short §8 组合级熔断 (portfolio_guard) governance — const-pins the account-level circuit-breaker state set + per-state effects + paper-track trigger + the no-data-is-not-safe fail-safe",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 portfolio_guard_status state set {normal, caution, cooldown, recovery} (== action_table vocab), the per-state design-locked effects (caution = reduce size + reduce weekly new count; cooldown = block new entry + block add + holding-risk-control only; recovery = only a few high-confidence new; normal = baseline), the trigger model (primary = model_paper_track §12 when evaluable: consecutive stops / paper drawdown over threshold; secondary = manual actual account = advisory), and the fail-safe (if the paper track is not_evaluable/data_degraded the guard must NOT be clean — '没数据不当安全'). advisory_only: affects advice only, never auto-trades. Threshold VALUES (consecutive-stop count, drawdown %) are forward priors routed to §13.1 #22, not pinned. Tight scope: portfolio_guard only; 削减叠法 / macro_cluster / symbol_cooldown / cash_allocation / ship-gate sizing are separate §8 slices. draft-07 cannot express: state set == action_table, provenance of each pinned mechanic in §8, and threshold_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "portfolio_guard_states",
+    "state_effects",
+    "triggers",
+    "fail_safe",
+    "advisory_only",
+    "threshold_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_portfolio_guard_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "portfolio_guard_states": {
+      "description": "§8 portfolio_guard_status ∈ {…} — exact state set/order, const-pinned byte-faithful; == action_table portfolio_guard_status vocab.",
+      "const": [
+        "normal",
+        "caution",
+        "cooldown",
+        "recovery"
+      ]
+    },
+    "state_effects": {
+      "description": "§8 per-state design-locked effects (fixed boolean set per state).",
+      "const": [
+        {
+          "state": "normal",
+          "effects": {
+            "block_new_entry": false,
+            "block_add": false,
+            "reduce_position_size": false,
+            "reduce_weekly_new_count": false,
+            "holding_risk_control_only": false,
+            "only_few_high_confidence_new": false
+          }
+        },
+        {
+          "state": "caution",
+          "effects": {
+            "block_new_entry": false,
+            "block_add": false,
+            "reduce_position_size": true,
+            "reduce_weekly_new_count": true,
+            "holding_risk_control_only": false,
+            "only_few_high_confidence_new": false
+          }
+        },
+        {
+          "state": "cooldown",
+          "effects": {
+            "block_new_entry": true,
+            "block_add": true,
+            "reduce_position_size": false,
+            "reduce_weekly_new_count": false,
+            "holding_risk_control_only": true,
+            "only_few_high_confidence_new": false
+          }
+        },
+        {
+          "state": "recovery",
+          "effects": {
+            "block_new_entry": false,
+            "block_add": false,
+            "reduce_position_size": false,
+            "reduce_weekly_new_count": false,
+            "holding_risk_control_only": false,
+            "only_few_high_confidence_new": true
+          }
+        }
+      ]
+    },
+    "triggers": {
+      "description": "§8 trigger model — primary model_paper_track (§12, when evaluable); secondary manual account = advisory.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "primary_source",
+        "primary_evaluable_required",
+        "primary_conditions",
+        "secondary_source",
+        "secondary_is_advisory"
+      ],
+      "properties": {
+        "primary_source": {
+          "const": "model_paper_track"
+        },
+        "primary_evaluable_required": {
+          "const": true
+        },
+        "primary_conditions": {
+          "const": [
+            "consecutive_stops",
+            "paper_account_drawdown_over_threshold"
+          ]
+        },
+        "secondary_source": {
+          "const": "manual_actual_account"
+        },
+        "secondary_is_advisory": {
+          "const": true
+        }
+      }
+    },
+    "fail_safe": {
+      "description": "§8 fail-safe — paper track not_evaluable/data_degraded ⟹ guard not clean (没数据不当安全).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paper_not_evaluable_forbids_clean",
+        "no_data_is_not_safe",
+        "default_when_not_evaluable"
+      ],
+      "properties": {
+        "paper_not_evaluable_forbids_clean": {
+          "const": true
+        },
+        "no_data_is_not_safe": {
+          "const": true
+        },
+        "default_when_not_evaluable": {
+          "const": "restricted_caution_or_holding_risk_only"
+        }
+      }
+    },
+    "advisory_only": {
+      "description": "§8 只影响建议、不自动交易.",
+      "const": true
+    },
+    "threshold_calibration_item_id": {
+      "description": "§8 阈值 prior → §13.1 #22 (组合熔断阈值: 连续止损/回撤 + 各状态档).",
+      "const": 22
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}
