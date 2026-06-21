@@ -1,0 +1,29 @@
+{
+  "schema_name": "us_short_ship_gate_sizing_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "sizing_fields": [
+    "model_position_size_amount",
+    "model_position_size_shares",
+    "live_permission_status",
+    "live_size_warning"
+  ],
+  "live_permission_status_vocab": [
+    "paper_or_minimal_only",
+    "not_full_size_eligible",
+    "full_size_eligible"
+  ],
+  "maturity_is_reminder_not_cap": true,
+  "ungraduated_not_full_size_license": true,
+  "real_money_amount_manual": true,
+  "hard_veto_zero_position": true,
+  "calibration_item_id": 12,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (ship-gate sizing line 233 + hard-veto line 234)",
+    "maturity_reminder_not_cap": "成熟度 = 提醒、不是算式帽 — never a system sizing cap; aligns with evidence_capital_policy (paper never claims full-size graduation)",
+    "no_auto_full_size": "未毕业不得当真金满仓许可; 真金投多少手动定 — the system advises, the human sets real-money size",
+    "hard_veto_zero": "hard veto = 0 仓 — overrides any sizing",
+    "thresholds_are_forward": "graduation/maturity thresholds = §13.1 #12 prior, not pinned"
+  }
+}

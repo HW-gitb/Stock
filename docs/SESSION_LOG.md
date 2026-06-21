@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short ship-gate sizing governance re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP` closed; no new material Required.
+- **Required**: None new. The prior Required remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design §8 and anchors. Target 114 OK; full discover 3209 OK; probe confirms all four safety booleans reject false and the class guard catches a relaxed real-money schema. No provider/runtime path.
+- **Next**: User may command `提交`; field_registry, provider, DataHub, live, and batch-2 sizing work remain separate authorization/review items.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP)
+- **Verdict/Action**: 判定成立、接受(checklist §A point4 枚举集覆盖:4 个 const-true 安全布尔,反向守护测了 3 个、漏 `real_money_amount_manual`)。test-only 修复(schema/preset 本就对):补 `test_schema_rejects_real_money_auto_sized` + **class loop `test_every_safety_boolean_has_negative_guard`**(发现所有 const:true 顶层布尔、断言恰为 4 个安全布尔、逐个 flip→false 拒)——根治该类、防未来新安全布尔漏守护。完整见 register。
+- **Required**: `R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: ship-gate 24→**26 OK**;class loop 实测 4 个安全布尔 flip 全拒;README ship-gate 行已更正含 real-money + class-guard(grep 验);起草 entry「三条…全焊」C bullet 已更正(real_money 第 4 条);doc-governance 24 OK;BOM=0;diff-check clean。full discover 见下条 closeout。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:不止补漏的 1 个——加 class loop 断言「所有 const-true 安全布尔皆有反向守护」(发现集恰为 4 个),根治枚举集漏member 类。**B(连带)**:README 负向列表 + 起草 C bullet 两处 overclaim 全更正(先 grep README 行确认再写);schema/preset 未动。**C(反向)**:real_money flip→false 被拒 + loop 覆盖全 4 条;loop 的集合断言兼证四者皆 const:true(非仅正向 preset 值)。**D**:N-A。**E**:register 单态(flip+Resolution)、README 仅陈述。**F**:无 BOM、diff-check clean、doc-governance 24 OK。教训续上轮:写「全焊/完整」前数清枚举集成员、别漏 member。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short ship-gate sizing governance)
+- **Verdict/Action**: FAIL. Full current-tree review found the ship-gate sizing contract currently pins manual real-money sizing, but its adversarial schema guard does not cover that safety boolean.
+- **Required**: `R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP` - full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design §8 and anchors. Target 112 OK; full 3207 OK on project Python 3.13. Probe: schema rejects false, but tests lack a negative/const guard for `real_money_amount_manual`; no provider/runtime path.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit or start field_registry / provider / DataHub / live / batch-2 sizing work.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 ship-gate sizing governance schema §8)
+
+**Worked on**: 新增 `us_short_ship_gate_sizing_governance` 治理契约(§8 最后一个子片)——把 §8 ship-gate sizing const-pin:① `live_permission_status` vocab {paper_or_minimal_only/not_full_size_eligible/full_size_eligible}(字节抽取、== action_table)② 4 个 sizing/permission 字段(⊆ action_table 列)③ 安全规则:**成熟度=提醒不是算式帽** / **未毕业不得当真金满仓许可** + 真金手动定 / **hard veto = 0 仓**(line 234)。阈值→§13 #12。schema + preset + 24 测试。纯声明式。
+
+**Key decisions**: ① 选此切片=§8 最后子片(收尾 §8)。② **3 条安全规则是设计硬态**:成熟度非算式帽、未毕业非满仓许可、hard veto=0 仓,negative 测全部翻转被拒(防未来引擎把成熟度当帽、把未毕业当满仓、把硬否决留仓位)。③ 字节抽取 live_permission_status vocab + 交叉校验 action_table;4 字段 ⊆ action_table 列。④ `calibration_item_id:12`(§13 #12 ship-gate 毕业门槛 + live_permission_status / 成熟度提醒阈值)=第 10 个 lifecycle 消费者(glob 自动纳入)。⑤ 接 evidence_capital_policy(paper 永不判满仓)。
+
+**Verify**: 新测试 **24 OK**;lifecycle glob 仍 OK(纳入 #12);vocab == action_table、4 字段 ⊆ 列;dup 无别处 pin;BOM=0;diff-check clean;README 路由行已补(本轮**先 grep 确认 README 行含 live_permission_status 再报**,吸取上轮 overclaim 教训);生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 ship-gate sizing 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后,消费全部输出面+治理)** + 可能的 §11.4 exclusion_summary / §11.5 coverage(若 action_table 未覆盖;顺序我自决)。**§8 子片全部完成**(削减叠法/macro_cluster/portfolio_guard/symbol_cooldown/cash_allocation/ship-gate sizing)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:vocab/字段/3 安全规则全 const-pin 进 schema、字节抽取全员覆盖;负向覆盖整类 drift(vocab/field/maturity/ungraduated/hard-veto)。**B(连带)**:三块无别处 pin(无 dup);#12 载体 lifecycle glob 自动纳入(仍绿);vocab/字段交叉校验 action_table;**README 改后先 grep 确认含 live_permission_status 再写「已补」(上轮 overclaim 教训)**。**C(反向)**:成熟度当帽被拒、未毕业满仓被拒、hard-veto 留仓被拒(**更正:共 4 个 const-true 安全布尔,real_money_amount_manual 第 4 条本轮漏加反向守护、已在下条 修复轮补 + class loop 守护全 4 条**)。**D**:N-A。**E**:README 加 1 行、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、5 provenance 生成时已 assert。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short cash-allocation governance re-review)
 - **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-CASH-ALLOCATION-BUILDABLE-SCOPE-GAP` and `R-USSHORT-CASH-ALLOCATION-ROUTE-SCOPE-DRIFT` closed; no new material Required.
 - **Required**: None new. Both IDs remain resolved in `docs/system_risk_register.md`.

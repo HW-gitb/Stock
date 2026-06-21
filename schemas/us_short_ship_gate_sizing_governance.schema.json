@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_ship_gate_sizing_governance",
+  "title": "US-short §8 ship-gate sizing governance — const-pins live_permission_status vocab + the maturity-is-reminder-not-cap / ungraduated-not-full-size / real-money-manual / hard-veto-zero-position safety rules",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 ship-gate sizing posture: model_position_size_* and live_size_warning are emitted on the NORMAL sizing basis (maturity is a REMINDER, not a formula cap — 成熟度 = 提醒、不是算式帽); live_permission_status vocab {paper_or_minimal_only, not_full_size_eligible, full_size_eligible} (== action_table); an un-graduated track is NEVER a real-money full-size license (未毕业不得当真金满仓许可) and the real-money amount is set manually; and hard veto = 0 position (line 234). Graduation thresholds / maturity reminder levels are forward priors routed to §13.1 #12, not pinned. draft-07 cannot express: vocab byte-faithfulness + == action_table, fields ⊆ action_table columns, provenance in §8, and calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "sizing_fields",
+    "live_permission_status_vocab",
+    "maturity_is_reminder_not_cap",
+    "ungraduated_not_full_size_license",
+    "real_money_amount_manual",
+    "hard_veto_zero_position",
+    "calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_ship_gate_sizing_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sizing_fields": {
+      "description": "§8 ship-gate sizing/permission fields (⊆ action_table columns).",
+      "const": [
+        "model_position_size_amount",
+        "model_position_size_shares",
+        "live_permission_status",
+        "live_size_warning"
+      ]
+    },
+    "live_permission_status_vocab": {
+      "description": "§8 live_permission_status vocab, byte-faithful; == action_table live_permission_status.",
+      "const": [
+        "paper_or_minimal_only",
+        "not_full_size_eligible",
+        "full_size_eligible"
+      ]
+    },
+    "maturity_is_reminder_not_cap": {
+      "description": "§8 成熟度 = 提醒、不是算式帽 — sizing is emitted on the normal basis; maturity does not cap the formula.",
+      "const": true
+    },
+    "ungraduated_not_full_size_license": {
+      "description": "§8 未毕业不得当真金满仓许可 — an un-graduated track is never a real-money full-size license.",
+      "const": true
+    },
+    "real_money_amount_manual": {
+      "description": "§8 真金投多少手动定 — the real-money amount is set manually, not auto-sized to full.",
+      "const": true
+    },
+    "hard_veto_zero_position": {
+      "description": "§8 (line 234) hard veto = 0 仓 — a hard veto forces zero position.",
+      "const": true
+    },
+    "calibration_item_id": {
+      "description": "§8 graduation thresholds + live_permission_status / maturity reminder levels = prior → §13.1 #12.",
+      "const": 12
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}
