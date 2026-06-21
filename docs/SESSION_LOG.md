@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 cash allocation repair round2)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: target cash+ship 31 OK; `*us_short*` 732 OK; schema `*us_short*` 408 OK; schema-sourced probes confirmed `建仓` / `加仓` allocate, the other 7 frozen `final_action` values and malformed / unknown actions observe `not_buildable`, malformed ranks still sink, `hard_veto=True` still fails closed, and no provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; 35%-block assembly, sizing core, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` round2 (R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP)
+- **Verdict/Action**: 成立、接受。上轮 `_is_buildable` 用英文 deny-list(observe/veto/hold),但 final_action 权威词表是 `us_short_action_table_contract` 冻结的 9 个中文值,故中文非建仓行 + buildable=True 仍被建仓;且我自创了 action_table 没有的 `buildable` 布尔。根因=checklist D(歧义类别走最窄安全侧=allow-list 对权威词表,非猜英文 deny-list)。改:翻 **allow-list** `_BUILDABLE_FINAL_ACTIONS=(建仓,加仓)`(仅这俩消耗现金)+ 弃自创 buildable;∈{建仓,加仓} 且非 hard_veto 才建,其余/未知/英文/typo/空格漂移/缺失全 fail-closed not_buildable。保留 `_rank_value`+hard_veto,ship_gate 不动。完整见 register round-2 Resolution。
+- **Required**: `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + round-2 Resolution)。
+- **Verify**: cash_allocation 18 OK;全 us_short 套件 324 OK(零回归,本机 deps-complete);探针 7 个中文非建仓 final_action + 未知/英文/typo → not_buildable 不占现金、建仓+加仓正控建仓、坏 rank 仍沉末;grep `_finite(`=0 + 旧 deny-list/自创 buildable 残留=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交并执行下一步`。
+- **Pre-Codex self-review**: A-F。**D 教训(本轮根因)**:歧义类别走 allow-list 对权威 schema 词表、别猜 deny-list。A(类):全 9 中文 final_action + 未知/英文/typo/空格/None/int + 建仓·加仓正控全覆盖。B:翻 allow-list + 弃 buildable 是机制改动→re-grep `_NON_BUILDABLE`/`buildable`-field/旧措辞(README+docstring)全清零;conformance 钉 {建仓,加仓}⊆action_table const 防漂移;ship_gate 同类不适用。C(反向):中文非建仓→observe 不花钱、未知→fail-closed,测设计意图。E:register 单态。F:`_rank_value`+allow-list、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 cash allocation repair re-review)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` remains open; the repair fixed malformed numeric ranks and English non-buildable signals, but the allocator still funds authoritative Chinese `final_action` non-buildable rows such as `观察` / `持有` / `否决/避开` / `清仓-止损` when `buildable=True`.
+- **Required**: `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` - full current Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: target cash+ship 28 OK; `*us_short*` 729 OK; schema `*us_short*` 408 OK; doc/route 38 OK. Probe reproduced Chinese non-buildable `final_action` values being allocated; numeric malformed ranks now sink and `hard_veto=True` / English `observe` still fail closed. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` this Required only; do not start 35%-block assembly, sizing core, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP)
+- **Verdict/Action**: 两点成立、接受。① 数值坏 rank(-1/0/0.5/NaN/bool/串)被当有效优先级插队 rank 1 抢现金 = 同款 whole-class 漏(测了非数字、漏数值越界);② buildable-only 边界只在 prose、没在 API 强制 → hard_veto/observe/buildable=False 行被现金复活,违反 preset never_rescue_non_buildable。窄修:加 `_rank_value`(rank 须正整数,坏→沉末位)+ `_is_buildable`(强制 buildable is True + hard_veto/observe/veto/hold 绝对否决→not_buildable 不花钱)。tiebreak 连续域留 `_finite_number`(坏值只在同 rank 内最差、不插队,Req#4)。ship-gate 无 rank/无 buildable、Codex 无 Required → 不动。完整修/测试见 register Resolution。
+- **Required**: `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: cash_allocation 15 OK;全 us_short 套件 321 OK(零回归,本机 deps-complete);探针 坏 rank 沉末不插队 rank1、非可建仓(无flag/False/hard_veto/observe)→not_buildable 不占现金、合法 rank 顺序建仓;grep `_finite(`=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交并执行下一步`。
+- **Pre-Codex self-review**: A-F。A(类):rank 负/零/分数/NaN/bool/串/None + buildable 5 种非建仓信号 + tiebreak 坏值 + 合法正控全覆盖。B:仅改 1 引擎 1 测试 + docstring;ship-gate 同类不适用;无下游消费者;grep `_finite(`=0。C(反向):坏 rank→末位非队首、非可建仓→observe 不花钱、坏 tiebreak 不插队,均测**设计意图**。D:N-A。E:register 单态。F:`_rank_value` 正整数 + `_is_buildable` 强制门、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 cash allocation / ship-gate sizing)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` is open; cash allocation can fund malformed-rank and non-buildable rows.
+- **Required**: `R-USSHORT-BATCH2-CASH-ALLOCATION-RANK-BUILDABLE-FAILOPEN-GAP` - full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: target 24 OK; `*us_short*` 725 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes reproduced `rank=-1/0/0.5 -> allocated before rank 1`, and `final_action=observe` / `hard_veto=True` / `buildable=False` rows being allocated.
+- **Next**: Claude Code `修复` this Required only; do not start 35%-block assembly, sizing core, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第十刀 并轮 — §8 全局现金分配 + ship-gate sizing)
+
+**Worked on**: 批2 第十刀(并轮组②,2 个 §8 sizing 层引擎一次起草/审查)。① `engine/us_short_cash_allocation.py` `allocate_cash`:buildable-only,按 排名/置信/RR/流动性 排序(rank-primary 字典序,权重 §13#25 forward,不造加权和),用最保守 valid_entry_high 依次占现金,够则建、不够→observe(不超额、不花没有的钱);per-row 出 5 个冻结字段 + reason。② `engine/us_short_ship_gate_sizing.py` `ship_gate_sizing`/`classify_live_permission`:出 model_size + live_permission_status{paper_or_minimal_only/not_full_size_eligible/full_size_eligible}+ warning。+ README 1 路由行。
+
+**Key decisions**: ① **不把 forward 校准烤进引擎**:cash 排序权重 §13#25→v1 rank 字典序非加权和;ship 毕业阈值 §13#12→graduation 作输入、引擎只守门不算阈值。② **ship 三安全不变式钉死**:成熟度=提醒非帽(model_size 原样透传不削)、paper/未毕业/not_evaluable/未知证据永不 full_size(fail-closed minimal_only)、hard_veto→0、真钱手动;4 个 safety bool 在 import 断言 + conformance。③ **cash 全 fail-closed**:坏 shares(_count ≥1 int)/entry/非dict→observe invalid_row 不花钱、坏/负 cash→0、坏 rank 沉末位、不够→不花(remaining 不变)。④ 自审删 cash 可配置 key 入参(CLAUDE §2 无揣测灵活性 + 硬编码键惯例)。
+
+**Verify**: 新测试 **24 OK**(cash:顺序建仓/保守基准/rank序不受输入序影响/无超额/不够不占现金;坏行·坏cash·坏rank·非list fail-closed;字段 conformance。ship:hard_veto→0、成熟度不削仓、paper/not_evaluable/未知→永不full、毕业 strict True、坏 size fail-closed、字段集/vocab/safety-bool conformance)。**零 us_short 回归**:全套件 **317 OK**(本机 deps-complete);grep `_finite(`=0(2 新引擎);4 新文件 BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十刀(2 引擎 + 2 测试 + README);PASS 后用户 `提交`。后续批2:§4.3 35%块方向合成(generalize 第七刀正交+swap)、§8 sizing 核(风险定仓 + 削减叠法 ④⑤ 整合 cash/regime/risk-discount + 成本地板 P0 真拦单 + theme_probe + 防守入场)、§9 action_rank 5 组骨架。
+
+**Pre-Codex self-review**: A-F。A(类):cash 坏 shares/entry/cash/rank/非dict + ship 坏 evidence/graduation/model_size 全覆盖,含边界(cash 恰够 inclusive、shares=0 合法 ship)。B:纯新增、无重命名、无下游消费者(batch3 才消费),README 1 行;grep `_finite(`=0。C(反向):cash 不够→observe 非 allocated、坏 rank→末位非前、ship paper/未毕业→非 full、坏 size→0/minimal,均测**设计意图**。D:N-A。E:README 1 行、无 transient gate 进 CURRENT。F:strict `_finite_number`/`_count`/`_nonneg_int` 贯穿、ship 安全 bool import 断言、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 portfolio guard repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-PORTFOLIO-GUARD-MALFORMED-STATE-COUNT-CLEAN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
