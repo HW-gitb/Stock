@@ -409,7 +409,7 @@ class DocGovernanceGuard(unittest.TestCase):
         # and its proof can't drift apart). For each review-cycle entry in the COMPLIANT ZONE that
         # cites a Required ID, enforce the EXACT minimal template.
         offenders = []
-        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) — ", zone_text)
+        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)   # — / – / - header separators
         for i in range(1, len(parts), 2):
             block = parts[i + 1]
             lines = block.splitlines()
@@ -423,8 +423,8 @@ class DocGovernanceGuard(unittest.TestCase):
             labels = []
             for ln in lines[1:]:
                 s = ln.strip()
-                if not s or s.startswith("<!--"):
-                    continue                              # blank / the adoption-marker comment line
+                if not s or s.startswith("<!--") or s.startswith(">"):
+                    continue                              # blank / adoption-marker comment / blockquote (e.g. archive note)
                 m = cls._BULLET.match(s)
                 if not m:
                     offenders.append(("free-form-or-non-template-line", tag))
@@ -455,7 +455,7 @@ class DocGovernanceGuard(unittest.TestCase):
         # closes the 起草/强化 (draft-class, non-review-cycle header) gap that let a session-style
         # handoff omit the line. A Claude entry whose header names draft work must carry the proof line.
         offenders = []
-        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) — ", zone_text)
+        parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)   # — / – / - header separators
         for i in range(1, len(parts), 2):
             block = parts[i + 1]
             lines = block.splitlines()
@@ -528,6 +528,20 @@ class DocGovernanceGuard(unittest.TestCase):
                      "- **Pre-Codex self-review**: A-F checked — evidence\n- **Next**: 审查\n")
         self.assertEqual(self._review_cycle_offenders(compliant), [],
                          "guard false-positives a compliant minimal entry")
+        # robustness control: a hyphen-separated review header (Codex's newer "- Codex `review …`" format)
+        # must be isolated as its own block, NOT absorbed into the preceding entry (which would double
+        # its labels). If the split regresses to em-dash-only this produces a duplicate-label offender.
+        hyphen_isolated = (compliant +
+                           "\n## 2026-06-14 - Codex `review FAIL` (R-TEST-FOO)\n"
+                           "- **Verdict/Action**: FAIL\n"
+                           "- **Required**: R-TEST-FOO — see register\n"
+                           "- **Verify**: 22 OK\n- **Next**: 修复\n")
+        self.assertEqual(self._review_cycle_offenders(hyphen_isolated), [],
+                         "hyphen-header review entry not isolated (absorbed into the preceding entry)")
+        # robustness control: a blockquote line (e.g. the archive note) must be skipped, not free-form
+        with_blockquote = compliant + "\n> 📦 archive note: older entries moved to the archive file\n"
+        self.assertEqual(self._review_cycle_offenders(with_blockquote), [],
+                         "blockquote line false-flagged as a non-template line")
 
     def test_draft_handoff_proof_enforced_above_marker(self):
         # R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP: a 起草/强化 handoff that omits the required

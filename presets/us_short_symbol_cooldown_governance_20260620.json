@@ -1,0 +1,33 @@
+{
+  "schema_name": "us_short_symbol_cooldown_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260620",
+  "status": "design-locked v1 (batch-1)",
+  "cooldown_fields": [
+    "symbol_cooldown_status",
+    "cooldown_until",
+    "reentry_allowed_reason"
+  ],
+  "breakout_unfilled_no_cooldown": true,
+  "enters_cooldown_on": [
+    "filled_then_stop_loss",
+    "filled_then_breakout_failure"
+  ],
+  "during_cooldown_action": "downgrade_to_observe",
+  "reentry_requires": [
+    "new_catalyst",
+    "new_structure",
+    "cooldown_expired"
+  ],
+  "reentry_all_required": true,
+  "purpose": "prevent_revenge_buy",
+  "param_calibration_item_id": 23,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §8 (单票再入场冷静期 line)",
+    "no_penalty_if_unfilled": "突破单未成交 = 不进冷静期（没进场不罚）— a breakout that never filled is not punished",
+    "cooldown_entry_requires_fill": "§18.1 #16 成交后失败才进 symbol_cooldown — both triggers are filled_then_*; an unfilled breakout (no fill) never enters cooldown",
+    "anti_revenge_buy": "full re-buy needs new catalyst AND new structure AND cooldown expired — all three, not any one",
+    "fields_not_all_in_action_table": "only symbol_cooldown_status is an action_table column; cooldown_until / reentry_allowed_reason are machine-layer fields",
+    "params_are_forward": "cooldown length + recovery conditions = §13.1 #23 prior, not pinned"
+  }
+}

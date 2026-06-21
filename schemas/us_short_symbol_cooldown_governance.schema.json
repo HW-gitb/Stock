@@ -1,0 +1,86 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_symbol_cooldown_governance",
+  "title": "US-short §8 单票再入场冷静期 (symbol re-entry cooldown) governance — const-pins the no-penalty-if-unfilled rule, the cooldown triggers, the in-cooldown action, and the anti-revenge-buy re-entry gate",
+  "description": "Batch-1 declarative governance contract. Freezes the §8 symbol re-entry cooldown: a breakout order that did NOT fill never enters cooldown (没进场不罚); a filled position that then hits its stop, or a failed breakout, DOES enter cooldown; during cooldown the action is downgraded to observe; and full re-buy requires ALL of new catalyst + new structure + cooldown expired (防 revenge-buy). Cooldown length + recovery params are forward priors routed to §13.1 #23, not pinned. draft-07 cannot express: field byte-faithfulness, the all-required re-entry conjunction, provenance in §8, symbol_cooldown_status ∈ action_table columns, and param_calibration_item_id ∈ the lifecycle registry — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "cooldown_fields",
+    "breakout_unfilled_no_cooldown",
+    "enters_cooldown_on",
+    "during_cooldown_action",
+    "reentry_requires",
+    "reentry_all_required",
+    "purpose",
+    "param_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_symbol_cooldown_governance"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "status": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cooldown_fields": {
+      "description": "§8 symbol cooldown field set, byte-faithful.",
+      "const": [
+        "symbol_cooldown_status",
+        "cooldown_until",
+        "reentry_allowed_reason"
+      ]
+    },
+    "breakout_unfilled_no_cooldown": {
+      "description": "§8 突破单未成交 = 不进冷静期（没进场不罚）— not entering is never penalized.",
+      "const": true
+    },
+    "enters_cooldown_on": {
+      "description": "§8 + §18.1 #16 conditions that DO enter cooldown — BOTH require a prior fill (成交后失败才进): a filled position that then stop-losses, or a FILLED breakout that then fails. An unfilled breakout never enters cooldown, so every trigger here is a filled_then_* event.",
+      "const": [
+        "filled_then_stop_loss",
+        "filled_then_breakout_failure"
+      ]
+    },
+    "during_cooldown_action": {
+      "description": "§8 期内动作降观察 — actions during cooldown are downgraded to observe.",
+      "const": "downgrade_to_observe"
+    },
+    "reentry_requires": {
+      "description": "§8 full re-buy requires ALL of these (anti-revenge-buy conjunction).",
+      "const": [
+        "new_catalyst",
+        "new_structure",
+        "cooldown_expired"
+      ]
+    },
+    "reentry_all_required": {
+      "description": "§8 新催化剂 + 新结构 + 期满 — all three are jointly required (AND, not any-of).",
+      "const": true
+    },
+    "purpose": {
+      "description": "§8 防 revenge-buy.",
+      "const": "prevent_revenge_buy"
+    },
+    "param_calibration_item_id": {
+      "description": "§8 冷静期长度 + 恢复条件 = prior → §13.1 #23.",
+      "const": 23
+    },
+    "notes": {
+      "type": "object"
+    }
+  }
+}

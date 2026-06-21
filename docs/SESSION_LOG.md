@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short symbol-cooldown governance re-review)
+- **Verdict/Action**: PASS. Full current-tree re-review found `R-USSHORT-SYMBOL-COOLDOWN-FILLED-BREAKOUT-PRECONDITION-GAP` closed; no new material Required in the symbol-cooldown governance slice or doc-governance ripple guard.
+- **Required**: None new. `R-USSHORT-SYMBOL-COOLDOWN-FILLED-BREAKOUT-PRECONDITION-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema/preset/tests/README/log/register/design anchors plus action-table/lifecycle/doc guards. Target 112 OK; full discover 3158 OK; probes reject broad breakout, missing fill prefix, no-penalty removal, any-of reentry, action/field/#23 drift.
+- **Next**: User may command `提交` for this slice; cash_allocation, ship-gate sizing, field_registry, provider, DataHub, and live work remain separate authorization/review items.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-SYMBOL-COOLDOWN-FILLED-BREAKOUT-PRECONDITION-GAP)
+- **Verdict/Action**: 判定成立、接受。§18.1 #16「成交后失败才进 symbol_cooldown」消歧 §8「成交后触发止损/突破失败」——fill 前提同样适用突破失败进冷静期;我的宽 token `breakout_failure` 丢了该前提、且与自己钉的 `breakout_unfilled_no_cooldown=true` 内部矛盾(消费者读 trigger 可能罚未成交单)。修复 shape(a):`breakout_failure`→`filled_then_breakout_failure`,两触发共享 `filled_then_` 前缀=fill 结构化。完整见 register。
+- **Required**: `R-USSHORT-SYMBOL-COOLDOWN-FILLED-BREAKOUT-PRECONDITION-GAP` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: symbol_cooldown 22→**24 OK**(+不变式「所有触发须 filled_then_」+反向拒宽 `breakout_failure`);provenance 加 §18.1 #16;README/schema/preset 不再教无前提 breakout-failure;**doc-governance 24 OK(含 guard 鲁棒性 ripple 修:split 认 hyphen 头 + 跳 blockquote,详见 register Resolution)**;BOM=0;diff-check clean。full discover 见下条 closeout。未跑 provider。
+- **Next**: Codex full re-`审查`;PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。**A(整类)**:不止改 token——加不变式「所有 enters_cooldown_on 须 filled_then_*」使 fill 前提对全部现/未来触发硬成立。**B(连带)**:schema+preset+test+README+register 全同步;`filled_then_stop_loss`/`breakout_unfilled_no_cooldown`/#23 不动。**C(反向)**:宽 `breakout_failure` 被拒(防罚未成交单)+ 不变式防未来触发漏 fill;未误伤 no-penalty 规则。**D**:N-A。**E**:register 单态(flip+Resolution)、无 transient gate 进 CURRENT。**F**:无 BOM、diff-check clean、draft7 过、provenance 加 §18.1 phrase。
+
+## 2026-06-21 - Codex `review FAIL` (US-short symbol-cooldown governance)
+- **Verdict/Action**: FAIL. Full current-tree review found the section 8 symbol-cooldown governance slice under-pins the filled-breakout precondition for cooldown entry.
+- **Required**: `R-USSHORT-SYMBOL-COOLDOWN-FILLED-BREAKOUT-PRECONDITION-GAP` — full detail is registered in `docs/system_risk_register.md`.
+- **Verify**: reviewed schema, preset, tests, README, SESSION_LOG, risk register, and design §8 / §18.1 #16 / §13 #23 plus action-table and lifecycle anchors. Target 110 OK; full discover 3156 OK via local Python 3.13; adversarial probe shows design requires "成交后失败才进 `symbol_cooldown`" while schema/preset/test only pin broad `breakout_failure` and have no `filled_then_breakout_failure` / requires-fill contract; diff-check has only CRLF warning; no provider/runtime path.
+- **Next**: Claude `修复` this Required only, then Codex re-`审查`; do not commit or start cash_allocation / ship-gate sizing / provider / DataHub / live work.
+
+## 2026-06-21 — Claude (起草 US-short batch-1 symbol-cooldown governance schema §8 单票再入场冷静期)
+
+**Worked on**: 新增 `us_short_symbol_cooldown_governance` 治理契约——把 §8 单票再入场冷静期 const-pin:① 冷静期字段(symbol_cooldown_status/cooldown_until/reentry_allowed_reason,字节抽取)② **没进场不罚**(突破单未成交=不进冷静期)③ 进冷静期触发(成交后止损/突破失败)④ 期内动作=降观察 ⑤ **防 revenge-buy 再入场闸 = 新催化剂 + 新结构 + 期满 全要(AND)**。参数→§13 #23。schema + preset + 22 测试。纯声明式。
+
+**Key decisions**: ① 选此切片依据=又一个 §8 安全状态机(防 revenge-buy),自足、规则清晰。② **再入场闸是 AND 合取非 any-of**:新催化剂+新结构+期满三者全要,negative 测「all_required 翻 false」+「丢一个 requirement」被拒——防把闸弱化成任一即可。③ **没进场不罚是安全规则**:negative 测「移除 no-penalty」被拒(突破单没成交不该罚冷静期)。④ 字节抽取字段;进/出冷静期+再入场条件结构化 + provenance 10 phrase 兜底。⑤ 交叉校验:symbol_cooldown_status ∈ action_table 列(cooldown_until/reentry_allowed_reason 是机器层、不在 action_table,notes 标注);`param_calibration_item_id:23`=第 8 个 lifecycle 消费者(glob 自动纳入)。
+
+**Verify**: 新测试 **22 OK**;lifecycle glob 仍 OK(纳入 #23);symbol_cooldown_status ∈ action_table;dup 无别处 pin;BOM=0;diff-check clean;README 路由行已补;生成器已删。(full discover 见 closeout。)未跑 provider/网络。
+
+**Next**: Codex `审查` 本 symbol-cooldown 治理切片;PASS 后用户 `提交`(push 须明确命令)。批1 业务剩:**field_registry(§10,留最后)** + §8 其余子片(cash_allocation #25 / ship-gate sizing;顺序我自决)。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:字段/触发/再入场闸全 const-pin 进 schema;负向覆盖整类 drift(field/no-penalty/triggers/reentry-drop/any-of/action)。**B(连带)**:cooldown_fields/reentry_requires 无别处 pin(无 dup);#23 载体 lifecycle glob 自动纳入(仍绿);symbol_cooldown_status 交叉校验 action_table;README 同步。**C(反向)**:**没进场不罚移除被拒**(防误罚未成交)、**再入场闸 AND→any-of 被拒**(防弱化 revenge-buy 防护)、丢 requirement 被拒、期内动作改 allow_full_buy 被拒。**D**:N-A。**E**:README 加 1 行、scope 边界明示、无 transient gate 进 CURRENT。**F**:UTF-8 无 BOM、diff-check clean、draft7 过、10 provenance 生成时已 assert。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short macro-cluster governance)
 - **Verdict/Action**: PASS. Full current-tree review found the section 8 macro-cluster governance schema/preset/test slice matches the live US-short design authority and has no material Required.
 - **Required**: None new.
