@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `审查 PASS` (US-short batch2 forward known-date events repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` is closed in the current working tree; no new material Required found in this repair scope.
+- **Required**: None new. `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: forward-events 14 OK; `*us_short*` 666 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probes: SPAC variants -> reduce_caution; malformed/unknown -> restricted; ordinary -> tag.
+- **Next**: User may command `提交`; event aggregation, sizing, action_rank, batch3, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP)
+- **Verdict/Action**: 两点判定成立、接受(安全门 fail-open + 漏 SPAC + 我测试又锁错 lenient fallback,= 上次正交那种自审 C 失败)。修:① SPAC 钉死——spac/recent_spac/recent_ipo_spac(normalize)→reduce_caution,加进 SENSITIVE_TYPES;② **fail closed**——只显式 ordinary→tag,未知/坏 sensitive_type(None/bool/int/未识别/typo/空)缺数据→restricted(绝不当 ordinary tag);type normalize trim+lower,has_data 仍 strict。+ 改/加 4 测试 + README/docstring vocab。
+- **Required**: `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: forward-events 14 OK;tests/ 666 + tests/schema 408 OK(零回归,本机 deps-complete);探针 spac/SPAC→reduce_caution、bogus/None→restricted(fail-closed)、ordinary→tag;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F。A(类):SPAC 全拼写/case + 未知/坏全覆盖 fail-closed、显式 ordinary 正控。**C 教训(重·复发)**:安全门 catch-all/else 必 fail-closed(保守)非 lenient 默认;测试照**设计安全意图**(未知→保守)核、非代码恰好产物——连续 2 刀(正交完美重叠、本刀未知类型)栽此,存 memory。B:仅改 1 引擎 1 测试 + README/docstring 同步 vocab;无下游消费者。D:N-A。E:register 单态。F:normalize+strict、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-21 - Codex `审查 FAIL` (US-short batch2 forward known-date events)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` is open; SPAC / malformed `event_sensitive_type` missing-data gaps fall to ordinary `tag`.
+- **Required**: `R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP` - full Required / evidence / boundary is in `docs/system_risk_register.md`.
+- **Verify**: forward-events 11 OK; `*us_short*` 663 OK; schema `*us_short*` 408 OK; doc/route 38 OK; diff-check clean except CRLF. Probe: `spac`, `SPAC`, None, bool, and whitespace-biotech all returned `tag`.
+- **Next**: Claude Code `修复` this Required only; do not start event aggregation, sizing, action_rank, batch3, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第八刀 — §8.1 未来已知事件日历)
+
+**Worked on**: 批2 第八刀,§8.1 forward 事件。`engine/us_short_forward_events.py`:① `forward_event_effect`(已知日期事件 earnings/index_inclusion/fda_pdufa/lockup_expiry/ex_dividend 在 [0,window] 天内 → 固定方向效应:财报→降仓/观察、解禁/FDA→减/谨慎、纳入→有界正向、除息→价格提示;past/超窗/未知/坏→none)② `event_data_gap_status`(sensitive-type 缺日期≠普通 unknown:biotech 缺FDA→restricted、recent_ipo 缺解禁→reduce_caution、ordinary→tag)。**只影响 sizing/风控/显示,绝不进选股分、绝不硬否决**。+ README 路由行。
+
+**Key decisions**: ① 35% 块方向合成(theme/industry base + residual_coef)留后续——需 swap 正交方向(theme on industry),会改已提交的第七刀 module,本刀避开、选自足的 §8.1。② **全输入校验前置(含 default 参数)**:event_type/sensitive_type set 成员(未知→安全默认)、days/window strict `_finite_number`、**window_days default 参数也校验**(`_safe_window` >0 否则默认)、**has_event_data strict True**(truthy-non-True→当缺失 escalate);grep `_finite(`=0。③ 窗口/量级 §13#15 forward;方向永不含 veto(测证)。④ 事件聚合(一票多事件)由 caller 组合,本刀产单事件效应 + sensitive gap。
+
+**Verify**: 新测试 **11 OK**(5 类型方向全覆盖、窗口边界 inclusive、past→none、未知类型→none、坏 days→none、window override + 坏 window→默认;sensitive 缺数据 escalate、ordinary→tag、**strict has_data**;方向映射 conformance、**never-hard-veto**)。**零 us_short 回归**:tests/ 663 + tests/schema 408 OK(本机 deps-complete);grep `_finite(`=0。BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第八刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。后续批2:35% 块方向合成(generalize 第七刀正交+swap)、§8 sizing(分多刀:风险定仓/削减叠法/成本地板 P0/macro_cluster/冷静期/熔断/现金/theme_probe)、§9 action_rank;validator/渲染/纸面 = 批3。
+
+**Pre-Codex self-review**: A-F。A(类):5 事件类型/窗口/past/未知/坏 days/window override + sensitive 4 态/strict has_data 全覆盖,含 window_days default 参数(neutral_block 教训)。B:纯新增、无重命名、无下游消费者,README 1 行;grep `_finite(`=0。C(反向):past/超窗/坏→none、坏 window→默认、truthy-non-True has_data→escalate、never-hard-veto(测证设计意图)。D:N-A。E:README 1 行、无 transient gate 进 CURRENT。F:strict `_finite_number` 贯穿、window>0 守、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 industry-theme orthogonalization repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP` is closed in the current working tree; no new material Required found in this repair scope.
