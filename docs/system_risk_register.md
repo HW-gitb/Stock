@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-POSITION-SIZING-MALFORMED-PRICE-CAP-DISCOUNT-FAILOPEN-GAP - US-short position sizing can emit positive shares from malformed prices or malformed cap / discount containers
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
+- Status: **resolved** (committed `8864484a`, Codex re-`审查 PASS` 2026-06-21). Was open P1 (Codex `审查 FAIL` 2026-06-21).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 eleventh slice (`engine/us_short_position_sizing.py`, `tests/test_us_short_position_sizing.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
