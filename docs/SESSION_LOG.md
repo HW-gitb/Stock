@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-21 - Codex `review PASS` (US-short batch2 price-engine repair re-review)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP` is closed in the current working tree; no new material Required found in this batch2 first-slice scope.
+- **Required**: None new. `R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP` remains resolved in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current dirty tree; ran price+private-path 38 OK, `tests -p '*us_short*'` 517 OK, `tests/schema -p '*us_short*'` 408 OK, and doc/route guards 38 OK; Codex probes confirmed false holding breach and invalid pullback rescue are fixed. No provider/live/DataHub/A-share path.
+- **Next**: User may command `提交`; next batch2 slice and any provider/live/DataHub/Skill/production work remain separately authorized.
+
+## 2026-06-21 — Claude `修复` (R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP)
+- **Verdict/Action**: 两条 Required 均判定成立、接受（draft-validity-gates 类，自审 C 漏的「有效几何」前置集合）。修引擎 2 处 silent-rescue/假信号:① `holding_exit_engine` 拆 真破位(close≤stop) vs 取整后止盈算不出(close>stop→非破位、stop-only、breached=False、status `tp_not_computable`);② `support_atr_engine` pullback 加 `support≥close→观察` 前置 + 删 band-collapse rescue(矛盾带→观察、不 collapse,兼覆盖 breakout 退化带)。+ 2 同类测试。无其他改动。
+- **Required**: `R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP` — 完整 judgment/修/同类测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: US-short price+guard 38 OK(+2);tests/ us_short 517 + tests/schema 408 OK(零 us_short 回归,本机 deps-complete);独立探针两 Codex repro 已修(HOLD breached=False/stop 在、PULL executable=False);BOM=0;diff-check 仅 CRLF;doc-governance/route 38 OK。未跑 provider/网络。
+- **Next**: Codex re-`审查`(2 引擎修 + 2 测试 + register flip);PASS 后用户 `提交`(push 须明确命令)。
+- **Pre-Codex self-review**: A-F checked。A(类):2 假信号路径=「无效几何→可用信号」整类,holding(breach/TP 拆)+ pullback(前置+带)+ breakout(stop_raw 门+带 fail-closed)全出口覆盖。B(连带):仅改 2 函数、无重命名、无下游消费者(批2 首刀),README/起草 entry 描述仍准。C(反向):非破位 TP-failure + 真破位正控 + 矛盾带拒 + 合法带控,双向;无 false-negative(合法 pullback support<close 仍过)。D:N-A。E:register flip 单态、无 transient gate 进 CURRENT。F:BOM=0、diff-check clean、跨字段不变式强化。Tests passing ≠ closure。
+
+## 2026-06-21 - Codex `review FAIL` (US-short batch2 first slice: price engine + private path guard)
+
+- **Verdict/Action**: FAIL. Scope stayed offline/pure and target tests pass, but the price engine still turns invalid geometry into executable or false breach signals.
+- **Required**: `R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP` - full material detail is in `docs/system_risk_register.md`.
+- **Verify**: Reviewed current `master@f646147f` dirty tree; ran 36 targeted US-short batch2 tests OK, 515 `*us_short*` discover tests OK, and 38 doc/route guard tests OK; Codex probes reproduced false holding breach and invalid pullback band rescue.
+- **Next**: Claude Code `修复` this Required only. Do not start next batch2 slice, provider/live/DataHub/Skill/production work.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 首刀 — 价格引擎 §6/§6.1 + 可复用 fail-closed 私密路径 guard)
+
+**Worked on**: 批2(纯决策引擎)首刀 = 2 个新 engine 模块 + 2 个测试,纯/离线、消费批1 冻结契约、不碰 provider/live/DataHub、不接券商、不交叉 A 股。① `engine/us_short_price_engine.py`:§6 `support_atr_engine`(pullback/breakout 双子模式——有效支撑压力**去插针**`second−raw>1×ATR`、ATR 定入场带/止损、`min_rr_gate`、side-aware $0.01 tick[<$1 sub-penny $0.0001]、**取整后 RR 复校**、突破失效线=止损 + 追价上限 + 突破 tp 走 ATR 倍数兜底[§13 #20] + RR 门 +0.5)+ §6.1 `holding_exit_engine`(被动 stop_clear/take_profit_reduce/take_profit_exit/event_clear_reference;breach 不伪造 tp)。**纯价格几何、无 sizing**(§8 才算股数),缺数据降级观察、绝不伪造价,镜像 A 股 `a_short_phase5_engine`。② `engine/us_short_private_paths.py`:可复用 `reject_nonprivate_output_path` fail-closed `git check-ignore` guard(无 in-repo override;git 不可用/rc∉{0,1} 皆拒)= §18.0 P0 / §18.1 #1 / `R-USSHORT-PRIVATE-PATH-FAILCLOSED-GUARD-TEST` 的首刀落地,供后续每个落盘者(冷静期 sidecar / 机器层 / 纸面账)调一道测过的门。+ `docs/README.md` 批2 路由行。
+
+**Key decisions**: ① 首刀 = 价格引擎 + guard helper(用户确认按此推荐):价格引擎是下游 sizing/action_rank 的几何地基,先冻行输出形态;guard helper 本身不落盘、只校验路径,字面满足「首刀必含私密路径 guard 测试」且保持批2 纯。② **无新 schema**——输出面已被批1 `action_table_contract` 冻结(价格列 + 5 vocab),价格数值全是 §13.1 forward prior(de-spike/RR/breakout/tick),**无 price governance preset = by-design**(contract `deferred_vocab_columns` 明示这些 field-name-only / forward);schema-first 由 conformance 测试(引擎输出 keys/vocab ⊆ 冻结 contract)兜。③ **sizing 不进价格引擎**(§8 才算股数)——比 A 股 `exit_and_size` 更干净分离。④ 突破 tp = `BREAKOUT_TP_ATR×ATR`(§13 #20)非 `rr_floor×risk`:设计测试时 catch 到「紧止损时 rr_floor×risk 目标太近、追价上限一吃 worst-case RR 必崩」→ 先修(pre-Codex 价值,非留给 Codex)。⑤ no-dangling/registry 强制 = 批3(contract 明示「Runtime row validation … is batch-3 and CONSUMES this」),首刀只产符合冻结 vocab 的字段。
+
+**Verify**: 新测试 **36 OK**(8 guard fail-closed[外部/忽略/未忽略/git 不可用/OSError/rc≠0,1/外部不调 git] + 28 price[ATR、去插针 strong/weak/fallback、tick side-aware+sub-penny、pullback/breakout happy、RR 门拒、**取整后结构崩 reverse-failure**、缺数据不伪造、breach、冻结 contract conformance 全字段+vocab])。**零 us_short 回归**:tests/ us_short 515 OK + tests/schema us_short 408 OK(本机 deps-complete:装 requests/tushare;缺该依赖环境另有 A 股 import-error、与本批无关、零 us_short 失败)。BOM=0(4 文件首字节 `# -`);`git diff --check` rc=0(仅 CRLF 警告)。未跑 provider/网络。
+
+**Next**: Codex `审查` 本首刀(2 engine + 2 test + README 路由行);PASS 后用户 `提交`(push 须明确命令)。后续批2 切片我自决顺序、合适处并轮(下一组 candidate:§7 两轴环境 + §5 hard veto = 两道纯独立刀可并一轮);no-dangling validator / 渲染 / 纸面 / 比较 / lifecycle eval = 批3。
+
+**Pre-Codex self-review**: A-F checked。**A(整类)**:2 子模式 + 2 引擎 + 缺数据所有出口一次覆盖;conformance 测试 sweep **全部**输出字段 vs 冻结列(非单字段);guard 6 fail-closed 出口全覆盖。**B(连带)**:纯新增文件、无重命名/改既有符号 → 无 ripple;新建模块加 README 路由行(grep 确认 engine/us_short 无重名)。**C(反向)**:取整后结构崩(raw 过、ticked 崩→观察)、缺数据不伪造、breach、git 不可用 fail-closed、外部写不被坏 git 挡——双向都测。**D**:N-A。**E**:README 加 1 行(稳定身份+指针);transient gate 只进本 SESSION_LOG、不进 CURRENT。**F**:NaN/Inf→None(测)、跨字段不变式 stop<entry<t1≤t2(测)、`indicators or compute` 空 dict 安全、UTF-8 无 BOM、diff-check clean。Tests passing ≠ closure。
+
 ## 2026-06-21 - Codex `review PASS` (US-short batch-1 hygiene closeout re-review)
 - **Verdict/Action**: PASS. Current re-review found `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` closed; no new material Required in the US-short batch-1 hygiene scope.
 - **Required**: None new. `R-USSHORT-BATCH1-HYGIENE-FULL-DISCOVER-EVIDENCE-OVERCLAIM` remains resolved in `docs/system_risk_register.md`.
