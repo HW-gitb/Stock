@@ -82,12 +82,20 @@ def classify_hard_veto(signals, row_context="candidate"):
     """signals = structured per-stock risk fields (booleans + optional `active_offering` /
     `semantic_audit` objects); row_context ∈ {'candidate', 'holding'}. Returns
     {veto_tier, effect, reasons, row_context}. Severity-max; §5.3 solo signals never exceed
-    soft_risk_tag. Pure — no data fetch, no A-share path."""
-    signals = signals or {}
+    soft_risk_tag. A non-dict `signals` (or a non-dict nested `active_offering` / `semantic_audit`) is
+    MALFORMED and fails CLOSED to a soft_risk_tag — never a raw AttributeError and never silently clean.
+    Pure — no data fetch, no A-share path."""
     if row_context not in _VALID_CONTEXTS:   # fail closed: never silently treat a bad/holding context as candidate
         raise ValueError(f"row_context must be one of {_VALID_CONTEXTS}, got {row_context!r}; "
                          "map an action_table row_source via row_source_to_context() first")
     hard = "position_hard_veto" if row_context == "holding" else "entry_hard_veto"
+    if not isinstance(signals, dict):
+        # a PRESENT but non-dict (truthy) signals object is malformed: fail CLOSED to a soft tag — never a raw
+        # AttributeError, and never silently clean ("没数据≠安全"). A falsy / None signals = "no signals" (clean).
+        if signals:
+            return {"veto_tier": "soft_risk_tag", "effect": TIER_EFFECT.get("soft_risk_tag"),
+                    "reasons": ["malformed_signals_object(非dict风险对象→保守标签)"], "row_context": row_context}
+        signals = {}
     tier = NONE
     reasons = []
 
@@ -100,24 +108,26 @@ def classify_hard_veto(signals, row_context="candidate"):
     # §5.1a SEC offering: hard veto ONLY if recent + active + material; stale/inactive/small → tag only
     off = signals.get("active_offering")
     if off:
-        if off.get("recency") == "recent" and off.get("status") == "active" and off.get("materiality") == "material":
+        od = off if isinstance(off, dict) else {}   # non-dict offering → present but unparseable → tag, not crash/clean
+        if od.get("recency") == "recent" and od.get("status") == "active" and od.get("materiality") == "material":
             tier = _max_tier(tier, hard)
             reasons.append("5.1a:SEC增发(近期+已激活+重大)")
         else:
             tier = _max_tier(tier, "soft_risk_tag")
-            reasons.append("5.1a:SEC增发(陈旧/未激活/小额→仅标签)")
+            reasons.append("5.1a:SEC增发(陈旧/未激活/小额/不可解析→仅标签)")
 
     # §5.1b semantic (advisory-first): unavailable → downgrade+observe, NOT hard block;
     # high-confidence adverse → ≥ restricted (strong_downgrade), not clean — still not a v1 hard veto
     sem = signals.get("semantic_audit")
     if sem:
-        if not sem.get("available"):
+        sd = sem if isinstance(sem, dict) else {}   # non-dict semantic object → treated as unavailable → tag, not crash
+        if not sd.get("available"):
             tier = _max_tier(tier, "soft_risk_tag")
             reasons.append("5.1b:semantic_audit_unavailable(降级+观察,不硬否决)")
-        elif sem.get("adverse") and sem.get("confidence") == "high":
+        elif sd.get("adverse") and sd.get("confidence") == "high":
             tier = _max_tier(tier, "strong_downgrade")
             reasons.append("5.1b:高可信不利语义(≥restricted,不clean)")
-        elif sem.get("adverse"):
+        elif sd.get("adverse"):
             tier = _max_tier(tier, "soft_risk_tag")
             reasons.append("5.1b:不利语义(低可信→仅标签)")
 

@@ -78,6 +78,14 @@ class WorstOfAndDegradationTests(unittest.TestCase):
         two = rg.compute_market_risk_regime(_r("进攻"))["market_risk_regime"]            # trend+breadth missing
         self.assertGreaterEqual(rg._SEVERITY[two], rg._SEVERITY[one])
 
+    def test_non_dict_axis_input_is_restricted_not_crash(self):
+        # a truthy non-dict axis_regimes (list/str/int) must fail closed to restricted/极度防御, never crash
+        for bad in (["进攻"], "进攻", 1, ("震荡",)):
+            out = rg.compute_market_risk_regime(bad)
+            self.assertEqual(out["market_risk_regime"], "极度防御", repr(bad))
+            self.assertTrue(out["restricted"], repr(bad))
+            self.assertFalse(out["new_entry_permitted"], repr(bad))
+
 
 class AntiChatterTests(unittest.TestCase):
     def test_downgrade_is_immediate(self):

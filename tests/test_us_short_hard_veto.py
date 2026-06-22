@@ -186,5 +186,32 @@ class ContractConformanceTests(unittest.TestCase):
             self.assertIn(r["veto_tier"], allowed)
 
 
+class MalformedInputFailClosedTests(unittest.TestCase):
+    def test_non_dict_signals_fails_closed_to_tag_not_crash(self):
+        # a PRESENT but non-dict (truthy) risk-signal object must fail closed to soft_risk_tag, never crash
+        for bad in ("delisted", ["delisted"], 1, ("x",)):
+            out = hv.classify_hard_veto(bad, "candidate")
+            self.assertEqual(out["veto_tier"], "soft_risk_tag", repr(bad))
+            self.assertNotIn(out["veto_tier"], _HARD)
+
+    def test_falsy_signals_is_no_veto(self):
+        # None / empty / falsy = "no signals" (the normal clean case), NOT a fabricated tag
+        for empty in (None, {}, "", 0, []):
+            self.assertEqual(hv.classify_hard_veto(empty, "candidate")["veto_tier"], "none", repr(empty))
+
+    def test_non_dict_nested_objects_fail_closed_not_crash(self):
+        # truthy non-dict active_offering / semantic_audit must degrade to a tag, never raw AttributeError
+        for sig in ({"active_offering": True}, {"active_offering": "yes"},
+                    {"semantic_audit": "unavailable"}, {"semantic_audit": True}):
+            out = hv.classify_hard_veto(sig, "candidate")
+            self.assertEqual(out["veto_tier"], "soft_risk_tag", repr(sig))
+            self.assertNotIn(out["veto_tier"], _HARD)
+
+    def test_malformed_signals_still_validates_context_first(self):
+        # context validation is fail-closed and precedes signal handling (a deliberate ValueError, not a crash)
+        with self.assertRaises(ValueError):
+            hv.classify_hard_veto("delisted", "bogus_context")
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -177,6 +177,13 @@ class SupportAtrEngineTests(unittest.TestCase):
         r = pe.support_atr_engine({"close": 100.0, "indicators": _ind(98.0, 110.0, 2.0)}, "震荡", "bogus")
         self.assertEqual(r["action_fields"]["price_sub_mode"], "pullback")
 
+    def test_non_dict_inp_degrades_to_observe_not_crash(self):
+        # a None / non-dict inp must degrade to observe (no fabricated levels), never raw AttributeError
+        for bad in (None, "bad", ["close"], 1):
+            r = pe.support_atr_engine(bad, "震荡", "pullback")
+            self.assertFalse(r["executable"], repr(bad))
+            self.assertIsNone(r["action_fields"]["stop_clear_price"], repr(bad))
+
 
 # ── holding_exit_engine: levels / breach / missing / event ref ────────────────────────────
 class HoldingExitEngineTests(unittest.TestCase):
@@ -221,6 +228,13 @@ class HoldingExitEngineTests(unittest.TestCase):
         r = pe.holding_exit_engine({"close": 109.0, "indicators": _ind(95.0, 110.0, 2.0)}, "震荡",
                                    event_reference_price=95.004)
         self.assertEqual(r["action_fields"]["event_clear_reference_price"], 95.0)
+
+    def test_non_dict_inp_observes_not_crash(self):
+        # a None / non-dict inp must degrade to observe (no fabricated levels), never raw AttributeError
+        for bad in (None, "bad", ["close"], 1):
+            r = pe.holding_exit_engine(bad, "震荡")
+            self.assertFalse(r["executable"], repr(bad))
+            self.assertIsNone(r["action_fields"]["stop_clear_price"], repr(bad))
 
 
 # ── conformance to the frozen action_table_contract (schema-first binding) ────────────────

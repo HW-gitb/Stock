@@ -72,7 +72,7 @@ def compute_market_risk_regime(axis_regimes, prior_regime=None, prior_upgrade_co
     prior regime (a downgrade applies immediately; an upgrade needs UPGRADE_CONFIRM_RUNS consecutive
     better runs). Returns the effective regime, its frozen cap, new-entry permission, a restricted
     flag, the raw (pre-anti-chatter) regime, and the new upgrade-confirmation count. Pure."""
-    present = {k: v for k, v in (axis_regimes or {}).items()
+    present = {k: v for k, v in (axis_regimes if isinstance(axis_regimes, dict) else {}).items()
                if k in _RISK_AXES and v in _SEVERITY}        # keep only valid regime values
     missing = set(_RISK_AXES) - set(present)
 

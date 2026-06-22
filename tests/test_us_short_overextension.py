@@ -88,6 +88,13 @@ class MissingDataTests(unittest.TestCase):
             self.assertEqual(out["overextension_state"], "none")
             self.assertFalse(out["strips_theme_score"])
 
+    def test_non_dict_metrics_is_none_not_crash(self):
+        # a truthy non-dict metrics (str/list/int) must fail closed to none (no fabrication), never crash
+        for bad in ("bad", ["close"], 1):
+            out = ox.classify_overextension(bad)
+            self.assertEqual(out["overextension_state"], "none", repr(bad))
+            self.assertFalse(out["strips_theme_score"], repr(bad))
+
 
 class ContractConformanceTests(unittest.TestCase):
     def test_state_vocab_matches_frozen_action_table(self):

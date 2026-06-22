@@ -33,6 +33,26 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP - public decision APIs raise raw AttributeError/TypeError on non-dict input instead of failing closed
+
+- Status: **resolved** — Codex `审查 PASS` 2026-06-22 in the current working tree; pending 用户 `提交`.
+- Severity: **P2**.
+- Source: converged full-batch review — Codex `review_v2.md` R3 + Claude `cc_review_v2.md` §P2-2 (both reproduced raw crashes on malformed public input).
+- Scope reviewed/repaired: the reviewed crash surfaces + the obvious sibling — `hard_veto.classify_hard_veto` (top-level `signals` + nested `active_offering`/`semantic_audit`), `regime.compute_market_risk_regime`, `price_engine.support_atr_engine` AND `holding_exit_engine` (sibling, same `inp.get`), `theme_heat.market_confirmation_passed`, `overextension.classify_overextension`, plus their tests. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- Technical finding:
+  - Each consumed a public dict-shaped argument via `.get` / `.items()` after only an `x or {}` falsy-guard (or no guard at all). A truthy NON-dict input (`"bad"`, `["x"]`, `1`, `True`; `None` for the unguarded `inp`) raised a raw `AttributeError` / `TypeError` instead of failing closed.
+  - Reproduced (both reviews): `classify_overextension("bad")` / `market_confirmation_passed("bad", True)` / `support_atr_engine(None, …)` / `compute_market_risk_regime(["进攻"])` / `classify_hard_veto({"active_offering": True})` — all raised.
+  - Risk: a single dirty/malformed row can crash the whole offline decision run; OR (worse) if a caller wraps per-row classification in try/except-continue, that row's safety evaluation is silently SKIPPED = fail-open.
+- Resolution (Claude `修复` 2026-06-22, working tree; 用户 `修复` 即授权): unified boundary policy — a non-dict public input coerces to each engine's EXISTING conservative degrade path, never a raw exception:
+  - regime: non-dict axis_regimes → `{}` → `restricted` / 极度防御 (cap 0, no new entry) — identical to the existing all-axes-missing path.
+  - theme_heat.market_confirmation_passed: non-dict flags → `{}` → not confirmed (no theme score).
+  - overextension: non-dict metrics → `{}` → `none` — consistent with the engine's documented "missing close/ATR → none, no fabrication" contract (fabricating a chasing_extreme penalty from malformed data would wrongly strip a legit stock). [Flag for review: chose `none` over a tag to honor the no-fabrication contract.]
+  - price_engine `support_atr_engine` + `holding_exit_engine`: non-dict inp → `{}` → degrade-to-observe (no fabricated levels).
+  - hard_veto is a fail-closed SAFETY classifier, so non-dict is NOT mapped to clean: a PRESENT truthy non-dict `signals` → `soft_risk_tag` (`malformed_signals_object`); None/falsy → no veto (normal clean); a non-dict nested `active_offering`/`semantic_audit` → coerced → the existing conservative tag branch (offering→tag, semantic→unavailable→tag). `row_context` validation still fails closed FIRST (deliberate documented ValueError, allowed by policy).
+- Verify: 5 target suites 102 OK (incl 9 new malformed-input tests across the engines); full us_short lane 880 OK (871 + 9), zero regression; direct probes confirm all 7 surfaces now return conservative results (soft_risk_tag / 极度防御 / observe / False / none) with NO exception; `or {}` coerce-idiom grep across `engine/us_short_*.py` = 0 remaining; no unguarded `.items()` on a public param. Pure/offline.
+- Scope note (no silent cap): this sweep covers the surfaces the converged review identified + the direct price sibling; it is NOT a blanket re-audit of every public function in all 23 engines — though the crash-prone `or {}` idiom is now eliminated engine-wide.
+- Codex re-review closure (2026-06-22): PASS. Re-reviewed the malformed-public-input crash sweep and confirmed each target surface fails closed without raw `AttributeError` / `TypeError`: `hard_veto` returns `soft_risk_tag` for present non-dict top-level or nested risk objects and keeps invalid `row_context` as the deliberate ValueError; `regime` degrades to 极度防御 / restricted / no new entry; `support_atr_engine` and `holding_exit_engine` degrade to observe with no fabricated levels; `theme_heat` returns not confirmed; `overextension` returns `none` per the no-fabrication contract. Verified: target 5 suites 102 OK; all `*us_short*` tests 880 OK; schema `*us_short*` tests 436 OK; doc-governance / route guards 38 OK; direct malformed probes passed; `or {}` grep over US-short engines returned 0; public-param `.items()` grep has only local/guarded uses; `git diff --check` only LF/CRLF warnings; modified files have no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run. Remaining converged items (theme_heat persistence_mult clamp / theme_lifecycle confirm_count / action_rank / private_paths / main-design doc drift; + Round B design decisions) stay queued and were deliberately NOT reviewed as fixed in this cut.
+
 ### R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN - ship_gate_sizing / cash_allocation gate hard_veto with `is True`, so a truthy-non-True veto fails OPEN
 
 - Status: **resolved** (committed `1614dd91`, Codex `审查 PASS` 2026-06-22).

@@ -215,6 +215,7 @@ def support_atr_engine(inp, regime, sub_mode="pullback"):
     f["order_expiry"] = "first_regular_session_only"
     f["gap_policy"] = "limit_band_first_session_no_chase"  # §2.1 跳空校准 (deferred-vocab free string)
 
+    inp = inp if isinstance(inp, dict) else {}   # malformed / non-dict inp → degrade-to-observe, never raw AttributeError
     close = inp.get("close")
     ind = _indicators(inp)
     sup, res, a = ind.get("effective_support"), ind.get("effective_resistance"), ind.get("atr")
@@ -321,6 +322,7 @@ def holding_exit_engine(inp, regime, event_reference_price=None):
     f["price_engine_used"] = "holding_exit_engine"
     f["price_sub_mode"] = None  # holding is not pullback/breakout
 
+    inp = inp if isinstance(inp, dict) else {}   # malformed / non-dict inp → degrade-to-observe, never raw AttributeError
     close = inp.get("close")
     ind = _indicators(inp)
     sup, res, a = ind.get("effective_support"), ind.get("effective_resistance"), ind.get("atr")

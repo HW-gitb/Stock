@@ -44,7 +44,7 @@ def market_confirmation_passed(item_pass_flags, stock_is_strong, min_items=MIN_C
     """A provisional theme earns theme score only if >= min_items of the 7 market-confirmation items
     pass AND the stock itself is strong (§4.3 个股闸). item_pass_flags = {item: truthy} over the 7 items;
     only the 7 known items are counted (an unknown key can't pad the count)."""
-    flags = item_pass_flags or {}
+    flags = item_pass_flags if isinstance(item_pass_flags, dict) else {}
     passed = sum(1 for k in THEME_CONFIRMATION_ITEMS if flags.get(k))
     return passed >= min_items and bool(stock_is_strong)
 

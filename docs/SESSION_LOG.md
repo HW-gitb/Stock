@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 malformed-public-input crash sweep)
+
+- **Verdict/Action**: PASS. Current Round A step 2 repair correctly closes `R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP` for the reviewed malformed public-input surfaces; no new Required in this scope.
+- **Required**: None new. `R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP` is resolved in `docs/system_risk_register.md` for the current working tree. Remaining convergence items (theme_heat clamp / theme_lifecycle / action_rank / private_paths / main design doc drift / Round B decisions) remain queued and intentionally out of this review.
+- **Verify**: status/diff/current files reviewed; target 5 suites 102 OK; all `*us_short*` tests 880 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct malformed probes passed for hard_veto/regime/price×2/theme_heat/overextension; `or {}` grep over US-short engines 0; public-param `.items()` grep has only local/guarded uses; `git diff --check` LF/CRLF warnings only; no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this crash-sweep cut, or direct the next one-scope queued repair item. Do not start batch3/provider/live/DataHub/Skill/production/A-share until separately authorized.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步2 — malformed-public-input crash sweep)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。第一刀(hard_veto 极性)已提交(`1614dd91` + 折叠 `331802a2`)。本刀 = Round A 步2 统一 malformed-input 边界 sweep:5 个 public 决策 API(+ price sibling)对 truthy 非-dict 输入裸抛 AttributeError/TypeError。统一策略:非-dict → 各引擎已有保守降级路径(isinstance coerce),绝不裸抛 —— regime→restricted/极度防御、theme_heat→未确认、overextension→none(no-fabrication 契约)、price support_atr+holding_exit→observe、hard_veto(安全分类器)→ present 非-dict signals/nested → soft_risk_tag(不 clean)。
+- **Required**: `R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP`(P2)— 完整 finding/policy/per-engine 保守目标/scope-note 见 `docs/system_risk_register.md`(in_progress、working tree)。来源:Codex `review_v2.md` R3 + CC `cc_review_v2.md` §P2-2。
+- **Verify**: 5 目标套件 102 OK(含 9 新 malformed 测试);全 us_short lane **880 OK**(871+9)零回归;探针证 7 个面(hard_veto/regime/price×2/theme_heat/overext)非-dict 全返保守值、无异常;`or {}` coerce 惯用法 grep=0 残留、无 public param 裸 `.items()`;BOM=0;纯 offline、未跑 provider。
+- **Next**: Codex `审查` 本刀(6 引擎面 + 9 测试 + register);PASS 后用户 `提交`。剩余收敛项(theme_heat clamp / theme_lifecycle / action_rank / private_paths / 主设计 doc drift;+ Round B 拍板项)仍排队。
+- **Pre-Codex self-review**: A-F。A(类):bug 类=public dict 输入对 truthy 非-dict 裸崩;扫净 reviewed 面 + price sibling,grep `or {}` 惯用法=0、`.items()` 仅 local/已 guard(覆盖类非实例);9 测试覆盖 str/list/int/tuple/None。B(连带):hard_veto 把 row_context 校验提前(ValueError 行为不变)、docstring 更新;无 doc 断言旧崩溃行为。C(反向):正常 dict 输入全保留(880 绿)、保守方向对(非 fail-open);overextension→none 遵 no-fabrication 契约(已 flag 交 Codex 评)。E:未碰 route-doc,仅 register+SESSION_LOG。F:shape guard 纯函数;hard_veto docstring↔行为一致;guard 不误拒正常态。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 hard_veto blocker polarity first cut)
 
 - **Verdict/Action**: PASS. Current first-cut repair correctly closes `R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN` for `ship_gate_sizing` and `cash_allocation`; no new Required in this scope.

@@ -43,7 +43,7 @@ def classify_overextension(metrics):
     condition (even a huge daily move) never reaches it. warning is the mild execution-side tier that
     KEEPS the theme score. The tiers are mutually exclusive (chasing_extreme precedence). Missing
     close/ATR → 'none' (no fabrication)."""
-    m = metrics or {}
+    m = metrics if isinstance(metrics, dict) else {}
     close, atr = _finite(m.get("close")), _finite(m.get("atr"))
     ma5, ma10, ma20 = _finite(m.get("ma5")), _finite(m.get("ma10")), _finite(m.get("ma20"))
     none_out = {"overextension_state": "none", "strips_theme_score": False,

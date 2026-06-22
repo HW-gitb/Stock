@@ -44,6 +44,11 @@ class MarketConfirmationTests(unittest.TestCase):
     def test_no_items_fails(self):
         self.assertFalse(th.market_confirmation_passed({}, stock_is_strong=True))
 
+    def test_non_dict_flags_fails_closed_not_passed(self):
+        # a truthy non-dict item_pass_flags (str/list/int) must fail closed to not-passed, never crash
+        for bad in ("bad", ["theme_source_count"], 1):
+            self.assertFalse(th.market_confirmation_passed(bad, stock_is_strong=True), repr(bad))
+
 
 class FitMultTests(unittest.TestCase):
     def test_above_floor_is_continuous(self):
