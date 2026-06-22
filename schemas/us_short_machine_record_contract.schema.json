@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_machine_record_contract",
+  "title": "US-short machine-layer record contract (design §10 + §11.1) — the per-run machine record the §10 no-dangling / evidence-traceback / field-registry validator focuses and the renderer renders from",
+  "description": "Batch-3 shared STRUCTURAL contract for the machine layer (design §11.1: operation_impact + 全字段 + 原始分数 + decision_trace + registry → state/us_short/runs_private/). It freezes the SHAPE of a per-run machine record: run-level (schema_name/version/as_of) + rows[] (per-ticker decision) + each row's field_records[] (the §10 完整字段 registry record, 10 keys). This schema pins STRUCTURE ONLY (keys present + types + the validator-native disposition enum + the evidence_ref sub-shape). It deliberately does NOT re-enumerate the big frozen vocabularies (operation_impact levels / core_field_classes / impact_targets / evidence claim types / evidence_ref kinds / final_action / action_table columns) — those are owned by us_short_field_registry_governance + us_short_action_table_contract, and membership is enforced at runtime by engine/us_short_no_dangling_validator.py reading those frozen presets (single source, no third copy to drift). draft-07 cannot express the §10 cross-field invariants (forward no-dangling, core-field-must-hit-an-impact-target-or-shadow/drop, reverse evidence traceback, hard_veto-covers-final_action, risk_downgrade-soft-only, selection-vs-action_rank-explained) — those live in the validator + tests. A field_record carries the static 10-key registry declaration PLUS the runtime resolution (field_class / disposition / impact_target / claim_type / evidence_ref) the validator checks.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "rows"],
+  "properties": {
+    "schema_name": {"const": "us_short_machine_record_contract"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "rows": {"type": "array", "items": {"$ref": "#/definitions/row"}}
+  },
+  "definitions": {
+    "row": {
+      "type": "object",
+      "description": "Per-ticker machine-layer decision record. additionalProperties is true: the rich machine layer (raw scores, per-engine traces, the rest of the §11.3 action_table columns) rides along; the validator only gates the §10-relevant fields.",
+      "required": ["ticker", "row_source", "final_action", "field_records"],
+      "additionalProperties": true,
+      "properties": {
+        "ticker": {"type": "string", "minLength": 1},
+        "row_source": {"type": "string", "minLength": 1},
+        "final_action": {"type": "string", "minLength": 1},
+        "action_rank": {"type": ["integer", "null"]},
+        "selection_rank": {"type": ["integer", "null"]},
+        "action_confidence": {},
+        "position_size": {},
+        "price": {},
+        "risk_tags": {"type": "array", "items": {"type": "string"}},
+        "decision_trace": {"type": "string"},
+        "field_records": {"type": "array", "items": {"$ref": "#/definitions/field_record"}}
+      }
+    },
+    "field_record": {
+      "type": "object",
+      "description": "§10 完整字段 registry record (the 10 const-pinned keys from us_short_field_registry_governance) + the runtime resolution the validator checks. Tight: additionalProperties false. Semantic emptiness/membership of the string-typed fields (current_landing_surface non-empty, operation_impact ∈ the 4 levels, field_class ∈ core classes, terminal ∈ a column/advisory landing, etc.) is enforced by the validator, NOT here — so the validator can be exercised with structurally-valid-but-semantically-bad records.",
+      "additionalProperties": false,
+      "required": [
+        "field_id",
+        "owner_module",
+        "data_source",
+        "pit_basis",
+        "privacy_class",
+        "current_landing_surface",
+        "terminal_surface_target",
+        "operation_impact",
+        "evidence_ref_kind",
+        "lifecycle_item_id",
+        "field_class",
+        "disposition"
+      ],
+      "properties": {
+        "field_id": {"type": "string"},
+        "owner_module": {"type": "string"},
+        "data_source": {"type": "string"},
+        "pit_basis": {"type": "string"},
+        "privacy_class": {"type": "string"},
+        "current_landing_surface": {"type": "string"},
+        "terminal_surface_target": {"type": "string"},
+        "operation_impact": {"type": "string"},
+        "evidence_ref_kind": {"type": ["string", "null"]},
+        "lifecycle_item_id": {"type": ["integer", "null"]},
+        "field_class": {"type": "string"},
+        "disposition": {"type": "string", "enum": ["landed", "shadow_record", "dropped"]},
+        "impact_target": {"type": ["string", "null"]},
+        "claim_type": {"type": ["string", "null"]},
+        "evidence_ref": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["kind", "value", "as_of"],
+          "properties": {
+            "kind": {"type": "string"},
+            "value": {"type": "string"},
+            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        }
+      }
+    }
+  }
+}

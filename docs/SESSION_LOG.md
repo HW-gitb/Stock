@@ -8,6 +8,81 @@
 
 ---
 
+## 2026-06-22 - Codex re-`review PASS` (US-short batch3 cut1 route-doc count repair)
+
+- **Verdict/Action**: PASS. Claude's README count repair is narrow; batch3 cut1 validator/schema behavior and the active route row now align.
+- **Required**: None new. `R-USSHORT-BATCH3-README-TEST-COUNT-DRIFT` is closed for this working tree in `docs/system_risk_register.md`.
+- **Verify**: target batch3 92 OK; full offline `*us_short*` 988 OK; schema `*us_short*` 453 OK; doc/route 38 OK; direct schema/lifecycle/any-hard-veto probes OK; `git diff --check` CRLF-only.
+- **Next**: User may `提交`; do not start downstream batch3 renderer/paper/comparison/lifecycle/provider/live/DataHub/Skill/production/A-share work without a separate command.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 cut1 — README test-count drift)
+
+- **Verdict/Action**: 收到 `修复`(Codex `review FAIL` 1 P3 小问题)。成立、接受:我自己的 doc-drift——README 批3 路由行行为措辞改了、但 `Tests (53)` 计数没跟着改,而 SESSION_LOG/register 已是 92。只改该路由行 → `Tests (92): 17 schema-structure + 75 validator`。零 code/test/design 改。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-README-TEST-COUNT-DRIFT` resolved(详 `docs/system_risk_register.md`)。
+- **Verify**: 活动路由行 `Tests (53)` grep=0;批3 92 OK;doc/route 38 OK;BOM=0;diff-check 仅 CRLF。纯 doc。
+- **Next**: Codex re-`审查`;PASS 后用户 `提交`。批3 续刀(R2/R3)待提交后起。
+- **Pre-Codex self-review**: A–F。纯 doc 计数同步;教训:改测试数后同步全部教学面(README 路由行也算),别只更 SESSION_LOG/register;写完 entry 复跑 doc 守护。
+
+## 2026-06-22 - Codex re-`review FAIL` (US-short batch3 cut1 route-doc test-count drift)
+
+- **Verdict/Action**: FAIL. The schema-gate repair itself holds under tests and probes, but the active `docs/README.md` batch3 route row still claims the old 53-test split after this repair expanded the targeted suite.
+- **Required**: `R-USSHORT-BATCH3-README-TEST-COUNT-DRIFT` is open in `docs/system_risk_register.md`.
+- **Verify**: target batch3 92 OK; full offline `*us_short*` 988 OK; schema `*us_short*` 453 OK; doc/route 38 OK; prior schema-gate probes now `clean=False`; direct lifecycle/any-hard-veto probes OK; `git diff --check` CRLF-only. No provider/live/DataHub/Skill/production/A-share work run.
+- **Next**: Claude should update only the active README batch3 route-row test-count wording, then return for Codex re-review. Do not start downstream batch3 renderer/paper/comparison/lifecycle/provider/live work.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 cut1 — schema-gate 结构完整性,关 SCHEMA-GATE-PARTIAL finding)
+
+- **Verdict/Action**: 收到「上次修复不全面」+ Codex 新 finding `SCHEMA-GATE-PARTIAL-DUPLICATION-BYPASS`(同一事)。判定成立、接受:hand-roll 部分 schema 必漏(whack-a-mole)。按 Codex 首选方案(也=我自审结论)给 validator 加 `jsonschema.Draft7Validator(schema).iter_errors` 结构闸(错类型/多余键/disposition 枚举/schema_name/version/evidence_ref 形状全 fail-closed、不抛),语义 §10 检查仍跑补跨字段逻辑;额外同类硬化:lifecycle_item_id §13.1 解析 + hard_veto 放宽到任意 硬否决。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-SCHEMA-GATE-PARTIAL-DUPLICATION-BYPASS` resolved(详 `docs/system_risk_register.md`)。
+- **Verify**: Codex 8 个 schema-gate bypass 探针(missing/wrong schema_name·version / 顶层&字段多余键 / 非-claim evidence_ref 错型&缺键)现全 clean=False,baseline clean;validator 75 + schema 17 + 全 us_short 988 OK 零回归;doc/route 38 OK;BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查`;PASS 后用户 `提交`。批3 续刀(R2/R3)待提交后起。
+- **Pre-Codex self-review**: A–F(完整见 register)。教训:clean-gate 别 hand-roll 结构(必 whack-a-mole)、直接挂 schema validator 一次堵整类;反向控:baseline + 正控(lifecycle null / 硬否决达 exit / 合法可选空值)仍 clean;跑 Codex 8 探针 + 自审探针 + 全套自验;写完 entry 复跑 doc 守护(上轮教训)。
+
+## 2026-06-22 - Codex re-`review FAIL` (US-short batch3 cut1 schema-gate completeness)
+
+- **Verdict/Action**: FAIL. The prior missing row/field required-key probes are fixed and tests are green, but the validator still returns `clean=True` for other schema-invalid machine-record shapes outside its manual subset.
+- **Required**: `R-USSHORT-BATCH3-SCHEMA-GATE-PARTIAL-DUPLICATION-BYPASS` is open in `docs/system_risk_register.md`.
+- **Verify**: target batch3 76 OK; full offline `*us_short*` 972 OK; schema `*us_short*` 453 OK; doc/route 38 OK; probes show missing/wrong `schema_name`, missing/bad `schema_version`, and non-claim bad `evidence_ref` shape still `clean=True`; no provider/live/DataHub/Skill/production/A-share work run.
+- **Next**: Claude should repair only the batch3 validator/schema-gate completeness gap, then return for Codex re-review. Do not start downstream batch3 renderer/paper/comparison/lifecycle/provider/live work.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 cut1 — 缺失必填字段 bypass + SESSION_LOG 极简模板)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`review FAIL` 2 条)。判定**两条都成立、接受**:① validator 旧 `col not in row: continue` 跳过缺失键 → 整个缺 ticker/row_source/final_action/field_class/disposition 仍 clean=True(同 under-scoping 类的下一层);② 我上条 修复 entry bullet 超 500 字破极简守护(漏在写 entry 后复跑 doc 守护)。修 `engine/us_short_no_dangling_validator.py`:行/字段记录全 schema-必填键缺失或空白即 fail-closed(可空键 evidence_ref_kind/lifecycle_item_id 须 present),并压缩上条 entry。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-MACHINE-RECORD-REQUIRED-FIELD-BYPASS` + `R-USSHORT-BATCH3-SESSIONLOG-MINIMAL-TEMPLATE-VIOLATION` 均 resolved(详 `docs/system_risk_register.md`)。
+- **Verify**: Codex 5 个缺失键探针(ticker/row_source/final_action/field_class/disposition)现全 clean=False;validator 59 + schema 17 + 全 us_short 972 OK 零回归;doc/route 守护 38 OK(压缩上条 entry 后过极简模板);BOM=0;`git diff --check` 仅 CRLF。
+- **Next**: Codex re-`审查`;PASS 后用户 `提交`。批3 续刀(R2/R3)待提交后起。
+- **Pre-Codex self-review**: A–F(完整见 register)。整类:行 3 键 + 字段记录全 12 键 presence+非空一次做全;反向控:可空键 null 合法、baseline clean;schema 三角钉 required 集防漂移;本地复跑 doc-governance 守护确认过(教训:写完 review-cycle entry 必复跑 doc 守护)。
+
+## 2026-06-22 - Codex re-`review FAIL` (US-short batch3 cut1 clean-gate repair)
+
+- **Verdict/Action**: FAIL. Prior 3 bypass probes are fixed, but the validator still returns `clean=True` for missing schema-required machine-record fields, and the latest repair `SESSION_LOG` entry breaks the minimal review-cycle guard.
+- **Required**: `R-USSHORT-BATCH3-MACHINE-RECORD-REQUIRED-FIELD-BYPASS` and `R-USSHORT-BATCH3-SESSIONLOG-MINIMAL-TEMPLATE-VIOLATION` are open in `docs/system_risk_register.md`.
+- **Verify**: target batch3 67 OK; full offline `*us_short*` 963 OK; schema `*us_short*` 452 OK; doc/route 38 FAIL on long repair-entry bullets; probes show missing `final_action`/`row_source`/`field_class` still `clean=True`; `git diff --check` CRLF-only.
+- **Next**: Claude should repair only those batch3 clean-gate required-field and SESSIONLOG-template issues, then return for Codex re-review. Do not start downstream batch3/provider/live/DataHub/Skill/production/A-share work.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 cut1 — VOCAB-BYPASS + PIT/证据反查 clean-gate 漏洞)
+
+- **Verdict/Action**: 收到 `修复`(Codex `review FAIL` 2 P1)。逐条判定**两条都成立、在 scope、必要,全接受**。修 `engine/us_short_no_dangling_validator.py`(纯/离线):action-table 冻结词表成员(读 design_locked_enums、整类 14 列)+ run-level as_of 严格真日期 + claim 须声明非空 evidence_ref_kind;schema 维持结构-only + 加日期 structural-vs-semantic split 测试。完整 judgment/修/验证见 `docs/system_risk_register.md`。
+- **Required**: `R-USSHORT-BATCH3-ACTION-TABLE-VOCAB-BYPASS` + `R-USSHORT-BATCH3-PIT-EVIDENCE-TRACEBACK-GAP` 均 flip→resolved(完整 judgment/修/验证/closure 见 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: Codex 复现的 **3 个 `clean=True` bypass 现全 `clean=False`**(invalid final_action 无 hard veto / as_of=20260231 无 claim / claim evidence_ref_kind=None);validator 51 OK(+13)、schema 16 OK(+1)、全 us_short `discover` **963 OK**(+14)零回归;doc/route 38 OK;BOM=0;`git diff --check` 仅 CRLF。
+- **Next**: Codex re-`审查` 本修(3 处校验器改 + 13 测试覆盖 3 bypass + 整类做全 14 列 + 反向控 + schema 日期 split 文档);PASS 后用户 `提交`。批3 续刀(R2 输出子系统 / R3 证据子系统)仍待本刀 PASS+提交后起(契约先冻结)。
+- **Pre-Codex self-review**: A–F(完整见 register Resolution)。根因同 `draft-validity-gates-complete`:clean-gate 第一稿该列全前提集,漏 3 条被 Codex 抓。整类做全 14 枚举列(非 2);反向控:可选空值/非-claim null 声明不误杀、baseline clean;跑 Codex 3 探针自验全 clean=False;UTF-8 无 BOM。
+
+## 2026-06-22 - Codex `review FAIL` (US-short batch3 cut1 no-dangling validator)
+
+- **Verdict/Action**: FAIL. Batch3 cut1 is correctly scoped as pure/offline no-dangling validator work, but the machine-record clean gate currently accepts invalid action-table vocab and PIT/evidence-traceback holes as `clean=True`.
+- **Required**: `R-USSHORT-BATCH3-ACTION-TABLE-VOCAB-BYPASS` and `R-USSHORT-BATCH3-PIT-EVIDENCE-TRACEBACK-GAP` are open in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; targeted batch3 tests 53 OK; full offline `*us_short*` 949 OK; doc/route guards 38 OK; adversarial probes reproduced three `clean=True` bypasses; `git diff --check` OK except CRLF warnings. No provider/live/network/DataHub/Skill/production/A-share work run.
+- **Next**: Claude Code should repair only these batch3 cut1 validator/schema/test/doc-claim gaps, then hand back for Codex re-`review`; do not start renderer/paper/comparison/lifecycle/provider/live/DataHub/Skill/production work in this repair.
+
+## 2026-06-22 — Claude `起草` (US-short 批3 cut1 — §10 no-dangling/证据反查/字段 registry 校验器 + 机器层记录契约)
+
+- **Verdict/Action**: 收到 `开批3`。批3 首刀(脊梁)= §10 机器层校验器 + 机器层记录契约——批3 renderer/纸面/比较/lifecycle eval 都消费它,按 §18.2「跨模块共享契约先冻结」必须最先做、不可并轮。新增 2 实现文件 + 2 测试:① `schemas/us_short_machine_record_contract.schema.json`(纯**结构**契约:run-level + rows[] + 每行 field_records[]=§10 的 10 键 registry 记录 + 运行时 field_class/disposition/impact_target/claim_type/evidence_ref;**故意不重列冻结词表**[operation_impact 档/核心类/impact_targets/claim 类型/ref kind/final_action/列名由 field_registry+action_table 拥有]→无第三处漂移)② `engine/us_short_no_dangling_validator.py::validate_machine_record`(正向不悬空[每字段有落点;非标签级须落真实 action_table 列;advisory/shadow 标签仅 `仅标签` 级合法] + 核心字段 landed 须命中 6 个 impact_target 之一否则 shadow_record/dropped + risk_downgrade 软only[非硬否决、只落 position_size/action_confidence/risk_tags] + 反向证据反查[claim→provider row/SEC filing/source_id @记录 PIT as_of、声明 kind==实际 kind] + registry 10 键完整 + 硬否决须覆盖 kill/exit final_action + 每决策行带非空 decision_trace;返回 `{clean, checks[7 道 pre_generation_checks], violations[]}`)。**读冻结 `us_short_field_registry_governance`+`us_short_action_table_contract` preset 做全部成员校验、零硬编码副本**(校验器自有子集 TAG_LEVEL/risk-downgrade 目标/kill-or-exit 动作三角 ⊆ 冻结集);坏输入 fail-closed(clean False、绝不抛)。**纯/离线不落盘**——§18.0 P0 私密路径 guard 随**首个真落盘刀**(机器层 writer/renderer)接、本刀不触发(已在 README/design 显式说明,非遗漏)。两个 deferred P3(`R-USSHORT-BATCH2-PRICE-NAN...`/`...MACROCLUSTER-ELEVATED...`)**不在本刀**:前者碰 price_engine、后者碰冻结 macro_cluster preset 需 nod → 留各自对应批3 刀清(register 已记)。
+- **Required**: 无(起草新代码,无 review finding)。两条既有 deferred P3 保持 open(详 `docs/system_risk_register.md`)。
+- **Verify**: 新测试 **53 OK**(38 校验器对抗:每条 §10 不变式一条 fail fixture + 正控[advisory landing/shadow escape/无 claim 字段/持有无 veto/clean baseline]+ 坏输入 fail-closed 全扫[非 dict/rows 非 list/行非 dict/field_records 非 list/evidence_ref 非 dict/缺 as_of 不崩]+ 三角证明读冻结 preset;15 schema 结构)。us_short 全套 `unittest discover` **949 OK**(含新 53;const_coverage 未受影响——新 schema 无 `_20260620` preset、不进其金表),零回归。BOM=0。
+- **Next**: Codex `审查` 本刀(machine_record schema 结构 + 校验器 §10 全不变式覆盖 + 「读冻结 preset 单一来源」+ 坏输入 fail-closed + README/design 状态同步是否过claim);PASS 后用户 `提交`。批3 续刀已定并轮(~7 刀→2 轮):**R2 输出子系统**(lifecycle eval #20 + 提醒机制 #11 + renderer→weekly_report.md/action_table.csv + price_clock #21 + 覆盖诚实/exclusion_summary #10 + hot_excluded #19 + 诚实横幅 + provider 健康离线摘要&never-touch-unapproved #3;**首个真落盘者→在此接 §18.0 P0 私密路径 guard**)+ **R3 证据子系统**(纸面成交确定性 #8 + 复权门结构 + 比较轨 shadow #13/#24 + theme_off + 升级闸防自欺 + 边界回归 #12 收尾)。**机器层契约=跨模块共享契约→R2/R3 须待本刀 Codex PASS + 提交后才起**(否则按 §18.2「共享契约先冻结」打回 + 消费刀 churn);并轮只在 R2/R3 各自内部、不跨本刀冻结门(跨门抢跑=返工负优化)。
+- **Pre-Codex self-review**: A–F。**A**(类不修实例):7 道 pre_generation_checks 每条都有 fail fixture;每条 §10 不变式跨全 rows/field_records 循环、非单点;枚举成员校验全走冻结 preset。**B**(连带 grep):新代码无重命名;grep README/design 无「validator/field_registry/机器层 未实现/standalone」stale 声明(batch-1 行说「batch-3 validator/renderer CONSUME this」=描述消费者、cut1 不证伪);同步 README 加 batch-3 cut1 行 + design header/§19「批3 实现中(首刀已落,进度见 README/SESSION_LOG)」——**不过claim done**(批3 仍 5 刀未完)。**C**(反向失败):clean baseline + 正控证明没把合法态误拒(advisory label/shadow escape/无 claim 字段/持有无 veto 全 clean);坏输入=clean False 非静默 True。**D**:N-A(结构/枚举判断,非歧义自然语言)。**E**(route-doc 单态):批3 cut1 状态进 SESSION_LOG(本条)+ README durable 行;CURRENT 不动、不写 pending gate。**F**(pre-flight):as_of 严格 8 位 ASCII+strptime round-trip(拒 20260231);本刀无浮点算术→无 NaN/Inf 面(price NaN 是另一模块 deferred P3);无 generator 双消费/静默去重/旁路;UTF-8 无 BOM。
+
 ## 2026-06-22 - Codex re-`审查 PASS` (R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP)
 - **Verdict/Action**: PASS. The US-short canonical decision-date design now closes the active-session roll gap with a two-edge live window and an explicit RTH active-session out-of-window fail-closed rule.
 - **Required**: None new. `R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP` is closed in `docs/system_risk_register.md` pending user `提交`.
