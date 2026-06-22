@@ -16,8 +16,10 @@ GROUPS, not a weighted score, so a must-act holding can NEVER rank below a new b
 
 `final_action` is a FROZEN-vocab categorical (always produced upstream from the action_table contract), so an
 unknown value is a contract violation → ValueError (strict, like §5 row_context). `selection_rank` is a noisy
-numeric → fail-closed to last-within-group (a malformed rank never jumps ahead). The global `action_rank` is
-group-major (every group-1 row precedes every group-2 row, …). Pure/offline; no provider, no A-share crossing.
+numeric → a clean positive rank or None. The global `action_rank` is group-major (every group-1 row precedes
+every group-2 row, …); WITHIN group 1 a survival sub-order (止损/事件清仓 → 减仓 → 止盈清仓, §9 line 248) precedes
+the rank, so an unranked 止损/事件清仓 deliberately outranks a ranked 减仓/止盈清仓, while groups 2-5 order by
+`selection_rank`. Pure/offline; no provider, no A-share crossing.
 """
 import json
 import math
@@ -39,11 +41,26 @@ FINAL_ACTION_GROUP = {
     "否决/避开": 5,
 }
 
+# §9 line 248 within-group-1 survival-first sub-order: among holding exits (group 1) a loss-preventing exit
+# (止损 / 事件清仓) ranks before a partial 减仓, which ranks before a pure take-profit (止盈清仓). This is ONLY a
+# sub-order INSIDE group 1 — for every other group it is a constant, so the existing selection_rank order is
+# unchanged. (A 减仓's driver — stop- vs profit-driven — isn't carried on final_action, so it sits in the middle.)
+_GROUP1_EXIT_PRIORITY = {"清仓-止损": 0, "清仓-事件": 0, "减仓": 1, "清仓-止盈": 2}
+
 
 def _rank_value(x):
-    """selection_rank as a positive integer (1 = best). Malformed → None → sorts last within its group (a
-    row we can't rank never jumps ahead of a properly-ranked one)."""
-    if isinstance(x, bool) or not isinstance(x, int):
+    """selection_rank as a positive integer (1 = best), else None. Accepts an integer-VALUED float (1.0 → 1,
+    e.g. from JSON / numpy / upstream float math) for parity with the sibling engines' numeric handling; a
+    non-integer float (1.5), a bool, a string, or a value < 1 → None. This only VALIDATES the rank value — the
+    ordering (group-major, then the group-1 survival sub-order, then this rank) is the caller's, so a None here
+    does NOT by itself mean 'last' (an unranked group-1 survival exit still outranks a ranked 减仓/止盈清仓)."""
+    if isinstance(x, bool):
+        return None
+    if isinstance(x, float):
+        if not math.isfinite(x) or x != int(x):     # non-integer / NaN / Inf float is not a clean rank
+            return None
+        x = int(x)
+    if not isinstance(x, int):                       # string / None / other → malformed
         return None
     return x if x >= 1 else None
 
@@ -60,21 +77,24 @@ def action_group(final_action):
 def rank_actions(rows):
     """Assign each row its §9 `action_group` (1-5) and a global `action_rank` (1-based). Returns a list
     aligned with the INPUT order; each element adds {action_group, action_rank}. Ordering is GROUP-MAJOR
-    (every group-1 row precedes every group-2 row, …); within a group, by `selection_rank` ascending (a
-    malformed rank sorts last), then input order for stability. Raises ValueError on a non-dict row or an
-    unknown `final_action` (frozen-vocab strict)."""
+    (every group-1 row precedes every group-2 row, …); WITHIN group 1 a survival-first sub-order applies
+    (loss-preventing 止损/事件清仓 before a partial 减仓 before a 止盈清仓, §9 line 248) ahead of `selection_rank`,
+    while groups 2-5 order by `selection_rank` ascending (a malformed rank sorts last); then input order for
+    stability. Raises ValueError on a non-dict row or an unknown `final_action` (frozen-vocab strict)."""
     if not isinstance(rows, list):
         raise ValueError("rows must be a list")
     enriched = []
     for i, row in enumerate(rows):
         if not isinstance(row, dict):
             raise ValueError(f"row {i} is not a dict")
-        group = action_group(row.get("final_action"))
+        fa = row.get("final_action")
+        group = action_group(fa)
         sr = _rank_value(row.get("selection_rank"))
-        enriched.append({"index": i, "group": group,
+        survival = _GROUP1_EXIT_PRIORITY.get(fa, 0) if group == 1 else 0   # survival-first only INSIDE group 1
+        enriched.append({"index": i, "group": group, "survival": survival,
                          "sort_rank": sr if sr is not None else math.inf})
 
-    order = sorted(enriched, key=lambda e: (e["group"], e["sort_rank"], e["index"]))
+    order = sorted(enriched, key=lambda e: (e["group"], e["survival"], e["sort_rank"], e["index"]))
     results = [None] * len(rows)
     for action_rank, e in enumerate(order, start=1):
         results[e["index"]] = {"action_group": e["group"], "action_rank": action_rank}

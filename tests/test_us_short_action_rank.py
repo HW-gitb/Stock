@@ -2,8 +2,9 @@
 """Tests for US-short action_rank (engine/us_short_action_rank.py) — §9 操作排名 (保命优先 5 组骨架).
 
 Adversarial focus: GROUPING-not-weighting (a must-act holding can NEVER rank below a new buy), the
-final_action→group map, within-group ordering by selection_rank, frozen-vocab strictness, and conformance
-to the frozen skeleton / vocab.
+final_action→group map, the group-1 survival sub-order (止损/事件清仓 before 减仓 before 止盈清仓, §9 line 248),
+groups-2-5 / same-tier ordering by selection_rank (integer-valued floats accepted), frozen-vocab strictness,
+and conformance to the frozen skeleton / vocab.
 """
 import json
 import sys
@@ -104,6 +105,58 @@ class ContractTests(unittest.TestCase):
     def test_policy_is_grouping_not_weighting(self):
         self.assertTrue(self.gov["action_rank_policy"]["grouping_not_weighting"])
         self.assertTrue(self.gov["action_rank_policy"]["survival_first"])
+
+
+class Group1SurvivalOrderTests(unittest.TestCase):
+    # sub-fix (a): §9 line 248 within-group-1 survival-first sub-order (separate from the float-rank fix)
+    def test_survival_exits_precede_profit_exits_in_group_one(self):
+        # a loss-preventing exit (止损/事件清仓) must rank before a 减仓 and a 止盈清仓, EVEN when the profit
+        # exit carries a better selection_rank (which orders group-1 same-tier + groups 2-5, NOT the
+        # group-1 survival tier) — the bug was 止损 sorting last
+        rows = [{"final_action": "清仓-止盈", "selection_rank": 1},
+                {"final_action": "减仓", "selection_rank": 1},
+                {"final_action": "清仓-止损"},
+                {"final_action": "清仓-事件"}]
+        out = ar.rank_actions(rows)
+        order = sorted(range(len(rows)), key=lambda i: out[i]["action_rank"])
+        self.assertEqual([rows[i]["final_action"] for i in order],
+                         ["清仓-止损", "清仓-事件", "减仓", "清仓-止盈"])
+        self.assertTrue(all(o["action_group"] == 1 for o in out))   # all still group 1, ahead of any buy
+
+    def test_within_same_survival_tier_selection_rank_breaks_ties(self):
+        # two same-tier survival exits still order by selection_rank (sub-order precedes, doesn't replace, it)
+        rows = [{"final_action": "清仓-止损", "selection_rank": 2},
+                {"final_action": "清仓-事件", "selection_rank": 1}]
+        out = ar.rank_actions(rows)
+        self.assertEqual(out[1]["action_rank"], 1)   # selection_rank 1 wins within the same tier
+        self.assertEqual(out[0]["action_rank"], 2)
+
+    def test_survival_suborder_does_not_disturb_other_groups(self):
+        # groups 2-5 keep the pure selection_rank order (the sub-order is a constant outside group 1)
+        rows = [{"final_action": "建仓", "selection_rank": 3}, {"final_action": "建仓", "selection_rank": 1},
+                {"final_action": "建仓", "selection_rank": 2}]
+        out = ar.rank_actions(rows)
+        self.assertEqual([o["action_rank"] for o in out], [3, 1, 2])
+
+
+class FloatSelectionRankTests(unittest.TestCase):
+    # sub-fix (b): integer-valued float selection_rank parity (separate from the survival-order fix)
+    def test_integer_valued_float_rank_is_accepted_not_demoted(self):
+        # an integer-valued float (1.0 from JSON / numpy) is a valid rank, NOT pushed to last
+        rows = [{"final_action": "建仓", "selection_rank": 2.0},
+                {"final_action": "建仓", "selection_rank": 1.0},
+                {"final_action": "建仓", "selection_rank": 3.0}]
+        out = ar.rank_actions(rows)
+        self.assertEqual([o["action_rank"] for o in out], [2, 1, 3])   # 1.0 ranks best, not last
+
+    def test_non_integer_float_bool_string_rank_sort_last(self):
+        # a non-integer float (1.5) / bool / NaN / string is still malformed → sorts last within the group
+        for bad in (1.5, True, float("nan"), "1"):
+            rows = [{"final_action": "建仓", "selection_rank": bad},
+                    {"final_action": "建仓", "selection_rank": 1}]
+            out = ar.rank_actions(rows)
+            self.assertEqual(out[1]["action_rank"], 1, repr(bad))   # clean int-1 first
+            self.assertEqual(out[0]["action_rank"], 2, repr(bad))   # malformed last
 
 
 if __name__ == "__main__":

@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 action_rank survival order + float rank + docstring drift closeout)
+
+- **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER`, `R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK`, and `R-USSHORT-BATCH2-ACTIONRANK-DOCSTRING-WITHINGROUP-RANK-DRIFT`; no new Required in this scope.
+- **Required**: None new. The three action_rank IDs are resolved in `docs/system_risk_register.md`. Optional, non-blocking: `tests/test_us_short_action_rank.py` has one local comment saying selection_rank "only orders group 2"; behavior/tests/README/function docs are correct, but the comment can be tightened later to "group-1 same-tier + groups 2-5".
+- **Verify**: status/diff/current files reviewed; `jsonschema` importable; action_rank 17 OK; all `*us_short*` tests 889 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct action_rank probes passed; active stale-phrase grep clean; broader grep leaves only historical SESSION_LOG/register prose plus the non-blocking local comment above; `git diff --check` LF/CRLF warnings only; no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this Round A step 5 action_rank cut. Remaining Round A private_paths / main-design doc drift and Round B stay queued and out of scope.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 步5 doc-drift — action_rank 教学面 within-group 措辞)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 步5,1 P3 Required)。判定成立、接受:两行为修(survival 序 + float rank)已 PASS;漏的又是 doc-drift —— 上轮 grep 了 README+design、**漏了被改的引擎/测试文件自身**(引擎 module + `_rank_value` + 测试 top docstring 仍写 "last-within-group" / "within-group ordering by selection_rank",对组1 survival 序已 stale)。修(doc-only、零 runtime):3 面 + README selection_rank 短语都加"组1 survival 先于 rank"限定。
+- **Required**: `R-USSHORT-BATCH2-ACTIONRANK-DOCSTRING-WITHINGROUP-RANK-DRIFT`(P3)— flip→resolved + Resolution 见 `docs/system_risk_register.md`。两行为修保持 PASS。
+- **Verify**: **广 grep**(这次含 engine+test,非只 README+design)`never jumps ahead`/`last-within-group`/`within a group ordered by selection_rank`/`within-group ordering by selection_rank` 全非-archive 面 —— **0 个 active code/test/README/design 教学面**残留;仅历史 SESSION_LOG+register prose(criterion 3 豁免)。action_rank 17 OK;全 us_short lane **889 OK**(doc-only 不变);doc/route 38 OK;BOM=0;纯 offline。
+- **Next**: Codex re-`审查` 本刀(3 docstring + README + register);PASS 后用户 `提交`。剩余 Round A(private_paths / 主设计 doc drift)+ Round B 仍排队。
+- **Pre-Codex self-review**: A-F。**根因(doc-drift 第3次)**:行为改动的全同义面 grep 我漏扫了**被改文件自身的 docstring**(只扫外部 README+design)。教训:grep 必含被改文件 module/函数 docstring + 其测试 docstring。本次已扫净(0 active 教学面残留,仅历史 prose 豁免)。B:design line248 本就组②、不动。C:零 runtime、889 不变。F:doc↔behavior 一致。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 action_rank survival order + float rank)
+
+- **Verdict/Action**: FAIL. The two action_rank behavior repairs are functionally correct, but active code/test teaching surfaces still describe the old selection_rank-only within-group model, so the cut is not clean yet.
+- **Required**: `R-USSHORT-BATCH2-ACTIONRANK-DOCSTRING-WITHINGROUP-RANK-DRIFT` (P3) is open with full detail in `docs/system_risk_register.md`. `R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER` and `R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK` passed behavior review but remain in this cut's closure path until the docstring drift is repaired and re-reviewed.
+- **Verify**: status/diff/current files reviewed; action_rank 17 OK; all `*us_short*` tests 889 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct action_rank probes passed; grep found stale active test/module docstring wording; `git diff --check` LF/CRLF warnings only; no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: Claude Code `修复` the action_rank docstring/test-doc wording only; do not change runtime behavior or start private_paths / main-design doc drift / Round B until re-reviewed.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步5 — action_rank 组1保命内序 + float rank,分开修)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。步4(confirm_count)已提交(`f620468d` + 折叠 `c0824e6a`,后者更正 f620468d 的误注"Codex 未跑"——Codex 实已 PASS)。本刀 = Round A 步5 action_rank,Codex 要求两子修分开:**(a)组1保命内序**——全组按 selection_rank 排,但 §9 选股名次只给组②,组①止损清仓(无 rank→inf)被排到止盈减仓后。修:组1 survival 子序(止损/事件0→减仓1→止盈2)先于 selection_rank,组2-5 不变。**(b)float rank**——`_rank_value` 拒 float(1.0→垫底),严于兄弟。修:收整数值 float、非整数/bool/串仍 last。
+- **Required**: `R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER`(P2)+ `R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK`(P2)—— **两条独立**(应 Codex"分开"),完整 finding/trace/设计 flag 见 `docs/system_risk_register.md`(均 in_progress)。来源:Codex `review_v2.md` R6 + CC `cc_review_v2.md` §3.1/§P2-6。
+- **Verify**: 探针 [减仓 rank1, 清仓-止损]→止损 action_rank=1(原2)、[建仓 rank2.0/1.0]→1.0 排首(原垫底);action_rank 17 OK(含 5 新:3 survival 序 + 2 float,**分开测**);全 us_short lane **889 OK**(884+5)零回归;doc/route 38 OK;BOM=0;纯 offline、未跑 provider。
+- **Next**: Codex `审查` 本刀(1 引擎 2 子修 + 2 测试类 + README 2 处 + register 2 条);PASS 后用户 `提交`。剩余 Round A(private_paths / 主设计 doc drift)+ Round B 仍排队。
+- **Pre-Codex self-review**: A-F。**E/B 主动防 route-drift(承步3教训)**:改 within-group 序后**当场 grep** README+design 的 action_rank 排序描述——design line248 本就写"选股名次=组②排序"(我的组1 survival 序与之一致、不碰冻结权威);README engine 行写"within a group ordered by selection_rank"(对组1 stale)→ 已同步改 + selection_rank 加 float 注。A(类):(a)只组1需 survival 序(组2-5 selection_rank 正确);(b)只 `_rank_value` 过严。C(反向):合法序/rank 全留(889 绿)、组2-5 不扰、1.0 收非误拒、1.5/bool/串仍 last。F:docstring↔行为一致。**设计 flag**:减仓 driver 不在 final_action→放中间 tier,已交 Codex/用户判。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_lifecycle confirm_count validation)
 
 - **Verdict/Action**: PASS. Current Round A step 4 repair closes `R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED` in the working tree; no new Required in this scope.
