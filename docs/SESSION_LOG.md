@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme-block docstring closure)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` is closed in the current working tree; behavior and active contract text now match.
+- **Required**: None new. `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: theme-block + orthogonalization 26 OK; `*us_short*` 791 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; probes confirmed base-only rows score and malformed selected bases stay `None`; `diff --check` only CRLF warnings. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; theme_probe seats, defensive-entry mode, batch3 renderer/validator, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-22 — Claude `修复` round2 (R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP)
+- **Verdict/Action**: 成立、接受。行为上轮已修、但 closure #4 没做全:我改了**函数 docstring + README、漏了模块级(文件顶)docstring**,顶部仍写「base or residual unusable→None」旧契约。= doc-drift B-ripple(改契约要一次 grep 所有陈述处:函数/模块 docstring + README + design)。修:模块 docstring 顶部「Per row」公式含对侧缺→0、「unusable→None」改为只选中 base;纯 docstring 改、行为/测试不变;grep 证残留旧措辞=0。完整见 register round-2 Resolution。
+- **Required**: `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` — 完整见 `docs/system_risk_register.md`(flip→resolved + round-2 Resolution)。
+- **Verify**: theme-block 11 OK(行为不变);doc 38 OK;grep 残留旧契约措辞=0;BOM=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex re-`审查`(本 docstring 修);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F。**B 教训(doc-drift 复发)**:改契约/机制时**一次 grep 全部陈述处**(函数 docstring + **模块 docstring** + README + design),别只改部分——本轮栽在漏了模块 docstring。本修后已 grep 证 engine+README 零残留旧措辞,四处(函数/模块 docstring + README + 测试)同契约。无代码/测试改。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 theme-block re-review)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` remains open; behavior probes now pass, but the active module-level docstring still teaches the old residual-missing -> `None` contract.
+- **Required**: `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` - full current Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: target theme-block + orthogonalization 26 OK; `*us_short*` discover 791 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; `diff --check` clean except CRLF warnings. Probes confirmed base-only rows now score, malformed selected bases still `None`, and perfect-overlap residuals stay 0. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` this docstring closure gap only; do not start theme_probe seats, defensive-entry mode, action_rank / batch3 renderer/validator, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-22 — Claude `修复` (R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP)
+- **Verdict/Action**: 成立、接受。漏了 **base-only 设计路径**(非 fail-closed 类):行 gate 在 base **和** residual 都非 None,但 §13#38 残差是 base 之上的加项非前提 → 纯 GICS(多数股票)+ 跨界 theme-only 行被丢出 35% 块。修:只 gate 选中 base、对侧残差缺取 0.0(`base+COEF×(residual or 0)`);其余保护全留、第七刀不动。+4 测试 + README/docstring 区分单源/双源。完整见 register Resolution。
+- **Required**: `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` — 完整 judgment/修/测试/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: theme-block 11 OK;全 us_short 套件 383 OK(零回归,本机 deps-complete);探针 industry-only→industry 百分位、theme-only(cross)→theme 百分位、混池 base-only 保留、选中 base 坏仍 None;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`(批2 纯引擎到此边界;theme_probe 仍待设计决定)。
+- **Pre-Codex self-review**: A-F。A(类):纯 GICS base-only/跨界 theme-only/混池/选中 base 坏仍 None 全覆盖。**D 教训**:残差是加项非前提——漏了 base-only 这条**常见**设计路径(多数股票纯 GICS),非 fail-closed 漏而是设计态覆盖漏,第一稿就该列「单源 vs 双源」两态。B:仅改 theme_block 引擎+测试+README 措辞;第七刀 `_orthogonalize` 不动(无连带);grep `_finite(`=0。C(反向):对侧缺→0 残差非丢行、选中 base 坏→None,测**设计意图**。E:register 单态。F:strict、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 theme-block)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` is open; `assemble_theme_block` drops valid base-only pure-GICS / cross-theme rows when the opposite heat source is missing.
+- **Required**: `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: target theme-block + orthogonalization 22 OK; `*us_short*` discover 787 OK; schema `*us_short*` 408 OK; doc-governance/route 38 OK; `diff --check` clean except CRLF warnings. Probes reproduced pure industry-only rows and cross-theme-only rows returning `[None, None, None]`. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` this Required only; do not start theme_probe seats, defensive-entry mode, action_rank / batch3 renderer/validator, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-21 — Claude (起草 US-short batch-2 第十四刀 — §4.3 35% 块方向合成 + 第七刀正交化 generalize)
+
+**Worked on**: 批2 第十四刀,§4.3 35% 赛道/主题热度块方向合成。① 把第七刀正交化抽成 generic `_orthogonalize(pool, base_key, residual_key)` + 加 swap 方向 `orthogonalize_theme_on_industry`(行为保持,旧 12 测试守护回归)。② 新 `engine/us_short_theme_block.py` `assemble_theme_block`:按 §13#38 方向规则合成。+ README(新 14 刀行 + 第七刀行 B-ripple 同步)。
+
+**Key decisions**: ① **§13#38 方向是固定规则非自由选**:跨界主题(`theme_is_cross_sector is True`)→theme 基+industry⊥theme;否则→**fail-safe GICS industry 基**+theme⊥industry(GICS 官方硬分组,故 theme 基须显式 True,缺/False/truthy 都落 industry 基)。② **重叠只计一次**:复用第七刀正交残差(完美重叠→0→不双计 boost,测证)。③ **合成式 v1(交审)**:block_raw = base 百分位(各源内)+ RESIDUAL_COEF×正交残差,再跨池 re-百分位→0-100;RESIDUAL_COEF=0.5 §13#38 forward 模块常量。④ 改已提交第七刀=机制 generalize,旧 12 测试守护行为保持 + README 同步。⑤ macro_cluster 重复热度 §8 独立软横幅、不在此硬扣。
+
+**Verify**: 新/扩展测试 **22 OK**(theme_block 7:方向换基、fail-safe 非显式True→industry基、完美重叠不双计、非list/坏行→None/[]、range;ortho swap 3:对称镜像、完美拟合→0、缺theme→None;+ 旧 12 回归)。**零 us_short 回归**:全套件 **379 OK**(本机 deps-complete);grep `_finite(`=0(用 `_finite_number`);4 文件 BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十四刀(2 引擎[1新+1 generalize] + 2 测试 + README);PASS 后用户 `提交`。批2 仅剩 theme_probe 名额 + 防御档入场(**仍卡 theme_opportunity_state 词表 design-deferred + §13#27 席位矩阵未指定,需用户/设计先定**)——这刀后批2 纯引擎基本到这条边界。
+
+**Pre-Codex self-review**: A-F。A(类):方向换基/fail-safe 严格True/完美重叠/坏输入/range/swap 对称 全覆盖。**B(连带·重点)**:改了已提交第七刀 → 抽 generic 行为保持(旧 12 测试守护、跑绿)、README 第七刀行措辞同步(旧「produces ONLY industry residual」改净)、跨引擎 import 验证可用。C(反向):非显式 True→industry 基(测设计意图)、坏→None 非放大、完美重叠→0 非 boost。D:方向是 design 固定规则,照 §13#38 非自创。E:README 2 行、无 transient 进 CURRENT。F:strict 校验、RESIDUAL_COEF 常量、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-21 - Codex `审查 PASS` (US-short batch2 action_rank)
 
 - **Verdict/Action**: PASS. US-short batch2 13th slice `engine/us_short_action_rank.py` is review-clean in the current working tree; no new material Required found.

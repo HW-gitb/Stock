@@ -101,5 +101,30 @@ class BadInputTests(unittest.TestCase):
         self.assertEqual(degenerate, ot._percentile_rank_0_100([20, 45, 55, 85]))
 
 
+class SwapDirectionTests(unittest.TestCase):
+    """orthogonalize_theme_on_industry = the swapped direction (regress theme on industry), for the §13.1 #38
+    pure-GICS-base case. It must be the symmetric mirror of the industry-on-theme function."""
+
+    def test_swap_unexplained_theme_gets_highest_residual(self):
+        pool = [{"industry_heat_score": i, "theme_heat_score": t}
+                for (i, t) in ((10, 20), (20, 40), (30, 60), (40, 80), (50, 200))]
+        out = ot.orthogonalize_theme_on_industry(pool)
+        self.assertEqual(len(out), 5)
+        for v in out:
+            self.assertTrue(0.0 <= v <= 100.0)
+        self.assertEqual(out.index(max(out)), 4)   # the anomalous-theme stock ranks top
+        self.assertEqual(out[4], 100.0)
+
+    def test_swap_perfectly_explained_theme_is_non_boosting_zero(self):
+        out = ot.orthogonalize_theme_on_industry([{"industry_heat_score": i, "theme_heat_score": 2 * i}
+                                                  for i in (10, 20, 30, 40)])
+        self.assertTrue(all(v == 0.0 for v in out))
+
+    def test_swap_missing_theme_row_is_none(self):
+        pool = [{"industry_heat_score": i, "theme_heat_score": 2 * i} for i in (10, 20, 30)] + \
+               [{"industry_heat_score": 40}]   # last has no theme → None in the swap direction
+        self.assertIsNone(ot.orthogonalize_theme_on_industry(pool)[3])
+
+
 if __name__ == "__main__":
     unittest.main()

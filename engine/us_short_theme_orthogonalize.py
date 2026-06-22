@@ -11,8 +11,10 @@ theme), and percentile-normalises it to 0-100. Degenerate (too few paired rows, 
 variance) → industry percentile fallback (theme carries no separable information). Pure Python OLS +
 percentile (no numpy).
 
-This slice produces ONLY the orthogonal industry residual; the directional 35%-block combination
-(theme-base vs pure-GICS-base, residual coefficient §13 #38) is a separate assembly step, NOT here.
+This module produces the orthogonal residual in BOTH directions (`orthogonalize_industry_on_theme` and the
+swapped `orthogonalize_theme_on_industry`) over a generic `_orthogonalize(pool, base_key, residual_key)`; the
+directional 35%-block COMBINATION (theme-base vs pure-GICS-base by rule, residual coefficient §13 #38) lives
+in `engine/us_short_theme_block.py`, which consumes these residuals.
 Every public input is validated fail-closed (whole-class, incl. the `min_paired` default param): pool
 rows' values use a strict `_finite_number` (rejects bool + numeric string), a non-list pool / non-dict
 row is treated as empty, and a malformed `min_paired` falls back to the default. Pure/offline; no
@@ -64,46 +66,59 @@ def _percentile_rank_0_100(values):
     return [sum(1 for u in values if u <= v) / n * 100.0 for v in values]
 
 
-def orthogonalize_industry_on_theme(pool, min_paired=MIN_PAIRED):
-    """Cross-sectional: regress `industry_heat_score` on `theme_heat_score` across the pool, take the
-    residual, percentile-normalise to 0-100 (industry/theme heat overlap counted once). Returns a list
-    aligned with `pool`: the orthogonal industry value (0-100) for rows where industry is a valid number,
-    else None. Degenerate (< min_paired both-present rows, or ~zero theme variance) → industry percentile
-    fallback over all rows that have a valid industry value (theme can't separate). A PERFECT
-    industry-on-theme fit (zero residual dispersion) → all paired rows get a non-boosting 0.0 (no
-    separable industry signal — the overlap is counted once, NOT turned into a max-percentile boost).
-    A non-list pool or non-dict / malformed row is treated as having no usable value (fail closed)."""
+def _orthogonalize(pool, base_key, residual_key, min_paired=MIN_PAIRED):
+    """Cross-sectional: regress `residual_key` on `base_key` across the pool, take the residual (the part of
+    `residual_key` NOT explained by `base_key`), percentile-normalise to 0-100 — so the overlap between the
+    two heat sources is counted ONCE. Returns a list aligned with `pool`: the orthogonal residual (0-100) for
+    rows where `residual_key` is a valid number, else None. Degenerate (< min_paired both-present rows, or
+    ~zero `base_key` variance) → `residual_key` percentile fallback (the base can't separate). A PERFECT fit
+    (zero residual dispersion) → all paired rows get a non-boosting 0.0 (no separable signal — overlap counted
+    once, NOT a max-percentile boost). A non-list pool / non-dict / malformed row → no usable value (fail
+    closed)."""
     rows = pool if isinstance(pool, list) else []
     mp = _safe_min_paired(min_paired)
     out = [None] * len(rows)
 
-    ind_idx, ind_vals, paired = [], [], []
+    y_idx, y_vals, paired = [], [], []
     for i, row in enumerate(rows):
         r = row if isinstance(row, dict) else {}
-        t = _finite_number(r.get("theme_heat_score"))
-        y = _finite_number(r.get("industry_heat_score"))
+        x = _finite_number(r.get(base_key))
+        y = _finite_number(r.get(residual_key))
         if y is not None:
-            ind_idx.append(i)
-            ind_vals.append(y)
-        if t is not None and y is not None:
-            paired.append((i, t, y))
+            y_idx.append(i)
+            y_vals.append(y)
+        if x is not None and y is not None:
+            paired.append((i, x, y))
 
-    if not ind_idx:
+    if not y_idx:
         return out
 
-    if len(paired) < mp or _variance([t for (_i, t, _y) in paired]) < 1e-9:
-        for i, pr in zip(ind_idx, _percentile_rank_0_100(ind_vals)):   # degenerate → industry percentile
+    if len(paired) < mp or _variance([x for (_i, x, _y) in paired]) < 1e-9:
+        for i, pr in zip(y_idx, _percentile_rank_0_100(y_vals)):   # degenerate → residual_key percentile
             out[i] = pr
         return out
 
-    xs = [t for (_i, t, _y) in paired]
-    ys = [y for (_i, _t, y) in paired]
+    xs = [x for (_i, x, _y) in paired]
+    ys = [y for (_i, _x, y) in paired]
     slope, intercept = _ols(xs, ys)
-    resid = [y - (slope * t + intercept) for (_i, t, y) in paired]
-    if _variance(resid) < 1e-9:        # industry perfectly explained by theme → no separable industry info
-        for (i, _t, _y) in paired:     # → non-boosting 0 (NOT max percentile); the overlap is counted once
+    resid = [y - (slope * x + intercept) for (_i, x, y) in paired]
+    if _variance(resid) < 1e-9:        # residual_key perfectly explained by base_key → no separable info
+        for (i, _x, _y) in paired:     # → non-boosting 0 (NOT max percentile); the overlap is counted once
             out[i] = 0.0
         return out
-    for (i, _t, _y), pr in zip(paired, _percentile_rank_0_100(resid)):  # residual percentile for paired rows
+    for (i, _x, _y), pr in zip(paired, _percentile_rank_0_100(resid)):  # residual percentile for paired rows
         out[i] = pr
     return out
+
+
+def orthogonalize_industry_on_theme(pool, min_paired=MIN_PAIRED):
+    """industry⊥theme (§4.3): regress `industry_heat_score` on `theme_heat_score`, residual percentile. The
+    orthogonal INDUSTRY contribution used when the THEME is the base (a cross-sector theme, §13.1 #38)."""
+    return _orthogonalize(pool, "theme_heat_score", "industry_heat_score", min_paired)
+
+
+def orthogonalize_theme_on_industry(pool, min_paired=MIN_PAIRED):
+    """theme⊥industry (§4.3, the swapped direction): regress `theme_heat_score` on `industry_heat_score`,
+    residual percentile. The orthogonal THEME contribution used when GICS industry is the base (pure-GICS,
+    §13.1 #38)."""
+    return _orthogonalize(pool, "industry_heat_score", "theme_heat_score", min_paired)
