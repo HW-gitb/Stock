@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT - register hygiene diff rewrites one old inline batch-1 status while claiming only seven new-format batch-2 Status lines changed
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `c3fd7bd6`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3** (review-log / register hygiene accuracy; no runtime/code behavior impact).
 - Source: Codex adversarial review of the current register-hygiene working tree after Claude `修复` entry "fold 7 stale committed-entry status markers".
 - Scope reviewed: current dirty diff in `docs/SESSION_LOG.md` and `docs/system_risk_register.md` only. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run.
