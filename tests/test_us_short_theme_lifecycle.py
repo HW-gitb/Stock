@@ -64,6 +64,13 @@ class TransitionTests(unittest.TestCase):
                 tl.next_theme_lifecycle_state("provisional_active", confirming=True, confirm_count=1,
                                               upgrade_confirm_runs=bad)
 
+    def test_malformed_confirm_count_fails_closed(self):
+        # REVERSE-FAILURE control: the consecutive-confirmation STREAK can't be short-circuited into a
+        # single-round upgrade via a bool / non-int / negative confirm_count (True+1=2 would trip a 2-run gate)
+        for bad in (True, False, 1.5, "1", -1, None):
+            with self.assertRaises(ValueError):
+                tl.next_theme_lifecycle_state("provisional_active", confirming=True, confirm_count=bad)
+
     def test_stricter_three_run_upgrade_is_allowed(self):
         # a forward-calibrated stricter threshold is fine: 3 runs -> still held at run 2, up at run 3
         self.assertEqual(tl.next_theme_lifecycle_state("provisional_active", confirming=True,

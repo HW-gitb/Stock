@@ -33,6 +33,21 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED - theme_lifecycle confirm_count is consumed unvalidated, so a bool/float can force a single-round upgrade
+
+- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`). Was in_progress for Round A step 4.
+- Severity: **P2**.
+- Source: converged batch-2 review — Codex `review_v2.md` R5 + Claude `cc_review_v2.md` §P2 (action 5.7).
+- Scope reviewed/repaired: `engine/us_short_theme_lifecycle.py::next_theme_lifecycle_state` + `tests/test_us_short_theme_lifecycle.py`. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- Technical finding:
+  - `next_theme_lifecycle_state` HARD-validates the sibling `upgrade_confirm_runs` (int, not bool, ≥2 → ValueError) but consumed `confirm_count` (the consecutive-confirmation streak) UNVALIDATED at `c = confirm_count + 1`.
+  - Trace: `next_theme_lifecycle_state("provisional_active", confirming=True, confirm_count=True)` → `True + 1 = 2 ≥ upgrade_confirm_runs(2)` → `("confirmed_active", 0)` — a SINGLE-round upgrade, bypassing the §13 #30 up-slow anti-chatter (consecutive confirmations). `confirm_count=1.5` similarly upgrades; a string `confirm_count` would raise a bare TypeError at `+1`.
+- Resolution (Claude `修复` 2026-06-22, working tree; 用户 `修复` 即授权): validate `confirm_count` with the SAME strict-int discipline as `upgrade_confirm_runs` — a non-negative int, NOT a bool; bool / non-int / negative → ValueError (fail closed, consistent with the engine's existing raise-on-bad-prior_state / raise-on-bad-upgrade_confirm_runs contract). A malformed streak can therefore never short-circuit the up-slow gate, and the string-`+1` TypeError is replaced by a clear ValueError.
+- Verify: `confirm_count=True / 1.5 / "1" / -1` → ValueError; valid `confirm_count=0` → (provisional_active, 1) build, `=1` → (confirmed_active, 0) upgrade (both unchanged). theme_lifecycle 22 OK (incl 1 new fail-closed test); full us_short lane 884 OK (883 + 1), zero regression.
+- Class-coverage note: the other `next_theme_lifecycle_state` flags were checked — `deteriorating` truthy → down-fast (the SAFE/conservative direction), `confirming` truthy still needs the now-validated streak (no single-round bypass). `passes_provisional_gate` is a truthy-permissive GRANT flag for retired re-entry (a truthy-non-True could allow re-entry) — low severity, NOT flagged by the review, deliberately OUT of this confirm_count cut; a candidate Round C hygiene item if the user wants grant-flag strictness there.
+- Closure: Codex `审查 PASS` confirms a malformed confirm_count can't force a single-round upgrade. Pending 用户 `提交`. Remaining Round A items (action_rank / private_paths / main-design doc drift; + Round B design decisions) stay queued.
+- Codex re-review closure (2026-06-22): PASS. Re-reviewed the current working-tree repair and confirmed `confirm_count` now uses the same strict-int discipline as `upgrade_confirm_runs`: bool / non-int / negative values raise ValueError before the up-slow transition, so malformed streak state cannot short-circuit `upgrade_confirm_runs=2` into a single-round upgrade. Legal streak behavior is unchanged (`0` builds to `(provisional_active, 1)`, `1`/`2` upgrade to `(confirmed_active, 0)`, stable resets to `0`, valid deterioration still down-fast, retired re-entry still requires `passes_provisional_gate`). Verified: target theme_lifecycle 22 OK; all `*us_short*` tests 884 OK; schema `*us_short*` tests 436 OK; doc-governance / route guards 38 OK; direct confirm_count and upgrade_confirm_runs probes passed; call-surface grep found only the function/tests/current log+register; `git diff --check` only LF/CRLF warnings; modified files have no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run.
+
 ### R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT - active route/docstring surfaces still describe the old lower-clamp-only persistence formula after the clamp repair landed
 
 - Status: **resolved** (committed `8c14e0e8`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).

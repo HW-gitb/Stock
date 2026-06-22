@@ -52,7 +52,9 @@ def next_theme_lifecycle_state(prior_state, deteriorating=False, confirming=Fals
     immediately). Up-slow: a non-retired state steps up only after `upgrade_confirm_runs` consecutive
     confirming runs. Retired re-entry: only via a full provisional re-confirmation (`passes_provisional_gate`),
     never a direct bounce-back. Returns (next_state, new_confirm_count). The deteriorating / confirming
-    classification (vs §13 #30 thresholds) is the caller's. Raises ValueError on an unknown prior_state."""
+    classification (vs §13 #30 thresholds) is the caller's. Raises ValueError on an unknown prior_state, a
+    malformed `confirm_count` (the streak must be a non-negative int, NOT a bool — else it could force a
+    single-round upgrade), or an `upgrade_confirm_runs` that isn't an int ≥ 2."""
     if prior_state not in THEME_STATES:
         raise ValueError(f"unknown theme_lifecycle_state {prior_state!r}")
     if not isinstance(upgrade_confirm_runs, int) or isinstance(upgrade_confirm_runs, bool) or upgrade_confirm_runs < 2:
@@ -60,6 +62,12 @@ def next_theme_lifecycle_state(prior_state, deteriorating=False, confirming=Fals
         # would weaken anti-chatter to an immediate upgrade → fail closed, never silently bypass it
         raise ValueError(f"upgrade_confirm_runs must be an int ≥ 2 (up-slow consecutive confirmation); "
                          f"got {upgrade_confirm_runs!r}")
+    if not isinstance(confirm_count, int) or isinstance(confirm_count, bool) or confirm_count < 0:
+        # the consecutive-confirmation STREAK must be a clean non-negative int — a bool / non-int / negative
+        # value (e.g. confirm_count=True → True+1=2) would short-circuit the up-slow gate into a single-round
+        # upgrade; fail closed with the SAME strict-int discipline as upgrade_confirm_runs above.
+        raise ValueError(f"confirm_count must be a non-negative int (consecutive-confirmation streak); "
+                         f"got {confirm_count!r}")
     if deteriorating:                                 # down-fast: immediate, reset the confirm streak
         return _DECAY_DOWN[prior_state], 0
     if prior_state == "retired":                      # retired re-entry only through the full provisional gate

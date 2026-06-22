@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_lifecycle confirm_count validation)
+
+- **Verdict/Action**: PASS. Current Round A step 4 repair closes `R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED` in the working tree; no new Required in this scope.
+- **Required**: None new. `R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED` is resolved in `docs/system_risk_register.md`. Remaining Round A items (action_rank / private_paths / main-design doc drift) and Round B decisions remain queued and intentionally out of this review.
+- **Verify**: status/diff/current files reviewed; target theme_lifecycle 22 OK; all `*us_short*` tests 884 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct confirm_count / upgrade_confirm_runs probes passed; confirm_count call-surface grep found only this function/tests/current log+register; `git diff --check` LF/CRLF warnings only; no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this Round A step 4 cut. Do not start remaining queued items unless separately authorized.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步4 — theme_lifecycle confirm_count 校验)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。步3(theme_heat clamp+finite+route-doc)已提交(`8c14e0e8` + 折叠 `bd0b82c7`)。本刀 = Round A 步4:`next_theme_lifecycle_state` 硬校验兄弟 `upgrade_confirm_runs`(int/非bool/≥2→ValueError),却对 `confirm_count`(连续确认 streak)零校验 → `confirm_count=True` 经 `True+1=2≥2` **单轮升档**,绕过 §13#30 up-slow anti-chatter;字符串还会裸 TypeError。修:对 confirm_count 用同一严格整数纪律(非负 int、非 bool;bool/非int/负→ValueError),fail-closed,与本引擎既有 raise-on-bad-prior_state/upgrade_confirm_runs 契约一致。
+- **Required**: `R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED`(P2,新建)— 完整 finding/trace/类覆盖 note 见 `docs/system_risk_register.md`(in_progress、working tree)。来源:Codex `review_v2.md` R5 + CC `cc_review_v2.md` §5.7。
+- **Verify**: 探针 confirm_count=True/1.5/"1"/-1→ValueError、合法 0→(provisional,1)/1→(confirmed_active,0) 不变;theme_lifecycle 22 OK(含 1 新 fail-closed 测试);全 us_short lane **884 OK**(883+1)零回归;doc/route 38 OK;BOM=0;纯 offline、未跑 provider。
+- **Next**: Codex `审查` 本刀(1 引擎 + 1 测试 + register);PASS 后用户 `提交`。剩余 Round A(action_rank / private_paths / 主设计 doc drift)+ Round B 拍板项仍排队。
+- **Pre-Codex self-review**: A-F。A(类):本类=anti-chatter 计数器未校验;upgrade_confirm_runs 已校验、confirm_count 现补齐(同纪律)。同函数其他 flag 核过:deteriorating truthy→down-fast(保守安全向)、confirming truthy 仍需已校验 streak(无单轮绕过);passes_provisional_gate 是 truthy-宽松 grant flag(retired 再入)= 低危、review 未点名、刻意不在本刀(可 Round C)。B:无消费者依赖旧绕过(本是 bug)、docstring 更新、无 doc 断言旧行为。C(反向):合法 confirm_count(0/1/2/5)全过(884 绿)、0 非误拒,只 malformed raise。E:未碰 route-doc。F:校验镜像 upgrade_confirm_runs(一致 strict-int);docstring↔行为一致。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_heat route-doc formula repair)
 
 - **Verdict/Action**: PASS. The active route/docstring formula drift `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` is closed in the current working tree; no new Required in this scope.
