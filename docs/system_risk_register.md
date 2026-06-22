@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN - ship_gate_sizing / cash_allocation gate hard_veto with `is True`, so a truthy-non-True veto fails OPEN
 
-- Status: **resolved** — Codex re-`审查 PASS` 2026-06-22. Pending user `提交`.
+- Status: **resolved** (committed `1614dd91`, Codex `审查 PASS` 2026-06-22).
 - Severity: **P1** (ship_gate) + same-root **P2** (cash_allocation).
 - Source: converged full-batch review — Claude `cc_review_v2.md` §P1-1 / §P2-1 + Codex `review_v2.md` R1 / R2 (both independently traced the same fail-open). Those are desktop review artifacts; this register entry is the durable repo record.
 - Scope reviewed: `engine/us_short_ship_gate_sizing.py`, `engine/us_short_cash_allocation.py`, their tests, plus a full `engine/us_short_*.py` sweep of every `is True` site and every `hard_veto` consumer. Authority `docs/us_short_system_design.md` §8 (line 234 hard veto = 0 仓) + the const-pinned `hard_veto_zero_position` invariant. No provider/live/network/DataHub/A-share/Skill/production/batch3 path executed.
