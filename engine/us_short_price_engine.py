@@ -17,7 +17,9 @@ Mirrors the proven A-short geometry in ``runners/a_short_phase5_engine.py``
 (``effective_support`` / ``effective_resistance`` / side-aware ``_tick`` / ``exit_and_size``
 post-round recheck / ``holding_levels`` trailing ratchet), which the design explicitly says
 to mirror. US differences: $0.01 tick with a sub-penny ($0.0001, price < $1) carve-out
-(§3.4); no limit-up/down so long wicks are more extreme → de-spike matters more (§6);
+(§3.4); no limit-up/down so long wicks are more extreme → de-spike matters more (§6), AND the de-spike
+compares the extreme against the nearest STRICTLY-DIFFERENT value (not the single 2nd-ordered value) so it
+is robust to 2+ bars wicking to the SAME extreme — a deliberate US-short refinement of the A-short mirror;
 **sizing is NOT here** — this engine is pure price geometry, §8 owns shares.
 
 Numeric thresholds are §13.1 forward-calibration PRIORS (engine defaults), NOT frozen
@@ -49,7 +51,7 @@ BREAKOUT_CHASE_ATR = 0.5       # §13 #33/#13 breakout chase cap (valid_entry_hi
 BREAKOUT_TP_ATR = 3.0          # §13 #20 突破 tp ATR 倍数: breakout take-profit (no overhead resistance) = close + this×ATR
 PULLBACK_BAND_ATR = 0.5        # §13 #13 pullback valid_entry_low = max(support, close − this×ATR)
 TP2_RISK_MULT = 2.0            # §13 #20 second take-profit floor = close + this×risk
-SR_SPIKE_ATR = 1.0            # §13 #24 de-spike: single-day extreme > this×ATR beyond 2nd value → wick
+SR_SPIKE_ATR = 1.0            # §13 #24 de-spike: extreme > this×ATR beyond the nearest non-tied value → wick
 SR_LOOKBACK = 20             # support/resistance window
 ATR_WINDOW = 14
 
@@ -132,39 +134,44 @@ def atr(bars, n=ATR_WINDOW):
 
 
 def effective_support(bars, atr_val):
-    """De-spiked structural support (§6, mirrors A-short #5). raw_low = min(window low). If the
-    lowest low is more than SR_SPIKE_ATR×ATR below the 2nd-lowest → single-day wick, take the
-    2nd-lowest (quality 'weak'); else the extreme is backed (quality 'strong'). ATR missing /
-    window < 2 → fall back to raw_low (quality 'fallback_extreme', never fabricate structure).
-    Returns (support, quality, recent_low)."""
+    """De-spiked structural support (§6). raw_low = min(window low). If the lowest low is more than
+    SR_SPIKE_ATR×ATR below the NEAREST STRICTLY-HIGHER low → wick, take that nearest non-tied low (quality
+    'weak'); else the extreme is backed (quality 'strong'). Comparing against the nearest STRICTLY-DIFFERENT
+    low (not `sorted(lows)[1]`) makes the de-spike robust to TIED long shadows — a deliberate US-short
+    refinement of the A-short single-2nd-value mirror (§6: US has no daily limit so long wicks are more
+    extreme AND can repeat across bars; the single-2nd-value test missed 2+ bars wicking to the same low).
+    ATR missing / window < 2 → fall back to raw_low ('fallback_extreme', never fabricate structure). Returns
+    (support, quality, recent_low)."""
     lows = [b["low"] for b in bars[-SR_LOOKBACK:]]
     if not lows:
         return None, None, None
     raw_low = min(lows)
     if atr_val is None or atr_val <= 0 or len(lows) < 2:
         return raw_low, "fallback_extreme", raw_low
-    second_low = sorted(lows)[1]
-    if second_low - raw_low > SR_SPIKE_ATR * atr_val:
-        return second_low, "weak", raw_low
+    next_low = min((lo for lo in lows if lo > raw_low), default=raw_low)   # nearest STRICTLY-higher → tie-robust
+    if next_low - raw_low > SR_SPIKE_ATR * atr_val:
+        return next_low, "weak", raw_low
     return raw_low, "strong", raw_low
 
 
 def effective_resistance(bars, atr_val):
-    """De-spiked structural resistance (§6, symmetric to effective_support). raw_high = max(window
-    high). If the highest high is more than SR_SPIKE_ATR×ATR above the 2nd-highest → wick, take the
-    2nd-highest (quality 'weak'); else 'strong'. ATR missing / window < 2 → fall back to raw_high
-    ('fallback_extreme'). Returns (resistance, quality, recent_high). Drives the new-entry t1/RR
-    numerator AND the holding trailing-stop basis (recent_high − ATR×mult), so de-spiking it keeps
-    both from being distorted by a single-day spike."""
+    """De-spiked structural resistance (§6, symmetric to effective_support). raw_high = max(window high). If
+    the highest high is more than SR_SPIKE_ATR×ATR above the NEAREST STRICTLY-LOWER high → wick, take that
+    nearest non-tied high (quality 'weak'); else 'strong'. The nearest strictly-different high (not
+    `sorted(highs)[-2]`) makes the de-spike robust to TIED long shadows (the same deliberate US-short
+    refinement as effective_support, §6). ATR missing / window < 2 → fall back to raw_high ('fallback_extreme').
+    Returns (resistance, quality, recent_high). Drives the new-entry t1/RR numerator AND the holding
+    trailing-stop basis (recent_high − ATR×mult), so de-spiking it keeps both from being distorted by a spike
+    (single-day OR tied multi-bar)."""
     highs = [b["high"] for b in bars[-SR_LOOKBACK:]]
     if not highs:
         return None, None, None
     raw_high = max(highs)
     if atr_val is None or atr_val <= 0 or len(highs) < 2:
         return raw_high, "fallback_extreme", raw_high
-    second_high = sorted(highs)[-2]
-    if raw_high - second_high > SR_SPIKE_ATR * atr_val:
-        return second_high, "weak", raw_high
+    next_high = max((hi for hi in highs if hi < raw_high), default=raw_high)   # nearest STRICTLY-lower → tie-robust
+    if raw_high - next_high > SR_SPIKE_ATR * atr_val:
+        return next_high, "weak", raw_high
     return raw_high, "strong", raw_high
 
 

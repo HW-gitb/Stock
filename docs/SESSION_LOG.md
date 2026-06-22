@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round B Cut 2 price de-spike tied shadows)
+
+- **Verdict/Action**: PASS. Current working tree correctly fixes the final batch-2 Round B item: US-short price de-spike now compares against the nearest strictly non-tied support/resistance value, so 2+ bars sharing the same long-shadow extreme no longer survive as `strong`.
+- **Required**: None new. `R-USSHORT-BATCH2-PRICE-DESPIKE-TIED-LONG-SHADOW` is resolved in `docs/system_risk_register.md` pending 用户 `提交`.
+- **Verify**: status/diff/current files reviewed; price_engine 34 OK; all `*us_short*` 896 OK; schema `*us_short*` 436 OK; doc/route 38 OK; direct tied/single/backed/flat/fallback support/resistance probes passed; active stale de-spike grep clean (A-share + historical entries exempt); `jsonschema` import OK. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this final Round B Cut 2. After commit, the full US-short batch-2 Round A + Round B review is closed; batch-3 remains separately gated.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 Round B Cut 2【末】— 去插针双根长影线,偏离 A 股镜像)
+
+- **Verdict/Action**: 收到 `提交,4.1 按建议执行`。Cut 1(4.2+4.3)已提交(`fc93fb8d` + 折叠 `c6011f53`)。本刀 = Round B Cut 2 **= 整个 batch-2 review 最后一项**:price_engine 去插针用 `sorted(lows)[1]`/`sorted(highs)[-2]`(单一次序值),2+ 根并列同极值时次值=极值、diff=0、漏判 → 并列长影存活标 'strong'。按你定**偏离 A 股镜像**:改比**最近的非并列值**(`min(lo>raw)`/`max(hi<raw)`),并列长影也去掉;§13#24 倍数不变;单插针/backed/flat 全不变。A 股引擎跨车道**不动**,分叉已记。
+- **Required**: `R-USSHORT-BATCH2-PRICE-DESPIKE-TIED-LONG-SHADOW`(P2)— 完整 finding/disposition/frozen-§6 note 见 register(in_progress)。来源:Codex `review_v2.md` §4.1 + CC §4.1。
+- **Verify**: 探针 support 并列[90,90,100×18]→(100,weak,90)[原(90,strong)]、单[90..]→(100,weak)不变、backed[99..]→(99,strong)不变、resist 并列[110,110..]→(100,weak);price_engine 34 OK(+2 并列测试);全 us_short lane **896 OK**(894+2)零回归;doc/route 38 OK;BOM=0;纯 offline。
+- **Next**: Codex `审查` 本刀(price_engine 2 fn + docstring/SR 注/module docstring + README + design §6 + 2 测试 + register);PASS 后用户 `提交` —— **该提交收口整个 batch-2 review(Round A 7 + Round B 2)**。之后 batch-2 本体收口,batch-3 独立门。
+- **Pre-Codex self-review**: A-F。**doc-drift 第6刀:这次主动同步全部教学面**(行为改后必扫)—— SR_SPIKE_ATR 注 + 2 函数 docstring + module docstring + README 路由行 + design §6;grep `2nd value`/`取次值`/`second_low` 证 0 stale us_short 面(残留=新 docstring 解释 refinement / A 股引擎跨车道不动 / 历史 register prose)。A:support+resistance 对称都修(唯二去插针点)。C(反向):单插针/backed/flat 全不变(探针+34 测试+896 lane)、未过度去插针。F:docstring↔行为一致、§13#24 不变。边界:A 股不碰、§6 改是你授权的 deviation。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round B Cut 1 SEC materiality + theme_opportunity)
 
 - **Verdict/Action**: PASS. Claude's doc-only follow-up closes the hard_veto active teaching-surface drift; the previously reviewed SEC missing-materiality runtime change and theme_opportunity low-score pin remain correct.

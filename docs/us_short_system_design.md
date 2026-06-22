@@ -193,7 +193,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
   - `breakout_mode`（突破）：`breakout_entry_price` 入场 + 追价上限 = `valid_entry_high`（不追飞）+ **突破失效线 = 止损**（取突破位/近期盘整下沿，不用远端结构支撑——否则止损太远 RR 不够、强势突破被过早误转观察）+ tp 用 ATR 倍数兜底。参数 = prior（§13 #20/#33）。
   - 两模式都仍过 `min_rr_gate` + tick 取整 + 取整后 RR 复校。
 - **优先级链**：① hard_veto（new→否决/不建；holding→强制减/清/重评）② data_degraded（holding→只风控/不伪造价；new→观察/restricted）③ holding→`holding_exit_engine` ④ new→`support_atr_engine`。**加仓**：持仓+触发加仓 → `support_atr_engine` 算加仓入场、`holding_exit_engine` 管原仓，两者并存。
-- **有效支撑/压力去插针**（美股无涨跌停、长影线更夸张）：`effective_support / effective_resistance / structure_quality / structure_adjustment_reason`；单日极值比次值远 >1×ATR（prior §13 #24）判插针、取次值；止损/入场/止盈/RR 全用**有效**值算；结构差 → 降观察/降仓。
+- **有效支撑/压力去插针**（美股无涨跌停、长影线更夸张）：`effective_support / effective_resistance / structure_quality / structure_adjustment_reason`；单日极值比**最近的非并列值**远 >1×ATR（prior §13 #24）判插针、取该非并列值（US-short 刻意比 A 股 phase5「取单一次值」更稳健：美股长影更夸张、可多根并列同极值，单一次值会漏判并列长影；§13 #24 倍数不变）；止损/入场/止盈/RR 全用**有效**值算；结构差 → 降观察/降仓。
 - **`min_rr_gate`**：`risk_reward_ratio =（盈一−入场）/（入场−止损）`；RR < gate → 不建仓、转观察（prior，突破型可更高）。突破票无上方阻力时用 `breakout_mode` 的 ATR 兜底 tp1 再过 RR 闸，不因"无阻力"把突破票直接转观察；trace 标结构 tp 还是 ATR 兜底。
 - **tick 取整 + 取整后 RR 复校**：算理论价 → 按方向取整可执行价（美股 $0.01，留 sub-penny/低价例外）→ 用取整后真实价**重算 RR**，破了降观察；字段 `execution_tick / rounded_price_used / post_round_rr_status`。
 - 缺可靠 ATR/支撑压力/财报日期/持仓成本 → 降级观察或只风控。

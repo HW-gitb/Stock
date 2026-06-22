@@ -64,6 +64,19 @@ class IndicatorTests(unittest.TestCase):
         bars = [{"high": x, "low": 99.0, "close": 100.0} for x in highs]
         self.assertEqual(pe.effective_resistance(bars, 2.0), (101.0, "strong", 101.0))
 
+    def test_effective_support_tied_long_shadows_rejected(self):
+        # 4.1 fix: TWO+ bars wicking to the SAME low must still be de-spiked — the old `sorted(lows)[1]` tied
+        # the extreme (diff 0) and let a multi-bar long shadow survive as 'strong'. Compare the nearest NON-tied.
+        lows = [90.0, 90.0] + [100.0] * 18    # two bars at 90, far below the 100 cluster
+        bars = [{"high": 101.0, "low": x, "close": 100.0} for x in lows]
+        self.assertEqual(pe.effective_support(bars, 2.0), (100.0, "weak", 90.0))   # nearest non-tied (100) → wick
+
+    def test_effective_resistance_tied_long_shadows_rejected(self):
+        # symmetric: two bars wicking to the same high must be de-spiked (not survive as 'strong')
+        highs = [110.0, 110.0] + [100.0] * 18
+        bars = [{"high": x, "low": 99.0, "close": 100.0} for x in highs]
+        self.assertEqual(pe.effective_resistance(bars, 2.0), (100.0, "weak", 110.0))
+
     def test_empty_bars_none(self):
         self.assertEqual(pe.effective_support([], 2.0), (None, None, None))
         self.assertEqual(pe.effective_resistance([], 2.0), (None, None, None))
