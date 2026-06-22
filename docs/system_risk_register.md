@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-GOVERNANCE-PORTFOLIO-GUARD-COOLDOWN-HARDZERO-GAP - theme_probe governance does not machine-pin portfolio_guard cooldown as a probe blocker
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `017b7206`, Codex re-`审查 PASS` 2026-06-22). Was open P1 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short theme_probe governance slice: `schemas/us_short_theme_probe_governance.schema.json`, `presets/us_short_theme_probe_governance_20260622.json`, `tests/schema/test_us_short_theme_probe_governance_schema.py`, `docs/README.md`, `docs/SESSION_LOG.md`, plus active authorities `docs/us_short_system_design.md`, `docs/us_short_theme_opportunity_state_seat_design_20260622.md`, and sibling `us_short_portfolio_guard_governance`. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -56,7 +56,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-GOVERNANCE-ROUTEDOC-PROPOSAL-APPROVAL-STATE-DRIFT - active proposal route still describes pre-approval / pre-governance landing state after governance landed
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `017b7206`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3**.
 - Scope reviewed: same US-short theme_probe governance slice and active route docs. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
