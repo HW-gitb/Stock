@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT - US-short theme_probe design proposal writes a pending Codex-review gate into durable docs
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `c7045a16`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3**.
 - Scope reviewed: current dirty design-only US-short proposal (`docs/us_short_theme_opportunity_state_seat_design_20260622.md`, `docs/README.md`, `docs/SESSION_LOG.md`). No code, schema, preset, provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
