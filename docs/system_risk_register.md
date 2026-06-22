@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-DESCRIPTION-DRIFT - threshold authority schema description still says item_category is not const-pinned
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-22, working tree; pending 用户 `提交`).
+- Status: **resolved** (committed in `ceb79483`, Codex re-`审查 PASS` 2026-06-22).
 - Severity: **P3** (active schema-contract prose drift; no runtime fail-open found, but this contradicts the exact governance invariant that closed the P1 same-shape drift).
 - Source: Codex full strict re-review of the US-short batch3 R2 lifecycle threshold-authority repair.
 - Scope reviewed: current working tree with modified `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, and untracked `engine/us_short_lifecycle_eval.py`, `schemas/us_short_lifecycle_register.schema.json`, `schemas/us_short_lifecycle_threshold_authority.schema.json`, `presets/us_short_lifecycle_threshold_authority_20260622.json`, `tests/test_us_short_lifecycle_eval.py`, `tests/schema/test_us_short_lifecycle_threshold_authority_schema.py`; `docs/us_short_system_design.md` §12.2 / §13 / §13.1 / §13.2 / §18.1 #20 / §18.2; lifecycle calibration governance/schema; prior batch3 cut1/R2a validator/renderer tests. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
@@ -50,7 +50,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-SAME-SHAPE-DRIFT-BYPASS - threshold authority map / runtime authority validation can drift without failing the clean gate
 
-- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `ceb79483`, Codex re-`审查 PASS` 2026-06-22).
 - Severity: **P1** (lifecycle reminder / anti-self-deception clean gate; the repair moved threshold authority out of mutable state, but the new authority can still change due semantics without a hard failure).
 - Source: Codex full strict re-review of Claude's repair for `R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS` and `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-RAISES`.
 - Scope reviewed: current working tree with modified `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, and untracked `engine/us_short_lifecycle_eval.py`, `schemas/us_short_lifecycle_register.schema.json`, `schemas/us_short_lifecycle_threshold_authority.schema.json`, `presets/us_short_lifecycle_threshold_authority_20260622.json`, `tests/test_us_short_lifecycle_eval.py`, `tests/schema/test_us_short_lifecycle_threshold_authority_schema.py`; `docs/us_short_system_design.md` §12.2 / §13 / §13.1 / §13.2 / §18.1 #20; lifecycle calibration governance/schema; prior batch3 cut1/R2a validator/renderer tests. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
@@ -64,7 +64,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS - lifecycle_register can lower its own review threshold and become due / upgrade-eligible early
 
-- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `ceb79483`, Codex re-`审查 PASS` 2026-06-22).
 - Severity: **P1** (lifecycle reminder / anti-self-deception clean gate before weekly_report lifecycle banner, readiness artifact, runtime accumulator, or upgrade-review routing consumes `evaluate_lifecycle`).
 - Source: Codex full strict review of US-short batch3 R2 lifecycle-eval slice 1.
 - Scope reviewed: `git status --short --untracked-files=all` showed modified `docs/README.md`, modified `docs/SESSION_LOG.md`, and untracked `engine/us_short_lifecycle_eval.py`, `schemas/us_short_lifecycle_register.schema.json`, `tests/test_us_short_lifecycle_eval.py`; recent commits through `76c138cc`; `docs/README.md` R2 lifecycle route row; top `docs/SESSION_LOG.md`; this register Hot Queue; `docs/us_short_system_design.md` §12.2 / §13 / §13.1 / §13.2 / §18.1 #20; `presets/us_short_lifecycle_calibration_governance_20260620.json`; `schemas/us_short_lifecycle_calibration_governance.schema.json`; `tests/schema/test_us_short_lifecycle_calibration_governance_schema.py`; prior batch3 cut1/R2a validator/renderer tests. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
@@ -78,7 +78,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-RAISES - lifecycle validator raises TypeError for malformed item keys instead of failing closed
 
-- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `ceb79483`, Codex re-`审查 PASS` 2026-06-22).
 - Severity: **P1** (clean-gate robustness before downstream lifecycle runtime / weekly_report consumers rely on the validator's fail-closed contract).
 - Source: Codex full strict review of US-short batch3 R2 lifecycle-eval slice 1.
 - Scope reviewed: same current R2 lifecycle slice as `R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS`; no provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
