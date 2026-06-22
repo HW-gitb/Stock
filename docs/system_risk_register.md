@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT - active route/docstring surfaces still describe the old lower-clamp-only persistence formula after the clamp repair landed
 
-- Status: **resolved** — Codex re-`审查 PASS` 2026-06-22 in the current working tree; pending 用户 `提交`. Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `8c14e0e8`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3**.
 - Source: Codex re-review of `R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY`.
 - Scope reviewed: `engine/us_short_theme_heat.py`, `tests/test_us_short_theme_heat.py`, `engine/us_short_overextension.py`, `tests/test_us_short_overextension.py`, active route docs (`docs/README.md`, `docs/CURRENT.md`, `docs/us_short_system_design.md`), and current review/register/session surfaces. No provider/live/network/DataHub/A-share/Skill/production/batch3.
@@ -54,7 +54,7 @@ Status:
 
 ### R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY - theme_heat persistence_mult is lower-clamped only, so an out-of-range value AMPLIFIES the 0-100 score
 
-- Status: **resolved** — Codex runtime re-review PASS 2026-06-22 in the current working tree; the slice still has separate P3 doc drift `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` open before commit.
+- Status: **resolved** (committed `8c14e0e8`, Codex `审查 PASS` 2026-06-22 — runtime + the route-doc drift `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT`). Was open P2.
 - Severity: **P2**.
 - Source: converged batch-2 review — Codex `review_v2.md` R4 + Claude `cc_review_v2.md` §P2-3.
 - Scope reviewed/repaired: `engine/us_short_theme_heat.py::continuous_theme_score` (+ the shared `_finite`) and `engine/us_short_overextension.py::_finite`, plus their tests. No provider/live/network/DataHub/A-share/Skill/production/batch3.
@@ -388,7 +388,7 @@ Status:
 
 ### R-USSHORT-BATCH2-LENIENT-FINITE-OVEREXTENSION-THEMEHEAT-HYGIENE - US-short overextension/theme_heat `_finite` leniently parses bools / numeric strings
 
-- Status: **resolved** — Codex runtime re-review PASS 2026-06-22 in the current working tree; folded into `R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY`. The slice still has separate P3 doc drift `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` open before commit. Was open P3.
+- Status: **resolved** (committed `8c14e0e8`, Codex `审查 PASS` 2026-06-22; folded into `R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY`). Was open P3.
 - Severity: **P3** (robustness hygiene; not a money / hard-veto / PIT / schema / live path).
 - Scope: `engine/us_short_overextension.py::_finite` + `engine/us_short_theme_heat.py::_finite` (slices 3 & 4, committed a2b9e9bd / 7ab9d079). NOT the 9th slice's new engines (those use strict `_finite_number` / no numeric parse).
 - Technical finding: both define `_finite(x)` as `try: v = float(x) except (TypeError, ValueError): return None`, which accepts bools (`float(True)=1.0`) and numeric strings (`float("0.5")=0.5`) as valid finite numbers — the same lenient class that was a Required fix for slice-5 `risk_downgrade._safe_margin` (resolved to strict `_finite_number` rejecting bool + str). NaN/Inf are still rejected by the `math.isfinite` guard.
