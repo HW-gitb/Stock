@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP - US-short theme block drops valid base-only industry/theme heat rows when the opposite heat source is missing
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` ×2 2026-06-22; round-1 fixed the base-only behavior, round-2 fixed the stale module-level docstring).
+- Status: **resolved** (committed `84b5fdfe`, Codex re-`审查 PASS` 2026-06-22). Was open P1 (Codex `审查 FAIL` ×2 2026-06-22; round-1 fixed the base-only behavior, round-2 fixed the stale module-level docstring).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 fourteenth slice (`engine/us_short_theme_block.py`, `engine/us_short_theme_orthogonalize.py`, `tests/test_us_short_theme_block.py`, `tests/test_us_short_theme_orthogonalize.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
