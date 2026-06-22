@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-THEME-OPPORTUNITY-SCORE-BOUNDS-AND-THRESHOLD-GUARD-GAP - theme_score says 0-100 but out-of-range scores can upgrade theme_opportunity_state
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `96455e29`, Codex re-`审查 PASS` 2026-06-22). Was open P1 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2补刀① determination slice: `engine/us_short_theme_opportunity.py`, `tests/test_us_short_theme_opportunity.py`, `docs/README.md`, `docs/SESSION_LOG.md`; active authorities `docs/us_short_system_design.md` §4.3 / §4.5 / §7 / §13 / §18.2, `docs/us_short_theme_opportunity_state_seat_design_20260622.md`, and theme_probe governance schema/preset. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -56,7 +56,7 @@ Status:
 
 ### R-USSHORT-THEME-OPPORTUNITY-ROUTEDOC-DETERMINATION-LANDING-STATE-DRIFT - active route docs still say determination is future/separate after the determination engine landed
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `96455e29`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3**.
 - Scope reviewed: same US-short batch2补刀① determination slice plus active route/status surfaces: `docs/README.md`, `docs/us_short_theme_opportunity_state_seat_design_20260622.md`, `presets/us_short_theme_probe_governance_20260622.json`, `schemas/us_short_theme_probe_governance.schema.json`, `engine/us_short_theme_opportunity.py`, and `tests/test_us_short_theme_opportunity.py`. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
