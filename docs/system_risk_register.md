@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT - main design authority still says batch-2 is unimplemented / next step = start batch-2, after batch-2 engines landed
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Round A step 7 is the LAST Round A item of the converged batch-2 review.
+- Status: **resolved** (committed `40c17472`, Codex re-`审查 PASS` 2026-06-22). Round A step 7 was the LAST Round A safety/contract item of the converged batch-2 review (Round A complete; Round B design-decision items remain, user-gated).
 - Severity: **P3**.
 - Source: converged batch-2 review — Codex `review_v2.md` R8 + Codex `review_v1` MAIN-DESIGN-STATUS-DRIFT + Claude `cc_review_v2.md` §2a.
 - Scope reviewed/repaired: `docs/us_short_system_design.md` (header `> 状态` line + §19 设计结论 conclusion). No design rules / schemas / runners / engines / §18.0 P0 gates touched. No provider/live/A-share/batch3.
