@@ -1,0 +1,38 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_lifecycle_register",
+  "title": "US-short §13 lifecycle calibration register — the dynamic per-item live-forward accumulator that us_short_lifecycle_eval scans (before the weekly render) to decide which §13.1 calibration items are due",
+  "description": "Batch-3 PRIVATE state contract (design §13 / §13.1 / §13.2 / §18.1 #20). The register is the per-§13.1-item live-forward accumulator: it carries ONLY the accumulated live_forward_count + the §12.2② upgrade_margin_frozen flag + the derived `due` state (+ number/title). It deliberately does NOT carry threshold metadata — the threshold is GOVERNED: engine/us_short_lifecycle_eval.py DERIVES each item's count_type / min_count / secondary_required from us_short_lifecycle_threshold_authority by number, so the mutable private register CANNOT self-author / lower its own review threshold (R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS) — additionalProperties:false here rejects a register that tries to smuggle threshold_min_count / count_type / threshold_category back in. It contains per-item counts and (later) ticker/performance detail, so it MUST live only on a gitignored private path (state/us_short/lifecycle/, §11.6); tracked surfaces carry only de-identified summaries. This schema pins STRUCTURE only. draft-07 cannot express: coverage (every §13.1 item enrolled, no missing/extra/duplicate — the §13 coverage insurance), the `number`/`title` cross-ref to us_short_lifecycle_calibration_governance, and the GOVERNED `due == (live_forward_count >= governed_min_count AND (secondary_condition_met OR NOT governed_secondary_required))` invariant — all enforced by engine/us_short_lifecycle_eval.py against the threshold authority + tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "items"],
+  "properties": {
+    "schema_name": {"const": "us_short_lifecycle_register"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "items": {"type": "array", "items": {"$ref": "#/definitions/item"}}
+  },
+  "definitions": {
+    "item": {
+      "type": "object",
+      "description": "One §13.1 calibration item's live-forward accumulator (live_forward_count + upgrade_margin_frozen + derived due). additionalProperties false — it carries NO threshold metadata (the threshold is governed by us_short_lifecycle_threshold_authority, derived by number); the number/title cross-ref + the governed `due` invariant are enforced by the lifecycle_eval validator, not here.",
+      "additionalProperties": false,
+      "required": [
+        "number",
+        "title",
+        "live_forward_count",
+        "secondary_condition_met",
+        "upgrade_margin_frozen",
+        "due"
+      ],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1},
+        "title": {"type": "string", "minLength": 1},
+        "live_forward_count": {"type": "integer", "minimum": 0},
+        "secondary_condition_met": {"type": "boolean"},
+        "upgrade_margin_frozen": {"type": "boolean"},
+        "due": {"type": "boolean"}
+      }
+    }
+  }
+}

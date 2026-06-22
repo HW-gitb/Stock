@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_lifecycle_threshold_authority",
+  "title": "US-short §13 lifecycle threshold authority — the machine-readable §13.2 thresholds + §13.1 item→category map the lifecycle eval DERIVES each item's review threshold from (so the mutable register can't self-author it)",
+  "description": "Batch-3 R2 governance contract (design §13.2 / §13.1). The §13.2 reminder thresholds are prose; this authority pins them machine-readably PER CATEGORY (count_type / min_count / secondary_required) and governs each §13.1 calibration item's category. engine/us_short_lifecycle_eval.py reads it as the threshold AUTHORITY: the lifecycle_register no longer carries threshold metadata, so it cannot lower its own bar (R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS). BOTH the 7 category thresholds AND the full 39-entry item_category map are CONST-pinned here (R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-SAME-SHAPE-DRIFT-BYPASS): the item→category assignments are PRIORS, but refining one requires a REVIEWED schema+preset version bump, never a silent same-shape remap. engine/us_short_lifecycle_eval.py validates the loaded/injected authority against THIS schema at runtime, so a remap / lowered threshold fails the clean gate, not only the separate schema suite. That the map covers exactly the §13.1 numbers (the cross-ref to the separate calibration governance, which draft-07 can't express) is enforced by the eval validator + tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "category_thresholds", "item_category", "notes"],
+  "properties": {
+    "schema_name": {"const": "us_short_lifecycle_threshold_authority"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "category_thresholds": {
+      "description": "§13.2 machine-readable threshold per category, const-pinned (stable §13.2 interpretation).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scoring weight",
+        "price_engine",
+        "hard_veto candidate",
+        "provider fallback",
+        "X/网络/LLM / 主题发现",
+        "future_event / 熔断 / 冷静期 等",
+        "赛道退场 / 集群上限 / 比较档权重"
+      ],
+      "properties": {
+        "scoring weight": {"const": {"count_type": "weeks", "min_count": 12, "secondary_required": false}},
+        "price_engine": {"const": {"count_type": "triggers", "min_count": 20, "secondary_required": true}},
+        "hard_veto candidate": {"const": {"count_type": "triggers", "min_count": 10, "secondary_required": true}},
+        "provider fallback": {"const": {"count_type": "triggers", "min_count": 8, "secondary_required": true}},
+        "X/网络/LLM / 主题发现": {"const": {"count_type": "weeks", "min_count": 12, "secondary_required": true}},
+        "future_event / 熔断 / 冷静期 等": {"const": {"count_type": "weeks", "min_count": 12, "secondary_required": true}},
+        "赛道退场 / 集群上限 / 比较档权重": {"const": {"count_type": "weeks", "min_count": 12, "secondary_required": true}}
+      }
+    },
+    "item_category": {
+      "description": "§13.1 item number (as string) -> its §13.2 category. The FULL 39-entry map is CONST-pinned (R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-SAME-SHAPE-DRIFT-BYPASS): the assignments are priors, but refining one requires a REVIEWED schema+preset version bump, never a silent same-shape remap that would drift a secondary-required trigger item into a no-secondary 12-week category. engine/us_short_lifecycle_eval.py validates the loaded/injected authority against this schema at runtime, so a remap fails the clean gate, not only the schema suite.",
+      "const": {
+        "1": "scoring weight",
+        "2": "scoring weight",
+        "3": "scoring weight",
+        "4": "scoring weight",
+        "5": "scoring weight",
+        "6": "price_engine",
+        "7": "hard_veto candidate",
+        "8": "X/网络/LLM / 主题发现",
+        "9": "provider fallback",
+        "10": "provider fallback",
+        "11": "provider fallback",
+        "12": "赛道退场 / 集群上限 / 比较档权重",
+        "13": "price_engine",
+        "14": "scoring weight",
+        "15": "future_event / 熔断 / 冷静期 等",
+        "16": "price_engine",
+        "17": "hard_veto candidate",
+        "18": "scoring weight",
+        "19": "provider fallback",
+        "20": "price_engine",
+        "21": "X/网络/LLM / 主题发现",
+        "22": "future_event / 熔断 / 冷静期 等",
+        "23": "future_event / 熔断 / 冷静期 等",
+        "24": "price_engine",
+        "25": "scoring weight",
+        "26": "provider fallback",
+        "27": "赛道退场 / 集群上限 / 比较档权重",
+        "28": "赛道退场 / 集群上限 / 比较档权重",
+        "29": "赛道退场 / 集群上限 / 比较档权重",
+        "30": "赛道退场 / 集群上限 / 比较档权重",
+        "31": "赛道退场 / 集群上限 / 比较档权重",
+        "32": "X/网络/LLM / 主题发现",
+        "33": "price_engine",
+        "34": "future_event / 熔断 / 冷静期 等",
+        "35": "scoring weight",
+        "36": "price_engine",
+        "37": "赛道退场 / 集群上限 / 比较档权重",
+        "38": "X/网络/LLM / 主题发现",
+        "39": "scoring weight"
+      }
+    },
+    "notes": {"type": "object"}
+  }
+}

@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-22 - Codex re-`review PASS` (US-short batch3 R2 lifecycle authority description repair)
+
+- **Verdict/Action**: PASS. The lifecycle authority schema description drift is repaired; the active authority contract now consistently says the full 39-entry `item_category` map is const-pinned and runtime-validated.
+- **Required**: None new. `R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-DESCRIPTION-DRIFT`, `…AUTHORITY-SAME-SHAPE-DRIFT-BYPASS`, `…THRESHOLD-SELF-AUTHORING-BYPASS`, and `…MALFORMED-INPUT-RAISES` are closed for this working tree in `docs/system_risk_register.md`.
+- **Verify**: R2/R2a/cut1 target 177 OK; full offline `*us_short*` 1049 OK; schema `*us_short*` 465 OK; doc/route 38 OK; direct remap/lowered-threshold probes fail closed; active lifecycle grep for `not const-pinned` / `structure-validated` is clean; `git diff --check` CRLF-only; BOM/FFFD false.
+- **Next**: User may `提交`; do not start lifecycle slice 2, weekly_report renderer, paper/shadow/provider/live/DataHub/Skill/production/A-share/US-long work without a separate command.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 R2 lifecycle — 权威 schema 顶层描述漂移同步)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`review FAIL` 1 P3,纯 doc 漂移)。成立、接受——B-ripple 漏:我同步了 `item_category` 属性描述,漏了 schema **顶层** `description`(仍教「item_category 非 const-pin / structure-validated」)。修:顶层 description 重写为「7 类阈值 + 整张 39 项 item_category 都 const-pin,细化=reviewed 版本升级,运行时校验载入/注入权威」,与属性描述/README/测试/行为一致;B-ripple 扫姊妹面——preset `notes.item_category_priors` 同步「map const-pin,细化=版本升级,无静默同形重映射」。纯 doc、零运行时/取值变更。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-DESCRIPTION-DRIFT` resolved(详 `docs/system_risk_register.md`)。前三条 lifecycle finding 仍 working-tree resolved。
+- **Verify**: 权威 schema 12 + lifecycle 33 全绿;grep「not const / structure-validated」在 lifecycle 文件归零(仅 preset 注一处命中,已同步);BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2(运行时阶段)= 后续。
+- **Pre-Codex self-review**: A–F。教训:契约改动的 B-ripple 必含**被改 schema 自身的顶层 description + 属性 description + 姊妹 preset 注**,别只改被点名那一句(同 doc-drift-retire 教训)。F:UTF-8 无 BOM;写完复跑 doc 守护。
+
+## 2026-06-22 - Codex re-`review FAIL` (US-short batch3 R2 lifecycle authority repair)
+
+- **Verdict/Action**: FAIL. The P1 lifecycle authority same-shape/runtime-validation gap is repaired in the working tree, but the authority schema's top-level description still teaches the old "item_category not const-pinned" contract.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-DESCRIPTION-DRIFT` is open in `docs/system_risk_register.md`. Prior `…AUTHORITY-SAME-SHAPE-DRIFT-BYPASS`, `…THRESHOLD-SELF-AUTHORING-BYPASS`, and `…MALFORMED-INPUT-RAISES` are working-tree repaired.
+- **Verify**: lifecycle 33 OK; authority schema 12 OK; lifecycle-governance 24 OK; R2+cut1+R2a target 177 OK; full offline `*us_short*` 1049 OK; schema `*us_short*` 465 OK; doc/route 38 OK, then 38 OK after closeout; direct remap/lowered-threshold/self-authoring/malformed probes fail closed; lifecycle private path gitignored; `git diff --check` CRLF-only.
+- **Next**: Claude should repair only the stale threshold-authority schema description drift, then return for Codex re-`review`. Do not start lifecycle slice 2, weekly_report renderer, paper/shadow/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 R2 lifecycle — 权威 same-shape 漂移堵死)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`review FAIL` 1 P1)。成立、接受——同一缺陷上移一层:我管住了 register,却留下权威本身可漂移(item_category 没 const、校验器只查权威形状)。修:① 权威 schema 把**整张 39 项 item_category 也 const-pin**(同形重映射 fail schema const;细化需 reviewed 版本升级)② 校验器**运行时拿权威 schema 校验载入/注入的权威**(降阈值/重映射当场 clean=False,不只在 schema 套件)。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-SAME-SHAPE-DRIFT-BYPASS` resolved(详 `docs/system_risk_register.md`)。前两条 lifecycle finding 仍 working-tree resolved。
+- **Verify**: 探针——重映射 #6/#7/#9/#22/#30→scoring weight 全 clean=False、降 scoring-weight min=1→clean=False、baseline clean;lifecycle 33 + 权威 schema 12 + 全 us_short 1049 + schema 465 全绿零回归;BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2(运行时阶段)= 后续。
+- **Pre-Codex self-review**: A–F。教训:「reviewed 权威」只有当它**被冻结 + 校验器运行时强制**才算数——const-pin 全部受治理身份(含 prior 映射,细化走版本升级)、运行时跑权威 schema。C(反向):shipped 权威 baseline clean(没误拒);移除已不可能的「注入自定义权威」测试。F:UTF-8 无 BOM;写完复跑 doc 守护。
+
+## 2026-06-22 - Codex re-`review FAIL` (US-short batch3 R2 lifecycle threshold-authority repair)
+
+- **Verdict/Action**: FAIL. The two prior R2 lifecycle findings are repaired in the working tree, but the new threshold authority has a same-shape drift bypass that can still change due semantics.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-AUTHORITY-SAME-SHAPE-DRIFT-BYPASS` is open in `docs/system_risk_register.md`. Prior `…SELF-AUTHORING-BYPASS` and `…MALFORMED-INPUT-RAISES` remain working-tree repaired.
+- **Verify**: R2 lifecycle 31 OK; threshold-authority schema 10 OK; lifecycle-governance 24 OK; R2+cut1+R2a target 173 OK; full offline `*us_short*` 1045 OK; schema `*us_short*` 463 OK; doc/route 38 OK; direct probes show old bypasses closed but item-category remaps pass schema+validator and a lowered category threshold passes validator injection; lifecycle private path gitignored; `git diff --check` CRLF-only.
+- **Next**: Claude should repair only the lifecycle threshold-authority same-shape drift/runtime authority-validation gap, then return for Codex re-`review`. Do not start lifecycle slice 2, weekly_report renderer, paper/shadow/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 R2 lifecycle-eval — 阈值自授权 + 畸形输入 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`(Codex `review FAIL` 2 P1)。两条都成立、接受。**finding 1(自授权阈值)**:可变台账自己写 `threshold_min_count`→降到 1 提前到期。取 Codex 最强方案——**阈值字段从台账删掉、由新权威 `us_short_lifecycle_threshold_authority` 派生**(7 类机读阈值 const + 39 项→类别 prior;台账 additionalProperties:false 拒夹带);due 改类别感知(`>=权威min` 且 非secondary类只看数)。**finding 2(畸形抛 TypeError)**:`number` 用作 set 键前加类型守、畸形跳过 fail-closed;`threshold_category` 检查随字段删除一并去掉。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS` + `…-MALFORMED-INPUT-RAISES` 均 resolved(详 `docs/system_risk_register.md`)。
+- **Verify**: 探针——自授权 min=1 / 低于权威 min 的 due → clean=False、list/dict number&category → clean=False 不抛、baseline clean;lifecycle 31 + 权威 schema 10 + 全 us_short 1045 + schema 463 全绿零回归;BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2(运行时阶段:累加/横幅/对账/落盘/陈旧桶 fail-closed)= 后续。
+- **Pre-Codex self-review**: A–F。教训:别让可变状态自授权门槛(=自欺后门)——阈值归权威、台账只存计数;clean-gate 别对 unhashable 输入崩。C(反向):正控(baseline + 类别感知 due 各路径)+ 反向(自授权堵、畸形 fail-closed)。F:39 项归类是 prior(写明、§13 可校准细化);UTF-8 无 BOM;写完复跑 doc 守护。
+
+## 2026-06-22 - Codex `review FAIL` (US-short batch3 R2 lifecycle-eval slice 1)
+
+- **Verdict/Action**: FAIL. Current lifecycle-eval slice is pure/offline and route scope is correct, but the lifecycle register clean gate has two material gaps before weekly_report/lifecycle runtime can consume it.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-THRESHOLD-SELF-AUTHORING-BYPASS` + `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-RAISES` are open in `docs/system_risk_register.md`.
+- **Verify**: lifecycle 21 OK; lifecycle-governance schema 24 OK; R2+cut1+R2a target 153 OK; full offline `*us_short*` 1025 OK; schema `*us_short*` 453 OK; doc/route 38 OK; direct probes show threshold downshift to min=1 is accepted as due/upgrade and malformed `number`/`threshold_category` list/dict raises `TypeError`; lifecycle private path is gitignored; `git diff --check` CRLF-only.
+- **Next**: Claude should repair only the lifecycle register threshold-authority and malformed-input fail-closed gaps, then return for Codex re-`review`. Do not start lifecycle slice 2, weekly_report renderer, paper/shadow/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-22 — Claude `起草` (US-short 批3 R2 lifecycle-eval slice 1 — lifecycle_register 契约 + 完整性校验器 + due 扫描)
+
+- **Verdict/Action**: 收到 `按你建议执行`(开 lifecycle-eval)。按设计「eval 必须在周报渲染前跑」,它是 weekly 渲染器的前置;按 cut1 烧 4 轮的教训拆小——**slice 1 = lifecycle_register schema-first 契约 + 完整性校验器 + due 扫描核心**(运行时阶段[横幅文本/周报 reconcile/落盘/accumulate/陈旧桶 fail-closed]= slice 2)。新 `schemas/us_short_lifecycle_register.schema.json`(动态累加器:per §13.1 item 的机读阈值元数据[count_type/min_count/category]+ live-forward 计数 + §12.2② margin_frozen + 派生 due;私密 gitignored;结构-only——§13.2 阈值是散文故作 data 携带)。新 `engine/us_short_lifecycle_eval.py`:`validate_lifecycle_register`(jsonschema 结构闸 + **覆盖保险**[register 必登记**全部** §13.1 项、读 governance 动态计数非硬编码 39、无缺/多/重 → 无项逃过提醒机制]+ §13.1 title 交叉引用 + §13.2 七类阈值成员 + **due == count≥min AND secondary** 焊死不变式 + as_of PIT)+ `evaluate_lifecycle`(扫描已校验 register → due_items + reconcile count + **upgrade_eligible**[due 且 §12.2② margin 已冻;margin 未冻→due 但不可升级];拒 not-clean register)。**纯/离线、不落盘**(persister + guard 在 slice 2);不交叉 A 股。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: lifecycle-eval **21 测全过**(全 39 覆盖保险 / due 派生正反向控[met-but-due-false、below-min-but-due-true、no-secondary 均拒]/ upgrade margin 门 / title·类别交叉引用 / as_of PIT / 动态计数[注入 2 项 governance]/ count_type 三角==schema enum / evaluate 拒 not-clean / malformed fail-closed);全 us_short `discover` **1025 OK**(+21)零回归;BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(契约结构 + 覆盖保险动态 + due 不变式 + §12.2② margin 门 + evaluate fail-closed);PASS 后用户 `提交`。lifecycle-eval slice 2 = 运行时阶段(accumulate live-forward + 横幅文本 + 周报 reconcile + 落盘 lifecycle/[落盘者接 guard] + 陈旧桶/as_of 错位 fail-closed);之后 weekly_report.md 渲染器(消费 machine record + lifecycle-eval 输出)。
+- **Pre-Codex self-review**: A–F。A:覆盖保险查全 §13.1(动态)、jsonschema 闸覆盖结构全类、due 不变式逐项。B:新代码无重命名;README 加 lifecycle-eval 路由行;design §19「批3 实现中」仍准(批3 未完)。C(反向):正控(full register clean、due_count 0)+ 反向控(due 不一致两向、margin 未冻不升级、malformed fail-closed)证明没误判。D:N-A。E:状态进 SESSION_LOG+README;CURRENT 不动(未提交)。F:as_of strict real-date(拒 20260231)、`_int_not_bool` 守 count/min、due 用 `is` 比 bool、count_type 三角、UTF-8 无 BOM。
+
 ## 2026-06-22 - Codex re-`review PASS` (US-short batch3 R2a renderer clean-gate repair)
 
 - **Verdict/Action**: PASS. The R2a renderer clean-gate bypass is closed; `render_action_table` no longer exposes a validation opt-out and `write_action_table` still guards private output before rendering.
