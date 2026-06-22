@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (register hygiene over-fold repair)
+
+- **Verdict/Action**: PASS. Claude reverted the single over-folded old-inline ship-gate status and kept the actual register hygiene change to the intended 7 new-format batch-2 `- Status:` lines, with SESSION_LOG scope wording now matching the two-file diff.
+- **Required**: None new. `R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT` is resolved in `docs/system_risk_register.md` pending 用户 `提交`.
+- **Verify**: status/diff/current files reviewed; batch-2 committed-status line grep = 7 `- Status:` rows; inline committed-status grep = 0; ship-gate old inline status remains its original batch-1 historical wording; doc/route guards 38 OK; `git diff --check` OK; BOM/FFFD=0. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this register-hygiene repair/fold.
+
+## 2026-06-22 — Claude `修复` (register hygiene over-fold — revert 1 mis-matched old-inline ship-gate status)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` register 卫生,1 P3)。判定成立、接受:我的 `replace_all` 子串也命中 1 条**老 inline batch-1** 条目(ship-gate)的内联 status → 被误改、且把 batch-1(`391720b4`)误标"batch-2 build"。取 Codex path (a):**revert 那条 ship-gate 内联 status** → 净改 = 仅 7 条新格式 batch-2 `- Status:`(与声明一致);+ 改原条目"register-only(1 文件)"→ 实 2 文件。
+- **Required**: `R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT`(P3)— flip→resolved + Resolution 见 `docs/system_risk_register.md`。
+- **Verify**: `git diff` 现仅含 7 条新格式 batch-2 `- Status:` 折叠(ship-gate 内联已 revert;grep `committed in the 2026-06-21 US-short batch-2 build` 只命中 7 条新格式、不在任何 inline);新格式 stale `^- Status:.*working tree.*pending 用户` grep=0;老 inline batch-1 全不动;doc/route 38 OK;diff-check 仅 CRLF;BOM=0。
+- **Next**: Codex re-`审查`(核 diff 与 log 一致、ship-gate 复原、仅 7 折叠);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: 教训:`replace_all` 即使子串"看着唯一"也要先 grep 全文核命中数(我没核 → 误碰 inline)。本次 revert 后 grep 证 ship-gate inline 复原 + 折叠只在 7 条新格式;log 三处对齐实际 diff(7 条 / old-inline 不动 / 2 文件)。零 code、零 runtime。
+
+## 2026-06-22 - Codex `审查 FAIL` (register hygiene fold stale committed markers)
+
+- **Verdict/Action**: FAIL. The 7 new-format `- Status:` folds are plausible, but the same diff also rewrites 1 old inline-format ship-gate sizing entry while the top SESSION_LOG claims old inline entries were deliberately untouched; that rewritten inline entry is also mislabeled as committed in the 2026-06-21 batch-2 build even though its owning commit is batch-1 `391720b4`.
+- **Required**: `R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT` is open in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; `git log` confirms HEAD includes `1f44c7b3`/`4c6c31d3`; `git show 391720b4` identifies the ship-gate sizing governance commit as batch-1; doc/route guards 38 OK; `git diff --check` OK; BOM/FFFD=0. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: Claude Code `修复` only the register-hygiene scope drift: make the changed inline ship-gate status accurate or revert that one over-fold, and make the SESSION_LOG scope/count wording match the actual diff.
+
+## 2026-06-22 — Claude `修复` (register hygiene — fold 7 stale committed-entry status markers)
+
+- **Verdict/Action**: 收到 `清 register 卫生`(addr Codex optional-caution-1:已提交条目仍标 working-tree/pending-提交)。折叠 7 个新格式 stale Status 标记 `resolved (working tree; Codex re-审查 PASS 2026-06-21; pending 用户 提交)` → `committed in the 2026-06-21 batch-2 build, Codex re-审查 PASS`(这 7 条 = 06-21 batch-2 build slice 的 P1,已在 build commits `ed9741f3`…`ac04a004` 提交、只是当时没折叠)。**刻意不动** ~22 条老 inline-format batch-1 条目(`RESOLVED P(date): … status resolved(…pending Codex re-审查 PASS…)`):heterogeneous 历史叙述 / 部分"pending Codex"PASS 状态不确定 / 低危 —— 遵 memory「旧 committed 措辞不 mass-rewrite」+ Codex 自己 caution against 这个 broad rewrite。
+- **Required**: 无(非 Codex finding;addr optional caution)。纯 register 卫生,零 code/behavior/schema。
+- **Verify**: 新格式 stale `^- Status:.*working tree.*pending 用户` grep = **0** 残留;doc/route guards 38 OK;改 register + SESSION_LOG **2 文件**(register 折叠 7 行);BOM=0。
+- **Next**: Codex 快速 `审查`(核 7 折叠准确 + 无 over-fold);PASS 后用户 `提交`。剩 ~22 老 inline 条留作低危历史(要清需谨慎逐条、非 mass-replace)。
+- **Pre-Codex self-review**: 折叠只换"已提交但标 working-tree/pending"的 7 条 `- Status:`(git log 证 build commits 在 HEAD + Codex 自己标这些 already-committed);用 replace_all 单一 identical 子串(不碰别处);老 inline / Resolution-narrative 的 "working tree" 不动(历史叙述非 status、且 mass-rewrite 被 cautioned)。零 code、guard 绿。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round B Cut 2 price de-spike tied shadows)
 
 - **Verdict/Action**: PASS. Current working tree correctly fixes the final batch-2 Round B item: US-short price de-spike now compares against the nearest strictly non-tied support/resistance value, so 2+ bars sharing the same long-shadow extreme no longer survive as `strong`.

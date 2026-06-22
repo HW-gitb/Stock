@@ -33,6 +33,19 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT - register hygiene diff rewrites one old inline batch-1 status while claiming only seven new-format batch-2 Status lines changed
+
+- Status: **resolved** (Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Severity: **P3** (review-log / register hygiene accuracy; no runtime/code behavior impact).
+- Source: Codex adversarial review of the current register-hygiene working tree after Claude `修复` entry "fold 7 stale committed-entry status markers".
+- Scope reviewed: current dirty diff in `docs/SESSION_LOG.md` and `docs/system_risk_register.md` only. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run.
+- Technical finding: the top `docs/SESSION_LOG.md` entry says the repair folded **7** new-format `- Status:` markers and **deliberately did not touch** the old inline-format batch-1 entries. The actual diff changes those 7 new-format `- Status:` lines **plus** one old inline-format entry: `R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP`. That inline rewrite now says it was "committed in the 2026-06-21 US-short batch-2 build", but `git show 391720b4` identifies the owning commit as `schema(us-short): batch-1 ship-gate sizing governance ...`; it is not one of the batch-2 build commits being folded. The same top SESSION_LOG verify line says `register-only(1 文件)` while the diff necessarily changes both `docs/SESSION_LOG.md` and `docs/system_risk_register.md`.
+- Materiality: this is not a code/schema/runtime failure and the 7 intended new-format batch-2 folds appear plausible. It still blocks a clean review because this slice's whole purpose is durable register state accuracy; the current top handoff understates scope and the register introduces a wrong batch attribution for an old inline entry.
+- Required repair: choose one narrow path and keep it docs-only. Either (a) revert the old inline ship-gate status line so this repair truly touches only the 7 new-format batch-2 `- Status:` entries, OR (b) keep an explicit ship-gate inline cleanup but correct its commit attribution to batch-1 `391720b4` (or another exact verified commit, if Claude proves a later fold commit) and update the top `docs/SESSION_LOG.md` entry to say 8 register lines / one old inline entry were changed, not 7-only / old-inline-untouched. Also correct the "register-only(1 文件)" wording to reflect the actual two-file diff or clarify that it means one target register file plus the review log. Do not mass-rewrite the remaining old inline entries.
+- Verification expected: `git diff -- docs/system_risk_register.md docs/SESSION_LOG.md` shows no contradiction between the top SESSION_LOG scope statement and the actual changed lines; `rg` for new-format stale `^- Status:.*working tree.*pending 用户` remains clean; doc/route guards pass; `git diff --check` and BOM/FFFD checks pass.
+- Resolution (Claude `修复` 2026-06-22, working tree; 用户 `修复` 即授权): took Codex path (a) — reverted the single over-folded old-inline ship-gate status (`R-USSHORT-SHIP-GATE-SIZING-REAL-MONEY-MANUAL-NEGATIVE-GUARD-GAP`) back to its original ``` `resolved`(working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`) ```, so the register-hygiene diff now changes ONLY the 7 new-format batch-2 `- Status:` lines (matching the SESSION_LOG claim; the old-inline batch-1 entries are untouched, the wrong batch-2 attribution is gone). Also corrected the SESSION_LOG `register-only(1 文件)` → `register + SESSION_LOG 2 文件`. Verify: `committed in the 2026-06-21 US-short batch-2 build` now appears ONLY in the 7 new-format `- Status:` lines (no inline ``` `resolved`(committed... ``` remains); new-format stale `^- Status:.*working tree.*pending 用户` grep = 0; doc/route guards 38 OK; `git diff --check` CRLF-only. Root cause: a `replace_all` substring that looks unique must still be grep-counted across the whole file first — this one also lived inside one inline ship-gate status. Did NOT mass-rewrite the remaining old-inline entries (per Codex's instruction + the `旧 committed 措辞不 mass-rewrite` rule). Closure on Codex re-`审查 PASS` + 用户 `提交`.
+- Codex re-review closure (2026-06-22): PASS. Confirmed the register diff now contains exactly the 7 intended new-format batch-2 `- Status:` folds, the old inline ship-gate status is back to its original batch-1 historical wording, there is no inline `resolved(committed in the 2026-06-21 US-short batch-2 build...)` over-fold, and the top SESSION_LOG scope/count wording matches the actual two-file diff. Verification: doc/route guards 38 OK; `git diff --check` OK; BOM/FFFD=0; no provider/live/network/DataHub/A-share/Skill/production/batch3.
+
 ### R-USSHORT-BATCH2-PRICE-DESPIKE-TIED-LONG-SHADOW - de-spike compared the extreme to the single 2nd-ordered value, so 2+ bars wicking to the SAME extreme survived as 'strong'
 
 - Status: **resolved** (committed `4c6c31d3`, Codex `审查 PASS` 2026-06-22). Was Round B Cut 2 — the LAST converged-review item; this commit closes the entire batch-2 review (Round A 7 + Round B 2).
@@ -562,7 +575,7 @@ Status:
 
 ### R-USSHORT-BATCH2-FORWARD-EVENT-SENSITIVE-TYPE-FAILOPEN-GAP - US-short forward-event missing-data sensitivity treats SPAC/malformed type as ordinary tag
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 eighth slice (`engine/us_short_forward_events.py`, `tests/test_us_short_forward_events.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -584,7 +597,7 @@ Status:
 
 ### R-USSHORT-BATCH2-ORTHO-PERFECT-OVERLAP-BOOST-GAP - US-short industry-theme orthogonal residual turns perfect overlap into max score
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 seventh slice (`engine/us_short_theme_orthogonalize.py`, `tests/test_us_short_theme_orthogonalize.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -606,7 +619,7 @@ Status:
 
 ### R-USSHORT-BATCH2-CORESCORE-NEUTRAL-BLOCK-BAD-SHAPE-GAP - US-short core_score neutral fallback parameter can crash or contaminate scoring
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 (Codex `审查 FAIL` 2026-06-21).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 sixth slice (`engine/us_short_core_score.py`, `tests/test_us_short_core_score.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -626,7 +639,7 @@ Status:
 
 ### R-USSHORT-BATCH2-RISK-DOWNGRADE-BAD-SHAPE-SOFT-SIGNAL-GAP - US-short risk_downgrade soft-signal API treats malformed flags/events as valid penalties or invalid score values
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 across 3 Codex FAIL rounds (original bad-shape → residual margin-override → residual return-input bool), now closed by a whole-class public-input-validation sweep.
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 across 3 Codex FAIL rounds (original bad-shape → residual margin-override → residual return-input bool), now closed by a whole-class public-input-validation sweep.
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short batch2 fifth slice (`engine/us_short_risk_downgrade.py`, `tests/test_us_short_risk_downgrade.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -653,7 +666,7 @@ Status:
 
 ### R-USSHORT-BATCH2-LIFECYCLE-MUTABLE-EFFECT-UPGRADE-GUARD-GAP - US-short batch2 lifecycle engine exposes mutable frozen effects and lets up-slow confirmation be bypassed
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (Codex `review FAIL` 2026-06-21).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 (Codex `review FAIL` 2026-06-21).
 - Severity: **P1**.
 - Scope reviewed: current dirty working tree US-short batch2 third slice (`engine/us_short_theme_lifecycle.py`, `engine/us_short_overextension.py`, `tests/test_us_short_theme_lifecycle.py`, `tests/test_us_short_overextension.py`, plus `docs/README.md` / `docs/SESSION_LOG.md`). No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -672,7 +685,7 @@ Status:
 
 ### R-USSHORT-BATCH2-HARDVETO-RELIABLE-TRIGGER-ROW-CONTEXT-GAP - US-short batch2 hard-veto classifier misses a design-required reliable liquidity/spread hard trigger and silently downgrades bad row context
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was open P1 (2026-06-21 Codex review FAIL).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was open P1 (2026-06-21 Codex review FAIL).
 - Severity: **P1**.
 - Scope reviewed: current dirty working tree US-short batch2 second slice (`engine/us_short_regime.py`, `engine/us_short_hard_veto.py`, `tests/test_us_short_regime.py`, `tests/test_us_short_hard_veto.py`, plus route/log docs). No provider/live/network/DataHub/A-share/Skill/production path was executed.
 - Technical finding:
@@ -694,7 +707,7 @@ Status:
 
 ### R-USSHORT-BATCH2-PRICE-STRUCTURE-FAILURE-RESCUE-GAP - US-short batch2 price engine can convert invalid structures into executable or false breach signals
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-21; pending 用户 `提交`). Was OPEN P1 (2026-06-21 Codex review FAIL).
+- Status: **resolved** (committed in the 2026-06-21 US-short batch-2 build, Codex re-`审查 PASS`). Was OPEN P1 (2026-06-21 Codex review FAIL).
 - Scope reviewed: current `master@f646147f` working tree US-short batch2 first slice (`engine/us_short_price_engine.py`, `engine/us_short_private_paths.py`, related tests and route/log docs). No provider/live/DataHub/A-share/Skill/production path was executed.
 - Technical finding:
   - `engine/us_short_price_engine.py::holding_exit_engine` treats post-round take-profit structure failure as an actual stop breach. With `close=109.0`, `support=95.0`, `resistance=109.001`, `atr=2.0`, the rounded TP levels become invalid while price is still above `stop_clear_price=106.51`; the function returns `executable=True`, `reject_reason="取整后止盈结构失效(已破位)"`, and `trace.breached=True`. This fabricates a breach signal for a non-breached holding.
