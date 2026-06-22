@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DOCSTRING-DRIFT - active hard_veto teaching surfaces omit the new missing-materiality disposition
 
-- Status: **resolved** (working tree; Claude `修复` 2026-06-22; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22). The runtime disposition (`R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION`) + theme_opportunity pin passed behavior review.
+- Status: **resolved** (committed `fc93fb8d`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22). The runtime disposition (`R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION`) + theme_opportunity pin passed behavior review.
 - Severity: **P3** (review-quality / active contract clarity; blocking this review because it can reintroduce the old near-clean interpretation).
 - Source: Codex adversarial review of the current working tree after Claude Round B repair (`R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION`).
 - Scope: `engine/us_short_hard_veto.py` module docstring and `docs/README.md` US-short batch-2 hard_veto route row. No runtime behavior change required; no provider/live/DataHub/A-share/Skill/production/batch3.
@@ -47,7 +47,7 @@ Status:
 
 ### R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION - a recent+active SEC offering with a MISSING materiality sub-field was near-clean (soft_risk_tag)
 
-- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`).
+- Status: **resolved** (committed `fc93fb8d`, Codex `审查 PASS` 2026-06-22).
 - Severity: **P2** (design-disposition; was `cc_review_v2 §4.2` design-decision item — the user authorized executing Round B with my stated default disposition).
 - Source: converged batch-2 review — Codex `review_v2.md` §4.2 + Claude `cc_review_v2.md` §4.2.
 - Scope reviewed/repaired: `engine/us_short_hard_veto.py::classify_hard_veto` (SEC active_offering branch) + `tests/test_us_short_hard_veto.py`. No provider/live/A-share/batch3.
@@ -60,7 +60,7 @@ Status:
 
 ### R-USSHORT-BATCH2-THEMEOPP-CONFIRMED-LOWSCORE-INTENTIONAL - pin confirmed+low/zero-score → strong as intentional (no score floor added)
 
-- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`).
+- Status: **resolved** (committed `fc93fb8d`, Codex `审查 PASS` 2026-06-22).
 - Severity: **P3** (design question, resolved by pinning current behavior as intentional).
 - Source: converged batch-2 review — Codex `review_v2.md` §4.3 + Claude `cc_review_v2.md` §3.2 / §4.3.
 - Scope reviewed/repaired: `tests/test_us_short_theme_opportunity.py` (TEST-ONLY). No engine/behavior change. No provider/live/A-share/batch3.
