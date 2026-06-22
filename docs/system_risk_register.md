@@ -33,6 +33,26 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-BATCH2-PRICE-NAN-IMPLICIT-FAILCLOSE-FRAGILE - price_engine NaN inputs are only ACCIDENTALLY fail-closed (no explicit isfinite guard)
+
+- Status: **open** (deferred P3 hygiene; user-acknowledged 2026-06-22 — NOT a blocking fix; registered so it is not lost on the desktop review `cc_review_v2.md`).
+- Severity: **P3** (robustness hygiene; currently SAFE by accident, not a fail-open — fragility risk only).
+- Source: `cc_review_v2.md` §5.9 — the converged batch-2 review's Round C / OPTIONAL-hygiene list (explicitly NOT a Round A/B Required; the review marked Round C "不挡 Round A / 可进批3").
+- Technical finding: `engine/us_short_price_engine.py` does not explicitly guard NaN in its numeric price inputs (close / ATR / support / resistance). A NaN currently fails closed only ACCIDENTALLY — e.g. a NaN risk is caught by the `risk > 0 else 0.0` path, and `effective_support` / `effective_resistance` can return a NaN value tagged `'strong'`. It works today, but the safety rests on an IMPLICIT side-effect, not an explicit `math.isfinite` check. (Line refs in cc_review_v2 predate Round A/B; price_engine has since changed — malformed-input sweep `18cd7494`, de-spike `4c6c31d3` — so re-verify exact lines at fix time.)
+- Why deferred / low: no money/safety fail-open in normal operation (real inputs are finite price floats; the accidental guard holds). The fragility is that a future refactor (batch-3+ touching price_engine) could silently break the implicit NaN-safety.
+- Disposition: add explicit `math.isfinite` guards on the price numeric inputs (NaN/Inf → degrade-to-observe / None, like the other engines' strict `_finite_number`). Best done WHEN batch-3 next touches price_engine, OR in a dedicated Round C hygiene slice. Not started.
+- Closure: a `修复` slice adds the explicit finite guards + adversarial NaN/Inf tests across support/resistance/RR, Codex re-`审查 PASS`, 用户 `提交`. Until then this stays a tracked deferred P3 (no behavior change required now).
+
+### R-USSHORT-BATCH2-MACROCLUSTER-ELEVATED-EFFECTS-NOT-CONST-PINNED - macro_cluster gives `elevated` a risk_tag/banner that lives only in code, not in the governance preset
+
+- Status: **open** (deferred P3 hygiene; user-acknowledged 2026-06-22 — NOT a blocking fix; registered so it is not lost on the desktop review `cc_review_v2.md`).
+- Severity: **P3** (governance source-of-truth gap; strictly conservative, NOT a fail-open).
+- Source: `cc_review_v2.md` §4.5 — the converged batch-2 review's Round C / OPTIONAL-hygiene list (NOT a Round A/B Required).
+- Technical finding: `engine/us_short_macro_cluster.py` emits `risk_tag=True` / `report_banner=True` for the `elevated` warning level, but design §8 (≈line 229) + the `us_short_macro_cluster` governance preset only pin `high_warning_effects` (the `high` level). So the `elevated` effects are a rule that lives ONLY in engine code, not in the const-pinned governance — a source-of-truth gap. Strictly conservative (no size effect, hard_cap always False), so NOT a fail-open. (Re-verify exact lines at fix time.)
+- Why deferred / low: not a behavior risk (`elevated` only tags/banners, no sizing/veto power). The gap is governance drift — if someone edits the elevated behavior, no schema/triangulation guard catches it (only the engine test does).
+- Disposition: EITHER pin an `elevated_effects` block in `presets/us_short_macro_cluster_governance_*.json` (+ schema const-pin + a triangulation test schema==preset==engine), OR add a one-line design §8 note that `elevated` carries a soft tag/banner. The const-pin option is the more rigorous governance fix. Best done WHEN batch-3 wires the field_registry / no-dangling governance layer, OR in a dedicated Round C slice. Not started. (Touches the frozen preset/schema or design — needs the usual care + user nod.)
+- Closure: a `修复` slice pins the elevated effects (preset + schema + triangulation) or adds the design note, Codex re-`审查 PASS`, 用户 `提交`. Until then this stays a tracked deferred P3.
+
 ### R-USSHORT-REGISTER-HYGIENE-SCOPE-OVERFOLD-LOG-DRIFT - register hygiene diff rewrites one old inline batch-1 status while claiming only seven new-format batch-2 Status lines changed
 
 - Status: **resolved** (committed `c3fd7bd6`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).

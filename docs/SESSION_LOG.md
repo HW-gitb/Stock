@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (register 2 deferred Round C P3 items)
+
+- **Verdict/Action**: PASS. The current docs-only diff accurately registers the two deferred Round C P3 hygiene items and does not change code, behavior, status of prior resolved entries, or batch3/provider/live scope.
+- **Required**: None new. `R-USSHORT-BATCH2-PRICE-NAN-IMPLICIT-FAILCLOSE-FRAGILE` and `R-USSHORT-BATCH2-MACROCLUSTER-ELEVATED-EFFECTS-NOT-CONST-PINNED` remain open deferred P3 items in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; target+governance+doc guards 105 OK; all `*us_short*` tests 896 OK; schema `*us_short*` tests 436 OK; direct NaN/elevated probes matched the register; `git diff --check` clean. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this docs-only register update; actual fixes stay deferred until batch3 touches those modules or a dedicated hygiene slice is authorized.
+
+## 2026-06-22 — Claude `修复` (register 2 deferred Round C P3 items — price NaN guard + macro_cluster const-pin)
+
+- **Verdict/Action**: 收到 `把那两个值得修的登记`。把 cc_review_v2 Round C(optional hygiene)里 2 个"值得以后顺手做"的 P3 登记进 repo register(之前只在桌面 cc_review_v2.md、易丢)。两条均 **open / deferred / 非阻塞**、明标"NOT a Round A/B Required"。其余 6 个 Round C 项不登记(纯保守/装饰/一致性、留桌面 doc)。零 code/behavior 改。
+- **Required**: 2 条新建 deferred P3:`R-USSHORT-BATCH2-PRICE-NAN-IMPLICIT-FAILCLOSE-FRAGILE`(price NaN 靠隐式兜底→加显式 isfinite 守,best done 批3 碰 price_engine)+ `R-USSHORT-BATCH2-MACROCLUSTER-ELEVATED-EFFECTS-NOT-CONST-PINNED`(elevated 效应只在代码→pin 进 preset/schema 或 §8 加注,best done 批3 接 field_registry)。完整 finding/disposition/closure 见 `docs/system_risk_register.md`。
+- **Verify**: 改 register + SESSION_LOG **2 文件**(只加 2 条 open P3 + 本条目;无 fix、无 status flip);doc/route guards 38 OK;BOM=0;零 code/test/behavior。
+- **Next**: Codex 快速 `审查`(核 2 条 finding 描述准确 + 恰当 deferred);PASS 后用户 `提交`。两条待批3 碰到那块或专门 hygiene 刀时清。
+- **Pre-Codex self-review**: 两条都核仍有效(price_engine 经 Round A/B 改过但 NaN 隐式兜底未动;macro_cluster 本会话没碰);disposition 注明"line refs 待 fix 时重核"(price_engine 行号已变);只登记不改 code;其余 6 项 Round C 纯保守/装饰、不登记(避免 register 噪音)。零 runtime。
+
 ## 2026-06-22 - Codex `审查 PASS` (register hygiene over-fold repair)
 
 - **Verdict/Action**: PASS. Claude reverted the single over-folded old-inline ship-gate status and kept the actual register hygiene change to the intended 7 new-format batch-2 `- Status:` lines, with SESSION_LOG scope wording now matching the two-file diff.
