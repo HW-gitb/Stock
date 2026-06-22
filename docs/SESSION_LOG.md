@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_opportunity_state determination repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-THEME-OPPORTUNITY-SCORE-BOUNDS-AND-THRESHOLD-GUARD-GAP` and `R-USSHORT-THEME-OPPORTUNITY-ROUTEDOC-DETERMINATION-LANDING-STATE-DRIFT` are closed in the current working tree.
+- **Required**: None new. Both prior Required IDs are resolved in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; theme_opportunity 12 OK; `*us_short*` 859 OK; schema `*us_short*` 436 OK; doc/route 38 OK; direct score-bound probes passed; stale active-surface determination/wiring grep 0; diff-check CRLF-only. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: User may command `提交`; §4.5 seat-split application, batch3, provider/live/DataHub/Skill/production/A-share remain separately gated.
+
+## 2026-06-22 — Claude `修复` (theme_opportunity 2 Required: score 边界 P1 + route-doc determination 落地态 P3)
+- **Verdict/Action**: 两点成立、接受。**①** `_theme_score` 用 `_finite_number` 接受任意有限数→[0,100] 外的坏 scale 反升级 state(1000 confirmed→extreme、-1→strong)。修:[0,100] 外→None ignored(不 clamp);+ 越界对抗测试 + 钉死精确阈值(20/80,旧测只断序)。**②** route-doc 落地态 drift(又):determination 这刀建好但旧 surface 仍写「determination/接线 separate」。这次**执行了上轮立的机械 grep 步骤**:README proposal 行×2 + theme_probe engine 行、proposal 状态行 + §8③ 全改「determination 已落、剩 §4.5 席位拆分应用」;grep stale=0。完整见 register 两 Resolution。
+- **Required**: `R-USSHORT-THEME-OPPORTUNITY-SCORE-BOUNDS-AND-THRESHOLD-GUARD-GAP`(P1)+ `...ROUTEDOC-DETERMINATION-LANDING-STATE-DRIFT`(P3)— 完整见 `docs/system_risk_register.md`(各 flip→resolved + Resolution)。
+- **Verify**: theme_opportunity 12 OK(越界 1000/100.1/-1 confirmed&unconfirmed→no_strong、精确阈值钉);全 us_short 引擎套件 423 零回归;doc 38 OK;grep determination-separate stale=0;BOM=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex re-`审查`(两 Required);PASS 后用户 `提交`。再补刀②=§4.5 席位拆分(state→Top15)+ #15,那刀落地才真收口批2。
+- **Pre-Codex self-review**: A-F。A(①类):越界有限数(±、>100、巨值)confirmed/unconfirmed + 旁污染 + 精确阈值钉 全覆盖。**E 教训(route-doc 落地即扫·这次执行了)**:landing 一个东西**当场 grep 全 active surface**把旧「future/separate」措辞改 settled——上轮只立 memory 没做、这刀做了(grep 前后各一证 0)。B:仅改 1 引擎 1 测试 + README/proposal 措辞;无 const/阈值改、无下游。C(反向):越界→ignored 非升级、坏→no_strong,测设计意图。F:[0,100] 域守、阈值钉、无 BOM。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 theme_opportunity_state determination)
+
+- **Verdict/Action**: FAIL. The new determination engine is directionally coherent, but two material gaps remain before this slice can pass.
+- **Required**: `R-USSHORT-THEME-OPPORTUNITY-SCORE-BOUNDS-AND-THRESHOLD-GUARD-GAP`, `R-USSHORT-THEME-OPPORTUNITY-ROUTEDOC-DETERMINATION-LANDING-STATE-DRIFT` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; theme_opportunity 11 OK; `*us_short*` 858 OK; schema `*us_short*` 436 OK; doc/route 38 OK; direct score-bound probes reproduced; active route grep found stale determination/wiring wording; diff-check CRLF-only. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: Claude Code `修复` these two Required items only; do not start §4.5 seat-split application, batch3, provider/live/DataHub/Skill/production/A-share, or commit until re-reviewed.
+
+## 2026-06-22 — Claude (起草 US-short batch-2 补刀① — §7/§4.5 theme_opportunity_state determination)
+
+**Worked on**: 用户「确认批2完成?」→ 我对 §18.2 line 452 逐项核,发现 overclaim:批2 scope 明列「两轴环境/动态席位」,但 theme_opportunity_state(第二根轴)没人算、§4.5 动态席位引擎没建。收回「完成」、补这两刀。本刀=determination。`engine/us_short_theme_opportunity.py` `classify_theme_opportunity_state`:从 §4.3 主题池(market_confirmed ≥3/7门 + theme_score 连续分)判周级 theme_opportunity_state {no_strong<normal<strong<extreme},驱动 §4.5 席位 + §8 theme_probe。+ README 1 路由行。
+
+**Key decisions**: ① **承认 overclaim 并补回 scope**:determination 是 §18.2「两轴环境」第二轴、纯逻辑(非 provider 输入),属批2;之前误当外部 state、框成「小尾巴」。② **映射我定·交审**(§13#29 prior 做模块常量):confirmed≥EXTREME→extreme、≥1 confirmed→strong、无 confirmed 但有 score≥ACTIVITY_FLOOR→normal、否则 no_strong;**只 market-confirmed(过 ≥3/7 门)挣 strong/extreme**(强但未确认→normal,防蹭热点)。③ **fail-closed no_strong_theme**:非list/空/全弱/全坏→no_strong(最保守:最少 theme 席位+无 probe);market_confirmed strict True、theme_score strict。④ 无 preset(§13#29 forward),LOAD theme_probe governance 取词表。
+
+**Verify**: 新测试 **11 OK**(4 态+边界 EXTREME/ACTIVITY、只 confirmed 计 strong/extreme、强未确认→normal、market_confirmed strict True、坏主题忽略、非list/空/全坏→no_strong、词表 conformance)。**零回归**:全 us_short 引擎套件 **422 OK**(本机 deps-complete);grep `_finite(`=0;BOM=0;diff-check 仅 CRLF。未跑 provider。
+
+**Next**: Codex `审查` 本补刀①(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。再补刀②=§4.5 动态席位引擎(theme_opportunity_state→Top15 12+3/10+5/8+7 拆分 + 强赛道周 Top6-15 龙头升级)+ #15 测试。两刀落地才真收口批2。
+
+**Pre-Codex self-review**: A-F。A(类):4 态全 + 双阈值边界 + confirmed/unconfirmed 区分 + market_confirmed strict + 坏主题/非list/空 全覆盖。B:纯新增、无重命名、无下游(下刀动态席位/theme_probe 按值消费 state);grep `_finite(`=0;LOAD 现有 preset 词表。C(反向):强未确认→normal 非 strong、全坏/空→no_strong 非乐观默认、truthy market_confirmed 不算确认,测**设计意图**。D:映射/阈值是 in-slice 设计(§13#29 prior),documented 交审、非自造硬上。E:README 1 行、无 transient gate。F:strict `_finite_number`、no_strong fail-closed、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 final theme_probe route/status repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT` is closed; the final `theme_probe` engine route now says landed, while §4.5 `theme_opportunity_state` determination/wiring stays separate.
