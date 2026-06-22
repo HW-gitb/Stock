@@ -21,13 +21,16 @@ Design boundaries (us_short_system_design §3.6 / §1 / §8 / §11.6 / §18):
   input is FATAL (fail-fast, never silently degrade account state).
 - Privacy (§11.6 / §18.0 P0 fail-closed guard): the output state + lineage carry real holdings/cost/
   cash, so they are refused on any in-repo path that `git check-ignore` does not ignore (fail-closed;
-  also fail-closed if git cannot verify). Default private dir = gitignored state/us_short/.
+  also fail-closed if git cannot verify) AND on any relative / CWD-dependent path (pass an ABSOLUTE path —
+  inside the gitignored state/us_short/ dir, or an external private location).
 - NO broker / no order / no market fetch / no real-money automation.
 
-Usage:
+Usage (--out / --lineage-out MUST be ABSOLUTE — the §11.6 / §18.0 privacy guard rejects a relative /
+CWD-dependent path; use an absolute path inside the gitignored state/us_short/ dir, or an external private
+location. --input-dir may stay relative):
     python runners/us_short_account_state_from_manual_tables.py \
         --input-dir state/us_short/account_state_csv --as-of 20260622 \
-        --out state/us_short/us_short_account_state.json
+        --out <ABSOLUTE_PRIVATE_DIR>/us_short_account_state.json
 """
 from __future__ import annotations
 
@@ -382,7 +385,18 @@ def _reject_nonprivate_account_output_path(out_path: str) -> None:
     location). There is deliberately NO in-repo override flag: real holdings must never land on a
     tracked path, even on explicit request (us_short_system_design §11.6 / §18.0 fail-closed P0).
     """
-    p = Path(out_path).resolve()
+    p = Path(out_path)
+    if not p.is_absolute():
+        # a relative path resolves against the process CWD, NOT the repo root, so from a non-root CWD it can
+        # resolve outside the repo and slip through the outside-repo branch below, bypassing the git-check gate
+        # (real holdings could land in an unintended CWD-relative location). Fail closed: require an absolute path.
+        raise ConvertError(
+            f"refusing a RELATIVE account output path {out_path!r}: a relative path is CWD-dependent "
+            "(not repo-root-relative) and its privacy location cannot be proven. Pass an ABSOLUTE --out / "
+            "--lineage-out — an external private location, or an in-repo path built from ROOT "
+            "(e.g. ROOT / 'state/us_short/...')."
+        )
+    p = p.resolve()
     try:
         p.relative_to(ROOT)
     except ValueError:
@@ -450,8 +464,10 @@ def main(argv=None) -> int:
     p = argparse.ArgumentParser(description="US-short manual tables -> us_short_account_state.json converter")
     p.add_argument("--input-dir", required=True, help="dir containing account.csv + positions.csv")
     p.add_argument("--as-of", required=True, help="decision date YYYYMMDD (= account_state.as_of = weekly --as-of)")
-    p.add_argument("--out", required=True, help="output us_short_account_state.json path")
-    p.add_argument("--lineage-out", help="lineage sidecar path (default <out dir>/<out stem>_lineage.json)")
+    p.add_argument("--out", required=True, help="output us_short_account_state.json path — must be ABSOLUTE "
+                   "(privacy guard rejects relative/CWD-dependent paths); inside the gitignored state/us_short/ "
+                   "dir, or an external private location")
+    p.add_argument("--lineage-out", help="lineage sidecar path (ABSOLUTE; default <out dir>/<out stem>_lineage.json)")
     args = p.parse_args(argv)
 
     input_dir = Path(args.input_dir)

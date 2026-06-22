@@ -76,6 +76,23 @@ class PrivatePathGuardTests(unittest.TestCase):
                 pp.reject_nonprivate_output_path(str(Path(d) / "out.json"))
                 self.assertEqual(m.call_count, 0)
 
+    def test_relative_path_fails_closed(self):
+        # a relative path resolves against the process CWD, not the repo root — from a non-root CWD it could
+        # resolve OUTSIDE the repo and bypass the git-check gate, so it must fail closed (require absolute).
+        # NB: `state/us_short/runs_private/x.json` would be gitignored-OK if ABSOLUTE, yet is refused as relative.
+        for rel in ("state/us_short/runs_private/x.json", "out.json", "../x.json",
+                    "state/us_short/weekly_private/x.json", "./runs_private/x.json"):
+            with self.assertRaises(PPE, msg=rel):
+                pp.reject_nonprivate_output_path(rel)
+
+    def test_relative_path_does_not_call_git(self):
+        # the relative-path refusal happens BEFORE any git invocation (fail-closed at the boundary)
+        import unittest.mock as mock
+        with mock.patch.object(pp.subprocess, "run", side_effect=AssertionError("git must not run")) as m:
+            with self.assertRaises(PPE):
+                pp.reject_nonprivate_output_path("state/us_short/runs_private/x.json")
+            self.assertEqual(m.call_count, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -38,7 +38,8 @@ def reject_nonprivate_output_path(out_path) -> None:
     """Refuse to write US-short private data unless the path is provably private.
 
     Decision (fail-closed):
-      * outside the repo                      -> OK   (user's own external private location)
+      * relative / non-absolute path          -> raise (resolves against the CWD not ROOT → privacy unprovable)
+      * outside the repo (absolute)           -> OK   (user's own external private location)
       * in-repo AND gitignored                -> OK   (private)
       * in-repo AND not gitignored            -> raise (would risk committing tickers/holdings/fills)
       * git unavailable / unexpected rc       -> raise (cannot prove the path is private)
@@ -48,7 +49,19 @@ def reject_nonprivate_output_path(out_path) -> None:
     case variant are all judged by git's actual ignore behaviour. There is no in-repo
     override argument by design.
     """
-    p = Path(out_path).resolve()
+    p = Path(out_path)
+    if not p.is_absolute():
+        # a relative path resolves against the process CWD, NOT the repo root, so a persister run from a
+        # non-root CWD could resolve it OUTSIDE the repo and slip through the outside-repo branch below,
+        # bypassing the git-check gate entirely. Fail closed: require an absolute path (privacy unprovable
+        # otherwise). Callers build in-repo paths from this module's ROOT, or pass an external absolute path.
+        raise PrivatePathError(
+            f"refusing a RELATIVE US-short private output path {out_path!r}: a relative path is CWD-dependent "
+            "(not repo-root-relative) and its privacy cannot be proven. Pass an ABSOLUTE path — an external "
+            "private location, or an in-repo one built from `engine.us_short_private_paths.ROOT` "
+            "(e.g. ROOT / 'state/us_short/runs_private/x.json')."
+        )
+    p = p.resolve()
     try:
         p.relative_to(ROOT)
     except ValueError:

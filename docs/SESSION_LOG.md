@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 private-path relative guard + CLI doc closeout)
+
+- **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS` and `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT`; no new Required in this scope.
+- **Required**: None new. Both private-path IDs are resolved in `docs/system_risk_register.md`. The A-share mirror note stays out-of-lane and is not part of this US-short cut.
+- **Verify**: status/diff/current files reviewed; converter `--help` checked; target guard suites 82 OK; all `*us_short*` tests 892 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct private-path probes passed; active relative-output/help grep clean; `git diff --check` LF/CRLF warnings only; no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this Round A step 6 private-path cut. Remaining Round A main-design doc drift and Round B stay queued and out of scope.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 步6 CLI doc-drift — 转换器 --out 相对路径 help/usage)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 步6,1 P3 Required)。判定成立、接受。守护行为修已 PASS;漏的是转换器 **CLI 教学面**:① module docstring Usage 例 `--out state/us_short/...`(相对、现会被拒)② argparse `--out`/`--lineage-out` help 没说要绝对 ③ Privacy 段"default dir = state/us_short/"。修(doc-only、零 runtime):Usage 例改 `<ABSOLUTE_PRIVATE_DIR>/...` + 注明 --out/--lineage-out 须绝对(--input-dir 保持相对);argparse help 两处加 ABSOLUTE 要求(`--help` 验证过);Privacy 段加"相对路径被拒"。
+- **Required**: `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT`(P3)— flip→resolved + Resolution 见 `docs/system_risk_register.md`。守护行为修(`...RELATIVE-CWD-BYPASS`)保持 PASS。
+- **Verify**: 广 grep us_short 全面 `--out state/us_short` / `state/us_short/us_short_account_state.json`(作输出例)/ 旧 help —— **0 个 active 教学面**矛盾;残留=历史 register/SESSION_LOG prose + 我的拒绝测试(对) + a_short 转换器(跨车道、与其未改守护一致)。converter 72 OK;全 us_short lane **892 OK**(doc-only 不变);doc/route 38 OK;BOM=0;纯 offline。
+- **Next**: Codex re-`审查` 本刀(转换器 docstring/help + register);PASS 后用户 `提交`。剩余 Round A(主设计 doc drift,最后一项)+ Round B 仍排队。
+- **Pre-Codex self-review**: A-F。**doc-drift 第4次·根因再升级**:行为改文件后,教学面不只 docstring,还含 **argparse help 字符串 + module-docstring Usage 例**(CLI 工具特有)—— 我之前漏扫。本次扫净三类 CLI 面 + 广 grep 证 0 矛盾。A:us_short 转换器全相对-output 面已改;a_short 跨车道一致、不动。C:零 runtime、892+72 不变。F:help↔守护行为现一致(help 说绝对、守护拒相对)。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 private-path relative-path guard)
+
+- **Verdict/Action**: FAIL. The two US-short private-path guard behavior repairs are correct, but the active account-state converter CLI teaching surface still shows/allows the old relative `--out` shape, so this cut is not clean yet.
+- **Required**: `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT` (P3) is open with full detail in `docs/system_risk_register.md`. `R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS` passed behavior review but remains in this cut's closure path until the CLI usage/help drift is repaired and re-reviewed.
+- **Verify**: status/diff/current files reviewed; target guard suites 82 OK; all `*us_short*` tests 892 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct private-path probes passed; `--help` and runner usage/docstring still expose relative-output wording; `git diff --check` LF/CRLF warnings only; no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: Claude Code `修复` the account-state converter usage/help/doc wording only; keep runtime behavior unchanged and do not start main-design doc drift / Round B until re-reviewed.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步6 — private-path 相对路径 CWD 绕过 + 转换器镜像)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。步5(action_rank)已提交(`6adcd378` + 折叠 `b54c138e`,含 Codex 点的 Optional 注释收紧)。本刀 = Round A 步6:§18.0 P0 私密守护 `reject_nonprivate_output_path` 用 `Path(out_path).resolve()` 把相对路径解析到 CWD 而非 ROOT → 非根 CWD 的相对路径解析到 repo 外、走"外部 OK"分支、跳过 git check-ignore。**整类扫净**:同改其 live 镜像 `runners/...account_state_from_manual_tables._reject_nonprivate_account_output_path`(真持仓写盘器、相对 `--out` 可达)。修:两处先 `if not is_absolute(): raise` 拒相对(隐私不可证),要求绝对路径。
+- **Required**: `R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS`(P2)—— 含 us_short 转换器镜像修 + a_short 镜像 out-of-lane flag,完整见 `docs/system_risk_register.md`(in_progress)。来源:Codex `review_v2.md` R7 + CC `cc_review_v2.md` §5.5。
+- **Verify**: 两守护套件 82 OK(含 3 新相对路径测试);全 us_short lane **892 OK**(889+3)零回归;探针两守护:相对→拒、绝对-gitignored→仍 OK、repo 外绝对→仍 OK;grep 证无自动 caller 传相对 `--out`(仅 CLI+测试、都绝对)→ 无破坏;doc/route 38 OK;BOM=0;纯 offline、未跑 provider。
+- **Next**: Codex `审查` 本刀(2 守护 + 2 测试 + README + register);PASS 后用户 `提交`。剩余 Round A(主设计 doc drift)+ Round B 拍板项仍排队。
+- **Pre-Codex self-review**: A-F。A(类):whole-class sweep —— 不只改被点名的 private_paths.py,同扫其 live 镜像(us_short 转换器)都修;a_short 镜像同 bug 但**跨车道**→ flag 不动(register 注、no silent cap)。**B/E(承 doc-drift 教训主动扫)**:守护契约变(拒相对)→ grep README+design+两守护 docstring+两测试 docstring:无 surface 断言"accepts relative"(非 stale);仍主动给 README private_paths 行补"拒相对/要绝对"完整化。C(反向):绝对路径全留(892+探针)、is_absolute 平台正确(Win drive-relative 也拒)。F:docstring↔行为一致。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 action_rank survival order + float rank + docstring drift closeout)
 
 - **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER`, `R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK`, and `R-USSHORT-BATCH2-ACTIONRANK-DOCSTRING-WITHINGROUP-RANK-DRIFT`; no new Required in this scope.

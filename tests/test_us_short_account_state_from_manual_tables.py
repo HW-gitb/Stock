@@ -369,6 +369,14 @@ class PrivacyGuardTests(unittest.TestCase):
                 conv._reject_nonprivate_account_output_path(
                     str(ROOT / "state" / "us_short" / "us_short_account_state.json"))
 
+    def test_relative_path_fails_closed(self):
+        # a relative --out resolves against the process CWD, not the repo root — from a non-root CWD it could
+        # resolve outside the repo and bypass the git-check gate (real holdings to an unintended location), so
+        # the guard requires an absolute path. NB: `state/us_short/...` would be gitignored-OK if ABSOLUTE.
+        for rel in ("state/us_short/us_short_account_state.json", "o.json", "../x.json"):
+            with self.assertRaises(CE, msg=rel):
+                conv._reject_nonprivate_account_output_path(rel)
+
 
 class MainEndToEndTests(unittest.TestCase):
     def test_main_writes_valid_output(self):
