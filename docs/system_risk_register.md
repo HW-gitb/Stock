@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2A-RENDER-VALIDATE-FALSE-BYPASS - action_table renderer exposes a public opt-out that can render a not-clean machine record
 
-- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in `37188a55`, Codex re-`审查 PASS`).
 - Severity: **P1** (output-contract / clean-gate integrity before downstream weekly_report, private packet, paper-fill, comparison, or lifecycle consumers trust rendered rows).
 - Source: Codex adversarial review of US-short batch3 R2a `action_table.csv` renderer.
 - Scope reviewed: `engine/us_short_action_table_renderer.py`, `tests/test_us_short_action_table_renderer.py`, `docs/README.md` R2a route row, top `docs/SESSION_LOG.md`, current `docs/system_risk_register.md`, `engine/us_short_private_paths.py`, `engine/us_short_no_dangling_validator.py`, and the frozen `us_short_action_table_contract` preset/schema route. No provider/live/network/DataHub/Skill/production/A-share/US-long path was run.
