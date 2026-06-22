@@ -1,6 +1,6 @@
 # US-short `theme_opportunity_state` 词表 + 席位矩阵 + `theme_probe` 设计提案 (2026-06-22)
 
-**状态**: DESIGN SOURCE — **已批准(用户 2026-06-22)**。其 const-pin **已落地**为 `schemas/us_short_theme_probe_governance.schema.json` + `presets/us_short_theme_probe_governance_20260622.json` + 对应 schema-test(本 governance 即该 const-pin 的落地面)。剩余:`engine/us_short_theme_probe.py` + §4.5 接线仍**单独 gated**(待用户命令)。折进冻结主设计 `docs/us_short_system_design.md` 为**可选的后续 design-doc cleanup**(非引擎前置)。本文档是设计来源,不授权 provider/live/抓数/真钱/A 股交叉。(逐轮审查 verdict 在 `docs/SESSION_LOG.md` 顶部,不写在此。)
+**状态**: DESIGN SOURCE — **已批准(用户 2026-06-22)**。其 const-pin **已落地**为 `schemas/us_short_theme_probe_governance.schema.json` + `presets/us_short_theme_probe_governance_20260622.json` + 对应 schema-test(本 governance 即该 const-pin 的落地面)。`engine/us_short_theme_probe.py` 亦**已落地**(batch2 最后一刀决策引擎)。剩余分离项:**§4.5 `theme_opportunity_state` determination/接线**(§4.3/§7 产该 state)。折进冻结主设计 `docs/us_short_system_design.md` 为**可选的后续 design-doc cleanup**(非引擎前置)。本文档是设计来源,不授权 provider/live/抓数/真钱/A 股交叉。(逐轮审查 verdict 在 `docs/SESSION_LOG.md` 顶部,不写在此。)
 
 设计权威(本提案据此推导,不替代): `docs/us_short_system_design.md` §4.5(line 163 动态席位)、§7(line 210 两轴)、§8(line 220-224 强赛道试探名额 + line 223 防御档入场)、§13.1 #27(`theme_probe` 席位数/封顶)、#29(§4.5 动态席位比例触发)、§9 测试 #25(line 435 防御档入场单测)。
 
@@ -88,5 +88,5 @@
 ## 8. 落地路线(批准后)
 
 - **② governance const-pin = 已落地**:`presets/us_short_theme_probe_governance_20260622.json` + `schemas/us_short_theme_probe_governance.schema.json` + 对应 schema-test(batch-1 风格 const-pin 词表/矩阵/不变量/硬零/防御档);本 governance 即该 const-pin 的落地面。
-- **③ `engine/us_short_theme_probe.py` = 仍单独 gated**(待用户命令):consume 本 preset + 不变量 + 复用 `cost_floor`;纯/离线;schema-first + tests + 独立审查。**batch2 最后一块。**
+- **③ `engine/us_short_theme_probe.py` = 已落地**(batch2 最后一刀):consume 本 preset + 不变量 + 复用 `cost_floor`、消费 `theme_lifecycle_state`;纯/离线。**剩余分离项 = §4.5 `theme_opportunity_state` determination/接线**(§4.3/§7,非本刀)。
 - **① 折进冻结主设计 `docs/us_short_system_design.md` §4.5/§8 + §13#27/#29 = 可选的后续 design-doc cleanup**(非引擎前置;主设计 §8 已述 theme_probe + 引 §13#27 prior,具体值由本 governance preset const-pin)。

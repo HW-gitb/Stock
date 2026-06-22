@@ -48,6 +48,6 @@
     "hard_zero_precedence": "极度防御 / symbol_cooldown_active / portfolio_guard_cooldown / hard_veto force 0 regardless of the matrix AND override the defensive breakout exception",
     "two_cooldowns_distinct": "symbol_cooldown_active = §8 单票再入场冷静期 (us_short_symbol_cooldown_governance); portfolio_guard_cooldown = §8 组合熔断 portfolio_guard_status=cooldown whose effects block_new_entry=true/block_add=true are const-pinned in us_short_portfolio_guard_governance — a theme_probe is a NEW entry so BOTH hard-zero it (§8 line 230 cooldown→禁新建/加仓), not just the symbol-level cooldown",
     "cost_floor_link": "试探仓最小仓成本地板 = engine/us_short_cost_floor.py (observe_reason_type cost_inefficient_min_size); the safety multiple is also §13.1 #27",
-    "consumed_by": "batch-2 engine/us_short_theme_probe.py (to be built) + §4.5 dynamic-seat wiring; declarative — selects/sizes nothing at rest, no A-share crossing"
+    "consumed_by": "batch-2 engine/us_short_theme_probe.py (landed, final batch-2 decision-engine slice) + the separate §4.5 dynamic-seat wiring; declarative — selects/sizes nothing at rest, no A-share crossing"
   }
 }

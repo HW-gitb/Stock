@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 final theme_probe route/status repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT` is closed; the final `theme_probe` engine route now says landed, while §4.5 `theme_opportunity_state` determination/wiring stays separate.
+- **Required**: None new. `R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT` is resolved in `docs/system_risk_register.md`; the three prior behavior Required IDs remain resolved.
+- **Verify**: status/diff/current files reviewed; theme_probe 28 OK; governance schema 28 OK; `*us_short*` 847 OK; schema `*us_short*` 436 OK; doc/route 38 OK; stale active-surface grep 0; diff-check CRLF-only. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: User may command `提交`; batch3/provider/live/DataHub/Skill/production/A-share remain separately gated.
+
+## 2026-06-22 — Claude `修复` (R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT)
+- **Verdict/Action**: 成立、接受。3 个引擎 Required 已 PASS,但**又**栽 route-doc 状态迁移漂移:本刀建了引擎 + 加了新 engine 行,却没扫掉旧 surface(proposal 行/§8③/preset notes)的「engine to be built / 仍单独 gated」→ 新旧矛盾。修(纯措辞):README proposal 行×2 + governance 行、proposal 状态行 + §8③、preset notes.consumed_by 全改为「engine 已落地(batch2 最后一刀);剩 §4.5 determination/接线 separate」;grep 5 surface 旧短语=0。完整见 register Resolution。
+- **Required**: `R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT`(P3)— 完整见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: governance schema 28 OK(preset 仅 notes 改、无 const 动);doc 38 OK;grep 5 active surface「to be built/仍单独 gated/待用户命令」=0;BOM=0;diff-check 仅 CRLF。无代码/引擎行为改。
+- **Next**: Codex re-`审查` 本 route 修;PASS 后用户 `提交`(本刀=batch2 收口)。
+- **Pre-Codex self-review**: A-F。**E 教训(route-doc 本会话第 3 轮连续复发·根因=执行非知识)**:landing 一个东西时不是只加「已建」新行,而是 **grep 全 active surface 把所有把它写成 future 的旧措辞同刀改 settled**。固化机械动作(已存 memory):每次落地 engine/artifact,先 `grep (to be built|gated|待|后续|future) + artifact 名` 圈出所有 active surface,逐一改、再 grep 证 0。本修已照做。B/C/D/F:纯措辞、无 const/test/代码改、历史 SESSION_LOG/register 不动。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 final theme_probe re-review)
+
+- **Verdict/Action**: FAIL. The three prior `theme_probe` code Required IDs are functionally repaired, but a new route/status drift is open.
+- **Required**: `R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; theme_probe 28 OK; `*us_short*` 847 OK; schema `*us_short*` 436 OK; doc/route 38 OK; probes passed; diff-check CRLF-only. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: Claude Code `修复` the route/status wording only; no code/provider/live/DataHub/Skill/production/A-share/commit until re-reviewed.
+
+## 2026-06-22 — Claude `修复` (theme_probe 引擎 3 Required: blocking 默认 fail-open P1 + lifecycle 没消费 P1 + coverage 词表 P2)
+- **Verdict/Action**: 三点全成立、接受。**①** blocking flag 默认值是 False→省略=permissive 自相矛盾。修:三 blocker 默认改 None→省略/坏/True 全 block,须显式 False 放行。**②** 没消费 `theme_lifecycle_state`→退化主题仍能试探(只进不出)。修:加参 consume `lifecycle_effects`,active 才放、cooling/decayed/retired/缺/坏 fail-closed。**③** coverage 用了 §3 词表,但 action_table 冻结 {full,partial,restricted,blocked}。修:`COVERAGE_ELIGIBLE`={full,partial}+conformance 钉 enum。完整见 register 三 Resolution。
+- **Required**: `R-USSHORT-THEME-PROBE-BLOCKING-DEFAULT-FAILOPEN-GAP`(P1)+ `...LIFECYCLE-NOT-CONSUMED-GAP`(P1)+ `...COVERAGE-VOCAB-MISMATCH-GAP`(P2)— 完整见 `docs/system_risk_register.md`(各 flip→resolved + Resolution)。
+- **Verify**: theme_probe **28 OK**(省略 blocker→block、lifecycle 5 态+未知、coverage full/partial 正控·clean/restricted/blocked/None 负控、coverage∈action_table enum conformance);全 us_short 引擎套件 **411 零回归**;grep `_finite(`=0、coverage 旧词表在 engine/我行残留=0;BOM=0;diff-check 仅 CRLF;doc 38 OK。未跑 provider。
+- **Next**: Codex re-`审查` 本修(三 Required);PASS 后用户 `提交`(本刀 = batch2 收口)。
+- **Pre-Codex self-review**: A-F。**A(类)**:blocker 省略/坏/True 全 block + lifecycle 5 态 + coverage 全 enum(full/partial 正、clean/restricted/blocked/None 负)+ action_table 跨契约钉。**D 教训**:安全 blocker 的**默认值**也是 whole-class 一员、省略必 fail-closed(承接 neutral_block/容器层同根)。B:仅改 1 引擎 1 测试 + README/docstring,跨引擎/跨schema 验过。C:省略/退化/坏→block,测设计意图。F:None-sentinel/strict、无 BOM。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 final theme_probe engine)
+
+- **Verdict/Action**: FAIL. The final `theme_probe` engine has three material contract gaps; full detail lives in the register.
+- **Required**: `R-USSHORT-THEME-PROBE-BLOCKING-DEFAULT-FAILOPEN-GAP`, `R-USSHORT-THEME-PROBE-LIFECYCLE-NOT-CONSUMED-GAP`, `R-USSHORT-THEME-PROBE-COVERAGE-VOCAB-MISMATCH-GAP` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: status/diff reviewed; theme_probe 21 OK; `*us_short*` 840 OK; schema `*us_short*` 436 OK; doc/route 38 OK; diff-check CRLF-only. Probes reproduced all three IDs. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: Claude Code `修复` the three Required items only; no batch3/provider/live/DataHub/Skill/production/A-share/commit until re-reviewed.
+
+## 2026-06-22 — Claude (起草 US-short batch-2 第十五刀 FINAL — §8 theme_probe 强赛道试探名额引擎)
+
+**Worked on**: batch2 **最后一块** —— §8 theme_probe 引擎。`engine/us_short_theme_probe.py` consume 已落地 governance preset:① `theme_probe_seats`(regime×state 查 #27 矩阵,未知→0)② `hard_zero_for_probe`(极度防御/单票cooldown/**组合熔断cooldown**/hard_veto 阻断,blocking flag fail-closed)③ `defensive_entry_constraint`(防御→pullback-only,extreme+不跳空+带内→1 breakout 例外)④ `theme_probe_decision`(硬零→席位→资格[强制高置信+coverage∈{clean,usable_with_fallback}]→防御档;放行=最小仓+risk_tag+受全 §8 约束+cost-floor)。+ README 1 路由行。
+
+**Key decisions**: ① **blocking flag(cooldown/veto)fail-closed**(True 或 malformed 都阻断、只显式 False 放行)——承接 fail-open 教训,坏安全态绝不静默放行 probe;granting flag(high_conf/no_gap/in_band)strict True。② **组合熔断 cooldown 进硬零**(governance 那轮修的安全门,引擎据此 block)。③ 引擎只决策 seats+资格+防御档入场;**强制最小仓 + cost-floor 由 sizing pipeline 接**(复用已建 cost_floor、不重实现);**§4.5 determination(谁产 theme_opportunity_state)不在本刀**(§4.3/§7)。④ coverage 用 allow-list {clean,usable_with_fallback}(line 77),restricted/blocked/未知→fail-closed 不放行。⑤ 矩阵/词表/risk_tag conformance==preset。
+
+**Verify**: 新测试 **21 OK**(矩阵给定+v1格、未知→0、极度防御行0;硬零各条+组合熔断+malformed fail-closed;防御 pullback/extreme 例外三条 strict;decision 全允许/硬零/无席位/资格/防御档各路径;conformance)。**零回归**:全 us_short 引擎套件 **404 OK**(本机 deps-complete);grep `_finite(`=0;BOM=0;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: Codex `审查` 本第十五刀(1 引擎 + 1 测试 + README);PASS 后用户 `提交`。**本刀落地 = batch2 纯决策引擎全部收口**(价格/两轴/仓位全链/hard veto/core_score/正交/35%块/生命周期/macro_cluster/事件/action_rank/theme_probe);提交后正式报用户 batch2 结束 + 剩余非工程门(两道时间门 + 批3 渲染/validator/纸面)。
+
+**Pre-Codex self-review**: A-F。A(类):seats 全格+未知、硬零各条+malformed、防御档三条 strict+非防御、decision 各 reason 路径 全覆盖。B:纯新增 1 引擎 1 测试 + README 1 行;consume 已落 preset、无 schema 改、无下游(sizing pipeline 按值用 + 接 min-size/cost-floor);grep `_finite(`=0。C(反向):blocking flag malformed→block 非放行、granting flag malformed→不授、未知 regime/state→0、coverage 非白名单→不放行,测设计安全意图。D:组合熔断/coverage/extreme 例外均 §8/§3 已定,非自造。E:README 1 行、无 transient gate 进 durable(无 pending/Codex 字样)。F:strict bool/membership、allow-list coverage、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short theme_probe governance repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-GOVERNANCE-PORTFOLIO-GUARD-COOLDOWN-HARDZERO-GAP` and `R-USSHORT-THEME-PROBE-GOVERNANCE-ROUTEDOC-PROPOSAL-APPROVAL-STATE-DRIFT` are closed in the current working tree.
