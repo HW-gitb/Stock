@@ -12,7 +12,8 @@ adversarially tested:
   * §5.1a reliable file-type/status/price signals (delisting / halt / bankruptcy / OTC /
     critical-data-missing) → a real hard veto (entry_hard_veto for a candidate row,
     position_hard_veto for a holding row). A SEC offering is a hard veto ONLY when it is
-    recent + active + material; a stale / inactive / small shelf is NOT (→ soft_risk_tag).
+    recent + active + material; a recent + active offering whose materiality is MISSING → strong_downgrade
+    (没数据≠安全, short of a hard veto); a stale / inactive / known-small shelf is NOT (→ soft_risk_tag).
   * §5.1b semantic / news signals are advisory-first: `semantic_audit_unavailable` →
     downgrade + observe, never a hard block; a high-confidence adverse read → ≥ restricted
     (strong_downgrade), not clean — still NOT a v1 hard veto.
@@ -105,13 +106,22 @@ def classify_hard_veto(signals, row_context="candidate"):
             tier = _max_tier(tier, hard)
             reasons.append(f"5.1a:{label}")
 
-    # §5.1a SEC offering: hard veto ONLY if recent + active + material; stale/inactive/small → tag only
+    # §5.1a SEC offering: hard veto ONLY if recent + active + material; stale/inactive/small → tag; a recent +
+    # active offering whose materiality is MISSING → strong_downgrade (没数据≠安全, §4.2 disposition for review)
     off = signals.get("active_offering")
     if off:
         od = off if isinstance(off, dict) else {}   # non-dict offering → present but unparseable → tag, not crash/clean
-        if od.get("recency") == "recent" and od.get("status") == "active" and od.get("materiality") == "material":
+        recent_active = od.get("recency") == "recent" and od.get("status") == "active"
+        materiality = od.get("materiality")
+        if recent_active and materiality == "material":
             tier = _max_tier(tier, hard)
             reasons.append("5.1a:SEC增发(近期+已激活+重大)")
+        elif recent_active and materiality is None:
+            # recent + ACTIVE but the materiality sub-field is MISSING: a known-live offering whose size we
+            # can't confirm must NOT be near-clean ("没数据≠安全"). Escalate to strong_downgrade (≥restricted),
+            # short of a hard veto (materiality not confirmed material). [§4.2 design choice, submitted for review]
+            tier = _max_tier(tier, "strong_downgrade")
+            reasons.append("5.1a:SEC增发(近期+已激活+materiality缺失→strong_downgrade,不near-clean)")
         else:
             tier = _max_tier(tier, "soft_risk_tag")
             reasons.append("5.1a:SEC增发(陈旧/未激活/小额/不可解析→仅标签)")

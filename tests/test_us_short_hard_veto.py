@@ -111,6 +111,19 @@ class SecOfferingRecencyMaterialityTests(unittest.TestCase):
             self.assertEqual(out["veto_tier"], "soft_risk_tag", off)
             self.assertNotIn(out["veto_tier"], _HARD)
 
+    def test_recent_active_missing_materiality_is_strong_downgrade(self):
+        # §4.2 disposition (cc_review_v2 §4.2, submitted for review): a recent + ACTIVE offering whose
+        # materiality sub-field is MISSING must not be near-clean (没数据≠安全) — strong_downgrade, not a tag,
+        # and NOT a full hard veto (materiality not confirmed material).
+        out = hv.classify_hard_veto({"active_offering": {"recency": "recent", "status": "active"}}, "candidate")
+        self.assertEqual(out["veto_tier"], "strong_downgrade")
+        self.assertNotIn(out["veto_tier"], _HARD)
+        # controls (unchanged): a known-small recent+active, and a stale offering with missing materiality, stay tag
+        for off in ({"recency": "recent", "status": "active", "materiality": "small"},
+                    {"recency": "stale", "status": "active"}):
+            self.assertEqual(hv.classify_hard_veto({"active_offering": off}, "candidate")["veto_tier"],
+                             "soft_risk_tag", off)
+
 
 class SemanticAdvisoryFirstTests(unittest.TestCase):
     def test_unavailable_is_downgrade_not_hard_block(self):

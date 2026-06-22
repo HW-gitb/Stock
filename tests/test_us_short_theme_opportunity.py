@@ -31,6 +31,17 @@ class ClassifyTests(unittest.TestCase):
         self.assertEqual(to.classify_theme_opportunity_state([_theme(to.EXTREME_SCORE - 0.1, confirmed=True)]), "strong")
         self.assertEqual(to.classify_theme_opportunity_state([_theme(30, confirmed=True), _theme(90, confirmed=False)]), "strong")
 
+    def test_confirmed_low_or_zero_score_is_intentionally_strong(self):
+        # DESIGN DECISION pinned (user-approved 2026-06-22; cc_review_v2 §4.3 / Codex review_v2 §4.3):
+        # `market_confirmed` is the AUTHORITATIVE boolean gate (the theme passed the §4.3 ≥3/7 confirmation);
+        # `theme_score` only sets the EXTREME bar. So a market-confirmed theme below EXTREME_SCORE is `strong`
+        # REGARDLESS of how low the score is — INCLUDING score=0. This is pinned INTENTIONAL (not a missing
+        # score-floor): §8 back-gates (30% / 同主题周≤2 / 最小仓 / hard_veto) still bound the actual sizing. A
+        # score floor would change the approved semantics, so it is deliberately NOT added.
+        for score in (0.0, 0.1, 5.0, 19.9, to.EXTREME_SCORE - 0.1):
+            self.assertEqual(to.classify_theme_opportunity_state([_theme(score, confirmed=True)]), "strong",
+                             f"confirmed+score={score} must stay strong (market_confirmed is the authoritative gate)")
+
     def test_normal_is_activity_without_confirmation(self):
         self.assertEqual(to.classify_theme_opportunity_state([_theme(to.ACTIVITY_FLOOR)]), "normal")
         self.assertEqual(to.classify_theme_opportunity_state([_theme(60), _theme(10)]), "normal")   # unconfirmed only

@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round B Cut 1 SEC materiality + theme_opportunity)
+
+- **Verdict/Action**: PASS. Claude's doc-only follow-up closes the hard_veto active teaching-surface drift; the previously reviewed SEC missing-materiality runtime change and theme_opportunity low-score pin remain correct.
+- **Required**: None new. `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DOCSTRING-DRIFT`, `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION`, and `R-USSHORT-BATCH2-THEMEOPP-CONFIRMED-LOWSCORE-INTENTIONAL` are resolved in `docs/system_risk_register.md` pending 用户 `提交`.
+- **Verify**: status/diff/current files reviewed; hard_veto+theme_opportunity 41 OK; all `*us_short*` 894 OK; schema `*us_short*` 436 OK; doc/route 38 OK; direct hard_veto/theme probes passed; `diff --check` only LF/CRLF warnings; BOM/FFFD=0. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this Round B Cut 1. Remaining 4.1 de-spike double-shadow stays user-gated.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 Round B doc-drift — hard_veto SEC missing-materiality 教学面)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` Round B,1 P3 Required)。判定成立、接受。4.2 runtime + 4.3 pin Codex 已 PASS;漏的又是 doc-drift(第5次):加了 missing-materiality→strong_downgrade 行为 + inline 注 + 测试,却漏同步 ① hard_veto **module docstring** ② README 路由行(都只写"material→hard / stale·small→tag")。修(doc-only):两面补中间档"materiality 缺失→strong_downgrade"。design §5.1a **Codex 明令不动**(冻结、沉默非矛盾),已遵。
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DOCSTRING-DRIFT`(P3)— flip→resolved + Resolution 见 register。runtime disposition + theme_opportunity pin 保持 PASS。
+- **Verify**: 广 grep hard_veto 全教学面(`recent+active+material` / `stale/inactive/small→tag` / `materiality`)—— 新 strong_downgrade-missing 档现已进 module docstring + inline + README;测试文件由新测试记录;design §5.1a 留沉默(遵 Codex);test top docstring 非 stale。hard_veto 套件绿;全 us_short lane **894 OK**(doc-only 不变);doc/route 38 OK;BOM=0;纯 offline。
+- **Next**: Codex re-`审查` 本刀(module docstring + README + register);PASS 后用户 `提交` —— 收口 Round B Cut 1(4.2+4.3)。剩 4.1 去插针 = 待用户拍板。
+- **Pre-Codex self-review**: A-F。**doc-drift 第5次(连 4.2 这种小改也中)**:行为改 hard_veto 后教学面 = module docstring + README + 测试 docstring + design;我加了 inline 注 + 测试却漏 module docstring + README。这次广 grep 全 4 类、补 2 个 stale 面、design 遵 Codex 不动、非-stale 面(test docstring)不过-chase。C:零行为改、material→hard / small→tag / stale→tag 不变。F:docstring↔行为现一致。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 Round B SEC materiality + theme_opportunity)
+
+- **Verdict/Action**: FAIL. Runtime SEC missing-materiality behavior is correct and theme_opportunity low-score pin is correct, but active hard_veto teaching surfaces still omit the new missing-materiality disposition.
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DOCSTRING-DRIFT` is open in `docs/system_risk_register.md`. Behavior entry `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION` and test-only theme_opportunity entry otherwise pass this review.
+- **Verify**: status/diff/current files reviewed; hard_veto+theme_opportunity 41 OK; all `*us_short*` 894 OK; schema `*us_short*` 436 OK; doc/route 38 OK; direct probes passed; `diff --check` only LF/CRLF warnings. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: Claude Code `修复` only the active hard_veto docstring/README wording; keep runtime behavior unchanged; leave 4.1 de-spike double-shadow user-gated.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 Round B 合并刀 — SEC materiality 缺失处置 + theme_opportunity 低分钉死)
+
+- **Verdict/Action**: 收到 `提交并执行下一步` + "Round B 合并能合并的"。步7 已提交(`40c17472` + 折叠 `cbde9f30`)——**Round A(7 项)全完**。Round B 自决:**4.2+4.3 合并**(独立引擎、有用户已见 default);**4.1 去插针不合并**(需偏离 A 股镜像的 frozen-design 拍板 → flag 给用户)。本刀:① 4.2 hard_veto SEC recent+active 但 materiality **缺失** → soft_tag(near-clean)升 **strong_downgrade**(material→hard / small / stale 不变)。② 4.3 theme_opportunity confirmed+低分→strong **不加 floor**(改已批准语义),改**加测试钉死 intentional**,零行为改。
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-SEC-MISSING-MATERIALITY-DISPOSITION`(P2)+ `R-USSHORT-BATCH2-THEMEOPP-CONFIRMED-LOWSCORE-INTENTIONAL`(P3,test-only)— 完整见 `docs/system_risk_register.md`(均 in_progress)。来源:Codex `review_v2.md` §4.2/§4.3。
+- **Verify**: 探针 recent+active+material→hard / +MISSING→strong_downgrade / +small→tag / stale+MISSING→tag;hard_veto+theme_opportunity 41 OK(+2 新);全 us_short lane **894 OK**(892+2)零回归;doc/route 38 OK;BOM=0;纯 offline。
+- **Next**: Codex `审查` 本合并刀(hard_veto 1 改 + 2 测试 + register 2 条);PASS 后用户 `提交`。**剩 4.1 去插针双影线 = 需用户拍板**(美股是否刻意偏离 A 股 phase5 单值去插针镜像 + 是否动 frozen §6),决定后再执行。
+- **Pre-Codex self-review**: A-F。A:4.2 仅 active_offering 缺子字段(semantic_audit 的 unavailable→soft 是 §5.1b 故意 advisory、非 gap)。**边界(frozen-design)**:design §5.1a 对 missing-materiality **沉默**(不矛盾),故只改 engine code+test、**不擅自往 frozen §5.1a/preset 加新规则**——是否 const-pin 留用户/Codex 定(register 已 flag)。C(反向):material→hard / small→tag / stale→tag 全不变,只 MISSING 升级、未过度否决;4.3 零行为改。F:code 注↔行为一致。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round A step 7 main-design status drift)
 
 - **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT`; US-short authority now says batch2 is done and batch3 is next gated.
