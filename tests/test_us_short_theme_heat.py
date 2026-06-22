@@ -95,6 +95,18 @@ class ContinuousThemeScoreTests(unittest.TestCase):
         # an out-of-range fit_mult is clamped, not multiplied raw
         self.assertAlmostEqual(th.continuous_theme_score(80.0, 0.5, 1.5, gate_passed=True), 80 * 0.5 * 1.0)
 
+    def test_persistence_mult_above_one_is_clamped_not_amplified(self):
+        # persistence_mult is a [0,1] discount (§4.3): an out-of-range value must cap/discount, never amplify
+        self.assertEqual(th.continuous_theme_score(80.0, 5.0, 1.0, gate_passed=True), 80.0)   # min(5,1)=1, not 400
+        self.assertEqual(th.continuous_theme_score(80.0, 100.0, 1.0, gate_passed=True), 80.0)
+
+    def test_numeric_string_and_bool_inputs_fail_closed_to_zero(self):
+        # strict finite: a numeric-string / bool multiplier must NOT parse (was lenient float() -> amplified)
+        self.assertEqual(th.continuous_theme_score(80.0, "5", 1.0, gate_passed=True), 0.0)    # pm="5" rejected
+        self.assertEqual(th.continuous_theme_score("80", 0.5, 1.0, gate_passed=True), 0.0)    # heat string
+        self.assertEqual(th.continuous_theme_score(80.0, True, 1.0, gate_passed=True), 0.0)   # bool pm
+        self.assertEqual(th.fit_mult_from_score("0.8"), 0.0)                                  # string fit_score
+
 
 if __name__ == "__main__":
     unittest.main()

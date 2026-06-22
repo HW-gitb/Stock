@@ -28,11 +28,11 @@ OVEREXTENSION_STATES = ("none", "warning", "chasing_extreme")
 
 
 def _finite(x):
-    try:
-        v = float(x)
-    except (TypeError, ValueError):
+    # strict: a real finite int/float only — NOT a bool, NOT a numeric string ("5" must fail closed, not
+    # parse). A metric that isn't a clean number must not parse into a parabolic condition.
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return v if math.isfinite(v) else None
+    return float(x) if math.isfinite(x) else None
 
 
 def classify_overextension(metrics):

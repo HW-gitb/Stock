@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_heat route-doc formula repair)
+
+- **Verdict/Action**: PASS. The active route/docstring formula drift `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` is closed in the current working tree; no new Required in this scope.
+- **Required**: None new. `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` is resolved in `docs/system_risk_register.md`. Remaining Round A items (theme_lifecycle / action_rank / private_paths / main design doc drift) and Round B decisions remain queued and intentionally out of this review.
+- **Verify**: status/diff/current files reviewed; target theme_heat+overextension 30 OK; all `*us_short*` tests 883 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct clamp/strict-finite probes passed; active-surface grep found no current old-formula assertion in README/current/design/module docs (only a historical explanatory `was max(...)` code comment remains); `git diff --check` LF/CRLF warnings only; no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this Round A step 3 cut. Do not start remaining queued items unless separately authorized.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 步3 route-doc — persistence_mult 公式漂移)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 步3 的 1 个 Required)。判定:成立、接受 —— runtime 已 PASS,漏的是 doc-drift:我只改了 `continuous_theme_score` 函数 docstring 公式,漏了 **module docstring + README 路由行** 仍写旧 `max(persistence_mult, floor)`(B-ripple 老毛病:改一个公式面、漏同义兄弟面)。修(doc-only、零 runtime):两面改为 `heat × clamp_[floor,1](persistence_mult) × clamp_[0,1](fit_mult)` + 显式"discounts, never amplifies >1.0"。
+- **Required**: `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT`(P3)— flip→resolved + Resolution 见 `docs/system_risk_register.md`。runtime 部分(persistence clamp + strict finite)Codex 已 PASS。
+- **Verify**: 广 grep `max(persistence_mult` 全非测试面 —— 仅剩历史 finding/criterion prose(SESSION_LOG + 本 register 条,criterion 2 允许),**0 个 active route/code 教学面**仍写旧式;design doc(`heat × persistence × fit` + 门后地板)述 intent、与 clamp 一致,刻意不动。doc/route 38 OK;us_short lane 不变(883,doc-only);BOM=0。
+- **Next**: Codex re-`审查` 本刀(2 doc 面 + register);PASS 后用户 `提交`。剩余 Round A(theme_lifecycle / action_rank / private_paths / 主设计 doc drift)+ Round B 仍排队。
+- **Pre-Codex self-review**: A-F。**B(连带)= 本次根因**:公式类改动必须 grep 全同义面(函数 docstring + module docstring + README 路由行 + design doc),上轮只改函数 docstring;这次广 grep 全 repo `max(persistence`/`heat × max` 定位全部、逐面判活/历史。A:active 面只 2 处(module docstring+README)都改;design doc 述 intent 非 stale。C(反向):没误改历史 finding prose、没动 design-intent 面。E:README 是 route 面但本 finding 即改它的公式描述(非 transient gate),合规。F:doc↔behavior 现一致(函数+module+README 同式);零 runtime,883 不变。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short batch2 theme_heat clamp + strict finite)
+
+- **Verdict/Action**: FAIL. Runtime behavior for the `persistence_mult` clamp and strict `_finite` repair is correct, but active route/code teaching surfaces still describe the old lower-clamp-only formula.
+- **Required**: `R-USSHORT-BATCH2-THEMEHEAT-ROUTEDOC-FORMULA-DRIFT` — full Required / evidence / closure criteria are in `docs/system_risk_register.md`. The runtime parts of `R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY` and `R-USSHORT-BATCH2-LENIENT-FINITE-OVEREXTENSION-THEMEHEAT-HYGIENE` passed code review.
+- **Verify**: status/diff/current files reviewed; theme_heat+overextension 30 OK; all `*us_short*` tests 883 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct clamp/strict-finite probes passed; stale active-surface grep found old `max(persistence_mult, floor)` formula in `engine/us_short_theme_heat.py` module docstring and `docs/README.md` route row; `git diff --check` LF/CRLF warnings only; no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: Claude Code `修复` the active route/docstring formula drift only; do not change runtime behavior, thresholds, provider/live/DataHub/Skill/production/A-share, or commit until re-reviewed.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步3 — theme_heat persistence_mult clamp + strict _finite)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。malformed sweep 已提交(`18cd7494` + 折叠 `fdf71537`)。本刀 = Round A 步3:① theme_heat `continuous_theme_score` 的 `max(pm, floor)` 只下夹 → 越界 persistence_mult 放大 0-100 块分(pm=5→400);§4.3 它是 [0,1] 折扣。修:双边夹 `max(min(pm,1.0), floor)`(只能折扣不能放大,floor 仍护新主题)。② theme_heat + overextension 共用的 lenient `_finite`(`float(x)` 接受 bool/数字串)→ 改严格 isinstance(对齐兄弟引擎 `_finite_number`),`pm="5"` 不再解析+放大。
+- **Required**: `R-USSHORT-BATCH2-THEMEHEAT-PERSISTENCE-MULT-AMPLIFY`(P2,新建)+ `R-USSHORT-BATCH2-LENIENT-FINITE-OVEREXTENSION-THEMEHEAT-HYGIENE`(P3,折叠 resolved)—— 完整见 `docs/system_risk_register.md`(均 working tree)。来源:Codex `review_v2.md` R4 + CC `cc_review_v2.md` §P2-3。
+- **Verify**: theme_heat+overextension 30 OK(含 3 新:pm 越界夹 / 数字串·bool→0 / 数字串 metric 不入条件);全 us_short lane **883 OK**(880+3)零回归;探针 pm=5→80(原 400)、pm=0.1→24(floor 仍生效)、pm="5"·True→0;doc/route 38 OK;BOM=0;纯 offline、未跑 provider。
+- **Next**: Codex `审查` 本刀(theme_heat+overextension 2 引擎 + 3 测试 + register 2 条);PASS 后用户 `提交`。剩余 Round A(theme_lifecycle confirm_count / action_rank / private_paths / 主设计 doc drift)+ Round B 拍板项仍排队。
+- **Pre-Codex self-review**: A-F。A(类):放大类——只有 [0,1]-折扣乘子 persistence_mult 缺上夹(fit_mult 已双夹、heat 是分基不需上夹),已修;lenient `_finite` score 字段——仅 theme_heat+overextension 有(都修);regime classify_vix 串解析=intentional+tested("18"→震荡)、price tick helper 有安全 fallback,均非本类(grep 核 + register 注明)。B:无消费者依赖放大(本是 bug);docstring 公式更新;无 doc 断言旧行为。C(反向):floor 仍生效(pm=0.1→24 非夹0)、合法 float 不受影响(883 绿)、严格只拒 bool/串。E:未碰 route-doc。F:persistence 现 [floor,1] 有界;`_finite` 对齐 `_finite_number`;docstring↔行为一致。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 malformed-public-input crash sweep)
 
 - **Verdict/Action**: PASS. Current Round A step 2 repair correctly closes `R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP` for the reviewed malformed public-input surfaces; no new Required in this scope.

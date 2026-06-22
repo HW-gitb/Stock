@@ -10,9 +10,10 @@ Scope of THIS slice = the per-stock "does a stock earn theme score, and how much
     strong, or a theme passing < MIN items, earns NO theme score even if heat is high.
   * fit_mult_from_score — maps theme_fit_score → fit multiplier (§4.3 'fit_mult 由 fit_score 映射'):
     0 below the floor (gate), else the clamped fit_score (continuous, not a flat 1).
-  * continuous_theme_score — theme_score = heat × max(persistence_mult, floor) × fit_mult AFTER the
-    gate (§4.3 门内连续打分), so a just-confirmed high-heat theme scores proportionally rather than
-    being flattened; the persistence FLOOR applies only after the gate (a fresh theme isn't crushed);
+  * continuous_theme_score — theme_score = heat × clamp_[floor,1](persistence_mult) × clamp_[0,1](fit_mult)
+    AFTER the gate (§4.3 门内连续打分), so a just-confirmed high-heat theme scores proportionally rather than
+    being flattened; persistence_mult is clamped to [floor, 1] (it discounts, NEVER amplifies above 1.0) and
+    the floor applies only after the gate (a fresh theme isn't crushed);
     returns 0 if the gate didn't pass or the stock is chasing_extreme (§4.3 overextension strips theme
     heat to base).
 
@@ -33,11 +34,11 @@ PERSISTENCE_FLOOR = 0.30      # persistence_mult floor AFTER the gate
 
 
 def _finite(x):
-    try:
-        v = float(x)
-    except (TypeError, ValueError):
+    # strict: a real finite int/float only — NOT a bool, NOT a numeric string ("5" must fail closed, not
+    # parse). A score / multiplier field that isn't a clean number degrades to 0, never silently coerces.
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return v if math.isfinite(v) else None
+    return float(x) if math.isfinite(x) else None
 
 
 def market_confirmation_passed(item_pass_flags, stock_is_strong, min_items=MIN_CONFIRMATION_ITEMS):
@@ -60,7 +61,7 @@ def fit_mult_from_score(fit_score, fit_floor=FIT_FLOOR):
 
 def continuous_theme_score(theme_heat, persistence_mult, fit_mult, gate_passed, chasing_extreme=False,
                            persistence_floor=PERSISTENCE_FLOOR):
-    """theme_score = heat × max(persistence_mult, floor) × clamp(fit_mult) AFTER the confirmation gate
+    """theme_score = heat × clamp_[floor,1](persistence_mult) × clamp_[0,1](fit_mult) AFTER the confirmation gate
     (§4.3 门内连续打分). Returns 0.0 when the gate didn't pass, the stock is chasing_extreme (theme heat
     stripped to base, §4.3 overextension), or any input is non-finite. The persistence floor applies
     only after the gate so a fresh high-heat theme isn't crushed by a low multiplier."""
@@ -69,4 +70,6 @@ def continuous_theme_score(theme_heat, persistence_mult, fit_mult, gate_passed, 
     h, pm, fm = _finite(theme_heat), _finite(persistence_mult), _finite(fit_mult)
     if h is None or pm is None or fm is None:
         return 0.0
-    return max(0.0, h) * max(pm, persistence_floor) * max(0.0, min(1.0, fm))
+    # persistence_mult is a [0,1] discount (§4.3): double-clamp (floor AND ceil 1.0) so an out-of-range value
+    # can only DISCOUNT, never AMPLIFY the 0-100 block score (was `max(pm, floor)` = lower-clamp only → pm=5 → ×5).
+    return max(0.0, h) * max(min(pm, 1.0), persistence_floor) * max(0.0, min(1.0, fm))

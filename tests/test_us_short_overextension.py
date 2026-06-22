@@ -95,6 +95,13 @@ class MissingDataTests(unittest.TestCase):
             self.assertEqual(out["overextension_state"], "none", repr(bad))
             self.assertFalse(out["strips_theme_score"], repr(bad))
 
+    def test_numeric_string_metric_does_not_parse_into_condition(self):
+        # strict finite: a numeric-string daily_change must NOT parse into the daily_move condition
+        base = {"close": 100.0, "ma5": 99.0, "ma10": 98.0, "ma20": 97.0, "atr": 2.0,
+                "vol_ratio": 1.0, "vertical_run": False, "weak_retrace": False}
+        out = ox.classify_overextension({**base, "daily_change": "20"})
+        self.assertNotIn("daily_move_ge_m_atr", out["condition_names"])   # the string didn't parse into a condition
+
 
 class ContractConformanceTests(unittest.TestCase):
     def test_state_vocab_matches_frozen_action_table(self):
