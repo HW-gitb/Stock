@@ -19,7 +19,8 @@ seats AND §8 theme_probe seats. v1 determination rule (in-slice design, submitt
 Determination is PURE (consumes the §4.3 confirmation signals, no provider): each theme is
 {market_confirmed: bool, theme_score: float 0-100}. Every public input is fail-closed: `market_confirmed`
 strict True, theme_score strict `_finite_number`, a malformed theme is ignored, a non-list / empty pool →
-`no_strong_theme` (no opportunity). No A-share crossing. The §4.5 seat-split application is a SEPARATE engine.
+`no_strong_theme` (no opportunity). No A-share crossing. The §4.5 seat-split application is
+`engine/us_short_dynamic_seats.py`.
 """
 import json
 import math

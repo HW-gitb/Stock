@@ -8,6 +8,25 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 dynamic seats)
+
+- **Verdict/Action**: PASS. `engine/us_short_dynamic_seats.py` correctly lands the §4.5 seat-split primitive and strong-theme leader-upgrade max/allowance; no new Required.
+- **Required**: None new. Prior US-short `theme_opportunity_state` Required items remain resolved in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; dynamic_seats 8 OK; `*us_short*` 867 OK; schema `*us_short*` 436 OK; doc/route guards 38 OK; `git diff --check` CRLF-only. Reviewed §4.5/#29/#37/#15/#18 boundaries and active route wording. No provider/live/network/DataHub/A-share/Skill/production.
+- **Next**: User may command `提交`; batch3 renderer/validator/paper path, provider/live/DataHub/Skill/production, and actual Top15 seat composition/leader selection remain separately gated.
+
+## 2026-06-22 — Claude (起草 US-short batch-2 补刀② FINAL — §4.5 动态席位)
+
+**Worked on**: batch2 真正最后一块 —— §4.5 动态席位(test #15)。`engine/us_short_dynamic_seats.py`:① `selection_seats`(theme_opportunity_state → Top15 拆分 {core_top, theme_momentum},从 const-pin selection_seat_map:无强赛道 12+3/常 10+5/强赛道周 8+7,总 15;未知→fail-closed 12+3;返 copy)② `strong_theme_leader_upgrade_max`(强赛道周 strong/extreme → 上限 `STRONG_THEME_LEADER_UPGRADE_MAX`[§13#29 prior 1-2] Top6-15 龙头升级;否则 0)。+ README 1 路由行。**+ 主动执行 route-doc 机械步骤**:grep 全 surface 把「§4.5 席位拆分 remains separate」(6 处:README 90×2/92/93 + proposal 3/91 + determination docstring)同刀改成「已落地·批2收口」,grep 证 0 残留。
+
+**Key decisions**: ① **未知 state → fail-closed 最保守 12+3**(最少 theme 席位,读不出机会不放大赛道分配)。② 拆分 MAP 从 const-pin preset 取、返 copy;席位数 §13#29 prior。③ 龙头升级 1-2 是 §13#29 prior 模块常量(line 52「1–2 只」);强赛道周(strong/extreme)才给。④ 席位**构成**(谁填 theme 席位,line 164)= 下游 assembly,不在本刀。⑤ **route-doc 机械步骤这次主动执行**(承接连续 route FAIL 教训):落地即 grep 全 surface 改 future→settled。
+
+**Verify**: 新测试 **8 OK**(每态拆分+总15、未知→12+3、copy-safe、强赛道周龙头升级、preset conformance)。**零回归**:全 us_short 引擎套件 **431 OK**(本机 deps-complete);BOM=0;diff-check 仅 CRLF;route-doc 6 处 stale 改净 + grep=0。未跑 provider。
+
+**Next**: Codex `审查` 本补刀②(1 引擎 + 1 测试 + README + route 同步);PASS 后用户 `提交`。**本刀落地 = batch2 纯决策引擎真正全部收口**(这次对着 §18.2 逐项核过);提交后正式确认报用户 + 列剩余(批3 渲染/validator/纸面 + 两道时间门 + 可选主设计折叠)。
+
+**Pre-Codex self-review**: A-F。A(类):4 态拆分+总15不变量+未知 fail-closed+copy-safe+龙头升级各态+conformance 全覆盖。B:纯新增 1 引擎 1 测试;LOAD 现有 preset;**改了 determination docstring + 5 处 route 措辞=route-doc landing sweep(主动执行机械步骤、grep 前后证 0)**;无 const/阈值改。C(反向):未知→12+3 非乐观、非强赛道周→0 升级,测设计意图。D:升级数/fallback 是 §13#29 prior + line 52/164,documented。E:**route-doc 这次主动扫净**(无 future/separate 残留)。F:copy-safe、fail-closed、无 BOM。Tests≠closure。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme_opportunity_state determination repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-THEME-OPPORTUNITY-SCORE-BOUNDS-AND-THRESHOLD-GUARD-GAP` and `R-USSHORT-THEME-OPPORTUNITY-ROUTEDOC-DETERMINATION-LANDING-STATE-DRIFT` are closed in the current working tree.
