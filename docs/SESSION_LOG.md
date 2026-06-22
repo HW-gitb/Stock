@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-22 - Codex re-`review PASS` (US-short batch3 R2a renderer clean-gate repair)
+
+- **Verdict/Action**: PASS. The R2a renderer clean-gate bypass is closed; `render_action_table` no longer exposes a validation opt-out and `write_action_table` still guards private output before rendering.
+- **Required**: None new. `R-USSHORT-BATCH3-R2A-RENDER-VALIDATE-FALSE-BYPASS` is closed for this working tree in `docs/system_risk_register.md`.
+- **Verify**: R2a 16 OK; R2a+cut1 108 OK; full offline `*us_short*` 1004 OK; schema `*us_short*` 453 OK; doc/route 38 OK; direct probe shows default bad render raises, old `validate=False` raises `TypeError`, clean render OK, bad write leaves no file; `git diff --check` CRLF-only.
+- **Next**: User may `提交`; do not start weekly_report/paper/shadow/lifecycle/provider/live/DataHub/A-share work without a separate command.
+
+## 2026-06-22 — Claude `修复` (US-short 批3 R2a — 删渲染器 clean-gate opt-out 后门)
+
+- **Verdict/Action**: 收到 `修复`(Codex `review FAIL` 1 P1)。成立、接受:我给 `render_action_table` 留的 `validate=False` 是 clean-gate 后门(能渲染 not-clean 记录),还写了 `test_validate_false_skips_the_gate` 给它背书——falsifies「只消费已校验机器层/绝不半渲染」契约。按 Codex 处方**删 `validate` 参数**(渲染器永远跑 §10 校验、not-clean 必 raise、无 opt-out,闸焊死);删背书测试、加「后门已消失」测试(default raise + `validate=False`→TypeError)。`write_action_table` 不受影响(本就无 validate kwarg)。完整见 register。
+- **Required**: `R-USSHORT-BATCH3-R2A-RENDER-VALIDATE-FALSE-BYPASS` resolved(详 `docs/system_risk_register.md`)。
+- **Verify**: 探针——默认 render 拒 not-clean、`validate=False`→TypeError(后门没了)、clean 仍渲染;R2a 16 OK、全 us_short `discover` 1004 OK 零回归;BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。R2 续片:weekly_report.md 渲染器 → lifecycle-eval → R3 证据子系统。
+- **Pre-Codex self-review**: A–F。教训:别给 clean-gate 留 opt-out(=后门),更别写测试给后门背书——gate 焊死、无旁路。C(反向):clean 记录 + 仓外写成功仍 OK,没误拒合法态。F:删参数后无 dead code、`write_action_table` 调用未带该 kwarg;UTF-8 无 BOM;写完 entry 复跑 doc 守护。
+
+## 2026-06-22 - Codex `review FAIL` (US-short batch3 R2a action_table renderer clean-gate bypass)
+
+- **Verdict/Action**: FAIL. R2a is pure/offline and `write_action_table` wires the private-path guard, but the public renderer exposes a `validate=False` path that can render a not-clean machine record.
+- **Required**: `R-USSHORT-BATCH3-R2A-RENDER-VALIDATE-FALSE-BYPASS` is open in `docs/system_risk_register.md`.
+- **Verify**: R2a target 16 OK; R2a+cut1 target 108 OK; full offline `*us_short*` 1004 OK; schema `*us_short*` 453 OK; doc/route 38 OK; direct probe shows default render rejects while `validate=False` emits invalid `final_action`; `git diff --check` CRLF-only.
+- **Next**: Claude should remove or close the renderer clean-gate opt-out and update tests/docs narrowly, then return for Codex re-`review`. Do not start weekly_report/paper/shadow/lifecycle/provider/live/DataHub/A-share work.
+
+## 2026-06-22 — Claude `起草` (US-short 批3 R2a — action_table.csv 渲染器 + 首个落盘者接私密路径 guard)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。批3 cut1(校验器 + 机器层契约)已提交 `5c399107` + closeout 折叠 `ff2431d3`(register 6 条→committed hash、CURRENT §0,working tree 干净)。续刀按 cut1 烧 4 轮的教训**拆小、不一锅端**:首刀 = **R2a action_table 渲染器**(输出子系统第一片 + **首个落盘者**)。新 `engine/us_short_action_table_renderer.py`:`render_action_table` 从机器层记录渲染 §11.3 冻结 51 列 CSV(列序读冻结 `us_short_action_table_contract` 单一来源、零硬编码;省略列→空格;list/bool 单元格归一),**渲染前必过 §10 校验器、not-clean 拒渲染**(`NotCleanMachineRecordError`、只消费已校验机器层、绝不半渲染);`write_action_table` 作首个落盘者**先接 §18.0 P0 fail-closed 私密路径 guard**(`reject_nonprivate_output_path`:相对/仓内非 ignored 拒、仓外/ignored 放行)再校验、mkdir `<决策日>` 父目录、写 CSV。无新 schema(符合冻结契约,schema-first 由 conformance 兜)。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: R2a **16 测全过**(列序==冻结契约三角 / clean 渲染值 + 省略列空格 + 单元格格式 / not-clean 拒渲染 / guard 接线:相对·仓内非ignored 拒、仓外写成功、guard 先于 render、not-clean 不留文件、缺父目录自建);全 us_short `discover` **1004 OK**(+16)零回归;BOM=0;`git diff --check` 干净(仅 R2a 2 新文件)。
+- **Next**: Codex `审查` 本刀(渲染器列序单一来源 + not-clean 拒渲染 + 首个落盘者 guard 接线 fail-closed + 纯/离线无 A 股/provider);PASS 后用户 `提交`。R2 续片:weekly_report.md 渲染器(13 节 + 诚实横幅 + price_clock + coverage + exclusion + hot_excluded)→ lifecycle-eval 运行时阶段 → R3 证据子系统(纸面成交 + 比较轨 shadow)。
+- **Pre-Codex self-review**: A–F。**A**:渲染全 51 列(非子集)、guard 覆盖落盘路径全类(相对/仓内/仓外)。**B**:新代码无重命名;README 加 R2a 路由行;cut1 行「batch-3 renderer … consume this」仍准(描述消费者、R2a 不证伪)、design §19「批3 实现中」仍准(批3 未完)。**C**(反向):正控(clean 渲染 + 仓外写成功 + validate=False opt-out)证明没误拒合法态;guard 仓外放行、不过度拦。**D**:N-A(结构渲染)。**E**:R2a 状态进 SESSION_LOG(本条)+ README durable 行;CURRENT 不动(未提交、无 settled fact、无 transient gate)。**F**:CSV writer 自动引号(值含逗号/换行安全)、`newline=''`(Windows 不双换行)、mkdir 在 render 校验**之后**(not-clean 不留空目录)、UTF-8 无 BOM。
+
 ## 2026-06-22 - Codex re-`review PASS` (US-short batch3 cut1 route-doc count repair)
 
 - **Verdict/Action**: PASS. Claude's README count repair is narrow; batch3 cut1 validator/schema behavior and the active route row now align.
