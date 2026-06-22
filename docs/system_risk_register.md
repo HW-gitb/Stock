@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-ROUTEDOC-ENGINE-LANDING-STATE-DRIFT - active theme_probe route/status docs still say the final engine is future-gated after the engine landed
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `b3c1c935`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P3**.
 - Scope reviewed: current dirty US-short batch2 final `theme_probe` re-review: `engine/us_short_theme_probe.py`, `tests/test_us_short_theme_probe.py`, `docs/README.md`, `docs/us_short_theme_opportunity_state_seat_design_20260622.md`, `presets/us_short_theme_probe_governance_20260622.json`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, plus active authorities `docs/us_short_system_design.md`, lifecycle governance, and action-table coverage contract. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -55,7 +55,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-BLOCKING-DEFAULT-FAILOPEN-GAP - theme_probe blocking flags claim explicit-False gating but omitted safety inputs default to permissive
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `b3c1c935`, Codex re-`审查 PASS` 2026-06-22). Was open P1 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P1**.
 - Scope reviewed: current dirty US-short final theme_probe engine slice: `engine/us_short_theme_probe.py`, `tests/test_us_short_theme_probe.py`, `docs/README.md`, `docs/SESSION_LOG.md`; active authorities `docs/us_short_system_design.md`, `presets/us_short_theme_probe_governance_20260622.json`, `schemas/us_short_theme_probe_governance.schema.json`, `presets/us_short_portfolio_guard_governance_20260620.json`, `schemas/us_short_action_table_contract.schema.json`, and sibling `engine/us_short_theme_lifecycle.py`. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -76,7 +76,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-LIFECYCLE-NOT-CONSUMED-GAP - final theme_probe decision ignores theme_lifecycle_state effects that stop degraded themes from new probes
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P1 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `b3c1c935`, Codex re-`审查 PASS` 2026-06-22). Was open P1 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P1**.
 - Scope reviewed: same US-short final theme_probe engine slice plus `engine/us_short_theme_lifecycle.py`, `tests/test_us_short_theme_lifecycle.py`, `presets/us_short_theme_lifecycle_governance_20260620.json`, and `docs/us_short_system_design.md` §4.3 / §10. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
@@ -97,7 +97,7 @@ Status:
 
 ### R-USSHORT-THEME-PROBE-COVERAGE-VOCAB-MISMATCH-GAP - theme_probe uses clean/usable_with_fallback while the frozen action-table coverage_status enum is full/partial/restricted/blocked
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P2 (Codex `审查 FAIL` 2026-06-22).
+- Status: **resolved** (committed `b3c1c935`, Codex re-`审查 PASS` 2026-06-22). Was open P2 (Codex `审查 FAIL` 2026-06-22).
 - Severity: **P2**.
 - Scope reviewed: same US-short final theme_probe engine slice plus `schemas/us_short_action_table_contract.schema.json`, `schemas/us_short_theme_probe_governance.schema.json`, and `docs/us_short_system_design.md` §3 / §8 / §11.3. No provider/live/network/DataHub/A-share/Skill/production/broker path was executed.
 - Technical finding:
