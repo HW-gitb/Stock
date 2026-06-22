@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-PRICE-DESPIKE-TIED-LONG-SHADOW - de-spike compared the extreme to the single 2nd-ordered value, so 2+ bars wicking to the SAME extreme survived as 'strong'
 
-- Status: **resolved** (Codex `审查 PASS` 2026-06-22; pending 用户 `提交`). Was Round B Cut 2 — the LAST converged-review item.
+- Status: **resolved** (committed `4c6c31d3`, Codex `审查 PASS` 2026-06-22). Was Round B Cut 2 — the LAST converged-review item; this commit closes the entire batch-2 review (Round A 7 + Round B 2).
 - Severity: **P2** (price-geometry design-hole; was `cc_review_v2 §4.1`).
 - Source: converged batch-2 review — Codex `review_v2.md` §4.1 + Claude `cc_review_v2.md` §4.1. The user explicitly authorized my recommended disposition ("4.1 按你建议执行" = deviate from the A-share mirror + add a §6 deviation note).
 - Scope reviewed/repaired: `engine/us_short_price_engine.py::effective_support` + `::effective_resistance` (+ their docstrings, the `SR_SPIKE_ATR` comment, and the module docstring) + `tests/test_us_short_price_engine.py` + the `docs/README.md` price route row + `docs/us_short_system_design.md` §6 (line 196). No provider/live/A-share/batch3.
