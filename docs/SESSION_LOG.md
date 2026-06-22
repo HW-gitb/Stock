@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short theme_probe design proposal route-doc gate repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` is closed in the current working tree; durable proposal/README wording no longer encodes a pending Codex-review gate.
+- **Required**: None new. `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` is resolved in `docs/system_risk_register.md`.
+- **Verify**: current status/diff reviewed; proposal + README forbidden-gate grep returned no matches; doc-governance/route 38 OK; `diff --check` only CRLF warnings; proposal has no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`; folding into main design, governance preset/schema, `theme_probe` engine, provider/live/DataHub/Skill/production remain separately gated.
+
+## 2026-06-22 – Claude `修复` (R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT) + 用户批准 4 推荐
+- **Verdict/Action**: 成立、接受。同款 route-doc state-duplication:把 review-cycle gate(pending Codex review / 待用户·Codex 审批)写进 durable docs(README 行 + 提案状态行)。判别:**「需用户批准才落地」=稳定属性可留;「pending Codex review」=review-cycle gate 只进 SESSION_LOG**。窄修措辞(不动词表/矩阵/不变量/开放点/主设计/preset/代码):两处去 Codex-gate、留 design-only+需用户批准;§8「tests+Codex」→「独立审查」;grep 证零残留。**另**:用户已批准 4 推荐 → §7 顶记「已批准…Q1 4态/Q2 默认/Q3 不入enum/Q4 留§4.3」(只记决定)。完整见 register Resolution。
+- **Required**: `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` — 完整 judgment/修/closure 见 `docs/system_risk_register.md`(flip→resolved + Resolution)。
+- **Verify**: 无代码改(纯 route/status 措辞 + §7 批准记录);doc-governance/route 38 OK;grep proposal+README 行「Codex/pending/待…Codex」=0;BOM=0;diff-check 仅 CRLF。未跑 provider。
+- **Next**: Codex re-`审查`(本 route 修);PASS 后用户 `提交`。提交后(4 推荐已批)我按序:折定稿进主设计 §4.5/§8/§13 + 建 governance preset+schema + 起草 theme_probe 引擎刀 —— 均待你逐步命令。
+- **Pre-Codex self-review**: A-F。**E 教训(route-doc 复发)**:review-cycle gate(pending/待审/谁审下一个)**位置无关地**只进 SESSION_LOG 顶,绝不进 README/proposal status/任何 durable;artifact 稳定属性(design-only/需用户批准)可留。本修后 grep 证零残留。B:仅改 README 1 行 + proposal 2 处措辞 + §7 批准记录;词表/矩阵/不变量/主设计/preset/代码全未动。D:用户批准 4 点已记 §7(决定来自用户)。无代码/测试改。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short theme_probe design proposal route-doc gate drift)
+
+- **Verdict/Action**: FAIL. The design proposal is materially coherent, but `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` is open because durable docs encode a pending Codex-review gate.
+- **Required**: `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: current status/diff reviewed; proposal checked against `docs/us_short_system_design.md` §4.5/§7/§8/§13; doc-governance/route 38 OK; `diff --check` only CRLF warnings; untracked proposal has no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` the status/route wording only; do not build code/preset, fold into main design, or start provider/live/DataHub/Skill/production.
+
+## 2026-06-22 — Claude (起草 US-short theme_opportunity_state 词表 + theme_probe 席位 DESIGN PROPOSAL)
+
+**Worked on**: 用户选「先起草词表+席位设计提案」→ `docs/us_short_theme_opportunity_state_seat_design_20260622.md`(design-only,不写代码/不抓数/不跑/不改冻结主设计/不建 preset)。提案:① `theme_opportunity_state` 4 态词表(no_strong_theme/normal/strong/extreme,单调)同服务 §4.5 动态席位(§13#29)+ §8 theme_probe;② §8 theme_probe 席位矩阵(regime×state,§13#27:极度防御行0/防御+strong·extreme=1/进攻+extreme=2/no-strong·normal列0 + 未指定格 v1 保守默认);③ theme_probe 不变量(强制最小仓+高置信、全 §8 约束叠、极度防御/cooldown/veto 硬零、复用 cost_floor、防御档 pullback-only + extreme/不跳空/带内 1 breakout 例外);④ 不变量→测试钩子;⑤ 4 个开放点交用户。+ README 1 路由行。
+
+**Key decisions**: ① **design-only 提案、不碰代码/冻结主设计**——用户明选此路(非直接建、非自造默认硬上)。② 词表**同服务 §4.5+§8**、一次定准避免两处各自为政;v1 **不入 action_table 冻结 enum**、只待批后 preset const-pin(防过早冻结)。③ 矩阵**主设计给定 4 格标粗、未指定格(震荡=1/进攻+strong=1)明标 v1 保守 prior 可上调**——不把猜测当定论。④ determination(谁产该值)显式划出范围、留 §4.3 确认门。⑤ 落地路线(折主设计+preset+引擎刀)预告但**不在本提案授权内**。
+
+**Verify**: 无代码改动(纯设计 doc)。doc-governance/route 38 OK(README 路由行 + 本 entry)。无 BOM;diff-check 仅 CRLF。未跑 provider/网络。
+
+**Next**: 用户审 §7 四开放点(词表够用否 / 未指定格默认 / 暂不入 enum / determination 划界)+ Codex 可审设计自洽;批准(可能含修订)后我:折定稿进主设计 + 建 governance preset + 起草 theme_probe 引擎刀。未批前不写任何代码/preset。
+
+**Pre-Codex self-review**: A-F(设计提案版)。A:提案覆盖词表/两映射/矩阵全格/不变量/测试钩子/开放点。B:新增 1 doc + README 1 行、不改冻结主设计/无代码连带。C:矩阵主设计给定值标粗、推测值明标 v1 prior(不混淆已定与待定)。D:把 deferred 词表/席位作设计决定显式交用户、非自造硬上(承接「真用户级决策不自决」)。E:README 1 行、无 transient 进 CURRENT。F:design-only 边界反复声明(不写码/不抓/不跑/不改冻结/不建 preset)、无 BOM。本提案 ≠ 实现授权。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 theme-block docstring closure)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH2-THEME-BLOCK-BASE-ONLY-ROW-DROPS-35PCT-GAP` is closed in the current working tree; behavior and active contract text now match.
