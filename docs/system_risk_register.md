@@ -33,6 +33,20 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT - main design authority still says batch-2 is unimplemented / next step = start batch-2, after batch-2 engines landed
+
+- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Round A step 7 is the LAST Round A item of the converged batch-2 review.
+- Severity: **P3**.
+- Source: converged batch-2 review — Codex `review_v2.md` R8 + Codex `review_v1` MAIN-DESIGN-STATUS-DRIFT + Claude `cc_review_v2.md` §2a.
+- Scope reviewed/repaired: `docs/us_short_system_design.md` (header `> 状态` line + §19 设计结论 conclusion). No design rules / schemas / runners / engines / §18.0 P0 gates touched. No provider/live/A-share/batch3.
+- Technical finding:
+  - `docs/us_short_system_design.md` is the single US-short design authority, but its header (line 3) and §19 conclusion (line 464) still said batch-2 纯决策引擎 is "仍未实现" and "下一步 = 批2 起手", while HEAD + `docs/README.md` route the implemented batch-2 decision engines as complete + Codex-reviewed.
+  - History: a prior 2026-06-21 `修复` correctly set this wording when only batch-1 was done (batch-2 was genuinely future then). Batch-2 has since been built + reviewed, so the same two sentences drifted stale again — a fresh agent reading the authority could go re-implement already-done batch-2.
+- Resolution (Claude `修复` 2026-06-22, working tree; 用户 `修复` 即授权): doc-only STATUS correction (NO design-rule change). (1) header line 3: batch-2 纯决策引擎 (§18.2 全部决策引擎) now stated as 已实现进 repo + Codex 逐片审查 (README-routed); 批3/批4/批5/DataHub/Skill/production evidence remain 仍未实现 + separately gated. (2) §19 conclusion: same batch-2-done flip; "下一步 = 批2 起手" → "下一步 = 批3 起手" (still gated, each slice user-authorized). All design rules / §18.0 P0 gates / provider-live / no-broker / no-auto-order / no-A-share-crossing left intact.
+  - Deliberately LEFT (frozen-design caution + still partially accurate, consistent with the prior 2026-06-21 resolution): §11.6 / §18.1 #1 fail-closed-guard-test notes (line 281 / 411) — the reusable private-path guard helper landed (batch-2 首刀), but per-producer enforcement lands with the batch-3+ persisters that write the private paths, so the "护栏测试随实现 slice 落地" framing is not the named "批2未实现" drift and is not flatly false. Out of this narrow status-wording scope.
+- Verify: design-doc grep for `批2.{0,10}(未实现|仍未|起手)` / `下一步.*批2` shows NO remaining active design/README/CURRENT surface (only the historical 2026-06-21 register resolution prose, exempt). full us_short lane 892 OK (doc-only, unchanged); doc/route guards 38 OK. No code/test touched.
+- Codex re-review closure (2026-06-22): PASS. Confirmed the authority's header + §19 status now match HEAD/README (batch-2 done, batch-3 next-gated) with no design-rule change; active route/design/current grep found 0 stale "batch2 unimplemented / next=batch2" hits. This is the LAST Round A safety/contract item; Round B (design-decision items: price double-shadow de-spike / SEC materiality unknown / theme_opportunity low-score) remains separately gated on the user. Closure pending 用户 `提交`.
+
 ### R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT - account-state converter active usage/help still teaches relative output paths after the guard now rejects them
 
 - Status: **resolved** (committed `81341a0f`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22). The underlying behavior repair (`R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS`) also passed final closeout.

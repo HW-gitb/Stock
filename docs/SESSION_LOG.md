@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 Round A step 7 main-design status drift)
+
+- **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT`; US-short authority now says batch2 is done and batch3 is next gated.
+- **Required**: None new. `R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT` is resolved in `docs/system_risk_register.md`. Desktop US-long v3 files were not part of this repo review.
+- **Verify**: status/diff/current files reviewed; `jsonschema` importable; §18.2/header/§19 checked against README batch2 rows; active stale-status grep = 0; us_short 892 OK; schema us_short 436 OK; doc/route 38 OK; diff-check only LF/CRLF warnings; no BOM/trailing whitespace; no provider/live/DataHub/A-share/batch3.
+- **Next**: User may command `提交` for this final Round A status-doc cut. Round B design-decision items remain separately gated on user decision.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review Round A 步7【末】— 主设计 doc 批2 状态漂移)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`。步6(private-path)已提交(`81341a0f` + 折叠 `eb568e81`)。本刀 = Round A **最后一项**:主设计权威 `us_short_system_design.md` header(line3)+ §19 结论(line464)仍写"批2 纯决策引擎仍未实现 / 下一步=批2起手",与 HEAD+README(批2 已实现)矛盾 —— fresh agent 会去重做已完成的批2。修(doc-only、零设计规则改):两处把批2 翻成"已实现进 repo + Codex 逐片审查",批3/4/5 仍未实现,下一步=批3 起手(仍 gated)。
+- **Required**: `R-USSHORT-BATCH2-MAIN-DESIGN-STATUS-DRIFT`(P3)— 完整见 `docs/system_risk_register.md`(in_progress)。来源:Codex `review_v2.md` R8 + review_v1 + CC §2a。
+- **Verify**: design-doc grep `批2.{0,10}(未实现|仍未|起手)` / `下一步.*批2` —— **0 个 active design/README/CURRENT 面**残留(仅历史 2026-06-21 register resolution prose,豁免);全 us_short lane **892 OK**(doc-only 不变);doc/route 38 OK;无 code/test 改;BOM=0;纯 offline。
+- **Next**: Codex `审查` 本刀(主设计 header + §19 + register);PASS 后用户 `提交`。**Round A(safety/contract 7 项)至此全完**;剩 Round B 设计拍板项(去插针双影线 / SEC materiality / theme_opportunity low-score)= 需你拍板、单独 gated。
+- **Pre-Codex self-review**: A-F。A/边界:只改被点名的 2 个状态面(header+§19),只翻"未实现→已实现 + 下一步批2→批3",**零设计规则/schema/§18.0 P0 改**;§11.6/§411 护栏-test 注**刻意不动**(与 2026-06-21 prior resolution 一致、且 per-producer 仍 batch-3+、非"批2未实现"漂移)。B(承 doc-drift 教训):grep 全 design+README+CURRENT 证 0 active 残留;register/SESSION_LOG 历史 prose 豁免不追。C:无行为改。F:权威状态↔HEAD/README 现一致。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 private-path relative guard + CLI doc closeout)
 
 - **Verdict/Action**: PASS. Current working tree closes `R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS` and `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT`; no new Required in this scope.
