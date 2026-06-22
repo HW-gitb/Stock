@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-MALFORMED-PUBLIC-INPUT-CRASH-SWEEP - public decision APIs raise raw AttributeError/TypeError on non-dict input instead of failing closed
 
-- Status: **resolved** — Codex `审查 PASS` 2026-06-22 in the current working tree; pending 用户 `提交`.
+- Status: **resolved** (committed `18cd7494`, Codex `审查 PASS` 2026-06-22).
 - Severity: **P2**.
 - Source: converged full-batch review — Codex `review_v2.md` R3 + Claude `cc_review_v2.md` §P2-2 (both reproduced raw crashes on malformed public input).
 - Scope reviewed/repaired: the reviewed crash surfaces + the obvious sibling — `hard_veto.classify_hard_veto` (top-level `signals` + nested `active_offering`/`semantic_audit`), `regime.compute_market_risk_regime`, `price_engine.support_atr_engine` AND `holding_exit_engine` (sibling, same `inp.get`), `theme_heat.market_confirmation_passed`, `overextension.classify_overextension`, plus their tests. No provider/live/network/DataHub/A-share/Skill/production/batch3.
