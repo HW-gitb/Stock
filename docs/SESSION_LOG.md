@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-06-22 - Codex re-`审查 PASS` (R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP)
+- **Verdict/Action**: PASS. The US-short canonical decision-date design now closes the active-session roll gap with a two-edge live window and an explicit RTH active-session out-of-window fail-closed rule.
+- **Required**: None new. `R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP` is closed in `docs/system_risk_register.md` pending user `提交`.
+- **Verify**: status/diff/current files reviewed; doc/route guards 38 OK; targeted US-short schema/doc guards 66 OK; full `*us_short*` 896 OK; active design grep for the old immediate-open-roll framing clean; BOM/FFFD=0; `git diff --check` OK except CRLF warnings. Provider/live/network/batch-4 implementation not run.
+- **Next**: user may `提交` this design-only US-short canonical decision-date repair; batch-4 implementation remains gated and separately authorized.
+
+## 2026-06-22 — Claude `修复` (R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP)
+- **Verdict/Action**: 成立、接受——我引入的真设计 gap。根因:照搬 A 股单一 `cutoff` 心智,但 US-short 决策 cutoff 是 RTH **开盘**(须开盘前挂限价单),与 A 股 **收盘** cutoff 不同——开盘≠价格基准结算,故「开盘后立即滚次日」让周一 09:30-16:00 盘中产出周二 decision_date 而周一收盘(其价格基准)未结算。修 §2.1:live canonical 窗口改**两条边**(起点=上一 session 已收盘[基准结算]、终点=目标 session 9:30 开盘前);**盘中=死区 out-of-window/fail-closed**(不 emit packet/forward),**收盘后才 roll**(基准=刚收盘 session)。doc-only,US-short 仍 design-only。
+- **Required**: `R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP` — 完整 judgment/修/验证/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: doc-governance 24 OK、us_short schema 套件 436 OK(design-only、code/schema 未动)、残留「开盘后立即滚周二」框架 grep 清零、`out-of-window` 现于 §2.1/§3.5/§18.2 三处、`git diff --check` 仅 CRLF、无 BOM。改 §2.1(两边窗口+死区+US 日历两边锚+价格基准结算保证)/§3.5 指针/§18.2 批4(active-session fail-closed + 注入日历测试期望:周五·周末·盘前→周一 / 周一盘中→out-of-window 拒 / 周一收盘后→周二[基准=周一收盘] / 假期 / 半日市 / DST)。未跑 provider/live。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`。实现仍归批4(gated)。
+- **Pre-Codex self-review**: A-F。**根因教训**:跨市场移植 cadence 别照搬单一 cutoff——US 开盘 cutoff 与数据结算不对齐,「决策窗关闭(开盘)」≠「基准结算(收盘)」两时点 gap。A(类):两边窗口+盘中死区+收盘后 roll+假期/半日市/DST 两边锚全写明。B(连带):§2.1 cutoff/日历/价格基准 + §3.5 指针 + §18.2 批4 测试期望 同步,旧「开盘后滚周二」清零、`out-of-window` 三处一致。C(反向):盘中不拒会污染次日 packet/陈旧基准→显式 fail-closed;canonical 恒 live。D:US 特异(开盘/ET/半日市)未照搬 A 股收盘。E:极简模板、register 单态。F:纯 doc 加性、无 renumber、无 BOM、diff clean。Tests≠closure。
+
+## 2026-06-22 - Codex `review FAIL` (R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP)
+
+- **Verdict/Action**: FAIL. The scope is correctly design-only, but the US-short canonical decision-date text rolls to Tuesday immediately after Monday RTH open while the Tuesday price basis has not settled yet.
+- **Required**: `R-USSHORT-CANONICAL-DECISION-ACTIVE-SESSION-ROLL-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: status/diff/current files reviewed; doc/route guards 38 OK; targeted US-short schema/doc guards 66 OK; `git diff --check` OK except line-ending warnings only; no provider/live/network/batch-4 implementation run.
+- **Next**: repair this US-short design gap only: active-session runs after RTH open and before close must fail closed/out-of-window, and only after the current session closes may the resolver roll to the next decision date.
+
+## 2026-06-22 — Claude (起草 US-short 设计 — canonical 决策日解析器,允许非交易日/窗口内多次运行)
+
+**Worked on**: 把 A 股刚提交的「canonical 决策日解析器 / 允许非交易日多次运行」需求同样应用到**美股短线设计**。**纯设计文档改动**(`docs/us_short_system_design.md` 单一权威):已核 US-short 已编码部分(23 引擎 + 转换器 + 18 schema)**零交易日/same-day/日历 gate**,cadence/runner(批4 周末 pipeline)未建 → 按用户指示「没代码就改设计/框架」改设计。改 §2.1 加 canonical 块 + §2 标题 + §3.5 日历指针 + §11.2 price-clock 横幅 + §18.2 批4 描述。
+
+**Key decisions**: ① **US 与 A 股形似但 cutoff 不同**:US-short「开盘前跑」(为周一 RTH 挂限价单)→ canonical cutoff = **RTH 开盘 9:30 ET(非 A 股的收盘 cutoff)**;周一开盘后跑→滚周二。② **窗口** = 上周五美股收盘后→周一开盘前(北京 ≈ 周六凌晨→周一晚 21:30/22:30),任意时刻/多次跑收敛同一 canonical 决策日(正常=即将到来的周一)。③ **US 市场日历(NYSE/NASDAQ,§3.5)**兜假期(MLK/Presidents/…→滚周二)/半日市/DST(cutoff 锚 ET、不依赖北京夏冬令时)。④ 幂等不灌:(decision_date,symbol)去重 + 单一 decision_date + 升级闸桶名≠decision_date fail-closed(§11.4/§13.1);private 后跑覆盖。⑤ live/historical 同 A 股口径 `decision_date<run_date`。⑥ **实现归属批4**:解析器在 pipeline 最前、贯穿 decision_date;批2 引擎/批1 转换器保持日历无关(as_of 注入)。⑦ **US-short 从设计起按 canonical 解析、无非交易日拒门可踩**(区别 A 股 egs_main 早期拒非交易日靠 resolver 兜)。⑧ 纯加性:无 §13#/批N renumber、无 governance 值改动。
+
+**Verify**: us_short schema 套件 **436 OK**(纯 doc 改动不影响 code/schema)、doc-governance 24 OK、改动集仅 `docs/us_short_system_design.md` 一文件。schema 测试以**路径指针**引用设计文档(非 prose 断言)→ 不受影响;路由 README/CURRENT/AGENTS/strategy_design_synthesis 仍指向该文档。design-only:无 provider/live/真钱/code、不交叉 A 股、§18.0 P0 不动、批3-5 gated 不碰。
+
+**Next**: Codex `审查` 本设计改动(1 文件 `docs/us_short_system_design.md`:§2/§2.1/§3.5/§11.2/§18.2)。PASS 后用户 `提交`;实现仍归批4(gated,须单独授权)。
+
+**Pre-Codex self-review**: A-F。A(类):cutoff(开盘非收盘)/假期/半日市/DST/周一盘后滚周二/幂等/live-historical 全在设计写明。B(连带):同步 §2 标题 + §3.5 + §11.2 横幅 + §18.2 批4 + lead-bullet 56(news 窗「拉到周一」→「运行时刻」,避 A 股那两轮 same-day-only lead-vs-detail drift)→ 设计内自洽,无残留矛盾。C(反向):非交易日**不拒而解析**、canonical 恒 live、historical 不推进 forward。D:US 特异(RTH-open/ET/NYSE 日历)未照搬 A 股 SSE/收盘——明确标差异。E:本条仅 SESSION_LOG,无 transient 入 CURRENT;design 是权威文档本体非二次重述。F:纯加性无 renumber、术语(决策日/decision_date/RTH/§锚)与原文一致、无 BOM 风险(md)。Tests≠closure(设计待 Codex)。
+
 ## 2026-06-22 — Codex re-`审查 PASS` (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
 - **Verdict/Action**: PASS. round-2 cleared the same-day-only residual comments and broadened the guard; I found no run-date/canonical blocker for A-short execution.
 - **Required**: None new. `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` is resolved in `docs/system_risk_register.md` pending 用户 `提交`.

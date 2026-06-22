@@ -33,7 +33,7 @@
 
 # 共同基础（§2–§3）
 
-## 2. 总体架构（每周一次一键跑完；决策日 = 周一开盘前）
+## 2. 总体架构（每周一次一键跑完；canonical 决策日 = 即将到来的交易日、开盘前，§2.1）
 
 ```text
 load config / state / data  (+ provider 健康检查 §3.7；不健康→restricted/blocked)
@@ -53,8 +53,16 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 - research / backtest 只用于排雷/调参/版本比较/证据记录，**不能授权实盘/full-size**（§12）。
 
 ### 2.1 运行 cadence
-- **决策日 = 周一、美股开盘前跑**。价格用**上周五收盘**（周末无更新价）；新闻/web/LLM 窗口拉到周一、含整个周末突发。
+- **决策日 = 即将到来的美股交易日（正常周=周一）、美股开盘前跑**（canonical 解析见下「运行窗口」）。价格用 **canonical 决策日前一已收盘交易日收盘**（正常=上周五；周末/开盘前无更新价）；新闻/web/LLM 窗口拉到**运行时刻**（含整个周末 + 周一早间突发）。
 - **北京时间**：美股周一开盘 9:30 ET = 北京周一晚 21:30（夏令时）/ 22:30（冬令时）；北京周一白天/傍晚跑、挂限价单等开盘自动成交，不必盯盘。
+- **运行窗口 + canonical 决策日解析（允许非交易日/窗口内多次运行；2026-06-22 加，借 A 股 `runners/resolve_canonical_asof.py` 同款）**：用户可在「上周五美股收盘后 → 周一美股开盘前（9:30 ET）」窗口内**任意时刻、可多次**运行（北京时间 ≈ 周六凌晨 → 周一晚 21:30/22:30）；窗口内任何时刻跑都收敛到**同一个 canonical 决策日 = 即将到来/当前尚未开盘的美股交易日**（正常周 = 即将到来的周一）。这样多次试跑/不同时刻跑不会把同一周决策当成多个 cohort 灌 forward 证据。
+  - **live canonical 窗口有两条边（关键，US 特异，≠ A 股单一收盘 cutoff）**：① **起点 = 上一交易 session 已收盘（16:00 ET，含半日市 early-close）**——此后该日收盘价才结算、成为下一决策日的价格基准；② **终点 = 目标决策 session 的 RTH 开盘前（9:30 ET）**——必须开盘前决策才能挂该 session 的 RTH 限价单（`first_regular_session_only`）。落在两边之间（= 上一 session 收盘后 → 目标 session 开盘前，含盘后/隔夜/周末/假期）跑 → canonical = 该目标 session（周五收盘后 / 周末 / 周一开盘前 → 周一）。
+  - **盘中（某 session 的 RTH 开盘到收盘之间）= 死区，fail-closed / out-of-window**：此刻既不能为当前 session 决策（开盘已过、入场窗关闭），也不能为下一 session 决策（当前 session 未收盘 → 下一 session 的价格基准 = 当前 session 收盘 尚未结算，否则只能用陈旧的更前一日收盘、违反「前一已收盘交易日」价格钟）→ **批4 此时不得 emit 新私密 packet、不得为下一交易日产 forward 证据决策**；**只有当前 session 收盘后** resolver 才滚到下一交易日（价格基准 = 刚收盘的 session）。用户窗口（上周五收盘后 → 周一开盘前）整段落在任何 active session 之外 → 永远在合法窗口、canonical = 周一；死区（如周一 9:30-16:00 ET）在用户窗口之外、为健壮性显式定义为 out-of-window（正常不触发）。
+  - **US 市场日历（NYSE/NASDAQ，§3.5）解析**「下一未开盘交易日」+「最近已收盘交易日」：自动处理美股假期（周一逢 MLK / Presidents / Memorial / Independence / Labor / Thanksgiving / Christmas 等休市 → canonical 滚到周二）、半日市（early close 仍是交易日、open 仍 9:30、收盘提前到 13:00 → roll 起点也随之提前）、DST（两边都锚 ET——决策终点 = 9:30 开盘、roll 起点 = 当日收盘；不依赖北京本地夏/冬令时；timezone 记 ET+UTC，§3.5）。
+  - **价格基准 = canonical 决策日的前一已收盘交易日**（周一未开盘 → 上周五收盘；逢节自动回退到节前最后交易日）——**由 canonical 窗口起点（上一 session 已收盘）保证该基准恒已结算、不会陈旧**，与本节「价格用上周五收盘」一致。**新闻/语义窗口 = 运行时刻**（PIT `observed_at <= 运行时刻`、物理抓不到未来事件 → 自然含周末 + 周一早间突发）。
+  - **幂等不灌前向证据**：窗口内多次跑都收敛到同一 canonical 决策日 → forward 证据按 `(decision_date, symbol)` 去重 + 单一 decision_date；私密周报/机器层（§11.1，按 `<决策日>` 分目录）后跑覆盖前跑；升级闸只数 live forward 观测、桶名 ≠ decision_date 即 fail-closed 弃（§11.4 / §13.1）→ 重跑不重复计数。
+  - **live / historical 判据（同 A 股口径）**：`decision_date >= run_date` = live（今日 或 前瞻 canonical）、`decision_date < run_date` = 真·过去回放（research/backtest only，须显式标、**不推进 forward 证据/不写私密实盘产物**）；canonical 恒 live。
+  - **实现归属 = 批4 周末 pipeline（§18.2）**：canonical 解析器在编排最前面（运行时刻 + US 日历 → decision_date），把 decision_date 贯穿喂给 universe / Pass1 / Pass2 / engine / output / 转换器（`decision_as_of`）；**批2 引擎 + 批1 转换器保持日历无关**（as_of 由 pipeline 注入、引擎/转换器不自行解析交易日，已核现编码无交易日 gate）。**非交易日运行时不拒、而是解析到 canonical 交易日**（区别于 A 股 egs_main 早期「拒非交易日 as_of、靠 resolver 兜」——US-short 从设计起就按 canonical 解析，无非交易日拒门可踩）。
 - **跳空校准（可手动执行）**：新建仓输出为**限价单 + `valid_entry_band`**，`order_expiry = first_regular_session_only`（只在周一正常交易时段 RTH 有效）。周一 RTH 开盘价超出带子 → 不成交 → 转观察（盘前只作参考、不据此成交；不追高、不接飞刀）；当日 RTH 收盘仍未成交 → 转观察、不留隔日。带宽 = prior（§13）。
 - **周中态**：周频、**不盘中重评**；持仓靠周末设好的止损/失效/止盈执行；重大突发（财报跳空/停牌/突发做空报告）由用户手动决定提前离场，下个决策日系统再完整重评。
 
@@ -85,7 +93,7 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 缺关键微结构字段标 manual/research-only/blocked、不静默放行：停牌/LULD/陈旧报价、盘前盘后流动性/spread、odd-lot/sub-penny、ADR/外国假期/公司行动/反向拆股/退市破产、PDT。（SSR/Reg SHO/borrow 仅做空用 → v1 留门。）
 
 ### 3.5 Calendar / Timezone
-记 `as_of / 决策时间戳 / session / timezone`（默认 ET + UTC）；事件证据带 `event_date`(真实发出) + `observed_at`(我们看到)、分开记防偷看未来；半日市/假期/停牌/基准日历错配可见；A/US 跨市场比较须显式市场日历对齐。
+记 `as_of / 决策时间戳 / session / timezone`（默认 ET + UTC）；事件证据带 `event_date`(真实发出) + `observed_at`(我们看到)、分开记防偷看未来；半日市/假期/停牌/基准日历错配可见；A/US 跨市场比较须显式市场日历对齐。**§2.1 的 canonical 决策日解析器消费本节的 NYSE/NASDAQ 市场日历**（运行时刻 + 日历 → 即将到来/未开盘交易日 = decision_date；live 窗口两边锚 ET——起点 = 上一 session 已收盘[价格基准结算]、终点 = 目标 session 9:30 开盘前；**盘中[开盘到收盘]= out-of-window fail-closed**；假期/半日市/DST 由日历兜），把灵活运行窗口收敛到单一 decision_date。
 
 ### 3.6 手动持仓/成交输入层（镜像 A 股手动表，必备）
 - `state/us_short/account_state_csv/`（gitignored 私密；CSV 列名一律 ASCII）：
@@ -264,7 +272,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 
 ### 11.2 weekly_report.md 节
 本周运行状态 / 账户风控状态(`portfolio_guard_status`) / 市场环境(两轴：`market_risk_regime` + `theme_opportunity_state`) / 本周核心结论 / 最终操作表(精简一眼表) / 当前持仓复核 / Top15 选股 / Top6-15 观察池 / 本周剔除摘要(exclusion_summary) / 风险与降级 / 数据源健康摘要 / 字段·模块生命周期提醒 / 本周不 clean 项。lifecycle 提醒条数第 1 节与对应节须一致。
-- **顶部诚实横幅（借 A 股 M6.7）**：① 真/假观察拆分——把 `observe_reason_type` 聚合成"本周 X 只观察：A 只因没账户/没现金、B 只价格不可执行、C 只信号不够、D 只风控冷静期、E 只因最小仓成本无效——没账户/没现金那类是 sizing 假象、不是系统不看好"；② 宏观集群预警（§8）——"N 个建仓同属 X 集群、合计 Y% 仓位"；③ ship-gate 进度 + 达标 lifecycle 项数量对账；④ **price clock（必显）**——`price_data_through=上周五收盘 / news_window_through=周一跑前（含周末突发）/ session_scope=RTH / decision_date=周一`，杜绝误以为用了周一盘中价；⑤ **高热度被剔除提示**——"本周 N 只高赛道热度票被剔除（安全闸/流动性/数据），见 `hot_excluded`（§11.4）"。
+- **顶部诚实横幅（借 A 股 M6.7）**：① 真/假观察拆分——把 `observe_reason_type` 聚合成"本周 X 只观察：A 只因没账户/没现金、B 只价格不可执行、C 只信号不够、D 只风控冷静期、E 只因最小仓成本无效——没账户/没现金那类是 sizing 假象、不是系统不看好"；② 宏观集群预警（§8）——"N 个建仓同属 X 集群、合计 Y% 仓位"；③ ship-gate 进度 + 达标 lifecycle 项数量对账；④ **price clock（必显）**——`price_data_through=上周五收盘（=canonical 决策日前一已收盘交易日，逢节回退）/ news_window_through=运行时刻（决策日开盘前任意时刻；含周末+周一早间突发）/ session_scope=RTH / decision_date=canonical（即将到来的美股交易日，§2.1）`，杜绝误以为用了周一盘中价；窗口内多次跑同一 decision_date 即同一价格钟；⑤ **高热度被剔除提示**——"本周 N 只高赛道热度票被剔除（安全闸/流动性/数据），见 `hot_excluded`（§11.4）"。
 
 ### 11.3 action_table.csv（完整列）
 `ticker, row_source, selection_bucket, theme_source, theme_lifecycle_state, final_action, action_rank, action_confidence, observe_reason_type, order_type, entry_plan, pullback_entry_price, breakout_entry_price, limit_order_price, valid_entry_low, valid_entry_high, order_expiry, gap_policy, effective_support, effective_resistance, structure_quality, stop_clear_price, take_profit_reduce_price, take_profit_exit_price, event_clear_reference_price, risk_reward_ratio, min_rr_gate_status, post_round_rr_status, price_engine_used, price_sub_mode, model_position_size_amount, model_position_size_shares, live_permission_status, live_size_warning, cash_allocation_status, portfolio_guard_status, symbol_cooldown_status, coverage_status, coverage_gap_tags, trigger_conditions, invalid_conditions, risk_tags, overextension_state, macro_cluster, macro_cluster_exposure_frac, macro_cluster_warning_level, macro_cluster_size_adjustment, data_quality_tags, execution_constraints, upcoming_events, decision_trace`（+ 候选增强字段）。
@@ -451,7 +459,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 | 批1 数据契约 + 手工输入 | 全部 schema + governance preset（§13.1 priors + scoring_profile 权重）+ CSV→`us_short_account_state` 转换器/对账（#1,#4,#11/#13-schema） | 纯/声明式 | **最先**（共享契约先冻） |
 | 批2 纯决策引擎 | 价格引擎 + 两轴环境 + 仓位（含试探仓成本地板/现金分配/熔断/冷静期）+ hard veto 分层 + core_score/赛道正交/确认门连续打分/过热分档/赛道生命周期/动态席位/macro_cluster + 未来事件效应 + action_rank（#5–#7,#14–#17,#22,#23,#25,#26） | 纯（VIX 等走 unknown 路径） | 批1 冻结后 |
 | 批3 校验+输出+纸面+比较+lifecycle eval | no-dangling validator + 证据反查 + registry 强制 + 输出渲染（price clock/exclusion_summary/hot_excluded/覆盖诚实）+ 纸面成交确定性规则 + 比较轨 shadow + 升级闸防自欺 + lifecycle eval 运行时阶段 + 提醒机制 + 边界回归 + **provider 健康检查的离线策略/结构 + 「绝不触达未授权源」单测**（#3-离线,#8–#10,#12,#13,#19–#21,#24） | 纯 | 消费批2 |
-| 批4 周末 pipeline 接线（离线） | universe→Pass1→Pass2→engine→output 编排 + consumer-validation，全程 fixture/注入、不 live 抓数 | 纯 | 消费批2/3 |
+| 批4 周末 pipeline 接线（离线） | **canonical 决策日解析器（§2.1：运行时刻 + US 市场日历 → decision_date；live 窗口两边=上一 session 收盘后起、目标 session 9:30 开盘前止；盘中 out-of-window fail-closed、不 emit packet/forward；收盘后才 roll[基准=刚收盘 session]；允许非交易日/多次跑收敛单一 decision_date、幂等不灌 forward）** + universe→Pass1→Pass2→engine→output 编排 + consumer-validation，全程 fixture/注入、不 live 抓数。**注入日历测试期望**：周五收盘后/周末/周一盘前→周一；周一 RTH 盘中(9:30-16:00)→out-of-window 拒(不出 packet/forward)；周一收盘后→周二(基准=周一收盘)；US 假期→滚下一交易日；半日市(13:00 收盘)；DST 两边锚 ET | 纯 | 消费批2/3 |
 | 批5+ provider/live | **GATED，单独授权、小样本先行**：FMP 全市场 / SEC parser / yfinance / Web·X / 生产存储 / DataHub 消费 / 两遍打分真跑 / 复权·公司行动门 live / `forward_universe_snapshot` 真捕获（#2,#3-live；§18.0 provider 门 / `SR-PROVIDER-001`） | gated | **不与批1–4 同批** |
 
 - **批内纪律（不是把 30 项塞一个大 diff）**：每批内部仍要清楚的 **per-slice 边界 + 测试清单 + 反向失败用例 + hunk/stage 边界**；契约+直接消费者可同批，但跨模块消费的共享契约先冻结。批越大 FAIL 时重判 diff 越大、blast radius 越广——甜点是「一个子系统的纯刀 + 严格自审」、非 monolith。
