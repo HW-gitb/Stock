@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_theme_probe_governance",
+  "title": "US-short §8 强赛道试探名额 (theme_probe) + theme_opportunity_state vocab + seat matrix governance — const-pins the user-approved (2026-06-22) 4-state vocab, the §4.5 dynamic selection-seat map (#29), the §8 theme_probe seat matrix (#27), the hard-zero precedence, the theme_probe invariants, and the defensive-entry pullback-only + single-breakout-exception rule",
+  "description": "Batch-2 declarative governance contract (user-approved design proposal docs/us_short_theme_opportunity_state_seat_design_20260622.md). Freezes: the monotonic theme_opportunity_state vocab {no_strong_theme<normal<strong<extreme} serving BOTH §4.5 selection seats (#29: 12+3 / 10+5 / 8+7) and §8 theme_probe (#27); the regime×state theme_probe seat matrix (极度防御 row=0, 防御+strong/extreme=1, 进攻+extreme=2 are design-given; 震荡=1 / 进攻+strong=1 are v1 priors); hard-zero conditions (极度防御/cooldown/hard_veto) that override the matrix and the breakout exception; the theme_probe invariants (forced min size + high confidence, all §8 caps stack, cost-floor applies, bypasses risk-budget amplification); and the defensive-entry rule (pullback-only, the extreme+no-gap+in-band single breakout exception). The vocab is intentionally NOT in the action_table contract enum yet. draft-07 cannot express: seat-matrix design-given cells == §8, monotonic strength order, calibration #27/#29 ∈ the lifecycle registry, cost_floor_observe_reason ∈ observe_reason_types, provenance in §4.5/§8 — enforced in tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "theme_opportunity_state_vocab",
+    "vocab_is_monotonic_strength",
+    "selection_seat_total",
+    "selection_seat_map",
+    "theme_probe_seat_matrix",
+    "hard_zero_conditions",
+    "portfolio_guard_blocking_status",
+    "theme_probe_invariants",
+    "section8_caps_that_stack",
+    "defensive_entry",
+    "risk_tag",
+    "cost_floor_observe_reason",
+    "seat_calibration_item_id",
+    "selection_seat_calibration_item_id",
+    "notes"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_theme_probe_governance"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "theme_opportunity_state_vocab": {
+      "description": "§7/§8 theme_opportunity_state 4-state vocab, monotonic strength (no_strong_theme<normal<strong<extreme). User-approved Q1. Order is the strength order.",
+      "const": ["no_strong_theme", "normal", "strong", "extreme"]
+    },
+    "vocab_is_monotonic_strength": {
+      "description": "Vocab order encodes monotonically increasing theme opportunity (so '≥ strong' gates are well-defined).",
+      "const": true
+    },
+    "selection_seat_total": {
+      "description": "§4.5 总数恒 15 (core_top + theme_momentum).",
+      "const": 15
+    },
+    "selection_seat_map": {
+      "description": "§4.5 dynamic selection-seat split per state (#29, line 163): 无强赛道 12+3 / 常 10+5 / 强赛道 8+7; extreme shares strong's 8+7 (both 强赛道周).",
+      "const": [
+        {"state": "no_strong_theme", "core_top": 12, "theme_momentum": 3},
+        {"state": "normal", "core_top": 10, "theme_momentum": 5},
+        {"state": "strong", "core_top": 8, "theme_momentum": 7},
+        {"state": "extreme", "core_top": 8, "theme_momentum": 7}
+      ]
+    },
+    "theme_probe_seat_matrix": {
+      "description": "§8 theme_probe seat upper bound per (regime × state) (#27). 极度防御 row=0 / 防御+strong·extreme=1 / 进攻+extreme=2 are design-given (line 221); 震荡=1 and 进攻+strong=1 are v1 conservative priors (Q2-approved). no_strong_theme/normal columns=0 (probe only with a confirmed strong theme).",
+      "const": [
+        {"regime": "进攻", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 2},
+        {"regime": "震荡", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 1},
+        {"regime": "防御", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 1},
+        {"regime": "极度防御", "no_strong_theme": 0, "normal": 0, "strong": 0, "extreme": 0}
+      ]
+    },
+    "hard_zero_conditions": {
+      "description": "§8 条件 that force 0 probe seats regardless of the matrix AND override the defensive breakout exception. `symbol_cooldown_active` = 单票再入场冷静期; `portfolio_guard_cooldown` = 组合熔断 portfolio_guard_status=cooldown (禁新建/加仓, line 230) — a theme_probe is a NEW entry so BOTH cooldowns block it; plus 极度防御 regime + hard_veto (line 222 不放行).",
+      "const": ["regime_extreme_defensive", "symbol_cooldown_active", "portfolio_guard_cooldown", "hard_veto"]
+    },
+    "portfolio_guard_blocking_status": {
+      "description": "The portfolio_guard_status whose effects block a new entry / add (== the `cooldown` state in us_short_portfolio_guard_governance, block_new_entry=true / block_add=true). A theme_probe is a new entry, so this state hard-zeros it.",
+      "const": "cooldown"
+    },
+    "theme_probe_invariants": {
+      "description": "§8 line 222-224 theme_probe invariants (all const-true).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forced_min_executable_size", "requires_high_confidence", "coverage_must_not_be_restricted", "bypasses_risk_budget_amplification", "all_section8_caps_still_stack", "cost_floor_applies"],
+      "properties": {
+        "forced_min_executable_size": {"const": true},
+        "requires_high_confidence": {"const": true},
+        "coverage_must_not_be_restricted": {"const": true},
+        "bypasses_risk_budget_amplification": {"const": true},
+        "all_section8_caps_still_stack": {"const": true},
+        "cost_floor_applies": {"const": true}
+      }
+    },
+    "section8_caps_that_stack": {
+      "description": "§8 line 222 — the probe bypasses risk-budget amplification but STILL stacks under ALL of these caps.",
+      "const": ["single_ticker", "total_position", "same_theme", "available_cash", "hard_veto", "symbol_cooldown", "portfolio_guard"]
+    },
+    "defensive_entry": {
+      "description": "§8 line 223 / §9 test #25 (line 435) defensive-regime entry rule.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default_mode", "breakout_exception_requires", "max_breakout_probes_in_defensive", "hard_zero_overrides_exception"],
+      "properties": {
+        "default_mode": {"const": "pullback_only"},
+        "breakout_exception_requires": {
+          "const": ["regime_defensive", "theme_opportunity_state_extreme", "no_gap_week", "entry_in_valid_entry_band"]
+        },
+        "max_breakout_probes_in_defensive": {"const": 1},
+        "hard_zero_overrides_exception": {"const": true}
+      }
+    },
+    "risk_tag": {
+      "description": "§8 line 222 — the probe row carries this risk_tag.",
+      "const": "theme_probe_min_size"
+    },
+    "cost_floor_observe_reason": {
+      "description": "§8 line 224 — a cost-inefficient probe observes with this (frozen §9 observe_reason_type).",
+      "const": "cost_inefficient_min_size"
+    },
+    "seat_calibration_item_id": {
+      "description": "§8 theme_probe seat counts/caps + cost-floor safety multiple = prior → §13.1 #27.",
+      "const": 27
+    },
+    "selection_seat_calibration_item_id": {
+      "description": "§4.5 dynamic selection-seat ratios/triggers = prior → §13.1 #29.",
+      "const": 29
+    },
+    "notes": {"type": "object"}
+  }
+}

@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short theme_probe governance repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-GOVERNANCE-PORTFOLIO-GUARD-COOLDOWN-HARDZERO-GAP` and `R-USSHORT-THEME-PROBE-GOVERNANCE-ROUTEDOC-PROPOSAL-APPROVAL-STATE-DRIFT` are closed in the current working tree.
+- **Required**: None new. Both prior Required IDs are resolved in `docs/system_risk_register.md`.
+- **Verify**: current status/diff/untracked files reviewed; theme_probe governance schema 28 OK; all US-short schema 436 OK; doc-governance/route 38 OK; stale pre-approval/future-state grep has no blocking matches; `git diff --check` only CRLF warnings; new/touched target files have no BOM or trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: User may command `提交`. `engine/us_short_theme_probe.py`, §4.5 wiring, provider/live/DataHub/Skill/production remain separately gated. Optional cleanup only: proposal source still uses shorthand `硬零三态/cooldown`, and the README route row says `Tests (27)` while the suite now has 28 tests.
+
+## 2026-06-22 — Claude `修复` (theme_probe governance: portfolio-guard cooldown hard-zero P1 + proposal route-state P3)
+- **Verdict/Action**: 两点成立、接受。**①(P1)** §8 安全 gap:hard_zero 只有 symbol_cooldown、漏**组合熔断** portfolio_guard cooldown(line230 禁新建/加仓),theme_probe 新建仓须被硬零;cooldown 歧义。修:加 `portfolio_guard_cooldown` + const `portfolio_guard_blocking_status` + 跨schema 测试(证该态 block_new_entry=true)+ 三处措辞区分单票/组合。**②(P3)** route 状态迁移漂移:governance 已落但提案行/状态/§8 仍 future-tense「需批准/不建preset/批准后才建」。修:改 settled(已批·已落 schema/preset/test、引擎+§4.5 仍 gated、主设计折叠=可选),grep 旧措辞=0。纯 governance/route 改、无引擎。完整见 register 两 Resolution。
+- **Required**: `R-USSHORT-THEME-PROBE-GOVERNANCE-PORTFOLIO-GUARD-COOLDOWN-HARDZERO-GAP`(P1)+ `R-USSHORT-THEME-PROBE-GOVERNANCE-ROUTEDOC-PROPOSAL-APPROVAL-STATE-DRIFT`(P3)— 完整见 `docs/system_risk_register.md`(各 flip→resolved + Resolution)。
+- **Verify**: theme_probe governance schema 28 OK(+跨schema 组合熔断块新建);全 us_short schema 套件 436 零回归;doc 38 OK;grep 提案+README 旧批准/future 措辞=0;BOM=0;diff-check 仅 CRLF。无引擎/§4.5/provider 改。
+- **Next**: Codex re-`审查` 本修(两 Required);PASS 后用户 `提交`。再下一刀 = theme_probe 引擎(batch2 最后一块)。
+- **Pre-Codex self-review**: A-F。A(①类):两 cooldown 都进 hard_zero + 跨schema 证组合态真 block_new_entry;负向 drift 不变。**E 教训(route-doc 连续 2 轮复发)**:landing 时**位置无关地**扫所有 durable 陈述(README行+提案状态行+§8),把「X 一 ship 就 false」的 future-tense 当场改 settled;review-cycle 态只进 SESSION_LOG。行为承诺:落地任何 doc 描述为 future 的东西,同刀更新那 doc 的时态。本修 grep 证 0 残留。B:②纯措辞、词表/矩阵/schema-const/测试/引擎全未动;①加 1 字段+1 测试、跨schema resolve 验过。D:组合 cooldown 是 §8 已定安全态(line230)非自造。Tests≠closure。
+
+## 2026-06-22 - Codex `审查 FAIL` (US-short theme_probe governance)
+
+- **Verdict/Action**: FAIL. The schema/preset direction is mostly coherent, but two material governance/route gaps remain in the current working tree.
+- **Required**: `R-USSHORT-THEME-PROBE-GOVERNANCE-PORTFOLIO-GUARD-COOLDOWN-HARDZERO-GAP`, `R-USSHORT-THEME-PROBE-GOVERNANCE-ROUTEDOC-PROPOSAL-APPROVAL-STATE-DRIFT` - full Required / evidence / closure criteria are in `docs/system_risk_register.md`.
+- **Verify**: current status/diff/untracked files reviewed; theme_probe governance schema 27 OK; all US-short schema 435 OK; doc-governance/route 38 OK; `diff --check` only CRLF warnings; new files have no BOM/trailing whitespace. No provider/live/network/DataHub/A-share/Skill/production path was run.
+- **Next**: Claude Code `修复` the two governance/route Required items only; do not start `engine/us_short_theme_probe.py`, §4.5 wiring, provider/live/DataHub/Skill/production, or commit until re-reviewed.
+
+## 2026-06-22 — Claude (起草 US-short theme_probe governance — 词表+席位矩阵+不变量 const-pin)
+
+**Worked on**: theme_probe 落地第 1 步(schema-first governance,batch-1 风格 schema+preset+schema-test)。const-pin 用户已批准(2026-06-22)的:① theme_opportunity_state 4 态词表(no_strong<normal<strong<extreme,单调,同服务 §4.5+§8);② §4.5 选股席位映射(#29:12+3/10+5/8+7=15);③ §8 theme_probe 席位矩阵(regime×state,#27:极度防御行0/防御+strong·extreme=1/进攻+extreme=2 设计给定 + 震荡=1/进攻+strong=1 v1 prior);④ 硬零(极度防御/cooldown/hard_veto 压过矩阵+突破例外);⑤ 不变量(强制最小仓+高置信+coverage非restricted、绕风险预算但全 §8 约束叠、cost-floor 应用);⑥ 防御档(pullback-only + extreme/不跳空/带内 1 breakout 例外)。3 文件 + README 1 路由行。
+
+**Key decisions**: ① **按 batch-1 惯例 const-pin 在 preset+schema、不动单一权威主设计 doc**——主设计 §8 已述 theme_probe + 引 §13#27 prior,preset 钉具体值;4 决定记 preset notes + schema desc。② **词表暂不入 action_table 冻结 enum**(Q3)、只本 preset const-pin。③ **设计给定格 vs v1 prior 在 schema/preset 显式标注**(极度防御0/防御≤1/进攻+极强2 给定;震荡1/进攻+strong1 prior),不混淆已定与待校准。④ **矩阵单调不变量**(强主题席位不少于弱主题)+ extreme≤2 上限进 schema 负向测试。⑤ determination 划归 §4.3/§7(Q4),本 governance 只定词表+消费规则。⑥ cost-floor 复用已建引擎(observe_reason cost_inefficient_min_size ∈ 冻结 §9 词表,跨schema 钉)。
+
+**Verify**: theme_probe governance schema **27 OK**(schema==preset 三角、设计给定格==§8、矩阵单调+extreme≤2、cost_floor reason∈observe_reason_types、校准 #27/#29∈lifecycle registry、§4.5/§8 provenance、负向 drift[词表/极度防御非零/防御>1/进攻extreme>2/不变量翻/防御默认突破])。**零回归**:全 us_short schema 套件 **435 OK**(本机 deps-complete);3 文件 BOM=0;diff-check 仅 CRLF。无引擎/代码改、未跑 provider。
+
+**Next**: Codex `审查` 本 governance 刀(preset+schema+schema-test + README);PASS 后用户 `提交`。再下一刀 = `engine/us_short_theme_probe.py`(consume 本 preset + 不变量 + 复用 cost_floor;纯/离线)——**那刀是 batch2 最后一块,完成即 batch2 收口、届时报你**。
+
+**Pre-Codex self-review**: A-F。A(类):词表/两映射/矩阵全格/不变量/防御档/硬零 + 负向 drift 全类覆盖。B:纯新增 3 文件 + README 1 行;不改主设计/无代码连带;跨schema(observe_reason/校准 registry)resolve 验过。C(反向):极度防御非零/防御>1/进攻extreme>2/不变量翻/防御默认突破 全 schema-reject(测设计安全意图)。D:设计给定 vs v1 prior 显式分,未指定格走用户已批准默认非自造。E:README 1 行 + 无 transient gate 进 durable(承接 route-doc 教训:无 pending/Codex 字样,本 governance 是稳定 const-pin)。F:schema draft7 valid、const==preset、provenance 实配、无 BOM。Tests≠closure。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short theme_probe design proposal route-doc gate repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-THEME-PROBE-DESIGN-ROUTEDOC-PENDING-GATE-DRIFT` is closed in the current working tree; durable proposal/README wording no longer encodes a pending Codex-review gate.

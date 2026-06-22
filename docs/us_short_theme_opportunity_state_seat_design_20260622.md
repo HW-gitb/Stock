@@ -1,6 +1,6 @@
 # US-short `theme_opportunity_state` 词表 + 席位矩阵 + `theme_probe` 设计提案 (2026-06-22)
 
-**状态**: DESIGN PROPOSAL — 本身**不授权任何实现**,需**用户明确批准**后才落地。**授权范围**: 设计only。**不**写代码、**不**抓数、**不**跑、**不**改 `docs/us_short_system_design.md`(冻结主设计)、**不**建 preset。批准后才:① 把定稿折进主设计相应节 + 一个 batch-1 风格冻结 governance preset;② 再按批准的 spec 起草 `theme_probe` 引擎刀(schema-first + tests + 独立审查)。(本提案的逐轮审查 verdict 落 `docs/SESSION_LOG.md` 顶部,不写在此。)
+**状态**: DESIGN SOURCE — **已批准(用户 2026-06-22)**。其 const-pin **已落地**为 `schemas/us_short_theme_probe_governance.schema.json` + `presets/us_short_theme_probe_governance_20260622.json` + 对应 schema-test(本 governance 即该 const-pin 的落地面)。剩余:`engine/us_short_theme_probe.py` + §4.5 接线仍**单独 gated**(待用户命令)。折进冻结主设计 `docs/us_short_system_design.md` 为**可选的后续 design-doc cleanup**(非引擎前置)。本文档是设计来源,不授权 provider/live/抓数/真钱/A 股交叉。(逐轮审查 verdict 在 `docs/SESSION_LOG.md` 顶部,不写在此。)
 
 设计权威(本提案据此推导,不替代): `docs/us_short_system_design.md` §4.5(line 163 动态席位)、§7(line 210 两轴)、§8(line 220-224 强赛道试探名额 + line 223 防御档入场)、§13.1 #27(`theme_probe` 席位数/封顶)、#29(§4.5 动态席位比例触发)、§9 测试 #25(line 435 防御档入场单测)。
 
@@ -63,14 +63,14 @@
 被批准建的引擎刀须守:
 1. **强制最小可执行仓**(`= 最小可执行仓`,绕常规风险预算放大)+ **仅高置信**(`coverage 非 restricted`);`risk_tags` 带 `theme_probe_min_size`(line 222)。
 2. **仍受全部 §8 约束**:单票/总仓/同主题/可用现金/`hard_veto`/`symbol_cooldown`/`portfolio_guard` 全部叠加(line 222)。任何一个拦 → 不放行。
-3. **硬零三态**:`极度防御` regime / `symbol_cooldown` 期内 / `hard_veto` → **0、不放行**(line 222),先于席位矩阵。
+3. **硬零(4 条)**:`极度防御` regime / `symbol_cooldown` 期内(单票冷静期)/ `portfolio_guard` cooldown(组合熔断,禁新建/加仓,line 230)/ `hard_veto` → **0、不放行**(line 222/230),先于席位矩阵。theme_probe 是新建仓,故组合熔断 cooldown 也拦它,不只单票冷静期。
 4. **成本地板**:复用已建 `engine/us_short_cost_floor.py`(§8 line 224)——试探仓小到 round-trip 成本吃掉期望 → `observe`(`cost_inefficient_min_size`),真拦单。
 5. **防御档入场**(line 223 / §9 测试 #25 line 435):`regime=防御` 时新建仓(含 `theme_probe`)**默认只 `pullback_mode`**、关突破追高;**唯一例外** = `theme_opportunity_state == extreme` **且** 当周不跳空 **且** 入场在 `valid_entry_band` 内 → 放行 **1 个**最小仓 `breakout_mode` probe(仍占该格名额、仍受全约束;`极度防御`/`veto`/`cooldown` = 0 仍拦死)。
 
 ## 6. 不变量 → 测试钩子(建刀时落)
 
 - 极度防御整行 0;防御 strong/extreme 仅 1;进攻 extreme 2;`no_strong_theme`/`normal` 列 0。
-- 硬零三态先于矩阵(极度防御/cooldown/veto 即便 extreme 也 0)。
+- 硬零(4 条)先于矩阵(极度防御 / 单票cooldown / 组合熔断cooldown / veto 即便 extreme 也 0)。
 - 强制最小仓 + coverage restricted → 不放行;全 §8 约束任一拦 → 0。
 - 防御档:非 extreme → pullback-only;extreme+不跳空+带内 → 恰 1 个 breakout;extreme+跳空 → 不放行 breakout。
 - 词表 strict:未知 `theme_opportunity_state` → fail-closed 到最保守(`no_strong_theme` 等价,不给名额);`extreme` 须精确值。
@@ -85,6 +85,8 @@
 3. 词表 v1 **暂不入** `action_table` 冻结 enum、只 preset const-pin —— 同意否?
 4. determination(谁/怎么产 `theme_opportunity_state`)**不在本提案/本刀**,留作 §4.3 确认门的产物 —— 同意否?
 
-## 8. 批准后的落地路线(不在本提案授权内,仅预告)
+## 8. 落地路线(批准后)
 
-① 折定稿进 `docs/us_short_system_design.md` §4.5/§8 + §13#27/#29 措辞;② 建 `presets/us_short_theme_probe_governance_<date>.json` + schema(batch-1 风格 const-pin 词表/矩阵/不变量);③ 起草 `engine/us_short_theme_probe.py` 刀(consume preset + 上面不变量 + 复用 cost_floor;纯/离线;schema-first + tests + 独立审查)。**以上均需用户明确批准后、按命令逐步执行。**
+- **② governance const-pin = 已落地**:`presets/us_short_theme_probe_governance_20260622.json` + `schemas/us_short_theme_probe_governance.schema.json` + 对应 schema-test(batch-1 风格 const-pin 词表/矩阵/不变量/硬零/防御档);本 governance 即该 const-pin 的落地面。
+- **③ `engine/us_short_theme_probe.py` = 仍单独 gated**(待用户命令):consume 本 preset + 不变量 + 复用 `cost_floor`;纯/离线;schema-first + tests + 独立审查。**batch2 最后一块。**
+- **① 折进冻结主设计 `docs/us_short_system_design.md` §4.5/§8 + §13#27/#29 = 可选的后续 design-doc cleanup**(非引擎前置;主设计 §8 已述 theme_probe + 引 §13#27 prior,具体值由本 governance preset const-pin)。

@@ -1,0 +1,53 @@
+{
+  "schema_name": "us_short_theme_probe_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260622",
+  "status": "design-locked v1 (user-approved 20260622)",
+  "theme_opportunity_state_vocab": ["no_strong_theme", "normal", "strong", "extreme"],
+  "vocab_is_monotonic_strength": true,
+  "selection_seat_total": 15,
+  "selection_seat_map": [
+    {"state": "no_strong_theme", "core_top": 12, "theme_momentum": 3},
+    {"state": "normal", "core_top": 10, "theme_momentum": 5},
+    {"state": "strong", "core_top": 8, "theme_momentum": 7},
+    {"state": "extreme", "core_top": 8, "theme_momentum": 7}
+  ],
+  "theme_probe_seat_matrix": [
+    {"regime": "进攻", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 2},
+    {"regime": "震荡", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 1},
+    {"regime": "防御", "no_strong_theme": 0, "normal": 0, "strong": 1, "extreme": 1},
+    {"regime": "极度防御", "no_strong_theme": 0, "normal": 0, "strong": 0, "extreme": 0}
+  ],
+  "hard_zero_conditions": ["regime_extreme_defensive", "symbol_cooldown_active", "portfolio_guard_cooldown", "hard_veto"],
+  "portfolio_guard_blocking_status": "cooldown",
+  "theme_probe_invariants": {
+    "forced_min_executable_size": true,
+    "requires_high_confidence": true,
+    "coverage_must_not_be_restricted": true,
+    "bypasses_risk_budget_amplification": true,
+    "all_section8_caps_still_stack": true,
+    "cost_floor_applies": true
+  },
+  "section8_caps_that_stack": ["single_ticker", "total_position", "same_theme", "available_cash", "hard_veto", "symbol_cooldown", "portfolio_guard"],
+  "defensive_entry": {
+    "default_mode": "pullback_only",
+    "breakout_exception_requires": ["regime_defensive", "theme_opportunity_state_extreme", "no_gap_week", "entry_in_valid_entry_band"],
+    "max_breakout_probes_in_defensive": 1,
+    "hard_zero_overrides_exception": true
+  },
+  "risk_tag": "theme_probe_min_size",
+  "cost_floor_observe_reason": "cost_inefficient_min_size",
+  "seat_calibration_item_id": 27,
+  "selection_seat_calibration_item_id": 29,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §4.5/§7/§8 + §13.1 #27/#29; user-approved proposal docs/us_short_theme_opportunity_state_seat_design_20260622.md (2026-06-22)",
+    "vocab_serves_both": "theme_opportunity_state drives §4.5 selection seats (#29) AND §8 theme_probe seats (#27); single vocab, two consumers",
+    "vocab_not_in_action_table_enum": "v1 const-pinned here only, NOT yet in us_short_action_table_contract design_locked_enums (not-yet-tokenized column; promote after §4.5 wiring + forward data) — Q3 approved",
+    "design_given_vs_v1_prior": "极度防御 row=0 / 防御+strong·extreme=1 / 进攻+extreme=2 are design-given (§8 line 221); 震荡=1 and 进攻+strong=1 are v1 conservative priors (§13.1 #27), recalibratable — Q2 approved",
+    "determination_out_of_scope": "computing theme_opportunity_state from market data is the §4.3/§7 confirmation layer, NOT this governance nor the theme_probe engine (which consumes the state as an input) — Q4 approved",
+    "hard_zero_precedence": "极度防御 / symbol_cooldown_active / portfolio_guard_cooldown / hard_veto force 0 regardless of the matrix AND override the defensive breakout exception",
+    "two_cooldowns_distinct": "symbol_cooldown_active = §8 单票再入场冷静期 (us_short_symbol_cooldown_governance); portfolio_guard_cooldown = §8 组合熔断 portfolio_guard_status=cooldown whose effects block_new_entry=true/block_add=true are const-pinned in us_short_portfolio_guard_governance — a theme_probe is a NEW entry so BOTH hard-zero it (§8 line 230 cooldown→禁新建/加仓), not just the symbol-level cooldown",
+    "cost_floor_link": "试探仓最小仓成本地板 = engine/us_short_cost_floor.py (observe_reason_type cost_inefficient_min_size); the safety multiple is also §13.1 #27",
+    "consumed_by": "batch-2 engine/us_short_theme_probe.py (to be built) + §4.5 dynamic-seat wiring; declarative — selects/sizes nothing at rest, no A-share crossing"
+  }
+}
