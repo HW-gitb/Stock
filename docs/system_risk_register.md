@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-ACTIONRANK-DOCSTRING-WITHINGROUP-RANK-DRIFT - active action_rank code/test teaching surfaces still describe old selection_rank-only within-group ordering
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22). The two behavior repairs (`...GROUP1-SURVIVAL-ORDER` / `...FLOAT-SELECTION-RANK`) passed behavior review and are now resolved in this same closeout.
+- Status: **resolved** (committed `6adcd378`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22). The two behavior repairs (`...GROUP1-SURVIVAL-ORDER` / `...FLOAT-SELECTION-RANK`) passed behavior review and are resolved in the same closeout.
 - Severity: **P3**.
 - Source: Codex adversarial re-review of the current US-short batch2 Round A step 5 action_rank working tree. Same class as the earlier US-short route/docstring drift findings: current teaching surfaces must not keep the old rule after a behavior repair.
 - Scope reviewed: `engine/us_short_action_rank.py`, `tests/test_us_short_action_rank.py`, `docs/README.md`, `docs/us_short_system_design.md`, current SESSION_LOG/register surfaces, and the action governance schema/preset/tests. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run.
@@ -56,7 +56,7 @@ Status:
 
 ### R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER - action_rank group-1 (holding exits) ordered by selection_rank only, so a 止盈减仓 outranks a 止损清仓
 
-- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`). Was in_progress for Round A step 5 sub-fix a of the converged batch-2 review.
+- Status: **resolved** (committed `6adcd378`, Codex `审查 PASS` 2026-06-22). Was in_progress for Round A step 5 sub-fix a of the converged batch-2 review.
 - Severity: **P2**.
 - Source: converged batch-2 review — Codex `review_v2.md` R6 + Claude `cc_review_v2.md` §3.1 / §P2-5. (Codex asked for the two action_rank fixes to be tracked + tested SEPARATELY — this is the survival-order half; the float-rank half is `R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK`.)
 - Scope reviewed/repaired: `engine/us_short_action_rank.py::rank_actions` (within-group-1 sub-order) + `tests/test_us_short_action_rank.py::Group1SurvivalOrderTests` + the `docs/README.md` action_rank route row. No provider/live/A-share/batch3.
@@ -71,7 +71,7 @@ Status:
 
 ### R-USSHORT-BATCH2-ACTIONRANK-FLOAT-SELECTION-RANK - action_rank `_rank_value` rejects integer-valued floats, stricter than the sibling engines
 
-- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`). Was in_progress for Round A step 5 sub-fix b of the converged batch-2 review.
+- Status: **resolved** (committed `6adcd378`, Codex `审查 PASS` 2026-06-22). Was in_progress for Round A step 5 sub-fix b of the converged batch-2 review.
 - Severity: **P2** (Codex note: downgradeable to P3 if a future schema mandates an integer `selection_rank`; no such strong schema gate exists today → P2).
 - Source: converged batch-2 review — Codex `review_v2.md` R6 + Claude `cc_review_v2.md` §P2-6. (The separate float-rank half of the two action_rank fixes; survival-order half = `R-USSHORT-BATCH2-ACTIONRANK-GROUP1-SURVIVAL-ORDER`.)
 - Scope reviewed/repaired: `engine/us_short_action_rank.py::_rank_value` + `tests/test_us_short_action_rank.py::FloatSelectionRankTests` + the README selection_rank wording. No provider/live/A-share/batch3.
