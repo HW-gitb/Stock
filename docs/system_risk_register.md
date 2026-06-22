@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT - account-state converter active usage/help still teaches relative output paths after the guard now rejects them
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). Was open P3 (Codex `审查 FAIL` 2026-06-22). The underlying behavior repair (`R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS`) also passed final closeout.
+- Status: **resolved** (committed `81341a0f`, Codex re-`审查 PASS` 2026-06-22). Was open P3 (Codex `审查 FAIL` 2026-06-22). The underlying behavior repair (`R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS`) also passed final closeout.
 - Severity: **P3**.
 - Source: Codex adversarial review of the current US-short batch2 Round A step 6 private-path working tree.
 - Scope reviewed: `engine/us_short_private_paths.py`, `runners/us_short_account_state_from_manual_tables.py`, `tests/test_us_short_private_paths.py`, `tests/test_us_short_account_state_from_manual_tables.py`, `docs/README.md`, `docs/us_short_system_design.md`, current SESSION_LOG/register surfaces, and US-short schema/route tests. No provider/live/network/DataHub/A-share/Skill/production/batch3 path was run.
@@ -56,7 +56,7 @@ Status:
 
 ### R-USSHORT-BATCH2-PRIVATEPATH-RELATIVE-CWD-BYPASS - the §18.0 P0 private-path guard resolves a relative path against the CWD, not ROOT, so a non-root-CWD relative path bypasses the in-repo check
 
-- Status: **resolved** (working tree; Codex re-`审查 PASS` 2026-06-22; pending 用户 `提交`). The related CLI doc/help drift `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT` is also resolved in this closeout.
+- Status: **resolved** (committed `81341a0f`, Codex re-`审查 PASS` 2026-06-22). The related CLI doc/help drift `R-USSHORT-BATCH2-PRIVATEPATH-CLI-RELATIVE-OUTPUT-DOC-DRIFT` is also resolved in this closeout.
 - Severity: **P2** (latent; no git-commit leak — a bypassed path lands OUTSIDE the repo — but a privacy-sensitive file [real holdings, for the converter] can land in an unintended CWD-relative location, and the in-repo gitignore proof is silently skipped).
 - Source: converged batch-2 review — Codex `review_v2.md` R7 + Claude `cc_review_v2.md` §5.5 / §P2-7.
 - Scope reviewed/repaired (whole-class sweep): `engine/us_short_private_paths.py::reject_nonprivate_output_path` (the named §18.0 P0 helper) AND its live mirror `runners/us_short_account_state_from_manual_tables.py::_reject_nonprivate_account_output_path` (the real-holdings account_state writer — same bug, reachable via a relative `--out`), plus both test files + the README private_paths route row. No provider/live/A-share/batch3.
