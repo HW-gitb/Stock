@@ -4,8 +4,8 @@
   "generated_at": null,
   "coverage": {
     "start": "20250530",
-    "end": "20260612",
-    "n": 252
+    "end": "20260618",
+    "n": 256
   },
   "policy": {
     "percentile_window": 252,
@@ -5616,6 +5616,94 @@
       "csi1000_ret_1d": 0.531216,
       "pct_above_ma20": 18.449367,
       "csi1000_below_ma20": true,
+      "data_quality_flags": [],
+      "boundary": {
+        "production": false,
+        "comparison_only": true,
+        "drives_phase5_risk_posture": false
+      }
+    },
+    {
+      "schema_name": "a_short_market_regime_daily",
+      "schema_version": "1.0.0",
+      "as_of": "20260615",
+      "limit_up_count": 146,
+      "limit_down_count": 12,
+      "net_limit": 134,
+      "max_limit_streak": 3,
+      "promotion_rate": 0.161616,
+      "failed_limit_rate": 0.258883,
+      "iv_percentile_252d": 67.4603,
+      "csi300_ret_1d": 2.39448,
+      "csi1000_ret_1d": 3.882015,
+      "pct_above_ma20": 24.59588,
+      "csi1000_below_ma20": false,
+      "data_quality_flags": [],
+      "boundary": {
+        "production": false,
+        "comparison_only": true,
+        "drives_phase5_risk_posture": false
+      }
+    },
+    {
+      "schema_name": "a_short_market_regime_daily",
+      "schema_version": "1.0.0",
+      "as_of": "20260616",
+      "limit_up_count": 130,
+      "limit_down_count": 11,
+      "net_limit": 119,
+      "max_limit_streak": 4,
+      "promotion_rate": 0.267123,
+      "failed_limit_rate": 0.22619,
+      "iv_percentile_252d": 76.9841,
+      "csi300_ret_1d": -0.15292,
+      "csi1000_ret_1d": 1.468924,
+      "pct_above_ma20": 25.830959,
+      "csi1000_below_ma20": false,
+      "data_quality_flags": [],
+      "boundary": {
+        "production": false,
+        "comparison_only": true,
+        "drives_phase5_risk_posture": false
+      }
+    },
+    {
+      "schema_name": "a_short_market_regime_daily",
+      "schema_version": "1.0.0",
+      "as_of": "20260617",
+      "limit_up_count": 79,
+      "limit_down_count": 22,
+      "net_limit": 57,
+      "max_limit_streak": 5,
+      "promotion_rate": 0.215385,
+      "failed_limit_rate": 0.300885,
+      "iv_percentile_252d": 81.3492,
+      "csi300_ret_1d": 0.965431,
+      "csi1000_ret_1d": 0.671543,
+      "pct_above_ma20": 24.137931,
+      "csi1000_below_ma20": false,
+      "data_quality_flags": [],
+      "boundary": {
+        "production": false,
+        "comparison_only": true,
+        "drives_phase5_risk_posture": false
+      }
+    },
+    {
+      "schema_name": "a_short_market_regime_daily",
+      "schema_version": "1.0.0",
+      "as_of": "20260618",
+      "limit_up_count": 87,
+      "limit_down_count": 42,
+      "net_limit": 45,
+      "max_limit_streak": 4,
+      "promotion_rate": 0.164557,
+      "failed_limit_rate": 0.374101,
+      "iv_percentile_252d": 83.7302,
+      "csi300_ret_1d": 0.207092,
+      "csi1000_ret_1d": 0.764627,
+      "pct_above_ma20": 21.613924,
+      "csi1000_below_ma20": false,
       "data_quality_flags": [],
       "boundary": {
         "production": false,
