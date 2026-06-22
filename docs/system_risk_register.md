@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-README-TEST-COUNT-DRIFT - active batch3 route row still advertises the old 53-test split after the schema-gate repair
 
-- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P3** (route-doc / cross-LLM handoff hygiene; no runtime behavior failure).
 - Source: Codex adversarial re-review of the US-short batch3 cut1 schema-gate repair.
 - Scope reviewed: `docs/README.md` active US-short batch3 route row, top `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `engine/us_short_no_dangling_validator.py`, `tests/test_us_short_no_dangling_validator.py`, and `tests/schema/test_us_short_machine_record_contract_schema.py`. No provider/live/network/DataHub/Skill/production/A-share/US-long path was run.
@@ -50,7 +50,7 @@ Status:
 
 ### R-USSHORT-BATCH3-SCHEMA-GATE-PARTIAL-DUPLICATION-BYPASS - validator can still mark schema-invalid machine-record shapes as clean
 
-- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P1** (machine-record clean-gate integrity before renderer / private packet / action-table writer consumes batch3 output).
 - Source: Codex adversarial re-review of the US-short batch3 cut1 clean-gate repair.
 - Scope reviewed: `engine/us_short_no_dangling_validator.py`, `schemas/us_short_machine_record_contract.schema.json`, `tests/test_us_short_no_dangling_validator.py`, `tests/schema/test_us_short_machine_record_contract_schema.py`, `docs/README.md`, `docs/us_short_system_design.md`, top `docs/SESSION_LOG.md`, and this register. No provider/live/network/DataHub/Skill/production/A-share/US-long path was run.
@@ -64,7 +64,7 @@ Status:
 
 ### R-USSHORT-BATCH3-MACHINE-RECORD-REQUIRED-FIELD-BYPASS - validator can mark schema-required machine-record fields missing as clean
 
-- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P1** (machine-record clean-gate integrity before renderer / private packet / action-table writer consumes batch3 output).
 - Source: Codex adversarial re-review of the US-short batch3 cut1 clean-gate repair.
 - Scope reviewed: `engine/us_short_no_dangling_validator.py`, `schemas/us_short_machine_record_contract.schema.json`, `tests/test_us_short_no_dangling_validator.py`, `tests/schema/test_us_short_machine_record_contract_schema.py`, `docs/README.md`, `docs/us_short_system_design.md`, top `docs/SESSION_LOG.md`, and this register. No provider/live/network/DataHub/Skill/production/A-share/US-long path was run.
@@ -78,7 +78,7 @@ Status:
 
 ### R-USSHORT-BATCH3-SESSIONLOG-MINIMAL-TEMPLATE-VIOLATION - latest repair entry fails the review-cycle minimal guard
 
-- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex re-`review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P3** (cross-LLM process hygiene; blocks a clean review closeout because the tracked doc-governance test fails).
 - Source: Codex adversarial re-review of the US-short batch3 cut1 repair closeout.
 - Scope reviewed: top `docs/SESSION_LOG.md`, `docs/AI_REVIEW_PROTOCOL.md` / `AGENTS.md` review-closeout rules, and `tests/test_doc_governance_guard.py`. No business code or data path was changed for this finding.
@@ -91,7 +91,7 @@ Status:
 
 ### R-USSHORT-BATCH3-ACTION-TABLE-VOCAB-BYPASS - machine-record clean gate accepts row vocab values outside the frozen action-table contract
 
-- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P1** (schema/output-contract integrity before any renderer/private packet/action-table writer consumes the machine record).
 - Source: Codex adversarial review of US-short batch3 cut1 no-dangling validator.
 - Scope reviewed: `engine/us_short_no_dangling_validator.py`, `schemas/us_short_machine_record_contract.schema.json`, `tests/test_us_short_no_dangling_validator.py`, `tests/schema/test_us_short_machine_record_contract_schema.py`, `presets/us_short_action_table_contract_20260620.json`, `presets/us_short_field_registry_governance_20260620.json`, `docs/README.md`, `docs/us_short_system_design.md`, and the top `docs/SESSION_LOG.md` batch3 startup entry. No provider/live/network/DataHub/Skill/production/A-share path was run.
@@ -104,7 +104,7 @@ Status:
 
 ### R-USSHORT-BATCH3-PIT-EVIDENCE-TRACEBACK-GAP - malformed run PIT date and nullable evidence kind can pass the evidence-traceback clean gate
 
-- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (Codex `review FAIL` 2026-06-22 → Claude `修复` 2026-06-22; committed in the 2026-06-22 batch3 cut1 build `5c399107`, Codex re-`审查 PASS`).
 - Severity: **P1** (PIT/evidence-traceback integrity before private machine records become the renderer's authority).
 - Source: Codex adversarial review of US-short batch3 cut1 no-dangling validator.
 - Scope reviewed: `engine/us_short_no_dangling_validator.py`, `schemas/us_short_machine_record_contract.schema.json`, `tests/test_us_short_no_dangling_validator.py`, `tests/schema/test_us_short_machine_record_contract_schema.py`, `presets/us_short_field_registry_governance_20260620.json`, `docs/us_short_system_design.md` section 10 / section 11.1 / section 18, and the top `docs/SESSION_LOG.md` batch3 startup entry. No provider/live/network/DataHub/Skill/production/A-share path was run.
