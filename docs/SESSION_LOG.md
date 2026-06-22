@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-22 — Codex re-`审查 PASS` (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
+- **Verdict/Action**: PASS. round-2 cleared the same-day-only residual comments and broadened the guard; I found no run-date/canonical blocker for A-short execution.
+- **Required**: None new. `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` is resolved in `docs/system_risk_register.md` pending 用户 `提交`.
+- **Verify**: status/diff/current files reviewed; resolver+EGS+weekly guardrails 32 OK; doc/route guards 38 OK; direct M6.7 run-date probe OK; historical wrapper guard OK; ps1 ParseFile OK; compile OK; active-surface grep clean; BOM/FFFD=0; `git diff --check` OK. Provider/live fetch not run.
+- **Next**: 用户可 `提交` this canonical weekly cadence repair.
+
+## 2026-06-22 — Claude `修复` round-2 (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
+- **Verdict/Action**: 成立、接受。根因=round-1 只对被点名的一个 token(`as_of==运行日`)逐处点修,没整类扫净所有 same-day-only 同义词(`逐 token 点修` vs `整类扫净` 复发教训)。整类扫净所有活跃 cadence/价格门面,修 Codex 点名的 4 处残留:ps1 头部步骤列表 11/14 + Stage6 注释(regime/overlay `只在实盘当天跑`)、pipeline `_fetch_price_series` docstring(`--run-date == --as-of`)→ 全改 `live(as_of>=run_date:今日/前瞻 canonical)`;守护扩 5 同义 pattern + 加 pipeline 面 + planted/false-positive 控制。
+- **Required**: `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` — 完整 round-2 judgment/修/守护/验证/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution round-2)。
+- **Verify**: 全类 grep same-day 同义词活跃面清零(CURRENT §0 历史 `只实盘当天跑` 按精确 pattern 不误伤)、guardrails 11 OK(扩守护+planted)、resolver 16 OK、egs l3 guard 5 OK、doc-governance 24 OK、full weekly_pipeline 435 OK(私密 ratchet sidecar 隔离→还原 as_of 20260622)、ps1 PARSE OK、pipeline 语法 OK、BOM 0、diff 仅 CRLF。未跑 provider。
+- **Next**: Codex re-`审查`(本修 round-2);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F。**根因教训(复发·记牢)**:doc B-ripple 也要整类扫净——被点名一个 token 时,第1轮就 grep 全同义词(`只在实盘当天跑`/`--run-date == --as-of`/`as_of==运行日`)× 全活跃面(ps1/README/CURRENT/pipeline)一次扫净,别只改被点名那处(= whole-class sweep 同 input-validation 教训)。A(类):4 处残留 + 守护同义词一次扫。B(连带):pipeline 也纳入守护面;today-OR-prospective 正确措辞(`实盘当天/前瞻`、`run_date==as_of` 子情形)+ §0 历史(`只实盘当天跑`)按精确 pattern 不误伤(planted 证)。C(反向):守护↔证明同源 planted。D:N-A。E:register 单态、本条极简模板。F:无 BOM、PARSE OK、diff clean。Tests≠closure。
+
+## 2026-06-22 — Codex re-`审查 FAIL` (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
+- **Verdict/Action**: FAIL. Runtime predicate repair basically works and I do not see a run-date execution blocker, but closure is incomplete: active comments still teach same-day-only behavior.
+- **Required**: `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` — update remaining active same-day comments in `weekly_screening.ps1` and `_fetch_price_series`, then broaden guard coverage. Full detail is in `docs/system_risk_register.md`.
+- **Verify**: reviewed dirty diff/current files; 31 resolver/EGS/wrapper guard tests OK; 38 doc/route guards OK; direct M6.7 run-date probe OK; ps1 ParseFile OK; in-memory compile OK; `git diff --check` OK. Targeted pipeline unittest blocked by missing local `tushare`; live provider not run.
+- **Next**: Claude Code `修复` this residual doc/guard drift only, then Codex re-`审查`.
+
+## 2026-06-22 — Claude `修复` (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
+- **Verdict/Action**: 两矛盾成立、in-scope、接受。② resolver explicit 模式 `as_of<last_settled` 与 wrapper/egs/pipeline 的 `as_of<run_date` 契约不一致(我自己的测试还把错边界锁成"正确")= 我引入的真 bug;③ 是行为改动的 doc B-ripple。取 Codex **首选包:删 resolver explicit 分类路径**(本就 vestigial:ps1 显式 -AsOf 走纯 PowerShell `as_of<run_date`、从不调 resolver),全局只剩单一谓词 `as_of<run_date`;+3 文档去 same-day + anti-recurrence 守护。
+- **Required**: `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` — 完整 judgment/修/测试/文档/验证/closure 见 `docs/system_risk_register.md`(单一来源,flip→resolved + Resolution)。
+- **Verify**: resolver 16 OK(删 5 explicit 测试 + 加 no-mode-field/拒 --as-of)、egs l3 guard 5 OK、3 intraday-freshness OK、phase6 65 OK(含新 anti-recurrence 守护)、doc-governance 24 OK、full weekly_pipeline 435 OK(私密 ratchet sidecar 隔离后还原 as_of 20260622 完好);ps1 PARSE OK;grep `as_of==运行日`/`as_of == 运行日` 活跃面清零;resolver 无 `explicit_as_of`/`mode` 残留;BOM 0;diff 仅 CRLF。未跑 provider。
+- **Next**: Codex re-`审查`(本修);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A-F。**根因教训**:新增公共+被测的第二套谓词(resolver explicit `<last_settled`)与既有契约(`<run_date`)漂移,且测试把错边界锁成"正确"——同 forward-events fail-open-locking 一类自致(checklist C 反向:别把误判锁进测试)。A(类):删整条 explicit 路径而非补一处 → 单一谓词全局唯一。B(连带 grep):`as_of==运行日` 活跃面 + resolver `mode`/`explicit_as_of` 残留 + ps1 读 `.mode` 全清零。C(反向):canonical 仍恒 live、历史仍 strict,测设计意图。D:N-A。E:register 单态、本条极简模板。F:无 BOM、ps1 PARSE OK、diff clean。Tests≠closure。
+
+## 2026-06-22 — Codex `审查 FAIL` (R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT)
+
+- **Verdict/Action**: FAIL. Main omitted-`-AsOf` canonical path is directionally correct, but live/historical contract drift remains across resolver explicit mode and active cadence docs.
+- **Required**: `R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT` — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`。
+- **Verify**: status/diff/current files reviewed; resolver+EGS+weekly guardrails 33 OK; doc/route guards 52 OK; direct M6.7 live/historical probes OK; full weekly_pipeline blocked by local `tushare` absence + private ratchet sidecar.
+- **Next**: Claude Code `修复` this contract-drift package only, then Codex re-`审查`.
+
+## 2026-06-22 — Claude (起草 A-short weekly cadence — canonical as_of 解析器，放宽运行窗口)
+
+**Worked on**: 让 A-short 周实盘可在「周五收盘后→周一收盘前」窗口内**多次**运行而不灌前向证据——窗口内任意时刻都收敛到同一 canonical 决策日。新增 `runners/resolve_canonical_asof.py`(纯函数核心 + 薄 main 拉 trade_cal);`egs_main._guard_historical_asof_l3_mode` 判据 `!=`→`<`;`a_short_weekly_pipeline` intraday 价格门 `run_date!=as_of`→`as_of<run_date`(+help/注释);`weekly_screening.ps1` 省略 -AsOf→调 resolver 算 canonical、显式 -AsOf→纯 PowerShell 日期比较分类;+ 测试 + ps1 头部 cadence 文档。
+
+**Key decisions**: ① 锚「即将到来的周一」(用户 2026-06-22 选定,非「最近已结算」)——canonical 恒真交易日 → egs set_asof 交易日门 + 67 处 as_of 消费面**零改零审**(最大优势)。② live/historical 二元统一判据 `as_of>=run_date`=live(今日/前瞻)、`<`=historical(真回放须 -L3Mode);egs+pipeline+ps1 三处同口径。③ resolver **仅省略 -AsOf 时调**(需网络),显式 -AsOf 走纯 PowerShell 比较(无网络)——否则网络依赖插进 historical 守护、无 TOKEN 测试环境 guardrail 测试全挂(已踩并修)。④ 15:00 收盘为界(模块常量);周一盘后滚周二(窗口外)。⑤ 新闻窗无需改:cninfo `ann_date<=as_of` 物理抓不到未来新闻→自然到运行时刻。⑥ ps1 Write-Host 代码串保持英文(无 BOM ps1 被 GBK 读,中文入码串破解析如「。」吃引号;沿用原文件约定:中文只入注释)。
+
+**Verify**: resolver 19 OK(纯核心+main 接线:端午周六→周一、盘前盘后滚动、15:00 整秒边界、显式 live/historical/equal-last-settled、空窗口 raise)、egs l3 guard 5 OK(+前瞻放行)、pipeline 全套 435 OK(clean env)+3 intraday/freshness 单测 OK(新前瞻放行·历史拒)、phase6 64 OK(guardrails 9 + egs 5)。ps1 PARSE OK + `-AsOf 19000101` 正确触发 historical FATAL(exit 1)。BOM 0;diff 仅 CRLF;改动 7 文件全可追溯。**预存非本 slice**:MainWiringTests 用默认 ratchet 路径,今日真实 `state/a_short/holding_ratchet/`(as_of 20260622) 在用户机污染之(PIT 未来态 ValueError)→ 隔离 sidecar 后 435 OK;Codex sandbox 无真实 sidecar 不受影响。
+
+**Next**: Codex `审查` 本 slice(7 文件:resolver + ps1 + egs guard + pipeline guard + 3 测试文件)。PASS 后用户 `提交`。边界:research-only/advisory 不变、A股主板、不碰 EGS 打分/选股/股数/否决/provider、V14.2 frozen、纯 cadence 灵活性。
+
+**Pre-Codex self-review**: A-F。A(类/边界):resolver 全时刻(盘前/盘后/周末/15:00 整秒)+端午长假回退+显式三类分类+空窗口 raise 全覆盖;intraday guard 前瞻放行·历史拒·缺 run-date 拒。B(连带 grep):全树引用被改函数=3 测试文件全更新;**漏查教训**=ps1 guardrail 测试不引用 Python 函数名、靠跑 phase6 才抓到 resolver 插进 historical 路径→已修(resolver 仅省略 -AsOf 时调)。C(反向):前瞻别误判 historical、历史别误放 live,测设计意图非代码产物。D:canonical 锚=用户决策非我猜。E:本条只入 SESSION_LOG,无 transient gate 入 CURRENT。F:纯函数注入可测无 wall-clock、ps1 码串 ASCII、无 BOM、diff clean。Tests≠closure。
+
 ## 2026-06-22 - Codex `审查 PASS` (register 2 deferred Round C P3 items)
 
 - **Verdict/Action**: PASS. The current docs-only diff accurately registers the two deferred Round C P3 hygiene items and does not change code, behavior, status of prior resolved entries, or batch3/provider/live scope.

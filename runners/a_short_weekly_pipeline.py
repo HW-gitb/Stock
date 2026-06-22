@@ -2301,10 +2301,11 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
     陈旧 → 中止不写。返回空(provider 成功但无行)由 main 覆盖门统一拦截。
 
     **实盘盘中 reviewed-tolerance**(register 原始 repair 已显式预留「or document and test an explicit
-    reviewed tolerance」):若给出 `accept_prior_settled_date`(= as_of 的前一交易日;仅由 main 在
-    `--run-date == --as-of`、即实盘当天 as_of 当日 EOD 尚未发布的盘中场景传入),则最新 bar 亦可 == 该
-    「最新已结算交易日」。仍拒**更早**(真陈旧)与**未来** bar;历史回放不传该参数 → 严格 == end。语义:在
-    决策时点(as_of=今天)最新已结算行情就是前一交易日,使用它非 look-ahead、亦非陈旧。
+    reviewed tolerance」):若给出 `accept_prior_settled_date`(= as_of 的前一交易日;仅由 main 在 **live 运行**
+    [`as_of >= run_date`:今日 或 前瞻 canonical 周一,as_of 当日 EOD 尚未发布]传入,真·过去回放 `as_of < run_date`
+    不传),则最新 bar 亦可 == 该「最新已结算交易日」。仍拒**更早**(真陈旧)与**未来** bar;历史回放不传该参数
+    → 严格 == end。语义:在决策时点(as_of>=今天:今日 或 即将到来的交易日)最新已结算行情就是前一交易日,
+    使用它非 look-ahead、亦非陈旧。
 
     返回 `(series, latest_trade_date)`:series=[{high,low,close}](engine 形状,不含日期);latest_trade_date=
     实际最新已结算 bar 日期(供 main 记 `price_data_through` lineage,诚实标注真实价格时钟);无行 → `([], None)`。"""
@@ -2465,11 +2466,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
     p.add_argument("--web-news-lookback-days", type=int, default=30,
                    help="web_llm em 资讯新鲜度窗(天,默认 30;只把近 N 天新闻喂判官)")
-    p.add_argument("--run-date", help="实际运行日 YYYYMMDD(记进 run_lineage;intraday_prior_settled 模式要求 ==--as-of)")
+    p.add_argument("--run-date", help="实际运行日 YYYYMMDD(记进 run_lineage;intraday_prior_settled 模式要求存在且 <= --as-of)")
     p.add_argument("--price-freshness-mode", choices=["strict_as_of", "intraday_prior_settled"],
                    default="strict_as_of",
                    help="价格新鲜度模式(显式,记进 run_lineage.price_freshness):strict_as_of(默认,最新 bar 必须 ==as_of);"
-                        "intraday_prior_settled(实盘盘中、as_of 当日 EOD 未发布 → 容忍最新 bar==前一交易日;仅 --run-date==--as-of 有效)")
+                        "intraday_prior_settled(实盘当天/前瞻 canonical、as_of 当日 EOD 未发布 → 容忍最新 bar==前一交易日;要求 --as-of >= --run-date)")
     p.add_argument("--skip-semantic", action="store_true",
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
@@ -2483,11 +2484,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
         raise SystemExit(f"[FATAL] --run-date {args.run_date} 不是合法日历日期")
-    # intraday tolerance is an EXPLICIT mode, not inferred; and only valid on the actual run day (when
-    # as_of's own EOD may not be published yet). Historical replay / missing run-date must stay strict.
-    if args.price_freshness_mode == "intraday_prior_settled" and str(args.run_date or "") != str(args.as_of):
-        raise SystemExit("[FATAL] --price-freshness-mode intraday_prior_settled 仅在 --run-date == --as-of"
-                         "(实盘当天、as_of 当日 EOD 未发布)有效;历史回放/缺 run-date 请用 strict_as_of")
+    # intraday tolerance is an EXPLICIT mode, not inferred; valid when as_of's own EOD may not be published
+    # yet — i.e. as_of is today (run_date==as_of) OR a prospective canonical session (as_of>run_date, e.g.
+    # weekly canonical 解析器把周末/周一盘前运行解析成「即将到来的周一」as_of)。两者最新已结算 bar 都 ==
+    # as_of 前一交易日。真·过去回放(as_of<run_date,EOD 已发布) / 缺 run-date 仍须 strict_as_of。
+    if args.price_freshness_mode == "intraday_prior_settled" and (
+            not args.run_date or str(args.as_of) < str(args.run_date)):
+        raise SystemExit("[FATAL] --price-freshness-mode intraday_prior_settled 要求 --run-date 存在且 "
+                         "--as-of >= --run-date(实盘当天/前瞻 canonical:as_of 当日 EOD 未发布);"
+                         "历史回放(as_of<run-date)/缺 run-date 请用 strict_as_of")
     # 持仓恒列入隐私护栏(固化):带 --account 的周报含真实持仓 → 拒绝落仓库内非私密目录(防 git 提交泄漏)。
     # 早于任何取数/落盘,fail-fast。
     _reject_nonprivate_account_output_path(args.out, bool(args.account), args.allow_nonprivate_account_out)
@@ -2542,8 +2547,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         import tushare as ts
         pro = pro_factory() if pro_factory else init_tushare_pro(os.environ["TUSHARE_TOKEN"])
         start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
-        # 显式 intraday_prior_settled 模式(已 guard --run-date==--as-of)→ 价格门容忍最新 bar==前一交易日
-        # (as_of 当日 EOD 未发布的实盘盘中);strict_as_of → prior_settled=None → 严格 == as_of。仅放前一交易日,
+        # 显式 intraday_prior_settled 模式(已 guard as_of>=run_date)→ 价格门容忍最新 bar==前一交易日
+        # (as_of 当日 EOD 未发布的实盘当天/前瞻 canonical);strict_as_of → prior_settled=None → 严格 == as_of。仅放前一交易日,
         # 更早(真陈旧)仍拒、未来恒拒;实际接受的最新日期记进 run_lineage.price_freshness。
         prior_settled = (_prev_trading_day(pro, args.as_of)
                          if args.price_freshness_mode == "intraday_prior_settled" else None)

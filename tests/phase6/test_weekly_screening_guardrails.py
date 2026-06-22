@@ -139,6 +139,52 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
                 self.assertIn(token, readme,
                               f"runners/README.md omits regime-stage token {token!r} while ps1 wires it (route-doc drift)")
 
+    # R-ASHORT-WEEKLY-CANONICAL-ASOF-LIVE-HISTORICAL-CONTRACT-DRIFT anti-recurrence (BROADENED after Codex
+    # re-审查 FAIL): after the 2026-06-22 canonical resolver, a valid LIVE run can have as_of > run_date
+    # (a prospective Monday resolved from a weekend run); the live/historical boundary is `as_of < run_date`
+    # everywhere (wrapper, egs guard, pipeline price-freshness, regime/M6.7/overlay gating). Active
+    # cadence/price-freshness surfaces must NOT teach the same-day-only contract in ANY synonym. Patterns
+    # are PRECISE to the same-day-ONLY framing so the correct today-OR-prospective wording (实盘当天/前瞻,
+    # `run_date==as_of` named as a sub-case) and historical §0 prose (只实盘当天跑, no 在) are NOT false-flagged.
+    SAME_DAY_ONLY_PATTERNS = ("as_of==运行日", "as_of == 运行日", "只在实盘当天跑",
+                              "--run-date == --as-of", "--run-date==--as-of")
+    CADENCE_SURFACES = ("runners/weekly_screening.ps1", "runners/README.md",
+                        "docs/CURRENT.md", "runners/a_short_weekly_pipeline.py")
+
+    @classmethod
+    def _same_day_only_hits(cls, text):
+        return [p for p in cls.SAME_DAY_ONLY_PATTERNS if p in text]
+
+    def test_active_cadence_surfaces_no_same_day_only_wording(self):
+        offenders = []
+        for rel in self.CADENCE_SURFACES:
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            for p in self._same_day_only_hits(text):
+                offenders.append((rel, p))
+        self.assertEqual(offenders, [],
+                         f"active cadence/price-freshness surface still teaches same-day-only: {offenders}")
+        # positive: the live model (canonical resolver + as_of>=run_date predicate) must be documented in ps1.
+        ps1 = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("canonical", ps1, "ps1 must document the canonical-resolver cadence model")
+        self.assertIn("as_of>=运行日", ps1.replace(" ", ""),
+                      "ps1 must document the live predicate as_of>=run_date (incl. prospective canonical)")
+
+    def test_same_day_only_guard_planted(self):
+        # guard ↔ proof can't drift: each synonym is caught; the correct today-OR-prospective wording and
+        # the historical §0 prose are NOT flagged (false-positive controls).
+        self.assertTrue(self._same_day_only_hits("regime sidecar **只在实盘当天跑**(历史回放跳过)"),
+                        "synonym 只在实盘当天跑 must be caught")
+        self.assertTrue(self._same_day_only_hits("accept_prior_settled 仅由 main 在 `--run-date == --as-of` 传入"),
+                        "synonym --run-date == --as-of must be caught")
+        self.assertTrue(self._same_day_only_hits("M6.7 intraday/live 行为是 as_of==运行日"),
+                        "synonym as_of==运行日 must be caught")
+        self.assertEqual(self._same_day_only_hits("intraday(实盘当天/前瞻 canonical、要求 --as-of >= --run-date)"), [],
+                         "correct today-OR-prospective wording must not be flagged")
+        self.assertEqual(self._same_day_only_hits("as_of is today (run_date==as_of) OR a prospective session"), [],
+                         "the today sub-case run_date==as_of (no dashes) must not be flagged")
+        self.assertEqual(self._same_day_only_hits("③ regime 接进 weekly Stage 5 … 只实盘当天跑、非阻断"), [],
+                         "historical §0 prose 只实盘当天跑 (no 在) must not be flagged")
+
 
 if __name__ == "__main__":
     unittest.main()

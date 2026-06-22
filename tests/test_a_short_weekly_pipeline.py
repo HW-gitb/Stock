@@ -525,17 +525,48 @@ class MainWiringTests(unittest.TestCase):
         finally:
             wp._fetch_price_series = orig
 
-    def test_intraday_mode_requires_run_date_equals_as_of(self):
-        # explicit intraday mode on a non-same-day run-date is rejected up front (guard), before fetch.
+    def test_intraday_mode_rejects_historical_run_date_after_as_of(self):
+        # explicit intraday mode where the run-date is AFTER as_of (genuine past replay, as_of EOD已发布)
+        # is rejected up front (guard), before fetch. (canonical 解析器只会产 as_of>=run_date 的 live。)
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             with self.assertRaises(SystemExit):
-                main(["--as-of", AS_OF, "--run-date", "20260605", "--price-freshness-mode",
+                main(["--as-of", AS_OF, "--run-date", "20260615", "--price-freshness-mode",
                       "intraday_prior_settled", "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
                       "--out", str(Path(td) / "w.json"), "--confirm-fetch-authorized", "--skip-semantic"],
                      pro_factory=lambda: object(), semantic_provider=lambda c: None,
                      web_llm_provider=lambda c: None)
+
+    def test_intraday_mode_allows_prospective_run_date_before_as_of(self):
+        # canonical: run-date BEFORE as_of (周末/周一盘前跑、as_of=即将到来的周一) → 前瞻 live → guard 放行,
+        # 价格门容忍最新 bar==前一交易日(20260608)。spy 短路 fetch 以证明已越过 guard 并走 intraday 分支。
+        import runners.a_short_weekly_pipeline as wp
+        cap = {}
+
+        def _spy(ts, pro, code, start, end, accept_prior_settled_date=None):
+            cap["accept"] = accept_prior_settled_date
+            raise SystemExit("captured")
+
+        class _Pro:
+            def trade_cal(self, **kw):
+                return pd.DataFrame({"cal_date": ["20260605", "20260608", AS_OF]})
+
+        orig = wp._fetch_price_series
+        wp._fetch_price_series = _spy
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                with self.assertRaises(SystemExit):           # spy 短路(非 guard) → 证明 guard 已放行
+                    main(["--as-of", AS_OF, "--run-date", "20260605", "--price-freshness-mode",
+                          "intraday_prior_settled", "--analysis-input", str(Path(td) / "ai.json"),
+                          "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                          "--out", str(Path(td) / "w.json"), "--confirm-fetch-authorized", "--skip-semantic"],
+                         pro_factory=lambda: _Pro(), semantic_provider=lambda c: None,
+                         web_llm_provider=lambda c: None)
+                self.assertEqual(cap["accept"], "20260608")   # 前瞻 → 前一交易日容忍生效
+        finally:
+            wp._fetch_price_series = orig
 
     def test_strict_mode_records_price_freshness_lineage(self):
         # default strict run: the artifact records the price clock = as_of (injected list → strict clock).

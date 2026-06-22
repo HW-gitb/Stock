@@ -8,10 +8,10 @@
 #                                               M6.7 pipeline,语义 cninfo+DeepSeek 行内;watch pool =
 #                                               当次 EGS analysis_input;run-path 见契约 §web_llm 产出路径)
 #   5) V14.3 regime 比较账本(a_short_regime_comparison_runner:旁路 sidecar,comparison-only 非生产、V14.2 冻结;
-#                                               **只在实盘当天跑**(历史回放跳过——账本是 forward 累积的已结算交易日证据);
+#                                               **只在 live 运行跑**(as_of>=运行日:今日 或 前瞻 canonical;真·过去回放 as_of<运行日 跳过——账本是 forward 累积的已结算交易日证据);
 #                                               无 ledger→一次性 --bootstrap 252日回填(首跑数分钟)、有→increment ~5日;
 #                                               runner 把 as_of 收敛到最新已结算交易日(盘中周一→上周五),复用本次 IV feed)
-#   6) overlay §6 readiness 提醒(a_short_overlay_eval:旁路 sidecar,comparison-only 非生产;只在实盘当天跑;
+#   6) overlay §6 readiness 提醒(a_short_overlay_eval:旁路 sidecar,comparison-only 非生产;只在 live 运行跑(as_of>=运行日,含前瞻 canonical);
 #                                               数 forward overlay.json,≥governance 阈值(12)即打醒目横幅提醒做 §6
 #                                               升级/退役决定——跨LLM、不管哪个AI跑都提醒;不算指标、不自动升级)
 #
@@ -23,8 +23,8 @@
 # - 整体 exit code 取 egs_main 的 exit code
 #
 # Usage:
-#   .\runners\weekly_screening.ps1                                   # as-of = 今天
-#   .\runners\weekly_screening.ps1 -AsOf 20260522
+#   .\runners\weekly_screening.ps1                                   # 省略 -AsOf = 自动解析 canonical(即将到来/当前未收盘的交易日)
+#   .\runners\weekly_screening.ps1 -AsOf 20260522                    # 显式决策日(前瞻 live 或真·过去 historical)
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -CanarySource em
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
@@ -34,22 +34,26 @@
 #                                                                     # 带 -Account 报告含真实持仓 → 自动落 gitignored 私密目录 state\a_short\weekly_private\<as_of>\(防提交泄漏);无 -Account 走标准 research lane
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 #
-# 运行 cadence(A-short 周五实盘;用户 2026-06-15 定):
-#   今后跑周五实盘用「决策日 as_of + 收盘前运行」—— 周一(决策日)**收盘前**跑 `-AsOf <周一日期>`
-#   (不传 -L3Mode;as_of==运行日 → 默认 l3-mode=today)。机理(已核 egs_main 代码):周一收盘前 Tushare
-#   当日 EOD(daily / daily_basic / suspend)尚未生成 → egs_main「空就回退前一交易日」逻辑(get_daily_basic 等)
-#   自动落到上周五,所以**选股价格/估值/停牌依据上周五收盘**;而新闻 / 语义 web·LLM 层窗口到周一、抓得到
-#   周末突发利好利空。= 周五选股池 + 周末最新新闻。
-#   M6.7 周报(含 EM 新闻→DeepSeek 判官)也在这同一次盘中跑里产出:本脚本给 weekly_pipeline 传 `--run-date <运行日>`,
-#   当 run-date==as_of(实盘当天、as_of 当日 EOD 未发布)时**价格新鲜度门容忍最新已结算 bar=前一交易日(=上周五)**,
-#   故 M6.7 不再 FATAL;新闻窗 as_of=周一 → 判到周六/周日(及任何周一早间)。历史回放(as_of≠运行日)仍严格 == as_of。
-#   *必须收盘前跑*:周一**收盘后**再跑,egs_main 会用周一收盘(不再回退),选股池就变成周一而非周五。
-#   确认依据周五的标志:日志出现 `daily_basic <周一> 无数据，回退至 <周五>`。
-#   (非交易日 as_of 如周日不可用:egs_main 拒非交易日 → ValueError "not an A-share trading day"。)
+# 运行 cadence(A-short 周实盘;用户 2026-06-15 定方向 / 2026-06-22 加 canonical 解析器放宽窗口):
+#   **窗口内任意时刻跑都收敛到同一个决策日**——周五收盘后 → 周一收盘前 的任何时刻(含周六/周日)跑,
+#   都自动解析到「即将到来/当前未收盘的交易日」(正常周 = 即将到来的周一)。直接 `.\weekly_screening.ps1`
+#   省略 -AsOf 即可(不传 -L3Mode);解析器(resolve_canonical_asof.py,拉 trade_cal)算出 canonical as_of,
+#   脚本在 [CANONICAL] 行打印,并把 live/historical 分类(mode)贯穿给 egs_main / pipeline / regime。
+#   机理(已核 egs_main 代码):canonical as_of=即将到来的周一时,周一当日 EOD(daily / daily_basic / suspend)
+#   尚未生成 → egs_main「空就回退前一交易日」逻辑自动落到最近已结算交易日,所以**选股价格/估值/停牌依据
+#   节前收盘**;而新闻 / 语义 web·LLM 层只查 `ann_date<=as_of`、物理上抓不到未来新闻 → 自然=到运行时刻为止
+#   (含周末突发 + 周一早间)。= 节前选股池 + 最新新闻。多次跑同一 canonical as_of:forward_tracker 按
+#   (as_of,ts_code)去重、regime 收敛到已结算日、overlay 数单一 as_of → 幂等不灌水;result/私密周报后跑覆盖前跑。
+#   M6.7 周报(含 EM 新闻→DeepSeek 判官)同次产出:脚本传 `--run-date <运行日>`,live(as_of>=run_date,
+#   含前瞻周一)→ `--price-freshness-mode intraday_prior_settled` 容忍最新 bar=前一交易日,故不 FATAL;
+#   真·过去回放(as_of<run_date)仍严格 strict_as_of + 须显式 -L3Mode pit/neutralize。
+#   确认依据节前的标志:日志出现 `daily_basic <周一> 无数据，回退至 <最近交易日>`。
+#   滚动边界:周一**收盘(15:00)后**再跑 → canonical 滚到周二(此时周一已收盘、实际在为周二决策);你的
+#   窗口止于周一收盘,不会触发。显式 -AsOf <非交易日> 仍被 egs_main 拒(请省略 -AsOf 自动解析,或传交易日)。
 
 param(
-    [ValidatePattern('^\d{8}$')]
-    [string]$AsOf = (Get-Date -Format 'yyyyMMdd'),
+    [ValidatePattern('^(\d{8})?$')]
+    [string]$AsOf = $null,
     [ValidateSet('sina', 'em')]
     [string]$CanarySource = 'sina',
     [ValidateSet('pit', 'today', 'neutralize')]
@@ -84,7 +88,33 @@ if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
 }
 
 $RunDate = Get-Date -Format 'yyyyMMdd'
-$IsHistoricalAsOf = $AsOf -ne $RunDate
+if ([string]::IsNullOrWhiteSpace($AsOf)) {
+    # --- 省略 -AsOf → 解析 canonical 决策日（拉 trade_cal，需网络/TUSHARE_TOKEN）---
+    # 窗口内任意时刻(周五盘后→周一盘前)运行都收敛到「即将到来/当前未收盘的交易日」(正常周=即将到来的周一),
+    # 避免多次跑用不同 as_of 把 forward_tracker/regime/overlay 灌水。canonical 恒为真交易日且 live。
+    $ResolveScript = Join-Path $ProjectRoot 'runners\resolve_canonical_asof.py'
+    $ResolveOut = Join-Path $env:TEMP "a_short_canonical_asof_$PID.json"
+    & $PythonExe $ResolveScript '--out' $ResolveOut | Out-Null
+    $ResolveExit = $LASTEXITCODE
+    if ($ResolveExit -ne 0 -or -not (Test-Path $ResolveOut)) {
+        Write-Host "[FATAL] canonical as_of resolution failed (resolve_canonical_asof.py exit $ResolveExit); check network / TUSHARE_TOKEN, or pass -AsOf <trading-day> explicitly." -ForegroundColor Red
+        exit 1
+    }
+    $Resolved = Get-Content -Raw -Encoding UTF8 $ResolveOut | ConvertFrom-Json
+    Remove-Item -Force $ResolveOut -ErrorAction SilentlyContinue
+    $AsOf = [string]$Resolved.as_of
+    $IsHistoricalAsOf = $false   # canonical = 即将到来/当前未收盘的交易日,按定义恒 live(as_of>=run_date)
+    if ([string]::IsNullOrWhiteSpace($AsOf)) {
+        Write-Host "[FATAL] canonical resolver returned an empty as_of." -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "[CANONICAL] as_of=$AsOf (resolved)  run_date=$RunDate  mode=live  last_settled=$($Resolved.last_settled)" -ForegroundColor Cyan
+} else {
+    # --- 显式 -AsOf → 纯日期比较分类（无需网络）---
+    # as_of < 今天 = historical(真·过去回放,须显式 -L3Mode pit/neutralize);as_of >= 今天 = live(今日/前瞻交易日)。
+    # as_of 交易日有效性由 egs_main.set_asof 兜底(拒非交易日);与 egs/pipeline 的 as_of>=run_date live 判据一致。
+    $IsHistoricalAsOf = ([string]::Compare([string]$AsOf, [string]$RunDate, [System.StringComparison]::Ordinal) -lt 0)
+}
 $EffectiveL3Mode = $L3Mode
 
 if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
@@ -247,8 +277,9 @@ if ($SkipSemanticRisk) {
         } else {
             $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if (-not $IsHistoricalAsOf) {
-                # 实盘当天(as_of==运行日):as_of 当日 EOD 盘中尚未发布 → 显式启用价格门 intraday tolerance
-                # (容忍最新已结算 bar=前一交易日);历史回放保持默认 strict_as_of。实际价格时钟记进 weekly_m67 lineage。
+                # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用
+                # 价格门 intraday tolerance(容忍最新已结算 bar=前一交易日);真·过去回放(as_of<运行日)保持默认
+                # strict_as_of。实际价格时钟记进 weekly_m67 lineage。
                 $M67Args += @('--price-freshness-mode', 'intraday_prior_settled')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
@@ -281,7 +312,8 @@ if ($SkipSemanticRisk) {
 }
 
 # --- Stage 5: V14.3 regime comparison ledger (旁路 sidecar;comparison-only 非生产,V14.2 仍冻结;失败绝不阻断
-#     周报)。只在实盘当天(as_of==运行日)跑——regime ledger 是 forward 累积的已结算交易日证据,历史回放不该推进它。
+#     周报)。只在 live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一)跑——regime ledger 是 forward 累积的
+#     已结算交易日证据,真·过去回放(as_of<运行日,$IsHistoricalAsOf)不该推进它。
 #     无 ledger→一次性 --bootstrap(252日回填,首跑数分钟)、有→increment(秒级)。runner 把 as_of 收敛到最新已结算
 #     交易日(盘中周一→上周五),复用本次已建的 IV feed(有则传)。egs 成功才会走到这(egs 失败已在上面 exit)。
 if ($SkipRegime) {
@@ -315,7 +347,7 @@ if ($SkipRegime) {
 }
 
 # --- Stage 6: overlay §6 升级-复审 readiness 提醒(旁路 sidecar;comparison-only 非生产;失败绝不阻断周报)。
-#     只在实盘当天跑(forward overlay 观测只在 live 累积)。数 forward overlay.json,≥governance 阈值(12)即由
+#     只在 live 运行跑(as_of>=运行日:今日/前瞻 canonical;forward overlay 观测只在 live 累积,真·过去回放跳过)。数 forward overlay.json,≥governance 阈值(12)即由
 #     runner 打醒目横幅提醒做 §6 升级/退役决定——这是"不管哪个 AI 跑系统、每周都提醒"的硬保证(横幅落在每次实盘
 #     运行输出 + research lane 的 overlay_eval_summary.json)。不算指标、不自动升级(详见 runner docstring + register track ②)。
 if ($SkipOverlayEval) {

@@ -49,6 +49,11 @@ class EgsMainL3GuardTest(unittest.TestCase):
     def test_current_asof_keeps_default_today_l3_allowed(self) -> None:
         self.egs_main._guard_historical_asof_l3_mode("20260601", "today", run_date="20260601")
 
+    def test_prospective_asof_allows_default_today_l3(self) -> None:
+        # canonical 解析器把周末/周一盘前运行解析成「即将到来的周一」as_of(> run_date 的前瞻交易日);
+        # 这类前瞻 live 运行用 l3=today 正确,不应被当历史回放拦死(判据已从 != 放宽为 <)。
+        self.egs_main._guard_historical_asof_l3_mode("20260622", "today", run_date="20260620")
+
 
 if __name__ == "__main__":
     unittest.main()

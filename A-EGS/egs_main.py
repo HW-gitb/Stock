@@ -1306,12 +1306,19 @@ def set_asof(date_str):
     log.info(f"[ASOF] running EGS as of {TODAY}; cache_ttl={CONF['cache_ttl']}s")
 
 def _guard_historical_asof_l3_mode(as_of, l3_mode, allow_historical_live_l3=False, run_date=None):
+    """l3=today 只对**真·过去**的 as_of 拦截（须显式 pit/neutralize）；当前/前瞻 as_of 放行。
+
+    判据从「as_of != run_date」放宽为「as_of < run_date」：weekly canonical 解析器（2026-06-22）会把
+    周末/周一盘前运行解析成「即将到来的周一」as_of（> run_date 的前瞻交易日，EOD 尚未发布 → 价格回退到
+    上一已结算交易日，与周一盘前实盘同一条已验证路径）。这类前瞻 live 运行用 l3=today 正确（L3 概念数据
+    同价格一样取当前最佳），不该被当历史回放拦死。真·过去回放（as_of < run_date）仍须 pit/neutralize。
+    """
     if not as_of:
         return
     effective_run_date = run_date or datetime.now().strftime("%Y%m%d")
-    if as_of != effective_run_date and l3_mode == "today" and not allow_historical_live_l3:
+    if str(as_of) < str(effective_run_date) and l3_mode == "today" and not allow_historical_live_l3:
         raise SystemExit(
-            f"[FATAL] Historical --as-of {as_of} is not the current run date {effective_run_date} "
+            f"[FATAL] Historical --as-of {as_of} predates the run date {effective_run_date} "
             "and cannot run with --l3-mode=today by default. Use --l3-mode=pit --l3-pit-strict "
             "for PIT snapshots, --l3-mode=neutralize for an L3-neutral replay, or add "
             "--allow-historical-live-l3 only for an explicitly non-evidence live-concept smoke run."
