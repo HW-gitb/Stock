@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH2-THEMELIFECYCLE-CONFIRM-COUNT-UNVALIDATED - theme_lifecycle confirm_count is consumed unvalidated, so a bool/float can force a single-round upgrade
 
-- Status: **resolved** (working tree; Codex `审查 PASS` 2026-06-22; pending 用户 `提交`). Was in_progress for Round A step 4.
+- Status: **resolved** (committed `f620468d`, Codex `审查 PASS` 2026-06-22). Was in_progress for Round A step 4. (NB: commit `f620468d`'s inline message note "Codex 审查 was NOT run" is ERRONEOUS — Codex did review and PASS this cut before commit, per the SESSION_LOG PASS entry + the Codex re-review closure below; the note came from a stale pre-Codex read at flag-time that was not re-checked right before commit.)
 - Severity: **P2**.
 - Source: converged batch-2 review — Codex `review_v2.md` R5 + Claude `cc_review_v2.md` §P2 (action 5.7).
 - Scope reviewed/repaired: `engine/us_short_theme_lifecycle.py::next_theme_lifecycle_state` + `tests/test_us_short_theme_lifecycle.py`. No provider/live/network/DataHub/A-share/Skill/production/batch3.
