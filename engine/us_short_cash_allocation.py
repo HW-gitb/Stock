@@ -73,6 +73,16 @@ def _rank_field(row, key):
 _BUILDABLE_FINAL_ACTIONS = ("建仓", "加仓")
 
 
+def _veto_blocks(hard_veto):
+    """A hard veto is a safety BLOCK (opposite polarity of a grant flag): a row is vetoed UNLESS its
+    `hard_veto` is ABSENT (no veto signal at all → rely on the `final_action` gate) or an explicit clean
+    boolean `False`. A present True / truthy-non-True (`1` / `"yes"` / `[1]`) / malformed value all FAIL
+    CLOSED to a veto (§8 hard veto = 0 position) — a present veto field that is not a clean `False` must
+    never be silently read as buildable. (Absent differs from ship_gate's default-`False` param: here the
+    veto is an OPTIONAL dict key via `.get`, so a missing key is no-veto, not a block.)"""
+    return hard_veto is not None and hard_veto is not False
+
+
 def _is_buildable(row):
     """The buildable-only safety boundary (§8 `never_rescue_non_buildable`), enforced at the API against the
     AUTHORITATIVE frozen `final_action` field (us_short_action_table_contract). A row is fundable ONLY if its
@@ -82,7 +92,7 @@ def _is_buildable(row):
     revived by cash ordering. A non-dict row is not buildable."""
     if not isinstance(row, dict):
         return False
-    if row.get("hard_veto") is True:                         # absolute override — §8 hard veto = 0 position
+    if _veto_blocks(row.get("hard_veto")):                   # absolute override — §8 hard veto = 0 position
         return False
     return row.get("final_action") in _BUILDABLE_FINAL_ACTIONS
 

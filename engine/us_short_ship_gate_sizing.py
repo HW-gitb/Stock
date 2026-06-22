@@ -52,13 +52,23 @@ def _nonneg_int(x):
     return x if x >= 0 else None
 
 
+def _veto_blocks(hard_veto):
+    """A hard veto is a safety BLOCK — the OPPOSITE polarity of the grant flag `graduated_full_size`. It
+    blocks the position (§8 hard veto = 0 position) UNLESS `hard_veto` is an explicit clean boolean `False`:
+    True, any truthy-non-True (`1` / `"yes"` / `[1]`), a malformed value, or `None` all FAIL CLOSED to a
+    veto. A veto signal that is not a clean `False` must never be silently read as "no veto" — this is the
+    one input where a strict `is True` test fails OPEN. The grant flag stays strict-True; only the blocker
+    flips polarity. (Default `hard_veto=False` → no veto, so a normal call clears.)"""
+    return hard_veto is not False
+
+
 def classify_live_permission(hard_veto, evidence_level, graduated_full_size=False):
     """§8 live_permission_status. A hard veto → `paper_or_minimal_only` (0 position, certainly no real-money
     full size). Paper-only / not-evaluable / unknown-or-malformed evidence → `paper_or_minimal_only` (paper
     evidence can NEVER be full size, §12). A live_normalized track → `full_size_eligible` ONLY if
     `graduated_full_size` is exactly True, else `not_full_size_eligible`. Never auto-grants full size on an
     un-graduated track."""
-    if hard_veto is True:
+    if _veto_blocks(hard_veto):
         return "paper_or_minimal_only"
     ev = evidence_level if evidence_level in EVIDENCE_LEVELS else "not_evaluable"   # fail closed
     if ev != "live_normalized":
@@ -75,7 +85,7 @@ def ship_gate_sizing(model_position_size_amount, model_position_size_shares, har
     size fails closed to a zero position + `paper_or_minimal_only`. The real-money amount is the human's to
     set — this is advisory."""
     permission = classify_live_permission(hard_veto, evidence_level, graduated_full_size)
-    if hard_veto is True:
+    if _veto_blocks(hard_veto):
         return _result(0.0, 0, "paper_or_minimal_only", "hard_veto_zero_position")
     amount = _finite_number(model_position_size_amount)
     shares = _nonneg_int(model_position_size_shares)

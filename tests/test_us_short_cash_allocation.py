@@ -129,6 +129,21 @@ class BuildableBoundaryTests(unittest.TestCase):
         self.assertEqual(out[0]["reason"], "not_buildable")
         self.assertEqual(out[1]["cash_allocation_status"], "allocated")          # cash not consumed by the vetoed row
 
+    def test_hard_veto_truthy_non_true_still_blocks(self):
+        # the fix: a present truthy-non-True / malformed veto on a buildable row fails CLOSED to
+        # not_buildable (defense-in-depth behind the final_action gate), never silently read as "no veto"
+        for veto in (1, "yes", "true", [1], 0.5):
+            out = ca.allocate_cash([_row(1, final_action="建仓", hard_veto=veto), _row(2)], available_cash=50.0)
+            self.assertEqual(out[0]["reason"], "not_buildable", repr(veto))
+            self.assertEqual(out[0]["cash_allocation_status"], "observe", repr(veto))
+            self.assertEqual(out[1]["cash_allocation_status"], "allocated", repr(veto))
+
+    def test_absent_or_clean_false_hard_veto_stays_buildable(self):
+        # absent hard_veto key (the normal row shape) and an explicit clean False must NOT block buildability
+        for row in (_row(1, final_action="建仓"), _row(1, final_action="建仓", hard_veto=False)):
+            out = ca.allocate_cash([row], available_cash=1000.0)
+            self.assertEqual(out[0]["cash_allocation_status"], "allocated", repr(row.get("hard_veto")))
+
     def test_both_build_and_add_actions_fund(self):
         out = ca.allocate_cash([_row(1, final_action="建仓"), _row(2, final_action="加仓")], available_cash=100.0)
         self.assertEqual([o["cash_allocation_status"] for o in out], ["allocated", "allocated"])

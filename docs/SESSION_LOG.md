@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-22 - Codex `审查 PASS` (US-short batch2 hard_veto blocker polarity first cut)
+
+- **Verdict/Action**: PASS. Current first-cut repair correctly closes `R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN` for `ship_gate_sizing` and `cash_allocation`; no new Required in this scope.
+- **Required**: None new. `R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN` is resolved in `docs/system_risk_register.md`. Remaining converged-review items (crash sweep / theme_heat / theme_lifecycle / action_rank / private_paths / main design doc drift / Round B design decisions) remain queued and were intentionally out of this first-cut review.
+- **Verify**: status/diff/current files reviewed; ship_gate+cash 35 OK; all `*us_short*` tests 871 OK; schema `*us_short*` tests 436 OK; doc/route guards 38 OK; direct silent-fail-open probes passed; `hard_veto is True` blocker grep clean; `git diff --check` LF/CRLF warnings only; no BOM. No provider/live/network/DataHub/A-share/Skill/production/batch3.
+- **Next**: User may command `提交` for this first cut, or direct Claude to continue the next one-scope repair item; do not start batch3/provider/live/DataHub/Skill/production/A-share until queued Required work is separately handled and reviewed.
+
+## 2026-06-22 — Claude `修复` (US-short batch2 review 第一刀 — hard_veto 阻断标志极性 fail-open)
+
+- **Verdict/Action**: 收到 `修复`（批2 全量审查后第一刀）。按已采纳方案 + 护栏(a)：**只修 hard_veto 阻断标志极性**，不一锅端 Round A。`hard_veto` 是安全阻断、与 grant 标志 `graduated_full_size` 极性相反，但 ship_gate(61,78)+ cash_allocation(85) 用 `is True` 门 → truthy-non-True veto（1/"yes"/[1]）静默当"无 veto"（被否决票满仓出 / 拨现金）。修：各引擎加 `_veto_blocks`（镜像 theme_probe `_flag_blocks`）—— ship_gate block-unless-clean-False；cash block-unless-absent-or-False（absent=正常行不挡）；grant 标志保持 strict-True。
+- **Required**: `R-USSHORT-BATCH2-HARDVETO-BLOCKER-POLARITY-FAILOPEN`（P1 ship_gate + 同根 P2 cash）— 完整 finding/trace/sweep/resolution 见 `docs/system_risk_register.md`（in_progress、working tree）。来源：收敛审查 `cc_review_v2.md` §P1-1/P2-1 + Codex `review_v2.md` R1/R2。
+- **Verify**: ship_gate+cash 35 OK（含 4 新对抗测试：truthy/malformed/None→挡、absent/False→放行）；全 us_short lane（engine+schema）**871 OK**（867+4），零回归；下游消费者 grep=测试外 0（a_short `_allocate_cash` 自有、无跨车道）；无 doc 断言旧极性；BOM=0；纯 offline、未跑 provider。
+- **Next**: Codex re-`审查` 本刀（2 引擎 + 4 测试 + register）；PASS 后用户 `提交`。剩余收敛项（crash sweep / theme_heat clamp / theme_lifecycle / action_rank / private_paths / 主设计 doc drift；+ Round B 拍板项）仍排队、刻意不在本刀（一 scope 一 commit）。
+- **Pre-Codex self-review**: A-F。A(类)：bug 类=blocking flag `is True` fail-open；扫全 `is True` 站点、仅 2 hard_veto 消费者中招、都修（ship_gate 61+78 / cash 85）；测试覆盖 truthy/malformed/None 挡 + absent/clean-False 放行。B(连带)：grep hard_veto 消费者(仅 ship_gate/cash/theme_probe[已对])+ 公共函数下游(测试外 0)+ doc 无旧极性断言。C(反向)：正常无-veto(ship_gate 默认 False / cash absent key)+ grant 标志(graduated strict-True)全保留、未过度拒。E：未碰 route-doc，仅 register+SESSION_LOG。F：§8 hard_veto=0 仓不变式现正确强制；docstring 一致；helper 纯函数无 footgun。
+
 ## 2026-06-22 - Codex `审查 PASS` (US-short batch2 dynamic seats)
 
 - **Verdict/Action**: PASS. `engine/us_short_dynamic_seats.py` correctly lands the §4.5 seat-split primitive and strong-theme leader-upgrade max/allowance; no new Required.

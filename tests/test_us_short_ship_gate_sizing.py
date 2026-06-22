@@ -40,6 +40,15 @@ class PermissionTests(unittest.TestCase):
             self.assertEqual(sg.classify_live_permission(False, "live_normalized", truthy),
                              "not_full_size_eligible", repr(truthy))
 
+    def test_hard_veto_blocks_on_truthy_non_true(self):
+        # a hard veto is a BLOCKER (opposite polarity of the grant flag): any truthy-non-True / malformed /
+        # None veto must FAIL CLOSED to a block, never be silently read as "no veto" (P1 fail-open guard)
+        for veto in (1, "yes", "true", [1], None, 0.0001):
+            self.assertEqual(sg.classify_live_permission(veto, "live_normalized", True),
+                             "paper_or_minimal_only", repr(veto))
+        # an explicit clean False is the ONLY value that clears the veto
+        self.assertEqual(sg.classify_live_permission(False, "live_normalized", True), "full_size_eligible")
+
 
 class SizingTests(unittest.TestCase):
     def test_hard_veto_zeroes_position(self):
@@ -49,6 +58,17 @@ class SizingTests(unittest.TestCase):
         self.assertEqual(out["model_position_size_shares"], 0)
         self.assertEqual(out["live_permission_status"], "paper_or_minimal_only")
         self.assertEqual(out["live_size_warning"], "hard_veto_zero_position")
+
+    def test_hard_veto_truthy_non_true_zeroes_position(self):
+        # the P1 fix: a truthy-non-True / malformed / None veto must zero the position exactly like True
+        # (was a silent fail-open that shipped a vetoed ticker at full size)
+        for veto in (1, "yes", "true", [1], None):
+            out = sg.ship_gate_sizing(5000.0, 100, hard_veto=veto, evidence_level="live_normalized",
+                                      graduated_full_size=True)
+            self.assertEqual(out["model_position_size_shares"], 0, repr(veto))
+            self.assertEqual(out["model_position_size_amount"], 0.0, repr(veto))
+            self.assertEqual(out["live_permission_status"], "paper_or_minimal_only", repr(veto))
+            self.assertEqual(out["live_size_warning"], "hard_veto_zero_position", repr(veto))
 
     def test_maturity_is_reminder_not_cap(self):
         # paper evidence must NOT shrink the model size — only the permission/warning change
