@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 paper net result fill-shape repair)
+
+- **Verdict/Action**: PASS. `paper_net_result()` now enforces the full per-status `fill_result` shape before any accounting, so inconsistent status / price / reason records are refused.
+- **Required**: None new. `R-USSHORT-BATCH3-PAPER-NET-FILL-SHAPE-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: target paper-net tests **17 OK**; `py_compile` OK; direct probes reject the prior malformed shapes and accept correct closed reasons; doc/route/boundary guards **47 OK**; broad `*us_short*` blocked by missing `jsonschema` (671 discovered, 36 errors, 1 skipped).
+- **Next**: User may `提交`; later paper multi-day realized exits / private ledger writer / comparison shadow remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 paper 净结果 — fill_result 全 per-status 形状锁)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——我 Pre-Codex 自夸「函数自校 fill_result」但只锁了 status + closed 价、没锁全 per-status 形:not_filled 带价、held 带 exit/缺·坏 fill、closed 错 exit_reason 都漏过(同「二级自校契约」课但应用不全)。按 Required 加 `_validate_fill_shape(fill_result, status)`(出任何结果前):not_filled 无 fill/exit/reason、held 正 fill 且无 exit/reason、closed 正 fill+exit 且 exit_reason==status 专属(same_day_stop/same_day_tp_exit,`_STATUS_EXIT_REASON` 镜像 sim);违例全 `PaperNetResultError`。cost 模型 + held=None 不动。
+- **Required**: `R-USSHORT-BATCH3-PAPER-NET-FILL-SHAPE-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: 新增 +5、target **17 OK**;Codex 4 探针(held 缺 fill/held 带 exit/not_filled 带价/closed 错 reason)现全 `PaperNetResultError`;全离线 `*us_short*` **1345 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:paper 多日平仓 realized net + 私密 ledger writer、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):全 per-status 形各违例全拒(not_filled 无价、held 正fill·无exit、closed 正fill+exit·status 专属 reason),非只 closed 价。B(连带):`_STATUS_EXIT_REASON` 镜像 sim + 集成测试防漂移;docstring「自校形」→「全锁」、README 同步(B-ripple);closed 冗余价校并入 validator;`_fill` 补 status reason。C(反向):正控——正确 reason 正常算、既有测试证契约;未误拒。D(歧义):exit_reason 映射取 sim 实值非自造。E:CURRENT 未动。F:held=None/cost 模型按 Required 不动。**教训:自校契约要全锁 status⇔price⇔reason 别只锁一半;Pre-Codex 自评「已自校」却没核全=自评不实。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 paper net result §12.1 #8 follow-up)
+
+- **Verdict/Action**: FAIL. `paper_net_result()` 的净收益公式和成本口径能跑通,但它没有真正锁住 `fill_result` 的 status/price/reason 形状。
+- **Required**: `R-USSHORT-BATCH3-PAPER-NET-FILL-SHAPE-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target paper-net tests **12 OK**; `py_compile` OK; direct probes show malformed held / not_filled / closed-reason shapes are accepted; doc/route/boundary guards **47 OK**; broad `*us_short*` blocked by missing `jsonschema` (666 discovered, 36 errors, 1 skipped).
+- **Next**: Claude should repair only status-specific `fill_result` shape validation and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order execution/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 paper 净结果口径 §12.1 #8-后续 — 单笔模拟成交确定性 net)
+
+- **Verdict/Action**: 起草 batch3 续片 paper 净结果(§12.1,#8 后续)。`paper_net_result(fill_result, *, cost_prior)` 把 `simulate_fill` 输出转**可复现** net(同输入→同数)。**两设计决策(自定)**:① **held 记法**=开仓未平→`realized=False/net=None/open_unrealized`(未实现不当 net、realized 留后续刀,§12.1 不虚高);② **cost 模型**=§13 #18 prior 三成分往返 return-drag(无 $)`total_cost=commission_fee+spread_cost+slippage_bps/10000`、仅扣 realized-closed。not_filled→0(没买上不当收益);stopped/tp→net=(exit-fill)/fill−cost。PAPER only 绝非 ship-gate。函数自校 fill_result。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **12 OK**;全离线 `*us_short*` **1340 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:paper 多日平仓 realized net + 私密 ledger writer、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):malformed 整类——fill_result 非dict/未知 status、cost_prior 非dict/键≠3/缺/负/非有限/bool、closed 坏 fill·exit 价 拒。B(连带):集成测试喂真 simulate_fill 全 status 防漂移;新 engine 入 boundary glob;README 行。C(反向):正控——各 status 对、零 cost net==gross、可复现;未误判。D(歧义):held+cost 二决策已在 Verdict 显式定交审、非藏;net 公式逐字 §12.1。E:CURRENT 未动。F:函数自校 fill_result(不信任 sim,同二级自校课);`_finite` 拒 NaN/Inf/bool。**镜像:确定性=paper_fill、自校=hot summary 课。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 paper 净结果口径 §12.1 #8-后续(engine/us_short_paper_net_result.py + tests/test_us_short_paper_net_result.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① 两设计决策是否合理——held=未实现(net=None、不当 net)、cost=三成分往返 return-drag total=commission_fee+spread_cost+slippage_bps/10000(无 $,合 §12.1 归一化)② net 公式 (exit-fill)/fill - cost 是否逐字 §12.1、not_filled→0(没买上不当收益)③ 函数是否自校 fill_result 形(不信任 sim)④ malformed 整类(未知 status/坏 cost/坏价)全 sanctioned PaperNetResultError ⑤ 集成测试喂真 simulate_fill 全 status 是否够防漂移 ⑥ PAPER only 未触 ship-gate、纯/离线、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 corporate-action evaluability gate doc-drift repair)
 
 - **Verdict/Action**: PASS. Active README / function / test doc wording now matches paper/reporting/shadow evaluability and the actual return fields.
