@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 weekly_report renderer surface-invariant repair)
+
+- **Verdict/Action**: PASS. The weekly_report renderer now refuses the prior blank / empty / negative surface cases while preserving valid zero-count and optional-omitted behavior.
+- **Required**: None new. `R-USSHORT-BATCH3-WEEKLY-REPORT-SURFACE-INVARIANT-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: renderer target 18 OK; direct probes refuse the 6 prior accepted cases plus `[None]` / mixed blank list, while zero counts render and blank optional stays omitted; `py_compile` OK; doc/route guards 39 OK; `git diff --check` CRLF-only; BOM/FFFD false. Full `*us_short*` remains blocked here by missing `jsonschema` in the Codex bundled runtime.
+- **Next**: User may `提交`; exclusion_summary / hot_excluded / coverage-honesty enrichments, paper/comparison, provider/live/DataHub/Skill/production/A-share/US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 weekly_report 渲染器 — 空白/负 surface 不变式整类 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——同 partial-validation 类:只校 key 存在/None/精确 ''、漏整个空白/空/负类,致「结构齐全但空体」的 §11.2 面照渲。按 Required 修三道:① `_section_has_content`——节体须非空白 str 或 非空 list 且每项非空白 str(''/空格/[]/['']/[None]/混合空白/非str 全拒);② price_clock 4 字段须非空白 str(空格也拒);③ count 须**非负** int(仍拒 bool、保等式、0 合法→负数不能伪装匹配)。可选横幅供则非空白才显。整类:每个显示值皆加非空白·非负门。详见 register。
+- **Required**: `R-USSHORT-BATCH3-WEEKLY-REPORT-SURFACE-INVARIANT-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: renderer **18 OK**(+5:节空白/空list/blank-item/None 拒、空格 price_clock 拒、负数拒、0 合法正控、空白可选省略);全离线 `*us_short*` **1177 OK** 零回归、doc/route 25 OK;探针——Codex 6 例 + [None] + 混合空白 list 全拒、0 数仍渲;README 渲染器行 B-ripple 同步;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:各节 enrichment(exclusion_summary/hot_excluded/覆盖诚实)+ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):渲染面显示值整类(节体/price_clock/count/可选横幅)非空白·非负门,非只被点名几例。B(连带):README 渲染器行同步「非空白内容/非负数/空白可选省略」;无符号改名。C(反向):正控(合法 report 渲、0 数、可选非空白显)证没误拒;空白/负只 fail-closed。D(歧义):「有内容」取最强=非空白语义(strip 空=blank、list 每项非空白)。E:CURRENT 不动(未提交)。F:`_nonblank_str`/`_section_has_content` 单一判据、count `_int_not_bool and >=0`(短路防 str 比较)、可选 val.strip() 渲。**教训:fail-closed 校「非空」别只查 None/''、要查 strip 空白+空容器+负值整类**。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 weekly_report renderer first cut)
+
+- **Verdict/Action**: FAIL. The renderer reads the frozen contract and renders the 13-section skeleton, but the fail-closed surface invariants are incomplete: blank/empty section bodies, whitespace-only `price_clock` values, and negative lifecycle counts can still render.
+- **Required**: `R-USSHORT-BATCH3-WEEKLY-REPORT-SURFACE-INVARIANT-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: renderer target 13 OK; `py_compile` OK; doc/route guards 39 OK before closeout; direct adversarial probe accepted `empty-string-section`, `whitespace-section`, `empty-list-section`, `list-empty-string-section`, `whitespace-price-clock`, and `negative-counts`. Full `*us_short*` remains blocked in this Codex runtime by missing `jsonschema` (35 unrelated import errors).
+- **Next**: Claude should repair only the weekly_report renderer surface-invariant gap and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 — weekly_report.md 渲染器首刀:§11.2 13 节骨架 + 诚实横幅 + lifecycle 对账)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`(E+F 已提交 `d89e245e`+closeout `6531ecb9`,Codex re-`审查 PASS`)。续 §18.2 批3 = **weekly_report.md 渲染器首刀**。新 `engine/us_short_weekly_report_renderer.py`:`render_weekly_report(report_data)` 从**冻结 `us_short_weekly_report_contract`**(批1)读 13 节集/序 + 5 诚实横幅元素 + price_clock 字段 + lifecycle-count 规则(单一来源、零硬编码),渲染 §11.2 markdown。**三道 fail-closed 渲染不变式**:① ④ price_clock 恒显(缺/不全/空字段拒渲染——读者必见用了哪些价/日期);② **§11.2 lifecycle 提醒数 第1节(本周运行状态)==第12节(字段·模块生命周期提醒)** 否则拒(= lifecycle **2c 末片·数量对账**);③ 13 节每节必有内容。可选 ①②③⑤(always_shown=false)有则显。无新 schema(符合冻结 §11.2 契约)。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: renderer **13 测全过**(13 节冻结序 + 单一来源、④ price_clock 恒显 + 可选 显/略、price_clock fail-closed[缺/不全/空]、数量对账[match OK / mismatch+非int 拒]、节覆盖、畸形 fail-closed);全离线 `*us_short*` **1172 OK**(+13)零回归、doc/route 25 OK;样例渲染直跑确认横幅(②+④)+ 13 节冻结序。无新 schema。BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(13 节单一来源读冻结契约、④ price_clock 恒显 fail-closed、§11.2 数量对账 fail-closed、节覆盖、纯/离线);PASS 后用户 `提交`。批3 续片:exclusion_summary(#10)/hot_excluded(#19)/覆盖诚实(#10)节 enrichment + R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):渲染不变式三道(price_clock 恒显/数量对账/节覆盖)各 fail-closed + 畸形(非dict report_data/子字段)全拒;banner 可选元素 显/略两路。B(连带):新 2 文件自带 docstring;README 加渲染器路由行(无计数,§18.1 #11,措辞避 absence guard);无符号改名、复用冻结契约不另造。C(反向):正控(合法 report_data 渲 + 可选元素显 + 匹配对账过)证没误拒;mismatch/缺字段只 fail-closed。D(歧义):节集/序/横幅/对账规则全取冻结契约单一来源,非凭记忆。E:CURRENT 不动(未提交)。F:price_clock 4 字段缺/空(None/'')皆拒、count `_int_not_bool` 拒 bool、节 header 读契约(零硬编码)、镜像 R2a 渲染器消费冻结契约模式。
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 E+F boundary broker-token repair)
 
 - **Verdict/Action**: PASS. The E+F boundary regression repair now covers engine + runners and catches the prior `tda` broker-SDK miss; provider-health remains offline-only and acceptable for this slice.
