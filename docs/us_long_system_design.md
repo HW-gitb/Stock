@@ -108,9 +108,9 @@ selection_score =
 
 Top20 先过硬门槛再排名：流动性/价格地板、数据质量 blocker、明显不可交易或字段缺失先剔除；`risk_data_quality_score` 的 5% 只处理非阻断级风险/降级，不得让数据 blocker 靠其它高分挤进 Top20。
 
-**Top20 不足 20 只时**：先放宽非核心阈值（市值/涨幅），保留硬阈值（流动性/最低价/非退市/数据齐全）；硬阈值幸存者 ≥20 取前 20，<20 则报实际只数 + manifest warning，不为凑数放垃圾、不硬停。
+**Top20 数量合同（实际数量合同，下游计数单一来源）**：`selected_count = min(20, 硬阈值幸存者数)`。不足 20 时先放宽非核心阈值（市值/涨幅）、保留硬阈值（流动性/最低价/非退市/数据齐全）；幸存者 ≥20 取分最高 20，<20 则 `selected_count` = 实际幸存者数 + manifest warning（记 `selected_count` / warning / 原因），**不为凑数放垃圾、不硬停（不因 <20 单独失败）**。下游计数全部由 `selected_count` 派生：`recommended_count ≤ min(5, selected_count)`、`not_recommended_count = selected_count − recommended_count`（文件名 `_15` / `_5` 仅常态标签，实际行数以 manifest 为准）。
 
-引擎：`engine/us_long_selection_score.py`。取分最高 20 只 = Top20。
+引擎：`engine/us_long_selection_score.py`。取分最高至多 20 只 = Top20（`selected_count = min(20, 幸存者)`，数量合同见上）。
 
 ---
 
@@ -295,12 +295,12 @@ ship_gate_eligible  仅当满足仓库 ship-gate（t≥2.0 / Sharpe≥1.0 / maxD
 中文列名 + 英文 ticker。最终只写 `state/us_long/results_private/YYYYMMDD/`，**白名单 6 文件**：
 
 ```text
-selected_top20.csv        20 行选股
+selected_top20.csv        selected_count 行选股（正常 20；<20 = 实际只数 + manifest warning，见 §5）
 recommended_build_5.csv   ≤5 行推荐建仓（含资金状态 + 推荐标签）
-not_recommended_15.csv    (20 − 推荐数) 行不推荐/观察 + 理由（实际行数以 manifest 为准）
+not_recommended_15.csv    (selected_count − 推荐数) 行不推荐/观察 + 理由（`_15` 仅常态标签；实际行数以 manifest 为准）
 positions_review.csv      持仓恒复核 + 50%止盈提示
 factor_audit.csv          每因子→声明落点 vs 实际落点（断路器证据）
-run_manifest.json         运行元信息 + dangling_check(PASS) + capital_mode + 计数 + 登记表命中
+run_manifest.json         运行元信息 + dangling_check(PASS) + capital_mode + 计数(selected_count/推荐/不推荐 + <20 shortfall warning/原因) + 登记表命中
 ```
 
 列定义：
@@ -319,7 +319,7 @@ positions_review:   运行日期,资金状态,Ticker,账户,股数,成本价,现
 factor_audit:       运行日期,Ticker,因子ID,因子名,状态,因子值,权重,
                     声明影响字段,实际影响字段,理由片段,最终影响
 run_manifest.json:  运行日期,系统版本,数据模式,capital_mode,输入文件,输出文件,
-                    推荐建仓数量,不推荐/观察数量,dangling_check(PASS),
+                    selected_count(Top20实际只数),推荐建仓数量,不推荐/观察数量,top20_shortfall_reason,dangling_check(PASS),
                     active/provisional/shadow 因子列表,登记表命中项,警告
 failure_manifest:   仅失败时写 logs/ 或 staging/，记录 dangling_check(FAIL),错误；不得进入 results_private
 ```
@@ -483,14 +483,14 @@ Tier 6  前向观察 + 校准：所有待校准项进登记表，攒 forward 结
 1.  一键命令跑通样例全流程。
 2.  样例/contract run 只写 staging/mock 或临时目录，不写 results_private。
 3.  Tier2-3 只验 official-write 守卫合约存在且会阻断 mock/失败输出；真实写入 results_private 验收留到 Tier5。
-4.  selected_top20 正常 20 行。
+4.  selected_top20 = selected_count 行（min(20, 硬阈值幸存者)；正常 20，<20 为实际只数 + manifest warning，见 §5，不硬塞凑数、不因 <20 失败）。
 5.  recommended_build_5 ≤5 行，可少于 5。
-6.  not_recommended_15 行数 = 20 − 推荐数。
+6.  not_recommended_15 行数 = selected_count − 推荐数（selected_count = Top20 实际只数）。
 7.  每行有建仓区间/止损价/3-6月目标价/止盈价。
 8.  空持仓 CSV 不阻塞运行。
 9.  持仓浮盈 ≥50% → positions_review 必触发止盈提示。
 10. factor_audit 记录声明落点 vs 实际落点。
-11. PASS run_manifest 记录 dangling_check=PASS 与 capital_mode；四张输出 CSV 显式包含资金状态；失败只写 failure_manifest 到 logs/staging。
+11. PASS run_manifest 记录 dangling_check=PASS、capital_mode、selected_count（+ <20 时 shortfall warning/原因）；四张输出 CSV 显式包含资金状态；失败只写 failure_manifest 到 logs/staging。
 12. 任一 active/provisional 因子悬空 → 不写正式结果；position_only 因子空持仓时落 not_applicable。
 13. 所有 needs_calibration/provisional/shadow 项进登记表。
 14. results_private 为 gitignored（私密守卫 PASS）。

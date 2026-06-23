@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-06-24 — Codex re-`审查 PASS` (US-long Tier 2 Cut 0 — Top20 count contract)
+
+- **Verdict/Action**: PASS. `R-USLONG-CUT0-TOP20-COUNT-CONTRACT-DRIFT` resolved in working tree; no new Required.
+- **Required**: None new. The Required count-contract repair is closed in `docs/system_risk_register.md`.
+- **Verify**: `docs/us_long_system_design.md` fixed-count residual grep = 0; `selected_count` / `top20_shortfall_reason` land in §5 / §11 / §17; `python -m unittest tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` = 39 OK via bundled Python; `git diff --check` = CRLF warning only; diff scope = design + register + SESSION_LOG only.
+- **Next**: User may command `提交` for this docs-only US-long Cut 0 count-contract repair. Cut 1 account_state / CSV converter / private guard remains separate and must not start under this PASS.
+
+## 2026-06-24 — Claude `修复` (US-long Tier 2 Cut 0 — Top20 计数合同统一为实际数量合同)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL` 1 Required, P1）。judge：成立、在 scope、必要——§5(111)「<20 报实际只数、不硬停」与 §11(298/300)+§17(#4/#6) 写死 20 冲突，selected<20 时 `not_recommended=20−推荐` 即错；§5 明写「不硬停」=实际数量合同，故保留 §5、改 §11/§17 对齐。修（docs-only，whole-class）：§5 立单一合同 `selected_count=min(20,幸存者)` + 派生 `recommended≤min(5,selected)`/`not_recommended=selected−推荐`；§11 清单+manifest、§17 #4/#6/#11 全改 selected_count；§6/§17#5 本就一致不动。详 register Resolution。
+- **Required**: `R-USLONG-CUT0-TOP20-COUNT-CONTRACT-DRIFT` resolved（working tree；详 register Resolution）。
+- **Verify**: grep 旧固定计数措辞（`20 行选股`/`(20 − 推荐数)`/`正常 20 行`/`= 20 −`/旧 manifest 列/`计数 + 登记表命中`）= **0**；新 `selected_count` 合同在 111/113/298/300/303/322/486/488/493 共 9 处；§5 单一来源、§11/§17 派生一致。docs-only（无 schema/runner，Codex 要的 normal-20 + <20 fixture 留 Cut 6 输出契约刀，已记 §17 Tests-expected）。doc-governance + route-doc guard 测 OK。`git status` 仅 design + register + 本 LOG（无 engine/schemas/tests/CURRENT）。
+- **Next**: Codex re-`审查`（单 Required resolved；docs-only count-contract 修复）。PASS 后用户 `提交`（含 register 折叠 RESOLVED@hash）。Cut 1（account_state+转换器+私密守卫）仍为后续门，不在本修复内启动。
+- **Pre-Codex self-review**: A：4 冲突点（selected_top20 行数/not_recommended 公式/验收#4/#6）+manifest 记 selected_count+派生链全覆盖。B：whole-class grep 旧措辞归零、§5 单一来源、路由 doc 不涉计数无 B-ripple、§6/§17#5 不动。C：normal-20 仍=20、<20 走实际不硬停不凑数、recommended≤selected。D：§5「不硬停」=实际数量合同（非 hard-stop）。E：CURRENT 未动（transient gate 只进 LOG）。F：docs-only、selected_count 单一来源派生全计数。
+
+## 2026-06-24 — Codex `审查 FAIL` (US-long Tier 2 Cut 0 — Top20 count contract)
+
+- **Verdict/Action**: FAIL. Cut 0 的仓库落地范围本身是 doc-only，桌面源已退役且 repo 内 `docs/us_long_system_design.md` 成为单一权威；但该权威文档内部存在一个 material 输出合同冲突，已登记为 `R-USLONG-CUT0-TOP20-COUNT-CONTRACT-DRIFT`。
+- **Required**: 修正 US-long 设计里的 Top20 数量口径：`docs/us_long_system_design.md:111` 允许硬门槛幸存者 `<20` 时按实际只数输出并写 manifest warning，但 §11 / §17 又写死 `selected_top20` 20 行、`not_recommended_15 = 20 - 推荐数`。必须在实现 output schema / runner 前统一为“实际数量合同”或“低于 20 hard-stop 合同”；完整边界见 `docs/system_risk_register.md`。
+- **Verify**: 审查核对 Cut 0 commit `75e12342` 范围为 `AGENTS.md` / `docs/CURRENT.md` / `docs/README.md` / `docs/SESSION_LOG.md` / `docs/us_long_system_design.md`；桌面 `C:\Users\cnhea\Desktop\v3_us_long_design.md` 当前不存在；`git diff --check HEAD~1 HEAD` OK；系统 `python` 不在 PATH，改用 Codex bundled Python 后 `python -m unittest tests.test_route_doc_ledger_status_consistency tests.test_doc_governance_guard` = 39 tests OK。
+- **Next**: 先做一个窄修复：只改 `docs/us_long_system_design.md` 的 Top20/Top5/not_recommended 计数合同及必要 closeout docs，然后交 Codex re-`审查`；不要借此启动 provider、真实数据、DataHub、runner、A 股或 US-short 工作。既存 `presets/us_long.yaml` / `research/results/us_long/README.md` 路径 reconcile 仍按已记录的 Cut 1+ 开放项处理。
+
 ## 2026-06-24 — Claude `执行` (US-long Tier 2 Cut 0 — 设计权威入 repo + 路由 + 桌面稿退役)
 
 - **Verdict/Action**: 落 us_long Tier 2 Cut 0（地基·doc-only）。桌面 `v3_us_long_design.md` verbatim 移植入 repo 作 `docs/us_long_system_design.md`（美股中长线 us_long 系统**单一设计权威**，对标 `docs/us_short_system_design.md`）——设计 substance（D1-D11 / §1-§19）字节级不动，**仅** header（状态：设计草稿 + 「未授权前不写项目文件夹」→ in-repo 单一权威 / Tier 2 active；数据·接入边界仍生效）+ §20 下一步（Tier 1 完成、Tier 2 进行中、桌面稿退役、Cut 1+ reconcile 开放项）随状态更新——否则 in-repo 权威自含「仅写在桌面、未碰项目文件夹」的即时自相矛盾（doc-drift）。路由 3 处镜像 us_short：`AGENTS.md`（§Reference framework policy 权威声明 + 文件索引）、`docs/CURRENT.md`（lane owner specs 行 + §0 delta）、`docs/README.md`（routing 表行）。桌面源**删除退役**（防双源漂移；内容已 verbatim 在 repo + 版本控制）。memory `project_us_long_v1_design_drafted` + `MEMORY.md` 权威路径桌面→repo 更新。
