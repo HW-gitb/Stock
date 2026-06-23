@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-LOAD-PRIVATE-PATH-GUARD-GAP - lifecycle loader accepts non-private in-repo artifacts
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `bc74b36f`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (private lifecycle accumulator / evidence-clock integrity before the weekly lifecycle banner, readiness artifact, or any downstream renderer consumes persisted state; adjacent to the §18.0 P0 private-path guard).
 - Source: Codex strict review of US-short batch3 R2 lifecycle-eval slice 2b (`engine/us_short_lifecycle_store.py` first lifecycle persister + stale-aware load).
 - Scope reviewed: current working tree after commits `5efb4f0a` / `cb28fc59`, with modified `docs/README.md`, `docs/SESSION_LOG.md`, `engine/us_short_lifecycle_eval.py`, and untracked `engine/us_short_lifecycle_store.py`, `tests/test_us_short_lifecycle_store.py`; design authority `docs/us_short_system_design.md` §2.1 / §11.6 / §12.2 / §13 / §18.0 / §18.1 #1 / #11 / #20 / §18.2; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
