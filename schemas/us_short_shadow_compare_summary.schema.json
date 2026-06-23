@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_shadow_compare_summary",
+  "title": "US-short §12.2 shadow comparison TRACKED de-identified summary — the no-ticker selection-divergence view (§12.2 / §11.6 脱敏汇总)",
+  "description": "Batch-3 TRACKED de-identified summary of a §12.2 shadow comparison (engine/us_short_shadow_compare_summary builds it from a comparison that passed validate_shadow_comparison). UNLIKE the PRIVATE comparison artifact (per-profile TopN selections WITH ticker names → gitignored via engine/us_short_shadow_compare_store, §11.6), this artifact carries ONLY normalized indicators — the per-shadow-profile selection-set DIVERGENCE COUNTS (balanced_only / shadow_extra / overlap), top_n / pool_size / selected_count, and the frozen ship-gate-isolation boundary — NO ticker names, NO $, NO performance — so it is safe to TRACK (§11.6 要 tracked 只能放脱敏汇总). additionalProperties:false everywhere + integer-only counts + const track/primary/boundary structurally guarantee no ticker / $ / performance detail can be smuggled into a tracked artifact, so engine/us_short_shadow_compare_summary validates a built / to-be-written summary against THIS schema as the de-identification gate (no §18.0 private-path guard is needed — being provably de-identified is exactly what §11.6 lets land on a tracked path). The divergence keys are const-pinned to the frozen shadow profiles. Structure-only: the as_of strict REAL-date (the pattern only checks 8 digits — it cannot reject an impossible calendar date like 20260231), selected_count == min(top_n,pool_size), and the welded per-profile `overlap+balanced_only == selected_count == overlap+shadow_extra` consistency are enforced by engine/us_short_shadow_compare_summary + tests. The paper-NAV two-way scorecard (§12.2 双向全口径) and the upgrade gate are later §12.2 cuts; this is the selection-level tracked companion of the private persister.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "as_of", "track", "primary_profile",
+    "top_n", "pool_size", "selected_count", "min_comparison_weeks", "divergence", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_shadow_compare_summary"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "track": {"const": "comparison_non_production"},
+    "primary_profile": {"const": "balanced"},
+    "top_n": {"type": "integer", "minimum": 1},
+    "pool_size": {"type": "integer", "minimum": 0},
+    "selected_count": {"type": "integer", "minimum": 0},
+    "min_comparison_weeks": {"type": "integer", "minimum": 1},
+    "divergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme_plus", "theme_aggressive", "theme_off"],
+      "properties": {
+        "theme_plus": {"$ref": "#/definitions/divergence_entry"},
+        "theme_aggressive": {"$ref": "#/definitions/divergence_entry"},
+        "theme_off": {"$ref": "#/definitions/divergence_entry"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "is_buy_advice", "shadow_counts_ship_gate", "changes_primary_selection"],
+      "properties": {
+        "production": {"const": false},
+        "is_buy_advice": {"const": false},
+        "shadow_counts_ship_gate": {"const": false},
+        "changes_primary_selection": {"const": false}
+      }
+    }
+  },
+  "definitions": {
+    "divergence_entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced_only_count", "shadow_extra_count", "overlap_count"],
+      "properties": {
+        "balanced_only_count": {"type": "integer", "minimum": 0},
+        "shadow_extra_count": {"type": "integer", "minimum": 0},
+        "overlap_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

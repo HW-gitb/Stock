@@ -8,6 +8,26 @@
 
 ---
 
+## 2026-06-23 - Codex `审查 PASS` (US-short batch3 §12.2 shadow compare de-id summary)
+
+- **Verdict/Action**: PASS. The tracked summary builds only de-identified divergence counts from a validated §12.2 shadow comparison and preserves the frozen non-production boundary.
+- **Required**: None.
+- **Verify**: target summary+schema 25 OK; full offline `*us_short*` 1453 OK; doc/route/boundary 47 OK; py_compile + JSON parse OK; direct de-id probe rejects ticker/extra keys, bad dates, bad counts, selected/boundary tamper; import probe no lifecycle/provider/DataHub/A-short.
+- **Next**: User may `提交` this US-short batch3 §12.2 de-identified shadow summary slice. Paper-NAV scorecard and upgrade gate remain separate scoped reviews.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 比较轨 shadow 脱敏 tracked 汇总 — schema-first de-id 选股分歧汇总)
+
+- **Verdict/Action**: 起草 §12.2 比较轨脱敏 tracked 汇总(私密 persister 的 tracked 伴侣、schema-first)。新 schema `schemas/us_short_shadow_compare_summary.schema.json`(§11.6 tracked de-id 契约:`additionalProperties:false` 各层 + 整数-only counts + const track/primary/boundary,结构性保证无票名/$/表现可夹带)+ 新 engine `engine/us_short_shadow_compare_summary.py`:`build_shadow_compare_summary(comparison, *, as_of)` 从过 `validate_shadow_comparison` 的比较建 de-id 汇总(拒未验比较)——每 shadow 档选股集分歧 COUNTS(balanced_only/shadow_extra/overlap SIZES、无票名)+ top_n/pool_size/selected_count + 冻结 boundary;`_assert_summary` = schema de-id 门 + 跨字段一致(strict real as_of / selected==min(top_n,pool_size) / 各档 overlap+balanced_only==selected==overlap+shadow_extra,doctored count 过不了);`write_shadow_compare_summary` schema 门后写、**无 §18.0 guard**(可证 de-id=§11.6 tracked-safe)。#24 theme_off 分歧非退化。镜像 `lifecycle_readiness`。README 加路由行。paper-NAV 双向全口径 / 升级闸=后续刀。纯-ish/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 engine target **16** + schema **9 OK**;全离线 `*us_short*`(含 schema 递归)**1453 OK** + schema `*us_short*` **481 OK** 零回归;import 探针 jsonschema=True(de-id 门、合理)其余 heavy=NONE(无 lifecycle/provider/a_short);doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 续刀 = paper-NAV 双向全口径成绩单(接 paper_fill/net_result 算各档 NAV)→ 升级闸防自欺。
+- **Pre-Codex self-review**: A–F。A(类×出口):build(de-id 键/分歧==比较集差/selected/boundary/空池)+ 拒坏输入(未验比较/坏 as_of)+ de-id 门(夹带票名/额外键)+ 一致性(counts 不符/selected 不符/boundary 篡改/缺档)+ write roundtrip/拒坏不落;schema(const/additionalProperties:false/required/整数-only/divergence 恰 3 档/entry 闭世界)。B(连带):新叶子 engine+schema+2 test、无重命名;README **主动加路由行**(前两刀 Codex 点名缺路由→先加);无下游消费者(weekly/升级闸后续)。C(反向):good/空池/roundtrip 全过无误拒。D(歧义):范围只选股层 de-id 汇总(NAV/scorecard/升级闸延后);shadow 档从比较派生(validate 已保证)非 import 私有符号。E:CURRENT 未动。F:`additionalProperties:false` de-id 门、整数-only counts、const track/primary/boundary、内联日期门含 `isascii()`、一致性不变式锁、jsonschema 仅 de-id 门用(不拉 lifecycle/provider/a_short)。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 比较轨脱敏 tracked 汇总(schemas/us_short_shadow_compare_summary.schema.json + engine/us_short_shadow_compare_summary.py + tests/test_us_short_shadow_compare_summary.py + tests/schema/test_us_short_shadow_compare_summary_schema.py + docs/README.md 路由行;复用 §12.2 validate_shadow_comparison)。重点:① schema 是 de-id 门(additionalProperties:false 各层 + 整数-only counts + const track/primary/boundary,无票名/$ 可夹带);② build 拒未过 validate_shadow_comparison 的比较、只出 counts 无票名;③ 一致性不变式(strict real as_of / selected==min(top_n,pool_size) / 各档 overlap+balanced_only==selected==overlap+shadow_extra);④ write schema 门后写、无 §18.0 guard(可证 de-id=tracked-safe)合理;⑤ jsonschema 仅 de-id 门用、不拉 lifecycle/provider/a_short;纯-ish/离线、不交叉 A 股;NAV/升级闸=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 shadow compare store repair)
 
 - **Verdict/Action**: PASS. The store-specific `_check_bucket` closes the prior wrong-date / wrong-namespace gap while preserving canonical and external non-canonical positive paths.
