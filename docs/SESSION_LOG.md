@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-23 - Codex re-`review PASS` (US-short batch3 R2 lifecycle slice 2c banner repair)
+
+- **Verdict/Action**: PASS scoped to the lifecycle banner repair. The prior fail-closed / GBK gap is closed by full eval-result validation plus an ASCII output floor.
+- **Required**: None new. `R-USSHORT-BATCH3-R2-LIFECYCLE-BANNER-FAILCLOSED-GBK-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: render 13 OK (1 expected skip for `evaluate_lifecycle` when `jsonschema` is absent); py_compile OK; doc/route 39 OK; direct probes confirm bad `due_count`, negative total, emoji `as_of` / ids all become ASCII/GBK-safe `UNAVAILABLE`, while valid banners still render. Full `*us_short*` / schema suites are blocked in this Codex runtime by missing `jsonschema` (`find_spec=None`). No provider/live/DataHub/A-share/US-long path was run.
+- **Next**: User may `commit` the reviewed banner slice if the known environment gap is acceptable; readiness artifact / weekly renderer / provider/live/DataHub/Skill/production/A-share/US-long remain gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle slice 2c 横幅 — 全契约校验 + ASCII/GBK 保证)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——横幅信任 eval 结果内容(as_of 干净日期、id 干净 int)没校验(同 partial-input-validation 类)。修:加 `_validated(eval_result)` 渲染前校全契约——dict、total 正 int、due_items/upgrade 为 [1,total] 内唯一正 int 列表、due_count==len(due_items)、len(due)<=total、upgrade⊆due、as_of 缺/unknown 或 strict ASCII 日期——任一违反→UNAVAILABLE(非误导 0-due 横幅);最终横幅 `.encode('ascii')` 兜底保证,畸形非-ASCII as_of/id 绝不漏到 GBK 控制台。模块保持 jsonschema-free + 集成测试懒导入 eval(缺则 skip)让横幅套件最小运行时可跑(补 Codex 验证缺口)。详见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-BANNER-FAILCLOSED-GBK-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: render **13 OK**(+5:contract fail-closed[due_count 缺/两向错配、total 负/0/过小/非int/bool、id 非int/bool/emoji/重复/越界、upgrade 非due、as_of 非ASCII/坏日期]、ASCII+GBK 对 valid+emoji 路径且无泄漏、as_of-absent→unknown);全离线 `*us_short*` **1116 OK**(+5)零回归、schema 465 OK、doc/route 25 OK;探针——due_count 错配/负 total→UNAVAILABLE、emoji as_of/id→UNAVAILABLE+GBK-safe+无泄漏、正控完好;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。2c 续片:readiness artifact(脱敏 tracked,schema-first)+ 周报 lifecycle 节/对账 → weekly_report 渲染器。
+- **Pre-Codex self-review**: A–F。A(类×出口):横幅入契约**整类**校(非只被点名 due_count/总数两腿)——total 符号/类型、id 类型/范围/唯一、due_count 一致、upgrade 子集、as_of ASCII 日期、输出 ASCII 保证全覆盖。B(连带):render docstring + README 2c 行同步「全契约 + 保证 ASCII」;无符号改名。C(反向):正控(各合法 result、as_of-absent、真 `evaluate_lifecycle` 集成)证没误拒合法态;emoji 输入只 UNAVAILABLE 不泄漏。D(歧义):「ASCII-safe」取最强保证=最终 encode 兜底。E:CURRENT 不动(未提交)。F:bool 全 `not isinstance bool`、id 短路守(pos_int 先于 <=total 防 str 比较 TypeError)、最终 ascii encode 兜底、模块 jsonschema-free 可最小运行时跑。
+
+## 2026-06-23 - Codex `review FAIL` (US-short batch3 R2 lifecycle slice 2c banner)
+
+- **Verdict/Action**: FAIL. The runtime banner can treat malformed eval output as a normal "0 due" banner and can emit non-GBK / non-ASCII text.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-BANNER-FAILCLOSED-GBK-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` OK; doc/route 39 OK; `git diff --check` CRLF-only; probes show missing/mismatched `due_count` and negative total render normally, while emoji `as_of` / item ids break GBK. Target/full tests are blocked in this runtime by missing `jsonschema` (`find_spec=None`). No provider/live/DataHub/A-share/US-long path was run.
+- **Next**: Claude should repair only lifecycle banner input-contract + ASCII/GBK fail-closed tests/docs, then return for Codex re-`review`; no readiness artifact / weekly renderer / provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 R2 lifecycle-eval slice 2c 首刀 — GBK-safe 运行时横幅)
+
+- **Verdict/Action**: 收到 `提交并进行下一步`(slice 2b 已提交 `bc74b36f`+closeout `5a8de744`,Codex re-`审查 PASS`)。续 lifecycle 运行时阶段 slice 2c。2c 三面(横幅 + readiness artifact + 周报 reconcile)中,reconcile 需 weekly_report 渲染器在场才能对账→**首刀取独立的 GBK-safe 运行时横幅**(纯投影 `evaluate_lifecycle` 输出,无新 schema)。新 `engine/us_short_lifecycle_render.py`:`lifecycle_banner(eval_result)` → 一行 ASCII(GBK-safe)横幅,露出本轮多少 §13.1 项达复核线 + 编号 + §12.2② 可升级项,带「upgrade needs a USER decision (never auto-production)」声明(只露出、不触发升级);畸形/缺失 eval 结果 fail-closed 成「UNAVAILABLE - treat as NOT clean」,绝不静默空串藏提醒。ASCII-only 保证 GBK 控制台必能编码(§13 不只靠周报文字 / 不靠某 LLM 记得读 register)。纯/离线、不碰 provider/live、不交叉 A 股。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: render **8 测全过**(无 due/列 due 项+用户决定声明/可升级只露不触发、fail-closed[非dict/缺键/畸形/bool-total→UNAVAILABLE 非空串]、GBK-safe[每形 `.encode('gbk')`]、`evaluate_lifecycle` 集成);全离线 `*us_short*` **1111 OK**(+8)零回归、doc/route guard 25 OK;样例横幅直跑确认 ASCII/GBK-safe 清晰。无新 schema。BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(横幅 fail-closed 非空、GBK-safe、upgrade 只露不触发、纯/离线);PASS 后用户 `提交`。2c 续片:readiness artifact(脱敏 tracked 汇总,schema-first)+ 周报 lifecycle 节/顶部横幅 + 数量对账(配 weekly_report.md 渲染器,§11.2)→ weekly_report 渲染器(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):横幅出口[无due/有due/可升级/畸形 UNAVAILABLE]全覆盖、fail-closed 多畸形形。B(连带):新文件自带 docstring;无符号改名;README 加 2c 路由行(无计数,§18.1 #11)。C(反向):正控(合法 eval 结果各形渲染、集成真 `evaluate_lifecycle`)证没误判;畸形只 fail-closed 成 UNAVAILABLE 非空、不误吞合法。D(歧义):「GBK-safe」取最窄安全侧=ASCII-only(必编码),不赌 GBK 子集。E:CURRENT 不动(未提交);README durable 行加。F:bool-total 守(isinstance int and not bool)、非空串 fail-closed、ASCII-only GBK 保证、upgrade 只露出不触发(§12.2 / §18.1 #20 绝不自动生产)。
+
 ## 2026-06-23 - Codex re-`review PASS` (US-short batch3 R2 lifecycle slice 2b load private-path guard repair)
 
 - **Verdict/Action**: PASS scoped to US-short batch3 R2 lifecycle slice 2b. `load_lifecycle_register` now guards `in_path` before read / parse / validate, closing the prior non-private source-load gap. Separate `AGENTS.md` / `tests/test_doc_governance_guard.py` protocol edits are outside this PASS.
