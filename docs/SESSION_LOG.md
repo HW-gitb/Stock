@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 upgrade gate repair)
+
+- **Verdict/Action**: PASS. The upgrade gate now re-derives min weeks and margin-frozen readiness from governance, and refuses look-ahead / non-de-identified observations.
+- **Required**: None new. `R-USSHORT-BATCH3-UPGRADE-GATE-SELF-AUTHORED-READINESS-GAP` is closed in the working tree; see `docs/system_risk_register.md`.
+- **Verify**: target upgrade-gate 30 OK; py_compile OK; doc-governance/route/boundary 47 OK; direct probes reject self-authored ready under current governance, nested ticker/performance obs, obs after eval `as_of`, and non-dict governance; frozen-margin positive still passes; import-heavy probe clean; `git diff --check` CRLF-only; full `*us_short*` discovery not counted in Codex runtime because `jsonschema` is unavailable.
+- **Next**: User may `提交` this US-short batch3 §12.2 upgrade gate slice; forward-observation discovery/accumulation, de-id tracked summary/writer, runtime banner, NAV, provider/live/DataHub/A-share/US-long remain separate scoped work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 upgrade gate — re-derive 权威 + 防 look-ahead/夹带)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required)。judge:四面成立、在 scope(同 lifecycle 权威 re-derive 教训)。修(Codex 窄修):`validate_upgrade_eval(summary, *, governance)` re-derive `margin_frozen`+`min` 断言 == artifact(禁自授权 ready)、build 传 governance 给 validate;obs 须 EXACTLY `{as_of}` 且 `<= eval as_of`(de-id + §12.2 ① 无 look-ahead、两侧);非dict gov → `UpgradeGateError`。详 register。
+- **Required**: `R-USSHORT-BATCH3-UPGRADE-GATE-SELF-AUTHORED-READINESS-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +7 测(self-authored frozen+ready 拒 / 夹带 ticker obs 拒 / obs>as_of look-ahead build+validate 拒 / 非dict gov 拒 + due-ready 仅冻 margin gov);Codex 全部 accepted 探针现 REJECT、正控仍过;target **30 OK**;全离线 `*us_short*` **1539 OK** 零回归;boundary+doc+route **47 OK**;import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:re-derive(frozen/min)+ obs 闭世界 + look-ahead(build+validate)+ 非dict gov + 既有闭世界/boundary/status/count/order 正控。B:模块+validator+test docstring + README 契约行同步;**不改 governance preset**(margin 经未来 reviewed 冻结)。C:accumulating/due-pending(当前 gov)/due-ready(冻 margin gov)/good 仍过无误拒。D:按 Codex 窄修(re-derive+obs 安全,不动 boundary/纯/无自动切产)。E:CURRENT 未动。F:re-derive 用 `is`(bool 身份)、obs `set=={as_of}`+`<=as_of`、`_require_gov` 非dict 拒、纯无 jsonschema;详 register。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 upgrade gate)
+
+- **Verdict/Action**: FAIL. The upgrade-gate build path is pure/offline and the target tests pass, but the reusable validator still lets the readiness artifact self-author upgrade readiness and carry non-de-identified / future observations.
+- **Required**: `R-USSHORT-BATCH3-UPGRADE-GATE-SELF-AUTHORED-READINESS-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target upgrade-gate 23 OK; py_compile OK; direct probes accepted nested ticker/performance smuggling, an observation after the eval `as_of`, and a self-authored `comparison_win_margin_frozen=True` + `review_due_ready` artifact under the current no-margin governance; import-heavy probe clean; `git diff --check` CRLF-only.
+- **Next**: Claude repair only the upgrade-gate validator/build contract and direct tests/docs/register, then return for Codex re-`审查`; do not commit or start discover/accumulate/banner/de-id writer/NAV/provider/live/DataHub/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 升级闸防自欺 upgrade gate — pure readiness decision capstone)
+
+- **Verdict/Action**: 起草 §12.2 升级闸防自欺(pure readiness 决定、§12.2 capstone,镜像 A 股 `runners/a_short_overlay_eval` 防自欺结构)。新 engine `engine/us_short_upgrade_gate.py`:`build_upgrade_eval(forward_observations, *, as_of, governance)` 数 forward(live 决策当日·PIT·无 look-ahead)周度两轨对比观测 vs 冻结 `min_comparison_weeks`(12,scoring_profile governance),由 `margin_frozen` 闸住(**§12.2 ②**:胜出 margin 仅当 governance 有**数值有限 `comparison_win_margin`** 才算冻——当前 governance 无 → 即便到/超 12 周也**绝不授权升级**,防"先看数据再定胜出线")。`decision_status` ∈ accumulating / review_due_margin_pending / review_due_ready(后者=可**提请**复审、用户决定、绝不自动切生产 §12)。**§12.2 ③**:forward obs 必须严格升序+唯一(陈旧/错位/重复周不能推进时钟)。de-id 输出(决策周日期+计数、无票名)+ 冻结 non-production boundary;`validate_upgrade_eval` = closed-world(exact 键集 + boundary + strict as_of + n==len + 升序唯一 + due==(n≥min) + status 与(due,margin)一致)。README 加路由行。discover/accumulate(扫私密 shadow_compare 桶,①③ artifact 层)/de-id tracked 汇总/运行时横幅(④)= 后续刀;**不改 governance preset**(margin 经未来 reviewed 改动冻结)。纯/离线、无 jsonschema/provider、不交叉 A 股。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **23 OK**(readiness:accumulating/due-margin-pending[当前 governance]/due-ready[冻 margin]/over-min-still-pending/empty;margin_frozen:数值 vs 缺/None/串/bool/nan/真 preset;forward-obs 契约:out-of-order/重复/坏 as_of/非dict/非list/坏 as_of 参/坏 gov min 拒;closed-world validator:extra/boundary/doctored due/status/count/margin-status 拒);全离线 `*us_short*` **1532 OK** 零回归;import heavy=NONE;doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 升级闸续刀 = forward-obs discover/accumulate(扫私密桶)+ de-id tracked 汇总 + 运行时横幅;另多日 held net(#8,有 exit_reason 跨模块连带)、回撤(NAV 路径)、weekly 接线(batch4-ish)= 批3 余项。
+- **Pre-Codex self-review**: A–F。A(类×出口):readiness 全态 + margin_frozen 全类 + forward-obs 契约全坏形 + closed-world validator 全篡改。B(连带):新叶子、无重命名;README **主动加路由行**;读 scoring_profile governance 单源、**不改 preset**;无下游消费者(discover/横幅后续)。C(反向):good/accumulating/empty/真 preset(未冻→pending)仍过无误拒。D(歧义):margin=数值有限才冻(防自欺保守默认,绝不授权直到 reviewed 冻结),明记;升级仅 surface、用户决定。E:CURRENT 未动。F:closed-world(开局即闭)、内联日期门含 isascii、严格升序唯一 obs(③)、margin numeric-finite 非 bool/nan、min_weeks governance-driven 可测、纯无 jsonschema。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 升级闸防自欺 upgrade gate(engine/us_short_upgrade_gate.py + tests/test_us_short_upgrade_gate.py + docs/README.md 路由行;读 scoring_profile governance 单源、镜像 a_short_overlay_eval、无新 schema、不改 preset)。重点:① §12.2 ② margin_frozen 仅数值有限 comparison_win_margin 才算冻(当前 governance 无→绝不授权升级,防先看数据再定胜出线);② decision_status accumulating/review_due_margin_pending/review_due_ready 与(due,margin)一致、升级仅 surface 用户决定绝不自动切生产;③ §12.2 ③ forward obs 严格升序+唯一(陈旧/错位/重复周不推进时钟);④ validate_upgrade_eval closed-world(exact 键集+boundary+一致性,doctored/smuggled 拒)、non-production boundary 全 False;⑤ de-id 无票名、纯/离线无 jsonschema/provider、不交叉 A 股、不改 governance preset;discover/accumulate/横幅/de-id 汇总=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 two-way scorecard comparison repair)
 
 - **Verdict/Action**: PASS. The scorecard comparison now enforces the same fixed-TopN `selected_total` denominator across all four embedded profile scorecards, while preserving closed-world deltas and the paper-only / ship-gate-isolation boundary.
