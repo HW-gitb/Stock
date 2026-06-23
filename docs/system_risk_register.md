@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-SHADOW-COMPARE-CORE-SCORE-DRIFT-GAP - shadow compare can validate frozen weights while core_score scores with drifted weights
 
-- **Status**: resolved (Codex re-`审查 PASS` 2026-06-23; working tree, pending user `提交`)
+- **Status**: resolved@`b579a957` (Codex re-`审查 PASS` 2026-06-23)
 - **Codex closure (2026-06-23)**: PASS. Target shadow tests 37 OK; direct probes reject output/governance/core_score drift; doc/route/boundary guards 47 OK; py_compile OK; import-heavy probe loads no `jsonschema` / lifecycle / provider modules; `git diff --check` clean except CRLF warnings. Broad `*us_short*` was not rerun in the reviewer environment because bundled Python lacks `jsonschema` and no network install is authorized.
 - **Resolution (2026-06-23, working tree)**: Locked the scorer dependency (Codex narrow option b). `_check_governance` now also asserts `engine.us_short_core_score.profile_weights(name) == _FROZEN_PROFILES[name]["weights"]` for every profile BEFORE any `_select`, so a drift in core_score's separately-loaded `_PROFILES` (distinct from this module's) fails closed instead of producing a frozen-looking artifact scored with drifted weights. Added `test_scorer_weight_drift_rejected` mutating `engine.us_short_core_score._PROFILES` independently of `engine.us_short_shadow_compare._PROFILES` → build rejects; prior output/governance tamper tests + positive controls kept. Direct probe: Codex's core_score-only `theme_off` weight drift `{0.0,1.0,0.0}` now REJECTS; good still builds. target shadow tests 37 OK; py_compile OK; import probe heavy=NONE (jsonschema / lifecycle not loaded). Module docstring synced.
 - **Severity**: P1 (US-short §12.2 shadow comparison evidence / attribution integrity before private persistence, scorecards, lifecycle upgrade review, or provider/live work consume this artifact).
@@ -50,7 +50,7 @@ Status:
 
 ### R-USSHORT-BATCH3-SHADOW-COMPARE-SESSIONLOG-MINIMAL-TEMPLATE-GAP - shadow compare repair handoff breaks the review-cycle minimal template guard
 
-- **Status**: resolved (Codex re-`审查 PASS` 2026-06-23; working tree, pending user `提交`)
+- **Status**: resolved@`b579a957` (Codex re-`审查 PASS` 2026-06-23)
 - **Codex closure (2026-06-23)**: PASS. The top repair entry now stays within the minimal review-cycle template and `tests.test_doc_governance_guard` passes; no full repair narrative is duplicated in SESSION_LOG.
 - **Resolution (2026-06-23, working tree)**: Shortened the prior Claude `修复` entry in `docs/SESSION_LOG.md` to the minimal review-cycle template (Verdict/Action, Required, Verify, Next, Pre-Codex self-review — every bullet ≤ MAX_BULLET_LEN 500), moving the full narrative to this register; the new `修复` entry for the core-score-drift fix uses the same minimal template. `tests.test_doc_governance_guard` review-cycle minimal-template + draft-handoff-proof guards pass; no register narrative duplicated in SESSION_LOG.
 - **Severity**: P2 (cross-LLM review closeout / route-doc process hygiene; blocks a clean review/commit closeout but does not change business scoring behavior).
@@ -65,7 +65,7 @@ Status:
 
 ### R-USSHORT-BATCH3-SHADOW-COMPARE-CONTRACT-ROUTE-GAP - shadow compare accepts drifted profile contracts and is missing route-doc ownership
 
-- **Status**: resolved (Codex re-`审查 PASS` 2026-06-23; working tree, pending user `提交`)
+- **Status**: resolved@`b579a957` (Codex re-`审查 PASS` 2026-06-23)
 - **Codex closure (2026-06-23)**: PASS. Frozen profile contract and README routing fixes remain accepted under the later scorer-dependency re-review; output and runtime governance tamper probes now reject, and the route row is stable.
 - **Resolution (2026-06-23, working tree)**: Const-pinned the reviewed §4.2/§12.2 profile contract in `engine/us_short_shadow_compare.py` (`_FROZEN_PROFILES`: per-profile weights + role + live_eligible + shadow_only) and runtime-enforced it via `_assert_frozen_profile` on BOTH the loaded preset (`_check_governance`) AND the emitted artifact (`validate_shadow_comparison`); a const self-check guards the sole-primary + `theme_off` theme==0 (#24) baseline. The previously-accepted mutations now REJECT — output `theme_off.weights.theme=0.99`, `theme_plus.role="primary_shadow_weird"`, `theme_plus.shadow_only="yes"`, and runtime `theme_off` weight drift `{0.50,0.25,0.25}` — confirmed by direct probe; the good artifact still passes (no false-positive). Added adversarial tests (output weight/role/flag tamper + runtime weight drift) + positive controls. Added a stable `docs/README.md` route row for `engine/us_short_shadow_compare.py` + `tests/test_us_short_shadow_compare.py` (no exact test counts / no transient review-commit wording). target shadow tests 36 OK; full offline `*us_short*` 1400 OK (zero regression); py_compile OK; import probe heavy=NONE (still jsonschema-free). Module + test docstrings synced to the const-pin behavior.
 - **Severity**: P1 (US-short §12.2 shadow comparison evidence / attribution integrity before private persistence, NAV scorecards, lifecycle upgrade review, or provider/live work consume this artifact).
