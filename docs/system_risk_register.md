@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-WEEKLY-REPORT-SURFACE-INVARIANT-GAP - weekly_report renderer accepts blank report surfaces as valid
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23 → Codex re-`审查 PASS` 2026-06-23; current working tree pending user `提交`).
+- Status: **resolved** (committed in `0e55bb23`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (official weekly report / lifecycle evidence-clock surface integrity before the report renderer is committed or consumed by later batch3 output, paper, comparison, or pipeline slices).
 - Source: Codex strict review of US-short batch3 weekly_report.md renderer first cut (`engine/us_short_weekly_report_renderer.py`, `tests/test_us_short_weekly_report_renderer.py`, `docs/README.md` route row).
 - Scope reviewed: current working tree after commits `d89e245e` / `6531ecb9`, with modified `docs/README.md`, `docs/SESSION_LOG.md`, and untracked `engine/us_short_weekly_report_renderer.py`, `tests/test_us_short_weekly_report_renderer.py`; design authority `docs/us_short_system_design.md` §11.2 / §13 / §18.1 #20-#21 / §18.2; frozen contract `presets/us_short_weekly_report_contract_20260620.json`; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
