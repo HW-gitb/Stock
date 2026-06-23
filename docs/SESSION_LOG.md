@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 coverage honesty validator repair)
+
+- **Verdict/Action**: PASS. `validate_row_coverage` now treats `coverage_gap_tags` as contract tags, not arbitrary labels: each tag must be `<gating-category>:<non-ok-status>`, category must be unique and in analyst / sec_parse / event, status must be missing / restricted / blocked, and `coverage_status` must exactly equal the worst-of tag severity.
+- **Required**: None new. `R-USSHORT-BATCH3-COVERAGE-HONESTY-GAP-TAG-VALIDATOR-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: coverage target 25 OK; `py_compile` OK; direct probes reject the prior arbitrary / ok / unknown / duplicate / understate / overstate cases and accept valid positives; doc/route/boundary guards 47 OK; `git diff --check` CRLF-only; BOM/FFFD false; broad US-short discover remains unverified in this Codex runtime because `jsonschema` is missing (36 import/runtime errors, no assertion failures observed before completion).
+- **Next**: User may `提交`; later hot_excluded enrichment / observe_reason_type / R3 paper-comparison / provider-live-DataHub-Skill-production / A-share / US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 coverage honesty §11.5 — gap_tag 契约 + worst-of 严重度一致性)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——`build_row_coverage` 派生诚实,但 `validate_row_coverage`(hand-built/上游记录的门)只校 gap_tags 非空白 str + full⇔empty,**不**解析 `<类>:<status>`/不校类·status/不重算 worst-of → 可塞 `made_up_gap`/`analyst:ok` 或把 `event:blocked` 谎报 partial,瓦解 §11.5 诚实。按 Required 强化:每 tag 解析为契约 `<gating类>:<非ok-status>`(类∈3 gating、status∈missing/restricted/blocked、类唯一),coverage_status 须 == worst-of(冻结列序,经共享 `_coverage_rank`);full⇔empty/enum/builder/类完整性不动。
+- **Required**: `R-USSHORT-BATCH3-COVERAGE-HONESTY-GAP-TAG-VALIDATOR-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: 新增 +5、target **25 OK**;Codex 5 探针(made_up_gap/analyst/analyst:ok/event:blocked-under-partial/sec_parse:restricted-under-partial)全 REJECT;全离线 `*us_short*` **1238 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ observe_reason_type(#10 余)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):gap_tag 整类——无冒号/多冒号/未知类/未知 status/`ok`/重复类全拒,严重度 under+over 双向拒。B(连带):`_coverage_rank` 单一严重度源、deriver+validator 共用(无第二映射);README 路由行同步 gap-tag 契约+worst-of;无符号改名。C(反向):正控——合法 worst-of(partial/restricted/blocked 各配相应 tag)受、builder 输出仍过门(含全-ok→full 空 gap),未误拒。D(歧义):gap status 取 §11.5 非ok 三态、worst-of 取冻结 coverage_status 列序。E:CURRENT 未动。F:`tag.split(':')` len!=2 拒;复用冻结 enum 读。**教训:派生器诚实≠校验器诚实;standalone 门须自校契约+一致性、别只信 deriver。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 coverage honesty validator)
+
+- **Verdict/Action**: FAIL. `build_row_coverage` derives worst-of correctly, but `validate_row_coverage` accepts arbitrary / malformed / severity-mismatched gap tags, so a hand-built row can understate `blocked` or `restricted` as `partial`.
+- **Required**: `R-USSHORT-BATCH3-COVERAGE-HONESTY-GAP-TAG-VALIDATOR-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: coverage target 20 OK; doc/route/boundary guards 47 OK; `py_compile` OK; `git diff --check` CRLF-only; direct probes accepted `made_up_gap`, `analyst`, `analyst:ok`, `event:blocked` under partial, and `sec_parse:restricted` under partial.
+- **Next**: Claude should repair only coverage gap-tag parsing / severity consistency and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 coverage honesty §11.5 — 逐行覆盖分类器 + fail-closed 诚实门)
+
+- **Verdict/Action**: 起草 batch3 续片 coverage honesty(§11.5,#10 余)。`build_row_coverage` 逐行分类 → `{row_source, coverage_status, coverage_gap_tags}`:enum 读**冻结 action_table `design_locked_enums`**(单一来源;coverage_status 列序=严重度 full<partial<restricted<blocked)。行须报齐 §11.5 三 gating 类(analyst/sec_parse/event,status∈{ok,missing,restricted,blocked};缺/多类拒——没查全不能评分);coverage_status=worst-of(镜像 provider-health),gap_tags 列非-ok 类。`validate_row_coverage`=诚实门:双向不变式 `full ⇔ 无 gap`(缺数据不写 clean、降级须命名 gap)。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **20 OK**;全离线 `*us_short*` **1233 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob、零越界);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀;PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ observe_reason_type(#10 余)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):malformed 整类扫净——row_source 闭世界、data_checks 非dict/缺类/多类/坏 status(bool/None/''/'clean')拒;validate 门 bad status·source/非list·blank gap/非dict 拒。B(连带):enum 读冻结 design_locked_enums 单源;新 engine 入 boundary glob(已验);README 行。C(反向):正控 all-ok→full 空 gap、非-full+gap 受;双向不变式(full+gap 拒、降级无 gap 拒)。D(歧义):三 gating 类取 §11.5 prose、worst-of 严重度取冻结 coverage_status 列序。E:CURRENT 未动。F:gap_tags 冻结类序确定;诊断 `sorted(map(str,...))` 防混合键。**镜像:enum=renderer、worst-of=provider-health。**
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 exclusion_summary private-detail repair)
 
 - **Verdict/Action**: PASS. The private-detail contract now closes the malformed-row and mixed-type-key diagnostic gaps: private rows require valid ticker / reason shape, and all three mixed-key diagnostics reject with `ExclusionSummaryError` instead of raw `TypeError`.
