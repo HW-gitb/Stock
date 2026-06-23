@@ -44,7 +44,7 @@ def _fields() -> list:
 def _strict_yyyymmdd(s) -> bool:
     # mirrors engine.us_short_lifecycle_eval._strict_yyyymmdd (the canonical lifecycle date gate); inlined so this
     # pure validator stays importable on a minimal runtime (no jsonschema pull-in, like us_short_lifecycle_render)
-    if not (isinstance(s, str) and len(s) == 8 and s.isdigit()):
+    if not (isinstance(s, str) and len(s) == 8 and s.isascii() and s.isdigit()):  # isascii() rejects Unicode digits (Arabic-Indic / fullwidth) that int() would still coerce
         return False
     try:
         datetime.date(int(s[:4]), int(s[4:6]), int(s[6:8]))

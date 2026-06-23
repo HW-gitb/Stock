@@ -54,6 +54,13 @@ class Dates(unittest.TestCase):
             with self.assertRaises(pc.PriceClockError, msg="nwt=%r" % (bad,)):
                 pc.validate_price_clock(_clock(nwt=bad))
 
+    def test_unicode_digit_dates_refused(self):  # R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP: isascii() guard
+        self.assertTrue(pc._strict_yyyymmdd("20260619"))  # ASCII positive control
+        for bad in ("٢٠٢٦٠٦١٩", "２０２６０６１９"):  # Arabic-Indic / fullwidth "20260619" — pass isdigit() but not isascii()
+            self.assertFalse(pc._strict_yyyymmdd(bad), repr(bad))
+            with self.assertRaises(pc.PriceClockError):
+                pc.validate_price_clock(_clock(pdt=bad))
+
 
 class Ordering(unittest.TestCase):
     def test_price_data_must_be_strictly_before_decision(self):

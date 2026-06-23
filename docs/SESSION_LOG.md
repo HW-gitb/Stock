@@ -8,6 +8,26 @@
 
 ---
 
+## 2026-06-23 - Codex re-review PASS (US-short batch3 price_clock DATE-ASCII repair)
+
+- **Verdict/Action**: PASS. The price-clock inline date helper now restores strict ASCII `YYYYMMDD` semantics without changing the rest of the §21 clock ordering/session contract.
+- **Required**: None new. `R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: target price-clock tests **14 OK**; `py_compile` OK; doc/route/boundary suites **47 OK**; direct import probe showed no `jsonschema` / `us_short_lifecycle_eval`; direct Unicode probe accepts ASCII and rejects Arabic-Indic/fullwidth dates through helper and validator; whole-class `engine/` scan for `len(s)==8` + `s.isdigit()` without `isascii()` returned **0**; no provider/live/network/real-data/DataHub/Skill/production/A-share/US-long run.
+- **Next**: User may `提交` this price-clock DATE-ASCII slice; continue later batch3 work only through the next scoped review cycle.
+
+## 2026-06-23 — Claude `起草` (US-short price_clock DATE-ASCII gap 修 — 内联日期门加 isascii;闭 registered finding)
+
+- **Verdict/Action**: 起草小刀:闭上刀连带登记的 `R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP`(committed price_clock 内联 `_strict_yyyymmdd` 漏 `s.isascii()`,同 ledger 那条)。`engine/us_short_price_clock.py` 同一行加 `s.isascii()`——Arabic-Indic/fullwidth 8 位数字现拒(isdigit 收但 isascii 不收、int() 本会 coerce)。**whole-class 收尾**:全 engine 再 grep `len==8 and isdigit()` 无 isascii = 0(两份内联拷贝都修、canonical lifecycle 本有)。仅严格化日期门、无行为/其它面改。
+- **Required**: 无新(闭 registered `R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP`,待 Codex `审查`)。
+- **Verify**: price_clock target **14 OK**(+1:helper Arabic-Indic/fullwidth 拒 + ASCII 正控 + validate 经 pdt 门拒);全离线 `*us_short*` **1364 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:paper 多日平仓 realized、比较轨 shadow #13/#24。
+- **Pre-Codex self-review**: A–F。A:Unicode 数字(Arabic-Indic/fullwidth)经 helper + validate pdt 门双拒、ASCII 正控收。B:whole-class——全 engine grep 同款 isdigit-无-isascii=0(主动收尾);README「strict real dates」仍准(isascii 实现细节、未 stale)。C:正控 ASCII 收、14 OK 不回归。D:无。E:CURRENT 未动。F:`isascii()+isdigit()`=ASCII 0-9。**这次主动收尾 whole-class(上刀按边界登记此条、现专刀闭)。**
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short price_clock DATE-ASCII gap 修(engine/us_short_price_clock.py + tests/test_us_short_price_clock.py;闭 register R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP)。重点:① `_strict_yyyymmdd` 加 isascii() 后 Arabic-Indic/fullwidth 拒、ASCII 收、严格语义恢复 ② 仅日期门严格化、无行为/其它面回归 ③ whole-class 全 engine 无残同款漏 ④ 纯/离线、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-review PASS (US-short batch3 paper ledger DATE-ASCII repair)
 
 - **Verdict/Action**: PASS. The paper-ledger inline date helper now restores strict ASCII `YYYYMMDD` semantics without reintroducing the lifecycle/jsonschema import coupling; prior ledger Required items are closed for this slice.
