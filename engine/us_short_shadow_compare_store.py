@@ -11,7 +11,9 @@ only on a gitignored private path (``state/us_short/shadow_compare_private/``). 
 PERSISTER, mirroring ``engine.us_short_lifecycle_store`` / ``engine.us_short_paper_ledger``:
 
   * ``write_shadow_comparison`` wires the §18.0 P0 fail-closed private-path guard (``reject_nonprivate_output_path``)
-    BEFORE any validate / write, and persists a DATED record ``{as_of, comparison}`` only after the record (strict
+    BEFORE any validate / write, and persists a DATED record ``{as_of, comparison, observation_kind}`` (the
+    ``observation_kind`` = the §12.2 ① live-forward provenance — only ``live_forward`` records count toward the
+    upgrade clock; replay / backfill / manual carry a non-live kind and are skipped) only after the record (strict
     real ``as_of`` + the §12.2 projection contract via ``validate_shadow_comparison``) validates — a malformed
     comparison / date is refused before any file side effect;
   * ``load_shadow_comparison`` applies the SAME §18.0 guard to the SOURCE first (SYMMETRIC — a private artifact is
@@ -50,8 +52,17 @@ from engine.us_short_private_paths import reject_nonprivate_output_path
 ROOT = Path(__file__).resolve().parent.parent
 SHADOW_COMPARE_PRIVATE_DIR = ROOT / "state" / "us_short" / "shadow_compare_private"  # gitignored private location (§12.2 / §11.6)
 
-_RECORD_KEYS = frozenset({"as_of", "comparison"})
+_RECORD_KEYS = frozenset({"as_of", "comparison", "observation_kind"})
 _CANONICAL_BUCKET_RE = re.compile(r"^shadow_comparison_\d{8}\.json$")  # the canonical dated bucket filename shape
+
+# §12.2 ① live-forward provenance: ONLY a record explicitly captured by a genuine live decision-week forward run
+# (``LIVE_FORWARD``) counts toward the upgrade clock (engine.us_short_upgrade_obs_discover). Historical replay /
+# research backfill / manual copies are §2.1 research-only and must NOT advance forward evidence — they carry a
+# non-live kind and are SKIPPED by the discover; a bucket with no / an unknown kind fails the record gate
+# (fail-closed). Date ordering alone can't tell a true live-forward bucket from a today-produced historical one,
+# so this auditable marker is required (mirrors the A-share pit_source.concept_membership == 'forward' gate).
+LIVE_FORWARD = "live_forward"
+_OBSERVATION_KINDS = frozenset({LIVE_FORWARD, "historical_replay", "research_backfill", "manual"})
 
 
 class ShadowCompareStoreError(ShadowCompareError):
@@ -77,11 +88,13 @@ def _strict_yyyymmdd(s) -> bool:
 
 
 def _validate_record(record) -> None:
-    """Fail-closed §12.2 shadow_comparison record gate: a dict carrying EXACTLY ``{as_of, comparison}`` (closed
-    world), a strict real ``as_of`` (YYYYMMDD), and a ``comparison`` that passes the §12.2 projection contract
+    """Fail-closed §12.2 shadow_comparison record gate: a dict carrying EXACTLY ``{as_of, comparison,
+    observation_kind}`` (closed world), a strict real ``as_of`` (YYYYMMDD), an ``observation_kind`` in the frozen
+    set (the §12.2 ① live-forward provenance — ``live_forward`` is the only kind the upgrade clock counts; a no /
+    unknown kind fails closed here), and a ``comparison`` that passes the §12.2 projection contract
     (``validate_shadow_comparison`` — the frozen track / boundary / profile const-pin / deterministic selection).
-    Raises ``ShadowCompareStoreError`` on a bad record shape / date, ``ShadowCompareError`` on a bad comparison —
-    the persister never trusts the producer."""
+    Raises ``ShadowCompareStoreError`` on a bad record shape / date / kind, ``ShadowCompareError`` on a bad
+    comparison — the persister never trusts the producer."""
     if not isinstance(record, dict):
         raise ShadowCompareStoreError("shadow_comparison record must be a dict, got %r" % (type(record).__name__,))
     if set(record) != _RECORD_KEYS:
@@ -90,6 +103,9 @@ def _validate_record(record) -> None:
     as_of = record["as_of"]
     if not (isinstance(as_of, str) and _strict_yyyymmdd(as_of)):
         raise ShadowCompareStoreError("shadow_comparison as_of must be a strict real YYYYMMDD, got %r" % (as_of,))
+    kind = record["observation_kind"]
+    if kind not in _OBSERVATION_KINDS:
+        raise ShadowCompareStoreError("shadow_comparison observation_kind must be one of %s, got %r" % (sorted(_OBSERVATION_KINDS), kind))
     validate_shadow_comparison(record["comparison"])  # the §12.2 projection contract (raises ShadowCompareError)
 
 
@@ -131,17 +147,20 @@ def _check_bucket(path, as_of, *, where) -> None:
             "as_of %r (桶名 ≠ as_of) — align the filename or the record date" % (where, p.name, as_of))
 
 
-def write_shadow_comparison(comparison, out_path, *, as_of):
+def write_shadow_comparison(comparison, out_path, *, as_of, observation_kind=LIVE_FORWARD):
     """Persist a §12.2 shadow comparison (ticker-bearing, private-tier §11.6) as a DATED record
-    ``{as_of, comparison}`` to a gitignored private path. Returns the written ``Path``.
+    ``{as_of, comparison, observation_kind}`` to a gitignored private path. Returns the written ``Path``.
 
-    The §18.0 P0 fail-closed private-path guard runs BEFORE any validate / write (the comparison carries ticker
-    names), so a relative / non-gitignored in-repo destination is refused (``PrivatePathError``). The record (strict
-    real ``as_of`` + the §12.2 ``validate_shadow_comparison`` contract) is then validated, so a malformed comparison
-    / date is refused before any file side effect. Pass ``shadow_comparison_path(as_of)`` (canonical dated bucket)
-    or an external absolute path."""
+    ``observation_kind`` = the §12.2 ① live-forward provenance (default ``LIVE_FORWARD`` — set by a genuine live
+    decision-week forward run; a historical replay / research backfill / manual copy MUST pass the matching
+    non-live kind so it is NOT counted toward the upgrade clock, §2.1). The §18.0 P0 fail-closed private-path guard
+    runs BEFORE any validate / write (the comparison carries ticker names), so a relative / non-gitignored in-repo
+    destination is refused (``PrivatePathError``). The record (strict real ``as_of`` + a frozen ``observation_kind``
+    + the §12.2 ``validate_shadow_comparison`` contract) is then validated, so a malformed comparison / date / kind
+    is refused before any file side effect. Pass ``shadow_comparison_path(as_of)`` (canonical dated bucket) or an
+    external absolute path."""
     reject_nonprivate_output_path(out_path)  # §18.0 P0 guard — before validate / write / any side effect
-    record = {"as_of": as_of, "comparison": comparison}
+    record = {"as_of": as_of, "comparison": comparison, "observation_kind": observation_kind}
     _validate_record(record)
     _check_bucket(out_path, as_of, where="write")  # §2.1 桶名=as_of + US-short shadow-compare namespace (beyond the privacy guard)
     out_path = Path(out_path)
@@ -152,7 +171,7 @@ def write_shadow_comparison(comparison, out_path, *, as_of):
 
 def load_shadow_comparison(in_path, *, expected_as_of=None) -> dict:
     """Load + re-validate a persisted shadow_comparison record; fail closed on a stale / bad bucket. Returns the
-    ``{as_of, comparison}`` record dict.
+    ``{as_of, comparison, observation_kind}`` record dict.
 
     SYMMETRIC with the persister: the §18.0 P0 guard runs FIRST on ``in_path`` (a private artifact is read only
     from a provably-private source — a relative / non-gitignored in-repo source is refused before any read, so a

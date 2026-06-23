@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 upgrade-obs discover live-forward provenance repair)
+
+- **Verdict/Action**: PASS. The store record now carries `observation_kind`, and upgrade-observation discover counts only `LIVE_FORWARD` records after the existing private-path / bucket / stale / comparison-contract gates.
+- **Required**: None new. `R-USSHORT-BATCH3-UPGRADE-OBS-DISCOVER-LIVE-PROVENANCE-GAP` is closed in the working tree; see `docs/system_risk_register.md`.
+- **Verify**: target store+discover 40 OK; store+discover+upgrade-gate 70 OK; boundary+doc+route 47 OK; py_compile OK; probes: backfill/no-marker/non-live/bad-kind/future count 0, `LIVE_FORWARD` count 12; import-heavy `NONE`; diff-check CRLF-only; full `test_us_short*.py` not counted because this Python lacks `jsonschema`.
+- **Next**: User may `提交` this US-short batch3 §12.2 upgrade-observation discover repair; de-id summary, NAV/#8, weekly wiring, provider/live/DataHub/A-share/US-long remain separate.
+
+## 2026-06-23 – Claude `修复` (US-short 批3 §12.2 upgrade-obs discover — live-forward provenance)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required)。judge:成立、在 scope——discover 只按日期+契约收桶、证不了 live-forward(probe:12 个 backfill 桶把闸推到 due;同 A 股 `concept_membership=='forward'`)。修(Codex 窄修、boundary 允许动 store):store 记录加 `observation_kind`(冻结集、`_validate_record` 校、write 默认 `LIVE_FORWARD`);discover 仅数 `observation_kind==LIVE_FORWARD`、replay/backfill/manual/无标记 SKIP。详 register。
+- **Required**: `R-USSHORT-BATCH3-UPGRADE-OBS-DISCOVER-LIVE-PROVENANCE-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: store+discover +5 测(provenance write/round-trip/bad-kind;non-live skip;12-backfill not-due);Codex 12-backfill 探针现 0 计入/not-due、live_forward 仍计;record-contract 连带(store/discover 测、README 双行、docstring)全同步;target store+discover **40 OK**;全离线 `*us_short*` **1559 OK** 零回归;boundary+doc+route **47 OK**;import heavy=NONE(仍 jsonschema-free)。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:provenance(write bad-kind/default/non-live roundtrip)+ discover live-gate(non-live skip/12-backfill not-due)+ 既有 skip 正控。B(连带):record-contract 改连带——store `_validate_record`/write + discover filter + 两测 + README 双行 + docstring 全同步。C(反向):live_forward 计入、干净桶仍收、空 dir→[]。D:Codex 窄修(record provenance + discover gate,镜像 a_short)。E:CURRENT 未动。F:`observation_kind` 冻结集闭世界、store+discover 仍纯无 jsonschema;详 register。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 upgrade-gate forward-obs discover)
+
+- **Verdict/Action**: FAIL. The discover path reuses store guards, but it cannot prove counted buckets are live-forward rather than historical/manual backfill.
+- **Required**: `R-USSHORT-BATCH3-UPGRADE-OBS-DISCOVER-LIVE-PROVENANCE-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target discover 8 OK; store+gate+discover 65 OK; doc/route/boundary 47 OK; py_compile OK; direct probe showed 12 unmarked buckets advance the gate; import probe clean; `jsonschema` unavailable; `git diff --check` CRLF-only.
+- **Next**: Claude repair only live-forward provenance for upgrade-observation discovery and direct docs/tests/register, then return for Codex re-`审查`; do not commit or start de-id summary/NAV/#8/weekly/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 upgrade-gate forward-obs discover — ①③ artifact 层、升级闸输入管道)
+
+- **Verdict/Action**: 起草升级闸 forward-obs discover(①③ artifact 层、升级闸输入管道,镜像 A 股 `a_short_overlay_eval.discover_forward_overlays`)。新 engine `engine/us_short_upgrade_obs_discover.py`:`discover_forward_observations(run_as_of, *, buckets_dir)` 扫私密 shadow_compare 桶(默认 `SHADOW_COMPARE_PRIVATE_DIR`)收喂 `build_upgrade_eval` 的 forward(live 决策周·PIT)观测——每个候选 `shadow_comparison_<as_of>.json` 经 `store.load_shadow_comparison(path, expected_as_of=run_as_of)` 加载,故 §18.0 guard + 记录/§12.2 比较契约 + 桶名==内容 as_of + 陈旧门(桶 as_of 晚于 run_as_of = look-ahead,§12.2 ①③)全生效。畸形/陈旧/错位/不可读/非 canonical 桶一律 **SKIP(fail-closed,绝不把坏证据计入升级时钟)**。返回 de-id `{as_of}`(仅决策周日期)升序+唯一。复用我建的 store(无 jsonschema)。README 加路由行。**§12.2 升级闸现 end-to-end:discover(输入)→ gate(决定)→ banner(露出 ④)。** 续刀 = de-id tracked 汇总(可选);另 #8 多日 held net(跨模块)、回撤(需 #8)、weekly 接线(batch4-ish)= 批3 余项。纯 IO/离线、不交叉 A 股。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **8 OK**(discover 干净桶升序+de-id;skip future/stale[look-ahead]/畸形JSON/错位[filename≠content]/非canonical;空+不存在 dir→[];坏 run_as_of 拒;集成喂 build_upgrade_eval);全离线 `*us_short*` **1554 OK** 零回归;import heavy=NONE;doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 升级闸 end-to-end 完;续 = de-id tracked 汇总(可选)/banner README Optional 对齐;批3 余项 = #8 多日 held net、回撤、weekly 接线。
+- **Pre-Codex self-review**: A–F。A(类×出口):discover(干净升序 de-id)+ skip(future/stale/畸形/错位/非canonical)+ 空/不存在 dir + 坏 run_as_of + 集成。B(连带):新叶子、无重命名;README **主动加路由行**;复用 store(§18.0 guard+validate+stale+bucket)+ shadow_compare 错误基类;喂 gate(下游)。C(反向):干净桶被收、坏桶被 skip(非误拒整批);空 dir→[]。D(歧义):skip-bad fail-closed(不计)镜像 a_short;陈旧经 store `expected_as_of` 门。E:CURRENT 未动。F:复用 store 的 §18.0/stale/bucket、except 窄集(ShadowCompareError/PrivatePathError/OSError)skip、内联日期门 isascii、纯无 jsonschema。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 upgrade-gate forward-obs discover(engine/us_short_upgrade_obs_discover.py + tests/test_us_short_upgrade_obs_discover.py + docs/README.md 路由行;复用 us_short_shadow_compare_store.load_shadow_comparison、无新 schema)。重点:① 每桶经 store.load(expected_as_of=run_as_of)→ §18.0 guard + §12.2 契约 + 桶名==内容 + 陈旧门(晚于 run_as_of=look-ahead §12.2 ①③)全生效;② 畸形/陈旧/错位/不可读/非canonical 桶 SKIP(fail-closed 不计入升级时钟)、干净桶升序+唯一收;③ 返回 de-id {as_of} 无票名;④ 集成喂 build_upgrade_eval 正确;⑤ 纯 IO/离线无 jsonschema/provider、不交叉 A 股;de-id 汇总=后续(可选)。
+```
+
 ## 2026-06-23 - Codex `审查 PASS` (US-short batch3 §12.2 upgrade-gate runtime banner)
 
 - **Verdict/Action**: PASS. The runtime banner re-validates upgrade-gate evals before rendering and fails closed to ASCII UNAVAILABLE for malformed, self-authored, look-ahead, or governance-misaligned inputs.

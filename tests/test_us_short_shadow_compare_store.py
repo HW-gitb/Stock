@@ -3,7 +3,9 @@
 
 Covers: the FIRST shadow-compare persister wiring the §18.0 P0 private-path guard (relative / in-repo-nonignored
 refused; gitignored in-repo + outside-repo allowed; guard BEFORE validate); refusing to persist a malformed
-comparison / bad date (no file written); the dated record {as_of, comparison} contract; the canonical dated
+comparison / bad date / bad observation_kind (no file written); the §12.2 ① live-forward provenance (default
+observation_kind=live_forward; a bad kind refused on write, a non-live kind round-trips); the dated record
+{as_of, comparison, observation_kind} contract; the canonical dated
 bucket helper; the store-specific BUCKET / NAMESPACE guard (§2.1 桶名=as_of + A-vs-US lane isolation — in-repo must
 be the canonical SHADOW_COMPARE_PRIVATE_DIR/shadow_comparison_<as_of>.json; model_paper_private / a_short / us_long
 dirs + filename-date mismatch refused on write AND load; external non-canonical allowed); and load fail-closed on
@@ -77,6 +79,23 @@ class WriteRefusesMalformed(unittest.TestCase):
                 store.write_shadow_comparison(_comparison(), p, as_of="20260231")  # not a real date
             self.assertFalse(p.exists())
 
+    def test_bad_observation_kind_not_persisted(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "c.json"
+            with self.assertRaises(store.ShadowCompareStoreError):
+                store.write_shadow_comparison(_comparison(), p, as_of="20260112", observation_kind="bogus")
+            self.assertFalse(p.exists())
+
+    def test_default_observation_kind_is_live_forward(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = store.write_shadow_comparison(_comparison(), Path(d) / "c.json", as_of="20260112")
+            self.assertEqual(store.load_shadow_comparison(p)["observation_kind"], "live_forward")
+
+    def test_non_live_kind_round_trips(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = store.write_shadow_comparison(_comparison(), Path(d) / "c.json", as_of="20260112", observation_kind="research_backfill")
+            self.assertEqual(store.load_shadow_comparison(p)["observation_kind"], "research_backfill")
+
     def test_guard_runs_before_validate(self):
         # a bad date AND a bad (relative) path → the §18.0 guard raises FIRST (PrivatePathError), not the
         # record gate — the guard is the outermost fail-closed floor
@@ -136,7 +155,7 @@ class BucketNamespaceGuard(unittest.TestCase):
     def test_load_filename_date_mismatch_refused(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "shadow_comparison_20260119.json"  # content as_of disagrees with the canonical-looking name
-            p.write_text(json.dumps({"as_of": "20260112", "comparison": _comparison()}), encoding="utf-8")
+            p.write_text(json.dumps({"as_of": "20260112", "comparison": _comparison(), "observation_kind": "live_forward"}), encoding="utf-8")
             with self.assertRaises(store.ShadowCompareStoreError):
                 store.load_shadow_comparison(p)
 
@@ -160,7 +179,7 @@ class LoadFailClosed(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             comp = _comparison()
             rec = store.load_shadow_comparison(self._write(d, as_of="20260112", comparison=comp))
-            self.assertEqual(rec, {"as_of": "20260112", "comparison": comp})
+            self.assertEqual(rec, {"as_of": "20260112", "comparison": comp, "observation_kind": "live_forward"})
 
     def test_missing_file_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
@@ -184,7 +203,7 @@ class LoadFailClosed(unittest.TestCase):
     def test_bad_comparison_content_fails_closed(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "bc.json"
-            p.write_text(json.dumps({"as_of": "20260112", "comparison": _bad_comparison()}), encoding="utf-8")
+            p.write_text(json.dumps({"as_of": "20260112", "comparison": _bad_comparison(), "observation_kind": "live_forward"}), encoding="utf-8")
             with self.assertRaises(sc.ShadowCompareError):
                 store.load_shadow_comparison(p)
 
@@ -219,7 +238,7 @@ class LoadFailClosed(unittest.TestCase):
         # at LOAD — a private artifact is read only from a provably-private source
         p = store.ROOT / "_shadow_compare_load_guard_TMP.json"  # repo root → not gitignored
         try:
-            p.write_text(json.dumps({"as_of": "20260112", "comparison": _comparison()}), encoding="utf-8")
+            p.write_text(json.dumps({"as_of": "20260112", "comparison": _comparison(), "observation_kind": "live_forward"}), encoding="utf-8")
             with self.assertRaises(PrivatePathError):
                 store.load_shadow_comparison(p)
         finally:
