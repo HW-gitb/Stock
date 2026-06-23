@@ -25,7 +25,9 @@ PC_FIELDS = CONTRACT["price_clock"]["fields"]
 
 def _good(**over):
     d = {
-        "banner": {"price_clock": {f: ("RTH" if f == "session_scope" else "20260619") for f in PC_FIELDS}},
+        # a §21-VALID clock: price_data_through (Fri) strictly before decision_date (Mon), news within range, RTH
+        "banner": {"price_clock": {"price_data_through": "20260619", "news_window_through": "20260619",
+                                   "session_scope": "RTH", "decision_date": "20260622"}},
         "lifecycle_reminder_count": {"section_1": 3, "section_12": 3},
         "sections": {str(i): ["(content %d)" % i] for i in range(1, len(SECTIONS) + 1)},
     }
@@ -140,6 +142,41 @@ class MalformedFailsClosed(unittest.TestCase):
             d = _good(); d[key] = "nope"
             with self.assertRaises(wr.WeeklyReportRenderError):
                 wr.render_weekly_report(d)
+
+
+class PriceClockConsistencyEnforced(unittest.TestCase):
+    """R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP: the official renderer now consumes
+    validate_price_clock, so an internally-inconsistent clock (same-day / future price / future news / non-RTH /
+    non-real date) fails closed (WeeklyReportRenderError) BEFORE any markdown is emitted — not only in the
+    standalone helper."""
+
+    def _render_clock(self, **over):
+        d = _good()
+        d["banner"]["price_clock"].update(over)
+        return wr.render_weekly_report(d)
+
+    def test_same_day_price_refused(self):
+        with self.assertRaises(wr.WeeklyReportRenderError):
+            self._render_clock(price_data_through="20260622")  # == decision_date (stale/same-day)
+
+    def test_future_price_refused(self):
+        with self.assertRaises(wr.WeeklyReportRenderError):
+            self._render_clock(price_data_through="20260623")  # > decision_date (forward leak)
+
+    def test_future_news_refused(self):
+        with self.assertRaises(wr.WeeklyReportRenderError):
+            self._render_clock(news_window_through="20260623")  # > decision_date
+
+    def test_non_rth_session_refused(self):
+        with self.assertRaises(wr.WeeklyReportRenderError):
+            self._render_clock(session_scope="ETH")
+
+    def test_non_real_date_refused(self):
+        with self.assertRaises(wr.WeeklyReportRenderError):
+            self._render_clock(price_data_through="20260231")
+
+    def test_valid_clock_still_renders(self):  # positive control: a §21-valid clock renders banner ④
+        self.assertIn("price_clock", self._render_clock())
 
 
 if __name__ == "__main__":

@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 price clock renderer gate repair)
+
+- **Verdict/Action**: PASS. `render_weekly_report()` now consumes `validate_price_clock()` before emitting banner ④, so the official weekly-report path refuses same-day price / future price / future news / non-RTH / non-real-date clocks instead of merely displaying any nonblank clock.
+- **Required**: None new. `R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP` is resolved in the current working tree; full closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: target price_clock+renderer **37 OK**; `py_compile` OK; direct renderer probes: valid accepted, same-day/future-price/future-news/non-RTH/non-real-date rejected as `WeeklyReportRenderError`; doc/route/boundary guards **47 OK**; `git diff --check` CRLF-only; BOM/FFFD false. Broad `*us_short*` discover remains blocked in this Codex runtime by missing `jsonschema` (619 discovered, 36 errors, 1 skipped).
+- **Next**: User may `提交`; batch4 canonical resolver / machine-context timezone cross-check / provider-live paths remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 price clock validator 未被官方渲染消费 — wire 进 render_weekly_report)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——**第 4 次同类**:`validate_price_clock` 对了,但官方输出路径 `render_weekly_report` 不消费它、仍只校非空白 → 渲染器照样输出 same-day/未来价/未来 news/非RTH 时钟。取 Codex 窄修:`render_weekly_report` 在 banner ④ 非空白校后调 `validate_price_clock`、`PriceClockError`→`WeeklyReportRenderError`,官方路径不再渲不一致时钟。按 Required 允许:机器层 as_of/session 交叉核**显式延后**到供机器上下文的 pipeline(batch4 canonical resolver 越界),代码注释+docstring 留界;渲染器强制全部内部一致性。
+- **Required**: `R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: renderer+price_clock target **37 OK**;Codex 4 渲染器探针(same-day/未来价/未来 news/非RTH)现全 `WeeklyReportRenderError`;全离线 `*us_short*` **1293 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:R3(纸面 #8 / 比较 #13/#24)/ no-dangling 证据反查+registry(#9)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):渲染器侧 same-day/未来价/未来 news/非RTH/非真实日期全拒,validator 直测保留。B(连带):动既有 renderer+测试:`_good()` 改 §21-valid 时钟、加 6 渲染器对抗测试;renderer docstring banner-④ 条 + price_clock & weekly_report README 行同步(B-ripple);无符号改名。C(反向):正控 合法渲、非空白/数量对账/section/边界老测试保留;未误拒。D(歧义):机器交叉核延后(Required 允许、batch4 越界),渲染器只强制内部一致性。E:CURRENT 未动。F:循环 import 已核(price_clock 只依赖 datetime/json/pathlib)。**教训:第 4 次同类——gate 必须焊在产出 OUTPUT 处(render),不能只放 standalone validator。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 price clock consistency §11.2 ④ / §21)
+
+- **Verdict/Action**: FAIL. The standalone `validate_price_clock()` rejects the main §21 internal clock violations, but the existing official `render_weekly_report()` path does not consume it and still renders invalid price clocks.
+- **Required**: `R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target price-clock 13 OK; `py_compile` OK; doc/route/boundary guards 47 OK; `git diff --check` CRLF-only; BOM/FFFD false; direct renderer probes accept same-day price, future price, future news window, and non-RTH session; broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (613 discovered, 36 errors, 1 skipped).
+- **Next**: Claude should repair only the price-clock validator consumption / renderer guard and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 price clock 一致性 §11.2 ④ / §21)
+
+- **Verdict/Action**: 起草 batch3 续片 price-clock 一致性(§21)。`validate_price_clock(price_clock, *, machine_as_of, machine_session)` 是 weekly_report banner ④(仅校必显·非空白)的**补**——fail-closed 一致性门:精确冻结字段集、`session_scope=="RTH"`、三日期严格真实 YYYYMMDD、序 `price_data_through < decision_date`(前一已收盘日;落决策日及之后=陈旧/前向泄露拒)且 `pdt ≤ news_window_through ≤ dd`。给 §3.5 机器层 as_of/session 时交叉核对(pdt==as_of、session==machine)。严格日期门内联(镜像 canonical lifecycle gate)、jsonschema-free 可在最小 runtime import。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **13 OK**;全离线 `*us_short*` **1287 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:R3(纸面 #8 / 比较 #13/#24)/ no-dangling 证据反查+registry(#9)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):非dict、字段集≠冻结(缺/多)、session≠RTH、各日期非真实(20260231/带横杠/非str/7位)、序违例(pdt≥dd 陈旧、nwt 越界)、机器 as_of/session 不符 全拒。B(连带):字段集读冻结 contract 单源;混合键诊断 `sorted(map(str,...))` 防 raw TypeError;新 engine 入 boundary glob;README 行。C(反向):正控——canonical clock、nwt 三边界(==pdt/中间/==dd)、None 机器跳交叉核;未误拒。D(歧义):session=RTH 取 §11.2 ④/§21 明列;news 窗 [pdt,dd] 闭区间取 §11.2 ④「决策日开盘前任意时刻」。E:CURRENT 未动。F:日期串字典序==时序(已先验真实);内联 `_strict_yyyymmdd` 镜像 canonical。**镜像:门=coverage、日期内联=lifecycle_render。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 price clock 一致性 §11.2 ④/§21(engine/us_short_price_clock.py + tests/test_us_short_price_clock.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① 序 pdt<dd 严格(落决策日及之后=陈旧/前向是否一律拒)+ news 窗 [pdt,dd] 闭区间是否忠于 §11.2 ④ ② session=RTH 与机器层交叉核对(as_of==pdt)是否对、None 跳过是否合理 ③ 各日期严格真实(含 20260231/带横杠/7位)是否全拒、字典序==时序前提是否先验真实 ④ 字段集精确闭世界 + 混合键诊断 sanctioned ⑤ 内联 _strict_yyyymmdd 与 canonical lifecycle gate 是否一致(jsonschema-free 取舍合理)⑥ 纯/离线、不碰 provider/live、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 hot_excluded summary bridge repair)
 
 - **Verdict/Action**: PASS. `hot_excluded_summary(excluded_rows, *, heat_threshold)` now consumes raw excluded rows and internally runs `detect_hot_excluded` as the only official bridge, so hard-veto / fundamental / unknown-gate / low-heat rows cannot bypass the gate+threshold contract into §11.4 `hot_excluded`.

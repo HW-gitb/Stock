@@ -11,7 +11,10 @@ never drift from the §11.2 contract. Three hard invariants are enforced fail-cl
 
   * the price_clock banner element ④ is ALWAYS shown — a missing / incomplete price_clock (any of the 4 fields
     absent or blank) refuses to render (§11.2 ④ always_shown; the reader must always see which prices/dates
-    were used);
+    were used) AND it must pass the §21 consistency gate (engine.us_short_price_clock.validate_price_clock:
+    session=RTH, real dates, price_data_through < decision_date, news_window in range) — the renderer is the
+    official §11.2 output path, so a stale / same-day / future / non-RTH clock fails closed here, not just in a
+    standalone helper (the machine-layer as_of/session cross-check is deferred to the pipeline that supplies it);
   * the §11.2 lifecycle-reminder count MUST match across section 1 (本周运行状态) and section 12
     (字段·模块生命周期提醒) — a mismatch refuses to render (the lifecycle 数量对账, this slice's 2c-末片);
   * every one of the 13 frozen sections must carry content — a missing section refuses to render.
@@ -24,6 +27,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+
+from engine.us_short_price_clock import PriceClockError, validate_price_clock
 
 ROOT = Path(__file__).resolve().parent.parent
 _CONTRACT_PRESET = ROOT / "presets" / "us_short_weekly_report_contract_20260620.json"
@@ -89,6 +94,14 @@ def render_weekly_report(report_data) -> str:
     if not isinstance(price_clock, dict) or any(not _nonblank_str(price_clock.get(f)) for f in pc_fields):
         raise WeeklyReportRenderError(
             "price_clock (always-shown banner element ④) is missing / incomplete / blank — it must carry a non-blank value for all of %s" % (pc_fields,))
+    try:
+        # §21 fail-closed consistency gate — the renderer IS the official §11.2 output path, so it must ENFORCE the
+        # clock (session=RTH, real dates, price_data_through < decision_date, news_window within range), not just
+        # display it (R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP). The machine-layer as_of/session
+        # cross-check is deferred to the pipeline that supplies machine context (the batch-4 canonical resolver).
+        validate_price_clock(price_clock)
+    except PriceClockError as e:
+        raise WeeklyReportRenderError("price_clock failed the §21 consistency gate: %s" % (e,))
     lines.append("## 诚实横幅")
     for el in banner_elements:
         if el["tag"] == "price_clock":
