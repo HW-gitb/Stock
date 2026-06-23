@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 two-way scorecard comparison repair)
+
+- **Verdict/Action**: PASS. The scorecard comparison now enforces the same fixed-TopN `selected_total` denominator across all four embedded profile scorecards, while preserving closed-world deltas and the paper-only / ship-gate-isolation boundary.
+- **Required**: None new. `R-USSHORT-BATCH3-SCORECARD-COMPARISON-FIXED-TOPN-DENOMINATOR-GAP` is closed in the working tree; see `docs/system_risk_register.md`.
+- **Verify**: target scorecard-comparison 23 OK; py_compile OK; boundary regression 8 OK; route-doc ledger guard 14 OK; doc-governance guard 25 OK; direct probes confirm mixed 1/3/4 denominators reject and valid same-denominator output carries `vs_balanced`; import-heavy probe clean; `git diff --check` CRLF-only; full `*us_short*` discovery attempted but blocked by missing `jsonschema` in the bundled Codex Python.
+- **Next**: User may `提交` this US-short batch3 §12.2 two-way scorecard comparison slice; NAV/drawdown, corporate-action evaluability, upgrade gate, provider/live/DataHub/A-share/US-long remain separate scoped work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 two-way scorecard comparison — fixed-TopN 同分母)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required)。judge:成立、在 scope——§12.2 是同-PIT/固定 TopN/禁止挑样本对比,我只校了每档 scorecard 合法 + delta 一致、漏了**跨档同分母**(probe 收 balanced=3/theme_plus=1/theme_aggressive=4)。修(Codex 窄修):新 `_assert_same_denominator` 要求各嵌入 scorecard 与 balanced 同 `selected_total`、build+validate 两侧调,mismatch fail-closed。delta 向/theme marginal/de-id/boundary 不动。详 register。
+- **Required**: `R-USSHORT-BATCH3-SCORECARD-COMPARISON-FIXED-TOPN-DENOMINATOR-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +5 测(small/large shadow + theme_off 分母 mismatch 于 build 拒、validator 分母 mismatch 拒、all-empty 共享 0 正控);Codex mixed 1/3/4/3 探针现 REJECT、同分母+all-empty 仍过;target **23 OK**;全离线 `*us_short*` **1509 OK** 零回归;boundary+doc+route **47 OK**;`git diff --check` clean(仅 CRLF);import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:分母 invariant(small/large shadow/theme_off mismatch build+validate)+ 既有闭世界/delta/boundary 正控。B:模块+validator+test docstring + README 契约行同步;de-id/delta 向/boundary 不动。C:同分母/all-empty(共享0)仍过无误拒。D:按 Codex 窄修(仅加同分母校,不动 API/delta/boundary)。E:CURRENT 未动。F:`_assert_same_denominator` build+validate 两侧、置于 per-scorecard 校验后 delta 前、纯无 jsonschema。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 two-way scorecard comparison)
+
+- **Verdict/Action**: FAIL. The comparison is closed-world for deltas/boundary, but it does not prove all embedded profile scorecards share the same fixed TopN denominator.
+- **Required**: `R-USSHORT-BATCH3-SCORECARD-COMPARISON-FIXED-TOPN-DENOMINATOR-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target scorecard-comparison 18 OK; py_compile OK; doc/route/boundary 47 OK; direct probe accepted `selected_total` 1/3/4 mixed profile scorecards; import-heavy probe clean; full `*us_short*` attempted but blocked by missing `jsonschema`; `git diff --check` CRLF-only.
+- **Next**: Claude repair only the fixed-TopN / same-denominator scorecard-comparison contract and direct tests/docs/register, then return for Codex re-`审查`; do not commit or start NAV/upgrade/provider/live/DataHub/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 比较轨 two-way scorecard comparison — balanced-vs-shadow 双向诚实)
+
+- **Verdict/Action**: 起草 §12.2 双向对比成绩单(消费 per-profile paper scorecard)。新 engine `engine/us_short_paper_scorecard_comparison.py`:`build_scorecard_comparison(scorecards_by_profile, *, as_of)` 把每档(冻结 `core_score.PROFILE_NAMES`:balanced + 3 shadow,各 re-validate)的 `build_paper_scorecard` 输出配对 → **嵌入 4 份全口径 de-id scorecard**(shadow 的多买亏损/成本/现金拖累/坏票率都看得见,§12.2 双向全口径)+ `vs_balanced[shadow]` per-metric `delta=shadow−balanced`(net_basket/bad_pick_rate/cost/win/loss/cash,任一侧 unrealized→None 不比 §12.1 不虚高)+ **`theme_weight_marginal_net`=balanced−theme_off net**(#24 NAV级赛道边际)+ **冻结 ship-gate 隔离/paper-only boundary**(track=comparison_non_production / evidence_level=paper / shadow_counts_ship_gate=False / full_size_ship_gate_allowed=False,§12/§13/§18.1 #27)。`validate_scorecard_comparison` = **closed-world**(exact 键集 + boundary + primary==balanced + strict as_of + 每嵌入 scorecard re-validate + 每 delta 重导 + theme marginal 重导)。de-id(无票名);纯/离线无 jsonschema/provider;镜像 scorecard 的 closed-world 自校。README 加路由行。回撤(NAV 路径,入各 scorecard 再入此)/复权门 evaluability/升级闸=后续刀。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **18 OK**(build:结构/嵌入全口径/deltas/#24 theme marginal/open→None net delta/theme_off-open→None marginal;坏输入:缺/多 profile/坏 as_of/非dict/嵌入 scorecard 非法 拒;closed-world validator:extra 键/boundary ship-gate flip/doctored delta/theme-marginal tamper/primary tamper/缺 shadow 拒);全离线 `*us_short*` **1504 OK** 零回归;import heavy=NONE(纯、无 jsonschema/provider/a_short);doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 续刀 = 回撤(NAV 路径)→ 升级闸防自欺;多日 held net(#8)、weekly 接线独立。
+- **Pre-Codex self-review**: A–F。A(类×出口):build 全态 + 坏输入(缺/多/坏as_of/非dict/嵌入非法)+ closed-world validator(extra/boundary/delta/theme-marginal/primary/缺shadow)。B(连带):新叶子、无重命名;README **主动加路由行**;复用公开 PROFILE_NAMES/PRIMARY_PROFILE + validate_paper_scorecard(无下游消费者,升级闸后续)。C(反向):good/open→None/count deltas always 仍过无误拒。D(歧义):范围只双向对比(回撤/复权门/升级闸延后);delta 向=shadow−balanced 明记;theme_off 为冻结 #24 基准 + PROFILE_NAMES 成员(覆盖校保证)。E:CURRENT 未动。F:closed-world(开局即闭、scorecard 教训)、内联日期门含 isascii、delta 重导自校、None 处理、纯无 jsonschema。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 two-way scorecard comparison(engine/us_short_paper_scorecard_comparison.py + tests/test_us_short_paper_scorecard_comparison.py + docs/README.md 路由行;消费 build_paper_scorecard 输出、复用 core_score PROFILE_NAMES/PRIMARY_PROFILE + validate_paper_scorecard、无新 schema)。重点:① 覆盖 EXACTLY 冻结 4 档 + 每嵌入 scorecard re-validate;② deltas=shadow−balanced(任一 unrealized→None)、#24 theme_weight_marginal_net=balanced−theme_off net;③ 冻结 ship-gate 隔离/paper-only boundary(shadow_counts_ship_gate/full_size_ship_gate_allowed False);④ validate_scorecard_comparison closed-world(exact 键集 + boundary + delta/marginal 重导自校,doctored/smuggled 拒);⑤ de-id 无票名、纯/离线无 jsonschema/provider、不交叉 A 股;回撤/复权门/升级闸=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 paper scorecard validator repair)
 
 - **Verdict/Action**: PASS. The paper scorecard now proves exact frozen-basket coverage, carries a frozen paper-only boundary, and its validator is closed-world for de-identified scorecards.
