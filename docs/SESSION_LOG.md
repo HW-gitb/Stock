@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 paper fill expiry gate repair)
+
+- **Verdict/Action**: PASS. `simulate_fill()` now enforces the §12.1 v1 `order_expiry=first_regular_session_only` gate before emitting any fill result; missing / non-v1 / non-string expiry values fail closed, while the valid v1 order still follows the deterministic Step0 / Step1 / same-day stop-priority rules.
+- **Required**: None new. `R-USSHORT-BATCH3-PAPER-FILL-EXPIRY-GATE-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: target paper-fill tests **25 OK**; `py_compile` OK; direct expiry probes reject missing / `multi_day_gtc` / non-string expiry as `PaperFillError` and accept valid v1; doc/route/boundary guards **47 OK**; `git diff --check` CRLF-only warning for `docs/README.md`; BOM/FFFD false. Broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (644 discovered, 36 errors, 1 skipped).
+- **Next**: User may `提交`; later paper ledger / corporate-action not_evaluable gate / performance accounting / comparison shadow remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 paper fill — v1 order_expiry=first_regular_session_only 门未强制)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——`simulate_fill` 从不读 `order_expiry`,§12.1 v1 锁(only `first_regular_session_only`)未强制 → 缺失/`multi_day_gtc`/非v1 expiry 照样返回成交、污染纸面证据。按 Required:`simulate_fill` 在出任何成交前读冻结 `order_expiry` enum(action_table `design_locked_enums` 单源,重构共享 `_enums()` 供 `_order_types`+新 `_order_expiries`),不在 v1 锁集内即 `PaperFillError`(缺失/非str/GTC/未知/错大小写全拒)。多日 GTC/隔日/盘前后仍不实现(lifecycle 候选、Required 边界)。
+- **Required**: `R-USSHORT-BATCH3-PAPER-FILL-EXPIRY-GATE-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: 新增 +4、target **25 OK**;Codex expiry 探针(missing/multi_day_gtc)现全 `PaperFillError`、valid 仍成交;全离线 `*us_short*` **1318 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:paper 落盘/复权门/绩效(#8 后续)、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):order_expiry 缺失/非str/GTC/未知/错大小写全拒;既有 21 fixture 补 v1 expiry。B(连带):重构 `_enums()` 单源供两 enum;模块 docstring order-validity 句 + README 路由行同步;无符号改名。C(反向):正控——v1 expiry 仍成交、`_order_expiries`=冻结值;未误拒。D(歧义):v1 锁集取冻结 order_expiry enum 非自造;GTC 明确不实现。E:CURRENT 未动。F:`∈ set(_order_expiries())` 闭世界。**教训:写 fill 规则漏读 order_expiry 这条 §18.1 #8 明列契约字段——契约字段逐条核,别只覆盖主流程几何。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 paper fill section 12.1 #8)
+
+- **Verdict/Action**: FAIL. `simulate_fill(order, day_bar)` covers the main Step0 / Step1 / same-day stop-priority shape, but it does not enforce the v1 `order_expiry=first_regular_session_only` contract; missing or non-v1 expiry orders still return filled results.
+- **Required**: `R-USSHORT-BATCH3-PAPER-FILL-EXPIRY-GATE-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target paper-fill tests **21 OK**; `py_compile` OK; direct expiry probes show missing / `multi_day_gtc` / valid expiry all return `filled_held`; doc/route/boundary guards **47 OK**; `git diff --check` CRLF-only warning for `docs/README.md`; broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (640 discovered, 36 errors, 1 skipped).
+- **Next**: Claude should repair only the paper-fill expiry gate and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order execution/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 paper fill §12.1 #8 — 确定性单订单日成交模拟)
+
+- **Verdict/Action**: 起草 batch3 续片 paper fill(§12.1 #8,R3 起步)。`simulate_fill(order, day_bar)` 按 §12.1 写死规则模拟日线成交、**可复现**(同输入同结果·无随机;paper 仅迭代、不判满仓 ship-gate)。有效期 `first_regular_session_only`。确定性序:Step0 open 不在带→not_filled;Step1 pullback `low≤limit`→@limit、breakout `high≥breakout`→@`min(max(open,breakout),ehi)`、否则 not_filled;**同日保守出场**(只低估不虚高):成交且 `low≤stop`→入场即止损、否则 `high≥tp`→止盈,**止损优先**(§12.1 ②)。无新 schema、无落盘(csv/复权门/绩效=后续刀)。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **21 OK**;全离线 `*us_short*` **1314 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:paper 落盘/复权门/绩效(#8 后续)、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):malformed 整类——order 非dict/未知 order_type/价格非有限正(0/负/str/bool/NaN/Inf)/带 inverted/缺型专属价、bar 非dict/不全/OHLC 不自洽(low>high、open 越界)全拒。B(连带):order_type 读冻结 enum 单源;新 engine 入 boundary glob;README 行。C(反向):正控——pullback/breakout 各成交+未达、同日 stop/tp/held、breakout 三价位(@breakout/@open/@capped)、可复现等价、stop 优先;未误拒。D(歧义):同日先后用 §12.1 写死保守序(stop 优先)非自造;fill 价位逐字照 §12.1。E:CURRENT 未动。F:`_finite_pos` 拒 NaN/Inf/bool/≤0;OHLC low底high顶自洽。**镜像:门=coverage/hot。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 paper fill §12.1 #8(engine/us_short_paper_fill.py + tests/test_us_short_paper_fill.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① 成交判定是否逐字照 §12.1(Step0 带、Step1 pullback low≤limit / breakout high≥breakout 及 fill=min(max(open,breakout),valid_entry_high))② 同日保守序——成交且 low≤stop→止损、止损优先于 tp(§12.1 ②)是否对、是否只低估不虚高 ③ order_type 单读冻结 enum ④ malformed 整类(价格非有限正/OHLC 不自洽/缺型专属价)全 sanctioned PaperFillError ⑤ 可复现(同输入同输出·无随机)⑥ 确未落盘/未碰 provider/live、未判 ship-gate、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 price clock renderer gate repair)
 
 - **Verdict/Action**: PASS. `render_weekly_report()` now consumes `validate_price_clock()` before emitting banner ④, so the official weekly-report path refuses same-day price / future price / future news / non-RTH / non-real-date clocks instead of merely displaying any nonblank clock.
