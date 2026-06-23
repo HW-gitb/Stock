@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-HOT-EXCLUDED-SUMMARY-BYPASS-GAP - hot_excluded summary bridge can bypass detector gate and threshold
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23 → Codex re-`审查 PASS` 2026-06-23; current working tree, pending user `提交`).
+- Status: **resolved** (committed in `ed44b441`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (official US-short `hot_excluded` audit / weekly-report banner ⑤ / exclusion_summary private detail before later report and §13 review consume the field).
 - Source: Codex strict review of US-short batch3 `hot_excluded` detector slice (`engine/us_short_hot_excluded.py`, `tests/test_us_short_hot_excluded.py`, `docs/README.md` route row).
 - Scope reviewed: current working tree after `8e12d9e0`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_hot_excluded.py`, and untracked `tests/test_us_short_hot_excluded.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` §11.4 / §11.2 banner ⑤ / §18.1 #19; frozen governance source `presets/us_short_exclusion_summary_governance_20260620.json`; review protocol and pre-Codex checklist. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order/A-share/US-long path was run.
