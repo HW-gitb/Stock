@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-PAPER-NET-FILL-SHAPE-GAP - paper net result trusts inconsistent fill_result status / price / reason shape
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-23; current working tree).
+- Status: **resolved** (committed in `27265575`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (US-short paper execution simulation / net-result accounting before later `paper_positions.csv`, `paper_performance.csv`, comparison shadow, cooldown, portfolio guard, or paper evidence summaries consume the net-result output).
 - Source: Codex strict review of US-short batch3 paper net result slice (`engine/us_short_paper_net_result.py`, `tests/test_us_short_paper_net_result.py`, `docs/README.md` route row, and the top `docs/SESSION_LOG.md` Claude draft entry).
 - Scope reviewed: current working tree after committed corporate-action closeout `45ef9b9c`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_paper_net_result.py`, and untracked `tests/test_us_short_paper_net_result.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` section 12 / section 12.1 / section 12.2 / section 18.1 #8 / section 18.2, plus `AGENTS.md`, `docs/AI_REVIEW_PROTOCOL.md`, and `docs/pre_codex_self_review_checklist.md`. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order execution/A-share/US-long path was run.
