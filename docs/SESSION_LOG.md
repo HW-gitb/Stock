@@ -8,6 +8,26 @@
 
 ---
 
+## 2026-06-23 - Codex `审查 PASS` (US-short batch3 honest-banner ① observe split §11.2)
+
+- **Verdict/Action**: PASS. `aggregate_observe_split` reads the frozen `observe_reason_type` enum, counts all 7 reasons with explicit zeros, classifies only `cash_or_account_missing` as the sizing artifact, and `validate_observe_split` fail-closes total / per-reason / sizing consistency before render.
+- **Required**: None new. No material finding was added to `docs/system_risk_register.md`.
+- **Verify**: target observe split 16 OK; `py_compile` OK; direct probes reject unknown / non-string / non-list inputs, mixed-key `per_reason`, bool / negative / float counts, total mismatch, and sizing mismatch with sanctioned `ObserveSplitError`; target+boundary+doc/route guards 63 OK; `git diff --check` CRLF-only; BOM/FFFD false. Broad `*us_short*` discover remains environment-blocked in this Codex runtime because `jsonschema` is missing (580 discovered, 36 jsonschema-related errors, 1 skipped).
+- **Next**: User may `提交`; later hot_excluded enrichment / R3 paper-comparison / provider-live-DataHub-Skill-production / A-share / US-long remain separately gated.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 honest-banner ① observe split §11.2 — observe_reason_type 真/假观察聚合)
+
+- **Verdict/Action**: 起草 batch3 续片 honest-banner ①(§11.2,#10 余 observe_reason_type)。`aggregate_observe_split` 把本周逐行观察原因聚合成真/假拆分 → `{total, per_reason(全7类), sizing_artifact_count}`:reason 读**冻结 action_table `design_locked_enums`**(7 值单源;未知/非str 拒)。per_reason 全 7 类零显;sizing_artifact_count = fake 数(`cash_or_account_missing`——冻结 banner ref + §11.2 ① 唯一点名的 sizing 假象:有信号但没账户/没现金、非不看好;窄安全=不夸大"只是 sizing")。`validate_observe_split` = fail-closed 门;`render_observe_split` 渲非空白脱敏横幅。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **16 OK**;全离线 `*us_short*` **1254 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):malformed 整类——非list/未知 reason/非str(None/int/bool)拒;validate 门 per_reason 键≠冻结/负·bool 计数/total≠sum/sizing≠类和/非dict 拒。B(连带):reason 读冻结 design_locked_enums 单源;新 engine 入 boundary glob;README 行。C(反向):正控 空周→0、全 7 类各 1、render 含全类+sizing 框架;未误拒。D(歧义):sizing 假象只取冻结 banner ref+§11.2 ① 明点的 cash_or_account_missing(窄安全,不自造把 cost_inefficient 算 fake)。E:CURRENT 未动。F:counts `_int_not_bool`;诊断 `sorted(map(str,...))`;render 先 validate。**镜像:门同 coverage。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 honest-banner ① observe split §11.2(engine/us_short_observe_split.py + tests/test_us_short_observe_split.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① observe_reason_type 是否真单读冻结 design_locked_enums 7 值无第二拷贝 ② sizing_artifact 只取 cash_or_account_missing 是否 faithful(冻结 banner ref + §11.2 ① 明点;未把 cost_inefficient_min_size 等自造进 fake)③ validate 双重一致性(total==sum、sizing==sizing类计数和)是否两向焊死、是否误拒合法态 ④ closed-world(未知/非str/非list)与 per_reason 混合键诊断是否全 sanctioned ObserveSplitError ⑤ 纯/离线、不碰 provider/live、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 coverage honesty validator repair)
 
 - **Verdict/Action**: PASS. `validate_row_coverage` now treats `coverage_gap_tags` as contract tags, not arbitrary labels: each tag must be `<gating-category>:<non-ok-status>`, category must be unique and in analyst / sec_parse / event, status must be missing / restricted / blocked, and `coverage_status` must exactly equal the worst-of tag severity.
