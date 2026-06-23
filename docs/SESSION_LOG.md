@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 E+F boundary broker-token repair)
+
+- **Verdict/Action**: PASS. The E+F boundary regression repair now covers engine + runners and catches the prior `tda` broker-SDK miss; provider-health remains offline-only and acceptable for this slice.
+- **Required**: None new. `R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: E/F target 20 OK; doc/route guards 39 OK; `py_compile` OK; direct probes catch `tda` / `tda.auth` / broker examples and real 31-file surface is clean; full `*us_short*` blocked here by missing `jsonschema` (`find_spec=None`).
+- **Next**: User may `提交`; lifecycle 2c final piece / weekly_report renderer / provider/live/DataHub/Skill/production/A-share/US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 E+F — 边界回归 broker token 补 tda + 整类扫 SDK,第2轮)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 1 P1)。成立、接受——我上轮误删 `tda`(错判会撞 `metadata`,实则 metadata 含 `tad` 非 `tda`),致 TD Ameritrade `tda-api`(`import tda`/`from tda.auth`)漏抓。修:补回 `tda` + 整类扫常见券商 SDK(tda/ib_insync/ibapi/alpaca/robinhood/webull/schwab/oanda/ccxt/broker 等 15 个);正控扩到断言 tda/`from tda.auth`/robinhood/alpaca/webull 全被抓。验真实 31 文件面扩 token 后**不误报**(broker/A 股 offenders 皆空)。详见 register。
+- **Required**: `R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: boundary 8 / E+F 20 OK;全离线 `*us_short*` **1159 OK** 零回归、doc/route 25 OK;探针——`import tda`/`from tda.auth` 现被抓、真实面仍干净;README F 行 broker 例补 tda/robinhood/webull;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续刀 = lifecycle 2c 末片 + weekly_report 渲染器簇(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):不只补被点名 tda——整类扫常见券商 SDK + 正控覆盖多 namespace。B(连带):README F 行 broker 例同步;无符号改名。C(反向):扩 token 对真实 31 文件面不误报(broker/A 股 offenders 空)+ 干净源正控,双向证非误报非 no-op。D(歧义):「broker」取常见 SDK import 名集(非穷举,留 broker 通配)。E:CURRENT 不动(未提交)。F:核实 tda 非 metadata 子串(上轮误判根因)、扩 token 后真实面零误报实测。**教训:删 guard token 前先核实子串假设、别凭直觉**。
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 E+F boundary regression repair)
+
+- **Verdict/Action**: FAIL. The boundary scan now covers engine + runners, but the broker SDK token set misses `tda`, so `import tda` / `from tda.auth ...` is not caught.
+- **Required**: `R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP` reopened - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: E/F target 20 OK; direct probe shows `tda` imports not flagged while `alpaca` / `ibapi` / `tushare` are flagged; doc/route guards 39 OK; `py_compile` OK; `git diff --check` CRLF-only; BOM/FFFD false. Full `*us_short*` remains blocked in this Codex runtime by missing `jsonschema` (`find_spec=None`).
+- **Next**: Claude should repair only the broker-token guard gap and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 E+F — 边界回归 scope 扩到 runner 面 + 检测正控)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——边界回归只扫 `engine/us_short_*.py`、漏 runner 面(`runners/us_short_account_state_...`),未来 runner 违禁 import 会静默漏过。修:扫描面扩到整个 us_short 可执行面 `engine/us_short_*.py + runners/*us_short*.py`(31 文件=全 engine+1 runner;test 非系统面);检测抽成可测 helper(扫源文本、不 import runner→零副作用)。按「Optional 合理就修」**加正控**:合成 runner 侧 tushare/a_short/ib_insync 确被抓 + 干净源不误报 + 断言面含 runners。当前 runner 无违禁→扩面仍过。详见 register。
+- **Required**: `R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: E+F **20 OK**(boundary 8=surface-wiring+4 边界+3 检测正控;provider-health 12);全离线 `*us_short*` **1159 OK** 零回归、doc/route 25 OK;面=31 文件含 runner;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续刀 = lifecycle 2c 末片 + weekly_report 渲染器簇(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):边界扫描整面(engine+runner,非只被点名 runner——whole us_short 可执行面)+ 检测 helper 抽离可测。B(连带):README F 行同步「engine→engine+runner 面 + 正控」;无符号改名。C(反向):正控(干净源不误报 + 现有 31 文件扫过)+ 检测正控(合成违禁确被抓)双向证守护非 no-op、非误报。D(歧义):「us_short 面」取 engine+runner 可执行码(非 test/schema)。E:CURRENT 不动(未提交)。F:扫源文本非 import 模块(零副作用)、token 用 import-行 module 名匹配(避免 docstring/字符串误报,同上轮 yfinance 教训)、helper named_sources 设计让正控喂合成源。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 E+F provider health + boundary regression)
+
+- **Verdict/Action**: FAIL. Provider-health offline classifier is acceptable in this slice, but the boundary-regression guard is scoped to `engine/us_short_*.py` only and misses the existing US-short runner surface.
+- **Required**: `R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: E/F target 16 OK; doc/route guards 39 OK; `py_compile` OK; `git diff --check` CRLF-only; BOM/FFFD false. Full `*us_short*` discover is blocked in this Codex runtime by missing `jsonschema` (`find_spec=None`).
+- **Next**: Claude should repair only the boundary-regression scope gap, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 E+F 并轮 — provider 健康检查离线 #3 + 边界回归 #12)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`(readiness 已提交 `0ad2d7af`+closeout `e49e4d99`,Codex re-`审查 PASS`)。按 §18.2 并轮判据(都纯/离线 + 无共享契约跨依赖 + 一次审查覆盖)把 **E(#3 离线)+ F(#12)合一刀**。**E** 新 `engine/us_short_provider_health.py`:OFFLINE 分类器(零 live 探活/网络/provider import,live 探活=批5)——授权源(FMP+公开 SEC EDGAR,$0 小样本授权,皆 critical)注入健康→§3.2 run-state(critical degraded→restricted、down/missing→blocked=关键源坏不输出 clean、overall worst-of);**§18.1 #3「绝不触达未授权源」结构性强制**:对任何非授权源(fmp_full_market/yfinance/Web·X/sec_parser/付费)的 status 直接 `ProviderHealthError` 拒——未授权源根本喂不进去、恒 disabled_unapproved 不参与 clean;畸形 fail-closed。**F** 新 `tests/test_us_short_boundary_regression.py`:钉死 v1 硬边界——不交叉 A 股(us_short engine 零 a_short/tushare/cninfo/A-EGS import + account-state ticker 须字母起拒 A 股数字码)、不接券商/全手动(零 broker/auto-order SDK import)、ship-gate 不放松(`ungraduated_not_full_size_license:true`)。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: E+F **16 测全过**(E:all-ok→clean / critical degraded→restricted / down→blocked / missing→blocked / worst-of、未授权+未知源全拒、disabled_unapproved 恒列、畸形 fail-closed、模块零网络 import;F:四边界静态/契约断言);全离线 `*us_short*` **1155 OK**(+16)零回归、doc/route 25 OK;F 通过即证边界真守(全 us_short engine 无 A 股/券商 import、ship-gate 在、ticker 拒 A 股码);无新 schema。BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(并轮 E+F:E 离线健康分类 + 未授权源结构性拒 + worst-of fail-closed;F 四边界回归);PASS 后用户 `提交`。批3 续刀 = lifecycle 2c 末片 + weekly_report 渲染器簇(price_clock/exclusion_summary/hot_excluded/覆盖诚实)+ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):E 分类全 run-state 出口 + 未授权/未知/畸形全拒;F #12 五边界中四条静态/契约 + 全 us_short engine 扫。B(连带):新 2 文件自带 docstring;README 加 E、F 两路由行(无计数,§18.1 #11);无符号改名、不动既有。C(反向):正控(授权源各健康态正确分类、shipped ship-gate/account-state 契约在)证没误判;F 静态扫真跑过=边界确实没破。D(歧义):「未授权源」取最强=输入契约结构性排除(喂不进),非靠运行时记得跳过。E:CURRENT 不动(未提交)。F:E 零网络/provider import(test 解析 import 行非裸字符串——避免 yfinance-字符串误报[本轮自 catch 并修])、未授权源 ProviderHealthError 先于任何处理、F 扫 import 行非任意 mention(避免 docstring 误报)。
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 R2 lifecycle readiness as_of repair)
 
 - **Verdict/Action**: PASS scoped to the lifecycle readiness `as_of` repair. The tracked readiness artifact now rejects bad `as_of` values before emit/write.
