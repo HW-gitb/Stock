@@ -8,6 +8,26 @@
 
 ---
 
+## 2026-06-23 - Codex `审查 PASS` (US-short batch3 §12.2 upgrade-gate runtime banner)
+
+- **Verdict/Action**: PASS. The runtime banner re-validates upgrade-gate evals before rendering and fails closed to ASCII UNAVAILABLE for malformed, self-authored, look-ahead, or governance-misaligned inputs.
+- **Required**: None. Optional: align route wording later if desired so docs do not imply every non-ready banner literally includes "USER decides".
+- **Verify**: target banner 7 OK; upgrade_gate+banner 37 OK; doc/route/boundary 47 OK; py_compile OK; direct adversarial probes OK; import-heavy probe clean; `git diff --check` CRLF-only; full discovery not counted because `jsonschema` is unavailable.
+- **Next**: User may `提交` this US-short batch3 §12.2 runtime-banner slice; forward-obs accumulation, de-id summary, NAV/#8/weekly/provider/live/DataHub/A-share/US-long remain separate.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 upgrade-gate runtime banner — ④ 运行时醒目横幅)
+
+- **Verdict/Action**: 起草 §12.2 升级闸运行时横幅(④,镜像 `lifecycle_render` banner)。新 engine `engine/us_short_upgrade_banner.py`:`upgrade_banner(eval_result, *, governance)` 把 `us_short_upgrade_gate` eval 渲染成**一行 ASCII(GBK-safe)运行时横幅**,让跑周报的人在 Windows GBK 控制台看见升级就绪态(不只靠周报文字)。**经 `validate_upgrade_eval` 复校**(传 governance 则按它、否则冻结 preset)——自授权(当前无 margin governance 下 `comparison_win_margin_frozen` 改 True)/畸形/look-ahead eval → fail-closed 到保守 UNAVAILABLE 横幅,绝不渲误导的 ready。逐态:ACCUMULATING N/min;DUE-但-margin-未冻 → 不授权(先冻 margin);DUE+margin-冻 → 可**提请**复审,均带「USER decides、绝不自动切生产」声明(§12)。最终 `.encode('ascii')` 兜底保证 ASCII;只 import 纯 `us_short_upgrade_gate`(无 jsonschema)。README 加路由行。升级闸续刀 = forward-obs discover/accumulate(扫私密桶)+ de-id tracked 汇总。纯/离线、不交叉 A 股。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **7 OK**(逐态横幅:accumulating/due-margin-pending[当前 gov]/due-ready[冻 margin gov 传入];fail-closed UNAVAILABLE:畸形 eval/自授权 frozen-ready/冻 margin eval 未传 governance;valid+畸形均 ASCII);全离线 `*us_short*` **1546 OK** 零回归;import heavy=NONE;doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。升级闸续刀 = forward-obs discover/accumulate + de-id 汇总;另 #8 多日 held net(跨模块)、回撤(需 #8)、weekly 接线(batch4-ish)= 批3 余项。
+- **Pre-Codex self-review**: A–F。A(类×出口):逐态横幅(3 态)+ fail-closed(畸形/自授权/冻 eval 未传 gov)+ ASCII 保证(valid+畸形)。B(连带):新叶子、无重命名;README **主动加路由行**;import 纯 upgrade_gate(无 jsonschema);无下游消费者(discover/汇总后续)。C(反向):good 横幅渲染、畸形→UNAVAILABLE 不误渲。D(歧义):复校经权威 `validate_upgrade_eval`(governance-aware re-derive)、自授权→UNAVAILABLE;升级仅 surface 用户决定。E:CURRENT 未动。F:ASCII-only + 最终 encode 兜底、经 validate_upgrade_eval re-derive、纯无 jsonschema/IO。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 upgrade-gate runtime banner(engine/us_short_upgrade_banner.py + tests/test_us_short_upgrade_banner.py + docs/README.md 路由行;import 纯 us_short_upgrade_gate、无新 schema)。重点:① 经 validate_upgrade_eval 复校(governance-aware re-derive)、自授权 frozen-ready/畸形/look-ahead eval → UNAVAILABLE 不渲 misleading ready;② 逐态横幅文案正确(accumulating/due-margin-pending/due-ready)+「USER decides 绝不自动切生产」声明;③ 一行 ASCII、最终 encode('ascii') 兜底保证 GBK-safe;④ 冻 margin eval 须传其 governance 才渲 ready(否则 UNAVAILABLE);⑤ 纯/离线无 jsonschema/provider/IO、不交叉 A 股;discover/accumulate/de-id 汇总=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 upgrade gate repair)
 
 - **Verdict/Action**: PASS. The upgrade gate now re-derives min weeks and margin-frozen readiness from governance, and refuses look-ahead / non-de-identified observations.
