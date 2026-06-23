@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 corporate-action evaluability gate doc-drift repair)
+
+- **Verdict/Action**: PASS. Active README / function / test doc wording now matches paper/reporting/shadow evaluability and the actual return fields.
+- **Required**: None new. `R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: paper-eval target **10 OK**; `py_compile` OK; direct probes OK; stale source grep **0**; doc/route/boundary guards **47 OK**; broad `*us_short*` remains blocked by missing `jsonschema` (654 discovered, 36 errors, 1 skipped).
+- **Next**: User may `提交`; later paper ledger / performance and comparison shadow remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 复权门 doc-drift — stale ship-gate/旧字段 active 教学面清零)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 1 P1,doc-drift)。成立、接受——行为 round-1 已对,但 3 处 active 教学面残 stale(惯漏 B-ripple 面=被改文件自身函数 docstring + 测试 docstring + README):函数 docstring「may enter alpha/ship-gate」、test docstring「blocks_alpha_and_ship_gate consequence」、README「enters alpha/ship-gate」+ 旧 `Returns {…blocks_alpha_and_ship_gate}` 字段表。全改:评估语义 paper/reporting/shadow + 局部因字段 + 恒定 ship-gate 不变式 + 实际 5 返回字段、删 overclaim。stale grep(4 短语 × 源)归零(仅 gitignored .pyc、0 tracked、不提交)。
+- **Required**: `R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP` resolved(working tree;详 register Resolution 2)。
+- **Verify**: target **10 OK**;全离线 `*us_short*` **1328 OK** 零回归;doc/route+boundary 33 OK;源 stale grep=0;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:paper 落盘/绩效(#8 后续)、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):stale 4 短语全 active 源面(engine .py 含函数 docstring / test 模块 docstring / README 路由行)grep 归零、行为不动。B(连带):.pyc 命中已核=gitignored 0-tracked 转译缓存、非教学面、`git add -A` dry-run 仅 5 源文件。C(反向):正控——行为 10 测试全绿(字段/不变式未变)、仅文字改。D(歧义):无。E:CURRENT 未动。F:SESSION_LOG/register 旧措辞 Codex 豁免为审计史、不动。**教训:行为改连带文档,被改文件自身函数 docstring + 测试模块 docstring + README「Returns/字段表」是我系统性漏的面——改字段名/语义后这三面必同 grep 归零。**
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 corporate-action evaluability gate repair)
+
+- **Verdict/Action**: FAIL. Behavior mostly fixed, but active README / function / test docstrings still teach old field / ship-gate wording.
+- **Required**: `R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP` remains open - full re-review correction in `docs/system_risk_register.md`.
+- **Verify**: paper-eval target **10 OK**; `py_compile` OK; direct probe OK; stale active grep hits remain; doc/route/boundary guards **47 OK**; broad `*us_short*` blocked by missing `jsonschema` (654 discovered, 36 errors, 1 skipped).
+- **Next**: Claude should repair only active docstring / route-row / test-doc wording for this gate, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order execution/A-share/US-long work.
+
+## 2026-06-23 – Claude `修复` (US-short 批3 复权门 — 公司行动可评估 ≠ ship-gate 许可,显式隔离)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——`blocks_alpha_and_ship_gate` 合二门:全确认=False、被读成「paper 现在 ship-gate eligible」,违反 §12(paper 绝不判 full-size ship-gate、只 live_normalized 毕业)。按 Required 拆:删合并字段、换**局部因**字段 `blocks_paper_performance_due_to_corporate_action`(仅未确认挡 paper/reporting/shadow),加两个**恒定 §12/§27 不变式** `full_size_ship_gate_allowed=False` + `ship_gate_evidence_level="paper_not_live_normalized"`(不随确认变)——全确认仅=可作 paper/reporting/shadow、绝非 ship-gate。三确认 literal-True 门不动。
+- **Required**: `R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: target **10 OK**;探针全确认→`{status:evaluable, full_size_ship_gate_allowed:False}`;全离线 `*us_short*` **1328 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:paper 落盘/绩效(#8 后续)、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):全确认/未确认/部分/空/typo 各态 ship-gate 恒 disallowed、无 ship_gate 字段为 True;原 fail-closed + 闭世界拒 typo 不变。B(连带):docstring/README overclaim 删、同步;重命名测试断言全改。C(反向):正控——全确认仍 evaluable、未确认仍 not_evaluable;新负测 all-confirmed 蕴含 ship-gate 即 fail。D(歧义):evaluable=paper/reporting/shadow 非 ship-gate(Required 明定);ship-gate 恒 disallowed。E:CURRENT 未动。F:不变式 hardcode 常量。**教训:可评估≠有资格;两道证据门别合一字段、ship-gate 许可须独立恒定不变式。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 corporate-action evaluability gate §12.1 / #29)
+
+- **Verdict/Action**: FAIL. The literal-True corporate-action fail-closed gate works, but the all-confirmed output says `blocks_alpha_and_ship_gate=False`, which can imply paper performance becomes ship-gate eligible even though section 12 keeps paper evidence out of full-size ship-gate.
+- **Required**: `R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target paper-eval-gate tests **8 OK**; `py_compile` OK; direct probes show all-True returns `blocks_alpha_and_ship_gate=False`, while truthy / missing / typo cases fail closed; doc/route/boundary guards **47 OK**; `git diff --check` CRLF-only warning for `docs/README.md`; broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (652 discovered, 36 errors, 1 skipped).
+- **Next**: Claude should repair only the paper-eval gate's output semantics and direct tests/docs so corporate-action evaluability does not imply paper ship-gate eligibility; no provider/live/DataHub/Skill/production/broker/order execution/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 复权/公司行动门 §12.1 / §18.1 #29 — paper_performance 可评估 fail-closed)
+
+- **Verdict/Action**: 起草 batch3 续片 复权门(§12.1/§18.0 P0/#29)。`paper_performance_evaluability(adjustment_context)` 判能否进 alpha/ship-gate:三 §12.1 公司行动确认(`adjustment_mode_confirmed`/`split_dividend_handled`/`ex_date_price_consistent`)全**字面 True** 才 `evaluable`,否则 `not_evaluable` + `unconfirmed` + `blocks_alpha_and_ship_gate=True`(§12.1 不进 ship-gate/alpha)。**fail-closed**:非字面 True(缺/False/None/truthy 非bool)皆不确认 → 默认 not_evaluable,绝不在未证 truthy 复权态上悄进 alpha(SR-PROVIDER-001)。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **8 OK**;全离线 `*us_short*` **1326 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:paper 落盘/绩效(#8 后续)、比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):非字面 True(缺/False/None/truthy 非bool)皆不确认→not_evaluable;malformed(非dict/未知[typo]确认键)拒。B(连带):确认键集源自 §12.1 prose;新 engine 入 boundary glob;README 行。C(反向):正控——全 True→evaluable、空 context 全 unconfirmed;未误判。D(歧义):bool 确认取「is True」严判(防松散 truthy 解锁,同 whole-class bool 课);状态取单一 fail-closed(§12.1 not_evaluable/data_degraded 二者皆 blocking、不自造区分)。E:CURRENT 未动。F:闭世界拒 typo 键(防真确认静默漏报);`is not True` 严判。**镜像:门=coverage/hot、bool is-True=whole-class 课。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 复权/公司行动门 §12.1/§18.1 #29(engine/us_short_paper_eval_gate.py + tests/test_us_short_paper_eval_gate.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① fail-closed 方向——三确认须全字面 True 才 evaluable、非 True(缺/False/None/truthy 非bool)皆 not_evaluable 是否对、是否会被松散 truthy 解锁 ② blocks_alpha_and_ship_gate 是否忠于 §12.1「不进 ship-gate/alpha」③ 闭世界拒 typo 确认键是否合理(防真确认被静默漏报)④ not_evaluable/data_degraded 取单一状态是否可接受(§12.1 二者皆 blocking、未自造区分)⑤ 纯/离线、不碰 provider/live、未判 ship-gate、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 paper fill expiry gate repair)
 
 - **Verdict/Action**: PASS. `simulate_fill()` now enforces the §12.1 v1 `order_expiry=first_regular_session_only` gate before emitting any fill result; missing / non-v1 / non-string expiry values fail closed, while the valid v1 order still follows the deterministic Step0 / Step1 / same-day stop-priority rules.
