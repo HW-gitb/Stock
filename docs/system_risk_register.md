@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP - lifecycle governance-edge malformed inputs still have raw-raise / silent-clean holes
 
-- Status: **resolved** (Codex re-`审查 FAIL` ×2 2026-06-23 → Claude `修复` round-3 2026-06-23, working tree; the malformed-input class is now closed STRUCTURALLY at the container layer, not leg-by-leg; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `5efb4f0a`, Codex re-`审查 PASS` 2026-06-23; the malformed-input class is closed STRUCTURALLY at the container layer over 3 rounds, not leg-by-leg).
 - Severity: **P1** (lifecycle evidence-clock / clean-gate robustness before persistence, weekly lifecycle banner, readiness artifact, or upgrade-review routing consumes the accumulator).
 - Source: Codex strict re-review of Claude's repair for `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES`.
 - Scope reviewed: current working tree with modified `docs/README.md`, `docs/SESSION_LOG.md`, `docs/system_risk_register.md`, `engine/us_short_lifecycle_eval.py`, `schemas/us_short_lifecycle_register.schema.json`, and `tests/test_us_short_lifecycle_eval.py`; recent commits through `1a219321`; `docs/us_short_system_design.md` §2.1 / §12.2 / §13 / §13.1 / §13.2 / §18.0 / §18.1 #20 / §18.2; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`; prior lifecycle slice-1/slice-2a review entries. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
@@ -60,7 +60,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-README-TEST-COUNT-DRIFT - active lifecycle route row still says 68 tests after the repair added six tests
 
-- Status: **resolved** (Codex re-`审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `5efb4f0a`, Codex re-`审查 PASS` 2026-06-23; exact route-row counts retired per §18.1 #11 + absence guard).
 - Severity: **P3** (active route-doc / cross-LLM review hygiene; no runtime behavior failure).
 - Source: Codex strict re-review of Claude's repair for `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES`.
 - Scope reviewed: `docs/README.md` active US-short batch3 R2 lifecycle route row, `tests/test_us_short_lifecycle_eval.py`, top `docs/SESSION_LOG.md`, and current lifecycle target test output. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
@@ -76,7 +76,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES - lifecycle accumulator / authority validator still accept or raw-raise malformed edge inputs
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `5efb4f0a`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (lifecycle evidence-clock / clean-gate correctness before the runtime persister, weekly lifecycle banner, readiness artifact, or upgrade-review routing consumes this accumulator).
 - Source: Codex strict review of US-short batch3 R2 lifecycle-eval slice 2a (derived `forward_observations` ledger + idempotent `accumulate_lifecycle_observation`).
 - Scope reviewed: current working tree with modified `docs/README.md`, `docs/SESSION_LOG.md`, `engine/us_short_lifecycle_eval.py`, `schemas/us_short_lifecycle_register.schema.json`, and `tests/test_us_short_lifecycle_eval.py`; recent commits through `1a219321`; `docs/us_short_system_design.md` §2.1 / §12.2 / §13 / §13.1 / §13.2 / §18.0 / §18.1 #20 / §18.2; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`; prior batch3 cut1/R2a/lifecycle slice-1 route rows and tests. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
