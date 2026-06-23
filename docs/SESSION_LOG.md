@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 shadow compare repair)
+
+- **Verdict/Action**: PASS. The shadow-compare first cut now locks the exposed profile contract, loaded preset, and `core_score` scorer dependency; README routing and SESSION_LOG minimal-template guard are clean.
+- **Required**: None new. `R-USSHORT-BATCH3-SHADOW-COMPARE-CONTRACT-ROUTE-GAP`, `R-USSHORT-BATCH3-SHADOW-COMPARE-CORE-SCORE-DRIFT-GAP`, and `R-USSHORT-BATCH3-SHADOW-COMPARE-SESSIONLOG-MINIMAL-TEMPLATE-GAP` are closed in `docs/system_risk_register.md`.
+- **Verify**: target shadow tests 37 OK; py_compile OK; doc/route/boundary 47 OK; direct probes reject output/governance/core_score drift and good still builds; import probe loads no `jsonschema` / lifecycle / provider modules; `git diff --check` clean except CRLF warnings; broad `*us_short*` not rerun because reviewer Python lacks `jsonschema` and no network install was authorized.
+- **Next**: User may `提交` this US-short batch3 §12.2 shadow-compare first cut; later §12.2 private persistence/NAV/upgrade cuts still require separate scoped review.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 比较轨 shadow — scorer 依赖锁 + SESSION_LOG 极简模板)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 2 Required)。judge:两面成立、在 scope。① **scorer 漂移**:`_select` 经 `core_score` 打分、其自载 `_PROFILES` 我没核——Codex 单独漂移 core_score 权重即得「冻结声明+漂移选股」。修(Codex 选项 b):`_check_governance` 选股前加 `profile_weights(name)==_FROZEN_PROFILES` 核 + 对抗测试。② **SESSION_LOG 超模板**:上条 `修复` bullet>500 触 guard → 缩到极简模板。详 register。
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-CORE-SCORE-DRIFT-GAP` + `R-USSHORT-BATCH3-SHADOW-COMPARE-SESSIONLOG-MINIMAL-TEMPLATE-GAP` 均 resolved(working tree;详 register)。
+- **Verify**: +1 对抗(独立漂移 `core_score._PROFILES` → build 拒)、target **37 OK**;探针:Codex core_score-only 漂移现 REJECT、先前 output/governance 探针仍拒、good 仍 build;全离线 `*us_short*` **1401 OK** 零回归;doc governance guard 过;py_compile OK;import heavy=NONE。
+- **Next**: Codex re-`审查`(2 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。§12.2 续刀 = 私密持久化+§18.0 guard / 脱敏汇总 → paper-NAV 双向全口径 → 升级闸。
+- **Pre-Codex self-review**: A:scorer 核覆盖全档 `profile_weights==frozen`、选股前 fail-closed。B:模块 docstring 同步、register 单一来源。C:good/边界仍过无误拒。D:选 Codex 选项 b(核 scorer 权重)非复制 core_score 打分。E:CURRENT 未动。F:dict== 精确;SESSION_LOG 双 `修复` bullet ≤500 极简模板、guard 复验。判断:非盲执。
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 §12.2 shadow compare repair)
+
+- **Verdict/Action**: FAIL. The README route and exposed artifact/preset locks are improved, but scorer-dependency drift can still make selections use non-frozen weights while the artifact declares frozen weights; the repair entry also violates the review-cycle minimal-template guard.
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-CORE-SCORE-DRIFT-GAP`; `R-USSHORT-BATCH3-SHADOW-COMPARE-SESSIONLOG-MINIMAL-TEMPLATE-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target shadow tests 36 OK; py_compile OK; prior output/governance probes reject; core_score-only drift probe accepted; doc/route/boundary 47 FAILED on SESSION_LOG bullet-too-long; full `*us_short*` blocked by missing `jsonschema`; no provider/live/network/DataHub/Skill/A-share/US-long.
+- **Next**: Claude repair only the two Required items and direct tests/docs, then return for Codex re-`审查`; do not commit or start persistence/NAV/upgrade/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 比较轨 shadow #13/#24 — 冻结档契约 const-pin + README 路由)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required,两面)。judge:两面成立、在 scope。① 契约未锁 weights(只查 role/flag)→ 引 `_FROZEN_PROFILES` const-pin + `_assert_frozen_profile` 在 preset+output 两侧强制==冻结值,锁 sole-primary + theme_off theme==0(#24);② `docs/README.md` 未路由 → 加稳定路由行。详 register。
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-CONTRACT-ROUTE-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +4 对抗(output weight/role/flag 篡改 + runtime 权重漂移)、target **36 OK**;Codex 4 个先前变异现全 REJECT、good 仍过;全离线 `*us_short*` **1400 OK** 零回归;py_compile OK;import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:契约 4 字段 ×2 面(preset+output)全锁 + theme_off=0 const 自校。B:模块+test docstring+README 三面同步。C:good/空池仍过、bool identity 拒 truthy 非bool。D:最窄修。E:CURRENT 未动。F:weights 精确 ==;详 register。判断:两面 judge 合理在-scope,非盲执。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 shadow compare #13/#24 first cut)
+
+- **Verdict/Action**: FAIL. Target projection behavior is present, but the validator/governance gate does not actually lock the frozen profile weights/roles it exposes, and the new slice is not routed in `docs/README.md`.
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-CONTRACT-ROUTE-GAP` - full Required/risk/boundary is in `docs/system_risk_register.md`.
+- **Verify**: target shadow tests 32 OK; py_compile OK; doc/route/boundary guards 47 OK; probes accepted tampered profile weights/role/shadow flags plus runtime `theme_off` drift; full `*us_short*` blocked by missing `jsonschema`; no provider/live/network/DataHub/Skill/production/A-share/US-long run.
+- **Next**: Claude repair only the shadow-comparison contract/route gaps and direct tests/docs, then return for Codex re-`审查`; do not commit or start persistence/NAV/upgrade/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 比较轨 shadow #13/#24 首刀 — shadow scoring_profile 选股比较投影)
+
+- **Verdict/Action**: 起草批3 §12.2 比较轨首刀(纯投影、无新 schema)。新 `engine/us_short_shadow_compare.py`:`build_shadow_comparison(scored_pool, *, top_n)` 把同一 PIT-冻结合格池在**每个冻结 scoring_profile** 下重打分(复用批2 `core_score`、读冻结 `us_short_scoring_profile_governance` preset 单源)、按 (core_score desc, ticker asc) **确定性 FIXED top_n** 选股 → per-profile selection + balanced↔shadow 选股集差(`vs_balanced`)。**#13** ship-gate 隔离:输出带冻结 boundary 块(production/is_buy_advice/shadow_counts_ship_gate/changes_primary_selection 全 False)+ balanced=唯一 primary/live(governance 漂移=第二 primary/shadow 转 live → fail-closed)。**#24** theme_off(theme 权重=0)归因基准:`vs_balanced['theme_off'].balanced_only` = 赛道权重边际选股贡献、可算+非退化。`validate_shadow_comparison` 自校全契约(track/boundary/单 primary/选股确定序·rank·唯一·长度/vs↔selection 一致)。**纯/离线**:仅 json+math(经 core_score),无 jsonschema/lifecycle_eval/provider/live;**不落盘**(私密持久化+§18.0 guard=下一刀,`private_paths` 已含 shadow_compare_private)、不算 NAV/双向全口径成绩单、不跑升级闸、不接 §12.1 复权门连带——均后续刀。不交叉 A 股。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **32 OK**(选股确定序+ticker tie-break / theme_plus 重排 / #24 marginal 非退化 / #13 boundary+单primary / 空池+欠额池 / 整类坏输入[pool·row·ticker·dup·blocks·top_n] / governance 漂移 3 例 / 输出 validator 篡改 11 例);全离线 `*us_short*` **1396 OK**(1364+32,零回归)、schema **472 OK**;py_compile OK;import 探针 heavy=NONE。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 续刀 = 私密持久化(shadow_compare_private + §18.0 guard)+ 脱敏 tracked 汇总 schema → paper-NAV 双向全口径成绩单 → 升级闸防自欺。
+- **Pre-Codex self-review**: A–F。A(类×出口):坏输入整类(pool 非 list / row 非 dict / ticker 缺·空·非str / 重复 / blocks 非 dict / top_n 非正int 含 bool·float·str·None·0·负)+ governance 漂移(无/双 primary、shadow 转 live)+ 输出 validator 11 篡改面全覆盖。B(连带):新叶子模块、无重命名既有符号、无下游消费者;`private_paths` 已含 shadow_compare_private(下一刀用);README 无 per-模块枚举需改。C(反向):正控——good/空池/欠额池全过;等分 ticker-asc 与 `_select` 排序一致不误拒。D(歧义):首刀范围取最窄安全侧(只投影,持久化/NAV/升级闸/复权门全延后),docstring 明列边界。E:CURRENT 未动(transient gate 只在 SESSION_LOG)。F:权重 dict 复制不可变冻结表、core_score 处理非有限/缺块、vs↔selection 跨字段一致校验、无 generator 双消费。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 比较轨 shadow #13/#24 首刀(engine/us_short_shadow_compare.py + tests/test_us_short_shadow_compare.py;无新 schema、复用冻结 us_short_scoring_profile_governance preset + 批2 core_score)。重点:① FIXED top_n + (core_score desc, ticker asc) 确定性选股=禁止挑样本(§12.2);② #13 ship-gate 隔离 boundary 全 False + balanced 唯一 primary/live + governance 漂移 fail-closed;③ #24 theme_off(theme=0)归因基准 balanced−theme_off 选股边际可算;④ validate_shadow_comparison 自校全契约(别只信 deriver);⑤ 纯/离线无 jsonschema/provider/live、不落盘(持久化/NAV/升级闸/复权门=后续刀)、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-review PASS (US-short batch3 price_clock DATE-ASCII repair)
 
 - **Verdict/Action**: PASS. The price-clock inline date helper now restores strict ASCII `YYYYMMDD` semantics without changing the rest of the §21 clock ordering/session contract.
