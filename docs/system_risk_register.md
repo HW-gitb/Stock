@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-PAPER-EVAL-GATE-SHIP-GATE-PERMISSION-GAP - corporate-action evaluability gate can imply paper performance is ship-gate eligible
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-23; current working tree).
+- Status: **resolved** (committed in `af8c92ec`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (US-short paper evidence / ship-gate evidence boundary before later paper_performance, comparison/shadow, portfolio guard, or maturity reporting consumes the evaluability gate).
 - Source: Codex strict review of US-short batch3 corporate-action evaluability gate slice (`engine/us_short_paper_eval_gate.py`, `tests/test_us_short_paper_eval_gate.py`, `docs/README.md` route row, and the top `docs/SESSION_LOG.md` Claude draft entry).
 - Scope reviewed: current working tree after committed paper-fill closeout `e0dd4794`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_paper_eval_gate.py`, and untracked `tests/test_us_short_paper_eval_gate.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` section 12 / section 12.1 / section 18.0 / section 18.1 #27 and #29, plus the review protocol and pre-Codex checklist. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order execution/A-share/US-long path was run.
