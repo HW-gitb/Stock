@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-23 - Codex re-`review PASS` (US-short batch3 S12.1 paper fill / multi-day #8)
+
+- **Verdict/Action**: PASS. Same-day `simulate_fill` now rejects invalid order geometry before any bookable output, and the multi-day held-exit bracket gate remains intact.
+- **Required**: None new. `R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP` and `R-USSHORT-BATCH3-MULTIDAY-EXIT-LEVEL-RELATION-GAP` are resolved in the working tree; see `docs/system_risk_register.md`.
+- **Verify**: target paper-fill/multi-day/net 61 OK; paper-fill/multi-day/net/scorecard/comparison/ledger 135 OK; boundary+doc+route 47 OK; py_compile OK; direct probes reject prior same-day invalid stop/tp/limit cases and keep valid pullback stop/tp/held plus breakout cap; import-heavy NONE; diff-check CRLF-only; full `test_us_short*.py` not counted because this Python lacks `jsonschema`.
+- **Next**: User may commit this US-short batch3 S12.1 #8 paper-fill / multi-day held-exit slice; NAV/weekly/provider/live/DataHub/A-share/US-long remain separate.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.1 same-day paper fill — order geometry stop<fill<tp + pullback limit 在带内)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`review FAIL` sibling 1 Required, P0;multi-day 那条已 resolved)。judge:成立、在 scope——同 geometry 类的 B-ripple,producer `simulate_fill` 同样漏校(修 multi-day 时没连带修 same-day)。修(Codex 窄修):pullback `limit_order_price` 须在 `[elo,ehi]` 带内;两 order type 算出 fill 候选后须 `stop < fill < tp`(严格),inverted/equal/out-of-band 在任何 bookable 输出前 fail-closed。breakout cap/Step0/STOP 优先/v1 expiry 不动。详 register。
+- **Required**: `R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +5 geometry 对抗(pullback stop>=fill/tp<=fill 含 equality、limit 上/下越带、breakout fill 未 bracket 拒)+ valid 仍 book 正控;Codex 4 探针现全 REJECT;target paper-fill **30 OK**;全离线 `*us_short*` **1578 OK** 零回归;boundary+doc+route 39 OK;import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;#8 整刀含 multi-day + same-day geometry;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:pullback 带内(上/下越带)+ 两 type stop<fill<tp(含 equality + breakout)+ valid 正控 + 既有 Step0/exit/expiry/malformed。B(连带):geometry 类 B-ripple——multi-day 已修、本刀连带修 producer simulate_fill;docstring(模块+函数)+ README row/Tests + test Covers 同步;paper_net_result/multi-day 不动。C(反向):valid bracket+in-band 仍 book、not_filled 不触发(无 fill 无 bracket)、向后兼容。D:按 Codex 窄修(limit 带内 + fill 候选后 bracket);breakout cap 保留。E:CURRENT 未动。F:strict `<` 双侧 + 带内闭区间、fill 候选后校、纯无 jsonschema。
+
+## 2026-06-23 - Codex re-`review FAIL` (US-short batch3 S12.1 paper fill / multi-day #8)
+
+- **Verdict/Action**: FAIL overall. `R-USSHORT-BATCH3-MULTIDAY-EXIT-LEVEL-RELATION-GAP` is resolved in the working tree, but the same-day paper-fill producer has the same order-geometry class open.
+- **Required**: `R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target multi-day+net 31 OK; paper-fill/multi-day/net/scorecard/comparison/ledger 130 OK; boundary+doc+route 47 OK; py_compile OK; import-heavy NONE; probes show multi-day invalid bracket rejects, but same-day fill still accepts stop>=fill / tp<=fill / pullback limit outside band and books net; full `test_us_short*.py` not counted because `jsonschema` is unavailable.
+- **Next**: Claude repair only same-day `simulate_fill` order geometry and direct tests/docs/register, then return for Codex re-review; do not commit or start NAV/weekly/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.1 多日平仓 — passive level 须 bracket entry stop<fill<tp)
+
+- **Verdict/Action**: 收到 `修复`(Codex `review FAIL` 1 Required, P0)。judge:成立、在 scope——`simulate_multi_day_exit` 只校 `stop<tp`、没校与 fill 的关系;long 的 passive levels 必须 stop<fill<tp(stop 在下、tp 在上),否则 stop>=fill 把"止损"记成赚、tp<=fill 把"止盈"记成亏(Codex 探针 {100,105,110}/{100,90,95} 都被收并 booked net)。修:校改 `stop < fill < tp`(严格,拒 inverted/equal,bar 处理前 fail-closed)。详 register。
+- **Required**: `R-USSHORT-BATCH3-MULTIDAY-EXIT-LEVEL-RELATION-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: bracket-geometry 对抗测试 5 例(stop>=fill[探针1]/tp<=fill[探针2]/stop==fill/tp==fill/stop==tp 全拒);Codex 2 探针现 REJECT(不再 book net)、valid bracket+later-day stop/tp+STOP 优先+no-hit/空 held+坏 bar/OHLC+same-day net_result 兼容仍过;target multi-day **14 OK**;全离线 `*us_short*` **1573 OK** 零回归;boundary+doc+route 47/39 OK;import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:bracket 全拒态(2 探针+两 equality+stop==tp)+ 既有 later-day/优先/held/坏输入/集成正控。B(连带):仅 multi-day 模块校改;docstring + README row/Tests + test Covers 同步;paper_net_result/paper_fill 不动(geometry 是 multi-day 入参契约)。C(反向):valid bracket 仍过、held 仍未实现、向后兼容。D:按 Codex 窄修(stop<fill<tp 严格);trailing-stop-above-entry 等非基本模式须显式设计命名、v1 不复用反转语义。E:CURRENT 未动。F:strict `<` 双侧、bar 前校、纯无 jsonschema。
+
+## 2026-06-23 - Codex `review FAIL` (US-short batch3 S12.1 multi-day held-exit)
+
+- **Verdict/Action**: FAIL. Target tests pass, but multi-day held exit accepts impossible passive level geometry and can feed realized net into paper accounting.
+- **Required**: `R-USSHORT-BATCH3-MULTIDAY-EXIT-LEVEL-RELATION-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target multi-day+net 31 OK; paper-fill/multi-day/net/scorecard/comparison/ledger 130 OK; boundary+doc+route 47 OK; py_compile OK; import-heavy NONE; direct probe accepted stop>=fill / tp<=fill and booked net; broad `test_us_short*.py` discovery was environment-blocked by missing `jsonschema`.
+- **Next**: Claude repair only the multi-day held-level relation gate and direct tests/docs/register, then return for Codex re-review; do not commit or start NAV/weekly/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.1 多日平仓 #8 — multi-day held-exit simulator + net_result exit_reason 泛化)
+
+- **Verdict/Action**: 起草 §12.1 #8 多日平仓(把 filled_held 多日后实现 net,解锁 scorecard fully-resolved + 回撤)。新 engine `engine/us_short_paper_multi_day_exit.py`:`simulate_multi_day_exit(held_position, day_bars)` 按 §12.1 同款保守规则逐日解平仓——首个 `low<=stop` → filled_stopped@stop(STOP 优先 ②,`multi_day_stop`),否则首个 `high>=tp` → filled_tp_exit@tp(`multi_day_tp_exit`),窗口内无命中 → 仍 filled_held(未实现;v1 无时间止损/主动减仓 #34,§12.1 不虚高)。`held_position={fill_price, stop_clear_price, take_profit_exit_price}`(§6.1 被动 levels、stop<tp);出 fill_result 同 paper_fill 形,直接喂 `paper_net_result`。**跨模块连带最小**:exit_reason 仅 paper_fill(产)+paper_net_result(校)耦合,ledger/scorecard 消费 net_result(无 exit_reason 字段)不受影响——故 `paper_net_result._STATUS_EXIT_REASONS` 改 set-valued(同 closed status 接 same_day 或 multi_day),其余不动、向后兼容。镜像 §6.1/§9 grounding(被动 levels、无 active mgmt)。README 加路由行。纯/离线、不交叉 A 股。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 multi-day target **14 OK**(stop/tp later day、STOP 优先、首触发日、无命中→held、空窗→held、整类坏输入[held 形/缺价/stop≮tp/bars/OHLC]、集成喂 paper_net_result stop/tp/held);paper_net_result 正控扩 multi_day(既有 reject 测仍过、向后兼容);全离线 `*us_short*` **1573 OK** 零回归;import heavy=NONE;doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。#8 完 → 回撤(NAV 路径,消费多日实现的 net)可做;批3 余项 = 回撤 / weekly 接线(batch4-ish)/ de-id 汇总(可选)/ banner README Optional。
+- **Pre-Codex self-review**: A:multi-day 全态(stop/tp later、优先、首触发、无命中held、空窗)+ 整类坏输入 + 集成(md→net_result)+ net_result multi_day 正控。B(连带):exit_reason 仅 paper_fill+net_result(grep 证 ledger/scorecard 无 exit_reason)→ 只改 net_result set-valued、docstring 同步、README 加行;paper_fill 不动(仍 same_day)。C(反向):既有 net_result reject 测仍过(跨-status 坏 reason 仍拒)、held→未实现、向后兼容。D:多日规则=§12.1 同款保守逐日(stop 优先/无命中held/无时间止损),grounding §6.1/§9 被动 levels #34 不做。E:CURRENT 未动。F:OHLC sanity 复用、stop<tp、exit_reason set-valued 向后兼容、纯无 jsonschema。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.1 #8 多日平仓(engine/us_short_paper_multi_day_exit.py + tests/test_us_short_paper_multi_day_exit.py + engine/us_short_paper_net_result.py[exit_reason set-valued] + tests/test_us_short_paper_net_result.py + docs/README.md 路由行;无新 schema)。重点:① 多日逐日 exit 规则=§12.1 同款保守(low<=stop→stop 优先、high>=tp→tp、无命中→held 不虚高、v1 无时间止损);② 出 fill_result 同 paper_fill 形喂 paper_net_result;③ paper_net_result._STATUS_EXIT_REASONS set-valued(同 closed status 接 same_day|multi_day)向后兼容、ledger/scorecard 不受影响(net_result 无 exit_reason);④ 整类坏输入 fail-closed(held 形/缺价/stop≮tp/bars/OHLC);⑤ 纯/离线无 jsonschema/provider、不交叉 A 股;回撤=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 upgrade-obs discover live-forward provenance repair)
 
 - **Verdict/Action**: PASS. The store record now carries `observation_kind`, and upgrade-observation discover counts only `LIVE_FORWARD` records after the existing private-path / bucket / stale / comparison-contract gates.

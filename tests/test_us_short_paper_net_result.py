@@ -164,11 +164,13 @@ class FillShapeLocked(unittest.TestCase):
                 nr.paper_net_result({"status": status, "fill_price": 100.0, "exit_price": 105.0,
                                      "exit_reason": bad, "reason": None}, cost_prior=ZERO_COST)
 
-    def test_correct_closed_reasons_pass(self):  # positive controls: the simulator's exact status⇔reason pairs
-        nr.paper_net_result({"status": "filled_stopped", "fill_price": 100.0, "exit_price": 95.0,
-                             "exit_reason": "same_day_stop", "reason": None}, cost_prior=ZERO_COST)
-        nr.paper_net_result({"status": "filled_tp_exit", "fill_price": 100.0, "exit_price": 110.0,
-                             "exit_reason": "same_day_tp_exit", "reason": None}, cost_prior=ZERO_COST)
+    def test_correct_closed_reasons_pass(self):  # positive controls: same-day AND multi-day status⇔reason pairs
+        for reason in ("same_day_stop", "multi_day_stop"):  # multi_day from engine.us_short_paper_multi_day_exit
+            nr.paper_net_result({"status": "filled_stopped", "fill_price": 100.0, "exit_price": 95.0,
+                                 "exit_reason": reason, "reason": None}, cost_prior=ZERO_COST)
+        for reason in ("same_day_tp_exit", "multi_day_tp_exit"):
+            nr.paper_net_result({"status": "filled_tp_exit", "fill_price": 100.0, "exit_price": 110.0,
+                                 "exit_reason": reason, "reason": None}, cost_prior=ZERO_COST)
 
 
 if __name__ == "__main__":

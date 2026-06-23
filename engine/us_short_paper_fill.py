@@ -20,6 +20,11 @@ single-session logic); the order is judged on the one regular session; not fille
     AND ``low <= stop_clear_price`` → entered-then-STOPPED (do NOT assume it survived the day); else if
     ``high >= take_profit_exit_price`` → tp exit. STOP takes priority when both same-day triggers fire (§12.1 ②).
 
+Order GEOMETRY is enforced fail-closed before any bookable output: a pullback ``limit_order_price`` must be inside
+the valid entry band, and the passive levels must BRACKET the actual fill (``stop_clear_price < fill <
+take_profit_exit_price``) — an inverted / equal / out-of-band geometry would book a "stop" as a gain or a
+"take-profit" as a loss (R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP).
+
 Pure / offline: applies arithmetic rules to dicts; no provider / live / DataHub / network; no persistence (the
 private paper_*.csv writer + the corporate-action / not_evaluable hard gate + performance accounting are later
 cuts); no A-share crossing. Malformed input fails closed (``PaperFillError``).
@@ -84,7 +89,12 @@ def simulate_fill(order, day_bar) -> dict:
     (frozen enum), ``valid_entry_low`` / ``valid_entry_high`` (the band), the type-specific entry price
     (``limit_order_price`` for pullback / ``breakout_entry_price`` for breakout), ``stop_clear_price`` and
     ``take_profit_exit_price``; ``day_bar`` carries ``open`` / ``high`` / ``low`` / ``close``. Same order + same
-    bar always yield the same result (reproducible). Raises ``PaperFillError`` on malformed input."""
+    bar always yield the same result (reproducible). Order GEOMETRY is enforced fail-closed before any bookable
+    output: a ``pullback_limit``'s ``limit_order_price`` must sit inside ``[valid_entry_low, valid_entry_high]``, and
+    (after the deterministic fill candidate is known, both order types) the passive levels must bracket it —
+    ``stop_clear_price < fill < take_profit_exit_price`` (a long's stop below entry, tp above; inverted / equal
+    geometry would book a "stop" as a gain or a "take-profit" as a loss). Raises ``PaperFillError`` on malformed
+    input / impossible geometry."""
     if not isinstance(order, dict):
         raise PaperFillError("order must be a dict, got %r" % (type(order).__name__,))
     ot = order.get("order_type")
@@ -116,6 +126,8 @@ def simulate_fill(order, day_bar) -> dict:
     # --- Step 1: fill by order_type (deterministic) ---
     if ot == "pullback_limit":
         limit = _price(order, "limit_order_price", "order")
+        if not (elo <= limit <= ehi):  # a pullback limit MUST sit inside the valid entry band (else fill out-of-zone)
+            raise PaperFillError("pullback limit_order_price %s must be inside the valid entry band [%s, %s]" % (limit, elo, ehi))
         if low <= limit:
             fill = limit
         else:
@@ -126,6 +138,14 @@ def simulate_fill(order, day_bar) -> dict:
             fill = min(max(o, bp), ehi)  # can't fill below the open; never chase above valid_entry_high
         else:
             return _result("not_filled", reason="breakout_not_reached")
+
+    # the passive levels MUST bracket the actual fill (a long: stop below entry, tp above) — else a same-day "stop"
+    # would book a gain or a "take-profit" a loss (R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP); checked AFTER
+    # the deterministic fill candidate is known, before any same-day stop/tp/held output can be booked
+    if not (stop < fill < tp):
+        raise PaperFillError(
+            "passive levels must bracket the fill: stop_clear_price %s < fill %s < take_profit_exit_price %s "
+            "(a long's stop below entry, tp above); inverted / equal geometry is refused" % (stop, fill, tp))
 
     # --- same-day conservative exit: STOP first (priority), then tp exit (§12.1 ①②) ---
     if low <= stop:

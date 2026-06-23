@@ -36,9 +36,12 @@ import math
 # simulate_fill outputs through here so a new status can't silently drift past this consumer)
 _REALIZED_CLOSED = ("filled_stopped", "filled_tp_exit")
 _FILL_STATUSES = ("not_filled", "filled_held") + _REALIZED_CLOSED
-# the exit_reason simulate_fill emits for each same-day CLOSED status (mirrors engine.us_short_paper_fill; the
-# integration test feeds real simulate_fill outputs so a reason rename can't silently drift past this consumer)
-_STATUS_EXIT_REASON = {"filled_stopped": "same_day_stop", "filled_tp_exit": "same_day_tp_exit"}
+# the exit_reason(s) a CLOSED status may carry — the same-day variant from engine.us_short_paper_fill OR the
+# multi-day variant from engine.us_short_paper_multi_day_exit (both feed this consumer; the integration tests feed
+# real outputs so a reason rename can't silently drift past here)
+_STATUS_EXIT_REASONS = {"filled_stopped": ("same_day_stop", "multi_day_stop"),
+                        "filled_tp_exit": ("same_day_tp_exit", "multi_day_tp_exit")}
+_COST_KEYS = ("commission_fee", "slippage_bps", "spread_cost")
 _COST_KEYS = ("commission_fee", "slippage_bps", "spread_cost")
 
 
@@ -59,7 +62,8 @@ def _validate_fill_shape(fill_result, status) -> None:
     inconsistent record came from ``simulate_fill``: ``not_filled`` carries NO fill_price / exit_price / exit_reason;
     ``filled_held`` carries a finite positive fill_price and NO exit_price / exit_reason (it is OPEN); a closed
     status (``filled_stopped`` / ``filled_tp_exit``) carries finite positive fill_price + exit_price and the
-    status-specific exit_reason (``same_day_stop`` / ``same_day_tp_exit``). Raises ``PaperNetResultError`` on any
+    status-specific exit_reason (``same_day_*`` from same-day fill OR ``multi_day_*`` from the multi-day exit).
+    Raises ``PaperNetResultError`` on any
     mismatch."""
     fill_price, exit_price, exit_reason = fill_result.get("fill_price"), fill_result.get("exit_price"), fill_result.get("exit_reason")
     if status == "not_filled":
@@ -78,8 +82,8 @@ def _validate_fill_shape(fill_result, status) -> None:
             raise PaperNetResultError("%s fill_price must be a finite positive number, got %r" % (status, fill_price))
         if not _finite_pos(exit_price):
             raise PaperNetResultError("%s exit_price must be a finite positive number, got %r" % (status, exit_price))
-        if exit_reason != _STATUS_EXIT_REASON[status]:
-            raise PaperNetResultError("%s exit_reason must be %r, got %r" % (status, _STATUS_EXIT_REASON[status], exit_reason))
+        if exit_reason not in _STATUS_EXIT_REASONS[status]:
+            raise PaperNetResultError("%s exit_reason must be one of %r, got %r" % (status, _STATUS_EXIT_REASONS[status], exit_reason))
 
 
 def _total_cost_fraction(cost_prior) -> float:

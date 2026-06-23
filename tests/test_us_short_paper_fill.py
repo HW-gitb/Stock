@@ -3,8 +3,10 @@
 
 Covers: Step 0 (open in band); Step 1 (pullback low<=limit; breakout high>=breakout, fill = clamp(max(open,
 breakout), high=valid_entry_high)); same-day conservative exit (stop priority over tp); reproducibility (same
-order+bar → same result); frozen order_type single-source; and the whole malformed-input class (order/bar shape,
-non-finite/negative prices, OHLC sanity, missing type-specific price). Pure/offline; no provider/live; no A-share.
+order+bar → same result); frozen order_type single-source; order geometry (a long's stop<fill<tp brackets the
+actual fill + a pullback limit in-band — inverted / equal / out-of-band refused for both order types before any
+booking); and the whole malformed-input class (order/bar shape, non-finite/negative prices, OHLC sanity, missing
+type-specific price). Pure/offline; no provider/live; no A-share.
 """
 import json
 import sys
@@ -49,6 +51,38 @@ class Step0Band(unittest.TestCase):
     def test_open_below_band_not_filled(self):
         r = pf.simulate_fill(_pullback(), _bar(open=90.0, high=94.0, low=89.0, close=93.0))
         self.assertEqual(r["status"], "not_filled")
+
+
+class OrderGeometry(unittest.TestCase):
+    """§12.1 (R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP): a long's passive levels must bracket the actual fill
+    (stop < fill < tp) and a pullback limit must sit inside the valid entry band; impossible geometry fails closed
+    BEFORE any same-day stop/tp/held output can be booked."""
+    _FILLBAR = {"open": 100.0, "high": 103.0, "low": 97.0, "close": 101.0}  # fills pullback limit 98 / breakout 102
+
+    def test_pullback_stop_at_or_above_fill_refused(self):
+        for stop in (105.0, 98.0):  # stop >= fill 98 (Codex probe 1 + equality) — would book a "stop" as a gain
+            with self.assertRaises(pf.PaperFillError):
+                pf.simulate_fill(_pullback(stop_clear_price=stop, take_profit_exit_price=115.0), self._FILLBAR)
+
+    def test_pullback_tp_at_or_below_fill_refused(self):
+        for tp in (95.0, 98.0):  # tp <= fill 98 (Codex probe 2 + equality) — would book a "take-profit" as a loss
+            with self.assertRaises(pf.PaperFillError):
+                pf.simulate_fill(_pullback(stop_clear_price=90.0, take_profit_exit_price=tp), self._FILLBAR)
+
+    def test_pullback_limit_outside_band_refused(self):
+        for limit in (120.0, 90.0):  # above valid_entry_high 105 (Codex probe 3) / below valid_entry_low 95 (probe 4)
+            with self.assertRaises(pf.PaperFillError):
+                pf.simulate_fill(_pullback(limit_order_price=limit), self._FILLBAR)
+
+    def test_breakout_fill_not_bracketed_refused(self):
+        # breakout fills @102 (min(max(open,102),105)); stop 104 >= fill → not bracketed → refused (same rule, both types)
+        with self.assertRaises(pf.PaperFillError):
+            pf.simulate_fill(_breakout(stop_clear_price=104.0, take_profit_exit_price=115.0), self._FILLBAR)
+
+    def test_valid_geometry_still_books(self):  # positive control: valid bracket + in-band limit still books a same-day exit
+        r = pf.simulate_fill(_pullback(stop_clear_price=92.0, take_profit_exit_price=115.0),
+                             {"open": 100.0, "high": 103.0, "low": 91.0, "close": 95.0})  # low 91 <= stop 92 → stopped @ 92
+        self.assertEqual((r["status"], r["exit_price"]), ("filled_stopped", 92.0))
 
 
 class Step1Pullback(unittest.TestCase):
