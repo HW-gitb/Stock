@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP - exclusion_summary private detail accepts malformed holding / hot_excluded rows
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-23; current working tree, pending user `提交`).
+- Status: **resolved** (committed in `ee7c687f`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (official US-short weekly private output integrity before later weekly-report enrichment, coverage honesty, paper/comparison, or pipeline slices consume `exclusion_summary` / `hot_excluded`).
 - Source: Codex strict review of US-short batch3 `exclusion_summary` slice (`engine/us_short_exclusion_summary.py`, `schemas/us_short_exclusion_summary_public.schema.json`, `tests/test_us_short_exclusion_summary.py`, `docs/README.md` route row).
 - Scope reviewed: current working tree after `c2d2135d`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_exclusion_summary.py`, untracked `schemas/us_short_exclusion_summary_public.schema.json`, and untracked `tests/test_us_short_exclusion_summary.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` §11.4 / §18.0 / §18.1 #10 and #19 / §18.2; review protocol and pre-Codex checklist reviewed. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order/A-share/US-long path was run.
