@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 shadow compare store repair)
+
+- **Verdict/Action**: PASS. The store-specific `_check_bucket` closes the prior wrong-date / wrong-namespace gap while preserving canonical and external non-canonical positive paths.
+- **Required**: None new. `R-USSHORT-BATCH3-SHADOW-COMPARE-STORE-BUCKET-NAMESPACE-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: target store 27 OK; shadow_compare+store 64 OK; py_compile OK; doc/route/boundary 47 OK; direct write/load probes reject date mismatch, wrong US/A/US-long dirs, and external canonical-name mismatch; import probe clean. Full `*us_short*` discovery was attempted but blocked by missing local `jsonschema`.
+- **Next**: User may `提交` this US-short batch3 §12.2 shadow-compare private-store slice. De-id tracked summary, paper-NAV scorecard, and upgrade gate remain separate scoped reviews.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 比较轨 shadow store — bucket/namespace guard)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required)。judge:成立、在 scope——dated-bucket store 须守 §2.1 桶名=as_of + A/US 通道隔离(比 lifecycle 单文件严是合理的:会被 glob、跨 lane 是硬边界)。加 `_check_bucket`(超 §18.0 隐私 guard、写读两侧):in-repo 须为 canonical `shadow_compare_private/shadow_comparison_<as_of>.json`(拒 model_paper_private/lifecycle/a_short/us_long 及 filename-date 不符);external 非 canonical 放行,但 canonical-looking 名须配 as_of。详 register。
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-STORE-BUCKET-NAMESPACE-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +7 测(in-repo filename-date 不符 + model_paper/a_short/us_long 拒、external canonical-名不符写读拒、canonical roundtrip 正控);Codex 全部探针现 REJECT、正控仍过;target **27 OK**;全离线 `*us_short*` **1428 OK** 零回归;boundary+doc+route **47 OK**;import heavy=NONE(无 jsonschema/a_short)。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:bucket guard 覆盖 in-repo(错 dir+filename-date)写读 + external(canonical 名不符)写读 + 正控(canonical roundtrip/external 非 canonical)。B:模块+test docstring+README external-path 契约同步。C:canonical/同日/前向仍过无误拒。D:按 Codex 窄修(in-repo canonical、external 带 filename-date 安全)。E:CURRENT 未动。F:`resolve()` 稳健比对、guard 序(§18.0 隐私在先)、无 jsonschema;详 register。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 shadow compare private store)
+
+- **Verdict/Action**: FAIL. The private store's normal write/load behavior is present, but the store does not pin the artifact to the US-short shadow-comparison bucket or keep the bucket date aligned with record `as_of`.
+- **Required**: `R-USSHORT-BATCH3-SHADOW-COMPARE-STORE-BUCKET-NAMESPACE-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target store tests 20 OK; py_compile OK; doc/route/boundary 47 OK; direct probes accepted filename/content date mismatch plus wrong US-short/A-short/US-long private dirs; import probe loads no `jsonschema` / lifecycle / provider / DataHub / A-short modules; `git diff --check` CRLF-only.
+- **Next**: Claude repair only the shadow-compare store bucket/namespace guard and direct tests/docs, then return for Codex re-`审查`; do not commit or start de-id summary/NAV/upgrade/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 比较轨 shadow 私密持久化 — 首个比较轨 persister + §18.0 guard 写读对称 + 陈旧桶 fail-closed)
+
+- **Verdict/Action**: 起草 §12.2 比较轨 shadow 私密持久化(首个比较轨 persister,镜像 `lifecycle_store`/`paper_ledger`)。新 `engine/us_short_shadow_compare_store.py`:`write_shadow_comparison(comparison, out_path, *, as_of)` 把 §12.2 shadow 比较(含票名·私密 §11.6)按 DATED record `{as_of, comparison}` 落 gitignored 私密路径——**§18.0 P0 guard 先于 validate/write** + validate(strict real `as_of` + §12.2 `validate_shadow_comparison` 投影契约);`load_shadow_comparison(in_path, *, expected_as_of)` **对称 §18.0 guard 作读侧地板** + 重校 + **陈旧桶 fail-closed**(持久 `as_of` 比决策日新→`StaleShadowComparisonError`;§2.1/§18.1 #20/§12.2 升级闸;同日幂等+更早周前向放行)。`shadow_comparison_path(as_of)` = canonical dated bucket(桶名=as_of)。内联 strict 日期门(含 `isascii()`、jsonschema-free)。无新 schema(record 包 §12.2 投影契约)。README 加路由行。脱敏 tracked 汇总 / paper-NAV 双向全口径 / 升级闸 = 后续刀。纯 IO/离线、不交叉 A 股、无 provider/live/DataHub。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **20 OK**(写 guard 接线[relative/in-repo-nonignored 拒·outside-repo+gitignored 写·guard-before-validate]、拒坏 comparison+坏 as_of 不落盘、dated bucket 助手[+坏 as_of 拒]、load roundtrip+对称 guard+fail-closed[missing/corrupt-JSON/坏 record/坏 comparison/stale-ahead/坏 expected]+同日/前向 OK);`git check-ignore` 证 `shadow_compare_private` gitignored;全离线 `*us_short*` **1421 OK** 零回归;boundary+doc/route guards 全绿;py_compile OK;import heavy=NONE。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 续刀 = 脱敏 tracked 汇总 schema → paper-NAV 双向全口径成绩单 → 升级闸防自欺。
+- **Pre-Codex self-review**: A–F。A(类×出口):write/load IO + record 契约整类——guard 接线 4 路径态 + guard-before-validate + 拒坏 comparison/as_of 不落盘 + load 对称 guard + fail-closed(missing/corrupt/坏 record/坏 comparison/stale)+ 同日/前向 OK + bucket 助手坏 as_of。B(连带):新叶子 persister、无重命名;**README 主动加路由行**(上刀 Codex 点名缺路由→本刀先加);.gitignore/private_paths 已含 shadow_compare_private 无需改;无下游消费者。C(反向):roundtrip+同日+前向(更早周)全过,stale 仅拒真更新 as_of、不误拒合法历史比较。D(歧义):范围只 persister(脱敏汇总/NAV/升级闸延后);桶名语义镜像 reviewed `lifecycle_store`(content as_of vs decision_date),不自造 filename-vs-content 检查。E:CURRENT 未动(transient 只 SESSION_LOG)。F:内联日期门含 `isascii()`(whole-class DATE-ASCII 教训)、jsonschema-free(import heavy=NONE)、guard 最外层、record 闭世界键、stale 用 YYYYMMDD 字典序比较、读侧对称 guard。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 比较轨 shadow 私密持久化(engine/us_short_shadow_compare_store.py + tests/test_us_short_shadow_compare_store.py + docs/README.md 路由行;无新 schema、复用 §12.2 validate_shadow_comparison + §18.0 reject_nonprivate_output_path)。重点:① §18.0 guard 写/读两侧对称、最外层 fail-closed(relative/in-repo-nonignored 拒、outside-repo/gitignored OK);② record {as_of,comparison} 闭世界 + strict real as_of + §12.2 投影契约重校;③ 陈旧桶 fail-closed(持久 as_of 比决策日新→拒;同日/前向 OK);④ 内联日期门含 isascii、jsonschema-free(import 无 jsonschema/lifecycle);⑤ 纯 IO/离线、不落 tracked、不交叉 A 股、无 provider/live;脱敏 tracked 汇总/NAV/升级闸=后续刀。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 shadow compare repair)
 
 - **Verdict/Action**: PASS. The shadow-compare first cut now locks the exposed profile contract, loaded preset, and `core_score` scorer dependency; README routing and SESSION_LOG minimal-template guard are clean.
