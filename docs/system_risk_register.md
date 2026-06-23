@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-BANNER-FAILCLOSED-GBK-GAP - lifecycle runtime banner trusts malformed eval output and can break GBK safety
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `198aff9b`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (runtime lifecycle reminder / evidence-clock visibility before weekly lifecycle section, readiness artifact, and weekly renderer consume the eval stage).
 - Source: Codex strict review of US-short batch3 R2 lifecycle-eval slice 2c first cut (`engine/us_short_lifecycle_render.py` GBK-safe runtime banner).
 - Scope reviewed: current working tree after commits `bc74b36f` / `5a8de744`, with modified `docs/README.md`, `docs/SESSION_LOG.md`, and untracked `engine/us_short_lifecycle_render.py`, `tests/test_us_short_lifecycle_render.py`; design authority `docs/us_short_system_design.md` §13 / §12.2 / §18.1 #20 / §18.2; route row `docs/README.md` US-short batch3 R2 slice 2c. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
