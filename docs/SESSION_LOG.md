@@ -8,6 +8,73 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 R2 lifecycle governance container repair)
+
+- **Verdict/Action**: PASS. The round-3 governance container repair closes the outer-container raw-raise gap; no new Required found in this review.
+- **Required**: None new. `R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: target batch3/lifecycle 215 OK; full offline `*us_short*` 1087 OK; schema `*us_short*` 465 OK; doc/route 39 OK; direct probes cover 25 malformed governance container / scalar / mixed-key cases with validate clean=False and accumulate `LifecycleObservationError`, baseline clean, README exact-count offenders=0; `git diff --check` CRLF-only; BOM/FFFD false. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: User may `提交`; lifecycle slice 2b / weekly renderer / provider / live / DataHub / Skill / production / A-share / US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle — governance 容器整类结构性 fail-closed,第3轮)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 同一 governance-edge 第3次:outer-container raw-raise)。成立、接受。**根因=我按腿补**(register number→权威值→权威键+标量校准→outer container),每轮 Codex 找下一个没盖容器。**本轮结构性修**:加 `_as_dict`/`_as_list`,在 validate 顶部把每个 governance 容器一次归一(cal/auth→dict、两 list 字段→list、cat_thresholds/item_category→dict),先于任何 `.get`/迭代——任何形状不再裸崩;schema 闸改验 RAW 输入、畸形仍记 clean=False;accumulate 经 base 拒。详见 register 单一来源。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: lifecycle **71 OK**(+3 outer-container 整类);全离线 `*us_short*` **1087 OK** + schema 465 OK 零回归、doc/route 25 OK;穷举探针——baseline clean + 8 个 outer-container 向量(cal=[]/str、calibration_items=None/dict、reminder=None、auth=[]、cat_thresholds=None、item_category=None)validate 全 clean=False 零裸崩 + accumulate 全 `LifecycleObservationError`;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2b(落盘+§18.0 guard+陈旧桶 fail-closed)= 后续。
+- **Pre-Codex self-review**: A–F。**核心教训**:同一 finding 烧 3 轮=按腿补 whack-a-mole,违反 whole-class-sweep。本轮**结构性**根治——容器归一在单一入口(非 N 个 call-site)、整类一次关死。A(类×出口):8 向量 × validate+accumulate 双路径全覆盖 + 正控。B:加 `_as_dict`/`_as_list`,schema 闸切 raw 输入,无符号改名。C(反向):shipped governance + round-1/2 正控全绿,归一没误拒合法态。D:N-A。E:CURRENT 不动。F:归一先于 `.get`/迭代、schema 闸验 raw、测用 `except Exception` 证零裸崩(非只 TypeError)。
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 R2 lifecycle slice 2a repair + count retirement)
+
+- **Verdict/Action**: FAIL. The prior fixes for unknown accumulator keys, mixed-type authority keys, scalar malformed calibration rows, and README exact-count retirement are working, but the same governance malformed-input class still has an outer-container raw-raise gap.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP` reopened - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target batch3/lifecycle 212 OK; full offline `*us_short*` 1084 OK; schema `*us_short*` 465 OK; doc/route 39 OK; probes show baseline clean, unknown-key raises, mixed-key authority clean=False, scalar calibration clean=False, README exact-count offenders=0, but `calibration=[]`, `calibration_items=None`, and `default_reminder_thresholds=None` raw-raise in both validate and accumulate paths. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: Claude should repair only the calibration outer-container fail-closed guard and direct tests/docs, then return for Codex re-`审查`; no lifecycle slice 2b, weekly renderer, provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `执行` (US-short README 计数退役 §18.1 #11 — 替代计数守护)
+
+- **Verdict/Action**: 用户 `按 §18.1 #11 退役`(在我加完计数守护后,选退役而非守值)。执行:①删 `tests/test_us_short_lifecycle_eval.py` 的计数守护 `ReadmeRouteRowCountGuard` + 孤儿 `import re`(给被退役的面守值自相矛盾);②退役全部 **5 条** us_short 路由行的精确 `Tests (N)` 计数(batch-2 theme_probe / batch-2 dynamic-seats[非规范 `Tests (8, design item #15)` 形,被新 absence guard 抓到、我原 `Tests (\d+)` 普查漏了] / batch-3 cut1 / R2a / R2 lifecycle)→ 改定性 `Tests: <覆盖什么>`;③加 absence guard `test_us_short_route_rows_do_not_restate_exact_test_counts`(任何 us_short 行重现 `Tests (N)`/`Tests: N` 即 RED,排除 `8-K` 误报 + planted-failure 控)。净效果:漂移面**退役**非守值——没有计数可漂、也爬不回来,合 §18.1 #11。详见 register `…-README-TEST-COUNT-DRIFT` 的 Resolution update。
+- **Required**: 无新 finding(用户指令的方法学修订,落同一条 `…-README-TEST-COUNT-DRIFT`)。governance-edge + README 两条 Codex finding 仍 working-tree resolved。
+- **Verify**: doc/route guard **25 OK**(含 absence guard,planted-failure 控验真);全离线 `*us_short*` **1084 OK** + schema 465 OK 零回归;`Tests\s*[:(]\s*\d` 在 us_short 路由行 = 0;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀(governance-edge fail-closed + README 计数退役 + absence guard);PASS 后用户 `提交`。lifecycle slice 2b = 后续。
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle slice 2a — governance-edge 补全 + README 计数漂移 + 自检守护)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL`:P1 governance-edge 残腿 + P3 README 计数漂移)。两项成立、接受。①类扫仍漏两腿:`sorted(cat_thresholds)` 遇 str+int 混合键裸崩→`sorted(map(str,…))`;畸形标量/多余校准行被静默丢→加运行时校准 schema 校验(镜像权威),坏 number/object/多余行现 clean=False、accumulate 经 base 拒。②README 仍 Tests(68)/56——正是你怒的反复返工:路由行复述精确计数、每加测试要手同步,我又漏→改 81/69 **并加自检守护 `ReadmeRouteRowCountGuard`**(路由计数 vs 真实 `def test_` 数,不符即 RED;本轮已报 56≠69)。详见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP` + `…-README-TEST-COUNT-DRIFT` 均 resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: lifecycle **69 OK**(+7:governance-edge 6 + 计数守护 1);全离线 `*us_short*` **1085 OK** + schema 465 OK 零回归、doc/route 24 OK;探针 baseline clean、混合型权威键 clean=False 无 TypeError、标量校准 number/object clean=False;计数守护本轮先 RED(56≠69)、改 README 后转绿;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2b(落盘+§18.0 guard+陈旧桶 fail-closed)= 后续。可选(用户定):计数守护推广到全路由行 / 按 §18.1 #11 退役精确计数。
+- **Pre-Codex self-review**: A–F。A(类×出口):governance-edge 补混合键 sort + 标量/多余校准行(运行时校准 schema)两腿,非只被点名值类型。B(连带):README 路由行计数+描述同步;无符号改名。C(反向):shipped governance / idempotent / weeks / triggers / governed due 正控仍绿,证没误拒合法态。D:N-A。E:CURRENT 不动(未提交)。F:**根治反复漂移=自检守护**(计数=行为硬门、漂移变 RED 非靠人记)非再补一处;sorted(map(str)) 防混合键、校准 schema 校验先于信任派生集。
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 R2 lifecycle slice 2a repair)
+
+- **Verdict/Action**: FAIL. The named malformed-edge repair is mostly working, but a sibling governance fail-closed edge and active README test-count drift remain.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-GOVERNANCE-EDGE-FAILCLOSED-GAP`; `R-USSHORT-BATCH3-R2-LIFECYCLE-README-TEST-COUNT-DRIFT` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target 206 OK; full offline `*us_short*` 1078 OK; schema 465 OK; doc/route 38 OK; probes show unknown-key/list-dict fixes pass but mixed-type authority key raw-raises and malformed scalar calibration rows return clean; README still says Tests (68)/56 eval; diff-check CRLF-only.
+- **Next**: Claude should repair only these Required, then return for Codex re-`审查`; no lifecycle slice2b/weekly_report/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle slice 2a — accumulate 闭世界键 + 权威/校准畸形 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 2×P1)。judge-before-execute:两项成立、在 scope、必要,接受。①accumulate 静默吞未知 update 键(typo→丢观测却报成功)→ 闭世界:未知键在 mutation 前 raise。②validate 跨引用用不可哈希值做成员测试→裸 TypeError;整类扫净(非只两条被点名腿):权威 count_type/item_category 腿 + 校准 comprehension 腿(gov_numbers/gov_title/s132)都加 isinstance 守 / 丢不可哈希——slice-1 `…-MALFORMED-INPUT-RAISES` 只守了 register number 腿,本轮补全。accumulate 校验 base→畸形权威 clean=False→raise。详见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: lifecycle **62 OK**(+6:闭世界键 typo/valid+extra/extra-flag raise+输入不变、权威 list/dict 值 clean=False 无 TypeError+accumulate 拒、校准腿畸形 fail-closed);全离线 `*us_short*` **1078 OK**+schema 465 OK 零回归、doc/route 24 OK;探针 3 未知键 raise、4 畸形权威 clean=False 无 TypeError;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2b(落盘+§18.0 私密 guard+陈旧桶/as_of fail-closed)= 后续。
+- **Pre-Codex self-review**: A–F。A(类×出口):不只修两条被点名腿——accumulate 全 update 键闭世界、validate 全 governance-fed 成员/键位(权威 count_type/item_category + 校准 number/object)整类扫不可哈希。B(连带):accumulate docstring「unknown key raises」同步;无符号改名。C(反向):正控仍绿(幂等/weeks0-1/triggers 多-per-date/governed due/shipped 权威 clean)证没误拒合法态。D:N-A。E:CURRENT 不动(未提交)。F:isinstance-str 守在 `in`/key 前短路、comprehension 丢不可哈希后由覆盖/成员检查记违规(fail-closed 非静默)、accumulate base 校验先行。
+
+## 2026-06-23 - Codex `审查 FAIL` (R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES)
+
+- **Verdict/Action**: FAIL. Slice 2a tests are green, but lifecycle accumulator / authority validator still has malformed-input edges.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-MALFORMED-INPUT-EDGES` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target 200 OK; full offline `*us_short*` 1072 OK; schema 465 OK; doc/route 38 OK; probes show unknown observation keys return clean and malformed authority list/dict raises TypeError; diff-check CRLF-only; BOM/FFFD false.
+- **Next**: Claude should repair only this Required, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/A-share/US-long/slice2b work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 R2 lifecycle-eval slice 2a — 派生计数 + 幂等 accumulate)
+
+- **Verdict/Action**: 收到 `执行`(续下一刀;slice 1 已提交 `ceb79483`+closeout `1a219321`,Codex re-`审查 PASS`)。按 §18.2 批内纪律(cut1/slice1 各烧 4 轮=甜点是一个子系统纯刀)把 lifecycle 运行时阶段拆三刀,先做最高风险的 **slice 2a = 幂等 accumulate**(纯/无 IO/不落盘)。设计权威 §2.1「forward 证据按 decision_date 去重、重跑不重复计数」要求 register 演进为 **dated `forward_observations` 台账**(decision_date→contribution);`live_forward_count` 改 DERIVED(台账求和)——同 slice-1「可变态不可自授权」原则下移一层(裸计数可伪造→删字段、由证据派生);weeks 类每 decision_date 贡献 ∈{0,1}(单跑不能伪造 N 周)。新 `accumulate_lifecycle_observation`:per-item `forward_observations[decision_date]` 是 SET-不-ADD(幂等)、纯(deepcopy 返回新 register)、clean-in→clean-out(拒不洁 base + 畸形/伪造/不洁结果 raise `LifecycleObservationError`,不洗白);as_of 取 max(不回退)。schema/engine/tests/README 同步;CURRENT 不动(未提交)。
+- **Required**: 无(起草新代码,无 review finding)。slice-1 四条 lifecycle finding 仍 committed-resolved。
+- **Verify**: lifecycle **56 全过**(原 33 + 2a 23);全离线 `*us_short*` **1072 OK**(+23)零回归、schema 465 OK、doc/route guard 36 OK;reviewer 探针直跑全绿(baseline clean / 同日两次 count==1 不翻倍 / weeks-forge accum raise / 持久化 weeks 伪造→clean False / triggers 多-per-date→clean True+due / 裸计数→clean False / 非真实日期键→clean False);BOM=0;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(派生计数不可自授权 + weeks 0/1 反伪造 + 幂等 SET-not-ADD 双向 + clean-in→clean-out 不洗白 + 纯/离线无 persist/A 股/provider);PASS 后用户 `提交`。lifecycle slice 2b = 落盘(首落盘接 §18.0 P0 私密 guard)+ load 陈旧桶/as_of 错位 fail-closed;之后 2c = 横幅/readiness artifact/周报 reconcile → weekly_report 渲染器。
+- **Pre-Codex self-review**: A–F。A(类×出口):计数伪造全路径(裸计数/weeks 单跑/非真实日期/负·bool 贡献)+ accumulate 全出口 raise + 幂等双向。B(连带 grep):`live_forward_count` 全活动面扫净——engine 3 处=正确「DERIVED」教学、README 旧「carries ONLY/due==」已改、含被改 schema/engine/test 自身 docstring;register:77 = slice-1 finding Resolution 历史散文(reviewer 豁免不改)。C(反向):正控(baseline / triggers 多-per-date / 达 governed→due)证没误拒合法态;weeks {0,1} 不拒合法 0/1。D:N-A。E:CURRENT 不动、README=durable 面已同步。F:strict 日期(decision_date+台账键拒 20260231)、derive 守 int-not-bool、单一 `_governed_due` 防 validate/accumulate 漂移、deepcopy 保纯、max as_of 字符串比较守非法旧值、jsonschema propertyNames+integer 拒 bool 贡献(套件验证)。
+
 ## 2026-06-22 - Codex re-`review PASS` (US-short batch3 R2 lifecycle authority description repair)
 
 - **Verdict/Action**: PASS. The lifecycle authority schema description drift is repaired; the active authority contract now consistently says the full 39-entry `item_category` map is const-pinned and runtime-validated.

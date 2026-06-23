@@ -733,6 +733,22 @@ class DocGovernanceGuard(unittest.TestCase):
                       "AI_REVIEW_PROTOCOL must state the minimal template applies to EVERY review-cycle "
                       "entry including the first FAIL")
 
+    _USSHORT_COUNT_RE = re.compile(r"Tests\s*[:(]\s*\d+(?![\w-])")  # a count after `Tests`; the (?![\w-]) excludes e.g. `Tests (8-K …)`
+
+    def test_us_short_route_rows_do_not_restate_exact_test_counts(self):
+        # §18.1 #11 「不在别处复述条数以免漂移」 (user decision 2026-06-23): us_short README route rows RETIRE
+        # exact test counts — the `Tests (N)` / `Tests: N` form recurred repeatedly as drift because it had to
+        # be hand-synced on every test add. A qualitative `Tests: <what's covered>` is fine; an integer count
+        # right after `Tests` is not. This enforces the retirement so a count can't creep back — the
+        # recurrence is now structurally impossible, not a thing to remember.
+        readme = (ROOT / "docs" / "README.md").read_text(encoding="utf-8")
+        offenders = [m.group(0) for line in readme.splitlines() if "us_short" in line.lower()
+                     for m in self._USSHORT_COUNT_RE.finditer(line)]
+        self.assertEqual(offenders, [], "us_short route row restates an exact test count (retired per §18.1 #11): %s" % offenders)
+        # planted-failure control: the detector is real, not a no-op regex
+        self.assertTrue(self._USSHORT_COUNT_RE.search("| US-short foo … Tests (42): 10 eval | path us_short |"),
+                        "detector must catch a reintroduced Tests (N) count")
+
 
 if __name__ == "__main__":
     unittest.main()
