@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 exclusion_summary private-detail repair)
+
+- **Verdict/Action**: PASS. The private-detail contract now closes the malformed-row and mixed-type-key diagnostic gaps: private rows require valid ticker / reason shape, and all three mixed-key diagnostics reject with `ExclusionSummaryError` instead of raw `TypeError`.
+- **Required**: None new. `R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` OK; doc/route guards 39 OK before closeout; direct probes reject the prior malformed private rows and mixed-key cases cleanly; target exclusion-summary unittest remains blocked in this Codex runtime by missing `jsonschema`.
+- **Next**: User may `提交`; later hot_excluded enrichment / coverage honesty / paper-comparison / provider-live-DataHub-Skill-production / A-share / US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 exclusion_summary §11.4 — 混合类型 key 诊断 raw-TypeError 整类)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 1 P1 reopen)。成立、接受——`_validate_private` 类集不匹配分支 `sorted(cats)` 遇「冻结 str 键 + 非 str 兄弟键」raw-raise `TypeError`(非 sanctioned `ExclusionSummaryError`),即 lifecycle governance-edge 的 `sorted(map(str,...))` 类、我重犯。按 Codex 窄修;但 B-ripple grep 全文发现**同缺陷在两兄弟** `_assert_public`(公开 category_counts 集差诊断)+ `build`(unknown 类诊断)同样 raw-raise(修前探针实证)→ **整类 3 处一并修**(同一 Required·同文件·同 sanctioned-error 契约根因;只修被点名那处=下一轮必再被抓)。
+- **Required**: `R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP` resolved(working tree;详 `docs/system_risk_register.md` Resolution 2)。
+- **Verify**: 新增混合 key 类 +3、target **36 OK**;两处原 raw 探针(`_validate_private`/`_assert_public` 混合键)现皆 clean `ExclusionSummaryError`;全离线 `*us_short*` **1213 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ 覆盖诚实(#10)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):`sorted()` on 用户 dict 键的 raw-TypeError 类全文 3 出口(`_validate_private`/`_assert_public`/`build`)一次 `sorted(map(str,...))` 扫净,非只 Codex 点名 1 处。B(连带):grep 全文 `sorted(` 确认无第 4 处;`map(str,...)` 不改正常态(全 str 键时等价)。C(反向):正控——合法全 str 键诊断/合法 payload 不受影响(36 全绿);assertRaises(ExclusionSummaryError) 设计=raw TypeError 不被捕获即 fail。D(歧义):无。E:CURRENT 未动。F:复用 lifecycle 既有 `sorted(map(str,...))` 模式。**教训:`sorted()`/比较 on 外部 dict 键必 `map(str,...)`;被点名 1 处时 grep 同模式全出口、别留同类兄弟。**
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 exclusion_summary private-detail repair)
+
+- **Verdict/Action**: FAIL. The repair closes the main private-row write gap, but `_validate_private` still raw-raises on a malformed category-set sibling (`categories` with frozen keys plus a non-string extra key) instead of returning the sanctioned `ExclusionSummaryError`.
+- **Required**: `R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP` reopened - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` OK; doc/route guards 39 OK before closeout; target exclusion-summary unittest remains blocked in this Codex runtime by missing `jsonschema`; direct probes confirm the prior 5 cases now reject, but `write_mixed_key_cats` raises raw `TypeError`.
+- **Next**: Claude should repair only the mixed-type category-key diagnostic path in `_validate_private` plus direct test/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 exclusion_summary §11.4 — 私密明细契约 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受、在 scope——公开侧有 schema+交叉门、私密侧无 shape 门:`_public_count` 只校 holdings 是 list 不校元素、build 浅拷入 private、hot_excluded 行不强制 ticker+reason、`write_exclusion_private` 只校 dict+as_of → 畸形私密 artifact 可成官方输出。与全系统「producer/persister 绝不落畸形物」姿态(store/action_table/readiness)相悖、我的写器是唯一漏网。按 Required 加单一私密契约 `_validate_private`(strict as_of + 精确冻结类集 + 各类 holdings 非空白 ticker str + hot 行非空白 ticker+reason)焊进 build 出口 + write 出口。
+- **Required**: `R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源 Resolution)。
+- **Verify**: 新增私密类 +5、target **33 OK**;Codex 5 探针([None]/空 ticker/hot 无 reason/畸形直写)**全 REJECT 零落盘**;全离线 `*us_short*` **1210 OK** 零回归;doc/route+boundary 33 OK;README 路由行 B-ripple 同步私密 shape 门;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ 覆盖诚实(#10)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):私密整类扫净——holdings(None/空白/非str/嵌套/dict)、hot 行(None/缺·空 ticker/缺·空 reason/非dict)、直写畸形(坏 as_of/categories 非dict/不全集/非list hot)全拒。B(连带):单一契约 `_validate_private` 两出口(build 后 + write guard 后写前)无第二门;README + Tests 同步。C(反向):正控 built-private/合法 ticker+reason 行/omitted→[] 受,没误拒。D(歧义):「持仓行」取最窄=非空白 ticker + hot 非空白 ticker+reason,未加 public_count≥len 假约束(Codex 排除)。E:CURRENT 未动。F:复用 `_strict_yyyymmdd`、guard 写前对称、脱敏契约不动。**教训:de-id 拆分≠只防泄露、私密侧也须 shape fail-closed 当审计轨。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 exclusion_summary private-detail contract)
+
+- **Verdict/Action**: FAIL. Public de-identification / count gating is acceptable for this slice, but the PRIVATE side has no real shape gate: malformed holding rows / malformed `hot_excluded` rows / malformed direct private-writer payloads can still become official private output.
+- **Required**: `R-USSHORT-BATCH3-EXCLUSION-SUMMARY-PRIVATE-DETAIL-CONTRACT-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` OK; doc/route guards 39 OK before closeout; target exclusion-summary unittest is blocked in this Codex runtime by missing `jsonschema`; direct private-gate probe accepts `[None]`, blank-ticker dict, missing hot reason, and writes an invalid private dict.
+- **Next**: Claude should repair only the exclusion-summary private-detail validation / writer gap and direct tests/docs, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 exclusion_summary §11.4 — 隐私拆分 builder + 脱敏公开汇总 + §11.2 节渲染)
+
+- **Verdict/Action**: 起草 batch3 续片 exclusion_summary(§11.4)。`build_exclusion_summary(exclusion_data)` 按隐私拆:**公开** = 8 冻结类(读 `us_short_exclusion_summary_governance` preset 单一来源)public-universe 计数 + hot_excluded 公开热票计数(覆盖 Pass-1 资格 + Pass-2 审计闸);**私密** = 真实持仓被剔明细(各类持仓票 + hot_excluded 行/原因)。未知类拒(闭世界·防误分/注入)、缺省类计 0(公开汇总恒显 8 类·零显)、计数非负 int(bool/float/数值串/负 全拒)。纯 SUMMARY、不做准入/否决 → 结构上无法救回 hard veto / 改准入(§11.4 hot_excluded 仅审计、喂 §13)。公开脱敏门 = schema(additionalProperties:false + 整数 only,镜像 readiness);私密写前焊 §18.0 guard(镜像 store)。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **28 OK**;全离线 `*us_short*` **1205 OK** 零回归;doc/route + boundary **33 OK**(新 engine 文件已落 boundary 扫描 glob、零越界);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀;PASS 后用户 `提交`。批3 续片:hot_excluded 富化(#19)/ 覆盖诚实(#10)/ R3(纸面/比较)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):malformed 整类一次扫净(top dict / as_of strict-real / categories·hot_excluded 容器 / 类目项 dict / holdings list / public_count·heat_count = bool·float·str·负·None 全拒);de-id 门整类(schema additionalProperties:false + 整数 only、extra-key、total≠sum、类集≠冻结、covers≠冻结、不可能日期 全拒)。B(连带):新模块无改既有符号;README 加路由行(无条数,§18.1 #11);新 engine 文件自动入 boundary glob(已验)。C(反向):正控——零剔除周合法渲、缺省类→0、未强加 public_count≥len(holdings) 假约束(防误拒合法态)。D(歧义):类目闭世界取自冻结 preset、非关键词猜。E:CURRENT 不动(未提交)。F:date 复用 `_strict_yyyymmdd` 单一来源、计数 `_int_not_bool`、§18.0 guard 写前对称、jsonschema iter_errors 同 readiness。**镜像两姊妹:公开脱敏=readiness、私密=store §18.0。**
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 weekly_report renderer surface-invariant repair)
 
 - **Verdict/Action**: PASS. The weekly_report renderer now refuses the prior blank / empty / negative surface cases while preserving valid zero-count and optional-omitted behavior.
