@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-R2-LIFECYCLE-READINESS-ASOF-REAL-DATE-GAP - tracked lifecycle readiness writer accepts impossible as_of dates
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `0ad2d7af`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (PIT / lifecycle readiness integrity before the weekly_report lifecycle section, top banner, and count reconcile consume the tracked readiness artifact).
 - Source: Codex strict review of US-short batch3 R2 lifecycle-eval slice 2c second cut (`schemas/us_short_lifecycle_readiness.schema.json` + `engine/us_short_lifecycle_readiness.py`).
 - Scope reviewed: current working tree after commits `198aff9b` / `e3c4d6eb`, with modified `docs/README.md`, `docs/SESSION_LOG.md`, `engine/us_short_lifecycle_eval.py`, `engine/us_short_lifecycle_render.py`, `engine/us_short_lifecycle_store.py`, and untracked `engine/us_short_lifecycle_readiness.py`, `schemas/us_short_lifecycle_readiness.schema.json`, `tests/test_us_short_lifecycle_readiness.py`, `tests/schema/test_us_short_lifecycle_readiness_schema.py`; design authority `docs/us_short_system_design.md` §2 / §3.5 / §11.2 / §11.6 / §13 / §18.1 #20 / §18.2; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
