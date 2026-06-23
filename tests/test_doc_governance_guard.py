@@ -281,17 +281,17 @@ class DocGovernanceGuard(unittest.TestCase):
                       "AGENTS lost the minimal review-cycle SESSION_LOG template")
 
     # R-CODEX-REVIEW-OUTPUT-PLAIN-LANGUAGE-FRONT-GUARD-GAP: the front short entry must front-load BOTH
-    # the four output sections AND the 大白话 plain-language layer. Single-source check for the live
+    # the three output sections AND the 大白话 plain-language layer. Single-source check for the live
     # guard and its planted-failure proof so the two can't drift apart (the previous front entry
-    # complied with the four-section shape while omitting the user-required 大白话 layer).
-    FRONT_OUTPUT_SECTIONS = ("Verdict", "Findings", "Required / Optional / Options", "下一步")
+    # complied with the section shape while omitting the user-required 大白话 layer).
+    FRONT_OUTPUT_SECTIONS = ("Verdict", "Required / Optional / Options", "下一步")
     PLAIN_LANGUAGE_FRONT_ANCHOR = "大白话"
 
     @classmethod
     def _front_review_output_gaps(cls, front):
         gaps = []
         if not all(s in front for s in cls.FRONT_OUTPUT_SECTIONS):
-            gaps.append("four-section-list")
+            gaps.append("three-section-list")
         if cls.PLAIN_LANGUAGE_FRONT_ANCHOR not in front:
             gaps.append("plain-language-大白话")
         return gaps
@@ -307,7 +307,6 @@ class DocGovernanceGuard(unittest.TestCase):
             "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER",
             "docs/system_risk_register.md",
             "Verdict",
-            "Findings",
             "Required / Optional / Options",
             "下一步",
             "不得发送",
@@ -318,25 +317,27 @@ class DocGovernanceGuard(unittest.TestCase):
                 front,
                 "AGENTS.md front matter must expose the Codex review output/logging closeout contract.",
             )
-        # the four-section shape alone is not enough — the 大白话 plain-language layer must be front-loaded too.
+        self.assertIn("不再输出 `Findings`", front,
+                      "AGENTS.md front short entry must explicitly remove the Findings section from chat output.")
+        # the three-section shape alone is not enough — the 大白话 plain-language layer must be front-loaded too.
         self.assertEqual(
             self._front_review_output_gaps(front), [],
-            "AGENTS.md front short entry must front-load the four output sections AND the 大白话 layer.",
+            "AGENTS.md front short entry must front-load the three output sections AND the 大白话 layer.",
         )
 
     def test_agents_front_entry_without_plain_language_fails(self):
-        # planted-failure + positive control: a front entry that lists only the four section names but
+        # planted-failure + positive control: a front entry that lists only the three section names but
         # omits the 大白话 layer must be flagged; the real AGENTS front (with 大白话) must pass the
         # same single-source checker.
-        four_sections_only = (
+        three_sections_only = (
             "## 审查输出/落盘短入口（Codex 必读）\n"
-            "屏幕最终回复固定四段：`Verdict`、`Findings`、`Required / Optional / Options`、`下一步`。\n"
+            "屏幕最终回复固定三段：`Verdict`、`Required / Optional / Options`、`下一步`。\n"
         )
-        self.assertIn("plain-language-大白话", self._front_review_output_gaps(four_sections_only),
-                      "a four-section-only front entry without 大白话 must fail the plain-language gate")
+        self.assertIn("plain-language-大白话", self._front_review_output_gaps(three_sections_only),
+                      "a three-section-only front entry without 大白话 must fail the plain-language gate")
         real_front = "\n".join(AGENTS.read_text(encoding="utf-8").splitlines()[:60])
         self.assertEqual(self._front_review_output_gaps(real_front), [],
-                         "the real AGENTS front entry must satisfy both the four-section and 大白话 gates")
+                         "the real AGENTS front entry must satisfy both the three-section and 大白话 gates")
 
     def test_agents_codex_review_requires_one_pass_defect_matrix(self):
         # User-directed 2026-06-13 correction: Codex review must not drip-feed one issue per
