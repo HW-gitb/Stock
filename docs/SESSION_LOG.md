@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 §12.2 paper scorecard validator repair)
+
+- **Verdict/Action**: PASS. The paper scorecard now proves exact frozen-basket coverage, carries a frozen paper-only boundary, and its validator is closed-world for de-identified scorecards.
+- **Required**: None new. `R-USSHORT-BATCH3-PAPER-SCORECARD-BASKET-EVIDENCE-CONTRACT-GAP` and `R-USSHORT-BATCH3-PAPER-SCORECARD-VALIDATOR-CLOSED-WORLD-GAP` are closed in the working tree; see `docs/system_risk_register.md`.
+- **Verify**: target paper scorecard 33 OK; py_compile OK; doc/route/boundary 47 OK; direct probes reject original cherry-pick cases and top-level smuggled ticker/ship-gate/live fields; import-heavy probe clean; `git diff --check` CRLF-only; full `*us_short*` discovery attempted but blocked by missing `jsonschema` in bundled Python.
+- **Next**: User may `提交` this US-short batch3 §12.2 paper scorecard slice; balanced-vs-shadow/NAV/upgrade/provider/live/DataHub/A-share/US-long remain separate scoped work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 paper scorecard validator — closed-world key set)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` sibling 1 Required;basket-lineage/boundary 那条已 PASS)。judge:成立、在 scope——模块纯无 schema,`validate_paper_scorecard` 是消费方契约门却非 closed-world,extra 顶层键(夹带 tickers / 假 ship-gate / live 标)能过。修(Codex 窄修):validate 先校 EXACT 顶层键集 `_SCORECARD_KEYS`(12 键、缺或多即拒),保 de-id 计数-only + paper-only;nested boundary 本已 exact-equality、API/不变式不动。详 register。
+- **Required**: `R-USSHORT-BATCH3-PAPER-SCORECARD-VALIDATOR-CLOSED-WORLD-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +7 测(夹带 tickers / per-name / 顶层 ship-gate / track / evidence drift / arbitrary extra / 缺键 拒);Codex 全部 smuggle 探针现 REJECT、cherry-pick(build)仍拒、正控+真集成仍过;target **33 OK**;全离线 `*us_short*` **1486 OK** 零回归;boundary+doc+route **47 OK**;`git diff --check` clean(仅 CRLF);import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:closed-world 全覆盖(夹带 tickers/per-name/顶层 ship-gate/track/evidence/arbitrary/缺键)+ 既有 boundary/count tamper + cherry-pick + 真集成正控。B:模块+test docstring + README validator 契约行同步;输出仍 de-id。C:build 输出恰 12 键过、good 仍验。D:按 Codex 窄修(仅加顶层键集校、不动 API/boundary/不变式)。E:CURRENT 未动。F:键集 frozenset 恰等、missing+extra 诊断、nested boundary 仍 exact;详 register。
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 §12.2 paper scorecard repair)
+
+- **Verdict/Action**: FAIL. The prior basket-coverage / nested paper-only boundary repair works, but the scorecard validator is not a closed-world gate for the de-identified paper scorecard contract.
+- **Required**: `R-USSHORT-BATCH3-PAPER-SCORECARD-VALIDATOR-CLOSED-WORLD-GAP` - full detail is in `docs/system_risk_register.md`; prior `R-USSHORT-BATCH3-PAPER-SCORECARD-BASKET-EVIDENCE-CONTRACT-GAP` is verified resolved in working tree.
+- **Verify**: target paper scorecard 26 OK; py_compile OK; doc/route/boundary 47 OK; full offline `*us_short*` attempted but blocked by missing `jsonschema` in bundled Python; direct probes reject original cherry-pick/boundary/count cases but accept top-level `tickers` / `full_size_ship_gate_allowed` / `track` smuggling; import-heavy probe clean; `git diff --check` CRLF-only.
+- **Next**: Claude repair only the scorecard validator closed-world/de-id boundary and direct tests/docs/register, then return for Codex re-`审查`; do not commit or start balanced-vs-shadow/NAV/upgrade/provider/live/DataHub/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 §12.2 paper scorecard — basket-lineage 契约 + paper-only boundary)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required)。judge:两面成立、在 scope(§12.2 禁止挑样本/全量 是核心硬规则,bare-list API 证不了篮子覆盖;且缺 paper-only 边界)。API 改 `build_paper_scorecard(net_results_by_ticker, *, selected_tickers)`、失败关闭除非 map 恰覆盖冻结选股(missing/extra/dup/blank 拒);输出加冻结 paper-only `boundary`、新 `validate_paper_scorecard` 复核 boundary+count 一致。详 register。
+- **Required**: `R-USSHORT-BATCH3-PAPER-SCORECARD-BASKET-EVIDENCE-CONTRACT-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: +12 测(basket 覆盖:子集/漏loser/多余stale/dup-blank身份/map非dict/selection非list 拒;validator:boundary flip/evidence tamper/doctored count/selected 不符/net_basket tamper 拒);Codex 全部 accepted cherry-pick 现 REJECT、正控+真集成仍过;target **26 OK**;全离线 `*us_short*` **1479 OK** 零回归;boundary+doc+route **47 OK**;import heavy=NONE。
+- **Next**: Codex re-`审查`(单 Required resolved;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:basket-lineage(missing/extra/dup/blank/map非dict/selection非list)+ boundary/validator tamper(flip/evidence/count/selected/net_basket)+ 聚合全态正控 + 真集成。B:模块+test docstring + README API 契约行同步;输出仍 de-id(无票名)。C:完整篮子/空/all-cash/open 仍过无误拒。D:按 Codex 窄修(selected_tickers + 键集恰等 + paper boundary)。E:CURRENT 未动。F:身份 unique 非空 str、覆盖集恰等、boundary const、count 一致不变式、net==gross-cost;详 register。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 §12.2 paper scorecard)
+
+- **Verdict/Action**: FAIL. The per-row accounting is mostly present, but the scorecard does not prove exact frozen-basket coverage and does not carry a hard paper-only boundary.
+- **Required**: `R-USSHORT-BATCH3-PAPER-SCORECARD-BASKET-EVIDENCE-CONTRACT-GAP` - full detail is in `docs/system_risk_register.md`.
+- **Verify**: target scorecard 14 OK; full offline `*us_short*` 1467 OK; doc/route/boundary 47 OK; py_compile OK; import-heavy probe clean; direct probes accepted winner-only subset, duplicate winner/omitted loser, extra stale row, and no paper-only boundary fields.
+- **Next**: Claude repair only the scorecard basket-coverage/evidence-boundary contract and direct tests/docs, then return for Codex re-`审查`; do not commit or start comparison/NAV/upgrade/provider/live/DataHub/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 §12.2 比较轨 paper scorecard — per-basket 全口径聚合)
+
+- **Verdict/Action**: 起草 §12.2 paper scorecard 首刀(双向全口径成绩单的聚合基石)。新 engine `engine/us_short_paper_scorecard.py`:`build_paper_scorecard(net_results)` 把一个篮子的逐仓 `paper_net_result` 输出(每档固定选股每票一条)聚合成 §12.2 全口径指标——确定性、路径无关、全仓计入(禁止挑样本):filled/unfilled-cash(现金拖累)/open-unrealized(held)计数、realized win/loss/flat + `bad_pick_rate`=loss/filled(§12.2 坏票率)、`total_cost_fraction`(往返成本拖累 §12.1 #18)、`net_basket`=等权 realized 篮子净值(closed net + unfilled 0.0 现金,**仅 fully_resolved[无 open]且非空落账**,否则 None——unrealized/空篮不虚标 §12.1 不虚高)。**自校每条 net_result 全 per-outcome 形**(cash/open/closed 不变式、net==gross-cost,不信任 producer)。PAPER only、绝不满仓 ship-gate。无新 schema;镜像 paper_net_result/ledger 的 per-outcome 校验。README 加路由行。回撤(NAV 路径)/balanced-vs-shadow 双向对比/多日 held 平仓 net(#8)/§12.1 复权门 evaluability=后续刀。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无新(待 Codex `审查`)。
+- **Verify**: 新增 target **14 OK**(聚合[fully-resolved/open 阻断 net_basket/空篮/全现金 0-带拖累/flat/bad_pick_rate 分数]、整类坏 net_result[非list/坏形/未知 outcome/net 不符/cash 非零/open 带数/负成本]、集成 drift-guard 喂真 paper_net_result);全离线 `*us_short*` **1467 OK** 零回归;import heavy=NONE(纯、无 jsonschema/provider/a_short);doc/route **39 OK**;py_compile OK。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。§12.2 续刀 = balanced-vs-shadow 双向对比 scorecard(消费各档 build_paper_scorecard)+ 回撤(NAV 路径)→ 升级闸防自欺;多日 held 平仓 net(#8)独立。
+- **Pre-Codex self-review**: A–F。A(类×出口):聚合全态(fully-resolved/open/空/全现金/flat/bad-pick)+ 整类坏 net_result(非list/坏形/未知 outcome/net≠gross-cost/cash 非零/open 带数/负成本)+ 集成真输出。B(连带):新叶子、无重命名;README **主动加路由行**;per-outcome 校验镜像 net_result/ledger(集成 drift-guard 防漂移);无下游消费者(双向对比/升级闸后续)。C(反向):正控全过;net_basket 仅 fully-resolved 落账、空/open→None 不误标;bad_pick_rate 无 filled→None 不除零。D(歧义):范围只路径无关聚合(回撤/双向/多日/复权门延后);等权篮子确定性、明文记。E:CURRENT 未动。F:`_finite` 拒 bool/NaN/Inf、net==gross-cost isclose、空篮/0-filled 除零守、纯无 jsonschema。
+- **Codex 审查 command**(写入交接):
+
+```
+审查 US-short 批3 §12.2 paper scorecard(engine/us_short_paper_scorecard.py + tests/test_us_short_paper_scorecard.py + docs/README.md 路由行;消费 paper_net_result 输出、无新 schema)。重点:① 自校每条 net_result 全 per-outcome 形(cash/open/closed 不变式、net==gross-cost,不信 producer);② 聚合口径——bad_pick_rate=loss/filled(无 filled→None)、net_basket 等权 realized 仅 fully_resolved[无 open]且非空落账否则 None(§12.1 不虚高)、现金算 0 拖累、全仓计入禁止挑样本;③ PAPER only 绝不 ship-gate;④ 纯/离线无 jsonschema/provider/a_short、不交叉 A 股;回撤/双向对比/多日 held net(#8)/复权门=后续刀。
+```
+
 ## 2026-06-23 - Codex `审查 PASS` (US-short batch3 §12.2 shadow compare de-id summary)
 
 - **Verdict/Action**: PASS. The tracked summary builds only de-identified divergence counts from a validated §12.2 shadow comparison and preserves the frozen non-production boundary.
