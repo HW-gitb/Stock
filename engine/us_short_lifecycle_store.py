@@ -19,7 +19,7 @@ path (state/us_short/lifecycle/, §11.6). This slice is the FIRST lifecycle PERS
     the SAME decision_date (idempotent) and normal forward progress are both fine.
 
 Structure-over-IO: reads/writes a private JSON only; no provider / live / DataHub / network; no A-share
-crossing. The honest banner / weekly reconcile / readiness artifact are the next slice (2c).
+crossing. The honest banner + readiness artifact are slice 2c (engine/us_short_lifecycle_render / us_short_lifecycle_readiness); the weekly reconcile pairs with the weekly_report renderer.
 """
 from __future__ import annotations
 

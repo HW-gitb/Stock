@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 R2 lifecycle readiness as_of repair)
+
+- **Verdict/Action**: PASS scoped to the lifecycle readiness `as_of` repair. The tracked readiness artifact now rejects bad `as_of` values before emit/write.
+- **Required**: None new. `R-USSHORT-BATCH3-R2-LIFECYCLE-READINESS-ASOF-REAL-DATE-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` OK; doc/route guards 39 OK; render 13 OK (1 expected skip); direct probe confirms valid date passes and bad dates reject/no file. Target readiness/schema unittest remains blocked here by missing `jsonschema` (`find_spec=None`). `git diff --check` CRLF-only; BOM/FFFD false; no forbidden paths run.
+- **Next**: User may `提交` the reviewed readiness repair; weekly_report renderer / provider/live/DataHub/Skill/production/A-share/US-long remain gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle readiness — as_of strict-real-date 补全)
+
+- **Verdict/Action**: 收到 `执行`(用户拟开 E+F);判 serial 门——有未决 readiness FAIL 不在其上堆新刀,先清此 FAIL 再 E+F。Codex `审查 FAIL` 1 P1 成立、接受:readiness as_of 只校 schema 8 位 pattern、没校真实日历日,`20260231`(2月31)过 `_assert_readiness`+`write`(同 partial-date 类,validate/banner 早已堵)。修:从 eval 导入 canonical `_strict_yyyymmdd`(单一来源,Required 认可复用)+ 在 `_assert_readiness` schema 闸后加 strict-real-date 检——build(自检)+write(门)俱拒畸形/不可能/非ASCII/非str as_of,落盘前 raise。整类:as_of 是 readiness 唯一日期字段=一腿,已闭。详见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-READINESS-ASOF-REAL-DATE-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: readiness **16 OK**(+4:assert+write 拒 20260231 不留文件、wrong-len/非digit/非str/非ASCII 拒、合法真日期过);全离线 `*us_short*` **1139 OK** + schema 472 OK 零回归、doc/route 25 OK;探针——assert/write 拒 20260231 无文件、正控过;schema 描述 + README 行 B-ripple 同步(as_of strict-real 由 engine 焊、非 8 位 pattern 足够);BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。然后 **批3 下一刀 = E+F 并轮**(provider 健康检查离线 #3 + 边界回归 #12,§18.2 判据可并)。
+- **Pre-Codex self-review**: A–F。A(类×出口):readiness 日期校验整类(as_of 唯一日期腿)——assert+write 双门、impossible/malformed/非ASCII/非str 全覆盖。B(连带):schema 描述 + README 2c-2 行同步「as_of strict-real engine-焊」;复用 eval `_strict_yyyymmdd` 单一来源、无新日期解析器。C(反向):正控(build 真日期、合法 readiness)过门没误拒。D(歧义):「真实日期」取 eval 既有 strict 契约(string+ASCII+8digit+valid calendar)。E:CURRENT 不动(未提交)。F:strict 检在 schema 闸后(as_of 已保证 8 位 str)、import 私有 helper 同 store 先例(Codex 已认可)、jsonschema 是 readiness 固有依赖(requirements 有)非缺陷。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 R2 lifecycle slice 2c readiness artifact)
+
+- **Verdict/Action**: FAIL. The tracked de-identified readiness artifact is structurally scoped correctly, but its `as_of` gate accepts impossible calendar dates before write.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-READINESS-ASOF-REAL-DATE-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` for the new readiness module/tests OK; doc/route guards 39 OK; `git diff --check` CRLF-only; BOM/FFFD false. Target readiness/schema tests are blocked in this Codex runtime by missing `jsonschema` (`find_spec=None`). Static review + schema-equivalent probe shows `_assert_readiness` and `write_lifecycle_readiness` accept `20260231`, while `due_count` mismatch still rejects. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: Claude should repair only readiness `as_of` strict-real-date validation plus direct tests/docs, then return for Codex re-`审查`; weekly_report lifecycle section/top banner, count reconcile, provider/live/DataHub/Skill/production/A-share/US-long remain gated.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 R2 lifecycle-eval slice 2c 续刀 — readiness artifact 脱敏 tracked 汇总)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`(slice 2c 首刀横幅已提交 `198aff9b`+closeout `e3c4d6eb`,Codex re-`审查 PASS`)。续 2c = **readiness artifact**(§13「写 readiness artifact」/ §11.6 tracked 脱敏汇总)。schema-first:新 `schemas/us_short_lifecycle_readiness.schema.json`——§13.1 项编号 + 聚合计数 ONLY(schema_name const/as_of/total_items/due_count/due_items[int]/upgrade[int]),`additionalProperties:false` + 整数项字段**结构性保证无票名/$/表现可夹带**(与私密 lifecycle_register 相反)。新 `engine/us_short_lifecycle_readiness.py`:`build_lifecycle_readiness(register)` evaluate(拒 not-clean→evaluate raises)→脱敏 readiness dict,自检 schema + 跨字段不变式(due_count==len(due_items)/id∈[1,total]/upgrade⊆due);`write_lifecycle_readiness` 写前跑同一 **schema=脱敏门**(夹带票名/不一致 dict 拒、不留文件),**故无需 §18.0 私密 guard**(guard 护私密输出;本物可证脱敏=§11.6 允许 tracked)。纯-ish、不碰 provider/live、不交叉 A 股。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: readiness **19 测全过**(12 模块[build 无due/有due/脱敏键-only/拒 not-clean/schema 符合;write roundtrip/拒夹带票名/拒不一致 无文件;一致性门]+ 7 schema 三角[const/required/additionalProperties:false/整数正 id]);全离线 `*us_short*` **1135 OK**(+19)零回归、schema `*us_short*` **472 OK**(+7)、doc/route 25 OK;真 artifact 直跑=纯脱敏 JSON(仅数字/计数、无票名);eval/store/render docstring「readiness=next slice」B-ripple 同步到「readiness 已落 2c」。BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(脱敏 schema 门=tracked 安全、build 拒 not-clean、write 跨字段一致性、纯/离线无 A 股);PASS 后用户 `提交`。2c 末片 = 周报 lifecycle 节/顶部横幅 + §11.2 数量对账(配 weekly_report.md 渲染器)→ weekly_report 渲染器(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):build 出口[clean→readiness / not-clean→raise]+ write 门[schema 违例 / 跨字段不一致(due_count / upgrade-子集 / id 越界)全 raise 不留文件]全覆盖。B(连带):新 schema/module/2 测自带 docstring;**eval+store+render 三处「readiness=next slice」docstring B-ripple 同步**;README 加 2c-2 路由行(无计数,§18.1 #11)。C(反向):正控(clean build→conforming readiness、shipped build 过门、roundtrip)证没误拒合法态。D(歧义):脱敏「门」取最强=schema additionalProperties:false 结构保证,非靠约定。E:CURRENT 不动(未提交)。F:additionalProperties:false 拒夹带票名(脱敏硬保证)、跨字段不变式 draft-07 表达不了由 engine 焊、write 前门先于落盘(夹带/不一致不留文件)、tracked 物无需私密 guard(可证脱敏)。
+
 ## 2026-06-23 - Codex re-`review PASS` (US-short batch3 R2 lifecycle slice 2c banner repair)
 
 - **Verdict/Action**: PASS scoped to the lifecycle banner repair. The prior fail-closed / GBK gap is closed by full eval-result validation plus an ASCII output floor.

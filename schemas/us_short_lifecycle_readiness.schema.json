@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_lifecycle_readiness",
+  "title": "US-short §13 lifecycle readiness artifact — the TRACKED, de-identified due-scan summary the weekly_report lifecycle section + top banner consume (§13 / §11.6 脱敏汇总)",
+  "description": "Batch-3 TRACKED de-identified summary of the §13.1 lifecycle due scan (engine/us_short_lifecycle_readiness builds it from a §13-clean register via evaluate_lifecycle). UNLIKE the PRIVATE lifecycle_register (per-item live-forward counts + later ticker/performance detail → gitignored, §11.6), this artifact carries ONLY normalized indicators — §13.1 item NUMBERS and aggregate counts, NO ticker names, NO $, NO performance — so it is safe to TRACK (§11.6 要 tracked 只能放脱敏汇总). additionalProperties:false + integer-only item fields structurally guarantee no ticker / performance detail can be smuggled into a tracked artifact, so engine/us_short_lifecycle_readiness validates a built / to-be-written artifact against THIS schema as the de-identification gate (no §18.0 private-path guard is needed — being provably de-identified is exactly what §11.6 lets land on a tracked path). The weekly_report lifecycle section + §11.2 top banner render from this; the §11.2 count reconcile (第1节与对应节一致) checks against it. Structure-only: the welded `due_count == len(due_items)` consistency, item-numbers-within-range, upgrade ⊆ due, and the as_of strict REAL-date (the `as_of` pattern here only checks 8 digits — it cannot reject an impossible calendar date like 20260231) are enforced by engine/us_short_lifecycle_readiness + tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "total_items", "due_count", "due_items", "upgrade_eligible_items"],
+  "properties": {
+    "schema_name": {"const": "us_short_lifecycle_readiness"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "total_items": {"type": "integer", "minimum": 1},
+    "due_count": {"type": "integer", "minimum": 0},
+    "due_items": {"type": "array", "items": {"type": "integer", "minimum": 1}, "uniqueItems": true},
+    "upgrade_eligible_items": {"type": "array", "items": {"type": "integer", "minimum": 1}, "uniqueItems": true}
+  }
+}

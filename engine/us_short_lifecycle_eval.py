@@ -26,7 +26,7 @@ NOT governed_secondary_required)`.
 
 Pure / offline: reads only the tracked register schema + §13.1 governance preset; persists nothing here —
 the persister + §18.0 private-path guard + stale-load fail-closed are in engine/us_short_lifecycle_store.py
-(slice 2b); the honest banner / weekly reconcile / readiness artifact are the next slice (2c). Malformed
+(slice 2b); the honest banner + readiness artifact are slice 2c (engine/us_short_lifecycle_render / us_short_lifecycle_readiness); the weekly reconcile pairs with the weekly_report renderer. Malformed
 register input fails closed (validate never raises); accumulate raises on malformed input or a not-clean
 base/result (a producer never emits a not-clean accumulator).
 """

@@ -15,7 +15,7 @@ upgrade always needs a USER decision, never auto-production).
 
 Pure / offline: formats a string from the eval-result dict; no IO, no provider/live; NO jsonschema/engine
 import (the runtime banner stays importable + testable on a minimal runtime). No A-share crossing. The
-weekly-report lifecycle section / top banner + count reconcile + the readiness artifact are the next 2c cuts.
+readiness artifact landed in engine/us_short_lifecycle_readiness (slice 2c); the weekly-report lifecycle section / top banner + count reconcile pair with the weekly_report renderer.
 """
 from __future__ import annotations
 
