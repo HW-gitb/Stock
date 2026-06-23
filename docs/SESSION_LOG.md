@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 hot_excluded summary bridge repair)
+
+- **Verdict/Action**: PASS. `hot_excluded_summary(excluded_rows, *, heat_threshold)` now consumes raw excluded rows and internally runs `detect_hot_excluded` as the only official bridge, so hard-veto / fundamental / unknown-gate / low-heat rows cannot bypass the gate+threshold contract into §11.4 `hot_excluded`.
+- **Required**: None new. `R-USSHORT-BATCH3-HOT-EXCLUDED-SUMMARY-BYPASS-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: target hot_excluded 20 OK; `py_compile` OK; direct adversarial bridge probe filters hard_veto / fundamental / sec_offering / made_up_gate / low-heat rows from both public count and private holdings while preserving valid safety/liquidity rows; doc/route/boundary guards 47 OK; `git diff --check` CRLF-only; BOM/FFFD false. Broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (600 discovered, 36 errors, 1 skipped).
+- **Next**: User may `提交`; later R3 paper/comparison, price-clock, no-dangling follow-ups, provider/live/DataHub/Skill/production, A-share, and US-long remain separately gated.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 hot_excluded summary bridge bypass — 内部跑 detector 防绕过)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——同 coverage/exclusion 复发类:`detect_hot_excluded` 对了,但官方桥 `hot_excluded_summary` 只校 row 形、不强制 gate+threshold 契约 → 直接调用可把 hard_veto/低热行塞进官方 hot_excluded 计数/明细(§11.4 绝不救回 hard veto 被绕)。取 Codex **首选修**:summary 改吃 RAW `excluded_rows`+`heat_threshold`、内部跑 `detect_hot_excluded`(唯一路径)再聚合——无 standalone「summarize 已检出行」面可绕;hard_veto/fundamental/未知 gate/低热行被过滤、不计(public+private 两侧)。audit-only/隐私拆分/malformed 门全保留。
+- **Required**: `R-USSHORT-BATCH3-HOT-EXCLUDED-SUMMARY-BYPASS-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: 新增 +5、target **20 OK**;Codex bypass 探针(hard_veto/fundamental/sec_offering/made_up_gate/低热)现全 `{public:0,holdings:[]}`;全离线 `*us_short*` **1274 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False、LF-only。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。批3 续片:R3(纸面 #8 / 比较 #13/#24)/ price-clock #21 / no-dangling #9(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):桥两侧对 hard_veto/fundamental/未知 gate/低热行皆过滤;malformed(非list/坏 threshold[NaN/Inf/bool/负]/坏 row)经 detector 全拒。B(连带):summary 单走 detector(filter 单源无漂移);README 行 + Tests 同步签名;detector/malformed 老测试保留。C(反向):正控——合法 audit-hot 行 detect+aggregate 等价、空→{0,[]}、阈值含界;audit-only 入参不变·copy·准入不改。D(歧义):无新增(沿用 detector 契约)。E:CURRENT 未动。F:bridge==detect+aggregate 显式断言。**教训:第三次同类(coverage/exclusion/hot)——官方输出桥别信入参、必复用主路径自校契约。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 hot_excluded summary bridge)
+
+- **Verdict/Action**: FAIL. `detect_hot_excluded` correctly filters hot rows, but `hot_excluded_summary` can be called directly and will surface non-audit gates or low-heat rows as official `hot_excluded` counts/details.
+- **Required**: `R-USSHORT-BATCH3-HOT-EXCLUDED-SUMMARY-BYPASS-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: target hot_excluded 15 OK; `py_compile` OK; doc/route/boundary guards 47 OK; `git diff --check` CRLF-only; BOM/FFFD false; direct probes show summary accepts hard_veto/fundamental/sec_offering/made_up_gate and low-heat safety/data rows; broad `*us_short*` discover remains environment-blocked by missing `jsonschema` (595 discovered, 36 jsonschema-related errors, 1 skipped).
+- **Next**: Claude should repair only the hot_excluded summary bridge so it reuses/rechecks the detector gate + threshold contract, then return for Codex re-`审查`; no provider/live/DataHub/Skill/production/broker/order/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 hot_excluded §11.4 detector #19 — 误杀审计)
+
+- **Verdict/Action**: 起草 batch3 续片 hot_excluded(§11.4,#19)。`detect_hot_excluded(excluded_rows, *, heat_threshold)` 返回审计视图:被剔票 `theme_heat_score≥threshold` 且落 安全闸/流动性/数据 gate(`AUDIT_ELIGIBLE_GATES` 源自冻结 criteria)——§11.4 误杀候选、喂 §13。高热但落 hard veto/其它 gate **绝不进**(不救回 veto);detector **不改准入**(返回 copy、不改入参)。heat cutoff 入参(percentile→cutoff forward 不 pin)。`hot_excluded_summary` 桥接成 exclusion_summary `hot_excluded` 输入 + banner ⑤ 单源 = `{public_heat_count(非持仓·脱敏), holdings(持仓·私密)}`。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **15 OK**;全离线 `*us_short*` **1269 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:R3(纸面 #8 / 比较轨 #13/#24)/ price-clock 一致性(#21)/ no-dangling 证据反查+registry(#9)(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A:malformed 整类——非list、bad threshold(None/str/bool/负/NaN/Inf)、bad row(非dict/坏 ticker/坏 heat[非有限·负·bool·str]/坏 gate/非bool is_holding)拒。B:AUDIT_ELIGIBLE_GATES 源自冻结 criteria;summary 形匹配 exclusion_summary+`_validate_private`。C:正控 空→[]、各 gate 命中、含界、低热跳;audit-only(入参不变·copy·准入不改)。D:eligible gate 只取冻结 criteria 的 safety/liquidity/data;percentile 留 forward 不 pin。E:CURRENT 未动。F:`_finite_number` 拒 NaN/Inf/bool;heat≥threshold 含界。**镜像:私密拆分=exclusion_summary、audit-only。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 hot_excluded §11.4 detector #19(engine/us_short_hot_excluded.py + tests/test_us_short_hot_excluded.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① 绝不救回 hard veto——高热落非 safety/liquidity/data gate 是否一律不进 hot ② audit-only——detect 是否真不改入参/不改准入(返回 copy)③ summary 隐私拆分——public_heat_count 是否只数非持仓(脱敏)、holdings 是否私密 {ticker,reason} 且形匹配 exclusion_summary `hot_excluded` + `_validate_private` ④ AUDIT_ELIGIBLE_GATES 是否忠于冻结 criteria(不自造 gate)、percentile 留 forward 是否合理 ⑤ malformed 整类(NaN/Inf/bool/负 heat、非bool is_holding)是否全 HotExcludedError ⑥ 纯/离线、不碰 provider/live、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex `审查 PASS` (US-short batch3 honest-banner ① observe split §11.2)
 
 - **Verdict/Action**: PASS. `aggregate_observe_split` reads the frozen `observe_reason_type` enum, counts all 7 reasons with explicit zeros, classifies only `cash_or_account_missing` as the sizing artifact, and `validate_observe_split` fail-closes total / per-reason / sizing consistency before render.
