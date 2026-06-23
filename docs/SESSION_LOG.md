@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-24 — Claude `执行` (US-long Tier 2 Cut 0 — 设计权威入 repo + 路由 + 桌面稿退役)
+
+- **Verdict/Action**: 落 us_long Tier 2 Cut 0（地基·doc-only）。桌面 `v3_us_long_design.md` verbatim 移植入 repo 作 `docs/us_long_system_design.md`（美股中长线 us_long 系统**单一设计权威**，对标 `docs/us_short_system_design.md`）——设计 substance（D1-D11 / §1-§19）字节级不动，**仅** header（状态：设计草稿 + 「未授权前不写项目文件夹」→ in-repo 单一权威 / Tier 2 active；数据·接入边界仍生效）+ §20 下一步（Tier 1 完成、Tier 2 进行中、桌面稿退役、Cut 1+ reconcile 开放项）随状态更新——否则 in-repo 权威自含「仅写在桌面、未碰项目文件夹」的即时自相矛盾（doc-drift）。路由 3 处镜像 us_short：`AGENTS.md`（§Reference framework policy 权威声明 + 文件索引）、`docs/CURRENT.md`（lane owner specs 行 + §0 delta）、`docs/README.md`（routing 表行）。桌面源**删除退役**（防双源漂移；内容已 verbatim 在 repo + 版本控制）。memory `project_us_long_v1_design_drafted` + `MEMORY.md` 权威路径桌面→repo 更新。
+- **Required**: 无（doc-only；设计已 /grill + Codex 三轮复核收敛，Cut 0 仅安置入 repo + 路由，不走 起草-审查 cycle，无新代码/schema）。
+- **开放项（留 Cut 1+，非 Cut 0 scope，已记 CURRENT §0 + 设计 §20）**: 既存 `presets/us_long.yaml`（`result_dir: result/us_long`、status `reserved_phase_9`）+ `research/results/us_long/README.md`（`lane_output_root("us_long")`）的结果路径口径，与设计 §14「最终结果落 `state/us_long/results_private/`（明确 override 通用 `result/` 约定，因结果天然私密）」不一致——待 Cut 1（私密/排他守卫）或 results-guard 刀 reconcile + 翻 `us_long.yaml` active。Cut 0 不静默改邻近脚手架（surgical）。
+- **Verify**: repo `docs/us_long_system_design.md` vs 桌面源差异仅 header + §20（substance 零改）；3 处路由可解析指向新权威（AGENTS×2 / CURRENT lane-owner / README 行）；桌面源已删（`Test-Path` False）；`git diff --check` 仅 CRLF；`git status` 仅本 Cut 0 涉及文件（设计稿 + AGENTS + README + CURRENT + 本 LOG）；无 `engine/`·`schemas/`·`tests/` 改动（纯 doc 地基）。
+- **Next**: Cut 1 — `schemas/us_long_account_state.schema.json` + `schemas/us_long_account_state_lineage.schema.json` + `runners/us_long_account_state_from_manual_tables.py`（复用 us_short 转换器/私密守卫模式）+ `engine/us_long_private_paths.py`（复用 us_short `git check-ignore` 真值判定）+ `.gitignore` 私密区 + tests；空持仓表只表头也照常（D9）；ticker 强制美股格式拒 A 股码、CSV canonical 拒 Excel 强转、坏输入 fail-fast。然后 Cut 2…6（universe / 赛道 / 评分 / 价格持仓 / pipeline+输出，见设计 §14 + CURRENT）。field_registry + lineage + 断路器 = Tier 3。每片 schema-first + tests + 交 Codex `审查`、不交叉 A 股、不 auto-push。
+
 ## 2026-06-23 - Codex re-`review PASS` (US-short batch3 S12.1 paper fill / multi-day #8)
 
 - **Verdict/Action**: PASS. Same-day `simulate_fill` now rejects invalid order geometry before any bookable output, and the multi-day held-exit bracket gate remains intact.

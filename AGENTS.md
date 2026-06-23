@@ -93,6 +93,7 @@
 - A 股短线框架与美股短线框架虽然都可能使用 `v14.x` 版本号，但它们是两套独立框架；不是前后版本关系，也不能把一个市场的 v14.x 当作另一个市场的升级版或替代版。
 - 这些 reference 文档原始目标是 AI chatbox 工作流。后续做 schema、runner、analyzer、Skill、prompt 或 preset 设计时，必须参考其业务逻辑、流程结构和判断维度，但不能机械照搬为运行时提示词或代码规则。
 - US-short 设计权威 = `docs/us_short_system_design.md`（单一权威；旧 `docs/us_short_spec.md` 已降级归档指针）；reference docs 继续作为源资料归档，`skills/us_short_analysis/SKILL.md` 在 Phase 7 / Phase 8 前仍保持 reserved。
+- US-long 设计权威 = `docs/us_long_system_design.md`（美股中长线 us_long 系统**单一设计权威**；2026-06-24 移植桌面定稿入 repo，桌面稿退役；foundation-first，用户已授权进入 Tier 2；Tier 2-3 只用本地样例数据，真实数据 / provider / DataHub / 联网留 Tier 4+ 单独授权审查；`presets/us_long.yaml` 仍 reserved_phase_9、实现时翻 active；不交叉 A 股、不 auto-push）。`docs/long_alpha_spec.md` 仍是长线**共同**规格 skeleton，本稿是 us_long 的**具体系统**权威，二者不冲突。
 - 可确定、可回测、可结构化的规则应拆入 Python / schema / config / state；需要语义判断、新闻理解、行业判断的部分才进入 Skill prompts。
 - 长线共同规格、US 长线 skeleton、A 股长线 skeleton 已在 `docs/long_alpha_spec.md` 建立；provider/data audit baseline 已在 `docs/provider_data_requirements_audit.md` 建立；后续 provider 选择、schema 和 implementation 仍待后续 Phase。不得用短线框架硬套长线系统。
 
@@ -562,6 +563,7 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 - `skills/us_short_analysis/reference/us_short_screening_spec.md` — 美股短线预测/筛选框架资料
 - `docs/us_short_system_design.md` — US-short 子系统**单一设计权威**（docs-only；移植桌面定稿；§18.0 7 道 P0 硬门已登记 register `R-USSHORT-V1-P0-IMPLEMENTATION-GATES`；不锁 provider / runner / schema / Skill；实现 gated + 不交叉 A 股）
 - `docs/us_short_spec.md` — 已降级为指向 `docs/us_short_system_design.md` 的归档指针（2026-06-20；不再是权威）
+- `docs/us_long_system_design.md` — US-long（美股中长线，持仓 3-6 月）子系统**单一设计权威**（2026-06-24 移植桌面 `v3_us_long_design.md` 入 repo、桌面稿退役；foundation-first，Tier 2 起 active；只用本地样例，真实数据 / provider / DataHub / 联网 gated 到 Tier 4+；不锁 provider / 最终 schema / Skill；实现逐刀 schema-first + Codex 审查；不交叉 A 股）
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` — Phase 7a+ 最高行动指南（alpha 真实性、业务漏洞、执行路线和后续 phase 挂载）
 - `docs/alpha_plausibility_audit.md` — Phase 7a alpha plausibility / lane objective owner（schema-first audit route；决定 continue / risk-filter / redesign / defer / do-not-implement）
 - `docs/evidence_capital_policy.md` — Phase 7a paper vs live-normalized evidence owner（不改变资金政策；ship gate 证据必须区分 paper / live_normalized）
