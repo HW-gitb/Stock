@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-EF-BOUNDARY-REGRESSION-SCOPE-GAP - boundary regression guard misses parts of the system boundary
 
-- Status: **resolved** (Codex `审查 FAIL` → 修复 → re-`审查 FAIL`(tda 漏) → Claude `修复` round-2 2026-06-23, working tree; closure on Codex re-`审查 PASS` + 用户 `提交`).
+- Status: **resolved** (committed in `d89e245e`, Codex re-`审查 PASS` 2026-06-23; scope 扩到 engine+runner 整面 + broker token 整类补 tda,经 2 轮).
 - Severity: **P1** (system hard-boundary / review-quality guard before broader US-short runner, weekly report, provider, or execution-adjacent implementation).
 - Source: Codex strict review of US-short batch3 E+F (`engine/us_short_provider_health.py` + `tests/test_us_short_provider_health.py` + `tests/test_us_short_boundary_regression.py`).
 - Scope reviewed: current working tree after commits `0ad2d7af` / `e49e4d99`, with modified `docs/README.md`, `docs/SESSION_LOG.md`, and untracked `engine/us_short_provider_health.py`, `tests/test_us_short_provider_health.py`, `tests/test_us_short_boundary_regression.py`; design authority `docs/us_short_system_design.md` §3.7 / §18.1 #3 / §18.1 #12; `AGENTS.md`; `docs/AI_REVIEW_PROTOCOL.md`; `docs/pre_codex_self_review_checklist.md`. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
