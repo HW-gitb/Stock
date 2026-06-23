@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-PAPER-FILL-EXPIRY-GATE-GAP - paper fill ignores the v1 first_regular_session_only order-expiry contract
 
-- Status: **resolved** (current working tree; Codex re-`审查 PASS` 2026-06-23; commit pending).
+- Status: **resolved** (committed in `c5e7ed4d`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (US-short paper-only execution simulation before later paper ledger, comparison/shadow, cooldown, portfolio guard, or performance evidence consumes simulated fills).
 - Source: Codex strict review of US-short batch3 paper fill slice (`engine/us_short_paper_fill.py`, `tests/test_us_short_paper_fill.py`, `docs/README.md` route row, and the top `docs/SESSION_LOG.md` Claude draft entry).
 - Scope reviewed: current working tree after `391976d0`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_paper_fill.py`, and untracked `tests/test_us_short_paper_fill.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` section 12.1 / section 18.1 #8 / section 18.2 plus the review protocol and pre-Codex checklist. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order execution/A-share/US-long path was run.
