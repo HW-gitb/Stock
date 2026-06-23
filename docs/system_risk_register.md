@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-COVERAGE-HONESTY-GAP-TAG-VALIDATOR-GAP - coverage honesty validator accepts invalid or severity-mismatched gap tags
 
-- Status: **resolved** (Codex re-`审查 PASS` 2026-06-23; current working tree, pending user `提交`).
+- Status: **resolved** (committed in `f2361d84`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (official US-short action_table / weekly-report coverage honesty before later output, coverage, observe-reason, paper/comparison, or pipeline slices consume `coverage_status`).
 - Source: Codex strict review of US-short batch3 coverage honesty slice (`engine/us_short_coverage_honesty.py`, `tests/test_us_short_coverage_honesty.py`, `docs/README.md` route row).
 - Scope reviewed: current working tree after `ca29ec31`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_coverage_honesty.py`, and untracked `tests/test_us_short_coverage_honesty.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` §11.5 / §11.3 / §18.1 #10 / §18.2; frozen enum source `presets/us_short_action_table_contract_20260620.json`; review protocol and pre-Codex checklist. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order/A-share/US-long path was run.
