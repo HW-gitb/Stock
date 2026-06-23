@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-PRICE-CLOCK-VALIDATOR-BYPASS-GAP - weekly_report renderer can bypass the price-clock consistency validator
 
-- Status: **resolved** (Codex `审查 FAIL` 2026-06-23 → Claude `修复` 2026-06-23 → Codex re-`审查 PASS` 2026-06-23; current working tree, pending user `提交`).
+- Status: **resolved** (committed in `718092ec`, Codex re-`审查 PASS` 2026-06-23).
 - Severity: **P1** (official US-short weekly_report banner ④ / price-clock honesty before later batch3 pipeline, paper, comparison, or production-like output consumes the report surface).
 - Source: Codex strict review of US-short batch3 price-clock consistency slice (`engine/us_short_price_clock.py`, `tests/test_us_short_price_clock.py`, `engine/us_short_weekly_report_renderer.py`, `tests/test_us_short_weekly_report_renderer.py`, `docs/README.md` route row).
 - Scope reviewed: current working tree after `957754e3`, with modified `docs/README.md` / `docs/SESSION_LOG.md`, untracked `engine/us_short_price_clock.py`, and untracked `tests/test_us_short_price_clock.py`; no staged diff. Design authority reviewed: `docs/us_short_system_design.md` §2.1 / §3.5 / §11.2 banner ④ / §18.1 #21 / §18.2; frozen field source `presets/us_short_weekly_report_contract_20260620.json`; review protocol and pre-Codex checklist. No provider/live/network/full-market fetch/DataHub/Skill/production/broker/order/A-share/US-long path was run.
