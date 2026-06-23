@@ -304,14 +304,14 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **ship-gate 只改"下多大注、信几分"，不改价位/时机**。
 
 ### 12.1 model_paper_track 纸面成交规则（写死、可复现）
-- 存储 `state/us_short/model_paper_private/`：`paper_orders.csv / paper_positions.csv / paper_performance.csv`；归一化指标（t/Sharpe/回撤，无 $）可出 tracked 无密摘要。
+- 存储 `state/us_short/model_paper_private/`：`paper_orders.csv / paper_positions.csv / paper_performance.json`（**`paper_performance` v1 实现为 JSON**——每条 = 一笔 net result 的嵌套 typed 记录[含 `None` / `bool` / `float` + per-outcome 不变式],JSON 无损表达,而 CSV 的扁平字符串须 type-coerce 回读且 0-条目丢 `as_of`;2026-06-23 design-owner 决定,见 register `R-USSHORT-BATCH3-PAPER-LEDGER-FORMAT-DRIFT`）；归一化指标（t/Sharpe/回撤，无 $）可出 tracked 无密摘要。
 - 只用日线 OHLCV。**复权/公司行动硬门**：未确认 `adjustment_mode` + split/dividend 处理 + 除权日价位一致性前，`paper_performance` 一律 `not_evaluable / data_degraded`，**不进任何 ship-gate / alpha 判断**（repo SR-PROVIDER-001：active price adjustment / corporate-action reconciliation 未证明、FMP 公司行动 endpoint 未 reviewed → 当前调用数为 0）。
 - **订单有效期（v1 锁定）= `first_regular_session_only`**：只按周一 RTH 判定成交，盘前盘后不算；当日 RTH 收盘未成交 → `not_filled` → 转观察（不留隔日）。多日 GTC 挂单 = lifecycle 候选 `multi_day_order_expiry_candidate`（`candidate_active`）、v1 不做，靠纸面成交数据后经 §13 #35 决定是否启用。
 - **成交判定（确定性顺序）**：
   - **Step 0**：`open` 不在 `[valid_entry_low, valid_entry_high]` → `not_filled`（资金算现金、不计收益）。
   - **Step 1（open 在带内，按 `order_type`）**：`pullback_limit`：`low ≤ limit_order_price` → 成交 @ `limit_order_price`；`breakout_stop_limit`：`high ≥ breakout_entry_price` → 成交 @ `min(max(open, breakout_entry_price), valid_entry_high)`；否则 `not_filled`。
 - **同日多事件（日线看不出盘中先后，一律保守、防纸面虚高）**：① 入场成交当日若 `low ≤ 止损` → 按"入场后即止损"记（不假设它活过当天，daily 数据下的保守近似）；② 同日止损与止盈都触发 → 止损优先。
-- **净结果口径**：`paper_performance.csv` 含 `commission_fee / slippage_bps / spread_cost / unfilled_cash / net_return`——算净收益、未成交按现金（不把没买上的当收益）。成本假设 = prior（§13 #18）。
+- **净结果口径**：`paper_performance.json` 每条 net result = `{outcome, realized, gross_return, cost_fraction, net_return, unfilled_cash}`——算净收益、未成交按现金（不把没买上的当收益）。**成本 = prior（§13 #18）**：三成分（commission / slippage_bps / spread）合成单一往返 return-drag `cost_fraction = commission_fee + spread_cost + slippage_bps/10000`（无 $、归一化口径），仅 realized-closed 扣；不变式 `net_return == gross_return − cost_fraction`。
 
 ### 12.2 赛道权重比较轨 + 错过成绩单（借 A 股 comparison-track；shadow-only）
 - **目的**：每周用 `theme_plus` / `theme_aggressive`（§4.2）在 shadow 各跑一遍选股，记"它们会选哪些、`balanced` 实际选哪些"，攒证据答：主系统是否常错过强赛道？加重赛道权重是否真更好？是否该升 §13 #1 权重？防系统因太稳长期错过主线。

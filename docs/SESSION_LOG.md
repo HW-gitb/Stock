@@ -8,6 +8,71 @@
 
 ---
 
+## 2026-06-23 - Codex re-review PASS (US-short batch3 paper ledger DATE-ASCII repair)
+
+- **Verdict/Action**: PASS. The paper-ledger inline date helper now restores strict ASCII `YYYYMMDD` semantics without reintroducing the lifecycle/jsonschema import coupling; prior ledger Required items are closed for this slice.
+- **Required**: None new for the paper-ledger slice. Existing separate `R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP` remains open in `docs/system_risk_register.md` and was not fixed under this ledger-only boundary.
+- **Verify**: target paper-ledger tests **18 OK**; `py_compile` OK; doc/route/boundary suites **47 OK**; direct import probe showed no `jsonschema` / `us_short_lifecycle_eval`; direct Unicode probe accepts ASCII and rejects Arabic-Indic/fullwidth dates; active `paper_performance.csv` grep **0**; broad `*us_short*` attempted but blocked by missing `jsonschema` in bundled Python; no provider/live/network/real-data/DataHub/Skill/production/A-share/US-long run.
+- **Next**: User may `提交` the paper-ledger slice; handle the price-clock DATE-ASCII gap only through a separate scoped repair/review.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 paper ledger DATE-ASCII — inline 日期门加 isascii())
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 1 P2)。成立——我内联 `_strict_yyyymmdd` 漏了 canonical 的 `s.isascii()`,`s.isdigit()` 收 Unicode 数字(Arabic-Indic/fullwidth)、`int()` 会 coerce → 弱化严格日期。修:加 `s.isascii()`(不重引 lifecycle/jsonschema)。**连带发现**:committed price_clock 内联同款漏 isascii()(同类)——按本 Required ledger-only 边界**不越界改**,登记新 finding `R-USSHORT-BATCH3-PRICE-CLOCK-DATE-ASCII-GAP` 留独立 scoped 修复(canonical lifecycle 本身有 isascii、只两份内联拷贝各漏)。
+- **Required**: `R-USSHORT-BATCH3-PAPER-LEDGER-DATE-ASCII-GAP` resolved(working tree;详 register)。
+- **Verify**: 新增 +1、target **18 OK**(ASCII 收、Arabic-Indic/fullwidth 拒,helper + as_of 门双验);import 仍无 jsonschema/lifecycle_eval;全离线 `*us_short*` 全绿;doc/route+boundary 33 OK;BOM/FFFD=False。
+- **Next**: Codex re-`审查` 整刀;PASS 后用户 `提交`。price_clock 同款 gap 另起 scoped 修复。
+- **Pre-Codex self-review**: A–F。A:Unicode 数字(Arabic-Indic/fullwidth)经 helper + record as_of 门双拒、ASCII 正控收。B:连带 grep 出 price_clock 同款内联漏(登记、不越界改);canonical lifecycle 有 isascii 无需动。C:正控 ASCII 收、18 OK。D:无。E:CURRENT 未动。F:`isascii()+isdigit()`=ASCII 0-9。**教训:内联 canonical helper 别简化掉它的守卫(isascii);两份内联拷贝都犯=简化惯性。**
+
+## 2026-06-23 - Codex re-review FAIL (US-short batch3 paper ledger date strictness)
+
+- **Verdict/Action**: FAIL. NET-SHAPE/doc-route drift and JSON authority now align, and the import-coupling repair removes the heavy lifecycle/jsonschema import, but its replacement date helper weakens strict date semantics by accepting Unicode digit dates.
+- **Required**: `R-USSHORT-BATCH3-PAPER-LEDGER-DATE-ASCII-GAP` - full detail and repair boundary are in `docs/system_risk_register.md`.
+- **Verify**: target paper-ledger tests **17 OK**; `py_compile` OK; doc/route/boundary suites **47 OK**; active `paper_performance.csv` grep **0**; import probe showed no `jsonschema` / `us_short_lifecycle_eval`; Unicode-date probes accepted Arabic-Indic and fullwidth digits; no provider/live/network/real-data/DataHub/Skill/production/A-share/US-long run.
+- **Next**: Claude repair only the inline paper-ledger date helper and direct regression tests/docs if needed, then return for Codex re-review; do not commit or start other batch3/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 paper ledger NET-SHAPE doc-drift — 4 教学面同步全契约)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` 1,doc-drift)。行为 round-1 对,但 4 active 教学面仍写旧弱契约(open-vs-有限-net),漏全 per-outcome(键集6、cash 全0、closed net==gross−cost)。全改:模块 docstring + `_validate_record` docstring(engine)、test 模块 docstring、README 路由行 → 全契约描述。弱措辞 grep 归零。
+- **Required**: `R-USSHORT-BATCH3-PAPER-LEDGER-NET-SHAPE-GAP` resolved(working tree;详 register Resolution 2)。
+- **Verify**: target **17 OK**(行为不动);弱措辞 grep=0;doc/route+boundary 33 OK;py_compile OK;BOM/FFFD=False。
+- **Next**: Codex re-`审查` 整刀(三 Required 全 resolved);PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A–F。A:4 active 教学面(2 engine docstring + test docstring + README)全契约措辞、弱措辞 grep 归零。B:仅文字、行为/测试断言不动。C:正控 17 OK。D:无。E:CURRENT 未动。F:SESSION_LOG/register 旧措辞审计史豁免。**教训:又是 doc-drift——改 validator 契约后,被改文件自身 module+函数 docstring + 测试 docstring + README 四面必同步,我反复漏。**
+
+## 2026-06-23 - Codex re-`审查 FAIL` (US-short batch3 paper ledger net-shape doc drift)
+
+- **Verdict/Action**: FAIL. Paper-ledger behavior fixes are mostly correct, but active module/test docstrings and the README route row still describe the old weak net-shape contract as the "FULLY self-enforced" rule.
+- **Required**: `R-USSHORT-BATCH3-PAPER-LEDGER-NET-SHAPE-GAP` remains open - full re-review correction and narrow repair boundary are in `docs/system_risk_register.md`.
+- **Verify**: target paper-ledger tests **17 OK**; `py_compile` OK; direct probes reject the prior 5 malformed net-shape rows; paper-ledger import does not load `jsonschema` / `us_short_lifecycle_eval`; active design/README/engine/test grep for `paper_performance.csv` **0** outside audit history; no provider/live/network/DataHub/Skill/production/A-share/US-long run.
+- **Next**: Claude `修复` only the active paper-ledger teaching surfaces for the closed-world net-shape contract, then return for Codex re-`审查`; do not commit or start other batch3/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 paper ledger — NET-SHAPE 全契约锁 + IMPORT 解耦;FORMAT-DRIFT 交用户定 .json/.csv)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 3 Required)。三条都成立、judge 后:**NET-SHAPE(P1)+ IMPORT(P2)干净修了**;**FORMAT-DRIFT(P2)= 设计权威决策、surface 给用户不擅自猜**。① NET-SHAPE:`_validate_record` 加全 paper_net_result 契约——键集精确6(闭世界)+ 各 outcome 不变式(cash 全0 / open 全None / closed 有限 gross·net·非负 cost·net==gross−cost)、写读全 `PaperLedgerError`(第3次同类、这次全锁)。② IMPORT:删 lifecycle_eval import(拖 jsonschema)、内联 `_strict_yyyymmdd`(镜像 price_clock·语义不弱),目标测试最小 runtime 可 import。
+- **Required**: 三条全 resolved(working tree):`...NET-SHAPE-GAP` + `...IMPORT-COUPLING-GAP` 直接修;`...FORMAT-DRIFT` 经 design-owner 选 A 解决(详 register Resolution)。
+- **Verify**: 新增 +3、target **16 OK**;Codex 5 NET-SHAPE 探针全 REJECT;import 仅 datetime/json/math/pathlib/private_paths(无 jsonschema);全离线 `*us_short*` **1361 OK** 零回归;doc/route+boundary 33 OK;BOM/FFFD=False。
+- **Next**: design-owner 选 **A** → §12.1 更新为 `paper_performance.json`(storage + 净结果口径两行改 .json + 描述实际记录/cost_fraction 模型)、加 filename-lock 测试、active 面 `paper_performance.csv` grep 归零(register/SESSION_LOG 审计史豁免)。三 Required 全 resolved → Codex re-`审查` 整刀(命令同前刀文件)。
+- **Pre-Codex self-review**: A–F。A(类×出口):NET-SHAPE 各 outcome 不变式 + 键集闭世界 + net==gross−cost 全锁、写读双向;这次按 Required 全锁(前两刀栽在只锁一半,本刀核了 Codex 全 5 例 reject)。B(连带):内联 date helper 去 jsonschema 耦合、import 仅 5 无-schema 模块;集成测试喂真 net_result 防漂移。C(反向):正控——全 outcome 合法记录 + 真 net_result 输出过、tampered 行 load 拒;未误拒。D(歧义):FORMAT-DRIFT 不擅自猜——§12.1 .csv vs 已提交 cost_fraction 模型冲突,交 owner 定(Required 本给此选项)。E:CURRENT 未动。F:`_finite` 拒 NaN/Inf/bool、`isclose` 定差。**判断:3 条 judge——2 干净修、1 真设计决策 surface,非盲执 3 条。**
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 paper ledger §12.1 #8 follow-up)
+
+- **Verdict/Action**: FAIL. `paper_performance` private persister is not passable: target suite cannot import in the bundled reviewer runtime, `_validate_record` accepts malformed net-result entries, and the canonical artifact path/format drifts from §12.1 `paper_performance.csv`.
+- **Required**: `R-USSHORT-BATCH3-PAPER-LEDGER-NET-SHAPE-GAP`; `R-USSHORT-BATCH3-PAPER-LEDGER-IMPORT-COUPLING-GAP`; `R-USSHORT-BATCH3-PAPER-LEDGER-FORMAT-DRIFT` - full details / repair boundaries in `docs/system_risk_register.md`.
+- **Verify**: status/log/design/route/current files reviewed; bundled Python target `tests.test_us_short_paper_ledger` import ERROR (`jsonschema` via `us_short_lifecycle_eval`); `py_compile` OK; direct stubbed probes show malformed ledger entries accepted; `git check-ignore` confirms private path ignored; no provider/live/network/DataHub/Skill/production/A-share/US-long run.
+- **Next**: Claude `修复` only these paper-ledger Required items and direct tests/docs, then return for Codex re-`审查`; do not commit or start other batch3/provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 paper ledger §12.1 #8-后续 — paper_performance 私密落盘)
+
+- **Verdict/Action**: 起草 batch3 续片 paper 私密落盘(§12.1/§11.6/#8 后续)。`write_paper_performance(record, out_path)` 把 paper_performance(含 $/持仓/net)落 gitignored 私密:§18.0 guard 写前(相对/仓内非ignored 拒、仓外/ignored OK)→ 校 → 写。`load_paper_performance` **对称** guard 源端 + 重校(缺/坏JSON/坏记录 fail-closed)。`_validate_record` **全自校**(不信任 producer):strict as_of + entries net-result 形 + **net-result 一致性**(open⟺realized False⟺net None / realized 态⟺True⟺有限 net)。无新 schema。
+- **Required**: 无(fresh 起草,待 Codex `审查`)。
+- **Verify**: 新 suite **13 OK**;全离线 `*us_short*` **1358 OK** 零回归;doc/route+boundary 33 OK(新 engine 入 boundary glob);BOM/FFFD=False、LF-only。
+- **Next**: Codex `审查` 本刀(命令见下);PASS 后用户 `提交`。批3 续片:paper 多日平仓 realized + 比较轨 shadow #13/#24(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):record 整类——非dict/坏 as_of/非list entries/非dict entry/坏 outcome/非bool realized·unfilled_cash/net-result 一致性两向 全拒。B(连带):§18.0 guard 写+读对称(镜像 store、对称-guard 课);_OUTCOMES 镜像 net_result + 集成测试防漂移;新 engine 入 boundary glob。C(反向):正控——全 outcome 过、outside-repo roundtrip、malformed 写前拒零落盘;未误拒。D(歧义):一致性/outcome 集取 net_result 实值非自造。E:CURRENT 未动。F:复用 `_strict_yyyymmdd`、`_finite` 拒 NaN/Inf/bool。**这次把「自校全锁 + 对称 guard」两课落全(上刀栽在自校只锁一半)。**
+- **Codex 审查 command**(写入交接、按用户指示不在 chat 复述):
+
+```
+审查 US-short 批3 paper ledger §12.1 #8-后续(engine/us_short_paper_ledger.py + tests/test_us_short_paper_ledger.py;路由见 docs/README.md,起草自审见本 SESSION_LOG 条)。重点:① §18.0 guard 写+读是否真对称(读端相对/仓内非ignored 源拒、写前 guard)② `_validate_record` 是否全自校 record(strict as_of、entries 形、net-result 一致性两向[open⟺未实现·net None / realized 态⟺有限 net])、不信任 producer ③ _OUTCOMES 镜像 net_result 是否够 + 集成测试防漂移 ④ malformed 写前拒零落盘、load 缺/坏JSON/坏记录 fail-closed ⑤ 记录是 private 落盘($/持仓)是否确不漏 tracked、纯/离线、不交叉 A 股。
+```
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 paper net result fill-shape repair)
 
 - **Verdict/Action**: PASS. `paper_net_result()` now enforces the full per-status `fill_result` shape before any accounting, so inconsistent status / price / reason records are refused.
