@@ -24,10 +24,11 @@ category each contribution must be 0 or 1 (one decision_date = at most one week,
 `due` is the welded GOVERNED invariant `derived_count >= governed_min_count AND (secondary_condition_met OR
 NOT governed_secondary_required)`.
 
-Pure / offline: reads only the tracked register schema + §13.1 governance preset; persists nothing here
-(the persister + private-path guard + banner/reconcile land with the next slice). Malformed register input
-fails closed (validate never raises); accumulate raises on malformed input or a not-clean base/result (a
-producer never emits a not-clean accumulator).
+Pure / offline: reads only the tracked register schema + §13.1 governance preset; persists nothing here —
+the persister + §18.0 private-path guard + stale-load fail-closed are in engine/us_short_lifecycle_store.py
+(slice 2b); the honest banner / weekly reconcile / readiness artifact are the next slice (2c). Malformed
+register input fails closed (validate never raises); accumulate raises on malformed input or a not-clean
+base/result (a producer never emits a not-clean accumulator).
 """
 from __future__ import annotations
 

@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-23 - Codex re-`review PASS` (US-short batch3 R2 lifecycle slice 2b load private-path guard repair)
+
+- **Verdict/Action**: PASS scoped to US-short batch3 R2 lifecycle slice 2b. `load_lifecycle_register` now guards `in_path` before read / parse / validate, closing the prior non-private source-load gap. Separate `AGENTS.md` / `tests/test_doc_governance_guard.py` protocol edits are outside this PASS.
+- **Required**: None new. `R-USSHORT-BATCH3-R2-LIFECYCLE-LOAD-PRIVATE-PATH-GUARD-GAP` is resolved in the current working tree; closure evidence is in `docs/system_risk_register.md`.
+- **Verify**: store 16 OK; lifecycle/store/authority/calibration target 123 OK; full offline `*us_short*` 1103 OK; schema `*us_short*` 465 OK; doc/route 39 OK; direct probes covered private OK / relative+nonignored refused / stale+not-clean fail closed; `git diff --check` CRLF-only; BOM/FFFD false; no provider/live/DataHub/A-share/US-long.
+- **Next**: User may `commit` the reviewed US-short slice. Slice 2c / provider / live / DataHub / Skill / production / A-share / US-long remain gated; protocol edits need separate confirmation if included.
+
+## 2026-06-23 — Claude `修复` (US-short 批3 R2 lifecycle slice 2b — load 私密路径 guard 对称补全)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 P1)。成立、接受——我守了 persister 的**写**路径,漏了**读**路径(非对称私密地板):`load_lifecycle_register` 不查 in_path,planted 在仓内非 gitignored 路径的合法 register 照样载入。修:load 开头先 `reject_nonprivate_output_path(in_path)`(§18.0 guard 最窄复用作读侧地板,Codex 已认可),相对/仓内非 ignored 源拒,私密 artifact 只从 provably-private 路径读;**保留 `PrivatePathError`**(guard 是路径隐私错误单一来源→写读同抛、对称)。整类:写✓读✓ = 2b 仅两个私密 IO 端点都已守。详见 register。
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-LOAD-PRIVATE-PATH-GUARD-GAP` resolved(working tree;详 `docs/system_risk_register.md` 单一来源)。
+- **Verify**: store **16 OK**(+2:relative 源拒、planted 仓内非ignored 源拒[合法 register 不被消费]);全离线 `*us_short*` **1103 OK** + schema 465 OK 零回归、doc/route 25 OK;探针——planted tracked register load 拒(gap 关)、仓外 roundtrip 仍载入;module+load docstring + README 2b 行 B-ripple 同步;BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 本刀;PASS 后用户 `提交`。lifecycle slice 2c(横幅/readiness/周报 reconcile)= 后续。
+- **Pre-Codex self-review**: A–F。A(类×出口):私密路径地板 写+读两端点全守(非只被点名读端);load guard 先于 read/parse/validate。B(连带):module docstring load bullet + load docstring + README 2b 行同步「load 对称源 guard」;无符号改名。C(反向):正控(canonical gitignored + 仓外 load、同日/前向 load)全绿,没误拒合法私密源。D:N-A。E:CURRENT 不动(未提交)。F:guard 先于任何 read(无半读)、保留 PrivatePathError 对称、planted-file 测仓内非ignored 写后清理不污染追踪树。
+
+## 2026-06-23 - Codex `审查 FAIL` (US-short batch3 R2 lifecycle slice 2b)
+
+- **Verdict/Action**: FAIL. `write_lifecycle_register` wires the private-path guard correctly, but `load_lifecycle_register` accepts a manually planted in-repo non-gitignored lifecycle_register artifact.
+- **Required**: `R-USSHORT-BATCH3-R2-LIFECYCLE-LOAD-PRIVATE-PATH-GUARD-GAP` - full Required / risk / boundary in `docs/system_risk_register.md`.
+- **Verify**: store 14 OK; lifecycle/store/authority/calibration target 121 OK; full offline `*us_short*` 1101 OK; schema `*us_short*` 465 OK; doc/route 39 OK; probes show canonical gitignored write+load OK, relative/nonignored writes refused, stale-ahead load refused, not-clean load refused, but manual non-gitignored in-repo valid register loads OK. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: Claude should repair only the lifecycle load private-path guard gap and direct tests/docs, then return for Codex re-`审查`; no lifecycle slice 2c / weekly renderer / provider/live/DataHub/Skill/production/A-share/US-long work.
+
+## 2026-06-23 — Claude `起草` (US-short 批3 R2 lifecycle-eval slice 2b — 首个 lifecycle 持久化 + 陈旧桶 fail-closed)
+
+- **Verdict/Action**: 收到 `提交并执行下一步`(slice 2a 已提交 `5efb4f0a`+closeout `cb28fc59`,Codex re-`审查 PASS`)。续 lifecycle 运行时阶段 slice 2b = **持久化 + stale-aware load**(IO 层,与 eval 纯层分离,镜像 R2a 渲染器独立文件)。新 `engine/us_short_lifecycle_store.py`:`write_lifecycle_register`(**首个 lifecycle 落盘者**)——§18.0 P0 私密路径 guard(`reject_nonprivate_output_path`)先于任何 validate/写(相对/仓内非 ignored 拒、仓内 gitignored[`state/us_short/lifecycle/`]/仓外放行)+ 拒落盘 not-clean register(`LifecycleRegisterError`,落盘前 raise);`load_lifecycle_register(*, expected_as_of)`——载入后重校验 + **陈旧/错位 fail-closed**:不可读/坏 JSON/not-clean,或(给决策日时)持久 as_of **比决策日新**(`StaleLifecycleArtifactError`,§2.1 桶名≠decision_date→弃 / §18.1 #20)→ 拒;同日(幂等重跑)+ 前向日放行。无新 schema(符合 slice-1 register 契约)。纯 IO、不碰 provider/live、不交叉 A 股。
+- **Required**: 无(起草新代码,无 review finding)。
+- **Verify**: store **14 测全过**(guard 接线[相对/仓内非ignored 拒、gitignored+仓外写、guard 先于 validate]、拒 not-clean 不留文件、load fail-closed[缺失/坏JSON/not-clean/陈旧领先]+ 同日幂等/前向放行 + 坏 expected-date + roundtrip);全离线 `*us_short*` **1101 OK**(+14)零回归、schema 465 OK、doc/route guard 25 OK;reviewer 探针直跑——真落盘物(canonical gitignored 路径)valid JSON + schema 符合 + 39 项 + roundtrip + 陈旧领先拒 + 相对拒,清理。eval docstring + README 旧「persister=next slice」B-ripple 同步到「2b in store / 2c next」。BOM/FFFD=False;diff-check 仅 CRLF。
+- **Next**: Codex `审查` 本刀(首落盘 guard 接线 fail-closed + 拒 not-clean 落盘 + load 陈旧桶/as_of 错位 fail-closed + 纯 IO 无 provider/A股);PASS 后用户 `提交`。lifecycle slice 2c = 横幅文本 + readiness artifact + 周报 reconcile(消费 eval 输出 + 持久 register)→ weekly_report.md 渲染器(按 §18.2)。
+- **Pre-Codex self-review**: A–F。A(类×出口):write 出口[guard 拒/not-clean 拒/成功]+ load 出口[缺失/坏JSON/not-clean/陈旧/坏expected/成功]全覆盖。B(连带):eval docstring「persister=next slice」+ README slice-1+2a 行同句 B-ripple 改到「2b 已落 in store」;新文件自带 docstring;R2a「first batch-3 persister」仍准(≠ first lifecycle persister)不改。C(反向):正控(clean 写+roundtrip、同日/前向 load 放行)证没误拒合法态;陈旧只拒「持久比决策日新」、不拒正常 behind/equal。D:N-A。E:CURRENT 不动(未提交);README durable 行加 + B-ripple。F:guard 先于落盘(无半写)、validate 先于写(不留 garbage 文件)、load 重校验 + strict expected_as_of、YYYYMMDD 字符串比较正确、UTF-8 无 BOM、tests 用仓外 tempfile + 仓内 gitignored 写后清理(不污染追踪树)。落盘者闭环已查实际 artifact(非仅测试过)。
+
 ## 2026-06-23 - Codex re-`审查 PASS` (US-short batch3 R2 lifecycle governance container repair)
 
 - **Verdict/Action**: PASS. The round-3 governance container repair closes the outer-container raw-raise gap; no new Required found in this review.
