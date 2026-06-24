@@ -1,11 +1,15 @@
 # -*- coding: utf-8 -*-
-"""Tests for the US-short weekend-pipeline build-count resolution (engine/us_short_weekend_basket.py) — batch4 slice 4d-ii-e.
+"""Tests for the US-short weekend-pipeline build-gate resolution (engine/us_short_weekend_basket.py) — batch4 slice 4d-ii-e/f.
 
-Design authority: docs/us_short_system_design.md §8 (line 227 weekly build-limit + 同主题 cap) / §9 / §18.2.
+Design authority: docs/us_short_system_design.md §8 (line 227 weekly build-limit + 同主题 cap; line 230/238
+portfolio_guard / symbol_cooldown new-build block) / §9 / §18.2.
 
 Covers selection_rank by core_score, the §8 BASE per-regime weekly build-limit (进攻3/震荡2/防御1/极度防御0),
 the 同主题 weekly cap (≤2), the no-promotion interaction, capacity_or_budget_deferred emission for
-capacity-deferred builds, non-建仓 carry-through, and fail-closed sized_result / regime / basket_context.
+capacity-deferred builds, the 4d-ii-f new-build blocking (portfolio_guard cooldown 禁新建 + per-symbol
+cooldown → 观察(risk_cooldown), removed before ranking so a blocked symbol frees its slot), non-建仓
+carry-through, the symbol_cooldown status⟺engine triangulation, and fail-closed sized_result / regime /
+basket_context / guard-state / cooldown-state inputs.
 """
 import sys
 import unittest
@@ -16,6 +20,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import engine.us_short_weekend_basket as wb  # noqa: E402
+import engine.us_short_symbol_cooldown as sc  # noqa: E402
 
 
 _DEFAULT = object()
@@ -34,12 +39,15 @@ def _sized(rows, regime="进攻"):
     return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": rows}
 
 
-def _ctx(theme_map):
-    return {"per_ticker": {t: {"theme": th} for t, th in theme_map.items()}}
+def _ctx(theme_map, guard="normal", cooldowns=None):
+    cooldowns = cooldowns or {}
+    return {"per_ticker": {t: {"theme": th, "symbol_cooldown_status": cooldowns.get(t, "none")}
+                           for t, th in theme_map.items()},
+            "portfolio_guard_status": guard}
 
 
-def _resolve(rows, regime, theme_map):
-    return wb.resolve_build_capacity(_sized(rows, regime), basket_context=_ctx(theme_map))
+def _resolve(rows, regime, theme_map, guard="normal", cooldowns=None):
+    return wb.resolve_build_capacity(_sized(rows, regime), basket_context=_ctx(theme_map, guard, cooldowns))
 
 
 def _by(out):
@@ -118,6 +126,71 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         out = _resolve([_brow("HLD", 0, final="持有")], "进攻", {})
         self.assertEqual(out["build_count"], 0)
 
+    # --- 4d-ii-f: portfolio_guard / symbol_cooldown new-build blocking → 观察(risk_cooldown) ---
+    def test_portfolio_guard_cooldown_blocks_all_builds(self):
+        # account cooldown (禁新建) → every provisional 建仓 → 观察(risk_cooldown), no rank, zero build_count.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "进攻",
+                       {"AAA": "t1", "BBB": "t2"}, guard="cooldown")
+        self.assertEqual(out["build_count"], 0)
+        by = _by(out)
+        for t in ("AAA", "BBB"):
+            self.assertEqual(by[t]["final_action"], "观察")
+            self.assertEqual(by[t]["observe_reason_type"], "risk_cooldown")
+            self.assertIsNone(by[t]["selection_rank"])
+
+    def test_portfolio_guard_caution_does_not_block(self):
+        # caution has block_new_entry=False (its reduce_* graded effects are out of this slice's scope).
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "进攻",
+                       {"AAA": "t1", "BBB": "t2"}, guard="caution")
+        self.assertEqual(out["build_count"], 2)
+        self.assertTrue(all(_by(out)[t]["final_action"] == "建仓" for t in ("AAA", "BBB")))
+
+    def test_portfolio_guard_recovery_does_not_block(self):
+        out = _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, guard="recovery")
+        self.assertEqual(_by(out)["AAA"]["final_action"], "建仓")
+
+    def test_symbol_in_cooldown_blocks_that_build_only(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "进攻",
+                       {"AAA": "t1", "BBB": "t2"}, cooldowns={"BBB": "in_cooldown"})
+        by = _by(out)
+        self.assertEqual(by["AAA"]["final_action"], "建仓")
+        self.assertEqual(by["BBB"]["final_action"], "观察")
+        self.assertEqual(by["BBB"]["observe_reason_type"], "risk_cooldown")
+        self.assertIsNone(by["BBB"]["selection_rank"])
+        self.assertEqual(out["build_count"], 1)
+
+    def test_symbol_entering_cooldown_blocks(self):
+        out = _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "entering_cooldown"})
+        self.assertEqual(_by(out)["AAA"]["observe_reason_type"], "risk_cooldown")
+
+    def test_symbol_reentry_allowed_does_not_block(self):
+        out = _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "reentry_allowed"})
+        self.assertEqual(_by(out)["AAA"]["final_action"], "建仓")
+
+    def test_symbol_none_does_not_block(self):
+        out = _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "none"})
+        self.assertEqual(_by(out)["AAA"]["final_action"], "建仓")
+
+    def test_blocked_build_frees_slot_before_ranking(self):
+        # 进攻 limit 3; top-ranked AAA is symbol-cooled → it does NOT consume a slot, so BBB/CCC/DDD all build.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80), _brow("CCC", 70), _brow("DDD", 60)],
+                       "进攻", {"AAA": "t1", "BBB": "t2", "CCC": "t3", "DDD": "t4"},
+                       cooldowns={"AAA": "in_cooldown"})
+        by = _by(out)
+        self.assertEqual(by["AAA"]["observe_reason_type"], "risk_cooldown")
+        self.assertEqual(out["build_count"], 3)   # BBB, CCC, DDD — AAA's slot was freed, DDD not deferred
+        self.assertTrue(all(by[t]["final_action"] == "建仓" for t in ("BBB", "CCC", "DDD")))
+
+    def test_block_takes_precedence_over_capacity(self):
+        # 防御 limit 1; top-ranked AAA is blocked → risk_cooldown (NOT capacity_or_budget_deferred); BBB builds.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, cooldowns={"AAA": "in_cooldown"})
+        by = _by(out)
+        self.assertEqual(by["AAA"]["observe_reason_type"], "risk_cooldown")
+        self.assertIsNone(by["AAA"]["selection_rank"])
+        self.assertEqual(by["BBB"]["final_action"], "建仓")
+        self.assertEqual(out["build_count"], 1)
+
     # --- fail-closed ---
     def test_malformed_sized_result_raises(self):
         for bad in ({"rows": []}, {"regime": {}}, {"regime": {"market_risk_regime": "进攻"}, "rows": {}}):
@@ -129,14 +202,29 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             _resolve([_brow("AAA", 90)], "bull_market", {"AAA": "t1"})
 
     def test_bad_basket_context_raises(self):
+        for ctx in ({"per_ticker": {}, "portfolio_guard_status": "normal", "x": 1},   # extra top-level key
+                    {"per_ticker": "nope", "portfolio_guard_status": "normal"},         # per_ticker not a dict
+                    {"per_ticker": {}}):                                                # missing portfolio_guard_status
+            with self.assertRaises(wb.WeekendBasketError):
+                wb.resolve_build_capacity(_sized([_brow("AAA", 90)]), basket_context=ctx)
+
+    def test_bad_portfolio_guard_status_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
-            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]), basket_context={"per_ticker": {}, "x": 1})
+            _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, guard="halt")
+
+    def test_bad_symbol_cooldown_status_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
-            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]), basket_context={"per_ticker": "nope"})
+            _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "frozen"})
+
+    def test_missing_symbol_cooldown_status_raises(self):
+        with self.assertRaises(wb.WeekendBasketError):
+            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]),
+                                      basket_context={"per_ticker": {"AAA": {"theme": "t1"}},
+                                                      "portfolio_guard_status": "normal"})
 
     def test_missing_build_theme_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
-            _resolve([_brow("AAA", 90)], "进攻", {})   # build AAA has no per_ticker theme
+            _resolve([_brow("AAA", 90)], "进攻", {})   # build AAA has no per_ticker entry
 
     def test_stale_per_ticker_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
@@ -149,12 +237,12 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             wb.resolve_build_capacity(_sized([row]), basket_context=_ctx({"AAA": "t1"}))
 
     def test_per_ticker_bad_theme_shape_raises(self):
-        with self.assertRaises(wb.WeekendBasketError):
-            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]),
-                                      basket_context={"per_ticker": {"AAA": {"theme": "t1", "x": 1}}})
-        with self.assertRaises(wb.WeekendBasketError):
-            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]),
-                                      basket_context={"per_ticker": {"AAA": {"theme": ""}}})
+        for tinfo in ({"theme": "t1", "x": 1},                              # extra key
+                      {"theme": "", "symbol_cooldown_status": "none"}):      # blank theme
+            with self.assertRaises(wb.WeekendBasketError):
+                wb.resolve_build_capacity(
+                    _sized([_brow("AAA", 90)]),
+                    basket_context={"per_ticker": {"AAA": tinfo}, "portfolio_guard_status": "normal"})
 
     def test_duplicate_build_ticker_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
@@ -220,6 +308,27 @@ class ResolveBuildCapacityTests(unittest.TestCase):
                        "进攻", {"AAA": "AI", "BBB": " AI ", "CCC": "AI"})
         self.assertEqual(out["build_count"], 2)
         self.assertEqual(_by(out)["CCC"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    # --- triangulation: the local symbol-cooldown blocking set is pinned to the engine's actual behavior ---
+    def test_symbol_cooldown_blocking_set_matches_engine(self):
+        # Every status the engine can emit must be in SYMBOL_COOLDOWN_STATUSES, and a status blocks a new
+        # build (∈ _SYMBOL_COOLDOWN_BLOCKS_NEW) IFF the engine downgrades it to observe — so this module's
+        # mapping cannot silently drift from us_short_symbol_cooldown.
+        cases = [
+            sc.symbol_cooldown_status(False),                                                 # none
+            sc.symbol_cooldown_status(False, trigger="filled_then_stop_loss"),               # entering_cooldown
+            sc.symbol_cooldown_status(False, trigger="filled_then_breakout_failure"),        # entering_cooldown
+            sc.symbol_cooldown_status(True),                                                 # in_cooldown
+            sc.symbol_cooldown_status(True, new_catalyst=True, new_structure=True, cooldown_expired=True),  # reentry
+            sc.symbol_cooldown_status("garbage"),                                            # malformed → in_cooldown
+        ]
+        seen = set()
+        for res in cases:
+            status, action = res["status"], res["action"]
+            seen.add(status)
+            self.assertIn(status, wb.SYMBOL_COOLDOWN_STATUSES)
+            self.assertEqual(status in wb._SYMBOL_COOLDOWN_BLOCKS_NEW, action == "downgrade_to_observe")
+        self.assertEqual(seen, set(wb.SYMBOL_COOLDOWN_STATUSES))   # all four statuses exercised
 
 
 if __name__ == "__main__":
