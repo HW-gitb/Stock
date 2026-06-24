@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-b decision evidence validation)
+
+- **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-DECISION-EVIDENCE-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-WEEKEND-DECISION-EVIDENCE-VALIDATION-GAP` is closed in `docs/system_risk_register.md`; Optional non-material: unhashable `veto_tier` now raw-TypeError fail-closed, not clean output.
+- **Verify**: decision 38 OK; adjacent pure deps 206 OK; doc/route/README guards 50 OK; py_compile OK; probes OK; broad `*us_short*` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-b — 证据 value-validation fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required，6 腿）。judge：全成立+在 scope（同 consumer-validation 类）。加 `_validate_evidence_row`：① veto_tier ∈ §5 词表（`VETO_TIERS`∪`NONE` 从 hard_veto 单源）；② veto.row_context 若有须==row_context、不兼容硬 tier（cand position/hold entry）fail-closed；③ executable 真 bool；④ executable holding 的 trace.breached 真 bool；⑤ event_data_gap.status ∈ 冻结 4 值。另 **非 exec 持仓→观察(price_not_executable)**（§6 不伪造价、非 clean 持有；降级非 raise=不 abort 整轮、与候选一致）。合法映射全保；详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-DECISION-EVIDENCE-VALIDATION-GAP`。
+- **Verify**: decision **38 OK**（+17：invalid/None/缺 veto_tier、candidate position / holding entry tier、veto/row context 不一致、非 bool executable、executable-holding 缺/非 bool breached、unknown gap → 全 raise；非 exec 持仓→观察 正控；veto/gap 词表 behavioral triangulation 覆盖引擎输出）。Codex 探针全 fail-closed/降级。全离线 `*us_short*` **1925 OK**（=1908+17）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex re-`审查` 4d-ii-b（1 Required 已修；`us_short_weekend_decision.py`+测试+docstring；纯/离线、无 provider/live、不交叉 A 股）。重点：① value-validation（veto_tier 词表/context 一致+不兼容 tier/executable bool/holding breached bool/gap status 词表）fail-closed；② 非 exec 持仓→观察(price_not_executable) 非 clean 持有（§6 降级非 raise）；③ 合法映射不变（清仓-事件/止损、否决、观察 data/price、建仓 provisional）；④ 词表单源（VETO_TIERS 从 §5、gap mirror forward_events+triangulation）；⑤ 加仓/scale-out deferral 仍立。findings 落 register。PASS 后 `提交`；之后 4d-ii-c。
+- **Pre-Codex self-review**: A 整类（veto_tier[坏/None/缺]+context[不兼容/mismatch]+executable[非bool]+breached[缺/非bool]+gap[unknown]+非 exec 持仓降级）；B 连带（VETO_TIERS/NONE 从 hard_veto 单源、gap mirror forward_events、docstring 同步、README 未变）；C 反向（合法 cand/hold 各态正控仍过）；D（非 exec 持仓 raise vs 观察）走最窄=观察（run-preserving、与候选一致）；E register resolved、CURRENT 未动；F（breached 仅 executable 消费已验 bool、gap None-safe、词表单源）。根因：起草只验 SHAPE 未验 VALUE——consumer-validation 复发，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-b decision evidence validation)
+
+- **Verdict/Action**: FAIL. Current 4d-ii-b is pure/offline and target tests pass, but the decision stage accepts malformed 4d-ii-a evidence and can emit clean `建仓` / `持有` from invalid hard-veto, price, event-gap, or holding stop evidence.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-DECISION-EVIDENCE-VALIDATION-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: decision 21 OK; adjacent pure deps 206 OK; doc/route/README guards 50 OK; py_compile OK; probes reproduce invalid-tier/non-bool-price/holding-non-executable gaps; broad `*us_short*` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4d-ii-b — 周末 pipeline 动作决策)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-b（§18.2 4d-ii 第二刀=动作决策）。新 `engine/us_short_weekend_decision.py`：`decide_actions(analysis_result)` 消费 4d-ii-a 证据（{regime,rows}），按 §6 优先级链从**证据本身**给每行定 §9 `final_action`+`observe_reason_type`：holding→position_hard_veto 清仓-事件 / breached 清仓-止损 / else 持有；candidate→entry_hard_veto 否决/避开 / event_data_gap restricted 观察(data_restricted) / 价格不可执行 观察(price_not_executable) / else **建仓(provisional)**。建仓暂定——§8 sizing(below-min)、周建仓上限/同主题/theme_probe、全局现金 在下游(4d-ii-c/d)仍可降观察。**v1 不自动决** 加仓(§6 dual-engine)、减仓/清仓-止盈(§6.1 active scale-out=§13#34)——词表有、本刀不出。final_action/observe_reason 仅从冻结 `design_locked_enums` 出、triangulation 锁 + action_group 兼容。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: decision tests **21 OK**（holding 持有/清仓-事件/清仓-止损/veto-precede-breach；candidate 建仓/否决/观察(data_restricted)/观察(price_not_executable)/veto-precede-price/data-precede-price；forward·reduce_caution·极度防御 仍 provisional 建仓=deferral；证据透传+regime 透传；词表 triangulation ⊆ 冻结+action_group 兼容；fail-closed 非dict/缺regime|rows/rows非list/坏 evidence 行）。全离线 `*us_short*` **1908 OK**（=1887+21）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex `审查` 批4 slice 4d-ii-b（仅 `engine/us_short_weekend_decision.py`+测试+README 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① §6 链→§9 final_action 映射（holding 清仓-事件/止损/持有、candidate 否决/观察/建仓；veto-precedence；observe data>price 顺序）；② 建仓 provisional 边界——不在此 sizing/限额/现金/排名，下游 4d-ii-c/d 可降观察；③ **v1 deferral 是否接受**：加仓(§6 dual-engine，因 4d-ii-a 一行一引擎未算 add 入场)+减仓/清仓-止盈(§6.1 active scale-out §13#34) 不自动决——若须 v1 必须则回 4d-ii-a 加 holding+add dual-engine；④ observe_reason 仅 data_restricted/price_not_executable 在本刀出（cash/cooldown/cost/signal_not_ready 归下游）；⑤ 词表 triangulation 锁冻结 + action_group 兼容；⑥ fail-closed evidence 形状。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii-c（§8 sizing：reduction_stack+折扣+单票/流动性 cap+below-min→观察）。
+- **Pre-Codex self-review**: A 整类（holding 3 出口+precedence / candidate 否决·data·price·build 4 分支+2 precedence / deferral 3 态 / 词表 triangulation / fail-closed 4 形 全覆盖）；B 连带（载 action_table_contract `design_locked_enums` 词表、复用 `action_rank.action_group` 焊 a→b→d 链、新模块无旧符号 ripple、README 薄行、design §18.2 未变）；C 反向（clean candidate→建仓 / clean holding→持有 正控、fail-closed 仅对畸形）；D（observe 顺序 + 加仓/scale-out 歧义）走最窄=data>price 文档化、加仓/scale-out v1 延后并显式交 Codex 判；E CURRENT 未动（draft）；F pre-flight（event_data_gap/trace None-safe .get、词表 triangulation 防漂移、categorical 无数值/日期）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-a sub_mode validation)
 
 - **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-ANALYSIS-SUBMODE-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
