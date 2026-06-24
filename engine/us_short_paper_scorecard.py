@@ -43,6 +43,7 @@ import math
 _CLOSED = ("filled_stopped", "filled_tp_exit")
 _OUTCOMES = ("cash_unfilled", "open_unrealized") + _CLOSED
 _ENTRY_KEYS = frozenset({"outcome", "realized", "gross_return", "cost_fraction", "net_return", "unfilled_cash"})
+_LEG_KEYS = frozenset({"net", "cost"})  # one de-identified {net, cost} per CLOSED position (source-traceable magnitude)
 _CLOSE_TOL = 1e-9
 # the FROZEN paper-only evidence boundary every scorecard carries — paper is design-iteration evidence and is
 # NEVER full-size ship-gate eligible (§12 / §18.1 #27; only live_normalized graduates). Mirrors the vocabulary of
@@ -58,7 +59,7 @@ _BOUNDARY = {
 _SCORECARD_KEYS = frozenset({
     "selected_total", "filled_count", "unfilled_cash_count", "open_unrealized_count",
     "win_count", "loss_count", "flat_count", "bad_pick_rate", "total_cost_fraction",
-    "fully_resolved", "net_basket", "boundary",
+    "fully_resolved", "net_basket", "realized_legs", "boundary",
 })
 
 
@@ -75,7 +76,9 @@ def _validate_net_result(e, label) -> None:
     EXACTLY the 6 keys, and the per-outcome invariants — ``cash_unfilled`` = realized True / gross=cost=net=0.0 /
     unfilled_cash True; ``open_unrealized`` = realized False / gross=cost=net=None / unfilled_cash False; a closed
     outcome = realized True / unfilled_cash False / finite gross & net / finite NON-NEGATIVE cost /
-    ``net_return == gross_return - cost_fraction``. Raises ``PaperScorecardError`` on any mismatch."""
+    ``net_return == gross_return - cost_fraction``. (The outcome⇔gross SIGN invariant is enforced at the producer +
+    private ledger, where the outcome label is consumed; the scorecard uses the NET sign, so it is not re-checked
+    here.) Raises ``PaperScorecardError`` on any mismatch."""
     if not isinstance(e, dict):
         raise PaperScorecardError("net_result for %r must be a dict, got %r" % (label, type(e).__name__))
     if set(e) != _ENTRY_KEYS:
@@ -94,6 +97,11 @@ def _validate_net_result(e, label) -> None:
             raise PaperScorecardError("net_result for %r %s must be realized=True / unfilled_cash=False / finite gross & net / finite non-negative cost, got %r" % (label, outcome, e))
         if not math.isclose(n, g - c, abs_tol=_CLOSE_TOL):
             raise PaperScorecardError("net_result for %r %s net_return %r != gross_return - cost_fraction (%r - %r)" % (label, outcome, n, g, c))
+        # NOTE: the outcome⇔gross SIGN invariant (a stop is a loss / a tp is a gain) is enforced where the outcome
+        # LABEL is persisted / consumed — the producer (engine.us_short_paper_net_result fill geometry) and the
+        # private ledger (engine.us_short_paper_ledger._validate_record). It is deliberately NOT re-checked here: the
+        # scorecard classifies win/loss/flat by the NET sign and propagates NO outcome label downstream, so a
+        # mislabeled-but-correctly-netted record yields a correct de-identified scorecard regardless of the label.
 
 
 def _validate_selection(selected_tickers):
@@ -117,10 +125,12 @@ def build_paper_scorecard(net_results_by_ticker, *, selected_tickers) -> dict:
     ``selected_tickers`` = the FROZEN selection identity (a profile's fixed TopN, unique non-blank strings);
     ``net_results_by_ticker`` = ``{ticker: paper_net_result output}``. FAILS CLOSED unless the map keys EXACTLY
     equal the selection (§12.2 禁止挑样本/全量 — no omitted selected name, no extra stale ticker), and every
-    net_result is re-validated against the §12.1 contract. Returns de-identified counts + ``net_basket`` (equal-
-    weight realized basket net over the whole selection, booked only when ``fully_resolved`` and non-empty, else
-    None — §12.1 不虚高) + a FROZEN paper-only ``boundary``. Re-validated through ``validate_paper_scorecard`` before
-    return. Raises ``PaperScorecardError`` on malformed input. PAPER only — never full-size ship-gate eligible (§12)."""
+    net_result is re-validated against the §12.1 contract. Returns de-identified
+    counts + ``net_basket`` (equal-weight realized basket net over the whole selection, booked only when
+    ``fully_resolved`` and non-empty, else None — §12.1 不虚高) + a de-identified source-traceable ``realized_legs``
+    (one ``{net, cost}`` per CLOSED position, sorted, no tickers / $ — so the magnitudes re-derive) + a FROZEN
+    paper-only ``boundary``. Re-validated through ``validate_paper_scorecard`` before return. Raises
+    ``PaperScorecardError`` on malformed input. PAPER only — never full-size ship-gate eligible (§12)."""
     selected = _validate_selection(selected_tickers)
     if not isinstance(net_results_by_ticker, dict):
         raise PaperScorecardError("net_results_by_ticker must be a dict, got %r" % (type(net_results_by_ticker).__name__,))
@@ -132,6 +142,7 @@ def build_paper_scorecard(net_results_by_ticker, *, selected_tickers) -> dict:
     filled = unfilled = open_unrealized = win = loss = flat = 0
     total_cost = 0.0
     net_sum = 0.0  # equal-weight numerator over the whole selection (closed net + unfilled 0.0)
+    realized_legs = []  # one de-identified {net, cost} per CLOSED position — the source-traceable magnitude record
     for t in selected_tickers:                            # iterate the selection (deterministic) — coverage proven above
         e = net_results_by_ticker[t]
         _validate_net_result(e, t)
@@ -144,12 +155,14 @@ def build_paper_scorecard(net_results_by_ticker, *, selected_tickers) -> dict:
             filled += 1
             total_cost += e["cost_fraction"]
             net_sum += n
+            realized_legs.append({"net": n, "cost": e["cost_fraction"]})
             if n > 0:
                 win += 1
             elif n < 0:
                 loss += 1
             else:
                 flat += 1
+    realized_legs.sort(key=lambda d: (d["net"], d["cost"]))  # de-identify: sort breaks the positional ticker correlation
     selected_total = len(selected_tickers)
     fully_resolved = open_unrealized == 0
     bad_pick_rate = (loss / filled) if filled else None   # fraction of FILLED positions that lost (§12.2 坏票率)
@@ -166,6 +179,7 @@ def build_paper_scorecard(net_results_by_ticker, *, selected_tickers) -> dict:
         "total_cost_fraction": total_cost,
         "fully_resolved": fully_resolved,
         "net_basket": net_basket,
+        "realized_legs": realized_legs,
         "boundary": dict(_BOUNDARY),
     }
     validate_paper_scorecard(result)
@@ -178,8 +192,12 @@ def validate_paper_scorecard(scorecard) -> None:
     ``tickers`` / per-name field or a contradictory top-level ship-gate / live field can never validate, keeping the
     artifact de-identified + paper-only); the FROZEN paper-only boundary (never full-size ship-gate); non-negative
     int counts; ``filled == win+loss+flat``; ``selected_total == filled + unfilled_cash + open_unrealized``;
-    ``fully_resolved == (open_unrealized == 0)``; ``bad_pick_rate == loss/filled`` (None iff nothing filled); and
-    ``net_basket`` booked IFF fully_resolved and non-empty. Raises ``PaperScorecardError``."""
+    ``fully_resolved == (open_unrealized == 0)``; ``bad_pick_rate == loss/filled`` (None iff nothing filled). It is
+    SOURCE-TRACEABLE: ``win/loss/flat``, ``total_cost_fraction`` (strict finite non-negative, bool refused), and the
+    booked ``net_basket`` are RE-DERIVED from the de-identified per-position ``realized_legs`` (each ``{net, cost}``
+    finite / non-negative cost; ``len == filled``), so a lazily-tampered / drifted scorecard whose aggregate diverges
+    from its own legs fails closed; ``net_basket`` booked IFF fully_resolved and non-empty. Raises
+    ``PaperScorecardError``."""
     if not isinstance(scorecard, dict):
         raise PaperScorecardError("scorecard must be a dict, got %r" % (type(scorecard).__name__,))
     if set(scorecard) != _SCORECARD_KEYS:
@@ -200,6 +218,43 @@ def validate_paper_scorecard(scorecard) -> None:
         raise PaperScorecardError("selected_total %d != filled+unfilled+open %d" % (st, fc + uc + oc))
     if scorecard.get("fully_resolved") is not (oc == 0):
         raise PaperScorecardError("fully_resolved must be %r (open_unrealized == 0), got %r" % (oc == 0, scorecard.get("fully_resolved")))
+    # SOURCE-TRACEABLE de-identified per-position legs (mirrors nav_drawdown / multiweek source-traceability): one
+    # {net, cost} per CLOSED position (no tickers / $), so win/loss/flat, total_cost_fraction, and net_basket are
+    # RE-DERIVED from the legs rather than trusted as opaque aggregates — a lazily-tampered / drifted / partially-
+    # corrupted scorecard whose aggregate diverges from its own legs fails closed
+    # (R-USSHORT-BATCH3-SCORECARD-MAGNITUDE-TRACEBACK-GAP). A fully self-consistent re-forge of legs + aggregates is
+    # beyond any self-validating gate (the accepted system limit, same as nav_drawdown / multiweek).
+    legs = scorecard.get("realized_legs")
+    if not isinstance(legs, list):
+        raise PaperScorecardError("realized_legs must be a list, got %r" % (type(legs).__name__,))
+    rd_win = rd_loss = rd_flat = 0
+    rd_cost = 0.0
+    rd_net_sum = 0.0
+    for j, leg in enumerate(legs):
+        if not isinstance(leg, dict) or set(leg) != _LEG_KEYS:
+            raise PaperScorecardError("realized_legs[%d] must carry EXACTLY %s, got %r" % (j, sorted(_LEG_KEYS), leg))
+        ln, lc = leg["net"], leg["cost"]
+        if not _finite(ln):
+            raise PaperScorecardError("realized_legs[%d].net must be a finite number (bool refused), got %r" % (j, ln))
+        if not (_finite(lc) and lc >= 0):
+            raise PaperScorecardError("realized_legs[%d].cost must be a finite non-negative number (bool refused), got %r" % (j, lc))
+        rd_cost += lc
+        rd_net_sum += ln
+        if ln > 0:
+            rd_win += 1
+        elif ln < 0:
+            rd_loss += 1
+        else:
+            rd_flat += 1
+    if len(legs) != fc:
+        raise PaperScorecardError("realized_legs length %d != filled_count %d" % (len(legs), fc))
+    if (win, loss, flat) != (rd_win, rd_loss, rd_flat):
+        raise PaperScorecardError("win/loss/flat %d/%d/%d != re-derived from realized_legs %d/%d/%d" % (win, loss, flat, rd_win, rd_loss, rd_flat))
+    tc = scorecard.get("total_cost_fraction")
+    if not (_finite(tc) and tc >= 0):                     # STRICT type gate (bool refused) BEFORE the value re-derivation
+        raise PaperScorecardError("total_cost_fraction must be a finite non-negative number (bool refused), got %r" % (tc,))
+    if not math.isclose(tc, rd_cost, abs_tol=_CLOSE_TOL):
+        raise PaperScorecardError("total_cost_fraction %r != re-derived sum of realized_legs costs %r" % (tc, rd_cost))
     bpr = scorecard.get("bad_pick_rate")
     if fc == 0:
         if bpr is not None:
@@ -210,5 +265,7 @@ def validate_paper_scorecard(scorecard) -> None:
     if (oc == 0 and st):
         if not _finite(nb):
             raise PaperScorecardError("net_basket must be a finite number for a fully-resolved non-empty basket, got %r" % (nb,))
+        if not math.isclose(nb, rd_net_sum / st, abs_tol=_CLOSE_TOL):  # RE-DERIVED from the realized legs (closed nets + unfilled 0.0 cash)
+            raise PaperScorecardError("net_basket %r != re-derived realized-leg net sum / selected_total %r" % (nb, rd_net_sum / st))
     elif nb is not None:
         raise PaperScorecardError("net_basket must be None for an unrealized / empty basket, got %r" % (nb,))

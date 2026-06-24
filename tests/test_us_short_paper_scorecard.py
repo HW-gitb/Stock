@@ -6,9 +6,11 @@ winner-only subset / omitted loser / extra stale ticker / missing selected ticke
 refused); per-basket full-caliber aggregation (counts, win/loss/flat + bad_pick_rate, total cost, equal-weight
 net_basket booked only when fully resolved — open blocks it, cash = 0 现金拖累, empty/all-cash edges); the FROZEN
 paper-only boundary + the validator's CLOSED-WORLD key set + count-consistency self-check (boundary flip / doctored
-count / net_basket tamper / smuggled ticker / per-name field / top-level ship-gate-or-track-or-evidence drift /
-arbitrary extra or missing key refused); the whole malformed-net_result class; and an integration drift-guard
-feeding REAL paper_net_result outputs. Pure/offline; no provider/live; no A-share crossing.
+count / net_basket presence tamper / smuggled ticker / per-name field / top-level ship-gate-or-track-or-evidence
+drift / arbitrary extra or missing key refused); the SOURCE-TRACEABLE magnitude re-derivation from the
+de-identified per-position realized_legs (forged net_basket / total_cost VALUE / win-loss split / leg shape
+refused); the whole malformed-net_result class; and an integration drift-guard feeding REAL paper_net_result
+outputs. Pure/offline; no provider/live; no A-share crossing.
 """
 import copy
 import sys
@@ -212,6 +214,55 @@ class ScorecardValidator(unittest.TestCase):
 
     def test_missing_key_refused(self):
         self._rejects(lambda b: b.pop("net_basket"))
+
+
+class MagnitudeSourceTraceable(unittest.TestCase):
+    """R-USSHORT-BATCH3-SCORECARD-MAGNITUDE-TRACEBACK-GAP: net_basket / total_cost_fraction / win-loss-flat are
+    RE-DERIVED from the de-identified per-position ``realized_legs`` (mirrors nav_drawdown / multiweek source-
+    traceability), so a lazily-tampered aggregate that diverges from its own legs fails closed — VALUE tamper, not
+    just presence. (A fully self-consistent re-forge of legs + aggregate is the accepted system limit.)"""
+
+    def setUp(self):
+        self.good = _basket({"AAA": _nr("filled_tp_exit", net=0.05, cost=0.001),
+                             "BBB": _nr("filled_stopped", net=-0.03, cost=0.001),
+                             "CCC": _nr("cash_unfilled")})
+
+    def _rejects(self, mutate):
+        bad = copy.deepcopy(self.good)
+        mutate(bad)
+        with self.assertRaises(sc.PaperScorecardError):
+            sc.validate_paper_scorecard(bad)
+
+    def test_realized_legs_de_identified_and_sorted(self):
+        legs = self.good["realized_legs"]
+        self.assertEqual(len(legs), 2)                                             # one per CLOSED position
+        self.assertEqual(legs, sorted(legs, key=lambda d: (d["net"], d["cost"])))  # sorted (breaks ticker correlation)
+        self.assertEqual(set(legs[0]), {"net", "cost"})                            # no tickers / $
+
+    def test_forged_net_basket_value_refused(self):     # the headline gap: a doctored VALUE (not presence) is caught
+        self._rejects(lambda b: b.__setitem__("net_basket", 5.0))
+
+    def test_forged_total_cost_value_refused(self):
+        self._rejects(lambda b: b.__setitem__("total_cost_fraction", 999.0))
+
+    def test_bool_total_cost_refused(self):             # numerically-equal bool can't slip past the value re-derivation
+        empty = sc.build_paper_scorecard({}, selected_tickers=[])                  # total_cost_fraction == 0.0
+        bad = copy.deepcopy(empty); bad["total_cost_fraction"] = False             # False == 0.0
+        with self.assertRaises(sc.PaperScorecardError):
+            sc.validate_paper_scorecard(bad)
+
+    def test_forged_win_loss_split_refused(self):       # win=2/loss=0 still sums to filled=2 but diverges from the legs
+        self._rejects(lambda b: (b.__setitem__("win_count", 2), b.__setitem__("loss_count", 0)))
+
+    def test_legs_diverge_from_filled_count_refused(self):
+        self._rejects(lambda b: b["realized_legs"].pop())                          # len(legs) != filled_count
+
+    def test_bad_leg_shape_refused(self):
+        for mutate in (lambda b: b["realized_legs"].__setitem__(0, {"net": 0.05}),            # missing cost
+                       lambda b: b["realized_legs"].__setitem__(0, {"net": True, "cost": 0.0}),  # bool net
+                       lambda b: b["realized_legs"].__setitem__(0, {"net": 0.05, "cost": -0.1}),  # negative cost
+                       lambda b: b.__setitem__("realized_legs", "nope")):                     # not a list
+            self._rejects(mutate)
 
 
 class IntegrationDriftGuard(unittest.TestCase):

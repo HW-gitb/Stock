@@ -19,8 +19,10 @@ the producer): each entry carries EXACTLY the 6 keys (outcome, realized, gross_r
 unfilled_cash — closed-world), and the per-outcome invariants hold — ``cash_unfilled`` = realized True /
 gross=cost=net=0.0 / unfilled_cash True; ``open_unrealized`` = realized False / gross=cost=net=None /
 unfilled_cash False; a closed outcome (``filled_stopped`` / ``filled_tp_exit``) = realized True / unfilled_cash
-False / finite gross & net / finite NON-NEGATIVE cost / ``net_return == gross_return - cost_fraction``. An
-inconsistent entry can never become official private paper evidence. Structure-over-IO: reads/writes a private
+False / finite gross & net / finite NON-NEGATIVE cost / ``net_return == gross_return - cost_fraction`` / the v1-long
+economic SIGN (a stop is a LOSS ``gross_return < 0``, a take-profit is a GAIN ``gross_return > 0``). An
+inconsistent entry — including a "stop" booked as a gain or a "tp" as a loss — can never become official private
+paper evidence. Structure-over-IO: reads/writes a private
 JSON only; no provider / live / DataHub / network; no A-share crossing. Malformed input fails closed.
 """
 from __future__ import annotations
@@ -70,8 +72,9 @@ def _validate_record(record) -> None:
     gross_return, cost_fraction, net_return, unfilled_cash — closed-world) and satisfies the per-outcome
     invariants: ``cash_unfilled`` = realized True / gross=cost=net=0.0 / unfilled_cash True; ``open_unrealized`` =
     realized False / gross=cost=net=None / unfilled_cash False; a closed outcome = realized True / unfilled_cash
-    False / finite gross & net / finite NON-NEGATIVE cost / ``net_return == gross_return - cost_fraction``. Raises
-    ``PaperLedgerError`` on any violation (the persister never trusts the producer)."""
+    False / finite gross & net / finite NON-NEGATIVE cost / ``net_return == gross_return - cost_fraction`` / the
+    v1-long economic SIGN (filled_stopped ``gross_return < 0`` = a loss, filled_tp_exit ``gross_return > 0`` = a
+    gain). Raises ``PaperLedgerError`` on any violation (the persister never trusts the producer)."""
     if not isinstance(record, dict):
         raise PaperLedgerError("paper_performance record must be a dict")
     as_of = record.get("as_of")
@@ -100,6 +103,16 @@ def _validate_record(record) -> None:
                 raise PaperLedgerError("paper_performance entry %d %s must be realized=True / unfilled_cash=False / finite gross & net / finite non-negative cost, got %r" % (i, outcome, e))
             if not math.isclose(n, g - c, abs_tol=_CLOSE_TOL):
                 raise PaperLedgerError("paper_performance entry %d %s net_return %r != gross_return - cost_fraction (%r - %r)" % (i, outcome, n, g, c))
+            # §12.1 v1-LONG economic SIGN: a stop is a LOSS (gross < 0), a take-profit is a GAIN (gross > 0). The
+            # producer (engine.us_short_paper_net_result) enforces this via the fill geometry stop<fill<tp, but this
+            # persister re-checks rather than trusting it, so a corrupted / stale / hand-crafted paper_performance.json
+            # that books a "stop" as a gain (or a "tp" as a loss) can never load as valid private paper evidence
+            # (R-USSHORT-BATCH3-NET-RESULT-OUTCOME-SIGN-GAP; net_return may still be <=0 for a tp after cost — the
+            # sign invariant is on gross_return, the raw round trip).
+            if outcome == "filled_stopped" and not (g < 0):
+                raise PaperLedgerError("paper_performance entry %d filled_stopped must have gross_return < 0 (a stop is a loss), got %r" % (i, g))
+            if outcome == "filled_tp_exit" and not (g > 0):
+                raise PaperLedgerError("paper_performance entry %d filled_tp_exit must have gross_return > 0 (a take-profit is a gain), got %r" % (i, g))
 
 
 def write_paper_performance(record, out_path):

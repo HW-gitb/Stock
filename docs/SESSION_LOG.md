@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-24 - Codex review PASS (US-short batch3 paper ledger/scorecard fail-open repair)
+
+- **Verdict/Action**: PASS. The current working tree closes the two reviewed fail-open gaps: `paper_ledger._validate_record` now rejects outcome-label/gross-sign contradictions, and `paper_scorecard` now carries de-identified `realized_legs` so aggregate magnitude fields are re-derived before downstream consumers trust them.
+- **Required**: None new. Existing Hot Queue items `R-USSHORT-BATCH3-NET-RESULT-OUTCOME-SIGN-GAP` and `R-USSHORT-BATCH3-SCORECARD-MAGNITUDE-TRACEBACK-GAP` are repaired in the working tree; see `docs/system_risk_register.md`; closure still waits for user `commit`.
+- **Verify**: target paper-chain tests 224 OK; full offline `test_us_short*.py` on user Python 3.13 = 1676 OK; doc/route 39 OK; py_compile OK; direct probes accepted=[]; `git diff --check` CRLF warnings only. Codex bundle Python broad discover was not counted because that runtime lacks `jsonschema`.
+- **Next**: User may `commit` this US-short batch3 ledger/scorecard fail-open repair; no provider/live/network/DataHub/Skill/production/broker/A-share/US-long path was run.
+
+## 2026-06-24 — Claude `修复` (US-short 批3 fresh re-audit 抓到的 2 个同族 fail-open 缝)
+
+- **Verdict/Action**: 用户 `修复`(fresh 三代理重审 + 我复现的 2 缝)。① P2 ledger 符号:`paper_ledger._validate_record` 加 outcome⇔gross 门(stop gross<0 / tp gross>0),堵持久化 paper_performance 把止损记成赚;**只在 label 持久化处加**,scorecard 用 net 符号分类不传 label 故不加(留 NOTE)。② P2 scorecard 幅值:`build_paper_scorecard` 嵌 de-id 排序 `realized_legs`,`validate` 从 legs 重导 win/loss/total_cost(拒 bool)+net_basket,堵伪造 net_basket 流进 nav。详 register 两 Required。
+- **Required**: `R-USSHORT-BATCH3-NET-RESULT-OUTCOME-SIGN-GAP`(P2 ledger 符号)+ `R-USSHORT-BATCH3-SCORECARD-MAGNITUDE-TRACEBACK-GAP`(P2 scorecard 幅值 source-traceable),均 in_progress、working tree 已修(详 register Resolution);待 Codex `审查 PASS` + 用户 `提交` → resolved@hash。
+- **Verify**: 改 2 engine(paper_ledger/paper_scorecard)+ 2 test + `docs/README.md`(docstring/route 同步);全离线 `*us_short*` **1676 OK**(+9、零回归);fresh-import 探针两缝原 repro 现 REJECTED + 正控 OK(forged net_basket/total_cost 拒、forged 值不再流进 nav、stop gross<0 过);doc-governance + route-doc **39 OK**;py_compile OK;`git diff --check` 仅 CRLF。
+- **Next**: Codex `审查` 本修复刀(2 engine + 2 test + README;重点:ledger 符号门正确且只在 label-持久化处、scorecard realized_legs 重导不误拒正控 + 下游无 key-set 破坏、零回归;两 Required 见 register)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:符号门只在 ledger(label 持久化处)不滥加 scorecard;幅值 source-traceable 镜像 nav/multiweek,全自洽 re-forge 是系统级限。B:module+函数+test docstring + README route 同步;`_SCORECARD_KEYS` 加 realized_legs 但下游经 validate 复验+内嵌、无 key-set 破坏(comparison/nav/multiweek 全绿)。C:正控不误拒(flat-closed net=0 仍过→scorecard 不加符号门);修 ledger fixture 符号一致。E:CURRENT 未动。F:total_cost 类型门置重导前;legs 排序去票名相关;无 BOM。
+
 ## 2026-06-24 - Codex `审查 PASS` (US-short 批3 fail-open 守门类 whole-class 修)
 
 - **Verdict/Action**: PASS. Net-result closed-fill geometry now fail-closes, and the three comparison/upgrade validators now reject bool/int equality bypasses before re-derived checks.

@@ -4,7 +4,8 @@
 Covers: the §18.0 P0 private-path guard on write AND the symmetric guard on load; validate-before-write (no file
 on refusal); load fail-closed (missing / corrupt-JSON / not-valid-record); the full record + per-entry shape with
 the EXACT paper_net_result contract — closed-world 6-key entries + per-outcome invariants (cash_unfilled all 0 /
-open_unrealized all None / closed finite gross·net, non-negative cost, net == gross - cost); the canonical
+open_unrealized all None / closed finite gross·net, non-negative cost, net == gross - cost, outcome⇔gross SIGN
+[a stop loses, a tp gains]); the canonical
 `paper_performance.json` filename; roundtrip + a tampered-row load refusal; and an integration drift-guard feeding
 REAL paper_net_result outputs. Pure structure-over-IO; no provider/live; no A-share.
 """
@@ -27,7 +28,8 @@ def _entry(outcome="filled_tp_exit", **over):
         d = {"outcome": outcome, "realized": False, "net_return": None, "gross_return": None,
              "cost_fraction": None, "unfilled_cash": False}
     else:
-        net = 0.0 if outcome == "cash_unfilled" else 0.05
+        # sign-consistent: a stop is a LOSS (gross < 0), a take-profit is a GAIN (gross > 0), cash is 0
+        net = 0.0 if outcome == "cash_unfilled" else (-0.05 if outcome == "filled_stopped" else 0.05)
         d = {"outcome": outcome, "realized": True, "net_return": net, "gross_return": net,
              "cost_fraction": 0.0, "unfilled_cash": outcome == "cash_unfilled"}
     d.update(over)
@@ -89,6 +91,21 @@ class ValidateRecord(unittest.TestCase):
         extra = _entry(); extra["extra"] = 1          # extra key (closed-world)
         with self.assertRaises(pl.PaperLedgerError):
             pl._validate_record(_record([extra]))
+
+    def test_outcome_sign_enforced(self):  # R-USSHORT-BATCH3-NET-RESULT-OUTCOME-SIGN-GAP
+        # a stop booked as a GAIN (gross >= 0) or a take-profit booked as a LOSS (gross <= 0) is impossible for a
+        # v1 long — the producer enforces it via fill geometry; the persister re-checks (the outcome label is
+        # persisted, so a corrupted paper_performance.json with a stop-as-gain must not load as valid)
+        for bad in (_entry("filled_stopped", net_return=0.05, gross_return=0.05),    # stop with a positive gross
+                    _entry("filled_stopped", net_return=0.0, gross_return=0.0),      # stop with zero gross
+                    _entry("filled_tp_exit", net_return=-0.05, gross_return=-0.05),  # tp with a negative gross
+                    _entry("filled_tp_exit", net_return=0.0, gross_return=0.0)):     # tp with zero gross
+            with self.assertRaises(pl.PaperLedgerError, msg=repr(bad)):
+                pl._validate_record(_record([bad]))
+
+    def test_correct_outcome_sign_passes(self):  # positive controls: a stop loses, a tp gains
+        pl._validate_record(_record([_entry("filled_stopped", net_return=-0.05, gross_return=-0.05),
+                                     _entry("filled_tp_exit", net_return=0.05, gross_return=0.05)]))
 
 
 class WriteGuardAndRoundtrip(unittest.TestCase):
