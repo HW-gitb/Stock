@@ -1,0 +1,24 @@
+{
+  "schema_name": "us_short_eligibility_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260624",
+  "status": "design-locked v1 (batch-4 slice 4c-i); governed semantics CONST-PINNED (whitelist/floors/disqualifiers/§13.1 anchors), calibration = reviewed schema+preset version bump; threshold VALUES = initial §13.1 #2 priors, NOT validated alpha",
+  "exchange_whitelist": ["NYSE", "NASDAQ"],
+  "cheap_eligibility_thresholds": {
+    "min_price_usd": 5.0,
+    "min_adv_usd": 5000000.0,
+    "min_market_cap_usd": 300000000.0
+  },
+  "disqualifying_status_flags": ["delisted", "halted", "bankruptcy", "otc"],
+  "thresholds_calibration_item_id": 2,
+  "candidate_set_calibration_item_id": 19,
+  "catalyst_recall_calibration_item_id": 21,
+  "notes": {
+    "scope": "Pass1 cheap-eligibility ONLY (exchange / price / ADV / market-cap / basic-status, FMP-profile-cheap). It is a fast pre-filter, NOT the authoritative safety gate: the Pass2 audit-safety-gate reuses engine/us_short_hard_veto.py (§5.1) and is not defined here. A cheap-eligible ticker still goes through Pass2 hard veto.",
+    "thresholds": "min_price_usd / min_adv_usd / min_market_cap_usd are INITIAL §13.1 #2 priors (US-short is active-only; historical backtests cannot prove alpha), NOT a tuned/validated set. $5 floor avoids sub-$5 microstructure; $5M/day dollar-ADV and $300M market-cap are conservative liquidity/size floors. The v1 priors (and the whitelist / disqualifier set / §13.1 anchors) are CONST-PINNED in the schema: forward-calibration is a deliberate REVIEWED schema+preset version bump (semver), never a silent value edit — so the gate cannot weaken (lower floors / drop a disqualifier / admit OTC / re-route a calibration anchor) without review.",
+    "exchange_whitelist": "canonical NYSE/NASDAQ per §4.0 active-only; the slice 4c-ii predicate normalizes the provider exchange string to these. Extend (e.g. NYSE American) only via a reviewed governance change.",
+    "candidate_set": "Pass1 narrows full universe to a candidate set ('几百只', §4.0); its size cap = §13.1 #19 prior, set by slice 4c-ii / batch5 within the FMP call budget (SR-PROVIDER-001).",
+    "catalyst_recall": "real market-level feed (earnings beats / rating changes / 8-K) = batch5 (§18.2); slice 4c-ii wires only the injection slot. criteria/size = §13.1 #21 prior.",
+    "boundary": "pure/offline contract; no provider/live/network/DataHub; no A-share crossing; thresholds never imply ship-gate/full-size eligibility."
+  }
+}

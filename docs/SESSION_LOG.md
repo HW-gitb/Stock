@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-i eligibility governance)
+
+- **Verdict/Action**: PASS. Re-reviewed the const-pin repair for slice 4c-i; the prior eligibility-governance semantic drift Required is resolved in the working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-ELIGIBILITY-GOVERNANCE-SEMANTIC-PIN-GAP` is resolved in `docs/system_risk_register.md`.
+- **Verify**: doc/route/README guards 50 OK; `py_compile` OK; custom const-pin/registry/mutation probe OK; target schema unittest still blocked here by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: User may `提交`; do not start 4c-ii/4d/provider/live/DataHub/A-share/US-long in this commit.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4c-i — eligibility governance const-pin v1 语义)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：成立——我 schema 只闭形状、没 const-pin 治理语义（白名单任意串 / disqualifier 任意 enum 子集 / 锚任意正整 / 阈值任意正数），同形不同值可悄悄塞 OTC / 丢 halted / 改错 §13 锚 / 削 floor 而测试全绿 = fail-open drift，违 house const-pin 模式。我"不 const 便于校准"直觉错——校准=reviewed 版本变更、非静默改。修：schema const-pin 白名单 / 3 阈值 / disqualifier 集 / 3 锚（2/19/21）；schema desc + preset notes 改"校准=reviewed 版本 bump"。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-ELIGIBILITY-GOVERNANCE-SEMANTIC-PIN-GAP`。
+- **Verify**: schema-test **21 OK**（preset 仍 conform const-pin schema + drift 全 reject：exchange 换/丢/加、disqualifier 丢/重排、锚 swap、price/adv/market-cap floor 削弱；+ 锚 2/19/21 交叉核对解析到 lifecycle-registry title）。全离线 `*us_short*` **1770 OK**（=1760+10）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4c-i（1 Required 已修；仅 schema + preset + schema-test + 本 closeout，README 未改；纯/离线、无 provider/live、不交叉 A 股）。重点：① 治理 v1 语义 const-pin（白名单/阈值/disqualifier/锚）+ drift 全 reject；② 锚交叉核对真解析 §13 registry title；③ preset 仍 conform；④ 校准=reviewed 版本 bump 措辞准、未起 4c-ii。findings 落 register。PASS 后用户 `提交`；之后 slice 4c-ii。
+- **Pre-Codex self-review**: A 整类（const-pin 4 类治理值 + drift 负例 3 类[换/丢/削]全覆盖 + 锚 registry 交叉核对）；B 连带（schema desc + preset status/notes 同步 const-pin、README 路由行措辞仍准[阈值仍是 §13 prior]无需改）；C 反向（preset 正控仍 conform、锚解析正控过）；D（"便于校准"歧义）走最窄安全侧=const-pin、校准=reviewed 版本 bump（house 模式）；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（行长 ≤500）。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4c-i eligibility governance)
+
+- **Verdict/Action**: FAIL. The slice is pure/offline and route guards pass, but the eligibility-governance schema only shape-validates several governed Pass1 semantics instead of pinning them.
+- **Required**: `R-USSHORT-BATCH4-ELIGIBILITY-GOVERNANCE-SEMANTIC-PIN-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: doc/route/README guards 50 OK; `py_compile` OK; diff-check CRLF-only; target schema unittest blocked here by missing `jsonschema`; static schema inspection found the unconstrained whitelist, disqualifier-set, calibration-id, and threshold-prior drift class.
+- **Next**: Claude repair only eligibility governance schema/tests/preset/README/closeout; keep pure/offline and do not start 4c-ii/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4c-i — eligibility governance 冻结契约)
+
+- **Verdict/Action**: 起草批4 slice 4c-i（§18.2 build-vs-wire ④；schema-first 先冻共享契约）。新 `presets/us_short_eligibility_governance_20260624.json` + `schemas/us_short_eligibility_governance.schema.json`：Pass1 cheap-eligibility 契约——`exchange_whitelist`(NYSE/NASDAQ) + `cheap_eligibility_thresholds`(min_price $5 / min_adv $5M / min_market_cap $300M) + `disqualifying_status_flags`(delisted/halted/bankruptcy/otc) + 3 个 §13.1 calibration_item_id(#2 阈值/#19 候选集/#21 catalyst_recall) + notes。阈值=**初始 §13.1 #2 prior**(active-only 证不了 alpha、forward 校准、非验证 alpha)、我定的保守初值。**Pass2 安全闸复用 hard_veto、不在此**；catalyst_recall 真 feed=批5。schema **全层闭世界**(顶层 + thresholds 对象 additionalProperties:false、status_flags enum、阈值 number+exclusiveMinimum 不 const 以便校准)。runtime loader/validator 归 4c-ii 消费方(批1→批2 模式)。纯/离线、不交叉 A 股。
+- **Required**: 无（起草；新 preset + schema + schema-test + README 一行）。
+- **Verify**: schema-test **11 OK**（preset conform + 对抗：extra 顶层键/缺键/错 schema_name/坏 version/extra 阈值键/非正阈值/空白名单/未知 status flag/非整 calibration_id 全 reject）。全离线 `*us_short*` **1760 OK**（=1749+11）零回归；py_compile OK；doc/route/README guards 待复跑。
+- **Next**: Codex `审查` 批4 slice 4c-i（仅 preset + schema + schema-test + README 一行；纯/离线、无 provider/live、不交叉 A 股）。审查重点：① schema 全层闭世界 + 对抗坏形全 reject；② 阈值=prior 初值(非 const、可校准)、calibration_item_id 链 §13.1；③ scope 边界措辞准(Pass1 cheap-only、Pass2 复用 hard_veto 不在此、catalyst feed=批5、不蕴含 ship-gate)；④ 阈值初值($5/$5M/$300M)作 forward-prior 起点是否合理。material findings 落 register。PASS 后用户 `提交`；之后 slice 4c-ii（Pass1/Pass2/catalyst 谓词消费本契约）。
+- **Pre-Codex self-review**: A（整类）：schema-test 对抗覆盖坏形整类(顶层/嵌套闭世界·类型·值域·enum·缺/多键)；阈值 number+exclusiveMinimum 不 const(校准需要)。B（连带）：新契约无旧符号；README 加 4c-i 薄路由行；§18.2 build-vs-wire ④ 本就预告 eligibility preset、无需改；house pattern 镜像 hard_veto governance(schema_name const + calibration_item_id)。C（反向）：合法 preset conform 正控过、坏形全 reject。D（阈值/whitelist 歧义）：阈值标 §13 prior 非 tuned、whitelist 限 NYSE/NASDAQ(§4.0)扩展须 governance 改、走最窄安全侧。E：CURRENT 未动（draft 未提交）。F：preset↔schema 一致(schema-test 焊)；runtime validator 显式延后 4c-ii(批1→批2 模式，notes/schema description 已标)。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4b market calendar)
 
 - **Verdict/Action**: PASS. Re-reviewed current slice 4b after the top-level closed-world repair; no new material Required found.

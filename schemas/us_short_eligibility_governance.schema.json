@@ -1,0 +1,36 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_eligibility_governance.schema.json",
+  "title": "US-short Pass1 cheap-eligibility governance (batch4 slice 4c)",
+  "description": "Frozen Pass1 cheap-eligibility contract for the weekend-pipeline universe->Pass1 gate: exchange whitelist + price/ADV/market-cap floors + basic-status disqualifiers. The governed v1 semantics (exchange whitelist, threshold floors, disqualifier set, §13.1 calibration anchors) are CONST-PINNED — forward-calibration of the §13.1 #2 priors is a deliberate REVIEWED schema+preset version bump, not a silent value edit, so the gate cannot drift/weaken without review. These are priors, NOT validated alpha and NOT ship-gate evidence. The authoritative Pass2 audit-safety-gate reuses engine/us_short_hard_veto.py (§5.1) and is NOT defined here. The consuming predicate (slice 4c-ii) must runtime-validate this artifact (jsonschema may be absent at runtime). No provider/live/network; no A-share crossing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "as_of", "status",
+    "exchange_whitelist", "cheap_eligibility_thresholds", "disqualifying_status_flags",
+    "thresholds_calibration_item_id", "candidate_set_calibration_item_id",
+    "catalyst_recall_calibration_item_id", "notes"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_eligibility_governance"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "exchange_whitelist": {"const": ["NYSE", "NASDAQ"]},
+    "cheap_eligibility_thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min_price_usd", "min_adv_usd", "min_market_cap_usd"],
+      "properties": {
+        "min_price_usd": {"const": 5.0},
+        "min_adv_usd": {"const": 5000000.0},
+        "min_market_cap_usd": {"const": 300000000.0}
+      }
+    },
+    "disqualifying_status_flags": {"const": ["delisted", "halted", "bankruptcy", "otc"]},
+    "thresholds_calibration_item_id": {"const": 2},
+    "candidate_set_calibration_item_id": {"const": 19},
+    "catalyst_recall_calibration_item_id": {"const": 21},
+    "notes": {"type": "object", "minProperties": 1}
+  }
+}
