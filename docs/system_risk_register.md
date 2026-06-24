@@ -35,7 +35,7 @@ Status:
 
 ### R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS - README route-row length guard only scans rows starting with `| `
 
-- **Status**: resolved (working tree; Codex re-`审查` PASS + 用户 `提交` pending).
+- **Status**: resolved@`8a905c77` (Codex re-`审查` PASS 2026-06-24).
 - **Severity**: P1 (cross-LLM continuity / doc-governance guard false-negative; blocks accepting the README anti-bloat guard as the mechanical root fix).
 - **Scope reviewed**: current docs-only guard slice with modified `AGENTS.md`, modified `docs/README.md`, modified `docs/SESSION_LOG.md`, modified `docs/system_risk_register.md`, and untracked `tests/test_readme_route_row_length.py`; `docs/us_short_system_design.md` §2.1 / §11 / §12 / §18.0-§18.2; `docs/pre_codex_self_review_checklist.md`; `docs/AI_REVIEW_PROTOCOL.md`. No business code, runner, schema, provider/live/network/DataHub/Skill/production/broker/order/A-share/US-short/US-long execution path was run.
 - **Detected by**: Codex re-`审查`, 2026-06-24.
@@ -50,7 +50,7 @@ Status:
 
 ### R-README-ROUTE-ROW-LENGTH-ESCAPED-PIPE-BYPASS - README route-row length guard mis-parses escaped Markdown pipes
 
-- **Status**: resolved for the escaped-pipe parser leg (working tree); Codex re-`审查` found sibling Required `R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS` before the guard slice can pass/commit.
+- **Status**: resolved@`8a905c77` (Codex re-`审查` PASS 2026-06-24; the escaped-pipe leg + the sibling `R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS` row-detection leg both landed in the guard slice).
 - **Severity**: P1 (cross-LLM continuity / doc-governance guard false-negative; blocks accepting the README anti-bloat guard as a mechanical root fix).
 - **Scope reviewed**: current docs-only guard slice with modified `AGENTS.md`, modified `docs/README.md`, modified `docs/SESSION_LOG.md`, and untracked `tests/test_readme_route_row_length.py`. No business code, runner, schema, provider/live/network/DataHub/Skill/production/broker/A-share/US-short/US-long execution path was run.
 - **Detected by**: Codex review, 2026-06-24.
