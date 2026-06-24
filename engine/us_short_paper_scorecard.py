@@ -24,9 +24,12 @@ stale row can no longer produce a clean-looking scorecard. Returns (no ticker na
     full-size ship-gate evidence (§12 / §18.1 #27); ``validate_paper_scorecard`` re-checks it + the count
     consistency, so a flipped boundary / doctored count fails closed.
 
-The path-dependent drawdown (needs the daily NAV path), the balanced-vs-shadow two-way comparison, the multi-day
-held-exit realized net (§12.1 #8 — turns an open position into a closed one upstream so more baskets fully
-resolve), and the §12.1 复权/公司行动 evaluability gate (not_evaluable → no alpha conclusion) are later §12.2 cuts.
+The path-dependent drawdown over the weekly basket-net equity curve is engine.us_short_paper_nav_drawdown (a
+single scorecard is path-INDEPENDENT — drawdown is computed across the weekly sequence, not inside one); the
+balanced-vs-shadow two-way comparison is engine.us_short_paper_scorecard_comparison; the multi-day held-exit
+realized net is engine.us_short_paper_multi_day_exit (§12.1 #8 — closes held positions upstream so more baskets
+fully resolve); the §12.1 复权/公司行动 evaluability gate (not_evaluable → no alpha conclusion) is
+engine.us_short_paper_eval_gate.
 Pure / offline: arithmetic on dicts; no provider / live / DataHub / network; no A-share crossing. The function
 RE-CHECKS every net_result's full per-outcome shape itself (never trusts the producer); malformed input fails
 closed (``PaperScorecardError``).

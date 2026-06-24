@@ -23,9 +23,10 @@ cost / cash drag / bad-pick rate are visible, not only its missed winners) plus 
     consumer can NEVER read a shadow profile, or any paper basket, as full-size ship-gate evidence (§12 / §13 / §18.1 #27).
 
 De-identified (counts / normalized deltas only — the embedded scorecards are de-identified, no tickers). The
-path-dependent drawdown (needs the daily NAV path → flows into each scorecard then here), the §12.1 复权/公司行动
-evaluability gate (not_evaluable → no upgrade/downgrade conclusion), and the anti-self-deception upgrade gate are
-later §12.2 cuts. ``validate_scorecard_comparison`` is CLOSED-WORLD (exact key set + frozen boundary + every
+path-dependent drawdown is engine.us_short_paper_nav_drawdown (a per-profile WEEKLY equity-curve metric, not a
+single path-independent scorecard; wiring its delta into a MULTI-week version of this comparison is a later cut);
+the §12.1 复权/公司行动 evaluability gate (not_evaluable → no upgrade/downgrade conclusion) is
+engine.us_short_paper_eval_gate; the anti-self-deception upgrade gate is engine.us_short_upgrade_gate. ``validate_scorecard_comparison`` is CLOSED-WORLD (exact key set + frozen boundary + every
 embedded scorecard re-validated + every delta re-derived) so a doctored delta / flipped boundary / smuggled field
 fails closed. Pure / offline: arithmetic on dicts; no provider / live / DataHub / network; no A-share crossing;
 malformed input fails closed (``ScorecardComparisonError``).
@@ -37,7 +38,8 @@ import datetime
 from engine.us_short_core_score import PROFILE_NAMES, PRIMARY_PROFILE
 from engine.us_short_paper_scorecard import validate_paper_scorecard
 
-# the §12.2 honest-caliber metrics compared shadow-vs-balanced (drawdown is added once the NAV-path cut lands)
+# the §12.2 honest-caliber metrics compared shadow-vs-balanced (per-profile cross-week drawdown is
+# engine.us_short_paper_nav_drawdown; wiring its delta here needs a multi-week comparison — a later cut)
 _DELTA_METRICS = ("net_basket", "bad_pick_rate", "total_cost_fraction", "win_count", "loss_count", "unfilled_cash_count")
 _THEME_OFF = "theme_off"  # the §4.2/§12.2 #24 theme-weight-zero attribution baseline (a member of the frozen PROFILE_NAMES)
 # the FROZEN ship-gate-isolation + paper-only boundary every comparison carries

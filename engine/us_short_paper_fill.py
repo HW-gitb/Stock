@@ -26,8 +26,9 @@ take_profit_exit_price``) — an inverted / equal / out-of-band geometry would b
 "take-profit" as a loss (R-USSHORT-BATCH3-PAPER-FILL-ORDER-GEOMETRY-GAP).
 
 Pure / offline: applies arithmetic rules to dicts; no provider / live / DataHub / network; no persistence (the
-private paper_*.csv writer + the corporate-action / not_evaluable hard gate + performance accounting are later
-cuts); no A-share crossing. Malformed input fails closed (``PaperFillError``).
+private persister engine.us_short_paper_ledger, the corporate-action / not_evaluable hard gate
+engine.us_short_paper_eval_gate, and performance accounting engine.us_short_paper_net_result /
+engine.us_short_paper_scorecard have since landed); no A-share crossing. Malformed input fails closed (``PaperFillError``).
 """
 from __future__ import annotations
 

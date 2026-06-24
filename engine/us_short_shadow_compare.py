@@ -32,7 +32,8 @@ This is a PURE in-memory projection: the per-profile selections carry tickers (p
 routed through the private persister + a de-identified tracked summary in a LATER slice — this cut does NOT
 persist, does NOT compute paper NAV / the two-way full-caliber scorecard (§12.2 双向全口径), does NOT run the
 anti-self-deception upgrade gate (§12.2 升级闸), and does NOT apply the §12.1 corporate-action evaluability
-carryover (all later §12.2 cuts). Pure / offline: arithmetic on dicts via engine.us_short_core_score; no
+carryover (all since landed downstream: engine.us_short_paper_scorecard / _scorecard_comparison /
+_paper_nav_drawdown / _paper_eval_gate, engine.us_short_upgrade_gate). Pure / offline: arithmetic on dicts via engine.us_short_core_score; no
 provider / live / DataHub / network; no A-share crossing. Malformed input / a drifted governance preset fails
 closed (``ShadowCompareError``).
 """

@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-24 - Codex `review PASS` (US-short batch3 S12.2 NAV/drawdown primitive)
+
+- **Verdict/Action**: PASS. The new NAV/drawdown primitive is pure, per-profile, paper-only, and keeps multi-week comparison wiring as a later cut.
+- **Required**: None new.
+- **Verify**: target NAV 25 OK; adjacent jsonschema-free US-short paper/shadow core 227 OK; boundary+doc+route 47 OK; py_compile OK; direct NAV probes OK; import-heavy NONE; diff-check CRLF-only; `jsonschema` unavailable so schema/summary full suite was not counted.
+- **Next**: User may `提交` this US-short batch3 S12.2 NAV/drawdown primitive slice. Multi-week comparison wiring, weekly pipeline, provider/live/DataHub/A-share/US-long remain separate.
+
+## 2026-06-24 — Claude `起草` (US-short 批3 §12.2 NAV 路径 / 回撤原语 + later-cut forward-ref 整类零残留)
+
+- **Verdict/Action**: 起草 §12.2 双向诚实「回撤」指标(#8 多日平仓解锁)。新 `engine/us_short_paper_nav_drawdown.py`:`build_nav_drawdown(period_scorecards)` 吃 ONE profile 按 as_of 周序的 `{as_of,scorecard}` 列,复用反自欺机制——再验每张 scorecard + as_of 严格递增防 look-ahead/重排/重复周 + realized(`net_basket` 有限)/unrealized(None,计覆盖不 impute,§12.1 不虚高)切分;复利净值曲线 → `max_drawdown`(非正,镜像 a_long `max_drawdown_on_levels` 工程约定)+ `final_cumulative_net` + 覆盖计数;`net≤−1`(NAV≤0,止损多头不可能)fail-closed;冻 paper-only boundary(镜像 scorecard);`validate_nav_drawdown` closed-world 从内嵌 realized nets 重算。判定:单周 scorecard path-INDEPENDENT,回撤是跨周指标 → 立原语;**不接 comparison**(多周 wiring=下一刀)。
+- **Required**: 无(起草;Required 由 Codex `审查` 产出后落 register)。
+- **B-ripple(doc-only,整类零残留)**: 把命名「已落模块」却仍写「later §12.2 cut」的 forward-ref 整类清零(本次 grep 暴露的 batch-3 累积漂移,位置无关、含 in-file docstring):`scorecard.py`/`comparison.py`(docstring+注释)/`shadow_compare{,_store,_summary}.py`/`paper_fill.py` 的 docstring + `README` 行 110/115/116/117/118/119 —— two-way comparison / 多日 #8 / `paper_eval_gate` / `upgrade_gate` / summary / store / 持久层 `paper_ledger` / perf accounting 由「later cut」改为指向各已落模块;legit deferred(multi-week wiring / weekly enrichment / #34 time-stop / vocab / batch-4 pipeline)全留。`README` 加 nav_drawdown 路由行。零行为改动(1603 测试不变)。
+- **Verify**: 新测试 21 例(build:已知 peak-to-trough / 单调 0 / 单点 / 首周亏从起始资本 1.0 / unrealized 计不 impute / 空篮周 / 空列 / 全 unrealized→None;对抗:非 list / item 形 / 坏 as_of 含 isascii 全角 / as_of 非严格增或重复 / 无效内嵌 scorecard / net≤−1 拒;validator closed-world:多或缺键 / boundary 篡改 / 正回撤 / 篡改累计 / 计数失配 / realized-nets 长度 / 内嵌 net≤−1 / None 耦合)。喂真实 `build_paper_scorecard`(drift guard)。**全离线 `*us_short*` 1603 OK + tests/schema 481 OK** 零回归;later-cut 复核剩 6 处全 legit(逐条核);源码 "daily NAV path" 0(仅旧 .pyc);BOM 无 / `git diff --check` 仅 CRLF。
+- **Next**: Codex `审查` US-short 批3 §12.2 NAV/回撤原语刀。命令:`审查 US-short 批3 §12.2 NAV 路径/回撤原语:engine/us_short_paper_nav_drawdown.py + tests/test_us_short_paper_nav_drawdown.py(纯新增 engine+test) + later-cut forward-ref 零残留校正(docs/README.md / engine/us_short_paper_scorecard.py / us_short_paper_scorecard_comparison.py / us_short_shadow_compare{,_store,_summary}.py / us_short_paper_fill.py 的 docstring/注释,doc-only)。重点:回撤口径(周度 realized 复利、不虚高、镜像 a_long max_drawdown_on_levels 非正约定)、反自欺/closed-world(as_of 严格增防 look-ahead、net≤−1 fail-closed、boundary 冻结、validator 从内嵌 nets 重算)、整类零残留是否真零(later-cut 命名已落模块全清)。无 schema/preset/runner、纯离线、不交叉 A 股。findings 落 system_risk_register。` PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类):validator 全出口(键集/boundary/计数/None 耦合/`net>−1` 在 build+validate 双口)一次覆盖;无 schema → boundary const 钉进 validator(validator=可复用门);as_of isascii 全角已测。B(连带·零残留证据):整仓 `grep later-cut` 扫,命名已落模块的 stale forward-ref 清零(6 文件 docstring + README 6 行),剩 6 处逐条核全 legit;"daily NAV path" 源码 0;boundary 镜像由 `test_boundary_mirrors_scorecard` 钉死。C(反向):legit deferred(multi-week wiring/#34/vocab/enrichment/pipeline)未误改;unrealized 不漏算 realized、net≤−1 拒不误拒合法(止损多头 net>−1)、单调→0 非假回撤、首周亏=真回撤。D:N/A(无歧义 NL)。E:CURRENT/durable route 未动(transient gate 只进本 LOG)。F:`_finite` 拒 NaN/Inf/bool;as_of canonical strict+isascii;跨字段不变式 validator 重算;无 generator 双消费;net≤−1 设计自查(新约束不误拒合法正常态);UTF-8 无 BOM、diff-check 干净。
+
 ## 2026-06-24 — Codex re-`审查 PASS` (US-long Tier 2 Cut 0 — Top20 count contract)
 
 - **Verdict/Action**: PASS. `R-USLONG-CUT0-TOP20-COUNT-CONTRACT-DRIFT` resolved in working tree; no new Required.

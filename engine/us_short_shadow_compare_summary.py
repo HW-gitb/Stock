@@ -17,8 +17,9 @@ path — that is why NO §18.0 private-path guard is needed here (the §18.0 gua
 artifact is provably de-identified, exactly what §11.6 lets be tracked).
 
 This is the SELECTION-level tracked companion of the private persister. The paper-NAV two-way full-caliber
-scorecard (§12.2 双向全口径: 多买亏损票 / 回撤 / 成本 / 现金拖累 / 坏票率) and the anti-self-deception upgrade gate
-are later §12.2 cuts. Pure-ish: builds from a comparison (no provider/live), writes a de-identified JSON; no
+scorecard (§12.2 双向全口径: 多买亏损票 / 回撤 / 成本 / 现金拖累 / 坏票率 — engine.us_short_paper_scorecard /
+_scorecard_comparison, drawdown engine.us_short_paper_nav_drawdown) and the anti-self-deception upgrade gate
+(engine.us_short_upgrade_gate) have since landed. Pure-ish: builds from a comparison (no provider/live), writes a de-identified JSON; no
 A-share crossing. Malformed input fails closed.
 """
 from __future__ import annotations

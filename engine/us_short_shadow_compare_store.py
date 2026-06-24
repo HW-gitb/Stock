@@ -33,7 +33,9 @@ week. OUTSIDE-repo absolute paths stay allowed as external non-canonical locatio
 store), EXCEPT a canonical-LOOKING ``shadow_comparison_<date>.json`` filename there must still match ``as_of``.
 
 ``shadow_comparison_path(as_of)`` is the canonical dated bucket (桶名 = as_of by construction). The de-identified
-TRACKED summary, the paper-NAV two-way scorecard, and the anti-self-deception upgrade gate are LATER §12.2 cuts —
+TRACKED summary (engine.us_short_shadow_compare_summary), the paper-NAV scorecard / comparison / drawdown
+(engine.us_short_paper_scorecard / _scorecard_comparison / _paper_nav_drawdown), and the anti-self-deception
+upgrade gate (engine.us_short_upgrade_gate) have since landed —
 this slice only persists / loads the ticker-bearing private artifact. Structure-over-IO: reads/writes a private
 JSON only; no provider / live / DataHub / network; no A-share crossing. The strict date gate is inlined (with the
 ``isascii()`` guard) so this persister stays jsonschema-free / importable on a minimal runtime. Malformed input
