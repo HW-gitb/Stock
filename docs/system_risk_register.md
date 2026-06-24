@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT - multiweek round-2 closeout leaves contradictory Hot Queue state
 
-- **Status**: resolved (working tree; docs-only single-state cleanup; Codex re-`审查` PASS + 用户 `提交` pending).
+- **Status**: resolved@`165cceba` (Codex re-`审查` PASS 2026-06-24).
 - **Severity**: P2 (blocks a clean review/commit closeout for this US-short batch3 §12.2 slice; code-level validator behavior is not the blocker).
 - **Scope reviewed**: current US-short batch3 §12.2 multiweek round-2 working tree, covering modified `docs/README.md`, modified `docs/SESSION_LOG.md`, modified `docs/system_risk_register.md`, modified `engine/us_short_paper_nav_drawdown.py`, untracked `engine/us_short_paper_multiweek_scorecard.py`, and untracked `tests/test_us_short_paper_multiweek_scorecard.py`. No provider/live/network/real-data fetch/DataHub/Skill/production/broker/order execution/A-share/US-long path was run.
 - **Detected by**: Codex re-review, 2026-06-24.
@@ -49,7 +49,7 @@ Status:
 
 ### R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP - multiweek scorecard validator can bless source-divergent cumulative tallies
 
-- **Status**: resolved (working tree, round 2 — whole numeric-strictness class now closed; Codex re-`审查` PASS + 用户 `提交` pending).
+- **Status**: resolved@`165cceba` (Codex re-`审查` PASS 2026-06-24; round-2 numeric-strictness + round-3 register single-state).
 - **Severity**: P1 (blocks the next US-short §12.2 multi-week balanced-vs-shadow comparison / upgrade-evidence consumer before it treats this per-profile aggregate as validated evidence).
 - **Scope reviewed**: current US-short batch3 §12.2 per-profile multiweek aggregation working tree after NAV/drawdown primitive commit `39f6df66` / closeout `dd0285a1`, covering modified `docs/README.md`, modified `docs/SESSION_LOG.md`, modified `engine/us_short_paper_nav_drawdown.py`, untracked `engine/us_short_paper_multiweek_scorecard.py`, and untracked `tests/test_us_short_paper_multiweek_scorecard.py`. Authority reviewed: `AGENTS.md`, `docs/README.md`, `docs/CURRENT.md`, Hot Queue, `docs/SESSION_LOG.md` top entry, `docs/AI_REVIEW_PROTOCOL.md`, `docs/us_short_system_design.md` §12 / §12.1 / §12.2 / §18.1 #13/#24/#27, and `docs/pre_codex_self_review_checklist.md`. No provider/live/network/real-data fetch/DataHub/Skill/production/broker/order execution/A-share/US-long path was run.
 - **Detected by**: Codex review, 2026-06-24.
