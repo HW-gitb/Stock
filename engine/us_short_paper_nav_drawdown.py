@@ -27,8 +27,9 @@ turns held positions into closed ones upstream, so more weeks ``fully_resolved``
 PAPER only — a frozen paper-only ``boundary`` (mirrors ``engine.us_short_paper_scorecard._BOUNDARY``) so a consumer
 can NEVER read the drawdown as full-size ship-gate evidence (§12 / §18.1 #27; only live_normalized graduates).
 ``validate_nav_drawdown`` is CLOSED-WORLD and RE-DERIVES the curve from the embedded realized nets (so a doctored
-drawdown / flipped boundary / count mismatch fails closed). Wiring this per-profile drawdown into a multi-week
-balanced-vs-shadow comparison is a later §12.2 cut. Pure / offline: arithmetic on dicts; no provider / live /
+drawdown / flipped boundary / count mismatch fails closed). The per-profile multi-week aggregation that rolls this drawdown
++ the cumulative full-caliber tally over weeks is engine.us_short_paper_multiweek_scorecard; wiring the 4 profiles
+into a balanced-vs-shadow comparison is a later §12.2 cut. Pure / offline: arithmetic on dicts; no provider / live /
 DataHub / network; no A-share crossing; malformed input fails closed (``PaperNavDrawdownError``).
 """
 from __future__ import annotations

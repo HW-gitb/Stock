@@ -8,6 +8,67 @@
 
 ---
 
+## 2026-06-24 - Codex re-`review PASS` (US-short batch3 S12.2 multiweek register-state closeout)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT` is resolved in the working tree; the code-level multiweek numeric strictness repair remains behavior-clean.
+- **Required**: None new. `R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT` and `R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP` are resolved in `docs/system_risk_register.md`.
+- **Verify**: target multiweek/nav/scorecard 88 OK; adjacent paper/shadow core 257 OK; doc-governance + route-doc 39 OK; py_compile OK; direct residual probes accepted=[]; import-heavy NONE; `git diff --check` CRLF-only.
+- **Next**: User may `提交` this US-short batch3 S12.2 per-profile multiweek scorecard slice; 4-profile comparison / weekly / provider-live / DataHub / A-share / US-long remain separate.
+
+## 2026-06-24 — Claude `修复` (US-short 批3 §12.2 multiweek register 单态化 — 文本交接,docs-only)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL`,新 Required `…MULTIWEEK-REGISTER-STATE-DRIFT` P1 docs-only)。judge:成立——`CUMULATIVE-TRACEBACK-GAP` 条目里旧 round-1 residual FAIL 段排在我 round-2 addendum 之后、未标 superseded(正文还写 "Required remains open until…" 那个 cost/bad_pick bool gap,而该 gap round-2 已修)→ 条目同时显示 resolved 与 remains-open,无法判真态。修(纯文本、未碰 code/test):该段标 "round-1 … SUPERSEDED … CLOSED in round 2(历史非现态)" + 正文 "remains open until" 改 "round-1 residual(DONE in round-2)";条目现单态。详 register Resolution。
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT` resolved(working tree;`CUMULATIVE-TRACEBACK-GAP` 残留段亦标 superseded;详 register Resolution)。
+- **Verify**: 两 MULTIWEEK 条目 Status 均 resolved;`CUMULATIVE` 条目内无未标 superseded 的 "remains open"/FAIL(已 reword);未碰 `engine/`/tests/README → 行为不变(multiweek/nav/scorecard 88、残留 bool 探针仍拒);doc-governance+route-doc+multiweek 69 OK;diff 仅 CRLF。
+- **Next**: Codex re-`审查`(单 Required docs-only single-state;命令同前刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:register 单态非只点名条目——扫全 register 确认本 multiweek 对两条都 resolved、无别处 resolved-后-未superseded-FAIL(其余 remains-open 命中皆 REGISTER-STATE-DRIFT 自身 finding 引述或无关 a_short/a_long 旧条)。B:仅 register + 本 LOG;未碰 code/test/README(Codex boundary)。C:superseded 标记 retained as history、没误删内容;round-2 行为未改。D:N/A。E:CURRENT 未动。F:diff 净、无 BOM;rg 核 CUMULATIVE 条目无 active remains-open。
+
+## 2026-06-24 - Codex re-`review FAIL` (US-short batch3 S12.2 multiweek round-2 closeout)
+
+- **Verdict/Action**: FAIL. The code-level numeric strictness repair now rejects the prior bool-as-number probes, but the active Hot Queue closeout is internally contradictory.
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT` is open in `docs/system_risk_register.md`.
+- **Verify**: target multiweek/nav/scorecard 88 OK; adjacent paper/shadow core 257 OK; doc-governance + route-doc 39 OK; py_compile OK; direct residual probes accepted=[]; import-heavy NONE; broad `test_us_short*.py` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only the multiweek Hot Queue/SESSION_LOG closeout state, then return for Codex re-review. Do not edit business code or start 4-profile comparison / weekly / provider-live / DataHub / A-share / US-long.
+
+## 2026-06-24 — Claude `修复` (US-short 批3 §12.2 multiweek 非计数数值字段严格类型门 — 整类闭环)
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL`,同 Required 残留)。judge:成立——上轮我只把 bool/类型严格性修到 **int 计数**,漏了**非计数数值字段**:`cum_total_cost_fraction=False`(False==0.0)、`overall_bad_pick_rate=False/True`(==0.0/1.0)仍钻过 `cum==_derive_cumulative` 值比较(且上轮重写把原 `_finite` cost 检查删了=自造回归)。这正是"整类一次修完"标准要求、我没做到的。修:**所有数值字段**在值比较前加严格类型门——cost finite 非负(拒 bool)、bad_pick None 或 finite(拒 bool)。详 register addendum。
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP` resolved(round 2,working tree;详 register addendum)。
+- **Verify**: 复跑 3 残留探针(cost=False / bad_pick=False / =True)现均 **REJECTED** + control OK;测试 +5(cost=False/=inf、bad_pick=False/=True/=nan 拒);整类审计:artifact 全数值字段(n_weeks+7 计数 strict-int、cost finite-非负、bad_pick finite-或-None)值比较前都类型门;nav 子块 floats 本就 `_finite` 拒 bool、boundary 子系统标准 dict!=。target multiweek+nav+scorecard **88 OK**;全离线 `*us_short*` **1633 OK** 零回归;schema 481;diff 仅 CRLF;BOM=0。
+- **Next**: Codex re-`审查`(单 Required round-2 resolved;整类数值类型门闭环;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类·彻底):枚举 artifact 全数值字段(n_weeks+7 计数+cost+bad_pick)逐一类型门,非只被点名的 cost/bad_pick——根因=值 `==` 下 False==0.0/True==1.0/2.0==2 钻过,故每数值字段先严格类型守。B:README validator 描述+tests 列表扩到"全数值字段类型门";`_derive_cumulative` 单源不变。C:valid 仍过、合法 0.0 cost / None 或 0.0 bad_pick 不误拒(_finite(0.0) 真)。D:N/A。E:CURRENT 未动。F:`_finite` 拒 bool+NaN+Inf;类型门置 `==` 前防数值相等绕过;diff 净、无 BOM。
+
+## 2026-06-24 - Codex re-`review FAIL` (US-short batch3 S12.2 multiweek traceback repair)
+
+- **Verdict/Action**: FAIL. The cumulative source traceback and `n_weeks` strict-int repair closes the original probes, but the same validator strictness class remains for non-count numeric fields.
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP` remains open in `docs/system_risk_register.md`.
+- **Verify**: target multiweek/nav/scorecard 84 OK; adjacent paper/shadow core 253 OK; py_compile OK; import-heavy NONE; original forged-cumulative and `n_weeks=2.0` probes now reject; direct probes still accept `cum_total_cost_fraction=False` and `overall_bad_pick_rate=False/True`.
+- **Next**: Claude repair only cumulative non-count numeric type validation/tests/docs/register; do not start 4-profile comparison / weekly / provider-live / DataHub / A-share / US-long.
+
+## 2026-06-24 — Claude `修复` (US-short 批3 §12.2 multiweek cumulative source-traceability + n_weeks 严格 int)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required P1)。judge:成立/在 scope/必要——本子系统反自欺模式(nav 从内嵌 nets 重算曲线、comparison 从内嵌 scorecard 重算 delta)我**漏用到 cumulative**,探针把 cumulative 改全 0(内部自洽)却过。修(narrow=自含 artifact):加 de-id 周级 `period_source`(每 `{as_of,scorecard}`、无票名/$),validator 从它**重算**——内嵌 nav 自校 + 须==`build_nav_drawdown(period_source)`、cumulative 须==`_derive_cumulative(period_source)`(单一派生 build+validate 共用),forged 全 0 拒;n_weeks+7 累计计数改严格非负 int(数值等 float/bool 拒)。详 register Resolution。
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP` resolved(working tree;详 register Resolution)。
+- **Verify**: 复现 Codex 两探针(cumulative→全 0 / n_weeks=2.0)现均 **REJECTED** + control valid OK;测试重做/+6(forged 自洽 cumulative 拒 / n_weeks=2.0 / =False / float 累计计数拒 / source-divergent nav 拒 / period_source de-id / valid 仍过 / open 周入累计不入曲线);target multiweek+nav+scorecard **84 OK**;全离线 `*us_short*` **1629 OK** 零回归;schema 481、doc+route 39 OK;diff-check 仅 CRLF;BOM=0。
+- **Next**: Codex re-`审查`(单 Required resolved;§12.2 multiweek source-traceability + n_weeks strict-int;命令同 `起草` 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:count 严格性整类——n_weeks+全7累计计数都 `_nonneg_int`(float/bool 拒)一次到位;source-traceability 整类——nav+cumulative 都从 period_source 重算。B:模块 docstring 重写为重算契约 + README 更新(输出含 period_source)+ `_derive_cumulative` build/validate 共用;无别消费者(4 档对比未建);grep 无旧"内部不变式"残留。C:valid 仍过、open 周入累计不入曲线、period_source 仍 de-id;严格性未误拒合法 int。D:N/A。E:CURRENT 未动(transient 只进 LOG)。F:`_nonneg_int` 拒 bool;重算== + 严格 int 双层防 4.0==4 漏过;period_source 拷贝防别名;无 BOM。
+
+## 2026-06-24 - Codex `review FAIL` (US-short batch3 S12.2 per-profile multiweek aggregation)
+
+- **Verdict/Action**: FAIL. The per-profile multiweek aggregate calculates correctly on builder output, but the cumulative tally validator is not source-traceable.
+- **Required**: `R-USSHORT-BATCH3-MULTIWEEK-CUMULATIVE-TRACEBACK-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: target multiweek/nav/scorecard 79 OK; adjacent paper/shadow core 248 OK; boundary+doc+route 39 OK; py_compile OK; import-heavy NONE; direct probes accepted source-divergent cumulative and `n_weeks=2.0`; `jsonschema` unavailable; diff-check CRLF-only.
+- **Next**: Claude repair only the multiweek cumulative traceback + `n_weeks` type contract and direct tests/docs/register, then return for Codex re-review. Do not start 4-profile multiweek comparison / weekly / provider-live / DataHub / A-share / US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批3 §12.2 per-profile 多周聚合 — 双向诚实 ≥12 周全口径 + 嵌 nav_drawdown)
+
+- **Verdict/Action**: 起草 §12.2 多周比较的 per-profile 建块。新 `engine/us_short_paper_multiweek_scorecard.py`:`build_multiweek_scorecard(period_scorecards)` 把一档按 as_of 周序的 `{as_of,scorecard}` 列(同 nav_drawdown 形)聚成多周摘要,报**两个口径诚实分离**(不同分母、绝不混):`cumulative`=所有周全口径仓位累计(filled/现金拖累/held[计不账,不虚高]/win/loss/flat/selected_total + `cum_total_cost_fraction` + `overall_bad_pick_rate`=cum_loss/cum_filled,分母=跨周仓位);`nav_drawdown`=嵌入的 realized 篮子曲线指标(max_drawdown/final_cumulative_net/realized 周覆盖,open 周计覆盖不上曲线,分母=realized 周)。判定:单周 scorecard 是一篮,§12.2 升级证据是 ≥12 周累计 → 立 per-profile 建块(镜像单周 scorecard→comparison 分解);4 档多周对比=下一刀。`validate_multiweek_scorecard` closed-world:嵌入 nav_drawdown re-validate(自重算曲线)+ 累计不变式 + n_weeks==nav.n_total + boundary 冻结。
+- **Required**: 无(起草;Required 由 Codex `审查` 产出后落 register)。
+- **B-ripple(doc-only)**: nav_drawdown docstring 的「multi-week comparison is a later cut」精确化——现指向新建块 `engine.us_short_paper_multiweek_scorecard`、保留「4 档对比仍 later cut」(comparison 真未建、非 stale)。README 加 multiweek 路由行。boundary 镜像由 `test_boundary_mirrors_scorecard_and_nav`(钉 mw==sc==nd 三相等)。无其它 surface 把 per-profile 聚合说成 deferred(grep 核)。
+- **Verify**: 新测试 21 例(build:结构+boundary / boundary 三相等 / 累计 tally / 成本累加 / nav 嵌入 / **open 周计入 cumulative 但不上曲线**[两口径分离]/ 空列 / 无 filled→bad_pick None;对抗传播自 nav:非 list / as_of 非增 / 无效内嵌 scorecard / net≤−1;validator closed-world:多或缺键 / cumulative 键集 / boundary 篡改 / 篡改计数 / selected 失配 / bad_pick 篡改 / n_weeks 失配 / 负成本 / 无效内嵌 nav)。喂真实 `build_paper_scorecard`(drift guard)。**全离线 `*us_short*` 1624 OK + schema 481 + doc guard 39** 零回归;BOM 无 / diff-check 干净。
+- **Next**: Codex `审查` US-short 批3 §12.2 per-profile 多周聚合刀。命令:`审查 US-short 批3 §12.2 per-profile 多周聚合:engine/us_short_paper_multiweek_scorecard.py + tests/test_us_short_paper_multiweek_scorecard.py(纯新增 engine+test) + nav_drawdown docstring forward-ref 精确化 + README 路由行(doc-only)。重点:两口径诚实分离(cumulative=跨周全仓位 vs nav_drawdown=realized 周曲线,分母不同不混)、§12.1 不虚高(open 周计覆盖不上曲线/不账)、closed-world/反自欺(嵌入 nav re-validate 自重算、累计不变式 cum_filled==win+loss+flat & cum_selected==filled+unfilled+open、boundary 三相等冻结、n_weeks==nav.n_total)、坏票率口径(pooled cum_loss/cum_filled 非周率均值)。无 schema/preset/runner、纯离线、不交叉 A 股。findings 落 system_risk_register。` PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类):validator 全出口(顶层+cumulative 键集 / boundary const 进 validator / 计数不变式 / bad_pick None 耦合 / 嵌入 nav re-validate)一次覆盖;7 个 `_SUM_COUNTS` 求和字段全在 loop + cumulative 9 键全闭世界;无 schema→boundary const 钉 validator + 三相等测试。B(连带):新模块,nav forward-ref 精确化(指新建块、comparison 仍 deferred 非 stale),README 加行;grep 无别处把 per-profile 聚合说 deferred;boundary 三相等钉死。C(反向):两口径不混(open 周入 cumulative 不入曲线、test 证);cum 不变式逐周成立故求和成立;bad_pick=pooled 非均值;空→0/None 非假指标;net≤−1 仍传播拒。D:N/A。E:CURRENT 未动(draft);README 路由当前态、无流水账。F:`_finite` 拒 NaN/Inf/bool;cum_total_cost finite 非负;period_scorecards 是 list 非 generator(nav + 本 loop 两次迭代安全);跨字段不变式 validator 重算;UTF-8 无 BOM、diff-check 干净。
+
 ## 2026-06-24 - Codex `review PASS` (US-short batch3 S12.2 NAV/drawdown primitive)
 
 - **Verdict/Action**: PASS. The new NAV/drawdown primitive is pure, per-profile, paper-only, and keeps multi-week comparison wiring as a later cut.
