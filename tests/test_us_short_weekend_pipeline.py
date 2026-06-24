@@ -1,0 +1,164 @@
+# -*- coding: utf-8 -*-
+"""Tests for the US-short weekend-pipeline selection front (engine/us_short_weekend_pipeline.py) — batch4 slice 4d-i.
+
+Design authority: docs/us_short_system_design.md §2 / §2.1 / §4.0 / §18.2.
+
+Covers the wired selection front end-to-end over an INJECTED data_context: canonical decision-day
+threading, the intraday DEAD-ZONE no-emit, Pass1 cheap-eligibility filtering, catalyst_recall
+injection, Pass2 audit-safety-gate (candidate exclusion on entry_hard_veto; holdings forced in with
+veto surfaced), canonical ticker identity flowing through, and fail-closed data_context shape.
+"""
+import sys
+import unittest
+from datetime import datetime
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import engine.us_short_weekend_pipeline as wp  # noqa: E402
+from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
+
+_SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]  # Fri / Mon / Tue (16:00)
+_PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+
+
+def _now(date, hh, mm):
+    return datetime(int(date[:4]), int(date[4:6]), int(date[6:]), hh, mm)
+
+
+def _univ_row(ticker, exchange="NASDAQ", price=150.0, adv=1.0e10, mcap=2.5e12, **status):
+    r = {"ticker": ticker, "exchange": exchange, "price": price, "adv_usd": adv, "market_cap_usd": mcap,
+         "delisted": False, "halted": False, "bankruptcy": False, "otc": False}
+    r.update(status)
+    return r
+
+
+def _dc(universe, *, recall=None, holdings=None, pass2=None):
+    return {"universe": universe, "catalyst_recall_feed": recall,
+            "holdings": holdings or [], "candidate_pass2_signals": pass2 or {}}
+
+
+class RunSelectionTests(unittest.TestCase):
+    def setUp(self):
+        self.gov = load_eligibility_governance(_PRESET)
+
+    def _run(self, dc, now=("20260613", 10, 0)):
+        return wp.run_selection(_now(*now), _SESSIONS, dc, eligibility_governance=self.gov)
+
+    def test_happy_path_selection(self):
+        dc = _dc([_univ_row("AAPL"), _univ_row("PENNY", price=1.0), _univ_row("OTCX", exchange="OTC")],
+                 pass2={"AAPL": {}})
+        out = self._run(dc)
+        self.assertFalse(out["out_of_window"])
+        self.assertEqual(out["decision_date"], "20260615")     # Sat -> upcoming Mon
+        self.assertEqual(out["price_basis_date"], "20260612")  # prior Fri
+        self.assertEqual(out["cheap_eligible"], ["AAPL"])      # PENNY below floor, OTCX off-whitelist
+        self.assertEqual(out["candidates"], ["AAPL"])
+        self.assertEqual(out["admitted"], ["AAPL"])
+
+    def test_out_of_window_no_emit(self):
+        out = self._run(_dc([_univ_row("AAPL")]), now=("20260615", 11, 0))  # Mon 11:00 = intraday dead zone
+        self.assertTrue(out["out_of_window"])
+        self.assertIsNone(out["decision_date"])
+        self.assertEqual(out["candidates"], [])
+        self.assertEqual(out["admitted"], [])
+
+    def test_catalyst_recall_injects(self):
+        out = self._run(_dc([_univ_row("AAPL")], recall=["MSFT"], pass2={"AAPL": {}, "MSFT": {}}))
+        self.assertTrue(out["recall_available"])
+        self.assertEqual(out["candidates"], ["AAPL", "MSFT"])
+        self.assertEqual(out["recall_added"], ["MSFT"])
+
+    def test_catalyst_feed_none_no_fabrication(self):
+        out = self._run(_dc([_univ_row("AAPL")], recall=None, pass2={"AAPL": {}}))
+        self.assertFalse(out["recall_available"])
+        self.assertEqual(out["recall_added"], [])
+
+    def test_pass2_excludes_entry_hard_veto_candidate(self):
+        # both cheap-eligible (clean Pass1 status); Pass2 SEC-audit finds BADX delisted -> excluded
+        dc = _dc([_univ_row("AAPL"), _univ_row("BADX")], pass2={"AAPL": {}, "BADX": {"delisted": True}})
+        out = self._run(dc)
+        self.assertEqual(out["candidates"], ["AAPL", "BADX"])
+        self.assertIn("AAPL", out["admitted"])
+        self.assertNotIn("BADX", out["admitted"])
+
+    def test_holdings_forced_in_with_veto_surfaced(self):
+        dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "GOOG", "signals": {"delisted": True}}],
+                 pass2={"AAPL": {}})
+        out = self._run(dc)
+        h = out["holdings"][0]
+        self.assertEqual(h["ticker"], "GOOG")
+        self.assertTrue(h["admit_to_topn"])             # §4.0 强制含持仓 — never excluded by the gate
+        self.assertEqual(h["veto_tier"], "position_hard_veto")  # surfaced for §9 action
+
+    def test_canonicality_flows_through(self):
+        out = self._run(_dc([_univ_row("aapl")], pass2={"AAPL": {}}))  # lowercase universe ticker
+        self.assertEqual(out["candidates"], ["AAPL"])    # canonicalized in Pass1
+
+    def test_malformed_data_context_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            wp.run_selection(_now("20260613", 10, 0), _SESSIONS, {"universe": []},
+                             eligibility_governance=self.gov)
+
+    def test_bad_holding_row_raises(self):
+        dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "GOOG"}])  # missing signals
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(dc)
+
+    def test_decision_date_threaded_into_result(self):
+        out = self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}))
+        self.assertEqual(out["decision_date"], "20260615")
+        self.assertEqual(out["run_date"], "20260613")
+
+    # --- Pass2 signal coverage / canonicality (no default-clean by omission) ---
+    def test_missing_candidate_pass2_signal_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={}))
+
+    def test_miscased_pass2_key_applies_veto(self):
+        # 'aapl' canonicalizes to 'AAPL' and its veto now applies (no bypass via key drift)
+        out = self._run(_dc([_univ_row("AAPL")], pass2={"aapl": {"delisted": True}}))
+        self.assertNotIn("AAPL", out["admitted"])
+
+    def test_recall_added_candidate_missing_pass2_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], recall=["MSFT"], pass2={"AAPL": {}}))
+
+    def test_stale_extra_pass2_key_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}, "ZZZZ": {}}))
+
+    def test_non_canonical_pass2_key_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}, "000001.SZ": {}}))
+
+    def test_non_dict_pass2_payload_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": "not-a-dict"}))
+
+    # --- holding ticker canonical identity (same policy as candidates) ---
+    def test_holding_ticker_canonicalized(self):
+        dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": " goog ", "signals": {}}], pass2={"AAPL": {}})
+        self.assertEqual(self._run(dc)["holdings"][0]["ticker"], "GOOG")
+
+    def test_holding_class_share_preserved(self):
+        dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "BRK.B", "signals": {}}], pass2={"AAPL": {}})
+        self.assertEqual(self._run(dc)["holdings"][0]["ticker"], "BRK.B")
+
+    def test_holding_a_share_code_raises(self):
+        dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "000001.SZ", "signals": {}}], pass2={"AAPL": {}})
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(dc)
+
+    def test_duplicate_holding_identity_raises(self):
+        dc = _dc([_univ_row("AAPL")],
+                 holdings=[{"ticker": "GOOG", "signals": {}}, {"ticker": "goog", "signals": {}}],
+                 pass2={"AAPL": {}})
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(dc)
+
+
+if __name__ == "__main__":
+    unittest.main()

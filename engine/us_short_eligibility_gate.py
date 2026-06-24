@@ -76,6 +76,12 @@ def _canonical_us_ticker(raw):
     return s
 
 
+# Public alias — the weekend-pipeline orchestrator (slice 4d) reuses this EXACT canonical policy for
+# its holding tickers + Pass2 signal keys, so the candidate set / holdings / Pass2 map share one
+# identity policy (no second identity space; cf. 4c-ii-b). Same function, no behavior change.
+canonical_us_ticker = _canonical_us_ticker
+
+
 def validate_eligibility_governance(gov):
     """Fail-closed runtime gate: the loaded governance must BE the frozen v1 contract.
 

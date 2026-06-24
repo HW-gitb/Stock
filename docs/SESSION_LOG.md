@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-i data_context validation)
+
+- **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-PIPELINE-DATACONTEXT-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-WEEKEND-PIPELINE-DATACONTEXT-VALIDATION-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: py_compile OK; pipeline+gate 76 OK; resolver/calendar 69 OK; doc/route/README guards 50 OK; probes OK; broad `test_us_short*.py` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-i — data_context Pass2 覆盖 + 持仓规范身份 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：两腿成立、且都是同类换面再犯——① Pass2 `.get(t,{})` 缺→默认 clean（同 4c-ii-a 状态旗坑）；② 持仓发原样 ticker（4c 给候选规范了、持仓没，第二套身份空间）。修 `run_selection`：① `candidate_pass2_signals` 键经 `canonical_us_ticker`（gate 新公开别名、最窄复用不改 gate）规范化、拒非规范/重复键、**精确覆盖候选集**（缺/陈旧 raise）、去 `.get` 默认（每候选取 present dict）；② 持仓 ticker 同策略规范化（拒 invalid/A股/重复、发 canonical）。out-of-window no-emit 不变；docstring 同步。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-PIPELINE-DATACONTEXT-VALIDATION-GAP`。
+- **Verify**: pipeline+gate **76 OK**（pipeline +10 对抗：缺 Pass2、miscased 键应用 veto、recall-added 缺、陈旧键、非规范键、非dict payload；持仓 小写/空格规范、class-share 保、A股拒、重复拒）。Codex 探针全修（`{}`/`{"aapl":{delisted}}`/recall 缺 Pass2 → fail-closed、`000001.SZ`/` aapl ` 持仓拒/规范）。全离线 `*us_short*` **1846 OK**（=1836+10）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4d-i（1 Required 已修；`engine/us_short_weekend_pipeline.py` + 测试 + 一行 gate 别名 + closeout；纯/离线、无 provider/live、不交叉 A 股）。重点：① Pass2 键规范 + 精确覆盖候选（缺/陈旧/非规范/重复 fail-closed、无 `.get` 默认）；② 持仓规范身份（同 4c 策略、A股/重复拒）；③ gate 别名仅暴露既有 helper 无行为改；④ out-of-window 仍 no-emit、未起 4d-ii。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii。
+- **Pre-Codex self-review**: A 整类（Pass2 键坏形[缺/陈旧/非规范/重复/非dict] + 持仓身份[小写/空格/A股/重复/class-share] 全覆盖）；B 连带（复用 gate `canonical_us_ticker` 公开别名不重写策略、pipeline docstring 同步、cheap/holdings/Pass2 三面一致身份）；C 反向（happy/持仓/feed=None 正控仍过）；D（缺数据/身份歧义）走最窄安全侧=缺 fail-closed + 一套规范身份；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard。**根因（本会话第 2 次同类）**：新增注入数据消费者（4d-i）未沿用既定"缺→fail-closed + 统一规范身份"，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4d-i data_context validation)
+
+- **Verdict/Action**: FAIL. 4d-i is pure/offline and target tests pass, but the selection front has a data_context validation fail-open: missing or miscased candidate Pass2 signal rows default clean, and holdings emit raw ticker identities.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-PIPELINE-DATACONTEXT-VALIDATION-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: pipeline 10 OK; adjacent gate/resolver/calendar 125 OK; doc/route/README guards 50 OK; py_compile OK; probes reproduce missing/miscased Pass2 + raw holding ticker gaps; diff-check CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4d-i — 周末 pipeline 选股前段编排)
+
+- **Verdict/Action**: 起草批4 slice 4d-i（§2/§18.2 编排首刀；批4 capstone 的选股前半）。新 `engine/us_short_weekend_pipeline.py`：`run_selection(now_et, sessions, data_context, *, eligibility_governance)` 串 `resolve_canonical_asof`(4a)→universe→Pass1 `cheap_eligible`+`inject_catalyst_recall`(4c-ii)→Pass2 `pass2_safety_admit`(4c-ii 复用 hard_veto，候选 entry_hard_veto 排除、持仓强制入 veto surfaced)→候选集 + admitted。盘中死区→OutOfWindowError 捕获→no-emit（无候选、下游不产）；decision_date 从 resolver 穿线进结果；`data_context` 全注入（batch5 同 seam 填真 provider）；consumer-validation（governance 经 `validate_eligibility_governance`、data_context closed-world fail-closed）。**分析链→machine_record §10 装配→no-dangling→lifecycle eval→内容无关 render = 4d-ii**（下刀）。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: pipeline tests **10 OK**（happy path 选股 + decision_date/price_basis 穿线、盘中死区 no-emit、catalyst inject / None 不伪造、Pass2 排除 entry_hard_veto 候选、持仓强制入 + veto surfaced、规范化贯通 aapl→AAPL、畸形 data_context / 坏 holding fail-closed）。全离线 `*us_short*` **1836 OK**（=1826+10）零回归；py_compile OK。
+- **Next**: Codex `审查` 批4 slice 4d-i（仅 `engine/us_short_weekend_pipeline.py` + 测试 + README 一行；纯/离线、无 provider/live、不交叉 A 股）。审查重点：① 选股前段串接（resolve→Pass1+catalyst→Pass2、持仓强制入 vs 候选排除 §4.0）；② out-of-window no-emit（不产候选/下游）；③ decision_date 穿线 + data_context closed-world fail-closed；④ 未起 4d-ii 分析/render/machine_record。material findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii。
+- **Pre-Codex self-review**: A 整类（选股前段各 stage + out-of-window + data_context 坏形[缺键/坏 holding] + canonicality 贯通 覆盖）；B 连带（复用 4a resolver + 4c gate 既有接口不重写；engine 不引 provider/jsonschema；README 加薄行）；C 反向（happy path/持仓/feed=None 正控不误拒）；D（持仓 vs 候选语义）持仓强制入非剔除（§4.0）；E：CURRENT 未动（draft）；F：data_context closed-world、governance 经 validate、out-of-window 捕获不漏 emit；加 entry 后复跑 doc guard（行长 ≤500）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-ii-b candidate ticker identity)
 
 - **Verdict/Action**: PASS. Re-reviewed the candidate ticker canonicality repair for slice 4c-ii-b; both prior candidate-set Required items are resolved in the working tree and no new material Required was found.
