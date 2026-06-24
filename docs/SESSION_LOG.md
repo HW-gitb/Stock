@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-24 - Codex `review PASS` (US-short batch3 S12.2 multi-week comparison)
+
+- **Verdict/Action**: PASS. The multi-week balanced-vs-shadow comparison is pure/offline, re-validates each source-traceable per-profile aggregate, enforces same ordered week window + fixed TopN per week, re-derives all deltas and the theme-off marginal, and keeps the frozen paper-only / non-production boundary.
+- **Required**: None.
+- **Verify**: target multiweek comparison 20 OK; adjacent paper/shadow core 277 OK; doc-governance + route-doc 39 OK; py_compile OK; direct delta/marginal residual probes accepted=[]; import-heavy NONE; broad `test_us_short*.py` blocked by missing `jsonschema`; `git diff --check` CRLF-only; encoding BOM/FFFD NONE.
+- **Next**: User may `提交` this US-short batch3 S12.2 multi-week balanced-vs-shadow comparison slice; weekly enrichment / provider-live / DataHub / A-share / US-long remain separate.
+
+## 2026-06-24 — Claude `起草` (US-short 批3 §12.2 multi-week 4 档 balanced-vs-shadow 对比 — 双向诚实 capstone)
+
+- **Verdict/Action**: 起草 §12.2 比较轨 capstone(单周 comparison 的多周版)。新 `engine/us_short_paper_multiweek_comparison.py`:`build_multiweek_comparison(multiweek_by_profile)` 配对冻结 4 档(`core_score.PROFILE_NAMES`,各 re-validate)的 `build_multiweek_scorecard` 聚合 → 嵌 4 档全口径 de-id 聚合并排(shadow 多买亏损/成本/现金拖累/坏票率 + 回撤都可见)+ `vs_balanced[shadow]` per-metric `delta=shadow−balanced`(final_cumulative_net/max_drawdown/overall_bad_pick_rate/cum_total_cost_fraction/cum_loss/cum_unfilled_cash/cum_win,任一 None→None §12.1 不虚高)+ `theme_weight_marginal_net`=balanced−theme_off 的 final_cumulative_net(#24 窗口级)。**周窗对齐不变式**(§12.2 PIT 同窗 + 固定 TopN):4 档须同 as_of 序 + 每周同 selected_total,错日/混 TopN fail-closed。冻 ship-gate 隔离 paper-only boundary;`validate_multiweek_comparison` closed-world 从聚合重导每 delta + **delta 严格类型门**(None 或 finite、拒 bool,堵 `False==0.0` 等值绕过——应用本轮 multiweek 教训)。镜像单周 comparison。
+- **Required**: 无(起草;Required 由 Codex `审查` 产出后落 register)。
+- **B-ripple(doc-only)**: nav_drawdown + multiweek_scorecard 的 in-file docstring + README 两行把"4 档对比是 later cut"改为指向新模块 `engine.us_short_paper_multiweek_comparison`(整类零残留含 in-file docstring,grep 核 0);README 加 comparison 路由行。
+- **Verify**: 新测试 20 例(build:结构/全口径嵌入/deltas/#24 theme marginal/open→None net+drawdown delta;对齐:错 TopN/错周/validate 侧失配拒;coverage:缺/多档/非dict/无效内嵌聚合拒;validator closed-world:多键/boundary 篡改/篡改 delta/**bool delta False==0 拒(真 delta=0 场景证类型门非 == 堵)**/theme-marginal 篡改+bool/primary 篡改/缺 delta 键)。**全离线 `*us_short*` 1653 + schema 481 + doc guard 39** 全绿零回归;forward-ref 零残留;BOM 无/diff 净。
+- **Next**: Codex `审查` US-short 批3 §12.2 multi-week 4 档对比刀。命令:`审查 US-short 批3 §12.2 multi-week balanced-vs-shadow 对比:engine/us_short_paper_multiweek_comparison.py + tests/test_us_short_paper_multiweek_comparison.py(纯新增 engine+test) + nav_drawdown/multiweek_scorecard forward-ref 指向 + README 路由行(doc-only)。重点:周窗对齐不变式(同 as_of 序 + 每周同 fixed-TopN,§12.2 PIT 同窗/禁挑样本)、双向全口径(回撤+亏损票+成本+现金拖累+坏票率并排)、closed-world/反自欺(每 delta 从聚合重导 + delta 严格类型门拒 bool 等值绕过 False==0.0、嵌入聚合 re-validate、theme_marginal 重导、boundary 冻结)、ship-gate 隔离(shadow 永不计毕业)。无 schema/preset/runner、纯离线、不交叉 A 股。findings 落 system_risk_register。` PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类):delta 严格类型门覆盖全 7 metric delta + theme_marginal(None 或 finite、拒 bool)——应用 multiweek round-2 教训不重蹈 bool 等值绕过;closed-world 键集 + 每 delta 从源重导。B(连带):4 处 forward-ref(2 docstring+2 README)指向新模块、零残留;README 加行;复用 PROFILE_NAMES/validate_multiweek_scorecard。C(反向):valid 仍过、open 档→None delta 不误算、对齐档不误拒(同窗同 TopN 过)、真 0 delta 合法(int 0 过类型门、只 bool 拒)。D:N/A。E:CURRENT/register 未动(draft 无 finding)。F:`_finite` 拒 bool/NaN/Inf;delta 类型门置 == 前;周窗对齐用 (as_of,selected_total) 序元组;无 generator 双消费;UTF-8 无 BOM、diff 净。
+
 ## 2026-06-24 - Codex re-`review PASS` (US-short batch3 S12.2 multiweek register-state closeout)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH3-MULTIWEEK-REGISTER-STATE-DRIFT` is resolved in the working tree; the code-level multiweek numeric strictness repair remains behavior-clean.

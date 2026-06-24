@@ -9,7 +9,7 @@ Design authority: docs/us_short_system_design.md §12.2 (双向诚实: 成绩单
 
 A single-week scorecard is one basket; the §12.2 upgrade evidence is the ≥12-WEEK accumulation. This rolls ONE
 profile's weekly scorecards into its multi-week full-caliber summary — the building block the multi-week
-balanced-vs-shadow comparison (a later cut) puts side by side. It reports TWO honestly-DISTINCT calibers (different
+balanced-vs-shadow comparison (engine.us_short_paper_multiweek_comparison) puts side by side. It reports TWO honestly-DISTINCT calibers (different
 denominators, never conflated):
 
   * ``cumulative`` — the full-caliber position tally over ALL weeks (every basket, realized or not): summed filled /
