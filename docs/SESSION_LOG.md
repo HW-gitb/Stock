@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-ii-a Pass1 eligibility gate)
+
+- **Verdict/Action**: PASS. Re-reviewed the missing-status fail-closed repair for slice 4c-ii-a; the prior Required is resolved in the working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-ELIGIBILITY-GATE-MISSING-STATUS-FAILOPEN` is resolved in `docs/system_risk_register.md`.
+- **Verify**: gate tests 33 OK; `py_compile` OK; doc/route/README guards 50 OK; direct uniform-missing/status probe OK; broad `test_us_short*.py` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: User may `提交`; do not start 4c-ii-b/4d/provider/live/DataHub/A-share/US-long in this commit.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4c-ii-a — Pass1 缺失状态旗 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：成立、且我自己写测试锁了 bug——`cheap_eligible` 用 `row.get(flag, False)` 把缺失的关键状态旗当 clean，`test_status_absent_defaults_clean` 还把这 fail-open 断言成对。违 §3.3（关键状态未知→保守、绝不因缺省当干净），且与本谓词数值字段（缺→fail-closed）自相矛盾。修：每个 disqualifying 状态旗须 present+bool，缺/非bool→`status_<flag>_unknown_or_invalid`+不合格；同步函数 docstring（状态旗 REQUIRED bool 非 optional）。删锁-bug 测试、加缺旗拒绝 + 显式 False 正控。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-ELIGIBILITY-GATE-MISSING-STATUS-FAILOPEN`。
+- **Verify**: gate tests **33 OK**。**统一-缺失探针**：drop 任一字段（ticker/exchange/price/adv/mcap + 4 状态旗）→ 全不合格、full explicit → 合格（零 fail-open，缺→fail-closed 现全字段统一）。全离线 `*us_short*` **1803 OK**（=1801−1+3）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4c-ii-a（1 Required 已修；仅 `engine/us_short_eligibility_gate.py` + 测试 + 本 closeout；纯/离线、无 provider/live、不交叉 A 股）。重点：① 缺/非bool 状态旗 fail-closed（每旗 + 全缺）、显式 False 正控合格；② 缺→fail-closed 全字段统一（探针证）；③ 未起 4c-ii-b/4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4c-ii-b。
+- **Pre-Codex self-review**: A 整类（这次跑统一-缺失探针：每字段 drop 都验 fail-closed、非口头 claim——前一稿正栽在"claim fail-closed 却漏 ABSENT 状态旗"）；B 连带（函数 docstring 改 REQUIRED bool、删锁-bug 测试；数值与状态缺失处理现一致）；C 反向（显式 False / full explicit 正控合格不误拒）；D（缺状态歧义）走最窄安全侧=未知不合格（§3.3）；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（行长 ≤500）。根因 tell：数值缺→fail-closed vs 状态缺→default-clean 的不一致；[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4c-ii-a Pass1 eligibility gate)
+
+- **Verdict/Action**: FAIL. Current slice is pure/offline, but `cheap_eligible` treats missing critical status flags as clean.
+- **Required**: `R-USSHORT-BATCH4-ELIGIBILITY-GATE-MISSING-STATUS-FAILOPEN` is open in `docs/system_risk_register.md`.
+- **Verify**: gate tests 31 OK; `py_compile` OK; doc/route/README guards 50 OK; direct probe shows missing `delisted/halted/bankruptcy/otc` all pass; schema/broad `*us_short*` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only status-missing fail-closed predicate/tests/docs/closeout; do not start 4c-ii-b/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4c-ii-a — Pass1 cheap-eligibility gate + governance runtime validator)
+
+- **Verdict/Action**: 起草批4 slice 4c-ii-a（§18.2 build-vs-wire ①④；消费 4c-i 冻结契约）。新 `engine/us_short_eligibility_gate.py`：① `load_eligibility_governance` + `validate_eligibility_governance`——runtime consumer-validation 边，re-enforce 冻结 v1 const 语义（whitelist/3 阈值/disqualifier/§13 锚 == 模块 const、drift fail-closed；schema 是 CI 门、runtime 不一定有 jsonschema 故 runtime 兜，镜像 calendar + regime POSITION_CAP house pattern + triangulation 测试 const==preset）；② `cheap_eligible(row, *, governance)` Pass1 谓词——交易所∈白名单 + price/ADV/market-cap ≥ floor + 无 disqualifying 状态旗；**fail-closed**：缺/非有限/bool/str 字段 → 显式 reason + 不合格（key 未知→保守 §3.3），收集全部 reason 非短路。Pass2 audit-safety-gate（复用 hard_veto）+ catalyst 注入槽 = 4c-ii-b。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: gate tests **31 OK**（validator：triangulation const==preset / 非dict / extra键 / 缺键 / 坏 schema_name / 坏 as_of / whitelist·threshold·disqualifier·anchor drift 全 reject；cheap_eligible：fully-eligible / at-floor 合格、exchange 非白名单·缺、price/adv/mcap below-floor·None·NaN·bool·str、4 状态旗 True、状态非bool、ticker 缺、row 非dict、多 reason 收集全）。全离线 `*us_short*` **1801 OK**（=1770+31）零回归；py_compile OK。
+- **Next**: Codex `审查` 批4 slice 4c-ii-a（仅 `engine/us_short_eligibility_gate.py` + 测试 + README 一行；纯/离线、无 provider/live、不交叉 A 股）。审查重点：① runtime validator re-enforce 冻结 v1（drift 全 fail-closed）+ triangulation const==preset；② cheap_eligible fail-closed 整类（缺/非有限/bool/str/非白名单/below-floor/状态旗/非bool 状态 全显式 reason、无静默放行）；③ Pass2/catalyst 正确延后 4c-ii-b、未起 4d；④ floor 边界 >= 合格。material findings 落 register。PASS 后用户 `提交`；之后 slice 4c-ii-b（Pass2 hard_veto 包装 + catalyst 注入槽）。
+- **Pre-Codex self-review**: A 整类（cheap_eligible 坏形矩阵一次覆盖：每数值字段缺/NaN/bool/str + 每状态旗 True/非bool + exchange 缺/非白名单 + ticker/row 形；validator drift 4 类 + 结构闭世界，吸取 4b/4c-i 穷举教训）；B 连带（runtime const 镜像 4c-i preset + triangulation 测试焊住不漂移；复用 hard_veto 留 4c-ii-b 不重写）；C 反向（fully-eligible/at-floor/状态缺省 正控合格不误拒）；D（缺数据歧义）走最窄安全侧=fail-closed 不合格（§3.3 key 未知→保守）；E：CURRENT 未动（draft）；F：`_is_finite_number` 拒 bool/NaN/Inf；闭世界顶层；reason 收集全非短路（审计视图完整）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-i eligibility governance)
 
 - **Verdict/Action**: PASS. Re-reviewed the const-pin repair for slice 4c-i; the prior eligibility-governance semantic drift Required is resolved in the working tree and no new material Required was found.
