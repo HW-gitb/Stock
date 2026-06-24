@@ -176,6 +176,127 @@ class CheapEligibleTests(unittest.TestCase):
         for r in ("exchange_not_whitelisted", "price_below_floor", "status_delisted"):
             self.assertIn(r, reasons)
 
+    def test_lowercase_ticker_canonicalized(self):
+        out = eg.cheap_eligible(_row(ticker="aapl"), governance=self.gov)
+        self.assertTrue(out["eligible"])
+        self.assertEqual(out["ticker"], "AAPL")  # emitted canonical
+
+    def test_whitespace_ticker_canonicalized(self):
+        out = eg.cheap_eligible(_row(ticker=" AAPL "), governance=self.gov)
+        self.assertTrue(out["eligible"])
+        self.assertEqual(out["ticker"], "AAPL")
+
+    def test_class_share_ticker_eligible(self):
+        out = eg.cheap_eligible(_row(ticker="BRK.B"), governance=self.gov)
+        self.assertTrue(out["eligible"])
+        self.assertEqual(out["ticker"], "BRK.B")
+
+    def test_a_share_code_ticker_rejected(self):
+        out = eg.cheap_eligible(_row(ticker="000001.SZ"), governance=self.gov)
+        self.assertIn("ticker_unknown_or_invalid", out["reasons"])
+        self.assertFalse(out["eligible"])
+
+
+class Pass2SafetyAdmitTests(unittest.TestCase):
+    def test_clean_candidate_admitted(self):
+        out = eg.pass2_safety_admit({}, row_context="candidate")
+        self.assertTrue(out["admit_to_topn"])
+        self.assertEqual(out["veto_tier"], "none")
+
+    def test_delisted_candidate_not_admitted(self):
+        out = eg.pass2_safety_admit({"delisted": True}, row_context="candidate")
+        self.assertFalse(out["admit_to_topn"])
+        self.assertEqual(out["veto_tier"], "entry_hard_veto")
+
+    def test_holding_always_admitted_even_with_veto(self):
+        # §4.0 强制含持仓: a vetoed holding is NOT excluded by the gate; the veto drives §9 action.
+        out = eg.pass2_safety_admit({"delisted": True}, row_context="holding")
+        self.assertTrue(out["admit_to_topn"])
+        self.assertEqual(out["veto_tier"], "position_hard_veto")
+
+    def test_bad_row_context_raises(self):
+        with self.assertRaises(ValueError):
+            eg.pass2_safety_admit({}, row_context="unknown")
+
+
+class CatalystRecallSlotTests(unittest.TestCase):
+    def test_feed_unavailable_unchanged(self):
+        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=None)
+        self.assertEqual(out["candidates"], ["A", "B"])
+        self.assertFalse(out["recall_available"])
+        self.assertEqual(out["recall_added"], [])
+
+    def test_feed_merges_new_dedup_order(self):
+        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=["B", "C", "D"])
+        self.assertEqual(out["candidates"], ["A", "B", "C", "D"])  # B de-duped, order preserved
+        self.assertTrue(out["recall_available"])
+        self.assertEqual(out["recall_added"], ["C", "D"])
+
+    def test_bad_recall_feed_non_list_raises(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["A"], recall_feed="C")
+
+    def test_bad_recall_feed_empty_item_raises(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["A"], recall_feed=["", "C"])
+
+    def test_bad_base_raises(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall("A", recall_feed=None)
+
+    def test_duplicate_base_raises(self):
+        # candidate set must be UNIQUE; a duplicate base ticker is surfaced, not silently de-duped
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=["MSFT"])
+
+    def test_duplicate_base_raises_even_with_none_feed(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=None)
+
+    def test_recall_internal_dup_deduped(self):
+        out = eg.inject_catalyst_recall(["A"], recall_feed=["B", "B", "C"])
+        self.assertEqual(out["candidates"], ["A", "B", "C"])
+        self.assertEqual(out["recall_added"], ["B", "C"])
+
+    def test_base_canonicalized(self):
+        out = eg.inject_catalyst_recall(["aapl", " MSFT "], recall_feed=None)
+        self.assertEqual(out["candidates"], ["AAPL", "MSFT"])  # emitted canonical
+
+    def test_semantic_duplicate_base_raises(self):
+        for dup in (["AAPL", "aapl"], ["AAPL", " AAPL "]):
+            with self.assertRaises(ValueError):
+                eg.inject_catalyst_recall(dup, recall_feed=None)
+
+    def test_recall_semantic_dup_against_base_deduped(self):
+        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["aapl", "MSFT"])
+        self.assertEqual(out["candidates"], ["AAPL", "MSFT"])  # 'aapl' canonicalizes to base 'AAPL'
+        self.assertEqual(out["recall_added"], ["MSFT"])
+
+    def test_class_share_preserved(self):
+        out = eg.inject_catalyst_recall(["BRK.B"], recall_feed=["BRK-A"])
+        self.assertEqual(out["candidates"], ["BRK.B", "BRK-A"])
+
+    def test_a_share_code_in_base_raises(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["000001.SZ"], recall_feed=None)
+
+    def test_a_share_code_in_recall_raises(self):
+        with self.assertRaises(ValueError):
+            eg.inject_catalyst_recall(["AAPL"], recall_feed=["000001.SZ"])
+
+
+class CanonicalTickerTriangulationTests(unittest.TestCase):
+    """engine `_canonical_us_ticker` must agree with the runner's `_parse_us_ticker` (no drift)."""
+
+    def test_engine_canonical_matches_runner_parse(self):
+        from runners.us_short_account_state_from_manual_tables import _parse_us_ticker, ConvertError
+        for raw in (" aapl ", "BRK.B", "msft", "BRK-A"):  # valid -> same canonical
+            self.assertEqual(eg._canonical_us_ticker(raw), _parse_us_ticker(raw, "t"))
+        for raw in ("000001.SZ", "", "12345", "TOOLONGSYM"):  # invalid -> engine None, runner raises
+            self.assertIsNone(eg._canonical_us_ticker(raw))
+            with self.assertRaises(ConvertError):
+                _parse_us_ticker(raw, "t")
+
 
 if __name__ == "__main__":
     unittest.main()

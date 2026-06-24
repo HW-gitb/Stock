@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-ii-b candidate ticker identity)
+
+- **Verdict/Action**: PASS. Re-reviewed the candidate ticker canonicality repair for slice 4c-ii-b; both prior candidate-set Required items are resolved in the working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-CANDIDATE-TICKER-CANONICALITY-GAP` and `R-USSHORT-BATCH4-CATALYST-RECALL-BASE-DEDUP-GAP` are resolved in `docs/system_risk_register.md`.
+- **Verify**: gate 56 OK; `py_compile` OK; doc/route/README guards 50 OK; direct ticker/pass2 probes OK; broad `test_us_short*.py` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: User may `提交`; do not start 4d/provider/live/DataHub/A-share/US-long in this commit.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4c-ii-b — 候选 ticker 规范身份)
+
+- **Verdict/Action**: 用户 `审查`→`修复`（我先独立 `审查` 确认 Codex canonicality finding 成立）。`cheap_eligible` 原样返 ticker、`inject_catalyst_recall` 精确字符串判唯一 → `AAPL`/`aapl`/` AAPL ` 算 3 个候选（绕过刚修的 base 去重门），违既有大写规范 US 符号契约。修：新 `_canonical_us_ticker`（strip+大写+`_US_TICKER_RE` 形 + 拒 A 股码，**镜像 runner `_parse_us_ticker`** + triangulation 防漂移），一致用于 cheap_eligible 输出 + inject base/recall（规范后判唯一：非规范/A股码→reject、语义重复 base→ValueError、recall 按规范去重）；保 BRK.B、保 feed=None 不伪造。docstring 同步。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-CANDIDATE-TICKER-CANONICALITY-GAP`。
+- **Verify**: gate **56 OK**（+11：cheap 小写/空格规范化、BRK.B 合格、A股码拒；catalyst base 规范化、语义重复 base 拒、recall 跨大小写去重、class-share 保、A股码拒；+ triangulation == runner `_parse_us_ticker`）。Codex 探针：`aapl`/` AAPL `→`AAPL`、`000001.SZ` ineligible、`["AAPL","aapl"]`/`["AAPL"," AAPL "]` raise、recall 跨大小写去重。全离线 `*us_short*` **1826 OK**（=1815+11）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4c-ii-b（1 Required 已修；仅 `engine/us_short_eligibility_gate.py` + 测试；纯/离线、无 provider/live、不交叉 A 股）。重点：① 规范身份一致用于 cheap 输出 + inject base/recall、语义重复（大小写/空格）不再当两候选；② 镜像 `_parse_us_ticker` + triangulation 防漂移；③ BRK.B 保、feed=None 不伪造、畸形 fail-closed 仍在；④ 未起 4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4d 编排器。
+- **Pre-Codex self-review**: A 整类（ticker 坏形/变体矩阵：小写/空格/A股码/class-share/过长/数字首 + 语义重复 base + recall 跨基/内部去重 全覆盖）；B 连带（镜像 runner `_parse_us_ticker` + triangulation 焊住不漂移、engine 不反向 import runner；cheap+inject 两面一致；docstring 同步）；C 反向（canonical/BRK.B/feed=None 正控不误拒）；D（规范策略歧义）走 canonicalize+reject-invalid（沿 `_parse_us_ticker` 既有口径）；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（Verdict ≤500）。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 slice 4c-ii-b candidate ticker identity)
+
+- **Verdict/Action**: FAIL. The exact duplicate-base repair works, but non-canonical ticker strings can still bypass candidate-set uniqueness.
+- **Required**: `R-USSHORT-BATCH4-CANDIDATE-TICKER-CANONICALITY-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: gate tests 45 OK; `py_compile` OK; doc/route/README guards 50 OK after closeout; direct probes show `AAPL`/`aapl` and `AAPL`/` AAPL ` pass as distinct; broad `test_us_short*.py` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only candidate ticker canonicality/uniqueness tests/docs/closeout; do not start 4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4c-ii-b — catalyst 候选集 base 去重 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：成立——`inject_catalyst_recall` 只去重 recall extras、却保留 base 自带重复（违 "de-duplicated" 契约 + 候选集非 row-multiset 语义）。走最窄安全侧：**重复 base → ValueError fail-closed**（surface 上游 universe/provider 重复，不静默去重以免掩盖，Codex material 顾虑）；feed=None / recall dedup 不变。同步 docstring + README。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-CATALYST-RECALL-BASE-DEDUP-GAP`。
+- **Verify**: gate tests **45 OK**（+3：重复 base 拒、重复 base+None feed 拒、recall 内部 dup 去重；留 feed-None/merge/畸形/非list-base）。Codex 探针 `["AAPL","AAPL"]+["MSFT","AAPL"]` 现 ValueError；unique merge + None-unchanged 仍对。全离线 `*us_short*` **1815 OK**（=1812+3）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4c-ii-b（1 Required 已修；仅 `engine/us_short_eligibility_gate.py` + 测试 + README 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① 候选集唯一——base 重复 fail-closed（含 None feed）、recall dedup 保序；② feed=None 不伪造覆盖、畸形 fail-closed 仍在；③ 未起 4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4d 编排器（批4 收尾）。
+- **Pre-Codex self-review**: A 整类（catalyst 输入坏形矩阵补齐：base 唯一性[+None feed 也验]、recall 内部 dup、畸形 feed、非list base 全覆盖）；B 连带（docstring "candidates=UNIQUE set" + README 行措辞同步）；C 反向（unique base merge / None / 显式正控仍过不误拒）；D（base 重复歧义）走最窄安全侧=fail-closed surface 上游、非静默去重；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（Verdict 压 ≤500——本会话反复栽此）。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4c-ii-b Pass2/catalyst gates)
+
+- **Verdict/Action**: FAIL. Current slice is pure/offline, but `inject_catalyst_recall` preserves duplicate base tickers despite the dedup contract.
+- **Required**: `R-USSHORT-BATCH4-CATALYST-RECALL-BASE-DEDUP-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: gate tests 42 OK; `py_compile` OK; doc/route/README guards 50 OK after closeout; direct Pass2 probes OK; direct catalyst probe shows `["AAPL", "AAPL"] + ["MSFT", "AAPL"] -> ["AAPL", "AAPL", "MSFT"]`; broad `test_us_short*.py` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only catalyst base de-dup predicate/tests/closeout; do not start 4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4c-ii-b — Pass2 audit-safety-gate + catalyst_recall 注入槽)
+
+- **Verdict/Action**: 起草批4 slice 4c-ii-b（§18.2 ②③；加进 4c-ii gate 模块）。`engine/us_short_eligibility_gate.py` 加：① `pass2_safety_admit`——Pass2 安全闸**复用 `classify_hard_veto` 不重写**：候选 entry_hard_veto→不入 Top15、**持仓强制入**（§4.0、veto 仅 surfaced 供 §9）、坏 context fail-closed；② `inject_catalyst_recall`——catalyst 注入槽：feed=None→不变 + 不伪造覆盖（§4.0）、有效 str list→merge dedup 保序、畸形 feed fail-closed raise、真 feed=批5。纯/离线、不交叉 A 股。
+- **Required**: 无（起草；加 2 函数 + 测试 + README 一行）。
+- **Verify**: gate tests **42 OK**（+9：Pass2 clean 候选 admit / delisted 候选 entry_hard_veto 不 admit / 持仓强制 admit+position_hard_veto surfaced / 坏 context raise；catalyst feed=None 不变 / merge dedup 保序 / 畸形 feed·空item·非list base raise）。全离线 `*us_short*` **1812 OK**（=1803+9）零回归；py_compile OK。
+- **Next**: Codex `审查` 批4 slice 4c-ii-b（仅 `engine/us_short_eligibility_gate.py` 新增 2 函数 + 测试 + README 一行；纯/离线、无 provider/live、不交叉 A 股）。审查重点：① Pass2 复用 hard_veto 不重写、候选 entry_hard_veto 挡 / 持仓强制入（§4.0）正确；② catalyst 槽 feed=None 不伪造覆盖、畸形 fail-closed、merge dedup 保序；③ import hard_veto 不引重依赖；④ 未起 4d。material findings 落 register。PASS 后用户 `提交`；之后 **slice 4d 编排器**（批4 收尾刀）。
+- **Pre-Codex self-review**: A 整类（Pass2 三态[候选 admit / 候选 veto / 持仓]+ 坏 context；catalyst feed None/有效/畸形 3 类 + 坏 base 全覆盖）；B 连带（复用既有 `classify_hard_veto`、不重写否决逻辑；同模块加函数、README 加薄行）；C 反向（clean 候选/持仓/feed=None 正控不误拒）；D（持仓 vs 候选语义）持仓强制入非 gate 剔除（§4.0）、veto surfaced 供 §9；E：CURRENT 未动（draft）；F：import 纯 hard_veto（无 jsonschema/provider）；catalyst dedup 保序确定性；feed 畸形 fail-closed 非静默。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4c-ii-a Pass1 eligibility gate)
 
 - **Verdict/Action**: PASS. Re-reviewed the missing-status fail-closed repair for slice 4c-ii-a; the prior Required is resolved in the working tree and no new material Required was found.

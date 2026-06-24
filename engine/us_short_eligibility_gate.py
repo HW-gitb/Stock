@@ -23,8 +23,11 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import datetime
 from pathlib import Path
+
+from engine.us_short_hard_veto import classify_hard_veto  # §5 (reused, NOT re-written) for Pass2
 
 # Frozen v1 governed semantics (== presets/us_short_eligibility_governance_20260624.json; a
 # conformance test triangulates module const == preset so this consumer copy cannot drift).
@@ -52,6 +55,25 @@ class EligibilityGovernanceError(Exception):
 def _is_finite_number(x):
     """Strict: a real finite number — rejects bool, None, strings, NaN/Inf."""
     return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+
+
+# Canonical US listing symbol = strip + uppercase + shape-validate; A-share digit code rejected.
+# MIRRORS runners/us_short_account_state_from_manual_tables.py::_parse_us_ticker (a test
+# triangulates the two so they cannot drift). Class shares (BRK.B / BRK-A) preserved; the engine
+# layer returns canonical-or-None (no runner-specific raise). One identity per security.
+_US_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9]{0,5}([.\-][A-Z]{1,3})?$")
+_A_SHARE_CODE_RE = re.compile(r"^\d{6}\.(SH|SZ|BJ)$", re.IGNORECASE)
+
+
+def _canonical_us_ticker(raw):
+    """raw -> canonical US ticker (stripped + uppercased + shape-validated) or None if not a valid
+    US listing symbol (blank / wrong shape / A-share digit code all -> None)."""
+    if not isinstance(raw, str):
+        return None
+    s = raw.strip().upper()
+    if _A_SHARE_CODE_RE.fullmatch(s) or not _US_TICKER_RE.fullmatch(s):
+        return None
+    return s
 
 
 def validate_eligibility_governance(gov):
@@ -118,21 +140,24 @@ _FLOOR_OF = {"price": "min_price_usd", "adv_usd": "min_adv_usd", "market_cap_usd
 def cheap_eligible(row, *, governance):
     """Pass1 cheap-eligibility predicate over one injected universe row (FAIL-CLOSED).
 
-    row = {"ticker": str, "exchange": str, "price"/"adv_usd"/"market_cap_usd": finite number,
+    row = {"ticker": str (canonicalized to a US listing symbol — strip+upper+shape),
+           "exchange": str, "price"/"adv_usd"/"market_cap_usd": finite number,
            "delisted"/"halted"/"bankruptcy"/"otc": REQUIRED bool (absent or non-bool ->
            conservative unknown, §3.3 — a critical status is NEVER assumed clean by omission)}.
     governance = a dict already passed through validate_eligibility_governance.
 
-    Returns {"ticker", "eligible": bool, "reasons": [str, ...]}. eligible == (reasons == []).
+    Returns {"ticker", "eligible": bool, "reasons": [str, ...]}. eligible == (reasons == []). The
+    returned `ticker` is the CANONICAL form; a non-canonical / A-share-code / blank ticker ->
+    `ticker_unknown_or_invalid` + ineligible (the candidate set has ONE identity per security).
     A missing / non-finite / wrong-type field yields an explicit reason and ineligibility (key
     unknown → conservative, §3.3) — never a silent pass. Collects ALL failing reasons (not
     short-circuit) so the audit view is complete.
     """
     reasons = []
-    ticker = row.get("ticker") if isinstance(row, dict) else None
-    if not (isinstance(row, dict)):
+    if not isinstance(row, dict):
         return {"ticker": None, "eligible": False, "reasons": ["row_not_dict"]}
-    if not (isinstance(ticker, str) and ticker.strip()):
+    ticker = _canonical_us_ticker(row.get("ticker"))  # strip+upper+shape; None if not a US symbol
+    if ticker is None:
         reasons.append("ticker_unknown_or_invalid")
 
     exch = row.get("exchange")
@@ -159,3 +184,75 @@ def cheap_eligible(row, *, governance):
         # row[flag] is False -> confirmed clean
 
     return {"ticker": ticker, "eligible": not reasons, "reasons": reasons}
+
+
+# ---- Pass2 audit-safety-gate (reuses §5 hard_veto; NO new veto logic, §18.2 build-vs-wire ②) ----
+_PASS2_CONTEXTS = ("candidate", "holding")
+
+
+def pass2_safety_admit(signals, *, row_context):
+    """Pass2 audit-safety-gate admit decision over one row, REUSING engine/us_short_hard_veto.
+
+    §4.0: a candidate that fails the audit safety gate does NOT enter Top15; a HOLDING is forced
+    into Pass2 (强制含持仓) and is never excluded BY THE GATE — a holding's veto instead drives the
+    §9 position action (reduce / clear / re-evaluate) downstream. No new veto logic here: the tier
+    comes entirely from `classify_hard_veto`.
+
+    Returns {"admit_to_topn": bool, "veto_tier": str, "effect": str, "reasons": [str, ...],
+             "row_context": str}. candidate: admit_to_topn = veto_tier != 'entry_hard_veto';
+    holding: admit_to_topn is always True (the veto is surfaced, not used to exclude).
+    """
+    if row_context not in _PASS2_CONTEXTS:
+        raise ValueError(f"row_context 须 ∈ {_PASS2_CONTEXTS}: {row_context!r}")
+    v = classify_hard_veto(signals, row_context=row_context)
+    admit = True if row_context == "holding" else (v["veto_tier"] != "entry_hard_veto")
+    return {"admit_to_topn": admit, "veto_tier": v["veto_tier"], "effect": v["effect"],
+            "reasons": list(v["reasons"]), "row_context": row_context}
+
+
+# ---- catalyst_recall injection slot (real market-level feed = batch5, §18.2 build-vs-wire ③) ----
+def inject_catalyst_recall(cheap_eligible_tickers, *, recall_feed):
+    """Inject catalyst_recall_lane names into the cheap-eligible candidate set (STRUCTURAL slot only).
+
+    §4.0: a market-level feed (recent earnings beats / rating changes / 8-K) pulls catalyst-strong
+    but momentum-weak names that the cheap gate alone would miss. The REAL feed is batch5
+    (SR-PROVIDER-001); this wires only the injection slot + honest provenance.
+
+    Both `cheap_eligible_tickers` and a non-None `recall_feed` are CANONICALIZED (strip+upper+US-
+    symbol-shape) BEFORE any uniqueness check, so case / whitespace variants ('AAPL' / 'aapl' /
+    ' AAPL ') collapse to one identity. `candidates` is a UNIQUE set of canonical tickers
+    (cheap-eligible first, then recall extras de-duplicated against the base and each other,
+    order-preserving).
+    recall_feed = None -> candidates (canonical) unchanged + {recall_available: False} (NEVER
+                  fabricate coverage when the feed is unavailable, §4.0).
+    Returns {"candidates": [...], "recall_available": bool, "recall_added": [...]}.
+    Fail-closed (ValueError): a non-list `cheap_eligible_tickers` or non-None/non-list `recall_feed`;
+    any non-canonical / A-share-code / blank item; OR a (post-canonical) duplicate base ticker (the
+    candidate set must be unique — an upstream duplicate is surfaced, NOT silently de-duped).
+    """
+    if not isinstance(cheap_eligible_tickers, list):
+        raise ValueError("cheap_eligible_tickers 须为 list")
+    base = []
+    for t in cheap_eligible_tickers:
+        c = _canonical_us_ticker(t)
+        if c is None:
+            raise ValueError(f"cheap_eligible_tickers 含非规范 US ticker（须 strip+大写+合法形、非 A 股码）: {t!r}")
+        base.append(c)
+    if len(set(base)) != len(base):
+        # the candidate set is a SET of canonical tickers, not a row-multiset; a (post-canonical)
+        # duplicate base ticker is an upstream defect — surface it, do NOT silently de-dup.
+        raise ValueError("cheap_eligible_tickers 含（规范化后）重复 ticker（候选集须唯一；上游重复行须先修，不静默去重以免掩盖缺陷）")
+    if recall_feed is None:
+        return {"candidates": base, "recall_available": False, "recall_added": []}
+    if not isinstance(recall_feed, list):
+        raise ValueError("recall_feed 须为 None 或 list（畸形 feed 不当作 no-recall）")
+    seen = set(base)
+    added = []
+    for t in recall_feed:
+        c = _canonical_us_ticker(t)
+        if c is None:
+            raise ValueError(f"recall_feed 含非规范 US ticker: {t!r}")
+        if c not in seen:
+            seen.add(c)
+            added.append(c)
+    return {"candidates": base + added, "recall_available": True, "recall_added": added}
