@@ -584,6 +584,46 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertEqual(self._draft_handoff_proof_offenders(codex_entry), [],
                          "guard must not flag a Codex review entry")
 
+    # R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP: one SESSION_LOG `##` entry records ONE review-cycle
+    # action → exactly one `Verdict/Action` bullet. >1 means a prior entry's review bullets were ORPHANED
+    # under this heading (e.g. a prepend whose old_string ate the previous `##` heading). The minimal-
+    # template guard missed this because it inspects only review-header (审查/修复/PASS/FAIL) entries
+    # citing a Required ID, so an orphan hidden under a non-review 起草 heading slipped through. This check
+    # is header-type- and position-independent.
+    _VERDICT_LINE = re.compile(r"(?m)^\s*-\s+\*\*Verdict/Action\*\*\s*[:：]")
+
+    @classmethod
+    def _orphaned_review_block_offenders(cls, zone_text):
+        offenders = []
+        headers = re.findall(r"(?m)^## (\d{4}-\d{2}-\d{2}\b.*)$", zone_text)
+        blocks = re.split(r"(?m)^## \d{4}-\d{2}-\d{2}\b.*$", zone_text)[1:]
+        for header, block in zip(headers, blocks):
+            n = len(cls._VERDICT_LINE.findall(block))
+            if n > 1:
+                offenders.append((header[:60], n))
+        return offenders
+
+    def test_no_orphaned_review_bullets_above_marker(self):
+        log = (ROOT / "docs" / "SESSION_LOG.md").read_text(encoding="utf-8")
+        zone = log.split(self.ADOPTION_MARKER, 1)[0]
+        self.assertEqual(
+            self._orphaned_review_block_offenders(zone), [],
+            "a SESSION_LOG entry orphans a prior review bullet set under its heading "
+            "(>1 Verdict/Action before the next ## header)")
+
+    def test_orphaned_review_block_guard_planted(self):
+        orphaned = ("## 2026-06-24 — Claude `起草` (foo)\n"
+                    "- **Verdict/Action**: drafted foo\n- **Next**: 审查\n\n"
+                    "- **Verdict/Action**: PASS. prior Codex result orphaned here\n- **Next**: 提交\n")
+        fixed = ("## 2026-06-24 — Claude `起草` (foo)\n"
+                 "- **Verdict/Action**: drafted foo\n- **Next**: 审查\n\n"
+                 "## 2026-06-24 - Codex `审查 PASS` (foo)\n"
+                 "- **Verdict/Action**: PASS. prior Codex result\n- **Next**: 提交\n")
+        self.assertTrue(self._orphaned_review_block_offenders(orphaned),
+                        "guard must catch a review bullet set orphaned under a non-review draft heading")
+        self.assertEqual(self._orphaned_review_block_offenders(fixed), [],
+                         "guard must not flag two properly-headed entries")
+
     PRE_CODEX_CHECKLIST = ROOT / "docs" / "pre_codex_self_review_checklist.md"
     # Pre-Codex gate single-source contract (2026-06-13 refactor): the checklist is the SOLE rule
     # body; AGENTS item 7 only points to it. Earlier the rule was restated in BOTH and pinned in

@@ -8,6 +8,52 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-e basket observe-reason compatibility)
+
+- **Verdict/Action**: PASS. Re-reviewed the residual observe_reason compatibility repair; `resolve_build_capacity` now closes the basket consumer-validation class for frozen action vocab, observe reason compatibility, canonical ticker identity, sized-build payload, per_ticker coverage, stripped-theme same-cap counting, and capacity-deferred overwrite. No new material Required found.
+- **Required**: None new. `R-USSHORT-BATCH4-WEEKEND-BASKET-CONSUMER-VALIDATION-GAP` is closed in `docs/system_risk_register.md`; `R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP` remains closed.
+- **Verify**: basket 28 OK; adjacent pure US-short suites 266 OK; doc-governance + route-doc + README guards 52 OK; py_compile OK; direct probes OK; broad `*us_short*` discovery blocked here by missing `jsonschema` (`1261` discovered, `40` errors, `1` skipped); `git diff --check` CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-e — basket observe_reason ⟺ final_action 一致性)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL` 残留：basket 不验 observe_reason_type ⟺ final_action 一致性，非建仓 carry-through 带坏/缺/陈旧 reason）。judge：成立（同消费验类残角）。`resolve_build_capacity` pass-1 加：`观察` 行 observe_reason_type 须 ∈ 冻结 `OBSERVE_REASONS`（从 decision 导入←contract 单源）、非`观察`行须 None；capacity-deferred 建仓覆盖为 `capacity_or_budget_deferred`。顺带修 `_brow` 测试 helper bug（给 持有 挂了 data_restricted）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-BASKET-CONSUMER-VALIDATION-GAP`（残留 observe-reason 已修；`R-DOCGOV-...ORPHANED` 上轮 closed）。
+- **Verify**: basket **28 OK**（+3：观察 坏 reason / 观察 缺 reason / 持有 带 stale reason → raise；既有 观察 carry-through + capacity 覆盖 正控仍绿）。全 `*us_short*` **1981 OK**（=1978+3）+ doc/route/README guards 52 OK 零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-e basket 残留（observe_reason ⟺ final_action 一致性；`us_short_weekend_basket.py`+测试；纯 engine/test、不交叉 A 股）。重点：① 观察行 reason ∈ 冻结词表、非观察行 None、capacity-deferred 覆盖 capacity_or_budget_deferred；② 复用 OBSERVE_REASONS 单源（decision←contract）；③ 上轮 legs（action 词表/canonical ticker/sized build/per_ticker/strip theme）+ SESSION_LOG orphan guard 仍绿。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-f。
+- **Pre-Codex self-review**: A 整类（观察 reason 坏/缺 + 非观察 stale + capacity 覆盖 + 既有正控；_brow helper bug 同修）；B 连带（复用 OBSERVE_REASONS 单源[decision←contract]、docstring+Raises 同步、_brow fixture 修）；C 反向（既有 观察 carry-through + 非观察 None 正控仍过）；D（reason 一致性）走 §9「仅 观察 带 reason」契约（与 action_governance test_only_observe_carries_observe_reason 一致）；E CURRENT 未动无 gate 词；F（观察 reason ∈ 词表、非观察 is None、capacity 覆盖已测）。根因：basket 验 final_action 词表却漏 observe_reason 一致性（同消费验类残角），[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 slice 4d-ii-e basket observe-reason compatibility)
+
+- **Verdict/Action**: FAIL. The prior basket value-validation repair closed the named action/ticker/sizing/theme legs and the SESSION_LOG orphan guard is fixed, but `resolve_build_capacity` still carries invalid `observe_reason_type` / action-reason combinations through non-build rows.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-BASKET-CONSUMER-VALIDATION-GAP` remains open; full residual details are in `docs/system_risk_register.md`. `R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP` is closed.
+- **Verify**: basket 25 OK; adjacent pure US-short suites 266 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probes reproduce bad/missing observe reason and non-observe stale reason carry-through; broad `*us_short*` discovery is blocked here by missing `jsonschema` (`1258` discovered, `40` errors, `1` skipped); `git diff --check` CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-e — basket VALUE 校验 + SESSION_LOG 孤儿标题修复)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，2 Required，均成立）。① **basket consumer-validation**：`resolve_build_capacity` 加 VALUE 校验——final_action ∈ 冻结词表、ticker 经 `canonical_us_ticker`（非规范/重复 raise、emit UPPERCASE）、建仓须真 sized build（status=='sized'+desired≥1）、per_ticker canonical 恰覆盖、同主题 cap 用 strip 后 theme（白空格不绕）。② **docgov orphaned**（文档漂移）：4d-ii-e prepend 吃掉上条 Codex PASS 的 `##` 标题致 bullets 孤儿；恢复标题（append-only）+ 硬化 guard：每 `##` 块 ≤1 Verdict/Action（位置无关、抓孤儿类）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-BASKET-CONSUMER-VALIDATION-GAP` + `R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP`。
+- **Verify**: basket **25 OK**（+8：unknown action / 小写 ticker→UPPERCASE / 小写 per_ticker 键 / A股 ticker / canonical dup / 5 坏 sizing / whitespace-theme capped）+ doc-governance **27 OK**（孤儿 live+planted）。全 `*us_short*` **1978 OK**（=1970+8）+ doc/route/README guards **52 OK** 零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-e 2 Required（`us_short_weekend_basket.py`+测试+`test_doc_governance_guard.py`+SESSION_LOG 结构；纯 docs/engine/test、不交叉 A 股）。重点：① basket VALUE 校验（final_action 词表 / canonical ticker emit / 真 sized build / per_ticker canonical 恰覆盖 / strip theme 防白空格绕 cap）；② SESSION_LOG PASS 标题已恢复（append-only）；③ orphan guard header-type 无关、≤1 Verdict/`##` 块（抓 minimal-template guard 漏类）；④ 复用单源 FINAL_ACTIONS/canonical_us_ticker。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-f。
+- **Pre-Codex self-review**: A 整类（basket：unknown action/ticker[小写/A股/dup]/sizing[5 坏]/theme strip + 既有正控；docgov：孤儿 live+planted）；B 连带（复用 FINAL_ACTIONS+canonical_us_ticker 单源、emit ct 全行、orphan guard 位置无关焊根因、docstring 同步）；C 反向（既有 basket 25 仍过、guard 不误报正常双标题）；D theme 白空格走 trim 归一；E SESSION_LOG 结构无 gate 词、CURRENT 未动；F（canonical None/dup raise、sizing strict、per_ticker set-eq、orphan ≤1 Verdict/块）。根因：basket 又只验 shape（同类第 4 次）+ prepend 吃标题致孤儿（已位置无关 guard 根治），[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-e basket capacity)
+
+- **Verdict/Action**: FAIL. The BASE weekly/same-theme happy path is directionally implemented, but `resolve_build_capacity` is not fail-closed on the full 4d-ii-c value contract, and the current `SESSION_LOG` top structure orphaned the prior Codex PASS entry under the new Claude draft.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-BASKET-CONSUMER-VALIDATION-GAP`; `R-DOCGOV-SESSIONLOG-ORPHANED-REVIEW-ENTRY-GAP`. Full details are in `docs/system_risk_register.md`.
+- **Verify**: basket 17 OK; adjacent pure US-short suites 266 OK; doc-governance + route-doc + README guards 50 OK but miss the orphaned-entry class; `py_compile` OK; direct probes reproduce invalid action / non-canonical ticker / same-theme whitespace bypass; broad `*us_short*` discovery is blocked here by missing `jsonschema` (`1250` discovered, `40` errors, `1` skipped); `git diff --check` CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4d-ii-e — 周末 pipeline 建仓数量闸 §8 周上限+同主题)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-e（§18.2 4d-ii 建仓数量闸；首个 emit `capacity_or_budget_deferred` 的消费者）。新 `engine/us_short_weekend_basket.py`：`resolve_build_capacity(sized_result, *, basket_context)` 消费 4d-ii-c 输出，按 core_score（降序、ticker 升序 tie）给建仓排 `selection_rank`，应用 §8 **BASE** 每周新建仓上限（WEEKLY_BUILD_LIMIT 进攻3/震荡2/防御1/极度防御0）+ 同主题周 cap（SAME_THEME_WEEK_CAP=2）——超额建仓→`观察(capacity_or_budget_deferred)`、**无 promotion**（同主题挤掉的 slot 不补低排不同主题建仓，保守 v1）。非建仓 carry-through（selection_rank None）。basket_context closed-world（`per_ticker[ticker]={theme}`、恰覆盖建仓集、缺/陈旧 raise）、建仓须有限 core_score、dup ticker raise。**theme_probe 额外席（§8 强赛道试探、engine 已建）+ portfolio_guard/symbol_cooldown 新建阻断（→risk_cooldown）+ allocate_cash + §9 rank = 4d-ii-f 接线**。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: basket tests **17 OK**（进攻3/震荡2/防御1/极度防御0 限额、同主题≤2、theme+weekly 无 promotion 交互、selection_rank 按 score、capacity 发射、非建仓 carry-through、no-builds 0；fail-closed：坏 sized_result×3 / 坏 regime / 坏 basket_context×2 / 缺建仓主题 / 陈旧 per_ticker / 缺 core_score / 坏 theme 形×2 / dup ticker）。全离线 `*us_short*` **1970 OK**（=1953+17）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex `审查` 批4 slice 4d-ii-e（仅 `engine/us_short_weekend_basket.py`+测试+README 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① §8 BASE 周建仓上限（进攻3/震荡2/防御1/极度防御0）+ 同主题≤2 正确、selection_rank 按 score；② 超额→`capacity_or_budget_deferred`（发射上一刀加的新值）、无 promotion（保守 v1）；③ basket_context closed-world + 恰覆盖建仓集 fail-closed；④ **theme_probe 额外席 / guard·cooldown 阻断 / cash / §9 rank 确属 4d-ii-f 未起**（本刀只 BASE 限额）；⑤ 极度防御 limit0=safety net（4d-ii-c position_cap0 已降级）。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-f（theme_probe+guard/cooldown+cash+§9 rank 接线）。
+- **Pre-Codex self-review**: A 整类（4 regime 限额+同主题 cap+no-promotion+selection_rank+capacity 发射+carry-through+no-builds+fail-closed 全形 全覆盖）；B 连带（新模块发射 committed `capacity_or_budget_deferred`、selection_rank 供 4d-ii-f `rank_actions`、capacity guard 无需改[scope 在 sizing]、README 薄行、design §18.2 未变、确认无既有 weekly-limit/same-theme engine 不重复）；C 反向（建仓保留/排名/正控仍过、fail-closed 仅畸形）；D（no-promotion + base-only 歧义）走最窄=保守不 promote + BASE 限额、theme_probe 延后并文档化；E CURRENT 未动（draft）；F（closed-world basket_context、恰覆盖建仓集、finite core_score、dup raise）。
+
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 observe_reason capacity residual prose/guard)
 
 - **Verdict/Action**: PASS. Re-reviewed the residual `capacity_or_budget_deferred` prose/guard repair; the cap-zero vs true under-min reason split is now aligned across emitter behavior, active route/test prose, and the focused guard. No new material Required was found.
