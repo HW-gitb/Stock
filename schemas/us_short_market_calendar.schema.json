@@ -1,0 +1,37 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_market_calendar.schema.json",
+  "title": "US-short static frozen NYSE/NASDAQ market calendar (batch4 slice 4b)",
+  "description": "Offline, deterministic, auditable frozen holiday + early-close table for the canonical decision-day resolver (engine/us_short_canonical_asof.py via the session-builder in engine/us_short_market_calendar.py). Reference data only: no provider/network. Holiday/half-day dates are rules-derived and gated on authoritative cross-check (data_provenance.verification_status) before any live/forward use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["calendar", "timezone", "start_date", "end_date", "regular_open", "regular_close", "holidays", "half_days", "data_provenance"],
+  "properties": {
+    "calendar": {"const": "NYSE_NASDAQ"},
+    "timezone": {"const": "America/New_York"},
+    "start_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "end_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "regular_open": {"const": "09:30"},
+    "regular_close": {"const": "16:00"},
+    "holidays": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[0-9]{8}$"},
+      "uniqueItems": true
+    },
+    "half_days": {
+      "type": "object",
+      "propertyNames": {"pattern": "^[0-9]{8}$"},
+      "additionalProperties": {"const": "13:00"}
+    },
+    "data_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "verification_status", "note"],
+      "properties": {
+        "source": {"type": "string", "minLength": 1},
+        "verification_status": {"enum": ["pending_authoritative_cross_check", "authoritative_verified"]},
+        "note": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

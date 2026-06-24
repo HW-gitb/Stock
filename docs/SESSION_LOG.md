@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4b market calendar)
+
+- **Verdict/Action**: PASS. Re-reviewed current slice 4b after the top-level closed-world repair; no new material Required found.
+- **Required**: None new. The three market-calendar Required IDs are repaired in the working tree; details and the pending authoritative-date boundary live in `docs/system_risk_register.md`.
+- **Verify**: market-calendar 29 OK; doc/route/README guards 50 OK; `py_compile` OK; direct 47-case adversarial probe OK; schema unittest / broad import-heavy `*us_short*` not counted because this Codex runtime lacks `jsonschema`; diff-check CRLF-only.
+- **Next**: User may `提交`; do not start slice 4c/4d/provider/live/DataHub/A-share/US-long in this commit.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4b — 日历顶层 closed-world fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL`，1 Required P1，slice 4b 第 4 轮）。judge：成立——runtime `validate_market_calendar` 只查缺键、不查多键，背离 schema `additionalProperties:false`（schema 不在 runtime 跑），`unknown_field` 过 = no-op（与我已给 provenance 加的闭世界不一致）。修：`extra = set(cal)-_REQUIRED_KEYS` 非空即 raise；同步 docstring。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-MARKET-CALENDAR-TOPLEVEL-CLOSED-WORLD-GAP`。
+- **Verify**: builder **29 OK**（+1 顶层多键 raise）。**28-shape 对抗扫描零 LEAK**（extra/missing/null×9/wrong-const×4/range/type/坏日期/越界/重复/周末/非1300/overlap/provenance 闭世界·status·空 全拒，valid + 生产 preset 过）→ 结构校验类实测闭合。全离线 `*us_short*` **1749 OK**（=1748+1）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4b（1 Required 已修；仅 `engine/us_short_market_calendar.py` + 1 测试 + 本 closeout，schema/preset/README 未改；纯/离线、无 provider/live、不交叉 A 股）。重点：① 顶层多键 raise（闭世界）；② 行为未变（valid/preset/resolver 集成仍过）；③ 结构类已闭（28-shape 扫描）、残余仅日期 accuracy（gated）；④ 未起 4c/4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4c。
+- **Pre-Codex self-review**: A 整类（这次不空 claim——跑 28-shape 穷举扫描证类闭合：每字段 presence/type/value/cross-field/closed-world + 顶层闭世界全覆盖）；B 连带（顶层闭世界对齐 provenance 既有闭世界、validator docstring 同步）；C 反向（valid/preset/resolver 集成正控不误拒）；D N/A；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（行长 ≤500）。**4 轮根因**：前两轮 claim 完整未做穷举枚举 → 本轮以穷举扫描代替口头 claim（register honesty + [[feedback_draft_validity_gates_complete]]）。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 slice 4b market calendar)
+
+- **Verdict/Action**: FAIL. The provenance, 13:00 half-day, and weekend-row repairs work, but the runtime validator still accepts unknown top-level calendar fields that the schema forbids and the builder ignores.
+- **Required**: `R-USSHORT-BATCH4-MARKET-CALENDAR-TOPLEVEL-CLOSED-WORLD-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: market-calendar 28 OK; doc/route/README guards 50 OK; py_compile OK; direct probes reject prior gaps but show extra top-level `unknown_field` passes; schema unittest + broad `test_us_short*.py` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only top-level closed-world calendar validation + focused tests + closeout; do not start 4c/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4b — 日历周末行 no-op fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL`，1 Required P1）。judge：成立/在 scope/必要——周末 `holidays`/`half_days` 行是 builder no-op（只 emit 工作日），陷阱=编 ACTUAL 周六日期（`20260704`）而 OBSERVED 工作日（`20260703`）仍开盘→休市没编上。修：新 `_is_weekday`，`validate_market_calendar` 要求每 holiday + half_day 日期 `weekday()<5`、周末行 raise（观察日须用 observed 交易日）。同步 validator docstring。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-MARKET-CALENDAR-WEEKEND-ROW-NOOP-GAP`。
+- **Verify**: builder **28 OK**（+3：周六 holiday / 周六 half-day / actual Sat Jul-4 `20260704`）。Codex 探针全 fail-closed（`20260620`/`20260704` 周六拒、prior provenance/非-13:00 仍拒、observed Fri `20260703` + 生产 preset 过）。全离线 `*us_short*` **1748 OK**（=1745+3）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4b（1 Required 已修；仅 `engine/us_short_market_calendar.py` + 测试 + 本 closeout，schema/preset/README 未改；纯/离线、无 provider/live、不交叉 A 股）。重点：① holiday + half_day 周末 raise（observed 工作日编码）；② 行为未变（preset + resolver 集成 + 合法 13:00 仍过）；③ 结构校验整类已全（格式/范围/重复/overlap/13:00/provenance/weekday），残余仅日期 accuracy（gated）；④ 未起 4c/4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4c。
+- **Pre-Codex self-review**: A 整类（这轮把日历结构校验**全类**补齐——weekday 是最后一格；连同上轮 provenance/13:00，坏形矩阵一次性收口，不应再有同主题轮次）；B 连带（新 `_is_weekday`、validator docstring 同步；preset 全工作日不被误伤[weekday 自检印证]；schema 无法表达 weekday→runtime 兜）；C 反向（observed 工作日/preset/resolver 集成正控不误拒）；D（周末日期歧义）走最窄安全侧=拒、observed 工作日编码，真周末日期进 provenance note；E register resolved、CURRENT 未动；F 加 entry 后复跑 doc guard（含 minimal-template 行长，上轮教训）。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 slice 4b market calendar)
+
+- **Verdict/Action**: FAIL. The provenance and 13:00 half-day repair works, but the validator still accepts weekend holiday / half-day rows that the builder silently ignores.
+- **Required**: `R-USSHORT-BATCH4-MARKET-CALENDAR-WEEKEND-ROW-NOOP-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: market-calendar 25 OK; doc/route/README guards 50 OK; py_compile OK; prior direct probes now reject, but weekend holiday/half-day probes still accept; schema unittest blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only weekend-row calendar validation + focused tests + closeout; do not start 4c/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4b — 日历 validator 契约对齐 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：两腿成立/在 scope/必要（calendar=冻结 artifact 的 runtime 校验边、schema 非 runtime 门），修。① `validate_market_calendar` 现 runtime 校 `data_provenance`（object + 恰 3 键 + source/note 非空 + status ∈ 冻结集），`trust_me`/缺字段/非 object/多键 拒——诚实门不可架空；② 半日市 close 钉 `13:00`（runtime + schema `const`，原放 09:30–15:59），09:30/14:00/15:59 拒（其它须先改 §3.5 契约）。删 orphan `_check_hhmm`、同步 docstring。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-MARKET-CALENDAR-VALIDATION-CONTRACT-GAP`。
+- **Verify**: builder **25 OK**、schema **4 OK**（+8 对抗：非-13:00×4 / valid 13:00 / 坏·缺·非object·多键·空 provenance / authoritative_verified 过 / schema 拒非-13:00）。Codex 探针全 fail-closed（trust_me/缺source/string provenance + 半日市 09:30/15:59 全拒、valid 13:00+pending 过）。全离线 `*us_short*` **1745 OK**（本机 jsonschema；=1737+8）零回归；py_compile OK。
+- **Next**: Codex re-`审查` 批4 slice 4b（1 Required 已修；仅 `engine/us_short_market_calendar.py` + schema + 2 测试 + 本 closeout，README/preset 未改；纯/离线、无 provider/live、不交叉 A 股）。重点：① provenance runtime 整类（坏 status/缺字段/非object/多键/空）fail-closed；② 半日市 close 钉 13:00（runtime+schema 一致）、非-13:00 拒；③ 行为未变（合法 13:00 日历 + resolver 集成仍过）；④ 未起 4c/4d。findings 落 register。PASS 后用户 `提交`；之后 slice 4c。
+- **Pre-Codex self-review**: A 整类（provenance 5 坏形 + 非-13:00 4 值一次覆盖）；B 连带（删 orphan `_check_hhmm`、validator docstring 同步——上轮栽过被改函数自身 docstring；README 路由行措辞仍准无需改；schema+runtime 双侧钉 13:00 一致）；C 反向（valid 13:00/pending/authoritative_verified 正控不误拒、resolver 集成测试全留过）；D（早收盘灵活性歧义）走最窄安全侧=钉 13:00（NYSE 实际固定），放宽须先改 owner 契约；E register resolved、CURRENT 未动（未提交）；F 加 SESSION_LOG entry 后复跑 doc guard（4a 漏跑教训）。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4b market calendar)
+
+- **Verdict/Action**: FAIL. Slice 4b is pure/offline and the target builder tests pass, but the active market-calendar validator is weaker than the documented calendar contract.
+- **Required**: `R-USSHORT-BATCH4-MARKET-CALENDAR-VALIDATION-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: market-calendar target tests 18 OK; doc/route/README guards 50 OK; py_compile OK; diff-check CRLF-only; schema unittest blocked by missing `jsonschema`; direct probes accepted bad provenance plus half-day closes `09:30` and `15:59`.
+- **Next**: Claude repair only calendar runtime/schema validation + focused tests/route closeout; do not start 4c/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4b — 静态冻结 NYSE 日历 + session-builder)
+
+- **Verdict/Action**: 起草批4 slice 4b（§18.2 D2）。新 `engine/us_short_market_calendar.py`：`load_market_calendar`（load + `validate_market_calendar` fail-closed）+ `build_sessions(start,end,*,calendar)`（冻结假期/半日市表 → 喂 resolver 的 sessions：weekday 过滤 + 假期跳过 + 半日市 close + 窗口须在冻结范围内）+ `sessions_for_window`（center±15 日、clamp 范围）。新 schema `schemas/us_short_market_calendar.schema.json` + 冻结 preset `presets/us_short_market_calendar_2026_2027.json`（NYSE 假期×20 + 半日市×3）。纯/离线、不碰 provider/网络、不交叉 A 股。**日期数据诚实门**：`data_provenance.verification_status=pending_authoritative_cross_check`——假期/半日市（尤其周末观察日移位）按 NYSE 规则离线推导、待权威核对（SR-PROVIDER-001、批5）才可 live；批4 离线非生产，此为中间态。
+- **Required**: 无（起草；新模块 + schema + preset + 2 测试 + README 路由行）。
+- **Verify**: builder 18 OK（weekday 过滤 / 假期跳过 / 半日市 close / 窗口越界 ValueError / 集成 resolver：周五假期+周末→decision 周一·basis 周四、半日市盘后 roll、半日市盘中死区 / 畸形日历 fail-closed：越界·不存在日期·重复·holiday==半日市·early-close≥close）+ schema 3 OK + 生产日历 load/build smoke。全离线 `*us_short*` **1737 OK**（= 1716 + 21）零回归；py_compile OK。**weekday 离线自检**（抓自致粗错）：12 浮动假期全落正确星期（MLK/Presidents/Memorial/Labor=Mon、Thanksgiving=Thu、Good Friday=Fri）、4 观察日移位全落 Mon/Fri 非周末、半日市星期合理。
+- **Next**: Codex `审查` 批4 slice 4b（仅 `engine/us_short_market_calendar.py` + schema + preset + 2 测试 + README 一行；纯/离线、无 provider/live、不交叉 A 股）。审查重点：① builder 三规则（weekday<5 + 非 holiday + half-day close）正确、窗口越界 fail-closed；② `validate_market_calendar` 整类畸形（越界 / 不存在日期 / 重复 / holiday∩half-day / early-close≥close）fail-closed；③ resolver 集成（假期/半日市 roll + price_basis 跨假期）；④ 日历**日期数据**仅 weekday 自检 + `verification_status=pending` 诚实标注——是否接受为离线中间态（live 前须权威核对、勿当已验证）；⑤ README 路由行薄、§18.2 D2 已涵盖无需改。material findings 落 `docs/system_risk_register.md`。PASS 后用户 `提交`；之后 slice 4c（eligibility 门 + gate 谓词）。
+- **Pre-Codex self-review**: A（整类）：畸形日历坏形一次覆盖（越界 2 侧 / 不存在日期 / 重复 / holiday∩half-day / early-close≥close）；builder 三规则 + 窗口边界双向。B（连带）：新模块无旧符号；README 加 4b 路由行（吸取 4a ROUTE-ROW 漏项教训）；§18.2 D2 本就列 4b 静态日历+builder、无需改；resolver 复用其 sessions 契约 `{date,open,close}` 一致。C（反向）：合法日历/窗口不误拒（fixture + 生产 smoke 正控）；weekday 自检确保日期非粗错。D（日期准确性歧义）：不臆断权威性——`verification_status=pending` 显式标 + 自检限 weekday 级，accuracy 走最窄安全侧（标 pending、不 live）。E：CURRENT 未动（draft 未提交）。F：strptime 真日历日 + ASCII 门；纯 engine 无 jsonschema（schema 校验在 schema-test）；half_days close 词典序 < `16:00` 成立（零填充）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4a canonical resolver + output-rule closeout)
 
 - **Verdict/Action**: PASS. Reviewed current working tree for slice 4a plus the user-requested `下一步` output-rule update in `AGENTS.md`; the four batch4 Required items are resolved in working tree and no new material Required was found.
