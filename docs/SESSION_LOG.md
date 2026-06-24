@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-24 - Codex `审查 PASS` (R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS)
+
+- **Verdict/Action**: PASS. README route-row guard repair accepted; reviewed scope = guard test + closeout docs/register + existing `AGENTS.md`/`docs/README.md` contract, with no runtime/business path.
+- **Required**: None new. `R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS` is repaired in the working tree; full Required/resolution is in `docs/system_risk_register.md`.
+- **Verify**: 50 OK (guard + doc/route). Direct probes flagged spaced/no-space/indented/escaped over-cap rows; thin/non-row controls pass; README offenders=[]; grandfather exact 33/33; `git diff --check` CRLF-only.
+- **Next**: User may `提交` this README anti-bloat guard repair; no business code/provider/live/network/DataHub/Skill/production/broker/A-share/US-short/US-long path was run.
+
+## 2026-06-24 — Claude `修复` (README 行长 guard 行检测 bypass — 改 robust Markdown 行识别[容缺空格+容缩进])
+
+- **Verdict/Action**: 收到 `修复`(Codex re-`审查 FAIL` sibling Required P1)。judge:成立——转义管道修对了,但**行检测** `ln.startswith("| ")` 太窄、漏合法 Markdown 行:管道后无空格 `|col1|` / 前导缩进 `  | col1 |` → fail-open。同 naive-Markdown 类(上轮切列、本轮行检测)。修(Codex narrow):检测改 `ln.lstrip().startswith("|")`(剥前导空白、首非空是 `|` 即收,容缩进+无空格);split 仍按未转义 `|` 切原行→缩进落 cells[0]、col1=cells[1] 不变;col2 不限;leading-pipe-less 故意不收(本表会 misrender+防 prose 误报)。over-cap 集不变→hash 无需重扫。详 register Resolution。
+- **Required**: `R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS` resolved(working tree;详 register Resolution)。
+- **Verify**: 复现 Codex 探针——正常/无空格/缩进 over-cap 行**全被抓**、`_overcap_offenders(README)`=空。测试 +3(无空格 over-cap 抓 / 缩进 over-cap 抓 / thin 无空格+缩进正控过)+ 留旧(转义管道/改旧行/col2-heavy/新胖行)= **11 OK**;doc+route **39 OK**;diff 净。仅 guard test + register/本 LOG(AGENTS/README contract 措辞本就写 col2 不限+薄指针、无需改)。
+- **Next**: Codex re-`审查`(单 Required resolved;行检测 robust 化;命令同 guard 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(整类一次焊死,非补特例):Markdown 行解析两类洞——转义切列(上轮)+ 行检测 lstrip/无空格(本轮)——都修;并复核 trailing-pipe-optional(col1=cells[1] 仍对)、leading-pipe-less(本表会 misrender、故意不收+防 prose 误报)两边界,终结解析洞循环。B:`_overcap_offenders` docstring 同步(行检测描述);AGENTS/README contract 措辞本就写 col2 不限+薄指针无需改;hash 整行 sha256 + over-cap 集不变。C(反向):thin 无空格/缩进正控不误报、header/separator 短过、over-cap 三形不漏;prose 单 `|` 行被 `len(cells)<3` 滤。D:N/A。E:CURRENT 未动。F:lstrip 检测 + 原行 split 一致;splitlines 无 \r;UTF-8 无 BOM;diff 净。
+
+## 2026-06-24 - Codex review FAIL (README anti-bloat guard re-review)
+
+- **Verdict/Action**: FAIL. The escaped-pipe parser repair works, but the route-row length guard still only scans rows beginning with `| `, so valid Markdown table rows with no space after the leading pipe or with leading indentation can bypass the col1 cap.
+- **Required**: `R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS` is open in `docs/system_risk_register.md`.
+- **Verify**: target guard 8 OK; doc-governance + route-doc 39 OK; `py_compile tests/test_readme_route_row_length.py` OK; direct probe flagged a normal spaced over-cap row but returned `[]` for no-space and indented over-cap rows; current README has no such rows; `git diff --check` CRLF warnings only.
+- **Next**: Claude repair only the Markdown table row detector / direct tests / grandfather recapture if needed, then return for Codex re-`审查`; do not touch business code or unrelated route-doc cleanup.
+
+## 2026-06-24 — Claude `修复` (README 行长 guard 转义管道 fail-open — parser 改按未转义 `|` 切 + 重扫 grandfather)
+
+- **Verdict/Action**: 收到 `修复`(Codex `审查 FAIL` 1 Required P1)。judge:成立——我的 `ln.split("|")` naive、不识 Markdown 转义管道 `\|`(渲染成字面竖线如 `|NI|`);README line 22(a_long cash_conversion)col1 含 `OCF/\|NI\|` 被误切→guard 测 col1=95 字、真 463 字漏过=**fail-open**,直接架空 anti-bloat guard。修(Codex narrow option):`_overcap_offenders` 改按**未转义 `|`** 切(`re.compile(r"(?<!\\)\|")`),col1 测真长;col2 仍不限长。grandfather set 用修正 parser **重扫**=**33** 行(+line 22;它是 a_long 历史行→grandfather 不重写 a_long)。详 register Resolution。
+- **Required**: `R-README-ROUTE-ROW-LENGTH-ESCAPED-PIPE-BYPASS` resolved(working tree;详 register Resolution)。
+- **Verify**: 直接复现 Codex line-22 探针——`naive str.split`=**95** / 修正 parser=**463** / grandfathered=**True** / `_overcap_offenders(README)`=**空**。测试 +3(over-cap 含 `\|` 按真长抓 / **thin 含 `\|` 正控过** / 真 line-22 测 over-cap+grandfather)+ 留旧(新胖行/thin/col2-heavy/改旧行)= **8 OK**;doc-governance+route-doc **39 OK**;diff 净。仅 guard test + register + 本 LOG(AGENTS/README 措辞本就写 col2 不限、无需改)。
+- **Next**: Codex re-`审查`(单 Required resolved;转义管道 parser 修;命令同 guard 刀)。PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类):「naive `split('|')` 误解 Markdown 转义」类只此 guard 一个消费者(route-doc guard 不按 `|` 切长);grandfather 重扫用同一修正 parser、与 guard 度量一致。B:test docstring 同步(32→33、4→5 A-long、parser 说明);AGENTS/README 无需改(col2 不限本就写明);hash 仍整行 sha256(parser 改不影响)。C(反向):thin 含 `\|` 正控不误报、over-cap 含 `\|` 不漏报(双向测);`\\|` 角落 fail-safe(over-merge→多报非漏报)、README 无此例。D:N/A。E:CURRENT 未动(本修复无 settled 变化)。F:`(?<!\\)\|` raw 正则;splitlines 无 \r 与 capture 一致;UTF-8 无 BOM;diff 净。
+
+## 2026-06-24 - Codex review FAIL (README anti-bloat guard)
+
+- **Verdict/Action**: FAIL. The US-long route compression is fine, but the new README row-length guard is fail-open for legal escaped Markdown pipes, so it cannot yet serve as the mechanical anti-bloat gate.
+- **Required**: `R-README-ROUTE-ROW-LENGTH-ESCAPED-PIPE-BYPASS` is open in `docs/system_risk_register.md`.
+- **Verify**: target guard 5 OK and doc/route 39 OK, but an escaped-pipe-aware probe found current `docs/README.md` line 22 is true col1 len 463 while the guard measures 95; `git diff --check` CRLF warnings only.
+- **Next**: Claude repair only the row parser / escaped-pipe tests / grandfather set, keep col2 uncapped, and do not touch business code or unrelated route-doc cleanup.
+
+## 2026-06-24 — Claude `起草` (README 反膨胀根治 — US-long 压缩 + route-row 行长 guard + grandfather + AGENTS 原则)
+
+- **Verdict/Action**: 起草反膨胀**机械根治**(采 Codex 终版:不动 a_short/a_long 正文、不搞复杂格式校验器)。① **压 us_long 路由行**(line 59,单一权威系统设计)成薄指针(col1 258 字 < 350)。② **新 guard `tests/test_readme_route_row_length.py`**:任何 README 路由行**描述列 col1 > 350 字即 FAIL**(位置无关、col2 文件列**不**限长);当前 over-cap 的**稳定历史行**经**整行 sha256 grandfather** 放行(原样过、一旦改即须压=增量清理)。③ **grandfather set 实现时机器扫描得到**(非口头「只 a_short/a_long」)——压完 us_long 后扫到 **32 行** over-cap:4 A-long + 26 A-short + **1 Phase + 1 Production**(后两条正是 Codex 警告的非-a_short/a_long 旧胖行,口头假设会漏放),逐条核实是用户接受的稳定历史/生产行。④ **AGENTS.md 加一行原则**(README route row=薄指针,细节去 docstring/owner-doc/tests/register,引该 guard)。根因:光靠文字规范必逐刀重膨胀(本仓多次实证),只有机器 guard 焊得住。
+- **Required**: 无(起草;guard test + docs)。
+- **Verify**: 新 guard **5 测试**(current README 干净=offenders 空 / 新 over-cap 胖行被抓 / 薄行过 / col2 文件多的行过[只 cap col1] / **改 grandfather 行→hash 变→被抓**)+ doc-governance + route-doc 共 **44 OK**;us_long col1 = **258 字符**(Python 度量,非 awk 字节)≤350、未误 grandfather;`_overcap_offenders(README)` = **空**;us 行 col2 vs HEAD 字节相同(us_long 压缩零指针丢);grandfather hash 与 guard 同用 `splitlines()`(无 \r)算、一致;`git diff --check` 净。仅 docs + 1 guard test,不动业务 code。
+- **Next**: Codex `审查` README 反膨胀 guard 刀。命令:`审查 README 反膨胀 guard(docs/README.md us_long 压缩 + tests/test_readme_route_row_length.py + AGENTS.md 一行,仅这三 + 不动业务 code):① guard 逻辑——col1>350 FAIL、col2 不限、grandfather=整行 sha256、splitlines 一致性、planted-failure(新胖行/改旧行)真拦得住;② grandfather set 是否**确实**=当前全部 over-cap 行(机器扫描非口头),且每条都是用户接受的稳定历史(4 A-long/26 A-short/Phase 53/Production 150),无该压未压的漏网;③ cap=350 字符是否合适(us_short/us_long 压后 max≈258、headroom 够;旧胖行 >350 grandfather);④ us_long 压缩 col2 零指针丢。findings 落 register。` PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A(类):guard 位置无关(任何 lane 任何未来刀的 over-cap 都抓)、grandfather 机器扫描非硬编码 lane(实测含 Phase/Production)、planted-failure 双向证(新胖行抓 + 改旧行抓)。B(连带):AGENTS.md 一行=规则单一权威 + 引 guard;README us_long 压;guard 引 test 文件名;无别处重述行长规则。C(反向):薄行/col2-heavy/grandfathered 不误报(测了),新胖行/改旧行不漏报(测了);cap 用字符非字节(awk 354 是字节误导,Python 258 才是 guard 度量)。D:N/A。E:CURRENT 未动(draft;压缩刀的 CURRENT delta 已提交)。F:hash 与 capture 同 `splitlines()` 算(无 \r 歧义);col2 字节=HEAD;UTF-8 无 BOM;diff 净。
+
 ## 2026-06-24 - Codex review PASS (US-short README route compression)
 
 - **Verdict/Action**: PASS. `docs/README.md` remains a routing table, not a second rule source: the US-short route compression keeps every file-pointer column byte-identical to HEAD, leaves non-US-short rows unchanged, and preserves load-bearing contracts in `AGENTS.md`, `docs/us_short_system_design.md`, module docstrings, tests, and the risk register.
