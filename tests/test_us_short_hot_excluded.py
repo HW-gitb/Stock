@@ -150,5 +150,27 @@ class GatesSourcedFromCriteria(unittest.TestCase):
         self.assertEqual(he.AUDIT_ELIGIBLE_GATES, frozenset({"safety", "liquidity", "data"}))
 
 
+class RenderHotExcludedBanner(unittest.TestCase):
+    def test_public_count_only_no_holding_ticker(self):
+        rows = [_row("AAPL", 0.9, "safety", is_holding=False),
+                _row("SECRETCO", 0.9, "liquidity", is_holding=True)]   # a HOLDING hot name — must stay private
+        s = he.render_hot_excluded_banner(he.hot_excluded_summary(rows, heat_threshold=0.5))
+        self.assertTrue(isinstance(s, str) and s.strip())
+        self.assertIn("1 只", s)                      # public_heat_count = 1 (only the non-holding AAPL)
+        self.assertNotIn("SECRETCO", s)               # the HOLDING ticker is private — NEVER rendered into the banner
+        self.assertNotIn("AAPL", s)                   # public-universe names are not rendered either (count only)
+
+    def test_zero_nonblank(self):
+        s = he.render_hot_excluded_banner({"public_heat_count": 0, "holdings": []})
+        self.assertTrue(s.strip())
+        self.assertIn("0 只", s)
+
+    def test_bad_summary_refused(self):
+        for bad in ({"public_heat_count": -1, "holdings": []}, {"public_heat_count": True, "holdings": []},
+                    {"public_heat_count": 1.0, "holdings": []}, {"holdings": []}, "x", 5, None):
+            with self.assertRaises(he.HotExcludedError, msg=repr(bad)):
+                he.render_hot_excluded_banner(bad)
+
+
 if __name__ == "__main__":
     unittest.main()

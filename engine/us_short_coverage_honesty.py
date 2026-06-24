@@ -158,3 +158,28 @@ def validate_row_coverage(coverage) -> None:
                 "§11.5 severity mismatch: coverage_status=%r but the gap_tags imply %r (worst-of) — a non-full "
                 "status must EXACTLY match its worst gap severity (no understatement / overstatement)" % (status, expected)
             )
+
+
+def render_coverage_section(coverages) -> list:
+    """Render the §11.2/§11.5 weekly_report 持仓覆盖诚实度 section body from a list of per-row
+    ``build_row_coverage`` records. Returns a list of NON-BLANK markdown lines (so the weekly_report
+    section-content invariant holds even for an empty / all-full week). Each record is RE-validated
+    (``validate_row_coverage`` — never trusts upstream), then AGGREGATED de-identified: the per-coverage_status row
+    counts (FROZEN severity order, zeros explicit — an honest 不写 clean count) + the distinct coverage gap_tags
+    across the rows (counts / tags only — NO row identity / ticker). Raises ``CoverageHonestyError`` on a bad list /
+    record."""
+    if not isinstance(coverages, list):
+        raise CoverageHonestyError("coverages must be a list, got %r" % (type(coverages).__name__,))
+    statuses = _coverage_statuses()                     # frozen severity order (full < partial < restricted < blocked)
+    counts = {s: 0 for s in statuses}
+    gap_tags = set()
+    for cov in coverages:
+        validate_row_coverage(cov)                      # never trust upstream — re-validate each §11.5 record
+        counts[cov["coverage_status"]] += 1
+        gap_tags.update(cov["coverage_gap_tags"])
+    lines = ["本周持仓覆盖 %d 行：%s。" % (len(coverages), " / ".join("%s %d" % (s, counts[s]) for s in statuses))]
+    if gap_tags:
+        lines.append("- 覆盖缺口（非 full 行须命名）：%s。" % ("、".join(sorted(gap_tags)),))
+    else:
+        lines.append("- 无覆盖缺口（全 full）。")
+    return lines

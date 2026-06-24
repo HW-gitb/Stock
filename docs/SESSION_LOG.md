@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-06-24 — Codex `审查 PASS` (US-short batch3 §11.2 formatter closeout)
+
+- **Verdict/Action**: PASS. `render_coverage_section` and `render_hot_excluded_banner` are pure/offline, de-identified aggregate/count-only formatters; `render_weekly_report` remains content-agnostic and batch-4 assembly stays separate. No new Required.
+- **Required**: None.
+- **Verify**: target formatter/renderer/observe tests 92 OK; boundary + doc/route guards 47 OK; py_compile OK; direct privacy/type probes OK; `git diff --check` = CRLF warning only. Adjacent `tests.test_us_short_exclusion_summary` import is not counted because this bundled Python lacks `jsonschema`.
+- **Next**: User may `提交` this US-short batch3 §11.2 formatter closeout slice; weekly pipeline assembly / provider-live / DataHub / A-share / US-long remain separate.
+
+## 2026-06-24 — Claude `起草` (US-short 批3 §11.2 输出渲染收尾 — coverage §11.5 + hot_excluded ⑤ section formatter,批3 最后一刀)
+
+- **Verdict/Action**: 起草批3「输出渲染」最后两个 §11.2 section/banner formatter(§18.2:批3=各节 renderer,批4=pipeline 组装)。`engine/us_short_coverage_honesty.py` 加 `render_coverage_section(coverages)`:把 per-row `build_row_coverage` 列表 **de-id 聚合**成 §11.5 节——逐条 re-validate + 每 coverage_status 行计数(冻结序、零显)+ 跨行 distinct gap_tags(无票名);空/全 full 仍非空白。`engine/us_short_hot_excluded.py` 加 `render_hot_excluded_banner(summary)`:§11.2 banner ⑤ 一行,**只渲 de-id `public_heat_count`、绝不渲 holdings 私密票名**;非 dict/非 int/bool/负 count 拒。两者纯/离线/de-id,镜像已有 `render_exclusion_section`/`render_observe_split`。render_weekly_report 保持 content-agnostic(组装=批4)。
+- **Required**: 无(起草;Required 由 Codex `审查` 产出后落 register)。
+- **B-ripple(doc-only)**: render_weekly_report docstring + README renderer 行把「section enrichment are later cuts」改为「formatters 现已全存在、组装=批4」(material:措辞已假);README coverage/hot 行补新 formatter;grep 残留=0。
+- **Verify**: 新测试 +7(coverage:de-id 聚合非空白/全 full/空周/非 list/坏 record 拒;hot ⑤:只公开计数无 holding 票名/零非空白/坏 summary 拒)。**全离线 `*us_short*` 1660 + doc guard 39 + renderer 全绿零回归**;「section enrichment later cut」残留=0;BOM 无/diff 净。**接此=批3「输出渲染」全 §11.2/§11.4/§11.5 section+banner formatter 齐(exclusion/observe/hot⑤/coverage),批3 整体工程完成**(剩纯时间门:weekly pipeline=批4、provider/live=批5)。
+- **Next**: Codex `审查` US-short 批3 §11.2 输出渲染收尾刀。命令:`审查 US-short 批3 §11.2 section formatter 收尾:engine/us_short_coverage_honesty.py +render_coverage_section、engine/us_short_hot_excluded.py +render_hot_excluded_banner + 两测试文件 render 类 + render_weekly_report/README 的「section enrichment later cut」措辞更新(doc-only)。重点:de-id(coverage 只聚合计数/gap-tag 无票名、hot ⑤ 绝不渲 holdings 私密票名)、§11.5 honesty(re-validate 每 record、空/全 full 非空白)、坏输入 fail-closed(非 list/坏 record/非int-bool-负 count)、批3「输出渲染」是否齐(4 个 section+banner formatter 全在、render_weekly_report content-agnostic、组装留批4)。纯离线、不交叉 A 股。findings 落 system_risk_register。` PASS 后用户 `提交`,届时批3 整体完成。
+- **Pre-Codex self-review**: A:两 formatter 同 de-id+fail-closed 类一次到位;render_hot_excluded_banner 只取 public_heat_count、结构上不触 holdings。B:render_weekly_report docstring + README renderer 行「later cut」措辞改(material 假)+ README coverage/hot 行补 formatter;grep 零残留;复用 validate_row_coverage/_coverage_statuses。C(反向):de-id 测试断言 banner 不含 holding 票名(SECRETCO/AAPL 都不在)、coverage 不含票名;空/全 full 仍非空白不误空;合法 0 count/空列不误拒。D:N/A。E:CURRENT/register 未动(draft 无 finding)。F:public_heat_count strict int 拒 bool;coverage re-validate 每 record;UTF-8 无 BOM、diff 净。
+
 ## 2026-06-24 - Codex `review PASS` (US-short batch3 S12.2 multi-week comparison)
 
 - **Verdict/Action**: PASS. The multi-week balanced-vs-shadow comparison is pure/offline, re-validates each source-traceable per-profile aggregate, enforces same ordered week window + fixed TopN per week, re-derives all deltas and the theme-off marginal, and keeps the frozen paper-only / non-production boundary.

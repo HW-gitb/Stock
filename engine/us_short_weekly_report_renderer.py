@@ -19,8 +19,12 @@ never drift from the §11.2 contract. Three hard invariants are enforced fail-cl
     (字段·模块生命周期提醒) — a mismatch refuses to render (the lifecycle 数量对账, this slice's 2c-末片);
   * every one of the 13 frozen sections must carry content — a missing section refuses to render.
 
-The optional banner elements ①②③⑤ (always_shown=false) are shown only when present. The exclusion_summary /
-hot_excluded / coverage-honesty section ENRICHMENT are later cuts. Pure / offline: formats a markdown string;
+The optional banner elements ①②③⑤ (always_shown=false) are shown only when present. The §11.2/§11.4/§11.5
+section + banner FORMATTERS now all exist — exclusion_summary (engine.us_short_exclusion_summary
+.render_exclusion_section), hot_excluded banner ⑤ (engine.us_short_hot_excluded.render_hot_excluded_banner),
+observe-split banner ① (engine.us_short_observe_split.render_observe_split), coverage-honesty §11.5
+(engine.us_short_coverage_honesty.render_coverage_section); ASSEMBLING their output into ``report_data`` is the
+batch-4 weekly pipeline's job (this renderer stays content-agnostic). Pure / offline: formats a markdown string;
 no provider/live/DataHub; no A-share crossing.
 """
 from __future__ import annotations

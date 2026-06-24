@@ -166,5 +166,33 @@ class GapTagContractAndSeverity(unittest.TestCase):
             ch.validate_row_coverage(ch.build_row_coverage(RS, checks))
 
 
+class RenderCoverageSection(unittest.TestCase):
+    def test_aggregates_de_identified_nonblank(self):
+        full = ch.build_row_coverage(RS, _checks())
+        gap = ch.build_row_coverage(RS, _checks(analyst="missing"))
+        lines = ch.render_coverage_section([full, gap, full])
+        self.assertTrue(lines and all(isinstance(x, str) and x.strip() for x in lines))
+        self.assertIn("3 行", lines[0])
+        self.assertIn("full 2", lines[0])                 # 2 of the 3 rows full (zeros explicit elsewhere)
+        self.assertIn("analyst:missing", " ".join(lines)) # the gap tag is named (不写 clean)
+
+    def test_all_full_and_empty_nonblank(self):
+        full = ch.build_row_coverage(RS, _checks())
+        self.assertIn("无覆盖缺口", " ".join(ch.render_coverage_section([full])))
+        empty = ch.render_coverage_section([])
+        self.assertIn("0 行", empty[0])
+        self.assertTrue(all(x.strip() for x in empty))    # non-blank even for an empty week
+
+    def test_not_a_list_refused(self):
+        with self.assertRaises(ch.CoverageHonestyError):
+            ch.render_coverage_section({"x": 1})
+
+    def test_invalid_record_refused(self):
+        bad = ch.build_row_coverage(RS, _checks())
+        bad["coverage_status"] = "blocked"                # full→blocked w/o gap_tags → §11.5 honesty invariant violated
+        with self.assertRaises(ch.CoverageHonestyError):
+            ch.render_coverage_section([bad])
+
+
 if __name__ == "__main__":
     unittest.main()

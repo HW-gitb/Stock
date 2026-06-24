@@ -96,3 +96,16 @@ def hot_excluded_summary(excluded_rows, *, heat_threshold) -> dict:
             for row in hot if row["is_holding"]  # real positions → private detail
         ],
     }
+
+
+def render_hot_excluded_banner(summary) -> str:
+    """Render the §11.2 honest-banner ⑤ string from a ``hot_excluded_summary`` output. Returns a NON-BLANK
+    one-line string carrying ONLY the de-identified ``public_heat_count`` — the ``holdings`` (real-position
+    tickers) are PRIVATE and are NEVER rendered into the tracked banner (§11.4 持仓票私密拆分; §11.6). Raises
+    ``HotExcludedError`` on a malformed summary / count (a non-dict, a missing / non-int / bool / negative count)."""
+    if not isinstance(summary, dict):
+        raise HotExcludedError("hot_excluded summary must be a dict, got %r" % (type(summary).__name__,))
+    n = summary.get("public_heat_count")
+    if not (isinstance(n, int) and not isinstance(n, bool) and n >= 0):
+        raise HotExcludedError("public_heat_count must be a non-negative int, got %r" % (n,))
+    return "本周高热度被剔除 %d 只（公开 universe 计数，仅审计·绝不救回 hard veto / 不改准入，喂 §13 复审）。" % (n,)
