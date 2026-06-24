@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-c sizing input/ticker contract)
+
+- **Verdict/Action**: PASS. Re-reviewed the current 4d-ii-c sizing repair; the original duplicate / non-executable / unknown-action / stale-`per_ticker` Required and the residual ticker-emission Required are resolved in the working tree. No new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-WEEKEND-SIZING-INPUT-CONTRACT-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: sizing 25 OK; adjacent pure suites 315 OK (`weekend_decision` / `weekend_analysis` / `position_sizing` / `regime` / `price_engine` / `eligibility_gate` / `weekend_pipeline` / `action_rank` / `market_calendar` / `canonical_asof`); doc-governance + route-doc + README guards 50 OK; `py_compile` OK; direct probes OK; broad `*us_short*` discovery remains blocked in this reviewer runtime by missing `jsonschema` (1230 tests discovered, 40 errors, 1 skipped); `git diff --check` CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-c — 残留 ticker-emit 规范大写)
+
+- **Verdict/Action**: 收到 `修复` + 用户「ticker 全部大写」（Codex re-`审查 FAIL` 残留：ticker 身份 VALUE 契约）。judge：成立——同 canonicality-on-every-surface 类（用 `canonical_us_ticker` 验身份、却 emit 原样 `row['ticker']`）。修：`size_rows` pass 2 **每行 emit 规范 UPPERCASE ticker**（建仓+非建仓 carry-through 都用 `ct`），注入 `aapl`/` AAPL ` 输出归一 `AAPL`、绝不原样回显；非法形（A 股码/坏形）pass 1 仍 raise。落实用户「全部大写」。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-SIZING-INPUT-CONTRACT-GAP`（残留 ticker-emit 已修）。
+- **Verify**: sizing **25 OK**（+2：build `aapl`→emit `AAPL`、holding ` goog `→emit `GOOG`；既有 23 正控/raise 保）。Codex 残留探针（`aapl` build emit `aapl`、` AAPL ` holding carry raw）现归一大写。全离线 `*us_short*` **1950 OK**（=1948+2）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex re-`审查` 4d-ii-c（残留 ticker-emit 已修；`us_short_weekend_sizing.py`+测试+docstring；纯/离线、无 provider/live、不交叉 A 股）。重点：① 每输出行 emit 规范 UPPERCASE ticker（建仓+非建仓，注入非规范归一、非法 raise）；② 上轮 4 探针（dup/非exec/unknown action/stale per_ticker）+ value 契约仍 fail-closed；③ 复用 `canonical_us_ticker`（gate 单源）不重写策略；④ 2 flag（cap0 reason、cap 位置）仍立。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii-d（基组+§9 rank）。
+- **Pre-Codex self-review**: A 整类（ticker emit：build 小写→UPPERCASE、holding 空格+小写→canonical + 既有 25 正控/raise）；B 连带（pass 2 emit `ct`、复用 canonical_us_ticker 单源、docstring 同步、README 未变、4d-ii-a 本就 emit canonical/实链上游已大写）；C 反向（既有 canonical ticker 输出不变、25 OK 仍过）；D（归一 vs reject）走用户指令=归一大写、非法仍 raise；E CURRENT 未动；F（ct pass1 已验非 None、emit build+非build 两面一致）。根因：上轮 canonicalize 验身份却 emit raw——canonicality-on-every-surface 复发（同 4d-i），[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 slice 4d-ii-c sizing ticker identity)
+
+- **Verdict/Action**: FAIL. The original sizing input-contract probes are fixed, but the same Required remains open: non-canonical ticker text can still be accepted and emitted by `size_rows`.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-SIZING-INPUT-CONTRACT-GAP` remains open in `docs/system_risk_register.md` (residual ticker identity contract).
+- **Verify**: sizing 23 OK; adjacent pure deps 209 OK; doc/route/README guards 50 OK; `py_compile` OK; probes show duplicate/non-exec/unknown-action/stale-per_ticker now fail closed, but `ticker="aapl"` build emits `aapl` sized 98 and `ticker=" AAPL "` holding carries through; broad `*us_short*` blocked here by missing `jsonschema` (1228 tests discovered, 40 errors, 1 skipped); diff-check CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-c — sizing 输入契约 fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required，4 探针）。judge：全成立+在 scope（同 consumer-validation 类）。`size_rows` 加两遍校验：① final_action ∈ 冻结词表（`FINAL_ACTIONS` 从 decision 单源）；② 建仓 须 row_context==candidate + price.executable is True + 合法价位；③ 每行 ticker 经 `canonical_us_ticker`（gate 单源）、**重复 canonical 身份 raise**（堵一股两行绕单票 cap）；④ `per_ticker` 须**恰等于建仓 ticker 集**（缺/陈旧 raise）。合法 sizing+非建仓 carry-through 保。2 flag（cap0 reason、cap 位置）Codex 未反对、保留。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-SIZING-INPUT-CONTRACT-GAP`。
+- **Verify**: sizing **23 OK**（+6：重复 build ticker、陈旧 per_ticker 键、unknown final_action、非 executable 建仓、建仓 incompatible row_context、非规范 ticker → 全 raise；happy/caps/discount/carry-through/below-min 正控保）。Codex 探针（dup AAPL 各 98=196>cap、非 exec sized 98、unknown action carried、stale per_ticker）全 fail-closed。全离线 `*us_short*` **1948 OK**（=1942+6）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex re-`审查` 4d-ii-c（1 Required 已修；`us_short_weekend_sizing.py`+测试+docstring；纯/离线、无 provider/live、不交叉 A 股）。重点：① decision-row VALUE 校验（final_action 词表 / 建仓 candidate+executable / canonical 唯一身份防 cap 绕过）；② per_ticker 恰覆盖建仓集（缺/陈旧 raise）；③ 复用单源（FINAL_ACTIONS 从 decision、canonical_us_ticker 从 gate）；④ 合法 sizing 数学+非建仓 carry-through 不变；⑤ 2 flag（cap0 reason、cap 位置）仍立。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii-d（基组：周建仓上限/同主题/theme_probe 成本地板/现金分配+§9 action_rank）。
+- **Pre-Codex self-review**: A 整类（dup ticker/stale per_ticker/unknown action/非exec 建仓/incompatible context/非规范 ticker + 既有正控 全覆盖）；B 连带（FINAL_ACTIONS 从 decision、canonical_us_ticker 从 gate 单源、`_size_build` 用 canonical ticker、docstring 同步、README 未变）；C 反向（既有正控 23 OK 仍过）；D（无新歧义；2 旧 flag 仍交 Codex）；E CURRENT 未动；F（canonical(None)→raise、set-equality 覆盖、executable is True 严格、两遍校验先于 sizing）。根因：起草只验 shape 未验 VALUE 契约+per_ticker 覆盖——consumer-validation 复发，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-c sizing input contract)
+
+- **Verdict/Action**: FAIL. Current 4d-ii-c is pure/offline and target tests pass, but the sizing stage accepts inconsistent decision/sizing inputs and can emit clean sized build rows that bypass the same-ticker cap.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-SIZING-INPUT-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: sizing 17 OK; adjacent pure deps 209 OK; doc/route/README guards 50 OK; `py_compile` OK; probes reproduce duplicate `AAPL` builds each sized 98 shares (aggregate 196 > row cap 98), non-executable build sized 98, unknown `final_action` carried, and stale extra `per_ticker` accepted; broad `*us_short*` blocked here by missing `jsonschema` (1222 tests discovered, 40 errors, 1 skipped); diff-check CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4d-ii-c — 周末 pipeline 仓位 §8 削减叠法)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-c（§18.2 4d-ii 第三刀=§8 per-row 仓位）。新 `engine/us_short_weekend_sizing.py`：`size_rows(decision_result, *, sizing_context)` 对每行 provisional 建仓跑 §8 削减叠法（复用 `us_short_position_sizing`、无新仓位数学）：① base=`risk_based_base_shares`(short_bucket, valid_entry_high, stop_clear_price) ② ×regime 乘数(=§7 position_cap) ③ ×harshest 注入折扣(取最狠不连乘) ④ min(单票 cap=⌊bucket×10%÷entry⌋, 注入流动性 cap) ⑤ <最小可执行→降观察(建仓→观察 cost_inefficient_min_size)。非建仓 carry-through sizing=None（持仓保留 account_state 仓、本刀只 size 新建）。注入 `sizing_context` value-validated fail-closed（bucket 正有限 / discount_mults∈[0,1] list / liquidity 非负 int / per_ticker 闭世界），建仓价位 re-validate(entry>stop>0)。SINGLE_TICKER_CAP_FRAC=0.10 作本模块 §13#4 prior（未改 position_sizing）。**跨行 §8（周建仓上限/同主题/theme_probe 成本地板/现金分配 + §9 rank）=4d-ii-d**；加仓/scale-out 仍 v1 延后。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: sizing tests **17 OK**（建仓 sized+单票 cap binds[98]/流动性 cap binds[50]/harshest discount[0.1→43]、zero-discount below-min→观察、极度防御 cap0→观察、非建仓 carry-through sizing=None、regime 透传；fail-closed：缺 per_ticker、discount 坏形×5、liquidity 坏形×4、per_ticker 多键、bucket 坏形×5、建仓价位非法 entry≤stop、bad position_cap、畸形 decision_result×3+row）。全离线 `*us_short*` **1942 OK**（=1925+17）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex `审查` 批4 slice 4d-ii-c（仅 `engine/us_short_weekend_sizing.py`+测试+README 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① §8 削减叠法链（base×regime×harshest-discount×min(单票/流动性 cap)，复用 position_sizing 不重写）；② below-min→观察(cost_inefficient_min_size)——**flag**：极度防御 cap0 也走此 reason，§9 observe_reason 无专门 regime/budget 项，cost_inefficient_min_size 当 §8 min-size observe 统一用（可接受？）；③ **flag**：SINGLE_TICKER_CAP_FRAC=0.10 放本模块（未改 position_sizing）——同意或要并入 position_sizing 与 PER_TRADE_RISK_FRAC 同处；④ 注入 sizing_context value-validation fail-closed（不静默零/膨胀）；⑤ 折扣 derivation + liquidity 由 caller/batch5 注入、本刀只 apply；⑥ 跨行（build-limit/同主题/theme_probe 成本地板/现金/rank）确属 4d-ii-d 未起。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii-d（基组+§9 rank）。
+- **Pre-Codex self-review**: A 整类（sized+单票/流动性 cap binds+discount applied / below-min[zero-discount·cap0] / 非建仓 carry-through / sizing_context 各字段坏形矩阵 / decision_result+build-row 坏形 全覆盖）；B 连带（复用 position_sizing risk_based/reduction_stack/MIN_EXECUTABLE 核签名、SINGLE_TICKER_CAP_FRAC 本模块 prior 未改 engine、新模块无旧符号 ripple、README 薄行、design §18.2 未变）；C 反向（sized build/carry-through 正控仍过、fail-closed 仅畸形）；D（below-min reason + cap 位置 歧义）走最窄=cost_inefficient_min_size 统一 + cap 本模块、显式交 Codex 判；E CURRENT 未动（draft）；F pre-flight（_finite_number 拒 bool/NaN/Inf、entry>stop>0、position_cap∈[0,1]、closed-world sizing_context、reduction_stack 内部 fail-closed 为 net）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-b decision evidence validation)
 
 - **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-DECISION-EVIDENCE-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
