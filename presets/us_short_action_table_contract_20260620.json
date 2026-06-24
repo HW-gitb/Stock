@@ -7,7 +7,7 @@
   "design_locked_enums": {
     "row_source": ["top15_candidate", "holding_in_top15", "holding_pass2_only", "holding_account_only"],
     "final_action": ["建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开"],
-    "observe_reason_type": ["signal_not_ready", "price_not_executable", "cash_or_account_missing", "risk_cooldown", "data_restricted", "event_window", "cost_inefficient_min_size"],
+    "observe_reason_type": ["signal_not_ready", "price_not_executable", "cash_or_account_missing", "risk_cooldown", "data_restricted", "event_window", "cost_inefficient_min_size", "capacity_or_budget_deferred"],
     "order_type": ["pullback_limit", "breakout_stop_limit"],
     "order_expiry": ["first_regular_session_only"],
     "price_engine_used": ["support_atr_engine", "holding_exit_engine"],

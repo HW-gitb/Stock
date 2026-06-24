@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 observe_reason capacity residual prose/guard)
+
+- **Verdict/Action**: PASS. Re-reviewed the residual `capacity_or_budget_deferred` prose/guard repair; the cap-zero vs true under-min reason split is now aligned across emitter behavior, active route/test prose, and the focused guard. No new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-OBSERVE-REASON-CAPACITY-DEFERRED-CONTRACT-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: target sizing/observe/capacity guard 44 OK; adjacent pure US-short suites 315 OK; doc-governance + route-doc + README guards 50 OK; JSON const/equality probe OK; direct behavior probe OK (`cap0 -> capacity_or_budget_deferred`, true under-min -> `cost_inefficient_min_size`); broad `*us_short*` discovery remains blocked in this reviewer runtime by missing `jsonschema`; no local `jsonschema` package found; `git diff --check` CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 — capacity 残留 cost-only prose + guard 扩)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL` 残留：emitter 已对，但 route/test prose 仍 cost-only 描述 cap-0、guard 不抓此类）。judge：成立——enum-ripple B 类续扫。修 3 处 stale prose（README 4d-ii-c 行/CURRENT §0 条/sizing 测试 docstring：cap-0 的 `cost_inefficient_min_size` → `cap0=capacity_or_budget_deferred、余 cost_inefficient_min_size`；README 删冗保 col1≤350）。扩 guard：sizing engine+test 现 cost_inefficient_min_size 必 co-现 capacity_or_budget_deferred、README/CURRENT 引 sizing 模块行同——抓 stale-reason 类。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-OBSERVE-REASON-CAPACITY-DEFERRED-CONTRACT-GAP`。
+- **Verify**: guard+sizing+route-row **39 OK**（README 4d-ii-c col1≤350 仍过、新 split-co-described guard 抓 stale-reason 类）。全 `*us_short*` **1953 OK**（=1952+1）+ doc-governance+route-doc 39 OK 零回归；py_compile OK；emitter 行为未改。
+- **Next**: Codex re-`审查` capacity 残留 prose+guard（README/CURRENT/sizing-test docstring 3 处 stale cost-only→split、guard 扩抓 stale-reason 类；纯 docs/test、emitter 未改、未动 4d-ii-e、不交叉 A 股）。重点：① 3 处 prose 现 cap0=capacity/余 cost-min、对齐 emitter；② guard split-co-described 抓 stale-reason 回归（sizing 文件 co-presence + README/CURRENT 行级）；③ README 4d-ii-c col1≤350（删`，复用 position_sizing`补偿）；④ emitter/测试行为不变（已 PASS）。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-e build-count。
+- **Pre-Codex self-review**: A 整类（3 stale-prose 面[README/CURRENT/test docstring]全修 + guard 扩抓 stale-reason 类[sizing 文件 co-presence + route 行级]）；B 连带（grep cost_inefficient_min_size 定位全残留面、guard 同盯 engine+test+README+CURRENT、README col1≤350 删冗补偿）；C 反向（既有 sizing 行为/测试不变[已 PASS]）；D 走全扫 Codex 点名 3 面+guard 防同类回归；E 仅 prose 对齐 emitter 无 gate 词；F（guard 不误报合法 cost_floor 单提：仅限 sizing 文件+引 sizing 模块行）。根因：上轮闭 emitter+count 漏 cost-only PROSE+guard 未覆盖 stale-reason 类，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 observe_reason capacity residual doc/guard drift)
+
+- **Verdict/Action**: FAIL. The Path A emitter behavior is repaired, but active route/test prose still carries the old cost-only reason for the cap-zero / below-min class, and the new guard does not catch that stale wording class.
+- **Required**: `R-USSHORT-BATCH4-OBSERVE-REASON-CAPACITY-DEFERRED-CONTRACT-GAP` remains open in `docs/system_risk_register.md`.
+- **Verify**: target non-schema tests 43 OK before schema import barrier; adjacent pure US-short suites 315 OK; doc-governance + route-doc + README guards 50 OK; direct probes confirm cap-zero → `capacity_or_budget_deferred` and true under-min → `cost_inefficient_min_size`; schema/no-dangling tests blocked here by missing `jsonschema`; `git diff --check` CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 — capacity_or_budget_deferred 闭合 emitter + active docs)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required，enum-ripple）。judge：成立——加了新值却没闭 emitter（极度防御 cap-0 仍发 cost_inefficient_min_size）+ 没扫 active "7" docs。选 **Path A**（闭 emitter，合 §9 文案"极度防御仓位上限"）：`_size_build` below-min 分流——`position_cap==0.0`→`capacity_or_budget_deferred`、其余→`cost_inefficient_min_size`（两 reason 不合并、2 测证）。"7"→dynamic 扫 6 面（weekend_decision/observe_split docstring/README×2/CURRENT/design §11.2 banner ① 改 delegate 冻结词表+点名 capacity）。新 guard 焊死。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-OBSERVE-REASON-CAPACITY-DEFERRED-CONTRACT-GAP`。
+- **Verify**: guard+sizing+observe_split+2 schema **98 OK**（极度防御 cap-0→capacity、零折扣[进攻 cap1.0]→cost-min 两测证不合并；guard：冻结 enum 含 capacity + 无 active 面 claim "7"）。全 `*us_short*` **1952 OK**（=1950+2 guard）+ tests/schema **506 OK** + doc guards 50 OK 零回归；py_compile OK。
+- **Next**: Codex re-`审查` capacity 闭合（`us_short_weekend_sizing.py`+测试+5 doc/comment 面+新 guard；纯 docs/engine/test、未动 4d-ii-e、不交叉 A 股）。重点：① emitter 分流（position_cap==0→capacity_or_budget_deferred、其余→cost_inefficient_min_size，不合并已测）；② Path A 合 §9 文案；③ "7"→dynamic 6 面全扫+guard 防回归；④ §11.2 banner ① delegate 冻结词表+点名 capacity（去 A-E 穷举）；⑤ observe_split 归 capacity 为 genuine deferral 不变。findings 落 register。PASS 后 `提交`；之后 4d-ii-e build-count。
+- **Pre-Codex self-review**: A 整类（emitter 两分支[cap-0 capacity/其余 cost-min]+两测证不合并 / "7"→dynamic 6 面 / guard）；B 连带（grep "7 observe_reason" 定位全 active 面逐一改、observe_split 动态读自动纳入、§11.2 delegate 冻结词表、新 guard 防回归）；C 反向（既有 sized/cost-min 正控仍过、capacity 仅 position_cap==0）；D（below-min 多因歧义）走 Codex 指定=cap-0 capacity、其余 cost-min（合 §9）；E CURRENT §0 仅去 stale 计数无 gate 词；F（position_cap==0.0 精确比较、guard 覆盖 stale "7" 模式）。根因：加值未闭 emitter+docs——enum-ripple，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 observe_reason_type capacity/budget enum)
+
+- **Verdict/Action**: FAIL. The 8-value enum is internally consistent across the four JSON contract surfaces, but the new `capacity_or_budget_deferred` reason is not closed against the current sizing emitter and active docs.
+- **Required**: `R-USSHORT-BATCH4-OBSERVE-REASON-CAPACITY-DEFERRED-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: JSON contract equality probe OK (8 values); observe_split accepts `capacity_or_budget_deferred` as non-sizing deferral; pure observe/sizing/decision/rank tests 96 OK; direct extreme-defensive sizing probe still emits `cost_inefficient_min_size`; schema/no-dangling tests blocked here by missing `jsonschema`; `git diff --check` CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 — observe_reason_type 加 `capacity_or_budget_deferred`，schema-first 契约)
+
+- **Verdict/Action**: 起草 — observe_reason_type 冻结词表加 `capacity_or_budget_deferred`（用户经 AskUserQuestion **批准**；§9 词表原无"被周度风险预算/容量挤掉"的值，会污染 §11.2 honesty 横幅分桶）。**7 面同步加（末位、同序）**：`presets/us_short_action_table_contract` + `schemas/us_short_action_table_contract` + `presets/us_short_action_governance` + `schemas/us_short_action_governance` + 2 schema tests（EXPECTED_ENUMS + count 7→8）+ design §9（slash-list + 描述：过闸可执行但被每周建仓上限/同主题上限/极度防御仓位上限挤出本周名额→转观察、非系统不看好）。`observe_split` + `no_dangling` 动态读契约自动纳入（新值归 **genuine deferral**、非 sizing-artifact——§11.2 ① 仅 cash_or_account_missing 为假象）。**emitter = 4d-ii-e build-count resolution**（本刀仅加词表、暂无消费者，schema-first）。纯 docs/preset/schema/test、不动 engine、不交叉 A 股。
+- **Required**: 无（起草；冻结词表加值，用户批准）。
+- **Verify**: 契约+治理 schema + observe_split + no_dangling **146 OK**；tests/ 全 `*us_short*` **1950 OK** + tests/schema **506 OK** + doc guards 50 OK 零回归；byte-faithful-to-design（§9 slash-list 解析）+ 跨 schema 等值（governance==contract）+ count 8 全过；py_compile N/A（无 .py 逻辑改）。
+- **Next**: Codex `审查` 批4 observe_reason_type 加值（7 面：2 preset+2 schema+2 schema test+design §9；纯 docs/契约、不动 engine、不交叉 A 股）。重点：① 7 面一致（同序末位 `capacity_or_budget_deferred`）；② design §9 byte-faithful 解析仍对（slash-list + 双 backtick 描述 parenthetical 不干扰 `_design_observe_reasons` 的 `if "/" in s` 抽取，新 backtick 无 "/"）；③ 跨 schema 等值（action_governance==action_table）+ count 7→8；④ observe_split 归新值为 genuine deferral（非 sizing-artifact）正确；⑤ 此为用户经 AskUserQuestion 批准的冻结词表加值，emitter=4d-ii-e。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-e build-count resolution（周建仓上限+同主题 cap+theme_probe 接线、emit 本新值）。
+- **Pre-Codex self-review**: A 整类（7 个 enum-pin/断言面全覆盖：2 preset+2 schema+2 test+design §9）；B 连带（byte-faithful-to-design 抽取器仍解析 slash-list、跨 schema 等值、count、observe_split/no_dangling 动态读自动纳入——逐一核；§9 parenthetical 新 backtick 描述无 "/" 不干扰抽取）；C 反向（146+1950+506+50 既有正控全过、未误改其他 enum）；D（新值命名/归类歧义）走最窄=descriptive snake_case 末位追加 + genuine-deferral 归类；E CURRENT 未动（draft）；F（draft-07 const 顺序敏感→7 面同序、observe_split per_reason 现 8 键动态）。**用户决策**：AskUserQuestion 选「加精确新值」。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-c sizing input/ticker contract)
 
 - **Verdict/Action**: PASS. Re-reviewed the current 4d-ii-c sizing repair; the original duplicate / non-executable / unknown-action / stale-`per_ticker` Required and the residual ticker-emission Required are resolved in the working tree. No new material Required was found.

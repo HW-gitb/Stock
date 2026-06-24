@@ -138,7 +138,8 @@
         "risk_cooldown",
         "data_restricted",
         "event_window",
-        "cost_inefficient_min_size"
+        "cost_inefficient_min_size",
+        "capacity_or_budget_deferred"
       ]
     },
     "action_rank_policy": {

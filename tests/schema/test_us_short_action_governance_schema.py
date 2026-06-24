@@ -101,7 +101,7 @@ class UsShortActionGovernance(unittest.TestCase):
         self.assertEqual(len(self.preset["holding_exit_price_fields"]), 4)
 
     def test_observe_reason_count(self):
-        self.assertEqual(len(self.preset["observe_reason_types"]), 7)
+        self.assertEqual(len(self.preset["observe_reason_types"]), 8)
 
     # --- triangulation: schema-const == preset == design ---
     def test_schema_const_equals_preset(self):

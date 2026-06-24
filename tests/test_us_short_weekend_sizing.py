@@ -5,8 +5,8 @@ Design authority: docs/us_short_system_design.md §8 (按风险定仓 + 削减�
 
 Covers the §8 削减叠法 over real analyze→decide→size chain output: a provisional 建仓 sized (base ×
 regime cap × harshest discount, capped by single-ticker / liquidity), the single-ticker and liquidity
-caps binding, the harshest discount applied, a below-min / 极度防御(cap 0) build downgrading to
-观察(cost_inefficient_min_size), non-建仓 rows carrying through with sizing=None, and fail-closed
+caps binding, the harshest discount applied, a below-min build downgrading to 观察 (极度防御 cap-0 →
+capacity_or_budget_deferred, else cost_inefficient_min_size), non-建仓 rows carrying through with sizing=None, and fail-closed
 value-validation of the injected sizing_context + each build row's price levels.
 
 Deterministic chain numbers for _cand() in 进攻: valid_entry_high=101.5, stop_clear_price=99.78,
@@ -102,10 +102,11 @@ class SizeRowsTests(unittest.TestCase):
         self.assertEqual(row["sizing"]["status"], "observe")
         self.assertEqual(row["sizing"]["desired_model_shares"], 0)
 
-    def test_extreme_defensive_cap_zero_observes(self):
+    def test_extreme_defensive_cap_zero_observes_capacity(self):
         row = _size_real([_cand()], axes={})["rows"][0]  # 极度防御 → position_cap 0 → 0 shares
         self.assertEqual(row["final_action"], "观察")
-        self.assertEqual(row["observe_reason_type"], "cost_inefficient_min_size")
+        # regime/position-cap zero is a CAPACITY/BUDGET deferral, NOT a cost/min-size inefficiency
+        self.assertEqual(row["observe_reason_type"], "capacity_or_budget_deferred")
         self.assertEqual(row["sizing"]["regime_multiplier"], 0.0)
 
     # --- non-build rows carry through unsized ---

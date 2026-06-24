@@ -39,7 +39,7 @@ from engine.us_short_hard_veto import NONE as _VETO_NONE, VETO_TIERS
 _CONTRACT_PATH = Path(__file__).resolve().parent.parent / "presets" / "us_short_action_table_contract_20260620.json"
 _ENUMS = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))["design_locked_enums"]
 FINAL_ACTIONS = tuple(_ENUMS["final_action"])           # frozen §9/§6.1 trade-action vocab (9)
-OBSERVE_REASONS = tuple(_ENUMS["observe_reason_type"])  # frozen §9 observe reasons (7)
+OBSERVE_REASONS = tuple(_ENUMS["observe_reason_type"])  # frozen §9 observe reasons (loaded from the contract enum)
 
 # The SUBSET this evidence-only stage emits (v1). 加仓 (§6 dual-engine) and 减仓 / 清仓-止盈 (§6.1 active
 # scale-out, §13 #34) are in the frozen vocab but NOT auto-decided here.

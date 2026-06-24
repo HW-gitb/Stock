@@ -3,7 +3,7 @@
 
 Design authority: docs/us_short_system_design.md §11.2 honest banner ① (把 observe_reason_type 聚合成"本周 X 只
 观察：…——没账户/没现金那类是 sizing 假象、不是系统不看好") / §18.1 #10. Enum + banner authority = the FROZEN
-presets (batch-1, design-locked): the 7 observe_reason_type values are read from
+presets (batch-1, design-locked): the frozen observe_reason_type values are read from
 ``presets/us_short_action_table_contract_20260620.json`` ``design_locked_enums`` (single source), and the
 ``true_false_observe_split`` banner element in ``presets/us_short_weekly_report_contract_20260620.json`` pins the
 honest framing — "no-account/no-cash = sizing artifact, not disfavor".

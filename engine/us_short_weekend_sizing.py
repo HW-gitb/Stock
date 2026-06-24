@@ -12,7 +12,7 @@ math here):
     ② × regime multiplier (= the §7 position_cap carried in decision_result.regime)
     ③ × harshest single risk discount (the injected per-row discount_mults — §8 取最狠的一个、不连乘)
     ④ min(single-ticker cap = ⌊bucket × SINGLE_TICKER_CAP_FRAC ÷ entry⌋, injected liquidity cap)
-    ⑤ < min executable → 降观察 (final_action 建仓 → 观察, observe_reason_type cost_inefficient_min_size)
+    ⑤ < min executable → 降观察 (建仓 → 观察; 极度防御 position_cap==0 → capacity_or_budget_deferred, else cost_inefficient_min_size)
 
 This is the PER-ROW sizing only. The CROSS-ROW §8 steps — the weekly new-build limit (进攻3/震荡2/
 防御1/极度防御0) + 同主题 cap + theme_probe slots + the theme_probe min-size cost floor (§8 line 232)
@@ -41,7 +41,8 @@ SINGLE_TICKER_CAP_FRAC = 0.10
 
 _BUILD = "建仓"
 _OBSERVE = "观察"
-_R_COST_INEFFICIENT = "cost_inefficient_min_size"   # §8 line 232 / §9 — the min-size / risk-budget observe reason
+_R_COST_INEFFICIENT = "cost_inefficient_min_size"      # §8 line 232 / §9 — genuine under-min / cost-floor observe
+_R_CAPACITY_DEFERRED = "capacity_or_budget_deferred"   # §9 — pushed out by a capacity/budget cap (here 极度防御 position_cap==0)
 
 
 class WeekendSizingError(Exception):
@@ -91,8 +92,9 @@ def _ticker_sizing_inputs(per_ticker, ticker):
 
 def _size_build(row, *, bucket, position_cap, ticker, per_ticker):
     """§8 削减叠法 for one VALIDATED PROVISIONAL 建仓 row (canonical `ticker`). Returns (final_action,
-    observe_reason_type, sizing) — a sized build keeps 建仓; a below-min result downgrades to
-    观察(cost_inefficient_min_size)."""
+    observe_reason_type, sizing) — a sized build keeps 建仓; a below-min result downgrades to 观察, with
+    reason capacity_or_budget_deferred when a regime/position cap zeroed it (极度防御 position_cap==0)
+    else cost_inefficient_min_size (a genuine under-min / cost-floor case)."""
     af = row["price"]["action_fields"]
     entry = _finite_number(af.get("valid_entry_high"))
     stop = _finite_number(af.get("stop_clear_price"))
@@ -112,7 +114,12 @@ def _size_build(row, *, bucket, position_cap, ticker, per_ticker):
     }
     if sized["status"] == "sized":
         return _BUILD, None, sizing
-    return _OBSERVE, _R_COST_INEFFICIENT, sizing   # §8 ⑤ < 最小可执行 → 降观察
+    # §8 ⑤ < 最小可执行 → 降观察. A regime/position-cap zero (极度防御仓位上限) is a CAPACITY/BUDGET deferral
+    # (§9 capacity_or_budget_deferred — "good enough, no room this week"), kept distinct from a genuine
+    # under-min / cost-floor case (cost_inefficient_min_size) so the §11.2 honesty split is not polluted.
+    if position_cap == 0.0:
+        return _OBSERVE, _R_CAPACITY_DEFERRED, sizing
+    return _OBSERVE, _R_COST_INEFFICIENT, sizing
 
 
 def size_rows(decision_result, *, sizing_context):
