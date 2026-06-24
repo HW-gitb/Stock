@@ -8,6 +8,43 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4a canonical resolver + output-rule closeout)
+
+- **Verdict/Action**: PASS. Reviewed current working tree for slice 4a plus the user-requested `下一步` output-rule update in `AGENTS.md`; the four batch4 Required items are resolved in working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-CANONICAL-ASOF-{CALENDAR-CONTRACT,ROUTE-ROW,ACTIVE-DOCSTRING,SESSIONLOG-MINIMAL-TEMPLATE}-GAP` are resolved in `docs/system_risk_register.md`.
+- **Verify**: resolver 40 OK; doc/route/README guards 50 OK; direct probes reject bad dates, duplicate sessions, non-RTH kwarg and accept valid RTH; py_compile OK; stale last-wins grep only shows current "no last-wins" or historical entries; diff-check CRLF-only; broad `*us_short*` not counted because Codex runtime lacks `jsonschema`.
+- **Next**: User may `提交`; do not start 4b/4c/4d/provider/live/DataHub/A-share/US-long in this commit.
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4a — resolver 契约 fail-closed + docstring/README/SESSION_LOG closeout)
+
+- **Verdict/Action**: 收到 `修复`（Codex 两轮 `审查 FAIL`，共 4 Required）。judge-before-execute：逐条均成立/在 scope/必要，修。R1 `CALENDAR-CONTRACT-GAP`(P1)：① `_strict_yyyymmdd` 加 strptime 真日历日门（拒不存在日期，upcoming+settled 双出口）② 重复 session date 改 RAISE（拒顺序相关 last-wins）③ 删 `session_scope` 参数、硬编码 RTH；`ROUTE-ROW-GAP`(P2) 补薄 README 行。R2 `ACTIVE-DOCSTRING-DRIFT`(P2)：函数 docstring 残留 "last spec wins" 改真实契约；`SESSIONLOG-MINIMAL-TEMPLATE-GAP`(P2)：本 entry 压到 minimal-template。详见 register Resolution。
+- **Required**: 4 条 resolved（working tree）：`R-USSHORT-BATCH4-CANONICAL-ASOF-CALENDAR-CONTRACT-GAP` / `ROUTE-ROW-GAP` / `ACTIVE-DOCSTRING-DRIFT` / `SESSIONLOG-MINIMAL-TEMPLATE-GAP`。
+- **Verify**: resolver **40 OK**（+8 对抗）；Codex 探针全 fail-closed（不存在日期拒 / session_scope 参数删 TypeError + 输出恒 RTH / 重复双序拒 / 合法 RTH 过）；全离线 `*us_short*` **1716 OK**（本机 jsonschema；=1676+40）零回归；doc/route/README guard 含 minimal-template 全绿；`rg "last spec wins"` active code/docstring=0；py_compile OK；diff-check 仅 CRLF。
+- **Next**: Codex re-`审查` 批4 slice 4a（4 Required 已修；范围仅 resolver+测试+README 行+closeout，§18.2 note 未再改；纯/离线、无 provider/live/A 股、未起 4b/4c/4d）。重点：docstring 契约与代码一致（无残留 last-wins）/ minimal-template guard 绿 / 行为未变（仍拒坏日期·重复·非 RTH、合法过）。findings 落 register。PASS 后用户 `提交`；之后 slice 4b。
+- **Pre-Codex self-review**: A 整类（不可能日期双出口 / dedup RAISE / session_scope 整面删 / stale 短语全 grep 归零）；B 连带（这次把**被改函数自身 docstring** 纳入 grep——上轮正栽此漏项；README/register 同步、无下游）；C 反向（合法日期·乱序唯一·输出 RTH 正控不误伤）；D N/A；E register 4 段 resolved 无矛盾、CURRENT 未动；F strptime+ASCII 叠加、无浮点/wall-clock、加 entry 后复跑 guard（上轮漏跑致 FAIL）。详见 register。
+
+## 2026-06-24 - Codex re-`审查 FAIL` (US-short batch4 canonical resolver slice 4a)
+
+- **Verdict/Action**: FAIL. The resolver behavior repair is effective, but the active function docstring still teaches duplicate-date last-wins and the top Claude `修复` entry violates the review-cycle minimal-template guard.
+- **Required**: `R-USSHORT-BATCH4-CANONICAL-ASOF-ACTIVE-DOCSTRING-DRIFT` and `R-USSHORT-BATCH4-CANONICAL-ASOF-SESSIONLOG-MINIMAL-TEMPLATE-GAP` are open in `docs/system_risk_register.md`.
+- **Verify**: resolver 40 OK; direct probes reject bad dates, non-RTH kwarg, and duplicate sessions while valid RTH passes; py_compile OK; doc/route/README guard 49 OK + 1 FAIL on SESSION_LOG bullet-too-long; diff-check CRLF-only; broad `*us_short*` blocked in Codex runtime by missing `jsonschema`.
+- **Next**: Claude repair only the active resolver docstring drift and compress the batch4 `修复` SESSION_LOG entry, then return for Codex re-`审查`; do not change resolver behavior or start 4b/4c/4d/provider/live/DataHub/A-share/US-long.
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 canonical resolver slice 4a)
+
+- **Verdict/Action**: FAIL. Slice is pure/offline and target tests pass, but the canonical resolver still accepts malformed calendar/session authority that can change the decision window; the new module/test are also not routed in README.
+- **Required**: `R-USSHORT-BATCH4-CANONICAL-ASOF-CALENDAR-CONTRACT-GAP` and `R-USSHORT-BATCH4-CANONICAL-ASOF-ROUTE-ROW-GAP` are open in `docs/system_risk_register.md`.
+- **Verify**: resolver 32 OK; doc/route 50 OK; py_compile OK; probes accepted invalid `20260631`, non-RTH scope, and duplicate conflicting sessions order-dependent; broad `*us_short*` blocked by missing `jsonschema`; diff-check CRLF-only.
+- **Next**: Claude repair only resolver fail-closed calendar/session gates + tests + thin README route row + necessary closeout docs, then return for Codex re-`审查`; do not start slice 4b/4c/4d, provider/live/DataHub/Skill/production, A-share, or US-long.
+
+## 2026-06-24 — Claude `起草` (US-short 批4 启动：§18.2 build-vs-wire note + slice 4a 纯 canonical resolver)
+
+- **Verdict/Action**: 起草批4（周末 pipeline 接线，离线）。先按用户裁定**砍掉半复述的独立设计稿**（已删、未提交——语义留 §2.1/§3.5 单一权威，防 doc-drift）。本刀两件：① **§18.2 加一条 build-vs-wire + 实现决策 note**（docs）——grounding 实测仓内**无** universe/eligibility/catalyst_recall/Pass2 safety-gate 模块、**也无** eligibility governance preset（17 个 us_short governance 均不含），故批4 自建这些 + 否决层复用已建 `hard_veto`；关键决策（resolver 纯函数 / 死区 raise / 静态冻结 NYSE 日历 / 北京→ET 在薄 runner / 单一 `data_context` seam）+ slice 拆分（4a-4d）落 §18.2；**现有 52 engine + 批1 转换器一律不改**（编排器只注入 as_of 调用）。② **slice 4a 纯 resolver `engine/us_short_canonical_asof.py`**：`resolve_canonical_asof(now_et, sessions, *, session_scope="RTH")` + `OutOfWindowError`（盘中死区 fail-closed），三态分类（settled `now>=close` / upcoming `now<open` / intraday=死区），注入日历即全量测，镜像 A 股 `runners/resolve_canonical_asof.py` 工程骨架。US 分歧 = 两条边（open/close ET、半日市 close=13:00）+ 盘中死区（A 股单边、无死区）；canonical-only（不分类 explicit historical，防谓词漂移）、恒 live。
+- **Required**: 无（起草；新模块 + 测试 + 一条 docs note；现有代码零改动，`git status` = M `docs/us_short_system_design.md` + ?? engine/test 各一）。
+- **Verify**: 新测试 `tests/test_us_short_canonical_asof.py` **32 OK**（合法窗口 Fri-close/周末/周一盘前→周一；死区 11:00 / 09:30:00 整 / 15:59:59 / 半日市盘中 全 raise；半日市盘后/收盘整点 16:00:00 roll；假期/双假期 roll；窗口太窄/空/畸形 session[非dict/坏日期/非ASCII/坏时刻/非零填充/open≥close]/now 非 datetime 全 ValueError；窗口内多跑收敛同一 decision_date + 确定性 + 乱序去重）。全离线 `*us_short*` **1708 OK**（= 旧基线 1676 + 新 32）零回归；doc-governance + route-doc + README route-row guard **50 OK**（§18.2 改动未触发膨胀/漂移）。`git diff --check` 仅 CRLF。
+- **Next**: Codex `审查` 批4 slice 4a + §18.2 note（仅 `engine/us_short_canonical_asof.py` + `tests/test_us_short_canonical_asof.py` + `docs/us_short_system_design.md` §18.2 这三处；纯/离线、不交叉 A 股、无 provider/live/网络/DataHub）。审查重点：① 三态分类边界严格性——开盘整点 09:30:00 = 死区（必须开盘前决策）、收盘整点 16:00:00 = settled（收盘后才 roll），与 §2.1 两边窗口一致；② 盘中死区 = raise `OutOfWindowError`（fail-closed、非返回 status），且对"窗口完整"也优先 raise；③ canonical-only / 恒 live、不分类 explicit historical（镜像 A 股 `runners/resolve_canonical_asof.py` 职责边界、防谓词漂移）；④ 半日市(close=13:00) / 假期(omit session) / 窗口太窄(无 upcoming 或无 settled) / 畸形 session / now 非 datetime 全 fail-closed；⑤ 窗口内多跑收敛同一 decision_date（幂等地基）+ 确定性 + 乱序去重；⑥ §18.2 note 准确性（实测无现存 eligibility 模块/preset → 批4 自建、现有 52 engine 不改）+ 无语义复述（语义仍以 §2.1/§3.5 为权威）；⑦ tz 契约（纯函数只认 ET 墙钟、北京→ET 归薄 runner slice）是否可接受。material findings 落 `docs/system_risk_register.md`。PASS 后用户 `提交`；之后 slice 4b（静态冻结 NYSE 日历 + session-builder）。
+- **Pre-Codex self-review**: A（整类）：坏输入整类一次覆盖（日期 3 形 + 时刻 2 形 + open/close 关系 + 非dict + 非datetime + 空 + 去重/乱序），非补单例。B（连带）：新模块无旧符号可 grep；§18.2 note 引新模块名一致、`render_weekly_report` 内容无关本就写明、无下游消费者（编排器=4d）。C（反向）：死区有正控（周末/盘前/半日市盘前**不** raise）+ 负控（盘中/开盘整点 raise），不把合法窗口误判死区、也不漏判盘中；半日市 vs 常规日 14:00 双向对照。D：N/A。E：§18.2 note 全是 settled 事实（scope/决策），无瞬态 gate 词；CURRENT 未动（draft 未提交，§0 delta 留提交时）。F：日期/时刻严格 ASCII+范围；now_et 类型门；无浮点 / 无 wall-clock（注入）/ sessions 单次消费（无 generator 双消费）；tz-aware 非 ET 不可靠检测 → docstring 明确契约要求 ET 墙钟（边界转换 + 其测试归薄 runner slice）。
+
 ## 2026-06-24 - Codex `审查 PASS` (R-README-ROUTE-ROW-LENGTH-TABLE-ROW-DETECTION-BYPASS)
 
 - **Verdict/Action**: PASS. README route-row guard repair accepted; reviewed scope = guard test + closeout docs/register + existing `AGENTS.md`/`docs/README.md` contract, with no runtime/business path.
