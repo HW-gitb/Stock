@@ -157,8 +157,9 @@ def validate_upgrade_eval(summary, *, governance=_GOV) -> None:
     margin_frozen(governance)`` (both RE-DERIVED — a doctored margin-frozen / min can't validate); every forward obs
     EXACTLY ``{"as_of": <strict YYYYMMDD>}`` (de-identified — no nested ticker / performance), each ``<= as_of`` (no
     look-ahead, §12.2 ①) and STRICTLY ascending + unique (§12.2 ③); ``n_forward_observations ==
-    len(forward_observations)``; ``upgrade_review_due == (n >= min_comparison_weeks)``; and ``decision_status``
-    consistent with (due, the re-derived margin_frozen). Raises ``UpgradeGateError`` (incl. on non-dict governance)."""
+    len(forward_observations)``; ``upgrade_review_due`` (a strict bool — an int that compares equal like 1==True /
+    0==False is refused) ``== (n >= min_comparison_weeks)``; and ``decision_status`` consistent with (due, the
+    re-derived margin_frozen). Raises ``UpgradeGateError`` (incl. on non-dict governance)."""
     if not isinstance(summary, dict):
         raise UpgradeGateError("summary must be a dict, got %r" % (type(summary).__name__,))
     if set(summary) != _EVAL_KEYS:
@@ -190,8 +191,11 @@ def validate_upgrade_eval(summary, *, governance=_GOV) -> None:
             raise UpgradeGateError("forward_observations must be STRICTLY ascending + unique by as_of, got %r after %r" % (o["as_of"], prev))
         prev = o["as_of"]
     due = n >= mw
-    if due != summary["upgrade_review_due"]:
-        raise UpgradeGateError("upgrade_review_due %r != (n >= min_comparison_weeks) %r" % (summary["upgrade_review_due"], due))
+    urd = summary["upgrade_review_due"]
+    if not isinstance(urd, bool):  # STRICT type gate: a re-derived bool, not an int that compares equal (1==True / 0==False)
+        raise UpgradeGateError("upgrade_review_due must be a bool, got %r" % (urd,))
+    if due != urd:
+        raise UpgradeGateError("upgrade_review_due %r != (n >= min_comparison_weeks) %r" % (urd, due))
     expected_frozen = margin_frozen(governance)  # re-derive from authority — NOT trusted from the artifact
     frozen, st = summary["comparison_win_margin_frozen"], summary["decision_status"]
     if not isinstance(frozen, bool):

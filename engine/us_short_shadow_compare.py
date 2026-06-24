@@ -223,7 +223,8 @@ def validate_shadow_comparison(result) -> None:
     frozen track / boundary / primary_profile / min_comparison_weeks; profiles cover EXACTLY the frozen profile
     set; EXACTLY one profile is primary/live; every selection is a deterministic (core_score DESC, ticker ASC),
     rank-1..k, len==min(top_n,pool_size), unique-ticker ranking (禁止挑样本); and every vs_balanced set-diff is
-    consistent with the selections. Raises ``ShadowCompareError``."""
+    consistent with the selections (overlap_count a strict int — bool refused so True==1 / False==0 can't slip past
+    the ``!=``). Raises ``ShadowCompareError``."""
     if not isinstance(result, dict):
         raise ShadowCompareError("result must be a dict, got %r" % (type(result).__name__,))
     if result.get("track") != _TRACK:
@@ -287,5 +288,8 @@ def validate_shadow_comparison(result) -> None:
             raise ShadowCompareError("vs_balanced[%r].balanced_only is inconsistent with the selections" % (name,))
         if d["shadow_extra"] != sorted(shadow_set - balanced_set):
             raise ShadowCompareError("vs_balanced[%r].shadow_extra is inconsistent with the selections" % (name,))
-        if d["overlap_count"] != len(balanced_set & shadow_set):
+        oc = d["overlap_count"]
+        if not (isinstance(oc, int) and not isinstance(oc, bool)):  # STRICT type gate: an int (bool refused — True==1 / False==0 can't slip past the != below)
+            raise ShadowCompareError("vs_balanced[%r].overlap_count must be an int (bool refused), got %r" % (name, oc))
+        if oc != len(balanced_set & shadow_set):
             raise ShadowCompareError("vs_balanced[%r].overlap_count is inconsistent with the selections" % (name,))

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-24 - Codex `审查 PASS` (US-short 批3 fail-open 守门类 whole-class 修)
+
+- **Verdict/Action**: PASS. Net-result closed-fill geometry now fail-closes, and the three comparison/upgrade validators now reject bool/int equality bypasses before re-derived checks.
+- **Required**: None new. Existing Hot Queue items are repaired in the working tree; see `docs/system_risk_register.md` for `R-USSHORT-BATCH3-PAPER-NET-FILL-GEOMETRY-GAP` and `R-USSHORT-BATCH3-VALIDATOR-NUMERIC-BOOL-BYPASS-CLASS`; pending user commit.
+- **Verify**: target 4 modified test files 114 OK; direct probes OK; full offline `test_us_short*.py` on user Python 3.13.8/jsonschema 4.26.0 = 1667 OK; doc/route 39 OK; py_compile OK; diff-check CRLF warnings only.
+- **Next**: User may `提交` this US-short batch3 fail-open whole-class repair; no provider/live/network/DataHub/Skill/production/broker/A-share/US-long path was run.
+
+## 2026-06-24 — Claude `修复` (US-short 批3 fail-open 守门类 whole-class 修 — paper_net_result 几何 + 3 validator bool 严格类型门)
+
+- **Verdict/Action**: 用户 `按你的意见修复批3`(cc_r1 + codex_r3 共识)。一次 whole-class 修两类:① P1 `paper_net_result._validate_fill_shape` 加 v1-long 几何门(filled_stopped exit<fill / filled_tp_exit exit>fill / 拒 ==,堵止损记成赚/止盈记成亏)+ 删重复 `_COST_KEYS`;② P2 三 validator(scorecard_comparison delta+marginal、shadow_compare overlap_count、upgrade_gate review_due)加严格类型门拒 bool 等值(镜像 multiweek_comparison),whole-class 扫余下裸 `!=` 无残留。两 Required 详 register。
+- **Required**: `R-USSHORT-BATCH3-PAPER-NET-FILL-GEOMETRY-GAP`(P1)+ `R-USSHORT-BATCH3-VALIDATOR-NUMERIC-BOOL-BYPASS-CLASS`(P2),均 in_progress(working tree 已修,详 register Resolution);closure 待 Codex re-`审查 PASS` + 用户 `提交`。
+- **Verify**: 改 4 engine + 4 test + `docs/README.md`(几何门/类型门 + module/函数/test docstring + route 4 面同步、grep 残留 0);全离线 `*us_short*` **1667 OK**(+7、零回归);fresh-import 探针 4 类全 REJECTED + 正控 OK;doc-governance + route-doc **39 OK**;py_compile OK;`git diff --check` 仅 CRLF。
+- **Next**: Codex `审查` 本修复刀(4 engine + 4 test + README;重点:几何门正确不误拒、bool 门 whole-class 无残留、B-ripple 4 面同步、零回归;两 Required 见 register)。PASS 后用户 `提交` → 两 Required resolved@hash。
+- **Pre-Codex self-review**: A:两类一次到位非逐腿、whole-class grep 无第 4 处。B:改 validator 后 4 教学面(module+函数+test docstring + README route)同步;producer 已有几何门不重复。C:正控不误拒(correct stop/tp、合法 int/float delta、真 0 仅 bool 拒);修 1 prior 测试(CostModel exit==fill→110)。E:CURRENT 未动(pre-commit)。F:`_finite` 拒 bool/NaN/Inf;门置 == 前;无 BOM、diff 净;jsonschema 在用户实机在位、Codex sandbox 缺包属环境非本刀 bug。
+
 ## 2026-06-24 — Codex `审查 PASS` (US-short batch3 §11.2 formatter closeout)
 
 - **Verdict/Action**: PASS. `render_coverage_section` and `render_hot_excluded_banner` are pure/offline, de-identified aggregate/count-only formatters; `render_weekly_report` remains content-agnostic and batch-4 assembly stays separate. No new Required.

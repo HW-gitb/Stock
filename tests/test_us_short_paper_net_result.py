@@ -4,8 +4,9 @@
 Covers: per-status net (not_filled → 0 cash; same-day close → gross - round-trip cost; held → unrealized
 None); the §13 #18 cost prior as round-trip return-drag (commission + spread + slippage_bps/10000);
 reproducibility; whole malformed-input class (fill_result / cost_prior shape, unknown status, bad / missing /
-negative / non-finite cost, bad close prices); and an integration drift-guard feeding REAL simulate_fill outputs
-through. Pure/offline; no provider/live; no A-share crossing.
+negative / non-finite cost, bad close prices); the v1-long exit GEOMETRY lock (a stop at/above entry or a
+take-profit at/below entry — incl. exit==fill — refused before accounting); and an integration drift-guard feeding
+REAL simulate_fill outputs through. Pure/offline; no provider/live; no A-share crossing.
 """
 import sys
 import unittest
@@ -59,7 +60,8 @@ class PerStatus(unittest.TestCase):
 
 class CostModel(unittest.TestCase):
     def test_total_cost_is_commission_plus_spread_plus_bps(self):
-        r = nr.paper_net_result(_fill("filled_tp_exit", fill_price=100.0, exit_price=100.0), cost_prior=COST)
+        # exit ABOVE entry (valid tp geometry); cost_fraction is independent of the gross
+        r = nr.paper_net_result(_fill("filled_tp_exit", fill_price=100.0, exit_price=110.0), cost_prior=COST)
         self.assertAlmostEqual(r["cost_fraction"], 0.0025)  # 0.001 + 0.0005 + 10/10000
 
     def test_zero_cost_net_equals_gross(self):
@@ -171,6 +173,30 @@ class FillShapeLocked(unittest.TestCase):
         for reason in ("same_day_tp_exit", "multi_day_tp_exit"):
             nr.paper_net_result({"status": "filled_tp_exit", "fill_price": 100.0, "exit_price": 110.0,
                                  "exit_reason": reason, "reason": None}, cost_prior=ZERO_COST)
+
+
+class FillGeometryLocked(unittest.TestCase):
+    """R-USSHORT-BATCH3-PAPER-NET-FILL-GEOMETRY-GAP: a v1-long closed fill must close stop BELOW entry / tp ABOVE.
+    A 'stop' with exit>=fill (would book a GAIN) or a 'take-profit' with exit<=fill (would book a LOSS), INCLUDING
+    exit==fill, is refused before any accounting — the consumer re-checks the geometry rather than trusting the
+    producer (the official producers enforce stop<fill<tp, but a hand-crafted / stale / drifted record must not
+    wash a direction-wrong net into a legitimate paper result)."""
+
+    def test_stop_at_or_above_entry_refused(self):
+        for exit_price in (110.0, 100.0):  # above entry, and EQUAL — both impossible for a long stop
+            with self.assertRaises(nr.PaperNetResultError, msg="stop exit=%r" % exit_price):
+                nr.paper_net_result(_fill("filled_stopped", fill_price=100.0, exit_price=exit_price), cost_prior=ZERO_COST)
+
+    def test_tp_at_or_below_entry_refused(self):
+        for exit_price in (90.0, 100.0):  # below entry, and EQUAL — both impossible for a long take-profit
+            with self.assertRaises(nr.PaperNetResultError, msg="tp exit=%r" % exit_price):
+                nr.paper_net_result(_fill("filled_tp_exit", fill_price=100.0, exit_price=exit_price), cost_prior=ZERO_COST)
+
+    def test_correct_geometry_passes(self):  # positive controls: stop below entry, tp above entry
+        self.assertAlmostEqual(
+            nr.paper_net_result(_fill("filled_stopped", fill_price=100.0, exit_price=95.0), cost_prior=ZERO_COST)["gross_return"], -0.05)
+        self.assertAlmostEqual(
+            nr.paper_net_result(_fill("filled_tp_exit", fill_price=100.0, exit_price=105.0), cost_prior=ZERO_COST)["gross_return"], 0.05)
 
 
 if __name__ == "__main__":

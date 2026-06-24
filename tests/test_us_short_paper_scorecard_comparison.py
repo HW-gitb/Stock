@@ -6,8 +6,9 @@ Covers: balanced-vs-shadow build (embeds the 4 full-caliber scorecards, per-shad
 None delta when a basket is unrealized (open); profile coverage (missing / extra profile refused); the fixed-TopN
 denominator invariant (§12.2 固定 TopN — mismatched selected_total across profiles: small / large shadow basket /
 theme_off mismatch refused on build AND validate; all-empty shared OK); bad as_of; an invalid embedded scorecard
-refused; and the CLOSED-WORLD validator (extra key / boundary tamper / doctored delta / theme-marginal tamper /
-primary tamper refused). Pure/offline; no provider/live; no A-share crossing.
+refused; the CLOSED-WORLD validator (extra key / boundary tamper / doctored delta / theme-marginal tamper /
+primary tamper refused); and the strict delta/marginal type gate (a numerically-equal `False==0` bool bypass
+refused). Pure/offline; no provider/live; no A-share crossing.
 """
 import copy
 import sys
@@ -182,6 +183,28 @@ class Validator(unittest.TestCase):
 
     def test_missing_shadow_in_vs_balanced_refused(self):
         self._rejects(lambda b: b["vs_balanced"].pop("theme_off"))
+
+
+class BoolBypassRefused(unittest.TestCase):
+    """R-USSHORT-BATCH3-SCORECARD-COMPARISON-DELTA-BOOL-BYPASS: a delta / marginal whose true value is numerically
+    0 doctored to the equal ``False`` (False==0 / False==0.0) must be refused by the strict None-or-finite type
+    gate, NOT slip past the bare ``!=`` — the same class the multi-week comparison already guards."""
+
+    def test_bool_count_delta_refused(self):
+        good = cmp.build_scorecard_comparison(_four(), as_of=AS_OF)
+        self.assertEqual(good["vs_balanced"]["theme_plus"]["win_count_delta"], 0)  # balanced 1 win - theme_plus 1 win
+        bad = copy.deepcopy(good)
+        bad["vs_balanced"]["theme_plus"]["win_count_delta"] = False  # False == 0 → must NOT validate
+        with self.assertRaises(cmp.ScorecardComparisonError):
+            cmp.validate_scorecard_comparison(bad)
+
+    def test_bool_theme_marginal_refused(self):
+        good = cmp.build_scorecard_comparison(_four(theme_off=BAL), as_of=AS_OF)  # theme_off net == balanced net
+        self.assertEqual(good["theme_weight_marginal_net"], 0.0)                  # balanced - theme_off = 0.0
+        bad = copy.deepcopy(good)
+        bad["theme_weight_marginal_net"] = False  # False == 0.0 → must NOT validate
+        with self.assertRaises(cmp.ScorecardComparisonError):
+            cmp.validate_scorecard_comparison(bad)
 
 
 if __name__ == "__main__":

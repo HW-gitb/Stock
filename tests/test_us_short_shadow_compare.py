@@ -7,8 +7,9 @@ ship-gate isolation boundary + balanced = sole primary (#13); reproducibility; e
 whole malformed-input class (pool / row / ticker / blocks / top_n); the frozen-profile contract lock — weights /
 role / live_eligible / shadow_only enforced on the loaded preset, the SCORER dependency (core_score), AND the
 emitted artifact (governance-drift: second primary / shadow turned live / no primary / runtime weight drift /
-scorer-dependency weight drift; output tamper: weight / role / flag); and the output-contract validator rejecting
-tampered artifacts. Pure/offline; no provider/live; no A-share crossing.
+scorer-dependency weight drift; output tamper: weight / role / flag); the output-contract validator rejecting
+tampered artifacts; and the strict overlap_count int gate (a numerically-equal `False==0` bool bypass refused).
+Pure/offline; no provider/live; no A-share crossing.
 """
 import copy
 import sys
@@ -260,6 +261,15 @@ class OutputValidator(unittest.TestCase):
 
     def test_output_shadow_flag_tampered(self):
         self._tamper(lambda b: b["profiles"]["theme_plus"].__setitem__("shadow_only", "yes"))
+
+    def test_bool_overlap_count_refused(self):
+        # R-USSHORT-BATCH3-SHADOW-OVERLAP-BOOL-BYPASS: overlap_count true value 0 (empty pool) doctored to the
+        # equal `False` (False==0) must be refused by the strict int gate, NOT slip past the bare `!=`
+        good = sc.build_shadow_comparison([], top_n=3)  # empty pool → every overlap_count is 0
+        bad = copy.deepcopy(good)
+        bad["vs_balanced"]["theme_off"]["overlap_count"] = False  # False == 0
+        with self.assertRaises(sc.ShadowCompareError):
+            sc.validate_shadow_comparison(bad)
 
 
 if __name__ == "__main__":

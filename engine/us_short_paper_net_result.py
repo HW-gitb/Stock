@@ -24,9 +24,11 @@ This is a PAPER number only — paper_performance is design-iteration evidence a
 eligible (§12; the corporate-action evaluability + ship-gate isolation are engine.us_short_paper_eval_gate).
 Pure / offline: arithmetic on dicts; no provider / live / DataHub / network; no persistence; no A-share crossing.
 Malformed input fails closed (``PaperNetResultError``); the function re-checks the FULL per-status fill_result
-shape itself (status ⇔ price / reason — see ``_validate_fill_shape``) rather than trusting it came from
-``simulate_fill``, so an inconsistent record (not_filled carrying prices, filled_held with an exit, a closed
-status with the wrong exit_reason) can never be converted into paper accounting.
+shape itself (status ⇔ price / reason, AND the v1-long exit GEOMETRY — a stop closes BELOW entry, a take-profit
+ABOVE — see ``_validate_fill_shape``) rather than trusting it came from ``simulate_fill``, so an inconsistent
+record (not_filled carrying prices, filled_held with an exit, a closed status with the wrong exit_reason, or a
+"stop" booked as a gain / a "take-profit" booked as a loss) can never be converted into paper accounting
+(R-USSHORT-BATCH3-PAPER-NET-FILL-GEOMETRY-GAP).
 """
 from __future__ import annotations
 
@@ -41,7 +43,6 @@ _FILL_STATUSES = ("not_filled", "filled_held") + _REALIZED_CLOSED
 # real outputs so a reason rename can't silently drift past here)
 _STATUS_EXIT_REASONS = {"filled_stopped": ("same_day_stop", "multi_day_stop"),
                         "filled_tp_exit": ("same_day_tp_exit", "multi_day_tp_exit")}
-_COST_KEYS = ("commission_fee", "slippage_bps", "spread_cost")
 _COST_KEYS = ("commission_fee", "slippage_bps", "spread_cost")
 
 
@@ -62,9 +63,11 @@ def _validate_fill_shape(fill_result, status) -> None:
     inconsistent record came from ``simulate_fill``: ``not_filled`` carries NO fill_price / exit_price / exit_reason;
     ``filled_held`` carries a finite positive fill_price and NO exit_price / exit_reason (it is OPEN); a closed
     status (``filled_stopped`` / ``filled_tp_exit``) carries finite positive fill_price + exit_price and the
-    status-specific exit_reason (``same_day_*`` from same-day fill OR ``multi_day_*`` from the multi-day exit).
-    Raises ``PaperNetResultError`` on any
-    mismatch."""
+    status-specific exit_reason (``same_day_*`` from same-day fill OR ``multi_day_*`` from the multi-day exit),
+    AND the v1-long exit GEOMETRY holds (a ``filled_stopped`` closes strictly BELOW entry, a ``filled_tp_exit``
+    strictly ABOVE — exit==fill is impossible too) so a record that books a "stop" as a gain (exit>fill) or a
+    "take-profit" as a loss (exit<fill) can never be converted into paper accounting. Raises
+    ``PaperNetResultError`` on any mismatch."""
     fill_price, exit_price, exit_reason = fill_result.get("fill_price"), fill_result.get("exit_price"), fill_result.get("exit_reason")
     if status == "not_filled":
         if fill_price is not None or exit_price is not None or exit_reason is not None:
@@ -84,6 +87,20 @@ def _validate_fill_shape(fill_result, status) -> None:
             raise PaperNetResultError("%s exit_price must be a finite positive number, got %r" % (status, exit_price))
         if exit_reason not in _STATUS_EXIT_REASONS[status]:
             raise PaperNetResultError("%s exit_reason must be one of %r, got %r" % (status, _STATUS_EXIT_REASONS[status], exit_reason))
+        # §12.1 v1-LONG passive exit GEOMETRY: a stop closes strictly BELOW entry, a take-profit strictly ABOVE
+        # (exit==fill is impossible too — a real stop/tp prints through the level). The official producers
+        # (engine.us_short_paper_fill / _multi_day_exit) already enforce stop<fill<tp, but this consumer re-checks
+        # rather than trusting them, so a hand-crafted / stale / drifted record that would book a "stop" as a GAIN
+        # (exit>=fill) or a "take-profit" as a LOSS (exit<=fill) can never be converted into paper accounting
+        # (R-USSHORT-BATCH3-PAPER-NET-FILL-GEOMETRY-GAP).
+        if status == "filled_stopped" and not (exit_price < fill_price):
+            raise PaperNetResultError(
+                "filled_stopped must close strictly BELOW entry (exit_price %r < fill_price %r); a stop at/above entry "
+                "is impossible for a v1 long and must not be booked as a gain" % (exit_price, fill_price))
+        if status == "filled_tp_exit" and not (exit_price > fill_price):
+            raise PaperNetResultError(
+                "filled_tp_exit must close strictly ABOVE entry (exit_price %r > fill_price %r); a take-profit "
+                "at/below entry is impossible for a v1 long and must not be booked as a loss" % (exit_price, fill_price))
 
 
 def _total_cost_fraction(cost_prior) -> float:

@@ -8,8 +8,9 @@ frozen margin still never authorizes, AND a self-authored comparison_win_margin_
 re-derived from governance and refused); §12.2 ③ forward obs strictly ascending + unique (out-of-order / duplicate
 refused); §12.2 ① no look-ahead (obs after the eval as_of refused on build + validate); de-identified obs (nested
 ticker / performance field refused); non-dict governance fails closed; the non-production boundary; and the
-CLOSED-WORLD validator (extra key / boundary tamper / doctored due or status refused). Pure/offline; no
-provider/live; no A-share crossing.
+CLOSED-WORLD validator (extra key / boundary tamper / doctored due or status refused, incl. a strict bool gate on
+upgrade_review_due so a numerically-equal `0==False` int bypass is refused). Pure/offline; no provider/live; no
+A-share crossing.
 """
 import copy
 import datetime
@@ -180,6 +181,12 @@ class Validator(unittest.TestCase):
         bad["decision_status"] = ug.REVIEW_DUE_MARGIN_PENDING
         with self.assertRaises(ug.UpgradeGateError):
             ug.validate_upgrade_eval(bad, governance=FROZEN_GOV)
+
+    def test_bool_review_due_refused(self):
+        # R-USSHORT-BATCH3-UPGRADE-GATE-DUE-BOOL-BYPASS: upgrade_review_due true value False (n=5<12) doctored to
+        # the equal int 0 (0==False) must be refused by the strict bool gate, NOT slip past the bare `!=`
+        self.assertFalse(self.good["upgrade_review_due"])
+        self._rejects(lambda b: b.__setitem__("upgrade_review_due", 0))
 
 
 if __name__ == "__main__":

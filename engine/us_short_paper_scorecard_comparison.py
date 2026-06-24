@@ -27,13 +27,15 @@ path-dependent drawdown is engine.us_short_paper_nav_drawdown (a per-profile WEE
 single path-independent scorecard; wiring its delta into a MULTI-week version of this comparison is a later cut);
 the §12.1 复权/公司行动 evaluability gate (not_evaluable → no upgrade/downgrade conclusion) is
 engine.us_short_paper_eval_gate; the anti-self-deception upgrade gate is engine.us_short_upgrade_gate. ``validate_scorecard_comparison`` is CLOSED-WORLD (exact key set + frozen boundary + every
-embedded scorecard re-validated + every delta re-derived) so a doctored delta / flipped boundary / smuggled field
-fails closed. Pure / offline: arithmetic on dicts; no provider / live / DataHub / network; no A-share crossing;
+embedded scorecard re-validated + every delta strict-typed [None or finite, bool refused so a `False==0.0` /
+`True==1` numerically-equal bool can't slip past the `==`] then re-derived) so a doctored delta / flipped boundary /
+smuggled field fails closed. Pure / offline: arithmetic on dicts; no provider / live / DataHub / network; no A-share crossing;
 malformed input fails closed (``ScorecardComparisonError``).
 """
 from __future__ import annotations
 
 import datetime
+import math
 
 from engine.us_short_core_score import PROFILE_NAMES, PRIMARY_PROFILE
 from engine.us_short_paper_scorecard import validate_paper_scorecard
@@ -66,6 +68,10 @@ def _strict_yyyymmdd(s) -> bool:
         return True
     except ValueError:
         return False
+
+
+def _finite(x) -> bool:
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
 
 
 def _delta(shadow_v, balanced_v):
@@ -134,9 +140,10 @@ def validate_scorecard_comparison(comparison) -> None:
     ship-gate-isolation / paper-only boundary; primary_profile == balanced; a strict REAL as_of; ``profiles``
     covers EXACTLY the frozen profile set, every embedded scorecard re-validates, AND all share the same fixed-TopN
     ``selected_total`` denominator (§12.2 固定 TopN — no mixed basket sizes); ``vs_balanced`` covers EXACTLY
-    the shadow profiles with EXACTLY the frozen delta keys, each delta == the re-derived ``shadow − balanced``; and
-    ``theme_weight_marginal_net`` == ``balanced.net_basket − theme_off.net_basket``. Raises
-    ``ScorecardComparisonError`` / ``PaperScorecardError``."""
+    the shadow profiles with EXACTLY the frozen delta keys, each delta None-or-finite (bool refused — a
+    numerically-equal `False==0.0` / `True==1` can't slip past the `==`) AND == the re-derived ``shadow − balanced``;
+    and ``theme_weight_marginal_net`` None-or-finite (bool refused) AND == ``balanced.net_basket −
+    theme_off.net_basket``. Raises ``ScorecardComparisonError`` / ``PaperScorecardError``."""
     if not isinstance(comparison, dict):
         raise ScorecardComparisonError("comparison must be a dict, got %r" % (type(comparison).__name__,))
     if set(comparison) != _COMPARISON_KEYS:
@@ -169,7 +176,13 @@ def validate_scorecard_comparison(comparison) -> None:
         if not isinstance(d, dict) or set(d) != _DELTA_KEYS:
             raise ScorecardComparisonError("vs_balanced[%r] must carry EXACTLY %s, got %s" % (name, sorted(_DELTA_KEYS), sorted(map(str, d)) if isinstance(d, dict) else type(d).__name__))
         for m in _DELTA_METRICS:
-            if d[m + "_delta"] != _delta(profiles[name][m], balanced[m]):
+            got = d[m + "_delta"]
+            if got is not None and not _finite(got):  # STRICT type gate: None or finite (bool refused) BEFORE the != below
+                raise ScorecardComparisonError("vs_balanced[%r].%s_delta must be None or a finite number (bool refused), got %r" % (name, m, got))
+            if got != _delta(profiles[name][m], balanced[m]):
                 raise ScorecardComparisonError("vs_balanced[%r].%s_delta inconsistent with the scorecards" % (name, m))
-    if comparison["theme_weight_marginal_net"] != _delta(balanced["net_basket"], profiles[_THEME_OFF]["net_basket"]):
+    tw = comparison["theme_weight_marginal_net"]
+    if tw is not None and not _finite(tw):  # STRICT type gate: None or finite (bool refused) BEFORE the != below
+        raise ScorecardComparisonError("theme_weight_marginal_net must be None or a finite number (bool refused), got %r" % (tw,))
+    if tw != _delta(balanced["net_basket"], profiles[_THEME_OFF]["net_basket"]):
         raise ScorecardComparisonError("theme_weight_marginal_net inconsistent with balanced − theme_off net_basket")
