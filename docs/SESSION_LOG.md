@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-a sub_mode validation)
+
+- **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-ANALYSIS-SUBMODE-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
+- **Required**: None new. `R-USSHORT-BATCH4-WEEKEND-ANALYSIS-SUBMODE-VALIDATION-GAP` is closed in `docs/system_risk_register.md`.
+- **Verify**: analysis 41 OK; adjacent pure deps 164 OK; doc/route/README guards 50 OK; py_compile OK; probes OK; broad `*us_short*` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: Claude Code：提交。
+
+## 2026-06-24 — Claude `修复` (US-short 批4 slice 4d-ii-a — sub_mode/probe consumer-validation fail-closed)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required P1）。judge：成立+在 scope（同类 consumer-validation fail-open——非法注入值冒充 clean）。`_resolve_candidate_sub_mode` 对非 `PRICE_SUB_MODES`（复用 price engine 常量、单源）sub_mode 改 raise、不再静默返 pullback；`_analyze_one` 以 `"sub_mode" in row` 分**缺省**（→pullback）vs **present-invalid**（含 None/非 str→raise）；probe present 须真 bool 否则 raise、缺省 False。合法行为不变（breakout honored/downgraded/真-True probe 例外/极度防御 never）；sub_mode·probe candidate-only（持仓忽略不误拒）。docstring 同步；详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKEND-ANALYSIS-SUBMODE-VALIDATION-GAP`。
+- **Verify**: analysis **41 OK**（+6：非法 sub_mode 串/非 str/显式 None/非 bool probe → 全 raise；显式 pullback honored + 持仓忽略 junk 字段 正控）。Codex 探针 `sub_mode="banana"` / probe `"true"` 现 fail-closed。全离线 `*us_short*` **1887 OK**（=1846+41）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex re-`审查` 4d-ii-a（1 Required 已修；`us_short_weekend_analysis.py`+测试+docstring；纯/离线、无 provider/live、不交叉 A 股）。重点：① sub_mode 边界 fail-closed（缺省→pullback、非法/None/非str→raise、复用 PRICE_SUB_MODES）；② probe 真 bool 门（非 bool→raise、缺省 False）；③ 合法行为不变（breakout honored/downgraded/probe 例外/极度防御 never）；④ 持仓忽略 sub_mode·probe；⑤ whole-class：sub_mode 唯一 fail-open，余（probe/has_event_data strict、event_sensitive/forward/profile/row_source/ticker raise-或-保守降级）无残留。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-b。
+- **Pre-Codex self-review**: A 整类（sub_mode 坏形[非法串/非str/None]+probe 非 bool+缺省/合法/持仓 正控）；B 连带（复用 `PRICE_SUB_MODES` 单源、`_resolve`+`_analyze_one`+`analyze_rows` docstring+Raises 同步、README 路由级未变）；C 反向（合法 pullback/breakout/probe/持仓 正控仍过）；D（缺省 vs present-invalid）走最窄=`"key" in row` 分、present-invalid raise；E register resolved、CURRENT 未动；F pre-flight（None/非str/非bool raise + 持仓不读该字段 已测）。**根因**：起草把"非法→引擎默认 pullback"当够用，漏了分析层须 raise（与 row_source/profile 一致），[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-24 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-a sub_mode validation)
+
+- **Verdict/Action**: FAIL. The 4d-ii-a analysis stage is pure/offline and target tests pass, but candidate `sub_mode` consumer-validation is fail-open: invalid mode values are silently emitted as normal pullback evidence.
+- **Required**: `R-USSHORT-BATCH4-WEEKEND-ANALYSIS-SUBMODE-VALIDATION-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: analysis 35 OK; adjacent pure deps 164 OK; doc/route/README guards 50 OK; py_compile OK; probes reproduce invalid-sub_mode -> pullback; broad `*us_short*` blocked here by missing `jsonschema` (40 errors); diff-check CRLF-only.
+- **Next**: Claude Code：修复。
+
+## 2026-06-24 — Claude `起草` (US-short 批4 slice 4d-ii-a — 周末 pipeline 分析证据段)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-a（§18.2 4d-ii capstone 第一刀=分析证据段）。新 `engine/us_short_weekend_analysis.py`：`analyze_rows(rows, *, market_axis_regimes, prior...)` 按**每行**跑 §5 `classify_hard_veto`+§6 路由价格引擎（candidate→`support_atr_engine`/holding→`holding_exit_engine`）+§8.1 forward/event-gap+§4.2 `core_score`，§7 regime **算一次**附结果级。**仅证据**：不决策 final_action/不跑 cap 削减/不分配现金/不排名(=4d-ii-b)、不装配 §10 machine_record(4d-ii-c)、不渲染(4d-ii-d)。§8 防御档 breakout→pullback 守门（极度防御 never；唯一例外=caller 断言 theme-extreme probe，min-size/slot/in-band cap 留 4d-ii-b）。ticker 复用 `canonical_us_ticker` 一股一行。纯/离线、不交叉 A 股、无 provider/live。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: analysis tests **35 OK**（regime 算一次+降级[缺轴 bump/无轴 restricted]、§6 路由 candidate/holding+breached、sub_mode 守门[进攻 honored/防御 downgraded/probe-allowed/极度防御 never/缺省 pullback/holding None]、veto evidence[entry/position/malformed soft]、forward 四态、event_gap 四态、score 三态、身份[规范/class-share/A股拒/dup 拒/缺 ticker 拒]、坏形[非list/非dict row/坏 price→observe]）。全离线 `*us_short*` **1880 OK**（=1846+34）零回归；py_compile OK；doc/route/README guards 50 OK。
+- **Next**: Codex `审查` 批4 slice 4d-ii-a（仅 `engine/us_short_weekend_analysis.py`+测试+README 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① §7 regime 算一次+降级保守（缺轴 bump/无轴 restricted）；② §6 路由 candidate→support_atr/holding→holding_exit（加仓 dual-engine v1 延后=一股一行）；③ §8 防御档 sub_mode 守门（breakout→pullback、极度防御 never、probe 例外仅 caller 断言；min-size/slot/in-band cap 属 4d-ii-b）；④ 证据 only 边界（veto 不 suppress build plan、不决策/定仓/现金/排名）；⑤ 身份一股一行（canonical 复用、dup/A股/缺 ticker fail-closed）；⑥ forward/score fail-closed（malformed forward / unknown profile raise、has_event_data strict-True、event_sensitive 缺→None 不误 restrict）。findings 落 register。PASS 后用户 `提交`；之后 slice 4d-ii-b（决策+基组：§6 链→final_action、§8 削减叠法+cap+cash、§9 action_rank）。
+- **Pre-Codex self-review**: A 整类（regime×sub_mode 矩阵 / veto 三档 / forward 四态 / event_gap 四态 / score 三态 / 身份五形 / 坏形四类 全覆盖）；B 连带（新模块复用 6 engine + gate `canonical_us_ticker`，逐一核源签名含 进攻 简体编码 footgun + `forward_event_effect` window_days=None→default + `core_score` KeyError + has_event_data strict-True；README 加薄行；design §18.2 未变=非设计变更、无旧符号 ripple）；C 反向（happy candidate executable / holding levels / veto none 正控不误拒，fail-closed raise 不误放）；D（§8 sub_mode 歧义）走最窄=降级+显式 probe flag、cap 延后；E CURRENT 未动（draft）；F pre-flight（canonical(None) 不崩已测、dup raise 非静默 dedup、缺 ticker fail-closed）。
+
 ## 2026-06-24 - Codex re-`审查 PASS` (US-short batch4 slice 4d-i data_context validation)
 
 - **Verdict/Action**: PASS. Re-reviewed the repair for `R-USSHORT-BATCH4-WEEKEND-PIPELINE-DATACONTEXT-VALIDATION-GAP`; the Required is resolved in the current working tree and no new material Required was found.
