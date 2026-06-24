@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-24 - Codex review PASS (US-short README route compression)
+
+- **Verdict/Action**: PASS. `docs/README.md` remains a routing table, not a second rule source: the US-short route compression keeps every file-pointer column byte-identical to HEAD, leaves non-US-short rows unchanged, and preserves load-bearing contracts in `AGENTS.md`, `docs/us_short_system_design.md`, module docstrings, tests, and the risk register.
+- **Required**: None.
+- **Verify**: `git status --short --untracked-files=all`; `git log -8 --oneline`; structural README probe OK (route data rows 150 unchanged, US-short 68 unchanged, US-long 1 unchanged, US-short read column exact match, non-US rows exact match, every US-short row has 3 pipes); doc-governance 25 OK; route-doc 14 OK; semantic boundary rg spot-check OK; `git diff --check` CRLF warnings only.
+- **Next**: User may commit this docs-only README route compression; no business code, provider/live/network/DataHub/Skill/production/broker/A-share/US-long path was run.
+
+## 2026-06-24 — Claude `起草` (US-short README 路由行压缩 — docs-only,68 行 prose → 薄指针)
+
+- **Verdict/Action**: 起草 docs-only README 压缩(采纳 Codex 建议:README=导航不讲故事;符合项目 `feedback_doc_drift_retire_not_chase`「一处权威+其余指针」)。`docs/README.md` 的 **68 行 `| US-short` 路由行**从 ~4-5K 字 prose 压成薄指针 `批/§ topic (context): 入口函数名 + 一句话 + 关键不变式`。**只压 col1 描述,col2 文件指针逐行原样保留**(用 `|` 切列自动保留=结构上杜绝丢指针)。删:多条不变式 prose(在 docstring)/「Pure-offline、no provider/live、no A股」blanket 边界(设计 §18 不变式)/「Tests:」枚举(在 test 文件)/ commit hash·review 历史(在 SESSION_LOG/git)。**仅 us_short lane**;a_short/a_long/us_long 行未动(如要统一是后续 docs 刀)。执行:两轮 general-purpose subagent(用户授权)压缩,我逐行验证+通读全 68。
+- **Required**: 无(起草;docs-only,无 code/test/schema 改动)。
+- **Verify**: **权威零指针丢失**——逐行 col2(文件列)`git show HEAD:README` vs 现 **字节相同**(比指针全集更严,排除 col1 prose token 噪音)。行数 us_short=68/us_long=1/总=152 不变;每 us_short 行恰 3 pipe(表合法);`git status` 仅 `docs/README.md`;**doc-governance + route-doc guard 39 OK**;us_short 块 **142721→22303 字符(−84%)**、中位行 324;**全 68 行已通读复核**(无 garble/丢义,批1/2/3 terseness 一致)。docs-only 不动 code → 不需跑 us_short 测试套。
+- **Next**: Codex `审查` US-short README 压缩刀。命令:`审查 US-short README 路由行压缩(docs-only,仅 docs/README.md):68 行 `| US-short` 由 prose 压成薄指针,col2 文件指针逐行字节保留(HEAD vs 现 col2 diff 空)。重点:① 抽查若干行确认 col2 文件指针零丢失/零改 + 表结构合法(68/1/152、每行 3 pipe);② 压缩后是否漏了某行**唯一 load-bearing** 的系统级事实(边界/§18.0 守卫/ship-gate 隔离/live-forward only/const-pin)——这类应在设计 §18/§12/§11.6 + register + 该模块 docstring 有权威(README 删之安全),抽查确认;③ 压缩级别是否合适(导航 vs 仍讲故事)。仅 docs/README.md、不动 code/test、不交叉 A 股。findings 落 register。` PASS 后用户 `提交`。
+- **Pre-Codex self-review**: A:统一全 68 行同一薄指针级别(非只压最长的几行)。B(连带):仅 README 一文件;col2 指针字节保留(权威 diff 空);删的系统级边界在设计 §18/§12/§11.6 有权威、契约在各 docstring、tests 在 test 文件——均非 README 唯一来源;a_short/a_long lane 未碰(scope 清晰)。C(反向):没把 thin 压到丢 load-bearing 指针(col2 全留)、也没保留过多 prose(中位 324);通读确认无 garble。D:N/A。E:CURRENT/register 未动(draft 无 finding)。F:表结构 awk 校每行 3 pipe;UTF-8 无 BOM(只 Edit README 经 subagent);docs-only 不触发 code 守护以外的测试。
+
 ## 2026-06-24 - Codex review PASS (US-short batch3 paper ledger/scorecard fail-open repair)
 
 - **Verdict/Action**: PASS. The current working tree closes the two reviewed fail-open gaps: `paper_ledger._validate_record` now rejects outcome-label/gross-sign contradictions, and `paper_scorecard` now carries de-identified `realized_legs` so aggregate magnitude fields are re-derived before downstream consumers trust them.
