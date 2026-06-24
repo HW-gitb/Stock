@@ -19,7 +19,7 @@
 
 用户下达 `审查` 或要求按审查流程收口时，Codex 在发送最终回复前必须先完成落盘：把 `docs/SESSION_LOG.md` 顶部、`REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER` 之上 prepend 一条极简 review-cycle entry（`Verdict/Action` / `Required` / `Verify` / `Next`）；material Required 的完整细节只写 `docs/system_risk_register.md`。
 
-屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**且每段的大白话必须另起一行**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写单独一行 `大白话：…` 和一条给另一个 LLM 的命令，不加入专业解释。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
+屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**大白话只放在前两段**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写一行最简单给另一个 LLM 的命令，如 `Claude Code：Pass`、`Claude Code：修复`、`Claude Code：提交`，不写 `大白话`、不写解释，具体指示放 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
 
 若没有写入 SESSION_LOG 极简 entry，Codex 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
 
@@ -277,13 +277,13 @@ Stock/
 
 ## 输出结论规则
 
-**`审查` 命令最终输出固定三段（2026-06-23 用户更新；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行 `大白话：...` 和一条给另一个 LLM 的命令，不加入专业解释。没有对应内容时写“无”。
+**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Claude Code：Pass`、`Claude Code：修复`、`Claude Code：提交`、`Claude Code：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。没有对应内容时写“无”。
 
 面向用户输出结论时，必须先给**简单、清晰、可行动的结果**，再给必要依据。不要先堆专业术语、内部流程、文件名或审查细节。
 
 对 provider / 数据可用性 / 风险 / 设计漏洞 / 执行阻塞等判断，必须把专业内容翻译成用户能直接理解的话：先回答“能不能用”“意味着什么”“还缺什么”“下一步做什么”，再用简短边界说明证据范围。除非用户要求深入展开，默认保持短、直、明了。
 
-**含 Required / 修复 / 执行结果的输出加「大白话」层（2026-06-15 用户固化）**：凡 chat 输出里告诉用户有问题需要 `修复`（尤其 Codex `审查 FAIL` / PASS-with-Required），或 Claude `修复` 后说明修复结果，或任何 `执行` 后说明执行结果 / 风险 / 阻塞 / 下一步，除了极简结论，必须有一句**最直白的大白话**——用最简单清楚的人话说清「实际发生了什么 + 对你意味着什么 / 为什么要修或继续」，不要废话、越直白越好。**这层是给用户理解的，和写进 `SESSION_LOG` / `register` / execution summary 的技术细节不是同一个**（文档放 Required ID / 文件名 / 自审 / lineage；chat 的大白话只为让用户秒懂后果）。
+**含 Required / 修复 / 执行结果的输出加「大白话」层（2026-06-15 用户固化）**：凡 chat 输出里告诉用户有问题需要 `修复`（尤其 Codex `审查 FAIL` / PASS-with-Required），或 Claude `修复` 后说明修复结果，或任何 `执行` 后说明执行结果 / 风险 / 阻塞，除了极简结论，必须有一句**最直白的大白话**——用最简单清楚的人话说清「实际发生了什么 + 对你意味着什么 / 为什么要修或继续」，不要废话、越直白越好。**例外**：`审查` 最终回复的 `下一步` 段按上条固定为一行命令，不写 `大白话`。**这层是给用户理解的，和写进 `SESSION_LOG` / `register` / execution summary 的技术细节不是同一个**（文档放 Required ID / 文件名 / 自审 / lineage；chat 的大白话只为让用户秒懂后果）。
 
 > R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT
 > 代码已经加了 EGS分 和 regime 横幅，但当前 `research/results/a_short/20260612/weekly_m67.json/md` 还是旧产物：JSON 15/15 都没有 EGS分，Markdown 也没有 EGS分 列和横幅。
@@ -357,9 +357,9 @@ Before Codex replies to any `审查`, Codex must complete this closeout gate and
 6. Guard / mutation checks were attempted for frozen fields, ledgers, approvals, and hygiene gates where feasible; otherwise the review states why not.
 7. The verdict layers are not collapsed: computation, schema / ledger, PIT / data, statistical claim, risk / deployability, and production / ship-gate readiness are separated when relevant.
 8. Final response confirms the register outcome and must not issue Pass while any material Required finding is neither fixed nor registered.
-9. Final response must end with one standalone next-step line for the user, and only the command token itself must be visually emphasized, for example `下一步：Claude Code：**修复**`, `下一步：Claude Code：**提交**`, or `下一步：Claude Code：**执行**`. If the client supports real rich-text color without exposing markup, color the command token only; never output raw HTML tags such as `<span>` / `<strong>` in the final reply.
+9. Final response must end with the fixed `下一步` section containing exactly one standalone command line for the next actor, with no `大白话` line and no repair details. Use the shortest command form, for example `Claude Code：Pass`, `Claude Code：修复`, `Claude Code：提交`, or `Claude Code：执行`; put detailed instructions in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in chat. If visual emphasis is used, emphasize only the command token; never output raw HTML tags such as `<span>` / `<strong>` in the final reply.
 
-Codex review output must follow `## 输出结论规则`: exactly `Verdict` / `Required / Optional / Options` / `下一步`, with each required `大白话` line separated, no `Findings`, no standalone chat verification section, and no extra sections. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
+Codex review output must follow `## 输出结论规则`: exactly `Verdict` / `Required / Optional / Options` / `下一步`; `大白话` belongs only to the first two sections, while `下一步` is one command line only. No `Findings`, no standalone chat verification section, and no extra sections. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
 
 ## Claude implementer standard
 
