@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 incident-log storage contract)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH5-INCIDENT-LOG-MAPPING-TRACEBACK-DRIFT` is fixed in the reviewed batch5 incident-log storage contract scope; the artifact preserves the P1 owner incident mappings and the schema now rejects source-ref, severity, and action drift. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, incident writer, runtime storage creation, or raw-payload read/write ran during review.
+- **Required**: resolved; full closure evidence lives in `docs/system_risk_register.md`. `SR-PROVIDER-001` remains open for any later provider/live, status polling, fallback execution, incident writer/runtime storage, DataHub/runner, production, live_normalized, or ship-gate boundary.
+- **Verify**: batch5 target 56 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2301 OK sequential; py_compile OK; direct mutant probe `valid_errors=0` and rejects source/severity/action plus no-authorize mutants; P1-vs-batch5 `mapping_mismatches=[]`; private/raw paths gitignored; exact-token secret/raw scan clean.
+- **Next**: Claude Code: Pass.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 incident-log storage contract mapping traceback)
+
+- **Verdict/Action**: Fixed `R-USSHORT-BATCH5-INCIDENT-LOG-MAPPING-TRACEBACK-DRIFT` in the working tree. The batch5 incident-log storage artifact now preserves the P1 owner incident mappings, and the schema now const-pins each incident row's source ref, severity, and exact required actions. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, incident writer, runtime storage creation, or raw-payload read/write ran.
+- **Required**: working-tree repair complete; pending Codex review before commit or any later incident writer, fallback, provider/live, DataHub, production, live_normalized, or ship-gate boundary.
+- **Verify**: TDD RED first reproduced three schema-accepted drift mutants plus three artifact/P1 mapping mismatches. After fix: incident-log storage schema 12 OK; batch5 target 56 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2301 OK; py_compile OK; direct mutant probe `valid_errors=0` and all 11 mutants rejected; P1-vs-batch5 `mapping_mismatches=[]`; future private/raw paths gitignored; exact-token secret/raw scan clean; `git diff --check` CRLF-only.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=schema contract / evidence-traceback drift; B ripple=schema/artifact/test/register/session only; C reverse=source-ref, severity, action drift RED then GREEN; F no provider/live/network/raw/DataHub/production path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 incident-log storage contract)
+
+- **Verdict/Action**: FAIL. The offline US-short batch5 incident-log storage contract remains no-access/no-execution, but it cannot be accepted before repair because its incident mapping trace drifts from the P1 owner contract while the schema still accepts source/action mapping drift.
+- **Required**: `R-USSHORT-BATCH5-INCIDENT-LOG-MAPPING-TRACEBACK-DRIFT` in `docs/system_risk_register.md`.
+- **Verify**: startup status/log checked; execution evidence spot-checked (batch5 54 OK, route/doc 52 OK, `tests/provider` 36 OK, full offline `*us_short*` 2299 OK, private paths ignored, secret/raw scan clean); additional Codex probes reproduced P1-vs-batch5 action/severity mismatches and schema acceptance of source-ref/action drift.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 incident-log storage contract)
+
+- **Verdict/Action**: Executed the offline US-short batch5 incident-log schema/storage contract slice: added `schemas/us_short_batch5_incident_log_storage_contract.schema.json`, `docs/us_short_batch5_incident_log_storage_contract_20260625.json`, and adversarial schema tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, incident-log writer, runtime incident record, runtime storage creation, or raw-payload read/write ran.
+- **Required**: none opened in this execution. `SR-PROVIDER-001` remains open; provider status polling, fallback execution, incident-log writer/runtime storage, provider/live probes, DataHub/runner consumption, production storage, live_normalized, and ship-gate work still need separate review and authorization where applicable.
+- **Verify**: TDD RED first failed on missing schema/artifact; after GREEN: new incident-log storage contract schema 10 OK; batch5 target 54 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2299 OK with `.tools/python_libs` on `PYTHONPATH`; py_compile OK; direct schema probe `valid_errors=0` and rejects writer, status-polling, fallback, private-path, raw-payload, missing-field, missing-incident, and ship-gate mutants; future private/log roots are gitignored and not created; exact-token secret/raw scan clean; `git diff --check` had CRLF warnings only.
+- **Next**: Codex review this offline batch5 incident-log storage contract scope before commit or any broader provider/live boundary.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 fallback/incident/stability binding)
 
 - **Verdict/Action**: PASS. The offline US-short batch5 fallback/incident/stability binding is valid: it binds the existing P1 playbook as default-deny design only, keeps SR-PROVIDER-001 open, and does not authorize provider/live calls, status polling, fallback execution, raw reads/writes, DataHub/runner, production storage, live_normalized, or ship-gate evidence.

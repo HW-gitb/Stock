@@ -1,0 +1,1459 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_incident_log_storage_contract/1.0.0/schema.json",
+  "title": "US-short Batch5 Incident Log Storage Contract",
+  "description": "US-short batch5 offline incident-log schema/storage contract. It defines future private incident-log paths and record fields only; it does not implement a writer, create runtime logs, poll provider status, fetch data, execute fallback paths, authorize DataHub/runner consumption, production storage, live_normalized evidence, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "contract_trace",
+    "storage_contract",
+    "record_contract",
+    "incident_type_mappings",
+    "implementation_gates",
+    "prohibited_actions",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_incident_log_storage_contract"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsUsShortSystemDesign"
+        },
+        {
+          "$ref": "#/$defs/containsFallbackBinding"
+        },
+        {
+          "$ref": "#/$defs/containsP1IncidentLogContract"
+        },
+        {
+          "$ref": "#/$defs/containsP1Playbook"
+        },
+        {
+          "$ref": "#/$defs/containsSrProvider001"
+        }
+      ]
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "contract_trace": {
+      "$ref": "#/$defs/contractTrace"
+    },
+    "storage_contract": {
+      "$ref": "#/$defs/storageContract"
+    },
+    "record_contract": {
+      "$ref": "#/$defs/recordContract"
+    },
+    "incident_type_mappings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/incidentTypeMapping"
+      },
+      "minItems": 8,
+      "maxItems": 8,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsQuotaOrRateLimit"
+        },
+        {
+          "$ref": "#/$defs/containsHttp5xxOrProviderOutage"
+        },
+        {
+          "$ref": "#/$defs/containsHttp401403AuthScope"
+        },
+        {
+          "$ref": "#/$defs/containsSchemaOrFieldSemanticsDrift"
+        },
+        {
+          "$ref": "#/$defs/containsStaleOrMissingRows"
+        },
+        {
+          "$ref": "#/$defs/containsPitOrObservedDateAmbiguity"
+        },
+        {
+          "$ref": "#/$defs/containsCorporateActionAdjustmentConflict"
+        },
+        {
+          "$ref": "#/$defs/containsSecEdgarAuditConflict"
+        }
+      ]
+    },
+    "implementation_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/implementationGate"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsIncidentLogWriterGate"
+        },
+        {
+          "$ref": "#/$defs/containsRuntimeStorageGate"
+        },
+        {
+          "$ref": "#/$defs/containsStatusPollingGate"
+        },
+        {
+          "$ref": "#/$defs/containsFallbackExecutionGate"
+        },
+        {
+          "$ref": "#/$defs/containsDatahubRunnerGate"
+        },
+        {
+          "$ref": "#/$defs/containsProductionStorageGate"
+        },
+        {
+          "$ref": "#/$defs/containsShipGate"
+        },
+        {
+          "$ref": "#/$defs/containsFutureLiveProbeGate"
+        }
+      ]
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "artifact_status",
+        "provider_calls_executed_by_this_artifact",
+        "network_access_required_for_this_artifact",
+        "provider_status_polling_allowed",
+        "fallback_execution_allowed",
+        "incident_log_writer_implemented",
+        "runtime_incident_records_created",
+        "runtime_log_storage_created",
+        "raw_payloads_read_by_this_artifact",
+        "raw_payloads_written_by_this_artifact",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "datahub_consumption_allowed",
+        "runner_consumption_allowed",
+        "production_storage_allowed",
+        "production_ready_claim_allowed",
+        "ship_gate_evidence_allowed",
+        "live_normalized_evidence_allowed",
+        "yfinance_allowed",
+        "web_x_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "lane": {
+          "const": "us_short"
+        },
+        "batch": {
+          "const": "batch5_provider_live"
+        },
+        "artifact_status": {
+          "const": "incident_log_storage_contract_offline_only"
+        },
+        "provider_calls_executed_by_this_artifact": {
+          "const": false
+        },
+        "network_access_required_for_this_artifact": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "incident_log_writer_implemented": {
+          "const": false
+        },
+        "runtime_incident_records_created": {
+          "const": false
+        },
+        "runtime_log_storage_created": {
+          "const": false
+        },
+        "raw_payloads_read_by_this_artifact": {
+          "const": false
+        },
+        "raw_payloads_written_by_this_artifact": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "datahub_consumption_allowed": {
+          "const": false
+        },
+        "runner_consumption_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "live_normalized_evidence_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "web_x_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "contractTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fallback_binding_ref",
+        "p1_incident_log_contract_ref",
+        "contract_mode",
+        "authorizes_writer",
+        "authorizes_runtime_storage",
+        "authorizes_provider_status_polling",
+        "authorizes_fallback_execution",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "fallback_binding_ref": {
+          "const": "docs/us_short_batch5_fallback_incident_stability_binding_20260625.json"
+        },
+        "p1_incident_log_contract_ref": {
+          "const": "docs/provider_evidence_p1_us_incident_log_contract_20260602.json"
+        },
+        "contract_mode": {
+          "const": "batch5_no_access_storage_contract"
+        },
+        "authorizes_writer": {
+          "const": false
+        },
+        "authorizes_runtime_storage": {
+          "const": false
+        },
+        "authorizes_provider_status_polling": {
+          "const": false
+        },
+        "authorizes_fallback_execution": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "storageContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_private_incident_log_root",
+        "future_private_incident_log_pattern",
+        "future_private_summary_pattern",
+        "future_raw_payload_root",
+        "future_paths_must_be_gitignored",
+        "paths_created_by_this_artifact",
+        "authorizes_runtime_write",
+        "authorizes_production_storage",
+        "request_urls_allowed_in_tracked_files",
+        "secrets_allowed_in_tracked_files",
+        "raw_rows_allowed_in_tracked_files",
+        "tracked_docs_are_contract_only"
+      ],
+      "properties": {
+        "future_private_incident_log_root": {
+          "const": "state/us_short/runs_private/provider_incidents/"
+        },
+        "future_private_incident_log_pattern": {
+          "const": "state/us_short/runs_private/provider_incidents/<YYYYMMDD>/incident_log.jsonl"
+        },
+        "future_private_summary_pattern": {
+          "const": "state/us_short/runs_private/provider_incidents/<YYYYMMDD>/incident_summary.json"
+        },
+        "future_raw_payload_root": {
+          "const": "provider_samples/us_short_batch5_provider_incidents/"
+        },
+        "future_paths_must_be_gitignored": {
+          "const": true
+        },
+        "paths_created_by_this_artifact": {
+          "const": false
+        },
+        "authorizes_runtime_write": {
+          "const": false
+        },
+        "authorizes_production_storage": {
+          "const": false
+        },
+        "request_urls_allowed_in_tracked_files": {
+          "const": false
+        },
+        "secrets_allowed_in_tracked_files": {
+          "const": false
+        },
+        "raw_rows_allowed_in_tracked_files": {
+          "const": false
+        },
+        "tracked_docs_are_contract_only": {
+          "const": true
+        }
+      }
+    },
+    "recordContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_schema_name",
+        "record_scope",
+        "required_fields",
+        "tracked_record_policy"
+      ],
+      "properties": {
+        "record_schema_name": {
+          "const": "us_short_batch5_incident_log_record"
+        },
+        "record_scope": {
+          "const": "future_record_contract_only_no_actual_incident_rows"
+        },
+        "required_fields": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requiredRecordField"
+          },
+          "minItems": 24,
+          "maxItems": 24,
+          "allOf": [
+            {
+              "$ref": "#/$defs/containsIncidentIdField"
+            },
+            {
+              "$ref": "#/$defs/containsDetectedAtField"
+            },
+            {
+              "$ref": "#/$defs/containsDetectedByField"
+            },
+            {
+              "$ref": "#/$defs/containsSourceFamilyField"
+            },
+            {
+              "$ref": "#/$defs/containsProviderCandidateField"
+            },
+            {
+              "$ref": "#/$defs/containsEndpointFamilyField"
+            },
+            {
+              "$ref": "#/$defs/containsAffectedSymbolsField"
+            },
+            {
+              "$ref": "#/$defs/containsAffectedDateWindowField"
+            },
+            {
+              "$ref": "#/$defs/containsIncidentTypeField"
+            },
+            {
+              "$ref": "#/$defs/containsSeverityField"
+            },
+            {
+              "$ref": "#/$defs/containsTriggerSummaryField"
+            },
+            {
+              "$ref": "#/$defs/containsEvidenceRefsField"
+            },
+            {
+              "$ref": "#/$defs/containsRawPayloadStorageRefField"
+            },
+            {
+              "$ref": "#/$defs/containsSecretScanStatusField"
+            },
+            {
+              "$ref": "#/$defs/containsImmediateActionField"
+            },
+            {
+              "$ref": "#/$defs/containsProductionUseBlockedField"
+            },
+            {
+              "$ref": "#/$defs/containsFallbackExecutionPerformedField"
+            },
+            {
+              "$ref": "#/$defs/containsProviderCallsPerformedField"
+            },
+            {
+              "$ref": "#/$defs/containsStatusPagePolledField"
+            },
+            {
+              "$ref": "#/$defs/containsManualReviewOwnerField"
+            },
+            {
+              "$ref": "#/$defs/containsReviewStatusField"
+            },
+            {
+              "$ref": "#/$defs/containsDispositionField"
+            },
+            {
+              "$ref": "#/$defs/containsReplayRequirementField"
+            },
+            {
+              "$ref": "#/$defs/containsScopeLocksField"
+            }
+          ]
+        },
+        "tracked_record_policy": {
+          "$ref": "#/$defs/trackedRecordPolicy"
+        }
+      }
+    },
+    "requiredRecordField": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "field_name",
+        "required_for_future_record",
+        "field_role",
+        "secret_or_request_url_allowed",
+        "raw_payload_allowed"
+      ],
+      "properties": {
+        "field_name": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required_for_future_record": {
+          "const": true
+        },
+        "field_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "secret_or_request_url_allowed": {
+          "const": false
+        },
+        "raw_payload_allowed": {
+          "const": false
+        }
+      }
+    },
+    "trackedRecordPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "tracked_incident_rows_allowed",
+        "tracked_summary_allowed",
+        "request_url_fields_allowed",
+        "secret_fields_allowed",
+        "raw_payload_fields_allowed",
+        "provider_response_body_allowed",
+        "requires_secret_scan_before_commit"
+      ],
+      "properties": {
+        "tracked_incident_rows_allowed": {
+          "const": false
+        },
+        "tracked_summary_allowed": {
+          "const": true
+        },
+        "request_url_fields_allowed": {
+          "const": false
+        },
+        "secret_fields_allowed": {
+          "const": false
+        },
+        "raw_payload_fields_allowed": {
+          "const": false
+        },
+        "provider_response_body_allowed": {
+          "const": false
+        },
+        "requires_secret_scan_before_commit": {
+          "const": true
+        }
+      }
+    },
+    "incidentTypeMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident_type",
+        "source_binding_incident_ref",
+        "storage_status",
+        "default_severity",
+        "required_actions",
+        "blocks_production_use_until_review",
+        "authorizes_status_polling",
+        "authorizes_data_fetch",
+        "authorizes_fallback_execution",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "authorizes_ship_gate_or_live_normalized_evidence"
+      ],
+      "properties": {
+        "incident_type": {
+          "$ref": "#/$defs/incidentType"
+        },
+        "source_binding_incident_ref": {
+          "$ref": "#/$defs/incidentType"
+        },
+        "storage_status": {
+          "const": "future_private_record_only"
+        },
+        "default_severity": {
+          "enum": [
+            "warning_only",
+            "production_blocker",
+            "evidence_blocker"
+          ]
+        },
+        "required_actions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/nonEmptyString"
+          },
+          "minItems": 2,
+          "contains": {
+            "const": "record_incident"
+          }
+        },
+        "blocks_production_use_until_review": {
+          "const": true
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_fallback_execution": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "authorizes_ship_gate_or_live_normalized_evidence": {
+          "const": false
+        }
+      }
+    },
+    "implementationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "authorizes_implementation_now",
+        "authorizes_provider_live_or_network",
+        "authorizes_datahub_or_runner",
+        "required_resolution"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked_pending_later_review",
+            "separate_authorization_required",
+            "not_allowed_in_batch5_first_version"
+          ]
+        },
+        "authorizes_implementation_now": {
+          "const": false
+        },
+        "authorizes_provider_live_or_network": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_live_call_authorized_by_this_artifact",
+        "provider_status_polling_authorized",
+        "fallback_execution_authorized",
+        "network_access_authorized_by_this_artifact",
+        "incident_log_writer_authorized",
+        "runtime_incident_storage_authorized",
+        "raw_payload_read_authorized_by_this_artifact",
+        "raw_payload_write_authorized_by_this_artifact",
+        "tracked_raw_or_secret_output_authorized",
+        "datahub_consumption_authorized",
+        "runner_consumption_authorized",
+        "production_storage_authorized",
+        "provider_selection_authorized",
+        "provider_ranking_authorized",
+        "yfinance_authorized",
+        "web_x_authorized",
+        "broker_or_order_automation_authorized",
+        "ship_gate_or_live_normalized_evidence_authorized",
+        "production_ready_claim_authorized"
+      ],
+      "properties": {
+        "provider_live_call_authorized_by_this_artifact": {
+          "const": false
+        },
+        "provider_status_polling_authorized": {
+          "const": false
+        },
+        "fallback_execution_authorized": {
+          "const": false
+        },
+        "network_access_authorized_by_this_artifact": {
+          "const": false
+        },
+        "incident_log_writer_authorized": {
+          "const": false
+        },
+        "runtime_incident_storage_authorized": {
+          "const": false
+        },
+        "raw_payload_read_authorized_by_this_artifact": {
+          "const": false
+        },
+        "raw_payload_write_authorized_by_this_artifact": {
+          "const": false
+        },
+        "tracked_raw_or_secret_output_authorized": {
+          "const": false
+        },
+        "datahub_consumption_authorized": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_storage_authorized": {
+          "const": false
+        },
+        "provider_selection_authorized": {
+          "const": false
+        },
+        "provider_ranking_authorized": {
+          "const": false
+        },
+        "yfinance_authorized": {
+          "const": false
+        },
+        "web_x_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        },
+        "ship_gate_or_live_normalized_evidence_authorized": {
+          "const": false
+        },
+        "production_ready_claim_authorized": {
+          "const": false
+        }
+      }
+    },
+    "incidentType": {
+      "enum": [
+        "quota_or_rate_limit",
+        "http_5xx_or_provider_outage",
+        "http_401_403_auth_scope",
+        "schema_or_field_semantics_drift",
+        "stale_or_missing_rows",
+        "pit_or_observed_date_ambiguity",
+        "corporate_action_adjustment_conflict",
+        "sec_edgar_audit_conflict"
+      ]
+    },
+    "containsUsShortSystemDesign": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "us_short_system_design"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsFallbackBinding": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "us_short_batch5_fallback_incident_stability_binding_20260625"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsP1IncidentLogContract": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "provider_p1_incident_log_contract_20260602"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsP1Playbook": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "provider_p1_fallback_incident_stability_playbook_20260602"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsSrProvider001": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "sr_provider_001"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsIncidentIdField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "incident_id"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsDetectedAtField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "detected_at"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsDetectedByField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "detected_by"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsSourceFamilyField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "source_family"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsProviderCandidateField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "provider_candidate"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsEndpointFamilyField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "endpoint_family"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsAffectedSymbolsField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "affected_symbols_or_universe"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsAffectedDateWindowField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "affected_date_window"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsIncidentTypeField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "incident_type"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsSeverityField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "severity"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsTriggerSummaryField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "trigger_summary"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsEvidenceRefsField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "evidence_artifact_refs"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsRawPayloadStorageRefField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "raw_payload_storage_ref"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsSecretScanStatusField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "secret_scan_status"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsImmediateActionField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "immediate_action"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsProductionUseBlockedField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "production_use_blocked"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsFallbackExecutionPerformedField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "fallback_execution_performed"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsProviderCallsPerformedField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "provider_calls_performed_by_log_contract"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsStatusPagePolledField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "status_page_polled_by_log_contract"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsManualReviewOwnerField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "manual_review_owner"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsReviewStatusField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "review_status"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsDispositionField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "disposition"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsReplayRequirementField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "replay_or_revalidation_requirement"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsScopeLocksField": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "field_name": {
+            "const": "scope_locks"
+          }
+        },
+        "required": [
+          "field_name"
+        ]
+      }
+    },
+    "containsQuotaOrRateLimit": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "quota_or_rate_limit"
+          },
+          "source_binding_incident_ref": {
+            "const": "quota_or_rate_limit"
+          },
+          "default_severity": {
+            "const": "production_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "block_production_use",
+              "fallback_path_review"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsHttp5xxOrProviderOutage": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "http_5xx_or_provider_outage"
+          },
+          "source_binding_incident_ref": {
+            "const": "http_5xx_or_provider_outage"
+          },
+          "default_severity": {
+            "const": "production_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "block_production_use",
+              "manual_review"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsHttp401403AuthScope": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "http_401_403_auth_scope"
+          },
+          "source_binding_incident_ref": {
+            "const": "http_401_403_auth_scope"
+          },
+          "default_severity": {
+            "const": "evidence_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "manual_review",
+              "fallback_path_review"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsSchemaOrFieldSemanticsDrift": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "schema_or_field_semantics_drift"
+          },
+          "source_binding_incident_ref": {
+            "const": "schema_or_field_semantics_drift"
+          },
+          "default_severity": {
+            "const": "production_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "manual_review",
+              "rerun_provider_evidence"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsStaleOrMissingRows": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "stale_or_missing_rows"
+          },
+          "source_binding_incident_ref": {
+            "const": "stale_or_missing_rows"
+          },
+          "default_severity": {
+            "const": "production_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "block_production_use",
+              "fallback_path_review"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsPitOrObservedDateAmbiguity": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "pit_or_observed_date_ambiguity"
+          },
+          "source_binding_incident_ref": {
+            "const": "pit_or_observed_date_ambiguity"
+          },
+          "default_severity": {
+            "const": "evidence_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "freeze_latest_only_claims",
+              "manual_review"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsCorporateActionAdjustmentConflict": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "corporate_action_adjustment_conflict"
+          },
+          "source_binding_incident_ref": {
+            "const": "corporate_action_adjustment_conflict"
+          },
+          "default_severity": {
+            "const": "evidence_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "manual_review",
+              "rerun_provider_evidence"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsSecEdgarAuditConflict": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_type": {
+            "const": "sec_edgar_audit_conflict"
+          },
+          "source_binding_incident_ref": {
+            "const": "sec_edgar_audit_conflict"
+          },
+          "default_severity": {
+            "const": "evidence_blocker"
+          },
+          "required_actions": {
+            "const": [
+              "record_incident",
+              "manual_review",
+              "use_reviewed_audit_source_only"
+            ]
+          }
+        },
+        "required": [
+          "incident_type",
+          "source_binding_incident_ref",
+          "default_severity",
+          "required_actions"
+        ]
+      }
+    },
+    "containsIncidentLogWriterGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "incident_log_writer_requires_separate_review"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsRuntimeStorageGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "runtime_storage_creation_requires_separate_review"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsStatusPollingGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "provider_status_polling_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsFallbackExecutionGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "fallback_execution_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsDatahubRunnerGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "datahub_runner_consumption_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsProductionStorageGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "production_storage_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsShipGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "live_normalized_ship_gate_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsFutureLiveProbeGate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "future_provider_live_probe_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    }
+  }
+}

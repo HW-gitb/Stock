@@ -1,0 +1,511 @@
+{
+  "schema_name": "us_short_batch5_incident_log_storage_contract",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-25T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "US-short single design authority; batch5 provider/live, DataHub, production evidence, and private output remain separately gated."
+    },
+    {
+      "artifact_id": "us_short_batch5_fallback_incident_stability_binding_20260625",
+      "path": "docs/us_short_batch5_fallback_incident_stability_binding_20260625.json",
+      "role": "Selected a safe next offline incident-log schema/storage contract, with no access and no execution."
+    },
+    {
+      "artifact_id": "provider_p1_incident_log_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_incident_log_contract_20260602.json",
+      "role": "Existing P1 incident-log shape reference; this artifact binds it to the US-short batch5 private-output route without implementing a writer."
+    },
+    {
+      "artifact_id": "provider_p1_fallback_incident_stability_playbook_20260602",
+      "path": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json",
+      "role": "Defines the default-deny incident types and blocking actions referenced by this storage contract."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker; this storage contract does not resolve provider/live, license, storage, PIT, fallback, DataHub, production, or ship-gate blockers."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "artifact_status": "incident_log_storage_contract_offline_only",
+    "provider_calls_executed_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "provider_status_polling_allowed": false,
+    "fallback_execution_allowed": false,
+    "incident_log_writer_implemented": false,
+    "runtime_incident_records_created": false,
+    "runtime_log_storage_created": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "raw_payloads_written_by_this_artifact": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "datahub_consumption_allowed": false,
+    "runner_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "production_ready_claim_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "live_normalized_evidence_allowed": false,
+    "yfinance_allowed": false,
+    "web_x_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "contract_trace": {
+    "fallback_binding_ref": "docs/us_short_batch5_fallback_incident_stability_binding_20260625.json",
+    "p1_incident_log_contract_ref": "docs/provider_evidence_p1_us_incident_log_contract_20260602.json",
+    "contract_mode": "batch5_no_access_storage_contract",
+    "authorizes_writer": false,
+    "authorizes_runtime_storage": false,
+    "authorizes_provider_status_polling": false,
+    "authorizes_fallback_execution": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "storage_contract": {
+    "future_private_incident_log_root": "state/us_short/runs_private/provider_incidents/",
+    "future_private_incident_log_pattern": "state/us_short/runs_private/provider_incidents/<YYYYMMDD>/incident_log.jsonl",
+    "future_private_summary_pattern": "state/us_short/runs_private/provider_incidents/<YYYYMMDD>/incident_summary.json",
+    "future_raw_payload_root": "provider_samples/us_short_batch5_provider_incidents/",
+    "future_paths_must_be_gitignored": true,
+    "paths_created_by_this_artifact": false,
+    "authorizes_runtime_write": false,
+    "authorizes_production_storage": false,
+    "request_urls_allowed_in_tracked_files": false,
+    "secrets_allowed_in_tracked_files": false,
+    "raw_rows_allowed_in_tracked_files": false,
+    "tracked_docs_are_contract_only": true
+  },
+  "record_contract": {
+    "record_schema_name": "us_short_batch5_incident_log_record",
+    "record_scope": "future_record_contract_only_no_actual_incident_rows",
+    "required_fields": [
+      {
+        "field_name": "incident_id",
+        "required_for_future_record": true,
+        "field_role": "Stable unique incident identifier assigned by a future reviewed writer or manual record process.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "detected_at",
+        "required_for_future_record": true,
+        "field_role": "Timestamp when the issue is detected; separate from any provider data timestamp.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "detected_by",
+        "required_for_future_record": true,
+        "field_role": "Human reviewer, test, runner, or manual audit surface that noticed the issue.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "source_family",
+        "required_for_future_record": true,
+        "field_role": "Affected field family such as fundamentals, price_volume_liquidity, corporate_actions, security_master_coverage, sec_edgar_audit, or benchmark_gics.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "provider_candidate",
+        "required_for_future_record": true,
+        "field_role": "Provider or public-source candidate involved; candidate mention is not provider selection.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "endpoint_family",
+        "required_for_future_record": true,
+        "field_role": "Endpoint or source-family label without request URL, query string, API key, bearer token, SEC user-agent value, or secret-bearing header.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "affected_symbols_or_universe",
+        "required_for_future_record": true,
+        "field_role": "Symbols, universe slice, or coverage class affected by the incident, with no raw rows.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "affected_date_window",
+        "required_for_future_record": true,
+        "field_role": "Date range or as-of window affected by the incident.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "incident_type",
+        "required_for_future_record": true,
+        "field_role": "One of the playbook incident types mapped by this contract.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "severity",
+        "required_for_future_record": true,
+        "field_role": "Warning, production blocker, or evidence blocker classification.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "trigger_summary",
+        "required_for_future_record": true,
+        "field_role": "Short human-readable description of what triggered the incident; no full payloads or request URLs.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "evidence_artifact_refs",
+        "required_for_future_record": true,
+        "field_role": "References to tracked summaries, schema tests, review entries, or no-secret artifacts that support the incident.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "raw_payload_storage_ref",
+        "required_for_future_record": true,
+        "field_role": "Gitignored raw payload pointer if a later approved data packet produced raw payloads; never a request URL or secret-bearing path.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "secret_scan_status",
+        "required_for_future_record": true,
+        "field_role": "Tracked summary must record secret-scan status before any artifact is committed.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "immediate_action",
+        "required_for_future_record": true,
+        "field_role": "Action taken from the playbook, such as block_production_use, manual_review, fallback_path_review, or freeze_latest_only_claims.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "production_use_blocked",
+        "required_for_future_record": true,
+        "field_role": "Explicit boolean in future records; production use remains blocked until reviewed resolution.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "fallback_execution_performed",
+        "required_for_future_record": true,
+        "field_role": "Explicit false unless a later separate reviewed slice implements and runs fallback execution.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "provider_calls_performed_by_log_contract",
+        "required_for_future_record": true,
+        "field_role": "Must remain false for this contract; incident logging cannot itself be a data-fetch approval.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "status_page_polled_by_log_contract",
+        "required_for_future_record": true,
+        "field_role": "Must remain false for this contract; status polling requires separate approval and review.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "manual_review_owner",
+        "required_for_future_record": true,
+        "field_role": "Person or review role responsible for disposition and unblock decision.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "review_status",
+        "required_for_future_record": true,
+        "field_role": "Review state such as pending_review, reviewed_blocked, reviewed_resolved, or accepted_risk_by_user.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "disposition",
+        "required_for_future_record": true,
+        "field_role": "Final reviewed disposition, if any; unresolved incidents must not be treated as resolved.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "replay_or_revalidation_requirement",
+        "required_for_future_record": true,
+        "field_role": "Whether later provider evidence must be rerun; any data or access rerun still needs separate explicit approval.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      },
+      {
+        "field_name": "scope_locks",
+        "required_for_future_record": true,
+        "field_role": "Future records must repeat no provider selection, no status polling, no fallback execution, no DataHub / runner, no production storage, and no ship-gate claim locks.",
+        "secret_or_request_url_allowed": false,
+        "raw_payload_allowed": false
+      }
+    ],
+    "tracked_record_policy": {
+      "tracked_incident_rows_allowed": false,
+      "tracked_summary_allowed": true,
+      "request_url_fields_allowed": false,
+      "secret_fields_allowed": false,
+      "raw_payload_fields_allowed": false,
+      "provider_response_body_allowed": false,
+      "requires_secret_scan_before_commit": true
+    }
+  },
+  "incident_type_mappings": [
+    {
+      "incident_type": "quota_or_rate_limit",
+      "source_binding_incident_ref": "quota_or_rate_limit",
+      "storage_status": "future_private_record_only",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "fallback_path_review"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "http_5xx_or_provider_outage",
+      "source_binding_incident_ref": "http_5xx_or_provider_outage",
+      "storage_status": "future_private_record_only",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "manual_review"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "http_401_403_auth_scope",
+      "source_binding_incident_ref": "http_401_403_auth_scope",
+      "storage_status": "future_private_record_only",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "fallback_path_review"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "schema_or_field_semantics_drift",
+      "source_binding_incident_ref": "schema_or_field_semantics_drift",
+      "storage_status": "future_private_record_only",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "rerun_provider_evidence"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "stale_or_missing_rows",
+      "source_binding_incident_ref": "stale_or_missing_rows",
+      "storage_status": "future_private_record_only",
+      "default_severity": "production_blocker",
+      "required_actions": [
+        "record_incident",
+        "block_production_use",
+        "fallback_path_review"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "pit_or_observed_date_ambiguity",
+      "source_binding_incident_ref": "pit_or_observed_date_ambiguity",
+      "storage_status": "future_private_record_only",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "freeze_latest_only_claims",
+        "manual_review"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "corporate_action_adjustment_conflict",
+      "source_binding_incident_ref": "corporate_action_adjustment_conflict",
+      "storage_status": "future_private_record_only",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "rerun_provider_evidence"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    },
+    {
+      "incident_type": "sec_edgar_audit_conflict",
+      "source_binding_incident_ref": "sec_edgar_audit_conflict",
+      "storage_status": "future_private_record_only",
+      "default_severity": "evidence_blocker",
+      "required_actions": [
+        "record_incident",
+        "manual_review",
+        "use_reviewed_audit_source_only"
+      ],
+      "blocks_production_use_until_review": true,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_fallback_execution": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false
+    }
+  ],
+  "implementation_gates": [
+    {
+      "gate_id": "incident_log_writer_requires_separate_review",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "A future writer implementation must be separately reviewed with validation, private-path enforcement, and secret-scan behavior."
+    },
+    {
+      "gate_id": "runtime_storage_creation_requires_separate_review",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Creating runtime incident-log directories or records is separate from this contract and must pass review."
+    },
+    {
+      "gate_id": "provider_status_polling_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Any provider status-page polling or live monitoring must stop for separate user authorization."
+    },
+    {
+      "gate_id": "fallback_execution_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Fallback execution must be separately reviewed and must not silently substitute unreviewed sources."
+    },
+    {
+      "gate_id": "datahub_runner_consumption_blocked",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "DataHub and runner consumption remain blocked until upstream provider gates and private-output contracts pass review."
+    },
+    {
+      "gate_id": "production_storage_blocked",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Production storage remains blocked until license, storage, retention, and private-output paths are reviewed."
+    },
+    {
+      "gate_id": "live_normalized_ship_gate_blocked",
+      "status": "not_allowed_in_batch5_first_version",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Live_normalized and ship-gate evidence require separate forward-evidence policy compliance."
+    },
+    {
+      "gate_id": "future_provider_live_probe_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Any next provider/live probe must specify symbols, endpoints, call budget, retry policy, write paths, raw/secret boundary, validation, and non-authorized paths."
+    }
+  ],
+  "prohibited_actions": {
+    "provider_live_call_authorized_by_this_artifact": false,
+    "provider_status_polling_authorized": false,
+    "fallback_execution_authorized": false,
+    "network_access_authorized_by_this_artifact": false,
+    "incident_log_writer_authorized": false,
+    "runtime_incident_storage_authorized": false,
+    "raw_payload_read_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "tracked_raw_or_secret_output_authorized": false,
+    "datahub_consumption_authorized": false,
+    "runner_consumption_authorized": false,
+    "production_storage_authorized": false,
+    "provider_selection_authorized": false,
+    "provider_ranking_authorized": false,
+    "yfinance_authorized": false,
+    "web_x_authorized": false,
+    "broker_or_order_automation_authorized": false,
+    "ship_gate_or_live_normalized_evidence_authorized": false,
+    "production_ready_claim_authorized": false
+  },
+  "limitations": [
+    "This artifact did not run provider/live/network/FMP/SEC/yfinance/Web/X calls.",
+    "This artifact did not poll provider status pages, execute fallback paths, implement an incident-log writer, or create runtime incident records.",
+    "This artifact did not read, write, summarize, or transform raw provider payloads.",
+    "Future incident-log rows must stay private under gitignored state/us_short/runs_private/ or provider_samples roots; tracked docs may only contain no-secret summaries.",
+    "This artifact does not resolve SR-PROVIDER-001 and does not select a provider.",
+    "This artifact is a contract only; no DataHub, runner, production storage, live_normalized, or ship-gate path is authorized."
+  ],
+  "next_steps": [
+    "Review this offline incident-log schema/storage contract before commit.",
+    "A later offline execution may implement a local writer only after separate review defines validation, secret scanning, ignored storage, and no-runtime-fetch behavior.",
+    "Any provider status polling, fallback execution, provider/live probe, DataHub/runner consumption, production storage, or ship-gate evidence must stop for separate review and authorization."
+  ]
+}
