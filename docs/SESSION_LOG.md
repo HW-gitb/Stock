@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 incident-log writer)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` is fixed in the reviewed batch5 offline private incident-log writer scope. The writer rejects existing-internal duplicate ids, new-vs-existing duplicate ids, and corrupt existing JSONL before append/summary mutation. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, live_normalized claim, or ship-gate claim ran.
+- **Required**: resolved; full closure evidence lives in `docs/system_risk_register.md`. `SR-PROVIDER-001` remains open for any broader provider/live, status polling, fallback execution, DataHub/runner consumption, production storage, live_normalized, or ship-gate boundary.
+- **Verify**: startup status/log checked; writer target 9 OK; batch5 target 73 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2318 OK; py_compile OK; direct private-temp probe rejected existing-internal duplicate, new duplicate, and corrupt existing JSONL with no log/summary mutation; `jsonschema` 4.26.0 via repo `.tools/python_libs`; `git diff --check` CRLF-only.
+- **Next**: Codex auto-commit reviewed slice.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 incident-log writer existing duplicate ids)
+
+- **Verdict/Action**: Fixed the residual `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` gap in the working tree. Existing `incident_log.jsonl` rows are now checked for duplicate `incident_id` values during preflight, so a pre-existing duplicate log is rejected before append or summary write. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, live_normalized claim, or ship-gate claim ran.
+- **Required**: working-tree repair complete; pending Codex review before closure/commit.
+- **Verify**: TDD RED reproduced existing-log duplicate acceptance. After fix: writer target 9 OK; batch5 target 73 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2318 OK; py_compile OK; direct private-temp probe rejected new duplicate, corrupt existing log, and pre-existing duplicate ids with no unintended append/summary.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=private-output writer existing-log uniqueness; B ripple=writer/test/register/session only; C reverse=new duplicate, corrupt JSONL, and existing-internal duplicate RED/GREEN; F no provider/live/network/raw/DataHub/production path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 incident-log writer repair)
+
+- **Verdict/Action**: FAIL. `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` is only partially fixed: the writer rejects a new duplicate id and corrupt existing JSONL, but still accepts an existing JSONL that already contains duplicate `incident_id` values and then appends a new row plus summary.
+- **Required**: `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` remains open in `docs/system_risk_register.md`.
+- **Verify**: startup status/log checked; writer target 8 OK; batch5 target 72 OK; route/doc guards 52 OK; `tests/provider` 44 OK; full offline `*us_short*` 2317 OK; py_compile OK; `git diff --check` CRLF-only; direct private-temp probe reproduced existing-log duplicate acceptance (`line_count=3`, `unique_id_count=2`, `summary_incident_count=3`). No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call ran.
+- **Next**: Codex: 修复.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 incident-log writer duplicate / partial-write)
+
+- **Verdict/Action**: Fixed `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` in the working tree. The offline batch5 incident-log writer now pre-validates existing JSONL, rejects duplicate `incident_id` values before mutation, and rejects corrupt existing logs without appending or writing a summary. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, live_normalized claim, or ship-gate claim ran.
+- **Required**: working-tree repair complete; pending Codex review before closure/commit.
+- **Verify**: TDD RED reproduced duplicate-id acceptance and corrupt-log append-before-fail. After fix: writer target 8 OK; batch5 target 72 OK; route/doc guards 52 OK; `tests/provider` 44 OK; full offline `*us_short*` 2317 OK; py_compile OK; direct private-temp probe rejected duplicate id with one log line / unchanged summary and rejected corrupt existing log with no new write / no summary.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=private-output writer no-dangling fix; B ripple=writer/test/register/session only; C reverse=duplicate id and corrupt existing JSONL RED then GREEN; F no provider/live/network/raw/DataHub/production path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 offline incident-log writer)
+
+- **Verdict/Action**: FAIL. The offline US-short batch5 incident-log writer remains no-provider/no-network, but it cannot be accepted before repair because it accepts duplicate `incident_id` values and can append to `incident_log.jsonl` before failing on a malformed existing log, leaving a dangling private log/summary state.
+- **Required**: `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` in `docs/system_risk_register.md`.
+- **Verify**: startup status/log checked; batch5 target 70 OK; route/doc guards 52 OK; `tests/provider` 42 OK; full offline `*us_short*` 2315 OK; py_compile OK; `git diff --check` CRLF-only; direct private-temp probe reproduced duplicate acceptance (`duplicate_lines=2`) and corrupt-log append-before-fail (`corrupt_lines_after=2`). No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call ran.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 offline incident-log writer)
+
+- **Verdict/Action**: Executed the offline US-short batch5 incident-log writer slice: added `schemas/us_short_batch5_incident_log_record.schema.json`, `engine/us_short_batch5_incident_log_writer.py`, and adversarial schema/writer tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production call, provider status polling, fallback execution, raw-payload read/write, tracked private/raw output, live_normalized claim, or ship-gate claim ran; test-only private temp files stayed under gitignored roots and were cleaned up.
+- **Required**: none opened in this execution. Pending Codex review before commit; `SR-PROVIDER-001` remains open for any broader provider/live, provider status polling, fallback execution, DataHub/runner consumption, production storage, live_normalized, or ship-gate boundary.
+- **Verify**: TDD RED first failed on missing record schema and writer module. After GREEN: new record/writer tests 14 OK; batch5 target 70 OK; route/doc guards 52 OK; `tests/provider` 42 OK; full offline `*us_short*` 2315 OK; py_compile OK; private incident/raw roots gitignored; static boundary scan found only guard/test literals and no real secret/raw payload; `git diff --check` CRLF-only.
+- **Next**: Codex review this offline batch5 incident-log writer scope before commit or any broader provider/live/status/fallback boundary.
+- **Pre-Codex self-review**: proof-of-use: A class=private-output writer + schema contract; B ripple=schema/engine/tests/README/session only; C reverse=missing schema/module RED then GREEN, path escape, unignored root, URL/secret/raw, mapping drift, and ship-gate relabel mutants covered; F no provider/live/network/raw/DataHub/production path.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 incident-log storage contract)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH5-INCIDENT-LOG-MAPPING-TRACEBACK-DRIFT` is fixed in the reviewed batch5 incident-log storage contract scope; the artifact preserves the P1 owner incident mappings and the schema now rejects source-ref, severity, and action drift. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, incident writer, runtime storage creation, or raw-payload read/write ran during review.
