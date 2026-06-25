@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch4 slice 4d-ii-i cash allocation)
+
+- **Verdict/Action**: PASS. Reviewed current worktree for `engine/us_short_weekend_cash.py`, `tests/test_us_short_weekend_cash.py`, the action/reason guard extension, and the README route row. No material Required. Boundary accepted as the 4d-ii-h finalized `建仓` set; `加仓` remains outside the current weekend v1 emitter path (`decide_actions`/README 4d-ii-b), while the shared base `allocate_cash` engine already supports `建仓/加仓`.
+- **Required**: None.
+- **Verify**: Startup `git status --short --untracked-files=all` + `git log -8 --oneline`; targeted offline `unittest` 245 OK; doc/route/README guards 52 OK; `py_compile` OK; `git diff --check` OK with CRLF warnings only; adversarial probes OK for funded build, malformed build inputs, malformed cash, and future-`加仓` boundary. Broad bundled-Python `unittest discover -s tests -p '*us_short*.py'` is environment-blocked by missing `jsonschema` (40 import/runtime errors, 1 skipped), not a slice regression; no alternate `python`/`py` interpreter found in PATH/repo.
+- **Next**: Claude Code: commit.
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-i — 周末 pipeline 全局现金分配 cash allocation)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-i（§8 line 240 全局现金分配）。新 `engine/us_short_weekend_cash.py`：`apply_cash_allocation(cost_floored_result, *, available_cash)` 后置 stage 对 4d-ii-h 最终建仓集跑 `allocate_cash`（复用 engine、无新现金数学）——可建仓票按 selection_rank(排名)主序、最保守 `valid_entry_high` 依次占用现金，轮到现金不够 → 观察(`cash_or_account_missing`)、attach 5 §8 cash_allocation_fields、build_count 重算；非建仓 carry（5 字段 None）。**从一开始单源 consumer-validation**：§9 `action_reason_error` + canonical-unique ticker（emit 大写/非规范/dup 拒）+ 建仓 cash 输入验证（shares 正 int/valid_entry_high 正有限/selection_rank 正 int → raise，使 engine observe 仅 = insufficient_cash、映射无歧义）。cash 模块入 action/reason guard（结构 import + 行为拒坏对）。**置信/流动性 tie-break 暂缺**（engine fail-closed worst、rank 主序不受影响）+ **§9 action_rank = 后续刀**。available_cash = 离线 fixture（live = 批5）。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行 + guard 扩 cash stage）。
+- **Verify**: cash **14 OK**（funded 留建仓+5 字段 / insufficient→观察 cash_or_account_missing+build_count 重算 / rank 主序 / 够全 funded / 零现金全观察 / 非建仓 carry None / 5 字段全行在 / fail-closed 坏 result·action-reason·非规范·dup·小写 canon·坏建仓输入×3）+ action/reason guard **13 OK**（加 cash stage import+行为）。全离线 `*us_short*` **2069 OK**（=2055+14）零回归；doc/route/README guards 51 OK（cash col1=331）；py_compile OK；no-BOM；直接探针 4 例；git diff --check CRLF-only。
+- **Next**: Codex `审查` 批4 slice 4d-ii-i（`engine/us_short_weekend_cash.py`+测试+README 一行+`test_us_short_weekend_action_reason_contract` 扩；纯/离线、不交叉 A 股）。重点：① 后置 stage 复用 `allocate_cash` 单源（buildable=建仓/加仓+非veto engine 内 enforce）、selection_rank 主序、valid_entry_high 占用、不够→观察(`cash_or_account_missing`)；② 单源 consumer-validation（§9 action_reason_error/canonical ticker/dup/建仓 cash 输入验证）+ cash stage 入 action/reason guard；③ **请核读法**：insufficient_cash→`cash_or_account_missing`（vs capacity_or_budget_deferred——§9 后者定义列周/同主题/仓位 cap、未列现金）、cash rank=selection_rank、cash 字段非建仓=None；④ 置信/流动性 tie-break 暂缺（engine worst、文档化）+ §9 action_rank 后续 + available_cash 离线 fixture（live=批5）。findings 落 register。PASS 后用户 `提交`；之后 §9 action_rank。
+- **Pre-Codex self-review**: A 整类（funded/insufficient/rank 主序/够/零现金/非建仓 carry/5 字段全行/fail-closed 坏 result·action-reason·非规范·dup·坏建仓输入[shares/entry/rank]，各对抗+正控）；B 连带（复用 allocate_cash+CASH_ALLOCATION_FIELDS+action_reason_error+canonical_us_ticker 单源；cash stage 入 action/reason guard[结构 import+行为+stale 反向]、guard glob 自动扫新模块[无 inline §9 标记]；README 行 col1≤350；新模块无其他消费者）；C 反向（funded 留建仓不误降、rank-order 正确、非建仓不给现金、合法输入过、仅畸形/不够 raise/观察）；D N/A；E README 单态、CURRENT 未动（draft）；F（result+建仓输入 fail-closed、observe→insufficient_cash 唯一[输入预验]、canonical+dup、no-BOM、git diff --check）。根因=4d-ii capstone 接线，从一开始用单源 consumer-validation 防同类，[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch4 slice 4d-ii-h forced-min sizing boundary)
 
 - **Verdict/Action**: PASS. Codex repaired and re-reviewed `R-USSHORT-BATCH4-COST-FLOOR-FORCED-MIN-SIZING-CONTRACT-GAP`: cost-floor now validates the 4d-ii-g forced-min sizing contract before any cost math.

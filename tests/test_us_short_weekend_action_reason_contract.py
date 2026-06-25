@@ -26,6 +26,7 @@ from engine.us_short_weekend_decision import OBSERVE_REASONS, action_reason_erro
 import engine.us_short_weekend_sizing as sizing  # noqa: E402
 import engine.us_short_weekend_basket as basket  # noqa: E402
 import engine.us_short_weekend_cost_floor as cost_floor  # noqa: E402
+import engine.us_short_weekend_cash as cash  # noqa: E402
 
 _ENGINE = ROOT / "engine"
 # the §9 inline-check error strings the single-source validator emits — they must NOT appear in any OTHER
@@ -83,7 +84,7 @@ class SingleSourceStructureTests(unittest.TestCase):
 
     def test_consuming_stages_import_single_source(self):
         for mod_path in (_ENGINE / "us_short_weekend_sizing.py", _ENGINE / "us_short_weekend_basket.py",
-                         _ENGINE / "us_short_weekend_cost_floor.py"):
+                         _ENGINE / "us_short_weekend_cost_floor.py", _ENGINE / "us_short_weekend_cash.py"):
             self.assertIn("action_reason_error", mod_path.read_text(encoding="utf-8"),
                           f"{mod_path.name} does not consume the single-source action/reason validator")
 
@@ -117,6 +118,13 @@ class StageRejectsBadPairTests(unittest.TestCase):
                 {"regime": {"market_risk_regime": "进攻"}, "rows": [bad], "weekly_build_limit": 1,
                  "build_count": 0}, cost_inputs={})
 
+    def test_cash_rejects_bad_pair(self):
+        bad = {"ticker": "AAA", "final_action": "观察", "observe_reason_type": "BANANA", "selection_rank": 9}
+        with self.assertRaises(cash.WeekendCashError):
+            cash.apply_cash_allocation(
+                {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [bad],
+                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0)
+
     def test_non_observe_stale_reason_rejected_each_stage(self):
         # the reverse half: a non-观察 row carrying a stale reason is also rejected at each stage.
         sized_bad = {"ticker": "AAA", "final_action": "持有", "observe_reason_type": "data_restricted",
@@ -136,6 +144,12 @@ class StageRejectsBadPairTests(unittest.TestCase):
             cost_floor.apply_probe_cost_floor(
                 {"regime": {"market_risk_regime": "进攻"}, "rows": [cf_bad], "weekly_build_limit": 1,
                  "build_count": 0}, cost_inputs={})
+        cash_bad = {"ticker": "AAA", "final_action": "持有", "observe_reason_type": "data_restricted",
+                    "selection_rank": 9}
+        with self.assertRaises(cash.WeekendCashError):
+            cash.apply_cash_allocation(
+                {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [cash_bad],
+                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0)
 
 
 if __name__ == "__main__":
