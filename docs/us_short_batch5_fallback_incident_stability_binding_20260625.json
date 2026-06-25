@@ -1,0 +1,526 @@
+{
+  "schema_name": "us_short_batch5_fallback_incident_stability_binding",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-25T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "US-short single design authority; batch5 provider/live and fallback execution remain gated."
+    },
+    {
+      "artifact_id": "us_short_batch5_provider_live_post_probe_disposition_20260625",
+      "path": "docs/us_short_batch5_provider_live_post_probe_disposition_20260625.json",
+      "role": "Selects this offline fallback/incident/stability binding as the safe next non-live execution round."
+    },
+    {
+      "artifact_id": "provider_p1_fallback_incident_stability_playbook_20260602",
+      "path": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json",
+      "role": "Existing P1 design-only playbook being bound to the US-short batch5 first-version route."
+    },
+    {
+      "artifact_id": "provider_p1_incident_log_contract_20260602",
+      "path": "docs/provider_evidence_p1_us_incident_log_contract_20260602.json",
+      "role": "Future incident-log shape reference; this binding does not implement the writer or storage."
+    },
+    {
+      "artifact_id": "provider_evidence_drift_monitor_contract",
+      "path": "docs/provider_evidence_drift_monitor.md",
+      "role": "Defines drift dimensions and default actions; this binding does not run a monitor."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker that this binding does not resolve."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "artifact_status": "fallback_incident_stability_binding_offline_only",
+    "binds_existing_p1_playbook": true,
+    "default_deny_binding": true,
+    "provider_calls_executed_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "provider_status_polling_allowed": false,
+    "fallback_execution_allowed": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "raw_payloads_written_by_this_artifact": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "datahub_consumption_allowed": false,
+    "runner_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "production_ready_claim_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "live_normalized_evidence_allowed": false,
+    "yfinance_allowed": false,
+    "web_x_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "binding_trace": {
+    "post_probe_disposition_ref": "docs/us_short_batch5_provider_live_post_probe_disposition_20260625.json",
+    "p1_playbook_ref": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json",
+    "p1_playbook_status": "schema_first_design_no_provider_calls",
+    "binding_mode": "batch5_default_deny_contract",
+    "response_shape_probe_remains_non_production": true,
+    "authorizes_provider_status_polling": false,
+    "authorizes_fallback_execution": false,
+    "authorizes_datahub_or_runner_consumption": false
+  },
+  "field_family_bindings": [
+    {
+      "family_id": "fundamentals",
+      "source_playbook_family_id": "fundamentals",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "manual_review",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "License, PIT, coverage, and SEC audit reconciliation gates reviewed.",
+        "Incident log schema and storage path reviewed.",
+        "Separate provider/live access packet if new raw rows are required."
+      ]
+    },
+    {
+      "family_id": "price_volume_liquidity",
+      "source_playbook_family_id": "price_volume_liquidity",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "manual_review",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "Price, volume, missing-session, halt, and adjustment semantics reviewed.",
+        "No yfinance or alternate price fallback without separate authorization.",
+        "No return calculation until corporate-action reconciliation is reviewed."
+      ]
+    },
+    {
+      "family_id": "corporate_actions",
+      "source_playbook_family_id": "corporate_actions",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "manual_review",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "Split/dividend/adjusted-price evidence reviewed.",
+        "Corporate-action sample packet separately authorized if raw validation is needed.",
+        "No silent normalization or production use while unresolved."
+      ]
+    },
+    {
+      "family_id": "security_master_coverage",
+      "source_playbook_family_id": "security_master_coverage",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "manual_review",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "Active/inactive/delisted/security-class coverage reviewed.",
+        "Forward universe capture separately authorized if live source is needed.",
+        "No full-market or security-master fetch by default."
+      ]
+    },
+    {
+      "family_id": "sec_edgar_audit",
+      "source_playbook_family_id": "sec_edgar_audit",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "manual_review",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "Parser lineage and field-family mapping reviewed.",
+        "SEC remains audit-only; not a price or free-float source.",
+        "No parser implementation or new SEC calls in this binding."
+      ]
+    },
+    {
+      "family_id": "benchmark_gics",
+      "source_playbook_family_id": "benchmark_gics",
+      "binding_status": "bound_to_default_deny_playbook",
+      "default_action": "block_production_use",
+      "requires_incident_log_before_manual_override": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "authorizes_provider_selection": false,
+      "silent_default_allowed": false,
+      "zero_fill_allowed": false,
+      "latest_only_backfill_allowed": false,
+      "required_before_runtime_use": [
+        "Licensed benchmark/GICS feed reviewed.",
+        "PIT industry membership reviewed before industry-normalized evidence.",
+        "No methodology page treated as a data feed."
+      ]
+    }
+  ],
+  "incident_bindings": [
+    {
+      "incident_id": "quota_or_rate_limit",
+      "source_playbook_incident_id": "quota_or_rate_limit",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "block_production_use",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Incident log schema and writer reviewed.",
+        "Quota behavior separately validated before runtime use."
+      ]
+    },
+    {
+      "incident_id": "http_5xx_or_provider_outage",
+      "source_playbook_incident_id": "http_5xx_or_provider_outage",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "block_production_use",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Status polling separately authorized if needed.",
+        "Fallback execution separately reviewed."
+      ]
+    },
+    {
+      "incident_id": "http_401_403_auth_scope",
+      "source_playbook_incident_id": "http_401_403_auth_scope",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "record_incident",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Access scope reviewed.",
+        "No provider selection from auth errors alone."
+      ]
+    },
+    {
+      "incident_id": "schema_or_field_semantics_drift",
+      "source_playbook_incident_id": "schema_or_field_semantics_drift",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "manual_review",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Field semantics drift captured in incident log.",
+        "Provider evidence rerun separately authorized if raw validation is needed."
+      ]
+    },
+    {
+      "incident_id": "stale_or_missing_rows",
+      "source_playbook_incident_id": "stale_or_missing_rows",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "block_production_use",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Missing/stale rows block production use.",
+        "No zero-fill or latest-only rescue."
+      ]
+    },
+    {
+      "incident_id": "pit_or_observed_date_ambiguity",
+      "source_playbook_incident_id": "pit_or_observed_date_ambiguity",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "freeze_latest_only_claims",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "PIT ambiguity blocks historical evidence use.",
+        "Observed-date rows require separate provider/live authorization."
+      ]
+    },
+    {
+      "incident_id": "corporate_action_adjustment_conflict",
+      "source_playbook_incident_id": "corporate_action_adjustment_conflict",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "manual_review",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Adjustment conflict blocks return construction.",
+        "Corporate-action reconciliation separately reviewed."
+      ]
+    },
+    {
+      "incident_id": "sec_edgar_audit_conflict",
+      "source_playbook_incident_id": "sec_edgar_audit_conflict",
+      "binding_status": "bound_to_default_deny_playbook",
+      "required_default_action": "manual_review",
+      "requires_incident_log": true,
+      "production_use_allowed_until_review": false,
+      "fallback_may_be_used_without_new_data": false,
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_adapter_or_datahub": false,
+      "authorizes_runner_consumption": false,
+      "required_before_execution": [
+        "Audit conflict blocks silent field use.",
+        "Parser/mapping implementation separately reviewed."
+      ]
+    }
+  ],
+  "drift_monitor_bindings": [
+    {
+      "dimension": "coverage_count",
+      "source_contract_dimension": "coverage_count",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "warn",
+        "block_production_use",
+        "rerun_provider_evidence"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "freshness_latency",
+      "source_contract_dimension": "freshness_latency",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "warn",
+        "manual_review",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "schema_or_field_semantics",
+      "source_contract_dimension": "schema_or_field_semantics",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "manual_review",
+        "record_incident",
+        "fallback_path_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "pit_as_of_integrity",
+      "source_contract_dimension": "pit_as_of_integrity",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "block_production_use",
+        "freeze_latest_only_claims",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "corporate_action_revision",
+      "source_contract_dimension": "corporate_action_revision",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "record_incident",
+        "rerun_provider_evidence",
+        "manual_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "authorization_cost_quota",
+      "source_contract_dimension": "authorization_cost_quota",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "manual_review",
+        "fallback_path_review",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "provider_incident",
+      "source_contract_dimension": "provider_incident",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "warn",
+        "record_incident",
+        "fallback_path_review"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "dimension": "outlier_revision_rate",
+      "source_contract_dimension": "outlier_revision_rate",
+      "binding_status": "design_binding_only_not_runtime_monitor",
+      "blocking_actions": [
+        "manual_review",
+        "rerun_provider_evidence",
+        "record_incident"
+      ],
+      "authorizes_status_polling": false,
+      "authorizes_data_fetch": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "implementation_gates": [
+    {
+      "gate_id": "incident_log_schema_required",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Incident log schema, storage path, retention, and replay behavior must be reviewed before incident writer execution."
+    },
+    {
+      "gate_id": "provider_status_polling_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Any provider status-page polling or live monitoring must stop for separate user authorization."
+    },
+    {
+      "gate_id": "fallback_execution_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Fallback execution must be separately reviewed and must not silently substitute unreviewed sources."
+    },
+    {
+      "gate_id": "datahub_runner_consumption_blocked",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "DataHub and runner consumption remain blocked until upstream provider gates and private-output contracts pass review."
+    },
+    {
+      "gate_id": "production_storage_blocked",
+      "status": "blocked_pending_later_review",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Production storage remains blocked until license/storage/retention rights and private-output paths are reviewed."
+    },
+    {
+      "gate_id": "live_normalized_ship_gate_blocked",
+      "status": "not_allowed_in_batch5_first_version",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Live_normalized and ship-gate evidence require separate forward-evidence policy compliance, not response-shape or fallback design evidence."
+    },
+    {
+      "gate_id": "future_provider_live_probe_separate_authorization",
+      "status": "separate_authorization_required",
+      "authorizes_implementation_now": false,
+      "authorizes_provider_live_or_network": false,
+      "authorizes_datahub_or_runner": false,
+      "required_resolution": "Any next provider/live probe must specify symbols, endpoints, call budget, retry policy, write paths, raw/secret boundary, validation, and non-authorized paths."
+    }
+  ],
+  "prohibited_actions": {
+    "provider_live_call_authorized_by_this_artifact": false,
+    "provider_status_polling_authorized": false,
+    "fallback_execution_authorized": false,
+    "network_access_authorized_by_this_artifact": false,
+    "raw_payload_read_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "datahub_consumption_authorized": false,
+    "runner_consumption_authorized": false,
+    "production_storage_authorized": false,
+    "provider_selection_authorized": false,
+    "provider_ranking_authorized": false,
+    "yfinance_authorized": false,
+    "web_x_authorized": false,
+    "broker_or_order_automation_authorized": false,
+    "ship_gate_or_live_normalized_evidence_authorized": false,
+    "production_ready_claim_authorized": false
+  },
+  "limitations": [
+    "This artifact did not run provider/live/network/FMP/SEC/yfinance/Web/X calls.",
+    "This artifact did not poll provider status pages or execute fallback paths.",
+    "This artifact did not read, write, summarize, or transform raw provider payloads.",
+    "This artifact does not resolve SR-PROVIDER-001 and does not select a provider.",
+    "This artifact is design binding only; no DataHub, runner, production storage, live_normalized, or ship-gate path is authorized."
+  ],
+  "next_steps": [
+    "Review this offline fallback/incident/stability binding before commit.",
+    "A safe next offline execution can be an incident-log schema/storage contract if still kept no-access and no-execution.",
+    "Any provider status polling, fallback execution, provider/live probe, DataHub/runner consumption, production storage, or ship-gate evidence must stop for separate review and authorization."
+  ]
+}

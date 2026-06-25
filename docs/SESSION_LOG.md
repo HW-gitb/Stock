@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 fallback/incident/stability binding)
+
+- **Verdict/Action**: PASS. The offline US-short batch5 fallback/incident/stability binding is valid: it binds the existing P1 playbook as default-deny design only, keeps SR-PROVIDER-001 open, and does not authorize provider/live calls, status polling, fallback execution, raw reads/writes, DataHub/runner, production storage, live_normalized, or ship-gate evidence.
+- **Required**: none for this reviewed slice; register pointer `docs/system_risk_register.md` / `SR-PROVIDER-001` remains open for broader provider/live, status polling, fallback execution, incident-log writer/storage, DataHub/runner, production, live_normalized, and ship-gate boundaries.
+- **Verify**: fallback binding schema 10 OK; batch5 target 44 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2289 OK; py_compile OK; direct schema probe `valid_errors=0` and rejects status-polling, fallback-execution, data-fetch, incident-production-use, drift-polling, missing family/incident/drift rows, and ship-gate mutants; source refs exist; secret/API-key scan clean.
+- **Next**: Claude Code: Pass.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 fallback/incident/stability binding)
+
+- **Verdict/Action**: Executed the offline US-short batch5 fallback/incident/stability binding slice: added `schemas/us_short_batch5_fallback_incident_stability_binding.schema.json`, `docs/us_short_batch5_fallback_incident_stability_binding_20260625.json`, and adversarial schema tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, or raw-payload read/write ran.
+- **Required**: none opened in this execution. `SR-PROVIDER-001` remains open; provider status polling, fallback execution, incident-log writer/storage, provider/live probes, DataHub/runner consumption, production storage, live_normalized, and ship-gate work still need separate review and authorization where applicable.
+- **Verify**: TDD RED first failed on missing schema/artifact; after GREEN: new fallback binding schema 10 OK; batch5 target 44 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2289 OK; py_compile OK; direct schema probe `valid_errors=0` and rejects status-polling, fallback-execution, data-fetch, incident-production-use, drift-polling, missing-family, and ship-gate mutants; exact-token secret/API-key scan clean.
+- **Next**: Codex review this offline batch5 fallback/incident/stability binding scope before commit or any broader provider/live boundary.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 post-probe blocker disposition)
 
 - **Verdict/Action**: PASS. The offline US-short batch5 post-probe disposition slice is valid: it records the completed 10-call probe as response-shape only, keeps SR-PROVIDER-001 open, and locks future provider/live, DataHub, production, live_normalized, and ship-gate paths behind separate gates. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call or raw-payload read/write ran during review.

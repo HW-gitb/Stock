@@ -1,0 +1,1196 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_fallback_incident_stability_binding/1.0.0/schema.json",
+  "title": "US-short Batch5 Fallback Incident Stability Binding",
+  "description": "US-short batch5 offline binding from the post-probe disposition to the existing P1 fallback/incident/stability playbook. It does not poll provider status, execute fallback, fetch data, read raw payloads, authorize DataHub/runner consumption, production storage, provider selection, live_normalized evidence, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "binding_trace",
+    "field_family_bindings",
+    "incident_bindings",
+    "drift_monitor_bindings",
+    "implementation_gates",
+    "prohibited_actions",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_fallback_incident_stability_binding"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "us_short_system_design"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "us_short_batch5_provider_live_post_probe_disposition_20260625"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_p1_fallback_incident_stability_playbook_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "provider_p1_incident_log_contract_20260602"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "artifact_id": {
+                "const": "sr_provider_001"
+              }
+            },
+            "required": [
+              "artifact_id"
+            ]
+          }
+        }
+      ]
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "binding_trace": {
+      "$ref": "#/$defs/bindingTrace"
+    },
+    "field_family_bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/fieldFamilyBinding"
+      },
+      "minItems": 6,
+      "maxItems": 6,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsFundamentals"
+        },
+        {
+          "$ref": "#/$defs/containsPriceVolumeLiquidity"
+        },
+        {
+          "$ref": "#/$defs/containsCorporateActions"
+        },
+        {
+          "$ref": "#/$defs/containsSecurityMasterCoverage"
+        },
+        {
+          "$ref": "#/$defs/containsSecEdgarAudit"
+        },
+        {
+          "$ref": "#/$defs/containsBenchmarkGics"
+        }
+      ]
+    },
+    "incident_bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/incidentBinding"
+      },
+      "minItems": 8,
+      "maxItems": 8,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsQuotaOrRateLimit"
+        },
+        {
+          "$ref": "#/$defs/containsHttp5xxOrProviderOutage"
+        },
+        {
+          "$ref": "#/$defs/containsHttp401403AuthScope"
+        },
+        {
+          "$ref": "#/$defs/containsSchemaOrFieldSemanticsDrift"
+        },
+        {
+          "$ref": "#/$defs/containsStaleOrMissingRows"
+        },
+        {
+          "$ref": "#/$defs/containsPitOrObservedDateAmbiguity"
+        },
+        {
+          "$ref": "#/$defs/containsCorporateActionAdjustmentConflict"
+        },
+        {
+          "$ref": "#/$defs/containsSecEdgarAuditConflict"
+        }
+      ]
+    },
+    "drift_monitor_bindings": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/driftMonitorBinding"
+      },
+      "minItems": 8,
+      "maxItems": 8,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsCoverageCount"
+        },
+        {
+          "$ref": "#/$defs/containsFreshnessLatency"
+        },
+        {
+          "$ref": "#/$defs/containsSchemaOrFieldSemantics"
+        },
+        {
+          "$ref": "#/$defs/containsPitAsOfIntegrity"
+        },
+        {
+          "$ref": "#/$defs/containsCorporateActionRevision"
+        },
+        {
+          "$ref": "#/$defs/containsAuthorizationCostQuota"
+        },
+        {
+          "$ref": "#/$defs/containsProviderIncident"
+        },
+        {
+          "$ref": "#/$defs/containsOutlierRevisionRate"
+        }
+      ]
+    },
+    "implementation_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/implementationGate"
+      },
+      "minItems": 7,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsIncidentLogSchemaRequired"
+        },
+        {
+          "$ref": "#/$defs/containsProviderStatusPollingSeparateAuthorization"
+        },
+        {
+          "$ref": "#/$defs/containsFallbackExecutionSeparateAuthorization"
+        },
+        {
+          "$ref": "#/$defs/containsDatahubRunnerConsumptionBlocked"
+        },
+        {
+          "$ref": "#/$defs/containsProductionStorageBlocked"
+        },
+        {
+          "$ref": "#/$defs/containsLiveNormalizedShipGateBlocked"
+        },
+        {
+          "$ref": "#/$defs/containsFutureProviderLiveProbeSeparateAuthorization"
+        }
+      ]
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "artifact_status",
+        "binds_existing_p1_playbook",
+        "default_deny_binding",
+        "provider_calls_executed_by_this_artifact",
+        "network_access_required_for_this_artifact",
+        "provider_status_polling_allowed",
+        "fallback_execution_allowed",
+        "raw_payloads_read_by_this_artifact",
+        "raw_payloads_written_by_this_artifact",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "datahub_consumption_allowed",
+        "runner_consumption_allowed",
+        "production_storage_allowed",
+        "production_ready_claim_allowed",
+        "ship_gate_evidence_allowed",
+        "live_normalized_evidence_allowed",
+        "yfinance_allowed",
+        "web_x_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "lane": {
+          "const": "us_short"
+        },
+        "batch": {
+          "const": "batch5_provider_live"
+        },
+        "artifact_status": {
+          "const": "fallback_incident_stability_binding_offline_only"
+        },
+        "binds_existing_p1_playbook": {
+          "const": true
+        },
+        "default_deny_binding": {
+          "const": true
+        },
+        "provider_calls_executed_by_this_artifact": {
+          "const": false
+        },
+        "network_access_required_for_this_artifact": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "fallback_execution_allowed": {
+          "const": false
+        },
+        "raw_payloads_read_by_this_artifact": {
+          "const": false
+        },
+        "raw_payloads_written_by_this_artifact": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "datahub_consumption_allowed": {
+          "const": false
+        },
+        "runner_consumption_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "live_normalized_evidence_allowed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "web_x_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "bindingTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "post_probe_disposition_ref",
+        "p1_playbook_ref",
+        "p1_playbook_status",
+        "binding_mode",
+        "response_shape_probe_remains_non_production",
+        "authorizes_provider_status_polling",
+        "authorizes_fallback_execution",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "post_probe_disposition_ref": {
+          "const": "docs/us_short_batch5_provider_live_post_probe_disposition_20260625.json"
+        },
+        "p1_playbook_ref": {
+          "const": "docs/provider_evidence_p1_us_fallback_incident_stability_playbook_20260602.json"
+        },
+        "p1_playbook_status": {
+          "const": "schema_first_design_no_provider_calls"
+        },
+        "binding_mode": {
+          "const": "batch5_default_deny_contract"
+        },
+        "response_shape_probe_remains_non_production": {
+          "const": true
+        },
+        "authorizes_provider_status_polling": {
+          "const": false
+        },
+        "authorizes_fallback_execution": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "fieldFamilyBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "family_id",
+        "source_playbook_family_id",
+        "binding_status",
+        "default_action",
+        "requires_incident_log_before_manual_override",
+        "authorizes_provider_call_now",
+        "authorizes_data_fetch",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "authorizes_provider_selection",
+        "silent_default_allowed",
+        "zero_fill_allowed",
+        "latest_only_backfill_allowed",
+        "required_before_runtime_use"
+      ],
+      "properties": {
+        "family_id": {
+          "enum": [
+            "fundamentals",
+            "price_volume_liquidity",
+            "corporate_actions",
+            "security_master_coverage",
+            "sec_edgar_audit",
+            "benchmark_gics"
+          ]
+        },
+        "source_playbook_family_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "binding_status": {
+          "const": "bound_to_default_deny_playbook"
+        },
+        "default_action": {
+          "enum": [
+            "manual_review",
+            "defer_field_family",
+            "block_production_use"
+          ]
+        },
+        "requires_incident_log_before_manual_override": {
+          "const": true
+        },
+        "authorizes_provider_call_now": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "authorizes_provider_selection": {
+          "const": false
+        },
+        "silent_default_allowed": {
+          "const": false
+        },
+        "zero_fill_allowed": {
+          "const": false
+        },
+        "latest_only_backfill_allowed": {
+          "const": false
+        },
+        "required_before_runtime_use": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "incidentBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "incident_id",
+        "source_playbook_incident_id",
+        "binding_status",
+        "required_default_action",
+        "requires_incident_log",
+        "production_use_allowed_until_review",
+        "fallback_may_be_used_without_new_data",
+        "authorizes_status_polling",
+        "authorizes_data_fetch",
+        "authorizes_adapter_or_datahub",
+        "authorizes_runner_consumption",
+        "required_before_execution"
+      ],
+      "properties": {
+        "incident_id": {
+          "enum": [
+            "quota_or_rate_limit",
+            "http_5xx_or_provider_outage",
+            "http_401_403_auth_scope",
+            "schema_or_field_semantics_drift",
+            "stale_or_missing_rows",
+            "pit_or_observed_date_ambiguity",
+            "corporate_action_adjustment_conflict",
+            "sec_edgar_audit_conflict"
+          ]
+        },
+        "source_playbook_incident_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "binding_status": {
+          "const": "bound_to_default_deny_playbook"
+        },
+        "required_default_action": {
+          "enum": [
+            "record_incident",
+            "manual_review",
+            "block_production_use",
+            "freeze_latest_only_claims"
+          ]
+        },
+        "requires_incident_log": {
+          "const": true
+        },
+        "production_use_allowed_until_review": {
+          "const": false
+        },
+        "fallback_may_be_used_without_new_data": {
+          "const": false
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_adapter_or_datahub": {
+          "const": false
+        },
+        "authorizes_runner_consumption": {
+          "const": false
+        },
+        "required_before_execution": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "driftMonitorBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dimension",
+        "source_contract_dimension",
+        "binding_status",
+        "blocking_actions",
+        "authorizes_status_polling",
+        "authorizes_data_fetch",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "dimension": {
+          "enum": [
+            "coverage_count",
+            "freshness_latency",
+            "schema_or_field_semantics",
+            "pit_as_of_integrity",
+            "corporate_action_revision",
+            "authorization_cost_quota",
+            "provider_incident",
+            "outlier_revision_rate"
+          ]
+        },
+        "source_contract_dimension": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "binding_status": {
+          "const": "design_binding_only_not_runtime_monitor"
+        },
+        "blocking_actions": {
+          "$ref": "#/$defs/stringList"
+        },
+        "authorizes_status_polling": {
+          "const": false
+        },
+        "authorizes_data_fetch": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "implementationGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "authorizes_implementation_now",
+        "authorizes_provider_live_or_network",
+        "authorizes_datahub_or_runner",
+        "required_resolution"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked_pending_later_review",
+            "separate_authorization_required",
+            "not_allowed_in_batch5_first_version"
+          ]
+        },
+        "authorizes_implementation_now": {
+          "const": false
+        },
+        "authorizes_provider_live_or_network": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner": {
+          "const": false
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_live_call_authorized_by_this_artifact",
+        "provider_status_polling_authorized",
+        "fallback_execution_authorized",
+        "network_access_authorized_by_this_artifact",
+        "raw_payload_read_authorized_by_this_artifact",
+        "raw_payload_write_authorized_by_this_artifact",
+        "datahub_consumption_authorized",
+        "runner_consumption_authorized",
+        "production_storage_authorized",
+        "provider_selection_authorized",
+        "provider_ranking_authorized",
+        "yfinance_authorized",
+        "web_x_authorized",
+        "broker_or_order_automation_authorized",
+        "ship_gate_or_live_normalized_evidence_authorized",
+        "production_ready_claim_authorized"
+      ],
+      "properties": {
+        "provider_live_call_authorized_by_this_artifact": {
+          "const": false
+        },
+        "provider_status_polling_authorized": {
+          "const": false
+        },
+        "fallback_execution_authorized": {
+          "const": false
+        },
+        "network_access_authorized_by_this_artifact": {
+          "const": false
+        },
+        "raw_payload_read_authorized_by_this_artifact": {
+          "const": false
+        },
+        "raw_payload_write_authorized_by_this_artifact": {
+          "const": false
+        },
+        "datahub_consumption_authorized": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_storage_authorized": {
+          "const": false
+        },
+        "provider_selection_authorized": {
+          "const": false
+        },
+        "provider_ranking_authorized": {
+          "const": false
+        },
+        "yfinance_authorized": {
+          "const": false
+        },
+        "web_x_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        },
+        "ship_gate_or_live_normalized_evidence_authorized": {
+          "const": false
+        },
+        "production_ready_claim_authorized": {
+          "const": false
+        }
+      }
+    },
+    "containsByFamily": {
+      "type": "object",
+      "properties": {
+        "family_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      },
+      "required": [
+        "family_id"
+      ]
+    },
+    "containsFundamentals": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "fundamentals"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsPriceVolumeLiquidity": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "price_volume_liquidity"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsCorporateActions": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "corporate_actions"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsSecurityMasterCoverage": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "security_master_coverage"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsSecEdgarAudit": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "sec_edgar_audit"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsBenchmarkGics": {
+      "contains": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/containsByFamily"
+          },
+          {
+            "properties": {
+              "family_id": {
+                "const": "benchmark_gics"
+              }
+            }
+          }
+        ]
+      }
+    },
+    "containsQuotaOrRateLimit": {
+      "$ref": "#/$defs/containsIncident_quota_or_rate_limit"
+    },
+    "containsHttp5xxOrProviderOutage": {
+      "$ref": "#/$defs/containsIncident_http_5xx_or_provider_outage"
+    },
+    "containsHttp401403AuthScope": {
+      "$ref": "#/$defs/containsIncident_http_401_403_auth_scope"
+    },
+    "containsSchemaOrFieldSemanticsDrift": {
+      "$ref": "#/$defs/containsIncident_schema_or_field_semantics_drift"
+    },
+    "containsStaleOrMissingRows": {
+      "$ref": "#/$defs/containsIncident_stale_or_missing_rows"
+    },
+    "containsPitOrObservedDateAmbiguity": {
+      "$ref": "#/$defs/containsIncident_pit_or_observed_date_ambiguity"
+    },
+    "containsCorporateActionAdjustmentConflict": {
+      "$ref": "#/$defs/containsIncident_corporate_action_adjustment_conflict"
+    },
+    "containsSecEdgarAuditConflict": {
+      "$ref": "#/$defs/containsIncident_sec_edgar_audit_conflict"
+    },
+    "containsIncident_quota_or_rate_limit": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "quota_or_rate_limit"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_http_5xx_or_provider_outage": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "http_5xx_or_provider_outage"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_http_401_403_auth_scope": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "http_401_403_auth_scope"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_schema_or_field_semantics_drift": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "schema_or_field_semantics_drift"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_stale_or_missing_rows": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "stale_or_missing_rows"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_pit_or_observed_date_ambiguity": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "pit_or_observed_date_ambiguity"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_corporate_action_adjustment_conflict": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "corporate_action_adjustment_conflict"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsIncident_sec_edgar_audit_conflict": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "incident_id": {
+            "const": "sec_edgar_audit_conflict"
+          }
+        },
+        "required": [
+          "incident_id"
+        ]
+      }
+    },
+    "containsCoverageCount": {
+      "$ref": "#/$defs/containsDimension_coverage_count"
+    },
+    "containsFreshnessLatency": {
+      "$ref": "#/$defs/containsDimension_freshness_latency"
+    },
+    "containsSchemaOrFieldSemantics": {
+      "$ref": "#/$defs/containsDimension_schema_or_field_semantics"
+    },
+    "containsPitAsOfIntegrity": {
+      "$ref": "#/$defs/containsDimension_pit_as_of_integrity"
+    },
+    "containsCorporateActionRevision": {
+      "$ref": "#/$defs/containsDimension_corporate_action_revision"
+    },
+    "containsAuthorizationCostQuota": {
+      "$ref": "#/$defs/containsDimension_authorization_cost_quota"
+    },
+    "containsProviderIncident": {
+      "$ref": "#/$defs/containsDimension_provider_incident"
+    },
+    "containsOutlierRevisionRate": {
+      "$ref": "#/$defs/containsDimension_outlier_revision_rate"
+    },
+    "containsDimension_coverage_count": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "coverage_count"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_freshness_latency": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "freshness_latency"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_schema_or_field_semantics": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "schema_or_field_semantics"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_pit_as_of_integrity": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "pit_as_of_integrity"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_corporate_action_revision": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "corporate_action_revision"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_authorization_cost_quota": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "authorization_cost_quota"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_provider_incident": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "provider_incident"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsDimension_outlier_revision_rate": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "dimension": {
+            "const": "outlier_revision_rate"
+          }
+        },
+        "required": [
+          "dimension"
+        ]
+      }
+    },
+    "containsIncidentLogSchemaRequired": {
+      "$ref": "#/$defs/containsGate_incident_log_schema_required"
+    },
+    "containsProviderStatusPollingSeparateAuthorization": {
+      "$ref": "#/$defs/containsGate_provider_status_polling_separate_authorization"
+    },
+    "containsFallbackExecutionSeparateAuthorization": {
+      "$ref": "#/$defs/containsGate_fallback_execution_separate_authorization"
+    },
+    "containsDatahubRunnerConsumptionBlocked": {
+      "$ref": "#/$defs/containsGate_datahub_runner_consumption_blocked"
+    },
+    "containsProductionStorageBlocked": {
+      "$ref": "#/$defs/containsGate_production_storage_blocked"
+    },
+    "containsLiveNormalizedShipGateBlocked": {
+      "$ref": "#/$defs/containsGate_live_normalized_ship_gate_blocked"
+    },
+    "containsFutureProviderLiveProbeSeparateAuthorization": {
+      "$ref": "#/$defs/containsGate_future_provider_live_probe_separate_authorization"
+    },
+    "containsGate_incident_log_schema_required": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "incident_log_schema_required"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_provider_status_polling_separate_authorization": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "provider_status_polling_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_fallback_execution_separate_authorization": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "fallback_execution_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_datahub_runner_consumption_blocked": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "datahub_runner_consumption_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_production_storage_blocked": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "production_storage_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_live_normalized_ship_gate_blocked": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "live_normalized_ship_gate_blocked"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    },
+    "containsGate_future_provider_live_probe_separate_authorization": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "gate_id": {
+            "const": "future_provider_live_probe_separate_authorization"
+          }
+        },
+        "required": [
+          "gate_id"
+        ]
+      }
+    }
+  }
+}
