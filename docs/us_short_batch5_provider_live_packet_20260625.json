@@ -1,0 +1,201 @@
+{
+  "schema_name": "us_short_batch5_provider_live_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-25T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "Single US-short authority; batch5+ provider/live is gated, separately authorized, and small-sample first."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider-risk gate; no full-market fetch, production storage, provider selection, DataHub, or ship-gate claim is cleared."
+    },
+    {
+      "artifact_id": "provider_data_requirements_audit",
+      "path": "docs/provider_data_requirements_audit.md",
+      "role": "Provider data requirement owner; no provider selection or DataHub implementation."
+    },
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "role": "DataHub guardrail; this batch5 first-version packet does not authorize DataHub consumption."
+    },
+    {
+      "artifact_id": "evidence_capital_policy",
+      "path": "docs/evidence_capital_policy.md",
+      "role": "Evidence-level boundary; paper and dry-run provider artifacts cannot become live_normalized or ship-gate evidence."
+    },
+    {
+      "artifact_id": "p1_validation_execution_summary_20260603",
+      "path": "docs/provider_evidence_p1_us_validation_execution_summary_20260603.json",
+      "role": "Prior five-symbol P1 response-shape summary; it remains bounded feasibility evidence and does not authorize batch5 live use."
+    },
+    {
+      "artifact_id": "p1_fmp_paid_tier_license_public_docs_review_20260603",
+      "path": "docs/provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json",
+      "role": "Public-doc license review; not legal clearance and not production storage authorization."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "first_version_status": "offline_readiness_packet_recorded_for_review_not_executed",
+    "provider_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "small_sample_first_required": true,
+    "future_provider_live_probe_requires_explicit_user_authorization": true,
+    "future_provider_live_probe_requires_reviewed_execution_packet": true,
+    "provider_calls_allowed_without_future_authorization": false,
+    "provider_selection_allowed": false,
+    "provider_adapter_allowed": false,
+    "datahub_consumption_allowed": false,
+    "skill_runtime_allowed": false,
+    "production_storage_allowed": false,
+    "full_market_or_broad_universe_allowed": false,
+    "yfinance_allowed": false,
+    "web_x_allowed": false,
+    "sec_parser_implementation_allowed": false,
+    "field_mapping_or_derivation_implementation_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "paper_results_as_live_normalized_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "future_provider_live_probe_boundary": {
+    "authorization_status": "not_authorized_by_this_artifact_requires_future_user_confirmation",
+    "sample_universe": {
+      "symbols": [
+        "AAPL",
+        "MSFT",
+        "JPM"
+      ],
+      "active_symbols": [
+        "AAPL",
+        "MSFT",
+        "JPM"
+      ],
+      "max_symbols": 3,
+      "inactive_or_delisted_historical_scope": "scoped_out_for_current_active_only_forward_model",
+      "not_full_market_or_security_master": true,
+      "forward_universe_snapshot_written_by_this_artifact": false
+    },
+    "endpoint_call_budget": {
+      "max_total_endpoint_calls": 10,
+      "fmp_planned_endpoint_calls": 6,
+      "sec_endpoint_calls": 4,
+      "retry_count_allowed": 0,
+      "abort_if_budget_exceeded": true,
+      "budget_authorized_by_this_artifact": false
+    },
+    "endpoint_families": [
+      {
+        "provider_id": "financial_modeling_prep",
+        "endpoint_family": "profile_or_company_metadata",
+        "call_count": 3,
+        "provider_role": "Future small-sample active-symbol metadata shape check only.",
+        "authorizes_provider_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false,
+        "authorizes_return_calculation": false,
+        "authorizes_corporate_action_reconciliation": false
+      },
+      {
+        "provider_id": "financial_modeling_prep",
+        "endpoint_family": "historical_eod_price_volume",
+        "call_count": 3,
+        "provider_role": "Future small-sample active EOD OHLCV shape check only; no return calculation or adjustment claim.",
+        "authorizes_provider_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false,
+        "authorizes_return_calculation": false,
+        "authorizes_corporate_action_reconciliation": false
+      },
+      {
+        "provider_id": "sec_edgar",
+        "endpoint_family": "company_tickers_mapping",
+        "call_count": 1,
+        "provider_role": "Future small-sample public CIK identity lookup shape check only.",
+        "authorizes_provider_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false,
+        "authorizes_return_calculation": false,
+        "authorizes_corporate_action_reconciliation": false
+      },
+      {
+        "provider_id": "sec_edgar",
+        "endpoint_family": "company_submissions",
+        "call_count": 3,
+        "provider_role": "Future small-sample public submissions lineage shape check only; no SEC parser implementation.",
+        "authorizes_provider_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false,
+        "authorizes_return_calculation": false,
+        "authorizes_corporate_action_reconciliation": false
+      }
+    ],
+    "validation_questions": [
+      "active_symbol_metadata_shape",
+      "active_eod_price_volume_shape",
+      "sec_identity_lookup_shape",
+      "sec_submissions_lineage_shape"
+    ]
+  },
+  "storage_and_secret_boundary": {
+    "future_raw_sample_storage_path": "provider_samples/us_short_batch5_v1_provider_live_20260625/",
+    "future_tracked_summary_path": "docs/us_short_batch5_provider_live_probe_summary_20260625.json",
+    "provider_samples_gitignore_check_required": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secrets": true,
+    "tracked_summary_write_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "production_storage_authorized": false
+  },
+  "preflight_gates": {
+    "schema_validation_required": true,
+    "provider_samples_gitignore_check_required": true,
+    "future_raw_path_scope_check_required": true,
+    "future_summary_no_secret_contract_required": true,
+    "budget_precheck_required": true,
+    "no_full_market_guard_required": true,
+    "no_datahub_consumption_guard_required": true,
+    "no_ship_gate_claim_guard_required": true
+  },
+  "prohibited_claims": {
+    "provider_call_authorized_now": false,
+    "provider_selected": false,
+    "datahub_consumable": false,
+    "runner_consumable": false,
+    "production_storage_rights_cleared": false,
+    "full_market_fetch_authorized": false,
+    "yfinance_authorized": false,
+    "web_x_authorized": false,
+    "sec_parser_implemented": false,
+    "field_mapping_or_derivation_implemented": false,
+    "return_calculation_performed": false,
+    "corporate_action_reconciliation_performed": false,
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Run dry-run preflight only for this packet in batch5 round 1; it must not read environment secrets, fetch provider data, write provider_samples, or write the future tracked summary.",
+    "Before any later provider/live probe, ask the user for separate explicit user authorization using this exact boundary: AAPL/MSFT/JPM only, max_total_endpoint_calls = 10, zero retry, raw under provider_samples/us_short_batch5_v1_provider_live_20260625/, tracked no-secret summary only.",
+    "A later reviewed execution packet must restate the endpoint families, storage, secret, budget, and prohibited-claim boundary before any network access.",
+    "Keep SR-PROVIDER-001 open unless later reviewed evidence separately resolves license/storage, active-symbol PIT where used, price adjustment/corporate actions where used, SEC parser/mapping where used, fallback/stability, provider selection, DataHub/runner consumption, and production readiness."
+  ],
+  "limitations": [
+    "This artifact performs no provider call, SEC call, web/X call, yfinance call, raw payload read, raw payload write, production storage write, or tracked summary write.",
+    "This artifact does not authorize DataHub consumption, Skill runtime, adapter implementation, SEC parser implementation, field mapping, derivation, return calculation, corporate-action reconciliation, or forward_universe_snapshot capture.",
+    "The proposed three-symbol active sample is not a full market, not a security master, not a two-pass production run, and not live_normalized or ship-gate evidence.",
+    "Prior P1 provider evidence remains bounded feasibility evidence only and cannot be treated as production data, provider selection, alpha evidence, or ship-gate evidence."
+  ]
+}

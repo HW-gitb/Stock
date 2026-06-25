@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-25 - Codex `审查 PASS` (US-short batch5 v1 provider/live readiness packet)
+
+- **Verdict/Action**: PASS. Batch5 v1 offline readiness packet + endpoint-count schema repair are in scope; no material Required remains in the reviewed batch5 scope. No provider/live/network/raw/DataHub/production path ran.
+- **Required**: `R-USSHORT-BATCH5-V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT` resolved in working tree; full closure evidence lives in `docs/system_risk_register.md`.
+- **Verify**: target batch5 12 OK; route/doc guards 52 OK; full offline `*us_short*` 2257 OK; `tests/provider` 31 OK; direct schema probe rejects endpoint-count drift (`mutant_errors=2`); CLI preflight no env read/no provider call/no raw or summary write; raw/summary paths absent; diff check CRLF-only.
+- **Next**: Codex：提交（需用户明确 `提交`）
+
+## 2026-06-25 - Codex `修复` (US-short batch5 v1 provider/live packet schema endpoint counts)
+
+- **Verdict/Action**: 修复 `R-USSHORT-BATCH5-V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT`：schema now locks each endpoint family by provider, family, and exact call_count; runner manual guard kept.
+- **Required**: resolved in working tree; full detail lives in `docs/system_risk_register.md`. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw path ran.
+- **Verify**: TDD RED first: schema accepted endpoint-count reshuffle. After fix: target batch5 12 OK; route/doc guards 52 OK; full offline `*us_short*` 2257 OK; `tests/provider` 31 OK; direct schema probe rejects drift (`schema_errors=2`); py_compile OK; no raw/summary output path exists.
+- **Next**: Codex：审查
+- **Pre-Codex self-review**: proof-of-use: A class=schema-first endpoint family call-count drift; B ripple=schema/test/register/session only; C reverse=endpoint-count reshuffle RED then GREEN; F no provider/live/network/raw/DataHub path.
+
+## 2026-06-25 - Codex `审查 FAIL` (US-short batch5 v1 provider/live readiness packet)
+
+- **Verdict/Action**: FAIL. The batch5 v1 offline packet did not run provider/live/network/raw/DataHub/production paths, and the runner fails closed, but the schema-first contract does not lock endpoint-family call counts.
+- **Required**: `R-USSHORT-BATCH5-V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT` is open in `docs/system_risk_register.md`; fix the schema/test gap before any later provider/live authorization request.
+- **Verify**: target batch5 11 OK; route/doc guards 52 OK; full offline `*us_short*` 2256 OK; `tests/provider` 31 OK; schema probe accepts endpoint-count reshuffle while runner rejects it; no raw/summary output path exists; diff check CRLF-only.
+- **Next**: Codex：修复
+
+## 2026-06-25 - Codex `执行` (US-short batch5 v1 provider/live readiness packet)
+
+- **Verdict/Action**: Executed batch5 round 1 as offline readiness only: added schema + packet + preflight runner + tests + README route; no provider/live/network/raw write/DataHub/production path ran.
+- **Required**: None opened; `SR-PROVIDER-001` remains open and binding for any later provider/live probe.
+- **Verify**: target 11 OK; route/doc guards 52 OK; full offline `*us_short*` 2256 OK; `tests/provider` 31 OK; CLI preflight reports no env read/no raw write/no summary write; py_compile OK; diff check clean except CRLF warning.
+- **Next**: Codex `审查` the batch5 v1 offline scope before any later authorization request.
+- **Pre-Codex self-review**: proof-of-use: A class=provider/live authorization boundary; B ripple=README route only, no CURRENT in-flight state; C reverse=scope-creep/storage/provider_samples/yfinance/full-market/DataHub tests; F preflight=no env read/no network/no write/no secrets.
+
 ## 2026-06-25 - Codex `修复 + 审查 PASS` (US-short batch4 slice 4d-ii-o weekend orchestrator)
 
 - **Verdict/Action**: PASS. Codex repaired and re-reviewed the final batch4 O orchestrator seam: `holding_in_top15` overlap now passes once; identity / row_source / stale / duplicate guards still fail closed. Batch4 offline weekend-pipeline engineering is closed; batch5 provider/live remains gated.
