@@ -54,6 +54,25 @@ _VALID_VETO_TIERS = frozenset(VETO_TIERS) | {_VETO_NONE}
 _EVENT_GAP_STATUSES = ("ok", "restricted", "reduce_caution", "tag")
 
 
+def action_reason_error(final_action, observe_reason_type):
+    """SINGLE SOURCE §9 validator for the (final_action, observe_reason_type) pair — EVERY weekend-pipeline
+    stage that emits OR carries the action/reason surface (decision / sizing / basket / cost-floor / any
+    future stage) MUST use this and must NOT re-implement the check inline (a structural guard
+    `tests/test_us_short_weekend_action_reason_contract.py` pins single-source + adversarially proves each
+    stage rejects a bad pair). Returns an error-message string if the pair violates the frozen §9 action-table
+    contract, else None: `final_action` must be a frozen action; a `观察` row must carry an
+    `observe_reason_type ∈ OBSERVE_REASONS`; every OTHER action must carry `observe_reason_type is None` — so a
+    bad / missing / stale reason on the wrong action can never pass a stage boundary."""
+    if final_action not in FINAL_ACTIONS:
+        return f"final_action 非法（不在冻结词表）: {final_action!r}"
+    if final_action == _A_OBSERVE:
+        if observe_reason_type not in OBSERVE_REASONS:
+            return f"观察 行 observe_reason_type 须 ∈ 冻结词表: {observe_reason_type!r}"
+    elif observe_reason_type is not None:
+        return f"非观察行（{final_action}）不得带 observe_reason_type: {observe_reason_type!r}"
+    return None
+
+
 class WeekendDecisionError(Exception):
     """The injected analysis-evidence result is malformed (fail-closed before the decision runs)."""
 
@@ -134,5 +153,8 @@ def decide_actions(analysis_result):
     for ev in rows:
         _validate_evidence_row(ev)
         action, reason = _decide_one(ev)
+        err = action_reason_error(action, reason)   # producer self-check: no _decide_one path may emit a bad §9 pair
+        if err:
+            raise WeekendDecisionError(err)
         decided.append({**ev, "final_action": action, "observe_reason_type": reason})
     return {"regime": analysis_result["regime"], "rows": decided}

@@ -34,7 +34,7 @@ import math
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES, reduction_stack, risk_based_base_shares
-from engine.us_short_weekend_decision import FINAL_ACTIONS
+from engine.us_short_weekend_decision import action_reason_error
 
 # §8 line 226 / §13.1 #4 forward-calibration prior (NOT a frozen const): 单票上限 10% of the short bucket.
 SINGLE_TICKER_CAP_FRAC = 0.10
@@ -156,8 +156,9 @@ def size_rows(decision_result, *, sizing_context):
         if not (isinstance(row, dict) and isinstance(row.get("final_action"), str)
                 and isinstance(row.get("price"), dict) and isinstance(row["price"].get("action_fields"), dict)):
             raise WeekendSizingError(f"decision row 形状非法（须为 4d-ii-b 输出行）: {row!r}")
-        if row["final_action"] not in FINAL_ACTIONS:
-            raise WeekendSizingError(f"final_action 非法（不在冻结词表）: {row['final_action']!r}")
+        err = action_reason_error(row["final_action"], row.get("observe_reason_type"))   # §9 single-source value-validation (含 final_action 词表 + 观察⟺reason 一致)
+        if err:
+            raise WeekendSizingError(err)
         ct = canonical_us_ticker(row.get("ticker"))
         if ct is None:
             raise WeekendSizingError(f"row ticker 非规范 US ticker（拒 A 股码/坏形）: {row.get('ticker')!r}")

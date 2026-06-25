@@ -8,6 +8,58 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch4 slice 4d-ii-h forced-min sizing boundary)
+
+- **Verdict/Action**: PASS. Codex repaired and re-reviewed `R-USSHORT-BATCH4-COST-FLOOR-FORCED-MIN-SIZING-CONTRACT-GAP`: cost-floor now validates the 4d-ii-g forced-min sizing contract before any cost math.
+- **Required**: None new. `R-USSHORT-BATCH4-COST-FLOOR-FORCED-MIN-SIZING-CONTRACT-GAP`, `R-USSHORT-BATCH4-COST-FLOOR-PROBE-IDENTITY-CONTRACT-GAP`, and `R-USSHORT-BATCH4-COST-FLOOR-ACTION-REASON-CONTRACT-GAP` are resolved in `docs/system_risk_register.md`.
+- **Verify**: RED cost-floor 33 failed 4 expected cases; then cost-floor 34 OK, target/adjacent 222 OK, doc guards 52 OK, `py_compile` OK, direct probes OK. Broad `*us_short*` ran 1335 and is environment-blocked by missing local `jsonschema` (40 errors / 1 skipped). No provider/live/DataHub/A-share/US-long.
+- **Next**: Claude Code: commit.
+
+## 2026-06-25 - Codex re-`审查 FAIL` (US-short batch4 slice 4d-ii-h forced-min sizing)
+
+- **Verdict/Action**: FAIL. 上轮 identity/trace 与 §9 单源修复有效，但 `apply_probe_cost_floor` 仍按输入 `sizing.desired_model_shares` 直接算成本地板，未验证 promoted probe 真是 forced-min sizing。
+- **Required**: `R-USSHORT-BATCH4-COST-FLOOR-FORCED-MIN-SIZING-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: target/adjacent pure suites 217 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probes show old residuals closed, but 500-share / `status=not_sized` probe still emits 建仓; no provider/live/network/DataHub/Skill/production/A-share/US-long path was run.
+- **Next**: Claude Code: 修复。
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-h — consumer-validation 整类根治：§9 单源 + cost-floor 身份/trace-值)
+
+- **Verdict/Action**: 收到 `仔细修复。同类型的问题不能再出现`（Codex re-`审查 FAIL` probe-identity；judge=成立）。按「整类一次扫净」根治：① **§9 单源** `action_reason_error` 入 decision，补 4d-ii-c sizing 漏的同 gap、e/f/g+h 改用单源、4d-ii-b 加 emit 自检、加位置无关 guard（结构单源+planted+各 stage 行为）；② **cost-floor 身份/trace-值**（镜像 basket）：canonical ticker（非规范/A股码/dup 拒、emit 大写、防 build_count 双计）、cost_inputs canonical 恰覆盖、probe trace 验**值**（risk_tag==RISK_TAG 单源、entry_mode_constraint∈合法集 triangulation）。详见 register 两条。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-COST-FLOOR-PROBE-IDENTITY-CONTRACT-GAP`（identity/trace-值）+ `R-USSHORT-BATCH4-COST-FLOOR-ACTION-REASON-CONTRACT-GAP`（§9 单源 sweep 加固）。
+- **Verify**: cost_floor **29 OK**（+7 身份/trace-值）+ action/reason guard **12 OK**（validator/结构单源+planted/producer 自检/各 stage 拒坏对）+ weekend 4 模块 141 OK（重构零行为变）。全离线 `*us_short*` **2050 OK** 零回归；doc/route/README guards 52 OK；py_compile/no-BOM/diff CRLF-only；直接探针 Codex 3 残留例（wrong-value trace / 小写 probe ticker / dup base build）全闭。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-h 整类根治（5 engine/test 文件；纯/离线、不交叉 A 股）。重点：① §9 单源 `action_reason_error`（decision 定义+producer 自检、sizing/basket/cost-floor 改用、无 inline 残留=结构 guard+planted）+ 4d-ii-c sizing 补同 gap；② cost-floor canonical ticker（非规范/dup 拒、emit 大写、cost_inputs canonical 覆盖）+ probe trace **值**（risk_tag 单源/entry_mode triangulation）；③ 重构 e/f/g+h 零行为变（141 OK）+ stage 行为 guard。findings 落 register。PASS 后 `提交`；之后 cash + §9 rank。
+- **Pre-Codex self-review**: A 整类（**全 stage 一次扫净**：§9 单源[5 面]+cost-floor 身份/trace-值[canonical/dup/risk_tag/entry_mode]，各对抗+正控）；B 连带（FINAL_ACTIONS 重构零残留；inline §9 标记仅 decision；canonical/RISK_TAG 单源 import；docstring 同步；新 guard 属 test 设施）；C 反向（合法值/大写/单 build 正控过、重构 141 零行为变、仅畸形/dup raise）；D N/A；E register 两条 resolved+CURRENT 未动；F（canonical+dup+trace 值 closed-world、triangulation+planted 钉、no-BOM/diff）。根因=逐腿修必复发→单源+位置无关 guard，[[feedback_whole_class_input_validation_sweep]]。
+
+## 2026-06-25 - Codex re-`审查 FAIL` (US-short batch4 slice 4d-ii-h probe identity / ticker identity)
+
+- **Verdict/Action**: FAIL. Claude's action/reason repair is valid, but `apply_probe_cost_floor` still accepts malformed promoted-probe identity and dirty row identity: exact-key wrong-value `theme_probe` traces, lowercase promoted-probe ticker keys, and duplicate base build tickers can reach output.
+- **Required**: `R-USSHORT-BATCH4-COST-FLOOR-PROBE-IDENTITY-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: target/adjacent pure suites 170 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probes confirm repaired action/reason failures now reject, but wrong-value probe trace / lowercase probe ticker / duplicate base ticker are still accepted; no provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: Claude Code: 修复。
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-h — cost-floor §9 action/reason 一致性)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required，judge=成立——同 4d-ii-e/f/g consumer-validation 类：发 §9 action/reason 面的 stage 须 VALUE-validate）。`apply_probe_cost_floor` Pass 1 加：每行 `final_action⟺observe_reason_type` 一致（观察→reason∈OBSERVE_REASONS / 非观察→None、单源 FINAL_ACTIONS·OBSERVE_REASONS）+ promoted-probe `theme_probe` trace shape（{risk_tag,entry_mode_constraint}）；坏/缺/陈旧 reason + 坏 trace 全 fail-closed。降级仍 overwrite cost_inefficient_min_size。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-COST-FLOOR-ACTION-REASON-CONTRACT-GAP`。
+- **Verify**: cost_floor **22 OK**（+5 对抗：观察+BANANA / 观察+缺 reason / base 建仓 stale reason / cost-cleared probe stale reason / 坏 theme_probe trace；正控 cleared probe observe_reason None 仍绿）。全离线 `*us_short*` **2031 OK**（=2026+5）零回归；doc/route/README guards 52 OK；py_compile OK；直接探针 4 坏组合现拒；git diff --check CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-h §9 一致性（`us_short_weekend_cost_floor.py`+测试；纯/离线、不交叉 A 股）。重点：① Pass 1 每行 §9 action⟺reason（观察→冻结 reason/非观察→None、单源 FINAL_ACTIONS·OBSERVE_REASONS）；② promoted-probe theme_probe trace shape {risk_tag,entry_mode_constraint} 校验；③ 坏/缺/陈旧 reason（含 cost-cleared probe）+ 坏 trace fail-closed；④ 降级 overwrite cost_inefficient_min_size + 正控未损。findings 落 register。PASS 后 `提交`；之后 cash + §9 action_rank。
+- **Pre-Codex self-review**: A 整类（§9 action/reason **每行**校验、probe trace shape、正控保留）；B 连带（FINAL_ACTIONS/OBSERVE_REASONS 单源、加 _PROBE_TRACE_KEYS、docstring Raises 同步、新模块无其他消费者）；C 反向（valid observe/base/cleared-probe-None 正控过、仅畸形 raise、降级仍正确）；D N/A；E register resolved、CURRENT 未动；F（每行 §9+trace closed-world、降级 overwrite、no-BOM、diff-check）。根因=起草 cost-floor 只 shape-check、漏 stage-boundary §9 value-validation（同类 4d-ii-e/f/g 已修、新 stage 重现），[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-25 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-h cost-floor action-reason contract)
+
+- **Verdict/Action**: FAIL. 4d-ii-h correctly routes the theme_probe cost-floor happy path, but `apply_probe_cost_floor` carries invalid section 9 `final_action` / `observe_reason_type` combinations through rows it does not downgrade, including cost-cleared probes.
+- **Required**: `R-USSHORT-BATCH4-COST-FLOOR-ACTION-REASON-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: target/adjacent pure suites 165 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probes reproduce bad/missing/stale observe reasons accepted by 4d-ii-h; broad `*us_short*` discovery is blocked here by missing local `jsonschema` (`1306` discovered, `40` errors, `1` skipped); `git diff --check` CRLF-only; no provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path was run.
+- **Next**: Claude Code: 修复。
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-h — 周末 pipeline theme_probe 成本地板 cost-floor)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-h（§8 line 232 最小仓成本地板、真拦单）。新 `engine/us_short_weekend_cost_floor.py`：`apply_probe_cost_floor(basket_result, *, cost_inputs)` 后置 stage 消费 4d-ii-g 输出，**只对已促回 theme_probe**（行 `final_action==建仓` 带 `theme_probe` 键）跑 `apply_cost_floor`（复用 cost_floor engine、无新成本数学）：shares=`desired_model_shares`(=MIN_EXECUTABLE_SHARES、4d-ii-g forced-min)、entry=`valid_entry_high`(保守/与 4d-ii-c sizing 同锚)、tp1=`take_profit_reduce_price`(盈一=t1、RR 分子)、注入佣金/滑点/点差；profit-盈一 ≤ 往返成本×安全倍 → 观察(`cost_inefficient_min_size`)、build_count 重算。**cost_inputs 恰覆盖已促回 probe 集**（结果可见、无需预判）closed-world fail-closed；cost-floored probe 保 theme_probe/sizing/rank trace；base/非建仓 carry。cost 值=离线 fixture（live 成本模型=批5、SR-PROVIDER-001）。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: cost_floor **17 OK**（probe 过留建仓 / 不过→观察 cost_inefficient_min_size+build_count 重算 / 保 trace / 多 probe 混合 / base·非建仓 carry / degenerate geom+坏 cost→观察 / fail-closed 坏 basket·坏 action·coverage 缺·stale·base-key·坏 shape·非 dict·dup probe）。全离线 `*us_short*` **2026 OK**（=2009+17）零回归；doc/route/README guards 52 OK（新行 col1=335 ≤350）；py_compile OK；UTF-8 no-BOM；直接探针 4 例（过/不过/coverage/空 probe）；git diff --check CRLF-only。
+- **Next**: Codex `审查` 批4 slice 4d-ii-h（`engine/us_short_weekend_cost_floor.py`+测试+`docs/README.md` 一行；纯/离线、无 provider/live、不交叉 A 股）。重点：① 后置 stage 只 cost-floor 已促回 probe（行带 theme_probe 键）、复用 `apply_cost_floor` 单源；② entry=`valid_entry_high`(保守/4d-ii-c sizing 同锚)、tp1=`take_profit_reduce_price`(盈一=t1、price engine RR 分子已确认)、shares=forced-min——**请核 entry/tp1 锚选**；③ profit-盈一≤往返成本×安全倍→观察(cost_inefficient_min_size)、build_count 重算、保 trace；④ cost_inputs **恰覆盖**已促回 probe（缺/stale/base-key/坏 shape/非 dict fail-closed）；⑤ cost 值=离线 fixture（live 成本=批5）、degenerate geom+坏 cost 经 apply_cost_floor fail-closed 保守观察。findings 落 register。PASS 后用户 `提交`；之后 cash 分配 + §9 action_rank（4d-ii capstone 余项）。
+- **Pre-Codex self-review**: A 整类（probe 过/不过、多 probe 混、base/非建仓 carry、degenerate geom+坏 cost→观察、cost_inputs coverage 缺/stale/base-key/坏 shape/非 dict/dup probe 全覆盖）；B 连带（新模块无既有消费者；复用 apply_cost_floor + OBSERVE_REASON_COST + FINAL_ACTIONS/OBSERVE_REASONS 单源；依赖 4d-ii-g emit theme_probe 键[已核]；README 新行 col1≤350；line135「cost-floor=4d-ii-h」现指向已落本行不改）；C 反向（过门 probe 留建仓不误降、base 永不 cost-floor、保守 fail-closed 仅畸形/不经济、保 trace 不丢）；D N/A；E README 新行单态、CURRENT 未动（draft）；F（basket_result+row+cost_inputs closed-world、apply_cost_floor fail-close 坏值、build_count 重算、entry/tp1 锚 flag 交核、cost 离线 fixture flag、UTF-8 no-BOM、git diff --check CRLF-only）。根因=承接 4d-ii-g 拆出的 cost-floor（需执行成本契约）、做成后置 stage 避免污染 resolve_build_capacity，[[feedback_draft_validity_gates_complete]]。
+
 ## 2026-06-25 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-g forced-min residual)
 
 - **Verdict/Action**: PASS. Re-reviewed the forced-min residual repair; the active basket test module docstring now says `size forced to min-executable`, and the implementation still forces promoted `theme_probe` rows to `MIN_EXECUTABLE_SHARES` with `pre_probe_risk_shares` trace.

@@ -59,7 +59,7 @@ from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES, portfolio_guard_effects
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES, theme_probe_decision, theme_probe_seats
-from engine.us_short_weekend_decision import FINAL_ACTIONS, OBSERVE_REASONS
+from engine.us_short_weekend_decision import OBSERVE_REASONS, action_reason_error
 
 # §8 line 227 / §13.1 #4 forward-calibration priors (NOT frozen const): BASE per-regime weekly new-build
 # count cap + the 同主题 weekly cap. theme_probe (§8 line 229 / §13.1 #27) adds EXTRA seats beyond these.
@@ -211,14 +211,9 @@ def resolve_build_capacity(sized_result, *, basket_context):
     for i, row in enumerate(sized_result["rows"]):
         if not (isinstance(row, dict) and isinstance(row.get("final_action"), str)):
             raise WeekendBasketError(f"sized row 形状非法（须为 4d-ii-c 输出行）: {row!r}")
-        if row["final_action"] not in FINAL_ACTIONS:
-            raise WeekendBasketError(f"final_action 非法（不在冻结词表）: {row['final_action']!r}")
-        orr = row.get("observe_reason_type")   # observe_reason_type ⟺ 观察 (§9 only 观察 carries a reason)
-        if row["final_action"] == _OBSERVE:
-            if orr not in OBSERVE_REASONS:
-                raise WeekendBasketError(f"观察 行 observe_reason_type 须 ∈ 冻结词表: {orr!r}")
-        elif orr is not None:
-            raise WeekendBasketError(f"非观察行（{row['final_action']}）不得带 observe_reason_type: {orr!r}")
+        err = action_reason_error(row["final_action"], row.get("observe_reason_type"))   # §9 single-source (词表 + 观察⟺reason)
+        if err:
+            raise WeekendBasketError(err)
         ct = canonical_us_ticker(row.get("ticker"))
         if ct is None:
             raise WeekendBasketError(f"row ticker 非规范 US ticker（拒 A 股码/坏形）: {row.get('ticker')!r}")
