@@ -17,8 +17,11 @@ PACKET_PATH = Path("docs/us_short_batch5_provider_live_packet_20260625.json")
 class UsShortBatch5ProviderLivePreflightTest(unittest.TestCase):
     def test_preflight_validates_packet_without_fetching_or_writing(self) -> None:
         future_raw_root = ROOT / "provider_samples" / "us_short_batch5_v1_provider_live_20260625"
-        if future_raw_root.exists():
-            self.fail(f"test expected no pre-existing raw root at {future_raw_root}")
+        before_raw_refs = sorted(
+            path.relative_to(future_raw_root).as_posix()
+            for path in future_raw_root.rglob("*")
+            if path.is_file()
+        ) if future_raw_root.exists() else []
 
         with mock.patch.dict(
             preflight.os.environ,
@@ -44,7 +47,12 @@ class UsShortBatch5ProviderLivePreflightTest(unittest.TestCase):
         self.assertEqual(result["future_provider_live_probe_boundary"]["endpoint_call_budget"]["max_total_endpoint_calls"], 10)
         self.assertFalse(result["environment"]["environment_values_read"])
         self.assertFalse(result["environment"]["secrets_logged"])
-        self.assertFalse(future_raw_root.exists())
+        after_raw_refs = sorted(
+            path.relative_to(future_raw_root).as_posix()
+            for path in future_raw_root.rglob("*")
+            if path.is_file()
+        ) if future_raw_root.exists() else []
+        self.assertEqual(after_raw_refs, before_raw_refs)
 
         result_text = json.dumps(result, ensure_ascii=False)
         self.assertNotIn("UNIT_TEST_FMP_SECRET", result_text)

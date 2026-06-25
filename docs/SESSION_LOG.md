@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 provider/live probe schema traceback repair)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH5-PROBE-SUMMARY-SCHEMA-TRACEBACK-GAP` is fixed in the reviewed batch5 scope; the tracked live probe summary validates only with the complete fixed 10 endpoint / 3 symbol evidence trace. No new provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call ran during review.
+- **Required**: resolved; full closure evidence lives in `docs/system_risk_register.md`. `SR-PROVIDER-001` remains open for any broader provider/live, DataHub, production, live_normalized, or ship-gate boundary.
+- **Verify**: batch5 target 26 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2271 OK; py_compile OK; direct schema/summary mutant probe rejects empty/partial/duplicate trace, count drift, raw-ref drift, and ship-gate claim; raw refs exist and are gitignored; tracked summary exact-token secret/URL/raw scan clean; dry-run env no network/write; `git diff --check` CRLF-only.
+- **Next**: Claude Code: Pass.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 provider/live probe summary schema traceback)
+
+- **Verdict/Action**: Fixed `R-USSHORT-BATCH5-PROBE-SUMMARY-SCHEMA-TRACEBACK-GAP` in the working tree. The probe summary schema now requires the completed live summary to carry the full fixed 10 endpoint trace rows and 3 symbol trace rows, with exact batch5 live counts and success coverage. No new provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call ran.
+- **Required**: working-tree repair complete; full detail lives in `docs/system_risk_register.md`. Pending Codex review before commit or any broader provider/live boundary.
+- **Verify**: TDD RED first reproduced empty/partial trace and duplicate trace acceptance. After fix: probe-summary schema 9 OK; direct mutant `valid_errors=0`, `empty_trace_schema_errors=15`; batch5 target 26 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2271 OK; py_compile OK; `git diff --check` CRLF-only; final status still only shows the batch5 probe slice files.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=evidence-traceback schema contract; B ripple=schema/test/register/session only; C reverse=empty trace, partial trace, duplicate endpoint, duplicate symbol RED then GREEN; F no new provider/live/network/raw/DataHub path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 provider/live 10-call probe)
+
+- **Verdict/Action**: FAIL. The executed batch5 probe stayed inside the authorized 10-call/provider/raw/privacy boundary, and the actual tracked summary has 10 endpoint rows, but the new summary schema accepts missing endpoint/symbol traceback while aggregate counts claim 10 successful calls.
+- **Required**: `R-USSHORT-BATCH5-PROBE-SUMMARY-SCHEMA-TRACEBACK-GAP` is open in `docs/system_risk_register.md`; fix the schema/tests before commit or broader provider/live work.
+- **Verify**: batch5 target 23 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2268 OK; direct schema probe shows empty endpoint/symbol trace still validates (`empty_trace_schema_errors=0`); raw gitignore confirmed; summary secret/URL/raw scan clean; diff check CRLF-only.
+- **Next**: Codex: fix.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 provider/live 10-call probe)
+
+- **Verdict/Action**: Executed only the user-authorized US-short batch5 provider/live small-sample probe: AAPL/MSFT/JPM, 10/10 calls (6 FMP stable + 4 SEC public), zero retry. Raw payloads are under gitignored `provider_samples/us_short_batch5_v1_provider_live_20260625/raw/`; tracked summary is `docs/us_short_batch5_provider_live_probe_summary_20260625.json` with no secrets, request URLs, or raw rows.
+- **Required**: None opened in this execution slice. `SR-PROVIDER-001` remains open; this is bounded response-shape evidence only, not provider selection, DataHub consumption, production storage, live_normalized evidence, ship-gate evidence, or production readiness.
+- **Verify**: dry-run env passed; live probe completed 10/10 success; summary rebuild from existing raw fixed SEC submissions lineage fields without new network calls; target batch5 tests 23 OK; route/doc guards 52 OK; full offline `*us_short*` 2268 OK; `tests/provider` 36 OK; raw gitignore confirmed; raw file count = 10; py_compile OK.
+- **Next**: Codex review this batch5 provider/live probe scope before any commit or broader call boundary.
+
 ## 2026-06-25 - Codex `审查 PASS` (US-short batch5 v1 provider/live readiness packet)
 
 - **Verdict/Action**: PASS. Batch5 v1 offline readiness packet + endpoint-count schema repair are in scope; no material Required remains in the reviewed batch5 scope. No provider/live/network/raw/DataHub/production path ran.
