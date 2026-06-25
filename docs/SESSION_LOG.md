@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-25 — Codex `review PASS` (US-short batch4 slice 4d-ii-j action_rank + review-protocol auto-commit update)
+
+- **Verdict/Action**: PASS. Reviewed the current worktree for US-short batch4 slice 4d-ii-j (`apply_action_rank` post-cash action ranking), the action/reason guard extension, the README route row, and the user-requested review-protocol wording that Codex auto-commits after PASS while Claude only implements / repairs. No material Required. Boundary accepted as pure/offline ranking over the 4d-ii-i cash result: every row gets canonical ticker + `action_group` + global `action_rank`; no final_action downgrade, no provider/live/DataHub/real-data path.
+- **Required**: 无；`docs/system_risk_register.md` 未新增 material Required。
+- **Verify**: bundled Python 3.12.13 + local `.tools/python_libs` where needed: action_rank/action-reason/action_rank targeted **43 OK**; adjacent weekend pipeline **167 OK**; doc/route/README guards **52 OK**; action governance + action-table schema contracts **55 OK**; full offline `*us_short*` discover **2083 OK**; `py_compile` OK; no-BOM; `git diff --check` clean (CRLF warnings only); Codex probes confirm survival-first rank order, class-share ticker canonicalization, duplicate identity/A-share ticker/stale reason rejection. No provider/live/network/DataHub run.
+- **Next**: Claude Code：Pass.
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-j — 周末 pipeline 操作排名 action_rank)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-j（§9 操作排名 action_rank）。新 `engine/us_short_weekend_action_rank.py`：`apply_action_rank(cash_result)` 后置 stage 对 4d-ii-i 输出跑 `rank_actions`（复用 engine、无新排名逻辑）——给每行挂 §9 `action_group`(1-5 survival-first：持仓减/清1→建仓2→加仓3→持有/观察4→否决5)+全局 `action_rank`(group-major + survival-first；组2-5 按 selection_rank；组1 内 止损/事件→减仓→止盈 子序)；**纯排名、无降级**（与 selection_rank=多强 分开、防把必须止损的持仓排到新买点后 §9 line 248）。**从一开始单源 consumer-validation**：§9 `action_reason_error` + canonical-unique ticker + dup（rank_actions 自身 frozen-vocab strict）。action_rank 模块入 action/reason guard（结构 import + 行为拒坏对）。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行 + guard 扩 action_rank stage）。
+- **Verify**: action_rank **12 OK**（组1 持仓清仓 outrank 组2 建仓[即使 selection_rank 更好] / 组1 survival 子序 止损→减仓→止盈 / 组2 按 selection_rank / 组2-5 全覆盖 + 全局 rank 反映组序 / 每行挂 group+rank / 小写 canon / fail-closed 坏 result·action-reason·stale·未知 action·非规范·dup）+ action/reason guard **14 OK**（加 action_rank stage import+行为）。全离线 `*us_short*` **2083 OK**（=2069+14）零回归；doc/route/README guards 51 OK（action_rank col1=314）；py_compile OK；no-BOM；直接探针 4 例；git diff --check CRLF-only。
+- **Next**: Codex `审查` 批4 slice 4d-ii-j（`engine/us_short_weekend_action_rank.py`+测试+README 一行+`test_us_short_weekend_action_reason_contract` 扩；纯/离线、不交叉 A 股）。重点：① 后置 stage 复用 `rank_actions` 单源（5-group survival-first、group-major、组1 survival 子序、组2-5 按 selection_rank）、纯排名无降级；② 单源 consumer-validation（§9 action_reason_error/canonical ticker/dup）+ action_rank stage 入 action/reason guard；③ 每行挂 action_group(1-5)+action_rank（含 观察/否决 组4/5）、rank_actions ticker-agnostic 我层 canonical+dup+emit 大写。findings 落 register。PASS 后用户 `提交`；之后 §10 machine_record 装配 + no-dangling（再 lifecycle-eval + render）。
+- **Pre-Codex self-review**: A 整类（组1 outrank 组2/组1 survival 子序/组2 selection_rank/组2-5 全覆盖/每行 group+rank/小写 canon/fail-closed 坏 result·action-reason·stale·未知 action·非规范·dup，各对抗+正控）；B 连带（复用 rank_actions+action_reason_error+canonical_us_ticker 单源；action_rank stage 入 action/reason guard[结构 import+行为+stale 反向]、guard glob 自动扫新模块；README 行 col1≤350；新模块无其他消费者）；C 反向（合法 action 全排名不误拒、组序正确、survival 子序正确、仅畸形 raise）；D N/A；E README 单态、CURRENT 未动（draft）；F（result fail-closed、rank_actions ticker-agnostic 我层 canonical+dup、emit 大写、no-BOM、git diff --check）。根因=4d-ii capstone 接线，单源 consumer-validation 防同类，[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch4 slice 4d-ii-i cash allocation)
 
 - **Verdict/Action**: PASS. Reviewed current worktree for `engine/us_short_weekend_cash.py`, `tests/test_us_short_weekend_cash.py`, the action/reason guard extension, and the README route row. No material Required. Boundary accepted as the 4d-ii-h finalized `建仓` set; `加仓` remains outside the current weekend v1 emitter path (`decide_actions`/README 4d-ii-b), while the shared base `allocate_cash` engine already supports `建仓/加仓`.
