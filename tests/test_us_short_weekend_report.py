@@ -96,9 +96,20 @@ def _report_context(**ov):
     return rc
 
 
+def _run_context(**ov):
+    rc = {"decision_date": _AS_OF, "price_basis_date": "20260109", "run_date": _AS_OF}
+    rc.update(ov)
+    return rc
+
+
+def _build_report(machine_record, lifecycle_result, *, report_context, run_context=None):
+    return wr.build_weekly_report(machine_record, lifecycle_result, report_context=report_context,
+                                  run_context=_run_context() if run_context is None else run_context)
+
+
 class HappyAssembly(unittest.TestCase):
     def test_builds_and_renders(self):
-        out = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
+        out = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
         self.assertIsInstance(out["weekly_report_md"], str)
         md = out["weekly_report_md"]
         for i in range(1, 14):
@@ -109,29 +120,29 @@ class HappyAssembly(unittest.TestCase):
             self.assertIn(tag, md)
 
     def test_all_13_sections_have_content(self):
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
         for i in range(1, 14):
             self.assertTrue(rd["sections"][i], f"section {i} empty")
 
     def test_lifecycle_count_reconciles(self):
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(due_count=2, due_items=(1, 3)),
+        rd = _build_report(_machine_record(), _lifecycle_result(due_count=2, due_items=(1, 3)),
                                     report_context=_report_context())["report_data"]
         self.assertEqual(rd["lifecycle_reminder_count"], {"section_1": 2, "section_12": 2})
         self.assertIn("#1", str(rd["sections"][12]))   # due items surfaced in §12
 
     def test_banner_has_observe_split_and_hot_excluded(self):
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
         self.assertIn("true_false_observe_split", rd["banner"])   # ① derived from observe rows
         self.assertIn("hot_excluded_notice", rd["banner"])        # ⑤
         self.assertNotIn("macro_cluster_warning", rd["banner"])   # ② omitted when blank
 
     def test_macro_cluster_banner_shown_when_present(self):
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(),
+        rd = _build_report(_machine_record(), _lifecycle_result(),
                                     report_context=_report_context(macro_cluster_banner="3 建仓同属 AI 集群"))["report_data"]
         self.assertEqual(rd["banner"]["macro_cluster_warning"], "3 建仓同属 AI 集群")
 
     def test_row_sections_derive_from_machine_rows(self):
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]
         self.assertIn("AAA", str(rd["sections"][5]))   # 操作表 one-glance
         self.assertIn("HLD", str(rd["sections"][6]))   # 持仓复核
         self.assertIn("OBS", str(rd["sections"][8]))   # 观察池
@@ -139,17 +150,17 @@ class HappyAssembly(unittest.TestCase):
     def test_not_clean_section_reflects_coverage_gap(self):
         rc = _report_context(coverage_inputs=[
             {"row_source": "holding_pass2_only", "data_checks": {"analyst": "missing", "sec_parse": "ok", "event": "ok"}}])
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
         self.assertIn("非 full", str(rd["sections"][13]))
 
 
 class FailClosed(unittest.TestCase):
     def test_non_closed_world_report_context_rejected(self):
         with self.assertRaises(wr.WeekendReportError):     # missing a key
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(),
+            _build_report(_machine_record(), _lifecycle_result(),
                                    report_context={k: v for k, v in _report_context().items() if k != "ship_gate_note"})
         with self.assertRaises(wr.WeekendReportError):     # extra key
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(),
+            _build_report(_machine_record(), _lifecycle_result(),
                                    report_context={**_report_context(), "EXTRA": 1})
 
     def test_malformed_lifecycle_result_rejected(self):
@@ -157,16 +168,16 @@ class FailClosed(unittest.TestCase):
                     "due_items": [], "upgrade_eligible_items": []}, "banner": "x"},
                     {"readiness": _lifecycle_result()["readiness"], "banner": ""}):
             with self.assertRaises(wr.WeekendReportError):
-                wr.build_weekly_report(_machine_record(), bad, report_context=_report_context())
+                _build_report(_machine_record(), bad, report_context=_report_context())
 
     def test_blank_editorial_section_rejected(self):
         for key in ("account_risk_note", "core_conclusion", "provider_health_note", "ship_gate_note"):
             with self.assertRaises(wr.WeekendReportError):
-                wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context(**{key: "  "}))
+                _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(**{key: "  "}))
 
     def test_malformed_coverage_input_rejected(self):
         with self.assertRaises(wr.WeekendReportError):
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(),
+            _build_report(_machine_record(), _lifecycle_result(),
                                    report_context=_report_context(coverage_inputs=[{"row_source": "holding_pass2_only"}]))
 
     def test_bad_price_clock_rejected(self):
@@ -174,7 +185,20 @@ class FailClosed(unittest.TestCase):
         bad_pc = {"price_data_through": _AS_OF, "news_window_through": _AS_OF, "session_scope": "RTH",
                   "decision_date": _AS_OF}
         with self.assertRaises(Exception):
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context(price_clock=bad_pc))
+            _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(price_clock=bad_pc))
+
+    def test_price_clock_must_match_run_context_price_basis(self):
+        bad_pc = {"price_data_through": "20260108", "news_window_through": _AS_OF,
+                  "session_scope": "RTH", "decision_date": _AS_OF}
+        with self.assertRaises(wr.WeekendReportError):
+            _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(price_clock=bad_pc))
+
+    def test_price_clock_news_window_must_stop_at_run_date(self):
+        rc = _report_context(price_clock={"price_data_through": "20260109", "news_window_through": _AS_OF,
+                                          "session_scope": "RTH", "decision_date": _AS_OF})
+        with self.assertRaises(wr.WeekendReportError):
+            _build_report(_machine_record(), _lifecycle_result(), report_context=rc,
+                          run_context=_run_context(run_date="20260110"))
 
 
 class SourceReconciliation(unittest.TestCase):
@@ -186,30 +210,30 @@ class SourceReconciliation(unittest.TestCase):
         bad_pc = {"price_data_through": "20260116", "news_window_through": "20260120",
                   "session_scope": "RTH", "decision_date": "20260120"}   # != machine as_of 20260112
         with self.assertRaises(wr.WeekendReportError):
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context(price_clock=bad_pc))
+            _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(price_clock=bad_pc))
 
     def test_lifecycle_decision_mismatch_rejected(self):
         with self.assertRaises(wr.WeekendReportError):   # lifecycle decision_date + readiness.as_of = a different week
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(decision_date="20260119"),
+            _build_report(_machine_record(), _lifecycle_result(decision_date="20260119"),
                                    report_context=_report_context())
 
     def test_exclusion_as_of_mismatch_rejected(self):
         rc = _report_context(exclusion_data={"as_of": "20260105", "categories": {},
                                              "hot_excluded": {"public_heat_count": 0, "holdings": []}})
         with self.assertRaises(wr.WeekendReportError):
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=rc)
+            _build_report(_machine_record(), _lifecycle_result(), report_context=rc)
 
     def test_inconsistent_readiness_rejected(self):
         # due_count=2 but due_items=[] and upgrade=[7] — the single-source readiness contract rejects it
         bad_lr = _lifecycle_result(readiness_overrides={"due_count": 2, "due_items": [], "upgrade_eligible_items": [7]})
         with self.assertRaises(wr.WeekendReportError):
-            wr.build_weekly_report(_machine_record(), bad_lr, report_context=_report_context())
+            _build_report(_machine_record(), bad_lr, report_context=_report_context())
 
     def test_hot_excluded_single_source(self):
         # one source (exclusion_data["hot_excluded"]) feeds BOTH the banner ⑤ and the §9 detail — they agree
         rc = _report_context(exclusion_data={"as_of": _AS_OF, "categories": {},
                                              "hot_excluded": {"public_heat_count": 3, "holdings": []}})
-        rd = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
         self.assertIn("3", rd["banner"]["hot_excluded_notice"])      # ⑤ reflects the single source
         self.assertIn("3", "\n".join(rd["sections"][9]))             # §9 detail reflects the SAME source
 
@@ -218,10 +242,10 @@ class SourceReconciliation(unittest.TestCase):
         # rejected (closed-world) so a future re-add is caught with a clear failure (not just the generic EXTRA test).
         rc = {**_report_context(), "hot_excluded_summary": {"public_heat_count": 2, "holdings": []}}
         with self.assertRaises(wr.WeekendReportError):
-            wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=rc)
+            _build_report(_machine_record(), _lifecycle_result(), report_context=rc)
 
     def test_valid_same_date_report_passes(self):  # positive control: all anchors == canonical
-        out = wr.build_weekly_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
+        out = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
         self.assertIn("## 1.", out["weekly_report_md"])
 
 

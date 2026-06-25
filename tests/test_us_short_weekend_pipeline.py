@@ -35,9 +35,22 @@ def _univ_row(ticker, exchange="NASDAQ", price=150.0, adv=1.0e10, mcap=2.5e12, *
     return r
 
 
-def _dc(universe, *, recall=None, holdings=None, pass2=None):
+def _selection_inputs(tickers, *, state="no_strong_theme", core_scores=None, theme_scores=None):
+    core_scores = core_scores or {}
+    theme_scores = theme_scores or {}
+    return {"theme_opportunity_state": state,
+            "per_ticker": {t: {"core_score": core_scores.get(t, 50.0),
+                               "theme_momentum_score": theme_scores.get(t, 0.0)}
+                           for t in tickers}}
+
+
+def _dc(universe, *, recall=None, holdings=None, pass2=None, selection_inputs=None):
+    pass2 = pass2 or {}
+    if selection_inputs is None:
+        selection_inputs = _selection_inputs(list(pass2))
     return {"universe": universe, "catalyst_recall_feed": recall,
-            "holdings": holdings or [], "candidate_pass2_signals": pass2 or {}}
+            "holdings": holdings or [], "candidate_pass2_signals": pass2,
+            "selection_inputs": selection_inputs}
 
 
 class RunSelectionTests(unittest.TestCase):
@@ -78,11 +91,60 @@ class RunSelectionTests(unittest.TestCase):
 
     def test_pass2_excludes_entry_hard_veto_candidate(self):
         # both cheap-eligible (clean Pass1 status); Pass2 SEC-audit finds BADX delisted -> excluded
-        dc = _dc([_univ_row("AAPL"), _univ_row("BADX")], pass2={"AAPL": {}, "BADX": {"delisted": True}})
+        dc = _dc([_univ_row("AAPL"), _univ_row("BADX")],
+                 pass2={"AAPL": {}, "BADX": {"delisted": True}},
+                 selection_inputs=_selection_inputs(["AAPL"]))
         out = self._run(dc)
         self.assertEqual(out["candidates"], ["AAPL", "BADX"])
         self.assertIn("AAPL", out["admitted"])
         self.assertNotIn("BADX", out["admitted"])
+
+    def test_top15_cap_enforced_for_pass2_clean_candidates(self):
+        tickers = ["A%02d" % i for i in range(16)]
+        dc = _dc([_univ_row(t) for t in tickers], pass2={t: {} for t in tickers})
+        out = self._run(dc)
+        self.assertEqual(len(out["admitted"]), 15)
+        self.assertNotIn("A15", out["admitted"])
+
+    def test_dynamic_seats_select_core_and_theme_buckets(self):
+        core = ["C%02d" % i for i in range(13)]
+        theme = ["T%02d" % i for i in range(5)]
+        tickers = core + theme
+        core_scores = {t: 100.0 - i for i, t in enumerate(core)}
+        core_scores.update({t: 10.0 - i for i, t in enumerate(theme)})
+        theme_scores = {t: 1.0 for t in core}
+        theme_scores.update({t: 100.0 - i for i, t in enumerate(theme)})
+        dc = _dc([_univ_row(t) for t in tickers], pass2={t: {} for t in tickers},
+                 selection_inputs=_selection_inputs(
+                     tickers, state="no_strong_theme", core_scores=core_scores, theme_scores=theme_scores))
+        out = self._run(dc)
+        self.assertEqual(out["selection_seats"], {"core_top": 12, "theme_momentum": 3})
+        self.assertEqual(set(out["admitted"]), set(core[:12] + theme[:3]))
+        self.assertNotIn("C12", out["admitted"])
+        self.assertNotIn("T03", out["admitted"])
+        self.assertEqual({d["ticker"]: d["selection_bucket"] for d in out["selection_details"] if d["ticker"] in theme[:3]},
+                         {t: "theme_momentum" for t in theme[:3]})
+
+    def test_missing_selection_input_for_pass2_clean_candidate_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}},
+                          selection_inputs=_selection_inputs([])))
+
+    def test_stale_selection_input_raises(self):
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}},
+                          selection_inputs=_selection_inputs(["AAPL", "MSFT"])))
+
+    def test_bad_selection_score_raises(self):
+        bad = _selection_inputs(["AAPL"])
+        bad["per_ticker"]["AAPL"]["core_score"] = "99"
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}, selection_inputs=bad))
+
+    def test_malformed_theme_state_fails_closed_to_no_strong_split(self):
+        si = _selection_inputs(["AAPL"], state=["strong"])
+        out = self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}, selection_inputs=si))
+        self.assertEqual(out["selection_seats"], {"core_top": 12, "theme_momentum": 3})
 
     def test_holdings_forced_in_with_veto_surfaced(self):
         dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "GOOG", "signals": {"delisted": True}}],
@@ -119,7 +181,8 @@ class RunSelectionTests(unittest.TestCase):
 
     def test_miscased_pass2_key_applies_veto(self):
         # 'aapl' canonicalizes to 'AAPL' and its veto now applies (no bypass via key drift)
-        out = self._run(_dc([_univ_row("AAPL")], pass2={"aapl": {"delisted": True}}))
+        out = self._run(_dc([_univ_row("AAPL")], pass2={"aapl": {"delisted": True}},
+                           selection_inputs=_selection_inputs([])))
         self.assertNotIn("AAPL", out["admitted"])
 
     def test_recall_added_candidate_missing_pass2_raises(self):

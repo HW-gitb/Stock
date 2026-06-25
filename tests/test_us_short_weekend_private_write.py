@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 
 import engine.us_short_weekend_private_write as pw  # noqa: E402
 import engine.us_short_weekend_machine_record as mr  # noqa: E402
+from engine.us_short_weekly_report_renderer import render_weekly_report  # noqa: E402
 from engine.us_short_action_rank import action_group as _ag  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
 from engine.us_short_weekend_action_table import WeekendActionTableError  # noqa: E402
@@ -36,7 +37,19 @@ _BUILD_AF = {
     "risk_reward_ratio": 2.0, "min_rr_gate_status": "pass", "post_round_rr_status": "ok",
     "price_engine_used": "support_atr_engine", "price_sub_mode": "pullback",
 }
-_REPORT_MD = "# US-short weekly report\n## 诚实横幅\n- ④ price_clock: session_scope=RTH / decision_date=%s\n## 1. 本周运行状态\nx\n" % _AS_OF
+def _report_md(as_of=_AS_OF):
+    return render_weekly_report({
+        "banner": {"price_clock": {"price_data_through": "20260109", "news_window_through": as_of,
+                                   "session_scope": "RTH", "decision_date": as_of}},
+        "lifecycle_reminder_count": {"section_1": 0, "section_12": 0},
+        "sections": {str(i): ["content %d" % i] for i in range(1, 14)},
+    })
+
+
+_REPORT_MD = _report_md()
+_MINIMAL_PRICE_CLOCK_ONLY_REPORT = (
+    "# US-short weekly report\n## 诚实横幅\n- ④ price_clock: session_scope=RTH / decision_date=%s\n"
+    "## 1. 本周运行状态\nx\n" % _AS_OF)
 
 
 def _machine_record(as_of=_AS_OF):
@@ -154,6 +167,16 @@ class FailClosed(unittest.TestCase):
             with self.assertRaises(pw.WeekendPrivateWriteError):
                 pw.write_run_private(decision_date=_AS_OF, machine_record=_machine_record(),
                                      weekly_report_md=body_only, runs_private_root=rr, weekly_private_root=wr)
+            self.assertFalse((Path(rr) / _AS_OF).exists())   # nothing written
+
+    def test_incomplete_report_surface_rejected(self):
+        # A report with a correct price-clock line but without the full renderer 13-section surface is not an
+        # official weekly_report.md artifact and must not be persisted by private-write.
+        with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            with self.assertRaises(pw.WeekendPrivateWriteError):
+                pw.write_run_private(decision_date=_AS_OF, machine_record=_machine_record(),
+                                     weekly_report_md=_MINIMAL_PRICE_CLOCK_ONLY_REPORT,
+                                     runs_private_root=rr, weekly_private_root=wr)
             self.assertFalse((Path(rr) / _AS_OF).exists())   # nothing written
 
     def test_blank_report_rejected(self):

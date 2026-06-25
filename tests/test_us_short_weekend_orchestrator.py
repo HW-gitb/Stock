@@ -50,7 +50,7 @@ def _register(as_of=_DD):
 
 def _report_context():
     return {
-        "price_clock": {"price_data_through": _PRICE_BASIS, "news_window_through": _DD,
+        "price_clock": {"price_data_through": _PRICE_BASIS, "news_window_through": "20260613",
                         "session_scope": "RTH", "decision_date": _DD},
         "exclusion_data": {"as_of": _DD, "categories": {}, "hot_excluded": {"public_heat_count": 0, "holdings": []}},
         "coverage_inputs": [], "account_risk_note": "portfolio_guard=normal",
@@ -60,10 +60,19 @@ def _report_context():
     }
 
 
-def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=None, per_ticker_analysis=None):
+def _selection_inputs(tickers):
+    return {"theme_opportunity_state": "no_strong_theme",
+            "per_ticker": {t: {"core_score": 50.0, "theme_momentum_score": 0.0} for t in tickers}}
+
+
+def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=None, per_ticker_analysis=None,
+                      selection_inputs=None):
+    pass2 = pass2 or {}
+    if selection_inputs is None:
+        selection_inputs = _selection_inputs(list(pass2))
     return {
         "data_context": {"universe": universe or [], "catalyst_recall_feed": None, "holdings": [],
-                         "candidate_pass2_signals": pass2 or {}},
+                         "candidate_pass2_signals": pass2, "selection_inputs": selection_inputs},
         "eligibility_governance": load_eligibility_governance(_PRESET),
         "per_ticker_analysis": {} if per_ticker_analysis is None else per_ticker_analysis,
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
@@ -75,6 +84,20 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "lifecycle_register_path": reg_path, "lifecycle_readiness_out_path": None,
         "runs_private_root": runs_root, "weekly_private_root": weekly_root,
     }
+
+
+def _uptrend_bars(n=22):
+    return [{"high": 100.0 + i * 0.5 + 0.5, "low": 100.0 + i * 0.5, "close": 100.0 + i * 0.5 + 0.3}
+            for i in range(n)]
+
+
+def _analysis_row(ticker, row_source="top15_candidate"):
+    row = {"ticker": ticker, "row_source": row_source, "signals": {},
+           "price_input": {"close": 110.5 if row_source.startswith("holding") else 101.5,
+                           "bars": _uptrend_bars()}}
+    if not row_source.startswith("holding"):
+        row["score_blocks"] = {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0}
+    return row
 
 
 class EmptyRunEndToEnd(unittest.TestCase):
@@ -105,6 +128,46 @@ class EmptyRunEndToEnd(unittest.TestCase):
             self.assertEqual(out["decision_date"], _DD)
             self.assertEqual(out["lifecycle_result"]["decision_date"], _DD)
             self.assertEqual(out["report_data"]["lifecycle_reminder_count"], {"section_1": 0, "section_12": 0})
+
+    def test_price_clock_must_match_resolved_price_basis(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr)
+            pc["report_context"]["price_clock"]["price_data_through"] = "20260611"  # resolver basis is 20260612
+            with self.assertRaises(Exception):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+
+    def test_nonempty_admitted_only_writes_official_artifacts(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                                   per_ticker_analysis={"AAPL": _analysis_row("AAPL")})
+            pc["sizing_context"]["per_ticker"] = {
+                "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+            pc["basket_context"]["per_ticker"] = {
+                "AAPL": {"theme": "software", "symbol_cooldown_status": "none",
+                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                                         "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+            self.assertEqual(len(out["machine_record"]["rows"]), 1)
+            self.assertTrue(out["written"]["weekly_report_path"].exists())
+            self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
+            self.assertIn("AAPL", out["written"]["action_table_path"].read_text(encoding="utf-8"))
+
+    def test_nonempty_holding_in_top15_overlap_writes_official_artifacts(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                                   per_ticker_analysis={"AAPL": _analysis_row("AAPL", "holding_in_top15")})
+            pc["data_context"]["holdings"] = [{"ticker": "AAPL", "signals": {}}]
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+            row = out["machine_record"]["rows"][0]
+            self.assertEqual(row["row_source"], "holding_in_top15")
+            self.assertEqual(row["final_action"], "持有")
+            self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
 
 
 class OutOfWindowNoEmit(unittest.TestCase):

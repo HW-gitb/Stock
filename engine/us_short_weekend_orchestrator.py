@@ -13,14 +13,15 @@ decision_date through every stage and persisting the official private artifacts:
       → 4d-ii-a analyze → b decide → c size → e/f/g build-gate → h cost-floor → i cash → j action_rank
       → K assemble_machine_record (as_of = decision_date)
       → L run_lifecycle_eval_stage (decision_date)            # §13: BEFORE the m2 render
-      → m2 build_weekly_report (machine_record + lifecycle_result + report_context)
+      → m2 build_weekly_report (machine_record + lifecycle_result + report_context + resolver run_context)
       → N write_run_private (decision_date, machine_record, weekly_report_md)
 
 It WIRES only — every stage keeps its own consumer-validation / fail-closed contract (single source, not
 re-implemented here). The orchestrator adds: (1) the §2.1 canonical decision_date threading — the resolver's
 decision_date is the single anchor passed to K's as_of, L, and N (m2 / N then reconcile their injected
-report_context price-clock / machine as_of against it, fail-closed cross-week); (2) §2.1 out-of-window NO-EMIT
-— on the intraday dead zone run_selection returns no candidates and the orchestrator produces NO machine
+report_context price-clock / resolver price_basis_date / run_date / machine as_of against it, fail-closed
+cross-week or stale/future-clock); (2) §2.1 out-of-window NO-EMIT — on the intraday dead zone run_selection
+returns no candidates and the orchestrator produces NO machine
 record / report / private artifact; (3) the selection→analysis seam — the injected per_ticker_analysis map must
 EXACTLY cover the canonical admitted ∪ holding identity UNION (admitted ∩ holdings is the legal holding_in_top15
 overlap, deduped to one row; only a repeat WITHIN admitted or WITHIN holdings is malformed), and each row's
@@ -176,7 +177,10 @@ def run_weekend_pipeline(now_et, sessions, pipeline_context):
     lifecycle_result = run_lifecycle_eval_stage(                                  # §13: L BEFORE the m2 render
         decision_date=decision_date, register_path=pc["lifecycle_register_path"],
         readiness_out_path=pc["lifecycle_readiness_out_path"])
-    report = build_weekly_report(machine_record, lifecycle_result, report_context=pc["report_context"])
+    report = build_weekly_report(
+        machine_record, lifecycle_result, report_context=pc["report_context"],
+        run_context={"decision_date": decision_date, "price_basis_date": selection["price_basis_date"],
+                     "run_date": selection["run_date"]})
     written = write_run_private(                                                  # decision_date → N (idempotent)
         decision_date=decision_date, machine_record=machine_record, weekly_report_md=report["weekly_report_md"],
         runs_private_root=pc["runs_private_root"], weekly_private_root=pc["weekly_private_root"])

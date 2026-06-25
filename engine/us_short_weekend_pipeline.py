@@ -9,18 +9,24 @@ run (confirmed no prior orchestrator). This 4d-i sub-slice wires the SELECTION F
       → universe (injected, NYSE/NASDAQ active-only)
       → Pass1: cheap_eligible (4c-ii) per row  +  inject_catalyst_recall (4c-ii)  → candidate set
       → Pass2: pass2_safety_admit (4c-ii, reuses §5 hard_veto); holdings forced in (§4.0)
+      → injected selection_inputs: dynamic core/theme seats → Top15 admitted set (§4.5)
 
 The ANALYSIS chain (hard_veto→price_engine→regime→sizing→forward_events→action_rank), the §10
 machine_record assembly + no-dangling validation, the lifecycle eval (before render), and the
 §11.2 weekly_report render are slice 4d-ii (next) — NOT here.
 
 All inputs are INJECTED via `data_context` (batch4 offline/fixture); batch5 fills `data_context`
-from the real provider behind the same seam. The canonical `decision_date` is threaded from the
-resolver into every consumer (§2.1). Pure/offline; no provider/live/network; no A-share crossing.
+from the real provider behind the same seam. `selection_inputs` is likewise injected: batch4 fixtures / batch5
+provider evidence supply the expensive post-Pass2 score inputs behind the same closed-world seam. The canonical
+`decision_date` is threaded from the resolver into every consumer (§2.1). Pure/offline; no provider/live/network;
+no A-share crossing.
 """
 from __future__ import annotations
 
+import math
+
 from engine.us_short_canonical_asof import resolve_canonical_asof, OutOfWindowError
+from engine.us_short_dynamic_seats import SELECTION_SEAT_TOTAL, selection_seats
 from engine.us_short_eligibility_gate import (
     canonical_us_ticker,
     cheap_eligible,
@@ -29,7 +35,10 @@ from engine.us_short_eligibility_gate import (
     validate_eligibility_governance,
 )
 
-_REQUIRED_DATA_CONTEXT_KEYS = {"universe", "catalyst_recall_feed", "holdings", "candidate_pass2_signals"}
+_REQUIRED_DATA_CONTEXT_KEYS = {
+    "universe", "catalyst_recall_feed", "holdings", "candidate_pass2_signals", "selection_inputs"}
+_SELECTION_INPUT_KEYS = {"theme_opportunity_state", "per_ticker"}
+_SELECTION_ROW_KEYS = {"core_score", "theme_momentum_score"}
 
 
 class WeekendPipelineError(Exception):
@@ -49,12 +58,98 @@ def _validate_data_context(dc):
         raise WeekendPipelineError("data_context.holdings 须为 list")
     if not isinstance(dc["candidate_pass2_signals"], dict):
         raise WeekendPipelineError("data_context.candidate_pass2_signals 须为 dict")
+    if not isinstance(dc["selection_inputs"], dict):
+        raise WeekendPipelineError("data_context.selection_inputs 须为 dict")
     # catalyst_recall_feed (None | list) is validated downstream by inject_catalyst_recall.
     for h in dc["holdings"]:
         if not (isinstance(h, dict) and isinstance(h.get("ticker"), str) and h["ticker"]
                 and isinstance(h.get("signals"), dict)):
             raise WeekendPipelineError(f"holdings 行须为 {{'ticker': str, 'signals': dict}}: {h!r}")
     return dc
+
+
+def _score_0_100(value, where):
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value):
+        raise WeekendPipelineError(f"{where} 须为 0-100 有限数值: {value!r}")
+    score = float(value)
+    if not 0.0 <= score <= 100.0:
+        raise WeekendPipelineError(f"{where} 须在 0-100: {value!r}")
+    return score
+
+
+def _select_top15(admitted_candidates, selection_inputs):
+    """Apply §4.5 dynamic Top15 seats to the Pass2-clean candidate set.
+
+    The injected `selection_inputs` must canonically cover Pass2-clean admitted candidates exactly. This keeps
+    batch4 offline/fixture-only while still enforcing the actual Top15 contract before analysis runs.
+    """
+    if set(selection_inputs) != _SELECTION_INPUT_KEYS:
+        raise WeekendPipelineError(
+            f"selection_inputs 顶层键须恰为 {sorted(_SELECTION_INPUT_KEYS)}（closed-world）: {sorted(selection_inputs)}")
+    if not isinstance(selection_inputs["per_ticker"], dict):
+        raise WeekendPipelineError("selection_inputs.per_ticker 须为 dict")
+
+    admitted_set = set(admitted_candidates)
+    scores = {}
+    for k, v in selection_inputs["per_ticker"].items():
+        ck = canonical_us_ticker(k)
+        if ck is None:
+            raise WeekendPipelineError(f"selection_inputs.per_ticker 键非规范 US ticker: {k!r}")
+        if ck in scores:
+            raise WeekendPipelineError(f"selection_inputs.per_ticker 含规范化后重复键: {ck!r}")
+        if not (isinstance(v, dict) and set(v) == _SELECTION_ROW_KEYS):
+            raise WeekendPipelineError(
+                f"selection_inputs.per_ticker[{k!r}] 须为 {{{sorted(_SELECTION_ROW_KEYS)}}}: {v!r}")
+        scores[ck] = {
+            "core_score": _score_0_100(v["core_score"], f"selection_inputs[{ck}].core_score"),
+            "theme_momentum_score": _score_0_100(
+                v["theme_momentum_score"], f"selection_inputs[{ck}].theme_momentum_score"),
+        }
+    if set(scores) != admitted_set:
+        raise WeekendPipelineError(
+            "selection_inputs.per_ticker 须恰覆盖 Pass2-clean admitted 候选（缺 %s / 多 %s）"
+            % (sorted(admitted_set - set(scores)), sorted(set(scores) - admitted_set)))
+
+    state = selection_inputs["theme_opportunity_state"]
+    seats = selection_seats(state if isinstance(state, str) else None)
+    target_total = min(SELECTION_SEAT_TOTAL, len(admitted_candidates))
+    core_rank = sorted(admitted_candidates, key=lambda t: (-scores[t]["core_score"], t))
+    theme_rank = sorted(admitted_candidates,
+                        key=lambda t: (-scores[t]["theme_momentum_score"], -scores[t]["core_score"], t))
+    selected, details = [], {}
+
+    def add(ticker, bucket):
+        if ticker not in details:
+            selected.append(ticker)
+            details[ticker] = {"ticker": ticker, "selection_bucket": bucket,
+                               "core_score": scores[ticker]["core_score"],
+                               "theme_momentum_score": scores[ticker]["theme_momentum_score"]}
+        elif bucket == "overlap":
+            details[ticker]["selection_bucket"] = "overlap"
+
+    for ticker in core_rank[:seats["core_top"]]:
+        add(ticker, "core_top")
+
+    theme_added = 0
+    for ticker in theme_rank:
+        if ticker in details:
+            add(ticker, "overlap")  # same row, theme seat rolls forward to the next theme-ranked name
+            continue
+        add(ticker, "theme_momentum")
+        theme_added += 1
+        if theme_added >= seats["theme_momentum"]:
+            break
+
+    for ticker in core_rank:
+        if len(selected) >= target_total:
+            break
+        if ticker not in details:
+            add(ticker, "core_backfill")
+
+    selected = selected[:target_total]
+    return {"admitted": selected, "selection_seats": seats,
+            "selection_details": [{**details[t], "selection_rank": i}
+                                  for i, t in enumerate(selected, start=1)]}
 
 
 def run_selection(now_et, sessions, data_context, *, eligibility_governance):
@@ -68,15 +163,19 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
                     "catalyst_recall_feed": None | [ticker, ...],   # batch5 feed; None offline
                     "holdings": [{"ticker": str, "signals": <hard_veto signals>}, ...],  # forced into Pass2;
                         # ticker canonicalized (invalid / A-share-code / post-canonical-dup -> fail-closed)
-                    "candidate_pass2_signals": {ticker: <hard_veto signals dict>}}  # keys canonicalized;
+                    "candidate_pass2_signals": {ticker: <hard_veto signals dict>},  # keys canonicalized;
                         # MUST exactly cover the final candidate set (incl. recall-added); a missing /
                         # non-canonical / duplicate / stale-extra key fails closed — NO default-clean (§3.3)
+                    "selection_inputs": {"theme_opportunity_state": str,
+                                         "per_ticker": {ticker: {"core_score": 0-100,
+                                                                "theme_momentum_score": 0-100}}}}
     eligibility_governance = a dict (validated here via validate_eligibility_governance — runtime
     consumer-validation edge; never trust an unvalidated governance artifact).
 
     Returns {decision_date, price_basis_date, run_date, out_of_window: bool, cheap_eligible: [ticker],
              candidates: [ticker], recall_available: bool, recall_added: [ticker],
-             admitted: [ticker], holdings: [{ticker, admit_to_topn, veto_tier}]}.
+             admitted: [Top15 ticker], selection_seats, selection_details,
+             holdings: [{ticker, admit_to_topn, veto_tier}]}.
     """
     try:
         canon = resolve_canonical_asof(now_et, sessions)
@@ -85,7 +184,7 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
             "out_of_window": True, "decision_date": None, "price_basis_date": None,
             "run_date": now_et.strftime("%Y%m%d"),
             "cheap_eligible": [], "candidates": [], "recall_available": False, "recall_added": [],
-            "admitted": [], "holdings": [],
+            "admitted": [], "selection_seats": None, "selection_details": [], "holdings": [],
         }
 
     gov = validate_eligibility_governance(eligibility_governance)
@@ -122,8 +221,9 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
     stale = set(canon_pass2) - cand_set
     if stale:
         raise WeekendPipelineError(f"candidate_pass2_signals 含非候选陈旧键: {sorted(stale)}")
-    admitted = [t for t in candidates
-                if pass2_safety_admit(canon_pass2[t], row_context="candidate")["admit_to_topn"]]
+    pass2_admitted = [t for t in candidates
+                      if pass2_safety_admit(canon_pass2[t], row_context="candidate")["admit_to_topn"]]
+    top15 = _select_top15(pass2_admitted, dc["selection_inputs"])
 
     # Holdings forced into Pass2 (§4.0); canonicalize identity with the SAME policy as candidates
     # (no second identity space; reject invalid / A-share-code / post-canonical duplicate); veto surfaced.
@@ -148,6 +248,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
         "candidates": candidates,
         "recall_available": recall["recall_available"],
         "recall_added": recall["recall_added"],
-        "admitted": admitted,
+        "admitted": top15["admitted"],
+        "selection_seats": top15["selection_seats"],
+        "selection_details": top15["selection_details"],
         "holdings": holdings,
     }

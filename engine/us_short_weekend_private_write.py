@@ -40,6 +40,7 @@ from engine.us_short_weekend_action_table import flatten_machine_record
 ROOT = Path(__file__).resolve().parent.parent
 RUNS_PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private"      # machine layer (§11.1, gitignored)
 WEEKLY_PRIVATE_ROOT = ROOT / "state" / "us_short" / "weekly_private"  # weekly_report.md + action_table.csv (§11.1)
+_REPORT_CONTRACT_PATH = ROOT / "presets" / "us_short_weekly_report_contract_20260620.json"
 
 # §11.1: weekly_private/<dd>/ holds ONLY these two official files — any pre-existing extra file/dir fails closed.
 _OFFICIAL_WEEKLY_FILES = frozenset({"weekly_report.md", "action_table.csv"})
@@ -47,6 +48,8 @@ _OFFICIAL_WEEKLY_FILES = frozenset({"weekly_report.md", "action_table.csv"})
 _PRICE_CLOCK_LINE = "price_clock:"
 _PRICE_CLOCK_PREFIX = "- ④ price_clock:"
 _PRICE_CLOCK_DECISION_DATE = re.compile(r"decision_date=(\d{8})")
+_REPORT_TITLE = "# US-short weekly report"
+_BANNER_TITLE = "## 诚实横幅"
 
 
 class WeekendPrivateWriteError(Exception):
@@ -61,6 +64,37 @@ def _write_text_private(path, text):
     p.parent.mkdir(parents=True, exist_ok=True)
     p.write_text(text, encoding="utf-8")
     return p
+
+
+def _report_sections():
+    return json.loads(_REPORT_CONTRACT_PATH.read_text(encoding="utf-8"))["sections"]
+
+
+def _validate_weekly_report_surface(weekly_report_md):
+    """Refuse non-renderer-like markdown before private persistence.
+
+    Private-write is intentionally the last artifact boundary. The upstream renderer owns exact content, but this
+    boundary must still prove it is persisting the official §11.2 surface, not an arbitrary markdown string with a
+    spoofed price-clock line. The renderer surface has one title, one honest banner, and the frozen 13 section
+    headers in order.
+    """
+    lines = [ln.strip() for ln in weekly_report_md.splitlines()]
+    if lines.count(_REPORT_TITLE) != 1 or _REPORT_TITLE not in lines[:2]:
+        raise WeekendPrivateWriteError("weekly_report_md 必须是渲染器输出：须含唯一 '# US-short weekly report' 标题")
+    if lines.count(_BANNER_TITLE) != 1:
+        raise WeekendPrivateWriteError("weekly_report_md 必须是渲染器输出：须含唯一 '## 诚实横幅'")
+    expected_headers = ["## %d. %s" % (i, title) for i, title in enumerate(_report_sections(), start=1)]
+    positions = []
+    for header in expected_headers:
+        if lines.count(header) != 1:
+            raise WeekendPrivateWriteError("weekly_report_md 必须是完整 §11.2 周报：缺失或重复节标题 %r" % header)
+        positions.append(lines.index(header))
+    if positions != sorted(positions):
+        raise WeekendPrivateWriteError("weekly_report_md §11.2 节标题顺序必须与冻结 contract 一致")
+    allowed_h2 = {_BANNER_TITLE, *expected_headers}
+    extra_h2 = [ln for ln in lines if ln.startswith("## ") and ln not in allowed_h2]
+    if extra_h2:
+        raise WeekendPrivateWriteError("weekly_report_md 含非冻结 §11.2 二级节标题: %s" % extra_h2)
 
 
 def write_run_private(*, decision_date, machine_record, weekly_report_md,
@@ -80,6 +114,7 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md,
     `WeekendActionTableError` — a non-private destination / malformed machine record."""
     if not (isinstance(weekly_report_md, str) and weekly_report_md.strip()):
         raise WeekendPrivateWriteError("weekly_report_md 须为非空 str")
+    _validate_weekly_report_surface(weekly_report_md)
     # flatten through the m1 §10/§6 gate (validates the machine record + projects the §11.3 columns).
     flat = flatten_machine_record(machine_record)   # raises WeekendActionTableError on a malformed record
     # §2.1 same-run reconciliation: the machine layer + the run's decision_date must be one run.

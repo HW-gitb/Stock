@@ -9,10 +9,12 @@ ASSEMBLES the §11.2 `report_data` (the 13 sections + the honest banner ①②�
 and renders it via the content-agnostic `us_short_weekly_report_renderer.render_weekly_report`. It DERIVES what the
 machine layer + lifecycle eval own, WIRES the batch-3 §11.2 formatters, and takes the genuinely non-derivable
 inputs (price_clock, the editorial sections, provider health, exclusion / hot-excluded / coverage raw inputs) from
-an injected `report_context` (batch4 offline fixture; batch5 fills it real behind the same seam):
+an injected `report_context`, and the canonical resolver clock from `run_context` (batch4 offline fixture; batch5
+fills the same seams):
 
   * banner ① true/false observe split  ← machine-record observe rows (aggregate_observe_split → render);
-  * banner ④ price_clock (ALWAYS shown) ← report_context (validated by validate_price_clock + the renderer);
+  * banner ④ price_clock (ALWAYS shown) ← report_context, reconciled against resolver run_context
+    (validated by validate_price_clock + the renderer);
   * banner ③ ship-gate + matured lifecycle count ← report_context ship_gate note + L readiness;
   * banner ⑤ hot_excluded notice ← exclusion_data["hot_excluded"] via build_exclusion_summary(...)["public"],
     then render_hot_excluded_banner — the SINGLE source the §9 detail also uses (banner count == §11.4 detail,
@@ -23,12 +25,14 @@ an injected `report_context` (batch4 offline fixture; batch5 fills it real behin
   * the row sections (5 操作表 / 6 持仓复核 / 7 Top15 / 8 观察池) ← the flattened §11.3 machine rows (slice m1).
 
 Consumer-validation at the boundary (the recurring batch4 lesson — a stage that RE-EMITS official output must
-value-validate the inputs it now owns): `report_context` is CLOSED-WORLD (exact key set), `lifecycle_result` is
-re-validated for shape, the machine record is flattened via the m1 §10/§6 gate, and the formatters / the renderer
-re-validate their own inputs (single source). Pure/offline; no provider/live/network; no broker/auto-order; no
-A-share crossing.
+value-validate the inputs it now owns): `report_context` and `run_context` are CLOSED-WORLD (exact key sets),
+`lifecycle_result` is re-validated for shape, the machine record is flattened via the m1 §10/§6 gate, and the
+formatters / the renderer re-validate their own inputs (single source). Pure/offline; no provider/live/network;
+no broker/auto-order; no A-share crossing.
 """
 from __future__ import annotations
+
+from datetime import datetime
 
 from engine.us_short_coverage_honesty import build_row_coverage, render_coverage_section
 from engine.us_short_exclusion_summary import build_exclusion_summary, render_exclusion_section
@@ -48,6 +52,7 @@ _REPORT_CONTEXT_KEYS = frozenset({
     "theme_opportunity_state", "core_conclusion", "risk_downgrade_note", "provider_health_note",
     "macro_cluster_banner", "ship_gate_note",
 })
+_RUN_CONTEXT_KEYS = frozenset({"decision_date", "price_basis_date", "run_date"})
 _HOLDING_SOURCES = frozenset({"holding_in_top15", "holding_pass2_only", "holding_account_only"})
 _OBSERVE, _BUILD = "观察", "建仓"
 
@@ -72,6 +77,29 @@ def _validate_report_context(rc):
     if not (isinstance(rc, dict) and set(rc) == _REPORT_CONTEXT_KEYS):
         raise WeekendReportError(
             f"report_context 顶层键须恰为 {sorted(_REPORT_CONTEXT_KEYS)}（closed-world）: {sorted(rc) if isinstance(rc, dict) else rc!r}")
+
+
+def _strict_yyyymmdd(value):
+    if not (isinstance(value, str) and len(value) == 8 and value.isascii() and value.isdigit()):
+        return False
+    try:
+        datetime.strptime(value, "%Y%m%d")
+        return True
+    except ValueError:
+        return False
+
+
+def _validate_run_context(run_context):
+    if not (isinstance(run_context, dict) and set(run_context) == _RUN_CONTEXT_KEYS):
+        raise WeekendReportError(
+            f"run_context 顶层键须恰为 {sorted(_RUN_CONTEXT_KEYS)}（closed-world）: "
+            f"{sorted(run_context) if isinstance(run_context, dict) else run_context!r}")
+    for key in _RUN_CONTEXT_KEYS:
+        if not _strict_yyyymmdd(run_context[key]):
+            raise WeekendReportError(f"run_context.{key} 须为真实 ASCII YYYYMMDD: {run_context[key]!r}")
+    if not (run_context["price_basis_date"] <= run_context["run_date"] <= run_context["decision_date"]):
+        raise WeekendReportError(
+            "run_context 日期顺序非法（须 price_basis_date <= run_date <= decision_date）: %r" % run_context)
 
 
 def _validate_lifecycle_result(lr):
@@ -107,6 +135,29 @@ def _reconcile_decision_date(canonical, price_clock, lifecycle_result, exclusion
             f"decision_date 不一致（须全 == machine_record.as_of={canonical!r}，§2.1 单一 decision_date 穿线）: {mismatched}")
 
 
+def _reconcile_price_clock(canonical, price_clock, run_context):
+    """The visible §11.2 price clock must be the resolver's canonical clock, not merely an internally ordered
+    date triple. This closes the stale-price / future-news gap: price_data_through equals the resolved prior
+    closed session, news_window_through equals the run date at date granularity, and decision_date equals the
+    canonical upcoming session."""
+    anchors = {
+        "run_context.decision_date": run_context["decision_date"],
+        "price_clock.decision_date": price_clock.get("decision_date") if isinstance(price_clock, dict) else None,
+    }
+    mismatched = {k: v for k, v in anchors.items() if v != canonical}
+    if mismatched:
+        raise WeekendReportError(
+            f"run_context/price_clock decision_date 不一致（须全 == machine_record.as_of={canonical!r}）: {mismatched}")
+    if price_clock.get("price_data_through") != run_context["price_basis_date"]:
+        raise WeekendReportError(
+            "price_clock.price_data_through %r != resolved price_basis_date %r（§2.1 canonical prior session）"
+            % (price_clock.get("price_data_through"), run_context["price_basis_date"]))
+    if price_clock.get("news_window_through") != run_context["run_date"]:
+        raise WeekendReportError(
+            "price_clock.news_window_through %r != resolved run_date %r（§2.1 news window must stop at run time）"
+            % (price_clock.get("news_window_through"), run_context["run_date"]))
+
+
 def _num(v):
     """A price/size cell for a one-line summary: a finite number → its str, else '·' (the cell was not produced)."""
     return str(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else "·"
@@ -126,19 +177,22 @@ def _rows_section(rows, label):
     return rows if rows else ["%s：无" % label]
 
 
-def build_weekly_report(machine_record, lifecycle_result, *, report_context):
+def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context):
     """4d-ii-m2 §11.2 weekly_report assembly + render.
 
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1 for the §11.3 rows).
     lifecycle_result = the 4d-ii-l `run_lifecycle_eval_stage` output {decision_date, readiness, banner}.
     report_context = the injected closed-world non-derivable inputs (price_clock + the editorial sections +
         provider health + exclusion / hot-excluded / coverage raw inputs); batch4 offline fixture, batch5 real.
+    run_context = the resolver/selection clock {decision_date, price_basis_date, run_date}; the visible
+        price_clock must match it exactly at date granularity.
 
     Returns {"weekly_report_md": <markdown str>, "report_data": <the assembled §11.2 report_data dict>}. Raises
     WeekendReportError on a malformed machine record / lifecycle result / report_context (and the formatters /
     renderer raise their own typed errors on a malformed formatter input / a §11.2 render-invariant violation —
     incomplete price_clock, lifecycle-count mismatch, a section without content)."""
     _validate_report_context(report_context)
+    _validate_run_context(run_context)
     _validate_lifecycle_result(lifecycle_result)
     # flatten through the m1 §10/§6 gate (re-validates the machine record + projects the §11.3 columns).
     flat = flatten_machine_record(machine_record)
@@ -147,6 +201,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context):
     # so the report can never stitch rows / lifecycle / price clock / exclusions from different weeks.
     _reconcile_decision_date(flat.get("as_of"), report_context["price_clock"], lifecycle_result,
                              report_context["exclusion_data"])
+    _reconcile_price_clock(flat.get("as_of"), report_context["price_clock"], run_context)
     readiness = lifecycle_result["readiness"]
     due_count = readiness["due_count"]
 
