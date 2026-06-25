@@ -1,0 +1,1271 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_license_storage_retention_decision/1.0.0/schema.json",
+  "title": "US-short Batch5 License Storage Retention Decision",
+  "description": "US-short batch5 offline license/storage/retention decision packet. It classifies the already reviewed small-sample response-shape outputs from existing repo evidence only; it does not refresh current terms, provide legal advice, contact providers, fetch data, read raw payloads, authorize broader provider/live calls, select a provider, authorize DataHub/runner consumption, production storage, live_normalized evidence, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "decision_basis",
+    "probe_storage_trace",
+    "decision_summary",
+    "rights_matrix",
+    "stop_points",
+    "future_authorization_boundary_template",
+    "prohibited_actions",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_license_storage_retention_decision"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceArtifactRef"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsUsShortSystemDesign"
+        },
+        {
+          "$ref": "#/$defs/containsPostProbeDisposition"
+        },
+        {
+          "$ref": "#/$defs/containsProbeSummary"
+        },
+        {
+          "$ref": "#/$defs/containsP1LicenseReview"
+        },
+        {
+          "$ref": "#/$defs/containsSrProvider001"
+        }
+      ]
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "decision_basis": {
+      "$ref": "#/$defs/decisionBasis"
+    },
+    "probe_storage_trace": {
+      "$ref": "#/$defs/probeStorageTrace"
+    },
+    "decision_summary": {
+      "$ref": "#/$defs/decisionSummary"
+    },
+    "rights_matrix": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerRights"
+      },
+      "minItems": 2,
+      "maxItems": 2,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsFinancialModelingPrep"
+        },
+        {
+          "$ref": "#/$defs/containsSecEdgar"
+        }
+      ]
+    },
+    "stop_points": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/stopPoint"
+      },
+      "minItems": 6,
+      "allOf": [
+        {
+          "$ref": "#/$defs/containsStopCurrentTermsWebRefresh"
+        },
+        {
+          "$ref": "#/$defs/containsStopLegalReview"
+        },
+        {
+          "$ref": "#/$defs/containsStopProviderContactTrialPaid"
+        },
+        {
+          "$ref": "#/$defs/containsStopFutureProviderLiveProbe"
+        },
+        {
+          "$ref": "#/$defs/containsStopDatahubRunnerProductionStorage"
+        },
+        {
+          "$ref": "#/$defs/containsStopLiveNormalizedShipGate"
+        }
+      ]
+    },
+    "future_authorization_boundary_template": {
+      "$ref": "#/$defs/futureAuthorizationBoundaryTemplate"
+    },
+    "prohibited_actions": {
+      "$ref": "#/$defs/prohibitedActions"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "path",
+        "role"
+      ],
+      "properties": {
+        "artifact_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "artifact_status",
+        "provider_calls_executed_by_this_artifact",
+        "network_access_required_for_this_artifact",
+        "current_terms_web_refresh_performed",
+        "provider_contact_performed",
+        "legal_advice_claimed",
+        "raw_payloads_read_by_this_artifact",
+        "raw_payloads_written_by_this_artifact",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "datahub_consumption_allowed",
+        "runner_consumption_allowed",
+        "production_storage_allowed",
+        "production_ready_claim_allowed",
+        "ship_gate_evidence_allowed",
+        "live_normalized_evidence_allowed",
+        "future_provider_live_call_authorized",
+        "yfinance_allowed",
+        "web_x_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "lane": {
+          "const": "us_short"
+        },
+        "batch": {
+          "const": "batch5_provider_live"
+        },
+        "artifact_status": {
+          "const": "license_storage_retention_decision_offline_only"
+        },
+        "provider_calls_executed_by_this_artifact": {
+          "const": false
+        },
+        "network_access_required_for_this_artifact": {
+          "const": false
+        },
+        "current_terms_web_refresh_performed": {
+          "const": false
+        },
+        "provider_contact_performed": {
+          "const": false
+        },
+        "legal_advice_claimed": {
+          "const": false
+        },
+        "raw_payloads_read_by_this_artifact": {
+          "const": false
+        },
+        "raw_payloads_written_by_this_artifact": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "datahub_consumption_allowed": {
+          "const": false
+        },
+        "runner_consumption_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "live_normalized_evidence_allowed": {
+          "const": false
+        },
+        "future_provider_live_call_authorized": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "web_x_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "decisionBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "uses_existing_reviewed_artifacts_only",
+        "current_terms_web_refresh_performed",
+        "provider_contact_performed",
+        "legal_advice_claimed",
+        "requires_later_current_terms_or_user_decision_before_production_use",
+        "batch5_probe_is_response_shape_only"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "current_terms_web_refresh_performed": {
+          "const": false
+        },
+        "provider_contact_performed": {
+          "const": false
+        },
+        "legal_advice_claimed": {
+          "const": false
+        },
+        "requires_later_current_terms_or_user_decision_before_production_use": {
+          "const": true
+        },
+        "batch5_probe_is_response_shape_only": {
+          "const": true
+        }
+      }
+    },
+    "probeStorageTrace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe_summary_ref",
+        "post_probe_disposition_ref",
+        "authorization_ref",
+        "actual_total_endpoint_calls",
+        "symbols",
+        "raw_payload_root",
+        "raw_payload_root_is_gitignored",
+        "tracked_summary_ref",
+        "tracked_summary_contains_secret_url_or_raw_rows",
+        "authorizes_broader_raw_retention",
+        "authorizes_production_storage"
+      ],
+      "properties": {
+        "probe_summary_ref": {
+          "const": "docs/us_short_batch5_provider_live_probe_summary_20260625.json"
+        },
+        "post_probe_disposition_ref": {
+          "const": "docs/us_short_batch5_provider_live_post_probe_disposition_20260625.json"
+        },
+        "authorization_ref": {
+          "const": "user_chat_20260625_batch5_provider_live_probe_10_call_boundary"
+        },
+        "actual_total_endpoint_calls": {
+          "const": 10
+        },
+        "symbols": {
+          "type": "array",
+          "items": [
+            {
+              "const": "AAPL"
+            },
+            {
+              "const": "MSFT"
+            },
+            {
+              "const": "JPM"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3,
+          "additionalItems": false
+        },
+        "raw_payload_root": {
+          "const": "provider_samples/us_short_batch5_v1_provider_live_20260625/raw/"
+        },
+        "raw_payload_root_is_gitignored": {
+          "const": true
+        },
+        "tracked_summary_ref": {
+          "const": "docs/us_short_batch5_provider_live_probe_summary_20260625.json"
+        },
+        "tracked_summary_contains_secret_url_or_raw_rows": {
+          "const": false
+        },
+        "authorizes_broader_raw_retention": {
+          "const": false
+        },
+        "authorizes_production_storage": {
+          "const": false
+        }
+      }
+    },
+    "decisionSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_status",
+        "already_produced_batch5_raw_samples_may_remain_gitignored",
+        "tracked_no_secret_summaries_may_remain_tracked",
+        "current_fmp_basic_evidence_sufficient_for_production_storage",
+        "current_sec_public_evidence_sufficient_for_broad_parser_use",
+        "current_evidence_sufficient_for_datahub_or_runner_consumption",
+        "current_evidence_sufficient_for_provider_selection",
+        "current_evidence_sufficient_for_live_normalized_or_ship_gate"
+      ],
+      "properties": {
+        "decision_status": {
+          "const": "reviewed_sample_only_non_production_use"
+        },
+        "already_produced_batch5_raw_samples_may_remain_gitignored": {
+          "const": true
+        },
+        "tracked_no_secret_summaries_may_remain_tracked": {
+          "const": true
+        },
+        "current_fmp_basic_evidence_sufficient_for_production_storage": {
+          "const": false
+        },
+        "current_sec_public_evidence_sufficient_for_broad_parser_use": {
+          "const": false
+        },
+        "current_evidence_sufficient_for_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "current_evidence_sufficient_for_provider_selection": {
+          "const": false
+        },
+        "current_evidence_sufficient_for_live_normalized_or_ship_gate": {
+          "const": false
+        }
+      }
+    },
+    "providerRights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "provider_role",
+        "rights"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": [
+            "financial_modeling_prep",
+            "sec_edgar"
+          ]
+        },
+        "provider_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "rights": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/rightClassification"
+          },
+          "minItems": 9,
+          "maxItems": 9,
+          "allOf": [
+            {
+              "$ref": "#/$defs/containsRightAlreadyProducedRawSampleRetention"
+            },
+            {
+              "$ref": "#/$defs/containsRightTrackedNoSecretSummary"
+            },
+            {
+              "$ref": "#/$defs/containsRightProductionRawStorage"
+            },
+            {
+              "$ref": "#/$defs/containsRightNormalizedDatahubStorage"
+            },
+            {
+              "$ref": "#/$defs/containsRightDerivedReports"
+            },
+            {
+              "$ref": "#/$defs/containsRightNonDisplayAnalyticalUse"
+            },
+            {
+              "$ref": "#/$defs/containsRightExportOrRedistribution"
+            },
+            {
+              "$ref": "#/$defs/containsRightRetentionAfterPlanLapse"
+            },
+            {
+              "$ref": "#/$defs/containsRightBroaderFutureSampleCalls"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "financial_modeling_prep"
+              }
+            },
+            "required": [
+              "provider_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rights": {
+                "items": {
+                  "$ref": "#/$defs/fmpRightClassificationById"
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "type": "object",
+            "properties": {
+              "provider_id": {
+                "const": "sec_edgar"
+              }
+            },
+            "required": [
+              "provider_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "rights": {
+                "items": {
+                  "$ref": "#/$defs/secRightClassificationById"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "rightClassification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "right_id",
+        "classification",
+        "classification_reason",
+        "authorizes_future_provider_call",
+        "authorizes_datahub_or_runner_consumption",
+        "authorizes_production_storage",
+        "authorizes_ship_gate_or_live_normalized_evidence",
+        "required_before_status_can_improve"
+      ],
+      "properties": {
+        "right_id": {
+          "enum": [
+            "already_produced_raw_sample_retention",
+            "tracked_no_secret_summary",
+            "production_raw_storage",
+            "normalized_datahub_storage",
+            "derived_reports_or_factor_outputs",
+            "non_display_analytical_use",
+            "export_or_redistribution",
+            "retention_after_plan_lapse_or_account_change",
+            "broader_or_future_sample_calls"
+          ]
+        },
+        "classification": {
+          "enum": [
+            "allowed_gitignored_reviewed_sample_only",
+            "allowed_tracked_no_secret_summary_only",
+            "blocked_pending_current_terms_user_decision",
+            "blocked_pending_parser_fair_access_artifact_contract",
+            "blocked_requires_new_provider_live_authorization",
+            "not_applicable"
+          ]
+        },
+        "classification_reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_future_provider_call": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        },
+        "authorizes_production_storage": {
+          "const": false
+        },
+        "authorizes_ship_gate_or_live_normalized_evidence": {
+          "const": false
+        },
+        "required_before_status_can_improve": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "fmpRightClassificationById": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "already_produced_raw_sample_retention"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "allowed_gitignored_reviewed_sample_only"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "tracked_no_secret_summary"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "allowed_tracked_no_secret_summary_only"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "enum": [
+                  "production_raw_storage",
+                  "normalized_datahub_storage",
+                  "derived_reports_or_factor_outputs",
+                  "non_display_analytical_use",
+                  "export_or_redistribution",
+                  "retention_after_plan_lapse_or_account_change"
+                ]
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "blocked_pending_current_terms_user_decision"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "broader_or_future_sample_calls"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "blocked_requires_new_provider_live_authorization"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        }
+      ]
+    },
+    "secRightClassificationById": {
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "already_produced_raw_sample_retention"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "allowed_gitignored_reviewed_sample_only"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "tracked_no_secret_summary"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "allowed_tracked_no_secret_summary_only"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "enum": [
+                  "production_raw_storage",
+                  "normalized_datahub_storage",
+                  "derived_reports_or_factor_outputs",
+                  "non_display_analytical_use",
+                  "export_or_redistribution"
+                ]
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "blocked_pending_parser_fair_access_artifact_contract"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "retention_after_plan_lapse_or_account_change"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "not_applicable"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "right_id": {
+                "const": "broader_or_future_sample_calls"
+              }
+            },
+            "required": [
+              "right_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "classification": {
+                "const": "blocked_requires_new_provider_live_authorization"
+              }
+            },
+            "required": [
+              "classification"
+            ]
+          }
+        }
+      ]
+    },
+    "stopPoint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stop_point_id",
+        "reason",
+        "must_stop_for_separate_user_authorization_or_review",
+        "authorized_by_this_decision"
+      ],
+      "properties": {
+        "stop_point_id": {
+          "enum": [
+            "current_terms_web_refresh",
+            "legal_review_or_terms_interpretation",
+            "provider_contact_trial_or_paid_access",
+            "future_provider_live_or_network_probe",
+            "datahub_runner_or_production_storage",
+            "live_normalized_or_ship_gate_claim"
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "must_stop_for_separate_user_authorization_or_review": {
+          "const": true
+        },
+        "authorized_by_this_decision": {
+          "const": false
+        }
+      }
+    },
+    "futureAuthorizationBoundaryTemplate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_before_any_future_provider_live_or_network",
+        "default_future_call_budget_without_new_authorization",
+        "must_state_symbols",
+        "must_state_endpoints",
+        "must_state_call_budget",
+        "must_state_retry_policy",
+        "must_state_write_locations",
+        "must_state_secret_and_raw_privacy_boundary",
+        "must_state_validation_method",
+        "must_state_non_authorized_paths"
+      ],
+      "properties": {
+        "required_before_any_future_provider_live_or_network": {
+          "const": true
+        },
+        "default_future_call_budget_without_new_authorization": {
+          "const": 0
+        },
+        "must_state_symbols": {
+          "const": true
+        },
+        "must_state_endpoints": {
+          "const": true
+        },
+        "must_state_call_budget": {
+          "const": true
+        },
+        "must_state_retry_policy": {
+          "const": true
+        },
+        "must_state_write_locations": {
+          "const": true
+        },
+        "must_state_secret_and_raw_privacy_boundary": {
+          "const": true
+        },
+        "must_state_validation_method": {
+          "const": true
+        },
+        "must_state_non_authorized_paths": {
+          "const": true
+        }
+      }
+    },
+    "prohibitedActions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_live_call_authorized_by_this_artifact",
+        "network_access_authorized_by_this_artifact",
+        "current_terms_refresh_authorized",
+        "legal_advice_or_terms_interpretation_authorized",
+        "provider_contact_trial_or_paid_access_authorized",
+        "raw_payload_read_authorized_by_this_artifact",
+        "raw_payload_write_authorized_by_this_artifact",
+        "tracked_raw_or_secret_output_authorized",
+        "datahub_consumption_authorized",
+        "runner_consumption_authorized",
+        "production_storage_authorized",
+        "provider_selection_authorized",
+        "provider_ranking_authorized",
+        "yfinance_authorized",
+        "web_x_authorized",
+        "broker_or_order_automation_authorized",
+        "ship_gate_or_live_normalized_evidence_authorized",
+        "production_ready_claim_authorized"
+      ],
+      "properties": {
+        "provider_live_call_authorized_by_this_artifact": {
+          "const": false
+        },
+        "network_access_authorized_by_this_artifact": {
+          "const": false
+        },
+        "current_terms_refresh_authorized": {
+          "const": false
+        },
+        "legal_advice_or_terms_interpretation_authorized": {
+          "const": false
+        },
+        "provider_contact_trial_or_paid_access_authorized": {
+          "const": false
+        },
+        "raw_payload_read_authorized_by_this_artifact": {
+          "const": false
+        },
+        "raw_payload_write_authorized_by_this_artifact": {
+          "const": false
+        },
+        "tracked_raw_or_secret_output_authorized": {
+          "const": false
+        },
+        "datahub_consumption_authorized": {
+          "const": false
+        },
+        "runner_consumption_authorized": {
+          "const": false
+        },
+        "production_storage_authorized": {
+          "const": false
+        },
+        "provider_selection_authorized": {
+          "const": false
+        },
+        "provider_ranking_authorized": {
+          "const": false
+        },
+        "yfinance_authorized": {
+          "const": false
+        },
+        "web_x_authorized": {
+          "const": false
+        },
+        "broker_or_order_automation_authorized": {
+          "const": false
+        },
+        "ship_gate_or_live_normalized_evidence_authorized": {
+          "const": false
+        },
+        "production_ready_claim_authorized": {
+          "const": false
+        }
+      }
+    },
+    "containsUsShortSystemDesign": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "us_short_system_design"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsPostProbeDisposition": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "us_short_batch5_provider_live_post_probe_disposition_20260625"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsProbeSummary": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "us_short_batch5_provider_live_probe_summary_20260625"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsP1LicenseReview": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "provider_p1_license_storage_retention_review_20260602"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsSrProvider001": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "artifact_id": {
+            "const": "sr_provider_001"
+          }
+        },
+        "required": [
+          "artifact_id"
+        ]
+      }
+    },
+    "containsFinancialModelingPrep": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "const": "financial_modeling_prep"
+          }
+        },
+        "required": [
+          "provider_id"
+        ]
+      }
+    },
+    "containsSecEdgar": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "provider_id": {
+            "const": "sec_edgar"
+          }
+        },
+        "required": [
+          "provider_id"
+        ]
+      }
+    },
+    "containsRightAlreadyProducedRawSampleRetention": {
+      "$ref": "#/$defs/containsRight_already_produced_raw_sample_retention"
+    },
+    "containsRightTrackedNoSecretSummary": {
+      "$ref": "#/$defs/containsRight_tracked_no_secret_summary"
+    },
+    "containsRightProductionRawStorage": {
+      "$ref": "#/$defs/containsRight_production_raw_storage"
+    },
+    "containsRightNormalizedDatahubStorage": {
+      "$ref": "#/$defs/containsRight_normalized_datahub_storage"
+    },
+    "containsRightDerivedReports": {
+      "$ref": "#/$defs/containsRight_derived_reports_or_factor_outputs"
+    },
+    "containsRightNonDisplayAnalyticalUse": {
+      "$ref": "#/$defs/containsRight_non_display_analytical_use"
+    },
+    "containsRightExportOrRedistribution": {
+      "$ref": "#/$defs/containsRight_export_or_redistribution"
+    },
+    "containsRightRetentionAfterPlanLapse": {
+      "$ref": "#/$defs/containsRight_retention_after_plan_lapse_or_account_change"
+    },
+    "containsRightBroaderFutureSampleCalls": {
+      "$ref": "#/$defs/containsRight_broader_or_future_sample_calls"
+    },
+    "containsRight_already_produced_raw_sample_retention": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "already_produced_raw_sample_retention"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_tracked_no_secret_summary": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "tracked_no_secret_summary"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_production_raw_storage": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "production_raw_storage"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_normalized_datahub_storage": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "normalized_datahub_storage"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_derived_reports_or_factor_outputs": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "derived_reports_or_factor_outputs"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_non_display_analytical_use": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "non_display_analytical_use"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_export_or_redistribution": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "export_or_redistribution"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_retention_after_plan_lapse_or_account_change": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "retention_after_plan_lapse_or_account_change"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsRight_broader_or_future_sample_calls": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "right_id": {
+            "const": "broader_or_future_sample_calls"
+          }
+        },
+        "required": [
+          "right_id"
+        ]
+      }
+    },
+    "containsStopCurrentTermsWebRefresh": {
+      "$ref": "#/$defs/containsStop_current_terms_web_refresh"
+    },
+    "containsStopLegalReview": {
+      "$ref": "#/$defs/containsStop_legal_review_or_terms_interpretation"
+    },
+    "containsStopProviderContactTrialPaid": {
+      "$ref": "#/$defs/containsStop_provider_contact_trial_or_paid_access"
+    },
+    "containsStopFutureProviderLiveProbe": {
+      "$ref": "#/$defs/containsStop_future_provider_live_or_network_probe"
+    },
+    "containsStopDatahubRunnerProductionStorage": {
+      "$ref": "#/$defs/containsStop_datahub_runner_or_production_storage"
+    },
+    "containsStopLiveNormalizedShipGate": {
+      "$ref": "#/$defs/containsStop_live_normalized_or_ship_gate_claim"
+    },
+    "containsStop_current_terms_web_refresh": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "current_terms_web_refresh"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    },
+    "containsStop_legal_review_or_terms_interpretation": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "legal_review_or_terms_interpretation"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    },
+    "containsStop_provider_contact_trial_or_paid_access": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "provider_contact_trial_or_paid_access"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    },
+    "containsStop_future_provider_live_or_network_probe": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "future_provider_live_or_network_probe"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    },
+    "containsStop_datahub_runner_or_production_storage": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "datahub_runner_or_production_storage"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    },
+    "containsStop_live_normalized_or_ship_gate_claim": {
+      "contains": {
+        "type": "object",
+        "properties": {
+          "stop_point_id": {
+            "const": "live_normalized_or_ship_gate_claim"
+          }
+        },
+        "required": [
+          "stop_point_id"
+        ]
+      }
+    }
+  }
+}

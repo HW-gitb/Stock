@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 license/storage rights classification schema)
+
+- **Verdict/Action**: PASS. `R-USSHORT-BATCH5-LICENSE-STORAGE-RIGHTS-CLASSIFICATION-SCHEMA-DRIFT` is fixed in the reviewed US-short batch5 offline license/storage/retention decision scope; the schema now rejects provider/right classification drift across the full FMP and SEC rights matrix. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw/current-terms/provider-contact/legal path ran.
+- **Required**: resolved; full closure evidence lives in `docs/system_risk_register.md`. `SR-PROVIDER-001` remains open for any future provider/live, current terms, legal/provider-contact, DataHub/runner consumption, production storage, live_normalized, or ship-gate boundary.
+- **Verify**: startup status/log checked; target license/storage schema tests 9 OK; batch5 target suites 82 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2327 OK; py_compile OK; direct mutant probe validated artifact `0` errors and rejected the six required FMP/SEC classification drift cases; private/raw path refs are gitignored; exact secret-token scan clean; `git diff --check` CRLF-only.
+- **Next**: Codex auto-commit reviewed slice.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 license/storage rights classification schema)
+
+- **Verdict/Action**: Fixed `R-USSHORT-BATCH5-LICENSE-STORAGE-RIGHTS-CLASSIFICATION-SCHEMA-DRIFT` in the working tree. The batch5 license/storage/retention decision schema now rejects provider/right classification drift across the full FMP and SEC rights matrix. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw/current-terms/provider-contact/legal path ran.
+- **Required**: working-tree repair complete; pending Codex review before closure/commit. `SR-PROVIDER-001` remains open for any broader provider/live, current terms, legal/provider-contact, DataHub/runner consumption, production storage, live_normalized, or ship-gate boundary.
+- **Verify**: TDD RED first reproduced 18 schema-accepted classification-drift mutants. After fix: target license/storage schema tests 9 OK; batch5 target suites 82 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2327 OK; py_compile OK; direct mutant probe rejected FMP production-storage, FMP retention, SEC production-storage, SEC retention, and both future-call drift cases.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=schema contract / provider-right classification traceback; B ripple=schema/test/register/session only; C reverse=18 classification-drift RED then GREEN; F no provider/live/network/raw/DataHub/production path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 license/storage/retention decision)
+
+- **Verdict/Action**: FAIL. The offline US-short batch5 license/storage/retention decision remains no-access/no-execution, but it cannot be accepted before repair because its schema accepts provider/right classification drift in the core rights matrix.
+- **Required**: `R-USSHORT-BATCH5-LICENSE-STORAGE-RIGHTS-CLASSIFICATION-SCHEMA-DRIFT` in `docs/system_risk_register.md`.
+- **Verify**: startup status/log checked; target license/storage schema tests 8 OK; batch5 target suites 81 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2326 OK; py_compile OK; `git diff --check` CRLF-only; direct schema mutant probe accepted FMP production-storage, SEC retention, and future-call classification drift with 0 errors. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw/current-terms/provider-contact/legal/raw call ran.
+- **Next**: Codex: 修复.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 license/storage/retention decision)
+
+- **Verdict/Action**: Executed the offline US-short batch5 license/storage/retention decision slice: added `schemas/us_short_batch5_license_storage_retention_decision.schema.json`, `docs/us_short_batch5_license_storage_retention_decision_20260625.json`, and adversarial schema tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, current terms refresh, provider contact, legal advice, raw-payload read/write, provider selection, live_normalized claim, or ship-gate claim ran.
+- **Required**: none opened in this execution. `SR-PROVIDER-001` remains open; future provider/live probes, current terms/legal/provider-contact work, broader raw retention, DataHub/runner consumption, production storage, live_normalized, and ship-gate work still need separate review and authorization where applicable.
+- **Verify**: TDD RED first failed on missing schema/artifact (8 failures). After GREEN: target license/storage schema tests 8 OK; batch5 target suites 81 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2326 OK; new test py_compile OK.
+- **Next**: Codex review this offline batch5 license/storage/retention decision scope before commit or any future provider/live/current-terms/DataHub/production boundary.
+- **Pre-Codex self-review**: proof-of-use: A class=license/storage/retention decision packet; B ripple=schema/doc/test/README/session only; C reverse=missing schema/artifact RED then GREEN plus scope-creep, production-storage, stop-point, and ship-gate mutants covered; F no provider/live/network/raw/DataHub/production path.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 incident-log writer)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH5-INCIDENT-WRITER-DUPLICATE-PARTIAL-WRITE` is fixed in the reviewed batch5 offline private incident-log writer scope. The writer rejects existing-internal duplicate ids, new-vs-existing duplicate ids, and corrupt existing JSONL before append/summary mutation. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, status polling, fallback execution, live_normalized claim, or ship-gate claim ran.
