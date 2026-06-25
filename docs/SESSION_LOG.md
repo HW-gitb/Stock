@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-25 - Codex `修复 + 审查 PASS` (US-short batch4 slice 4d-ii-n private write)
+
+- **Verdict/Action**: PASS. Codex re-reviewed the repaired private writer, found and fixed one same-class residual in the price-clock parser (duplicate same-line `decision_date` / body-only `price_clock:` marker), and found no remaining material Required in the reviewed US-short 4d-ii-n scope.
+- **Required**: `R-USSHORT-BATCH4-PRIVATE-WRITE-OFFICIAL-OUTPUT-GUARD-GAP` and `R-USSHORT-BATCH4-PRIVATE-WRITE-HANDOFF-COMMIT-DRIFT` are resolved; full detail and closure evidence live in `docs/system_risk_register.md`.
+- **Verify**: TDD RED first (2 expected private_write failures), then private_write 16 OK; adjacent private-path/action-table/weekend-report/machine-record/renderer 148 OK; full offline `*us_short*` 2213 OK; doc/route/README guards 52 OK; py_compile OK; direct probes reject spoofed / duplicate-date / body-only / mixed-root / extra-file cases and valid write stays two-file.
+- **Next**: PASS closeout owns the local commit; next actor command is `Claude Code：Pass`.
+- **Pre-Codex self-review**: proof-of-use: same-class sweep hardened rendered price-clock parsing, route row compressed under README cap, active handoff scan proves no obsolete submit command, no provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path ran.
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-n 私密写 官方输出门 3 gap + handoff drift)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，2 Required，judge 均成立+在 scope+必要）。**①OFFICIAL-OUTPUT-GUARD-GAP**（私密门 3 同类 gap）：(a) 周报验证从 substring 改为**解析渲染 price-clock 行**（恰 1 行、parse `decision_date=\d{8}`==canonical，旁注日期不蒙混）；(b) **预检全部路径**（三 path 先全过 §18.0 guard 再写、mixed root 零落盘）；(c) **only-two-files** fail-closed（weekly_private/<dd> 预存非官方文件拒、2 官方名覆盖）。**②HANDOFF-COMMIT-DRIFT**：N entry Next「PASS 后用户 提交」改 auto-commit 措辞（AGENTS §审查输出 PASS 后 Codex 自动提交）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-PRIVATE-WRITE-OFFICIAL-OUTPUT-GUARD-GAP` + `R-USSHORT-BATCH4-PRIVATE-WRITE-HANDOFF-COMMIT-DRIFT`。
+- **Verify**: private_write **14 OK**（+`AtomicAndContract` mixed-roots 零落盘·预存额外文件拒·官方文件覆盖 +`FailClosed` spoofed-report-date）。全离线 `*us_short*` **2211 OK** 零回归；doc/route/README guards 52 OK；py_compile OK；直接探针 3 Codex 案例（spoofed/partial/stale）全 fail-closed 零 partial；no-BOM；diff CRLF-only；leak 检查 git status 无私密 artifact。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-n（`engine/us_short_weekend_private_write.py`+测试；security-sensitive、纯/离线、不交叉 A 股）。重点：① 解析 price-clock 行验 decision_date（非 substring）；② 预检全部路径再写（mixed root 零 partial）；③ only-two-files fail-closed（预存额外拒、官方覆盖）；④ handoff 已改 auto-commit。findings 落 register。PASS 后 Codex auto-commit（不指示提交）；之后 O（端到端编排器）= 批4 周末 pipeline 工程闭环。
+- **Pre-Codex self-review**: A 整类（私密门 3 gap 一次扫净：price-clock 解析·路径预检·only-two-files，各对抗+正控 + handoff drift）；B 连带（复用 reject_nonprivate_output_path/write_action_table/flatten；preflight 全路径于写前；handoff 改 auto-commit、旧不 mass-rewrite）；C 反向（valid 写 3 文件/覆盖、仅 spoofed/mixed/extra/跨周 raise、零 partial+无 leak）；D N/A；E register 双 resolved+CURRENT 未动；F（写前预检原子+only-two-files+解析+probe+leak）。根因=security 私密门多 artifact 须解析验+原子预检+契约 fail-closed，[[feedback_whole_class_input_validation_sweep]]。
+
+## 2026-06-25 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-n private write)
+
+- **Verdict/Action**: FAIL. Private writer tests pass, but the official-output guard still accepts a spoofed weekly report date, can leave partial artifacts after a later path failure, and leaves pre-existing extra files in `weekly_private/<dd>` despite the only-two-files contract; the active handoff also still says PASS is followed by user `提交`.
+- **Required**: `R-USSHORT-BATCH4-PRIVATE-WRITE-OFFICIAL-OUTPUT-GUARD-GAP` and `R-USSHORT-BATCH4-PRIVATE-WRITE-HANDOFF-COMMIT-DRIFT` are open in `docs/system_risk_register.md`; full findings and repair boundaries live there.
+- **Verify**: target private_write 10 OK; adjacent private-path/action-table/weekend-report/machine-record/renderer suites 158 OK; full offline `*us_short*` 2207 OK; doc/route/README guards 52 OK; py_compile OK; direct probes reproduced accepted spoofed report date, partial write on mixed valid/invalid roots, and stale extra weekly file retention. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path ran.
+- **Next**: Claude Code：修复.
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-n 幂等私密写 + §18.0 P0 守卫)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-n（幂等私密写 + §18.0 P0 私密守卫；security-sensitive）。新 `engine/us_short_weekend_private_write.py`：`write_run_private(*, decision_date, machine_record, weekly_report_md, runs_private_root, weekly_private_root)` 把 run 官方 artifact 写到 gitignored 私密目录——机器层（flatten 后 §10 record = 全字段+原始分数+decision_trace+registry）→ `runs_private/<dd>/machine_record.json`；§11.1 weekly_private（**只** weekly_report.md + action_table.csv）→ `weekly_private/<dd>/`。**§18.0 P0 守卫**：每写前 `reject_nonprivate_output_path`（相对/非 gitignored in-repo/git-check 失败 → PrivatePathError，写前无副作用）；action_table.csv 复用 renderer `write_action_table`（同 §18.0 guard + render flatten 后 record 出填充 CSV）。**幂等**（§2.1 重跑不重复）：dd 键=目录、重跑覆盖非追加。**多 artifact 对账同一 run**（整类教训）：flatten 经 m1 §10/§6 gate、dd == machine_record.as_of、weekly_report 须含 `decision_date=<dd>`（price clock ④），跨周拒。N 不 emit §9 故不入 action/reason guard。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: private_write **10 OK**（3 artifact 写入 + weekly_private 只 2 文件 + 机器层/CSV/md 内容 + 幂等重跑覆盖不重复 + §18.0 拒相对/in-repo-nonignored[写前无副作用] + reconcile dd≠as_of/跨周周报/空 report/malformed record fail-closed）。全离线 `*us_short*` **2207 OK** 零回归；doc/route/README guards 52 OK（n 行 ≤350）；py_compile OK；no-BOM；diff CRLF-only；leak 检查 git status 无私密 artifact。
+- **Next**: Codex `审查` 批4 slice 4d-ii-n（`engine/us_short_weekend_private_write.py`+测试+README 一行；纯/离线[仅私密文件写]、不交叉 A 股；**security-sensitive=聚焦审 §18.0 私密守卫**）。重点：① 每写前 `reject_nonprivate_output_path` §18.0 P0（相对/非 gitignored in-repo/git-check 失败拒、写前无副作用）；② §11.1 路径分层（机器层→runs_private、weekly_private 只 2 文件）；③ 幂等 dd 键重跑覆盖不重复；④ 多 artifact 对账同一 run（flatten m1 gate + dd==machine as_of + 周报含 dd、跨周拒）；⑤ action_table.csv 复用 write_action_table（同 §18.0 + 填充）；⑥ N 不 emit §9 不入 guard。findings 落 register。PASS 后 Codex auto-commit（审查 PASS 后 Codex 自动提交已审查工作树，不指示 Claude/用户 `提交`）；之后 O（端到端编排器）= 批4 周末 pipeline 工程闭环。
+- **Pre-Codex self-review**: A 整类（happy 3 写入/weekly 只 2/内容/幂等 + §18.0 拒相对·in-repo + reconcile dd·跨周·空·malformed，各对抗+正控）；B 连带（复用 reject_nonprivate_output_path[§18.0 单源]+write_action_table[renderer §18.0+render]+flatten_machine_record[m1 gate]；私密目录已 gitignored[git check-ignore 证]；新模块仅 O 消费；README≤350；N 不 emit §9 不入 guard）；C 反向（valid 写 3 文件、幂等不重复、仅非私密/跨周/畸形 raise；leak 检查无 tracked 私密物）；D N/A；E README 薄指针单态、CURRENT §0 已 settle m2（n draft 未动 §0）；F（§18.0 写前 guard 无副作用+幂等覆盖+多 artifact 对账+no-BOM/diff+leak 检查）。根因=§11 私密落盘 security-sensitive，多 artifact 边界对账同一 run + §18.0 fail-closed，[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `审查 PASS` (US-short batch4 slice 4d-ii-m2 source-reconciliation)
 
 - **Verdict/Action**: PASS. Residual module docstring/deleted-symbol guard is fixed; m2 source-reconciliation remains fail-closed; PASS-covered files are owned by Codex auto-commit closeout.
