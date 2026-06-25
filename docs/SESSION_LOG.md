@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-25 - Codex `审查 PASS` (US-short batch4 slice 4d-ii-m2 source-reconciliation)
+
+- **Verdict/Action**: PASS. Residual module docstring/deleted-symbol guard is fixed; m2 source-reconciliation remains fail-closed; PASS-covered files are owned by Codex auto-commit closeout.
+- **Required**: `R-USSHORT-BATCH4-WEEKLY-REPORT-SOURCE-RECONCILIATION-GAP` — resolved; full Required/closure evidence in `docs/system_risk_register.md`.
+- **Verify**: target report 19 OK; adjacent report/lifecycle/render/price/exclusion/hot_excluded/coverage/observe/K/L/action_table/schema 295 OK; full offline `*us_short*` 2197 OK; doc/route/README guards 52 OK; py_compile OK; direct probes rejected six bad source/old-key cases and valid hot count rendered; diff checks clean except CRLF/gitignore warnings; no BOM/FFFD.
+- **Next**: PASS closeout owns the local commit; next actor command is `Claude Code：Pass`.
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-m2 source-reconciliation 残留：module docstring + deleted-symbol 测试)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL` 残留，1 Required，judge 成立——功能 reconciliation 有效，但我漏扫**被改文件自己的 module docstring**：顶部 bullet 仍写已删双源契约「banner⑤←report_context hot_excluded summary」，正是 [[feedback_draft_validity_gates_complete]] 点名却仍漏的面）。修：① docstring bullet 改为 banner⑤ 从 exclusion_data['hot_excluded'] 单源派生；② 加专门 deleted-symbol 测试拒旧 `hot_excluded_summary` key（强于泛 EXTRA）。B-ripple grep 全 m2 文件零活动残留（README/CURRENT 命中=批3 helper、合法）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKLY-REPORT-SOURCE-RECONCILIATION-GAP`（含残留）。
+- **Verify**: report **19 OK**（+deleted-symbol 旧 hot_excluded_summary key 拒）。全离线 `*us_short*` **2197 OK** 零回归；doc/route/README guards 52 OK；py_compile OK；m2 module docstring stale-phrase grep 空；no-BOM；diff CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-m2 残留（`engine/us_short_weekend_report.py` docstring + `tests/test_us_short_weekend_report.py`；纯 docs/test、不交叉 A 股）。重点：① m2 docstring banner⑤ 改单源（exclusion_data 派生、无 report_context summary）；② deleted-symbol 测试拒旧 key；③ 功能 reconciliation 上轮已 PASS、未动。findings 落 register。PASS 后用户 `提交`；之后 N→O。
+- **Pre-Codex self-review**: A 整类（hot_excluded 单源措辞全活动面扫净：module docstring 已修、code/_REPORT_CONTEXT_KEYS comment 上轮已对、test 加 deleted-symbol guard）；B 连带（B-ripple grep 跨 m2 module/test/README/CURRENT 贴零活动残留；README/CURRENT 命中=批3 helper 豁免；功能 code 未动）；C 反向（旧 key 拒、valid 仍渲染、19 全绿）；D N/A；E register resolved+CURRENT 未动；F（docstring+test、grep 证零残留、no-BOM/diff）。根因=上轮 B-ripple 漏扫被改文件自身 module docstring（[[feedback_draft_validity_gates_complete]] 已点名却仍漏=执行面），本次全活动面扫净+grep 证据。
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch4 slice 4d-ii-m2 source-reconciliation re-review)
+
+- **Verdict/Action**: FAIL. Functional source-reconciliation repair passes, but one active m2 module docstring still names the deleted separate `report_context hot_excluded summary` source.
+- **Required**: `R-USSHORT-BATCH4-WEEKLY-REPORT-SOURCE-RECONCILIATION-GAP` remains open in `docs/system_risk_register.md`; full residual and closure condition are in the register.
+- **Verify**: target report 18 OK; adjacent report/lifecycle/render/price/exclusion/hot_excluded/coverage/observe/K/L/action_table/schema 295 OK; full offline `*us_short*` 2196 OK; doc/route/README guards 52 OK; `py_compile` OK; direct probes reject price/lifecycle/readiness/exclusion date mismatches, inconsistent readiness, and the old `hot_excluded_summary` input. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path ran.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-m2 §11.2 周报 source-reconciliation 整类)
+
+- **Verdict/Action**: 收到 `修复`（Codex `review FAIL`，1 Required，judge=成立+在 scope+必要——同 consumer-validation 整类新面：m2 首个同时持多份官方 artifact 却没对账它们属同一 run）。整类修 3 处：① **canonical decision_date 对账**——price_clock/lifecycle/readiness.as_of/exclusion_data.as_of 须全 == 机器记录 as_of，否则 fail-closed（堵跨周拼接）；② **readiness 单源**改用 `_assert_readiness`（全契约 due_count/ids/upgrade⊆due）不只 shape；③ **hot_excluded 单源**——删 hot_excluded_summary key，banner⑤ 与 §9 同源 `build_exclusion_summary`（§18.1#19）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-WEEKLY-REPORT-SOURCE-RECONCILIATION-GAP`。
+- **Verify**: report **18 OK**（+`SourceReconciliation` price_clock/lifecycle/exclusion decision 不一致·readiness 内部不一致·hot_excluded 单源一致·valid same-date 正控）。全离线 `*us_short*` **2196 OK** 零回归；doc/route/README guards 52 OK；py_compile OK；直接探针 4 类 reconcile 坏输入全 fail-closed（原渲染）+ valid same-date 渲染；no-BOM；diff CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-m2 source-reconciliation（`engine/us_short_weekend_report.py`+测试；纯/离线、不交叉 A 股；边界=仅 m2+测试/docs，被调模块只 import 未改）。重点：① canonical decision_date 全 artifact 对账（machine as_of 基准）；② readiness 单源 `_assert_readiness` re-assert；③ hot_excluded 单源（exclusion_data 派生 banner⑤+§9、删 hot_excluded_summary key）；④ 4 类 Codex probe 全 fail-closed + valid same-date 正控。findings 落 register。PASS 后用户 `提交`；之后 N（幂等私密写+§18.0 守卫）→ O（端到端编排器）= 批4 闭环。
+- **Pre-Codex self-review**: A 整类（reconcile 三面一次扫净：decision_date 跨 artifact·readiness 内部·hot_excluded 单源，各对抗+正控）；B 连带（复用 `_assert_readiness`+`build_exclusion_summary`+`flatten_machine_record`；删 hot_excluded_summary key→report_context −1；被调模块只 import；新模块仅 O 消费）；C 反向（valid same-date 全节渲染+banner 一致，仅跨周/不一致 raise）；D N/A；E register resolved+CURRENT 未动；F（canonical 对账+单源 re-assert+probe 4 例+diff）。根因=多 artifact 官方边界须对账同一 run，[[feedback_whole_class_input_validation_sweep]]。
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch4 slice 4d-ii-m2 weekly_report assembly)
+
+- **Verdict/Action**: FAIL. m2 assembles and renders §11.2, but the official report boundary accepts cross-week / inconsistent source artifacts.
+- **Required**: `R-USSHORT-BATCH4-WEEKLY-REPORT-SOURCE-RECONCILIATION-GAP` is open in `docs/system_risk_register.md`; full details and probes are in the register.
+- **Verify**: target report 12 OK; full offline `*us_short*` 2190 OK; `py_compile` OK; direct probes show accepted price_clock/machine/lifecycle/exclusion date mismatches, inconsistent lifecycle readiness, and hot_excluded banner/detail mismatch. No provider/live/DataHub path ran.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-m2 §11.2 周报 report_data 装配 + render)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-m2（§11.2 周报装配 + render；M 拆 m1/m2 之 m2）。新 `engine/us_short_weekend_report.py`：`build_weekly_report(machine_record, lifecycle_result, *, report_context)` 装配 §11.2 report_data（13 节 + 诚实横幅①③④⑤[②可选] + lifecycle 数量对账）再 `render_weekly_report`。**派生**（从 K 机器记录经 m1 `flatten_machine_record` 拿 §11.3 扁平列）：§5 操作表一眼表/§6 持仓复核/§7 Top15/§8 观察池 行级节 + banner①（observe 行聚合 `aggregate_observe_split`）+ §3 regime（per-row carry）；**接 L** readiness：§12 lifecycle 提醒 + section_1/12 数量对账（=due_count）+ banner③（ship-gate + 升级可评估数）；**wire formatter**：§9 exclusion（`build_exclusion_summary`→`render_exclusion_section`）、§6 §11.5 coverage（`build_row_coverage`→`render_coverage_section`）、banner⑤（`render_hot_excluded_banner`）；**注入** closed-world `report_context`（price_clock④ + 编辑节 §2/§4/§10/§11 + theme_opportunity_state③ + macro②）。**consumer-validation**（本会话整类教训：RE-EMIT 官方周报须验输入）：report_context closed-world 精确键、lifecycle_result re-validate shape、machine record 经 m1 §10/§6 gate、formatter/renderer 自验。**m2 不入 action/reason guard**（不 emit §9 pair、只读经 m1 已验的机器记录）。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: report **12 OK**（渲染 13 节全有内容 + price_clock④ + ①③⑤ banner tag 匹配契约真渲染[md-contains] + 数量对账 section_1==12==due_count + due 项 surfaced §12 + 行级节派生 AAA/HLD/OBS + 不clean节反映 coverage gap + ② present 渲/blank 省；fail-closed report_context 非 closed-world/lifecycle 坏/coverage 坏/editorial 空白/price_clock 不合 §21）。全离线 `*us_short*` **2190 OK** 零回归；doc/route/README guards 52 OK（m2 行 329）；py_compile OK；no-BOM；diff CRLF-only。
+- **Next**: Codex `审查` 批4 slice 4d-ii-m2（`engine/us_short_weekend_report.py`+测试+README 一行；纯/离线、不交叉 A 股）。重点：① report_context closed-world value-validate + lifecycle_result re-validate（RE-EMIT 官方周报须验输入，本会话整类教训 K×2/m1）；② 13 节装配——行级节派生自 m1 flatten 的 §11.3 列、formatter wire（exclusion/coverage/hot_excluded/observe_split 自验）、L readiness 喂 §12+数量对账+banner③；③ banner tag 与冻结 weekly_report_contract 匹配（renderer 仅强校 price_clock④/section content/count；①②③⑤ tag 漂移则 renderer **静默省**→已加 md-contains 断言钉）；④ m2 不 emit §9 故不入 action/reason guard（读经 m1 已验记录）；⑤ 编辑节/provider_health 等不可派生输入注入（batch4 fixture、batch5 真）。findings 落 register。PASS 后用户 `提交`；之后 N（幂等私密写+§18.0 守卫）→ O（端到端编排器）。
+- **Pre-Codex self-review**: A 整类（happy 渲染全节/banner/计数/行级派生/不clean + fail-closed report_context·lifecycle·coverage·editorial·price_clock，各对抗+正控）；B 连带（复用 render_weekly_report[§11.2 单源 renderer]+observe_split/exclusion/hot_excluded/coverage formatter[自验]+flatten_machine_record[m1 §10/§6 gate]+validate_price_clock；report_context closed-world；新模块仅 O 后续消费；README≤350；m2 不 emit §9 不入 guard）；C 反向（valid 全节渲染+banner present、② blank 省、仅畸形 raise）；D N/A；E README 薄指针单态、CURRENT §0 已 settle m1（m2=draft 未动 §0）；F（report_context closed-world+lifecycle re-validate+formatter/renderer 自验+banner tag md-contains 钉+no-BOM/diff）。根因=§11.2 输出面装配，RE-EMIT 官方周报须 value-validate 输入，[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `修复 + review PASS` (US-short batch4 slice 4d-ii-m1 action_table price contract)
 
 - **Verdict/Action**: PASS. Codex repaired and strictly re-reviewed the m1 executable price projection contract; no remaining material Required found in reviewed scope.
