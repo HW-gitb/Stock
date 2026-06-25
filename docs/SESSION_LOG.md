@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-06-25 - Codex `修复 + review PASS` (US-short batch4 slice 4d-ii-m1 action_table price contract)
+
+- **Verdict/Action**: PASS. Codex repaired and strictly re-reviewed the m1 executable price projection contract; no remaining material Required found in reviewed scope.
+- **Required**: resolved `R-USSHORT-BATCH4-ACTION-TABLE-PROJECTION-PRICE-CONTRACT-GAP`; full detail and closure evidence are in `docs/system_risk_register.md`.
+- **Verify**: RED target failed 5 expected cases before fix; after fix m1 26 OK, m1+action-reason 42 OK, adjacent price/render/paper/no-dangling 155 OK, schema 50 OK, full offline `*us_short*` 2178 OK, doc guards 52 OK, direct probes reject residuals. No provider/live/DataHub.
+- **Next**: Claude Code: Pass.
+- **Pre-Codex self-review**: proof-of-use: TDD RED first, then one m1 boundary repair; same-class sweep covered candidate fixed fields and holding post-round status; full detail stays in register.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch4 slice 4d-ii-m1 action_table projection re-review)
+
+- **Verdict/Action**: FAIL. Original empty/nonnumeric probes now reject, but executable candidate rows can still omit fixed fields (`order_expiry`, `gap_policy`, RR status fields) and render blank official CSV cells.
+- **Required**: `R-USSHORT-BATCH4-ACTION-TABLE-PROJECTION-PRICE-CONTRACT-GAP` remains open in `docs/system_risk_register.md`; full re-review detail is in the register.
+- **Verify**: target m1/action-reason 38 OK; full offline `*us_short*` 2174 OK; doc guards 52 OK before this compression; `py_compile` OK; probes: old bad cases reject, fixed-field omissions still accept blank; BOM/FFFD and diff checks OK. No provider/live/DataHub path ran.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-m1 §11.3 价格投影契约 整类)
+
+- **Verdict/Action**: 收到 `修复`（Codex `review FAIL`，1 Required，judge=成立+在 scope+必要——同 consumer-validation 整类：m1 把 `price.action_fields` RE-EMIT 成官方 §11.3 CSV，只按键升+信任 §10 validator，而它只验 field_records+enum、不验 §6 价格契约）。整类修：加 fail-closed `_validate_price_projection` 在升列前——① present 价格/RR 列须有限数（拒非数值/NaN）；② executable 行按行类验 §6 契约（candidate/holding 各必填集+engine/sub_mode 匹配），空/partial 不得渲染成有动作+股数却空 entry/stop/RR；③ 非 executable 观察 partial 合法。单源+三角校验。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-ACTION-TABLE-PROJECTION-PRICE-CONTRACT-GAP`。
+- **Verify**: action_table **22 OK**（+`PriceContractFailClosed` 空 build/holding af·缺各必填·非数值 price·RR·NaN·坏 engine/sub_mode·holding-sub_mode + 正控 pullback/breakout build·holding no-target·非执行 partial·optional-None 留空；+`Triangulation` required⊆engine 列）+ action/reason guard 16。全离线 `*us_short*` **2174 OK** 零回归；doc/route/README guards 52 OK；py_compile OK；直接探针 空 af build/holding + 非数值 valid_entry_high/RR **全 fail-closed**（原渲染进官方 CSV）+ valid build 仍填充；no-BOM；diff CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-m1 价格契约（`engine/us_short_weekend_action_table.py`+测试；纯/离线、不交叉 A 股；边界=仅 m1+测试/docs，price engine/renderer 只 import 未改）。重点：① 升 price 列前 `_validate_price_projection` 按行类验 §6 契约（present 数值+executable 必填集）；② 单源 PRICE_ENGINES/SUB_MODES+required⊆engine 列三角+row_source_to_context；③ Codex 3 类 probe 全 fail-closed+正控仍 clean。findings 落 register。PASS 后用户 `提交`；之后 m2→N→O。
+- **Pre-Codex self-review**: A 整类（price 投影一次扫净：空/partial·缺必填·非数值·坏 engine/sub_mode 对抗+正控，非逐腿）；B 连带（单源 PRICE_ENGINES/SUB_MODES+row_source_to_context；required⊆engine 列三角；据引擎 executable 路径 grounded；fixture 补 limit_order_price；engine/renderer 只 import）；C 反向（valid build/holding/非执行 partial/optional-None clean，仅空/garbage executable raise）；D N/A；E register resolved+CURRENT 未动；F（数值+必填+三角+probe+diff）。根因=m1 RE-EMIT 官方 CSV 须 value-validate §6 价格契约，[[feedback_whole_class_input_validation_sweep]]。
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch4 slice 4d-ii-m1 action_table projection)
+
+- **Verdict/Action**: FAIL. m1 projects K's rich `price.action_fields` into the official §11.3 action_table, but it does not validate the executable price-field contract before rendering.
+- **Required**: `R-USSHORT-BATCH4-ACTION-TABLE-PROJECTION-PRICE-CONTRACT-GAP` is open in `docs/system_risk_register.md`.
+- **Verify**: target m1/action-reason suites 27 OK; full offline `*us_short*` 2163 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probes reproduce accepted empty build/holding `action_fields` and nonnumeric price/RR cells in rendered CSV; no provider/live/DataHub path ran.
+- **Next**: Claude Code: 修复.
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-m1 §11.3 action_table 投影)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-m1（§11.3 action_table 输出投影）。**M 自决拆 m1/m2**（实证依据）：K 机器记录行携带**嵌套** rich layer（price.action_fields/sizing dict），但 §11.3 CSV 按扁平列名 `r.get(col)` 取值→直接探针确认列**全空**（entry_plan/valid_entry_high/order_type/model_position_size_shares…）。新 `engine/us_short_weekend_action_table.py`：`flatten_machine_record` 把 rich layer 投影到扁平 §11.3 列（price.action_fields 键=列名直升 + sizing.desired_model_shares→model_position_size_shares），无 v1 源列留空（不编造）；`build_action_table`=render_action_table(flatten(...))。投影后 re-validate §10-clean fail-closed（升非法 locked-enum 被 §10 validator 拒）。单源：列集 `action_table_columns()` + §9 `action_reason_error` + canonical ticker + dup；入 action/reason guard。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行 + guard 扩 m1）。
+- **Verify**: action_table **13 OK**（price 列升/shares 升/rich+field_records 保留/§10-clean/holding/CSV 填充[entry_plan·valid_entry_high·model_shares 非空]/无源列留空/多行/fail-closed 坏 record·§9·非规范·dup·升非法 enum）+ action/reason guard 16。全离线 `*us_short*` **2163 OK** 零回归；doc/route/README guards 52 OK（m1 行 ≤350）；py_compile OK；直接探针 CSV 现填充（原 K 记录列全空）；no-BOM；diff CRLF-only。
+- **Next**: Codex `审查` 批4 slice 4d-ii-m1（`engine/us_short_weekend_action_table.py`+测试+README 一行+guard 扩；纯/离线、不交叉 A 股）。重点：① price.action_fields 键(=§11.3 列名)直升 + sizing→model_position_size_shares、无 v1 源列留空不编造；② 投影后 re-validate §10-clean（render_action_table 单源 validator，升非法 locked-enum 拒）；③ 单源（action_table_columns/action_reason_error/canonical/dup）+入 guard；④ rich layer+field_records 保留、market_risk_regime 非 §11.3 列(K traceback carry)。findings 落 register。PASS 后用户 `提交`；之后 m2（§11.2 周报 report_data 装配[13 节+banner、wire observe_split/exclusion/hot_excluded/coverage + L readiness]+render）→ N → O。
+- **Pre-Codex self-review**: A 整类（升列/shares/保留/§10-clean/holding/CSV 填充/无源留空/fail-closed 坏 record·§9·canonical·dup·升非法 enum，各对抗+正控）；B 连带（复用 render_action_table[§10 单源 validator]+action_table_columns[列集单源]+action_reason_error+canonical_us_ticker；入 guard[consuming+bad-pair+stale]；README ≤350；新模块仅 O 后续消费）；C 反向（合法投影 CSV 填充+§10-clean、无源列空、仅畸形/非法 enum raise）；D N/A；E README 薄指针单态、CURRENT §0 已 settle K/L（m1=draft 未动 §0）；F（投影后 render_action_table re-validate 单源、no-BOM/diff）。根因=K 嵌套 rich layer 需投影到 §11.3 扁平列方能渲染 CSV（实证空格），[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch4 slice 4d-ii-k/l machine_record + lifecycle eval)
 
 - **Verdict/Action**: PASS. Reviewed the current worktree for US-short batch4 slice 4d-ii-k/l after the position-trace repair. No new material Required; `R-USSHORT-BATCH4-MACHINE-RECORD-POSITION-TRACE-VALIDATION-GAP` is resolved.

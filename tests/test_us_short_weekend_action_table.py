@@ -1,0 +1,269 @@
+# -*- coding: utf-8 -*-
+"""Tests for US-short weekend §11.3 action_table projection (batch4 slice 4d-ii-m1).
+
+Covers: the rich machine layer (price.action_fields / sizing) is projected onto the flat §11.3 columns so the
+action_table.csv renders POPULATED (the columns that a non-flattened machine record left empty); columns with
+no v1 source stay empty (honest, not fabricated); the rich layer + field_records are preserved and the
+projection stays §10-clean; and fail-closed on a malformed record, a bad §9 pair, a non-canonical / duplicate
+ticker, and a projection that would lift an illegal design-locked enum. Pure/offline; no provider/live; no
+A-share crossing.
+"""
+import sys
+import unittest
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+import engine.us_short_weekend_action_table as at  # noqa: E402
+import engine.us_short_weekend_machine_record as mr  # noqa: E402
+from engine.us_short_action_rank import action_group as _ag  # noqa: E402
+from engine.us_short_no_dangling_validator import validate_machine_record  # noqa: E402
+from engine.us_short_price_engine import HOLDING_COLUMNS, NEW_ENTRY_COLUMNS  # noqa: E402
+
+_AS_OF = "20260112"
+_CANDIDATE_AF = {
+    "order_type": "pullback_limit", "entry_plan": "pullback", "pullback_entry_price": 99.0,
+    "breakout_entry_price": None, "limit_order_price": 101.0, "valid_entry_low": 99.0, "valid_entry_high": 101.0,
+    "order_expiry": "first_regular_session_only", "gap_policy": "limit_band_first_session_no_chase",
+    "effective_support": 98.0, "effective_resistance": 110.0, "structure_quality": "strong",
+    "stop_clear_price": 98.0, "take_profit_reduce_price": 105.0, "take_profit_exit_price": 110.0,
+    "risk_reward_ratio": 2.0, "min_rr_gate_status": "pass", "post_round_rr_status": "ok",
+    "price_engine_used": "support_atr_engine", "price_sub_mode": "pullback",
+}
+_HOLDING_AF = {
+    "stop_clear_price": 95.0, "take_profit_reduce_price": 108.0, "take_profit_exit_price": 115.0,
+    "risk_reward_ratio": 1.8, "post_round_rr_status": "ok",
+    "price_engine_used": "holding_exit_engine", "price_sub_mode": None,
+}
+
+
+def _machine_record(rows):
+    return mr.assemble_machine_record({"regime": {"market_risk_regime": "进攻"}, "rows": rows}, as_of=_AS_OF)
+
+
+def _candidate(ticker="AAA", action_fields=None, executable=True, final_action="建仓",
+               observe_reason_type=None, sized=True):
+    row = {"ticker": ticker, "row_source": "top15_candidate", "final_action": final_action,
+           "observe_reason_type": observe_reason_type, "row_context": "candidate", "selection_rank": 1,
+           "action_rank": 1, "action_group": _ag(final_action),
+           "veto": {"veto_tier": "none", "row_context": "candidate"},
+           "price": {"executable": executable, "trace": {},
+                     "action_fields": _CANDIDATE_AF if action_fields is None else action_fields},
+           "score": {"core_score": 50.0}}
+    if sized:
+        row["sizing"] = {"status": "sized", "desired_model_shares": 10}
+    return row
+
+
+def _holding(ticker="HLD"):
+    return {"ticker": ticker, "row_source": "holding_pass2_only", "final_action": "持有",
+            "observe_reason_type": None, "row_context": "holding", "selection_rank": None,
+            "action_rank": 1, "action_group": 4, "veto": {"veto_tier": "none", "row_context": "holding"},
+            "price": {"executable": True, "trace": {"breached": False}, "action_fields": _HOLDING_AF}}
+
+
+def _cells(table, ticker="AAA"):
+    cols = table["columns"]
+    tix = cols.index("ticker")
+    row = next(r for r in table["rows"] if r[tix] == ticker)
+    return {c: row[i] for i, c in enumerate(cols)}
+
+
+class Projection(unittest.TestCase):
+    def test_price_columns_lifted(self):
+        flat = at.flatten_machine_record(_machine_record([_candidate()]))
+        r0 = flat["rows"][0]
+        for col in ("order_type", "entry_plan", "valid_entry_high", "stop_clear_price",
+                    "take_profit_reduce_price", "risk_reward_ratio", "order_expiry", "gap_policy",
+                    "min_rr_gate_status", "post_round_rr_status", "price_engine_used", "price_sub_mode"):
+            self.assertEqual(r0[col], _CANDIDATE_AF[col])
+
+    def test_sizing_shares_lifted(self):
+        flat = at.flatten_machine_record(_machine_record([_candidate()]))
+        self.assertEqual(flat["rows"][0]["model_position_size_shares"], 10)
+
+    def test_rich_layer_and_field_records_preserved(self):
+        flat = at.flatten_machine_record(_machine_record([_candidate()]))
+        r0 = flat["rows"][0]
+        self.assertIsInstance(r0["price"], dict)          # rich layer kept
+        self.assertIn("field_records", r0)                # §10 registry kept
+        self.assertTrue(validate_machine_record(flat)["clean"])
+
+    def test_holding_flattens(self):
+        flat = at.flatten_machine_record(_machine_record([_holding()]))
+        r0 = flat["rows"][0]
+        self.assertEqual(r0["price_engine_used"], "holding_exit_engine")
+        self.assertIsNone(r0["price_sub_mode"])           # holding is not pullback/breakout
+        self.assertEqual(r0["stop_clear_price"], 95.0)
+        self.assertEqual(r0["post_round_rr_status"], "ok")
+
+
+class CsvPopulated(unittest.TestCase):
+    def test_action_table_cells_populated(self):
+        table = at.build_action_table(_machine_record([_candidate()]))
+        cells = _cells(table)
+        for col in ("entry_plan", "valid_entry_high", "order_type", "model_position_size_shares",
+                    "take_profit_reduce_price", "stop_clear_price", "risk_reward_ratio", "order_expiry",
+                    "gap_policy", "min_rr_gate_status", "post_round_rr_status"):
+            self.assertTrue(cells[col], f"{col} should be populated, got empty")
+        self.assertEqual(cells["valid_entry_high"], "101.0")
+        self.assertEqual(cells["model_position_size_shares"], "10")
+        self.assertEqual(cells["order_expiry"], "first_regular_session_only")
+        self.assertEqual(cells["gap_policy"], "limit_band_first_session_no_chase")
+        self.assertEqual(cells["min_rr_gate_status"], "pass")
+        self.assertEqual(cells["post_round_rr_status"], "ok")
+
+    def test_unsourced_columns_stay_empty(self):
+        # columns with no v1 pipeline source must stay EMPTY (honest, not fabricated)
+        cells = _cells(at.build_action_table(_machine_record([_candidate()])))
+        for col in ("macro_cluster", "overextension_state", "coverage_status", "live_permission_status",
+                    "model_position_size_amount"):
+            self.assertEqual(cells[col], "")
+
+    def test_multiple_rows(self):
+        table = at.build_action_table(_machine_record([_candidate("AAA"), _holding("HLD")]))
+        self.assertEqual(len(table["rows"]), 2)
+        self.assertTrue(_cells(table, "AAA")["entry_plan"])
+        self.assertTrue(_cells(table, "HLD")["stop_clear_price"])
+
+
+class FailClosed(unittest.TestCase):
+    def test_malformed_record_rejected(self):
+        for bad in (None, {}, {"rows": "x"}, {"rows": [None]}):
+            with self.assertRaises(at.WeekendActionTableError):
+                at.flatten_machine_record(bad)
+
+    def test_bad_action_reason_pair_rejected(self):
+        bad = {"schema_name": "us_short_machine_record_contract", "schema_version": "1.0.0", "as_of": _AS_OF,
+               "rows": [{"ticker": "AAA", "row_source": "top15_candidate", "final_action": "观察",
+                         "observe_reason_type": "BANANA"}]}
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(bad)
+
+    def test_noncanonical_and_duplicate_ticker_rejected(self):
+        base = {"final_action": "持有", "observe_reason_type": None, "row_source": "holding_account_only"}
+        with self.assertRaises(at.WeekendActionTableError):   # A-share code
+            at.flatten_machine_record({"rows": [{**base, "ticker": "600519"}]})
+        with self.assertRaises(at.WeekendActionTableError):   # duplicate canonical identity
+            at.flatten_machine_record({"rows": [{**base, "ticker": "AAA"}, {**base, "ticker": "aaa"}]})
+
+    def test_illegal_lifted_enum_fails_closed(self):
+        # an action_fields with an ILLEGAL order_type rides nested through K (which does not check action_fields
+        # internals), but flattening lifts it to the order_type COLUMN where the §10 validator rejects it.
+        bad_af = {**_CANDIDATE_AF, "order_type": "ILLEGAL_TYPE"}
+        rec = _machine_record([_candidate(action_fields=bad_af)])
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(rec)
+
+
+class PriceContractFailClosed(unittest.TestCase):
+    """R-USSHORT-BATCH4-ACTION-TABLE-PROJECTION-PRICE-CONTRACT-GAP: an executable row whose price is lifted into
+    the official §11.3 CSV must carry the §6 price-engine contract — empty / partial / nonnumeric action_fields
+    can never render a blank or garbage entry/stop/RR while still showing an action + size."""
+
+    def _reject(self, rec):
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(rec)
+
+    def test_executable_build_empty_action_fields_rejected(self):
+        self._reject(_machine_record([_candidate(action_fields={})]))
+
+    def test_build_missing_critical_field_rejected(self):
+        for drop in ("stop_clear_price", "valid_entry_high", "limit_order_price", "take_profit_reduce_price",
+                     "risk_reward_ratio", "entry_plan", "order_expiry", "gap_policy", "min_rr_gate_status",
+                     "post_round_rr_status"):
+            af = {k: v for k, v in _CANDIDATE_AF.items() if k != drop}
+            self._reject(_machine_record([_candidate(action_fields=af)]))
+
+    def test_nonnumeric_price_or_rr_rejected(self):
+        for col, bad in (("valid_entry_high", "BAD_PRICE"), ("stop_clear_price", "X"),
+                         ("risk_reward_ratio", "NOT_NUMERIC"), ("limit_order_price", float("nan"))):
+            self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, col: bad})]))
+
+    def test_bad_price_engine_or_sub_mode_rejected(self):
+        self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, "price_engine_used": "holding_exit_engine"})]))
+        self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, "price_sub_mode": "BANANA"})]))
+
+    def test_build_bad_fixed_execution_status_fields_rejected(self):
+        for col, bad in (("order_expiry", "multi_day_gtc"), ("gap_policy", "chase_gap_open"),
+                         ("min_rr_gate_status", "fail_below_floor"),
+                         ("post_round_rr_status", "broke_after_round")):
+            self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, col: bad})]))
+
+    def test_executable_holding_empty_action_fields_rejected(self):
+        h = _holding()
+        h["price"]["action_fields"] = {}
+        self._reject(_machine_record([h]))
+
+    def test_holding_with_sub_mode_rejected(self):
+        h = _holding()
+        h["price"]["action_fields"] = {**_HOLDING_AF, "price_sub_mode": "pullback"}   # holding is not pullback/breakout
+        self._reject(_machine_record([h]))
+
+    def test_holding_missing_or_bad_post_round_status_rejected(self):
+        h = _holding()
+        h["price"]["action_fields"] = {k: v for k, v in _HOLDING_AF.items() if k != "post_round_rr_status"}
+        self._reject(_machine_record([h]))
+        h = _holding()
+        h["price"]["action_fields"] = {**_HOLDING_AF, "post_round_rr_status": "BANANA"}
+        self._reject(_machine_record([h]))
+
+    def test_non_breached_holding_ok_status_requires_target_and_rr(self):
+        af = {**_HOLDING_AF, "take_profit_reduce_price": None, "take_profit_exit_price": None,
+              "risk_reward_ratio": None, "post_round_rr_status": "ok"}
+        h = _holding()
+        h["price"]["action_fields"] = af
+        self._reject(_machine_record([h]))
+
+    # --- positive controls: valid payloads + legitimate optional/None columns pass ---
+    def test_valid_breakout_build_passes(self):
+        af = {**_CANDIDATE_AF, "order_type": "breakout_stop_limit", "entry_plan": "breakout",
+              "price_sub_mode": "breakout", "pullback_entry_price": None, "breakout_entry_price": 99.0}
+        rec = _machine_record([_candidate(action_fields=af)])
+        self.assertTrue(validate_machine_record(at.flatten_machine_record(rec))["clean"])
+
+    def test_valid_holding_no_target_passes(self):
+        # a holding with a valid stop but no take-profit / RR (no-target case) is legitimate
+        af = {"stop_clear_price": 95.0, "take_profit_reduce_price": None, "take_profit_exit_price": None,
+              "risk_reward_ratio": None, "post_round_rr_status": "tp_not_computable",
+              "price_engine_used": "holding_exit_engine", "price_sub_mode": None}
+        h = _holding()
+        h["price"]["action_fields"] = af
+        self.assertTrue(validate_machine_record(at.flatten_machine_record(_machine_record([h])))["clean"])
+
+    def test_valid_breached_holding_no_target_passes(self):
+        af = {"stop_clear_price": 95.0, "take_profit_reduce_price": None, "take_profit_exit_price": None,
+              "risk_reward_ratio": None, "post_round_rr_status": "ok",
+              "price_engine_used": "holding_exit_engine", "price_sub_mode": None}
+        h = _holding()
+        h["price"]["trace"] = {"breached": True}
+        h["price"]["action_fields"] = af
+        self.assertTrue(validate_machine_record(at.flatten_machine_record(_machine_record([h])))["clean"])
+
+    def test_nonexecutable_partial_action_fields_ok(self):
+        # an observe(price_not_executable) row keeps honest partial output (§6) — no required-field gate
+        row = _candidate(final_action="观察", observe_reason_type="price_not_executable", executable=False,
+                         sized=False, action_fields={"price_engine_used": "support_atr_engine",
+                                                     "price_sub_mode": "pullback", "min_rr_gate_status": "fail_below_floor"})
+        self.assertTrue(validate_machine_record(at.flatten_machine_record(_machine_record([row])))["clean"])
+
+    def test_optional_none_columns_stay_empty(self):
+        cells = _cells(at.build_action_table(_machine_record([_candidate()])))   # pullback build
+        self.assertEqual(cells["breakout_entry_price"], "")        # inactive side
+        self.assertEqual(cells["event_clear_reference_price"], "")  # no event for a candidate
+
+
+class Triangulation(unittest.TestCase):
+    def test_required_subsets_of_engine_columns(self):
+        self.assertTrue({"order_expiry", "gap_policy", "min_rr_gate_status", "post_round_rr_status"}
+                        <= set(at._BUILD_REQUIRED))
+        self.assertIn("post_round_rr_status", at._HOLDING_REQUIRED)
+        self.assertTrue(set(at._BUILD_REQUIRED) <= set(NEW_ENTRY_COLUMNS))
+        self.assertTrue(set(at._HOLDING_REQUIRED) <= set(HOLDING_COLUMNS))
+        self.assertTrue(at._NUMERIC_PRICE_COLUMNS <= set(NEW_ENTRY_COLUMNS) | set(HOLDING_COLUMNS))
+
+
+if __name__ == "__main__":
+    unittest.main()
