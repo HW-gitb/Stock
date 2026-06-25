@@ -28,6 +28,7 @@ import engine.us_short_weekend_basket as basket  # noqa: E402
 import engine.us_short_weekend_cost_floor as cost_floor  # noqa: E402
 import engine.us_short_weekend_cash as cash  # noqa: E402
 import engine.us_short_weekend_action_rank as action_rank  # noqa: E402
+import engine.us_short_weekend_machine_record as machine_record  # noqa: E402
 
 _ENGINE = ROOT / "engine"
 # the §9 inline-check error strings the single-source validator emits — they must NOT appear in any OTHER
@@ -86,7 +87,8 @@ class SingleSourceStructureTests(unittest.TestCase):
     def test_consuming_stages_import_single_source(self):
         for mod_path in (_ENGINE / "us_short_weekend_sizing.py", _ENGINE / "us_short_weekend_basket.py",
                          _ENGINE / "us_short_weekend_cost_floor.py", _ENGINE / "us_short_weekend_cash.py",
-                         _ENGINE / "us_short_weekend_action_rank.py"):
+                         _ENGINE / "us_short_weekend_action_rank.py",
+                         _ENGINE / "us_short_weekend_machine_record.py"):
             self.assertIn("action_reason_error", mod_path.read_text(encoding="utf-8"),
                           f"{mod_path.name} does not consume the single-source action/reason validator")
 
@@ -134,6 +136,13 @@ class StageRejectsBadPairTests(unittest.TestCase):
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [bad],
                  "weekly_build_limit": 1, "build_count": 0})
 
+    def test_machine_record_rejects_bad_pair(self):
+        bad = {"ticker": "AAA", "row_source": "top15_candidate", "final_action": "观察",
+               "observe_reason_type": "BANANA"}
+        with self.assertRaises(machine_record.WeekendMachineRecordError):
+            machine_record.assemble_machine_record(
+                {"regime": {"market_risk_regime": "进攻"}, "rows": [bad]}, as_of="20260112")
+
     def test_non_observe_stale_reason_rejected_each_stage(self):
         # the reverse half: a non-观察 row carrying a stale reason is also rejected at each stage.
         sized_bad = {"ticker": "AAA", "final_action": "持有", "observe_reason_type": "data_restricted",
@@ -165,6 +174,11 @@ class StageRejectsBadPairTests(unittest.TestCase):
             action_rank.apply_action_rank(
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [ar_bad],
                  "weekly_build_limit": 1, "build_count": 0})
+        mr_bad = {"ticker": "AAA", "row_source": "top15_candidate", "final_action": "持有",
+                  "observe_reason_type": "data_restricted"}
+        with self.assertRaises(machine_record.WeekendMachineRecordError):
+            machine_record.assemble_machine_record(
+                {"regime": {"market_risk_regime": "进攻"}, "rows": [mr_bad]}, as_of="20260112")
 
 
 if __name__ == "__main__":
