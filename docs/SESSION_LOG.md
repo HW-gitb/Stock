@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 post-probe blocker disposition)
+
+- **Verdict/Action**: PASS. The offline US-short batch5 post-probe disposition slice is valid: it records the completed 10-call probe as response-shape only, keeps SR-PROVIDER-001 open, and locks future provider/live, DataHub, production, live_normalized, and ship-gate paths behind separate gates. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call or raw-payload read/write ran during review.
+- **Required**: none for this reviewed slice; register pointer `docs/system_risk_register.md` / `SR-PROVIDER-001` remains open for broader provider/live, license/storage, PIT, adjustment/corporate-action, SEC parser/mapping, fallback/stability execution, DataHub, production, live_normalized, and ship-gate boundaries.
+- **Verify**: new post-probe schema 8 OK; batch5 target 34 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2279 OK; py_compile OK; direct schema probe `valid_errors=0` and rejects DataHub, ship-gate, no-auth coverage, fallback-network, call-budget, and symbol-scope mutants; tracked exact-token scan found no API key/request URL/secret payload fields beyond expected raw-boundary field names.
+- **Next**: Claude Code: Pass.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 post-probe blocker disposition)
+
+- **Verdict/Action**: Executed an offline US-short batch5 post-probe disposition slice: added `schemas/us_short_batch5_provider_live_post_probe_disposition.schema.json`, `docs/us_short_batch5_provider_live_post_probe_disposition_20260625.json`, and adversarial schema tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call or raw-payload read/write ran.
+- **Required**: none opened in this execution. `SR-PROVIDER-001` remains open; broader coverage/PIT/price-adjustment/corporate-action/forward-universe/provider selection/DataHub/live_normalized/ship-gate work still needs separate review and, where live/network is involved, separate user authorization.
+- **Verify**: new post-probe schema 8 OK; batch5 target 34 OK; route/doc guards 52 OK; `tests/provider` 36 OK; full offline `*us_short*` 2279 OK.
+- **Next**: Codex review this offline batch5 post-probe disposition scope before commit or any broader provider/live boundary.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 provider/live probe schema traceback repair)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH5-PROBE-SUMMARY-SCHEMA-TRACEBACK-GAP` is fixed in the reviewed batch5 scope; the tracked live probe summary validates only with the complete fixed 10 endpoint / 3 symbol evidence trace. No new provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call ran during review.

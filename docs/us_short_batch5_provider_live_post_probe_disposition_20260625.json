@@ -1,0 +1,368 @@
+{
+  "schema_name": "us_short_batch5_provider_live_post_probe_disposition",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-25T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "US-short single design authority; batch5 provider/live remains gated and small-sample-first."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker for authorization, PIT, adjustment, fallback, DataHub, production, and ship-gate boundaries."
+    },
+    {
+      "artifact_id": "us_short_batch5_provider_live_packet_20260625",
+      "path": "docs/us_short_batch5_provider_live_packet_20260625.json",
+      "role": "Reviewed first-version packet that defined the exact AAPL/MSFT/JPM 10-call probe boundary."
+    },
+    {
+      "artifact_id": "us_short_batch5_provider_live_probe_summary_20260625",
+      "path": "docs/us_short_batch5_provider_live_probe_summary_20260625.json",
+      "role": "Tracked no-secret summary of the user-authorized 10-call provider/live response-shape probe."
+    },
+    {
+      "artifact_id": "p1_remaining_blocker_plan_20260602",
+      "path": "docs/provider_evidence_p1_us_remaining_blocker_resolution_plan_20260602.json",
+      "role": "Routes remaining P1 blocker tracks and distinguishes docs-only slices from provider/live access packets."
+    },
+    {
+      "artifact_id": "datahub_design",
+      "path": "docs/datahub_design.md",
+      "role": "Confirms DataHub consumption and production storage are separate future gates, not part of batch5 first-version evidence."
+    },
+    {
+      "artifact_id": "evidence_capital_policy",
+      "path": "docs/evidence_capital_policy.md",
+      "role": "Confirms paper or response-shape evidence cannot be promoted to live_normalized or ship-gate evidence."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "artifact_status": "post_probe_disposition_offline_only",
+    "provider_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "completed_probe_is_response_shape_only": true,
+    "small_sample_first_completed": true,
+    "broader_provider_live_still_requires_separate_authorization": true,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "provider_selection_allowed": false,
+    "full_market_or_broad_universe_allowed": false,
+    "yfinance_allowed": false,
+    "web_x_allowed": false,
+    "sec_parser_implementation_allowed": false,
+    "field_mapping_or_derivation_implementation_allowed": false,
+    "return_calculation_allowed": false,
+    "corporate_action_reconciliation_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "paper_results_as_live_normalized_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "completed_probe_trace": {
+    "probe_summary_ref": "docs/us_short_batch5_provider_live_probe_summary_20260625.json",
+    "probe_packet_ref": "docs/us_short_batch5_provider_live_packet_20260625.json",
+    "authorization_ref": "user_chat_20260625_batch5_provider_live_probe_10_call_boundary",
+    "actual_total_endpoint_calls": 10,
+    "actual_fmp_endpoint_calls": 6,
+    "actual_sec_public_api_calls": 4,
+    "retry_count": 0,
+    "endpoint_success_count": 10,
+    "endpoint_error_count": 0,
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "response_shape_only": true,
+    "tracked_summary_contains_no_secrets_urls_or_raw_rows": true,
+    "raw_payloads_stayed_gitignored": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false
+  },
+  "remaining_blocker_disposition": [
+    {
+      "blocker_id": "license_storage_retention_rights",
+      "status_after_probe": "manual_or_terms_decision_required_not_resolved",
+      "next_action_class": "docs_or_user_terms_decision_required",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The 10-call response-shape probe does not prove current license, storage, retention, redistribution, or production-use rights.",
+      "next_boundary_required": "A docs-only decision can use existing repo evidence; any current web/terms refresh, legal review, provider contact, trial, or paid access needs separate user authorization.",
+      "required_before_resolution": [
+        "Classify tracked summaries versus gitignored raw payload retention.",
+        "Record whether existing FMP Basic and SEC public use are sufficient for the intended non-production evidence path.",
+        "Do not mark production storage or provider selection ready from the 10-call probe."
+      ]
+    },
+    {
+      "blocker_id": "coverage_count_security_master",
+      "status_after_probe": "unresolved_after_response_shape_probe",
+      "next_action_class": "provider_live_requires_new_authorization",
+      "new_user_authorization_required_before_action": true,
+      "provider_live_or_network_needed": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "AAPL/MSFT/JPM active-only success does not prove inactive, delisted, historical security-master, or full-universe coverage.",
+      "next_boundary_required": "Before any coverage or security-master probe, specify symbols or universe slice, endpoints, max calls, retry policy, raw/tracked storage, and validation method.",
+      "required_before_resolution": [
+        "Separate authorization packet.",
+        "Reviewed call budget and abort rule.",
+        "No full-market fetch unless explicitly authorized."
+      ]
+    },
+    {
+      "blocker_id": "pit_observed_date_semantics",
+      "status_after_probe": "unresolved_after_response_shape_probe",
+      "next_action_class": "provider_live_requires_new_authorization",
+      "new_user_authorization_required_before_action": true,
+      "provider_live_or_network_needed": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The probe recorded response shapes only; it did not prove historical observed-date, accepted-date, restatement, or latest-only backfill semantics.",
+      "next_boundary_required": "Before any PIT-row validation, specify endpoint families, symbols, time windows, max calls, raw privacy boundary, and expected timestamp lineage checks.",
+      "required_before_resolution": [
+        "Separate authorization packet.",
+        "Field-by-field timestamp lineage assertions.",
+        "Fail-closed rule for missing or ambiguous observed dates."
+      ]
+    },
+    {
+      "blocker_id": "price_adjustment_corporate_actions",
+      "status_after_probe": "unresolved_after_response_shape_probe",
+      "next_action_class": "provider_live_requires_new_authorization",
+      "new_user_authorization_required_before_action": true,
+      "provider_live_or_network_needed": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The EOD shape probe did not reconcile adjusted versus unadjusted prices, split/dividend semantics, return construction, or corporate-action feeds.",
+      "next_boundary_required": "Before any adjustment or corporate-action validation, specify event symbols/date windows, endpoints, max calls, raw/tracked storage, and reconciliation assertions.",
+      "required_before_resolution": [
+        "Separate authorization packet.",
+        "Split and dividend event expectations.",
+        "No return calculation or reconciliation implementation in the access packet itself."
+      ]
+    },
+    {
+      "blocker_id": "sec_edgar_audit_parser_mapping",
+      "status_after_probe": "offline_design_allowed_not_resolved",
+      "next_action_class": "offline_schema_first_allowed",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "SEC submissions returned for the sample symbols, but this does not implement parser lineage, companyfacts mapping, accession handling, units, periods, amendments, or restatement rules.",
+      "next_boundary_required": "Offline schema-first parser-scope or field-family mapping design is allowed; raw parse, new SEC calls, parser implementation, or field mapping implementation require separate authorization.",
+      "required_before_resolution": [
+        "Parser lineage contract.",
+        "Field-family mapping contract.",
+        "No implementation until reviewed and separately authorized."
+      ]
+    },
+    {
+      "blocker_id": "fallback_incident_stability",
+      "status_after_probe": "offline_design_allowed_not_resolved",
+      "next_action_class": "offline_schema_first_allowed",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The 10-call success does not prove uptime, quota stability, endpoint drift, fallback execution, incident logging, or status-page integration.",
+      "next_boundary_required": "A batch5-binding offline contract can map default-deny behavior to the existing P1 playbook; provider status polling or fallback execution still needs separate authorization.",
+      "required_before_resolution": [
+        "Default-deny incident matrix.",
+        "No silent fallback rule.",
+        "Drift monitor binding that does not poll or fetch data."
+      ]
+    },
+    {
+      "blocker_id": "forward_universe_snapshot_real_capture",
+      "status_after_probe": "unresolved_after_response_shape_probe",
+      "next_action_class": "provider_live_requires_new_authorization",
+      "new_user_authorization_required_before_action": true,
+      "provider_live_or_network_needed": true,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The active-only three-symbol probe did not capture a forward universe snapshot or security-master eligible universe.",
+      "next_boundary_required": "Before any real forward_universe_snapshot capture, specify source, universe scope, max calls, raw/tracked storage, privacy boundary, and validation gates.",
+      "required_before_resolution": [
+        "Separate authorization packet.",
+        "Universe inclusion/exclusion contract.",
+        "No full-market or production runner consumption by default."
+      ]
+    },
+    {
+      "blocker_id": "datahub_runner_consumption",
+      "status_after_probe": "blocked_until_prior_gates",
+      "next_action_class": "blocked_until_upstream_provider_gates",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "No DataHub table, adapter, runner consumption, or production storage path was authorized or executed.",
+      "next_boundary_required": "DataHub/runner consumption remains blocked until provider authorization, license/storage, PIT, adjustment, fallback, and validation gates are separately reviewed.",
+      "required_before_resolution": [
+        "Separate DataHub implementation authorization.",
+        "Provider data contract pass.",
+        "Private-output and no-dangling evidence path."
+      ]
+    },
+    {
+      "blocker_id": "live_normalized_evidence_ship_gate",
+      "status_after_probe": "blocked_until_prior_gates",
+      "next_action_class": "not_allowed_in_batch5_v1",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "The 10-call response-shape probe is not paper performance, live_normalized forward evidence, or ship-gate evidence.",
+      "next_boundary_required": "Ship-gate evidence requires the separate live_normalized forward-evidence policy and cannot be created or claimed by this batch5 first-version path.",
+      "required_before_resolution": [
+        "Live-normalized evidence policy compliance.",
+        "Forward evidence horizon and metric gates.",
+        "No paper-to-live or response-shape-to-ship-gate promotion."
+      ]
+    },
+    {
+      "blocker_id": "provider_selection_production_readiness",
+      "status_after_probe": "blocked_until_prior_gates",
+      "next_action_class": "blocked_until_upstream_provider_gates",
+      "new_user_authorization_required_before_action": false,
+      "provider_live_or_network_needed": false,
+      "authorizes_provider_call_now": false,
+      "authorizes_datahub_or_runner_consumption": false,
+      "authorizes_production_storage": false,
+      "authorizes_ship_gate_or_live_normalized_evidence": false,
+      "evidence_after_probe": "A successful three-symbol response-shape probe is not provider selection, readiness ranking, production readiness, or Phase 7c clearance.",
+      "next_boundary_required": "Provider selection and production readiness stay blocked until all upstream provider, license/storage, PIT, adjustment, fallback, DataHub, and evidence gates are reviewed.",
+      "required_before_resolution": [
+        "No provider ranking from this probe.",
+        "No production-ready claim.",
+        "No Phase 7c or DataHub promotion from response-shape evidence."
+      ]
+    }
+  ],
+  "next_execution_rounds": [
+    {
+      "round_id": "batch5_offline_fallback_incident_stability_binding",
+      "round_type": "offline_schema_first",
+      "new_user_authorization_required_before_round": false,
+      "provider_live_or_network_allowed_in_round": false,
+      "description": "Bind the existing P1 fallback/incident/stability playbook to the US-short batch5 first-version path with default-deny behavior and no polling or provider call.",
+      "allowed_outputs": [
+        "Schema-first docs artifact.",
+        "Offline tests.",
+        "Route pointer."
+      ],
+      "forbidden_outputs": [
+        "Provider status polling.",
+        "Fallback execution.",
+        "DataHub or runner consumption.",
+        "Production storage."
+      ]
+    },
+    {
+      "round_id": "batch5_license_storage_retention_decision",
+      "round_type": "docs_or_user_terms_decision",
+      "new_user_authorization_required_before_round": false,
+      "provider_live_or_network_allowed_in_round": false,
+      "description": "Record a non-legal storage/retention decision from existing repo evidence or stop for separate current-terms/user decision before any terms refresh.",
+      "allowed_outputs": [
+        "Docs-only decision packet from existing repo evidence.",
+        "Explicit stop point for current web/terms/legal/provider-contact authorization."
+      ],
+      "forbidden_outputs": [
+        "Current web terms refresh without authorization.",
+        "Provider contact, trial, paid access, or production storage claim."
+      ]
+    },
+    {
+      "round_id": "batch5_future_provider_live_blocker_probe",
+      "round_type": "provider_live_requires_new_authorization",
+      "new_user_authorization_required_before_round": true,
+      "provider_live_or_network_allowed_in_round": true,
+      "description": "Any second provider/live probe for coverage, PIT, price adjustment, corporate actions, SEC raw samples, or forward universe capture must stop for a new explicit user authorization first.",
+      "allowed_outputs": [
+        "Only after authorization: bounded execution packet, raw under gitignored provider_samples, tracked no-secret summary, offline tests."
+      ],
+      "forbidden_outputs": [
+        "Unbounded calls.",
+        "Full-market fetch by default.",
+        "DataHub consumption.",
+        "Production storage.",
+        "Ship-gate evidence claim."
+      ]
+    }
+  ],
+  "authorization_boundary_template": {
+    "required_before_any_future_provider_live_or_network": true,
+    "current_artifact_provider_call_budget": 0,
+    "default_future_call_budget_without_new_authorization": 0,
+    "must_state_symbols": true,
+    "must_state_endpoints": true,
+    "must_state_call_budget": true,
+    "must_state_retry_policy": true,
+    "must_state_write_locations": true,
+    "must_state_secret_and_raw_privacy_boundary": true,
+    "must_state_validation_method": true,
+    "must_state_non_authorized_paths": true
+  },
+  "prohibited_actions": {
+    "provider_live_call_authorized_by_this_artifact": false,
+    "network_access_authorized_by_this_artifact": false,
+    "raw_payload_read_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "datahub_consumption_authorized": false,
+    "production_storage_authorized": false,
+    "full_market_or_security_master_authorized": false,
+    "yfinance_authorized": false,
+    "web_x_authorized": false,
+    "sec_parser_implementation_authorized": false,
+    "field_mapping_or_derivation_implementation_authorized": false,
+    "return_calculation_authorized": false,
+    "corporate_action_reconciliation_authorized": false,
+    "provider_selection_authorized": false,
+    "broker_or_order_automation_authorized": false,
+    "ship_gate_or_live_normalized_evidence_authorized": false,
+    "production_ready_claim_authorized": false
+  },
+  "limitations": [
+    "This artifact did not run provider/live/network/FMP/SEC/yfinance/Web/X calls.",
+    "This artifact did not read or summarize raw provider payload contents.",
+    "This artifact does not resolve SR-PROVIDER-001.",
+    "The completed 10-call probe remains response-shape evidence only.",
+    "No paper result, response-shape result, or tracked summary is promoted to live_normalized or ship-gate evidence."
+  ],
+  "next_steps": [
+    "Review this post-probe disposition before any commit.",
+    "A safe next execution can be an offline schema-first batch5 fallback/incident/stability binding with no provider/live/network call.",
+    "Any future provider/live probe must stop first for separate explicit user authorization that states call budget, symbols, endpoints, retry policy, write paths, secret/raw privacy boundary, validation method, and non-authorized paths."
+  ]
+}
