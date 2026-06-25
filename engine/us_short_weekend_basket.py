@@ -1,10 +1,11 @@
 # -*- coding: utf-8 -*-
 """US-short weekend-pipeline build-gate resolution — batch4 slice 4d-ii-e (§8 weekly build-limit + 同主题 cap)
-+ slice 4d-ii-f (§8 portfolio_guard / symbol_cooldown 新建阻断).
++ slice 4d-ii-f (§8 portfolio_guard / symbol_cooldown 新建阻断) + slice 4d-ii-g (§8 强赛道试探名额 theme_probe
+额外席).
 
-Design authority: docs/us_short_system_design.md §8 (line 227 每周新增建仓上限 + 同主题上限; line 230
-symbol_cooldown / portfolio_guard new-entry block; line 238 组合级熔断 cooldown→禁新建) / §9 (selection_rank,
-observe_reason_type) / §18.2 batch4.
+Design authority: docs/us_short_system_design.md §8 (line 227 每周新增建仓上限 + 同主题上限; line 228-231
+强赛道试探名额 theme_probe + 防御档入场; line 230/238 symbol_cooldown / portfolio_guard new-entry block) / §9
+(selection_rank, observe_reason_type) / §18.2 batch4.
 
 The cross-row build-gate stage after 4d-ii-c sizing. For every PROVISIONAL 建仓 row it, in order:
 
@@ -15,28 +16,40 @@ The cross-row build-gate stage after 4d-ii-c sizing. For every PROVISIONAL 建�
      never consume a weekly / 同主题 slot.
   ② (4d-ii-e) RANK + BASE CAPACITY: ranks the surviving 建仓 by selection strength (core_score) and applies
      the §8 BASE per-regime weekly new-build limit (进攻3 / 震荡2 / 防御1 / 极度防御0) + the 同主题 weekly cap
-     (≤2). A 建仓 pushed out of this week's BASE capacity → 观察(`capacity_or_budget_deferred`) (§9 — otherwise
-     executable, just no room this week — kept distinct from a cost/min-size or data/price observe so the
-     §11.2 honesty split is honest).
+     (≤2). A 建仓 pushed out of this week's BASE capacity → 观察(`capacity_or_budget_deferred`) (§9).
+  ③ (4d-ii-g) THEME_PROBE EXTRA SEATS: the §8 强赛道试探名额 — an EXTRA build allowance BEYOND the base
+     regime limit for a market-confirmed strong theme (§4.3/§7). Among the capacity-deferred builds (in
+     rank order) the eligible ones are PROMOTED back to 建仓 up to the §8 #27 seat budget
+     `theme_probe_seats(regime, theme_opportunity_state)` (防御≤1 / 进攻+极强≤2 / 极度防御0), still under the
+     同主题 cap. Eligibility reuses `theme_probe_decision` (lifecycle allows + high_confidence + coverage
+     non-restricted + the hard-zeros, which are already cleared for a survivor). A promoted probe carries the
+     §8 `theme_probe_min_size` risk tag + its 防御 entry-mode constraint, and its size is FORCED to the
+     minimum executable (`MIN_EXECUTABLE_SHARES`) — the pre-probe 4d-ii-c risk size kept as a
+     `pre_probe_risk_shares` trace — so a risk-throttled probe can never go out as a normal-sized build
+     (§8 line 230 强制 = 最小可执行仓, 绕过常规风险预算放大; governance `forced_min_executable_size`).
 
-Scope (v1): NOT here — the §8 强赛道试探名额 theme_probe EXTRA seats (engine/us_short_theme_probe.py), which
-add seats BEYOND this base regime limit for strong/extreme themes (and would PROMOTE some
-capacity-deferred builds, re-sized to min-executable + cost-floor checked) — that is slice 4d-ii-g WIRING.
-Cash allocation (allocate_cash) + §9 action_rank are also later. The portfolio_guard GRADED modulations
-(caution → reduce_position_size / reduce_weekly_new_count, recovery → only_few_high_confidence_new) are a
-separate portfolio_guard-effects concern — this slice consumes ONLY the cooldown `block_new_entry` (禁新建)
-effect, the user-scoped 新建阻断. No promotion: a build ranked beyond the weekly limit is never promoted into
-a slot freed by a 同主题-capped survivor (conservative v1).
+Scope (v1): NOT here — the §8 最小仓成本地板 cost floor (line 232 / `engine/us_short_cost_floor.py`), which
+downgrades a probe whose expected profit-to-TP1 ≤ round-trip cost × safety multiple to
+观察(`cost_inefficient_min_size`), is slice 4d-ii-h WIRING (it needs the commission / slippage / spread
+execution-cost input contract — `apply_cost_floor` is not yet wired into any pipeline stage; the row's
+`take_profit_exit_price` is available, the cost components are not). Cash allocation (allocate_cash) + §9
+action_rank are also later. The portfolio_guard GRADED modulations (caution → reduce_position_size /
+reduce_weekly_new_count, recovery → only_few_high_confidence_new) are a separate portfolio_guard-effects
+concern — this slice consumes ONLY the cooldown `block_new_entry` (禁新建) effect. No base-build promotion: a
+build ranked beyond the weekly limit is never promoted into a slot freed by a 同主题-capped survivor unless
+it earns a theme_probe seat (conservative v1).
 
-`market_risk_regime` is the §7 cap regime (极度防御 already yields no 建仓 from 4d-ii-c position_cap==0,
-so its weekly limit 0 is a safety net). All inputs are VALUE-validated fail-closed: every row's
-final_action must be frozen action vocab, ticker identity is canonical-unique and EMITTED UPPERCASE (a
-non-canonical injected ticker is normalized, never echoed raw), each 建仓 must be a real 4d-ii-c sized
-build (sizing.status=="sized"), a 观察 row must carry a frozen observe_reason_type and a non-观察 row must
-carry none, per_ticker must canonically cover the 建仓 set, the account `portfolio_guard_status` must be a
-frozen guard state and each build's `symbol_cooldown_status` a frozen cooldown status; the 同主题 cap counts
-on the STRIPPED theme so whitespace variants cannot dodge it. Pure/offline; no provider/live/network;
-no A-share crossing.
+`market_risk_regime` is the §7 cap regime (极度防御 already yields no 建仓 from 4d-ii-c position_cap==0, so
+its weekly limit 0 + its 0 probe seats are a safety net). All inputs are VALUE-validated fail-closed: every
+row's final_action must be frozen action vocab, ticker identity is canonical-unique and EMITTED UPPERCASE (a
+non-canonical injected ticker is normalized, never echoed raw), each 建仓 must be a real 4d-ii-c sized build
+(sizing.status=="sized"), a 观察 row must carry a frozen observe_reason_type and a non-观察 row must carry
+none, per_ticker must canonically cover the 建仓 set, the account `portfolio_guard_status` must be a frozen
+guard state, each build's `symbol_cooldown_status` a frozen cooldown status, the account
+`theme_opportunity_state` a frozen theme-opportunity state, and each build's `theme_probe` inputs a
+closed-world dict (the value semantics are fail-closed by `theme_probe_decision` — a malformed / low-confidence
+input simply yields no probe); the 同主题 cap counts on the STRIPPED theme so whitespace variants cannot dodge
+it. Pure/offline; no provider/live/network; no A-share crossing.
 """
 from __future__ import annotations
 
@@ -44,10 +57,12 @@ import math
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES, portfolio_guard_effects
+from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
+from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES, theme_probe_decision, theme_probe_seats
 from engine.us_short_weekend_decision import FINAL_ACTIONS, OBSERVE_REASONS
 
 # §8 line 227 / §13.1 #4 forward-calibration priors (NOT frozen const): BASE per-regime weekly new-build
-# count cap + the 同主题 weekly cap. theme_probe (§8) adds EXTRA seats beyond these in 4d-ii-g.
+# count cap + the 同主题 weekly cap. theme_probe (§8 line 229 / §13.1 #27) adds EXTRA seats beyond these.
 WEEKLY_BUILD_LIMIT = {"进攻": 3, "震荡": 2, "防御": 1, "极度防御": 0}
 SAME_THEME_WEEK_CAP = 2
 
@@ -57,6 +72,11 @@ SAME_THEME_WEEK_CAP = 2
 # (test_us_short_weekend_basket.py) so this mapping cannot silently drift from the engine.
 SYMBOL_COOLDOWN_STATUSES = ("none", "entering_cooldown", "in_cooldown", "reentry_allowed")
 _SYMBOL_COOLDOWN_BLOCKS_NEW = ("entering_cooldown", "in_cooldown")
+
+# §8 line 230 per-build theme_probe eligibility inputs (the value semantics are fail-closed inside
+# theme_probe_decision; this stage only enforces the closed-world SHAPE).
+_THEME_PROBE_KEYS = frozenset(
+    {"theme_lifecycle_state", "high_confidence", "coverage_status", "no_gap_week", "entry_in_band"})
 
 _BUILD = "建仓"
 _OBSERVE = "观察"
@@ -90,26 +110,78 @@ def _guard_blocks_new_entry(guard_status):
     return gb if isinstance(gb, bool) else True   # malformed governance effect → fail closed to block
 
 
+def _validate_theme_probe_inputs(tinfo, ct):
+    """Closed-world SHAPE gate for a build's `theme_probe` eligibility inputs. The VALUE semantics
+    (high_confidence is True, lifecycle allows, coverage non-restricted) are fail-closed inside
+    `theme_probe_decision` — a low-confidence / unknown-lifecycle / restricted-coverage build simply yields no
+    probe — so this only requires the closed-world key set to be present (a missing input is a malformed
+    contract)."""
+    tp = tinfo.get("theme_probe")
+    if not (isinstance(tp, dict) and set(tp) == _THEME_PROBE_KEYS):
+        raise WeekendBasketError(
+            f"per_ticker[{ct!r}].theme_probe 须为 closed-world {{{sorted(_THEME_PROBE_KEYS)}}}: {tp!r}")
+    return tp
+
+
+def _promote_theme_probes(capacity_deferred, *, regime, theme_opportunity_state, per_ticker, built_theme_count):
+    """§8 line 228-231 强赛道试探名额. Among the capacity-deferred builds (already in core_score rank order)
+    promote the theme_probe-eligible ones back to 建仓 up to the §8 #27 seat budget
+    `theme_probe_seats(regime, theme_opportunity_state)`, still respecting the 同主题 cap (a probe counts toward
+    its theme like a base build). The hard-zeros (极度防御 / symbol cooldown / portfolio_guard cooldown /
+    hard_veto) are already cleared for a survivor — a blocked build was removed in stage ① and a hard-vetoed
+    candidate never became 建仓 in 4d-ii-b — so they are passed explicit False. Returns {idx: {risk_tag,
+    entry_mode_constraint}} for the promoted builds (the caller forces each to min-executable size)."""
+    total_seats = theme_probe_seats(regime, theme_opportunity_state)
+    promoted = {}
+    if total_seats <= 0:
+        return promoted
+    granted = 0
+    for idx, ct, theme in capacity_deferred:
+        if granted >= total_seats:
+            break
+        if built_theme_count.get(theme, 0) >= SAME_THEME_WEEK_CAP:
+            continue                                   # 同主题 cap (a probe counts toward its theme)
+        tp = per_ticker[ct]["theme_probe"]
+        decision = theme_probe_decision(
+            regime, theme_opportunity_state,
+            theme_lifecycle_state=tp["theme_lifecycle_state"], high_confidence=tp["high_confidence"],
+            coverage_status=tp["coverage_status"], in_symbol_cooldown=False,
+            in_portfolio_guard_cooldown=False, hard_veto=False,
+            no_gap_week=tp["no_gap_week"], entry_in_band=tp["entry_in_band"])
+        if decision["probe_allowed"]:
+            promoted[idx] = {"risk_tag": decision["risk_tag"],
+                             "entry_mode_constraint": decision["entry_mode_constraint"]}
+            granted += 1
+            built_theme_count[theme] = built_theme_count.get(theme, 0) + 1
+    return promoted
+
+
 def resolve_build_capacity(sized_result, *, basket_context):
-    """4d-ii-e/f build-gate resolution. ① (4d-ii-f) downgrades a provisional 建仓 hit by an account
+    """4d-ii-e/f/g build-gate resolution. ① (4d-ii-f) downgrades a provisional 建仓 hit by an account
     portfolio_guard cooldown (禁新建) or a per-symbol re-entry cooldown to 观察(`risk_cooldown`), removed
     BEFORE ranking. ② (4d-ii-e) ranks the surviving 建仓 by core_score and applies the §8 BASE weekly
-    build-limit + 同主题 cap; a 建仓 beyond BASE capacity → 观察(`capacity_or_budget_deferred`). Non-建仓 rows
-    carry through unchanged (selection_rank None).
+    build-limit + 同主题 cap; a 建仓 beyond BASE capacity → 观察(`capacity_or_budget_deferred`). ③ (4d-ii-g)
+    promotes the theme_probe-eligible capacity-deferred builds back to 建仓 up to the §8 #27 strong-theme seat
+    budget (still under the 同主题 cap), tagged `theme_probe_min_size` + an entry-mode constraint, with size
+    FORCED to the minimum executable (`MIN_EXECUTABLE_SHARES`, pre-probe risk size kept as
+    `pre_probe_risk_shares`). Non-建仓 rows carry through unchanged (selection_rank None).
 
     sized_result = the `size_rows` output {regime: {... market_risk_regime ...}, rows: [...]}.
     basket_context = {"per_ticker": {<canonical ticker>: {"theme": <non-blank str>,
-                                                          "symbol_cooldown_status": <frozen status>}},  # one per 建仓
-                      "portfolio_guard_status": <frozen portfolio_guard state>}                          # account-level
+                                                          "symbol_cooldown_status": <frozen status>,
+                                                          "theme_probe": {"theme_lifecycle_state": str|None,
+                                                              "high_confidence": bool, "coverage_status": str,
+                                                              "no_gap_week": bool, "entry_in_band": bool}}},  # one per 建仓
+                      "portfolio_guard_status": <frozen portfolio_guard state>,                                # account-level
+                      "theme_opportunity_state": <frozen theme-opportunity state>}                             # account-level
 
-    Returns {"regime": <carried>, "rows": [{...row, "selection_rank": int|None, [final_action/
-    observe_reason_type overridden when blocked or capacity-deferred]}], "weekly_build_limit": int,
-    "build_count": int (建仓 kept)}. Raises WeekendBasketError on a malformed sized_result / regime /
-    basket_context, an unknown final_action, an observe_reason_type inconsistent with final_action (观察
-    needs a frozen reason; a non-观察 row must carry none), a non-canonical / duplicate ticker, a 建仓 that
-    is not a real sized build (missing finite core_score or sizing.status!="sized"), an invalid
-    portfolio_guard_status / symbol_cooldown_status, or a per_ticker set that does not exactly (canonically)
-    cover the 建仓 tickers."""
+    Returns {"regime": <carried>, "rows": [{...row, "selection_rank": int|None, ["theme_probe": {...}],
+    [final_action/observe_reason_type overridden]}], "weekly_build_limit": int, "build_count": int (建仓
+    kept, incl. promoted probes)}. Raises WeekendBasketError on a malformed sized_result / regime /
+    basket_context, an unknown final_action, an observe_reason_type inconsistent with final_action, a
+    non-canonical / duplicate ticker, a 建仓 that is not a real sized build, an invalid portfolio_guard_status
+    / symbol_cooldown_status / theme_opportunity_state, a malformed theme_probe input shape, or a per_ticker
+    set that does not exactly (canonically) cover the 建仓 tickers."""
     if not (isinstance(sized_result, dict) and isinstance(sized_result.get("regime"), dict)
             and isinstance(sized_result.get("rows"), list)):
         raise WeekendBasketError("sized_result 须为含 regime(dict) + rows(list) 的 4d-ii-c 输出")
@@ -117,19 +189,23 @@ def resolve_build_capacity(sized_result, *, basket_context):
     if regime not in WEEKLY_BUILD_LIMIT:
         raise WeekendBasketError(f"market_risk_regime 非法（须 ∈ {sorted(WEEKLY_BUILD_LIMIT)}）: {regime!r}")
     weekly_limit = WEEKLY_BUILD_LIMIT[regime]
-    if not (isinstance(basket_context, dict) and set(basket_context) == {"per_ticker", "portfolio_guard_status"}
+    if not (isinstance(basket_context, dict)
+            and set(basket_context) == {"per_ticker", "portfolio_guard_status", "theme_opportunity_state"}
             and isinstance(basket_context["per_ticker"], dict)):
         raise WeekendBasketError(
-            "basket_context 顶层键须恰为 {'per_ticker','portfolio_guard_status'} 且 per_ticker 为 dict（closed-world）")
+            "basket_context 顶层键须恰为 {'per_ticker','portfolio_guard_status','theme_opportunity_state'} 且 per_ticker 为 dict（closed-world）")
     per_ticker = basket_context["per_ticker"]
     guard_blocks_new = _guard_blocks_new_entry(basket_context["portfolio_guard_status"])
+    theme_opportunity_state = basket_context["theme_opportunity_state"]
+    if theme_opportunity_state not in THEME_OPPORTUNITY_STATES:
+        raise WeekendBasketError(
+            f"theme_opportunity_state 非法（须 ∈ {list(THEME_OPPORTUNITY_STATES)}）: {theme_opportunity_state!r}")
 
     # Pass 1 — VALUE-validate every row (frozen final_action vocab + canonical-unique ticker identity);
-    # collect the 建仓 rows. Each 建仓 must be a real 4d-ii-c sized build (sizing.status == "sized" +
-    # desired_model_shares ≥ 1) with a finite core_score; per_ticker must EXACTLY cover the canonical 建仓
-    # set. A 建仓 blocked by the account portfolio_guard cooldown OR its own per-symbol cooldown is recorded
-    # for a risk_cooldown downgrade and is NOT collected into the rankable set (a cooled-down symbol must not
-    # consume a weekly / 同主题 slot).
+    # collect the 建仓 rows. Each 建仓 must be a real 4d-ii-c sized build with a finite core_score; per_ticker
+    # must EXACTLY cover the canonical 建仓 set. A 建仓 blocked by the account portfolio_guard cooldown OR its
+    # own per-symbol cooldown is recorded for a risk_cooldown downgrade and is NOT collected into the rankable
+    # set (a cooled-down symbol must not consume a weekly / 同主题 slot).
     ct_by_index, seen = {}, set()
     builds, build_tickers, blocked_indices = [], set(), set()
     for i, row in enumerate(sized_result["rows"]):
@@ -163,14 +239,15 @@ def resolve_build_capacity(sized_result, *, basket_context):
             raise WeekendBasketError(
                 f"建仓 行须为 4d-ii-c 真 sized build（sizing.status=='sized' + desired_model_shares≥1）: {ct!r}")
         tinfo = per_ticker.get(ct)
-        if not (isinstance(tinfo, dict) and set(tinfo) == {"theme", "symbol_cooldown_status"}
+        if not (isinstance(tinfo, dict) and set(tinfo) == {"theme", "symbol_cooldown_status", "theme_probe"}
                 and isinstance(tinfo.get("theme"), str) and tinfo["theme"].strip()):
             raise WeekendBasketError(
-                f"basket_context.per_ticker[{ct!r}] 须为 {{'theme': 非空 str, 'symbol_cooldown_status': 冻结状态}}: {tinfo!r}")
+                f"basket_context.per_ticker[{ct!r}] 须为 {{'theme': 非空 str, 'symbol_cooldown_status', 'theme_probe'}}: {tinfo!r}")
         scs = tinfo["symbol_cooldown_status"]
         if scs not in SYMBOL_COOLDOWN_STATUSES:
             raise WeekendBasketError(
                 f"per_ticker[{ct!r}].symbol_cooldown_status 非法（须 ∈ {list(SYMBOL_COOLDOWN_STATUSES)}）: {scs!r}")
+        _validate_theme_probe_inputs(tinfo, ct)
         build_tickers.add(ct)
         if guard_blocks_new or scs in _SYMBOL_COOLDOWN_BLOCKS_NEW:
             blocked_indices.add(i)            # §8 新建阻断 → risk_cooldown, removed before ranking
@@ -180,11 +257,12 @@ def resolve_build_capacity(sized_result, *, basket_context):
         raise WeekendBasketError(
             f"basket_context.per_ticker 须恰覆盖 建仓 ticker 集（无缺/无陈旧、canonical 键）: per_ticker={sorted(per_ticker)} builds={sorted(build_tickers)}")
 
-    # selection_rank by (core_score desc, ticker asc) over the NON-blocked builds; then §8 weekly-limit +
-    # 同主题 cap (stripped theme; no promotion).
+    # selection_rank by (core_score desc, ticker asc) over the NON-blocked builds; then §8 BASE weekly-limit +
+    # 同主题 cap (stripped theme). built_theme_count tracks the BUILT (non-deferred) builds per theme; the
+    # capacity-deferred builds (in rank order) are the theme_probe promotion candidates for stage ③.
     ordered = sorted(builds, key=lambda b: (-b[2], b[1]))
     rank_by_index, capped_by_index = {}, {}
-    theme_count = {}
+    theme_count, built_theme_count, capacity_deferred = {}, {}, []
     for rank, (idx, ct, cs, theme) in enumerate(ordered, start=1):
         rank_by_index[idx] = rank
         over_weekly = rank > weekly_limit
@@ -192,10 +270,21 @@ def resolve_build_capacity(sized_result, *, basket_context):
         if not over_weekly:   # 同主题 cap counts only among the weekly survivors
             theme_count[theme] = theme_count.get(theme, 0) + 1
             over_theme = theme_count[theme] > SAME_THEME_WEEK_CAP
-        capped_by_index[idx] = over_weekly or over_theme
+        if over_weekly or over_theme:
+            capped_by_index[idx] = True
+            capacity_deferred.append((idx, ct, theme))
+        else:
+            capped_by_index[idx] = False
+            built_theme_count[theme] = built_theme_count.get(theme, 0) + 1
+
+    # ③ theme_probe extra seats — promote eligible capacity-deferred strong-theme builds back to 建仓.
+    promoted = _promote_theme_probes(
+        capacity_deferred, regime=regime, theme_opportunity_state=theme_opportunity_state,
+        per_ticker=per_ticker, built_theme_count=built_theme_count)
 
     # Emit — EVERY output row carries the canonical UPPERCASE ticker (never echoed raw). A blocked build is
-    # 观察(risk_cooldown) with no rank (never ranked); a capacity-deferred build keeps its rank.
+    # 观察(risk_cooldown) with no rank; a promoted probe is 建仓 + theme_probe metadata; a still-deferred build
+    # is 观察(capacity_or_budget_deferred); both deferred classes keep their rank.
     out_rows, build_count = [], 0
     for i, row in enumerate(sized_result["rows"]):
         ct = ct_by_index[i]
@@ -205,6 +294,17 @@ def resolve_build_capacity(sized_result, *, basket_context):
         if i in blocked_indices:
             out_rows.append({**row, "ticker": ct, "selection_rank": None,
                              "final_action": _OBSERVE, "observe_reason_type": _R_RISK_COOLDOWN})
+        elif i in promoted:
+            build_count += 1
+            # §8 强赛道试探：FORCE min-executable size (绕过风险预算放大 / forced_min_executable_size); a
+            # risk-throttled probe must never go out as a normal-sized build. The 4d-ii-c risk size is kept
+            # as a `pre_probe_risk_shares` trace.
+            orig_sizing = row["sizing"]
+            probe_sizing = {**orig_sizing, "desired_model_shares": MIN_EXECUTABLE_SHARES,
+                            "reason": "theme_probe_forced_min",
+                            "pre_probe_risk_shares": orig_sizing["desired_model_shares"]}
+            out_rows.append({**row, "ticker": ct, "selection_rank": rank_by_index[i],
+                             "sizing": probe_sizing, "theme_probe": promoted[i]})
         elif capped_by_index[i]:
             out_rows.append({**row, "ticker": ct, "selection_rank": rank_by_index[i],
                              "final_action": _OBSERVE, "observe_reason_type": _R_CAPACITY})

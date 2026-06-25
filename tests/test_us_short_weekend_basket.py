@@ -1,15 +1,16 @@
 # -*- coding: utf-8 -*-
-"""Tests for the US-short weekend-pipeline build-gate resolution (engine/us_short_weekend_basket.py) — batch4 slice 4d-ii-e/f.
+"""Tests for the US-short weekend-pipeline build-gate resolution (engine/us_short_weekend_basket.py) — batch4 slice 4d-ii-e/f/g.
 
-Design authority: docs/us_short_system_design.md §8 (line 227 weekly build-limit + 同主题 cap; line 230/238
-portfolio_guard / symbol_cooldown new-build block) / §9 / §18.2.
+Design authority: docs/us_short_system_design.md §8 (line 227 weekly build-limit + 同主题 cap; line 228-231
+强赛道试探名额 theme_probe; line 230/238 portfolio_guard / symbol_cooldown new-build block) / §9 / §18.2.
 
 Covers selection_rank by core_score, the §8 BASE per-regime weekly build-limit (进攻3/震荡2/防御1/极度防御0),
-the 同主题 weekly cap (≤2), the no-promotion interaction, capacity_or_budget_deferred emission for
-capacity-deferred builds, the 4d-ii-f new-build blocking (portfolio_guard cooldown 禁新建 + per-symbol
-cooldown → 观察(risk_cooldown), removed before ranking so a blocked symbol frees its slot), non-建仓
-carry-through, the symbol_cooldown status⟺engine triangulation, and fail-closed sized_result / regime /
-basket_context / guard-state / cooldown-state inputs.
+the 同主题 weekly cap (≤2), the no-promotion interaction, capacity_or_budget_deferred emission, the 4d-ii-f
+new-build blocking (portfolio_guard cooldown 禁新建 + per-symbol cooldown → 观察(risk_cooldown), removed before
+ranking so a blocked symbol frees its slot), the 4d-ii-g theme_probe extra seats (promote eligible
+capacity-deferred strong-theme builds up to the §8 #27 seat budget, under the 同主题 cap, tagged
+theme_probe_min_size + entry-mode, size forced to min-executable), non-建仓 carry-through, the
+symbol_cooldown status⟺engine triangulation, and fail-closed inputs.
 """
 import sys
 import unittest
@@ -21,9 +22,19 @@ if str(ROOT) not in sys.path:
 
 import engine.us_short_weekend_basket as wb  # noqa: E402
 import engine.us_short_symbol_cooldown as sc  # noqa: E402
+from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES  # noqa: E402
 
 
 _DEFAULT = object()
+# a default (non-eligible) theme_probe input block — low confidence so it never earns a probe by accident
+_TP_OFF = {"theme_lifecycle_state": None, "high_confidence": False, "coverage_status": "full",
+           "no_gap_week": False, "entry_in_band": False}
+
+
+def _tp(hc=True, lc="confirmed_active", cov="full", gap=False, band=False):
+    """A theme_probe eligibility input block (eligible by default)."""
+    return {"theme_lifecycle_state": lc, "high_confidence": hc, "coverage_status": cov,
+            "no_gap_week": gap, "entry_in_band": band}
 
 
 def _brow(ticker, score, final="建仓", sizing=_DEFAULT):
@@ -39,15 +50,17 @@ def _sized(rows, regime="进攻"):
     return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": rows}
 
 
-def _ctx(theme_map, guard="normal", cooldowns=None):
+def _ctx(theme_map, guard="normal", cooldowns=None, opp="no_strong_theme", probes=None):
     cooldowns = cooldowns or {}
-    return {"per_ticker": {t: {"theme": th, "symbol_cooldown_status": cooldowns.get(t, "none")}
-                           for t, th in theme_map.items()},
-            "portfolio_guard_status": guard}
+    probes = probes or {}
+    return {"per_ticker": {t: {"theme": th, "symbol_cooldown_status": cooldowns.get(t, "none"),
+                              "theme_probe": probes.get(t, _TP_OFF)} for t, th in theme_map.items()},
+            "portfolio_guard_status": guard, "theme_opportunity_state": opp}
 
 
-def _resolve(rows, regime, theme_map, guard="normal", cooldowns=None):
-    return wb.resolve_build_capacity(_sized(rows, regime), basket_context=_ctx(theme_map, guard, cooldowns))
+def _resolve(rows, regime, theme_map, guard="normal", cooldowns=None, opp="no_strong_theme", probes=None):
+    return wb.resolve_build_capacity(_sized(rows, regime),
+                                     basket_context=_ctx(theme_map, guard, cooldowns, opp, probes))
 
 
 def _by(out):
@@ -94,11 +107,11 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         self.assertEqual(by["CCC"]["observe_reason_type"], "capacity_or_budget_deferred")
 
     def test_theme_cap_no_promotion(self):
-        # top-3 by rank are tA,tA,tA; tB is rank 4. theme cap drops 3rd tA; tB is NOT promoted into the slot.
+        # top-3 by rank are tA,tA,tA; tB is rank 4. theme cap drops 3rd tA; tB is NOT base-promoted into the slot.
         out = _resolve([_brow("AAA", 90), _brow("BBB", 80), _brow("CCC", 70), _brow("DDD", 60)],
                        "进攻", {"AAA": "tA", "BBB": "tA", "CCC": "tA", "DDD": "tB"})
         by = _by(out)
-        self.assertEqual(out["build_count"], 2)   # AAA, BBB only — no promotion of DDD
+        self.assertEqual(out["build_count"], 2)   # AAA, BBB only — no base promotion of DDD
         self.assertEqual([by[t]["final_action"] for t in ("AAA", "BBB")], ["建仓", "建仓"])
         self.assertEqual(by["CCC"]["final_action"], "观察")
         self.assertEqual(by["DDD"]["final_action"], "观察")
@@ -128,7 +141,6 @@ class ResolveBuildCapacityTests(unittest.TestCase):
 
     # --- 4d-ii-f: portfolio_guard / symbol_cooldown new-build blocking → 观察(risk_cooldown) ---
     def test_portfolio_guard_cooldown_blocks_all_builds(self):
-        # account cooldown (禁新建) → every provisional 建仓 → 观察(risk_cooldown), no rank, zero build_count.
         out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "进攻",
                        {"AAA": "t1", "BBB": "t2"}, guard="cooldown")
         self.assertEqual(out["build_count"], 0)
@@ -139,7 +151,6 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             self.assertIsNone(by[t]["selection_rank"])
 
     def test_portfolio_guard_caution_does_not_block(self):
-        # caution has block_new_entry=False (its reduce_* graded effects are out of this slice's scope).
         out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "进攻",
                        {"AAA": "t1", "BBB": "t2"}, guard="caution")
         self.assertEqual(out["build_count"], 2)
@@ -172,7 +183,6 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         self.assertEqual(_by(out)["AAA"]["final_action"], "建仓")
 
     def test_blocked_build_frees_slot_before_ranking(self):
-        # 进攻 limit 3; top-ranked AAA is symbol-cooled → it does NOT consume a slot, so BBB/CCC/DDD all build.
         out = _resolve([_brow("AAA", 90), _brow("BBB", 80), _brow("CCC", 70), _brow("DDD", 60)],
                        "进攻", {"AAA": "t1", "BBB": "t2", "CCC": "t3", "DDD": "t4"},
                        cooldowns={"AAA": "in_cooldown"})
@@ -182,7 +192,6 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         self.assertTrue(all(by[t]["final_action"] == "建仓" for t in ("BBB", "CCC", "DDD")))
 
     def test_block_takes_precedence_over_capacity(self):
-        # 防御 limit 1; top-ranked AAA is blocked → risk_cooldown (NOT capacity_or_budget_deferred); BBB builds.
         out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
                        {"AAA": "t1", "BBB": "t2"}, cooldowns={"AAA": "in_cooldown"})
         by = _by(out)
@@ -190,6 +199,112 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         self.assertIsNone(by["AAA"]["selection_rank"])
         self.assertEqual(by["BBB"]["final_action"], "建仓")
         self.assertEqual(out["build_count"], 1)
+
+    # --- 4d-ii-g: theme_probe extra seats (§8 强赛道试探名额) ---
+    def test_theme_probe_promotes_deferred_strong(self):
+        # 防御 limit 1: AAA base, BBB deferred; 防御+strong = 1 seat → BBB promoted (建仓 + theme_probe tag).
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong",
+                       probes={"AAA": _tp(), "BBB": _tp()})
+        by = _by(out)
+        self.assertEqual(out["build_count"], 2)
+        self.assertEqual(by["BBB"]["final_action"], "建仓")
+        self.assertEqual(by["BBB"]["theme_probe"]["risk_tag"], "theme_probe_min_size")
+        self.assertEqual(by["BBB"]["selection_rank"], 2)              # keeps its rank
+        self.assertEqual(by["BBB"]["sizing"]["desired_model_shares"], MIN_EXECUTABLE_SHARES)   # forced min size
+        self.assertEqual(by["BBB"]["sizing"]["pre_probe_risk_shares"], 50)   # pre-probe risk size kept as trace
+        self.assertNotIn("theme_probe", by["AAA"])                   # a base build is not a probe
+
+    def test_promoted_probe_forced_to_min_executable_size(self):
+        # §8 forced-min invariant: a promoted probe must NOT keep its 4d-ii-c risk size — whatever it was
+        # (here 500), it is forced to MIN_EXECUTABLE_SHARES, with the pre-probe risk size kept as a trace.
+        big = {"desired_model_shares": 500, "status": "sized"}
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80, sizing=big)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong", probes={"AAA": _tp(), "BBB": _tp()})
+        probe = _by(out)["BBB"]
+        self.assertEqual(probe["final_action"], "建仓")
+        self.assertEqual(probe["theme_probe"]["risk_tag"], "theme_probe_min_size")
+        self.assertEqual(probe["sizing"]["desired_model_shares"], MIN_EXECUTABLE_SHARES)
+        self.assertLessEqual(probe["sizing"]["desired_model_shares"], MIN_EXECUTABLE_SHARES)   # never > min
+        self.assertEqual(probe["sizing"]["pre_probe_risk_shares"], 500)   # original risk size preserved
+        self.assertEqual(probe["sizing"]["reason"], "theme_probe_forced_min")
+
+    def test_no_strong_theme_no_probe(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="no_strong_theme",
+                       probes={"AAA": _tp(), "BBB": _tp()})
+        self.assertEqual(out["build_count"], 1)   # 0 seats
+        self.assertEqual(_by(out)["BBB"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    def test_normal_theme_no_probe(self):
+        # `normal` theme_opportunity_state is also 0 seats (matrix: only strong/extreme grant probes) —
+        # a deferred eligible build is NOT promoted under `normal`.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="normal",
+                       probes={"AAA": _tp(), "BBB": _tp()})
+        self.assertEqual(out["build_count"], 1)   # 0 seats → BBB stays deferred
+        self.assertEqual(_by(out)["BBB"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    def test_theme_probe_ineligible_low_confidence(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong",
+                       probes={"AAA": _tp(), "BBB": _tp(hc=False)})
+        self.assertEqual(_by(out)["BBB"]["final_action"], "观察")   # low confidence → no probe
+
+    def test_theme_probe_ineligible_restricted_coverage(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong",
+                       probes={"AAA": _tp(), "BBB": _tp(cov="restricted")})
+        self.assertEqual(_by(out)["BBB"]["final_action"], "观察")   # restricted coverage → no probe
+
+    def test_theme_probe_ineligible_degraded_lifecycle(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong",
+                       probes={"AAA": _tp(), "BBB": _tp(lc="cooling")})
+        self.assertEqual(_by(out)["BBB"]["final_action"], "观察")   # cooling theme → no new probe
+
+    def test_theme_probe_seat_budget_caps_promotions(self):
+        # 进攻 limit 3 + extreme = 2 seats; 5 builds → 3 base + 2 deferred, both eligible → exactly 2 promoted.
+        rows = [_brow(t, 90 - i) for i, t in enumerate(["A", "B", "C", "D", "E"])]
+        out = _resolve(rows, "进攻", {t: "th" + t for t in "ABCDE"}, opp="extreme",
+                       probes={t: _tp() for t in "ABCDE"})
+        self.assertEqual(out["build_count"], 5)   # 3 base + 2 probe (seat budget 2)
+
+    def test_theme_probe_respects_same_theme_cap(self):
+        # 防御 limit 1, theme X: AAA base (X count 1). extreme = 1 seat. BBB(X) promoted (X→2=cap); CCC(X) blocked.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80), _brow("CCC", 70)], "防御",
+                       {"AAA": "X", "BBB": "X", "CCC": "X"}, opp="extreme",
+                       probes={t: _tp() for t in ("AAA", "BBB", "CCC")})
+        by = _by(out)
+        self.assertEqual(out["build_count"], 2)   # AAA base + BBB probe; CCC deferred (theme cap)
+        self.assertEqual(by["CCC"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    def test_theme_probe_same_theme_cap_blocks_with_spare_seats(self):
+        # 进攻 limit 3, all theme X: AAA+BBB base (X→2=cap), CCC deferred. extreme = 2 seats (spare), but X
+        # is already at the 同主题 cap → CCC is NOT promoted even with a free seat (theme cap, not seat budget).
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80), _brow("CCC", 70)], "进攻",
+                       {"AAA": "X", "BBB": "X", "CCC": "X"}, opp="extreme",
+                       probes={t: _tp() for t in ("AAA", "BBB", "CCC")})
+        self.assertEqual(out["build_count"], 2)   # AAA+BBB base; CCC blocked by 同主题 cap despite a spare seat
+        self.assertEqual(_by(out)["CCC"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    def test_extreme_defensive_no_probe_even_extreme(self):
+        out = _resolve([_brow("AAA", 90)], "极度防御", {"AAA": "t1"}, opp="extreme",
+                       probes={"AAA": _tp()})
+        self.assertEqual(out["build_count"], 0)   # 极度防御 row = 0 seats regardless of theme state
+
+    def test_promoted_probe_defensive_pullback_entry_mode(self):
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="strong",
+                       probes={"AAA": _tp(), "BBB": _tp()})
+        self.assertEqual(_by(out)["BBB"]["theme_probe"]["entry_mode_constraint"], "pullback_only")
+
+    def test_promoted_probe_defensive_breakout_exception(self):
+        # 防御 + extreme + no_gap_week + entry_in_band → the single breakout-exception entry mode.
+        out = _resolve([_brow("AAA", 90), _brow("BBB", 80)], "防御",
+                       {"AAA": "t1", "BBB": "t2"}, opp="extreme",
+                       probes={"AAA": _tp(gap=True, band=True), "BBB": _tp(gap=True, band=True)})
+        self.assertEqual(_by(out)["BBB"]["theme_probe"]["entry_mode_constraint"], "breakout_exception_allowed")
 
     # --- fail-closed ---
     def test_malformed_sized_result_raises(self):
@@ -202,9 +317,12 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             _resolve([_brow("AAA", 90)], "bull_market", {"AAA": "t1"})
 
     def test_bad_basket_context_raises(self):
-        for ctx in ({"per_ticker": {}, "portfolio_guard_status": "normal", "x": 1},   # extra top-level key
-                    {"per_ticker": "nope", "portfolio_guard_status": "normal"},         # per_ticker not a dict
-                    {"per_ticker": {}}):                                                # missing portfolio_guard_status
+        base = _ctx({"AAA": "t1"})
+        for ctx in ({**base, "x": 1},                                          # extra top-level key
+                    {"per_ticker": "nope", "portfolio_guard_status": "normal",
+                     "theme_opportunity_state": "no_strong_theme"},            # per_ticker not a dict
+                    {k: v for k, v in base.items() if k != "portfolio_guard_status"},   # missing guard
+                    {k: v for k, v in base.items() if k != "theme_opportunity_state"}):  # missing opp state
             with self.assertRaises(wb.WeekendBasketError):
                 wb.resolve_build_capacity(_sized([_brow("AAA", 90)]), basket_context=ctx)
 
@@ -212,15 +330,29 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         with self.assertRaises(wb.WeekendBasketError):
             _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, guard="halt")
 
+    def test_bad_theme_opportunity_state_raises(self):
+        with self.assertRaises(wb.WeekendBasketError):
+            _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, opp="mega_strong")
+
     def test_bad_symbol_cooldown_status_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
             _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "frozen"})
 
     def test_missing_symbol_cooldown_status_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
-            wb.resolve_build_capacity(_sized([_brow("AAA", 90)]),
-                                      basket_context={"per_ticker": {"AAA": {"theme": "t1"}},
-                                                      "portfolio_guard_status": "normal"})
+            wb.resolve_build_capacity(
+                _sized([_brow("AAA", 90)]),
+                basket_context={"per_ticker": {"AAA": {"theme": "t1", "theme_probe": _TP_OFF}},
+                                "portfolio_guard_status": "normal", "theme_opportunity_state": "no_strong_theme"})
+
+    def test_malformed_theme_probe_shape_raises(self):
+        for tp in (None, {"high_confidence": True}, {**_TP_OFF, "x": 1}):
+            with self.assertRaises(wb.WeekendBasketError):
+                wb.resolve_build_capacity(
+                    _sized([_brow("AAA", 90)]),
+                    basket_context={"per_ticker": {"AAA": {"theme": "t1", "symbol_cooldown_status": "none",
+                                                          "theme_probe": tp}},
+                                    "portfolio_guard_status": "normal", "theme_opportunity_state": "no_strong_theme"})
 
     def test_missing_build_theme_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
@@ -237,12 +369,14 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             wb.resolve_build_capacity(_sized([row]), basket_context=_ctx({"AAA": "t1"}))
 
     def test_per_ticker_bad_theme_shape_raises(self):
-        for tinfo in ({"theme": "t1", "x": 1},                              # extra key
-                      {"theme": "", "symbol_cooldown_status": "none"}):      # blank theme
+        for tinfo in ({"theme": "t1", "symbol_cooldown_status": "none", "theme_probe": _TP_OFF, "x": 1},  # extra key
+                      {"theme": "", "symbol_cooldown_status": "none", "theme_probe": _TP_OFF},   # blank theme
+                      {"theme": "t1", "symbol_cooldown_status": "none"}):                        # missing theme_probe
             with self.assertRaises(wb.WeekendBasketError):
                 wb.resolve_build_capacity(
                     _sized([_brow("AAA", 90)]),
-                    basket_context={"per_ticker": {"AAA": tinfo}, "portfolio_guard_status": "normal"})
+                    basket_context={"per_ticker": {"AAA": tinfo}, "portfolio_guard_status": "normal",
+                                    "theme_opportunity_state": "no_strong_theme"})
 
     def test_duplicate_build_ticker_raises(self):
         with self.assertRaises(wb.WeekendBasketError):
@@ -283,7 +417,7 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             with self.assertRaises(wb.WeekendBasketError):
                 wb.resolve_build_capacity(_sized([_brow("AAA", 90, sizing=bad)]), basket_context=_ctx({"AAA": "t1"}))
 
-    # --- observe_reason_type ⟺ final_action consistency (Codex residual) ---
+    # --- observe_reason_type ⟺ final_action consistency ---
     def test_observe_row_bad_reason_raises(self):
         row = _brow("OBS", 50, final="观察")
         row["observe_reason_type"] = "BANANA"
@@ -311,9 +445,6 @@ class ResolveBuildCapacityTests(unittest.TestCase):
 
     # --- triangulation: the local symbol-cooldown blocking set is pinned to the engine's actual behavior ---
     def test_symbol_cooldown_blocking_set_matches_engine(self):
-        # Every status the engine can emit must be in SYMBOL_COOLDOWN_STATUSES, and a status blocks a new
-        # build (∈ _SYMBOL_COOLDOWN_BLOCKS_NEW) IFF the engine downgrades it to observe — so this module's
-        # mapping cannot silently drift from us_short_symbol_cooldown.
         cases = [
             sc.symbol_cooldown_status(False),                                                 # none
             sc.symbol_cooldown_status(False, trigger="filled_then_stop_loss"),               # entering_cooldown

@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-06-25 - Codex re-`审查 PASS` (US-short batch4 slice 4d-ii-g forced-min residual)
+
+- **Verdict/Action**: PASS. Re-reviewed the forced-min residual repair; the active basket test module docstring now says `size forced to min-executable`, and the implementation still forces promoted `theme_probe` rows to `MIN_EXECUTABLE_SHARES` with `pre_probe_risk_shares` trace.
+- **Required**: None new. `R-USSHORT-BATCH4-THEME-PROBE-MIN-SIZE-BYPASS` is closed in `docs/system_risk_register.md`.
+- **Verify**: basket 56 OK; theme_probe + cost_floor 37 OK; adjacent pure US-short suites 312 OK; doc-governance + route-doc + README guards 52 OK; py_compile OK; direct probe verifies base 500-share build unchanged and promoted 500-share probe -> 1 share with `theme_probe_forced_min` + `theme_probe_min_size`; active keep-size grep returns 0 hits; local `jsonschema` unavailable; `git diff --check` CRLF-only.
+- **Next**: Claude Code: 提交。
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-g — forced-min test-docstring 残留)
+
+- **Verdict/Action**: 收到 `修复`（Codex re-`审查 FAIL` 残留，1 Required，judge=成立）。test 模块 docstring（`test_us_short_weekend_basket.py`）仍写「keeping size」旧契约——我上轮 B-ripple 漏扫**测试文件自身 docstring**（只扫了 engine+README+design），却写了「零残留」。改为「size forced to min-executable」。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-THEME-PROBE-MIN-SIZE-BYPASS`（残留 test-docstring 已修；code-level forced-min 上轮已对、未动）。
+- **Verify**: 完整 keep-size grep（`keeping size/keep 4d-ii-c size/保 size/no special re-size/自然显示其小仓`）扫 `engine/ tests/ docs/ presets/ schemas/`：活动 code/test/README **零命中**；剩 spec line230 原文 + 历史 SESSION_LOG + register finding prose（全豁免）。basket **56 OK**（docstring-only、逻辑未改）+ doc/route/README guards 52 OK + py_compile OK + git diff --check CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-g 残留（`tests/test_us_short_weekend_basket.py` docstring；纯 test/docs、不交叉 A 股）。重点：① test 模块 docstring「keeping size」→「size forced to min-executable」；② 完整 keep-size grep 活动 code/test/README 零残留（spec/历史/finding-prose 豁免）；③ code-level forced-min + 对抗测试上轮已 PASS、未动。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-h。
+- **Pre-Codex self-review**: A 整类（keep-size 措辞**全活动面**一次扫净：engine 0/test docstring 1 已修/README 0；本次 grep 含 test 文件 docstring=上轮漏的面）；B 连带（grep 跨 engine/tests/docs/presets/schemas 全仓、贴零命中；豁免=spec 原文+历史 SESSION_LOG+finding prose）；C 反向（仅 docstring 文字、测试逻辑/code 未动、56 仍绿）；D N/A；E register resolved+Residual resolution、CURRENT 未动；F（docstring-only、no-BOM、diff-check）。根因=上轮 B-ripple 漏扫被改文件的**测试 docstring**（[[feedback_draft_validity_gates_complete]] 已点名却仍漏=执行面），本次全活动面一次扫净+贴零命中证据。
+
+## 2026-06-25 - Codex re-`审查 FAIL` (US-short batch4 slice 4d-ii-g forced-min residual)
+
+- **Verdict/Action**: FAIL. The code-level forced-min repair works, but the active basket test module docstring still says `theme_probe_min_size + entry-mode, keeping size`, leaving the old keep-size contract in a current teaching surface.
+- **Required**: `R-USSHORT-BATCH4-THEME-PROBE-MIN-SIZE-BYPASS` remains open; residual details are in `docs/system_risk_register.md`.
+- **Verify**: basket 56 OK; theme_probe + cost_floor 37 OK; adjacent pure US-short suites 312 OK; doc-governance + route-doc + README guards 52 OK; py_compile OK; direct probe verifies base 500-share build unchanged and promoted 500-share probe -> 1 share with `pre_probe_risk_shares`, `theme_probe_forced_min`, and `theme_probe_min_size`; exact `keeping size` grep leaves one active hit at `tests/test_us_short_weekend_basket.py:12`; local `jsonschema` unavailable; `git diff --check` CRLF-only.
+- **Next**: Claude Code: 修复。
+
+## 2026-06-25 — Claude `修复` (US-short 批4 slice 4d-ii-g — theme_probe forced-min-size)
+
+- **Verdict/Action**: 收到 `修复`（Codex `review FAIL`，1 Required，judge=成立且在 scope——正是我起草时 flag 给 Codex 核的读法；governance `forced_min_executable_size=true` const-pin + §8「强制=最小可执行仓」+ theme_probe engine caller-forces-min 契约为权威，「自然显示其小仓」保留风险仓读法错）。促回 theme_probe 行 emit 前强制 `sizing.desired_model_shares=MIN_EXECUTABLE_SHARES`（单源 position_sizing）+ `reason=theme_probe_forced_min` + 原风险仓存 `pre_probe_risk_shares` trace。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-THEME-PROBE-MIN-SIZE-BYPASS`。
+- **Verify**: basket **56 OK**（+1 对抗：500 股 risk build 促回→强制 1 股=MIN_EXECUTABLE_SHARES、≤min、原值存 trace；既有 promote 测改断言 forced-min+trace）。全离线 `*us_short*` **2009 OK**（=2008+1）零回归；doc/route/README guards 52 OK（basket col1=343 ≤350）；py_compile OK；直接探针 500→1+trace；git diff --check CRLF-only。
+- **Next**: Codex re-`审查` 批4 slice 4d-ii-g forced-min（`us_short_weekend_basket.py`+测试+README+docstring；纯/离线、不交叉 A 股）。重点：① 促回 probe 强制 `MIN_EXECUTABLE_SHARES`（单源 position_sizing）+`reason=theme_probe_forced_min`+`pre_probe_risk_shares` trace；② 对抗测试 promoted `desired_model_shares ≤ MIN_EXECUTABLE_SHARES`（500→1）+ 既有 seat/同主题/资格/entry-mode/no-probe 正控绿；③ docstring+emit+README「keep size」改 forced-min；④ cost-floor 仍 4d-ii-h（min-size 已 enforce）。findings 落 register。PASS 后 `提交`；之后 4d-ii-h。
+- **Pre-Codex self-review**: A 整类（forced-min 在唯一 promoted 出口、对抗 500→min、≤min 防反向）；B 连带（grep keep-size 措辞活动面[docstring+emit+README]零残留；MIN_EXECUTABLE_SHARES 单源 position_sizing；spec「自然显示其小仓」原文不动；起草 append-only 不改）；C 反向（base 非 probe、ineligible/no-seat 不促、≤min 防 >min、trace 不丢）；D N/A；E README 单态、register resolved、CURRENT 未动；F（sizing 加 trace/reason 不破键、orig desired≥1 已 validated、no-BOM、diff-check）。根因=起草采被 flag 的错读法，Codex 据 governance pin 纠正，[[feedback_draft_validity_gates_complete]]。
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch4 slice 4d-ii-g theme_probe min-size)
+
+- **Verdict/Action**: FAIL. 4d-ii-g theme_probe extra-seat promotion is structurally wired, but promoted probe builds retain 4d-ii-c risk-sized shares while being tagged `theme_probe_min_size`, violating the section 8 forced-min-size invariant.
+- **Required**: `R-USSHORT-BATCH4-THEME-PROBE-MIN-SIZE-BYPASS` is open in `docs/system_risk_register.md`.
+- **Verify**: basket 55 OK; theme_probe + cost_floor 37 OK; adjacent pure US-short suites 349 OK; doc-governance + route-doc + README guards 52 OK; `py_compile` OK; direct probe reproduces promoted probe retaining 500 shares with `theme_probe_min_size` metadata; schema / broad `*us_short*` discovery is blocked here by missing local `jsonschema`; `git diff --check` CRLF-only.
+- **Next**: Claude Code: 修复。
+
+## 2026-06-25 — Claude `起草` (US-short 批4 slice 4d-ii-g — 周末 pipeline 建仓门 theme_probe 额外席)
+
+- **Verdict/Action**: 起草批4 slice 4d-ii-g（§8 line 228-231 强赛道试探名额 theme_probe 额外席）。扩 `resolve_build_capacity` 第③段：base 排名+capacity 后，把 capacity-deferred 的强赛道建仓按 §8 #27 席位 `theme_probe_seats(regime, theme_opportunity_state)`（防御≤1/进攻+极强≤2/极度防御0）促回 建仓——资格复用 `theme_probe_decision`（lifecycle 允许+high_confidence+coverage 非 restricted+hard-zero 已为幸存者清零），仍受 同主题 cap（probe 计入主题）；促回行 tag `theme_probe_min_size` + 防御档 entry_mode_constraint，**保留 4d-ii-c 风险仓**（§8「绕过风险预算放大→model_position_size 自然显示其小仓」、本刀无特殊重定仓）。basket_context 扩 account `theme_opportunity_state` + per_ticker[ct].theme_probe（closed-world 5 输入、值语义由 theme_probe_decision fail-close）。**cost-floor 闸（line 232→cost_inefficient_min_size）= 4d-ii-h**（需 佣金/滑点/点差 执行成本契约，`apply_cost_floor` 尚未接入任何 stage）；cash+§9 rank 后续。注：4d-ii-f 起草曾把「重定仓+cost-floor」并入 4d-ii-g，本刀据「自然显示其小仓」改为保留 size + cost-floor 另拆 4d-ii-h。
+- **Required**: 无（起草；扩 1 engine 模块 + 测试 + README 2 行；pre-existing `4d-ii-d` 兄弟模块 docstring drift 见 Next⑥）。
+- **Verify**: basket **55 OK**（41→+14：promote 强赛道 / no_strong·normal 0席 / 低置信·restricted·degraded-lifecycle 不促 / 席位budget cap / 同主题 cap[break+continue 双路径] / 极度防御0席 / 保留 size+rank / entry-mode pullback·breakout / fail-closed 坏 opp·malformed theme_probe）。全离线 `*us_short*` **2008 OK**（=1994+14）零回归；doc/route/README guards 52 OK（basket col1=338、sizing col1=318 ≤350）；py_compile OK；UTF-8 no-BOM；直接探针 5 例（防御+strong 促 / no_strong 不促 / hc=False 不促 / 进攻+extreme 2席满促 / 同主题 cap 拦第3）。
+- **Next**: Codex `审查` 批4 slice 4d-ii-g（`engine/us_short_weekend_basket.py`+测试+`docs/README.md` 2 行；纯/离线、无 provider/live、不交叉 A 股）。重点：① theme_probe 席位授予复用 `theme_probe_decision`/`theme_probe_seats` 单源（资格=lifecycle+high_confidence+coverage、hard-zero 传 False 因幸存者已清）；② 席位 budget（matrix 周总额）break + 同主题 cap continue 双拦路径、probe 计入 built_theme_count；③ 促回行 tag theme_probe_min_size+entry_mode_constraint、**保留 4d-ii-c size**（设计「自然显示其小仓」读法——请核此读法 vs forced-min）；④ basket_context 扩 theme_opportunity_state(account)+per_ticker.theme_probe(per-build closed-world、值由 engine fail-close)；⑤ **cost-floor=4d-ii-h（apply_cost_floor 未接入、需执行成本契约）+ cash/§9 rank 后续 + 极度防御0席 safety net**——本刀只席位+资格+tag+entry-mode、不 cost-floor/不重定仓；⑥ pre-existing `4d-ii-d` 兄弟模块（analysis/decision/sizing）docstring drift（早期重编号、非本刀 ripple）noticed-未修。findings 落 register。PASS 后用户 `提交`；之后 4d-ii-h（cost-floor）。
+- **Pre-Codex self-review**: A 整类（theme_opportunity_state 4 态全覆盖[no_strong·normal 0席/strong 1席/extreme 2席+breakout]、资格 fail 3 类[low-conf/restricted/degraded-lifecycle]、席位 budget break + 同主题 cap continue 双路径隔离测、极度防御0席、promote 保 size+rank、base 不误 tag probe、fail-closed 坏 opp+malformed theme_probe shape）；B 连带（grep resolve_build_capacity 消费者=仅测试[已更新]；模块+函数+测试 docstring + README basket 行同步；README sizing 行移除每刀失效的漂移 forward-pointer 改稳定；新符号 THEME_OPPORTUNITY_STATES/theme_probe_decision/theme_probe_seats import + _THEME_PROBE_KEYS/_validate_theme_probe_inputs/_promote_theme_probes 无旧符号删改；pre-existing 4d-ii-d drift 非本刀 ripple 未修）；C 反向（no_strong/normal/ineligible/极度防御 不误促、eligible deferred 强赛道确促、promote 保 size+rank 不损、base build 无 theme_probe 键）；D 资格走 theme_probe_decision 真值绑定非枚举关键词；E README 单态更新+移除漂移 pointer、CURRENT 未动（draft）；F（closed-world basket_context+per_ticker+theme_probe shape、opp∈THEME_OPPORTUNITY_STATES、theme_probe_decision/seats 纯函数、effects 深拷无 mutation、UTF-8 no-BOM、git diff --check CRLF-only）。根因=承接 4d-ii-f flag 的 theme_probe wiring、cost-floor 因需执行成本契约拆 4d-ii-h，[[feedback_draft_validity_gates_complete]]。
+
 ## 2026-06-25 - Codex `审查 PASS` (US-short batch4 slice 4d-ii-f basket new-entry blocking)
 
 - **Verdict/Action**: PASS. Reviewed the 4d-ii-f `resolve_build_capacity` extension for portfolio_guard / symbol_cooldown new-entry blocking; it consumes `portfolio_guard_effects(...).block_new_entry` generically, maps account/symbol cooldowns to `观察(risk_cooldown)`, removes blocked builds before ranking, and preserves the 4d-ii-e capacity semantics. No new material Required found.
