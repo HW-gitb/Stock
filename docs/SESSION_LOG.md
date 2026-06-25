@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-06-25 - Codex `修复 + 审查 PASS` (US-short batch4 slice 4d-ii-o weekend orchestrator)
+
+- **Verdict/Action**: PASS. Codex repaired and re-reviewed the final batch4 O orchestrator seam: `holding_in_top15` overlap now passes once; identity / row_source / stale / duplicate guards still fail closed. Batch4 offline weekend-pipeline engineering is closed; batch5 provider/live remains gated.
+- **Required**: `R-USSHORT-BATCH4-O-HOLDING-IN-TOP15-SEAM-BLOCKER` and prior `R-USSHORT-BATCH4-O-SELECTION-ANALYSIS-PAYLOAD-ID-GAP` are resolved; full detail and closure evidence live in `docs/system_risk_register.md`.
+- **Verify**: orchestrator 20 OK; direct seam probes OK; adjacent weekend suites 388 OK; full offline `*us_short*` 2233 OK; doc/route/README guards 52 OK; py_compile OK; nonempty O probes wrote admitted-only and `holding_in_top15` private artifacts. No forbidden path ran.
+- **Next**: PASS closeout owns the local commit; next actor command is `Claude Code：Pass`.
+- **Pre-Codex self-review**: proof-of-use: union identity + membership row_source guards are explicit; N private guard remains single source; design/CURRENT status is settled; only US-short batch4 offline files/docs were touched.
+
+## 2026-06-25 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-o holding-in-top15 seam)
+
+- **Verdict/Action**: FAIL. The payload identity repair closes the AAPL-key/MSFT-payload gap, but the same O seam rejects a legal `holding_in_top15` overlap: a ticker that is both admitted and already held raises as a duplicate before analysis.
+- **Required**: `R-USSHORT-BATCH4-O-HOLDING-IN-TOP15-SEAM-BLOCKER` is open in `docs/system_risk_register.md` with full detail and repair boundary. Prior `R-USSHORT-BATCH4-O-SELECTION-ANALYSIS-PAYLOAD-ID-GAP` remains resolved in the working tree.
+- **Verify**: orchestrator 10 OK; adjacent weekend suites 368 OK; full offline `*us_short*` 2223 OK; direct probes reject AAPL-key/MSFT-payload and reproduce admitted+holding AAPL with `row_source=holding_in_top15` being rejected. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path ran.
+- **Next**: Claude Code：修复
+
+## 2026-06-25 — Claude `修复` (US-short 批4 末刀 4d-ii-o seam payload 身份)
+
+- **Verdict/Action**: 收到 `修复`（Codex `审查 FAIL`，1 Required，judge=成立+在 scope+必要——consumer-validation 身份类：O 的 selection→analysis seam `_build_analysis_rows` 只验 per_ticker_analysis **键集**覆盖 canonical admitted+holdings，没验**每个 payload 行自身 ticker == 其键**，key `AAPL` 挂 ticker=`MSFT` 的 payload 蒙混、后续全链跑错票）。修：键循环加——每个 payload 须为 dict 且 `canonical_us_ticker(payload['ticker'])==canonical 键`，非 dict/缺/非法/不匹配 fail-closed（key-only 覆盖不证明 payload 身份）。详见 register。
+- **Required**: resolved（working tree）：`R-USSHORT-BATCH4-O-SELECTION-ANALYSIS-PAYLOAD-ID-GAP`。
+- **Verify**: orchestrator **10 OK**（+`SeamPayloadIdentity` 候选 key/他票 payload·持仓 key/他票·两票互换[键覆盖成立但内容互换]·非 dict payload + 正控匹配[含非规范键]）。全离线 `*us_short*` **2223 OK** 零回归；doc/route/README guards 52 OK；py_compile OK；直接探针 AAPL 键/MSFT payload 现 fail-closed；no-BOM；diff CRLF-only；leak 无私密。
+- **Next**: Codex re-`审查` 批4 末刀 4d-ii-o seam（`engine/us_short_weekend_orchestrator.py`+测试；纯/离线、不交叉 A 股；边界=仅 orchestrator+测试/docs，被调 stage 只 import 未改）。重点：① `_build_analysis_rows` 每 payload canonical ticker==其键（非 dict/缺/不匹配 fail-closed）；② 键集覆盖 + payload 身份双验；③ Codex AAPL/MSFT 案例 fail-closed + 正控匹配过。findings 落 register。PASS 后 Codex auto-commit（不指示提交）；**完成即批4 周末 pipeline 工程闭环**。
+- **Pre-Codex self-review**: A 整类（seam payload 身份一次扫净：候选/持仓 key 他票·互换·非 dict + 正控，各对抗）；B 连带（复用 canonical_us_ticker 单源；键覆盖 + payload 身份双验于返回前；编排器只改 _build_analysis_rows、被调 stage 未改；新模块顶层无下游）；C 反向（payload ticker==键 正控过[含非规范键]、仅不匹配/非 dict raise）；D N/A；E register resolved+CURRENT 未动（o draft）；F（payload 身份对账+canonical 单源+direct-probe+no-BOM/diff/leak）。根因=seam key-only 覆盖不证明 payload 身份，须每 payload 对账其键，[[feedback_whole_class_input_validation_sweep]]。
+
+## 2026-06-25 - Codex `审查 FAIL` (US-short batch4 slice 4d-ii-o orchestrator)
+
+- **Verdict/Action**: FAIL. The new end-to-end orchestrator keeps the stage order and out-of-window shape, but the selection→analysis seam has a material identity-validation gap: a selected ticker key can carry a payload row for a different ticker.
+- **Required**: `R-USSHORT-BATCH4-O-SELECTION-ANALYSIS-PAYLOAD-ID-GAP` is open in `docs/system_risk_register.md` with full detail and repair boundary.
+- **Verify**: target orchestrator 5 OK; py_compile OK; direct seam probe reproduced `selection.admitted=["AAPL"]` + `per_ticker_analysis["AAPL"].ticker="MSFT"` being accepted and returned as `MSFT`. No provider/live/network/DataHub/Skill/production/broker/order/A-share/US-long path ran.
+- **Next**: Claude Code：修复
+
+## 2026-06-25 — Claude `起草` (US-short 批4 末刀 4d-ii-o 端到端编排器 = 周末 pipeline 工程闭环)
+
+- **Verdict/Action**: 起草批4 末刀 4d-ii-o（端到端编排器）。新 `engine/us_short_weekend_orchestrator.py`：`run_weekend_pipeline(now_et, sessions, pipeline_context)` 串全链——4d-i run_selection（内含 resolve_canonical_asof；盘中死区→**out-of-window no-emit** 不跑下游/不产 artifact）→ 从 selection（admitted 候选 + holdings）经注入 `per_ticker_analysis` 建 4d-ii-a rows → analyze→decide→size→build-gate(e/f/g)→cost-floor→cash→action_rank → K assemble_machine_record(**as_of=decision_date**) → L run_lifecycle_eval_stage(decision_date、**先于 m2 render**) → m2 build_weekly_report → N write_run_private(decision_date)。**decision_date 单一穿线**（resolver→K as_of→L→N；m2/N 再对账注入 report_context price-clock / machine as_of == decision_date、跨周 fail-closed）。**selection→分析 seam consumer-validation**：per_ticker_analysis 恰覆盖 canonical admitted+holdings（缺/陈旧/非规范/重复 fail-closed）。closed-world pipeline_context（15 键）。纯接线——各 stage 自带 consumer-validation 不重写。
+- **Required**: 无（起草；新 engine 模块 + 测试 + README 一行）。
+- **Verify**: orchestrator **5 OK**（empty-run end-to-end 全链 emit + 写 3 artifact[weekly_private 只 2 文件] + decision_date 穿线 + out-of-window no-emit[不产 artifact/不写] + closed-world 拒缺/多键 + seam per_ticker_analysis 未覆盖 admitted→拒）。全离线 `*us_short*` **2218 OK** 零回归；doc/route/README guards 52 OK（o 行 334）；py_compile OK；no-BOM；diff CRLF-only；leak 检查 git status 无私密 artifact。
+- **Next**: Codex `审查` 批4 末刀 4d-ii-o（`engine/us_short_weekend_orchestrator.py`+测试+README 一行；纯/离线、不交叉 A 股）。重点：① 全链串接序（4d-i→a..j→K→L **先于 m2**→N）+ decision_date 单一穿线（resolve→K as_of/L/N、m2/N 对账跨周 fail-closed）；② out-of-window no-emit（不跑下游、不产 machine record/report/私密 artifact）；③ selection→分析 seam（per_ticker_analysis 恰覆盖 canonical admitted+holdings、缺/陈旧/dup/非规范 fail-closed）；④ closed-world pipeline_context（15 键）；⑤ 纯接线、各 stage 自验单源不重写、不入 action/reason guard（不 emit §9）；⑥ empty-run 是合法 end-to-end（空选股→空链→K 空记录 clean→渲染"无"→N 写）。findings 落 register。PASS 后 Codex auto-commit（不指示提交）；**完成即批4 周末 pipeline 工程闭环**（≠ 真周报：仍需批5 真数据 + ≥12 周前向 + ship-gate 时间门）。
+- **Pre-Codex self-review**: A 整类（empty-run end-to-end/decision_date 穿线/out-of-window no-emit/closed-world/seam coverage，各对抗+正控）；B 连带（复用全 11 stage 单源[run_selection/analyze/decide/size/basket/cost_floor/cash/action_rank/K/L/m2/N]+canonical_us_ticker；编排器只串接不重写 stage 校验；decision_date 穿 K/L/N、m2/N 对账；新模块=顶层无下游消费者；README≤350；不入 action/reason guard）；C 反向（empty-run emit+写、out-of-window 不产/不写、仅 closed-world/seam 畸形 raise；leak 无 tracked 私密）；D N/A；E README 薄指针单态、CURRENT §0 已 settle N（o draft 未动 §0）；F（decision_date 单源穿线+out-of-window no-emit+seam coverage+各 stage 自验+leak 检查+no-BOM/diff）。根因=批4 末刀端到端编排（工程闭环），多 artifact 边界 decision_date 单一穿线 + seam coverage + 各 stage 自验，[[feedback_whole_class_input_validation_sweep]]。
+
 ## 2026-06-25 - Codex `修复 + 审查 PASS` (US-short batch4 slice 4d-ii-n private write)
 
 - **Verdict/Action**: PASS. Codex re-reviewed the repaired private writer, found and fixed one same-class residual in the price-clock parser (duplicate same-line `decision_date` / body-only `price_clock:` marker), and found no remaining material Required in the reviewed US-short 4d-ii-n scope.
