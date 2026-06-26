@@ -47,6 +47,15 @@ def _report_md(as_of=_AS_OF):
 
 
 _REPORT_MD = _report_md()
+# a full §11.2 report whose section-2 body contains "price_clock:" (simulates an account_risk_note
+# that references last week's clock); used to prove the banner ④ filter matches only the prefix.
+_REPORT_MD_WITH_EDITORIAL_PRICE_CLOCK = render_weekly_report({
+    "banner": {"price_clock": {"price_data_through": "20260109", "news_window_through": _AS_OF,
+                               "session_scope": "RTH", "decision_date": _AS_OF}},
+    "lifecycle_reminder_count": {"section_1": 0, "section_12": 0},
+    "sections": {**{str(i): ["content %d" % i] for i in range(1, 14)},
+                 "2": ["参考上周 price_clock: session_scope=RTH / decision_date=20260105"]},
+})
 _MINIMAL_PRICE_CLOCK_ONLY_REPORT = (
     "# US-short weekly report\n## 诚实横幅\n- ④ price_clock: session_scope=RTH / decision_date=%s\n"
     "## 1. 本周运行状态\nx\n" % _AS_OF)
@@ -89,6 +98,16 @@ class HappyWrite(unittest.TestCase):
             self.assertIn("field_records", rec["rows"][0])     # the §10 machine layer
             self.assertIn("valid_entry_high", out["action_table_path"].read_text(encoding="utf-8"))  # populated CSV header
             self.assertEqual(out["weekly_report_path"].read_text(encoding="utf-8"), _REPORT_MD)
+
+    def test_editorial_body_with_price_clock_string_does_not_count_as_banner(self):
+        # A valid §11.2 report where an editorial section body contains "price_clock:" must still pass —
+        # it is not the rendered banner ④ line and must not be miscounted (the filter now matches prefix,
+        # not substring).
+        with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            out = pw.write_run_private(decision_date=_AS_OF, machine_record=_machine_record(),
+                                       weekly_report_md=_REPORT_MD_WITH_EDITORIAL_PRICE_CLOCK,
+                                       runs_private_root=rr, weekly_private_root=wr)
+            self.assertTrue(out["weekly_report_path"].exists())
 
     def test_idempotent_rerun_overwrites(self):
         with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:

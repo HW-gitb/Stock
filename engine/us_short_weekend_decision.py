@@ -77,7 +77,7 @@ class WeekendDecisionError(Exception):
     """The injected analysis-evidence result is malformed (fail-closed before the decision runs)."""
 
 
-def _validate_evidence_row(ev):
+def validate_evidence_row(ev):
     """Fail-closed VALUE validation of one 4d-ii-a evidence row before it maps to a §9 action — a
     malformed veto tier, a context-incompatible hard veto, a veto/row context mismatch, a non-bool price
     `executable`, a missing/non-bool holding `breached` (when consumed), or an unknown
@@ -151,7 +151,7 @@ def decide_actions(analysis_result):
         raise WeekendDecisionError("analysis_result.rows 须为 list")
     decided = []
     for ev in rows:
-        _validate_evidence_row(ev)
+        validate_evidence_row(ev)
         action, reason = _decide_one(ev)
         err = action_reason_error(action, reason)   # producer self-check: no _decide_one path may emit a bad §9 pair
         if err:

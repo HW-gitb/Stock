@@ -44,8 +44,9 @@ _REPORT_CONTRACT_PATH = ROOT / "presets" / "us_short_weekly_report_contract_2026
 
 # §11.1: weekly_private/<dd>/ holds ONLY these two official files — any pre-existing extra file/dir fails closed.
 _OFFICIAL_WEEKLY_FILES = frozenset({"weekly_report.md", "action_table.csv"})
-# the rendered §11.2 price-clock banner ④ line (render_weekly_report emits exactly one "- ④ price_clock: ...").
-_PRICE_CLOCK_LINE = "price_clock:"
+# the rendered §11.2 price-clock banner ④ line — only a line STARTING with this prefix is the real
+# banner (render_weekly_report emits exactly one such line; editorial content with "price_clock:" elsewhere
+# in the body must not be counted as a second banner line).
 _PRICE_CLOCK_PREFIX = "- ④ price_clock:"
 _PRICE_CLOCK_DECISION_DATE = re.compile(r"decision_date=(\d{8})")
 _REPORT_TITLE = "# US-short weekly report"
@@ -124,7 +125,7 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md,
     # the official weekly_report's RENDERED price-clock banner ④ must be for THIS decision_date — parse the actual
     # rendered price_clock banner line (exactly one, render_weekly_report emits one), NOT an arbitrary substring,
     # so an incidental old/new `decision_date=` elsewhere in the body cannot spoof a cross-week report (§2.1 同一 run).
-    pc_lines = [ln for ln in weekly_report_md.splitlines() if _PRICE_CLOCK_LINE in ln]
+    pc_lines = [ln for ln in weekly_report_md.splitlines() if ln.strip().startswith(_PRICE_CLOCK_PREFIX)]
     if len(pc_lines) != 1:
         raise WeekendPrivateWriteError(f"weekly_report_md 须恰含 1 行 price-clock 横幅 ④（实得 {len(pc_lines)} 行）")
     pc_line = pc_lines[0].strip()

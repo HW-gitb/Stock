@@ -50,7 +50,7 @@ from engine.us_short_weekend_cost_floor import (
 )
 from engine.us_short_weekend_decision import (
     WeekendDecisionError,
-    _validate_evidence_row,
+    validate_evidence_row,
     action_reason_error,
 )
 
@@ -217,7 +217,7 @@ def _validate_ranked_row(row):
     # 4d-ii-a evidence (veto dict + known veto_tier + veto/row-context consistency + context-incompatible veto;
     # price dict + bool executable + trace dict; holding breached bool; event_data_gap status) — single source.
     try:
-        _validate_evidence_row(row)
+        validate_evidence_row(row)
     except WeekendDecisionError as e:
         raise WeekendMachineRecordError(f"4d-ii-a 证据非法（machine-record 边界 fail-closed）: {e}")
 
@@ -236,7 +236,7 @@ def _validate_ranked_row(row):
     # a 建仓 is an actionable build: it must carry an EXECUTABLE price plan and a real sized position, else
     # price could be shadowed / sizing+regime fabricated onto position_size from a non-executable / unsized build.
     if final_action == _BUILD:
-        if row["price"].get("executable") is not True:   # _validate_evidence_row proved price is a dict w/ bool executable
+        if row["price"].get("executable") is not True:   # validate_evidence_row proved price is a dict w/ bool executable
             raise WeekendMachineRecordError("建仓 行 price 须 executable=True（不可执行的建仓不一致）")
         sizing = row.get("sizing")
         if not (isinstance(sizing, dict) and sizing.get("status") == "sized"):
