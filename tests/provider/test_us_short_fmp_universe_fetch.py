@@ -243,6 +243,47 @@ class TestAuthorizationGuard(unittest.TestCase):
         self.assertFalse(summary["scope"]["full_market_fetch_performed"])
 
 
+class TestRawRootScopeGuard(unittest.TestCase):
+    """Adversarial: raw_root outside provider_samples/ must be rejected BEFORE any write."""
+
+    def test_raw_root_outside_provider_samples_rejected(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            bad_root = Path(tmp) / "escaped_raw"
+            # Must raise BEFORE any network call or file write.
+            # _check_gitignore passes (provider_samples/ is in .gitignore),
+            # but validate_raw_root must catch that bad_root is outside provider_samples/.
+            with patch.object(_mod, "_check_gitignore", return_value=True):
+                with self.assertRaises((ValueError, RuntimeError)) as ctx:
+                    _mod.run_fetch(
+                        raw_root=bad_root,
+                        confirm_user_authorization=True,
+                        dry_run_env=False,
+                    )
+            # Verify the error is about the path scope, not something else
+            err = str(ctx.exception).lower()
+            self.assertTrue(
+                "provider_samples" in err or "gitignored" in err or "under" in err,
+                f"unexpected error message: {ctx.exception!r}",
+            )
+            # Verify NO file was written under the escaped path
+            self.assertFalse(
+                any(bad_root.rglob("*")),
+                "no files should be written when raw_root is outside provider_samples/",
+            )
+
+    def test_raw_root_under_provider_samples_accepted_in_dry_run(self):
+        # Default raw_root is under provider_samples/ → validate_raw_root must not raise
+        # Use dry_run_env=True so no actual network call or file write
+        with patch.object(_mod, "_check_gitignore", return_value=True):
+            summary = _mod.run_fetch(
+                raw_root=_mod.RAW_ROOT,
+                dry_run_env=True,
+                confirm_user_authorization=False,
+            )
+        self.assertEqual(summary["scope"]["status"], "dry_run_env_only")
+
+
 # ---------------------------------------------------------------------------
 # Summary safety
 # ---------------------------------------------------------------------------

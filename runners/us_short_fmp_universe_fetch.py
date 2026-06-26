@@ -43,6 +43,7 @@ from engine.us_short_eligibility_gate import (  # noqa: E402
     load_eligibility_governance,
     canonical_us_ticker,
 )
+from runners import us_egs_sample_validation as _sv  # noqa: E402  (for validate_raw_root)
 
 AUTHORIZATION_ARTIFACT = ROOT / "docs" / "us_short_fmp_universe_fetch_authorization_20260626.json"
 GOVERNANCE_PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
@@ -364,6 +365,11 @@ def run_fetch(
 
     if not _check_gitignore():
         raise RuntimeError("provider_samples/ not confirmed in .gitignore")
+
+    # Validate raw_root is under provider_samples/ (not just that .gitignore contains the string).
+    # Reuse existing us_egs_sample_validation.validate_raw_root which resolves the path and
+    # requires it to be under ROOT/provider_samples, raising ValueError otherwise.
+    _sv.validate_raw_root(raw_root)
 
     import os
     fmp_key = os.environ.get("FMP_API_KEY", "")

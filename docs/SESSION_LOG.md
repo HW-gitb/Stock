@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-06-26 - 自审 `修复` + `审查` PASS (US-short batch5 FMP universe fetch raw-root scope)
+
+- **Verdict/Action**: `R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS` 已修复并自验 PASS：导入 `_sv.validate_raw_root(raw_root)` 在 `run_fetch` 写任何文件前调用；新增 `TestRawRootScopeGuard` 2 条对抗测试（逃逸路径拒绝 + 合法路径接受）。30 tests + 2368 full offline OK；doc guards OK。
+- **Required**: `R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS` → resolved，见 `docs/system_risk_register.md`。
+- **Verify**: 30 provider tests OK；2368 全离线 OK；route-doc/doc-governance/README guards 全绿；git diff --check CRLF-only；无真 FMP 调用。
+- **Next**: 提交.
+- **Proof-of-use**: A: 整类修复（raw_root 任何传入都过同一守门，不只测默认路径）；B: 无改名；C: 反向——逃逸路径 ValueError 测试覆盖；F: diff --check OK。
+
+## 2026-06-26 - 自审 `审查` FAIL (US-short batch5 FMP universe fetch raw-root escape)
+
+- **Verdict/Action**: FAIL. `runners/us_short_fmp_universe_fetch.py` raw_root 未验证 provider_samples/ 前缀：`_check_gitignore()` 只查 .gitignore 含字符串，不查实际路径；summary `raw_payload_root_gitignored: True` 无条件 hardcode。
+- **Required**: `R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS` 见 `docs/system_risk_register.md`。
+- **Verify**: 自审全读 runner/schema/tests/artifact；`sample_validation.validate_raw_root` 已有正确模板（line 411）；28 tests 当前 OK；无真 FMP 调用。
+- **Next**: 修复.
+
 ## 2026-06-26 - Claude 起草 (US-short batch5 FMP 全市场 universe fetch + p1-gate)
 
 - **Verdict/Action**: 起草 FMP 全市场 universe fetch（用户授权全市场边界）：authorization packet + `runners/us_short_fmp_universe_fetch.py`（FMP stable screener max 3 calls → map_screener_row → cheap_eligible → p1 gate；raw gitignored；--confirm-user-authorization 才发真网络）；28 tests + 2366 full offline OK；README + CURRENT 更新。DataHub/production/SEC parser/ship-gate 边界仍需另授权。
