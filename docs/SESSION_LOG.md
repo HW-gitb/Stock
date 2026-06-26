@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-25 - Codex `review PASS` (US-short batch5 SEC source-artifact traceback schema)
+
+- **Verdict/Action**: PASS, commit blocked by current Codex usage-limit / Git-escalation approval failure. `R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT` is fixed in the working tree.
+- **Required**: review PASS but not committed; full closure evidence lives in `docs/system_risk_register.md`. `SR-PROVIDER-001` remains open for any SEC/FMP/raw/fixture/parser/DataHub/production/live_normalized/ship-gate boundary.
+- **Verify**: status/log checked; target 10 OK; batch5 92 OK; route/doc 52 OK; provider 45 OK; full offline `*us_short*` 2337 OK; py_compile OK; direct mutants rejected with no misses; secret/raw scans found no new tracked payload; `git diff --check` CRLF-only.
+- **Next**: retry Codex auto-commit when the Git-escalation usage-limit blocker clears.
+
+## 2026-06-25 - Codex `fix` (US-short batch5 SEC source-artifact traceback schema)
+
+- **Verdict/Action**: Fixed `R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT`; schema now locks exactly six top-level source refs by artifact_id, path, and role. No provider/live/network/raw path ran.
+- **Required**: working-tree repair complete; pending Codex review. `SR-PROVIDER-001` remains open for any SEC/FMP/raw/fixture/parser/DataHub/production/live_normalized/ship-gate boundary.
+- **Verify**: TDD RED reproduced 13 accepted source-ref mutants; after fix target 10 OK, batch5 92 OK, route/doc 52 OK, provider 45 OK, full offline `*us_short*` 2337 OK, py_compile OK, direct mutants rejected, `git diff --check` CRLF-only.
+- **Next**: Codex review.
+- **Pre-Codex self-review**: proof-of-use: A class=schema source-traceback; B ripple=schema/test/register/session only; C reverse=path/role/extra-source RED then GREEN; F no provider/live/network/raw/DataHub/production path.
+
+## 2026-06-25 - Codex `review FAIL` (US-short batch5 SEC EDGAR parser/field-family binding)
+
+- **Verdict/Action**: FAIL. Offline/no-access scope intact, but schema accepts source-artifact traceback drift.
+- **Required**: `R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT` in `docs/system_risk_register.md`.
+- **Verify**: status/log checked; target 9 OK; batch5 91 OK; route/doc 52 OK; py_compile OK; secret/raw scan clean; `git diff --check` CRLF-only; direct probe accepted source path, role, and extra-source mutants with 0 errors; no provider/live/network/raw path ran.
+- **Next**: Codex: fix.
+
+## 2026-06-25 - Codex `execute` (US-short batch5 SEC EDGAR parser/field-family binding)
+
+- **Verdict/Action**: Executed the offline US-short batch5 SEC EDGAR parser / field-family binding slice: added `schemas/us_short_batch5_sec_edgar_parser_field_binding.schema.json`, `docs/us_short_batch5_sec_edgar_parser_field_binding_20260625.json`, and adversarial schema tests; updated only the batch5 route pointer. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, current terms refresh, provider contact, legal advice, raw-payload read/parse, fixture generation, parser implementation, field-mapping implementation, provider selection, live_normalized claim, or ship-gate claim ran.
+- **Required**: none opened in this execution. `SR-PROVIDER-001` remains open; future SEC endpoint calls, raw parse, fixture generation, parser or field-mapping implementation, FMP cross-check implementation, DataHub/runner consumption, production storage, live_normalized, and ship-gate work still need separate review and authorization where applicable.
+- **Verify**: TDD RED first failed on missing schema/artifact (8 failures), then source-traceback RED reproduced 32 schema-accepted source-ref drift mutants. After GREEN: target SEC parser/field binding schema tests 9 OK; batch5 target suites 91 OK; route/doc guards 52 OK; `tests/provider` 45 OK; full offline `*us_short*` 2336 OK; py_compile OK; direct mutant probe rejected field-family role/source drift, lineage source drift, gate status/source drift, scope-creep, ship-gate, and silent-default drift.
+- **Next**: Codex review this offline batch5 SEC parser/field-family binding scope before commit or any future SEC/FMP/raw/fixture/parser/DataHub/production boundary.
+- **Pre-Codex self-review**: proof-of-use: A class=schema contract / SEC field-family, lineage, gate, and source-traceback binding, full 10 field-family set + 16 lineage set + 6 gate set const-pinned; B ripple=README/session only plus no code/runner paths; C reverse=blocked scope + allowed audit-only role preserved, direct mutants cover too-lax authorization, source drift, gate/status drift, and silent-default drift; F no provider/live/network/raw/DataHub/production path.
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 license/storage rights classification schema)
 
 - **Verdict/Action**: PASS. `R-USSHORT-BATCH5-LICENSE-STORAGE-RIGHTS-CLASSIFICATION-SCHEMA-DRIFT` is fixed in the reviewed US-short batch5 offline license/storage/retention decision scope; the schema now rejects provider/right classification drift across the full FMP and SEC rights matrix. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw/current-terms/provider-contact/legal path ran.
