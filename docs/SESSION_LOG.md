@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-26 - Claude 执行 (US-short batch5 register 残留清理 — V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT)
+
+- **Verdict/Action**: `R-USSHORT-BATCH5-V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT` register 状态从 `commit pending explicit user instruction` 更新为 `resolved`——fix 已在 `49ca24e5`（schema 现 const-pin 四个 endpoint-family call_count：FMP profile=3、FMP EOD=3、SEC tickers=1、SEC submissions=3），92 batch5 tests OK 2026-06-26 核实；用户 `执行未完成部分` 即明确指令。`SR-PROVIDER-001` 对 FMP/SEC live/network 边界仍 open。
+- **Required**: 无新开。
+- **Verify**: batch5 全套 92 OK；route-doc consistency guard 14 OK；git status clean。无 provider/live/network/raw 路径运行。
+- **Next**: 批5 全离线注册条目现全 resolved；provider/live 真实边界（FMP 全市场 / SEC parser / DataHub / production）仍 GATED（SR-PROVIDER-001），需单独用户授权。
+- **Pre-Codex self-review**: doc-only register housekeeping；A/B/C/D/F N/A；E route-doc 单态：register 更新为 resolved + settled fact，SESSION_LOG 顶部唯一 live-state 来源，CURRENT 无需修改（已有 batch5 闭合 entry）。
+
 ## 2026-06-26 - Claude 执行 (US-short batch5 离线工程闭合 + register 修复)
 
 - **Verdict/Action**: 批5 离线 schema-first 8 刀全已提交并通过 Codex review；`R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT` 修复已在 `781b5679`（schema `maxItems:6` + 6 条 const-pin path/role）；register 状态更新为 resolved；CURRENT.md §0 加批5 离线闭环 settled entry；本 SESSION_LOG entry 记录。`SR-PROVIDER-001` 对 FMP/SEC provider/live 边界仍 open（GATED）。
