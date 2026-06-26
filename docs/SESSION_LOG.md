@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-26 - Claude 起草 (US-short batch5 FMP 全市场 universe fetch + p1-gate)
+
+- **Verdict/Action**: 起草 FMP 全市场 universe fetch（用户授权全市场边界）：authorization packet + `runners/us_short_fmp_universe_fetch.py`（FMP stable screener max 3 calls → map_screener_row → cheap_eligible → p1 gate；raw gitignored；--confirm-user-authorization 才发真网络）；28 tests + 2366 full offline OK；README + CURRENT 更新。DataHub/production/SEC parser/ship-gate 边界仍需另授权。
+- **Required**: 无新开。
+- **Verify**: provider/test 28 OK；全套 2366 OK；route-doc/doc-governance/README guards 全绿；git diff --check CRLF-only。无真 FMP 调用运行（offline-only 测试）。
+- **Next**: Codex review，PASS 后用户 `--confirm-user-authorization` 跑真调用获取 NYSE/NASDAQ 候选集。
+- **Proof-of-use**: A: 新 runner；gate `cheap_eligible` 整类覆盖（全字段缺失 fail-closed）；map_screener_row 覆盖 volAvg/volume 两路 ADV。B: 无符号改名；README col1 344<350。C: 反向 7 条 ineligible 测试覆盖 fail-closed；dry-run 无网络。F: diff --check CRLF-only；`_assert_summary_safe` 拒 secret/URL/raw_payload。
+
 ## 2026-06-26 - Claude 执行 (US-short batch5 register 残留清理 — V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT)
 
 - **Verdict/Action**: `R-USSHORT-BATCH5-V1-PACKET-SCHEMA-ENDPOINT-COUNT-DRIFT` register 状态从 `commit pending explicit user instruction` 更新为 `resolved`——fix 已在 `49ca24e5`（schema 现 const-pin 四个 endpoint-family call_count：FMP profile=3、FMP EOD=3、SEC tickers=1、SEC submissions=3），92 batch5 tests OK 2026-06-26 核实；用户 `执行未完成部分` 即明确指令。`SR-PROVIDER-001` 对 FMP/SEC live/network 边界仍 open。

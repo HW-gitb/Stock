@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_fmp_universe_fetch_authorization/1.0.0/schema.json",
+  "title": "US-short FMP Full-Market Universe Fetch Authorization",
+  "description": "Authorization packet for the batch5 FMP full-market universe fetch (Pass1 screener). Authorizes up to 3 FMP screener calls for NYSE/NASDAQ active-only universe; raw responses gitignored; tracked summary excludes symbols, prices, and secrets; no DataHub, production storage, or ship-gate claim.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "generated_at", "authorization_ref",
+    "scope", "endpoint_plan", "storage_boundary", "pass1_gate_plan", "prohibited_actions"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_fmp_universe_fetch_authorization" },
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "authorization_ref": { "const": "user_chat_20260626_sr_provider_001_fmp_full_market_universe_fetch" },
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "market", "lane", "batch", "full_market_fetch_authorized",
+        "provider_selection_allowed", "datahub_consumption_allowed",
+        "production_storage_allowed", "ship_gate_evidence_allowed",
+        "live_normalized_evidence_allowed", "broker_or_order_automation_allowed",
+        "sec_parser_allowed", "yfinance_allowed", "web_x_allowed",
+        "corporate_action_reconciliation_allowed", "return_calculation_allowed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "lane": { "const": "us_short" },
+        "batch": { "const": "batch5_provider_live" },
+        "full_market_fetch_authorized": { "const": true },
+        "provider_selection_allowed": { "const": false },
+        "datahub_consumption_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "ship_gate_evidence_allowed": { "const": false },
+        "live_normalized_evidence_allowed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false },
+        "sec_parser_allowed": { "const": false },
+        "yfinance_allowed": { "const": false },
+        "web_x_allowed": { "const": false },
+        "corporate_action_reconciliation_allowed": { "const": false },
+        "return_calculation_allowed": { "const": false }
+      }
+    },
+    "endpoint_plan": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "provider_id", "endpoint_family", "base_strategy",
+        "max_fmp_calls", "retry_count_allowed", "abort_if_budget_exceeded",
+        "exchange_filter", "price_floor_usd", "market_cap_floor_usd", "is_etf_excluded"
+      ],
+      "properties": {
+        "provider_id": { "const": "financial_modeling_prep" },
+        "endpoint_family": { "const": "stock_screener_or_list" },
+        "base_strategy": { "const": "fmp_screener_bulk_then_pass1_gate" },
+        "max_fmp_calls": { "const": 3 },
+        "retry_count_allowed": { "const": 0 },
+        "abort_if_budget_exceeded": { "const": true },
+        "exchange_filter": { "const": ["NYSE", "NASDAQ"] },
+        "price_floor_usd": { "const": 5.0 },
+        "market_cap_floor_usd": { "const": 300000000.0 },
+        "is_etf_excluded": { "const": true }
+      }
+    },
+    "storage_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "raw_root_prefix", "raw_gitignored", "tracked_summary_path",
+        "tracked_summary_excludes_symbols", "tracked_summary_excludes_prices",
+        "tracked_summary_excludes_secrets", "tracked_summary_excludes_request_urls",
+        "candidate_list_path", "candidate_list_gitignored"
+      ],
+      "properties": {
+        "raw_root_prefix": { "const": "provider_samples/us_short_fmp_universe_fetch_20260626/" },
+        "raw_gitignored": { "const": true },
+        "tracked_summary_path": { "const": "docs/us_short_fmp_universe_fetch_summary_20260626.json" },
+        "tracked_summary_excludes_symbols": { "const": false },
+        "tracked_summary_excludes_prices": { "const": true },
+        "tracked_summary_excludes_secrets": { "const": true },
+        "tracked_summary_excludes_request_urls": { "const": true },
+        "candidate_list_path": { "const": "state/us_short/candidate_universe_20260626.json" },
+        "candidate_list_gitignored": { "const": true }
+      }
+    },
+    "pass1_gate_plan": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "governance_preset_path", "gate_function", "adv_computation",
+        "status_flag_source", "conservative_unknown_policy"
+      ],
+      "properties": {
+        "governance_preset_path": { "const": "presets/us_short_eligibility_governance_20260624.json" },
+        "gate_function": { "const": "engine.us_short_eligibility_gate.cheap_eligible" },
+        "adv_computation": { "const": "volAvg_times_price_fallback_volume_times_price" },
+        "status_flag_source": { "const": "screener_isActivelyTrading_and_exchange_inference" },
+        "conservative_unknown_policy": { "const": "fail_closed_if_field_absent_or_invalid" }
+      }
+    },
+    "prohibited_actions": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "provider_selection", "datahub_consumption", "production_storage",
+        "live_normalized_claim", "ship_gate_claim", "sec_parser",
+        "yfinance", "web_x", "corporate_action_reconciliation",
+        "return_calculation", "broker_or_order_automation",
+        "tracking_raw_symbols_with_prices", "tracking_api_secrets"
+      ],
+      "properties": {
+        "provider_selection": { "const": false },
+        "datahub_consumption": { "const": false },
+        "production_storage": { "const": false },
+        "live_normalized_claim": { "const": false },
+        "ship_gate_claim": { "const": false },
+        "sec_parser": { "const": false },
+        "yfinance": { "const": false },
+        "web_x": { "const": false },
+        "corporate_action_reconciliation": { "const": false },
+        "return_calculation": { "const": false },
+        "broker_or_order_automation": { "const": false },
+        "tracking_raw_symbols_with_prices": { "const": false },
+        "tracking_api_secrets": { "const": false }
+      }
+    }
+  }
+}
