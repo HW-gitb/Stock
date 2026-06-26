@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-26 - Claude 起草 (US-short batch5 IBKR universe fetch — SEC list + IBKR snapshot)
+
+- **Verdict/Action**: 新建 `runners/us_short_ibkr_universe_fetch.py`——SEC NYSE/NASDAQ list + IB Gateway snapshot（fundamental ratios tick 258，price+MKTCAP+VOL3MAVG）+ Pass1 gate；替代 FMP（日限不足）；dry-run OK；import OK。需用户开 IB Gateway 后执行真调用。
+- **Required**: 无新开。
+- **Verify**: import + dry-run OK；全离线 tests 不受影响（runner 无 test 文件，下轮执行后补）。
+- **Next**: 用户开 IB Gateway（paper port 4002 或 live port 4001），执行 `python runners/us_short_ibkr_universe_fetch.py --confirm-user-authorization --port 4002`。
+- **Proof-of-use**: A: 新 runner；validate_raw_root guard 复用；gzip 解压与 FMP runner 同类修复。B: 无改名。C: dry-run 不发网络（验证）；auth flag 未设则 raise。F: import OK；diff --check CRLF-only。
+
 ## 2026-06-26 - Claude 起草+执行 (US-short batch5 FMP universe fetch v1.1 — SEC list + per-symbol profile)
 
 - **Verdict/Action**: Runner 改为 SEC company_tickers_exchange（1次免费 SEC 调用）+ FMP per-symbol profile（日限约250次）；gzip 解压修复；34 tests OK；执行结果：SEC 7627 tickers，FMP 243 calls 后 HTTP 429 停止，83 eligible（仅"A"打头），主因 ADV/市值/价格不足。**FMP Basic 日限~250次，处理全量7627只需31天，不适用于周 pipeline；需升级付费计划。**
