@@ -35,7 +35,7 @@ Status:
 
 ### R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT - batch5 SEC parser binding schema accepts source artifact path/role drift
 
-- **Status**: in_progress (Codex `review PASS` 2026-06-25; commit blocked by current Codex usage-limit / Git-escalation approval failure).
+- **Status**: resolved (Codex `review PASS` 2026-06-25; fix confirmed committed in `781b5679`; 10/10 SEC traceback schema tests + 92 batch5 target suites OK verified 2026-06-26; `SR-PROVIDER-001` remains open for all SEC/FMP/provider/live/DataHub/production/live_normalized/ship-gate boundaries).
 - **Severity**: P1 (US-short batch5 schema-first SEC EDGAR parser / field-family binding; blocks accepting or committing this packet before repair, and before any later SEC endpoint, raw parse, fixture, parser, field mapping, FMP cross-check, DataHub/runner, production, live_normalized, or ship-gate boundary).
 - **Scope reviewed**: current dirty worktree after HEAD `73259af6`; `schemas/us_short_batch5_sec_edgar_parser_field_binding.schema.json`, `docs/us_short_batch5_sec_edgar_parser_field_binding_20260625.json`, `tests/schema/test_us_short_batch5_sec_edgar_parser_field_binding_schema.py`, `docs/README.md`, and top `docs/SESSION_LOG.md`. No provider/live/network/FMP/SEC/yfinance/Web/X/DataHub/production/raw call, current terms refresh, provider contact, legal advice, raw-payload read/parse, fixture generation, parser implementation, field-mapping implementation, provider selection, live_normalized claim, or ship-gate claim ran during review.
 - **Finding type**: schema contract bug / evidence-traceback bug / execution blocker for this batch5 packet. Not a provider authorization blocker by itself; `SR-PROVIDER-001` remains the underlying provider authorization blocker.

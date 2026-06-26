@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-26 - Claude 执行 (US-short batch5 离线工程闭合 + register 修复)
+
+- **Verdict/Action**: 批5 离线 schema-first 8 刀全已提交并通过 Codex review；`R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT` 修复已在 `781b5679`（schema `maxItems:6` + 6 条 const-pin path/role）；register 状态更新为 resolved；CURRENT.md §0 加批5 离线闭环 settled entry；本 SESSION_LOG entry 记录。`SR-PROVIDER-001` 对 FMP/SEC provider/live 边界仍 open（GATED）。
+- **Required**: 无新开。
+- **Verify**: SEC traceback schema 10 OK；batch5 全套 92 OK；route-doc consistency guard 14 OK；git status clean（781b5679 HEAD）。无 provider/live/network/raw 路径运行。
+- **Next**: 批5 provider/live 边界（FMP 全市场 / SEC parser / DataHub / production）仍 GATED（SR-PROVIDER-001）；需单独用户授权后推进。
+- **Pre-Codex self-review**: 本条 = doc-only housekeeping（register resolved + CURRENT settled fact + SESSION_LOG）；A N/A（无枚举/schema 改动）；B N/A（无符号改名）；C N/A（无 validator 改动，反向失败路径未受影响）；E route-doc 单态：CURRENT §0 只写 settled 事实（8 刀全提交、commit hash 固定），SESSION_LOG 顶部是唯一 live-state 真相源，不在 CURRENT 写 transient gate；F git diff --check CRLF-only 无空白/冲突标记。
+
 ## 2026-06-25 - Codex `review PASS` (US-short batch5 SEC source-artifact traceback schema)
 
 - **Verdict/Action**: PASS, commit blocked by current Codex usage-limit / Git-escalation approval failure. `R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT` is fixed in the working tree.
