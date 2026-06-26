@@ -1,6 +1,6 @@
 {
   "schema_name": "us_short_fmp_universe_fetch_authorization",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "generated_at": "2026-06-26T00:00:00+08:00",
   "authorization_ref": "user_chat_20260626_sr_provider_001_fmp_full_market_universe_fetch",
   "scope": {
@@ -21,12 +21,24 @@
     "return_calculation_allowed": false
   },
   "endpoint_plan": {
-    "provider_id": "financial_modeling_prep",
-    "endpoint_family": "stock_screener_or_list",
-    "base_strategy": "fmp_screener_bulk_then_pass1_gate",
-    "max_fmp_calls": 3,
-    "retry_count_allowed": 0,
-    "abort_if_budget_exceeded": true,
+    "strategy_version": "1.1.0",
+    "base_strategy": "sec_exchange_list_then_fmp_profile_per_symbol",
+    "strategy_note": "FMP stable screener returned 404; v3 screener returned 403 (not on Basic plan). Use SEC company_tickers_exchange.json (1 free call) for NYSE/NASDAQ symbol list, then FMP stable/profile per symbol.",
+    "sec_calls": {
+      "provider_id": "sec_edgar",
+      "endpoint": "company_tickers_exchange",
+      "max_calls": 1,
+      "url_template": "https://www.sec.gov/files/company_tickers_exchange.json",
+      "requires_sec_user_agent": true
+    },
+    "fmp_calls": {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_per_symbol",
+      "max_fmp_calls": 300,
+      "retry_count_allowed": 0,
+      "abort_if_budget_exceeded": true,
+      "stop_on_http_429_or_403": true
+    },
     "exchange_filter": ["NYSE", "NASDAQ"],
     "price_floor_usd": 5.0,
     "market_cap_floor_usd": 300000000.0,
@@ -47,7 +59,7 @@
     "governance_preset_path": "presets/us_short_eligibility_governance_20260624.json",
     "gate_function": "engine.us_short_eligibility_gate.cheap_eligible",
     "adv_computation": "volAvg_times_price_fallback_volume_times_price",
-    "status_flag_source": "screener_isActivelyTrading_and_exchange_inference",
+    "status_flag_source": "fmp_profile_isActivelyTrading_and_exchange_inference",
     "conservative_unknown_policy": "fail_closed_if_field_absent_or_invalid"
   },
   "prohibited_actions": {

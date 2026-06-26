@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-26 - Claude 起草+执行 (US-short batch5 FMP universe fetch v1.1 — SEC list + per-symbol profile)
+
+- **Verdict/Action**: Runner 改为 SEC company_tickers_exchange（1次免费 SEC 调用）+ FMP per-symbol profile（日限约250次）；gzip 解压修复；34 tests OK；执行结果：SEC 7627 tickers，FMP 243 calls 后 HTTP 429 停止，83 eligible（仅"A"打头），主因 ADV/市值/价格不足。**FMP Basic 日限~250次，处理全量7627只需31天，不适用于周 pipeline；需升级付费计划。**
+- **Required**: 无新开。
+- **Verify**: 34 provider tests OK；2372 全离线 OK；doc guards OK；git diff --check CRLF-only；summary 无 secret/URL/raw；raw gitignored；state/ gitignored。
+- **Next**: 用户决定是否升级 FMP 付费计划；升级后重跑可获完整候选集。
+- **Proof-of-use**: A: gzip fix 覆盖整类 SEC 响应；_rel() 整类处理所有路径；B: 无改名；C: 429 停止测试覆盖；F: diff --check CRLF-only；_assert_summary_safe 验证无 secret。
+
 ## 2026-06-26 - 自审 `修复` + `审查` PASS (US-short batch5 FMP universe fetch raw-root scope)
 
 - **Verdict/Action**: `R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS` 已修复并自验 PASS：导入 `_sv.validate_raw_root(raw_root)` 在 `run_fetch` 写任何文件前调用；新增 `TestRawRootScopeGuard` 2 条对抗测试（逃逸路径拒绝 + 合法路径接受）。30 tests + 2368 full offline OK；doc guards OK。
