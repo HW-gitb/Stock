@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-27 - Claude 起草 (US-short 轮2 slice 1 momentum block)
+
+- **Verdict/Action**: 起草 `engine/us_short_momentum.py`——core_score §4.2 的 40% momentum 分量。`compute_momentum_features`(纯函数,日线 close/volume + SPY/QQQ 序列→1m/3m/5d/10d 简单收益、rel SPY/QQQ 1m 相对强度、vol_surge 量比) + `momentum_block`(每子特征横截面分位 0-100→等权均值合成→全池再分位,"动量=全池分位")。缺史票入 `insufficient_history` 不伪造中性(由 core_score 走 §4.2 缺分量中性规则)。纯/离线,数据层接 Massive 留后续 slice。
+- **Required**: 无新开。
+- **Verify**: momentum 26 tests OK；boundary 8 OK(新 engine 无券商/A股 import)；全量 2387 OK。
+- **Next**: 轮2 后续 slice——赛道块(35%,sector 分类)、催化剂块(25%,SEC 8-K + 分析师预期源待定)、多日数据层接 Massive、Pass2 编排消费 core_score。
+- **Proof-of-use**: A: 输入全 fail-closed(`_finite` 拒 bool/NaN/numeric-string,`_clean_series` 拒短/坏序列;缺史不伪中性)；percentile 覆盖 单值/空/平手。B: 新增独立 engine,无改名;README 加路由行(批2 core_score 后)。C: 反向——bool 当特征值被拒入 insufficient、量窗不足不出 vol_surge、benchmark 缺不出 rel 特征 均测。F: ast 解析 OK;diff --check 待提交。
+
 ## 2026-06-27 - Claude 起草+执行 (US-short batch5 轮1 universe fetch 落定 Massive+SEC，无券商)
 
 - **Verdict/Action**: 轮1 universe fetch 最终落定 **Massive grouped-daily + SEC**（全免费、纯 HTTP、无券商）。数据源探索收敛：FMP Basic 日限不足、IBKR Fundamental(258)被封+延迟成交量按时机不稳(深周末变 0/脏值)、IBKR scanner 收盘返回过少——均淘汰。Massive `/v2/aggs/grouped/.../{date}` **1 次调用**返回全美股 OHLCV(12324 只)、官方合并量、不依赖运行时机。新 `runners/us_short_universe_fetch.py`：SEC tickers+CIK → Massive 收盘价/量(ADV=量×收) → SEC frames 流通股(市值=股×收) → FMP 兜底(SEC 缺股的多股权名,bounded 240) → Pass1。删 FMP/IBKR runner+test+孤儿。**因不再用券商,撤销 06-26 的"不接券商"放宽,boundary 测试+§1/§17 恢复原严格版**(register BROKER-BOUNDARY 标 withdrawn)。执行结果：eligible=2323 含全部巨头(AAPL/MSFT/GOOGL/META/V/NVDA/AMZN/AVGO/JPM/TSLA/BLK/JNJ/WMT/UNH)。raw+candidate gitignored,tracked summary 无价格/无密钥。
