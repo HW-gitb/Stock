@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-06-27 - Claude 起草+执行 (US-short batch5 轮1 universe fetch 落定 Massive+SEC，无券商)
+
+- **Verdict/Action**: 轮1 universe fetch 最终落定 **Massive grouped-daily + SEC**（全免费、纯 HTTP、无券商）。数据源探索收敛：FMP Basic 日限不足、IBKR Fundamental(258)被封+延迟成交量按时机不稳(深周末变 0/脏值)、IBKR scanner 收盘返回过少——均淘汰。Massive `/v2/aggs/grouped/.../{date}` **1 次调用**返回全美股 OHLCV(12324 只)、官方合并量、不依赖运行时机。新 `runners/us_short_universe_fetch.py`：SEC tickers+CIK → Massive 收盘价/量(ADV=量×收) → SEC frames 流通股(市值=股×收) → FMP 兜底(SEC 缺股的多股权名,bounded 240) → Pass1。删 FMP/IBKR runner+test+孤儿。**因不再用券商,撤销 06-26 的"不接券商"放宽,boundary 测试+§1/§17 恢复原严格版**(register BROKER-BOUNDARY 标 withdrawn)。执行结果：eligible=2323 含全部巨头(AAPL/MSFT/GOOGL/META/V/NVDA/AMZN/AVGO/JPM/TSLA/BLK/JNJ/WMT/UNH)。raw+candidate gitignored,tracked summary 无价格/无密钥。
+- **Required**: 无新开。`R-USSHORT-BATCH5-BROKER-BOUNDARY-READONLY-DATA`=withdrawn；`R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS`=resolved(guard 随新 runner carry-forward)。SR-PROVIDER-001 仍 open(DataHub/production/ship-gate)。
+- **Verify**: 新 runner test 23 OK；boundary 8 OK(原严格版,新 runner 无券商 import)；全离线 2361 OK；doc/route/README guards 全绿；tracked summary 无 apikey/massive/fmp key(已扫)；Massive 实跑 date=2026-06-25 12324 只、1 次调用。
+- **Next**: 轮2 = Pass2 对候选(2323→动量/赛道再收窄)拉基本面打分 core_score。Massive 有 OHLCV/历史；分析师/财报预期数据源轮2 再定。
+- **Proof-of-use**: A: order-placement token 全集 + A股 import 整类(boundary 原版保留)；apply_pass1 market_cap 双源(SEC 优先/FMP 兜底)+ ADV 全覆盖；Massive 解析覆盖 canonical/缺close/末交易日回退。B: 删 IBKR/FMP 后 grep README/register 残留→改指针；boundary/§1/§17 恢复原版(git checkout)。C: 反向——raw_root 逃逸、FMP 429 停、全空日 raise、非 canonical 跳过 均测。F: tracked summary secret 扫净;diff --check 待提交。
+
 ## 2026-06-26 - Claude 起草 (US-short batch5 IBKR universe fetch — SEC list + IBKR snapshot)
 
 - **Verdict/Action**: 新建 `runners/us_short_ibkr_universe_fetch.py`——SEC NYSE/NASDAQ list + IB Gateway snapshot（fundamental ratios tick 258，price+MKTCAP+VOL3MAVG）+ Pass1 gate；替代 FMP（日限不足）；dry-run OK；import OK。需用户开 IB Gateway 后执行真调用。
@@ -38,6 +46,14 @@
 - **Required**: `R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS` 见 `docs/system_risk_register.md`。
 - **Verify**: 自审全读 runner/schema/tests/artifact；`sample_validation.validate_raw_root` 已有正确模板（line 411）；28 tests 当前 OK；无真 FMP 调用。
 - **Next**: 修复.
+
+## 2026-06-26 - Claude 起草+执行 (US-short batch5 轮1 IBKR+SEC universe fetch + 券商边界精细化)
+
+- **Verdict/Action**: 轮1 数据源定为 SEC+IBKR（全免费）：FMP Basic 日限不足、IBKR Fundamental tick 258 被封(10358)、IBKR scanner 收盘返回过少且多 ETF — 三者实测淘汰。最终路径：SEC company_tickers_exchange（ticker+CIK+交易所）+ SEC XBRL frames（流通股 bulk）+ IBKR 延迟快照（价格/量，readonly）→ market_cap=流通股×价格 → Pass1。删 FMP/scanner/旧 IBKR runner 及孤儿。**券商边界精细化（用户选 A）**：§1/§17「不接券商」改为「只读行情可以、绝不下单」，boundary 测试 NoBrokerAutoOrder→NoOrderPlacement（禁 placeOrder/*Order( + 强制 readonly=True）。新 runner + 25 tests。小样本 60 只验证端到端通（14 eligible 含 AAPL，市值正确）。全量执行中。
+- **Required**: `R-USSHORT-BATCH5-BROKER-BOUNDARY-READONLY-DATA`（resolved，设计变更已记录）见 register。
+- **Verify**: boundary 11 OK（新红线 + 正控）；新 universe test 25 OK；全离线 2366 OK；doc guards 全绿；零 order-placement token 误报（已 grep 证）。
+- **Next**: 全量 fetch 完成→核候选数→提交（runner+test+设计+register+README+SESSION_LOG）。
+- **Proof-of-use**: A: 整类——order-placement token 全 7 个 + readonly 两道；snapshot 字段提取覆盖 last/close/delayed 全路径。B: 删 FMP 后 grep README 残留=0；boundary docstring/§1/§17/register 同步。C: 反向——非 readonly 连接、synthetic placeOrder 均被正控抓；只读数据 pattern 明确不误报。F: diff --check 待提交前跑。
 
 ## 2026-06-26 - Claude 起草 (US-short batch5 FMP 全市场 universe fetch + p1-gate)
 

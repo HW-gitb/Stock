@@ -33,6 +33,13 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-BATCH5-BROKER-BOUNDARY-READONLY-DATA - considered relaxing "不接券商" for IBKR data, then WITHDRAWN (switched to Massive, boundary unchanged)
+
+- **Status**: withdrawn / not-applied (2026-06-27). The data source switched from IBKR to Massive (pure HTTP, no broker), so the "不接券商" boundary did NOT need to change and was reverted to its original strict form.
+- **Severity**: n/a (no design invariant was changed in the committed tree).
+- **History**: round-1 universe fetch first tried IBKR `ib_insync` for price/volume, which would have required relaxing the §1/§17 "不接券商" boundary to "read-only data OK, no order placement" (user approved option A 2026-06-26). Before committing, IBKR delayed-snapshot volume proved unreliable (0 / garbage deep into the weekend, timing-dependent) and the data source was replaced by Massive grouped-daily (`/v2/aggs/grouped/locale/us/market/stocks/{date}`) — one HTTP call for the whole US market, no broker. With no broker dependency, the boundary relaxation was unnecessary: `tests/test_us_short_boundary_regression.py::NoBrokerAutoOrder` and `docs/us_short_system_design.md` §1/§17 were reverted to the original "no broker SDK import" rule. `runners/us_short_universe_fetch.py` imports no broker SDK.
+- **Plain language**: we briefly planned to let the system read IBKR data (which needed loosening the no-broker rule), but a better no-broker source (Massive) replaced it, so the no-broker rule stays exactly as it was.
+
 ### R-USSHORT-BATCH5-UNIVERSE-FETCH-RAW-ROOT-SCOPE-BYPASS - universe fetch runner raw_root not validated against provider_samples/ prefix
 
 - **Status**: resolved (self-review FAIL 2026-06-26 → self-repair → self-review PASS 2026-06-26; `_sv.validate_raw_root(raw_root)` called in `run_fetch` before any write; adversarial test `TestRawRootScopeGuard` added; 30 tests OK; 2368 full offline OK).
@@ -44,6 +51,7 @@ Status:
 - **Required repair**: (1) Import `us_egs_sample_validation` in `runners/us_short_fmp_universe_fetch.py` and call `us_egs_sample_validation.validate_raw_root(raw_root)` in `run_fetch` immediately after `_check_gitignore()` and before any network call or file write. (2) Add an adversarial test that calls `run_fetch` (or `_validate_raw_root` once extracted) with `raw_root` pointing outside `provider_samples/` (e.g., a temp dir) and verifies `ValueError` is raised before any file is written. Keep all existing tests passing. No live FMP call, no provider/network, no DataHub, no production path during repair.
 - **Tests expected**: existing 28 tests must remain OK; new adversarial test for raw_root escape; full offline `*us_short*` regression; doc/route guards; `git diff --check`; `git status --short`.
 - **Plain language**: the runner checks that .gitignore contains "provider_samples/" but never checks whether the actual output path IS under provider_samples/. Passing a different path bypasses the whole privacy guard while the summary still claims the raw data is gitignored.
+- **Carry-forward (2026-06-27)**: the FMP and IBKR universe runners were superseded by `runners/us_short_universe_fetch.py` (Massive+SEC). The `_sv.validate_raw_root(raw_root)` guard + the raw-root-escape adversarial test (`TestGuards.test_raw_root_escape_rejected`) carry forward into the new runner/`tests/provider/test_us_short_universe_fetch.py`, so the fix remains in force on the live data path.
 
 ### R-USSHORT-BATCH5-SEC-SOURCE-ARTIFACT-TRACEBACK-SCHEMA-DRIFT - batch5 SEC parser binding schema accepts source artifact path/role drift
 
