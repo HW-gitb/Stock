@@ -212,6 +212,31 @@ class FailClosed(unittest.TestCase):
                 pw.write_run_private(decision_date=_AS_OF, machine_record={"rows": "x"},
                                      weekly_report_md=_REPORT_MD, runs_private_root=rr, weekly_private_root=wr)
 
+    def test_post_assembly_field_record_deletion_rejected(self):
+        # R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP consumer boundary: a manifest field_record DELETED
+        # AFTER assembly is rejected at the PRIVATE write path too — flatten re-runs the §10-clean reverse
+        # reconciliation BEFORE any artifact is persisted, so nothing is written.
+        rec = _machine_record()
+        rec["rows"][0]["field_records"] = [fr for fr in rec["rows"][0]["field_records"]
+                                           if fr["field_id"] != "price"]
+        with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            with self.assertRaises(WeekendActionTableError):
+                pw.write_run_private(decision_date=_AS_OF, machine_record=rec,
+                                     weekly_report_md=_REPORT_MD, runs_private_root=rr, weekly_private_root=wr)
+            self.assertFalse((Path(rr) / _AS_OF / "machine_record.json").exists())   # nothing persisted
+
+    def test_evidence_strip_empty_registry_rejected_at_private_write(self):
+        # Codex re-review-2 co-deletion probe through the PRIVATE write: strip the raw `veto` marker AND empty the
+        # registry — the official gate's UNCONDITIONAL floor (run inside flatten) rejects it before any persist.
+        rec = _machine_record()
+        rec["rows"][0].pop("veto", None)
+        rec["rows"][0]["field_records"] = []
+        with tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            with self.assertRaises(WeekendActionTableError):
+                pw.write_run_private(decision_date=_AS_OF, machine_record=rec,
+                                     weekly_report_md=_REPORT_MD, runs_private_root=rr, weekly_private_root=wr)
+            self.assertFalse((Path(rr) / _AS_OF / "machine_record.json").exists())   # nothing persisted
+
 
 class AtomicAndContract(unittest.TestCase):
     def test_mixed_valid_invalid_roots_writes_nothing(self):

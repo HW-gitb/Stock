@@ -7,7 +7,7 @@ Design authority: docs/us_short_system_design.md §10 (不悬空 + 证据反查 
 
 The post-pass after 4d-ii-j (`apply_action_rank`). It ASSEMBLES the finalized ranked rows into the §10
 machine record (run-level as_of + rows[] each with `field_records[]` + `decision_trace`), then runs the
-batch-3 `validate_machine_record` and FAILS CLOSED if the record is not §10-clean — a producer never emits a
+batch-3 `validate_official_machine_record` and FAILS CLOSED if the record is not §10-clean — a producer never emits a
 not-clean machine record (the renderer / private-write stages downstream consume only a clean record). It
 ASSEMBLES only — it does NOT render (4d-ii-m) or persist (4d-ii-n); the §10 cross-field invariants
 (forward no-dangling, hard_veto→final_action kill/exit, core-field-hits-a-target-or-shadow,
@@ -39,7 +39,7 @@ import math
 from engine.us_short_action_rank import ACTION_RANK_SKELETON, action_group as _expected_action_group
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import VETO_TIERS
-from engine.us_short_no_dangling_validator import validate_machine_record
+from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_theme_probe import RISK_TAG as _PROBE_RISK_TAG
@@ -52,6 +52,7 @@ from engine.us_short_weekend_decision import (
     WeekendDecisionError,
     validate_evidence_row,
     action_reason_error,
+    action_price_error,
 )
 
 _SCHEMA_NAME = "us_short_machine_record_contract"
@@ -233,6 +234,15 @@ def _validate_ranked_row(row):
     if sr is not None and not _pos_int(sr):
         raise WeekendMachineRecordError(f"selection_rank 须为 None 或正 int: {sr!r}")
 
+    # §9 action↔price 一一对应 (R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP): an OFFICIAL action that names a price
+    # (建仓/加仓 entry / 减仓 TP1 / 清仓-止损 stop / 清仓-止盈 TP2 / 清仓-事件 event-ref) must carry that price in
+    # price.action_fields BEFORE the §10 field_records are emitted (machine-clean gate) — keyed by ACTION, not
+    # row class / executable, so a 清仓-事件 with a null event reference price can never become a clean official
+    # row. Single source: action_price_error (decision §9). price is a dict here (validate_evidence_row proved it).
+    price_err = action_price_error(final_action, row["price"].get("action_fields"))
+    if price_err:
+        raise WeekendMachineRecordError(price_err)
+
     # a 建仓 is an actionable build: it must carry an EXECUTABLE price plan and a real sized position, else
     # price could be shadowed / sizing+regime fabricated onto position_size from a non-executable / unsized build.
     if final_action == _BUILD:
@@ -278,13 +288,13 @@ def _validate_ranked_row(row):
 
 def assemble_machine_record(ranked_result, *, as_of):
     """4d-ii-k §10 machine-record assembly. Assembles the 4d-ii-j `apply_action_rank` result into the §10
-    machine record and validates it with `validate_machine_record`, failing closed if it is not §10-clean.
+    machine record and validates it with `validate_official_machine_record`, failing closed if it is not §10-clean.
 
     ranked_result = the `apply_action_rank` output {regime, rows, weekly_build_limit, build_count}; each row
         carries the additive 4d-ii-a..j fields (veto / price / score / sizing / theme_probe / forward_event /
         final_action / observe_reason_type / selection_rank / action_group / action_rank / row_source).
     as_of = the run's canonical decision_date (the §10 record PIT anchor); the run-level real-YYYYMMDD gate is
-        enforced by `validate_machine_record` (single date source — this module adds no second date parser).
+        enforced by `validate_official_machine_record` (single date source — this module adds no second date parser).
 
     Returns the §10 machine record {schema_name, schema_version, as_of, rows: [{...row (rich machine layer),
     ticker canonical UPPERCASE, market_risk_regime (carried for traceback), decision_trace, field_records}]}.
@@ -319,10 +329,14 @@ def assemble_machine_record(ranked_result, *, as_of):
         _validate_ranked_row(row)   # VALUE-validate carried evidence before §10 field_records are emitted
         rows_out.append({**row, "ticker": ct, "market_risk_regime": market_risk_regime,
                          "decision_trace": _decision_trace(row), "field_records": _field_records(row)})
+    # §10 field-registry 反向完整性 (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP) is enforced by the OFFICIAL
+    # gate `validate_official_machine_record` (no_dangling) — its UNCONDITIONAL manifest floor cannot be bypassed by
+    # stripping evidence. The SAME gate is re-run by every official consumer (flatten / private), so a record whose
+    # registry was stripped AFTER assembly cannot pass into official §11.3 output either.
 
     record = {"schema_name": _SCHEMA_NAME, "schema_version": _SCHEMA_VERSION, "as_of": as_of, "rows": rows_out}
 
-    result = validate_machine_record(record)
+    result = validate_official_machine_record(record)
     if not result["clean"]:
         raise WeekendMachineRecordError(
             "assembled machine record is not §10-clean (a producer never emits a not-clean record); "

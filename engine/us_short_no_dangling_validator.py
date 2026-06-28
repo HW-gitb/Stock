@@ -97,6 +97,43 @@ def _result(violations):
     return {"clean": not violations, "checks": checks, "violations": violations}
 
 
+# §10 per-row field-registry MANIFEST (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP) — the assembler's
+# _SPECS field_ids. Used ONLY by the OFFICIAL gate `validate_official_machine_record` (producer + every official
+# consumer), NEVER by the bare generic `validate_machine_record`, which stays field_id-agnostic by design (its
+# docstring forbids a hardcoded producer-vocab copy; its _valid() fixtures use arbitrary ids deliberately).
+MANIFEST_FIELD_IDS = frozenset({
+    "hard_veto", "price", "market_risk_regime", "core_score", "sizing",
+    "theme_lifecycle_state", "theme_opportunity_state", "forward_event",
+})
+_BUILD_ACTIONS = frozenset({"建仓", "加仓"})  # a build is by contract a scored + sized candidate (§8 / machine-record)
+
+
+def official_expected_field_ids(row):
+    """The §10 manifest an OFFICIAL machine-record decision row MUST carry — used by the official gate, NOT the
+    generic validator. UNCONDITIONAL floor: hard_veto / price / market_risk_regime are evaluated for EVERY
+    decision row, so they are required regardless of row content and CANNOT be stripped to forge an empty /
+    partial registry (this is what closes the evidence-strip bypass; an earlier evidence-gated manifest could be
+    defeated by deleting the gating field). A 建仓/加仓 additionally requires core_score + sizing — a build is by
+    contract a scored, sized candidate and `final_action` is a required non-blank identity key, so this is robust
+    too. The remaining fields are required when the row carries that evidence (a holding has no selection score;
+    an unsized row no sizing): this catches a record dropped while its evidence still rides along."""
+    if not isinstance(row, dict):
+        return set()
+    expected = {"hard_veto", "price", "market_risk_regime"}
+    if row.get("final_action") in _BUILD_ACTIONS:
+        expected.update(("core_score", "sizing"))
+    if isinstance(row.get("score"), dict):
+        expected.add("core_score")
+    sizing = row.get("sizing")
+    if isinstance(sizing, dict) and sizing.get("status") == "sized":
+        expected.add("sizing")
+    if isinstance(row.get("theme_probe"), dict):
+        expected.update(("theme_lifecycle_state", "theme_opportunity_state"))
+    if isinstance(row.get("forward_event"), dict):
+        expected.add("forward_event")
+    return expected
+
+
 def validate_machine_record(record, *, field_registry=None, action_table=None) -> dict:
     """Validate a US-short machine record against the §10 contract.
 
@@ -187,6 +224,19 @@ def validate_machine_record(record, *, field_registry=None, action_table=None) -
         if not isinstance(field_records, list):
             add("no_dangling", rid, "field_records is not a list")
             continue
+
+        # 反向完整性 — duplicate registry record (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP): a
+        # field_id must appear AT MOST once per row (the assembler's set-based expected/emitted reconciliation
+        # cannot see a duplicate; this generic list-based check does, on every validation path). The field_id
+        # presence/blank gate runs per-record below; here we only flag a repeated non-blank id.
+        _seen_fids: dict = {}
+        for frec in field_records:
+            if isinstance(frec, dict) and _nonempty_str(frec.get("field_id")):
+                _fidk = frec["field_id"]
+                _seen_fids[_fidk] = _seen_fids.get(_fidk, 0) + 1
+        for _fidk, _cnt in _seen_fids.items():
+            if _cnt > 1:
+                add("no_dangling", rid, "field_record field_id %r appears %d times (duplicate registry record)" % (_fidk, _cnt))
 
         row_has_hard_veto = False
         for fi, frec in enumerate(field_records):
@@ -311,4 +361,35 @@ def validate_machine_record(record, *, field_registry=None, action_table=None) -
                 "a 硬否决 operation_impact is present but final_action %r is not a kill/exit action %s"
                 % (final_action, sorted(KILL_OR_EXIT_ACTIONS)))
 
+    return _result(violations)
+
+
+def validate_official_machine_record(record, *, field_registry=None, action_table=None) -> dict:
+    """The OFFICIAL machine-record §10 gate = the generic `validate_machine_record` PLUS the reverse-completeness
+    MANIFEST mandate (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP). EVERY official producer/consumer
+    (assemble_machine_record / flatten_machine_record / the private write via flatten) uses THIS, never the bare
+    generic validator, so an official row CANNOT be reduced to an empty / partial registry by stripping its raw
+    evidence — the manifest FLOOR (hard_veto / price / market_risk_regime) is unconditional. Per row: a manifest
+    field_record that is MISSING (vs `official_expected_field_ids`) or EXTRA/fabricated ⟹ not clean; duplicate
+    manifest ids are already caught by the generic validator. The generic validator stays field_id-agnostic by
+    design; the manifest mandate lives ONLY here. Same result shape; malformed input fails closed, never raises."""
+    result = validate_machine_record(record, field_registry=field_registry, action_table=action_table)
+    violations = list(result["violations"])
+    rows = record.get("rows") if isinstance(record, dict) else None
+    if isinstance(rows, list):
+        for ri, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            rid = row.get("ticker") if _nonempty_str(row.get("ticker")) else ("rows[%d]" % ri)
+            frs = row.get("field_records")
+            present = ({frec.get("field_id") for frec in frs
+                        if isinstance(frec, dict) and frec.get("field_id") in MANIFEST_FIELD_IDS}
+                       if isinstance(frs, list) else set())
+            expected = official_expected_field_ids(row)
+            for missing in sorted(expected - present):
+                violations.append({"check": "no_dangling", "where": rid,
+                                   "reason": "official row missing required §10 field_record %r (reverse-completeness)" % missing})
+            for extra in sorted(present - expected):
+                violations.append({"check": "no_dangling", "where": rid,
+                                   "reason": "official row carries §10 field_record %r the row did not compute (unexpected/fabricated)" % extra})
     return _result(violations)

@@ -32,6 +32,7 @@ no A-share crossing.
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 from engine.us_short_hard_veto import NONE as _VETO_NONE, VETO_TIERS
@@ -70,6 +71,56 @@ def action_reason_error(final_action, observe_reason_type):
             return f"观察 行 observe_reason_type 须 ∈ 冻结词表: {observe_reason_type!r}"
     elif observe_reason_type is not None:
         return f"非观察行（{final_action}）不得带 observe_reason_type: {observe_reason_type!r}"
+    return None
+
+
+# §9 action↔price 一一对应契约 (design §9 line 253 + §6.1 line 210): an OFFICIAL final_action that NAMES a price
+# MUST carry that execution/reference price — a priced state with a blank/non-finite price decouples 动作 from
+# 价位 (设计明确禁止 "状态/价位脱钩"; R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP). SINGLE SOURCE for the matrix:
+# the consumers (machine-record assembly BEFORE §10-clean via `_validate_ranked_row`; the §11.3 action_table
+# projection via `_validate_price_projection`; and — through `flatten_machine_record` — private persistence) all
+# call `action_price_error` and never re-hardcode the mapping. The field names are triangulated ⊆ the frozen
+# §11.3 price columns and the keys == FINAL_ACTIONS by a test (no third drift surface). The matrix covers ALL 9
+# frozen actions incl. the v1-deferred ones (加仓 / 减仓 / 清仓-止盈) so a later activation cannot bypass the gate;
+# the N/A actions (持有 / 观察 / 否决-避开) require no price. Keyed by ACTION, not row-class — independent of
+# `executable` (a non-executable 清仓-事件 must still carry its event reference price).
+_A_ADD, _A_REDUCE, _A_CLEAR_TP = "加仓", "减仓", "清仓-止盈"
+_ENTRY_PRICE_FIELDS = ("limit_order_price",)   # 建仓 / 加仓 → entry 价（可执行委托价）
+ACTION_REQUIRED_PRICE_FIELDS = {
+    _A_BUILD: _ENTRY_PRICE_FIELDS,
+    _A_ADD: _ENTRY_PRICE_FIELDS,
+    _A_REDUCE: ("take_profit_reduce_price",),    # 减仓（部分止盈）→ TP1
+    _A_CLEAR_STOP: ("stop_clear_price",),        # 清仓-止损 → stop
+    _A_CLEAR_TP: ("take_profit_exit_price",),    # 清仓-止盈 → TP2
+    _A_CLEAR_EVENT: ("event_clear_reference_price",),  # 清仓-事件 → 事件清仓参考价
+    _A_HOLD: (),
+    _A_OBSERVE: (),
+    _A_REJECT: (),
+}
+
+
+def _finite_positive(x):
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x > 0.0
+
+
+def action_price_error(final_action, action_fields):
+    """SINGLE SOURCE §9 action↔price validator — EVERY weekend-pipeline stage that builds OR flattens an
+    OFFICIAL row (machine-record assembly / §11.3 action_table projection / private write) MUST use this and
+    must NOT re-implement the mapping inline. An OFFICIAL `final_action` that names a price must carry that
+    execution/reference price in `action_fields` as a finite POSITIVE number, else 动作与价位脱钩 (设计禁止).
+    `action_fields` = the row's §6 price-engine `price.action_fields` dict. Returns an error-message string if
+    the action's required price is missing / non-positive / non-finite, else None. N/A actions
+    (持有 / 观察 / 否决-避开) and any action outside the matrix (the vocab gate is `action_reason_error`) require
+    no price. Independent of `executable` / row class (an action-keyed contract, not a row-class one)."""
+    required = ACTION_REQUIRED_PRICE_FIELDS.get(final_action, ())
+    if not required:
+        return None
+    if not isinstance(action_fields, dict):
+        return f"{final_action} 行 price.action_fields 须为 dict（§9 action↔price 一一对应）: {action_fields!r}"
+    for field in required:
+        v = action_fields.get(field)
+        if not _finite_positive(v):
+            return f"{final_action} 须带有限正 {field}（§9 action↔price 一一对应；缺/非正/非有限即脱钩）: {v!r}"
     return None
 
 

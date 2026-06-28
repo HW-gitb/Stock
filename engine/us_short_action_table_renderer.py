@@ -20,7 +20,7 @@ import csv
 import json
 from pathlib import Path
 
-from engine.us_short_no_dangling_validator import validate_machine_record
+from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_private_paths import reject_nonprivate_output_path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -62,7 +62,7 @@ def render_action_table(machine_record) -> dict:
     ``NotCleanMachineRecordError`` (the renderer never emits a CSV from an unvalidated machine layer). Each
     row renders the 51 frozen columns in exact contract order; a column the machine row omits → empty cell.
     """
-    result = validate_machine_record(machine_record)
+    result = validate_official_machine_record(machine_record)
     if not result["clean"]:
         raise NotCleanMachineRecordError(
             "refusing to render a not-clean machine record; first violations: %s"

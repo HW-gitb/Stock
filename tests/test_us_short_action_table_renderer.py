@@ -18,36 +18,38 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import engine.us_short_action_table_renderer as rndr  # noqa: E402
+from engine.us_short_action_rank import action_group  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
+from engine.us_short_weekend_machine_record import assemble_machine_record  # noqa: E402
 
 CONTRACT = json.loads((ROOT / "presets" / "us_short_action_table_contract_20260620.json").read_text(encoding="utf-8"))
 
 
-def _field(**over):
-    base = {
-        "field_id": "tag1", "owner_module": "engine.us_short_x", "data_source": "FMP",
-        "pit_basis": "prior_friday_close", "privacy_class": "public_universe",
-        "current_landing_surface": "weekly_report.risk_section", "terminal_surface_target": "risk_tags",
-        "operation_impact": "仅标签", "evidence_ref_kind": None, "lifecycle_item_id": 7,
-        "field_class": "structured_tag", "disposition": "landed",
-        "impact_target": None, "claim_type": None, "evidence_ref": None,
-    }
-    base.update(over)
-    return base
-
-
 def _clean_record():
-    """A §10-clean machine record (passes validate_machine_record) carrying a few action_table columns."""
-    return {
-        "schema_name": "us_short_machine_record_contract", "schema_version": "1.0.0", "as_of": "20260622",
-        "rows": [{
-            "ticker": "AAPL", "row_source": "top15_candidate", "final_action": "建仓",
-            "action_rank": 2, "decision_trace": "passed gate; pullback entry",
-            "risk_tags": ["macro_cluster:ai_complex", "near_earnings"],
-            "coverage_status": "full", "model_position_size_shares": 100,
-            "field_records": [_field()],
-        }],
+    """A real official §10 machine record carrying a few already-projected action-table cells."""
+    row = {
+        "ticker": "AAPL", "row_source": "top15_candidate", "row_context": "candidate",
+        "final_action": "建仓", "observe_reason_type": None, "selection_rank": 1,
+        "action_rank": 2, "action_group": action_group("建仓"),
+        "veto": {"veto_tier": "none", "row_context": "candidate"},
+        "price": {"executable": True, "trace": {}, "action_fields": {"limit_order_price": 10.0}},
+        "score": {"core_score": 50.0},
+        "sizing": {"status": "sized", "desired_model_shares": 100},
+        "risk_tags": ["macro_cluster:ai_complex", "near_earnings"],
+        "coverage_status": "full", "model_position_size_shares": 100,
     }
+    return assemble_machine_record(
+        {"regime": {"market_risk_regime": "进攻"}, "rows": [row],
+         "weekly_build_limit": 3, "build_count": 1},
+        as_of="20260622",
+    )
+
+
+def _stripped_official_record():
+    record = _clean_record()
+    record["rows"][0].pop("veto")
+    record["rows"][0]["field_records"] = []
+    return record
 
 
 class ColumnContract(unittest.TestCase):
@@ -94,6 +96,10 @@ class Render(unittest.TestCase):
             rndr.render_action_table(bad)                       # always validates
         with self.assertRaises(TypeError):
             rndr.render_action_table(bad, validate=False)       # no such parameter — the bypass is gone
+
+    def test_refuses_official_record_with_stripped_registry(self):
+        with self.assertRaises(rndr.NotCleanMachineRecordError):
+            rndr.render_action_table(_stripped_official_record())
 
 
 class CellFormatting(unittest.TestCase):
@@ -155,6 +161,13 @@ class PrivatePathGuardWiring(unittest.TestCase):
             with self.assertRaises(rndr.NotCleanMachineRecordError):
                 rndr.write_action_table(bad, out)
             self.assertFalse(out.exists())  # render refused -> no file
+
+    def test_stripped_official_registry_not_written_on_valid_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "action_table.csv"
+            with self.assertRaises(rndr.NotCleanMachineRecordError):
+                rndr.write_action_table(_stripped_official_record(), out)
+            self.assertFalse(out.exists())
 
 
 if __name__ == "__main__":

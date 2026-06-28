@@ -24,7 +24,7 @@ Because the projection makes price.action_fields the OFFICIAL §11.3 cells, the 
 finite, and an EXECUTABLE row must carry the required executable price fields for its row class (a 建仓 /
 executable holding can never render a blank or nonnumeric entry·stop·RR while still showing an action + size);
 a non-executable observe/reject row keeps honest partial output (§6). The flattened record then stays §10-clean:
-`flatten_machine_record` re-runs `validate_machine_record` and fails closed if the projection ever broke the §10
+`flatten_machine_record` re-runs `validate_official_machine_record` and fails closed if the projection ever broke the §10
 contract (a lifted design-locked enum value is re-checked too). Single-source consumer-validation at the
 boundary (§9 action/reason via `action_reason_error`, canonical-unique ticker, the §6 price contract via the
 engine's `PRICE_ENGINES` / `PRICE_SUB_MODES` + the column subsets triangulated ⊆ the engine column sets), the
@@ -40,9 +40,10 @@ from pathlib import Path
 from engine.us_short_action_table_renderer import action_table_columns, render_action_table
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import row_source_to_context
+from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
-from engine.us_short_weekend_decision import action_reason_error
+from engine.us_short_weekend_decision import action_price_error, action_reason_error
 
 # the frozen §11.3 column set (single source) — only keys that ARE a real column are lifted from the rich layer.
 _ACTION_TABLE_COLUMNS = frozenset(action_table_columns())
@@ -179,6 +180,12 @@ def _validate_price_projection(row, ct):
     af = price.get("action_fields")
     if not isinstance(af, dict):
         raise WeekendActionTableError(f"{ct}: price.action_fields 须为 dict: {af!r}")
+    # §9 action↔price 一一对应 (R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP): independent of executable / row class,
+    # an OFFICIAL action that names a price must carry it BEFORE it is projected onto the §11.3 columns (runs
+    # BEFORE the executable early-return below). Single source: action_price_error (decision §9).
+    price_err = action_price_error(row.get("final_action"), af)
+    if price_err:
+        raise WeekendActionTableError(f"{ct}: {price_err}")
     for col in _NUMERIC_PRICE_COLUMNS:                       # any present price/ratio cell must be finite-or-None
         v = af.get(col)
         if v is not None and not _finite(v):
@@ -248,11 +255,20 @@ def flatten_machine_record(machine_record):
 
     Every row is consumer-validated fail-closed (§9 action/reason single-source + canonical-unique ticker),
     then the rich layer is projected onto the flat §11.3 columns. The flattened record is re-checked §10-clean
-    (`render_action_table` runs `validate_machine_record`), so a projection that ever broke the §10 contract —
+    (`render_action_table` runs `validate_official_machine_record`), so a projection that ever broke the §10 contract —
     e.g. a lifted design-locked enum with an illegal value — fails closed. Raises WeekendActionTableError on a
     malformed record / row, a bad §9 pair, a non-canonical / duplicate ticker, or a not-§10-clean projection."""
     if not (isinstance(machine_record, dict) and isinstance(machine_record.get("rows"), list)):
         raise WeekendActionTableError("machine_record 须为含 rows(list) 的 4d-ii-k 机器记录")
+
+    # OFFICIAL consumer gate (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP): reject a record whose §10
+    # registry was STRIPPED after assembly before it is projected into official §11.3 output. The manifest floor
+    # (hard_veto / price / market_risk_regime) is UNCONDITIONAL, so deleting raw evidence + field_records cannot
+    # forge an empty/partial registry past this boundary (the bare generic validator stays field_id-agnostic).
+    _off = validate_official_machine_record(machine_record)
+    if not _off["clean"]:
+        raise WeekendActionTableError(
+            f"machine record 非 official §10-clean（manifest 反查失败）: {_off['violations'][:5]!r}")
 
     out_rows, seen = [], set()
     for row in machine_record["rows"]:

@@ -23,7 +23,8 @@ import engine.us_short_weekend_machine_record as mr  # noqa: E402
 import engine.us_short_theme_probe as tp_engine  # noqa: E402
 from engine.us_short_action_rank import ACTION_RANK_SKELETON, action_group as _ag  # noqa: E402
 from engine.us_short_hard_veto import VETO_TIERS  # noqa: E402
-from engine.us_short_no_dangling_validator import validate_machine_record  # noqa: E402
+from engine.us_short_no_dangling_validator import (  # noqa: E402
+    official_expected_field_ids, validate_machine_record, validate_official_machine_record)
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES  # noqa: E402
 from engine.us_short_regime import REGIMES  # noqa: E402
 
@@ -46,9 +47,13 @@ def _row(ticker="AAA", final_action="建仓", observe_reason_type=None, row_sour
         "observe_reason_type": observe_reason_type, "row_context": ctx, "selection_rank": selection_rank,
         "action_rank": action_rank, "action_group": _safe_group(final_action) if action_group is None else action_group,
         "veto": {"veto_tier": veto_tier, "row_context": ctx},
-        # holding executable rows carry a bool breached (consumed by the §6 evidence contract); candidates don't
+        # holding executable rows carry a bool breached (consumed by the §6 evidence contract); candidates don't.
+        # action_fields carry the §9 action↔price cells a real price engine emits (so the action-keyed price
+        # contract `action_price_error` is satisfied — entry/stop/TP1/TP2/event-ref all positive).
         "price": {"executable": executable, "trace": {"breached": False} if ctx == "holding" else {},
-                  "action_fields": {}},
+                  "action_fields": {"limit_order_price": 10.0, "stop_clear_price": 9.0,
+                                    "take_profit_reduce_price": 12.0, "take_profit_exit_price": 14.0,
+                                    "event_clear_reference_price": 8.0}},
     }
     if has_score:
         row["score"] = {"core_score": 50.0}
@@ -140,6 +145,17 @@ class FieldRecordLandings(unittest.TestCase):
         self.assertEqual(_fr_by_id(rec, "hard_veto")["operation_impact"], "硬否决")
         self.assertNotIn("core_score", _ids(rec))  # holdings carry no selection score
         self.assertTrue(validate_machine_record(rec)["clean"])
+
+    def test_event_clear_with_null_event_price_rejected_at_assembly(self):
+        # R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP: a 清仓-事件 holding whose event reference price is null is
+        # rejected at the machine-clean gate (§9 action↔price) — an event-clear can never be official without
+        # its 事件清仓参考价, even though the rest of the holding evidence is valid.
+        bad = _row(row_source="holding_pass2_only", final_action="清仓-事件",
+                   veto_tier="position_hard_veto", has_score=False, sized=False)
+        bad["price"]["action_fields"] = {k: v for k, v in bad["price"]["action_fields"].items()
+                                         if k != "event_clear_reference_price"}
+        with self.assertRaises(mr.WeekendMachineRecordError):
+            mr.assemble_machine_record(_ranked([bad]), as_of=_AS_OF)
 
     def test_soft_veto_tier_is_shadow_not_hard(self):
         # a strong_downgrade tier is NOT acted on in v1 → recorded as a clean shadow, never 硬否决
@@ -394,6 +410,106 @@ class SingleSourceTriangulation(unittest.TestCase):
             tp_engine.defensive_entry_constraint("防御", "extreme", no_gap_week=True, entry_in_band=True),  # breakout
         }
         self.assertEqual(seen, set(mr._ENTRY_MODE_CONSTRAINTS))
+
+
+class RegistryReverseCompletenessTests(unittest.TestCase):
+    """R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP: the assembler reconciles the EMITTED field_records
+    against an independently-derived expected-field MANIFEST, so a computed §10 field that produced no record
+    (silent disappearance) or a fabricated/unexpected record fails closed at the machine-clean gate."""
+
+    # --- the OFFICIAL manifest: UNCONDITIONAL floor (strip-proof) + build-contract + evidence-conditional ---
+    def test_floor_is_unconditional_strip_proof(self):
+        # the floor survives an evidence strip — this is what closes Codex's evidence-strip-to-empty-manifest forge
+        self.assertEqual(official_expected_field_ids({}), {"hard_veto", "price", "market_risk_regime"})
+        self.assertEqual(official_expected_field_ids({"final_action": "持有"}),
+                         {"hard_veto", "price", "market_risk_regime"})
+
+    def test_build_requires_score_and_sizing(self):
+        self.assertEqual(official_expected_field_ids({"final_action": "建仓"}),
+                         {"hard_veto", "price", "market_risk_regime", "core_score", "sizing"})
+
+    def test_evidence_conditional_extras(self):
+        self.assertEqual(
+            official_expected_field_ids({"final_action": "持有", "theme_probe": {"x": 1}, "forward_event": {"y": 1}}),
+            {"hard_veto", "price", "market_risk_regime", "theme_lifecycle_state", "theme_opportunity_state", "forward_event"})
+
+    def test_emitted_equals_official_manifest_for_representative_rows(self):
+        # single-source pin: the assembler emits EXACTLY the official manifest for a valid row
+        for kw in ({"has_score": True, "sized": True},
+                   {"final_action": "持有", "row_source": "holding_pass2_only", "has_score": False, "sized": False},
+                   {"has_score": True, "sized": True, "theme_probe": True, "forward_event": True}):
+            row = _row(**kw)
+            self.assertEqual({fr["field_id"] for fr in mr._field_records(row)},
+                             official_expected_field_ids(row), kw)
+
+    # --- planted-deletion / unexpected at the OFFICIAL gate (assemble) ---
+    def test_dropped_field_record_rejected(self):
+        import unittest.mock as mock
+        orig = mr._field_records
+        with mock.patch.object(mr, "_field_records",
+                               lambda r: [fr for fr in orig(r) if fr["field_id"] != "sizing"]):
+            with self.assertRaises(mr.WeekendMachineRecordError):
+                mr.assemble_machine_record(_ranked([_row(sized=True)]), as_of=_AS_OF)
+
+    def test_unexpected_field_record_rejected(self):
+        import unittest.mock as mock
+        orig = mr._field_records
+        def add_extra(r):
+            frs = orig(r)
+            frs.append(mr._fr("forward_event", op="仅标签", terminal=mr._SHADOW_TERMINAL,
+                              disposition=mr._SHADOW, impact_target=None))
+            return frs
+        with mock.patch.object(mr, "_field_records", add_extra):
+            with self.assertRaises(mr.WeekendMachineRecordError):   # row has no forward_event input
+                mr.assemble_machine_record(_ranked([_row(forward_event=False)]), as_of=_AS_OF)
+
+    # --- positive controls: legitimately-absent §10 fields assemble clean (no over-requirement) ---
+    def test_minimal_row_assembles_clean(self):
+        rec = mr.assemble_machine_record(
+            _ranked([_row(final_action="持有", row_source="holding_pass2_only", has_score=False, sized=False)]),
+            as_of=_AS_OF)
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    def test_full_row_assembles_clean(self):
+        rec = mr.assemble_machine_record(
+            _ranked([_row(has_score=True, sized=True, forward_event=True)]), as_of=_AS_OF)
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    # --- consumer boundary (Codex re-review-1/2): post-assembly tamper fails the OFFICIAL gate ---
+    def test_deleted_field_record_rejected_at_consumer_gate(self):
+        import engine.us_short_weekend_action_table as at
+        rec = mr.assemble_machine_record(_ranked([_row(has_score=True, sized=True)]), as_of=_AS_OF)
+        rec["rows"][0]["field_records"] = [fr for fr in rec["rows"][0]["field_records"]
+                                           if fr["field_id"] != "price"]
+        self.assertFalse(validate_official_machine_record(rec)["clean"])    # official gate rejects it
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(rec)                                  # and so does the §11.3 projection
+
+    def test_evidence_strip_to_empty_manifest_rejected(self):
+        # Codex re-review-2 probe: delete the raw `veto` evidence AND all field_records — an evidence-gated
+        # manifest would go empty and pass; the UNCONDITIONAL floor rejects it at the official gate + flatten.
+        import engine.us_short_weekend_action_table as at
+        rec = mr.assemble_machine_record(
+            _ranked([_row(final_action="持有", row_source="holding_pass2_only", has_score=False, sized=False)]),
+            as_of=_AS_OF)
+        rec["rows"][0].pop("veto", None)
+        rec["rows"][0]["field_records"] = []
+        self.assertFalse(validate_official_machine_record(rec)["clean"])
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(rec)
+
+    def test_deleting_any_field_record_breaks_clean(self):
+        # behavioral triangulation: for a FULL assembled row every emitted manifest record is required → deleting
+        # ANY single one makes the record fail the OFFICIAL gate (none silently drops).
+        import copy
+        base = mr.assemble_machine_record(
+            _ranked([_row(has_score=True, sized=True, forward_event=True)]), as_of=_AS_OF)
+        n = len(base["rows"][0]["field_records"])
+        self.assertGreaterEqual(n, 5)
+        for i in range(n):
+            rec = copy.deepcopy(base)
+            del rec["rows"][0]["field_records"][i]
+            self.assertFalse(validate_official_machine_record(rec)["clean"], f"deleting field_record[{i}] must break clean")
 
 
 if __name__ == "__main__":

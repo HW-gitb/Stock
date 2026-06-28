@@ -8,6 +8,59 @@
 
 ---
 
+## 2026-06-28 - Codex 修复 + 全量自检 PASS (US-short batch4 ④⑤ final closeout)
+
+- **Verdict/Action**: PASS；action-price mapping 与 official manifest reverse-completeness 已闭合，renderer/write 全部走 official gate；批4离线工程范围修复完毕，batch5 provider/live 仍独立 gated。
+- **Required**: 无；`R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`、`R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` 均 resolved，完整 closure 见 `docs/system_risk_register.md`。
+- **Verify**: TDD RED 2 failures→GREEN 18 OK；真 jsonschema `test_us_short*` 2505 OK、schema 580、weekend 496、runner 8、boundary 8、doc guards 52；direct official/render/write forge 三路拒且零落盘；compileall/diff-check OK。
+- **Next**: 无；Codex 按 PASS 流程提交。
+- **Proof-of-use**: direct renderer + allowed-private writer 对 evidence-strip/empty-registry 各拒；全 engine US-short validator 引用扫描仅 official consumers 用 official gate，generic 仅 validator 内部保留。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 ⑤ round-3 strict re-review)
+
+- **Verdict/Action**: FAIL；official validator floor 已封住 evidence-strip，但 action-table renderer/write 仍调用 generic validator，可直接渲染同一空 registry 伪造记录，官方消费者接线未全闭合。
+- **Required**: `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`；完整证据与修复边界见 `docs/system_risk_register.md`。
+- **Verify**: 真 jsonschema 全量 `test_us_short*` 2503 OK；boundary 8、doc guards 52、py_compile/diff-check OK；探针得到 `official_clean=False` 但 `render_action_table` 接受并输出 1 行。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 ⑤ round-2 strict re-review)
+
+- **Verdict/Action**: FAIL；post-assembly 单条 field_record 删除已封住，但 raw evidence + registry 同删可把 official row 降级为空 manifest，validator/flatten 仍放行，批4尚未整体闭合。
+- **Required**: `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`；完整证据与修复边界见 `docs/system_risk_register.md`。
+- **Verify**: 真 jsonschema 全量 `test_us_short*` 2501 OK；boundary 8、doc guards 52、py_compile/diff-check OK；对抗探针删除已组装 holding 行的 `veto` + 全部 `field_records` 后，`expected=[]`、validator `clean=True`、flatten 接受空 registry。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 ④⑤ strict re-review)
+
+- **Verdict/Action**: FAIL；④ action-price mapping PASS，⑤ registry reverse-completeness 仅封住 assembler，consumer 边界仍可放行缺失 field_record，批4尚未整体修复完毕。
+- **Required**: `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`；完整证据与修复边界见 `docs/system_risk_register.md`。
+- **Verify**: 真 jsonschema 全量 `test_us_short*` 2496 OK；boundary 8、route-doc 25、py_compile、diff-check OK；对抗探针删除已组装 holding 行的 `price` field_record 后，validator 仍 `clean=True` 且 flatten 接受。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ⑤ round-3 — official gate 无条件 manifest floor)
+
+- **Verdict/Action**: 回应 Codex re-review-2 FAIL（evidence-strip 绕过：删 raw veto + 清空 field_records → evidence-gated manifest 变空、flatten 接受空 registry）。采用 Codex 给的选项——**拆分 official/generic 校验 API**：新增 `validate_official_machine_record`（generic + 逐行 manifest 强制，floor `hard_veto/price/market_risk_regime` **无条件**不可 strip；建仓/加仓 按 final_action 再要 core_score+sizing）。assemble + flatten 都走 official gate；generic 保持 field_id-agnostic。round-2 加在 generic 的反查已移除。live_permission 仍排除。详见 register。
+- **Required**: `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` → fixed round-3 pending Codex；Repair round-3 全文见 register。
+- **Verify**: 全离线 `*us_short*` 2502 OK（真 jsonschema，零回归）；no_dangling/machine_record/action_table/private 焦点全绿；boundary 8 / doc-route 52；py_compile / `git diff --check` 绿；实测 Codex re-review-2 探针现 official gate not clean + flatten 拒。
+- **Next**: Codex strict 复审 ⑤ round-3 → PASS 则连 ④ 一并提交，批4 原始 6 条整体闭合。
+- **Proof-of-use**: co-deletion（删 veto + 空 registry）在 official gate + flatten + **private write** 三路各拒（零落盘）；单记录删除；满行删任一记录破 clean；planted-extra；build 必带 score+sizing；floor 无条件单测；空 registry passes generic 但 fails official。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ⑤ round-2 — 消费者边界单源反查)
+
+- **Verdict/Action**: 回应 Codex re-review-1 FAIL（⑤ 仅封 assembler、消费者门可绕过：删已组装行 price 记录后 validator 仍 clean）。把 manifest 移到**单一非循环源** `expected_field_ids` + `MANIFEST_FIELD_IDS`（入 no_dangling，删 assembler 本地副本+其对账）；`validate_machine_record` 逐行对账 manifest 记录 vs `expected_field_ids`（缺/多即 not clean，dup 另检）——此门 assemble/flatten/render/private 都重跑，故装配后 AND 投影后均生效。evidence-gated（无 veto+price 机器层的通用记录→空 manifest 不受影响）。④ 已 Codex PASS。
+- **Required**: `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` → fixed round-2 pending Codex；完整 Repair round-2 + live_permission 设计岔口见 `docs/system_risk_register.md`。
+- **Verify**: 全离线 `*us_short*` 2501 OK（真 jsonschema，零回归）；no_dangling/machine_record/action_table/private 焦点全绿；boundary 8 / doc-route 52；py_compile / `git diff --check` 绿。
+- **Next**: Codex strict 复审 ⑤ round-2 → PASS 则连 ④ 一并提交（批4 原始 6 条整体闭合）。**用户决定 2026-06-28：live_permission 等 stage-derived 输出格不纳入 §10 manifest**（保持批4 honest-empty 边界、不动冻结治理，batch5 再议）——该岔口已闭，详见 register。
+- **Proof-of-use**: 装配后删 price 记录在 validator + flatten + **private write** 三路各被拒（private 路零落盘）；planted-extra；满行删任一记录均破 clean；`expected_field_ids` 通用→空 / 机器层→manifest 单测；dup-id。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ④⑤ — 整体闭合补完)
+
+- **Verdict/Action**: 修 ④ ACTION-PRICE-MAPPING-GAP + ⑤ MACHINE-REGISTRY-COMPLETENESS-GAP（批4 原始 6 条仅剩这 2 条 open，用户指令修）。④=单源 §9 action↔price 矩阵（decision.py），action-keyed 覆盖全 9 动作（含 deferred），在装配/action_table 投影/private 三处强制。⑤=反向完整性：独立 `expected_field_ids` 在装配处与 emitted 对账（缺/多即拒）+ no_dangling 加 duplicate-id 检查。两条 Repair 全文见 register。
+- **Required**: `R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`、`R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` → fixed pending Codex；完整修复边界 + scope 依据见 `docs/system_risk_register.md`。
+- **Verify**: 全离线 `*us_short*` 2496 OK（真 jsonschema 4.26.0，零回归）；decision/machine_record/action_table/no_dangling/private 焦点全绿；boundary 8 / doc-route 52；py_compile / `git diff --check` 绿。
+- **Next**: Codex 按写入文档的对抗性审查标准 strict 复审 ④⑤ → PASS 则提交。
+- **Proof-of-use**: ④ 每动作 positive + missing/非正/非有限/错类型 reverse + 清仓-事件 null 事件价在装配与 flatten 双边界各被拒 + 正控；⑤ planted-deletion(drop sizing 记录)/planted-unexpected(伪造 forward_event 记录)/duplicate-id 各被拒 + minimal/full 行正控；scope 经 frozen core_field_classes 核（cash/portfolio_guard/coverage/live_permission 非 §10 类→正控）。
+
 ## 2026-06-28 - Claude 审查 (US-short batch4 整体修复完成度复核, 用户请求)
 
 - **Verdict/Action**: FAIL（批4 未整体修复完成）。①②③⑥ 已 resolved 且经真 jsonschema 全量复核确属闭合；但原始 6 条里的 ④ `R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`、⑤ `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` 仍 open——从未被任何人处理（用户只点名 ②③⑥）。

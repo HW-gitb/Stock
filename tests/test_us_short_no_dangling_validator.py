@@ -508,5 +508,39 @@ class FrozenPresetIsSingleSource(unittest.TestCase):
         self.assertFalse(out["clean"])
 
 
+class RegistryReverseCompleteness(unittest.TestCase):
+    """R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP: the generic validator flags a DUPLICATE registry
+    record but stays field_id-agnostic (no manifest mandate, by design); the OFFICIAL gate
+    (`validate_official_machine_record`, used by assemble / flatten / private) adds the UNCONDITIONAL manifest
+    floor so an official row cannot be stripped to an empty registry."""
+
+    def test_duplicate_field_id_within_row_rejected(self):
+        # a second record reusing an existing field_id is a duplicate registry record → not clean (generic)
+        out = ndv.validate_machine_record(_mut(
+            lambda r: r["rows"][1]["field_records"].append(copy.deepcopy(_rdown_fr(r)))))
+        self.assertFalse(out["clean"])
+        self.assertFalse(out["checks"]["no_dangling"])
+
+    def test_unique_field_ids_pass(self):
+        # positive control: the baseline (all field_ids unique per row) stays clean under the GENERIC validator
+        self.assertTrue(ndv.validate_machine_record(_valid())["clean"])
+
+    # --- the OFFICIAL gate adds the manifest mandate the generic validator deliberately omits ---
+    def test_official_manifest_floor_and_build(self):
+        self.assertEqual(ndv.official_expected_field_ids({"final_action": "持有"}),
+                         {"hard_veto", "price", "market_risk_regime"})            # unconditional floor
+        self.assertEqual(ndv.official_expected_field_ids({"final_action": "建仓"}),
+                         {"hard_veto", "price", "market_risk_regime", "core_score", "sizing"})
+
+    def test_empty_registry_passes_generic_but_fails_official(self):
+        # a machine-layer row stripped to an EMPTY registry passes the field_id-agnostic generic validator but
+        # FAILS the official gate's unconditional floor (the evidence-strip forge is closed at the official gate).
+        rec = {"schema_name": "us_short_machine_record_contract", "schema_version": "1.0.0", "as_of": "20260622",
+               "rows": [{"ticker": "AAA", "row_source": "holding_pass2_only", "final_action": "持有",
+                         "decision_trace": "hold", "field_records": []}]}
+        self.assertTrue(ndv.validate_machine_record(rec)["clean"])             # generic: no manifest mandate
+        self.assertFalse(ndv.validate_official_machine_record(rec)["clean"])   # official: floor missing
+
+
 if __name__ == "__main__":
     unittest.main()

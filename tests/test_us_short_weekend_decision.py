@@ -267,5 +267,47 @@ class EvidenceValueValidationTests(unittest.TestCase):
                 self.assertIn(event_data_gap_status(est, has)["status"], wd._EVENT_GAP_STATUSES)
 
 
+class ActionPriceContractTests(unittest.TestCase):
+    """R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP: the §9 action↔price 一一对应 matrix is single-source
+    (ACTION_REQUIRED_PRICE_FIELDS / action_price_error), covers ALL 9 frozen actions (incl. the v1-deferred
+    加仓/减仓/清仓-止盈 so a later activation cannot bypass the gate), lands only on real §11.3 columns, and
+    rejects a priced action whose required price is missing / non-positive / non-finite / wrong-type."""
+
+    # --- triangulation: exactly the frozen vocab + only real §11.3 columns (no third drift surface) ---
+    def test_matrix_keys_are_exactly_the_frozen_actions(self):
+        self.assertEqual(set(wd.ACTION_REQUIRED_PRICE_FIELDS), set(wd.FINAL_ACTIONS))
+
+    def test_required_fields_are_frozen_action_table_columns(self):
+        from engine.us_short_action_table_renderer import action_table_columns
+        cols = set(action_table_columns())
+        for action, fields in wd.ACTION_REQUIRED_PRICE_FIELDS.items():
+            for f in fields:
+                self.assertIn(f, cols, f"{action} required price {f} must be a frozen §11.3 column")
+
+    def test_na_actions_require_no_price(self):
+        for a in ("持有", "观察", "否决/避开"):
+            self.assertEqual(wd.ACTION_REQUIRED_PRICE_FIELDS[a], ())
+            self.assertIsNone(wd.action_price_error(a, {}))
+            self.assertIsNone(wd.action_price_error(a, None))   # N/A: action_fields irrelevant
+
+    # --- per priced action: one positive + the missing / non-positive / non-finite / wrong-type reverse set ---
+    def test_every_priced_action_positive_and_reverse(self):
+        priced = {a: f for a, f in wd.ACTION_REQUIRED_PRICE_FIELDS.items() if f}
+        self.assertEqual(set(priced), {"建仓", "加仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件"})
+        for action, fields in priced.items():
+            good = {f: 10.0 for f in fields}
+            self.assertIsNone(wd.action_price_error(action, good), f"{action} positive must pass")
+            self.assertIsNotNone(wd.action_price_error(action, None), f"{action} non-dict action_fields rejected")
+            for f in fields:
+                for bad in (None, 0.0, -1.0, float("nan"), float("inf"), "10.0", True):
+                    self.assertIsNotNone(wd.action_price_error(action, {**good, f: bad}),
+                                         f"{action} with {f}={bad!r} must be rejected")
+
+    def test_event_clear_requires_event_reference_price(self):
+        self.assertIsNone(wd.action_price_error("清仓-事件", {"event_clear_reference_price": 8.0}))
+        self.assertIsNotNone(wd.action_price_error("清仓-事件", {"event_clear_reference_price": None}))
+        self.assertIsNotNone(wd.action_price_error("清仓-事件", {}))
+
+
 if __name__ == "__main__":
     unittest.main()

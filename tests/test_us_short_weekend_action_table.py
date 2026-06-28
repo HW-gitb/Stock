@@ -255,59 +255,75 @@ class PriceContractFailClosed(unittest.TestCase):
     the official §11.3 CSV must carry the §6 price-engine contract — empty / partial / nonnumeric action_fields
     can never render a blank or garbage entry/stop/RR while still showing an action + size."""
 
-    def _reject(self, rec):
-        with self.assertRaises(at.WeekendActionTableError):
-            at.flatten_machine_record(rec)
+    def _reject(self, rows):
+        # a broken price/projection is fail-closed at EITHER official boundary: machine-record assembly
+        # (§9 action↔price / §10) or the §11.3 action_table flatten — both prevent a clean official row.
+        with self.assertRaises((mr.WeekendMachineRecordError, at.WeekendActionTableError)):
+            at.flatten_machine_record(_machine_record(rows))
 
     def test_executable_build_empty_action_fields_rejected(self):
-        self._reject(_machine_record([_candidate(action_fields={})]))
+        self._reject([_candidate(action_fields={})])
 
     def test_build_missing_critical_field_rejected(self):
         for drop in ("stop_clear_price", "valid_entry_high", "limit_order_price", "take_profit_reduce_price",
                      "risk_reward_ratio", "entry_plan", "order_expiry", "gap_policy", "min_rr_gate_status",
                      "post_round_rr_status"):
             af = {k: v for k, v in _CANDIDATE_AF.items() if k != drop}
-            self._reject(_machine_record([_candidate(action_fields=af)]))
+            self._reject([_candidate(action_fields=af)])
 
     def test_nonnumeric_price_or_rr_rejected(self):
         for col, bad in (("valid_entry_high", "BAD_PRICE"), ("stop_clear_price", "X"),
                          ("risk_reward_ratio", "NOT_NUMERIC"), ("limit_order_price", float("nan"))):
-            self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, col: bad})]))
+            self._reject([_candidate(action_fields={**_CANDIDATE_AF, col: bad})])
 
     def test_bad_price_engine_or_sub_mode_rejected(self):
-        self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, "price_engine_used": "holding_exit_engine"})]))
-        self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, "price_sub_mode": "BANANA"})]))
+        self._reject([_candidate(action_fields={**_CANDIDATE_AF, "price_engine_used": "holding_exit_engine"})])
+        self._reject([_candidate(action_fields={**_CANDIDATE_AF, "price_sub_mode": "BANANA"})])
 
     def test_build_bad_fixed_execution_status_fields_rejected(self):
         for col, bad in (("order_expiry", "multi_day_gtc"), ("gap_policy", "chase_gap_open"),
                          ("min_rr_gate_status", "fail_below_floor"),
                          ("post_round_rr_status", "broke_after_round")):
-            self._reject(_machine_record([_candidate(action_fields={**_CANDIDATE_AF, col: bad})]))
+            self._reject([_candidate(action_fields={**_CANDIDATE_AF, col: bad})])
 
     def test_executable_holding_empty_action_fields_rejected(self):
         h = _holding()
         h["price"]["action_fields"] = {}
-        self._reject(_machine_record([h]))
+        self._reject([h])
 
     def test_holding_with_sub_mode_rejected(self):
         h = _holding()
         h["price"]["action_fields"] = {**_HOLDING_AF, "price_sub_mode": "pullback"}   # holding is not pullback/breakout
-        self._reject(_machine_record([h]))
+        self._reject([h])
 
     def test_holding_missing_or_bad_post_round_status_rejected(self):
         h = _holding()
         h["price"]["action_fields"] = {k: v for k, v in _HOLDING_AF.items() if k != "post_round_rr_status"}
-        self._reject(_machine_record([h]))
+        self._reject([h])
         h = _holding()
         h["price"]["action_fields"] = {**_HOLDING_AF, "post_round_rr_status": "BANANA"}
-        self._reject(_machine_record([h]))
+        self._reject([h])
 
     def test_non_breached_holding_ok_status_requires_target_and_rr(self):
         af = {**_HOLDING_AF, "take_profit_reduce_price": None, "take_profit_exit_price": None,
               "risk_reward_ratio": None, "post_round_rr_status": "ok"}
         h = _holding()
         h["price"]["action_fields"] = af
-        self._reject(_machine_record([h]))
+        self._reject([h])
+
+    def test_event_clear_null_event_price_rejected_at_flatten(self):
+        # R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP: the §11.3 projection boundary independently fails closed on
+        # a 清仓-事件 whose event reference price is null (defense in depth) — assemble a valid event-clear record,
+        # then null the event price and flatten directly: action_price_error rejects it at the action_table layer.
+        h = _holding()
+        h["final_action"], h["action_group"] = "清仓-事件", _ag("清仓-事件")
+        h["veto"] = {"veto_tier": "position_hard_veto", "row_context": "holding"}
+        h["price"]["action_fields"] = {**_HOLDING_AF, "event_clear_reference_price": 8.0}
+        rec = _machine_record([h])   # passes assembly (event price present)
+        self.assertEqual(at.flatten_machine_record(rec)["rows"][0]["event_clear_reference_price"], 8.0)
+        rec["rows"][0]["price"]["action_fields"]["event_clear_reference_price"] = None
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(rec)
 
     # --- positive controls: valid payloads + legitimate optional/None columns pass ---
     def test_valid_breakout_build_passes(self):
