@@ -53,8 +53,6 @@ it. Pure/offline; no provider/live/network; no A-share crossing.
 """
 from __future__ import annotations
 
-import math
-
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES, portfolio_guard_effects
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
@@ -89,12 +87,6 @@ assert {_R_CAPACITY, _R_RISK_COOLDOWN} <= set(OBSERVE_REASONS), "emitted observe
 
 class WeekendBasketError(Exception):
     """The injected sized_result / basket_context is malformed (fail-closed before resolution)."""
-
-
-def _finite_number(x):
-    if isinstance(x, bool) or not isinstance(x, (int, float)):
-        return None
-    return float(x) if math.isfinite(x) else None
 
 
 def _guard_blocks_new_entry(guard_status):
@@ -223,10 +215,14 @@ def resolve_build_capacity(sized_result, *, basket_context):
         ct_by_index[i] = ct
         if row["final_action"] != _BUILD:
             continue
-        score = row.get("score")
-        cs = _finite_number(score.get("core_score")) if isinstance(score, dict) else None
-        if cs is None:
-            raise WeekendBasketError(f"建仓 行须有有限 core_score（供 selection_rank）: {ct!r}")
+        # rank by the PRESERVED Top15 selection_rank (slice 2a/2b: the canonical selection identity threaded from
+        # _select_top15), NOT a re-derived analysis core_score — so build/cash/action priority can never silently
+        # reverse the selection (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP).
+        sel_rec = row.get("selection_record")
+        sr = sel_rec.get("selection_rank") if isinstance(sel_rec, dict) else None
+        if not (isinstance(sr, int) and not isinstance(sr, bool) and sr >= 1):
+            raise WeekendBasketError(
+                f"建仓 行须有 selection_record.selection_rank 正 int（preserved Top15 rank，供排序、不再重算 core_score）: {ct!r} → {sr!r}")
         sizing = row.get("sizing")
         dms = sizing.get("desired_model_shares") if isinstance(sizing, dict) else None
         if not (isinstance(sizing, dict) and sizing.get("status") == "sized"
@@ -247,20 +243,22 @@ def resolve_build_capacity(sized_result, *, basket_context):
         if guard_blocks_new or scs in _SYMBOL_COOLDOWN_BLOCKS_NEW:
             blocked_indices.add(i)            # §8 新建阻断 → risk_cooldown, removed before ranking
         else:
-            builds.append((i, ct, cs, tinfo["theme"].strip()))   # STRIPPED theme — whitespace variants can't dodge the cap
+            builds.append((i, ct, sr, tinfo["theme"].strip()))   # sr = preserved Top15 rank; STRIPPED theme — whitespace variants can't dodge the cap
     if set(per_ticker) != build_tickers:
         raise WeekendBasketError(
             f"basket_context.per_ticker 须恰覆盖 建仓 ticker 集（无缺/无陈旧、canonical 键）: per_ticker={sorted(per_ticker)} builds={sorted(build_tickers)}")
 
-    # selection_rank by (core_score desc, ticker asc) over the NON-blocked builds; then §8 BASE weekly-limit +
-    # 同主题 cap (stripped theme). built_theme_count tracks the BUILT (non-deferred) builds per theme; the
-    # capacity-deferred builds (in rank order) are the theme_probe promotion candidates for stage ③.
-    ordered = sorted(builds, key=lambda b: (-b[2], b[1]))
+    # order the NON-blocked builds by their PRESERVED Top15 selection_rank (asc, ticker tiebreak); then apply the
+    # §8 BASE weekly-limit + 同主题 cap (stripped theme) over that order. The EMITTED selection_rank is the
+    # preserved Top15 rank (多强, may be sparse when a Top15 name was downgraded upstream); the weekly limit uses
+    # the SURVIVOR POSITION. built_theme_count tracks the BUILT (non-deferred) builds per theme; the
+    # capacity-deferred builds (in preserved-rank order) are the theme_probe promotion candidates for stage ③.
+    ordered = sorted(builds, key=lambda b: (b[2], b[1]))
     rank_by_index, capped_by_index = {}, {}
     theme_count, built_theme_count, capacity_deferred = {}, {}, []
-    for rank, (idx, ct, cs, theme) in enumerate(ordered, start=1):
-        rank_by_index[idx] = rank
-        over_weekly = rank > weekly_limit
+    for position, (idx, ct, sr, theme) in enumerate(ordered, start=1):
+        rank_by_index[idx] = sr
+        over_weekly = position > weekly_limit
         over_theme = False
         if not over_weekly:   # 同主题 cap counts only among the weekly survivors
             theme_count[theme] = theme_count.get(theme, 0) + 1

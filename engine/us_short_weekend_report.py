@@ -15,12 +15,12 @@ fills the same seams):
   * banner ① true/false observe split  ← machine-record observe rows (aggregate_observe_split → render);
   * banner ④ price_clock (ALWAYS shown) ← report_context, reconciled against resolver run_context
     (validated by validate_price_clock + the renderer);
-  * banner ③ ship-gate + matured lifecycle count ← report_context ship_gate note + L readiness;
-  * banner ⑤ hot_excluded notice ← exclusion_data["hot_excluded"] via build_exclusion_summary(...)["public"],
+  * banner ③ ship-gate + matured lifecycle count ← frozen batch4 paper-only ship-gate engine + L readiness;
+  * banner ⑤ hot_excluded notice ← selection-derived exclusion_data via build_exclusion_summary(...)["public"],
     then render_hot_excluded_banner — the SINGLE source the §9 detail also uses (banner count == §11.4 detail,
     §18.1 #19; there is NO separate report_context hot-excluded summary input);
   * banner ② macro_cluster ← report_context (optional; omitted when blank);
-  * §11.5 持仓覆盖诚实度 (in §6) + §9 剔除摘要 (§11.4) ← report_context coverage / exclusion inputs via formatters;
+  * §11.5 持仓覆盖诚实度 (in §6) ← report_context coverage; §9 剔除摘要 (§11.4) ← actual selection rejects;
   * §12 字段·模块生命周期提醒 + the §11.2 lifecycle-count reconcile ← L readiness due scan;
   * the row sections (5 操作表 / 6 持仓复核 / 7 Top15 / 8 观察池) ← the flattened §11.3 machine rows (slice m1).
 
@@ -35,25 +35,38 @@ from __future__ import annotations
 from datetime import datetime
 
 from engine.us_short_coverage_honesty import build_row_coverage, render_coverage_section
+from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_exclusion_summary import build_exclusion_summary, render_exclusion_section
 from engine.us_short_hot_excluded import render_hot_excluded_banner
 from engine.us_short_lifecycle_readiness import LifecycleReadinessError, _assert_readiness
 from engine.us_short_observe_split import aggregate_observe_split, render_observe_split
+from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES
 from engine.us_short_price_clock import validate_price_clock
+from engine.us_short_provider_health import validate_provider_health_result
+from engine.us_short_selection_exclusions import build_selection_exclusion_data
+from engine.us_short_ship_gate_sizing import ship_gate_sizing
+from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
 from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekly_report_renderer import render_weekly_report
 
 # the genuinely non-machine / non-lifecycle inputs the §11.2 assembly needs (closed-world — an unknown / missing
 # key fails closed, so a section can never silently render blank from a forgotten input). batch4 = offline fixture.
-# NOTE: hot_excluded is NOT a separate key — its banner ⑤ is derived from exclusion_data["hot_excluded"] (the
-# SINGLE source) so the §11.2 banner count can never disagree with the §11.4 exclusion detail (§18.1 #19).
+# Exclusion and ship-gate facts are intentionally absent: selection rejects and the batch4 paper-only gate are
+# their single sources, so detached prose/counts cannot contradict the run.
 _REPORT_CONTEXT_KEYS = frozenset({
-    "price_clock", "exclusion_data", "coverage_inputs", "account_risk_note",
-    "theme_opportunity_state", "core_conclusion", "risk_downgrade_note", "provider_health_note",
-    "macro_cluster_banner", "ship_gate_note",
+    "price_clock", "coverage_inputs",
+    "core_conclusion", "risk_downgrade_note",
+    "macro_cluster_banner",
 })
+# the STRUCTURED decision-stage status the §11.2 report BINDS to (no free-text status, R-USSHORT-BATCH4-OFFICIAL-
+# REPORT-SOURCE-BINDING-GAP): provider health from `classify_provider_health`, the account portfolio_guard, and
+# the theme opportunity state — the EXACT inputs/outputs the decision used, so the report can never contradict the
+# run. `account_risk_note` / `provider_health_note` remain in report_context as EDITORIAL commentary (rendered
+# AFTER the structured status), never the source of the status itself.
+_STAGE_STATUS_KEYS = frozenset({"provider_health", "portfolio_guard_status", "theme_opportunity_state"})
 _RUN_CONTEXT_KEYS = frozenset({"decision_date", "price_basis_date", "run_date"})
 _HOLDING_SOURCES = frozenset({"holding_in_top15", "holding_pass2_only", "holding_account_only"})
+_SELECTED_SOURCES = frozenset({"top15_candidate", "holding_in_top15"})
 _OBSERVE, _BUILD = "观察", "建仓"
 
 
@@ -77,6 +90,24 @@ def _validate_report_context(rc):
     if not (isinstance(rc, dict) and set(rc) == _REPORT_CONTEXT_KEYS):
         raise WeekendReportError(
             f"report_context 顶层键须恰为 {sorted(_REPORT_CONTEXT_KEYS)}（closed-world）: {sorted(rc) if isinstance(rc, dict) else rc!r}")
+
+
+def _validate_stage_status(ss):
+    """The structured decision-stage status the report binds §2/§3/§11 to (never a free-text status). Fail-closed:
+    provider_health must be a `classify_provider_health` result (overall_run_state ∈ RUN_STATES); portfolio_guard
+    and theme_opportunity_state must be the frozen §8/§4.5 vocab values the basket actually used."""
+    if not (isinstance(ss, dict) and set(ss) == _STAGE_STATUS_KEYS):
+        raise WeekendReportError(
+            f"stage_status 顶层键须恰为 {sorted(_STAGE_STATUS_KEYS)}（closed-world）: {sorted(ss) if isinstance(ss, dict) else ss!r}")
+    if not validate_provider_health_result(ss["provider_health"]):
+        raise WeekendReportError(
+            f"stage_status.provider_health 须为内部一致的 classify_provider_health 结果（拒伪造 health dict）: {ss['provider_health']!r}")
+    if ss["portfolio_guard_status"] not in PORTFOLIO_GUARD_STATES:
+        raise WeekendReportError(
+            f"stage_status.portfolio_guard_status 非法（须 ∈ {sorted(PORTFOLIO_GUARD_STATES)}）: {ss['portfolio_guard_status']!r}")
+    if ss["theme_opportunity_state"] not in THEME_OPPORTUNITY_STATES:
+        raise WeekendReportError(
+            f"stage_status.theme_opportunity_state 非法（须 ∈ {sorted(THEME_OPPORTUNITY_STATES)}）: {ss['theme_opportunity_state']!r}")
 
 
 def _strict_yyyymmdd(value):
@@ -177,15 +208,18 @@ def _rows_section(rows, label):
     return rows if rows else ["%s：无" % label]
 
 
-def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context):
+def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context, stage_status, selection):
     """4d-ii-m2 §11.2 weekly_report assembly + render.
 
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1 for the §11.3 rows).
     lifecycle_result = the 4d-ii-l `run_lifecycle_eval_stage` output {decision_date, readiness, banner}.
-    report_context = the injected closed-world non-derivable inputs (price_clock + the editorial sections +
-        provider health + exclusion / hot-excluded / coverage raw inputs); batch4 offline fixture, batch5 real.
+    report_context = the injected closed-world non-derivable inputs (price_clock + editorial sections +
+        coverage raw inputs); batch4 offline fixture, batch5 real. Exclusions are derived from ``selection``.
     run_context = the resolver/selection clock {decision_date, price_basis_date, run_date}; the visible
         price_clock must match it exactly at date granularity.
+    stage_status = the STRUCTURED decision-stage status {provider_health (classify_provider_health result),
+        portfolio_guard_status, theme_opportunity_state} the report BINDS §2/§3/§11 to — the exact inputs/outputs
+        the decision used, so the report can never contradict the run (no free-text status).
 
     Returns {"weekly_report_md": <markdown str>, "report_data": <the assembled §11.2 report_data dict>}. Raises
     WeekendReportError on a malformed machine record / lifecycle result / report_context (and the formatters /
@@ -193,14 +227,15 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     incomplete price_clock, lifecycle-count mismatch, a section without content)."""
     _validate_report_context(report_context)
     _validate_run_context(run_context)
+    _validate_stage_status(stage_status)
     _validate_lifecycle_result(lifecycle_result)
     # flatten through the m1 §10/§6 gate (re-validates the machine record + projects the §11.3 columns).
     flat = flatten_machine_record(machine_record)
     rows = flat["rows"]
     # §2.1 / §11: reconcile ONE canonical decision_date across every official-report artifact before rendering,
     # so the report can never stitch rows / lifecycle / price clock / exclusions from different weeks.
-    _reconcile_decision_date(flat.get("as_of"), report_context["price_clock"], lifecycle_result,
-                             report_context["exclusion_data"])
+    exclusion_data = build_selection_exclusion_data(selection)
+    _reconcile_decision_date(flat.get("as_of"), report_context["price_clock"], lifecycle_result, exclusion_data)
     _reconcile_price_clock(flat.get("as_of"), report_context["price_clock"], run_context)
     readiness = lifecycle_result["readiness"]
     due_count = readiness["due_count"]
@@ -209,24 +244,32 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     builds = [r for r in rows if r.get("final_action") == _BUILD]
     observes = [r for r in rows if r.get("final_action") == _OBSERVE]
     holdings = [r for r in rows if r.get("row_source") in _HOLDING_SOURCES]
-    candidates = [r for r in rows if r.get("row_source") == "top15_candidate"]
+    # The Top15 view includes the legal admitted+holding overlap. Use the same selected-row identity as the
+    # action-table consumer and order by the preserved selection rank, independent of machine/action row order.
+    candidates = sorted(
+        (r for r in rows if r.get("row_source") in _SELECTED_SOURCES),
+        key=lambda r: r["selection_record"]["selection_rank"],
+    )
     actionable = [r for r in rows if r.get("final_action") not in (_OBSERVE,)]
     regime_value = rows[0].get("market_risk_regime") if rows else None   # run-level regime, carried per-row by K
 
     # §9 exclusion summary built FIRST (build_exclusion_summary fully validates exclusion_data incl. its
     # hot_excluded) so the banner ⑤ + the §11.4 detail are ONE source — their hot counts cannot disagree (§18.1 #19).
-    exclusion_public = build_exclusion_summary(report_context["exclusion_data"])["public"]
+    exclusion_public = build_exclusion_summary(exclusion_data)["public"]
     exclusion_lines = render_exclusion_section(exclusion_public)
 
     # --- honest banner (① observe split derived; ②③⑤ via formatter / lifecycle / context; ④ price_clock) ---
     observe_split = aggregate_observe_split([r.get("observe_reason_type") for r in observes])
     price_clock = report_context["price_clock"]
     validate_price_clock(price_clock)   # §21 gate also re-run by the renderer; fail clear here too
+    batch4_ship_gate = ship_gate_sizing(0.0, 0, hard_veto=False,
+                                        evidence_level="paper", graduated_full_size=False)
     banner = {
         "price_clock": price_clock,                                                       # ④ always shown
         "true_false_observe_split": render_observe_split(observe_split),                  # ①
-        "ship_gate_progress": "%s | lifecycle 达标(升级可评估) %d 项"                       # ③
-                              % (_as_lines(report_context["ship_gate_note"], "ship_gate_note")[0],
+        "ship_gate_progress": "live_permission=%s; warning=%s | lifecycle 达标(升级可评估) %d 项"  # ③
+                              % (batch4_ship_gate["live_permission_status"],
+                                 batch4_ship_gate["live_size_warning"],
                                  len(readiness["upgrade_eligible_items"])),
         # ⑤ derived from the SAME validated exclusion public summary the §9 detail uses (single source) — so the
         # §11.2 banner hot count can never disagree with the §11.4 exclusion detail (§18.1 #19).
@@ -237,15 +280,34 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     if isinstance(macro, str) and macro.strip():
         banner["macro_cluster_warning"] = macro.strip()                                   # ② (optional)
 
-    # --- §11.5 coverage (in §6) via the batch-3 formatter (self-validates each record) ---
+    # --- §11.5 coverage (in §6): bind ONE-TO-ONE to the machine record's holding rows BY TICKER (R-USSHORT-
+    # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
+    # / missing / extra / duplicate coverage set fails closed, so a held position can never render "全 full 无
+    # 缺口" with no coverage proof.
     coverage_inputs = report_context["coverage_inputs"]
     if not isinstance(coverage_inputs, list):
         raise WeekendReportError("report_context.coverage_inputs 须为 list")
-    coverage_records = []
+    holding_source_by_ticker = {r["ticker"]: r.get("row_source") for r in holdings}
+    holding_tickers = sorted(holding_source_by_ticker)
+    coverage_records, cov_tickers = [], []
     for ci in coverage_inputs:
-        if not (isinstance(ci, dict) and set(ci) == {"row_source", "data_checks"}):
-            raise WeekendReportError(f"coverage_inputs 行须为 {{'row_source','data_checks'}}: {ci!r}")
+        if not (isinstance(ci, dict) and set(ci) == {"ticker", "row_source", "data_checks"}):
+            raise WeekendReportError(f"coverage_inputs 行须为 {{'ticker','row_source','data_checks'}}: {ci!r}")
+        ct = canonical_us_ticker(ci["ticker"])
+        if ct is None:
+            raise WeekendReportError(f"coverage_inputs ticker 非规范 US ticker: {ci['ticker']!r}")
+        # reconcile each coverage row to the EXACT machine holding-row source (not just ticker): a swapped
+        # row_source (e.g. holding_pass2_only ↔ holding_account_only) for the same ticker fails closed.
+        if ct in holding_source_by_ticker and ci["row_source"] != holding_source_by_ticker[ct]:
+            raise WeekendReportError(
+                "coverage_inputs[%s] row_source %r 与持仓行 %r 不符（须对账 machine 行身份）"
+                % (ct, ci["row_source"], holding_source_by_ticker[ct]))
+        cov_tickers.append(ct)
         coverage_records.append(build_row_coverage(ci["row_source"], ci["data_checks"]))
+    if sorted(cov_tickers) != holding_tickers:
+        raise WeekendReportError(
+            "coverage_inputs 须一对一覆盖持仓行（无空/缺/多/重）: coverage=%s holdings=%s"
+            % (sorted(cov_tickers), holding_tickers))
     coverage_lines = render_coverage_section(coverage_records)
     not_clean = [c for c in coverage_records if c["coverage_status"] != "full"]   # §13 不 clean 项 = 覆盖非 full
 
@@ -259,20 +321,28 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     sections = {
         1: "本周运行状态: decision_date=%s; 建仓 %d / 观察 %d / 持仓 %d / 候选 %d; lifecycle 提醒 %d 项"
            % (price_clock["decision_date"], len(builds), len(observes), len(holdings), len(candidates), due_count),
-        2: _as_lines(report_context["account_risk_note"], "account_risk_note"),
+        # §2/§3/§11 render ONLY the STRUCTURED stage_status (portfolio_guard / theme / provider health the run
+        # actually used). The status-bearing free-text notes were REMOVED (Codex re-review 2): an editorial
+        # "portfolio_guard=normal" could otherwise sit beside a structured cooldown — the authoritative status now
+        # carries NO contradicting prose (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP).
+        2: ["账户组合风险闸: portfolio_guard=%s（结构化、权威，无自由文本状态）" % stage_status["portfolio_guard_status"]],
         3: ["市场环境 两轴: market_risk_regime=%s / theme_opportunity_state=%s"
-            % (regime_value or "·",
-               _as_lines(report_context["theme_opportunity_state"], "theme_opportunity_state")[0])],
+            % (regime_value or "·", stage_status["theme_opportunity_state"])],
         4: _as_lines(report_context["core_conclusion"], "core_conclusion"),
         5: _rows_section([_one_glance(r) for r in actionable], "最终操作表"),
         6: _rows_section([_one_glance(r) for r in holdings], "当前持仓复核") + coverage_lines,
+        # §7 Top15 = the SELECTION view (多强): display the PRESERVED selection_rank + selection-time core_score
+        # (slice 2b, from the threaded selection_record), NOT action_rank (先干哪个 = the §5 操作表 view) — they are
+        # deliberately different orderings (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP).
         7: _rows_section(["%s core_score=%s rank=%s %s" % (r.get("ticker"),
-                          _num((r.get("score") or {}).get("core_score") if isinstance(r.get("score"), dict) else None),
-                          _num(r.get("action_rank")), r.get("final_action")) for r in candidates], "Top15 选股"),
+                          _num((r.get("selection_record") or {}).get("core_score")),
+                          _num((r.get("selection_record") or {}).get("selection_rank")), r.get("final_action"))
+                          for r in candidates], "Top15 选股"),
         8: _rows_section(["%s 观察(%s)" % (r.get("ticker"), r.get("observe_reason_type")) for r in observes], "观察池"),
         9: exclusion_lines,
         10: _as_lines(report_context["risk_downgrade_note"], "risk_downgrade_note"),
-        11: _as_lines(report_context["provider_health_note"], "provider_health_note"),
+        11: ["数据源健康: provider_health=%s（结构化、权威，无自由文本状态）"
+             % stage_status["provider_health"]["overall_run_state"]],
         12: lifecycle_lines,
         13: (["本周 %d 行覆盖非 full（partial/restricted/blocked），明细见 §6 持仓覆盖诚实度节" % len(not_clean)]
              if not_clean else ["本周无不 clean 项（机器记录已过 §10 no-dangling 校验、覆盖全 full）"]),

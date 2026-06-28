@@ -220,69 +220,106 @@ class Pass2SafetyAdmitTests(unittest.TestCase):
 
 
 class CatalystRecallSlotTests(unittest.TestCase):
+    @staticmethod
+    def _elig(*tickers):
+        """universe_eligibility marking the given canonical tickers as PASSING the §4.0 cheap-eligibility floor."""
+        return {t: True for t in tickers}
+
     def test_feed_unavailable_unchanged(self):
-        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=None)
+        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=None, universe_eligibility=self._elig("A", "B"))
         self.assertEqual(out["candidates"], ["A", "B"])
         self.assertFalse(out["recall_available"])
-        self.assertEqual(out["recall_added"], [])
+        self.assertEqual((out["recall_added"], out["recall_excluded"]), ([], []))
 
     def test_feed_merges_new_dedup_order(self):
-        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=["B", "C", "D"])
+        # C, D are active universe rows that PASS the floor → admitted; B is already base (de-duped)
+        out = eg.inject_catalyst_recall(["A", "B"], recall_feed=["B", "C", "D"],
+                                        universe_eligibility=self._elig("A", "B", "C", "D"))
         self.assertEqual(out["candidates"], ["A", "B", "C", "D"])  # B de-duped, order preserved
         self.assertTrue(out["recall_available"])
-        self.assertEqual(out["recall_added"], ["C", "D"])
+        self.assertEqual((out["recall_added"], out["recall_excluded"]), (["C", "D"], []))
 
     def test_bad_recall_feed_non_list_raises(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["A"], recall_feed="C")
+            eg.inject_catalyst_recall(["A"], recall_feed="C", universe_eligibility=self._elig("A"))
 
     def test_bad_recall_feed_empty_item_raises(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["A"], recall_feed=["", "C"])
+            eg.inject_catalyst_recall(["A"], recall_feed=["", "C"], universe_eligibility=self._elig("A", "C"))
 
     def test_bad_base_raises(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall("A", recall_feed=None)
+            eg.inject_catalyst_recall("A", recall_feed=None, universe_eligibility={})
 
     def test_duplicate_base_raises(self):
         # candidate set must be UNIQUE; a duplicate base ticker is surfaced, not silently de-duped
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=["MSFT"])
+            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=["MSFT"],
+                                      universe_eligibility=self._elig("AAPL", "MSFT"))
 
     def test_duplicate_base_raises_even_with_none_feed(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=None)
+            eg.inject_catalyst_recall(["AAPL", "AAPL"], recall_feed=None, universe_eligibility=self._elig("AAPL"))
 
     def test_recall_internal_dup_deduped(self):
-        out = eg.inject_catalyst_recall(["A"], recall_feed=["B", "B", "C"])
+        out = eg.inject_catalyst_recall(["A"], recall_feed=["B", "B", "C"],
+                                        universe_eligibility=self._elig("A", "B", "C"))
         self.assertEqual(out["candidates"], ["A", "B", "C"])
         self.assertEqual(out["recall_added"], ["B", "C"])
 
     def test_base_canonicalized(self):
-        out = eg.inject_catalyst_recall(["aapl", " MSFT "], recall_feed=None)
+        out = eg.inject_catalyst_recall(["aapl", " MSFT "], recall_feed=None, universe_eligibility={})
         self.assertEqual(out["candidates"], ["AAPL", "MSFT"])  # emitted canonical
 
     def test_semantic_duplicate_base_raises(self):
         for dup in (["AAPL", "aapl"], ["AAPL", " AAPL "]):
             with self.assertRaises(ValueError):
-                eg.inject_catalyst_recall(dup, recall_feed=None)
+                eg.inject_catalyst_recall(dup, recall_feed=None, universe_eligibility={})
 
     def test_recall_semantic_dup_against_base_deduped(self):
-        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["aapl", "MSFT"])
+        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["aapl", "MSFT"],
+                                        universe_eligibility=self._elig("AAPL", "MSFT"))
         self.assertEqual(out["candidates"], ["AAPL", "MSFT"])  # 'aapl' canonicalizes to base 'AAPL'
         self.assertEqual(out["recall_added"], ["MSFT"])
 
     def test_class_share_preserved(self):
-        out = eg.inject_catalyst_recall(["BRK.B"], recall_feed=["BRK-A"])
+        out = eg.inject_catalyst_recall(["BRK.B"], recall_feed=["BRK-A"],
+                                        universe_eligibility=self._elig("BRK.B", "BRK-A"))
         self.assertEqual(out["candidates"], ["BRK.B", "BRK-A"])
 
     def test_a_share_code_in_base_raises(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["000001.SZ"], recall_feed=None)
+            eg.inject_catalyst_recall(["000001.SZ"], recall_feed=None, universe_eligibility={})
 
     def test_a_share_code_in_recall_raises(self):
         with self.assertRaises(ValueError):
-            eg.inject_catalyst_recall(["AAPL"], recall_feed=["000001.SZ"])
+            eg.inject_catalyst_recall(["AAPL"], recall_feed=["000001.SZ"], universe_eligibility=self._elig("AAPL"))
+
+    # --- §4.0 tradability floor (slice 2c): a recalled name must pass cheap_eligible or be excluded ---
+    def test_off_universe_recall_excluded(self):
+        # PENNY is not an active universe row → recall-but-ineligible, EXCLUDED (the finding's off-universe probe)
+        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["PENNY"], universe_eligibility=self._elig("AAPL"))
+        self.assertEqual(out["candidates"], ["AAPL"])                       # PENNY NOT admitted ahead of AAPL
+        self.assertEqual(out["recall_added"], [])
+        self.assertEqual(out["recall_excluded"], [{"ticker": "PENNY", "reason": "off_universe"}])
+
+    def test_below_floor_recall_excluded(self):
+        # SUB is a universe row that FAILED the cheap-eligibility floor → excluded, never admitted
+        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["SUB"],
+                                        universe_eligibility={"AAPL": True, "SUB": False})
+        self.assertEqual(out["candidates"], ["AAPL"])
+        self.assertEqual(out["recall_excluded"], [{"ticker": "SUB", "reason": "below_floor"}])
+
+    def test_eligible_recall_admitted(self):   # positive control: an in-universe, floor-passing recall IS admitted
+        out = eg.inject_catalyst_recall(["AAPL"], recall_feed=["NVDA"], universe_eligibility=self._elig("AAPL", "NVDA"))
+        self.assertEqual((out["candidates"], out["recall_added"], out["recall_excluded"]),
+                         (["AAPL", "NVDA"], ["NVDA"], []))
+
+    def test_bad_universe_eligibility_raises(self):
+        with self.assertRaises(ValueError):   # non-bool verdict
+            eg.inject_catalyst_recall(["AAPL"], recall_feed=None, universe_eligibility={"AAPL": "yes"})
+        with self.assertRaises(ValueError):   # not a dict
+            eg.inject_catalyst_recall(["AAPL"], recall_feed=None, universe_eligibility=["AAPL"])
 
 
 class CanonicalTickerTriangulationTests(unittest.TestCase):

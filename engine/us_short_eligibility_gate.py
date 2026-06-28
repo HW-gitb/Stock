@@ -217,7 +217,7 @@ def pass2_safety_admit(signals, *, row_context):
 
 
 # ---- catalyst_recall injection slot (real market-level feed = batch5, §18.2 build-vs-wire ③) ----
-def inject_catalyst_recall(cheap_eligible_tickers, *, recall_feed):
+def inject_catalyst_recall(cheap_eligible_tickers, *, recall_feed, universe_eligibility):
     """Inject catalyst_recall_lane names into the cheap-eligible candidate set (STRUCTURAL slot only).
 
     §4.0: a market-level feed (recent earnings beats / rating changes / 8-K) pulls catalyst-strong
@@ -229,15 +229,27 @@ def inject_catalyst_recall(cheap_eligible_tickers, *, recall_feed):
     ' AAPL ') collapse to one identity. `candidates` is a UNIQUE set of canonical tickers
     (cheap-eligible first, then recall extras de-duplicated against the base and each other,
     order-preserving).
-    recall_feed = None -> candidates (canonical) unchanged + {recall_available: False} (NEVER
-                  fabricate coverage when the feed is unavailable, §4.0).
-    Returns {"candidates": [...], "recall_available": bool, "recall_added": [...]}.
-    Fail-closed (ValueError): a non-list `cheap_eligible_tickers` or non-None/non-list `recall_feed`;
-    any non-canonical / A-share-code / blank item; OR a (post-canonical) duplicate base ticker (the
-    candidate set must be unique — an upstream duplicate is surfaced, NOT silently de-duped).
+
+    `universe_eligibility` = {canonical_ticker: cheap_eligible bool} for the active universe — the §4.0
+    TRADABILITY FLOOR verdict per row. A recalled name is admitted ONLY if it is an active universe row
+    that PASSES cheap_eligible (exchange/price/ADV/market-cap/status); a ticker-only injection that is
+    off-universe or below the floor is recorded in `recall_excluded` as recall-but-ineligible and is
+    NEVER admitted (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP: no floor bypass).
+
+    recall_feed = None -> candidates (canonical) unchanged + {recall_available: False, recall_excluded: []}
+                  (NEVER fabricate coverage when the feed is unavailable, §4.0).
+    Returns {"candidates": [...], "recall_available": bool, "recall_added": [...],
+             "recall_excluded": [{"ticker": str, "reason": "off_universe"|"below_floor"}, ...]}.
+    Fail-closed (ValueError): a non-list `cheap_eligible_tickers` or non-None/non-list `recall_feed`; a
+    `universe_eligibility` that is not a {ticker: bool} dict; any non-canonical / A-share-code / blank
+    item; OR a (post-canonical) duplicate base ticker (the candidate set must be unique — an upstream
+    duplicate is surfaced, NOT silently de-duped).
     """
     if not isinstance(cheap_eligible_tickers, list):
         raise ValueError("cheap_eligible_tickers 须为 list")
+    if not (isinstance(universe_eligibility, dict)
+            and all(isinstance(v, bool) for v in universe_eligibility.values())):
+        raise ValueError("universe_eligibility 须为 dict {canonical_ticker: bool}（§4.0 cheap-eligible 地板判定）")
     base = []
     for t in cheap_eligible_tickers:
         c = _canonical_us_ticker(t)
@@ -249,16 +261,24 @@ def inject_catalyst_recall(cheap_eligible_tickers, *, recall_feed):
         # duplicate base ticker is an upstream defect — surface it, do NOT silently de-dup.
         raise ValueError("cheap_eligible_tickers 含（规范化后）重复 ticker（候选集须唯一；上游重复行须先修，不静默去重以免掩盖缺陷）")
     if recall_feed is None:
-        return {"candidates": base, "recall_available": False, "recall_added": []}
+        return {"candidates": base, "recall_available": False, "recall_added": [], "recall_excluded": []}
     if not isinstance(recall_feed, list):
         raise ValueError("recall_feed 须为 None 或 list（畸形 feed 不当作 no-recall）")
     seen = set(base)
-    added = []
+    added, excluded = [], []
     for t in recall_feed:
         c = _canonical_us_ticker(t)
         if c is None:
             raise ValueError(f"recall_feed 含非规范 US ticker: {t!r}")
-        if c not in seen:
+        if c in seen:
+            continue   # already a candidate (base or an earlier recall) — the set is unique, no double-add
+        # §4.0 tradability floor: a recalled name MUST be an active universe row that passes cheap_eligible.
+        # An off-universe or below-floor ticker-only injection is recall-but-ineligible → EXCLUDED, never admitted.
+        verdict = universe_eligibility.get(c)
+        if verdict is True:
             seen.add(c)
             added.append(c)
-    return {"candidates": base + added, "recall_available": True, "recall_added": added}
+        else:
+            excluded.append({"ticker": c, "reason": "below_floor" if verdict is False else "off_universe"})
+    return {"candidates": base + added, "recall_available": True, "recall_added": added,
+            "recall_excluded": excluded}

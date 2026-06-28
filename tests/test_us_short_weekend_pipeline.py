@@ -78,16 +78,28 @@ class RunSelectionTests(unittest.TestCase):
         self.assertEqual(out["candidates"], [])
         self.assertEqual(out["admitted"], [])
 
-    def test_catalyst_recall_injects(self):
-        out = self._run(_dc([_univ_row("AAPL")], recall=["MSFT"], pass2={"AAPL": {}, "MSFT": {}}))
+    def test_catalyst_recall_off_universe_excluded(self):
+        # MSFT recalled but NOT an active universe row → floored out (recall_excluded), never admitted ahead of
+        # AAPL (the finding's off-universe probe); the candidate set stays the cheap-eligible universe names only.
+        out = self._run(_dc([_univ_row("AAPL")], recall=["MSFT"], pass2={"AAPL": {}}))
         self.assertTrue(out["recall_available"])
-        self.assertEqual(out["candidates"], ["AAPL", "MSFT"])
-        self.assertEqual(out["recall_added"], ["MSFT"])
+        self.assertEqual(out["candidates"], ["AAPL"])
+        self.assertEqual(out["recall_added"], [])
+        self.assertEqual(out["recall_excluded"], [{"ticker": "MSFT", "reason": "off_universe"}])
 
     def test_catalyst_feed_none_no_fabrication(self):
         out = self._run(_dc([_univ_row("AAPL")], recall=None, pass2={"AAPL": {}}))
         self.assertFalse(out["recall_available"])
         self.assertEqual(out["recall_added"], [])
+
+    def test_duplicate_universe_identity_rejected(self):
+        # two canonical-AAPL universe rows (one eligible, one below-floor) → fail closed; the floor verdict map
+        # must NOT silently last-row-wins (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP).
+        for order in ([_univ_row("AAPL"), _univ_row("AAPL", price=0.5)],            # eligible then below-floor
+                      [_univ_row("AAPL", price=0.5), _univ_row("AAPL")],            # below-floor then eligible
+                      [_univ_row("AAPL"), _univ_row("aapl")]):                      # case-variant same identity
+            with self.assertRaises(wp.WeekendPipelineError):
+                self._run(_dc(order, pass2={"AAPL": {}}))
 
     def test_pass2_excludes_entry_hard_veto_candidate(self):
         # both cheap-eligible (clean Pass1 status); Pass2 SEC-audit finds BADX delisted -> excluded
@@ -98,6 +110,36 @@ class RunSelectionTests(unittest.TestCase):
         self.assertEqual(out["candidates"], ["AAPL", "BADX"])
         self.assertIn("AAPL", out["admitted"])
         self.assertNotIn("BADX", out["admitted"])
+        self.assertEqual(out["exclusion_records"], [{
+            "stage": "pass2_audit_gate", "ticker": "BADX", "category": "停牌退市破产",
+            "reasons": ["5.1a:退市"],
+        }])
+
+    def test_pass1_rejects_are_retained_with_frozen_categories(self):
+        low_adv = _univ_row("ILLIQ", adv=1.0)
+        penny = _univ_row("PENNY", price=1.0)
+        otc = _univ_row("OTCX", exchange="OTC")
+        unknown = _univ_row("MISS")
+        unknown["price"] = None
+        out = self._run(_dc([_univ_row("AAPL"), low_adv, penny, otc, unknown], pass2={"AAPL": {}}))
+        by_ticker = {r["ticker"]: r for r in out["exclusion_records"]}
+        self.assertEqual(by_ticker["ILLIQ"]["category"], "流动性")
+        self.assertEqual(by_ticker["PENNY"]["category"], "价格市值")
+        self.assertEqual(by_ticker["OTCX"]["category"], "停牌退市破产")
+        self.assertEqual(by_ticker["MISS"]["category"], "数据unknown")
+
+    def test_pass2_offering_and_top15_score_reject_are_retained(self):
+        tickers = ["A%02d" % i for i in range(16)] + ["OFFER"]
+        pass2 = {t: {} for t in tickers}
+        pass2["OFFER"] = {"active_offering": {"recency": "recent", "status": "active",
+                                                    "materiality": "material"}}
+        clean_for_scoring = tickers[:-1]
+        out = self._run(_dc([_univ_row(t) for t in tickers], pass2=pass2,
+                            selection_inputs=_selection_inputs(clean_for_scoring)))
+        by_ticker = {r["ticker"]: r for r in out["exclusion_records"]}
+        self.assertEqual(by_ticker["OFFER"]["category"], "增发SEC")
+        self.assertEqual(by_ticker["A15"]["category"], "分不够")
+        self.assertEqual(by_ticker["A15"]["stage"], "top15_selection")
 
     def test_top15_cap_enforced_for_pass2_clean_candidates(self):
         tickers = ["A%02d" % i for i in range(16)]
@@ -185,9 +227,13 @@ class RunSelectionTests(unittest.TestCase):
                            selection_inputs=_selection_inputs([])))
         self.assertNotIn("AAPL", out["admitted"])
 
-    def test_recall_added_candidate_missing_pass2_raises(self):
-        with self.assertRaises(wp.WeekendPipelineError):
-            self._run(_dc([_univ_row("AAPL")], recall=["MSFT"], pass2={"AAPL": {}}))
+    def test_in_universe_recall_no_double_add(self):
+        # MSFT IS an active universe row that passes the floor → already a candidate (base); the recall lane does
+        # NOT double-add it and records no exclusion (the floor's positive control).
+        out = self._run(_dc([_univ_row("AAPL"), _univ_row("MSFT")], recall=["MSFT"],
+                            pass2={"AAPL": {}, "MSFT": {}}))
+        self.assertEqual(sorted(out["candidates"]), ["AAPL", "MSFT"])
+        self.assertEqual((out["recall_added"], out["recall_excluded"]), ([], []))
 
     def test_stale_extra_pass2_key_raises(self):
         with self.assertRaises(wp.WeekendPipelineError):

@@ -119,6 +119,23 @@ def _analyze_one(row, regime):
         except KeyError:
             raise WeekendAnalysisError(f"score_blocks 的 scoring_profile 非法（fail-closed）: {profile!r}")
 
+    # §4.0/§4.5 canonical selection identity: the orchestrator carries the Top15 selection record
+    # (selection_rank / selection_bucket / selection-time core+theme scores) onto each admitted row. It rides
+    # through analysis into the machine record. When this row ALSO recomputed a §4.2 core_score, the selection-
+    # time and the analysis-time core_score MUST agree (one core_score per run) — a divergence is a seam bug and
+    # fails CLOSED (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP: no silent same-run score fork).
+    sel_rec = row.get("selection_record")
+    if sel_rec is not None:
+        if not isinstance(sel_rec, dict):
+            raise WeekendAnalysisError(f"selection_record 须为 dict 或缺省: {sel_rec!r}")
+        if score is not None:
+            sel_core = sel_rec.get("core_score")
+            if (isinstance(sel_core, bool) or not isinstance(sel_core, (int, float))
+                    or abs(score["core_score"] - sel_core) > 1e-6):
+                raise WeekendAnalysisError(
+                    f"{ticker}: 选择期 core_score {sel_rec.get('core_score')!r} != 分析期 §4.2 core_score "
+                    f"{score['core_score']!r}（同一 run 须单源、不可分叉）")
+
     return {
         "ticker": ticker,
         "row_source": row.get("row_source"),
@@ -130,6 +147,7 @@ def _analyze_one(row, regime):
         "forward_event": forward,
         "event_data_gap": event_gap,
         "score": score,
+        "selection_record": sel_rec,
     }
 
 

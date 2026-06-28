@@ -83,3 +83,21 @@ def classify_provider_health(authorized_statuses) -> dict:
         "overall_run_state": overall,
         "disabled_unapproved": sorted(UNAUTHORIZED_SOURCES),
     }
+
+
+def validate_provider_health_result(result) -> bool:
+    """True iff `result` is a structurally-valid, INTERNALLY-CONSISTENT `classify_provider_health` output — the
+    exact {sources, overall_run_state, disabled_unapproved} shape; `sources` covering EXACTLY the authorized
+    sources with valid §3.2 run-states; `overall_run_state` == the worst-of those states; and `disabled_unapproved`
+    == the sorted unauthorized sources. Lets a consumer (e.g. the §11.2 weekly report) REJECT a FABRICATED health
+    dict (e.g. `{"overall_run_state":"clean"}` with no real sources) that this classifier did not produce."""
+    if not (isinstance(result, dict) and set(result) == {"sources", "overall_run_state", "disabled_unapproved"}):
+        return False
+    sources = result["sources"]
+    if not (isinstance(sources, dict) and set(sources) == set(AUTHORIZED_SOURCES)
+            and all(st in _SEVERITY for st in sources.values())):
+        return False
+    overall = result["overall_run_state"]
+    if overall not in _SEVERITY or overall != max(sources.values(), key=lambda st: _SEVERITY[st]):
+        return False
+    return result["disabled_unapproved"] == sorted(UNAUTHORIZED_SOURCES)

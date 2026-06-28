@@ -34,6 +34,7 @@ from engine.us_short_eligibility_gate import (
     pass2_safety_admit,
     validate_eligibility_governance,
 )
+from engine.us_short_selection_exclusions import pass1_category, pass2_category
 
 _REQUIRED_DATA_CONTEXT_KEYS = {
     "universe", "catalyst_recall_feed", "holdings", "candidate_pass2_signals", "selection_inputs"}
@@ -174,6 +175,7 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
 
     Returns {decision_date, price_basis_date, run_date, out_of_window: bool, cheap_eligible: [ticker],
              candidates: [ticker], recall_available: bool, recall_added: [ticker],
+             recall_excluded: [{ticker, reason}],   # off-universe / below-floor recalls (not admitted, §4.0)
              admitted: [Top15 ticker], selection_seats, selection_details,
              holdings: [{ticker, admit_to_topn, veto_tier}]}.
     """
@@ -184,21 +186,42 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
             "out_of_window": True, "decision_date": None, "price_basis_date": None,
             "run_date": now_et.strftime("%Y%m%d"),
             "cheap_eligible": [], "candidates": [], "recall_available": False, "recall_added": [],
+            "recall_excluded": [],
+            "exclusion_records": [],
             "admitted": [], "selection_seats": None, "selection_details": [], "holdings": [],
         }
 
     gov = validate_eligibility_governance(eligibility_governance)
     dc = _validate_data_context(data_context)
 
-    # Pass1: cheap eligibility -> canonical eligible tickers (cheap_eligible emits the canonical id).
+    # Pass1: cheap eligibility -> canonical eligible tickers (cheap_eligible emits the canonical id). Build the
+    # per-row tradability-floor verdict map (canonical ticker -> eligible bool) so the catalyst recall lane gates
+    # against the SAME floor — a recalled name must be an active universe row that passes Pass1, not a bypass.
     cheap_eligible_tickers = []
+    universe_eligibility = {}
+    exclusion_records = []
     for row in dc["universe"]:
         res = cheap_eligible(row, governance=gov)
+        ct = res["ticker"]
+        if ct is not None:
+            # ONE canonical identity = ONE Pass1 verdict: a duplicate canonical universe row fails closed (never
+            # silent last-row-wins, which could overwrite an eligible verdict with a below-floor one or vice versa).
+            if ct in universe_eligibility:
+                raise WeekendPipelineError(
+                    f"universe 含规范化后重复 ticker（一身份一行一裁决，不静默 last-row-wins）: {ct!r}")
+            universe_eligibility[ct] = res["eligible"]            # floor verdict (eligible OR below-floor)
         if res["eligible"]:
-            cheap_eligible_tickers.append(res["ticker"])
+            cheap_eligible_tickers.append(ct)
+        else:
+            exclusion_records.append({
+                "stage": "pass1_eligibility", "ticker": ct,
+                "category": pass1_category(res["reasons"]), "reasons": list(res["reasons"]),
+            })
 
-    # Pass1 + catalyst_recall injection -> candidate set (unique canonical tickers).
-    recall = inject_catalyst_recall(cheap_eligible_tickers, recall_feed=dc["catalyst_recall_feed"])
+    # Pass1 + catalyst_recall injection -> candidate set (unique canonical tickers). Recall is FLOORED: an
+    # off-universe / below-floor recalled name is recorded recall_excluded (not admitted), never a tradability bypass.
+    recall = inject_catalyst_recall(cheap_eligible_tickers, recall_feed=dc["catalyst_recall_feed"],
+                                    universe_eligibility=universe_eligibility)
     candidates = recall["candidates"]
 
     # Pass2 audit-safety-gate (reuses §5 hard_veto). The Pass2 signal map must cover the final
@@ -221,9 +244,24 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
     stale = set(canon_pass2) - cand_set
     if stale:
         raise WeekendPipelineError(f"candidate_pass2_signals 含非候选陈旧键: {sorted(stale)}")
-    pass2_admitted = [t for t in candidates
-                      if pass2_safety_admit(canon_pass2[t], row_context="candidate")["admit_to_topn"]]
+    pass2_admitted = []
+    for ticker in candidates:
+        verdict = pass2_safety_admit(canon_pass2[ticker], row_context="candidate")
+        if verdict["admit_to_topn"]:
+            pass2_admitted.append(ticker)
+        else:
+            exclusion_records.append({
+                "stage": "pass2_audit_gate", "ticker": ticker,
+                "category": pass2_category(verdict["reasons"]), "reasons": list(verdict["reasons"]),
+            })
     top15 = _select_top15(pass2_admitted, dc["selection_inputs"])
+    selected_set = set(top15["admitted"])
+    for ticker in pass2_admitted:
+        if ticker not in selected_set:
+            exclusion_records.append({
+                "stage": "top15_selection", "ticker": ticker, "category": "分不够",
+                "reasons": ["outside_top15_by_frozen_selection_rank"],
+            })
 
     # Holdings forced into Pass2 (§4.0); canonicalize identity with the SAME policy as candidates
     # (no second identity space; reject invalid / A-share-code / post-canonical duplicate); veto surfaced.
@@ -248,6 +286,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
         "candidates": candidates,
         "recall_available": recall["recall_available"],
         "recall_added": recall["recall_added"],
+        "recall_excluded": recall["recall_excluded"],
+        "exclusion_records": exclusion_records,
         "admitted": top15["admitted"],
         "selection_seats": top15["selection_seats"],
         "selection_details": top15["selection_details"],

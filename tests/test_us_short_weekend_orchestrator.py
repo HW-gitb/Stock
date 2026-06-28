@@ -23,9 +23,9 @@ if str(ROOT) not in sys.path:
 import engine.us_short_weekend_orchestrator as orch  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
+from engine.us_short_run_provenance import RunProvenanceError  # noqa: E402
 
-_SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]   # Fri / Mon / Tue
-_DD = "20260615"          # canonical decision_date for a Sat run (upcoming Mon)
+_DD = "20260615"          # canonical decision_date for a Sat run (upcoming Mon); sessions derived from _cal()
 _PRICE_BASIS = "20260612"  # prior Fri
 _PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _CAL = json.loads((ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json").read_text(encoding="utf-8"))
@@ -52,11 +52,8 @@ def _report_context():
     return {
         "price_clock": {"price_data_through": _PRICE_BASIS, "news_window_through": "20260613",
                         "session_scope": "RTH", "decision_date": _DD},
-        "exclusion_data": {"as_of": _DD, "categories": {}, "hot_excluded": {"public_heat_count": 0, "holdings": []}},
-        "coverage_inputs": [], "account_risk_note": "portfolio_guard=normal",
-        "theme_opportunity_state": "no_strong_theme", "core_conclusion": "empty run 占位",
-        "risk_downgrade_note": "无", "provider_health_note": "FMP/SEC 健康", "macro_cluster_banner": "",
-        "ship_gate_note": "ship-gate: paper 累积中",
+        "coverage_inputs": [], "core_conclusion": "empty run 占位",
+        "risk_downgrade_note": "无", "macro_cluster_banner": "",
     }
 
 
@@ -65,16 +62,51 @@ def _selection_inputs(tickers):
             "per_ticker": {t: {"core_score": 50.0, "theme_momentum_score": 0.0} for t in tickers}}
 
 
+_FAMS = ("universe", "per_ticker_analysis", "candidate_pass2_signals", "selection_inputs")
+
+
+def _run_provenance(counts=None, observed="2026-06-13T08:00:00", *, as_of=_DD, price_basis=_PRICE_BASIS):
+    # §2.1 PIT 来源对账 manifest: universe / per_ticker_analysis are price-bearing; the two signal/score families
+    # observe-at only (price lineage = None). row_count BINDS the manifest to the actual payload (①a). observed
+    # defaults safely before the Sat 10:00 run wall clock.
+    counts = counts or {f: 0 for f in _FAMS}
+    def price_fam(n):
+        return {"as_of": as_of, "observed_at": observed, "price_basis_date": price_basis,
+                "session": "RTH", "adjustment": "split_div_adjusted", "row_count": counts[n]}
+    def nonprice_fam(n):
+        return {"as_of": as_of, "observed_at": observed, "price_basis_date": None,
+                "session": None, "adjustment": None, "row_count": counts[n]}
+    return {"as_of": as_of, "price_basis_date": price_basis,
+            "families": {"universe": price_fam("universe"), "per_ticker_analysis": price_fam("per_ticker_analysis"),
+                         "candidate_pass2_signals": nonprice_fam("candidate_pass2_signals"),
+                         "selection_inputs": nonprice_fam("selection_inputs")}}
+
+
+def _cal(status="pending_authoritative_cross_check"):
+    # a minimal valid NYSE calendar artifact covering the test window (June 2026; Juneteenth = the one holiday);
+    # the §2.1/§3.5 live gate derives from its data_provenance.verification_status (not a caller-attested string).
+    return {"calendar": "NYSE_NASDAQ", "timezone": "America/New_York", "start_date": "20260601",
+            "end_date": "20260630", "regular_open": "09:30", "regular_close": "16:00",
+            "holidays": ["20260619"], "half_days": {},
+            "data_provenance": {"source": "test fixture", "verification_status": status, "note": "offline test calendar"}}
+
+
 def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=None, per_ticker_analysis=None,
-                      selection_inputs=None):
+                      selection_inputs=None, run_provenance=None, provider_health=None, calendar=None):
     pass2 = pass2 or {}
     if selection_inputs is None:
         selection_inputs = _selection_inputs(list(pass2))
+    pta = {} if per_ticker_analysis is None else per_ticker_analysis
+    counts = {"universe": len(universe or []), "per_ticker_analysis": len(pta),
+              "candidate_pass2_signals": len(pass2), "selection_inputs": len(selection_inputs["per_ticker"])}
     return {
         "data_context": {"universe": universe or [], "catalyst_recall_feed": None, "holdings": [],
                          "candidate_pass2_signals": pass2, "selection_inputs": selection_inputs},
         "eligibility_governance": load_eligibility_governance(_PRESET),
-        "per_ticker_analysis": {} if per_ticker_analysis is None else per_ticker_analysis,
+        "per_ticker_analysis": pta,
+        "run_provenance": _run_provenance(counts) if run_provenance is None else run_provenance,
+        "provider_health": {"fmp": "ok", "sec_edgar": "ok"} if provider_health is None else provider_health,
+        "calendar": _cal() if calendar is None else calendar,
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
         "prior_regime": None, "prior_upgrade_count": 0,
         "sizing_context": {"short_bucket_dollars": 10000.0, "per_ticker": {}},
@@ -96,7 +128,9 @@ def _analysis_row(ticker, row_source="top15_candidate"):
            "price_input": {"close": 110.5 if row_source.startswith("holding") else 101.5,
                            "bars": _uptrend_bars()}}
     if not row_source.startswith("holding"):
-        row["score_blocks"] = {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0}
+        # §4.2 core_score(blocks)=50.0 == the _selection_inputs selection-time core_score (one core_score per run,
+        # so the slice-2a selection↔analysis reconciliation passes; a divergent value is tested separately).
+        row["score_blocks"] = {"momentum": 50.0, "theme": 50.0, "catalyst": 50.0}
     return row
 
 
@@ -106,7 +140,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             reg = Path(d) / "reg.json"
             reg.write_text(json.dumps(_register()), encoding="utf-8")
             pc = _pipeline_context(reg, rr, wr)
-            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)   # Sat → Mon decision
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)   # Sat → Mon decision
             self.assertFalse(out["out_of_window"])
             self.assertTrue(out["emitted"])
             self.assertEqual(out["decision_date"], _DD)
@@ -122,7 +156,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
             reg = Path(d) / "reg.json"
             reg.write_text(json.dumps(_register()), encoding="utf-8")
-            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS,
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0),
                                             _pipeline_context(reg, rr, wr))
             # one canonical decision_date through selection / machine record / lifecycle / report
             self.assertEqual(out["decision_date"], _DD)
@@ -136,7 +170,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr)
             pc["report_context"]["price_clock"]["price_data_through"] = "20260611"  # resolver basis is 20260612
             with self.assertRaises(Exception):
-                orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
 
     def test_nonempty_admitted_only_writes_official_artifacts(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
@@ -150,11 +184,23 @@ class EmptyRunEndToEnd(unittest.TestCase):
                 "AAPL": {"theme": "software", "symbol_cooldown_status": "none",
                          "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
-            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertEqual(len(out["machine_record"]["rows"]), 1)
             self.assertTrue(out["written"]["weekly_report_path"].exists())
+            action_csv = out["written"]["action_table_path"].read_text(encoding="utf-8")
+            self.assertIn("paper_or_minimal_only", action_csv)
+            self.assertNotIn("full_size_eligible", action_csv)
             self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
-            self.assertIn("AAPL", out["written"]["action_table_path"].read_text(encoding="utf-8"))
+            self.assertIn("AAPL", action_csv)
+
+    def test_real_pass1_reject_drives_report_exclusion_count(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("PENNY", price=1.0)])
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertTrue(out["emitted"])
+            self.assertIn("本周剔除 1 只", "\n".join(out["report_data"]["sections"][9]))
 
     def test_nonempty_holding_in_top15_overlap_writes_official_artifacts(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
@@ -163,7 +209,9 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL", "holding_in_top15")})
             pc["data_context"]["holdings"] = [{"ticker": "AAPL", "signals": {}}]
-            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+            pc["report_context"]["coverage_inputs"] = [{"ticker": "AAPL", "row_source": "holding_in_top15",
+                "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             row = out["machine_record"]["rows"][0]
             self.assertEqual(row["row_source"], "holding_in_top15")
             self.assertEqual(row["final_action"], "持有")
@@ -176,7 +224,7 @@ class OutOfWindowNoEmit(unittest.TestCase):
             reg = Path(d) / "reg.json"
             reg.write_text(json.dumps(_register()), encoding="utf-8")
             pc = _pipeline_context(reg, rr, wr)
-            out = orch.run_weekend_pipeline(_now(_DD, 11, 0), _SESSIONS, pc)   # Mon 11:00 = intraday dead zone
+            out = orch.run_weekend_pipeline(_now(_DD, 11, 0), pc)   # Mon 11:00 = intraday dead zone
             self.assertTrue(out["out_of_window"])
             self.assertFalse(out["emitted"])
             self.assertIsNone(out["decision_date"])
@@ -192,11 +240,11 @@ class FailClosed(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr)
             pc.pop("report_context")          # missing a key
             with self.assertRaises(orch.WeekendOrchestratorError):
-                orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             pc2 = _pipeline_context(reg, rr, wr)
             pc2["EXTRA"] = 1                   # extra key
             with self.assertRaises(orch.WeekendOrchestratorError):
-                orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc2)
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc2)
 
     def test_seam_per_ticker_analysis_must_cover_selection(self):
         # AAPL is admitted but per_ticker_analysis does not cover it → the selection→analysis seam fails closed
@@ -206,7 +254,180 @@ class FailClosed(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={})   # missing AAPL
             with self.assertRaises(orch.WeekendOrchestratorError):
-                orch.run_weekend_pipeline(_now("20260613", 10, 0), _SESSIONS, pc)
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+
+
+class ProvenanceFailClosed(unittest.TestCase):
+    """R-USSHORT-BATCH4-PIPELINE-PIT-...: the §2.1 PIT 来源对账 runs BEFORE analysis, so a consumed input family
+    tagged for another run / observed in the future fails the WHOLE pipeline closed — nothing reaches the official
+    chain, nothing is written (the exact contamination vector the strict review reproduced)."""
+
+    def test_cross_run_input_family_rejected(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            rp = _run_provenance()
+            rp["families"]["universe"]["as_of"] = "20990101"   # universe produced for a DIFFERENT run
+            pc = _pipeline_context(reg, rr, wr, run_provenance=rp)
+            with self.assertRaises(RunProvenanceError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(any(Path(wr).iterdir()))          # NO official artifact written
+
+    def test_future_observed_input_rejected(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, run_provenance=_run_provenance(observed="2099-01-01T00:00:00"))
+            with self.assertRaises(RunProvenanceError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(any(Path(wr).iterdir()))
+
+    def test_missing_run_provenance_key_rejected(self):   # closed-world: the 16th key is mandatory
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr)
+            pc.pop("run_provenance")
+            with self.assertRaises(orch.WeekendOrchestratorError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+
+    def test_clean_provenance_positive_control(self):   # the default manifest reconciles → empty run emits
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), _pipeline_context(reg, rr, wr))
+            self.assertTrue(out["emitted"])
+            self.assertEqual(out["run_provenance"]["as_of"], _DD)
+            self.assertEqual(out["run_provenance"]["session"], "RTH")
+
+
+class RunGateHealthAndMode(unittest.TestCase):
+    """R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP (health + mode halves): the §3.7 provider-health
+    gate NO-EMITs on non-clean CRITICAL health; the §2.1 run-mode gate fails a live run closed on a
+    non-authoritative calendar; offline_test runs on the pending fixture calendar."""
+
+    def _ctx(self, d, rr, wr, **over):
+        reg = Path(d) / "reg.json"
+        reg.write_text(json.dumps(_register()), encoding="utf-8")
+        return _pipeline_context(reg, rr, wr, **over)
+
+    def test_degraded_critical_health_no_emit(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "degraded", "sec_edgar": "ok"})
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(out["emitted"])
+            self.assertEqual(out["no_emit_reason"], "provider_health_restricted")
+            self.assertNotIn("machine_record", out)
+            self.assertFalse(any(Path(wr).iterdir()))
+
+    def test_down_critical_health_no_emit(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "down"})
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(out["emitted"])
+            self.assertEqual(out["no_emit_reason"], "provider_health_blocked")
+            self.assertFalse(any(Path(wr).iterdir()))
+
+    def test_missing_critical_source_no_emit(self):   # a critical source absent → missing → blocked → no-emit
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok"})   # sec_edgar missing
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(out["emitted"])
+            self.assertEqual(out["no_emit_reason"], "provider_health_blocked")
+
+    def test_unauthorized_source_structurally_rejected(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "ok", "yfinance": "ok"})
+            with self.assertRaises(Exception):   # classifier refuses an unauthorized source (§18.1 #3)
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+
+    def test_clean_health_positive_control(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), self._ctx(d, rr, wr))
+            self.assertTrue(out["emitted"])
+            self.assertEqual(out["provider_health"]["overall_run_state"], "clean")
+
+    def test_live_mode_pending_calendar_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr)   # default calendar = pending_authoritative_cross_check
+            with self.assertRaises(orch.WeekendOrchestratorError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc, run_mode="live")
+            self.assertFalse(any(Path(wr).iterdir()))
+
+    def test_live_mode_gated_even_with_authoritative_calendar(self):
+        # batch4 GATES live entirely — a self-reported authoritative_verified calendar does NOT enable live (the
+        # trust anchor is the batch5 cross-checked artifact, not a caller-injected one).
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, calendar=_cal(status="authoritative_verified"))
+            with self.assertRaises(orch.WeekendOrchestratorError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc, run_mode="live")
+
+    def test_forged_calendar_string_rejected(self):
+        # ①c: a bare 'authoritative_verified' STRING is not a calendar artifact → validate_market_calendar rejects
+        # it (offline_test so the calendar is actually validated, not short-circuited by the live gate).
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, calendar="authoritative_verified")
+            with self.assertRaises(Exception):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+
+    def test_offline_test_mode_runs_on_pending_calendar(self):   # default mode tolerates the pending fixture calendar
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), self._ctx(d, rr, wr),
+                                            run_mode="offline_test")
+            self.assertTrue(out["emitted"])
+
+    def test_invalid_run_mode_rejected(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            with self.assertRaises(orch.WeekendOrchestratorError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), self._ctx(d, rr, wr),
+                                          run_mode="production")
+
+
+class SelectionRecordThreaded(unittest.TestCase):
+    """R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP (selection-record half): the canonical Top15
+    selection identity (rank/bucket/selection-time scores) is carried through analysis into the machine record;
+    a same-run divergence between the selection-time and the recomputed §4.2 core_score fails the run closed."""
+
+    @staticmethod
+    def _build_ctx(d, rr, wr, **over):
+        reg = Path(d) / "reg.json"
+        reg.write_text(json.dumps(_register()), encoding="utf-8")
+        pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                               per_ticker_analysis={"AAPL": _analysis_row("AAPL")}, **over)
+        pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+        pc["basket_context"]["per_ticker"] = {
+            "AAPL": {"theme": "software", "symbol_cooldown_status": "none",
+                     "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                                     "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+        return pc
+
+    def test_selection_record_reaches_machine_record(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), self._build_ctx(d, rr, wr))
+            rec = out["machine_record"]["rows"][0]["selection_record"]   # carried, not dropped
+            self.assertEqual(rec["selection_rank"], 1)                   # AAPL is the top (only) Top15 name
+            self.assertEqual(rec["selection_bucket"], "overlap")        # top in both core + theme rank → overlap
+            self.assertEqual(rec["core_score"], 50.0)
+
+    def test_divergent_selection_vs_analysis_core_fails_closed(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._build_ctx(d, rr, wr)
+            pc["data_context"]["selection_inputs"]["per_ticker"]["AAPL"]["core_score"] = 99.0   # ≠ §4.2 analysis 50
+            with self.assertRaises(Exception):                          # WeekendAnalysisError through the pipeline
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(any(Path(wr).iterdir()))                   # nothing written
+
+    def test_holding_only_row_carries_no_selection_record(self):
+        # a current holding that did NOT rank into Top15 has selection_record=None (not in selection_details)
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, per_ticker_analysis={"HLD": _analysis_row("HLD", "holding_account_only")})
+            pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
+            pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
+                "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertIsNone(out["machine_record"]["rows"][0]["selection_record"])
 
 
 class SeamPayloadIdentity(unittest.TestCase):

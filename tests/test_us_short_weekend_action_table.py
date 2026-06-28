@@ -51,7 +51,9 @@ def _candidate(ticker="AAA", action_fields=None, executable=True, final_action="
            "veto": {"veto_tier": "none", "row_context": "candidate"},
            "price": {"executable": executable, "trace": {},
                      "action_fields": _CANDIDATE_AF if action_fields is None else action_fields},
-           "score": {"core_score": 50.0}}
+           "score": {"core_score": 50.0},
+           "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
+                                "core_score": 50.0, "theme_momentum_score": 0.0}}
     if sized:
         row["sizing"] = {"status": "sized", "desired_model_shares": 10}
     return row
@@ -83,6 +85,81 @@ class Projection(unittest.TestCase):
     def test_sizing_shares_lifted(self):
         flat = at.flatten_machine_record(_machine_record([_candidate()]))
         self.assertEqual(flat["rows"][0]["model_position_size_shares"], 10)
+
+    def test_selection_bucket_projected(self):
+        # the preserved Top15 selection_bucket lands on its frozen §11.3 column via the threaded selection_record
+        # (not blank) — R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP
+        row = _candidate()
+        row["selection_record"] = {"selection_rank": 1, "selection_bucket": "core_top",
+                                   "core_score": 50.0, "theme_momentum_score": 0.0}
+        flat = at.flatten_machine_record(_machine_record([row]))
+        self.assertEqual(flat["rows"][0]["selection_bucket"], "core_top")
+
+    def test_no_selection_record_leaves_bucket_unset(self):
+        # a non-selected holding row (no selection_record) leaves the bucket cell honestly unset
+        flat = at.flatten_machine_record(_machine_record([_holding()]))
+        self.assertIsNone(flat["rows"][0].get("selection_bucket"))
+
+    def test_forged_flat_bucket_cleared(self):
+        # a FORGED flat selection_bucket on a non-selected holding row (no record) is cleared — only a record sets it
+        row = _holding()
+        row["selection_bucket"] = "core_top"   # forged flat value, holding row carries no record
+        flat = at.flatten_machine_record(_machine_record([row]))
+        self.assertIsNone(flat["rows"][0].get("selection_bucket"))
+
+    def test_selected_row_missing_record_rejected(self):
+        # a top15_candidate (selected) with NO selection_record fails closed — the canonical source is required
+        row = _candidate(); del row["selection_record"]
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(_machine_record([row]))
+
+    def test_malformed_selection_record_rejected(self):
+        for bad in ({"selection_rank": 1, "selection_bucket": "garbage", "core_score": 50.0, "theme_momentum_score": 0.0},
+                    {"selection_rank": 0, "selection_bucket": "core_top", "core_score": 50.0, "theme_momentum_score": 0.0},
+                    {"selection_rank": 1, "selection_bucket": "core_top", "core_score": 150.0, "theme_momentum_score": 0.0},
+                    {"selection_rank": 1, "selection_bucket": "core_top"}):   # bad bucket / rank / score-range / partial
+            row = _candidate(); row["selection_record"] = bad
+            with self.assertRaises(at.WeekendActionTableError):
+                at.flatten_machine_record(_machine_record([row]))
+
+    def test_holding_only_row_with_record_rejected(self):
+        # a non-selected holding row carrying a (forged) selection_record fails closed
+        row = _holding()
+        row["selection_record"] = {"selection_rank": 1, "selection_bucket": "core_top",
+                                   "core_score": 50.0, "theme_momentum_score": 0.0}
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(_machine_record([row]))
+
+    def test_duplicate_selection_rank_across_selected_rows_rejected(self):
+        # two selected rows both record-rank 1 → fail closed (selected rows must be unique 1..N)
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(_machine_record([_candidate("AAA"), _candidate("BBB")]))
+
+    def test_record_rank_vs_landed_conflict_rejected(self):
+        row = _candidate(); row["selection_rank"] = 2   # landed top-level ≠ record rank 1
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(_machine_record([row]))
+
+    def test_record_core_vs_machine_score_conflict_rejected(self):
+        row = _candidate(); row["selection_record"]["core_score"] = 99.0   # ≠ machine score.core_score 50
+        with self.assertRaises(at.WeekendActionTableError):
+            at.flatten_machine_record(_machine_record([row]))
+
+    def test_two_selected_rows_unique_ranks_pass(self):   # multi-row positive control
+        a, b = _candidate("AAA"), _candidate("BBB")
+        b["selection_rank"] = 2
+        b["selection_record"]["selection_rank"] = 2
+        flat = at.flatten_machine_record(_machine_record([a, b]))
+        self.assertEqual(len(flat["rows"]), 2)
+
+    def test_flat_bucket_conflicting_with_record_uses_record(self):
+        # a pre-existing flat value is IGNORED — the selection_record is the sole source (record wins).
+        row = _candidate()
+        row["selection_bucket"] = "core_backfill"   # conflicting forged flat
+        row["selection_record"] = {"selection_rank": 1, "selection_bucket": "core_top",
+                                   "core_score": 50.0, "theme_momentum_score": 0.0}
+        flat = at.flatten_machine_record(_machine_record([row]))
+        self.assertEqual(flat["rows"][0]["selection_bucket"], "core_top")
 
     def test_rich_layer_and_field_records_preserved(self):
         flat = at.flatten_machine_record(_machine_record([_candidate()]))
@@ -118,9 +195,24 @@ class CsvPopulated(unittest.TestCase):
     def test_unsourced_columns_stay_empty(self):
         # columns with no v1 pipeline source must stay EMPTY (honest, not fabricated)
         cells = _cells(at.build_action_table(_machine_record([_candidate()])))
-        for col in ("macro_cluster", "overextension_state", "coverage_status", "live_permission_status",
-                    "model_position_size_amount"):
+        for col in ("macro_cluster", "overextension_state", "coverage_status"):
             self.assertEqual(cells[col], "")
+
+    def test_batch4_ship_gate_fields_are_engine_derived(self):
+        cells = _cells(at.build_action_table(_machine_record([_candidate()])))
+        self.assertEqual(cells["live_permission_status"], "paper_or_minimal_only")
+        self.assertEqual(cells["live_size_warning"], "paper_or_minimal_only_not_full_size_license")
+        self.assertEqual(cells["model_position_size_amount"], "1010.0")
+
+    def test_forged_full_size_cells_cannot_reach_action_table(self):
+        row = _candidate()
+        row["live_permission_status"] = "full_size_eligible"
+        row["live_size_warning"] = None
+        row["model_position_size_amount"] = 999999.0
+        cells = _cells(at.build_action_table(_machine_record([row])))
+        self.assertEqual(cells["live_permission_status"], "paper_or_minimal_only")
+        self.assertEqual(cells["live_size_warning"], "paper_or_minimal_only_not_full_size_license")
+        self.assertEqual(cells["model_position_size_amount"], "1010.0")
 
     def test_multiple_rows(self):
         table = at.build_action_table(_machine_record([_candidate("AAA"), _holding("HLD")]))

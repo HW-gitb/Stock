@@ -41,6 +41,7 @@ from engine.us_short_action_table_renderer import action_table_columns, render_a
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import row_source_to_context
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
+from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_weekend_decision import action_reason_error
 
 # the frozen §11.3 column set (single source) — only keys that ARE a real column are lifted from the rich layer.
@@ -88,7 +89,14 @@ class WeekendActionTableError(Exception):
     """The injected machine record is malformed, or the flattened projection is not §10-clean (fail-closed)."""
 
 
-def _flatten_row(row):
+# the only legal §4.5 selection buckets the producer `_select_top15` emits (single source for the consumer-side
+# value validation) + the row_sources that carry a selection record (the Top15-admitted names).
+_SELECTION_BUCKETS = frozenset({"core_top", "theme_momentum", "overlap", "core_backfill"})
+_SELECTED_ROW_SOURCES = frozenset({"top15_candidate", "holding_in_top15"})
+_SELECTION_RECORD_KEYS = frozenset({"selection_rank", "selection_bucket", "core_score", "theme_momentum_score"})
+
+
+def _flatten_row(row, ct):
     """Project one §10 machine-record row's rich layer onto the flat §11.3 columns (keeping the rich layer +
     field_records). Only frozen §11.3 column keys are lifted; an unsourced column is left untouched (empty)."""
     flat = dict(row)
@@ -102,6 +110,55 @@ def _flatten_row(row):
     sizing = row.get("sizing")
     if isinstance(sizing, dict) and sizing.get("status") == "sized":
         flat["model_position_size_shares"] = sizing.get("desired_model_shares")
+    # Batch4 has paper evidence only and live mode is hard-gated. Re-derive the official ship-gate cells from
+    # the frozen engine on every projection, overwriting any caller-planted flat values. A live-normalized grant
+    # belongs to the separately reviewed batch5 evidence path, never to this offline boundary.
+    shares = sizing.get("desired_model_shares") if isinstance(sizing, dict) and sizing.get("status") == "sized" else None
+    af = row.get("price", {}).get("action_fields", {}) if isinstance(row.get("price"), dict) else {}
+    entry = af.get("valid_entry_high") if isinstance(af, dict) else None
+    has_model_size = (isinstance(shares, int) and not isinstance(shares, bool) and shares >= 0
+                      and _finite(entry) and entry > 0.0)
+    amount = float(shares) * float(entry) if has_model_size else 0.0
+    veto_tier = row.get("veto", {}).get("veto_tier") if isinstance(row.get("veto"), dict) else None
+    gate = ship_gate_sizing(amount, shares if has_model_size else 0,
+                            hard_veto=veto_tier in {"entry_hard_veto", "position_hard_veto"},
+                            evidence_level="paper", graduated_full_size=False)
+    flat["model_position_size_amount"] = gate["model_position_size_amount"] if has_model_size else None
+    flat["live_permission_status"] = gate["live_permission_status"]
+    flat["live_size_warning"] = gate["live_size_warning"]
+    # the PRESERVED Top15 selection_bucket lands on its §11.3 column ONLY from a VALIDATED selection_record
+    # (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP): a SELECTED row (top15_candidate / holding_in_top15)
+    # must carry a well-formed record (exact keys, positive-int rank, legal bucket, finite 0-100 scores); a
+    # non-selected holding row must carry NO record. A forged / malformed record fails closed; any caller-planted
+    # flat value is cleared first so the cell is set ONLY from the validated bucket.
+    flat.pop("selection_bucket", None)
+    sel_rec = row.get("selection_record")
+    if row.get("row_source") in _SELECTED_ROW_SOURCES:
+        if not (isinstance(sel_rec, dict) and set(sel_rec) == _SELECTION_RECORD_KEYS):
+            raise WeekendActionTableError(
+                f"{ct}: Top15 选择行 selection_record 形状非法（须键 {sorted(_SELECTION_RECORD_KEYS)}）: {sel_rec!r}")
+        sr = sel_rec["selection_rank"]
+        if not (isinstance(sr, int) and not isinstance(sr, bool) and sr >= 1):
+            raise WeekendActionTableError(f"{ct}: selection_record.selection_rank 须正 int: {sr!r}")
+        if sel_rec["selection_bucket"] not in _SELECTION_BUCKETS:
+            raise WeekendActionTableError(
+                f"{ct}: selection_record.selection_bucket 非法（须 ∈ {sorted(_SELECTION_BUCKETS)}）: {sel_rec['selection_bucket']!r}")
+        for k in ("core_score", "theme_momentum_score"):
+            if not (_finite(sel_rec[k]) and 0.0 <= sel_rec[k] <= 100.0):
+                raise WeekendActionTableError(f"{ct}: selection_record.{k} 须为 0-100 有限数: {sel_rec[k]!r}")
+        # reconcile the record against THIS row's sibling machine fields (no same-row fork): the landed top-level
+        # selection_rank (set by the basket for builds) must equal the record rank; the machine score.core_score
+        # (when present) must equal the record core (Codex re-review 5: score/rank conflict).
+        landed = row.get("selection_rank")
+        if landed is not None and landed != sr:
+            raise WeekendActionTableError(f"{ct}: 行 selection_rank {landed!r} != selection_record.selection_rank {sr!r}（同行分叉）")
+        score = row.get("score")
+        if isinstance(score, dict) and "core_score" in score and score["core_score"] != sel_rec["core_score"]:
+            raise WeekendActionTableError(
+                f"{ct}: 行 score.core_score {score['core_score']!r} != selection_record.core_score {sel_rec['core_score']!r}（同行分叉）")
+        flat["selection_bucket"] = sel_rec["selection_bucket"]
+    elif sel_rec is not None:
+        raise WeekendActionTableError(f"{ct}: 非 Top15 持仓行不得带 selection_record（伪造拒）: {sel_rec!r}")
     return flat
 
 
@@ -211,7 +268,15 @@ def flatten_machine_record(machine_record):
             raise WeekendActionTableError(f"rows 含规范化后重复 ticker（一股一行）: {ct!r}")
         seen.add(ct)
         _validate_price_projection(row, ct)   # §6 price contract before lifting into the official §11.3 columns
-        out_rows.append({**_flatten_row(row), "ticker": ct})
+        out_rows.append({**_flatten_row(row, ct), "ticker": ct})
+
+    # cross-row §4.5 selection-rank integrity: the SELECTED rows (top15_candidate / holding_in_top15) ARE the Top15
+    # admitted set, so their preserved selection_rank must be EXACTLY 1..N (unique + dense + in-range) — a duplicate
+    # / gapped / out-of-range rank fails closed (Codex re-review 5: duplicate selection_rank across selected rows).
+    selected_ranks = sorted(r["selection_record"]["selection_rank"]
+                            for r in out_rows if r.get("row_source") in _SELECTED_ROW_SOURCES)
+    if selected_ranks != list(range(1, len(selected_ranks) + 1)):
+        raise WeekendActionTableError(f"selected 行 selection_rank 须恰为 1..N（唯一+连续+在界）: {selected_ranks}")
 
     flat_record = {**machine_record, "rows": out_rows}
     # re-assert §10-cleanliness of the projection (the renderer's validator is the single §10 gate) — a flatten

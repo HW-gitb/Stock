@@ -8,6 +8,159 @@
 
 ---
 
+## 2026-06-28 - Claude 审查 (US-short batch4 整体修复完成度复核, 用户请求)
+
+- **Verdict/Action**: FAIL（批4 未整体修复完成）。①②③⑥ 已 resolved 且经真 jsonschema 全量复核确属闭合；但原始 6 条里的 ④ `R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`、⑤ `R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP` 仍 open——从未被任何人处理（用户只点名 ②③⑥）。
+- **Required**: `R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`（无 action→价格矩阵：清仓-事件 仍可空 event_clear_reference_price 过 §10-clean）、`R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`（no_dangling 仅正向 landing、无 expected-field 反查清单）仍 open，见 register。
+- **Verify**: 全离线 `*us_short*` **2479 OK（真 jsonschema 4.26.0**——Codex 此前仅 jsonschema-no-op 隔离、未跑过真 schema 全量，本轮补上）；boundary 8 / doc-route 52 OK；新文件 selection_exclusions + weekend_batch4 runner 离线无券商/网络/A股；3d ship-gate 经 frozen engine 重派 paper-only 并 overwrite caller、3c run_selection 留真 reject→分类、② §7 overlap、⑥ runner 均核实。④⑤ 经代码核实仍开。
+- **Next**: 修 ④ + ⑤ 才能整体闭合（其余 4 条已确属闭合，无需返工）。
+- **Proof-of-use**: 真 jsonschema 全量 2479 OK 实跑（非 no-op）；action_table 第113-128行核 3d 重派 overwrite caller、pipeline 第190-290行核 3c exclusion_records 留 reject；④ 代码核 _validate_price_projection 仍按 row-class、event_clear_reference_price 仅 None-allowed numeric；⑤ no_dangling 无 expected-field 反查；新文件 grep 券商/网络/A股 = 0。
+
+## 2026-06-28 - Codex 修复 + 自检 PASS (US-short batch4 Required 2/3)
+
+- **Verdict/Action**: PASS；3c 真实 reject→§11.4、3d paper-only ship-gate→action-table/report、离线一键 runner/account+lifecycle bootstrap 均闭合；live/provider 仍 gated。
+- **Required**: `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` → resolved；细节见 register。
+- **Verify**: TDD RED→GREEN；`jsonschema 4.26.0` 已安装；真实 schema-backed 全量 `test_us_short*` 2479 OK；boundary 8；doc guards 52；py_compile/diff-check OK。
+- **Next**: 无；按用户本轮指令提交。
+- **Proof-of-use**: real Pass1 reject 报告计数、detached exclusion/full-size spoof 拒绝或覆盖、CLI dry/out-of-window/missing-state/bootstrap/account/private/live 八类反向均实测。
+
+## 2026-06-28 - Codex 修复 + 自检 PASS (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP)
+
+- **Verdict/Action**: PASS；按用户授权仅修 §7 Top15 overlap：holding_in_top15 现在同时进入 §6 持仓与 §7 Top15，§7 按 preserved selection_rank 排序且不重复。
+- **Required**: `R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP` → resolved；完整 closure 见 `docs/system_risk_register.md`。
+- **Verify**: TDD RED 2 failures→GREEN 2 OK；focused 187 OK；action-table/report/orchestrator/private-write 128 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；git diff --check CRLF-only。
+- **Next**: 等用户后续指令；③ 3c/3d与⑥ runner 不在本轮范围。
+- **Proof-of-use**: overlap-only 验 §6+§7 双落点；candidate+overlap 验 preserved-rank 顺序与恰两行；只改 report selected-set/排序及对应测试，未触碰 deferred scope。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 round-3 re-review 6)
+
+- **Verdict/Action**: FAIL；② rank/score 全 run 对账与 API 文档同步 PASS，但 holding_in_top15 被 §7 Top15 过滤掉；③ 3c/3d和⑥ runner 本体仍开放。
+- **Required**: `R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: focused provider/provenance/selection/basket 187 OK；action-table/report/orchestrator/private-write 126 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；overlap E2E 探针复现 §6 有 AAPL 而 §7 为“Top15 无”；README/CURRENT API 已一致；git diff --check CRLF-only。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ② re-review-5 收口 + 编排器改签 doc B-ripple)
+
+- **Verdict/Action**: 修 Codex re-review-5（① PASS、③ 3a/3b PASS；见 register）。**② per-run 对账收口**：`_flatten_row` 加同行对账（landed top-level selection_rank==record rank、machine score.core_score==record core，present 时）；`flatten_machine_record` 加跨行——selected 行(top15_candidate/holding_in_top15)的 record rank 须恰 1..N（唯一+连续+在界），重复/跳号/越界拒。**doc B-ripple**：我 round-2 改 `run_weekend_pipeline` 签名后 README/CURRENT 仍发旧三参数 API，已更新为 `(now_et, pipeline_context, *, run_mode)`（sessions 由 calendar 派生）。
+- **Required**: 无新开。② 全闭合（待 Codex re-review）；⑥ doc-API drift 修、但 runner 本体仍开；③ 3c/3d 仍开。见 `docs/system_risk_register.md`。
+- **Verify**: action_table(+dup-rank/rank-landed-conflict/core-score-conflict/two-row-positive) 全绿；全离线 `*us_short*` 2462 OK（零回归）；boundary 8 / doc-route / py_compile / `git diff --check` 绿。
+- **Next**: ③ 3c（exclusion 由真 reject 派）+ 3d（ship-gate live_permission）；⑥ runner；④⑤。**建议先 Codex 复审已闭合大批（①②③ 3a/rr2/3b/rr4/rr5）**。
+- **Proof-of-use**: A dup-rank/跳号/越界 + 同行 rank-landed/core-score 分叉 + 多行正控 + 观察行 top-level None。B `_flatten_row` 加同行对账 + `flatten_machine_record` 加跨行 1..N；README/CURRENT API 改签；report `_observe` 给 distinct rank。C 反向上述 + 正控。F 全量 2462。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 round-3 re-review 5)
+
+- **Verdict/Action**: FAIL；①按批准边界 PASS，③ 3a/3b PASS；②仍接受重复 selection rank 与 score 分叉，且 orchestrator 改签后 README/CURRENT 仍发布旧三参数 API。③ 3c/3d继续开放。
+- **Required**: `R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: focused provider/provenance/selection/basket 187 OK；action-table/report/orchestrator/private-write 122 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；探针复现 duplicate selection_rank 与 selection-score conflict 仍过；rg 复现 README/CURRENT 旧 API；git diff --check CRLF-only。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ①②③ re-review-4 — sessions 派生 + selection_record 校验 + coverage row_source)
+
+- **Verdict/Action**: 修 Codex re-review-4 三点（均 deterministic batch4 correctness、非 deferred digest；见 register）。**①**：`run_weekend_pipeline` 不再收注入 sessions，改由 validated calendar `sessions_for_window`/`build_sessions` **派生**——open/close（含 13:00 半日市）+ 序列完整 by construction，omitted-close/漏中间日/多/重/错日全不可能。**②**：`_flatten_row` 在官方消费边界**校验 selection_record**——selected 行须确切键 + 正 rank + 合法 bucket + 0-100 分；非选择持仓行不得带 record；伪造/残缺拒。**③**：coverage 按 ticker 对账 row_source 到真持仓行（swap 拒）。
+- **Required**: 无新开。① 离线 calendar/PIT 门闭合（digest 留批5）；② 闭合；③ 3b+row_source 闭合，3c（exclusion 由真 reject 派）/3d（ship-gate）仍开。见 `docs/system_risk_register.md`。
+- **Verify**: orchestrator 40 / action_table(+malformed/holding-record/missing-record) / report(+wrong-row_source) 全绿；全离线 `*us_short*` 2458 OK（零回归）；boundary 8 / doc-route / py_compile / `git diff --check` 绿；删孤儿 datetime import + 2 moot injected-session 测试。
+- **Next**: ③ 余 3c+3d（跨 stage：选股留 reject + ship_gate 引擎）；④⑤⑥。**建议先 Codex 复审已闭合大批（①②③ 3a/rr2/3b/rr4）**。
+- **Proof-of-use**: A sessions 派生(无注入) + selection_record 4 类坏形 + holding-record/missing-record + coverage swap。B orchestrator 删 sessions 参+datetime；action_table `_flatten_row` 加校验+常量；report coverage 加 row_source 对账；4 测试 fixture 加 selection_record。C 反向上述 + 正控。F 全量 2458。
+
+## 2026-06-28 - Codex 审查 FAIL (US-short batch4 round-3 / ①②③ partial re-review)
+
+- **Verdict/Action**: FAIL；live 硬门、forged health、状态自由文本和 coverage ticker 集已修，但 session 序列/缺省时刻、selection_record 值、coverage row_source 仍可错配进入官方输出。
+- **Required**: `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`、`R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: focused provenance/provider/selection/basket 187 OK；action-table/report/orchestrator 102 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；探针复现半日市省略 close→错误死区、漏周一→决策周二、FORGED record bucket、coverage wrong-row_source 仍过；git diff --check CRLF-only。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ③ 报告绑定 — re-review-2 spoofs + 3b coverage)
+
+- **Verdict/Action**: 用户批准「① digest 硬化留批5」→转 ③ `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`（见 register）。修 re-review-2 两 spoof + 3b：**forged classifier**——新 `validate_provider_health_result`（校 classify 输出形 + 内部一致），`_validate_stage_status` 调用、伪造 dict 拒；**矛盾**——删 status-bearing editorial（account/provider_health_note），§2/§11 只渲染结构化 stage_status；**3b**——coverage_inputs 加 ticker、一对一覆盖持仓行（空/缺/多/重拒）。
+- **Required**: 无新开。③ in_progress——3a + re-review-2 + 3b working tree 已修；3c（exclusion 由真 Pass1/2 reject 派 + 映 8 类）、3d（ship-gate live_permission）仍开（跨 stage、待续）。见 `docs/system_risk_register.md`。
+- **Verify**: report + orchestrator + provider_health 全绿；全离线 `*us_short*` 2456 OK（+4 自 2452，零回归）；boundary 8 / doc-route / py_compile / `git diff --check` 绿。
+- **Next**: 3c（run_selection 留 Pass1/2 reject → 报告 exclusion 派生/对账）+ 3d（ship_gate 引擎→live_permission 结构化）；后 ④⑤⑥。**建议先让 Codex 复审已闭合大批（①②③ 3a/rr2/3b）再续**——累计批大、Codex 并行连审。
+- **Proof-of-use**: A forged classifier 3 形 + 删 editorial closed-world 拒 + coverage 空/多/缺一对一。B provider_health 加 validate 函数；report 删 2 editorial 键 + coverage 加 ticker 对账 + import canonical_us_ticker；fixture 同步。C 反向上述 + 正控 real-restricted。F 全量 2456。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-3 — ① re-review-3 半采纳 + scope judgment)
+
+- **Verdict/Action**: Codex re-review 3 三点（见 register）：**采纳并修 2 个**——(a) batch4 **live mode 硬门**（`run_mode=live` 一律 raise，注入日历自报 authoritative 不启用 live；权威 artifact 留批5，比 trusted-identity 更严）；(b) session open/close 绑日历（13:00 半日市≠16:00 session 拒）。**push back 第 3 个**（payload digest/identity 绑定 + universe 行强制 provenance）：offline 接缝调用方**同注入 manifest+payload**，任何一致性绑定都能重算（same-count 换票配个匹配 manifest 即过）——anti-forge 只在批5（provider-派生 payload）真成立。accidental-污染门（per-row dirty + row_count + vocab + live 硬门 + session 时刻）全在。
+- **Required**: 无新开。① 仍 in_progress——2 点已修、第 3 点 surface 给用户做 scope 决策（继续追 offline caller-forge=递减/部分表演 vs 接受现门、caller-forge 留批5），见 `docs/system_risk_register.md`。
+- **Verify**: orchestrator live-gated / half-day-mismatch / forged-string(offline) / session-not-derived OK；全离线 `*us_short*` 2452 OK（+65 累计，零回归）；boundary / py_compile / doc-route / `git diff --check` 绿。
+- **Next**: **等用户 scope 决策**再定 ① 是否继续硬化；③ 剩(伪 classifier / cooldown-normal / 3b-d)、④⑤⑥ 待修。
+- **Proof-of-use**: A live 硬门(authoritative 也拒) + half-day close/open 失配 + forged 裸串 + 落休市 session。B `_assert_calendar_and_sessions` 加 live 硬门 + open/close 绑定、删孤儿 AUTHORITATIVE_CALENDAR_STATUS。C 反向上述 + offline 正控。F 全量 2452。
+
+## 2026-06-27 - Codex 审查 FAIL (US-short batch4 round-2 re-review 3 / Finding ①)
+
+- **Verdict/Action**: FAIL；row_count/显式脏标签和休市日期守卫有效，但 provenance 仍未绑定 payload 内容，live 日历仍接受自报 authoritative artifact 与半日市开收盘错配。
+- **Required**: `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: provenance 29 OK；orchestrator 41 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；探针复现 same-count 全族换票仍过、自报 authoritative dict 仍过、13:00 artifact 对 16:00 session 仍过；git diff --check CRLF-only。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-2 — ① 收尾: ①a manifest↔payload + ①c 日历 artifact)
+
+- **Verdict/Action**: 收尾 `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`（① 三 gap 全闭，见 register）。**①a**：`reconcile_run_provenance` 收 `payloads`（真 data_context 各族），每族 manifest `row_count` 对账真行数 + payload 行自带 as_of/observed_at 与 manifest 矛盾即 fail-closed（dirty-row=2099 现在 raise）；orchestrator 传真 payloads。**①c**：`calendar_status` 字符串换成 `calendar` artifact，`validate_market_calendar` 后从 `data_provenance.verification_status` 派发 live 门 + 绑 sessions 到日历（in-range/weekday/非休市）。
+- **Required**: 无新开。① working tree 全闭、待 Codex 审。（Codex re-review 2 另提 ② action-table forged-bucket / ③ 伪 classifier·cooldown-normal 矛盾，下一轮修。）
+- **Verify**: provenance PayloadBinding 5 + vocab 2 + orchestrator forged-calendar / session-not-derived / live 正负控 OK；全离线 `*us_short*` 2449 OK（was 2387，+62 累计，零回归）；boundary 8 / doc-route / py_compile / `git diff --check` 绿。
+- **Next**: 修 Codex re-review 2 新点：② action-table 拒伪造 flat bucket（只认 selection_record 投影）；③ 报告校 provider_health 真 classifier 一致性 + 消 editorial/structured 矛盾。
+- **Proof-of-use**: A payload row_count 失配 / dirty as_of / dirty observed_at / 正控 / closed-world；calendar 裸串拒 / session 落休市拒 / authoritative live 过 / pending live 拒。B provenance 加 payloads param + `_family_entries`；orchestrator 加 `_assert_calendar_and_sessions` + 换 calendar 键；fixture 加 row_count / `_cal`。C 反向上述 + 正控。F 全量 2449。
+
+## 2026-06-27 - Codex 审查 FAIL (US-short batch4 round-2 re-review 2)
+
+- **Verdict/Action**: FAIL；①b 与 report TypeError 已修、②正常链路改进通过，但①a/①c P0 仍开放，且 action-table consumer 与 report structured-status 仍可接受伪造/矛盾输入。
+- **Required**: `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`、`R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: focused provenance/eligibility/pipeline/basket 170 OK；action-table/report/orchestrator 93 OK（jsonschema no-op 隔离）；boundary 8、doc guards 52、py_compile OK；探针复现 FORGED flat bucket、伪 classifier result、cooldown/normal 矛盾同屏；标准 report 测试受本机缺 jsonschema 阻断。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-2 — 应 Codex re-review FAIL: ② 收口 + ①b vocab + ③ collateral)
+
+- **Verdict/Action**: 判 Codex re-review 3 条全成立、照修（见 register）。**②** 收口：`run_selection` 重复 canonical universe 身份 fail-closed；`_flatten_row` 投影 `selection_bucket` 到 §11.3 列（除空白 CSV）。**①b**：provenance 价格族 session/adjustment 改 approved-vocab（RTH / split_div_adjusted），equal-but-illegal(ETH/unknown_raw)拒。**③ collateral**（report TypeError）已由完成的 3a 解（orchestrator 传 stage_status + 调 `_validate_stage_status` + §3 用 stage_status）。**① 余 ①a manifest↔payload + ①c 日历 artifact 绑定待续。**
+- **Required**: 无新开。② working tree 全修待 re-审；① 部分（①b done，①a/①c 待续）；③ 3a done(provider/guard/theme)、3b/3c/3d 待续。
+- **Verify**: action_table(+2 bucket) / pipeline(+1 dup) / provenance(+2 vocab) / report(+5 3a) OK；全离线 `*us_short*` 2442 OK（was 2387，+55 累计，零回归）；boundary / doc-route / py_compile / `git diff --check` 绿。
+- **Next**: ① 收尾——①a（manifest 绑 payload：row_count + per-row as_of 对账、拒 clean-manifest/dirty-payload）+ ①c（live 日历绑 artifact 身份、拒 forged calendar_status）；再 ③ 3b coverage 行集 / 3c exclusion / 3d ship-gate；后 ④⑤⑥。
+- **Proof-of-use**: A dup 三序(eligible-first/below-first/case-variant) + bucket 投影/缺则不伪造 + vocab equal-but-illegal session·adjustment。B `_flatten_row` 加 bucket 投影 / run_selection 加 dup guard / provenance 加 APPROVED_SESSIONS·ADJUSTMENTS。C 反向 dup/ETH/unknown_raw raise + 正控。F 全量 2442。
+
+## 2026-06-27 - Codex 审查 FAIL (US-short batch4 round-2 partial repairs ①②)
+
+- **Verdict/Action**: FAIL；① provenance/calendar 仍可由分离清单和状态字符串自报绕过，② selection metadata 未落到 action table 且重复 universe 身份仍有 last-row-wins 歧义；连带 report API 改动还使批4在报告阶段直接中断。
+- **Required**: `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`、`R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: provenance 22、eligibility 60、pipeline 26、basket 59 OK；py_compile clean；git diff --check CRLF-only；对抗探针复现 ETH/unknown adjustment 被接受、混合资格重复 AAPL 被接受；report+orchestrator 60 tests 在 jsonschema no-op 隔离下 30 errors（missing stage_status）；标准全量受本机缺 jsonschema 阻断。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-2 slice 2b+2c — preserved rank + recall floor, Finding ② 收口)
+
+- **Verdict/Action**: 续修 `R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP` 完结（见 register）。**2b**：basket 按 preserved `selection_record.selection_rank` 排序（不再重算 core_score）、weekly-limit 用幸存位、emit 真 Top15 rank（可稀疏）；报告 §7 显示 selection_rank；删 basket 孤儿 `_finite_number`+`import math`。**2c**：`inject_catalyst_recall` 加 `universe_eligibility` 地板——off-universe/below-floor → `recall_excluded` 不入候选；`run_selection` 建 map+surface。审查「PENNY 越过 AAPL」探针现排除。
+- **Required**: 无新开。Finding ② 三刀(2a+2b+2c) working tree 全修，待 Codex 审。
+- **Verify**: basket 59(+3 preserved-rank) / analysis+orch 80 / gate recall(+4 floor) / pipeline floor / report 21 全 OK；全离线 `*us_short*` 2432 OK（was 2387，+45 累计，零回归）；boundary 8 / doc-route / py_compile / `git diff --check` 全绿。
+- **Next**: Finding ①②全修完（working tree）。续 ③(P0 报告绑定)→⑤(field 反查)→④(动作-价格矩阵)→⑥(dry-run runner)；批完整交 Codex `审查`。
+- **Proof-of-use**: A basket preserved-rank 3 态(core 反序/稀疏/weekly-limit) + recall floor 3 态(off/below/eligible)+bad-map raise；fixture 由 score-desc 派 rank（旧断言保持）。B basket 删孤儿+删 math import；inject_catalyst_recall 签名 + run_selection 返回加 recall_excluded；README 加 round-2 slice-2 行；basket/test docstring 改「by core_score」→「preserved rank」。C 反向 PENNY off-universe / SUB below-floor 排除 + 正控 NVDA 入。F py_compile/boundary/diff/全量 2432。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-2 slice 2a — selection record thread + core 对账)
+
+- **Verdict/Action**: 修 `R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`（P1，选择身份半）：orchestrator `_build_analysis_rows` 把 `_select_top15` 的 canonical 选择记录（selection_rank/bucket/选时 core+theme 分）挂到每个 admitted 行，经 analysis `{**row}` 链带进 machine record；`_analyze_one` 对账选时 vs 分析期 §4.2 core_score（都在时须一致、差>1e-6 fail-closed），审查复现的「分析期重算分反转排名」探针现 fail-closed。剩 2b（basket/cash/action 用穿过来的 rank + 报告显示）+ 2c（召回地板）。
+- **Required**: 无新开。该条 → `in_progress`（见 `docs/system_risk_register.md`；2a working tree 已修，2b/2c 待续）。
+- **Verify**: orchestrator+analysis 80 OK（+3：record 进 machine、分叉 fail-closed、holding-only=None）；全离线 `*us_short*` 2425 OK（+3 零回归）。
+- **Next**: 续 2b（basket 按 preserved selection_rank 排 + 报告 §7 显示）→ 2c（recall 过 universe+cheap_eligible 或标 ineligible 排除）→ 余刀 3/4/5/6。
+- **Proof-of-use**: A 对账 both-present / 一方 None(holding score=None 跳过) / 分叉>1e-6 raise；selection_details 缺→None 不破直测。B `_build_analysis_rows` return + analysis 输出加 selection_record；fixture score_blocks→50 对齐选时 50。C 反向 选时 99≠分析 50 零落盘 + 正控。F 全量 2425。
+
+## 2026-06-27 - Claude 修复 (US-short batch4 round-2 slice 1 — run gate: PIT provenance + health + mode)
+
+- **Verdict/Action**: 修 `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`（P0），全 OFFLINE 补 3 道跑前门（不抓真日历/不连真 provider/不前移批5）：(1a) 新 `engine/us_short_run_provenance.py` 对账消费输入族来源 vs §2.1 三钟（future/stale/cross-run/mixed→fail-closed）；(1b) orchestrator 接现成 `classify_provider_health`，非 clean 关键源 NO-EMIT；(1c) 新 `run_mode`+`calendar_status`，live 须 authoritative。审查复现的 2099 污染向量现在分析前 fail-closed、零落盘。细节见 register。
+- **Required**: 无新开。`R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP` → `in_progress`（working tree 已修，待 Codex 审）。其余 5 条仍 open。
+- **Verify**: 新 provenance 22 + orchestrator `ProvenanceFailClosed` 4 + `RunGateHealthAndMode` 9；全离线 `*us_short*` **2422 OK**（was 2387，+35，零回归）；boundary 8 OK（新 engine 仅 import datetime、无 broker/A股）；doc/route/README 52 OK（新 README 路由行 <350）；py_compile OK；`git diff --check` CRLF-only。无 provider/live/network/日历抓取/DataHub。
+- **Next**: 续修剩 5 刀（loop 中不 commit、批完整后一次交 Codex `审查`）：刀2 选择身份单源穿线 + recall floor(②)→刀3 报告结构化绑定 + 留 reject + coverage 行集对账(P0③，含 1b 的 graduated restricted 报告)→刀4 field 完整清单 + 反查(⑤)→刀5 9-动作→价格矩阵(④)→刀6 dry-run runner(⑥)。
+- **Proof-of-use**: A 整类——每输入族 ×(future/stale/cross-run/mixed/malformed) + 三钟守卫 + 时刻级 future(拒纯日期)；health 三档 + 未授权拒；mode 4 态。B docstring 加 (4) + context keys + 签名 run_mode + README round-2 路由行。C 反向 2099/乱序/tz-aware/伪造血缘 + 正控 clean。F py_compile/diff/boundary/全量 2422。
+
+## 2026-06-27 - Claude 判断 (US-short batch4 re-review 6 Required 采纳裁定 — judge-before-execute)
+
+- **Verdict/Action**: 采纳全部 6 条（逐文件核代码、复现每个对抗探针，非橡皮图章）。修复**全程 offline-scoped**——provider/live、官方 NYSE 日历权威核对、真实数据 fill 仍 GATED（SR-PROVIDER-001 / 批5）：本轮只补**离线工程门**（mode 门 + 注入态消费 + 接缝对账 + 反查清单 + runner dry-run 骨架），**不抓真日历、不连真 provider、不前移批5、不交叉 A 股**。结论：批4 之前记的"工程闭环完成"在 **end-to-end 接缝**上确有漏——逐刀 review 各自只验自身 I/O，**组合接缝的完整性没有任何一刀验过**；6 条都真实、在 batch4 离线 scope 内可修、且为"§10-clean / 官方输出诚实 / 一键跑完"等已记声明成立所必需。无驳回、无桌面 reject 文档。
+- **逐条代码复现**: ①PIT/health/calendar(P0)：`run_weekend_pipeline` 只把 decision_date 穿给 K/L/report/N，`_build_analysis_rows` 对注入的 per_ticker_analysis 只验 ticker 身份/row_source/覆盖，**无 as_of/observed_at/price-basis/lineage 对账**→标 `as_of=20990101` 的行可流过；`classify_provider_health` 全程未被消费；日历仍 `pending_authoritative_cross_check` 且无 live 门。②选择身份(P1)：`_select_top15` 产 `selection_details`(rank/bucket/选时分) 并由 `run_selection` 返回，但 orchestrator 只取 `selection["admitted"]/["holdings"]`、**丢弃 selection_details**；`basket.py:255` 用**重算的** analysis core_score 新造同名 `selection_rank`→可反转（AAA core100→rank2）；`inject_catalyst_recall` 仅规范化/去重，**不验 universe 成员、不过 cheap_eligible 地板**。③报告绑定(P0)：`account_risk_note`/`theme_opportunity_state`/`provider_health_note`/`ship_gate_note` 仅 `_as_lines` 非空校验=自由文本，未对账 machine run（cooldown 跑出却可印 normal / all clean / full_size_eligible）；`coverage_inputs` 无行集身份对账（[]→"0 行…全 full…无不 clean"）；`exclusion_data` 独立注入、未由 Pass1/2 reject 派生（选择阶段未留 reject）。④动作-价格(P1)：`_validate_price_projection` **按行类(candidate/holding)非按 final_action**，`_HOLDING_REQUIRED` 不含 `event_clear_reference_price`、非 executable 行提前 return→`清仓-事件` 空价仍过 §10-clean。⑤registry 完整(P1)：`validate_machine_record` 只遍历**已供** `field_records`，**无 expected-field 清单/反查**→consumed 字段(portfolio_guard/symbol_cooldown/cash_allocation/coverage/theme/live_permission)漏记仍 clean。⑥一键入口(P1)：`run_weekend_pipeline` 仅见于 engine 定义/tests/docs，**无 runner/CLI 调用**（runners glob 无 batch4 entry），15-键 `pipeline_context` 须手搓、lifecycle register 缺、日历 pending；测试靠合成 fixture 过。
+- **Required**: 6 条全采纳进入修复（register `open`→逐刀 `in_progress`→`resolved`）：`R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`(P0)、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`(P0)、`R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`(P1)、`R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`(P1)、`R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`(P1)、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP`(P1)。各条 Required repair 边界按 register 既有描述，但**实现一律 offline**（live/authoritative-calendar/real-provider 部分留批5）。
+- **Verify**: 逐读 `engine/us_short_weekend_orchestrator|pipeline|basket|analysis|decision|action_table|report.py` + `us_short_no_dangling_validator.py` + `us_short_eligibility_gate.py`；`grep run_weekend_pipeline`=仅 6 处(docs/test/engine 定义)；`runners/*us_short*` glob=无 batch4 runner。未跑测试（本轮仅判断+持久化，修复在后续刀）。
+- **Next**: Claude 逐刀修复（自定序、P0 先、每刀独立 slice + 自审 + 交 Codex 审查/提交、loop 中不 commit）：刀1 `run/input provenance + health-gate + offline/live mode`(P0,①)→刀2 `选择身份单源穿线 + recall floor`(P1,②)→刀3 `报告结构化绑定 + 选择阶段留 reject + coverage 行集对账`(P0,③)→刀4 `field 完整清单 + 反查`(P1,⑤)→刀5 `9-动作→价格矩阵`(P1,④)→刀6 `dry-run runner 骨架 + bootstrap`(P1,⑥,provider 仍 gated)。全程 offline、不前移批5、不交叉 A 股。
+
+## 2026-06-27 - Codex `审查 FAIL` (US-short batch4 strict full review)
+
+- **Verdict/Action**: FAIL；batch4 离线测试可运行，但当前 selection→analysis→official output 闭环仍可接受 PIT/health/score/report/action-price/registry 漂移，且无支持的一键 runner，不能维持“工程闭环”结论。
+- **Required**: `R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP`、`R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP`、`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`、`R-USSHORT-BATCH4-ACTION-PRICE-MAPPING-GAP`、`R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP`、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP`；完整证据/修复边界见 `docs/system_risk_register.md`。
+- **Verify**: status/log clean baseline；batch4 target 567 OK；全离线 `*us_short*` 2387 OK；doc guards 52 OK；boundary 8 OK；AST 35 files OK；对抗探针复现 future-input emit、selection rank reversal、off-universe recall、0-row coverage=>all-full、free-text full-size/health spoof、event-clear null price、registry omission；无 provider/live/network。
+- **Next**: Claude Code `修复`。
+
 ## 2026-06-27 - Claude 起草 (US-short 轮2 slice 1 momentum block)
 
 - **Verdict/Action**: 起草 `engine/us_short_momentum.py`——core_score §4.2 的 40% momentum 分量。`compute_momentum_features`(纯函数,日线 close/volume + SPY/QQQ 序列→1m/3m/5d/10d 简单收益、rel SPY/QQQ 1m 相对强度、vol_surge 量比) + `momentum_block`(每子特征横截面分位 0-100→等权均值合成→全池再分位,"动量=全池分位")。缺史票入 `insufficient_history` 不伪造中性(由 core_score 走 §4.2 缺分量中性规则)。纯/离线,数据层接 Massive 留后续 slice。

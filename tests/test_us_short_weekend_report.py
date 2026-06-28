@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 import engine.us_short_weekend_report as wr  # noqa: E402
 import engine.us_short_weekend_machine_record as mr  # noqa: E402
 from engine.us_short_action_rank import action_group as _ag  # noqa: E402
+from engine.us_short_provider_health import classify_provider_health  # noqa: E402
 
 _AS_OF = "20260112"
 # a valid executable support_atr build action_fields (carries every m1 _BUILD_REQUIRED field with valid values)
@@ -45,7 +46,9 @@ def _candidate(ticker="AAA", final_action="建仓", observe_reason_type=None, ex
            "action_rank": 1, "action_group": _ag(final_action),
            "veto": {"veto_tier": "none", "row_context": "candidate"},
            "price": {"executable": executable, "trace": {}, "action_fields": _BUILD_AF if af is None else af},
-           "score": {"core_score": 50.0}}
+           "score": {"core_score": 50.0},
+           "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
+                                "core_score": 50.0, "theme_momentum_score": 0.0}}
     if sized:
         row["sizing"] = {"status": "sized", "desired_model_shares": 10}
     return row
@@ -59,11 +62,23 @@ def _holding(ticker="HLD"):
             "price": {"executable": True, "trace": {"breached": False}, "action_fields": _HOLDING_AF}}
 
 
+def _holding_in_top15(ticker="HLD", selection_rank=1):
+    row = _holding(ticker)
+    row["row_source"] = "holding_in_top15"
+    row["selection_record"] = {"selection_rank": selection_rank, "selection_bucket": "overlap",
+                               "core_score": 50.0, "theme_momentum_score": 50.0}
+    return row
+
+
 def _observe(ticker="OBS"):
-    return _candidate(ticker, final_action="观察", observe_reason_type="price_not_executable",
-                      executable=False, sized=False,
-                      af={"price_engine_used": "support_atr_engine", "price_sub_mode": "pullback",
-                          "min_rr_gate_status": "fail_below_floor"})
+    row = _candidate(ticker, final_action="观察", observe_reason_type="price_not_executable",
+                     executable=False, sized=False,
+                     af={"price_engine_used": "support_atr_engine", "price_sub_mode": "pullback",
+                         "min_rr_gate_status": "fail_below_floor"})
+    row["selection_rank"] = None   # 观察 is not a build → no landed top-level rank (basket sets None)
+    row["selection_record"] = {"selection_rank": 2, "selection_bucket": "theme_momentum",   # distinct Top15 rank (AAA=1)
+                               "core_score": 50.0, "theme_momentum_score": 0.0}
+    return row
 
 
 def _machine_record(rows=None):
@@ -85,12 +100,10 @@ def _report_context(**ov):
     rc = {
         "price_clock": {"price_data_through": "20260109", "news_window_through": _AS_OF,
                         "session_scope": "RTH", "decision_date": _AS_OF},
-        "exclusion_data": {"as_of": _AS_OF, "categories": {}, "hot_excluded": {"public_heat_count": 0, "holdings": []}},
-        "coverage_inputs": [{"row_source": "holding_pass2_only",
+        "coverage_inputs": [{"ticker": "HLD", "row_source": "holding_pass2_only",
                              "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}],
-        "account_risk_note": "portfolio_guard=normal", "theme_opportunity_state": "no_strong_theme",
         "core_conclusion": "本周核心结论占位", "risk_downgrade_note": "无重大降级",
-        "provider_health_note": "FMP/SEC 健康", "macro_cluster_banner": "", "ship_gate_note": "ship-gate: paper 累积中",
+        "macro_cluster_banner": "",
     }
     rc.update(ov)
     return rc
@@ -102,9 +115,76 @@ def _run_context(**ov):
     return rc
 
 
-def _build_report(machine_record, lifecycle_result, *, report_context, run_context=None):
+def _stage_status(**ov):
+    ss = {"provider_health": classify_provider_health({"fmp": "ok", "sec_edgar": "ok"}),   # a REAL classifier output
+          "portfolio_guard_status": "normal", "theme_opportunity_state": "no_strong_theme"}
+    ss.update(ov)
+    return ss
+
+
+def _selection(as_of=_AS_OF, records=None):
+    return {"decision_date": as_of, "exclusion_records": [] if records is None else records}
+
+
+def _build_report(machine_record, lifecycle_result, *, report_context, run_context=None, stage_status=None,
+                  selection=None):
     return wr.build_weekly_report(machine_record, lifecycle_result, report_context=report_context,
-                                  run_context=_run_context() if run_context is None else run_context)
+                                  run_context=_run_context() if run_context is None else run_context,
+                                  stage_status=_stage_status() if stage_status is None else stage_status,
+                                  selection=_selection() if selection is None else selection)
+
+
+class StageStatusBinding(unittest.TestCase):
+    """R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP (slice 3a): §2/§3/§11 bind to the STRUCTURED
+    stage_status (provider health / portfolio_guard / theme), NOT free text — so the report can never claim a
+    healthy/normal/different state the run did not establish."""
+
+    def _sections(self, **ss_ov):
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
+                           stage_status=_stage_status(**ss_ov))["report_data"]
+        return rd["sections"]
+
+    def test_portfolio_guard_rendered_from_stage_not_note(self):
+        # the structured cooldown is rendered even though account_risk_note is generic editorial — no false 'normal'
+        self.assertIn("portfolio_guard=cooldown", str(self._sections(portfolio_guard_status="cooldown")[2]))
+
+    def test_provider_health_rendered_from_stage_not_note(self):
+        ph = classify_provider_health({"fmp": "degraded", "sec_edgar": "ok"})   # real classifier output → restricted
+        self.assertIn("provider_health=restricted", str(self._sections(provider_health=ph)[11]))
+
+    def test_forged_classifier_result_rejected(self):
+        # a fabricated health dict (legal overall_run_state but NOT a real classify_provider_health output) fails
+        for forged in ({"overall_run_state": "clean"},                                            # missing keys
+                       {"overall_run_state": "clean", "sources": {}, "disabled_unapproved": []},   # empty sources
+                       {"overall_run_state": "clean", "sources": {"fmp": "blocked", "sec_edgar": "clean"},
+                        "disabled_unapproved": []}):                                               # overall ≠ worst-of
+            with self.assertRaises(wr.WeekendReportError):
+                _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
+                              stage_status=_stage_status(provider_health=forged))
+
+    def test_status_editorial_note_no_longer_accepted(self):
+        # the status-bearing editorial notes were REMOVED (contradiction vector); injecting one is closed-world-rejected
+        for removed in ("account_risk_note", "provider_health_note"):
+            with self.assertRaises(wr.WeekendReportError):
+                _build_report(_machine_record(), _lifecycle_result(),
+                              report_context=_report_context(**{removed: "portfolio_guard=normal"}))
+
+    def test_theme_rendered_from_stage(self):
+        self.assertIn("theme_opportunity_state=strong", str(self._sections(theme_opportunity_state="strong")[3]))
+
+    def test_clean_positive_control(self):
+        s = self._sections()
+        self.assertIn("portfolio_guard=normal", str(s[2]))
+        self.assertIn("provider_health=clean", str(s[11]))
+
+    def test_malformed_stage_status_fails_closed(self):
+        for bad in ({"provider_health": {"overall_run_state": "clean"}, "portfolio_guard_status": "normal"},  # no theme
+                    _stage_status(portfolio_guard_status="halt"),                      # invalid guard
+                    _stage_status(theme_opportunity_state="mega"),                     # invalid theme
+                    _stage_status(provider_health={"overall_run_state": "nope"})):     # invalid run state
+            with self.assertRaises(wr.WeekendReportError):
+                _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
+                              stage_status=bad)
 
 
 class HappyAssembly(unittest.TestCase):
@@ -147,18 +227,60 @@ class HappyAssembly(unittest.TestCase):
         self.assertIn("HLD", str(rd["sections"][6]))   # 持仓复核
         self.assertIn("OBS", str(rd["sections"][8]))   # 观察池
 
+    def test_holding_in_top15_is_in_both_holding_and_top15_sections(self):
+        row = _holding_in_top15("AAPL")
+        rc = _report_context(coverage_inputs=[
+            {"ticker": "AAPL", "row_source": "holding_in_top15",
+             "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}])
+        rd = _build_report(_machine_record([row]), _lifecycle_result(), report_context=rc)["report_data"]
+        self.assertIn("AAPL", str(rd["sections"][6]))
+        self.assertIn("AAPL", str(rd["sections"][7]))
+
+    def test_top15_section_includes_overlap_once_in_preserved_rank_order(self):
+        candidate = _candidate("AAA")
+        overlap = _holding_in_top15("HLD", selection_rank=2)
+        rc = _report_context(coverage_inputs=[
+            {"ticker": "HLD", "row_source": "holding_in_top15",
+             "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}])
+        section = _build_report(_machine_record([overlap, candidate]), _lifecycle_result(),
+                                report_context=rc)["report_data"]["sections"][7]
+        self.assertEqual(len(section), 2)
+        self.assertTrue(section[0].startswith("AAA "))
+        self.assertTrue(section[1].startswith("HLD "))
+
     def test_not_clean_section_reflects_coverage_gap(self):
         rc = _report_context(coverage_inputs=[
-            {"row_source": "holding_pass2_only", "data_checks": {"analyst": "missing", "sec_parse": "ok", "event": "ok"}}])
+            {"ticker": "HLD", "row_source": "holding_pass2_only",
+             "data_checks": {"analyst": "missing", "sec_parse": "ok", "event": "ok"}}])
         rd = _build_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
         self.assertIn("非 full", str(rd["sections"][13]))
+
+    def test_coverage_must_cover_holdings(self):
+        # a machine record with a holding (HLD) but EMPTY coverage_inputs fails closed — no "全 full" without proof
+        with self.assertRaises(wr.WeekendReportError):
+            _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(coverage_inputs=[]))
+
+    def test_coverage_extra_ticker_rejected(self):
+        dc = {"analyst": "ok", "sec_parse": "ok", "event": "ok"}
+        rc = _report_context(coverage_inputs=[{"ticker": "HLD", "row_source": "holding_pass2_only", "data_checks": dc},
+                                              {"ticker": "ZZZ", "row_source": "holding_pass2_only", "data_checks": dc}])
+        with self.assertRaises(wr.WeekendReportError):   # ZZZ is not a held row → one-to-one reconciliation fails
+            _build_report(_machine_record(), _lifecycle_result(), report_context=rc)
+
+    def test_coverage_wrong_row_source_rejected(self):
+        # right ticker but a SWAPPED row_source (actual HLD row is holding_pass2_only) → fail closed
+        rc = _report_context(coverage_inputs=[
+            {"ticker": "HLD", "row_source": "holding_account_only",
+             "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}])
+        with self.assertRaises(wr.WeekendReportError):
+            _build_report(_machine_record(), _lifecycle_result(), report_context=rc)
 
 
 class FailClosed(unittest.TestCase):
     def test_non_closed_world_report_context_rejected(self):
         with self.assertRaises(wr.WeekendReportError):     # missing a key
             _build_report(_machine_record(), _lifecycle_result(),
-                                   report_context={k: v for k, v in _report_context().items() if k != "ship_gate_note"})
+                                   report_context={k: v for k, v in _report_context().items() if k != "core_conclusion"})
         with self.assertRaises(wr.WeekendReportError):     # extra key
             _build_report(_machine_record(), _lifecycle_result(),
                                    report_context={**_report_context(), "EXTRA": 1})
@@ -218,10 +340,9 @@ class SourceReconciliation(unittest.TestCase):
                                    report_context=_report_context())
 
     def test_exclusion_as_of_mismatch_rejected(self):
-        rc = _report_context(exclusion_data={"as_of": "20260105", "categories": {},
-                                             "hot_excluded": {"public_heat_count": 0, "holdings": []}})
         with self.assertRaises(wr.WeekendReportError):
-            _build_report(_machine_record(), _lifecycle_result(), report_context=rc)
+            _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
+                          selection=_selection(as_of="20260105"))
 
     def test_inconsistent_readiness_rejected(self):
         # due_count=2 but due_items=[] and upgrade=[7] — the single-source readiness contract rejects it
@@ -229,13 +350,29 @@ class SourceReconciliation(unittest.TestCase):
         with self.assertRaises(wr.WeekendReportError):
             _build_report(_machine_record(), bad_lr, report_context=_report_context())
 
-    def test_hot_excluded_single_source(self):
-        # one source (exclusion_data["hot_excluded"]) feeds BOTH the banner ⑤ and the §9 detail — they agree
-        rc = _report_context(exclusion_data={"as_of": _AS_OF, "categories": {},
-                                             "hot_excluded": {"public_heat_count": 3, "holdings": []}})
-        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=rc)["report_data"]
-        self.assertIn("3", rd["banner"]["hot_excluded_notice"])      # ⑤ reflects the single source
-        self.assertIn("3", "\n".join(rd["sections"][9]))             # §9 detail reflects the SAME source
+    def test_exclusion_summary_is_derived_from_selection_records(self):
+        records = [
+            {"stage": "pass1_eligibility", "ticker": "PENNY", "category": "价格市值",
+             "reasons": ["price_below_floor"]},
+            {"stage": "pass2_audit_gate", "ticker": "BADX", "category": "停牌退市破产",
+             "reasons": ["5.1a:退市"]},
+        ]
+        rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
+                           selection=_selection(records=records))["report_data"]
+        self.assertIn("本周剔除 2 只", "\n".join(rd["sections"][9]))
+
+    def test_detached_exclusion_and_ship_gate_prose_are_rejected(self):
+        for key, value in (("exclusion_data", {"as_of": _AS_OF, "categories": {}}),
+                           ("ship_gate_note", "full_size_eligible")):
+            with self.assertRaises(wr.WeekendReportError):
+                _build_report(_machine_record(), _lifecycle_result(),
+                              report_context={**_report_context(), key: value})
+
+    def test_ship_gate_banner_is_structured_paper_only(self):
+        rd = _build_report(_machine_record(), _lifecycle_result(),
+                           report_context=_report_context())["report_data"]
+        self.assertIn("paper_or_minimal_only", rd["banner"]["ship_gate_progress"])
+        self.assertNotIn("full_size_eligible", rd["banner"]["ship_gate_progress"])
 
     def test_old_hot_excluded_summary_key_rejected(self):
         # focused deleted-symbol guard: the removed dual-source key `report_context["hot_excluded_summary"]` must be

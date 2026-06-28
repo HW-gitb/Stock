@@ -4,7 +4,8 @@
 Design authority: docs/us_short_system_design.md §8 (line 227 weekly build-limit + 同主题 cap; line 228-231
 强赛道试探名额 theme_probe; line 230/238 portfolio_guard / symbol_cooldown new-build block) / §9 / §18.2.
 
-Covers selection_rank by core_score, the §8 BASE per-regime weekly build-limit (进攻3/震荡2/防御1/极度防御0),
+Covers selection_rank by the PRESERVED Top15 rank (slice 2b: from selection_record, not a re-derived core_score),
+the §8 BASE per-regime weekly build-limit (进攻3/震荡2/防御1/极度防御0),
 the 同主题 weekly cap (≤2), the no-promotion interaction, capacity_or_budget_deferred emission, the 4d-ii-f
 new-build blocking (portfolio_guard cooldown 禁新建 + per-symbol cooldown → 观察(risk_cooldown), removed before
 ranking so a blocked symbol frees its slot), the 4d-ii-g theme_probe extra seats (promote eligible
@@ -47,7 +48,18 @@ def _brow(ticker, score, final="建仓", sizing=_DEFAULT):
 
 
 def _sized(rows, regime="进攻"):
-    return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": rows}
+    # slice 2b: the basket now ranks builds by the PRESERVED Top15 selection_rank. Auto-attach a selection_record
+    # to each 建仓 row (ranked by core_score desc, so the existing selection_rank-by-score expectations hold)
+    # UNLESS the row already carries one — a test can inject an explicit rank to prove the basket consumes the
+    # PRESERVED rank, not a re-derived core_score.
+    auto_builds = sorted([r for r in rows if r.get("final_action") == "建仓" and "selection_record" not in r
+                          and isinstance(r.get("score"), dict)],
+                         key=lambda r: (-r["score"]["core_score"], r["ticker"]))
+    auto = {r["ticker"]: i for i, r in enumerate(auto_builds, start=1)}
+    out = [({**r, "selection_record": {"selection_rank": auto[r["ticker"]], "selection_bucket": "core_top",
+                                       "core_score": r["score"]["core_score"], "theme_momentum_score": 0.0}}
+            if r.get("ticker") in auto else r) for r in rows]
+    return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": out}
 
 
 def _ctx(theme_map, guard="normal", cooldowns=None, opp="no_strong_theme", probes=None):
@@ -362,9 +374,11 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         with self.assertRaises(wb.WeekendBasketError):
             _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1", "STALE": "t2"})
 
-    def test_build_missing_core_score_raises(self):
+    def test_build_missing_selection_record_raises(self):
+        # slice 2b: a 建仓 with no preserved selection_record (selection identity lost) fails closed — the basket
+        # must NOT silently fall back to a re-derived rank.
         row = _brow("AAA", 90)
-        row["score"] = None
+        row["selection_record"] = None
         with self.assertRaises(wb.WeekendBasketError):
             wb.resolve_build_capacity(_sized([row]), basket_context=_ctx({"AAA": "t1"}))
 
@@ -392,6 +406,43 @@ class ResolveBuildCapacityTests(unittest.TestCase):
         out = _resolve([_brow("aapl", 90)], "进攻", {"AAPL": "t1"})   # per_ticker canonical
         self.assertEqual(_by(out)["AAPL"]["ticker"], "AAPL")
         self.assertEqual(_by(out)["AAPL"]["final_action"], "建仓")
+
+
+class PreservedSelectionRankTests(unittest.TestCase):
+    """R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP (slice 2b): the basket ranks builds by the
+    PRESERVED Top15 selection_rank, NOT a re-derived analysis core_score — so a downstream re-score can never
+    reverse the selection-time build/cash priority (the exact reversal the strict review reproduced)."""
+
+    @staticmethod
+    def _ranked(ticker, core, sel_rank):
+        r = _brow(ticker, core)   # core kept on the row (machine-record evidence) but no longer drives the rank
+        r["selection_record"] = {"selection_rank": sel_rank, "selection_bucket": "core_top",
+                                 "core_score": float(core), "theme_momentum_score": 0.0}
+        return r
+
+    def test_preserved_rank_overrides_core_order(self):
+        # AAA has the HIGHER analysis core (90 vs 10) but BBB has the BETTER preserved Top15 rank (1 vs 2) →
+        # the basket must emit BBB rank 1 / AAA rank 2 (preserved wins), not reverse it to follow core.
+        out = _resolve([self._ranked("AAA", 90, 2), self._ranked("BBB", 10, 1)], "进攻",
+                       {"AAA": "t1", "BBB": "t2"})
+        by = _by(out)
+        self.assertEqual((by["BBB"]["selection_rank"], by["AAA"]["selection_rank"]), (1, 2))
+
+    def test_weekly_limit_uses_preserved_order(self):
+        # defensive limit 1: the single survivor is the preserved-rank-1 name (BBB), NOT the high-core AAA.
+        out = _resolve([self._ranked("AAA", 90, 2), self._ranked("BBB", 10, 1)], "防御",
+                       {"AAA": "t1", "BBB": "t2"})
+        by = _by(out)
+        self.assertEqual((by["BBB"]["final_action"], by["AAA"]["final_action"]), ("建仓", "观察"))
+        self.assertEqual(by["AAA"]["observe_reason_type"], "capacity_or_budget_deferred")
+
+    def test_sparse_preserved_rank_emitted_verbatim(self):
+        # a Top15 name downgraded upstream leaves a gap → the surviving builds keep their SPARSE preserved ranks
+        # (1 and 3), not a re-densified 1,2 — the emitted selection_rank is the真实 Top15 rank.
+        out = _resolve([self._ranked("AAA", 90, 1), self._ranked("CCC", 70, 3)], "进攻",
+                       {"AAA": "t1", "CCC": "t3"})
+        by = _by(out)
+        self.assertEqual((by["AAA"]["selection_rank"], by["CCC"]["selection_rank"]), (1, 3))
 
     def test_non_build_lowercase_ticker_emitted_uppercase(self):
         out = _resolve([_brow("AAA", 90), _brow("obs", 50, final="观察")], "进攻", {"AAA": "t1"})
