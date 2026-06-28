@@ -36,6 +36,7 @@ from engine.us_short_forward_events import event_data_gap_status, forward_event_
 from engine.us_short_hard_veto import classify_hard_veto, row_source_to_context
 from engine.us_short_price_engine import PRICE_SUB_MODES, holding_exit_engine, support_atr_engine
 from engine.us_short_regime import compute_market_risk_regime
+from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 
 # §8 防御/极度防御: new entries default to pullback only — no breakout chase in a weak market. The
 # single exception (a theme-extreme min-size probe) is caller-asserted via the row flag below; its
@@ -108,14 +109,22 @@ def _analyze_one(row, regime):
     est = row.get("event_sensitive_type")
     event_gap = event_data_gap_status(est, row.get("has_event_data", False)) if est is not None else None
 
-    # §4.2 score — only for rows carrying score blocks (candidates); an unknown profile fails closed.
+    # §4.2 score — only for rows carrying score blocks (candidates); an unknown profile fails closed. A scored
+    # candidate MUST carry the closed-world §4.2 risk_downgrade input (the typed engine output), whose points are
+    # SUBTRACTED in core_score (R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP) — the designed soft penalty was
+    # previously omitted from the weekend recommendation path. Missing / malformed risk input fails CLOSED (缺数据
+    # ≠安全, §3.3); a genuinely clean stock carries an explicit zero-points input, not an omission.
     sb = row.get("score_blocks")
     if sb is None:
-        score = None
+        score, risk_dg = None, None
     else:
         profile = row.get("scoring_profile", PRIMARY_PROFILE)
         try:
-            score = core_score(sb, profile)
+            risk_dg = validate_risk_downgrade_input(row.get("risk_downgrade"))
+        except ValueError as e:
+            raise WeekendAnalysisError(f"{ticker}: {e}")
+        try:
+            score = core_score(sb, profile, risk_downgrade_points=risk_dg["points"])
         except KeyError:
             raise WeekendAnalysisError(f"score_blocks 的 scoring_profile 非法（fail-closed）: {profile!r}")
 
@@ -147,6 +156,7 @@ def _analyze_one(row, regime):
         "forward_event": forward,
         "event_data_gap": event_gap,
         "score": score,
+        "risk_downgrade": risk_dg,   # §4.2 typed penalty (points + components), None for an unscored holding
         "selection_record": sel_rec,
     }
 

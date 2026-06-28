@@ -8,6 +8,43 @@
 
 ---
 
+## 2026-06-28 - Codex scoped re-review PASS (RISK-DOWNGRADE-WIRING-GAP only)
+
+- **Verdict/Action**: PASS；罚分已进入 `core_score` 并真实改变 selection/action priority，official landing 改到存在的 `action_rank`；typed input 已严格 closed-world。
+- **Required**: 无；`R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` resolved。本轮未审 ONE-CLICK、batch5、A-share、US-long。
+- **Verify**: focused 373、全离线 `*us_short*` 2516、route-doc 25 全绿；direct mutants 缺 `hard_veto`/多余键均拒，61.5→46.5、rank 1→2，official `landed/action_rank` clean。
+- **Next**: Claude Code `Pass`。
+
+## 2026-06-28 - Claude 修复 (RISK-DOWNGRADE-WIRING round-2 — 真 landing + closed-world 输入)
+
+- **Verdict/Action**: 回应 Codex scoped FAIL（① risk_downgrade 伪报 landed 到从不计算的 `action_confidence`；② typed 输入接受缺 `hard_veto`/多余键）。修：(A) landing 改到 **`action_rank`**（罚分经 core_score→selection_rank→action_rank，是真有值面）+ no_dangling `RISK_DOWNGRADE_TARGETS` 加 action_rank；(B) `validate_risk_downgrade_input` 改 closed-world（顶层键恰为 {points,hard_veto,components}、hard_veto is False、缺/多即拒）；(C) 测试证明 terminal/priority 真变 + 缺/多键反向测。软信号仍软。详见 register Repair round-2。
+- **Required**: `R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` → fixed round-2 pending Codex；`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` 仍 open（待续）。Repair round-2 全文见 register。
+- **Verify**: 全离线 `*us_short*` 2516 OK（零回归）；analysis/machine_record/no_dangling/renderer/orchestrator 焦点全绿；boundary 8 / doc-route 52 / py_compile OK；直接探针 risk_downgrade `landed/action_rank`+行有真 rank 值、缺/多键各拒。
+- **Next**: Codex 复审 RISK-DOWNGRADE round-2 → PASS 则连同 ② ONE-CLICK 一并推进。
+- **Proof-of-use**: landing=action_rank（行 action_rank=1 真值、action_confidence=None）；罚 15→core_score 46.5<61.5→penalized selection_rank 更差；缺 hard_veto/多余键/负/points≠Σ/坏 shape/str/hard_veto=True 各 fail-closed；planted 删 risk_downgrade→官方门 not clean。
+
+## 2026-06-28 - Codex scoped re-review FAIL (RISK-DOWNGRADE-WIRING-GAP only)
+
+- **Verdict/Action**: FAIL；罚分已真实进入 weekend `core_score`，但 official machine record 把不存在的 `action_confidence` 伪报为 landed，no-dangling 仍 clean；typed input 也未做到 closed-world。
+- **Required**: `R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` 仍 `in_progress`；完整证据和修复要求见 register。本轮未审 ONE-CLICK、batch5、A-share、US-long。
+- **Verify**: focused offline 372 tests OK；direct probe confirmed 61.5→51.5 score wiring, false `action_confidence` landing, and acceptance of missing `hard_veto` / extra top-level key。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-28 - Claude 修复 (US-short batch4 ① RISK-DOWNGRADE-WIRING — ②ONE-CLICK 待续)
+
+- **Verdict/Action**: 确认两条 Required 均非批5（finding 明写 "Batch5/provider/live excluded" / "Keep data acquisition outside ... still gated"）→ 按指令修。**① RISK-DOWNGRADE-WIRING-GAP 已修完**：§4.2 软 risk_downgrade 接进周末 core_score（analysis 减罚 + machine_record/_SPECS/官方 manifest + no_dangling），软信号仍软。**② ONE-CLICK-EXECUTION-ENTRYPOINT-GAP 未动**（大件：packet schema + builder + 示例 + 子进程 CLI 测试）——下一轮单独做。详见 register Repair。
+- **Required**: `R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` → fixed pending Codex；`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` 仍 open（下一轮修）。Repair 全文见 register。
+- **Verify**: 全离线 `*us_short*` 2515 OK（+10；零回归）；analysis/machine_record/no_dangling/action_table/private/report/orchestrator/sizing/decision/renderer 焦点全绿；boundary 8 / doc-route 52 / py_compile OK。
+- **Next**: Claude 续修 ② ONE-CLICK（schema-first packet + builder + 示例 + 子进程测试，仍 OFFLINE、provider/data 保持 gated）→ 再交 Codex 一并复审。
+- **Proof-of-use**: 罚分实测 61.5→51.5（rank 降）+ 同 run 选时/分析对账用罚后分；零罚不变；缺/负/points≠Σ/坏 shape/str/hard_veto=True 各 fail-closed；holding 无 risk_downgrade；landed-action_confidence vs 零-shadow；planted 删 risk_downgrade 记录→官方门 not clean；评分行缺它→装配拒。
+
+## 2026-06-28 - Codex 严格全量审查 FAIL (US-short batch4 + batch1-4 execution chain)
+
+- **Verdict/Action**: FAIL；batch4 离线框架与既有输出/安全门大体闭合，但 primary weekend 链漏消费 risk_downgrade，且 clean checkout 无 batch1-4 可生成/校验的 context packet，不能认定完整选股建议与一键执行闭环。
+- **Required**: `R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP`、`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP`；完整证据与修复边界见 `docs/system_risk_register.md`。
+- **Verify**: batch1-4-only 101 文件/2390 tests OK；weekend 496、core+risk 39、boundary 8、doc guards 52、compileall/diff-check OK；批1 sample CLI 与批4 test-packet empty/out-of-window CLI 实跑；risk-downgrade 探针复现 51.5 被 analysis 重算为 61.5 后拒绝；context schema/example 搜索 0。
+- **Next**: Claude Code `修复`。
+
 ## 2026-06-28 - Codex 修复 + 全量自检 PASS (US-short batch4 ④⑤ final closeout)
 
 - **Verdict/Action**: PASS；action-price mapping 与 official manifest reverse-completeness 已闭合，renderer/write 全部走 official gate；批4离线工程范围修复完毕，batch5 provider/live 仍独立 gated。

@@ -530,7 +530,7 @@ class RegistryReverseCompleteness(unittest.TestCase):
         self.assertEqual(ndv.official_expected_field_ids({"final_action": "持有"}),
                          {"hard_veto", "price", "market_risk_regime"})            # unconditional floor
         self.assertEqual(ndv.official_expected_field_ids({"final_action": "建仓"}),
-                         {"hard_veto", "price", "market_risk_regime", "core_score", "sizing"})
+                         {"hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing"})
 
     def test_empty_registry_passes_generic_but_fails_official(self):
         # a machine-layer row stripped to an EMPTY registry passes the field_id-agnostic generic validator but

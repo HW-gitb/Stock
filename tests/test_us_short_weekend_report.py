@@ -47,6 +47,7 @@ def _candidate(ticker="AAA", final_action="建仓", observe_reason_type=None, ex
            "veto": {"veto_tier": "none", "row_context": "candidate"},
            "price": {"executable": executable, "trace": {}, "action_fields": _BUILD_AF if af is None else af},
            "score": {"core_score": 50.0},
+           "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}},
            "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
                                 "core_score": 50.0, "theme_momentum_score": 0.0}}
     if sized:

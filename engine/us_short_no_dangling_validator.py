@@ -51,7 +51,7 @@ _MACHINE_RECORD_SCHEMA = ROOT / "schemas" / "us_short_machine_record_contract.sc
 # Validator-native semantic groupings (triangulated ⊆ the frozen sets in the tests, so a rename of the
 # frozen vocab fails the test rather than silently diverging here).
 TAG_LEVEL = "仅标签"  # the one operation_impact level for which an advisory/shadow label is a valid landing
-RISK_DOWNGRADE_TARGETS = frozenset({"position_size", "action_confidence", "risk_tags"})  # §5.2 soft-only
+RISK_DOWNGRADE_TARGETS = frozenset({"action_rank", "position_size", "action_confidence", "risk_tags"})  # §4.2 selection-score / §5.2 soft-only
 KILL_OR_EXIT_ACTIONS = frozenset({"否决/避开", "清仓-止损", "清仓-止盈", "清仓-事件", "减仓"})  # a hard veto must reach one of these
 ADVISORY_LANDINGS = frozenset({"advisory_label", "shadow_record", "report_banner"})  # recognized non-column soft landings
 NULLABLE_REGISTRY_KEYS = frozenset({"evidence_ref_kind", "lifecycle_item_id"})  # required-present but may be null
@@ -102,7 +102,7 @@ def _result(violations):
 # consumer), NEVER by the bare generic `validate_machine_record`, which stays field_id-agnostic by design (its
 # docstring forbids a hardcoded producer-vocab copy; its _valid() fixtures use arbitrary ids deliberately).
 MANIFEST_FIELD_IDS = frozenset({
-    "hard_veto", "price", "market_risk_regime", "core_score", "sizing",
+    "hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing",
     "theme_lifecycle_state", "theme_opportunity_state", "forward_event",
 })
 _BUILD_ACTIONS = frozenset({"建仓", "加仓"})  # a build is by contract a scored + sized candidate (§8 / machine-record)
@@ -121,9 +121,9 @@ def official_expected_field_ids(row):
         return set()
     expected = {"hard_veto", "price", "market_risk_regime"}
     if row.get("final_action") in _BUILD_ACTIONS:
-        expected.update(("core_score", "sizing"))
+        expected.update(("core_score", "risk_downgrade", "sizing"))   # a build is a scored candidate (§4.2 penalty)
     if isinstance(row.get("score"), dict):
-        expected.add("core_score")
+        expected.update(("core_score", "risk_downgrade"))             # every scored candidate carries the §4.2 penalty
     sizing = row.get("sizing")
     if isinstance(sizing, dict) and sizing.get("status") == "sized":
         expected.add("sizing")

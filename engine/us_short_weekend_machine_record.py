@@ -42,6 +42,7 @@ from engine.us_short_hard_veto import VETO_TIERS
 from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
+from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_theme_probe import RISK_TAG as _PROBE_RISK_TAG
 from engine.us_short_weekend_cost_floor import (
     _ENTRY_MODE_CONSTRAINTS,
@@ -92,6 +93,9 @@ _SPECS = {
                   "field_class": "hard veto", "lifecycle_item_id": 7},
     "core_score": {"owner_module": "engine.us_short_core_score", "data_source": "row.score (injected; live=batch5)",
                    "field_class": "selection", "lifecycle_item_id": 1},
+    "risk_downgrade": {"owner_module": "engine.us_short_risk_downgrade",
+                       "data_source": "row.risk_downgrade (injected; live=batch5)",
+                       "field_class": "risk downgrade", "lifecycle_item_id": 7},
     "price": {"owner_module": "engine.us_short_price_engine", "data_source": "row.price (injected; live=batch5)",
               "field_class": "price", "lifecycle_item_id": 6},
     "sizing": {"owner_module": "engine.us_short_position_sizing", "data_source": "row.sizing (injected; live=batch5)",
@@ -163,6 +167,20 @@ def _field_records(row):
     # core_score / selection (§4.2) — only candidates carry a score; it lands on action_rank.
     if isinstance(row.get("score"), dict):
         frs.append(_fr("core_score", op="调信心", terminal="action_rank", disposition=_LANDED, impact_target="action_rank"))
+        # §4.2 risk_downgrade (§5.2 soft, never a hard veto) is SUBTRACTED inside core_score, so a real penalty
+        # (points>0) demonstrably lowers the core_score that drives the §9 action_rank (group-2 builds order by
+        # selection_rank, set from core_score) → LANDED on `action_rank`, the SAME populated surface core_score
+        # lands on (an always-present rank value, unlike the never-computed action_confidence cell). Zero penalty
+        # → a clean SHADOW (computed, did not drive). Every scored candidate carries it
+        # (R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP); the assembler validated the typed input above.
+        rd = row.get("risk_downgrade")
+        rd_pts = rd.get("points") if isinstance(rd, dict) else None
+        if isinstance(rd_pts, (int, float)) and not isinstance(rd_pts, bool) and rd_pts > 0.0:
+            frs.append(_fr("risk_downgrade", op="调信心", terminal="action_rank",
+                           disposition=_LANDED, impact_target="action_rank"))
+        else:
+            frs.append(_fr("risk_downgrade", op="仅标签", terminal=_SHADOW_TERMINAL,
+                           disposition=_SHADOW, impact_target=None))
 
     # sizing (§8) — a real sized build (incl. a build later downgraded to 观察 by cash/capacity, which still
     # carries the computed size on the model_position_size_shares column). market_risk_regime (§7) is always
@@ -256,6 +274,14 @@ def _validate_ranked_row(row):
     score = row.get("score")
     if score is not None and not (isinstance(score, dict) and _finite_number(score.get("core_score"))):
         raise WeekendMachineRecordError(f"score 须为含有限 core_score 的 dict: {score!r}")
+    # §4.2 risk_downgrade — a scored candidate MUST carry the typed soft-penalty input (it is subtracted in
+    # core_score and lands a §10 field_record); the official gate re-validates it so a stripped/forged penalty
+    # can never reach the machine layer (R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP).
+    if isinstance(score, dict):
+        try:
+            validate_risk_downgrade_input(row.get("risk_downgrade"))
+        except ValueError as e:
+            raise WeekendMachineRecordError(f"评分行 risk_downgrade 非法: {e}")
 
     # sizing — when a sized payload rides on ANY row (incl. a downgraded 观察 carrying its computed size, which
     # the assembler lands on position_size) the model share count must be a valid positive int (not bool).

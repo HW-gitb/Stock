@@ -32,7 +32,8 @@ def _uptrend_bars(n=22):
 def _cand(ticker="AAPL", close=101.5, **over):
     r = {"ticker": ticker, "row_source": "top15_candidate", "signals": {},
          "price_input": {"close": close, "bars": _uptrend_bars()},
-         "score_blocks": {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0}}
+         "score_blocks": {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0},
+         "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}}}
     r.update(over)
     return r
 

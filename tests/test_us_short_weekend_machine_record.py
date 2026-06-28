@@ -57,6 +57,9 @@ def _row(ticker="AAA", final_action="建仓", observe_reason_type=None, row_sour
     }
     if has_score:
         row["score"] = {"core_score": 50.0}
+        # §4.2 risk_downgrade typed input (zero-penalty default; a real penalty is exercised in dedicated tests)
+        row["risk_downgrade"] = {"points": 0.0, "hard_veto": False,
+                                 "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}}
     if sized:
         row["sizing"] = {"status": "sized", "desired_model_shares": 10}
     if theme_probe:
@@ -426,7 +429,7 @@ class RegistryReverseCompletenessTests(unittest.TestCase):
 
     def test_build_requires_score_and_sizing(self):
         self.assertEqual(official_expected_field_ids({"final_action": "建仓"}),
-                         {"hard_veto", "price", "market_risk_regime", "core_score", "sizing"})
+                         {"hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing"})
 
     def test_evidence_conditional_extras(self):
         self.assertEqual(
@@ -510,6 +513,49 @@ class RegistryReverseCompletenessTests(unittest.TestCase):
             rec = copy.deepcopy(base)
             del rec["rows"][0]["field_records"][i]
             self.assertFalse(validate_official_machine_record(rec)["clean"], f"deleting field_record[{i}] must break clean")
+
+
+class RiskDowngradeLanding(unittest.TestCase):
+    """R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP: a scored candidate carries a §10 risk_downgrade field_record —
+    LANDED on action_rank (the REAL populated surface the penalty changes via core_score) at a real penalty, a
+    clean SHADOW at zero; it is in the official manifest so a planted deletion fails the gate and a scored row
+    missing it fails assembly closed."""
+
+    def _scored(self, points):
+        row = _row()   # 建仓 candidate, has_score
+        row["risk_downgrade"] = {"points": points, "hard_veto": False,
+                                 "components": {"history": points, "current_event": 0.0, "analyst": 0.0}}
+        return row
+
+    def test_penalty_lands_on_action_rank_a_real_populated_surface(self):
+        rec = mr.assemble_machine_record(_ranked([self._scored(15.0)]), as_of=_AS_OF)
+        rd = _fr_by_id(rec, "risk_downgrade")
+        self.assertEqual((rd["disposition"], rd["operation_impact"], rd["impact_target"], rd["terminal_surface_target"]),
+                         ("landed", "调信心", "action_rank", "action_rank"))
+        # the landing surface is REAL, not phantom: the assembled row actually carries an action_rank value
+        # (unlike the never-computed action_confidence cell, which the false landing previously claimed).
+        self.assertIsInstance(rec["rows"][0]["action_rank"], int)
+        self.assertIsNone(rec["rows"][0].get("action_confidence"))
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    def test_zero_penalty_is_clean_shadow(self):
+        rec = mr.assemble_machine_record(_ranked([self._scored(0.0)]), as_of=_AS_OF)
+        rd = _fr_by_id(rec, "risk_downgrade")
+        self.assertEqual((rd["disposition"], rd["operation_impact"], rd["impact_target"]),
+                         ("shadow_record", "仅标签", None))
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    def test_planted_deletion_fails_official_gate(self):
+        rec = mr.assemble_machine_record(_ranked([self._scored(15.0)]), as_of=_AS_OF)
+        rec["rows"][0]["field_records"] = [f for f in rec["rows"][0]["field_records"]
+                                           if f["field_id"] != "risk_downgrade"]
+        self.assertFalse(validate_official_machine_record(rec)["clean"])
+
+    def test_scored_row_missing_risk_downgrade_rejected(self):
+        bad = _row()
+        del bad["risk_downgrade"]
+        with self.assertRaises(mr.WeekendMachineRecordError):
+            mr.assemble_machine_record(_ranked([bad]), as_of=_AS_OF)
 
 
 if __name__ == "__main__":

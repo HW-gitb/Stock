@@ -34,7 +34,8 @@ def _uptrend_bars(n=22):
 def _cand_row(ticker="AAPL", close=101.5, **over):
     r = {"ticker": ticker, "row_source": "top15_candidate", "signals": {},
          "price_input": {"close": close, "bars": _uptrend_bars()},
-         "score_blocks": {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0}}
+         "score_blocks": {"momentum": 70.0, "theme": 60.0, "catalyst": 50.0},
+         "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}}}
     r.update(over)
     return r
 
@@ -257,6 +258,78 @@ class AnalyzeRowsTests(unittest.TestCase):
     def test_malformed_price_input_degrades_to_observe(self):
         row = _run([_cand_row(price_input="not-a-dict")])["rows"][0]
         self.assertFalse(row["price"]["executable"])  # engine fail-closes to observe, no crash
+
+
+class RiskDowngradeWiring(unittest.TestCase):
+    """R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP: the §4.2 soft risk_downgrade is now SUBTRACTED in the weekend
+    core_score; a scored candidate must carry the closed-world typed input (missing/malformed fails closed)."""
+
+    def _rd(self, points, **comp):
+        c = {"history": 0.0, "current_event": 0.0, "analyst": 0.0}
+        c.update(comp)
+        return {"points": points, "hard_veto": False, "components": c}
+
+    def test_zero_penalty_leaves_core_score_unchanged(self):
+        # blocks 70/60/50 @ balanced 40/35/25 → 61.5; zero penalty leaves it
+        row = _run([_cand_row(risk_downgrade=self._rd(0.0))])["rows"][0]
+        self.assertAlmostEqual(row["score"]["core_score"], 61.5, places=6)
+        self.assertEqual(row["risk_downgrade"], {"points": 0.0, "hard_veto": False,
+                         "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}})
+
+    def test_penalty_lowers_selection_priority(self):
+        # the §4.2 penalty's §10 terminal is action_rank (group-2 builds order by selection_rank, set from
+        # core_score). A candidate whose core_score is penalized below a competitor ranks AFTER it — proving the
+        # terminal PRIORITY demonstrably changes (not just field-record metadata).
+        from engine.us_short_weekend_pipeline import _select_top15
+        clean = _run([_cand_row(ticker="AAA", risk_downgrade=self._rd(0.0))])["rows"][0]["score"]["core_score"]
+        pen = _run([_cand_row(ticker="BBB", risk_downgrade=self._rd(15.0, history=15.0))])["rows"][0]["score"]["core_score"]
+        self.assertLess(pen, clean)   # 46.5 < 61.5: the penalty lowered the action_rank-driving value
+        si = {"theme_opportunity_state": "no_strong_theme",
+              "per_ticker": {"AAA": {"core_score": clean, "theme_momentum_score": 0.0},
+                             "BBB": {"core_score": pen, "theme_momentum_score": 0.0}}}
+        ranks = {d["ticker"]: d["selection_rank"] for d in _select_top15(["AAA", "BBB"], si)["selection_details"]}
+        self.assertLess(ranks["AAA"], ranks["BBB"])   # the penalized BBB ranks AFTER the clean AAA
+
+    def test_nonzero_penalty_subtracted_from_core_score(self):
+        base = _run([_cand_row(risk_downgrade=self._rd(0.0))])["rows"][0]["score"]["core_score"]
+        pen = _run([_cand_row(risk_downgrade=self._rd(10.0, current_event=10.0))])["rows"][0]
+        self.assertAlmostEqual(pen["score"]["core_score"], base - 10.0, places=6)   # 61.5 → 51.5
+        self.assertEqual(pen["risk_downgrade"]["points"], 10.0)
+        self.assertLess(pen["score"]["core_score"], base)                           # rank-affecting: lower score
+
+    def test_scored_candidate_missing_risk_downgrade_fails_closed(self):
+        bad = _cand_row()
+        del bad["risk_downgrade"]
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([bad])
+
+    def test_malformed_risk_downgrade_fails_closed(self):
+        _C = {"history": 0.0, "current_event": 0.0, "analyst": 0.0}
+        for rd in (None,
+                   {"points": -1.0, "hard_veto": False, "components": _C},                       # negative
+                   {"points": 5.0, "hard_veto": False, "components": {"history": 1.0, "current_event": 1.0, "analyst": 1.0}},  # points!=Σ
+                   {"points": 0.0, "hard_veto": False, "components": {"history": 0.0}},           # bad component shape
+                   {"points": "0", "hard_veto": False, "components": _C},                         # numeric string
+                   {"points": 5.0, "hard_veto": True, "components": {"history": 5.0, "current_event": 0.0, "analyst": 0.0}},  # never hard veto
+                   {"points": 0.0, "components": _C},                                             # MISSING hard_veto (closed-world)
+                   {"points": 0.0, "hard_veto": False, "components": _C, "extra": 1}):            # EXTRA top-level key
+            with self.assertRaises(wa.WeekendAnalysisError):
+                _run([_cand_row(risk_downgrade=rd)])
+
+    def test_same_run_reconciliation_uses_penalized_score(self):
+        # a selection_record core_score must equal the PENALIZED analysis core_score (one core_score per run)
+        rd = self._rd(10.0, current_event=10.0)
+        sel = {"selection_rank": 1, "selection_bucket": "core_top", "core_score": 51.5, "theme_momentum_score": 0.0}
+        ok = _run([_cand_row(risk_downgrade=rd, selection_record=sel)])["rows"][0]
+        self.assertAlmostEqual(ok["score"]["core_score"], 51.5, places=6)
+        bad_sel = {**sel, "core_score": 61.5}   # the UNPENALIZED score now forks → fail closed
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(risk_downgrade=rd, selection_record=bad_sel)])
+
+    def test_holding_has_no_risk_downgrade(self):
+        row = _run([_hold_row()])["rows"][0]
+        self.assertIsNone(row["risk_downgrade"])
+        self.assertIsNone(row["score"])
 
 
 if __name__ == "__main__":

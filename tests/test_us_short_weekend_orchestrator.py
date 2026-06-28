@@ -131,6 +131,8 @@ def _analysis_row(ticker, row_source="top15_candidate"):
         # §4.2 core_score(blocks)=50.0 == the _selection_inputs selection-time core_score (one core_score per run,
         # so the slice-2a selection↔analysis reconciliation passes; a divergent value is tested separately).
         row["score_blocks"] = {"momentum": 50.0, "theme": 50.0, "catalyst": 50.0}
+        # §4.2 risk_downgrade typed input (zero penalty → core_score == 50.0, seam stays consistent)
+        row["risk_downgrade"] = {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}}
     return row
 
 

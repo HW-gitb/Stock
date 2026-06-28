@@ -67,6 +67,7 @@ def _machine_record(as_of=_AS_OF):
            "veto": {"veto_tier": "none", "row_context": "candidate"},
            "price": {"executable": True, "trace": {}, "action_fields": _BUILD_AF},
            "score": {"core_score": 50.0}, "sizing": {"status": "sized", "desired_model_shares": 10},
+           "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}},
            "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
                                 "core_score": 50.0, "theme_momentum_score": 0.0}}
     return mr.assemble_machine_record({"regime": {"market_risk_regime": "进攻"}, "rows": [row]}, as_of=as_of)

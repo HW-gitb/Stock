@@ -34,6 +34,7 @@ def _clean_record():
         "veto": {"veto_tier": "none", "row_context": "candidate"},
         "price": {"executable": True, "trace": {}, "action_fields": {"limit_order_price": 10.0}},
         "score": {"core_score": 50.0},
+        "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}},
         "sizing": {"status": "sized", "desired_model_shares": 100},
         "risk_tags": ["macro_cluster:ai_complex", "near_earnings"],
         "coverage_status": "full", "model_position_size_shares": 100,

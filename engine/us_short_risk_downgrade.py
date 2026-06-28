@@ -76,6 +76,44 @@ def earnings_reaction_history_score(bad_reaction_quarters):
     return min(n, HISTORY_MAX_QUARTERS) * HISTORY_PER_QUARTER
 
 
+_RISK_DOWNGRADE_COMPONENTS = ("history", "current_event", "analyst")
+_RISK_DOWNGRADE_KEYS = frozenset({"points", "hard_veto", "components"})
+
+
+def validate_risk_downgrade_input(rd):
+    """SINGLE-SOURCE consumer-validation of an INJECTED §4.2 risk_downgrade input — the EXACT typed output of
+    `risk_downgrade()` carried on a scored candidate analysis row (batch4 offline / batch5 provider behind the
+    same seam). Returns the normalized {points, components} (floats) or raises ValueError (the caller wraps it in
+    its own typed error). A scored candidate is NEVER scored on an absent / malformed risk input (缺数据≠安全,
+    §3.3). CLOSED-WORLD producer shape: the top-level keys are EXACTLY {points, hard_veto, components} (a missing
+    `hard_veto` or any extra key is rejected — not normalized away); `hard_veto` is exactly False (§5.2 soft-only
+    — never a hard veto); `points` finite NON-NEGATIVE; `components` = exactly {history, current_event, analyst}
+    each finite non-negative; and `points == Σcomponents` (proving it is the genuine engine output, not a forged
+    total)."""
+    if not (isinstance(rd, dict) and set(rd) == _RISK_DOWNGRADE_KEYS):
+        raise ValueError(f"risk_downgrade 输入顶层键须恰为 {sorted(_RISK_DOWNGRADE_KEYS)}（§4.2 typed 引擎输出 closed-world）: {rd!r}")
+    if rd["hard_veto"] is not False:
+        raise ValueError(f"risk_downgrade.hard_veto 须为 False（§5.2 soft-only）: {rd['hard_veto']!r}")
+    pts = _finite_number(rd["points"])
+    if pts is None or pts < 0.0:
+        raise ValueError(f"risk_downgrade.points 须为有限非负数: {rd['points']!r}")
+    comp = rd["components"]
+    if not (isinstance(comp, dict) and set(comp) == set(_RISK_DOWNGRADE_COMPONENTS)):
+        raise ValueError(f"risk_downgrade.components 须恰为 {list(_RISK_DOWNGRADE_COMPONENTS)}: {comp!r}")
+    out, total = {}, 0.0
+    for k in _RISK_DOWNGRADE_COMPONENTS:
+        cv = _finite_number(comp[k])
+        if cv is None or cv < 0.0:
+            raise ValueError(f"risk_downgrade.components[{k!r}] 须为有限非负数: {comp[k]!r}")
+        out[k] = cv
+        total += cv
+    if abs(total - pts) > 1e-6:
+        raise ValueError(f"risk_downgrade.points {pts!r} != Σcomponents {total!r}（须为引擎 typed 输出）")
+    # return the FULL normalized producer shape (hard_veto≡False) so a downstream consumer that re-validates
+    # (the machine-record official gate) sees the same closed-world {points, hard_veto, components}.
+    return {"points": pts, "hard_veto": False, "components": out}
+
+
 def risk_downgrade(history_score=0.0, current_event=None, analyst_collective_downgrade=False):
     """§4.2 risk_downgrade = the SUM of the soft signals (history + current event + analyst downgrade),
     NEVER a hard veto. `current_event` is a `current_good_data_bad_reaction_event` result (its penalty
