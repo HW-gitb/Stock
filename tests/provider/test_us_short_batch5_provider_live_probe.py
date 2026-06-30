@@ -230,5 +230,52 @@ class UsShortBatch5ProviderLiveProbeTests(unittest.TestCase):
                 )
 
 
+class Batch5ProbeRuntimeSchemaEnforcement(unittest.TestCase):
+    """R-USSHORT-BATCH5-RUNTIME-SCHEMA-ENFORCEMENT-GAP: the probe summary is Draft7-schema-validated + secret-scanned
+    BEFORE the atomic write (no write-then-validate, no residue), and rebuild honors the CLI --packet-path."""
+
+    def _committed(self):
+        return json.loads(probe.SUMMARY_PATH.read_text(encoding="utf-8"))   # a real, schema-valid success summary
+
+    def test_schema_invalid_summary_not_written_no_residue(self):
+        bad = self._committed()
+        bad["validation_decision"]["datahub_allowed"] = True   # flipped safety flag → schema-invalid
+        with tempfile.TemporaryDirectory(dir=probe.ROOT) as d:
+            p = Path(d) / "summary.json"
+            with self.assertRaises(RuntimeError):
+                probe._write_summary_validated(bad, p, [])
+            self.assertFalse(p.exists())                       # no write-then-validate
+            self.assertFalse(p.with_name(p.name + ".tmp").exists())
+
+    def test_secret_bearing_summary_not_written_no_residue(self):
+        leak = self._committed()
+        leak["limitations"] = list(leak["limitations"]) + ["see https://financialmodelingprep.com/x"]
+        with tempfile.TemporaryDirectory(dir=probe.ROOT) as d:
+            p = Path(d) / "summary.json"
+            with self.assertRaises(RuntimeError):
+                probe._write_summary_validated(leak, p, [])
+            self.assertFalse(p.exists())
+
+    def test_clean_summary_writes(self):
+        with tempfile.TemporaryDirectory(dir=probe.ROOT) as d:
+            p = Path(d) / "summary.json"
+            probe._write_summary_validated(self._committed(), p, [])
+            self.assertTrue(p.exists())
+
+    def test_error_branch_summary_is_schema_valid(self):
+        err = self._committed()
+        err["validation_decision"]["status"] = "bounded_probe_completed_with_endpoint_errors"
+        err["endpoint_results"][1]["status"] = "error"
+        err["aggregate_validation_metrics"]["endpoint_error_count"] = 1
+        err["aggregate_validation_metrics"]["endpoint_success_count"] = 9
+        probe._validate_summary_against_schema(err)   # legal error branch validates (no raise)
+
+    def test_rebuild_honors_cli_packet_path(self):
+        # a wrong --packet-path is the one validated (proving it is threaded, not the hardcoded default): a
+        # markdown file is not a valid packet → load_and_validate raises, so rebuild fails on the PASSED path.
+        with self.assertRaises(Exception):
+            probe.rebuild_summary_from_existing_raw(packet_path=probe.ROOT / "docs" / "README.md")
+
+
 if __name__ == "__main__":
     unittest.main()

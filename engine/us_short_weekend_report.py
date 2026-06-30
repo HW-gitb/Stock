@@ -43,6 +43,15 @@ from engine.us_short_observe_split import aggregate_observe_split, render_observ
 from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES
 from engine.us_short_price_clock import validate_price_clock
 from engine.us_short_provider_health import validate_provider_health_result
+from engine.us_short_run_origin import (
+    OFFLINE_TEST_RUN_ORIGIN,
+    assert_offline_report_invariants,
+    build_offline_honesty,
+    build_run_status,
+    canonical_offline_sections,
+    canonical_section_1,
+    validate_run_origin,
+)
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
@@ -72,6 +81,66 @@ _OBSERVE, _BUILD = "观察", "建仓"
 
 class WeekendReportError(Exception):
     """The injected machine record / lifecycle result / report_context is malformed (fail-closed before render)."""
+
+
+def report_row_groups(rows):
+    """Single-source §11.2 row classification from the flattened §11.3 machine rows — used by build_weekly_report
+    (sections + run_status counts) AND the private-write source-reconciliation boundary, so the persisted
+    run_status counts are RE-DERIVED from the same machine rows, never trusted from caller report_data
+    (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP)."""
+    return {
+        "builds": [r for r in rows if isinstance(r, dict) and r.get("final_action") == _BUILD],
+        "observes": [r for r in rows if isinstance(r, dict) and r.get("final_action") == _OBSERVE],
+        "holdings": [r for r in rows if isinstance(r, dict) and r.get("row_source") in _HOLDING_SOURCES],
+        "selected": [r for r in rows if isinstance(r, dict) and r.get("row_source") in _SELECTED_SOURCES],
+    }
+
+
+def canonical_lifecycle_section(readiness):
+    """Single-source §12 lifecycle-reminder lines, derived PURELY from a validated readiness (due_count /
+    total_items / due_items / upgrade_eligible_items) — used by build_weekly_report AND the private-write boundary,
+    so the §12 due-item / upgrade DETAIL (not only the count) cannot be forged in report_data independent of the
+    lifecycle source (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP lifecycle-source detail)."""
+    if readiness["due_count"]:
+        return ["本周 %d/%d 个 §13.1 校准项达到复审线: %s"
+                % (readiness["due_count"], readiness["total_items"],
+                   "、".join("#%d" % n for n in readiness["due_items"])),
+                "升级可评估(§12.2 margin 已冻): %s; 升级须用户决定、绝不自动切生产"
+                % ("、".join("#%d" % n for n in readiness["upgrade_eligible_items"]) or "无")]
+    return ["本周无 §13.1 校准项达到复审线 (0/%d)" % readiness["total_items"]]
+
+
+def reconcile_holding_coverage(holdings, coverage_inputs):
+    """Single-source §11.5 coverage reconciliation: bind coverage_inputs ONE-TO-ONE to the machine holding rows by
+    canonical ticker + exact row_source, returning the validated coverage_records — used by build_weekly_report
+    AND the private-write boundary, so `coverage_non_full_count` is bound to validated holding coverage, never
+    trusted from caller report_data (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP). Fail-closed on a
+    non-list input, a malformed row, a non-canonical ticker, a swapped row_source, or a coverage set that does
+    not exactly cover the holding rows."""
+    if not isinstance(coverage_inputs, list):
+        raise WeekendReportError("report_context.coverage_inputs 须为 list")
+    holding_source_by_ticker = {r["ticker"]: r.get("row_source") for r in holdings}
+    holding_tickers = sorted(holding_source_by_ticker)
+    coverage_records, cov_tickers = [], []
+    for ci in coverage_inputs:
+        if not (isinstance(ci, dict) and set(ci) == {"ticker", "row_source", "data_checks"}):
+            raise WeekendReportError(f"coverage_inputs 行须为 {{'ticker','row_source','data_checks'}}: {ci!r}")
+        ct = canonical_us_ticker(ci["ticker"])
+        if ct is None:
+            raise WeekendReportError(f"coverage_inputs ticker 非规范 US ticker: {ci['ticker']!r}")
+        # reconcile each coverage row to the EXACT machine holding-row source (not just ticker): a swapped
+        # row_source (e.g. holding_pass2_only ↔ holding_account_only) for the same ticker fails closed.
+        if ct in holding_source_by_ticker and ci["row_source"] != holding_source_by_ticker[ct]:
+            raise WeekendReportError(
+                "coverage_inputs[%s] row_source %r 与持仓行 %r 不符（须对账 machine 行身份）"
+                % (ct, ci["row_source"], holding_source_by_ticker[ct]))
+        cov_tickers.append(ct)
+        coverage_records.append(build_row_coverage(ci["row_source"], ci["data_checks"]))
+    if sorted(cov_tickers) != holding_tickers:
+        raise WeekendReportError(
+            "coverage_inputs 须一对一覆盖持仓行（无空/缺/多/重）: coverage=%s holdings=%s"
+            % (sorted(cov_tickers), holding_tickers))
+    return coverage_records
 
 
 def _as_lines(value, where):
@@ -208,7 +277,8 @@ def _rows_section(rows, label):
     return rows if rows else ["%s：无" % label]
 
 
-def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context, stage_status, selection):
+def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context, stage_status, selection,
+                        run_origin=OFFLINE_TEST_RUN_ORIGIN):
     """4d-ii-m2 §11.2 weekly_report assembly + render.
 
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1 for the §11.3 rows).
@@ -229,6 +299,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     _validate_run_context(run_context)
     _validate_stage_status(stage_status)
     _validate_lifecycle_result(lifecycle_result)
+    validate_run_origin(run_origin)   # batch4 honesty provenance (offline_test / caller_supplied_fixture)
     # flatten through the m1 §10/§6 gate (re-validates the machine record + projects the §11.3 columns).
     flat = flatten_machine_record(machine_record)
     rows = flat["rows"]
@@ -240,16 +311,13 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     readiness = lifecycle_result["readiness"]
     due_count = readiness["due_count"]
 
-    # --- row groups from the flattened §11.3 machine rows ---
-    builds = [r for r in rows if r.get("final_action") == _BUILD]
-    observes = [r for r in rows if r.get("final_action") == _OBSERVE]
-    holdings = [r for r in rows if r.get("row_source") in _HOLDING_SOURCES]
+    # --- row groups from the flattened §11.3 machine rows (single-source classification, also re-derived at the
+    # private-write boundary so the persisted run_status counts cannot be forged in report_data) ---
+    groups = report_row_groups(rows)
+    builds, observes, holdings = groups["builds"], groups["observes"], groups["holdings"]
     # The Top15 view includes the legal admitted+holding overlap. Use the same selected-row identity as the
     # action-table consumer and order by the preserved selection rank, independent of machine/action row order.
-    candidates = sorted(
-        (r for r in rows if r.get("row_source") in _SELECTED_SOURCES),
-        key=lambda r: r["selection_record"]["selection_rank"],
-    )
+    candidates = sorted(groups["selected"], key=lambda r: r["selection_record"]["selection_rank"])
     actionable = [r for r in rows if r.get("final_action") not in (_OBSERVE,)]
     regime_value = rows[0].get("market_risk_regime") if rows else None   # run-level regime, carried per-row by K
 
@@ -284,43 +352,27 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
     # / missing / extra / duplicate coverage set fails closed, so a held position can never render "全 full 无
     # 缺口" with no coverage proof.
-    coverage_inputs = report_context["coverage_inputs"]
-    if not isinstance(coverage_inputs, list):
-        raise WeekendReportError("report_context.coverage_inputs 须为 list")
-    holding_source_by_ticker = {r["ticker"]: r.get("row_source") for r in holdings}
-    holding_tickers = sorted(holding_source_by_ticker)
-    coverage_records, cov_tickers = [], []
-    for ci in coverage_inputs:
-        if not (isinstance(ci, dict) and set(ci) == {"ticker", "row_source", "data_checks"}):
-            raise WeekendReportError(f"coverage_inputs 行须为 {{'ticker','row_source','data_checks'}}: {ci!r}")
-        ct = canonical_us_ticker(ci["ticker"])
-        if ct is None:
-            raise WeekendReportError(f"coverage_inputs ticker 非规范 US ticker: {ci['ticker']!r}")
-        # reconcile each coverage row to the EXACT machine holding-row source (not just ticker): a swapped
-        # row_source (e.g. holding_pass2_only ↔ holding_account_only) for the same ticker fails closed.
-        if ct in holding_source_by_ticker and ci["row_source"] != holding_source_by_ticker[ct]:
-            raise WeekendReportError(
-                "coverage_inputs[%s] row_source %r 与持仓行 %r 不符（须对账 machine 行身份）"
-                % (ct, ci["row_source"], holding_source_by_ticker[ct]))
-        cov_tickers.append(ct)
-        coverage_records.append(build_row_coverage(ci["row_source"], ci["data_checks"]))
-    if sorted(cov_tickers) != holding_tickers:
-        raise WeekendReportError(
-            "coverage_inputs 须一对一覆盖持仓行（无空/缺/多/重）: coverage=%s holdings=%s"
-            % (sorted(cov_tickers), holding_tickers))
+    coverage_records = reconcile_holding_coverage(holdings, report_context["coverage_inputs"])
     coverage_lines = render_coverage_section(coverage_records)
     not_clean = [c for c in coverage_records if c["coverage_status"] != "full"]   # §13 不 clean 项 = 覆盖非 full
 
     # --- §12 lifecycle reminders + the §11.2 count reconcile (section 1 == section 12) ---
-    lifecycle_lines = (["本周 %d/%d 个 §13.1 校准项达到复审线: %s"
-                        % (due_count, readiness["total_items"], "、".join("#%d" % n for n in readiness["due_items"])),
-                        "升级可评估(§12.2 margin 已冻): %s; 升级须用户决定、绝不自动切生产"
-                        % ("、".join("#%d" % n for n in readiness["upgrade_eligible_items"]) or "无")]
-                       if due_count else ["本周无 §13.1 校准项达到复审线 (0/%d)" % readiness["total_items"]])
+    # single-source §12 detail (also re-derived at the private-write boundary from the independent lifecycle source).
+    lifecycle_lines = canonical_lifecycle_section(readiness)
 
+    offline_honesty = build_offline_honesty(
+        stage_status["provider_health"]["overall_run_state"], len(not_clean))
+    offline_s11, offline_s13 = canonical_offline_sections(offline_honesty)
+    # §1 is the system-owned authoritative run-status section: build it from the immutable run_origin + a typed
+    # closed-world run_status, so the consumer can recompute it canonically (no extra operational line after the
+    # sentinel) — R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP §1 canonical repair.
+    run_status = build_run_status(price_clock["decision_date"], len(builds), len(observes),
+                                  len(holdings), len(candidates), due_count)
     sections = {
-        1: "本周运行状态: decision_date=%s; 建仓 %d / 观察 %d / 持仓 %d / 候选 %d; lifecycle 提醒 %d 项"
-           % (price_clock["decision_date"], len(builds), len(observes), len(holdings), len(candidates), due_count),
+        # always-visible offline/fixture disclosure FIRST (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP):
+        # a batch4 run is always an offline_test run over a caller-supplied fixture, so the very first section
+        # states it before any status/counts can read as operational.
+        1: canonical_section_1(run_origin, run_status),
         # §2/§3/§11 render ONLY the STRUCTURED stage_status (portfolio_guard / theme / provider health the run
         # actually used). The status-bearing free-text notes were REMOVED (Codex re-review 2): an editorial
         # "portfolio_guard=normal" could otherwise sit beside a structured cooldown — the authoritative status now
@@ -341,12 +393,18 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
         8: _rows_section(["%s 观察(%s)" % (r.get("ticker"), r.get("observe_reason_type")) for r in observes], "观察池"),
         9: exclusion_lines,
         10: _as_lines(report_context["risk_downgrade_note"], "risk_downgrade_note"),
-        11: ["数据源健康: provider_health=%s（结构化、权威，无自由文本状态）"
-             % stage_status["provider_health"]["overall_run_state"]],
+        # §3.7 provider health is the INJECTED fixture's self-report, NOT a real provider call — an offline run
+        # must never describe it as operationally 权威 clean (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP).
+        11: offline_s11,
         12: lifecycle_lines,
-        13: (["本周 %d 行覆盖非 full（partial/restricted/blocked），明细见 §6 持仓覆盖诚实度节" % len(not_clean)]
-             if not_clean else ["本周无不 clean 项（机器记录已过 §10 no-dangling 校验、覆盖全 full）"]),
+        # §13 不 clean 项 ALWAYS leads with the non-operational offline limitation (so an offline run can never
+        # render the misleading “本周无不 clean 项” / operational-clean surface), then any coverage-non-full rows.
+        13: offline_s13,
     }
     report_data = {"banner": banner, "lifecycle_reminder_count": {"section_1": due_count, "section_12": due_count},
-                   "sections": sections}
+                   "sections": sections, "run_origin": run_origin, "offline_honesty": offline_honesty,
+                   "run_status": run_status}
+    # self-check the structured offline invariants (single source) before rendering — the private-write consumer
+    # re-runs the SAME assertion, so the builder's output and the persistence boundary cannot drift.
+    assert_offline_report_invariants(report_data, run_origin)
     return {"weekly_report_md": render_weekly_report(report_data), "report_data": report_data}

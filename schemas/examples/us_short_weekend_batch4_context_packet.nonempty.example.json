@@ -1,0 +1,261 @@
+{
+  "data_context": {
+    "universe": [
+      {
+        "ticker": "AAPL",
+        "exchange": "NASDAQ",
+        "price": 150.0,
+        "adv_usd": 10000000000.0,
+        "market_cap_usd": 2500000000000.0,
+        "delisted": false,
+        "halted": false,
+        "bankruptcy": false,
+        "otc": false
+      }
+    ],
+    "catalyst_recall_feed": null,
+    "holdings": [],
+    "candidate_pass2_signals": {
+      "AAPL": {}
+    },
+    "selection_inputs": {
+      "theme_opportunity_state": "no_strong_theme",
+      "per_ticker": {
+        "AAPL": {
+          "core_score": 50.0,
+          "theme_momentum_score": 0.0
+        }
+      }
+    }
+  },
+  "per_ticker_analysis": {
+    "AAPL": {
+      "ticker": "AAPL",
+      "row_source": "top15_candidate",
+      "signals": {},
+      "price_input": {
+        "close": 101.5,
+        "bars": [
+          {
+            "high": 100.5,
+            "low": 100.0,
+            "close": 100.3
+          },
+          {
+            "high": 101.0,
+            "low": 100.5,
+            "close": 100.8
+          },
+          {
+            "high": 101.5,
+            "low": 101.0,
+            "close": 101.3
+          },
+          {
+            "high": 102.0,
+            "low": 101.5,
+            "close": 101.8
+          },
+          {
+            "high": 102.5,
+            "low": 102.0,
+            "close": 102.3
+          },
+          {
+            "high": 103.0,
+            "low": 102.5,
+            "close": 102.8
+          },
+          {
+            "high": 103.5,
+            "low": 103.0,
+            "close": 103.3
+          },
+          {
+            "high": 104.0,
+            "low": 103.5,
+            "close": 103.8
+          },
+          {
+            "high": 104.5,
+            "low": 104.0,
+            "close": 104.3
+          },
+          {
+            "high": 105.0,
+            "low": 104.5,
+            "close": 104.8
+          },
+          {
+            "high": 105.5,
+            "low": 105.0,
+            "close": 105.3
+          },
+          {
+            "high": 106.0,
+            "low": 105.5,
+            "close": 105.8
+          },
+          {
+            "high": 106.5,
+            "low": 106.0,
+            "close": 106.3
+          },
+          {
+            "high": 107.0,
+            "low": 106.5,
+            "close": 106.8
+          },
+          {
+            "high": 107.5,
+            "low": 107.0,
+            "close": 107.3
+          },
+          {
+            "high": 108.0,
+            "low": 107.5,
+            "close": 107.8
+          },
+          {
+            "high": 108.5,
+            "low": 108.0,
+            "close": 108.3
+          },
+          {
+            "high": 109.0,
+            "low": 108.5,
+            "close": 108.8
+          },
+          {
+            "high": 109.5,
+            "low": 109.0,
+            "close": 109.3
+          },
+          {
+            "high": 110.0,
+            "low": 109.5,
+            "close": 109.8
+          },
+          {
+            "high": 110.5,
+            "low": 110.0,
+            "close": 110.3
+          },
+          {
+            "high": 111.0,
+            "low": 110.5,
+            "close": 110.8
+          }
+        ]
+      },
+      "score_blocks": {
+        "momentum": 50.0,
+        "theme": 50.0,
+        "catalyst": 50.0
+      },
+      "risk_downgrade": {
+        "points": 0.0,
+        "hard_veto": false,
+        "components": {
+          "history": 0.0,
+          "current_event": 0.0,
+          "analyst": 0.0
+        }
+      }
+    }
+  },
+  "run_provenance": {
+    "as_of": "20260615",
+    "price_basis_date": "20260612",
+    "families": {
+      "universe": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": "20260612",
+        "session": "RTH",
+        "adjustment": "split_div_adjusted",
+        "row_count": 1
+      },
+      "per_ticker_analysis": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": "20260612",
+        "session": "RTH",
+        "adjustment": "split_div_adjusted",
+        "row_count": 1
+      },
+      "candidate_pass2_signals": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": null,
+        "session": null,
+        "adjustment": null,
+        "row_count": 1
+      },
+      "selection_inputs": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": null,
+        "session": null,
+        "adjustment": null,
+        "row_count": 1
+      }
+    }
+  },
+  "provider_health": {
+    "fmp": "ok",
+    "sec_edgar": "ok"
+  },
+  "market_axis_regimes": {
+    "vix": "进攻",
+    "market_trend": "进攻",
+    "breadth": "进攻"
+  },
+  "prior_regime": null,
+  "prior_upgrade_count": 0,
+  "sizing_per_ticker": {
+    "AAPL": {
+      "discount_mults": [
+        1.0
+      ],
+      "liquidity_cap_shares": 100000
+    }
+  },
+  "basket_context": {
+    "per_ticker": {
+      "AAPL": {
+        "theme": "software",
+        "symbol_cooldown_status": "none",
+        "theme_probe": {
+          "theme_lifecycle_state": null,
+          "high_confidence": false,
+          "coverage_status": "full",
+          "no_gap_week": false,
+          "entry_in_band": false
+        }
+      }
+    },
+    "portfolio_guard_status": "normal",
+    "theme_opportunity_state": "no_strong_theme"
+  },
+  "cost_inputs": {},
+  "report_context": {
+    "price_clock": {
+      "price_data_through": "20260612",
+      "news_window_through": "20260613",
+      "session_scope": "RTH",
+      "decision_date": "20260615"
+    },
+    "coverage_inputs": [],
+    "core_conclusion": "nonempty 占位：单候选 AAPL，无持仓",
+    "risk_downgrade_note": "无",
+    "macro_cluster_banner": ""
+  },
+  "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+  "calendar_path": "presets/us_short_market_calendar_2026_2027.json",
+  "account_state_path": "<ABSOLUTE_PRIVATE_DIR>/us_short_account_state.json",
+  "lifecycle_register_path": "<ABSOLUTE_PRIVATE_DIR>/lifecycle/lifecycle_register.json",
+  "lifecycle_readiness_out_path": null,
+  "runs_private_root": "<ABSOLUTE_PRIVATE_DIR>/runs_private",
+  "weekly_private_root": "<ABSOLUTE_PRIVATE_DIR>/weekly_private"
+}

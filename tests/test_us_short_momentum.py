@@ -125,13 +125,17 @@ class TestPercentileRank(unittest.TestCase):
         self.assertEqual(out["A"], out["B"])  # tie → same percentile
 
 
+# the full 7-sub-feature set; a ticker carrying all of them clears the default min-coverage (4) and is scored.
+_FULL = ("ret_1m", "ret_3m", "ret_5d", "ret_10d", "rel_spy_1m", "rel_qqq_1m", "vol_surge")
+
+
+def _full_feats(value):
+    return {sf: value for sf in _FULL}
+
+
 class TestMomentumBlock(unittest.TestCase):
     def test_full_pool_percentile(self):
-        feats = {
-            "HI": {"ret_1m": 0.30, "ret_5d": 0.10},
-            "MID": {"ret_1m": 0.10, "ret_5d": 0.05},
-            "LO": {"ret_1m": -0.10, "ret_5d": -0.02},
-        }
+        feats = {"HI": _full_feats(0.30), "MID": _full_feats(0.10), "LO": _full_feats(-0.10)}
         out = momentum_block(feats)
         b = out["momentum_block"]
         self.assertEqual(b["HI"], 100.0)
@@ -141,24 +145,62 @@ class TestMomentumBlock(unittest.TestCase):
 
     def test_insufficient_history_excluded_not_faked(self):
         feats = {
-            "GOOD": {"ret_1m": 0.2},
-            "EMPTY": {},          # no sub-features → insufficient
+            "GOOD": _full_feats(0.2),
+            "EMPTY": {},          # no sub-features → insufficient_history
         }
         out = momentum_block(feats)
         self.assertIn("EMPTY", out["insufficient_history"])
         self.assertNotIn("EMPTY", out["momentum_block"])  # NOT a fake neutral
         self.assertIn("GOOD", out["momentum_block"])
 
-    def test_partial_subfeatures_still_scored(self):
-        # one ticker has only ret_5d, another has full set → both scored on what they have
+    def test_below_min_coverage_not_scored(self):
+        # R-USSHORT-BATCH5-MOMENTUM-COVERAGE-PIT-COMPARABILITY-GAP: a ticker below min-coverage is NOT scored on
+        # the handful it has (it goes to insufficient_coverage, distinct from the no-feature insufficient_history).
+        feats = {"FULL": _full_feats(0.1), "SPARSE": {"ret_5d": 0.5}}   # SPARSE has 1 of 7 < min 4
+        out = momentum_block(feats)
+        self.assertIn("FULL", out["momentum_block"])
+        self.assertIn("SPARSE", out["insufficient_coverage"])
+        self.assertNotIn("SPARSE", out["momentum_block"])        # not auto-full-weighted
+        self.assertNotIn("SPARSE", out["insufficient_history"])  # it HAS a feature, just below min
+
+    def test_sparse_extreme_does_not_outrank_full(self):
+        # the exact Codex probe: a single-feature EXTREME ticker must not outrank a full-feature ticker — it is
+        # below min-coverage so it is not scored at all (previously it could score 100 and outrank FULL).
+        feats = {"FULL": _full_feats(0.0), "SHORT": {"ret_5d": 999.0}}
+        out = momentum_block(feats)
+        self.assertIn("FULL", out["momentum_block"])
+        self.assertNotIn("SHORT", out["momentum_block"])
+        self.assertIn("SHORT", out["insufficient_coverage"])
+
+    def test_neutral_fill_caps_partial_extreme(self):
+        # a ticker AT min-coverage with all-top present features is pulled toward neutral by its MISSING features
+        # (neutral-fill over the SAME full set), so a genuinely full-feature top ticker still ranks above it.
         feats = {
-            "A": {"ret_1m": 0.1, "ret_3m": 0.2, "ret_5d": 0.05},
-            "B": {"ret_5d": 0.5},  # only one feature, but very high
+            "TOP": _full_feats(2.0),                                                   # 7 features, all top
+            "PARTIAL": {sf: 1.0 for sf in ("ret_1m", "ret_3m", "ret_5d", "ret_10d")},  # exactly 4 (>=min), 3 missing→neutral
+            "LOW": _full_feats(0.0),                                                   # 7 features, all low
         }
         out = momentum_block(feats)
+        b = out["momentum_block"]
+        self.assertGreater(b["TOP"], b["PARTIAL"])   # full-coverage top beats partial-but-extreme
+        self.assertGreater(b["PARTIAL"], b["LOW"])
+
+    def test_coverage_matrix_and_min_coverage_reported(self):
+        feats = {"FULL": _full_feats(0.1), "SPARSE": {"ret_5d": 0.1}}
+        out = momentum_block(feats)
+        self.assertEqual(out["min_coverage"], 4)
+        self.assertEqual(out["coverage_matrix"]["FULL"], {"n_present": 7, "scored": True})
+        self.assertEqual(out["coverage_matrix"]["SPARSE"], {"n_present": 1, "scored": False})
+
+    def test_min_coverage_param_and_validation(self):
+        feats = {"A": {"ret_1m": 0.1, "ret_5d": 0.2}, "B": {"ret_1m": 0.2, "ret_5d": 0.1}}
+        out = momentum_block(feats, min_coverage=2)   # lowered threshold → both 2-feature tickers scored
         self.assertIn("A", out["momentum_block"])
         self.assertIn("B", out["momentum_block"])
-        self.assertEqual(out["insufficient_history"], [])
+        with self.assertRaises(ValueError):
+            momentum_block(feats, min_coverage=0)
+        with self.assertRaises(ValueError):
+            momentum_block(feats, min_coverage=True)   # bool is not a valid int threshold
 
     def test_coverage_counts(self):
         feats = {

@@ -230,5 +230,41 @@ class UsShortBatch5IncidentLogWriterTest(unittest.TestCase):
         self.assertFalse(summary["prohibited_claims"]["production_readiness_claimed"])
 
 
+class UsShortBatch5IncidentTimeSemanticsTest(unittest.TestCase):
+    """R-USSHORT-BATCH5-INCIDENT-TIME-SEMANTICS-GAP: detected_at / affected_date_window / decision_date must be
+    real timezone-aware / calendar values, not just format/pattern-shaped strings."""
+
+    def test_valid_record_passes_time_semantics(self):
+        writer.validate_incident_record(valid_record())   # positive control
+
+    def test_detected_at_not_real_datetime_rejected(self):
+        for bad in ("not-a-real-datetime00", "2026-13-01T00:00:00Z", "2026-02-30T00:00:00Z"):
+            rec = valid_record(); rec["detected_at"] = bad
+            with self.assertRaises(writer.IncidentLogWriterError):
+                writer.validate_incident_record(rec)
+
+    def test_detected_at_without_timezone_rejected(self):
+        rec = valid_record(); rec["detected_at"] = "2026-06-25T10:00:00"   # no offset/Z
+        with self.assertRaises(writer.IncidentLogWriterError):
+            writer.validate_incident_record(rec)
+
+    def test_affected_date_window_unreal_date_rejected(self):
+        for start, end in (("2026-99-99", "2026-06-25"), ("2026-00-00", "2026-06-25")):
+            rec = valid_record(); rec["affected_date_window"] = {"start": start, "end": end}
+            with self.assertRaises(writer.IncidentLogWriterError):
+                writer.validate_incident_record(rec)
+
+    def test_affected_date_window_inverted_rejected(self):
+        rec = valid_record(); rec["affected_date_window"] = {"start": "2026-06-26", "end": "2026-06-25"}
+        with self.assertRaises(writer.IncidentLogWriterError):
+            writer.validate_incident_record(rec)
+
+    def test_decision_date_must_be_real_calendar_date(self):
+        writer._validate_decision_date("20260625")        # positive control: a real date passes
+        for bad in ("20261399", "20260229", "2026062a"):  # month 13 / Feb 29 in a non-leap year / non-digit
+            with self.assertRaises(writer.IncidentLogWriterError):
+                writer._validate_decision_date(bad)
+
+
 if __name__ == "__main__":
     unittest.main()

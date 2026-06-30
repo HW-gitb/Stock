@@ -242,6 +242,17 @@ class UsShortBatch5ProviderLiveProbeSummarySchemaTests(unittest.TestCase):
         summary["symbol_results"][-1] = copy.deepcopy(summary["symbol_results"][0])
         self.assertFalse(_validator().is_valid(summary))
 
+    def test_accepts_error_branch_not_only_all_success(self):
+        # R-USSHORT-BATCH5-RUNTIME-SCHEMA-ENFORCEMENT-GAP: the runtime contract must accept the legal ERROR branch
+        # (an endpoint errored), not only the all-success committed example — the full per-endpoint/per-symbol
+        # trace is still present, so the anti-spoof invariant holds while the status/counts reflect the error.
+        err = copy.deepcopy(_valid_summary())
+        err["validation_decision"]["status"] = "bounded_probe_completed_with_endpoint_errors"
+        err["endpoint_results"][1]["status"] = "error"
+        err["aggregate_validation_metrics"]["endpoint_error_count"] = 1
+        err["aggregate_validation_metrics"]["endpoint_success_count"] = 9
+        _validator().validate(err)   # accepted (raises on any error)
+
     def test_summary_artifact_validates_when_present(self):
         if not SUMMARY_PATH.exists():
             self.skipTest("batch5 provider-live summary has not been generated yet")

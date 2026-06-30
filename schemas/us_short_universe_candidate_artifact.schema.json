@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_universe_candidate_artifact",
+  "description": "Per-run US-short Pass1 universe candidate artifact (batch5 round-2 R2). It is the gitignored, auditable record of ONE universe fetch: every NYSE/NASDAQ ticker considered, its Pass1 inputs (price / multi-day ADV / market-cap), its eligibility verdict + reasons, and per-row provider lineage (price_source / ADV window coverage / shares source / as_of / observed_at). `summary` and `eligible_tickers` are RECOMPUTED from `rows` (the runner re-derives them and fails closed before write if they disagree), so the artifact can prove WHY a ticker entered or was cut and can be safely re-run. `decision_date` is the canonical upcoming-trading-day (§2.1) that the OUTPUT PATH binds to; `price_basis_date` is the prior settled session; `used_date` is the newest Massive trading day actually used. `adv_usd` is the multi-day AVERAGE daily dollar volume over the ADV window (NOT a single day's dollar volume) — a ticker observed on fewer than `adv_window.min_days_required` days has `adv_usd: null` (insufficient coverage → conservative, never eligible). Rows carry prices, so this artifact is written under the gitignored state/ root (NOT tracked); the tracked summary keeps only counts. Schema is enforced at runtime BEFORE the atomic write (jsonschema import-or-fail-closed).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "authorization_ref", "generated_at",
+    "decision_date", "price_basis_date", "used_date", "calendar_verification_status",
+    "provider", "adv_window", "rows", "row_count", "eligible_tickers", "eligible_count", "summary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_universe_candidate_artifact"},
+    "schema_version": {"type": "string", "minLength": 1},
+    "authorization_ref": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "minLength": 1,
+      "description": "When this artifact was produced (observed_at for every row)."},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$",
+      "description": "Canonical upcoming-trading-day YYYYMMDD (§2.1). The output file path binds to this."},
+    "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$",
+      "description": "Canonical prior settled session YYYYMMDD (§2.1 price basis)."},
+    "used_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+      "description": "Newest Massive trading day with data actually used as the latest ADV-window day (Massive is delayed, so this may step back from price_basis_date)."},
+    "calendar_verification_status": {"type": "string",
+      "enum": ["pending_authoritative_cross_check", "authoritative_verified"],
+      "description": "The frozen market-calendar data_provenance.verification_status used to resolve decision_date/price_basis_date (disclosed, not laundered)."},
+    "provider": {"type": "string", "minLength": 1},
+    "adv_window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["trading_days", "min_days_required", "observed_window_dates", "latest_date"],
+      "properties": {
+        "trading_days": {"type": "integer", "minimum": 1,
+          "description": "Target ADV window length in trading days (the prior over which dollar volume is averaged)."},
+        "min_days_required": {"type": "integer", "minimum": 1,
+          "description": "Minimum per-ticker observed days for a usable ADV; below this adv_usd is null (conservative)."},
+        "observed_window_dates": {"type": "array", "minItems": 1,
+          "items": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+          "description": "The trading days actually fetched with data (newest-first), the real basis of the average."},
+        "latest_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "= used_date (the newest observed window day)."}
+      }
+    },
+    "rows": {"type": "array", "items": {"$ref": "#/definitions/row"},
+      "description": "One row per considered universe ticker (ALL of them — eligible and not), the audit basis for summary."},
+    "row_count": {"type": "integer", "minimum": 0},
+    "eligible_tickers": {"type": "array", "items": {"type": "string"},
+      "description": "Canonical tickers whose row.eligible is true (recomputed from rows; must be unique)."},
+    "eligible_count": {"type": "integer", "minimum": 0},
+    "summary": {"$ref": "#/definitions/summary"}
+  },
+  "definitions": {
+    "row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticker", "exchange", "price", "price_as_of", "volume",
+        "adv_usd", "adv_days_observed", "adv_coverage_ok",
+        "shares", "market_cap_usd", "market_cap_source",
+        "delisted", "halted", "bankruptcy", "otc", "status_flags_sourced",
+        "eligible", "reasons",
+        "provider_id", "as_of", "observed_at", "coverage_status", "parser_status", "lineage"
+      ],
+      "properties": {
+        "ticker": {"type": "string", "minLength": 1},
+        "exchange": {"type": "string"},
+        "price": {"type": ["number", "null"], "description": "Newest observed close (price basis); null if no close."},
+        "price_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$",
+          "description": "The trading day the price came from (may be older than used_date for a thin name)."},
+        "volume": {"type": ["number", "null"]},
+        "adv_usd": {"type": ["number", "null"],
+          "description": "Multi-day AVERAGE daily dollar volume over the observed window; null when adv_days_observed < min_days_required."},
+        "adv_days_observed": {"type": "integer", "minimum": 0},
+        "adv_coverage_ok": {"type": "boolean", "description": "adv_days_observed >= adv_window.min_days_required."},
+        "shares": {"type": ["number", "null"], "description": "SEC XBRL free-float shares outstanding; null if absent."},
+        "market_cap_usd": {"type": ["number", "null"]},
+        "market_cap_source": {"type": "string", "enum": ["sec_shares_x_close", "fmp_profile", "none"]},
+        "delisted": {"type": "boolean"},
+        "halted": {"type": "boolean"},
+        "bankruptcy": {"type": "boolean"},
+        "otc": {"type": "boolean"},
+        "status_flags_sourced": {"type": "boolean",
+          "description": "Round-1: false — delisted/halted/bankruptcy/otc are hardwired false (status source gated, R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN)."},
+        "eligible": {"type": "boolean"},
+        "reasons": {"type": "array", "items": {"type": "string"},
+          "description": "All failing Pass1 reasons (empty iff eligible)."},
+        "provider_id": {"type": "string", "minLength": 1},
+        "as_of": {"type": "string", "minLength": 1, "description": "Data as-of (= used_date)."},
+        "observed_at": {"type": "string", "minLength": 1, "description": "= generated_at."},
+        "coverage_status": {"type": "string",
+          "enum": ["complete", "adv_partial", "adv_insufficient", "no_price", "no_shares"]},
+        "parser_status": {"type": "string", "enum": ["ok", "degraded"]},
+        "lineage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["price_source", "adv_window_trading_days", "adv_days_observed", "shares_source", "market_cap_source"],
+          "properties": {
+            "price_source": {"type": "string", "minLength": 1},
+            "adv_window_trading_days": {"type": "integer", "minimum": 1},
+            "adv_days_observed": {"type": "integer", "minimum": 0},
+            "shares_source": {"type": "string", "enum": ["sec_xbrl_frames", "none"]},
+            "market_cap_source": {"type": "string", "enum": ["sec_shares_x_close", "fmp_profile", "none"]}
+          }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eligible_count", "ineligible_count", "no_price_count", "no_shares_count",
+        "needs_market_cap", "total_tickers", "reason_distribution"
+      ],
+      "properties": {
+        "eligible_count": {"type": "integer", "minimum": 0},
+        "ineligible_count": {"type": "integer", "minimum": 0},
+        "no_price_count": {"type": "integer", "minimum": 0},
+        "no_shares_count": {"type": "integer", "minimum": 0},
+        "needs_market_cap": {"type": "array", "items": {"type": "string"}},
+        "total_tickers": {"type": "integer", "minimum": 0},
+        "reason_distribution": {"type": "object", "additionalProperties": {"type": "integer"}}
+      }
+    }
+  }
+}

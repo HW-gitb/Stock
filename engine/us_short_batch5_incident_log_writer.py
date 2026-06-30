@@ -4,6 +4,7 @@ import json
 import subprocess
 import sys
 from collections import Counter
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -85,8 +86,46 @@ def _validate_private_incident_root(path: Path) -> None:
 
 
 def _validate_decision_date(decision_date: str) -> None:
-    if not (isinstance(decision_date, str) and len(decision_date) == 8 and decision_date.isdigit()):
-        raise IncidentLogWriterError("decision_date must be YYYYMMDD")
+    # real calendar date, not just 8 ASCII digits (R-USSHORT-BATCH5-INCIDENT-TIME-SEMANTICS-GAP: `20261399` etc.
+    # must be rejected so a bad date can never create a bad private directory).
+    if not (isinstance(decision_date, str) and len(decision_date) == 8 and decision_date.isascii()
+            and decision_date.isdigit()):
+        raise IncidentLogWriterError("decision_date must be 8-digit YYYYMMDD")
+    try:
+        datetime.strptime(decision_date, "%Y%m%d")
+    except ValueError as exc:
+        raise IncidentLogWriterError(f"decision_date is not a real calendar date: {decision_date}") from exc
+
+
+def _validate_time_semantics(record: dict[str, Any]) -> None:
+    """Strict real-time validation the JSON-Schema `format`/`pattern` cannot enforce at runtime
+    (R-USSHORT-BATCH5-INCIDENT-TIME-SEMANTICS-GAP): `detected_at` must be a timezone-aware ISO-8601 instant,
+    `affected_date_window.start/end` must be real calendar dates with start <= end."""
+    detected_at = record.get("detected_at")
+    if not isinstance(detected_at, str):
+        raise IncidentLogWriterError("detected_at must be an ISO-8601 string")
+    try:
+        parsed = datetime.fromisoformat(detected_at.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise IncidentLogWriterError(f"detected_at is not a valid ISO-8601 datetime: {detected_at}") from exc
+    if parsed.tzinfo is None:
+        raise IncidentLogWriterError(f"detected_at must be timezone-aware (carry an offset/Z): {detected_at}")
+    window = record.get("affected_date_window")
+    if not isinstance(window, dict):
+        raise IncidentLogWriterError("affected_date_window must be an object")
+    real = {}
+    for key in ("start", "end"):
+        value = window.get(key)
+        if not isinstance(value, str):
+            raise IncidentLogWriterError(f"affected_date_window.{key} must be a YYYY-MM-DD string")
+        try:
+            real[key] = datetime.strptime(value, "%Y-%m-%d")
+        except ValueError as exc:
+            raise IncidentLogWriterError(
+                f"affected_date_window.{key} is not a real calendar date: {value}") from exc
+    if real["start"] > real["end"]:
+        raise IncidentLogWriterError(
+            f"affected_date_window start {window['start']} must be <= end {window['end']}")
 
 
 def _scan_for_forbidden_content(value: Any, path: str = "$") -> None:
@@ -158,6 +197,7 @@ def validate_incident_record(record: dict[str, Any]) -> dict[str, Any]:
         raise IncidentLogWriterError("incident record must be a dict")
     _scan_for_forbidden_content(record)
     _validate_schema(record)
+    _validate_time_semantics(record)   # real ISO-8601 / calendar-date semantics (schema format/pattern is not enough)
     _validate_mapping_traceback(record)
     return record
 

@@ -8,10 +8,290 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short batch5 fix-now set: R1/R5/R4/R2)
+
+- **Verdict/Action**: PASS; R2 path/version binding closed: candidate artifact path must equal canonical `state/us_short/candidate_universe_<decision_date>.json` and pass real `git check-ignore`; wrong-date/non-gitignored probes reject before fetch/write with no residue.
+- **Required**: 无; `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` resolved in current working tree. R3 seam, R1 live, R5 PIT-on-real remain DEFERRED per register and were not reopened.
+- **Verify**: direct wrong-date/non-gitignored probes rejected with no candidate/tmp/summary/raw residue; target batch5 regression 135 OK; full offline `*us_short*` 2648 OK; doc-route guards 52 OK; py_compile OK; `git diff --check` CRLF-only.
+- **Next**: 自动提交阻塞: current worktree includes unrelated A-share/batch4/provider changes and overlapping `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, so Codex cannot safely stage only the reviewed slice.
+
+## 2026-06-30 — Claude `修复` (US-short batch5 R2 path/version binding — candidate 路径钉死 canonical decision_date)
+
+- **Verdict/Action**: 修复 Codex 批5复审 FAIL 同一 R2 下一条腿（path binding）：上轮 path-guard 只查 gitignore+approved-root、未绑 canonical 日期，gitignored 但错日期的 `…_19000101.json` 在 20260629 run 仍可写带价 artifact。`_validate_candidate_path` 改为 `== _candidate_path_for(decision_date)`（恰等 canonical）+ 复查 git check-ignore；非 canonical/错日期/非 gitignored 一律写前 fail-closed。并删整个生产 override 面：CLI 去 `--candidate-list-path/--summary-path/--raw-root`、dated 输出全由 canonical 派生、path kwargs 仅留测试 seam。详见 register Repair 3。
+- **Required**: `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` → fixed pending Codex（register 单源 Repair 3）。批5 fix-now 集 R1/R5/R4/R2 全 fixed pending Codex；R3 seam + R1 live + R5 PIT-on-real 仍 DEFERRED。
+- **Verify**: 聚焦 64 OK（CandidatePathGuard 6：canonical 接受 / 错日期 gitignored 拒 / 非 gitignored 拒 / CLI 无 path override / 全 run 错日期无残留 / 全 run 非 gitignored 无残留；e2e 写真 canonical state/ 路径并断言 gitignored=True）；复现 Codex 确切探针（真 provider_samples raw root 不 patch + gitignored 错日期 candidate）现写前 raise、candidate/.tmp/summary/raw 全 absent；全离线 `*us_short*` 2648 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 路径门各出口（canonical 接受 / 错日期拒 / 非 gitignored 拒 / CLI 无 override / 全 run 两类反向 no-residue / summary 不写）；B ripple grep=无外部调用 3 flag、candidate 单写入点在门后、门在 fetch 前、docstring+设计 §3.1 同步；C 正控（canonical 接受、e2e 真落盘 gitignored=True）；D 封整类（不只被点名腿：== canonical 同灭 wrong-date+non-gitignored、并删 override 面）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R2 path/version binding；批5 fix-now 集 R1/R5/R4/R2 全 fixed pending Codex、等批量复审收口；R3 seam + R1 live + R5 PIT-on-real 待真实数据层授权（DEFERRED）。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 R2 path/version binding)
+
+- **Verdict/Action**: FAIL；非 gitignored `--candidate-list-path` 已写前拒绝且零残留，但 R2 路径/version binding 仍未闭合：gitignored `state/us_short/candidate_universe_19000101.json` 可写入 `decision_date=20260629` 的 priced candidate artifact。
+- **Required**: `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` 保持 `in_progress`；完整复现与修复验收见 register。本轮只审 US-short batch5 fix-now 集已修项，未审 R3 seam、R1 live、R5 PIT-on-real、batch4、A-share、US-long 或 provider/live 新执行。
+- **Verify**: target 134 OK；全离线 `*us_short*` 2647 OK；doc-route 52 OK；py_compile OK；non-gitignored probe REJECTED 且 no artifact/summary/raw/tmp；wrong-date gitignored path probe ACCEPTED，path=`candidate_universe_19000101.json`，artifact/summary `decision_date=20260629`，`candidate_artifact_gitignored=True`，row 含 `price=200.0`。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-30 — Claude `修复` (US-short batch5 R2 path-guard — candidate artifact gitignored-root 写前门)
+
+- **Verdict/Action**: 修复 Codex 批5复审 FAIL 唯一残留 R2 `…LIQUIDITY-LINEAGE-CONTRACT-GAP`：含 per-row 价/ADV/市值的 candidate artifact 仍能经 `--candidate-list-path` 写到非 gitignored 路径、gitignored 状态写后才披露。新 `_validate_candidate_path` 在任何 fetch/write 前 fail-closed：路径须为 canonical 或在 approved root `state/us_short/` 下，且两者都须真·`git check-ignore`=True，否则零落盘（无 artifact/.tmp/summary/raw）；`candidate_artifact_gitignored` 完成 run 永不为 false。详见 register Repair 2。
+- **Required**: `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` → fixed pending Codex（register 单源 Repair 2）。批5 fix-now 集 R1/R5/R4/R2 现全 fixed pending Codex、等批量复审收口；R3 seam + R1 live + R5 PIT-on-real 仍 DEFERRED。
+- **Verify**: 聚焦 63 OK（新 CandidatePathGuard 5：canonical 接受 / approved-root+gitignored override 接受 / 非 gitignored override 拒 / in-root `.txt` 拒 / 全 run 反向无 artifact·tmp·summary 残留；e2e 改写真 state/ 路径并断言 gitignored=True）；复现 Codex 原始探针（真 provider_samples raw root 不 patch + 非 gitignored temp candidate）现写前 raise、全输出 absent；全离线 `*us_short*` 2647 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 路径门各出口（canonical / approved-root+gitignored / 非 approved-root / in-root 非 ignored 扩展 / 全 run 反向 no-residue / summary 不写）；B ripple grep=candidate 单写入点在门后、门在 fetch 前、模块 docstring + 设计 §3.1 措辞同步、无外部消费者；C 正控（canonical + approved-root override 接受、e2e 真落盘）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R2 path-guard；批5 fix-now 集 R1/R5/R4/R2 全 fixed pending Codex、等批量复审；R3 seam + R1 live + R5 PIT-on-real 待真实数据层授权（DEFERRED）。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 fix-now set: R1/R5/R4/R2)
+
+- **Verdict/Action**: FAIL；R1 slice-1、R5 min-coverage、R4 runtime-schema 的目标测试通过，但 R2 per-run candidate artifact 仍可经 `--candidate-list-path` 写到非 gitignored 路径；含 price/ADV/market_cap 的 artifact 已落盘后，summary 才披露 `candidate_artifact_gitignored=false`。
+- **Required**: `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` 保持 `in_progress`；完整复现与修复验收见 register。本轮只审 US-short batch5 fix-now 集；R3 seam、R1 live、R5 PIT-on-real 按 register DEFERRED，未审 A-share、US-long、batch4 或 provider/live 新执行。
+- **Verify**: target 129 OK；全离线 `*us_short*` 2642 OK；doc-route 52 OK；py_compile OK；`git diff --check` 仅 CRLF；direct probe: real gitignored `provider_samples` raw_root 下 `raw_root_gitignored_flag=True`，但非 gitignored candidate path `candidate_exists=True`、`candidate_gitignored_flag=False`，row 含 `price=200.0` / `adv_usd=120000000.0` / `market_cap_usd=3000000000000.0`。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 R2 — 多日 ADV + per-run lineage artifact + decision_date 路径绑定)
+
+- **Verdict/Action**: 批5 fix-now 集**最后一项 R2** `…LIQUIDITY-LINEAGE-CONTRACT-GAP`。①ADV 多日化（实算非改名）：`adv_usd`=20 个截至 price_basis 的 session 日均 `close×volume`；governance 阈值不动（preset 本就定义日均），覆盖<10 天→null 保守拒、单日 spike 不放行。②新 per-run lineage artifact（`schemas/us_short_universe_candidate_artifact.schema.json`：每行 Pass1 输入+判定+§3.2 lineage，缺 lineage/adv_window 拒、带价→gitignored state/）。③summary 从行重算单源+anti-forgery。④路径绑 canonical decision_date（不再钉 20260626、盘中 fail-closed）。⑤写前 schema+语义校验。详见 register Repair。
+- **Required**: `R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP` → fixed pending Codex（register 单源 Repair 注）。R3 seam 仍 DEFERRED。
+- **Verify**: 聚焦 58 OK（单日 spike 拒 / 覆盖不足保守 / summary 重算 / decision_date 路径 / schema 缺 lineage+缺 adv_window+additionalProperties 拒 / e2e 绑 20260629）；全离线 `*us_short*` 2642 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 缺陷类×出口（ADV 单日/多日/覆盖<min→null/液票过；artifact 各缺字段拒；语义 tampered-summary/row_count/eligible-null-ADV/decision_date 各拒；auth raise；guards no-auth/dry-run/缺 now-et/盘中 out-of-window/raw-root 全处理）；B ripple grep=`apply_pass1`/fetch/模块常量无外部消费者（仅自有测试），design §3.1 line 83 + README batch5 行更新；C 正控（液票/FMP/SEC 优先）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R2；批5 fix-now 集（R1/R5/R4/R2）全 fixed pending Codex 完成、等批量复审；R3 seam + R1 live + R5 PIT-on-real 仍 DEFERRED。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 R4 — probe summary 运行期 schema 校验 + 写前校验 + --packet-path)
+
+- **Verdict/Action**: 续修批5 fix-now 集。**R4** `…RUNTIME-SCHEMA-ENFORCEMENT-GAP`：probe 写盘前 Draft7 校验 + secret-scan（`_write_summary_validated`；坏 summary 抛错、零落盘、无 .tmp），run_probe+rebuild 同用；rebuild 接 `--packet-path`。**schema 升级为运行期契约**：删钉死 committed 精确行/计数的 allOf，换 identity-only trace（executed 须含 10 个 (provider,family,symbol)+3 symbol、status-agnostic、保反伪造），success/error/dry-run 全验过；清 36 孤儿 def；raw_sample_ref 放宽到 approved-root 前缀。committed 精确回归由 static-invariants 测试锁。
+- **Required**: `R-USSHORT-BATCH5-RUNTIME-SCHEMA-ENFORCEMENT-GAP` → fixed pending Codex（universe-summary schema 属 R2、不在此 probe scope）。全文见 register。
+- **Verify**: probe 13 + probe-summary-schema 11 + preflight OK；全离线 `*us_short*` 2614 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 出口(schema-invalid 不写+零残留 / secret 不写+零残留 / clean 写 / error 分支验过 / rebuild 用传入 packet_path / 3 反伪造 reject 仍拒)；B `_assert_text_safe` 抽出、allOf identity-trace 保反伪造、孤儿 def 清零、static-invariants 锁 committed、无悬挂；C 正控(committed+error 验过)；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R4；续修 R2(ADV 口径改名 + per-run lineage artifact)——fix-now 集最后一项。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 R5 min-coverage + R5-PIT/R3/R1-live 暂不修原因落 register)
+
+- **Verdict/Action**: 续修批5（用户「按你的意见修复 + 暂不修部分写交接文档让 Codex 理解、避免反复提；记忆稍后补」）。**R5 min-coverage**(`momentum_block`)：加 `min_coverage` prior(默认 4=核心收益集, §13#14)——低于阈值→`insufficient_coverage`(不打分、不 full-weight 余项；区别于零特征 `insufficient_history`)；已打分票缺分量按 NEUTRAL(50)填、复合分在同一全特征集上算(单分母)。Codex 探针(单特征 SHORT=999 超过 FULL)现 SHORT 进 insufficient_coverage 不打分；返回 coverage_matrix+min_coverage；`compute_momentum_features` 签名不动。**暂不修(用户已认可)**：R5 PIT/对齐、R3 seam、R1 余项(parser/live)——原因已写入各自 register 条目(标 DEFERRED + do-NOT-re-raise + 复议条件)。
+- **Required**: R5 **min-coverage 部分** → fixed pending Codex；R5 PIT / R3 / R1-live **DEFERRED**（register 各条已记原因，Codex 勿当 fix-now 反复提）。
+- **Verify**: momentum 30(+4) OK；全离线 `*us_short*` 2608 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A momentum 出口(below-min / sparse-extreme-不超-full / neutral-fill-cap / coverage-matrix / min_coverage 参数+bool 拒 / 旧 partial 测试替换)；B momentum_block 无外部消费者(R3 未接、零回归)、compute_features 不动、返回键扩；C 正控(full-pool percentile HI/MID/LO)；D 延期原因写进 R5/R3/R1 register 条目(单源、Codex 可读)；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R5 min-coverage + 三条延期理由；续修 R4(probe summary schema 接受合法分支 + 写前校验 + --packet-path) → R2(ADV 口径 + per-run lineage)。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 R1 slice-1 重修 — decision-gate required_resolution 钉死)
+
+- **Verdict/Action**: 用户「先重修 R1 slice-1」，回应 Codex scoped re-review FAIL（唯一残留：3 道 decision gate 的 `required_resolution` 仍可同形漂移到「无需审批、自动执行」）。`status_source_binding` schema 每个 gate `contains` 块在 `gate_id`+`status` 外**再 const-pin `required_resolution`**（值由脚本从 artifact 注入）。3 道 unsafe-resolution + 1 swapped mutant 现全 error，真 artifact 仍 valid，前轮 5 mutant 仍拒。**slice-1 语义钉死全闭**（逐旗 provenance/status/derivation + gate id/status/resolution + source-ref role）；R1 余项(parser/live)仍 gated。不动批5 其它项。详见 register。
+- **Required**: `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` slice-1 schema → fixed pending Codex（R1 余项仍 open，属 R1–R5 数据层批）；O3 已 resolved。全文见 register。
+- **Verify**: status-source schema 21(+2 resolution 测) OK；全离线 `*us_short*` 2604 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A gate 出口（3 道 resolution drift 各拒 + swapped 拒 + 真 artifact valid + 前 5 mutant 仍拒）；B schema const 由脚本从 artifact 注入(零转写)、gate contains 三字段齐(id/status/resolution)、无悬挂；C 正控（真 artifact valid）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 R1 slice-1；之后续修 R5→R4→R2→R3（按上轮判断：R5 min-coverage / R4 / R2 ADV 口径先做，R3 seam + R1 live + R5 PIT-on-real 待真实数据层授权）。
+
+## 2026-06-29 - Codex scoped re-review FAIL (US-short batch5 O3 + R1 slice-1 only)
+
+- **Verdict/Action**: FAIL；O3 secret-scan 写前零残留 PASS，但 R1 slice-1 仍允许三道 decision gate 的 `required_resolution` 同形漂移，尚未闭合。
+- **Required**: `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` slice-1 保持 open；完整 residual 与修复验收见 register。`R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP` 已 resolved。本轮未审 R1 后续 parser/live、R2-R5、batch4、A-share、US-long。
+- **Verify**: target 49、全离线 `*us_short*` 2602、doc-route 52、py_compile 全绿；前轮 5 mutants 均拒；三种 `required_resolution` unsafe mutants 均 `0 errors`；O3 secret mutant REJECTED、既有安全文件字节不变、无 `.tmp`。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 — O3 secret-scan + R1 slice-1 schema 语义钉死)
+
+- **Verdict/Action**: 「修复批5所有」第一批（自包含离线 FAIL）。**O3**(secret-scan)：universe_fetch 改 `_write_summary_safe`——序列化后、写盘前扫描，失败零落盘（原 post-write 残留已修）。**R1 slice-1**(status_source_binding schema)：`allOf` 从只钉路由键升级为钉**语义**——每旗 const-pin provenance_required/status_semantics/derivation_evidence_rule + 3 decision-gate 唯一身份(gate_id→status, maxItems3) + 每 source-ref role；Codex 5 类同形漂移全 error、真 artifact 仍 valid。仅自包含离线、不接真状态源。详见 register。
+- **Required**: O3 → fixed pending Codex；R1 **slice-1 schema** → fixed pending Codex（R1 余项=离线 parser+cheap_eligible 接 provenance、live 状态源仍 open/gated，属 R1–R5 数据层批）。**批5 仍 open**：R2(universe 逐行 lineage+ADV 口径) / R3(seam builder, 依赖 R1/R2/R4/R5) / R4(probe summary schema 接受合法 error/dry-run 分支 + 写前校验 + --packet-path) / R5(momentum 最小覆盖+PIT)。全文见 register。
+- **Verify**: status-source schema 19(+8 mutant) / universe-fetch 30(+2) OK；全离线 `*us_short*` 2602 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A O3（secret/clean 各出口+零残留）、R1（5 mutant + 缺 provenance/缺 gate/gate-status drift + 正控）；B `_assert_text_safe` 抽出复用、schema const 由脚本从 artifact 注入(零转写错)、无悬挂；C 正控（clean summary 写出、真 artifact valid）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 O3 + R1 slice-1；续修 R5→R4→R2→R3（较大/耦合，R3 seam 依赖前序）。
+
+## 2026-06-29 - Codex 复审批4 PASS (OFFICIAL-REPORT lifecycle source binding)
+
+- **Verdict/Action**: PASS；private-write 已将 lifecycle 独立源双日期绑定到本 run，并从 validated readiness canonical 重算 §12 due-item/upgrade 明细；跨日、as_of 错配、同计数异 due-item/upgrade 均零落盘拒绝，真实非零正控可写。
+- **Required**: 无；`R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP` 在当前工作树 resolved。仅审批4，批5修复项全部忽略。
+- **Verify**: batch4 focused 692 OK；machine schema 17 OK；route/doc 52 OK；4 类 direct mutant REJECTED+wrote=False，consistent-nonzero ACCEPTED。py_compile / diff-check 收口见本轮；未联网、未运行 provider/live/DataHub/production。
+- **Next**: 自动提交阻塞：`docs/SESSION_LOG.md` / `docs/system_risk_register.md` 同时含未审批5与 A-short 改动，无法安全整文件 stage；不得夹带。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFICIAL-REPORT — lifecycle 源 decision_date + §12 明细绑定)
+
+- **Verdict/Action**: 继续修批4 同一 Required `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`（Codex 复审：协同计数已闭，但 lifecycle 源未绑 decision_date、§12 明细未从源派生）。`_reconcile_official_source_facts` 步(2)加：`lifecycle_result.decision_date` 与 `readiness.as_of` 须 == run decision_date；§12 行抽成共享单源 `canonical_lifecycle_section(readiness)`（builder + private-write 同源），`report_data.sections[12]` 须精确等于由独立 readiness 投影的 canonical。跨日 / 同计数改 due-item·upgrade 均 fail-closed。仅此一项，不动 batch5/provider/live/A 股。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP` → fixed pending Codex（`docs/system_risk_register.md` 单一来源）。
+- **Verify**: 跨日 lifecycle / as_of 不符 / 同计数异 due-item / 异 upgrade 各拒+零落盘（复现 Codex 两残留 probe）+ 一致非零(=2)正控写出；private-write 51 / report+orch 76 / 全离线 `*us_short*` 2592 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A lifecycle 源出口（跨日 / as_of / due-item / upgrade / 协同计数 / 不一致 readiness）各拒 + 非零正控；B `canonical_lifecycle_section` 单源被 builder+private-write 共用（§12 行抽出、byte-identical）、orchestrator 已注入 lifecycle_result、测试 fixture §12 改真 canonical（堵 generic-§12 盲点）、无悬挂；C 非零一致正控写出；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审该 Required。
+
+## 2026-06-29 - Codex 复审批4 FAIL (OFFICIAL-REPORT lifecycle source binding)
+
+- **Verdict/Action**: FAIL；上一轮 all-copies=99 对独立 due_count=0 已零落盘拒绝，但 private-write 未把 `lifecycle_result.decision_date/readiness.as_of` 绑定到本次 run，也未从 readiness 重算并对账 §12 明细；跨周同计数源及同计数不同 due-item 明细仍可写正式产物。
+- **Required**: `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP` 保持 `in_progress`；完整复现与验收条件见 register。仅审批4，批5修复项全部忽略。
+- **Verify**: batch4 focused 688 OK；machine schema 17 OK；route/doc 52 OK；exact all-copies-99 mutant 已拒，但 cross-date lifecycle 与 due-item-detail mismatch 两个 mutant 均 accepted+wrote。未联网、未运行 provider/live/DataHub/production。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFICIAL-REPORT-SOURCE-BINDING-GAP — lifecycle 协同伪造)
+
+- **Verdict/Action**: 仅修复批4 Codex 联合复审 FAIL 项 `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`（lifecycle 三份 caller-controlled 计数同时改 99 仍可写）。`write_run_private` 加必填 `lifecycle_result`（orchestrator 注入 4d-ii-l 结果）；`_reconcile_official_source_facts` 步(2)改为 `_assert_readiness` 重校 readiness → run_status.lifecycle + §1 + §12 三份须全等于**独立** due_count，不再彼此对账。协同改 99 因真 due_count=0 无法在 report_data 内替换而 fail-closed。仅此一项，不动 batch5/provider/live/A 股。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP` → fixed pending Codex（`docs/system_risk_register.md` 单一来源）。batch4 PROVENANCE-GAP 上轮已 PASS；batch5 项本轮不在 scope。
+- **Verify**: 协同 all-copies-99 伪造探针拒+零落盘（复现 Codex probe）+ 不一致 readiness 拒 + 一致非零(=2)正控写出；private-write 47 / report+orch 76 / 全离线 `*us_short*` 2588 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A lifecycle 出口（协同 99 / 不一致 readiness / 缺 readiness）各拒 + 非零正控；B `_assert_readiness` 单源复用（report+private-write 同源）、orchestrator 注入 lifecycle_result、无悬挂；C 非零一致 run 正控写出；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审该 Required。
+
+## 2026-06-29 - Codex 联合复审 FAIL (US-short batch4 + batch5 已修部分)
+
+- **Verdict/Action**: FAIL；batch4 action-table 缺 `run_origin` 已零落盘拒绝，但 lifecycle 三份 caller-controlled 计数同时改为 99 仍可写正式周报；batch5 preflight 空 gate-map 与 Massive 401/403/429 分类通过，但状态源 binding 上轮 5 类同形漂移仍 0 schema errors，universe secret scan 命中后已写 summary 仍残留。
+- **Required**: `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`、`R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` slice 1、`R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP` 保持/恢复 `in_progress|open`；完整证据与修复验收见 register。`R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 此轮 PASS。
+- **Verify**: focused batch4 141 OK；batch5 fixed-part 58 OK；全离线 US-short 2585 + schema 591 + provider 52 OK；route/doc 52 OK；direct mutants 复现 lifecycle all-copies spoof、5 类 schema drift、secret-scan post-write residue。未联网、未运行 provider/live/DataHub/production，未审 A-share/US-long。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 严格全量审查 FAIL — 两条官方输出 consumer-bypass)
+
+- **Verdict/Action**: 修复批4最新审查 FAIL 两条 Required（均在持久化边界）：① PROVENANCE-GAP——`write_action_table` 加 `validate_run_origin`（path-guard 后、落盘前 fail-closed；generic render/§10 不变）；② SOURCE-BINDING-GAP——`write_run_private` 加 `_reconcile_official_source_facts`（计数从机器记录经单源 `report_row_groups` 独立重算、lifecycle 对 §1/§12、provider-health 绑 orchestrator 注入 classify、coverage 经单源 `reconcile_holding_coverage` 重算；加必填 `provider_health`+`coverage_inputs`）。不动 provider/live/batch5。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` + `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP` → fixed pending Codex（`docs/system_risk_register.md` 单一来源）。
+- **Verify**: 残留探针（stripped-CSV 落盘 / build_count·lifecycle 0→99 伪造）经 reverse 测试拒+零落盘；private-write 44 / report+orch 76 / renderer 60 / 全离线 `*us_short*` 1942+638 / doc-guard 64 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 两类伪造各出口拒+positive；B `report_row_groups`/`reconcile_holding_coverage` 单源被 builder+private-write 共用、orchestrator 注入、origin gate 在 path-guard 后 render 前、无悬挂；C 一致 run 正控、generic render 不要 origin；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审两条 Required。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 cc_r1 R1/R2/O2/O3/O8 落 register + 已修部分)
+
+- **Verdict/Action**: 把 cc_r1 批5 R1/R2/O2/O3/O8 落 register（已修部分）。R1(设计漂移,resolved)补 §18.2/§3.1 价格源登记；R2+O2(FAILOPEN,open)=universe_fetch summary 加 `status_screening` 披露（状态旗硬编码 False 明示）+ Massive 401/403/429 不再静默回退；O3(新)=summary secret-scan + gitignored 改真 git-check-ignore；O8(RUNTIME-SCHEMA,open)=preflight 空 gate-map fail-closed。未碰状态真接入/data_context seam（gated）。详见 register。
+- **Required**: O3 新增 `R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP`(fixed pending Codex)；FAILOPEN/RUNTIME-SCHEMA 仍 open（本轮仅披露/稳健/auth-分类层）；R1 resolved（`docs/system_risk_register.md`）。
+- **Verify**: O3+universe-fetch 28 OK；全离线 `*us_short*` 1942+638 OK；universe/preflight dry-run 正常；secret/raw scan clean；py_compile/`git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 披露+auth 分类+preflight 空块+gitignore 真校验各处理（+secret-scan reverse 测试）；B §0/§19 用户改、补 §18.2/§3.1、limitations 同步、无悬挂；C dry-run/secret-scan 正控；E register 单源；F diff-check。
+- **Next**: Codex 复审 O3；批5 数据层批待用户拍状态 derivation。
+
+## 2026-06-29 - Codex 严格全量审查 FAIL (US-short batch4 only)
+
+- **Verdict/Action**: FAIL；batch4 正常空/非空 fixture 编排、decision_date、no-emit、私密写、renderer/no-dangling 均可运行，但官方输出仍有两条 consumer bypass：action-table 可从缺 `run_origin` 的 machine record 单独写出；周报 `run_status/offline_honesty` 可伪造计数/状态后自洽落盘，未与 machine/lifecycle/coverage/provider 来源复核。
+- **Required**: 重开 `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 与 `R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP`；完整证据和修复验收见 register。批1→用户显式 11-key batch2/3 fixture→批4 runner 的离线链可跑；无该 fixture 的批1→4 自动直链仍阻塞，属 batch4 明示 fixture 边界。忽略 batch5，未审 A-share/US-long。
+- **Verify**: batch4 focused 672 OK；全离线 `test_us_short_*.py` 2567 OK；US-short schema 591 OK；boundary+route-doc 33 OK；direct probes 复现 missing-origin action CSV 写出、伪造 build/lifecycle count 周报写出。未联网、未运行 provider/live/DataHub/production。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Codex 联合审查 FAIL (US-short batch4 + batch5 已修部分)
+
+- **Verdict/Action**: 总体 FAIL。batch4 §1 canonical provenance PASS；batch5 R6 incident 真日期语义 PASS；batch5 R7 设计权威状态 PASS；batch5 R1 slice-1 状态源 binding FAIL——schema 仍接受 provenance/derivation/status 语义、decision-gate 身份和 source-role 同形漂移。
+- **Required**: `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` slice 1 保持未闭合；完整 5 组零错误 mutant 与修复要求见 register。batch4 `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 已独立复审 PASS；R6/R7 已 resolved。未运行联网/live/provider/DataHub/production，也未审并行 A-short 改动。
+- **Verify**: focused 156 OK；全离线 `test_us_short_*.py` 2567 OK；US-short schema 591 OK；provider offline 47 OK；route-doc 25 OK；batch4 §1 mutant 与 incident 坏时间均拒；batch5 status binding 的 5 类语义漂移均 schema errors=0。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 R1 数据层 slice 1 — 状态源 binding schema-first 契约)
+
+- **Verdict/Action**: 用户授权「接真状态源」+「开建」。第一刀=schema-first 状态源 binding 契约（不联网）:schema+artifact+测,冻结 4 状态旗→授权源+endpoint+provenance+unknown 政策（delisted/otc→ticker_reference、halted→公开停牌 feed、bankruptcy→SEC 8-K Item 1.03 best-effort 不证 clean）+ failure-health 政策（禁 swallow 返空、失败接 provider health、关键全失败 no-emit）。schema `allOf`/`contains` const-pin,flag→source/path/政策/布尔 漂移全拒。**不授权 live fetch**（另需 access packet+preflight）。详见 register。
+- **Required**: `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` slice 1（契约层）→ fixed pending Codex；全文+后续 slice 见 system_risk_register.md。
+- **Verify**: 状态源 schema 11 OK（artifact validates + 漂移 mutant 全拒）；全离线 `test_*us_short*` 2567 OK（+11）；route/doc guard 52 OK；secret/raw scan clean；py_compile/diff-check 干净。
+- **Pre-Codex self-review**: A 缺陷×出口（scope allow flip / flag authorize flip / flag→source 漂移 / bankruptcy unknown 政策漂移 / 源 path swap / 第5行超 maxItems 各拒 + artifact 正控过）；B ripple-grep（新 schema/artifact/test 三件套、README 薄路由行≤cap、无悬挂；不碰 universe_fetch 本体本刀）；C 反向（合法 artifact 正控）；D 契约↔batch5 既有 binding 范式一致；E 无 CURRENT 瞬态词；F 复用 jsonschema/Draft7 范式。
+- **Next**: Codex 复审 slice 1；下一刀=状态源 access packet（live-fetch 授权，单独）/ 离线 parser + cheap_eligible 接 provenance + R2 lineage（仍仅 batch5+seam scope、勿夹带 batch4/A-short）。
+
+## 2026-06-29 - Claude 修复 (US-short batch5 codex_r1 R1–R7 落 register + R6/R7 修复 + R1 设计决策上浮)
+
+- **Verdict/Action**: 用户「落 register 并 修复」。已把 Codex batch5 R1 的 7 条（Claude `cc_r1.md` §八 已逐条独立复核接受）全部写入 register。本轮修完两条无设计决策的独立项：**R7** 设计权威 `:3/:473` 改为「批5 PARTIALLY implemented」（列已建 governance/Pass1/momentum + 仍 gated 的 seam/Pass2/scoring/live；设计内容不动）；**R6** incident writer 加 `_validate_time_semantics`（detected_at tz-aware ISO-8601 + window 真日历日 start≤end）+ `_validate_decision_date` 真 `%Y%m%d` + 反向测。**R1/R5 上浮为耦合批**：R1「保留 unknown」机械执行会因 Massive/SEC 无 halted/bankruptcy/OTC 状态源把全 universe 拒掉，须先定每旗 derivation 政策（设计决策）；R5 PIT/dated-series 契约与 R2 lineage、R3 数据层耦合 → R1/R2/R3/R4/R5 合为 schema-first 数据层+seam 批，不单独修。
+- **Required**: R6/R7 → fixed pending Codex；R1–R5 仍 open（R1 含设计决策已在 register 上浮、待用户拍状态政策 + 数据层批）；7 条全文见 system_risk_register.md（单一来源）。
+- **Verify**: incident writer+schema 23 OK；全离线 `test_*us_short*` 2556 OK；doc/route guard 52 OK；py_compile OK；`git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A R6 缺陷×出口（坏月日/Feb29 非闰/无时区/倒置窗口/`20261399`/非数字 各拒 + valid_record 正控）；B ripple-grep（`_validate_time_semantics` 已接进 `validate_incident_record`、加 `datetime` import、design-doc 两处状态同改、cheap_eligible 已有 unknown→拒 故 R1 是 runner 硬编码非 gate）；C 反向（合法记录/真日期正控过）；D 设计权威↔实现状态一致；E 无 README/CURRENT 瞬态词；F 复用既有 schema/forbidden-scan/eligibility unknown 规则。
+- **Next**: Codex 复审 R6/R7；R1–R5 数据层+seam 批待用户拍 R1 状态 derivation 政策后开建（仅 batch5 + 直连 seam scope、勿夹带 batch4/A-short 改动）。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFLINE-ARTIFACT-MODE — §1 canonical 化)
+
+- **Verdict/Action**: 回应 latest-fix FAIL（§1 仅子串测 sentinel，可在其后加运营授权行落盘）。§1 做成与 §11/§13 同级 canonical：`run_origin.py` 加 typed `run_status`（decision_date 真 YYYYMMDD + 5 非负计数）`build_run_status` + `canonical_section_1`；`assert_offline_report_invariants` 改 §1 须**精确等于** canonical；report 建 run_status、§1 走 canonical、report_data 带之；private-write 独立重算后再 byte-equality。加 §1 反向测。不动 §4/§10 NL、不碰 provider/live/batch5/A-share。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` → fixed pending Codex；§1-canonical repair 全文+验证见 system_risk_register.md（单一来源）。
+- **Verify**: §1 mutant 探针拒（clean §1 过）；焦点 private-write/report/orchestrator/builder 130 OK；全离线 `test_*us_short*` 2550 OK（+1）；schema 580/guard 52/py_compile OK；diff-check 仅 CRLF。
+- **Pre-Codex self-review**: A 缺陷×出口（§1 追加运营行/缺 run_status/坏计数/坏日期 各拒、合法空运行正控过）；B ripple-grep（report 删 offline_disclosure_lines import 改用 canonical_section_1、run_status 单源四方一致、OFFLINE_DISCLOSURE_SENTINEL 仍经 offline_disclosure_lines 用、无悬挂）；C 反向（真示例 §1 canonical 正控）；D run_origin↔report↔private↔run_status 一致；E 无 README 改；F 私密地板+§10 门复用。
+- **Next**: Codex 复审 §1-canonical → PASS 则提交（仍仅 us_short batch4 scope、勿夹带并行 A-short 改动）。
+
+## 2026-06-29 - Codex 审查 FAIL (US-short batch4 OFFLINE-ARTIFACT-MODE latest fix)
+
+- **Verdict/Action**: FAIL；typed `offline_honesty` 已把 §11/§13 闭世界化，§4/§10 exact-mark Optional 也生效；但 §1 仍只校验“包含 sentinel”，可在 sentinel 后插入“真实 provider、已授权运营、可直接执行”并通过 structured validation + byte equality 后真实落盘。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 恢复 `in_progress`；完整 §1 绕过与 canonical 修复要求见 register。并行 A-short 改动、batch5/provider/live 均未审未动。
+- **Verify**: focused 129 OK；全离线 `test_us_short_*.py` 2549 OK；US-short schema 580 OK；route-doc 25 OK；direct private-temp §1 contradiction mutant `accepted=True`，machine/report 均写出，证明当前绿测遗漏该出口。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFLINE-ARTIFACT-MODE — Claude 复审 Optional 处置)
+
+- **Verdict/Action**: 用户「修复 optional」（Claude 复审提的两条）。② `RunOriginError` 类上移到首次使用前（运行期惰性解析无变化，纯可读性）。① 编辑段防护：`assert_offline_report_invariants` 加 §4/§10（caller free-text）窄 guard——禁两条结构化权威 mark（“结构化、权威”/“本周无不 clean 项”）复制进编辑段绕过披露；**显式不做**开放式 NL 关键词黑名单（whack-a-mole、误伤合法 §2 与正常叙述）——§1 恒显横幅为主披露，“可照此下单”类自由文本由 §1 dominance 兜底（设计边界）。加 §4/§10 反向测。
+- **Required**: 无新 Required；为 `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 的 Optional 处置（详见 register）。
+- **Verify**: 焦点 private-write/report/orchestrator/builder 129 OK；全离线 `test_*us_short*` 2549 OK（+2）；schema 580/guard 52/py_compile OK；diff-check 仅 CRLF；探针 §4 含 mark→拒、合法示例 §4/§10 正控仍过。
+- **Pre-Codex self-review**: A 缺陷×出口（§4 mark/§10 mark 各拒、合法 §2 不误伤、RunOriginError 上移运行期一致）；B ripple-grep（assert 单源被 report self-check + private-write 共用、`_EDITORIAL_SECTIONS` 新常量、无悬挂）；C 反向（真示例 §4/§10 benign 正控过）；D run_origin↔report↔private 一致；E 无 README 改；F 私密地板复用。
+- **Next**: Codex 复审 Optional 处置 → PASS 则提交（仍仅 us_short batch4 scope、勿夹带并行 A-short 改动）。
+
+## 2026-06-29 - Codex 修复 + 自审 PASS (US-short batch4 OFFLINE-ARTIFACT-MODE round-3)
+
+- **Verdict/Action**: PASS（用户指令下自修自审）；§11/§13 改为 typed `offline_honesty` 闭世界事实→canonical section 独立重算→private-write 精确对账，同义/附加矛盾与假 provider state 均拒写。
+- **Required**: 无；`R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` resolved in working tree，完整 repair / self-review evidence 见 register。
+- **Verify**: TDD RED→GREEN；private 31、focused 195、全离线 US-short 2547、schema 580、route/doc 52、py_compile 全绿；5 类 direct mutant 均 REJECTED 且 wrote=False；diff-check 仅换行警告。
+- **Pre-Codex self-review**: closed-world keys/false flags/count/真实 RUN_STATES 枚举/§11·§13 exact list/renderer byte equality/零落盘各出口已反向证明；provider/live/batch5/§2/A-share 未动。
+- **Next**: 自动提交阻塞；review docs 同时含未提交 A-short 审查记录与运行产物，禁止夹带提交。
+
+## 2026-06-29 - Codex 复审 FAIL (US-short batch4 OFFLINE-ARTIFACT-MODE round-2)
+
+- **Verdict/Action**: FAIL；结构化 report_data / 三方 run_origin / 重渲染字节对账已接通，但 §11/§13 仍是精确短语禁词表，同义“运营级 clean / 无其他不清洁项”可通过真实 private-write 并写出双 artifact。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 保持 `in_progress`；完整绕过证据与 closed-world/typed canonical 修复要求见 register。本轮未扩 batch5/provider/live/A-share/US-long。
+- **Verify**: focused 192 OK；direct private-temp synonym mutant `ACCEPTED True True`，machine/report 均已写，证明现有绿测只封精确字面、未封同义矛盾。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Codex 审查 PASS (A-short overlay / weekly candidate same-batch repair)
+
+- **Verdict/Action**: PASS；comparison overlay 已改为 Stage3 后从最终 `watch_df` 生成，20260629 实跑的 overlay 与 analysis_input 均为同一 15 只，账户 M6.7 私密周报成功落盘；生产行业热度评分与排序未改。
+- **Required**: 无；`R-ASHORT-OVERLAY-WEEKLY-CANDIDATE-BATCH-DRIFT` resolved，完整 scope / root cause / closure evidence 见 register。
+- **Verify**: TDD RED→GREEN；focused 37 OK；py_compile；20260629 full authorized run exit 0；artifact candidate-set 15=15 exact；private weekly 17 rows；diff-check clean（仅换行警告）。
+- **Next**: 自动提交阻塞；`SESSION_LOG` / register 与未审 US-short 改动重叠，保持本轮已审 A-short 两文件 + review entry 未提交，禁止夹带提交。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFLINE-ARTIFACT-MODE round-2 — 结构化 report provenance 对账)
+
+- **Verdict/Action**: 回应 round-1 FAIL（private-write 仅 sentinel 子串测可被绕过）。改结构化对账：`us_short_run_origin.py` 加单源 `assert_offline_report_invariants`（run_origin 一致+§1 sentinel+§11 须带 disclaimer/禁“结构化、权威”+§13 禁“无不 clean”）+marker；report §11 用共享 disclaimer、build 后自检同一断言；`write_run_private(..., report_data)` 三步=machine/report/run_origin 三方一致→§1/§11/§13 不变式→`render(report_data)==md` 字节相等，任一败拒写无落盘。orchestrator 传 report_data；live 硬阻断、无 provider/batch5；§2 段隔离未动。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` → fixed round-2 pending Codex；Repair round-2 全文+验证见 system_risk_register.md（单一来源）。
+- **Verify**: 焦点 private-write/orchestrator/report/machine/builder 192 OK；全离线 `test_*us_short*` 2543 OK（+4）；US-short schema 580 OK；route/doc guard 52 OK；py_compile OK；`git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 缺陷×出口（§11 还原权威 clean、§13 还原无不 clean、二者并、md 手改字节不等、§1 缺 sentinel、缺/换 machine run_origin 各 fail-closed 无落盘）；B ripple-grep（write_run_private 改签 report_data 必填→orchestrator+测全更新+docstring 补、唯二调用者、assert/常量四方引用一致、A 股异名无冲突）；C 反向（空/非空真写正控盖章 + build 自检）；D run_origin↔report↔private↔schema 一致；E README 薄指针；F 私密地板+§10 门复用。
+- **Next**: Codex `审查` OFFLINE-ARTIFACT-MODE round-2（private-write 结构化 report_data 对账：三方 run_origin + §1/§11/§13 不变式 + 字节相等重渲染；反向测覆盖矛盾横幅/手改 markdown）→ PASS 则提交；**仅 us_short batch4 scope**——`A-EGS/egs_main.py`、`research/results/a_short/*`、`tests/phase6/*` 等并行 A-short 改动非本次、勿夹带。
+
+## 2026-06-29 - Codex 审查 FAIL (US-short batch4 OFFLINE-ARTIFACT-MODE round-1)
+
+- **Verdict/Action**: FAIL；正常 orchestrator→report→private-write 路径已正确盖 `run_origin` 和离线披露，但最终 private-write 只检查 sentinel 子串，仍会接受并落盘“有 sentinel、同时声称 provider 权威 clean + 本周无不 clean”的矛盾完整周报。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` 保持 `in_progress`；完整绕过复现与结构化 consumer-validation 修复要求见 register。本轮未扩 batch5/provider/live/A-share/US-long。
+- **Verify**: focused 236 OK；全离线 `test_us_short_*.py` 2539 OK；US-short schema 580 OK；route-doc 25 OK；direct private-temp mutant 被接受且 machine/report 均已写，证明现有绿测漏掉矛盾周报绕过。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 OFFLINE-ARTIFACT-MODE-PROVENANCE — run_origin 穿线对账)
+
+- **Verdict/Action**: 闭 OFFLINE-ARTIFACT-MODE。新 `engine/us_short_run_origin.py` 定不可变 run_origin 事实（offline_test·调用方 fixture·非运营）+validate+sentinel；orchestrator 派生并穿 K/m2/N。machine record 盖 run_origin（schema const-pin、flatten 保留→写入 artifact）；周报 §1 恒显离线横幅·§11 provider 不认定运营级权威 clean·§13 恒列离线限制；private write 对账 machine↔report（缺/换 run_origin 或缺 sentinel→拒写无落盘，置 flatten 门后）。live 仍硬阻断、无 provider/batch5；§2 portfolio_guard 按 Codex scope 未动。详见 register。
+- **Required**: `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP` → fixed pending Codex；Repair 全文+验证见 system_risk_register.md（单一来源）。
+- **Verify**: batch4 引擎焦点 188 OK；全离线 `test_*us_short*` 2539 OK（+4）；US-short schema 580 OK；route/doc guard 52 OK；py_compile OK；`git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 缺陷×出口（缺/换 run_origin、报告缺 sentinel、provider 非权威 clean、§13 恒不 clean、非 dry 写入双 artifact 盖章 各 fail-closed/对账）；B ripple-grep（改签 3 函数 in-file docstring + schema description 补 run_origin、A 股 build_weekly_report 异名无冲突、flatten 透传已证、register 历史散文豁免）；C 反向（空/非空真写正控盖章）；D run_origin 单源↔schema↔report↔private 四方一致；E README 薄指针≤cap；F 私密地板+§10 门复用。
+- **Next**: Codex 复审 OFFLINE-ARTIFACT-MODE → PASS 则提交。
+
+## 2026-06-29 - Codex 严格全量审查 FAIL (US-short batch4 + batch1-4 直接链)
+
+- **Verdict/Action**: FAIL；batch4 离线 fixture 工程链可执行且 2535 个 US-short 离线测试全绿，但 `offline_test` 写出的正式机器层/周报没有运行模式或 fixture provenance，周报反而把注入的 provider 状态显示为“结构化、权威、clean”并声明“本周无不 clean 项”。
+- **Required**: 新开 `R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP`（P1/open）；完整复现、影响与修复验收见 register。批1 account→用户显式提供 11-key batch2/3 fixture→批4 runner 可跑；真实每周 batch1→4 仍无 batch2/3 数据/context producer，属 batch5/provider 边界，不在本轮误报为 batch4 回归。
+- **Verify**: focused builder/runner/orchestrator/pipeline 97 OK；全离线 `test_us_short_*.py` 2535 OK；US-short schema 580 OK；route-doc 25 OK；全 US-short `py_compile` OK；direct private-temp probe 复现 offline artifact 无 mode/fixture 标识、machine 无 `run_mode`，周报显示 provider clean + no unclean。未运行 provider/live/network/DataHub/Skill/production/A-share/US-long。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Codex 修复 + 自检 PASS (US-short batch4 ONE-CLICK final)
+
+- **Verdict/Action**: PASS（自修自检边界）；动态 schema/top-level 错误已统一脱敏，PowerShell 命令与 CLI help 已对齐；当前 repo 的 `R-USSHORT-BATCH4-*` 全部 resolved。
+- **Required**: 无；`R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` resolved in working tree，完整 closure 见 register。
+- **Verify**: TDD RED→GREEN；focused 68、全离线 `*us_short*` 2535、doc guards 52、py_compile、PowerShell 解析、diff-check 全绿。
+- **Pre-Codex self-review**: A 动态 schema path/顶层 scalar/未知键全出口脱敏；B 旧 Unix 续行与原始值回显零活跃残留；C 合法模板/PowerShell help 正控；D schema↔builder↔runner 对齐；E README 薄指针；F 私密边界不变。
+- **Next**: Codex `提交`。
+
+## 2026-06-29 - Codex 审查 FAIL (US-short batch4 ONE-CLICK round-2b)
+
+- **Verdict/Action**: FAIL；schema/runtime、重复持仓、模板直食已闭合；动态 JSON path/顶层坏 packet 仍泄值，发布的 Unix 续行命令在 Windows PowerShell 不可直接执行。
+- **Required**: `R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` 仍 `in_progress`；完整证据与修复矩阵见 register。
+- **Verify**: focused 63、全离线 `*us_short*` 2530、doc guards 52 全绿；3 个 redaction reverse probes 复现，当前 shell 无 `python` PATH 命令。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 ONE-CLICK round-2b — 四条 reverse-path FAIL 回应)
+
+- **Verdict/Action**: 回应 Codex round-2 FAIL 四条：①`catalyst_recall_feed` schema 改 `array|null` 对齐运行态 +双向测；②builder+runner 改 canonical 查重再 set 相等(同名/大小写变体 dup 拒)真 1:1；③`--analysis-fixture` 直接吃 committed 18 键示例(忽略+覆写路径键)、删私测 strip helper、命令进 builder docstring+README 指针；④失败全脱敏(错误码+location+计数；两 main() 对传播引擎错误仅露类名)。详见 register。
+- **Required**: `R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` → fixed round-2b pending Codex；Repair round-2b 全文+验证见 system_risk_register.md（单一来源）。
+- **Verify**: builder/CLI 子进程测 14 OK；既有 runner+orchestrator 49 OK（零回归）；全离线 `test_*us_short*` 2530 OK；README route guard 11 OK；doc/route guard 52 OK；py_compile OK。
+- **Pre-Codex self-review**: A 缺陷×出口（malformed/缺键、mismatch、同名 dup、变体 dup、account 值、schema 哨兵值、runner mismatch/dup、传播引擎错误 各 fail-closed 无落盘且脱敏）；B ripple-grep（删 `_analysis_fixture`/`context_tickers` 源零残留、`_PATH_KEYS` 已用、catalyst schema=array|null）；C 反向（合法空/非空示例直接消费 emit row 0/1 正控）；D schema↔运行态↔示例↔builder 四方一致；E README 薄指针≤cap、escaped-pipe；F 私密地板+脱敏复用既有 guard。
+- **Next**: Codex 复审 ONE-CLICK round-2b → PASS 则提交。
+
+## 2026-06-29 - Codex 审查 FAIL (US-short batch4 ONE-CLICK round-2)
+
+- **Verdict/Action**: FAIL；schema/builder/examples 正向链可跑，但 schema↔runtime 类型漂移、重复持仓绕过 1:1、fixture 仍需私测式手工裁剪、失败 stderr 回显敏感值。
+- **Required**: `R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` 仍 `in_progress`；完整证据与修复矩阵见 register。
+- **Verify**: builder/runner/orchestrator 55、全离线 `*us_short*` 2522、route-doc 25 全绿；4 组 direct reverse probes 均复现。
+- **Next**: Claude Code `修复`。
+
+## 2026-06-29 - Claude 修复 (US-short batch4 ② ONE-CLICK round-2 — schema+builder+examples+subprocess CLI)
+
+- **Verdict/Action**: 闭 reopened ONE-CLICK 后半。新增 schema-first 18 键闭世界 packet schema + 支持 builder（batch1 account + 本地 batch2/3 分析 fixture + 复核 calendar/governance/私密根 → schema-validated packet；holdings↔positions 1:1 对账；§18.0 私密地板写出）+ 空/非空 no-secret 示例模板 + runner 装管线前 schema 校验。provider/live/数据获取仍 OUTSIDE 且 gated，live 由 orchestrator 硬阻断；builder 不产 batch2/3 行情、只拼用户提供的离线 fixture。
+- **Required**: `R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP` → fixed round-2 pending Codex；Repair round-2 全文+验证见 system_risk_register.md（单一来源）。
+- **Verify**: 新 builder/CLI 子进程测 6 OK；既有 runner+orchestrator 49 OK（零回归）；全离线 `test_*us_short*` 2522 OK（+6）；README route-row guard 11 OK；py_compile OK。
+- **Pre-Codex self-review**: A 缺陷×出口（malformed fixture / holdings-account 不符 / 嵌套类型违例 / 缺键 各 fail-closed 无落盘）；B ripple-grep（`_packet`/`run_weekend_pipeline`/新文件名 已 route、无悬挂）；C 反向（合法空/非空 packet 正控 emit row 0/1）；D schema 与 `_packet` 运行态 + 两示例 三方一致；E README 薄指针≤cap 无条数；F 私密地板复用 `reject_nonprivate_output_path`。
+- **Next**: Codex 复审 ONE-CLICK round-2 → PASS 则提交。
+
 ## 2026-06-28 - Codex scoped re-review PASS (RISK-DOWNGRADE-WIRING-GAP only)
 
 - **Verdict/Action**: PASS；罚分已进入 `core_score` 并真实改变 selection/action priority，official landing 改到存在的 `action_rank`；typed input 已严格 closed-world。
-- **Required**: 无；`R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` resolved。本轮未审 ONE-CLICK、batch5、A-share、US-long。
+- **Required**: 无；`R-USSHORT-BATCH4-RISK-DOWNGRADE-WIRING-GAP` resolved（详见 system_risk_register.md）。本轮未审 ONE-CLICK、batch5、A-share、US-long。
 - **Verify**: focused 373、全离线 `*us_short*` 2516、route-doc 25 全绿；direct mutants 缺 `hard_veto`/多余键均拒，61.5→46.5、rank 1→2，official `landed/action_rank` clean。
 - **Next**: Claude Code `Pass`。
 

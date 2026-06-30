@@ -26,164 +26,6 @@
     "limitations",
     "next_steps"
   ],
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "scope": {
-            "properties": {
-              "first_version_status": {
-                "const": "provider_live_probe_executed_small_sample_only"
-              }
-            }
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "scope": {
-            "properties": {
-              "provider_live_probe_performed": {
-                "const": true
-              },
-              "raw_payload_storage_performed": {
-                "const": true
-              },
-              "validation_only_raw_parse_performed": {
-                "const": true
-              }
-            }
-          },
-          "pre_execution_checks": {
-            "properties": {
-              "user_authorization_confirmed": {
-                "const": true
-              }
-            }
-          },
-          "endpoint_call_budget": {
-            "properties": {
-              "actual_total_endpoint_calls": {
-                "const": 10
-              },
-              "actual_fmp_endpoint_calls": {
-                "const": 6
-              },
-              "actual_sec_public_api_calls": {
-                "const": 4
-              }
-            }
-          },
-          "endpoint_results": {
-            "minItems": 10,
-            "maxItems": 10,
-            "allOf": [
-              {
-                "contains": {
-                  "$ref": "#/definitions/sec_tickers_mapping_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_profile_aapl_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_eod_aapl_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_profile_msft_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_eod_msft_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_profile_jpm_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/fmp_eod_jpm_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/sec_submissions_aapl_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/sec_submissions_msft_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/sec_submissions_jpm_success"
-                }
-              }
-            ]
-          },
-          "symbol_results": {
-            "minItems": 3,
-            "maxItems": 3,
-            "allOf": [
-              {
-                "contains": {
-                  "$ref": "#/definitions/symbol_aapl_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/symbol_msft_success"
-                }
-              },
-              {
-                "contains": {
-                  "$ref": "#/definitions/symbol_jpm_success"
-                }
-              }
-            ]
-          },
-          "aggregate_validation_metrics": {
-            "properties": {
-              "endpoint_success_count": {
-                "const": 10
-              },
-              "endpoint_error_count": {
-                "const": 0
-              },
-              "symbols_with_profile_shape": {
-                "const": 3
-              },
-              "symbols_with_price_volume_shape": {
-                "const": 3
-              },
-              "symbols_with_sec_cik": {
-                "const": 3
-              },
-              "symbols_with_sec_submissions_shape": {
-                "const": 3
-              }
-            }
-          },
-          "validation_decision": {
-            "properties": {
-              "status": {
-                "const": "bounded_probe_completed"
-              }
-            }
-          }
-        }
-      }
-    }
-  ],
   "properties": {
     "schema_name": {
       "const": "us_short_batch5_provider_live_probe_summary"
@@ -644,373 +486,6 @@
     }
   },
   "definitions": {
-    "successful_endpoint_base": {
-      "type": "object",
-      "required": [
-        "status",
-        "missing_required_fields",
-        "raw_sample_ref_gitignored"
-      ],
-      "properties": {
-        "status": {
-          "const": "success"
-        },
-        "missing_required_fields": {
-          "maxItems": 0
-        },
-        "raw_sample_ref_gitignored": {
-          "const": true
-        }
-      }
-    },
-    "sec_tickers_mapping_success": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "SEC"
-            },
-            "endpoint_family": {
-              "const": "company_tickers_mapping"
-            },
-            "symbol": {
-              "const": null
-            }
-          }
-        }
-      ]
-    },
-    "fmp_profile_aapl_success": {
-      "$ref": "#/definitions/fmp_profile_success_aapl"
-    },
-    "fmp_eod_aapl_success": {
-      "$ref": "#/definitions/fmp_eod_success_aapl"
-    },
-    "fmp_profile_msft_success": {
-      "$ref": "#/definitions/fmp_profile_success_msft"
-    },
-    "fmp_eod_msft_success": {
-      "$ref": "#/definitions/fmp_eod_success_msft"
-    },
-    "fmp_profile_jpm_success": {
-      "$ref": "#/definitions/fmp_profile_success_jpm"
-    },
-    "fmp_eod_jpm_success": {
-      "$ref": "#/definitions/fmp_eod_success_jpm"
-    },
-    "sec_submissions_aapl_success": {
-      "$ref": "#/definitions/sec_submissions_success_aapl"
-    },
-    "sec_submissions_msft_success": {
-      "$ref": "#/definitions/sec_submissions_success_msft"
-    },
-    "sec_submissions_jpm_success": {
-      "$ref": "#/definitions/sec_submissions_success_jpm"
-    },
-    "fmp_profile_success_aapl": {
-      "$ref": "#/definitions/fmp_profile_success_AAPL"
-    },
-    "fmp_profile_success_AAPL": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "profile_or_company_metadata"
-            },
-            "symbol": {
-              "const": "AAPL"
-            }
-          }
-        }
-      ]
-    },
-    "fmp_profile_success_msft": {
-      "$ref": "#/definitions/fmp_profile_success_MSFT"
-    },
-    "fmp_profile_success_MSFT": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "profile_or_company_metadata"
-            },
-            "symbol": {
-              "const": "MSFT"
-            }
-          }
-        }
-      ]
-    },
-    "fmp_profile_success_jpm": {
-      "$ref": "#/definitions/fmp_profile_success_JPM"
-    },
-    "fmp_profile_success_JPM": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "profile_or_company_metadata"
-            },
-            "symbol": {
-              "const": "JPM"
-            }
-          }
-        }
-      ]
-    },
-    "fmp_eod_success_aapl": {
-      "$ref": "#/definitions/fmp_eod_success_AAPL"
-    },
-    "fmp_eod_success_AAPL": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "historical_eod_price_volume"
-            },
-            "symbol": {
-              "const": "AAPL"
-            }
-          }
-        }
-      ]
-    },
-    "fmp_eod_success_msft": {
-      "$ref": "#/definitions/fmp_eod_success_MSFT"
-    },
-    "fmp_eod_success_MSFT": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "historical_eod_price_volume"
-            },
-            "symbol": {
-              "const": "MSFT"
-            }
-          }
-        }
-      ]
-    },
-    "fmp_eod_success_jpm": {
-      "$ref": "#/definitions/fmp_eod_success_JPM"
-    },
-    "fmp_eod_success_JPM": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "FMP"
-            },
-            "endpoint_family": {
-              "const": "historical_eod_price_volume"
-            },
-            "symbol": {
-              "const": "JPM"
-            }
-          }
-        }
-      ]
-    },
-    "sec_submissions_success_aapl": {
-      "$ref": "#/definitions/sec_submissions_success_AAPL"
-    },
-    "sec_submissions_success_AAPL": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "SEC"
-            },
-            "endpoint_family": {
-              "const": "company_submissions"
-            },
-            "symbol": {
-              "const": "AAPL"
-            }
-          }
-        }
-      ]
-    },
-    "sec_submissions_success_msft": {
-      "$ref": "#/definitions/sec_submissions_success_MSFT"
-    },
-    "sec_submissions_success_MSFT": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "SEC"
-            },
-            "endpoint_family": {
-              "const": "company_submissions"
-            },
-            "symbol": {
-              "const": "MSFT"
-            }
-          }
-        }
-      ]
-    },
-    "sec_submissions_success_jpm": {
-      "$ref": "#/definitions/sec_submissions_success_JPM"
-    },
-    "sec_submissions_success_JPM": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_endpoint_base"
-        },
-        {
-          "properties": {
-            "provider": {
-              "const": "SEC"
-            },
-            "endpoint_family": {
-              "const": "company_submissions"
-            },
-            "symbol": {
-              "const": "JPM"
-            }
-          }
-        }
-      ]
-    },
-    "symbol_aapl_success": {
-      "$ref": "#/definitions/symbol_success_AAPL"
-    },
-    "symbol_msft_success": {
-      "$ref": "#/definitions/symbol_success_MSFT"
-    },
-    "symbol_jpm_success": {
-      "$ref": "#/definitions/symbol_success_JPM"
-    },
-    "symbol_success_AAPL": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_symbol_base"
-        },
-        {
-          "properties": {
-            "symbol": {
-              "const": "AAPL"
-            }
-          }
-        }
-      ]
-    },
-    "symbol_success_MSFT": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_symbol_base"
-        },
-        {
-          "properties": {
-            "symbol": {
-              "const": "MSFT"
-            }
-          }
-        }
-      ]
-    },
-    "symbol_success_JPM": {
-      "allOf": [
-        {
-          "$ref": "#/definitions/successful_symbol_base"
-        },
-        {
-          "properties": {
-            "symbol": {
-              "const": "JPM"
-            }
-          }
-        }
-      ]
-    },
-    "successful_symbol_base": {
-      "type": "object",
-      "required": [
-        "active_symbol_assumption",
-        "sec_cik_found",
-        "fmp_endpoint_status",
-        "sec_endpoint_status"
-      ],
-      "properties": {
-        "active_symbol_assumption": {
-          "const": true
-        },
-        "sec_cik_found": {
-          "const": true
-        },
-        "fmp_endpoint_status": {
-          "type": "object",
-          "required": [
-            "profile_or_company_metadata",
-            "historical_eod_price_volume"
-          ],
-          "properties": {
-            "profile_or_company_metadata": {
-              "const": "success"
-            },
-            "historical_eod_price_volume": {
-              "const": "success"
-            }
-          }
-        },
-        "sec_endpoint_status": {
-          "type": "object",
-          "required": [
-            "company_submissions"
-          ],
-          "properties": {
-            "company_submissions": {
-              "const": "success"
-            }
-          }
-        }
-      }
-    },
     "endpoint_result": {
       "type": "object",
       "additionalProperties": false,
@@ -1068,7 +543,7 @@
         },
         "raw_sample_ref": {
           "type": "string",
-          "pattern": "^provider_samples/us_short_batch5_v1_provider_live_20260625/raw/"
+          "pattern": "^provider_samples/us_short_batch5_v1_provider_live_20260625/"
         },
         "raw_sample_ref_gitignored": {
           "const": true
@@ -1168,5 +643,277 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "scope": {
+            "properties": {
+              "first_version_status": {
+                "const": "provider_live_probe_executed_small_sample_only"
+              }
+            }
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "endpoint_results": {
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "SEC"
+                    },
+                    "endpoint_family": {
+                      "const": "company_tickers_mapping"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "profile_or_company_metadata"
+                    },
+                    "symbol": {
+                      "const": "AAPL"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "profile_or_company_metadata"
+                    },
+                    "symbol": {
+                      "const": "MSFT"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "profile_or_company_metadata"
+                    },
+                    "symbol": {
+                      "const": "JPM"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "historical_eod_price_volume"
+                    },
+                    "symbol": {
+                      "const": "AAPL"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "historical_eod_price_volume"
+                    },
+                    "symbol": {
+                      "const": "MSFT"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "FMP"
+                    },
+                    "endpoint_family": {
+                      "const": "historical_eod_price_volume"
+                    },
+                    "symbol": {
+                      "const": "JPM"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "SEC"
+                    },
+                    "endpoint_family": {
+                      "const": "company_submissions"
+                    },
+                    "symbol": {
+                      "const": "AAPL"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "SEC"
+                    },
+                    "endpoint_family": {
+                      "const": "company_submissions"
+                    },
+                    "symbol": {
+                      "const": "MSFT"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "provider": {
+                      "const": "SEC"
+                    },
+                    "endpoint_family": {
+                      "const": "company_submissions"
+                    },
+                    "symbol": {
+                      "const": "JPM"
+                    }
+                  },
+                  "required": [
+                    "provider",
+                    "endpoint_family",
+                    "symbol"
+                  ]
+                }
+              }
+            ]
+          },
+          "symbol_results": {
+            "allOf": [
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "const": "AAPL"
+                    }
+                  },
+                  "required": [
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "const": "MSFT"
+                    }
+                  },
+                  "required": [
+                    "symbol"
+                  ]
+                }
+              },
+              {
+                "contains": {
+                  "type": "object",
+                  "properties": {
+                    "symbol": {
+                      "const": "JPM"
+                    }
+                  },
+                  "required": [
+                    "symbol"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

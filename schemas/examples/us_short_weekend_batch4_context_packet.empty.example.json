@@ -1,0 +1,88 @@
+{
+  "data_context": {
+    "universe": [],
+    "catalyst_recall_feed": null,
+    "holdings": [],
+    "candidate_pass2_signals": {},
+    "selection_inputs": {
+      "theme_opportunity_state": "no_strong_theme",
+      "per_ticker": {}
+    }
+  },
+  "per_ticker_analysis": {},
+  "run_provenance": {
+    "as_of": "20260615",
+    "price_basis_date": "20260612",
+    "families": {
+      "universe": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": "20260612",
+        "session": "RTH",
+        "adjustment": "split_div_adjusted",
+        "row_count": 0
+      },
+      "per_ticker_analysis": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": "20260612",
+        "session": "RTH",
+        "adjustment": "split_div_adjusted",
+        "row_count": 0
+      },
+      "candidate_pass2_signals": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": null,
+        "session": null,
+        "adjustment": null,
+        "row_count": 0
+      },
+      "selection_inputs": {
+        "as_of": "20260615",
+        "observed_at": "2026-06-13T08:00:00",
+        "price_basis_date": null,
+        "session": null,
+        "adjustment": null,
+        "row_count": 0
+      }
+    }
+  },
+  "provider_health": {
+    "fmp": "ok",
+    "sec_edgar": "ok"
+  },
+  "market_axis_regimes": {
+    "vix": "进攻",
+    "market_trend": "进攻",
+    "breadth": "进攻"
+  },
+  "prior_regime": null,
+  "prior_upgrade_count": 0,
+  "sizing_per_ticker": {},
+  "basket_context": {
+    "per_ticker": {},
+    "portfolio_guard_status": "normal",
+    "theme_opportunity_state": "no_strong_theme"
+  },
+  "cost_inputs": {},
+  "report_context": {
+    "price_clock": {
+      "price_data_through": "20260612",
+      "news_window_through": "20260613",
+      "session_scope": "RTH",
+      "decision_date": "20260615"
+    },
+    "coverage_inputs": [],
+    "core_conclusion": "empty run 占位（无候选、无持仓）",
+    "risk_downgrade_note": "无",
+    "macro_cluster_banner": ""
+  },
+  "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+  "calendar_path": "presets/us_short_market_calendar_2026_2027.json",
+  "account_state_path": "<ABSOLUTE_PRIVATE_DIR>/us_short_account_state.json",
+  "lifecycle_register_path": "<ABSOLUTE_PRIVATE_DIR>/lifecycle/lifecycle_register.json",
+  "lifecycle_readiness_out_path": null,
+  "runs_private_root": "<ABSOLUTE_PRIVATE_DIR>/runs_private",
+  "weekly_private_root": "<ABSOLUTE_PRIVATE_DIR>/weekly_private"
+}

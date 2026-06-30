@@ -251,7 +251,8 @@ def flatten_machine_record(machine_record):
     """Project the rich §10 machine record onto the flat §11.3 action_table columns; returns a NEW machine
     record with each row's rich layer + field_records preserved AND the flat columns populated.
 
-    machine_record = the 4d-ii-k `assemble_machine_record` output {schema_name, schema_version, as_of, rows}.
+    machine_record = the 4d-ii-k `assemble_machine_record` output {schema_name, schema_version, as_of, run_origin, rows}
+        (top-level keys are preserved through the projection, so run_origin rides onto the written machine artifact).
 
     Every row is consumer-validated fail-closed (§9 action/reason single-source + canonical-unique ticker),
     then the rich layer is projected onto the flat §11.3 columns. The flattened record is re-checked §10-clean

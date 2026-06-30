@@ -1,0 +1,216 @@
+{
+  "schema_name": "us_short_batch5_status_source_binding",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-29T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "US-short single design authority; §3.3 critical-status unknown must not be assumed clean, §3.7 provider health; batch5 status-source fetch remains gated under SR-PROVIDER-001."
+    },
+    {
+      "artifact_id": "us_short_universe_fetch_runner",
+      "path": "runners/us_short_universe_fetch.py",
+      "role": "Round-1 Massive+SEC universe fetch + Pass1 that currently hardwires delisted/halted/bankruptcy/otc to False (R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN); this binding defines the real per-flag status source that replaces the hardwired False."
+    },
+    {
+      "artifact_id": "us_short_batch5_license_storage_retention_decision_20260625",
+      "path": "docs/us_short_batch5_license_storage_retention_decision_20260625.json",
+      "role": "Storage/retention rights boundary; status-source raw payloads remain gitignored sample-only, no production storage authorized by this binding."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker; this binding does not authorize the live status fetch, only freezes the schema-first per-flag source contract for a later reviewed status-source access packet + preflight."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "artifact_status": "status_source_binding_offline_only",
+    "user_authorized_real_status_source_integration": true,
+    "provider_live_call_allowed": false,
+    "network_access_required": false,
+    "raw_payload_read_allowed": false,
+    "raw_payload_parse_allowed": false,
+    "fixture_generation_allowed": false,
+    "parser_implementation_allowed": false,
+    "gate_integration_implementation_allowed": false,
+    "datahub_consumption_allowed": false,
+    "runner_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "production_ready_claim_allowed": false,
+    "live_normalized_evidence_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "broker_or_order_automation_allowed": false
+  },
+  "review_basis": {
+    "basis_type": "existing_repo_artifacts_no_new_external_review",
+    "uses_existing_reviewed_artifacts_only": true,
+    "status_source_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "fixture_generated": false,
+    "parser_implemented": false,
+    "gate_integration_implemented": false,
+    "requires_later_user_approved_status_source_access_packet": true,
+    "requires_later_parser_implementation_review": true,
+    "requires_later_gate_integration_review": true
+  },
+  "binding_summary": {
+    "binding_status": "status_sources_bound_to_batch5_only_offline",
+    "replaces_pass1_hardwired_false": true,
+    "unknown_status_policy": "critical_unknown_is_never_clean_by_omission_conservative_reject",
+    "bankruptcy_screen_type": "positive_detection_only_best_effort_no_proof_of_clean",
+    "datahub_or_runner_status": "blocked",
+    "ship_gate_status": "not_evidence"
+  },
+  "status_flag_bindings": [
+    {
+      "flag_id": "delisted",
+      "eligibility_role": "disqualifying_status_flag",
+      "authorized_source_id": "ticker_reference",
+      "endpoint_family": "active_listing_reference",
+      "status_semantics": "clean_false requires a positive reference observation that the symbol is an active listing at as_of; reference active=false OR absence from the active-listing reference at as_of -> delisted (True); no reference observation -> unknown.",
+      "provenance_required": ["source_id", "as_of", "observed_at", "reference_active_value", "coverage"],
+      "unknown_policy": "conservative_reject",
+      "derivation_evidence_rule": "a same-session grouped-daily trade is NOT sufficient evidence of listing status; the active-listing reference is the authoritative source for delisting.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "flag_id": "halted",
+      "eligibility_role": "disqualifying_status_flag",
+      "authorized_source_id": "exchange_halt_feed",
+      "endpoint_family": "public_trading_halt_feed",
+      "status_semantics": "True if the symbol appears in the exchange trading-halt feed effective at the decision PIT (prior settled session); clean_false requires the halt feed to have been observed and the symbol absent; feed unavailable -> unknown. Intraday halts that resolved before the PIT are not a standing disqualifier.",
+      "provenance_required": ["source_id", "as_of", "observed_at", "halt_feed_observed", "coverage"],
+      "unknown_policy": "conservative_reject",
+      "derivation_evidence_rule": "absence from price/volume data is NOT evidence of a halt; only the halt feed sets the flag.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "flag_id": "otc",
+      "eligibility_role": "disqualifying_status_flag",
+      "authorized_source_id": "ticker_reference",
+      "endpoint_family": "primary_exchange_reference",
+      "status_semantics": "True if the reference primary exchange/market is an OTC venue; clean_false requires a positive reference observation that the primary exchange is an authorized NYSE/NASDAQ venue (the §3.1 exchange whitelist); no reference observation -> unknown. This binds the explicit otc flag to the same reference exchange field the whitelist already screens.",
+      "provenance_required": ["source_id", "as_of", "observed_at", "primary_exchange_value", "coverage"],
+      "unknown_policy": "conservative_reject",
+      "derivation_evidence_rule": "the exchange whitelist already rejects non-NYSE/NASDAQ; this flag records the explicit OTC determination with its reference provenance, never a hardwired False.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "flag_id": "bankruptcy",
+      "eligibility_role": "disqualifying_status_flag",
+      "authorized_source_id": "sec_8k_item_103",
+      "endpoint_family": "sec_8k_bankruptcy_filing_search",
+      "status_semantics": "bankrupt_8k_found (True/reject) if an SEC 8-K Item 1.03 (Bankruptcy or Receivership) is found for the issuer within the lookback window; screened_no_filing (best-effort clean_false) if the 8-K search ran over the lookback window and found none; unscreened if the search did not run. There is NO positive proof of non-bankruptcy, so clean_false is a BEST-EFFORT negative, never an assumption.",
+      "provenance_required": ["source_id", "as_of", "observed_at", "lookback_window", "filing_accession_if_found", "coverage", "screen_status"],
+      "unknown_policy": "mark_unscreened_not_clean",
+      "derivation_evidence_rule": "absence of an 8-K is recorded as screened_no_filing (best-effort), NOT proof of solvency; the run records bankruptcy_screen_coverage and flags any unscreened universe explicitly.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "provider_failure_health_policy": {
+    "policy_status": "failure_classified_and_health_bound_not_swallowed",
+    "swallow_all_exceptions_and_return_empty_allowed": false,
+    "per_source_failure_must_be_classified": true,
+    "per_source_failure_must_be_counted": true,
+    "failure_feeds_provider_health": true,
+    "critical_source_all_fail_must_block_or_no_emit": true,
+    "completed_summary_on_critical_failure_allowed": false,
+    "authorizes_status_source_call": false,
+    "authorizes_gate_integration": false
+  },
+  "decision_gates": [
+    {
+      "gate_id": "status_source_access_packet_approval",
+      "status": "pending_user_approval",
+      "blocks_implementation": true,
+      "required_resolution": "A user-approved status-source access packet must define the symbols/universe, per-flag source endpoint families, call budget, fair-access behavior, gitignored raw-payload storage, and no-secret summary policy before any live status-source call.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "gate_id": "parser_and_gate_integration_review",
+      "status": "pending_later_review",
+      "blocks_implementation": true,
+      "required_resolution": "A later reviewed slice must implement the offline status parser + the cheap_eligible per-flag-with-provenance integration + R2 per-row lineage against fixtures, with no-silent-default behavior, before any code consumes a live payload.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    },
+    {
+      "gate_id": "phase7c_consumption_gate",
+      "status": "blocked",
+      "blocks_implementation": true,
+      "required_resolution": "DataHub / runner / production consumption remains blocked until the status sources, parser, gate integration, lineage, coverage, and production-readiness boundaries are resolved or explicitly accepted.",
+      "authorizes_status_source_call": false,
+      "authorizes_raw_payload_parse": false,
+      "authorizes_fixture_generation": false,
+      "authorizes_gate_integration": false,
+      "authorizes_datahub_or_runner_consumption": false
+    }
+  ],
+  "prohibited_actions": {
+    "status_source_call": false,
+    "raw_payload_read": false,
+    "raw_payload_parse": false,
+    "fixture_generation": false,
+    "parser_implementation": false,
+    "gate_integration_implementation": false,
+    "new_token_or_trial": false,
+    "paid_access": false,
+    "provider_contact": false,
+    "full_market_download": false,
+    "datahub_table": false,
+    "runner_consumption": false,
+    "production_storage": false,
+    "live_normalized_evidence": false,
+    "ship_gate_claim": false,
+    "broker_or_order_automation": false
+  },
+  "next_authorization_boundary": {
+    "required_before_any_status_source_call": true,
+    "required_before_any_raw_parse_or_fixture": true,
+    "required_before_any_parser_or_gate_integration": true,
+    "required_before_any_datahub_or_runner_consumption": true,
+    "default_future_call_budget_without_new_authorization": 0,
+    "must_state_symbols": true,
+    "must_state_endpoint_families": true,
+    "must_state_call_budget": true,
+    "must_state_fair_access_policy": true,
+    "must_state_write_locations": true,
+    "must_state_secret_and_raw_privacy_boundary": true,
+    "must_state_validation_method": true,
+    "must_state_non_authorized_paths": true
+  },
+  "limitations": [
+    "This artifact performs no status-source calls, reads no raw payloads, parses nothing, generates no fixtures, and implements no parser or gate integration.",
+    "It freezes the schema-first per-flag status-source contract (delisted/halted/otc/bankruptcy -> authorized source + provenance + unknown policy) for batch5 only; it does not prove source availability, coverage, fair-access terms, or production readiness.",
+    "delisted/otc come from a ticker-reference dataset, halted from a public exchange halt feed, bankruptcy best-effort from SEC 8-K Item 1.03; bankruptcy clean_false is a best-effort negative, never proof of solvency.",
+    "It does not resolve SR-PROVIDER-001; the live status fetch, parser, gate integration, lineage, DataHub/runner consumption, production storage, live_normalized evidence, and ship-gate claims remain blocked pending separate reviewed packets."
+  ],
+  "next_steps": [
+    "Review this offline status-source binding before commit.",
+    "A later reviewed status-source access packet must define symbols, per-flag endpoint families, call budget, fair-access, write locations, and no-secret policy before any live call.",
+    "A later reviewed offline slice implements the status parser + cheap_eligible per-flag-with-provenance integration + R2 lineage against fixtures, still performing no live call."
+  ]
+}

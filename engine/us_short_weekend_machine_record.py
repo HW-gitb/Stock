@@ -43,6 +43,7 @@ from engine.us_short_no_dangling_validator import validate_official_machine_reco
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
+from engine.us_short_run_origin import OFFLINE_TEST_RUN_ORIGIN, validate_run_origin
 from engine.us_short_theme_probe import RISK_TAG as _PROBE_RISK_TAG
 from engine.us_short_weekend_cost_floor import (
     _ENTRY_MODE_CONSTRAINTS,
@@ -312,7 +313,7 @@ def _validate_ranked_row(row):
                 f"reason={_PROBE_SIZING_REASON!r}, pre_probe_risk_shares>=min）: {psz!r}")
 
 
-def assemble_machine_record(ranked_result, *, as_of):
+def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN):
     """4d-ii-k §10 machine-record assembly. Assembles the 4d-ii-j `apply_action_rank` result into the §10
     machine record and validates it with `validate_official_machine_record`, failing closed if it is not §10-clean.
 
@@ -321,8 +322,11 @@ def assemble_machine_record(ranked_result, *, as_of):
         final_action / observe_reason_type / selection_rank / action_group / action_rank / row_source).
     as_of = the run's canonical decision_date (the §10 record PIT anchor); the run-level real-YYYYMMDD gate is
         enforced by `validate_official_machine_record` (single date source — this module adds no second date parser).
+    run_origin = the immutable batch4 honesty-provenance fact (offline_test / caller_supplied_fixture /
+        not_authorized) stamped on the record so a synthetic fixture run can never pass as operational output
+        (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP); validated single-source here.
 
-    Returns the §10 machine record {schema_name, schema_version, as_of, rows: [{...row (rich machine layer),
+    Returns the §10 machine record {schema_name, schema_version, as_of, run_origin (offline honesty fact), rows: [{...row (rich machine layer),
     ticker canonical UPPERCASE, market_risk_regime (carried for traceback), decision_trace, field_records}]}.
     Raises WeekendMachineRecordError on a malformed result / row, an invalid market_risk_regime, an unknown
     final_action, an observe_reason_type inconsistent with final_action, a non-canonical / duplicate ticker, a
@@ -360,7 +364,8 @@ def assemble_machine_record(ranked_result, *, as_of):
     # stripping evidence. The SAME gate is re-run by every official consumer (flatten / private), so a record whose
     # registry was stripped AFTER assembly cannot pass into official §11.3 output either.
 
-    record = {"schema_name": _SCHEMA_NAME, "schema_version": _SCHEMA_VERSION, "as_of": as_of, "rows": rows_out}
+    record = {"schema_name": _SCHEMA_NAME, "schema_version": _SCHEMA_VERSION, "as_of": as_of,
+              "run_origin": validate_run_origin(run_origin), "rows": rows_out}
 
     result = validate_official_machine_record(record)
     if not result["clean"]:

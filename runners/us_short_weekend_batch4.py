@@ -18,12 +18,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof
+from engine.us_short_cli_redaction import closed_world_counts, safe_schema_location
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
 from runners.us_short_account_state_from_manual_tables import ConvertError, validate_account_state
 
 _CALIBRATION_PATH = ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json"
+_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_weekend_batch4_context_packet.schema.json"
 
 _PACKET_KEYS = frozenset({
     "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
@@ -40,8 +42,8 @@ class Batch4RunnerError(ValueError):
 def _read_json(path: Path, label: str):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError, ValueError) as exc:
-        raise Batch4RunnerError(f"{label} 无法读取为 UTF-8 JSON: {path}: {exc}") from exc
+    except (OSError, json.JSONDecodeError, ValueError):
+        raise Batch4RunnerError(f"{label} 无法读取为 UTF-8 JSON")
 
 
 def _resolve_path(value, *, base: Path, label: str, allow_none=False):
@@ -75,12 +77,27 @@ def _bootstrap_lifecycle(path: Path, *, decision_date: str) -> bool:
     return True
 
 
+def _validate_packet_schema(packet: dict) -> None:
+    """Structural schema validation BEFORE orchestration (the closed-world top-level key check above is the
+    first-line error; this validates the nested batch2/3 shape against the routed schema-first contract so a
+    hand-authored / builder-produced packet is caught here, not deep inside the orchestrator). The deep
+    SEMANTIC gates (PIT 对账 / price-clock / seam coverage / health / run-mode) stay in the orchestrator."""
+    import jsonschema  # run_packet already imported + hard-required jsonschema before calling this
+    schema = json.loads(_PACKET_SCHEMA_PATH.read_text(encoding="utf-8"))
+    try:
+        jsonschema.validate(packet, schema)
+    except jsonschema.ValidationError as exc:
+        location = safe_schema_location(exc.absolute_path, allowed_roots=_PACKET_KEYS)
+        raise Batch4RunnerError(f"context packet 不符合 schema (at {location})")
+
+
 def _load_packet(packet_path) -> tuple[dict, Path]:
     path = Path(packet_path).resolve()
     packet = _read_json(path, "batch4 context packet")
     if not isinstance(packet, dict) or set(packet) != _PACKET_KEYS:
-        keys = sorted(packet) if isinstance(packet, dict) else packet
-        raise Batch4RunnerError(f"context packet 顶层键须恰为 {sorted(_PACKET_KEYS)}（closed-world）: {keys!r}")
+        shape = closed_world_counts(packet, expected_keys=_PACKET_KEYS)
+        raise Batch4RunnerError(f"context packet 顶层须为 18-key closed-world object ({shape})")
+    _validate_packet_schema(packet)
     return packet, path.parent
 
 
@@ -92,24 +109,33 @@ def _assemble_context(packet: dict, base: Path) -> tuple[dict, dict]:
     try:
         reject_nonprivate_output_path(account_path)
     except PrivatePathError as exc:
-        raise Batch4RunnerError(f"account_state_path 必须为可证明私密的路径: {exc}") from exc
+        raise Batch4RunnerError("account_state_path 必须为可证明私密的路径") from exc
     account = _read_json(account_path, "US-short account state")
     try:
         validate_account_state(account, account.get("as_of") if isinstance(account, dict) else None)
-    except (ConvertError, KeyError, TypeError) as exc:
-        raise Batch4RunnerError(f"account_state 非法: {exc}") from exc
+    except (ConvertError, KeyError, TypeError):
+        # redacted: validate_account_state messages echo account equity/cash/ticker values
+        raise Batch4RunnerError("account_state 非法（详见你的私密 account artifact）")
     if not isinstance(packet["sizing_per_ticker"], dict):
         raise Batch4RunnerError("sizing_per_ticker 须为 dict")
     data_context = packet["data_context"]
     if not (isinstance(data_context, dict) and isinstance(data_context.get("holdings"), list)):
         raise Batch4RunnerError("data_context.holdings 须为 list")
     account_tickers = {p["ticker"] for p in account["positions"]}
-    context_tickers = {canonical_us_ticker(h.get("ticker")) for h in data_context["holdings"]
-                       if isinstance(h, dict)}
-    if None in context_tickers or context_tickers != account_tickers:
+    # TRUE 1:1: canonical holding tickers must be UNIQUE (dup rows must not pass set equality) AND equal
+    # the account ticker set. Redacted: counts only, never the tickers (§11/§18 no-secret contract).
+    canon_holdings = []
+    for h in data_context["holdings"]:
+        c = canonical_us_ticker(h.get("ticker")) if isinstance(h, dict) else None
+        if c is None:
+            raise Batch4RunnerError("data_context.holdings 行须为 {object, 合法 ticker}")
+        canon_holdings.append(c)
+    if len(set(canon_holdings)) != len(canon_holdings):
         raise Batch4RunnerError(
-            f"data_context.holdings 须与 account_state.positions 一一一致: context={sorted(str(x) for x in context_tickers)} "
-            f"account={sorted(account_tickers)}")
+            f"data_context.holdings 含 {len(canon_holdings) - len(set(canon_holdings))} 个重复 canonical ticker（须 1:1 唯一）")
+    if set(canon_holdings) != account_tickers:
+        raise Batch4RunnerError(
+            f"data_context.holdings 与 account_state.positions 不 1:1 对应（holdings {len(set(canon_holdings))} / positions {len(account_tickers)}）")
     pc = {
         "data_context": packet["data_context"],
         "eligibility_governance": load_eligibility_governance(gov_path),
@@ -175,13 +201,14 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", bootst
         if decision_date is not None:
             try:
                 validate_account_state(account, decision_date)
-            except ConvertError as exc:
-                raise Batch4RunnerError(f"account_state 与本次 decision_date 不一致: {exc}") from exc
+            except ConvertError:
+                # redacted: ConvertError echoes account as_of/equity/cash values
+                raise Batch4RunnerError("account_state 与本次 decision_date 不一致（详见你的私密 account artifact）")
         register_path = Path(pc["lifecycle_register_path"])
         if decision_date is not None and not register_path.exists():
             if not bootstrap_lifecycle:
                 raise Batch4RunnerError(
-                    f"lifecycle register 缺失: {register_path}; 首次离线运行请显式加 --bootstrap-lifecycle")
+                    "lifecycle register 缺失；首次离线运行请显式加 --bootstrap-lifecycle")
             _bootstrap_lifecycle(register_path, decision_date=decision_date)
 
     if dry_run:
@@ -216,8 +243,13 @@ def main(argv=None) -> int:
     try:
         summary = run_packet(args.context, now_et=args.now_et, run_mode=args.run_mode,
                              bootstrap_lifecycle=args.bootstrap_lifecycle, dry_run=args.dry_run)
+    except Batch4RunnerError as exc:
+        print(f"US-short batch4 runner failed: {exc}", file=sys.stderr)   # already redacted at the raise site
+        return 2
     except Exception as exc:
-        print(f"US-short batch4 runner failed: {exc}", file=sys.stderr)
+        # redacted: a propagated engine error (orchestrator/analysis/private-path) message can echo
+        # tickers/scores/account values; surface only the error CLASS, never str(exc)
+        print(f"US-short batch4 runner failed: {type(exc).__name__}（已脱敏）", file=sys.stderr)
         return 2
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True))
     return 0

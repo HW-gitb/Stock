@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "us_short_machine_record_contract",
   "title": "US-short machine-layer record contract (design §10 + §11.1) — the per-run machine record the §10 no-dangling / evidence-traceback / field-registry validator focuses and the renderer renders from",
-  "description": "Batch-3 shared STRUCTURAL contract for the machine layer (design §11.1: operation_impact + 全字段 + 原始分数 + decision_trace + registry → state/us_short/runs_private/). It freezes the SHAPE of a per-run machine record: run-level (schema_name/version/as_of) + rows[] (per-ticker decision) + each row's field_records[] (the §10 完整字段 registry record, 10 keys). This schema pins STRUCTURE ONLY (keys present + types + the validator-native disposition enum + the evidence_ref sub-shape). It deliberately does NOT re-enumerate the big frozen vocabularies (operation_impact levels / core_field_classes / impact_targets / evidence claim types / evidence_ref kinds / final_action / action_table columns) — those are owned by us_short_field_registry_governance + us_short_action_table_contract, and membership is enforced at runtime by engine/us_short_no_dangling_validator.py reading those frozen presets (single source, no third copy to drift). draft-07 cannot express the §10 cross-field invariants (forward no-dangling, core-field-must-hit-an-impact-target-or-shadow/drop, reverse evidence traceback, hard_veto-covers-final_action, risk_downgrade-soft-only, selection-vs-action_rank-explained) — those live in the validator + tests. A field_record carries the static 10-key registry declaration PLUS the runtime resolution (field_class / disposition / impact_target / claim_type / evidence_ref) the validator checks.",
+  "description": "Batch-3 shared STRUCTURAL contract for the machine layer (design §11.1: operation_impact + 全字段 + 原始分数 + decision_trace + registry → state/us_short/runs_private/). It freezes the SHAPE of a per-run machine record: run-level (schema_name/version/as_of + optional run_origin = the batch4 offline honesty-provenance fact) + rows[] (per-ticker decision) + each row's field_records[] (the §10 完整字段 registry record, 10 keys). This schema pins STRUCTURE ONLY (keys present + types + the validator-native disposition enum + the evidence_ref sub-shape). It deliberately does NOT re-enumerate the big frozen vocabularies (operation_impact levels / core_field_classes / impact_targets / evidence claim types / evidence_ref kinds / final_action / action_table columns) — those are owned by us_short_field_registry_governance + us_short_action_table_contract, and membership is enforced at runtime by engine/us_short_no_dangling_validator.py reading those frozen presets (single source, no third copy to drift). draft-07 cannot express the §10 cross-field invariants (forward no-dangling, core-field-must-hit-an-impact-target-or-shadow/drop, reverse evidence traceback, hard_veto-covers-final_action, risk_downgrade-soft-only, selection-vs-action_rank-explained) — those live in the validator + tests. A field_record carries the static 10-key registry declaration PLUS the runtime resolution (field_class / disposition / impact_target / claim_type / evidence_ref) the validator checks.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "as_of", "rows"],
@@ -10,6 +10,17 @@
     "schema_name": {"const": "us_short_machine_record_contract"},
     "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "batch4 honesty provenance (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP): the immutable execution/data-origin fact for a batch4 weekend run. Const-pinned to the offline_test / caller_supplied_fixture / not_authorized fact because batch4 only ever produces an official record in offline_test (live is hard-gated upstream → batch5). Optional at the schema level only to keep pre-existing hand-built test records valid; assemble_machine_record always populates and validates it.",
+      "required": ["run_mode", "data_origin", "operational_use"],
+      "properties": {
+        "run_mode": {"const": "offline_test"},
+        "data_origin": {"const": "caller_supplied_fixture"},
+        "operational_use": {"const": "not_authorized"}
+      }
+    },
     "rows": {"type": "array", "items": {"$ref": "#/definitions/row"}}
   },
   "definitions": {

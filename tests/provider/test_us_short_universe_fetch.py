@@ -3,16 +3,21 @@
 Offline-only: no live Massive/SEC/FMP calls. Covers the pure logic:
 - SEC ticker/CIK/exchange parsing + exchange normalization
 - SEC shares frames merge (latest per CIK across quarters)
-- Massive grouped daily parsing (canonical ticker, close/volume, last-trading-day fallback)
-- Pass1 join: market_cap = SEC shares × close; ADV = volume × close; FMP fallback precedence
-- FMP market-cap fallback (budget cap, 429 stop)
-- Authorization + gitignore + raw_root guards
+- Massive grouped daily ADV WINDOW parsing (canonical ticker, multi-day average dollar volume,
+  delayed-day skip, min-coverage conservative null)
+- Pass1 per-row records: market_cap = SEC shares × close; ADV = multi-day average; FMP fallback precedence
+- ADV semantics: a single-day spike must NOT pass the (multi-day) ADV floor
+- summary recomputed from rows; per-run artifact schema + semantic validate-before-write
+- canonical decision_date binds the output path
+- FMP market-cap fallback (budget cap, 429 stop); authorization / gitignore / raw_root / now-et guards
 """
 from __future__ import annotations
 
 import json
+import os
 import sys
 import unittest
+from datetime import datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,11 +29,23 @@ if str(ROOT) not in sys.path:
 import runners.us_short_universe_fetch as _mod
 
 _GOV_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+_CAL_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 
 
 def _load_gov():
     from engine.us_short_eligibility_gate import load_eligibility_governance
     return load_eligibility_governance(_GOV_PATH)
+
+
+def _load_cal():
+    from engine.us_short_market_calendar import load_market_calendar
+    return load_market_calendar(_CAL_PATH)
+
+
+def _md(close, adv_usd, *, volume=None, adv_days=20, price_as_of="2026-06-26"):
+    """A market_data entry as fetch_massive_window now produces it (multi-day ADV precomputed)."""
+    return {"close": close, "volume": volume, "adv_usd": adv_usd,
+            "adv_days_observed": adv_days, "price_as_of": price_as_of}
 
 
 class TestFetchSecTickers(unittest.TestCase):
@@ -81,99 +98,282 @@ class TestFetchSecShares(unittest.TestCase):
         self.assertEqual(out[3]["shares"], 500.0)
 
 
-class TestFetchMassiveUniverse(unittest.TestCase):
-    def test_parses_canonical_close_volume(self):
-        results = [{"T": "AAPL", "c": 275.0, "v": 50000000},
-                   {"T": "MSFT", "c": 350.0, "v": 20000000}]
-        with patch.object(_mod, "_massive_grouped_for_date", return_value=results):
-            used, data = _mod.fetch_massive_universe("k", as_of_date="2026-06-25")
-        self.assertEqual(used, "2026-06-25")
-        self.assertEqual(data["AAPL"], {"close": 275.0, "volume": 50000000.0})
+class TestAdvWindowSessionDates(unittest.TestCase):
+    def test_last_n_sessions_newest_first_iso(self):
+        cal = _load_cal()
+        out = _mod.adv_window_session_dates("20260626", cal, count=5)
+        self.assertEqual(out[0], "2026-06-26")             # newest first
+        self.assertEqual(len(out), 5)
+        self.assertTrue(all(d <= "2026-06-26" for d in out))
+        # strictly descending unique ISO trading days (no weekends/holidays)
+        self.assertEqual(out, sorted(out, reverse=True))
+        self.assertEqual(len(set(out)), len(out))
+        self.assertNotIn("2026-06-19", out)                # Juneteenth holiday excluded
 
-    def test_skips_non_canonical_and_missing_close(self):
-        results = [{"T": "000001.SZ", "c": 10, "v": 1},   # A-share code → skipped
-                   {"T": "GOOD", "c": 5.0, "v": 100},
-                   {"T": "NOCLOSE", "c": None, "v": 100}]  # no close → skipped
-        with patch.object(_mod, "_massive_grouped_for_date", return_value=results):
-            _, data = _mod.fetch_massive_universe("k", as_of_date="2026-06-25")
-        self.assertIn("GOOD", data)
-        self.assertNotIn("000001.SZ", data)
-        self.assertNotIn("NOCLOSE", data)
 
-    def test_steps_back_to_last_trading_day(self):
-        # first date empty (holiday/weekend), second has data
-        calls = {"n": 0}
+class TestFetchMassiveWindow(unittest.TestCase):
+    def test_collects_window_and_averages_adv(self):
+        # 20 days of constant $6M/day dollar volume → adv_usd == 6M, used_date == newest
+        dates = [f"2026-06-{d:02d}" for d in range(26, 6, -1)]   # newest-first, 20 entries
 
         def fake(date, key):
-            calls["n"] += 1
-            return [] if calls["n"] == 1 else [{"T": "AAPL", "c": 275.0, "v": 1000}]
+            return [{"T": "AAPL", "c": 10.0, "v": 600_000}]
 
         with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
-            used, data = _mod.fetch_massive_universe("k", as_of_date=None, lookback=3)
-        self.assertIn("AAPL", data)
-        self.assertEqual(calls["n"], 2)
+            used, observed, md = _mod.fetch_massive_window("k", dates, window=20, min_days=10)
+        self.assertEqual(used, "2026-06-26")
+        self.assertEqual(len(observed), 20)
+        self.assertEqual(md["AAPL"]["adv_usd"], 6_000_000.0)
+        self.assertEqual(md["AAPL"]["adv_days_observed"], 20)
+        self.assertEqual(md["AAPL"]["close"], 10.0)
+        self.assertEqual(md["AAPL"]["price_as_of"], "2026-06-26")
 
-    def test_raises_when_all_empty(self):
-        with patch.object(_mod, "_massive_grouped_for_date", return_value=[]):
+    def test_skips_empty_delayed_days(self):
+        # Massive has not published the two newest days yet (empty) → used_date steps back, still 20 days
+        dates = [f"2026-06-{d:02d}" for d in range(28, 0, -1)]
+
+        def fake(date, key):
+            return [] if date in ("2026-06-28", "2026-06-27") else [{"T": "AAPL", "c": 10.0, "v": 600_000}]
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            used, observed, md = _mod.fetch_massive_window("k", dates, window=20, min_days=10)
+        self.assertEqual(used, "2026-06-26")               # newest day WITH data
+        self.assertNotIn("2026-06-27", observed)
+        self.assertEqual(len(observed), 20)
+
+    def test_raises_below_min_days(self):
+        dates = [f"2026-06-{d:02d}" for d in range(26, 20, -1)]   # only a handful have data
+
+        def fake(date, key):
+            return [{"T": "AAPL", "c": 10.0, "v": 600_000}] if date in dates[:3] else []
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
             with self.assertRaises(RuntimeError):
-                _mod.fetch_massive_universe("k", as_of_date=None, lookback=2)
+                _mod.fetch_massive_window("k", dates, window=20, min_days=10)
+
+    def test_auth_error_raises_not_skipped(self):
+        import urllib.error
+
+        def fake(date, key):
+            raise urllib.error.HTTPError(None, 401, "unauth", {}, None)
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            with self.assertRaises(RuntimeError) as ctx:
+                _mod.fetch_massive_window("k", ["2026-06-26", "2026-06-25"], window=20, min_days=1)
+        self.assertIn("401", str(ctx.exception))
+
+    def test_adv_insufficient_coverage_null(self):
+        # ticker only trades on 4 of the collected days (< min 10) → adv_usd is None (conservative)
+        dates = [f"2026-06-{d:02d}" for d in range(26, 6, -1)]
+
+        def fake(date, key):
+            rows = [{"T": "BIG", "c": 10.0, "v": 600_000}]
+            if date in dates[:4]:
+                rows.append({"T": "THIN", "c": 10.0, "v": 600_000})
+            return rows
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            _, _, md = _mod.fetch_massive_window("k", dates, window=20, min_days=10)
+        self.assertIsNone(md["THIN"]["adv_usd"])
+        self.assertEqual(md["THIN"]["adv_days_observed"], 4)
+        self.assertEqual(md["BIG"]["adv_usd"], 6_000_000.0)
+
+    def test_skips_non_canonical_and_missing_close(self):
+        def fake(date, key):
+            return [{"T": "000001.SZ", "c": 10, "v": 1},      # A-share code → skipped (non-canonical)
+                    {"T": "GOOD", "c": 5.0, "v": 100},
+                    {"T": "NOCLS", "c": None, "v": 100}]       # no close → entry kept, price unusable
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            _, _, md = _mod.fetch_massive_window("k", ["2026-06-26"], window=20, min_days=1)
+        self.assertIn("GOOD", md)
+        self.assertNotIn("000001.SZ", md)
+        self.assertIsNone(md["NOCLS"]["close"])              # present but no usable price
 
 
 class TestApplyPass1(unittest.TestCase):
     def setUp(self):
         self.gov = _load_gov()
 
+    def _rows(self, sec, shares, md, **kw):
+        return _mod.apply_pass1(sec, shares, md, governance=self.gov,
+                                as_of="2026-06-26", observed_at="2026-06-29T12:00:00+00:00", **kw)
+
     def test_eligible_when_all_pass(self):
         sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
-        md = {"AAPL": {"close": 200.0, "volume": 50_000_000}}
-        out = _mod.apply_pass1(sec, shares, md, governance=self.gov)
-        self.assertEqual(out["eligible_count"], 1)
-        self.assertIn("AAPL", out["eligible_tickers"])
+        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0)})
+        self.assertEqual(_mod.eligible_tickers_from_rows(rows), ["AAPL"])
+        self.assertTrue(rows[0]["eligible"])
+        self.assertEqual(rows[0]["reasons"], [])
 
     def test_market_cap_below_floor(self):
         sec = {"S": {"cik": 5, "exchange": "NYSE"}}
         shares = {5: {"shares": 10_000_000, "end": "2026-03-31"}}
-        md = {"S": {"close": 5.0, "volume": 50_000_000}}
-        out = _mod.apply_pass1(sec, shares, md, governance=self.gov)
-        self.assertEqual(out["eligible_count"], 0)
-        self.assertIn("market_cap_usd_below_floor", out["reason_distribution"])
+        rows = self._rows(sec, shares, {"S": _md(5.0, 50_000_000.0)})
+        self.assertFalse(rows[0]["eligible"])
+        self.assertIn("market_cap_usd_below_floor", rows[0]["reasons"])
 
     def test_adv_below_floor(self):
         sec = {"T": {"cik": 3, "exchange": "NYSE"}}
         shares = {3: {"shares": 15_000_000_000, "end": "2026-03-31"}}
-        md = {"T": {"close": 10.0, "volume": 100}}
-        out = _mod.apply_pass1(sec, shares, md, governance=self.gov)
-        self.assertEqual(out["eligible_count"], 0)
-        self.assertIn("adv_usd_below_floor", out["reason_distribution"])
+        rows = self._rows(sec, shares, {"T": _md(10.0, 1000.0)})
+        self.assertFalse(rows[0]["eligible"])
+        self.assertIn("adv_usd_below_floor", rows[0]["reasons"])
+
+    def test_adv_insufficient_coverage_is_conservative(self):
+        sec = {"T": {"cik": 3, "exchange": "NYSE"}}
+        shares = {3: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+        rows = self._rows(sec, shares, {"T": _md(10.0, None, adv_days=4)})
+        self.assertFalse(rows[0]["eligible"])
+        self.assertIn("adv_usd_unknown_or_invalid", rows[0]["reasons"])
+        self.assertFalse(rows[0]["adv_coverage_ok"])
+        self.assertEqual(rows[0]["coverage_status"], "adv_insufficient")
 
     def test_needs_market_cap_when_only_missing_mktcap(self):
         sec = {"GOOGL": {"cik": 1652044, "exchange": "NASDAQ"}}
-        md = {"GOOGL": {"close": 340.0, "volume": 20_000_000}}
-        out = _mod.apply_pass1(sec, {}, md, governance=self.gov)
-        self.assertIn("GOOGL", out["needs_market_cap"])
-        self.assertEqual(out["eligible_count"], 0)
+        rows = self._rows(sec, {}, {"GOOGL": _md(340.0, 50_000_000.0)})
+        self.assertEqual(_mod.summarize_rows(rows)["needs_market_cap"], ["GOOGL"])
+        self.assertFalse(rows[0]["eligible"])
 
     def test_fmp_cap_rescues(self):
         sec = {"GOOGL": {"cik": 1652044, "exchange": "NASDAQ"}}
-        md = {"GOOGL": {"close": 340.0, "volume": 20_000_000}}
-        out = _mod.apply_pass1(sec, {}, md, governance=self.gov, fmp_caps={"GOOGL": 2e12})
-        self.assertEqual(out["eligible_count"], 1)
+        rows = self._rows(sec, {}, {"GOOGL": _md(340.0, 50_000_000.0)}, fmp_caps={"GOOGL": 2e12})
+        self.assertTrue(rows[0]["eligible"])
+        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
 
     def test_sec_shares_precedence_over_fmp(self):
         sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
-        md = {"AAPL": {"close": 200.0, "volume": 50_000_000}}
-        out = _mod.apply_pass1(sec, shares, md, governance=self.gov, fmp_caps={"AAPL": 1.0})
-        self.assertEqual(out["eligible_count"], 1)  # SEC shares used, bogus FMP cap ignored
+        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0)}, fmp_caps={"AAPL": 1.0})
+        self.assertTrue(rows[0]["eligible"])               # SEC shares used, bogus FMP cap ignored
+        self.assertEqual(rows[0]["market_cap_source"], "sec_shares_x_close")
 
     def test_no_price_fails(self):
         sec = {"X": {"cik": 7, "exchange": "NYSE"}}
         shares = {7: {"shares": 15_000_000_000, "end": "2026-03-31"}}
-        md = {"X": {"close": None, "volume": None}}
-        out = _mod.apply_pass1(sec, shares, md, governance=self.gov)
-        self.assertEqual(out["eligible_count"], 0)
-        self.assertEqual(out["no_price_count"], 1)
+        rows = self._rows(sec, shares, {"X": _md(None, None, adv_days=0)})
+        self.assertFalse(rows[0]["eligible"])
+        self.assertEqual(_mod.summarize_rows(rows)["no_price_count"], 1)
+        self.assertEqual(rows[0]["coverage_status"], "no_price")
+
+    def test_row_carries_full_lineage(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0, volume=600_000)})
+        r = rows[0]
+        for key in ("provider_id", "as_of", "observed_at", "coverage_status", "parser_status", "lineage"):
+            self.assertIn(key, r)
+        self.assertEqual(set(r["lineage"]),
+                         {"price_source", "adv_window_trading_days", "adv_days_observed",
+                          "shares_source", "market_cap_source"})
+        self.assertEqual(r["as_of"], "2026-06-26")
+        self.assertEqual(r["lineage"]["shares_source"], "sec_xbrl_frames")
+        self.assertFalse(r["status_flags_sourced"])
+
+
+class TestAdvSemantics(unittest.TestCase):
+    """The finding's core: single-day dollar volume mislabeled as ADV. A one-day spike that clears the
+    floor must NOT make a name eligible once ADV is the real multi-day average."""
+
+    def setUp(self):
+        self.gov = _load_gov()
+        self.floor = self.gov["cheap_eligibility_thresholds"]["min_adv_usd"]   # 5_000_000
+
+    def test_single_day_spike_does_not_pass_adv_floor(self):
+        # newest day $6M (> floor), 19 prior days $4M → 20-day average $4.1M (< floor)
+        collected = [("2026-06-26", [{"T": "SPK", "c": 10.0, "v": 600_000}])]
+        collected += [(f"d{i}", [{"T": "SPK", "c": 10.0, "v": 400_000}]) for i in range(19)]
+        md = _mod._aggregate_window(collected)
+        _mod._finalize_adv(md, min_days=_mod.ADV_MIN_DAYS_REQUIRED)
+        adv = md["SPK"]["adv_usd"]
+        self.assertGreater(10.0 * 600_000, self.floor)     # the spike day ALONE clears the floor
+        self.assertLess(adv, self.floor)                   # the multi-day average does not
+        rows = _mod.apply_pass1({"SPK": {"cik": 1, "exchange": "NYSE"}},
+                                {1: {"shares": 10_000_000_000, "end": "2026-03-31"}},
+                                md, governance=self.gov, as_of="2026-06-26", observed_at="t")
+        self.assertFalse(rows[0]["eligible"])
+        self.assertIn("adv_usd_below_floor", rows[0]["reasons"])
+
+    def test_consistently_liquid_name_passes(self):
+        collected = [(f"d{i}", [{"T": "LIQ", "c": 10.0, "v": 600_000}]) for i in range(20)]  # $6M/day
+        md = _mod._aggregate_window(collected)
+        _mod._finalize_adv(md, min_days=_mod.ADV_MIN_DAYS_REQUIRED)
+        self.assertGreaterEqual(md["LIQ"]["adv_usd"], self.floor)
+        rows = _mod.apply_pass1({"LIQ": {"cik": 2, "exchange": "NYSE"}},
+                                {2: {"shares": 10_000_000_000, "end": "2026-03-31"}},
+                                md, governance=self.gov, as_of="2026-06-26", observed_at="t")
+        self.assertTrue(rows[0]["eligible"])
+
+
+class TestSummaryAndArtifact(unittest.TestCase):
+    def setUp(self):
+        self.gov = _load_gov()
+
+    def _rows(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+               "LOW": {"cik": 5, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  5: {"shares": 10_000_000_000, "end": "2026-03-31"}}
+        md = {"AAPL": _md(200.0, 50_000_000.0), "LOW": _md(10.0, 1000.0)}
+        return _mod.apply_pass1(sec, shares, md, governance=self.gov,
+                                as_of="2026-06-26", observed_at="2026-06-29T12:00:00+00:00")
+
+    def _artifact(self):
+        return _mod.build_candidate_artifact(
+            rows=self._rows(), decision_date="20260629", price_basis_date="20260626",
+            used_date="2026-06-26", observed_window_dates=["2026-06-26", "2026-06-25"],
+            generated_at="2026-06-29T12:00:00+00:00",
+            calendar_verification_status="pending_authoritative_cross_check")
+
+    def test_summary_recomputed_matches_rows(self):
+        art = self._artifact()
+        self.assertEqual(art["summary"], _mod.summarize_rows(art["rows"]))
+        self.assertEqual(art["eligible_tickers"], ["AAPL"])
+        self.assertEqual(art["eligible_count"], 1)
+        self.assertEqual(art["row_count"], 2)
+
+    def test_validate_accepts_valid_artifact(self):
+        art = self._artifact()
+        _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_tampered_summary(self):
+        art = self._artifact()
+        art["summary"]["eligible_count"] = 99
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_row_count_mismatch(self):
+        art = self._artifact()
+        art["row_count"] = 1
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_decision_date_path_mismatch(self):
+        art = self._artifact()
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260622", governance=self.gov)
+
+    def test_validate_rejects_eligible_with_uncovered_adv(self):
+        # forge an eligible row whose ADV is null / under-covered: schema permits null adv_usd, the
+        # semantic floor check must still reject it (no single-day / no-coverage admit slips through)
+        art = self._artifact()
+        for r in art["rows"]:
+            if r["ticker"] == "AAPL":
+                r["adv_usd"] = None
+                r["adv_coverage_ok"] = False
+        # keep summary consistent with the mutated rows so we isolate the eligible-ADV check
+        art["summary"] = _mod.summarize_rows(art["rows"])
+        art["eligible_tickers"] = _mod.eligible_tickers_from_rows(art["rows"])
+        art["eligible_count"] = len(art["eligible_tickers"])
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_missing_row_lineage(self):
+        art = self._artifact()
+        del art["rows"][0]["lineage"]
+        with self.assertRaises(Exception):   # jsonschema.ValidationError (required lineage)
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
 
 
 class TestFetchFmpMarketCaps(unittest.TestCase):
@@ -219,19 +419,233 @@ class TestGuards(unittest.TestCase):
         self.assertIn("confirm-user-authorization", str(ctx.exception))
 
     def test_dry_run_env_no_auth(self):
-        with patch.object(_mod, "_check_gitignore", return_value=True), \
-             patch.object(_mod._sv, "validate_raw_root"):
+        with patch.object(_mod, "_check_gitignore", return_value=True):
             out = _mod.run_fetch(dry_run_env=True, confirm_user_authorization=False)
         self.assertEqual(out["scope"]["status"], "dry_run_env_only")
+
+    def test_requires_now_et_for_live(self):
+        with patch.object(_mod, "_check_gitignore", return_value=True), \
+             patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k"}):
+            with self.assertRaises(RuntimeError) as ctx:
+                _mod.run_fetch(confirm_user_authorization=True, now_et=None)
+        self.assertIn("now-et", str(ctx.exception))
+
+    def test_intraday_out_of_window_fail_closed(self):
+        # 2026-06-29 11:00 ET is inside the Monday RTH session → §2.1 dead zone, fail-closed
+        with patch.object(_mod, "_check_gitignore", return_value=True), \
+             patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k"}):
+            with self.assertRaises(RuntimeError) as ctx:
+                _mod.run_fetch(confirm_user_authorization=True, now_et=datetime(2026, 6, 29, 11, 0, 0))
+        self.assertIn("盘中死区", str(ctx.exception))
 
     def test_raw_root_escape_rejected(self):
         import tempfile
         with tempfile.TemporaryDirectory() as tmp:
             bad = Path(tmp) / "escaped"
-            with patch.object(_mod, "_check_gitignore", return_value=True):
+            with patch.object(_mod, "_check_gitignore", return_value=True), \
+                 patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k"}):
                 with self.assertRaises((ValueError, RuntimeError)):
-                    _mod.run_fetch(raw_root=bad, confirm_user_authorization=True)
+                    _mod.run_fetch(confirm_user_authorization=True,
+                                   now_et=datetime(2026, 6, 29, 8, 0, 0), raw_root=bad)
             self.assertFalse(any(bad.rglob("*")))
+
+
+class TestRunFetchE2E(unittest.TestCase):
+    def test_full_offline_run_binds_decision_date_and_recomputes(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+                   "LOWADV": {"cik": 5, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  5: {"shares": 1_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},   # huge ADV
+                    {"T": "LOWADV", "c": 10.0, "v": 100}]          # ~$1k/day ADV → below floor
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"  # canonical for decision_date 20260629 (gitignored)
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+            self.assertEqual(summary["decision_clock"]["decision_date"], "20260629")
+            self.assertEqual(summary["decision_clock"]["price_basis_date"], "20260626")
+            self.assertEqual(summary["decision_clock"]["used_date"], "2026-06-26")
+            self.assertIn("AAPL", summary["pass1_result"]["eligible_tickers"])
+            self.assertNotIn("LOWADV", summary["pass1_result"]["eligible_tickers"])
+            self.assertFalse(summary["storage"]["tracked_summary_contains_prices"])
+            self.assertTrue(summary["storage"]["candidate_artifact_gitignored"])   # real True on a completed run
+
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+        self.assertEqual(artifact["decision_date"], "20260629")
+        self.assertEqual(artifact["summary"], _mod.summarize_rows(artifact["rows"]))
+        self.assertEqual(artifact["adv_window"]["trading_days"], _mod.ADV_WINDOW_TRADING_DAYS)
+        aapl = next(r for r in artifact["rows"] if r["ticker"] == "AAPL")
+        self.assertEqual(aapl["adv_days_observed"], _mod.ADV_WINDOW_TRADING_DAYS)
+        self.assertTrue(aapl["adv_coverage_ok"])
+        self.assertEqual(summary["pass1_result"], {**_mod.summarize_rows(artifact["rows"]),
+                                                   "eligible_tickers": ["AAPL"]})
+
+
+class SummarySafetyAndGitignore(unittest.TestCase):
+    """R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP (cc_r1 O3): the tracked summary is scanned for
+    leaked secrets / provider URLs before write, and the gitignored claims are real `git check-ignore` truths."""
+
+    def _write(self, text):
+        import tempfile
+        p = Path(tempfile.mkdtemp()) / "summary.json"
+        p.write_text(text, encoding="utf-8")
+        return p
+
+    def test_assert_summary_safe_passes_clean(self):
+        p = self._write('{"eligible_count": 3, "provider": "massive_grouped_daily + sec_shares"}')
+        _mod._assert_summary_safe(p, ["SECRETKEY123", ""])   # no forbidden fragment, no secret present
+
+    def test_assert_summary_safe_rejects_secret_value(self):
+        p = self._write('{"x": "leaked SECRETKEY123 here"}')
+        with self.assertRaises(RuntimeError):
+            _mod._assert_summary_safe(p, ["SECRETKEY123"])
+
+    def test_assert_summary_safe_rejects_forbidden_fragment(self):
+        p = self._write('{"url": "https://api.massive.com/v2/aggs?apiKey=zzz"}')
+        with self.assertRaises(RuntimeError):
+            _mod._assert_summary_safe(p, [])
+
+    def test_git_check_ignored_true_for_state_json(self):
+        # state/us_short/*.json is gitignored (state/*/*.json) → the candidate-artifact claim is a real True
+        self.assertTrue(_mod._git_check_ignored(ROOT / "state" / "us_short" / "candidate_universe_20260629.json"))
+
+    def test_git_check_ignored_false_for_tracked_docs(self):
+        # a tracked docs path is NOT gitignored → the claim cannot be hard-coded True
+        self.assertFalse(_mod._git_check_ignored(ROOT / "docs" / "README.md"))
+
+    def test_write_summary_safe_clean_writes(self):
+        import tempfile
+        p = Path(tempfile.mkdtemp()) / "summary.json"
+        _mod._write_summary_safe({"eligible_count": 3, "provider": "massive_grouped_daily + sec_shares"},
+                                 p, ["SECRETKEY123"])
+        self.assertTrue(p.exists())
+
+    def test_write_summary_safe_secret_leaves_no_residue(self):
+        # scan runs BEFORE the write, so a secret-bearing summary raises with NO file created (no residue) —
+        # R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP (post-write-residue fix).
+        import tempfile
+        p = Path(tempfile.mkdtemp()) / "summary.json"
+        with self.assertRaises(RuntimeError):
+            _mod._write_summary_safe({"x": "leaked SECRETKEY123 here"}, p, ["SECRETKEY123"])
+        self.assertFalse(p.exists())
+        self.assertFalse(p.with_name(p.name + ".tmp").exists())   # no temp residue either
+
+
+class CandidatePathGuard(unittest.TestCase):
+    """R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP (Codex reviews 2026-06-30): the per-run candidate
+    artifact carries per-row price/ADV/market_cap, so its path is BOUND to the canonical decision_date BEFORE
+    any fetch/write — it must be EXACTLY state/us_short/candidate_universe_<decision_date>.json. A non-gitignored
+    OR wrong-date path fails closed with no artifact/.tmp/summary/raw residue; the production CLI exposes no
+    --candidate-list-path override; storage.candidate_artifact_gitignored can never be false on a completed run."""
+
+    def test_canonical_path_accepted(self):
+        _mod._validate_candidate_path(_mod._candidate_path_for("20260629"), "20260629")  # no raise
+
+    def test_wrong_date_gitignored_path_rejected(self):
+        # Codex probe: a gitignored state/us_short/ .json whose filename date != the run's decision_date must be
+        # rejected — the filename must not lie about which decision-date bucket the priced artifact represents.
+        with self.assertRaises(RuntimeError) as ctx:
+            _mod._validate_candidate_path(ROOT / "state" / "us_short" / "candidate_universe_19000101.json", "20260629")
+        self.assertIn("canonical", str(ctx.exception).lower())
+
+    def test_non_gitignored_path_rejected(self):
+        # right filename, wrong (non-gitignored) dir → != canonical → rejected
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(RuntimeError) as ctx:
+                _mod._validate_candidate_path(Path(tmp) / "candidate_universe_20260629.json", "20260629")
+        self.assertIn("canonical", str(ctx.exception).lower())
+
+    def test_cli_no_longer_exposes_output_path_overrides(self):
+        # the production CLI must not accept a redirect for any dated output artifact — they derive from the
+        # canonical decision_date; the run_fetch path kwargs are a private test seam only.
+        for flag in ("--candidate-list-path", "--summary-path", "--raw-root"):
+            with self.assertRaises(SystemExit):
+                _mod.parse_args([flag, "x"])
+
+    def test_full_run_wrong_date_candidate_leaves_no_residue(self):
+        # Codex's exact probe: a gitignored but WRONG-DATE candidate path on a 20260629 run must fail closed
+        # BEFORE writing the priced artifact or the tracked summary (no candidate/.tmp/summary residue).
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
+
+        wrong = ROOT / "state" / "us_short" / "candidate_universe_19000101.json"
+        wrong.unlink(missing_ok=True)
+        self.addCleanup(wrong.unlink, missing_ok=True)
+        self.addCleanup(wrong.with_name(wrong.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            summ = tmpp / "sum.json"
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    _mod.run_fetch(
+                        now_et=datetime(2026, 6, 29, 8, 0, 0),
+                        summary_path=summ, raw_root=tmpp / "raw",
+                        candidate_list_path=wrong,
+                        generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    )
+            self.assertIn("canonical", str(ctx.exception).lower())
+            self.assertFalse(wrong.exists())                                 # no priced artifact written
+            self.assertFalse(wrong.with_name(wrong.name + ".tmp").exists())  # no temp residue
+            self.assertFalse(summ.exists())                                  # no tracked summary either
+
+    def test_full_run_non_gitignored_candidate_leaves_no_residue(self):
+        # a non-gitignored candidate path likewise fails closed before any write.
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            bad_cand = tmpp / "candidate_universe_20260629.json"   # right name, NON-gitignored dir
+            summ = tmpp / "sum.json"
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    _mod.run_fetch(
+                        now_et=datetime(2026, 6, 29, 8, 0, 0),
+                        summary_path=summ, raw_root=tmpp / "raw",
+                        candidate_list_path=bad_cand,
+                        generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    )
+            self.assertIn("canonical", str(ctx.exception).lower())
+            self.assertFalse(bad_cand.exists())
+            self.assertFalse(bad_cand.with_name(bad_cand.name + ".tmp").exists())
+            self.assertFalse(summ.exists())
 
 
 if __name__ == "__main__":

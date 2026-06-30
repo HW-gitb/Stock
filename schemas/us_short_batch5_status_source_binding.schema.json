@@ -1,0 +1,928 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_batch5_status_source_binding",
+  "title": "US-short batch5 status-source binding (offline contract)",
+  "description": "Schema-first contract binding the four US-short eligibility disqualifying status flags (delisted/halted/otc/bankruptcy) to their authorized real data sources with per-flag provenance + unknown policy, closing R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN. STRUCTURE + boundary only: it authorizes NO live status-source call (the live fetch needs a separate reviewed access packet + preflight). All const-pinned so a same-shaped artifact cannot drift the source/flag/unknown-policy/no-authorize boundaries.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "review_basis",
+    "binding_summary",
+    "status_flag_bindings",
+    "provider_failure_health_policy",
+    "decision_gates",
+    "prohibited_actions",
+    "next_authorization_boundary",
+    "limitations",
+    "next_steps"
+  ],
+  "allOf": [
+    {
+      "properties": {
+        "status_flag_bindings": {
+          "contains": {
+            "required": [
+              "flag_id",
+              "authorized_source_id",
+              "endpoint_family",
+              "unknown_policy",
+              "provenance_required",
+              "status_semantics",
+              "derivation_evidence_rule"
+            ],
+            "properties": {
+              "flag_id": {
+                "const": "delisted"
+              },
+              "authorized_source_id": {
+                "const": "ticker_reference"
+              },
+              "endpoint_family": {
+                "const": "active_listing_reference"
+              },
+              "unknown_policy": {
+                "const": "conservative_reject"
+              },
+              "provenance_required": {
+                "const": [
+                  "source_id",
+                  "as_of",
+                  "observed_at",
+                  "reference_active_value",
+                  "coverage"
+                ]
+              },
+              "status_semantics": {
+                "const": "clean_false requires a positive reference observation that the symbol is an active listing at as_of; reference active=false OR absence from the active-listing reference at as_of -> delisted (True); no reference observation -> unknown."
+              },
+              "derivation_evidence_rule": {
+                "const": "a same-session grouped-daily trade is NOT sufficient evidence of listing status; the active-listing reference is the authoritative source for delisting."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "status_flag_bindings": {
+          "contains": {
+            "required": [
+              "flag_id",
+              "authorized_source_id",
+              "endpoint_family",
+              "unknown_policy",
+              "provenance_required",
+              "status_semantics",
+              "derivation_evidence_rule"
+            ],
+            "properties": {
+              "flag_id": {
+                "const": "halted"
+              },
+              "authorized_source_id": {
+                "const": "exchange_halt_feed"
+              },
+              "endpoint_family": {
+                "const": "public_trading_halt_feed"
+              },
+              "unknown_policy": {
+                "const": "conservative_reject"
+              },
+              "provenance_required": {
+                "const": [
+                  "source_id",
+                  "as_of",
+                  "observed_at",
+                  "halt_feed_observed",
+                  "coverage"
+                ]
+              },
+              "status_semantics": {
+                "const": "True if the symbol appears in the exchange trading-halt feed effective at the decision PIT (prior settled session); clean_false requires the halt feed to have been observed and the symbol absent; feed unavailable -> unknown. Intraday halts that resolved before the PIT are not a standing disqualifier."
+              },
+              "derivation_evidence_rule": {
+                "const": "absence from price/volume data is NOT evidence of a halt; only the halt feed sets the flag."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "status_flag_bindings": {
+          "contains": {
+            "required": [
+              "flag_id",
+              "authorized_source_id",
+              "endpoint_family",
+              "unknown_policy",
+              "provenance_required",
+              "status_semantics",
+              "derivation_evidence_rule"
+            ],
+            "properties": {
+              "flag_id": {
+                "const": "otc"
+              },
+              "authorized_source_id": {
+                "const": "ticker_reference"
+              },
+              "endpoint_family": {
+                "const": "primary_exchange_reference"
+              },
+              "unknown_policy": {
+                "const": "conservative_reject"
+              },
+              "provenance_required": {
+                "const": [
+                  "source_id",
+                  "as_of",
+                  "observed_at",
+                  "primary_exchange_value",
+                  "coverage"
+                ]
+              },
+              "status_semantics": {
+                "const": "True if the reference primary exchange/market is an OTC venue; clean_false requires a positive reference observation that the primary exchange is an authorized NYSE/NASDAQ venue (the §3.1 exchange whitelist); no reference observation -> unknown. This binds the explicit otc flag to the same reference exchange field the whitelist already screens."
+              },
+              "derivation_evidence_rule": {
+                "const": "the exchange whitelist already rejects non-NYSE/NASDAQ; this flag records the explicit OTC determination with its reference provenance, never a hardwired False."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "status_flag_bindings": {
+          "contains": {
+            "required": [
+              "flag_id",
+              "authorized_source_id",
+              "endpoint_family",
+              "unknown_policy",
+              "provenance_required",
+              "status_semantics",
+              "derivation_evidence_rule"
+            ],
+            "properties": {
+              "flag_id": {
+                "const": "bankruptcy"
+              },
+              "authorized_source_id": {
+                "const": "sec_8k_item_103"
+              },
+              "endpoint_family": {
+                "const": "sec_8k_bankruptcy_filing_search"
+              },
+              "unknown_policy": {
+                "const": "mark_unscreened_not_clean"
+              },
+              "provenance_required": {
+                "const": [
+                  "source_id",
+                  "as_of",
+                  "observed_at",
+                  "lookback_window",
+                  "filing_accession_if_found",
+                  "coverage",
+                  "screen_status"
+                ]
+              },
+              "status_semantics": {
+                "const": "bankrupt_8k_found (True/reject) if an SEC 8-K Item 1.03 (Bankruptcy or Receivership) is found for the issuer within the lookback window; screened_no_filing (best-effort clean_false) if the 8-K search ran over the lookback window and found none; unscreened if the search did not run. There is NO positive proof of non-bankruptcy, so clean_false is a BEST-EFFORT negative, never an assumption."
+              },
+              "derivation_evidence_rule": {
+                "const": "absence of an 8-K is recorded as screened_no_filing (best-effort), NOT proof of solvency; the run records bankruptcy_screen_coverage and flags any unscreened universe explicitly."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "source_artifact_refs": {
+          "contains": {
+            "required": [
+              "artifact_id",
+              "path",
+              "role"
+            ],
+            "properties": {
+              "artifact_id": {
+                "const": "us_short_universe_fetch_runner"
+              },
+              "path": {
+                "const": "runners/us_short_universe_fetch.py"
+              },
+              "role": {
+                "const": "Round-1 Massive+SEC universe fetch + Pass1 that currently hardwires delisted/halted/bankruptcy/otc to False (R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN); this binding defines the real per-flag status source that replaces the hardwired False."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "source_artifact_refs": {
+          "contains": {
+            "required": [
+              "artifact_id",
+              "path",
+              "role"
+            ],
+            "properties": {
+              "artifact_id": {
+                "const": "us_short_system_design"
+              },
+              "path": {
+                "const": "docs/us_short_system_design.md"
+              },
+              "role": {
+                "const": "US-short single design authority; §3.3 critical-status unknown must not be assumed clean, §3.7 provider health; batch5 status-source fetch remains gated under SR-PROVIDER-001."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "source_artifact_refs": {
+          "contains": {
+            "required": [
+              "artifact_id",
+              "path",
+              "role"
+            ],
+            "properties": {
+              "artifact_id": {
+                "const": "sr_provider_001"
+              },
+              "path": {
+                "const": "docs/system_risk_register.md"
+              },
+              "role": {
+                "const": "Open provider blocker; this binding does not authorize the live status fetch, only freezes the schema-first per-flag source contract for a later reviewed status-source access packet + preflight."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "source_artifact_refs": {
+          "contains": {
+            "required": [
+              "artifact_id",
+              "path",
+              "role"
+            ],
+            "properties": {
+              "artifact_id": {
+                "const": "us_short_batch5_license_storage_retention_decision_20260625"
+              },
+              "path": {
+                "const": "docs/us_short_batch5_license_storage_retention_decision_20260625.json"
+              },
+              "role": {
+                "const": "Storage/retention rights boundary; status-source raw payloads remain gitignored sample-only, no production storage authorized by this binding."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "decision_gates": {
+          "contains": {
+            "required": [
+              "gate_id",
+              "status",
+              "required_resolution"
+            ],
+            "properties": {
+              "gate_id": {
+                "const": "status_source_access_packet_approval"
+              },
+              "status": {
+                "const": "pending_user_approval"
+              },
+              "required_resolution": {
+                "const": "A user-approved status-source access packet must define the symbols/universe, per-flag source endpoint families, call budget, fair-access behavior, gitignored raw-payload storage, and no-secret summary policy before any live status-source call."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "decision_gates": {
+          "contains": {
+            "required": [
+              "gate_id",
+              "status",
+              "required_resolution"
+            ],
+            "properties": {
+              "gate_id": {
+                "const": "parser_and_gate_integration_review"
+              },
+              "status": {
+                "const": "pending_later_review"
+              },
+              "required_resolution": {
+                "const": "A later reviewed slice must implement the offline status parser + the cheap_eligible per-flag-with-provenance integration + R2 per-row lineage against fixtures, with no-silent-default behavior, before any code consumes a live payload."
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "properties": {
+        "decision_gates": {
+          "contains": {
+            "required": [
+              "gate_id",
+              "status",
+              "required_resolution"
+            ],
+            "properties": {
+              "gate_id": {
+                "const": "phase7c_consumption_gate"
+              },
+              "status": {
+                "const": "blocked"
+              },
+              "required_resolution": {
+                "const": "DataHub / runner / production consumption remains blocked until the status sources, parser, gate integration, lineage, coverage, and production-readiness boundaries are resolved or explicitly accepted."
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_status_source_binding"
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 10
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifact_id",
+          "path",
+          "role"
+        ],
+        "properties": {
+          "artifact_id": {
+            "enum": [
+              "us_short_system_design",
+              "us_short_universe_fetch_runner",
+              "us_short_batch5_license_storage_retention_decision_20260625",
+              "sr_provider_001"
+            ]
+          },
+          "path": {
+            "enum": [
+              "docs/us_short_system_design.md",
+              "runners/us_short_universe_fetch.py",
+              "docs/us_short_batch5_license_storage_retention_decision_20260625.json",
+              "docs/system_risk_register.md"
+            ]
+          },
+          "role": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "artifact_status",
+        "user_authorized_real_status_source_integration",
+        "provider_live_call_allowed",
+        "network_access_required",
+        "raw_payload_read_allowed",
+        "raw_payload_parse_allowed",
+        "fixture_generation_allowed",
+        "parser_implementation_allowed",
+        "gate_integration_implementation_allowed",
+        "datahub_consumption_allowed",
+        "runner_consumption_allowed",
+        "production_storage_allowed",
+        "production_ready_claim_allowed",
+        "live_normalized_evidence_allowed",
+        "ship_gate_evidence_allowed",
+        "broker_or_order_automation_allowed"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "lane": {
+          "const": "us_short"
+        },
+        "batch": {
+          "const": "batch5_provider_live"
+        },
+        "artifact_status": {
+          "const": "status_source_binding_offline_only"
+        },
+        "user_authorized_real_status_source_integration": {
+          "const": true
+        },
+        "provider_live_call_allowed": {
+          "const": false
+        },
+        "network_access_required": {
+          "const": false
+        },
+        "raw_payload_read_allowed": {
+          "const": false
+        },
+        "raw_payload_parse_allowed": {
+          "const": false
+        },
+        "fixture_generation_allowed": {
+          "const": false
+        },
+        "parser_implementation_allowed": {
+          "const": false
+        },
+        "gate_integration_implementation_allowed": {
+          "const": false
+        },
+        "datahub_consumption_allowed": {
+          "const": false
+        },
+        "runner_consumption_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_ready_claim_allowed": {
+          "const": false
+        },
+        "live_normalized_evidence_allowed": {
+          "const": false
+        },
+        "ship_gate_evidence_allowed": {
+          "const": false
+        },
+        "broker_or_order_automation_allowed": {
+          "const": false
+        }
+      }
+    },
+    "review_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis_type",
+        "uses_existing_reviewed_artifacts_only",
+        "status_source_calls_performed",
+        "raw_payload_read_or_parsed",
+        "fixture_generated",
+        "parser_implemented",
+        "gate_integration_implemented",
+        "requires_later_user_approved_status_source_access_packet",
+        "requires_later_parser_implementation_review",
+        "requires_later_gate_integration_review"
+      ],
+      "properties": {
+        "basis_type": {
+          "const": "existing_repo_artifacts_no_new_external_review"
+        },
+        "uses_existing_reviewed_artifacts_only": {
+          "const": true
+        },
+        "status_source_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "fixture_generated": {
+          "const": false
+        },
+        "parser_implemented": {
+          "const": false
+        },
+        "gate_integration_implemented": {
+          "const": false
+        },
+        "requires_later_user_approved_status_source_access_packet": {
+          "const": true
+        },
+        "requires_later_parser_implementation_review": {
+          "const": true
+        },
+        "requires_later_gate_integration_review": {
+          "const": true
+        }
+      }
+    },
+    "binding_summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_status",
+        "replaces_pass1_hardwired_false",
+        "unknown_status_policy",
+        "bankruptcy_screen_type",
+        "datahub_or_runner_status",
+        "ship_gate_status"
+      ],
+      "properties": {
+        "binding_status": {
+          "const": "status_sources_bound_to_batch5_only_offline"
+        },
+        "replaces_pass1_hardwired_false": {
+          "const": true
+        },
+        "unknown_status_policy": {
+          "const": "critical_unknown_is_never_clean_by_omission_conservative_reject"
+        },
+        "bankruptcy_screen_type": {
+          "const": "positive_detection_only_best_effort_no_proof_of_clean"
+        },
+        "datahub_or_runner_status": {
+          "const": "blocked"
+        },
+        "ship_gate_status": {
+          "const": "not_evidence"
+        }
+      }
+    },
+    "status_flag_bindings": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "flag_id",
+          "eligibility_role",
+          "authorized_source_id",
+          "endpoint_family",
+          "status_semantics",
+          "provenance_required",
+          "unknown_policy",
+          "derivation_evidence_rule",
+          "authorizes_status_source_call",
+          "authorizes_raw_payload_parse",
+          "authorizes_gate_integration",
+          "authorizes_datahub_or_runner_consumption"
+        ],
+        "properties": {
+          "flag_id": {
+            "enum": [
+              "delisted",
+              "halted",
+              "otc",
+              "bankruptcy"
+            ]
+          },
+          "eligibility_role": {
+            "const": "disqualifying_status_flag"
+          },
+          "authorized_source_id": {
+            "enum": [
+              "ticker_reference",
+              "exchange_halt_feed",
+              "sec_8k_item_103"
+            ]
+          },
+          "endpoint_family": {
+            "enum": [
+              "active_listing_reference",
+              "public_trading_halt_feed",
+              "primary_exchange_reference",
+              "sec_8k_bankruptcy_filing_search"
+            ]
+          },
+          "status_semantics": {
+            "type": "string",
+            "minLength": 1
+          },
+          "provenance_required": {
+            "type": "array",
+            "minItems": 5,
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "unknown_policy": {
+            "enum": [
+              "conservative_reject",
+              "mark_unscreened_not_clean"
+            ]
+          },
+          "derivation_evidence_rule": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authorizes_status_source_call": {
+            "const": false
+          },
+          "authorizes_raw_payload_parse": {
+            "const": false
+          },
+          "authorizes_gate_integration": {
+            "const": false
+          },
+          "authorizes_datahub_or_runner_consumption": {
+            "const": false
+          }
+        }
+      }
+    },
+    "provider_failure_health_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "swallow_all_exceptions_and_return_empty_allowed",
+        "per_source_failure_must_be_classified",
+        "per_source_failure_must_be_counted",
+        "failure_feeds_provider_health",
+        "critical_source_all_fail_must_block_or_no_emit",
+        "completed_summary_on_critical_failure_allowed",
+        "authorizes_status_source_call",
+        "authorizes_gate_integration"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "failure_classified_and_health_bound_not_swallowed"
+        },
+        "swallow_all_exceptions_and_return_empty_allowed": {
+          "const": false
+        },
+        "per_source_failure_must_be_classified": {
+          "const": true
+        },
+        "per_source_failure_must_be_counted": {
+          "const": true
+        },
+        "failure_feeds_provider_health": {
+          "const": true
+        },
+        "critical_source_all_fail_must_block_or_no_emit": {
+          "const": true
+        },
+        "completed_summary_on_critical_failure_allowed": {
+          "const": false
+        },
+        "authorizes_status_source_call": {
+          "const": false
+        },
+        "authorizes_gate_integration": {
+          "const": false
+        }
+      }
+    },
+    "decision_gates": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gate_id",
+          "status",
+          "blocks_implementation",
+          "required_resolution",
+          "authorizes_status_source_call",
+          "authorizes_raw_payload_parse",
+          "authorizes_fixture_generation",
+          "authorizes_gate_integration",
+          "authorizes_datahub_or_runner_consumption"
+        ],
+        "properties": {
+          "gate_id": {
+            "enum": [
+              "status_source_access_packet_approval",
+              "parser_and_gate_integration_review",
+              "phase7c_consumption_gate"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending_user_approval",
+              "pending_later_review",
+              "blocked"
+            ]
+          },
+          "blocks_implementation": {
+            "const": true
+          },
+          "required_resolution": {
+            "type": "string",
+            "minLength": 1
+          },
+          "authorizes_status_source_call": {
+            "const": false
+          },
+          "authorizes_raw_payload_parse": {
+            "const": false
+          },
+          "authorizes_fixture_generation": {
+            "const": false
+          },
+          "authorizes_gate_integration": {
+            "const": false
+          },
+          "authorizes_datahub_or_runner_consumption": {
+            "const": false
+          }
+        }
+      }
+    },
+    "prohibited_actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status_source_call",
+        "raw_payload_read",
+        "raw_payload_parse",
+        "fixture_generation",
+        "parser_implementation",
+        "gate_integration_implementation",
+        "new_token_or_trial",
+        "paid_access",
+        "provider_contact",
+        "full_market_download",
+        "datahub_table",
+        "runner_consumption",
+        "production_storage",
+        "live_normalized_evidence",
+        "ship_gate_claim",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "status_source_call": {
+          "const": false
+        },
+        "raw_payload_read": {
+          "const": false
+        },
+        "raw_payload_parse": {
+          "const": false
+        },
+        "fixture_generation": {
+          "const": false
+        },
+        "parser_implementation": {
+          "const": false
+        },
+        "gate_integration_implementation": {
+          "const": false
+        },
+        "new_token_or_trial": {
+          "const": false
+        },
+        "paid_access": {
+          "const": false
+        },
+        "provider_contact": {
+          "const": false
+        },
+        "full_market_download": {
+          "const": false
+        },
+        "datahub_table": {
+          "const": false
+        },
+        "runner_consumption": {
+          "const": false
+        },
+        "production_storage": {
+          "const": false
+        },
+        "live_normalized_evidence": {
+          "const": false
+        },
+        "ship_gate_claim": {
+          "const": false
+        },
+        "broker_or_order_automation": {
+          "const": false
+        }
+      }
+    },
+    "next_authorization_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "required_before_any_status_source_call",
+        "required_before_any_raw_parse_or_fixture",
+        "required_before_any_parser_or_gate_integration",
+        "required_before_any_datahub_or_runner_consumption",
+        "default_future_call_budget_without_new_authorization",
+        "must_state_symbols",
+        "must_state_endpoint_families",
+        "must_state_call_budget",
+        "must_state_fair_access_policy",
+        "must_state_write_locations",
+        "must_state_secret_and_raw_privacy_boundary",
+        "must_state_validation_method",
+        "must_state_non_authorized_paths"
+      ],
+      "properties": {
+        "required_before_any_status_source_call": {
+          "const": true
+        },
+        "required_before_any_raw_parse_or_fixture": {
+          "const": true
+        },
+        "required_before_any_parser_or_gate_integration": {
+          "const": true
+        },
+        "required_before_any_datahub_or_runner_consumption": {
+          "const": true
+        },
+        "default_future_call_budget_without_new_authorization": {
+          "const": 0
+        },
+        "must_state_symbols": {
+          "const": true
+        },
+        "must_state_endpoint_families": {
+          "const": true
+        },
+        "must_state_call_budget": {
+          "const": true
+        },
+        "must_state_fair_access_policy": {
+          "const": true
+        },
+        "must_state_write_locations": {
+          "const": true
+        },
+        "must_state_secret_and_raw_privacy_boundary": {
+          "const": true
+        },
+        "must_state_validation_method": {
+          "const": true
+        },
+        "must_state_non_authorized_paths": {
+          "const": true
+        }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "next_steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  }
+}

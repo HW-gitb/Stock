@@ -1,0 +1,142 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_weekend_batch4_context_packet",
+  "description": "Closed-world local context packet consumed by the supported US-short batch4 weekend runner (runners/us_short_weekend_batch4.py --context). It is the documented, schema-first shape a user (or runners/us_short_weekend_batch4_context_builder.py) assembles from batch1 account state + explicitly supplied local batch2/3 fixture inputs + reviewed calendar/governance/private paths. This is an OFFLINE packet only: it carries NO provider call, network, broker, order, or live authorization, and the runner keeps live hard-blocked. STRUCTURE only — the orchestrator (engine/us_short_weekend_orchestrator.py) still enforces the deep SEMANTIC gates (PIT 来源对账, price-clock match, selection->analysis seam coverage, provider-health, run-mode/calendar). Real packets carry ticker/holding/score data and must be written to a gitignored private path (the builder enforces this); the tracked example templates are synthetic / no-secret. The 7 *_path / *_root keys point at local artifacts; the other 11 keys are the batch2/3 analysis layer.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
+    "provider_health", "calendar_path", "account_state_path", "market_axis_regimes", "prior_regime",
+    "prior_upgrade_count", "sizing_per_ticker", "basket_context", "cost_inputs", "report_context",
+    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root"
+  ],
+  "properties": {
+    "data_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["universe", "catalyst_recall_feed", "holdings", "candidate_pass2_signals", "selection_inputs"],
+      "properties": {
+        "universe": {"type": "array", "items": {"type": "object"},
+                     "description": "Pass1-eligible universe rows (batch2/3). Empty for an empty run."},
+        "catalyst_recall_feed": {"type": ["array", "null"], "items": {"type": "string"},
+                                 "description": "Optional catalyst recall feed = a list of canonical US ticker strings (the exact runtime type consumed by inject_catalyst_recall: list|null), null when absent. NOT an object."},
+        "holdings": {"type": "array", "items": {"type": "object"},
+                     "description": "Current holdings with signals; tickers MUST reconcile 1:1 with account_state.positions (enforced by the runner/builder, not by JSON Schema)."},
+        "candidate_pass2_signals": {"type": "object", "additionalProperties": {"type": "object"},
+                                    "description": "Per-ticker Pass2 signal payloads keyed by ticker."},
+        "selection_inputs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["theme_opportunity_state", "per_ticker"],
+          "properties": {
+            "theme_opportunity_state": {"type": "string"},
+            "per_ticker": {"type": "object", "additionalProperties": {"type": "object"},
+                           "description": "Per-ticker selection-time scores keyed by ticker (e.g. core_score, theme_momentum_score)."}
+          }
+        }
+      }
+    },
+    "eligibility_governance_path": {"type": "string", "minLength": 1,
+      "description": "Path to the reviewed eligibility governance preset (loaded + validated at runtime)."},
+    "per_ticker_analysis": {"type": "object", "additionalProperties": {"type": "object"},
+      "description": "Per-ticker §4.2 analysis rows keyed by ticker; must exactly cover the admitted ∪ holdings union (seam enforced by the orchestrator)."},
+    "run_provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "price_basis_date", "families"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "families": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["universe", "per_ticker_analysis", "candidate_pass2_signals", "selection_inputs"],
+          "properties": {
+            "universe": {"$ref": "#/$defs/provenance_family"},
+            "per_ticker_analysis": {"$ref": "#/$defs/provenance_family"},
+            "candidate_pass2_signals": {"$ref": "#/$defs/provenance_family"},
+            "selection_inputs": {"$ref": "#/$defs/provenance_family"}
+          }
+        }
+      }
+    },
+    "provider_health": {"type": "object", "additionalProperties": {"type": "string"},
+      "description": "Per-source health status keyed by authorized source id (e.g. fmp, sec_edgar). The orchestrator §3.7 gate rejects unauthorized sources and no-emits on non-clean critical health."},
+    "calendar_path": {"type": "string", "minLength": 1,
+      "description": "Path to the reviewed frozen NYSE/NASDAQ calendar artifact."},
+    "account_state_path": {"type": "string", "minLength": 1,
+      "description": "Path to the private us_short_account_state.json (batch1 converter output). MUST be a provably-private/gitignored or external path — enforced by the runner/builder."},
+    "market_axis_regimes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vix", "market_trend", "breadth"],
+      "properties": {
+        "vix": {"type": "string"},
+        "market_trend": {"type": "string"},
+        "breadth": {"type": "string"}
+      }
+    },
+    "prior_regime": {"type": ["string", "null"],
+      "description": "Prior-week regime label, or null on the first run."},
+    "prior_upgrade_count": {"type": "integer", "minimum": 0},
+    "sizing_per_ticker": {"type": "object", "additionalProperties": {"type": "object"},
+      "description": "Per-ticker sizing inputs keyed by ticker (e.g. discount_mults, liquidity_cap_shares); empty for an empty run. Bucket dollars + available cash are derived from account_state, not from this map."},
+    "basket_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["per_ticker", "portfolio_guard_status", "theme_opportunity_state"],
+      "properties": {
+        "per_ticker": {"type": "object", "additionalProperties": {"type": "object"}},
+        "portfolio_guard_status": {"type": "string"},
+        "theme_opportunity_state": {"type": "string"}
+      }
+    },
+    "cost_inputs": {"type": "object",
+      "description": "Per-ticker cost inputs; may be empty."},
+    "report_context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["price_clock", "coverage_inputs", "core_conclusion", "risk_downgrade_note", "macro_cluster_banner"],
+      "properties": {
+        "price_clock": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["price_data_through", "news_window_through", "session_scope", "decision_date"],
+          "properties": {
+            "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "news_window_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "session_scope": {"type": "string"},
+            "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        },
+        "coverage_inputs": {"type": "array", "items": {"type": "object"}},
+        "core_conclusion": {"type": "string"},
+        "risk_downgrade_note": {"type": "string"},
+        "macro_cluster_banner": {"type": "string"}
+      }
+    },
+    "lifecycle_register_path": {"type": "string", "minLength": 1,
+      "description": "Path to the private lifecycle register (required, or initialized once via the runner's --bootstrap-lifecycle)."},
+    "lifecycle_readiness_out_path": {"type": ["string", "null"],
+      "description": "Optional private path for the lifecycle readiness sidecar; null to skip."},
+    "runs_private_root": {"type": "string", "minLength": 1,
+      "description": "Private (gitignored / external) root for the machine-record layer."},
+    "weekly_private_root": {"type": "string", "minLength": 1,
+      "description": "Private (gitignored / external) root for the weekly report + action table."}
+  },
+  "$defs": {
+    "provenance_family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "observed_at": {"type": "string"},
+        "price_basis_date": {"type": ["string", "null"]},
+        "session": {"type": ["string", "null"]},
+        "adjustment": {"type": ["string", "null"]},
+        "row_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

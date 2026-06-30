@@ -22,6 +22,7 @@ from pathlib import Path
 
 from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_private_paths import reject_nonprivate_output_path
+from engine.us_short_run_origin import validate_run_origin
 
 ROOT = Path(__file__).resolve().parent.parent
 _ACTION_TABLE_PRESET = ROOT / "presets" / "us_short_action_table_contract_20260620.json"
@@ -83,8 +84,16 @@ def write_action_table(machine_record, out_path):
     FIRST batch-3 persister: the §18.0 P0 fail-closed private-path guard runs BEFORE any rendering/writing,
     so a relative / non-gitignored in-repo destination is refused (action_table.csv carries tickers/levels).
     Returns the written path.
+
+    OFFICIAL-output provenance gate (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP): the persisted CSV
+    carries prices/sizing/actions but NO offline/non-operational column, so once opened outside the weekly
+    bundle it would be indistinguishable from operational advice. The official persister therefore REQUIRES the
+    exact immutable `run_origin` on the machine record — a missing / swapped origin fails closed BEFORE any file
+    is created. This prohibits standalone official persistence of a provenance-stripped record (the generic §10
+    validator stays origin-agnostic for internal/hand-built test records; only this output boundary requires it).
     """
     reject_nonprivate_output_path(out_path)        # §18.0 P0 guard — before validate / render / write
+    validate_run_origin(machine_record.get("run_origin") if isinstance(machine_record, dict) else None)  # before render/write
     table = render_action_table(machine_record)    # validates; refuses a not-clean record (before any dir/file side effect)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)  # the <决策日> private dir may not exist yet (only after render passes)

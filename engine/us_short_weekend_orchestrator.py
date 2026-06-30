@@ -39,6 +39,7 @@ from __future__ import annotations
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_provider_health import classify_provider_health
+from engine.us_short_run_origin import run_origin_for_mode
 from engine.us_short_run_provenance import reconcile_run_provenance
 from engine.us_short_weekend_action_rank import apply_action_rank
 from engine.us_short_weekend_analysis import analyze_rows
@@ -253,12 +254,17 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"])
     ranked = apply_action_rank(cash)
 
-    machine_record = assemble_machine_record(ranked, as_of=decision_date)        # decision_date → K as_of
+    # batch4 honesty provenance: the immutable offline_test / caller_supplied_fixture / not_authorized fact,
+    # threaded through K (machine record) + m2 (report) + N (private write) so a synthetic fixture run can never
+    # be mistaken for operational weekly advice (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP). live is
+    # hard-gated above, so run_origin_for_mode only ever returns the offline fact here.
+    run_origin = run_origin_for_mode(run_mode)
+    machine_record = assemble_machine_record(ranked, as_of=decision_date, run_origin=run_origin)   # decision_date → K as_of
     lifecycle_result = run_lifecycle_eval_stage(                                  # §13: L BEFORE the m2 render
         decision_date=decision_date, register_path=pc["lifecycle_register_path"],
         readiness_out_path=pc["lifecycle_readiness_out_path"])
     report = build_weekly_report(
-        machine_record, lifecycle_result, report_context=pc["report_context"],
+        machine_record, lifecycle_result, report_context=pc["report_context"], run_origin=run_origin,
         run_context={"decision_date": decision_date, "price_basis_date": selection["price_basis_date"],
                      "run_date": selection["run_date"]},
         # §11.2 BINDS its boundary facts to the structured stage outputs (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-
@@ -270,9 +276,17 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
         selection=selection)
     written = write_run_private(                                                  # decision_date → N (idempotent)
         decision_date=decision_date, machine_record=machine_record, weekly_report_md=report["weekly_report_md"],
-        runs_private_root=pc["runs_private_root"], weekly_private_root=pc["weekly_private_root"])
+        report_data=report["report_data"],
+        # source-fact reconciliation (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP): the persistence boundary
+        # rebinds report_data.run_status / offline_honesty to the RUN-LEVEL provider-health + holding coverage + the
+        # independent lifecycle stage result the run actually used, so a forged count/state (incl. a coordinated
+        # all-copies lifecycle forge) cannot ride byte-equality.
+        provider_health=provider_health, coverage_inputs=pc["report_context"]["coverage_inputs"],
+        lifecycle_result=lifecycle_result,
+        runs_private_root=pc["runs_private_root"],
+        weekly_private_root=pc["weekly_private_root"], run_origin=run_origin)
 
     return {"out_of_window": False, "emitted": True, "decision_date": decision_date,
             "run_date": selection["run_date"], "selection": selection, "machine_record": machine_record,
             "lifecycle_result": lifecycle_result, "report_data": report["report_data"], "written": written,
-            "run_provenance": run_provenance, "provider_health": provider_health}
+            "run_provenance": run_provenance, "provider_health": provider_health, "run_origin": run_origin}

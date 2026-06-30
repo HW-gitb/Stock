@@ -136,25 +136,41 @@ def _percentile_rank(values: dict[str, float]) -> dict[str, float]:
     return out
 
 
+NEUTRAL_PERCENTILE = 50.0
+# §13 prior (#14 打分标准化口径): a ticker must carry at least this many of the sub-features to receive a PRIMARY
+# momentum score; below it it is `insufficient_coverage` (NOT scored on the remainder) and the caller applies
+# §4.2's neutral-block / data_quality rule. Calibratable; default = the four core return features.
+MIN_SUBFEATURE_COVERAGE = 4
+
+
 def momentum_block(
     features_by_ticker: dict[str, dict[str, float]],
     *,
     sub_features: tuple[str, ...] = ("ret_1m", "ret_3m", "ret_5d", "ret_10d",
                                      "rel_spy_1m", "rel_qqq_1m", "vol_surge"),
+    min_coverage: int = MIN_SUBFEATURE_COVERAGE,
 ) -> dict[str, Any]:
     """Map per-ticker momentum sub-features -> a 0-100 FULL-POOL percentile momentum block.
 
-    For each sub-feature, percentile-rank the tickers that HAVE it (cross-sectional). Each ticker's
-    composite = the mean of its available sub-feature percentiles; a ticker with NO sub-feature goes to
-    `insufficient_history` (no fake neutral — the caller marks data_quality, §4.2 缺分量). The composite
-    is then percentile-ranked across the scored pool to give the final 0-100 momentum block
-    ("动量 = 全池分位").
+    For each sub-feature, percentile-rank the tickers that HAVE it (cross-sectional).
+
+    MIN-COVERAGE + NEUTRAL-FILL (R-USSHORT-BATCH5-MOMENTUM-COVERAGE-PIT-COMPARABILITY-GAP): a ticker must carry
+    at least `min_coverage` of the sub-features to receive a PRIMARY score — below it it is NOT scored on the
+    handful it happens to have (it goes to `insufficient_coverage`, never auto-full-weighted), so a sparse ticker
+    with one extreme feature can no longer outrank a full-feature ticker. For a SCORED ticker every MISSING
+    sub-feature counts as the NEUTRAL percentile (50), so every scored ticker's composite is the mean over the
+    SAME full `sub_features` set (one denominator) — comparable across unequal coverage. The composite is then
+    percentile-ranked across the scored pool ("动量 = 全池分位"). A ticker with NO sub-feature goes to
+    `insufficient_history` (no fake neutral — §4.2 缺分量).
 
     Returns {momentum_block: {ticker: 0-100}, insufficient_history: [ticker, ...],
-             sub_feature_coverage: {sub_feature: count}}.
+             insufficient_coverage: [ticker, ...], sub_feature_coverage: {sub_feature: count},
+             coverage_matrix: {ticker: {"n_present": int, "scored": bool}}, min_coverage: int}.
     """
     if not isinstance(features_by_ticker, dict):
         features_by_ticker = {}
+    if not (isinstance(min_coverage, int) and not isinstance(min_coverage, bool) and min_coverage >= 1):
+        raise ValueError("min_coverage 须为 >=1 的 int")
 
     # 1) per-sub-feature cross-sectional percentile
     per_sub_pct: dict[str, dict[str, float]] = {}
@@ -171,21 +187,32 @@ def momentum_block(
         if raw:
             per_sub_pct[sf] = _percentile_rank(raw)
 
-    # 2) composite = mean of available sub-feature percentiles per ticker
+    # 2) per-ticker coverage + min-coverage gate; SCORED composite = mean over the FULL sub_feature set with a
+    #    MISSING sub-feature filled NEUTRAL (never full-weight on the available remainder).
     composite: dict[str, float] = {}
-    insufficient: list[str] = []
-    for tkr in features_by_ticker:
-        pcts = [per_sub_pct[sf][tkr] for sf in sub_features
-                if sf in per_sub_pct and tkr in per_sub_pct[sf]]
-        if pcts:
-            composite[tkr] = sum(pcts) / len(pcts)
+    insufficient_history: list[str] = []
+    insufficient_coverage: list[str] = []
+    coverage_matrix: dict[str, dict[str, Any]] = {}
+    for tkr, feats in features_by_ticker.items():
+        present = {sf for sf in sub_features if sf in per_sub_pct and tkr in per_sub_pct[sf]}
+        n_present = len(present)
+        scored = n_present >= min_coverage
+        coverage_matrix[tkr] = {"n_present": n_present, "scored": scored}
+        if n_present == 0:
+            insufficient_history.append(tkr)
+        elif not scored:
+            insufficient_coverage.append(tkr)
         else:
-            insufficient.append(tkr)
+            vals = [per_sub_pct[sf][tkr] if sf in present else NEUTRAL_PERCENTILE for sf in sub_features]
+            composite[tkr] = sum(vals) / len(sub_features)
 
-    # 3) final momentum block = full-pool percentile of the composite
+    # 3) final momentum block = full-pool percentile of the composite (over the scored pool only)
     block = _percentile_rank(composite)
     return {
         "momentum_block": block,
-        "insufficient_history": sorted(insufficient),
+        "insufficient_history": sorted(insufficient_history),
+        "insufficient_coverage": sorted(insufficient_coverage),
         "sub_feature_coverage": coverage,
+        "coverage_matrix": coverage_matrix,
+        "min_coverage": min_coverage,
     }

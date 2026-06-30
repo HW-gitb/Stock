@@ -34,8 +34,21 @@ import re
 from pathlib import Path
 
 from engine.us_short_action_table_renderer import write_action_table
+from engine.us_short_lifecycle_readiness import _assert_readiness
 from engine.us_short_private_paths import reject_nonprivate_output_path
+from engine.us_short_provider_health import validate_provider_health_result
+from engine.us_short_run_origin import (
+    OFFLINE_TEST_RUN_ORIGIN,
+    assert_offline_report_invariants,
+    validate_run_origin,
+)
 from engine.us_short_weekend_action_table import flatten_machine_record
+from engine.us_short_weekend_report import (
+    canonical_lifecycle_section,
+    reconcile_holding_coverage,
+    report_row_groups,
+)
+from engine.us_short_weekly_report_renderer import render_weekly_report
 
 ROOT = Path(__file__).resolve().parent.parent
 RUNS_PRIVATE_ROOT = ROOT / "state" / "us_short" / "runs_private"      # machine layer (§11.1, gitignored)
@@ -98,14 +111,101 @@ def _validate_weekly_report_surface(weekly_report_md):
         raise WeekendPrivateWriteError("weekly_report_md 含非冻结 §11.2 二级节标题: %s" % extra_h2)
 
 
-def write_run_private(*, decision_date, machine_record, weekly_report_md,
-                      runs_private_root=None, weekly_private_root=None) -> dict:
+def _reconcile_official_source_facts(flat, report_data, decision_date, *, provider_health, coverage_inputs,
+                                     lifecycle_result):
+    """R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP (strict full re-review): canonical §1/§11/§13 + byte
+    equality only prove the PROSE matches report_data's typed run_status / offline_honesty — those objects are
+    caller-controlled at this persistence boundary. So INDEPENDENTLY re-derive the run_status counts from the
+    validated machine record, bind the lifecycle count to the independent re-validated lifecycle stage result
+    (NOT another report_data field — a coordinated all-copies forge must still fail), and bind provider-health +
+    coverage to the RUN-LEVEL sources (which cannot be replaced inside report_data). A forged build/observe/
+    holding/candidate/lifecycle/provider/coverage value fails closed here with NO write."""
+    run_status = report_data.get("run_status") if isinstance(report_data, dict) else None
+    offline_honesty = report_data.get("offline_honesty") if isinstance(report_data, dict) else None
+    if not (isinstance(run_status, dict) and isinstance(offline_honesty, dict)):
+        raise WeekendPrivateWriteError("report_data 缺 run_status/offline_honesty（源对账失败，拒写，无落盘）")
+    # (1) build/observe/holding/candidate counts RE-DERIVED from the validated machine record (NOT report_data).
+    groups = report_row_groups(flat.get("rows", []))
+    expected = {"build_count": len(groups["builds"]), "observe_count": len(groups["observes"]),
+                "holding_count": len(groups["holdings"]), "candidate_count": len(groups["selected"])}
+    for key, want in expected.items():
+        if run_status.get(key) != want:
+            raise WeekendPrivateWriteError(
+                f"run_status.{key}={run_status.get(key)!r} 与机器记录重算 {want} 不符（疑伪造计数，拒写，无落盘）")
+    if run_status.get("decision_date") != decision_date:
+        raise WeekendPrivateWriteError(
+            f"run_status.decision_date={run_status.get('decision_date')!r} != {decision_date!r}（拒写，无落盘）")
+    # (2) lifecycle count bound to the INDEPENDENT lifecycle stage result (NOT another report_data field): the
+    # readiness is re-validated by the single-source `_assert_readiness` (due_count == len(due_items) + item ids
+    # in range + upgrade ⊆ due), then ALL THREE caller-controlled lifecycle copies (run_status + §1/§12) must
+    # equal that independent due_count — a COORDINATED all-copies forge fails because the real due_count cannot
+    # be replaced inside report_data (Codex strict source-binding re-review: lifecycle all-copies spoof).
+    if not (isinstance(lifecycle_result, dict) and isinstance(lifecycle_result.get("readiness"), dict)):
+        raise WeekendPrivateWriteError("lifecycle_result 须为含 readiness(dict) 的 4d-ii-l 输出（独立 lifecycle 源缺失，拒写，无落盘）")
+    readiness = lifecycle_result["readiness"]
+    try:
+        _assert_readiness(readiness)
+    except Exception as exc:
+        raise WeekendPrivateWriteError(f"lifecycle_result.readiness 非内部一致（独立 lifecycle 源校验失败，拒写，无落盘）: {exc}")
+    # the lifecycle source must BELONG to this run: a valid lifecycle result for another date is not this run's.
+    if lifecycle_result.get("decision_date") != decision_date or readiness.get("as_of") != decision_date:
+        raise WeekendPrivateWriteError(
+            f"lifecycle_result 不属于本 run（decision_date={lifecycle_result.get('decision_date')!r} / "
+            f"readiness.as_of={readiness.get('as_of')!r} != {decision_date!r}，拒写，无落盘）")
+    due_count = readiness["due_count"]
+    lrc = report_data.get("lifecycle_reminder_count")
+    if not (isinstance(lrc, dict) and lrc.get("section_1") == due_count and lrc.get("section_12") == due_count
+            and run_status.get("lifecycle_reminder_count") == due_count):
+        raise WeekendPrivateWriteError(
+            f"lifecycle 计数与独立 lifecycle 源 due_count={due_count} 不一致（run_status/§1/§12 须全等，疑协同伪造，拒写，无落盘）")
+    # §12 DETAIL (due-item / upgrade identities, not only the count) must equal the canonical projection of the
+    # validated readiness — a same-count / different-due-items or different-upgrade forge fails closed.
+    sections = report_data.get("sections")
+    s12 = sections.get(12, sections.get("12")) if isinstance(sections, dict) else None
+    if s12 != canonical_lifecycle_section(readiness):
+        raise WeekendPrivateWriteError(
+            "report §12 生命周期明细与独立 lifecycle 源 canonical 投影不符（疑伪造 due-item/upgrade，拒写，无落盘）")
+    # (3) provider-health bound to the RUN-LEVEL classifier result (not report_data): revalidate its exact
+    # internal-consistent shape, then require offline_honesty.provider_health_state == its overall_run_state.
+    if not validate_provider_health_result(provider_health):
+        raise WeekendPrivateWriteError("provider_health 非内部一致的 classify 结果（运行级源校验失败，拒写，无落盘）")
+    if offline_honesty.get("provider_health_state") != provider_health["overall_run_state"]:
+        raise WeekendPrivateWriteError(
+            "offline_honesty.provider_health_state 与运行级 provider 健康源不符（疑伪造，拒写，无落盘）")
+    # (4) coverage_non_full_count bound to validated holding coverage (coverage_inputs reconciled 1:1 to the
+    # machine holding rows via the report's single-source helper, independent of report_data).
+    try:
+        coverage_records = reconcile_holding_coverage(groups["holdings"], coverage_inputs)
+    except Exception as exc:
+        raise WeekendPrivateWriteError(f"coverage 源对账失败（拒写，无落盘）: {exc}")
+    non_full = sum(1 for c in coverage_records if c.get("coverage_status") != "full")
+    if offline_honesty.get("coverage_non_full_count") != non_full:
+        raise WeekendPrivateWriteError(
+            f"offline_honesty.coverage_non_full_count={offline_honesty.get('coverage_non_full_count')!r} "
+            f"与持仓覆盖重算 {non_full} 不符（拒写，无落盘）")
+
+
+def write_run_private(*, decision_date, machine_record, weekly_report_md, report_data,
+                      provider_health, coverage_inputs, lifecycle_result,
+                      runs_private_root=None, weekly_private_root=None,
+                      run_origin=OFFLINE_TEST_RUN_ORIGIN) -> dict:
     """4d-ii-n idempotent private write. Persists the run's machine layer + §11.1 weekly_private surface to the
     gitignored private dirs, fail-closed behind the §18.0 P0 private-path guard, keyed (idempotent) by decision_date.
 
     decision_date = the run's canonical decision_date (the per-run private dir key).
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1).
     weekly_report_md = the 4d-ii-m2 `build_weekly_report` weekly_report markdown.
+    report_data = the 4d-ii-m2 `build_weekly_report` STRUCTURED report_data — the boundary re-validates its offline
+        provenance (run_origin three-way + §1/§11/§13 invariants) and requires render(report_data)==weekly_report_md
+        (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: structured provenance, not a markdown substring).
+    provider_health = the RUN-LEVEL `classify_provider_health` result the run used; revalidated here and bound to
+        report_data.offline_honesty.provider_health_state (a run-level source that cannot be replaced inside report_data).
+    coverage_inputs = the run's holding coverage inputs; reconciled 1:1 to the machine holding rows and bound to
+        report_data.offline_honesty.coverage_non_full_count (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP).
+    lifecycle_result = the 4d-ii-l lifecycle stage result; re-validated here (readiness internal consistency +
+        decision_date / readiness.as_of == this run) as the INDEPENDENT source the three lifecycle count copies
+        (run_status + §1/§12) AND the §12 due-item/upgrade detail must match — so a coordinated count forge, a
+        cross-date lifecycle result, or a same-count detail forge all fail closed.
     runs_private_root / weekly_private_root = override the default private roots (tests / an external private
         location); a relative / non-gitignored in-repo destination is refused by the §18.0 guard.
 
@@ -135,6 +235,32 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md,
     if len(dates) != 1 or dates[0] != decision_date:
         raise WeekendPrivateWriteError(
             f"weekly_report price-clock decision_date {dates if dates else None!r} != {decision_date!r}（疑跨周/歧义周报）")
+
+    # batch4 honesty provenance (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP, round-1 FAIL): the
+    # persistence boundary validates STRUCTURED report provenance, not a markdown substring. Runs AFTER the
+    # flatten/§10 gate (a malformed record surfaces its own typed error first) and before any write:
+    #   (1) machine record + report_data + run_origin all carry the SAME immutable offline fact (three-way);
+    #   (2) the §1/§11/§13 offline invariants hold on report_data — so a renderer-valid report that keeps the §1
+    #       sentinel but restores a “provider 权威 clean” / “本周无不 clean” surface fails closed;
+    #   (3) re-render report_data and require BYTE EQUALITY with weekly_report_md — so a hand-edited markdown
+    #       string that no longer matches the structured data is rejected.
+    validate_run_origin(run_origin)
+    if (machine_record.get("run_origin") if isinstance(machine_record, dict) else None) != run_origin:
+        raise WeekendPrivateWriteError(
+            "machine_record.run_origin 与本次 run_origin 不一致（offline/fixture 来源对账失败，拒写，无落盘）")
+    try:
+        assert_offline_report_invariants(report_data, run_origin)   # report_data.run_origin == run_origin + §1/§11/§13
+    except ValueError as exc:
+        raise WeekendPrivateWriteError(f"report_data 离线 provenance 不变式失败（拒写，无落盘）: {exc}")
+    if render_weekly_report(report_data) != weekly_report_md:
+        raise WeekendPrivateWriteError(
+            "weekly_report_md 与 report_data 重渲染不一致（疑手改 markdown，拒写，无落盘）")
+    # source-fact reconciliation (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP strict full re-review):
+    # re-derive run_status counts from the machine record + bind provider-health/coverage/lifecycle to run-level
+    # sources, so a caller-forged report_data.run_status / offline_honesty value cannot ride byte-equality.
+    _reconcile_official_source_facts(flat, report_data, decision_date,
+                                     provider_health=provider_health, coverage_inputs=coverage_inputs,
+                                     lifecycle_result=lifecycle_result)
 
     runs_root = Path(runs_private_root) if runs_private_root is not None else RUNS_PRIVATE_ROOT
     weekly_root = Path(weekly_private_root) if weekly_private_root is not None else WEEKLY_PRIVATE_ROOT

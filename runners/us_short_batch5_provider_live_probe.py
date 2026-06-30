@@ -380,8 +380,7 @@ def build_summary(
     }
 
 
-def _assert_summary_safe(summary_path: Path, sensitive_values: list[str]) -> None:
-    text = summary_path.read_text(encoding="utf-8")
+def _assert_text_safe(text: str, sensitive_values: list[str]) -> None:
     lower = text.lower()
     forbidden_fragments = [
         "apikey=",
@@ -398,6 +397,32 @@ def _assert_summary_safe(summary_path: Path, sensitive_values: list[str]) -> Non
     for value in sensitive_values:
         if value and value in text:
             raise RuntimeError("tracked summary contains a sensitive environment value")
+
+
+def _assert_summary_safe(summary_path: Path, sensitive_values: list[str]) -> None:
+    _assert_text_safe(summary_path.read_text(encoding="utf-8"), sensitive_values)
+
+
+def _validate_summary_against_schema(summary: dict) -> None:
+    """Draft7-validate the summary against its schema BEFORE any write (R-USSHORT-BATCH5-RUNTIME-SCHEMA-
+    ENFORCEMENT-GAP): a schema-invalid summary — a flipped safety flag, an out-of-range count, an illegal
+    status — must NEVER be written (no write-then-validate). The schema accepts the legal success / error /
+    dry-run branches while pinning the safety/honesty flags."""
+    from jsonschema import Draft7Validator
+    schema = json.loads(SUMMARY_SCHEMA_PATH.read_text(encoding="utf-8"))
+    errors = sorted(Draft7Validator(schema).iter_errors(summary), key=lambda err: list(err.path))
+    if errors:
+        raise RuntimeError("probe summary failed schema validation: "
+                           + "; ".join(err.message for err in errors[:5]))
+
+
+def _write_summary_validated(summary: dict, summary_path: Path, sensitive_values: list[str]) -> None:
+    """Schema-validate + secret-scan the SERIALIZED summary BEFORE the atomic write — no write-then-validate and
+    no schema-invalid / secret-bearing residue (the scanned text is byte-identical to what write_json_atomic writes)."""
+    _validate_summary_against_schema(summary)
+    text = json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
+    _assert_text_safe(text, sensitive_values)
+    write_json_atomic(summary, summary_path)
 
 
 def _load_record_from_raw(path: Path) -> sample_validation.FetchRecord:
@@ -444,12 +469,13 @@ def load_records_from_existing_raw(raw_root: Path) -> tuple[list[sample_validati
 
 def rebuild_summary_from_existing_raw(
     *,
+    packet_path: Path = PACKET_PATH,
     summary_path: Path = SUMMARY_PATH,
     raw_root: Path = RAW_SAMPLE_ROOT,
     generated_at: str | None = None,
     existing_summary_path: Path = SUMMARY_PATH,
 ) -> dict[str, Any]:
-    _validate_batch5_packet(PACKET_PATH)
+    _validate_batch5_packet(packet_path)   # honor the CLI --packet-path (R4: was hardcoded to PACKET_PATH)
     if not preflight.provider_samples_gitignored():
         raise RuntimeError("provider_samples/ is not confirmed in .gitignore")
     existing_summary = {}
@@ -473,8 +499,7 @@ def rebuild_summary_from_existing_raw(
         dry_run_env=False,
         authorization_confirmed=True,
     )
-    write_json_atomic(summary, summary_path)
-    _assert_summary_safe(summary_path, [])
+    _write_summary_validated(summary, summary_path, [])   # schema-validate + scan BEFORE write (no residue)
     return summary
 
 
@@ -584,8 +609,8 @@ def run_probe(
     )
     if not summary["endpoint_call_budget"]["within_budget"]:
         raise RuntimeError("endpoint call budget check failed after execution")
-    write_json_atomic(summary, summary_path)
-    _assert_summary_safe(summary_path, [fmp_env.value, sec_user_agent_env.value])
+    # schema-validate + secret-scan BEFORE write (R4: no write-then-validate, no schema-invalid/secret residue)
+    _write_summary_validated(summary, summary_path, [fmp_env.value, sec_user_agent_env.value])
     return summary
 
 
@@ -593,6 +618,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if getattr(args, "rebuild_from_existing_raw", False):
         summary = rebuild_summary_from_existing_raw(
+            packet_path=args.packet_path,
             summary_path=args.summary_path,
             raw_root=args.raw_root,
             generated_at=args.generated_at,

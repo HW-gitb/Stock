@@ -20,6 +20,7 @@ if str(ROOT) not in sys.path:
 import engine.us_short_action_table_renderer as rndr  # noqa: E402
 from engine.us_short_action_rank import action_group  # noqa: E402
 from engine.us_short_private_paths import PrivatePathError  # noqa: E402
+from engine.us_short_run_origin import RunOriginError  # noqa: E402
 from engine.us_short_weekend_machine_record import assemble_machine_record  # noqa: E402
 
 CONTRACT = json.loads((ROOT / "presets" / "us_short_action_table_contract_20260620.json").read_text(encoding="utf-8"))
@@ -168,6 +169,35 @@ class PrivatePathGuardWiring(unittest.TestCase):
             out = Path(d) / "action_table.csv"
             with self.assertRaises(rndr.NotCleanMachineRecordError):
                 rndr.write_action_table(_stripped_official_record(), out)
+            self.assertFalse(out.exists())
+
+
+class OfficialProvenanceGate(unittest.TestCase):
+    """R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: the OFFICIAL persister requires the exact immutable
+    run_origin on the record, so a provenance-stripped record can never be persisted as an actionable CSV that is
+    indistinguishable from operational data. A missing / swapped origin fails BEFORE any file is created."""
+
+    def test_clean_record_carries_run_origin(self):
+        self.assertEqual(_clean_record().get("run_origin"),
+                         {"run_mode": "offline_test", "data_origin": "caller_supplied_fixture",
+                          "operational_use": "not_authorized"})
+
+    def test_missing_run_origin_refused_before_file_creation(self):
+        rec = _clean_record()
+        rec.pop("run_origin", None)
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "action_table.csv"
+            with self.assertRaises(RunOriginError):
+                rndr.write_action_table(rec, out)
+            self.assertFalse(out.exists())   # provenance-stripped record never persisted
+
+    def test_swapped_run_origin_refused_before_file_creation(self):
+        rec = _clean_record()
+        rec["run_origin"] = {"run_mode": "live", "data_origin": "real_provider", "operational_use": "authorized"}
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "action_table.csv"
+            with self.assertRaises(RunOriginError):
+                rndr.write_action_table(rec, out)
             self.assertFalse(out.exists())
 
 

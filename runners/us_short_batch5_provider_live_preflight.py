@@ -202,12 +202,20 @@ def load_and_validate_packet(path: Path) -> dict[str, Any]:
     ]:
         _expect_false(errors, storage, field, "storage_and_secret_boundary")
 
-    for field, value in (packet.get("preflight_gates") or {}).items():
-        if value is not True:
-            errors.append(f"preflight_gates.{field} must be true")
-    for field, value in (packet.get("prohibited_claims") or {}).items():
-        if value is not False:
-            errors.append(f"prohibited_claims.{field} must be false")
+    preflight_gates = packet.get("preflight_gates")
+    if not isinstance(preflight_gates, dict) or not preflight_gates:
+        errors.append("preflight_gates must be a non-empty object")
+    else:
+        for field, value in preflight_gates.items():
+            if value is not True:
+                errors.append(f"preflight_gates.{field} must be true")
+    prohibited_claims = packet.get("prohibited_claims")
+    if not isinstance(prohibited_claims, dict) or not prohibited_claims:
+        errors.append("prohibited_claims must be a non-empty object")
+    else:
+        for field, value in prohibited_claims.items():
+            if value is not False:
+                errors.append(f"prohibited_claims.{field} must be false")
 
     if errors:
         raise ValueError("; ".join(errors))
