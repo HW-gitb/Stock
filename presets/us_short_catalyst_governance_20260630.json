@@ -1,0 +1,31 @@
+{
+  "schema_name": "us_short_catalyst_governance",
+  "schema_version": "1.0.0",
+  "as_of": "20260630",
+  "status": "initial_prior_pre_forward_calibration",
+  "neutral_catalyst_score": 50.0,
+  "score_bounds": {"min": 0.0, "max": 100.0},
+  "earnings_surprise": {
+    "bucket_bounds_pct": {"big_beat_min": 10.0, "beat_min": 2.0, "miss_max": -2.0, "big_miss_max": -10.0},
+    "points": {"big_beat": 20.0, "beat": 10.0, "inline": 0.0, "miss": -10.0, "big_miss": -20.0}
+  },
+  "analyst_revision": {
+    "bucket_bounds_net": {"strong_positive_min": 3, "positive_min": 1, "negative_max": -1, "strong_negative_max": -3},
+    "points": {"strong_positive": 15.0, "positive": 8.0, "neutral": 0.0, "negative": -8.0, "strong_negative": -15.0}
+  },
+  "event_8k": {
+    "points": {"positive": 12.0, "neutral": 0.0, "negative": -12.0}
+  },
+  "semantic_advisory": {
+    "input_bounds": {"min": -1.0, "max": 1.0},
+    "max_abs_points": 6.0
+  },
+  "scoring_caliber_calibration_item_id": 14,
+  "notes": {
+    "design_authority": "docs/us_short_system_design.md §4.2 (催化剂 = 规则映射分(非分位); 仅已实现/当前, 未来事件归 §8.1) + §13.1 #14 打分标准化口径",
+    "prior_status": "v1 locked defaults; every point value + bucket bound is a §13.1 #14 FORWARD prior, NOT validated alpha and NOT ship-gate evidence. Forward-calibration is a REVIEWED schema+preset+module version bump, never a silent edit, so the catalyst mapping cannot drift/weaken without review.",
+    "realized_only": "the block scores REALIZED/current signals ONLY; a future-dated signal is EXCLUDED and belongs to §8.1 forward_events (engine/us_short_forward_events.py), never the selection score. The engine enforces this exclusion against each signal's caller-supplied event_date vs the run as_of; the PROVENANCE that those dates are real/PIT is the provider/live data layer (gated, see data_layer_gated).",
+    "scope_boundary": "fundamental beat/miss (earnings actual vs expected) + analyst revisions + filed 8-K event class + advisory LLM semantic ONLY. The good-data-BAD-price-REACTION soft penalty is the SEPARATE engine/us_short_risk_downgrade.py (core_score = ... − risk_downgrade; §18.1 #26 两字段分离), NOT folded into this block.",
+    "data_layer_gated": "the real FMP earnings/analyst + free SEC 8-K EXTRACTION that produces these per-ticker signals is the provider/live data layer, separately gated (SR-PROVIDER-001). This engine is the pure offline rule-mapping over INJECTED signals (mirrors the momentum slice, whose Massive grouped-daily data layer is likewise gated)."
+  }
+}

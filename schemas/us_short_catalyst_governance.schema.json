@@ -1,0 +1,120 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_catalyst_governance.schema.json",
+  "title": "US-short core_score catalyst block (25%) rule-mapping governance (round-2)",
+  "description": "Frozen §4.2 catalyst block (催化剂 = 规则映射分(非分位)) point schedule for the 25% core_score component: a NEUTRAL baseline plus additive points for the REALIZED earnings-surprise / analyst-revision / 8-K event class / advisory semantic signals, clamped to score_bounds. The governed v1 semantics (neutral, bounds, every bucket bound + point value, the §13.1 #14 anchor) are CONST-PINNED — forward-calibration of these §13.1 #14 priors is a deliberate REVIEWED schema+preset+module version bump, not a silent value edit, so the catalyst mapping cannot drift/weaken without review. These are priors, NOT validated alpha and NOT ship-gate evidence. The realized-signal EXTRACTION (FMP earnings/analyst + SEC 8-K) is the provider/live data layer and is separately gated (SR-PROVIDER-001) — this contract governs only the pure offline mapping. Future-dated signals belong to §8.1 forward_events, never this block. The consuming engine (engine/us_short_catalyst.py) runtime-validates this artifact (jsonschema may be absent at runtime). No provider/live/network; no A-share crossing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "as_of", "status",
+    "neutral_catalyst_score", "score_bounds",
+    "earnings_surprise", "analyst_revision", "event_8k", "semantic_advisory",
+    "scoring_caliber_calibration_item_id", "notes"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_catalyst_governance"},
+    "schema_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"type": "string", "minLength": 1},
+    "neutral_catalyst_score": {"const": 50.0},
+    "score_bounds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["min", "max"],
+      "properties": {"min": {"const": 0.0}, "max": {"const": 100.0}}
+    },
+    "earnings_surprise": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bucket_bounds_pct", "points"],
+      "properties": {
+        "bucket_bounds_pct": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["big_beat_min", "beat_min", "miss_max", "big_miss_max"],
+          "properties": {
+            "big_beat_min": {"const": 10.0},
+            "beat_min": {"const": 2.0},
+            "miss_max": {"const": -2.0},
+            "big_miss_max": {"const": -10.0}
+          }
+        },
+        "points": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["big_beat", "beat", "inline", "miss", "big_miss"],
+          "properties": {
+            "big_beat": {"const": 20.0},
+            "beat": {"const": 10.0},
+            "inline": {"const": 0.0},
+            "miss": {"const": -10.0},
+            "big_miss": {"const": -20.0}
+          }
+        }
+      }
+    },
+    "analyst_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bucket_bounds_net", "points"],
+      "properties": {
+        "bucket_bounds_net": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["strong_positive_min", "positive_min", "negative_max", "strong_negative_max"],
+          "properties": {
+            "strong_positive_min": {"const": 3},
+            "positive_min": {"const": 1},
+            "negative_max": {"const": -1},
+            "strong_negative_max": {"const": -3}
+          }
+        },
+        "points": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["strong_positive", "positive", "neutral", "negative", "strong_negative"],
+          "properties": {
+            "strong_positive": {"const": 15.0},
+            "positive": {"const": 8.0},
+            "neutral": {"const": 0.0},
+            "negative": {"const": -8.0},
+            "strong_negative": {"const": -15.0}
+          }
+        }
+      }
+    },
+    "event_8k": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["points"],
+      "properties": {
+        "points": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["positive", "neutral", "negative"],
+          "properties": {
+            "positive": {"const": 12.0},
+            "neutral": {"const": 0.0},
+            "negative": {"const": -12.0}
+          }
+        }
+      }
+    },
+    "semantic_advisory": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_bounds", "max_abs_points"],
+      "properties": {
+        "input_bounds": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["min", "max"],
+          "properties": {"min": {"const": -1.0}, "max": {"const": 1.0}}
+        },
+        "max_abs_points": {"const": 6.0}
+      }
+    },
+    "scoring_caliber_calibration_item_id": {"const": 14},
+    "notes": {"type": "object", "minProperties": 1}
+  }
+}

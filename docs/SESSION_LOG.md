@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short round-2 catalyst block repair)
+
+- **Verdict/Action**: PASS; `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP` is resolved in the reviewed working tree. `analyst_revision_net` now uses a strict signed-int count parser, so fractional / float / bool / string counts cannot move the catalyst score, while legal integer counts still score.
+- **Required**: None. Register entry resolved in `docs/system_risk_register.md`; provider/live extraction, Pass2, R3 seam, DataHub, production/ship-gate, A-share, A-long, and US-long remain outside this reviewed scope.
+- **Verify**: focused catalyst/schema 63 OK; full offline `*us_short*` 2728 OK; doc-route guards 52 OK; py_compile OK; direct mutant probe rejected fractional/integer-valued-float/bool/string counts and accepted legal integers; `git diff --check` warning-only CRLF.
+- **Next**: Auto-commit blocked: `git add` failed with `.git/index.lock` permission denied, and the required escalation was rejected by the environment usage-limit gate. No files were staged; keep `.gitignore` out of this reviewed slice.
+
+## 2026-06-30 — Claude `修复` (US-short 轮2 catalyst block — analyst_revision_net 严格整数计数)
+
+- **Verdict/Action**: 修复 Codex round-2 catalyst FAIL 唯一 Required `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP`：`analyst_revision_net`（分析师修正 net 计数）原用 `_finite`（数值校验器）→ 接受分数计数当已实现催化打分（2.9→58 / 3.1→65 / -1.1→42）。新 `_finite_int`（严格 signed int：拒 bool/str/NaN/Inf/分数及整数值 float 含 3.0），`_revision_points` 改走它；非整数→None→`catalyst_block` 记为 excluded、唯一信号坏则落 `neutral_fallback`，分数不再被坏计数推动。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP` → fixed pending Codex（register 单源 Repair）。真实信号数据层 / R3 seam / Pass2 / live 仍 DEFERRED/gated（SR-PROVIDER-001），未碰、未重校准阈值。
+- **Verify**: focused 63 OK；全离线 `*us_short*` 2728 OK（零回归）；doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF；复现 Codex 确切探针（2.9/3.1/-1.1/3.0/-3.0 → 50 中性、`realized=[]`、`neutral_fallback`），int 3 正控 →65 realized。
+- **Pre-Codex self-review**: A 整类（类=scoring 边界用 float 校验器的 count 字段；本引擎唯一成员=`analyst_revision_net` 已修；`earnings_surprise_pct`%/`semantic_advisory_score`[-1,1] 是真连续→`_finite` 保留不动否则正控变漏报；governance `bucket_bounds_net` 整数阈值已 `_check_subdict` 严格 int）；B ripple grep=`_finite_int` 仅本引擎、模块+`_revision_points` in-file docstring 同步严格-int、零外部消费者；C 反向（拒 0.5/2.9/3.0/3.1/负向+bool/str/NaN/Inf、正控 -3/-1/0/1/3 仍打分）；D 方向对（坏计数=不计、非漏报）；E 未碰 CURRENT/design stable doc；F py_compile/diff-check。
+- **Next**: Codex 复审 `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP`；PASS 后更 design line 3/§18.2/§19 + CURRENT §0 并提交。
+
+## 2026-06-30 - Codex review FAIL (US-short round-2 catalyst block)
+
+- **Verdict/Action**: FAIL; catalyst governance/schema and realized/future-date gates are mostly sound, but `analyst_revision_net` accepts fractional counts and changes the 25% catalyst score.
+- **Required**: `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP` open; full materiality, repro, and repair boundary live in `docs/system_risk_register.md`.
+- **Verify**: focused catalyst/schema 58 OK; full offline `*us_short*` 2723 OK; doc-route guards 52 OK; py_compile OK; direct fractional-count probe ACCEPTED (`2.9 -> 58.0`, `3.1 -> 65.0`, `-1.1 -> 42.0`).
+- **Next**: Claude Code `修复`.
+
+## 2026-06-30 — Claude 起草 (US-short 轮2 slice 2 — core_score 催化剂块 25% 纯规则映射引擎 + governance 契约)
+
+- **Verdict/Action**: 起草 round-2 catalyst block（core_score 25% 分量的生产引擎，平行于 slice-1 momentum）。新 `engine/us_short_catalyst.py`：`catalyst_block(signals_by_ticker, governance, *, as_of)` 纯规则映射（§4.2 催化剂=规则映射分非分位）= NEUTRAL 50 + 各已实现信号的 governed 加点（财报 surprise% 5 桶 / 分析师修正 net 5 桶 / 8-K 类 / LLM 语义线性 capped），clamp 到 score_bounds；含 `load/validate_catalyst_governance` 运行期 const re-enforce（drift fail-closed、const==preset 三角）。**仅已实现/当前**：信号日期>as_of=未来→排除（归 §8.1，绝不进选股分）、日期缺/非真历→未核排除（保守）；无已实现信号→中性 50 + `neutral_fallback`（§4.2 缺分量、留 caller 降 data_quality）。新 `presets/us_short_catalyst_governance_20260630.json` + schema：§13.1 #14 点表全 const-pin（drift 须 reviewed 版本变更）。
+- **Boundary**: 纯/离线、消费注入信号——真实 FMP 财报/分析师 + 免费 SEC 8-K **抽取数据层仍 gated（SR-PROVIDER-001）**，镜像 momentum 的 Massive 层延期；R3 seam（接 core_score/pipeline）、Pass2、live 均未碰、DEFERRED。**scope**：本块只算 fundamental beat/miss + 修正 + 8-K + 语义信号强度；good-data-坏价格反应软扣是**独立** `us_short_risk_downgrade`（§18.1 #26 两字段分离），未折入。不交叉 A 股、未 push。
+- **Required**: 无（新起草，非修 register finding）。
+- **Verify**: focused 58 OK（engine 38 + schema 20）；全离线 `*us_short*` **2723 OK**（2665+58、零回归）；doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（governance 每个 governed 值 drift→raise + 顶层 closed-world；catalyst_block 各入口 fail-closed：非 dict→{}、坏/非真 as_of→raise、坏值（bool/NaN/数字串）→不计、缺/未来/坏日期→三类 excluded）；B ripple grep=新符号仅在 5 新文件、`catalyst_block` 零外部消费者（R3 未接，镜像 `momentum_block`）、const==preset 三角测；C 正控（big-beat→70、满栈→clamp100、负栈→clamp0、inline=realized 非 fallback、realized beat 不被 future 信号抬分）；D 反向（future/未核信号方向=不抬分，非漏报）；E 未碰 CURRENT/design stable doc（待 Codex PASS 再随 commit 入）；F py_compile/diff-check。
+- **Next**: Codex 审查 round-2 catalyst block slice（`engine/us_short_catalyst.py` + preset + schema + 2 test 文件）；PASS 后再更 design line 3/§18.2/§19 + CURRENT §0 并提交。真实信号数据层 / R3 seam / Pass2 / live 仍待 SR-PROVIDER-001 授权（DEFERRED）。
+
 ## 2026-06-30 - Codex review PASS (US-short batch5 universe fetch clean-slate full review)
 
 - **Verdict/Action**: PASS / clean. Clean-slate adversarial review of current committed `runners/us_short_universe_fetch.py`, `schemas/us_short_universe_candidate_artifact.schema.json`, and the two specified target test files found no new material Required item. Already resolved `R-USSHORT-BATCH5-*` findings were checked against the current implementation and not re-raised; deferred/gated items remain out of scope per user boundary.
