@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short batch5 universe fetch clean-slate full review)
+
+- **Verdict/Action**: PASS / clean. Clean-slate adversarial review of current committed `runners/us_short_universe_fetch.py`, `schemas/us_short_universe_candidate_artifact.schema.json`, and the two specified target test files found no new material Required item. Already resolved `R-USSHORT-BATCH5-*` findings were checked against the current implementation and not re-raised; deferred/gated items remain out of scope per user boundary.
+- **Required**: 无。No new `docs/system_risk_register.md` entry added.
+- **Verify**: target runner/schema tests 78 OK; full offline `*us_short*` 2665 OK; doc-route guards 52 OK; py_compile OK; direct mutants rejected for forged row verdict, forged market-cap source, forged summary/eligible set, wrong decision_date, unknown row property, wrong candidate path, RTH out-of-window, and summary secret prewrite residue.
+- **Next**: Codex 自动提交本次 review-only SESSION_LOG entry。
+
 ## 2026-06-30 - Codex review PASS (US-short batch5 cc_r1_v1 hardening Repair 2)
 
 - **Verdict/Action**: PASS; `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` Repair 2 closes the market-cap-source precedence residual. `validate_candidate_artifact` now rejects forged `market_cap_source=fmp_profile` when SEC shares×price is available, while accepting real FMP fallback / none producer shapes.
