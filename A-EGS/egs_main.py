@@ -3173,28 +3173,6 @@ def run_egs(backtest_mode=False, output_root=None):
     except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
         log.warning(f"egs 权重 variant 对比 diff 跳过：{type(_wc_exc).__name__}")
 
-    # 赛道热度 overlay(Slice A,comparison-track 非生产):A 方案——在 EGS run 内用内存里的全量日线
-    # + L3 概念快照 + sw_map 装配,落到同一 run 桶。失败绝不影响生产 run。
-    # **pit + today 均产出**:pit→概念标 'pit'(回放快照);today(live)→概念标 'forward'(决策当日 live 成员,
-    # 无 look-ahead)→ overlay 在 live weekly 自然 forward 累积(攒 ≥12 周升级证据)。neutralize 无概念 → 跳过(不编造)。
-    try:
-        from runners.a_short_theme_overlay_comparison import emit_overlay, overlay_emit_allowed
-        from engine.a_short_run_paths import overlay_path
-        # 概念成员口径(由 emit_overlay 按模式标):pit=PIT 快照(回放)→ 'pit';today=决策当日 live 成员
-        # (forward,无 look-ahead)→ 'forward'。门控 + 标签 + 装配 + 写盘的真实落点已提取到 emit_overlay(可单测)。
-        _l3 = _load_l3_snapshot(TODAY) if overlay_emit_allowed(CONF.get("l3_mode")) else None
-        if _l3 is not None:
-            _ov_pool = top50[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
-            _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
-            _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
-            _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
-                                       TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
-            log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_written}")
-        else:
-            log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode=neutralize 或无快照),不编造概念")
-    except Exception as _ov_exc:  # noqa: BLE001 (non-production side output must never break the run)
-        log.warning(f"赛道热度 overlay 跳过：{type(_ov_exc).__name__}")
-
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
 
@@ -3243,6 +3221,25 @@ def run_egs(backtest_mode=False, output_root=None):
         if not tier2_fill.empty:
             log.info(f"[BACKTEST] watch_df Tier1 仅 {len(watch_df)} 只，从 Tier2 补 {len(tier2_fill)} 只达 watch_n={watch_n}")
             watch_df = pd.concat([watch_df, tier2_fill[watch_df.columns]], ignore_index=True)
+
+    # 赛道热度 overlay(Slice A,comparison-track 非生产):只覆盖 Stage3 后最终周报候选 watch_df，
+    # 与 analysis_input.candidates 保持同一批，避免 M6.7 因多行/缺行而 fail-closed。
+    # 生产行业热度评分已在 score_l5 完成；本 overlay 仅供后续分析/对照，不反向改变候选排序。
+    try:
+        from runners.a_short_theme_overlay_comparison import emit_overlay, overlay_emit_allowed
+        from engine.a_short_run_paths import overlay_path
+        _l3 = _load_l3_snapshot(TODAY) if overlay_emit_allowed(CONF.get("l3_mode")) else None
+        if _l3 is not None:
+            _ov_pool = watch_df[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
+            _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
+            _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
+            _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
+                                       TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
+            log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_written}")
+        else:
+            log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode=neutralize 或无快照),不编造概念")
+    except Exception as _ov_exc:  # noqa: BLE001 (non-production side output must never break the run)
+        log.warning(f"赛道热度 overlay 跳过：{type(_ov_exc).__name__}")
 
     watch_df["entry_flag"]  = watch_df.apply(_entry_flag, axis=1)
     if "ts_code" in watch_df.columns:

@@ -1,11 +1,11 @@
 {
   "schema_name": "a_short_overlay_eval_summary",
   "schema_version": "1.0.0",
-  "generated_at": "2026-06-22T08:36:53+08:00",
-  "as_of": "20260622",
+  "generated_at": "2026-06-29T14:18:06+08:00",
+  "as_of": "20260629",
   "track": "comparison_non_production",
   "min_forward_observations": 12,
-  "n_forward_observations": 1,
+  "n_forward_observations": 2,
   "promotion_review_due": false,
   "stable_win_margin_frozen": false,
   "decision_status": "accumulating",
@@ -25,6 +25,11 @@
       "as_of": "20260622",
       "generated_at": "2026-06-22T08:31:51+08:00",
       "candidate_count": 13
+    },
+    {
+      "as_of": "20260629",
+      "generated_at": "2026-06-29T14:11:54+08:00",
+      "candidate_count": 15
     }
   ],
   "boundary": {
