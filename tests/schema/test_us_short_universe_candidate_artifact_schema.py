@@ -133,6 +133,30 @@ class UsShortUniverseCandidateArtifactSchemaTest(unittest.TestCase):
         a["schema_name"] = "something_else"
         self.assertTrue(self._errors(a))
 
+    def test_forged_schema_version_rejected(self):
+        # F4 (cc_r1_v1): schema_version const-pinned (was minLength:1) — self-sufficient like sibling schemas.
+        a = copy.deepcopy(_valid_artifact())
+        a["schema_version"] = "9.9.9-forged"
+        self.assertTrue(self._errors(a))
+
+    def test_forged_authorization_ref_rejected(self):
+        # F4: authorization_ref const-pinned.
+        a = copy.deepcopy(_valid_artifact())
+        a["authorization_ref"] = "totally_unauthorized_ref"
+        self.assertTrue(self._errors(a))
+
+    def test_status_flags_sourced_true_rejected(self):
+        # F4: round-1 honesty invariant pinned IN the schema (status source is gated → must be false).
+        a = copy.deepcopy(_valid_artifact())
+        a["rows"][0]["status_flags_sourced"] = True
+        self.assertTrue(self._errors(a))
+
+    def test_status_flag_true_rejected(self):
+        # F4: delisted/halted/bankruptcy/otc const false in round-1 (never sourced-true by omission).
+        a = copy.deepcopy(_valid_artifact())
+        a["rows"][0]["delisted"] = True
+        self.assertTrue(self._errors(a))
+
 
 if __name__ == "__main__":
     unittest.main()

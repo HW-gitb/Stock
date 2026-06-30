@@ -57,6 +57,30 @@ class UsShortBatch5IncidentLogWriterTest(unittest.TestCase):
         ]:
             self.assertNotIn(forbidden, summary_text)
 
+    def test_writer_rejects_implausible_detected_at_year(self) -> None:
+        # F7 (cc_r1_v1): detected_at must be real AND plausible — a far-future year (9999) is rejected.
+        incident_root = self._private_incident_root()
+        rec = valid_record()
+        rec["detected_at"] = "9999-01-01T00:00:00+00:00"
+        with self.assertRaisesRegex(writer.IncidentLogWriterError, "plausible"):
+            writer.write_incident_record(rec, decision_date="20260625", incident_root=incident_root)
+
+    def test_summary_write_failure_leaves_valid_log_no_corrupt_residue(self) -> None:
+        # F3 (cc_r1_v1): the log is written via atomic tmp-then-replace; a failure during the summary write
+        # cannot leave a half-written/corrupt log (it stays a complete parseable JSONL of all records) and no
+        # .tmp residue. The summary momentarily lags but self-heals from the log on the next write.
+        incident_root = self._private_incident_root()
+        rec = valid_record()
+        with mock.patch.object(writer, "_write_json_atomic", side_effect=RuntimeError("summary write boom")):
+            with self.assertRaises(RuntimeError):
+                writer.write_incident_record(rec, decision_date="20260625", incident_root=incident_root)
+        log_path = incident_root / "20260625" / "incident_log.jsonl"
+        self.assertTrue(log_path.exists())
+        lines = [ln for ln in log_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+        self.assertEqual(len(lines), 1)
+        self.assertEqual(json.loads(lines[0]), rec)                                  # complete, not corrupt
+        self.assertFalse(log_path.with_name("incident_log.jsonl.tmp").exists())      # no tmp residue
+
     def test_writer_rejects_output_root_outside_batch5_private_incident_root(self) -> None:
         with tempfile.TemporaryDirectory(prefix="outside_incident_", dir=writer.ROOT) as tmpdir:
             with self.assertRaisesRegex(writer.IncidentLogWriterError, "private incident root"):

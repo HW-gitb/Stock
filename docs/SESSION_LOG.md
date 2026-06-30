@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short batch5 cc_r1_v1 hardening Repair 2)
+
+- **Verdict/Action**: PASS; `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` Repair 2 closes the market-cap-source precedence residual. `validate_candidate_artifact` now rejects forged `market_cap_source=fmp_profile` when SEC shares×price is available, while accepting real FMP fallback / none producer shapes.
+- **Required**: 无; this slice is resolved in the current working tree. Deferred/gated items (R3 seam, live status source, momentum data layer, provider/live/DataHub/production) remain out of scope per register/user boundary.
+- **Verify**: direct forged-source probe REJECTED; producer-shaped FMP fallback + none ACCEPTED; focused 146 OK; full offline `*us_short*` 2665 OK; doc-route guards 52 OK; py_compile OK; `git diff --check` warning-only CRLF.
+- **Next**: Codex 自动提交 reviewed slice。
+
+## 2026-06-30 — Claude `修复` (US-short batch5 cc_r1_v1 F1 同类漏网 — market_cap source 改 producer 优先级重算)
+
+- **Verdict/Action**: 修复 Codex cc_r1_v1 复审 FAIL 唯一残留：F1 anti-forgery 同类一腿——`validate_candidate_artifact` 之前 source-label-first（fmp_profile 分支只查 mc 有限），故 SEC shares+price 可得时仍接受伪造 `market_cap_source=fmp_profile`。改为按 `apply_pass1` producer 优先级重算：shares+price 均有限→必 sec_shares_x_close 且 mc==shares×price；fmp_profile 仅当 SEC 不可得+mc 有限；none 仅当 mc 空；sec 无 shares+price→拒。lineage 仍钉行源。详见 register Repair 2。
+- **Required**: `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` → fixed pending Codex（register 单源 Repair 2）。deferred/gated 项未碰、不在 scope。
+- **Verify**: universe-fetch 63 OK（+4：SEC-available→forged-FMP 拒 / FMP-fallback 正控 / none 正控 / none 负边界）；复现 Codex 确切探针（price=200 shares=15e9 → producer sec_shares_x_close、伪造 fmp_profile）现 REJECTED；全离线 `*us_short*` 2665 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（§1 审出 market_cap source 是唯一 precedence-only gap；verdict/coverage/shares_source/price_source 已 fully re-derive 或 const-pin）；B ripple=单 validate_candidate_artifact 消费点、producer 优先级与 apply_pass1 一致、lineage 钉行源；C 正控（FMP-fallback + none 真行接受、genuine artifact 仍过）；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 复审 `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` Repair 2。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 cc_r1_v1 hardening)
+
+- **Verdict/Action**: FAIL; Claude 修复的 F1/F2/P3 目标套件与全离线回归均通过，但 F1 per-row anti-forgery 仍有同类漏网：当 `price` + SEC `shares` 均可用时，candidate row 可伪造为 `market_cap_source=fmp_profile` 且同步伪造 lineage，`validate_candidate_artifact` 仍接受；这违反本轮 register 声称的 whole per-row class / market_cap / lineage 重算保证。
+- **Required**: `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` 保持 `in_progress`; 具体复现、materiality、修复要求见 register Codex review residual 2026-06-30。
+- **Verify**: focused 142 OK; full offline `*us_short*` 2661 OK; direct forged-source probe ACCEPTED (`market_cap_source=fmp_profile` while SEC shares×price available, lineage matched forged source).
+- **Next**: Claude Code `修复`。
+
+## 2026-06-30 — Claude `修复` (US-short batch5 cc_r1_v1 自审硬化 — F1–F9 + 两条 hygiene)
+
+- **Verdict/Action**: 修复用户授权的 cc_r1_v1（我充当 reviewer 的桌面审查）9 条发现 + 2 条 hygiene。核心 F1(P2)：candidate validator 改为重算整类 per-row（verdict/status/coverage/market_cap/lineage/PIT），堵伪造 ineligible→eligible；F2(P2) SEC frames 全失败 fail-closed。P3：F4 schema const-pin、F3 incident 原子 log、F5/F6/F7/F9 probe/incident hygiene；F8 判无干净代码修（naive 时钟验不了 ET、仅强化 docstring）。Hygiene：momentum docstring 对齐 min-coverage + register R2/R4/R5/R1-slice1 翻 resolved committed 9113f075。逐条详见 register。
+- **Required**: `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING` → fixed pending Codex（register 单源）。deferred/gated（R3 seam / momentum 数据层 / live 状态源 / 价源 fallback+§3.7 live）未碰、不在 scope。
+- **Verify**: 聚焦 142 OK（+13 反向：forged eligible/coverage/lineage/as_of、schema const-pin、SEC all-fail+partial、incident 原子+年界、`..`）；F1 直探针 penny 伪造 eligible → REJECTED；全离线 `*us_short*` 2661 / doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（F1 重算全 per-row 字段类、非只 price 一腿）；B ripple=validate_candidate_artifact 单消费点、schema↔producer 值一致、momentum docstring 旧措辞清零；C 正控（genuine artifact 仍过 + partial-SEC-frame 容忍）；D F8 判不可修不硬造；E register 单源、未碰 CURRENT；F py_compile/diff-check。
+- **Next**: Codex 审查 `R-USSHORT-BATCH5-CC-R1-V1-SELF-REVIEW-HARDENING`；deferred 项仍待 SR-PROVIDER-001 授权。
+
 ## 2026-06-30 - Codex review PASS (US-short batch5 fix-now set: R1/R5/R4/R2)
 
 - **Verdict/Action**: PASS; R2 path/version binding closed: candidate artifact path must equal canonical `state/us_short/candidate_universe_<decision_date>.json` and pass real `git check-ignore`; wrong-date/non-gitignored probes reject before fetch/write with no residue.

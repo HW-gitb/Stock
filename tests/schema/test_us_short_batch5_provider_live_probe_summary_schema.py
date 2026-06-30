@@ -222,6 +222,15 @@ class UsShortBatch5ProviderLiveProbeSummarySchemaTests(unittest.TestCase):
         summary["endpoint_results"][0]["raw_sample_ref"] = "docs/raw_payload.json"
         self.assertFalse(_validator().is_valid(summary))
 
+    def test_rejects_raw_ref_with_parent_dir_traversal(self):
+        # F6 (cc_r1_v1): even WITHIN the authorized prefix a `..` traversal must be rejected (the sibling
+        # incident-record schema already blocks `..`; this closes the asymmetry).
+        summary = copy.deepcopy(_valid_summary())
+        summary["endpoint_results"][0]["raw_sample_ref"] = (
+            "provider_samples/us_short_batch5_v1_provider_live_20260625/../../etc/passwd"
+        )
+        self.assertFalse(_validator().is_valid(summary))
+
     def test_rejects_missing_or_partial_trace_when_counts_claim_completed_probe(self):
         for field in ["endpoint_results", "symbol_results"]:
             summary = copy.deepcopy(_valid_summary())

@@ -110,6 +110,8 @@ def _validate_time_semantics(record: dict[str, Any]) -> None:
         raise IncidentLogWriterError(f"detected_at is not a valid ISO-8601 datetime: {detected_at}") from exc
     if parsed.tzinfo is None:
         raise IncidentLogWriterError(f"detected_at must be timezone-aware (carry an offset/Z): {detected_at}")
+    if not (2000 <= parsed.year <= 2100):  # F7: real AND plausible (reject far-future / pre-epoch like 9999 / 1899)
+        raise IncidentLogWriterError(f"detected_at year out of plausible range [2000,2100]: {detected_at}")
     window = record.get("affected_date_window")
     if not isinstance(window, dict):
         raise IncidentLogWriterError("affected_date_window must be an object")
@@ -291,6 +293,13 @@ def _write_json_atomic(payload: dict[str, Any], path: Path) -> None:
     tmp_path.replace(path)
 
 
+def _write_text_atomic(text: str, path: Path) -> None:
+    """Atomic full-rewrite via tmp-then-replace (no half-line on a mid-write crash; F3)."""
+    tmp_path = path.with_name(f"{path.name}.tmp")
+    tmp_path.write_text(text, encoding="utf-8", newline="\n")
+    tmp_path.replace(path)
+
+
 def write_incident_record(
     record: dict[str, Any],
     *,
@@ -319,13 +328,15 @@ def write_incident_record(
     _ensure_unique_incident_id(existing_records, validated["incident_id"])
 
     target_dir.mkdir(parents=True, exist_ok=True)
-    line = json.dumps(validated, ensure_ascii=False, sort_keys=True)
-    _scan_for_forbidden_content(line)
-    with log_path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(line)
-        handle.write("\n")
-
     records = [*existing_records, validated]
+    # F3 (cc_r1_v1): write the log via tmp-then-replace (atomic full rewrite of existing + new) rather than a
+    # bare append — a crash mid-write can never leave a half-line. The summary is a pure function of the log
+    # records, so if a crash lands between the two atomic replaces the summary momentarily lags one row but
+    # self-heals on the next write (rebuilt from the log); neither file is ever left corrupt/half-written.
+    log_text = "".join(json.dumps(rec, ensure_ascii=False, sort_keys=True) + "\n" for rec in records)
+    _scan_for_forbidden_content(records)
+    _write_text_atomic(log_text, log_path)
+
     summary = _build_summary(
         decision_date=decision_date,
         log_path=log_path,

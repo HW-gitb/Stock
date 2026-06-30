@@ -97,6 +97,24 @@ class TestFetchSecShares(unittest.TestCase):
         self.assertNotIn(2, out)
         self.assertEqual(out[3]["shares"], 500.0)
 
+    def test_all_frames_failed_raises(self):
+        # F2 (cc_r1_v1): every frame failing (SEC down) → fail closed, NOT a silent empty map.
+        with patch.object(_mod, "_sec_get", side_effect=RuntimeError("SEC down")):
+            with self.assertRaises(RuntimeError):
+                _mod.fetch_sec_shares("ua@test.com", frames=["CY2026Q1I", "CY2025Q4I"])
+
+    def test_partial_frame_failure_tolerated(self):
+        # F2: a SINGLE failed frame is tolerated (other quarters still merge the latest shares per CIK).
+        good = {"data": [{"cik": 7, "val": 800, "end": "2026-03-31"}]}
+
+        def se(url, ua):
+            if "CY2026Q1I" in url:
+                raise RuntimeError("one frame down")
+            return good
+        with patch.object(_mod, "_sec_get", side_effect=se):
+            out = _mod.fetch_sec_shares("ua@test.com", frames=["CY2026Q1I", "CY2025Q4I"])
+        self.assertEqual(out[7]["shares"], 800.0)
+
 
 class TestAdvWindowSessionDates(unittest.TestCase):
     def test_last_n_sessions_newest_first_iso(self):
@@ -374,6 +392,88 @@ class TestSummaryAndArtifact(unittest.TestCase):
         del art["rows"][0]["lineage"]
         with self.assertRaises(Exception):   # jsonschema.ValidationError (required lineage)
             _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_forged_eligible_below_price_floor(self):
+        # F1 (cc_r1_v1) headline: a penny row (price below the $5 floor) forged eligible=True/reasons=[] with a
+        # self-consistent summary must be REJECTED — the validator re-derives the verdict via cheap_eligible.
+        art = self._artifact()
+        for r in art["rows"]:
+            if r["ticker"] == "AAPL":
+                r["price"] = 3.0                          # below min_price_usd=5.0
+                r["market_cap_usd"] = r["shares"] * 3.0   # keep market_cap_source=sec_shares_x_close consistent
+                r["eligible"] = True                      # forged
+                r["reasons"] = []                         # forged
+        art["summary"] = _mod.summarize_rows(art["rows"])           # keep aggregation self-consistent
+        art["eligible_tickers"] = _mod.eligible_tickers_from_rows(art["rows"])
+        art["eligible_count"] = len(art["eligible_tickers"])
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_forged_coverage_status(self):
+        # F1: coverage_status re-derived from inputs (schema allows the enum value; the semantic layer rejects).
+        art = self._artifact()
+        art["rows"][0]["coverage_status"] = "no_price"   # AAPL has a price → recompute = "complete"
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_forged_lineage_source(self):
+        # F1: lineage.market_cap_source must equal the row's market_cap_source (re-derived consistency).
+        art = self._artifact()
+        art["rows"][0]["lineage"]["market_cap_source"] = "none"   # row says sec_shares_x_close
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_forged_as_of(self):
+        # F1: row as_of must be bound to the run clock (== used_date).
+        art = self._artifact()
+        art["rows"][0]["as_of"] = "1999-01-01"
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def _fmp_rows(self, fmp_caps):
+        # one ticker with NO SEC shares (so the producer falls back to FMP / none precedence)
+        sec = {"NOSEC": {"cik": 999, "exchange": "NYSE"}}
+        md = {"NOSEC": _md(50.0, 20_000_000.0)}
+        return _mod.apply_pass1(sec, {}, md, governance=self.gov, fmp_caps=fmp_caps,
+                                as_of="2026-06-26", observed_at="2026-06-29T12:00:00+00:00")
+
+    def _fmp_artifact(self, rows):
+        return _mod.build_candidate_artifact(
+            rows=rows, decision_date="20260629", price_basis_date="20260626", used_date="2026-06-26",
+            observed_window_dates=["2026-06-26"], generated_at="2026-06-29T12:00:00+00:00",
+            calendar_verification_status="pending_authoritative_cross_check")
+
+    def test_validate_rejects_forged_fmp_source_when_sec_available(self):
+        # Codex cc_r1_v1 residual: SEC shares+price available → producer uses sec_shares_x_close; forging
+        # market_cap_source (and matching lineage) to fmp_profile must be REJECTED (producer-precedence re-derive).
+        art = self._artifact()
+        for r in art["rows"]:
+            if r["ticker"] == "AAPL":   # SEC shares 15e9 + price 200 → sec_shares_x_close
+                r["market_cap_source"] = "fmp_profile"             # forged source
+                r["lineage"]["market_cap_source"] = "fmp_profile"  # forged to match → isolates the precedence check
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_accepts_fmp_fallback_when_sec_unavailable(self):
+        # FMP fallback POSITIVE: no SEC shares + finite FMP cap → market_cap_source=fmp_profile accepted.
+        rows = self._fmp_rows({"NOSEC": 5e8})
+        self.assertEqual(rows[0]["market_cap_source"], "fmp_profile")
+        self.assertIsNone(rows[0]["shares"])
+        _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_accepts_none_source_when_no_market_cap(self):
+        # none POSITIVE: no SEC shares + no FMP cap → market_cap_source=none, market_cap_usd=None accepted.
+        rows = self._fmp_rows({})
+        self.assertEqual(rows[0]["market_cap_source"], "none")
+        self.assertIsNone(rows[0]["market_cap_usd"])
+        _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_none_source_with_finite_market_cap(self):
+        # none NEGATIVE boundary: market_cap_source=none must not carry a finite market_cap (forge rejected).
+        rows = self._fmp_rows({})
+        rows[0]["market_cap_usd"] = 5e8   # forged finite cap while market_cap_source stays "none"
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(self._fmp_artifact(rows), expected_decision_date="20260629", governance=self.gov)
 
 
 class TestFetchFmpMarketCaps(unittest.TestCase):

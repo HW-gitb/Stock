@@ -12,6 +12,12 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+# F5 (cc_r1_v1): make jsonschema resolvable when it is only vendored under .tools/python_libs — the probe's
+# mandatory pre-write _validate_summary_against_schema imports jsonschema; mirror the incident-log writer's
+# bootstrap so the two batch5 writers guarantee the dependency the same way.
+_PYTHON_LIBS = ROOT / ".tools" / "python_libs"
+if _PYTHON_LIBS.exists() and str(_PYTHON_LIBS) not in sys.path:
+    sys.path.insert(0, str(_PYTHON_LIBS))
 
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_batch5_provider_live_preflight as preflight  # noqa: E402
@@ -578,6 +584,11 @@ def run_probe(
     for symbol in EXPECTED_SYMBOLS:
         cik10 = cik_by_symbol.get(symbol)
         if not cik10:
+            # F9 (cc_r1_v1): a sample symbol with no resolvable CIK (parse_sec_cik_map dropped a malformed
+            # cik_str, or SEC renamed/dropped the ticker) makes the run fall short of the fixed 10-call trace.
+            # This is INTENTIONAL fail-closed: the `!= MAX_TOTAL_ENDPOINT_CALLS` guard below then raises with NO
+            # summary (7-9 real calls were spent, but we will not emit a summary asserting full 10-call
+            # coverage). Do NOT "fix" the bare RuntimeError by relaxing the exact-10 invariant.
             continue
         _assert_budget(endpoint_records)
         time.sleep(sec_sleep_seconds)

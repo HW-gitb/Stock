@@ -543,7 +543,8 @@
         },
         "raw_sample_ref": {
           "type": "string",
-          "pattern": "^provider_samples/us_short_batch5_v1_provider_live_20260625/"
+          "pattern": "^provider_samples/us_short_batch5_v1_provider_live_20260625/",
+          "not": {"pattern": "\\.\\."}
         },
         "raw_sample_ref_gitignored": {
           "const": true

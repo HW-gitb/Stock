@@ -210,12 +210,19 @@ def fetch_sec_tickers(sec_ua: str) -> dict[str, dict[str, Any]]:
 # ---------------------------------------------------------------------------
 
 def fetch_sec_shares(sec_ua: str, *, frames: list[str] = SEC_SHARE_FRAMES) -> dict[int, dict[str, Any]]:
-    """Return {cik: {"shares": float, "end": str}} keeping the latest 'end' per CIK across frames."""
+    """Return {cik: {"shares": float, "end": str}} keeping the latest 'end' per CIK across frames.
+
+    F2 (cc_r1_v1): if EVERY frame request fails (SEC source down) RAISE — never return an empty map that
+    silently yields a degraded near-empty eligible universe with NO health signal (asymmetric with the Massive
+    auth path which already raises). A single failed frame is tolerated (other quarters still merge the latest
+    shares per CIK)."""
     by_cik: dict[int, dict[str, Any]] = {}
+    failed = 0
     for q in frames:
         try:
             data = _sec_get(SEC_FRAMES_URL.format(q=q), sec_ua)
         except Exception:
+            failed += 1
             continue
         for item in data.get("data", []):
             cik = item.get("cik")
@@ -227,6 +234,10 @@ def fetch_sec_shares(sec_ua: str, *, frames: list[str] = SEC_SHARE_FRAMES) -> di
             if prev is None or end > prev["end"]:
                 by_cik[cik] = {"shares": float(val), "end": end}
         time.sleep(SEC_FAIR_ACCESS_SLEEP)
+    if failed == len(frames):
+        raise RuntimeError(
+            f"all {len(frames)} SEC share frames failed (SEC source unavailable); fail-closed rather than "
+            "emit a silently-degraded universe with no shares/market-cap")
     return by_cik
 
 
@@ -564,13 +575,59 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
         raise RuntimeError("eligible_tickers 含重复（候选集须唯一）")
     if artifact["decision_date"] != expected_decision_date:
         raise RuntimeError("artifact.decision_date 与输出路径绑定的 decision_date 不一致")
-    floor = governance["cheap_eligibility_thresholds"]["min_adv_usd"]
+
+    # Per-row anti-forgery (F1, cc_r1_v1): re-derive EACH row's verdict / coverage / lineage / status /
+    # clock from its OWN stored Pass1 inputs + the artifact's declared window+clock, and fail closed on ANY
+    # disagreement. The prior validator re-derived only the AGGREGATION (summary / eligible set) and TRUSTED
+    # the stored per-row verdict+lineage, so a tampered ineligible→eligible row on a non-ADV disqualifier
+    # (price/market_cap/status below floor) passed — contradicting the artifact's "prove WHY a ticker entered"
+    # guarantee. Now the whole per-row class is re-derived.
+    used_date = artifact["used_date"]
+    generated_at = artifact["generated_at"]
+    aw = artifact["adv_window"]
+    window_days = aw["trading_days"]
+    min_days = aw["min_days_required"]
+    if aw["latest_date"] != used_date:
+        raise RuntimeError("adv_window.latest_date 须等于 used_date")
     for r in rows:
-        if r["eligible"]:
-            if r["reasons"]:
-                raise RuntimeError("eligible 行不应带 reasons")
-            if not (r["adv_coverage_ok"] and _is_finite(r["adv_usd"]) and r["adv_usd"] >= floor):
-                raise RuntimeError("eligible 行的 ADV 须覆盖充分且达多日门槛（多日 ADV 语义）")
+        gate_row = {"ticker": r["ticker"], "exchange": r["exchange"], "price": r["price"],
+                    "adv_usd": r["adv_usd"], "market_cap_usd": r["market_cap_usd"],
+                    "delisted": r["delisted"], "halted": r["halted"],
+                    "bankruptcy": r["bankruptcy"], "otc": r["otc"]}
+        v = cheap_eligible(gate_row, governance=governance)
+        if r["eligible"] != v["eligible"] or r["reasons"] != v["reasons"]:
+            raise RuntimeError(f"行 {r['ticker']} 的 eligible/reasons 与按存储输入重算的 cheap_eligible 不一致（反伪造）")
+        if r["status_flags_sourced"] is not False or any(
+                r[f] is not False for f in ("delisted", "halted", "bankruptcy", "otc")):
+            raise RuntimeError(f"行 {r['ticker']} round-1 状态不变式被破坏（status 旗 + status_flags_sourced 须均为 False）")
+        if r["adv_coverage_ok"] != (r["adv_days_observed"] >= min_days):
+            raise RuntimeError(f"行 {r['ticker']} 的 adv_coverage_ok 与 adv_days_observed/min_days 不一致")
+        if r["coverage_status"] != _coverage_status(r["price"], r["shares"], r["adv_days_observed"], window_days, min_days):
+            raise RuntimeError(f"行 {r['ticker']} 的 coverage_status 与输入重算不一致")
+        mcs, mc, sh, px = r["market_cap_source"], r["market_cap_usd"], r["shares"], r["price"]
+        # market_cap_source re-derived by the PRODUCER PRECEDENCE (apply_pass1), not source-label-first
+        # (Codex cc_r1_v1 residual): SEC shares×price wins WHENEVER both are finite — so a row with SEC
+        # shares+price available can NOT carry market_cap_source=fmp_profile/none. fmp_profile is valid only
+        # when SEC-derived cap is unavailable + a finite FMP cap is present; none only when no finite cap.
+        if _is_finite(sh) and _is_finite(px):
+            if mcs != "sec_shares_x_close" or not (_is_finite(mc) and math.isclose(mc, float(sh) * float(px), rel_tol=1e-9)):
+                raise RuntimeError(f"行 {r['ticker']} SEC shares×price 可得时 market_cap 必须 sec_shares_x_close 且 == shares×price（producer 优先级反伪造）")
+        elif mcs == "fmp_profile":
+            if not _is_finite(mc):
+                raise RuntimeError(f"行 {r['ticker']} market_cap_source=fmp_profile 但 market_cap_usd 非有限")
+        elif mcs == "none":
+            if mc is not None:
+                raise RuntimeError(f"行 {r['ticker']} market_cap_source=none 但 market_cap_usd 非空")
+        else:
+            raise RuntimeError(f"行 {r['ticker']} market_cap_source={mcs!r} 但 SEC shares/price 不全可得（producer 优先级反伪造）")
+        lin = r["lineage"]
+        expected_shares_source = "sec_xbrl_frames" if _is_finite(sh) else "none"
+        if (lin["adv_window_trading_days"] != window_days or lin["adv_days_observed"] != r["adv_days_observed"]
+                or lin["market_cap_source"] != mcs or lin["shares_source"] != expected_shares_source
+                or lin["price_source"] != "massive_grouped_daily"):
+            raise RuntimeError(f"行 {r['ticker']} lineage 与存储输入/窗口不一致（反伪造）")
+        if r["as_of"] != used_date or r["observed_at"] != generated_at:
+            raise RuntimeError(f"行 {r['ticker']} as_of/observed_at 未绑定 run 时钟（as_of=used_date, observed_at=generated_at）")
     return artifact
 
 
@@ -832,7 +889,8 @@ def parse_args(argv=None):
     p.add_argument("--confirm-user-authorization", action="store_true")
     p.add_argument("--dry-run-env", action="store_true")
     p.add_argument("--now-et", dest="now_et", type=_parse_now_et, default=None,
-                   help="ET wall clock YYYY-MM-DDTHH:MM:SS (resolves canonical decision_date; required for live)")
+                   help="ET wall clock YYYY-MM-DDTHH:MM:SS — must be Eastern Time, NOT Beijing time (a Beijing "
+                        "wall-clock resolves a wrong decision_date silently; F8). Resolves canonical decision_date; required for live")
     p.add_argument("--calendar", dest="calendar_path", type=Path, default=CALENDAR_PRESET)
     # No --summary-path / --raw-root / --candidate-list-path: all dated outputs derive from the canonical
     # decision_date so a caller can't redirect a priced artifact to a non-gitignored / wrong-date path

@@ -11,17 +11,19 @@ price/volume series (the Massive grouped-daily data layer supplies them in round
 benchmark (SPY/QQQ) series, computes per-ticker momentum sub-features, then maps the composite to a
 0-100 FULL-POOL PERCENTILE block that engine/us_short_core_score.py consumes as its `momentum` block.
 
-v1 momentum composite (a §13 forward-calibratable prior, NOT validated alpha): equal-weight the
-cross-sectional percentile of each available sub-feature, then percentile the composite across the
-pool. Equal-weight-of-percentiles is robust to scale/outliers (no arbitrary z-score tuning) and
-degrades gracefully when a sub-feature is missing for a ticker (that ticker uses the sub-features it
-has). The relative-to-sector sub-feature is OPTIONAL (it needs sector classification, wired later);
-when absent the composite uses the remaining sub-features.
+v1 momentum composite (a §13 forward-calibratable prior, NOT validated alpha): for each sub-feature take
+the cross-sectional percentile; then for a SCORED ticker average those percentiles over the FULL sub-feature
+set — a MISSING sub-feature is filled with the NEUTRAL percentile (never full-weighted on the available
+remainder) — and finally percentile the composite across the scored pool. Equal-weight-of-percentiles is
+robust to scale/outliers (no arbitrary z-score tuning). The relative-to-sector sub-feature is OPTIONAL (needs
+sector classification, wired later).
 
-Fail-closed: a ticker without enough price history to compute ANY sub-feature gets no momentum score
-(returned in `insufficient_history`, NOT a fake neutral) so the caller can mark its data_quality and
-let core_score apply its neutral-block rule (§4.2 缺分量). All numeric inputs are strictly validated
-(reject bool / NaN / Inf / numeric string).
+Coverage gating + fail-closed (min-coverage, R-USSHORT-BATCH5-MOMENTUM-COVERAGE-PIT-COMPARABILITY-GAP): a
+ticker must carry at least `min_coverage` sub-features to be SCORED — below that it goes to
+`insufficient_coverage` (NOT scored on the handful it happens to have, so a sparse extreme can't outrank a
+full-feature name); a ticker with NO sub-feature goes to `insufficient_history`. Neither gets a fake neutral;
+the caller marks its data_quality and core_score applies its neutral-block rule (§4.2 缺分量). All numeric
+inputs are strictly validated (reject bool / NaN / Inf / numeric string).
 """
 from __future__ import annotations
 
