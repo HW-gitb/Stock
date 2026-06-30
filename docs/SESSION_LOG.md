@@ -8,6 +8,68 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short provisional theme heat volume-coverage repair)
+
+- **Verdict/Action**: PASS; `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN` is resolved. Scope was limited to the US-short provisional-theme heat repair plus adjacent theme confirmation consumers; the already-reviewed industry heat sibling was included only for joint closeout routing.
+- **Required**: None new; closure details live in `docs/system_risk_register.md`. Provider/live discovery feeds, member-list freeze data layer, GICS/provider extraction, batch5-to-batch4 scoring seam, Pass2, R3, DataHub, production/ship-gate, broker/order paths, A-share, A-long, and US-long stayed out of scope.
+- **Verify**: direct thin-volume probe now returns `volume_confirm_frac=0.2` and `theme_volume_confirm_frac=False`; the contribution probe has only 2 producer confirmations and downstream gate `False`. Focused provisional/theme suites `64 OK`; full offline `*us_short*` `2766 OK`; doc-route guards `52 OK`; `py_compile` OK; boundary grep found no network/provider/A-share imports; `git diff --check` warning-only CRLF.
+- **Next**: Claude Code: Pass.
+
+## 2026-06-30 — Claude `修复` (US-short 轮2 provisional-theme-heat 部分量覆盖 fail-open)
+
+- **Verdict/Action**: 修复 Codex round-2 provisional-theme-heat FAIL 唯一 Required `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN`：`volume_confirm_frac` 原以「有量子集」作分母（`len(surges)`），5 票里仅 1 票有量且放量 → 1/1=1.0、flag True、助过 §4.3 ≥3/7 门。改为按 Required 选项 a **coverage-aware 全成员分母**：缺/无效量 member 计为未确认，`confirmed/member_count` → 1-of-5=0.2、flag False；不再单 member 分母造满确认。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN` → fixed pending Codex（register 单源）。industry-heat 非正收盘 finding 已 Codex PASS（resolved、未提交，等本刀一并）。真实数据层 / discovery feed / R3 seam / Pass2 / live 仍 gated，未重校准非覆盖语义阈值。
+- **Verify**: focused provisional 20 OK；全离线 `*us_short*` 2766 OK（零回归）；doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF；复现 Codex 确切探针（5 票仅 1 票放量 → `volume_confirm_frac=0.2`、`theme_volume_confirm_frac=False`）。
+- **Pre-Codex self-review**: A 整类（class=分母取部分覆盖子集当全覆盖；唯一成员=`volume_confirm_frac` 改全成员分母；`breadth_up_frac`/`leader_rs` 经核 closes 强制+正价保证 ret 全有→分母已是 member_count、全覆盖无同类漏；本引擎无 new_high；姊妹 industry-heat 无 volume 同样全覆盖）；B ripple=`_theme_raw_metrics` in-file docstring 同步（分母=全成员）、零外部消费者、无 A 股 import；C 正控（broad 3-of-5=0.6→flag True 仍确认）；D 反向（1-of-5/2-of-5/全缺/零量 各 flag False、非误 True）；E 未碰 CURRENT/design stable doc；F py_compile/diff-check。
+- **Next**: Codex 复审 `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN`；PASS 后两刀（industry-heat + provisional-theme-heat）一并更 design/CURRENT/README + 提交。
+
+## 2026-06-30 - Codex review FAIL (US-short provisional theme heat producer)
+
+- **Verdict/Action**: FAIL; reviewed `engine/us_short_provisional_theme_heat.py` + test and adjacent theme confirmation/block consumers. The producer treats partial volume coverage as full `theme_volume_confirm_frac` evidence.
+- **Required**: `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN` open — see `docs/system_risk_register.md`. No business code edited.
+- **Verify**: focused provisional/theme suites `61 OK`; full offline `*us_short*` `2763 OK`; doc-route guards `52 OK`; `py_compile` OK; boundary grep found no network/provider/A-share imports; direct thin-volume probe was ACCEPTED (`volume_confirm_frac=1.0`, gate `True`); `git diff --check` warning-only CRLF.
+- **Next**: Claude Code `修复`.
+
+## 2026-06-30 - Codex review PASS (US-short industry heat non-positive close repair)
+
+- **Verdict/Action**: PASS; `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN` is resolved in the reviewed working tree. Scope was limited to the industry heat repair and the same-class non-positive close boundary; `provisional_theme_heat` full slice review remains separate.
+- **Required**: None new; `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN` closure details live only in `docs/system_risk_register.md`. Provider/live/GICS data layer/R3/Pass2/DataHub/production/broker/A-share/US-long/A-long scopes remained excluded.
+- **Verify**: focused industry + same-class provisional tests `35 OK`; full offline `*us_short*` suite `2763 OK`; doc-route guards `52 OK`; `py_compile` OK; direct ZERO/NEG close probes were rejected as insufficient/no heat; `git diff --check` warning-only CRLF.
+- **Next**: Auto-commit blocked: safe scoped commit cannot be formed while unreviewed `engine/us_short_provisional_theme_heat.py` / `tests/test_us_short_provisional_theme_heat.py`, unrelated `.gitignore`, and shared review docs are dirty. No files staged; review the provisional slice separately.
+
+## 2026-06-30 — Claude `修复` (US-short 轮2 industry-heat 非正收盘 fail-open + 姊妹刀同类)
+
+- **Verdict/Action**: 修复 Codex round-2 industry-heat FAIL 唯一 Required `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN`：`_clean_series` 原接受任意有限数（含 0/负收盘），非正价 member 经 `at_new_high` 造 `new_high_frac` 假热（探针：全零/负 sector heat 100）。改为价格边界拒 `f<=0`（先于 _ret/at_new_high）→ 非正 member 不可用；`industry_heat_block` 加 `seen_sectors`、对全部见过 sector 判 gate → 被 drop 变薄（含全员清空）的 sector 落 `insufficient_sectors` 零热；同 `_clean_series` 也清 benchmark → 非正 SPY/QQQ 失效降中性。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN` → fixed pending Codex（register 单源）。**姊妹刀同类预修**：`provisional_theme_heat` 的 `_clean_series` 加 `positive` flag（closes/benchmark 须 >0、volume 仍 ≥0），同 cut 堵未审 slice 4 同根漏（非另立 finding）。真实数据层 / R3 seam / Pass2 / live 仍 gated、未重校准阈值。
+- **Verify**: focused industry 18 + provisional 17 = 35 OK；全离线 `*us_short*` 2763 OK（零回归）；doc-route guard 52 OK；py_compile（两引擎）+ `git diff --check` 仅 CRLF；复现 Codex 确切探针（3 全零 ZERO+3 负 NEG+有效 COLD+正 SPY → ZERO/NEG insufficient 零热、COLD 照打分）。
+- **Pre-Codex self-review**: A 整类（class=非正收盘当价格证据；A 源头 `_clean_series` 拒 ≤0[探针腿 at_new_high]、B member drop、C 变薄/清空 sector→insufficient 零热、D 非正 benchmark 失效 全覆盖）；B ripple=两引擎 module+`_clean_series` in-file docstring 同步、零外部消费者、无 A 股 import、volume 路径仍 ≥0；C 正控（rising/declining/flat 正价 + 缺 benchmark 仍打分、zero-volume 仍有效）；D n/a；E 未碰 CURRENT/design stable doc；F py_compile/diff-check。
+- **Next**: Codex 复审 industry-heat `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN` + 顺审姊妹刀 provisional-theme-heat（slice 4，同类已预修）；各 PASS 后更 design/CURRENT/README + 提交。
+
+## 2026-06-30 - Codex review FAIL (US-short round-2 industry heat producer only)
+
+- **Verdict/Action**: FAIL; reviewed only `engine/us_short_industry_heat.py` + `tests/test_us_short_industry_heat.py` (slice 3). The pure GICS industry-heat producer mostly holds the percentile / coverage / benchmark-degrade shape, but non-positive close series are accepted into the member pool and can manufacture `new_high_frac` heat.
+- **Required**: `R-USSHORT-INDUSTRY-HEAT-NONPOSITIVE-CLOSE-FAILOPEN` open; full materiality, repro, and repair boundary live in `docs/system_risk_register.md`. The sibling `provisional_theme_heat` slice remains unreviewed in this cycle.
+- **Verify**: focused industry-heat 15 OK; full offline `*us_short*` 2757 OK; doc-route guards 52 OK; py_compile OK; direct non-positive-close probe ACCEPTED (`ZERO`/`NEG` sector heat `100.0` vs valid declining peer `0.0`).
+- **Next**: Claude Code `修复`.
+
+## 2026-06-30 — Claude 起草 (US-short 轮2 slice 4 — §4.3 provisional 跨行业 theme 热度 + 确认 producer)
+
+- **Verdict/Action**: 起草 round-2 provisional theme heat producer（§4.3 provisional_theme_lane），industry-heat 的姊妹刀、补齐 35% theme block 另一半热度输入。新 `engine/us_short_provisional_theme_heat.py`：`provisional_theme_heat_block(themes_by_id, *, spy/qqq)` 纯引擎——每个 provisional 主题（冻结成员表 price+volume）算价量子指标（breadth_up_frac/volume_confirm_frac/leader_rs）+ member_count，各子指标跨主题横截面分位→等权合成→再分位 = 0-100 theme_heat（主题池内分位），并发 4 个价量/计数确认项 pass flags（theme_breadth_up_frac/theme_volume_confirm_frac/theme_leader_rs/theme_member_count）。供 `theme_heat.py` 的 market_confirmation_passed（≥3/7 门）+ theme_block 消费。
+- **Boundary**: 纯/离线、消费注入冻结成员序列——真实发现 feed+成员表+价格抓取层仍 gated（SR-PROVIDER-001）。§4.3 anti-circularity 合约（成员 observed_at 冻结 + 独立价格、不拿发现源自证）= documented 数据层合约。不重写 `theme_heat.py` 门/scorer、不做正交（theme_block 已有）、3 个 discovery-meta 项 injected 非本刀算、module-const §13 #32 prior。**与上一刀 industry-heat 平行**（同 group-heat-over-members 模式、各自 own helpers、独立可分审）。不交叉 A 股（无 import）。未 push。
+- **Required**: 无（新起草，非修 register finding）。
+- **Verify**: focused 14 OK；全离线 `*us_short*` 2757 OK（2743+14、零回归）；doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（全数值 strict `_finite`；`_clean_series(min_len)` 拒短/非 list/洞；coverage gate MIN_THEME_MEMBERS=3 不足→无热无 flag；缺 benchmark→leader_rs None/flag False、缺 volume→volume_confirm None/flag False、单主题→50、空/非 dict 各处理）；B ripple grep=零外部 tracked 消费者（未接、镜像 industry/momentum）、无 A 股 import、helper 本地自足；C 正控（hot>cold、flags hot 全 True/cold 全 False、member_count 边界、breadth/volume 值）；D 反向（不足主题无热无 flag、坏序列 drop、缺源降级非崩、leader/volume 缺→flag False 非误 True）；E 未碰 CURRENT/design stable doc（待 PASS）；F py_compile/diff-check。
+- **Next**: Codex 审查 round-2 industry-heat（slice 3）+ provisional-theme-heat（slice 4）两姊妹刀（可分开/可一并）；各 PASS 后更 design/CURRENT/README + 提交。真实数据层 / R3 seam / Pass2 / live 仍 gated（SR-PROVIDER-001）。
+
+## 2026-06-30 — Claude 起草 (US-short 轮2 slice 3 — §4.3 GICS 行业热度 producer)
+
+- **Verdict/Action**: 起草 round-2 industry heat producer（§4.3 硬分主力 = GICS 官方行业组），theme 侧对标 momentum 的 `compute_momentum_features`。新 `engine/us_short_industry_heat.py`：`industry_heat_block(members_by_ticker, *, spy_closes, qqq_closes)` 纯引擎——按 GICS sector 分组、每组算 4 个 §4.3 子指标（组相对强度 vs SPY/QQQ=行业强度/相对、1 月上涨广度 breadth、创新高比例、龙头 top-quartile RS），各子指标跨 sector 横截面分位→等权合成（缺项填中性、不重新归一）→ 再分位 = 0-100 sector industry_heat_score，组内每票继承（§4.2「GICS 池内分位」）。供 `theme_block`/`theme_heat` 的 `industry_heat_score` 输入。
+- **Boundary**: 纯/离线、消费注入 sector 分组日线 + benchmark——真实 GICS 分类 + 价格抓取数据层仍 gated（SR-PROVIDER-001），镜像 momentum 的 Massive 层。**不做**：industry⊥theme 正交（`theme_block` 已有）、provisional 跨行业 theme heat（§4.3 provisional_theme，单独 slice）、governance preset（等权分位无权重可治，用 module-const §13 #32/#14 prior、对标 momentum）。**不交叉 A 股**：不 import `egs_industry_heat`（helper 本地副本）。未 push。
+- **Required**: 无（新起草，非修 register finding）。
+- **Verify**: focused 15 OK；全离线 `*us_short*` 2743 OK（2728+15、零回归）；doc-route guard 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（全数值 strict `_finite` 拒 bool/NaN/Inf/数字串；`_clean_series` 拒短/非 list/洞；coverage gate MIN_SECTOR_MEMBERS=3 不足→insufficient 不给热、非伪中性；缺 sector/缺 benchmark/单 sector→50/空 各处理）；B ripple grep=`industry_heat_block` 零外部 tracked 消费者（未接、镜像 `momentum_block` 未 wire）、无 A 股 import（仅 math/typing）、helper 本地自足；C 正控（hot>cold、3-way mid、breadth/new_high 值正确）；D 反向（不足组无热、坏序列 drop、缺 benchmark 降级非崩）；E 未碰 CURRENT/design stable doc（待 Codex PASS 随 commit 入）；F py_compile/diff-check。
+- **Next**: Codex 审查 round-2 industry heat producer（`engine/us_short_industry_heat.py` + test）；PASS 后更 design/CURRENT/README + 提交。provisional theme heat / 真实数据层 / R3 seam / Pass2 / live 仍 gated（SR-PROVIDER-001）。
+
 ## 2026-06-30 - Codex review PASS (US-short round-2 catalyst block repair)
 
 - **Verdict/Action**: PASS; `R-USSHORT-CATALYST-ANALYST-REVISION-FRACTIONAL-COUNT-GAP` is resolved in the reviewed working tree. `analyst_revision_net` now uses a strict signed-int count parser, so fractional / float / bool / string counts cannot move the catalyst score, while legal integer counts still score.
