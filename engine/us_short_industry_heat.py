@@ -10,10 +10,19 @@ Design authority: docs/us_short_system_design.md §4.3 + §4.2 ("赛道 = GICS/�
 
 This is the THEME-side analog of engine/us_short_momentum.py::compute_momentum_features: PURE (no network, no
 provider, NO A-share crossing — it does NOT import the A-share engine/egs_industry_heat.py), it consumes
-already-fetched daily close series grouped by GICS sector (+ the SPY/QQQ benchmark series; the real GICS
-classification + price fetch is the gated round-2 data layer, SR-PROVIDER-001), computes per-sector heat
-sub-metrics, then maps each sector to a 0-100 cross-sector PERCENTILE (§4.2 "GICS 池内分位") that every member
-stock inherits.
+already-fetched PIT-bearing dated CLOSE series grouped by GICS sector (each = {as_of, session, adjustment_mode,
+points:[{date, close, volume?}]}; + the SPY/QQQ benchmark dated series; the real GICS classification + price
+fetch is the gated round-2 data layer, SR-PROVIDER-001), computes per-sector heat sub-metrics, then maps each
+sector to a 0-100 cross-sector PERCENTILE (§4.2 "GICS 池内分位") that every member stock inherits.
+
+PIT + clock (R-USSHORT-BATCH5-MOMENTUM-COVERAGE-PIT-COMPARABILITY-GAP analog, Cut 3a, input-rework half): each
+series is PIT-cut to its `as_of` (a point dated AFTER as_of is BLOCKED — no look-ahead) over a strictly-ascending
+unique date axis, and ALL valid series (members + benchmarks) must share ONE (as_of, session, adjustment_mode)
+clock — a non-uniform clock is fail-closed (`IndustryHeatError`), so heat is never computed from mixed-as-of /
+cross-adjustment data. Exact within-window daily-date alignment of members vs the benchmark is the GATED data-layer
+assembly's contract (R5 rationale: alignment is only meaningfully enforced where series are assembled with
+provenance); this engine enforces the PIT cut + the uniform decision clock. The sub-metric math below is unchanged
+from the prior bare-array version. The LIVE Massive/GICS assembly stays gated (Cut 3b, SR-PROVIDER-001).
 
 §4.3 SELF-CERTIFICATION CONTRACT (documented, not enforceable here): the caller MUST pass the BASE universe /
 full GICS peer group — NOT the candidate pool / Top15 / a manual watchlist (§4.3 "不能用候选池/Top15/人工
@@ -42,6 +51,7 @@ history simply does not contribute (and a sector emptied that way falls to insuf
 from __future__ import annotations
 
 import math
+from datetime import datetime
 from typing import Any
 
 # §13.1 #32 / #14 forward priors (NOT frozen const; mirror the momentum lookbacks).
@@ -89,6 +99,65 @@ def _ret(series: list[float], lookback: int) -> float | None:
     if base <= 0:
         return None
     return series[-1] / base - 1.0
+
+
+class IndustryHeatError(ValueError):
+    """The injected series carry a non-uniform decision clock (mixed as_of / session / adjustment_mode) — heat
+    is never computed from inconsistent-clock data (fail-closed)."""
+
+
+_DATED_SERIES_KEYS = {"as_of", "session", "adjustment_mode", "points"}
+_POINT_REQUIRED = {"date", "close"}
+_POINT_ALLOWED = {"date", "close", "volume"}
+
+
+def _valid_date(s: Any):
+    """Strict YYYY-MM-DD -> datetime.date, else None (no other format / no timezone games)."""
+    if not (isinstance(s, str) and len(s) == 10):
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_dated_series(series: Any) -> dict | None:
+    """Validate + PIT-cut a date/as_of/session/adjustment-bearing CLOSE series ->
+    {as_of: date, session: str, adjustment_mode: str, closes: [float,...]} or None (fail-closed).
+
+    PIT: a point dated AFTER `as_of` is BLOCKED (excluded — no look-ahead); the RAW point axis must be strictly
+    ascending + unique by date BEFORE the cut (corrupt/duplicated -> None). The kept closes go through THIS
+    engine's `_clean_series` (finite + strictly POSITIVE + >= _MIN_HISTORY after the cut → an IPO/short/
+    non-positive name -> None). Own copy mirroring engine/us_short_momentum.py's parser but using the
+    non-positive-rejecting `_clean_series` (the established per-engine-helper convention)."""
+    if not (isinstance(series, dict) and set(series) == _DATED_SERIES_KEYS):
+        return None
+    as_of = _valid_date(series["as_of"])
+    if as_of is None:
+        return None
+    session, adj = series["session"], series["adjustment_mode"]
+    if not (isinstance(session, str) and session and isinstance(adj, str) and adj):
+        return None
+    pts = series["points"]
+    if not isinstance(pts, list) or not pts:
+        return None
+    kept: list[Any] = []
+    prev = None
+    for p in pts:
+        if not (isinstance(p, dict) and _POINT_REQUIRED <= set(p) <= _POINT_ALLOWED):
+            return None
+        d = _valid_date(p["date"])
+        if d is None:
+            return None
+        if prev is not None and d <= prev:
+            return None                       # raw axis must be strictly ascending + unique (corrupt -> None)
+        prev = d
+        if d <= as_of:
+            kept.append(p["close"])           # PIT cut: future points BLOCKED; _clean_series validates value
+    closes = _clean_series(kept)              # finite + strictly positive + MIN history floor (post-cut)
+    if closes is None:
+        return None
+    return {"as_of": as_of, "session": session, "adjustment_mode": adj, "closes": closes}
 
 
 def _benchmark_return(spy_closes: Any, qqq_closes: Any, lookback: int) -> float | None:
@@ -145,12 +214,16 @@ def _sector_raw_metrics(members: list[dict], bench_rs: float | None) -> dict[str
             "new_high_frac": new_high, "leader_rs": leader_rs}
 
 
-def industry_heat_block(members_by_ticker: Any, *, spy_closes: Any = None, qqq_closes: Any = None) -> dict[str, Any]:
-    """Map per-ticker {sector, closes} → a 0-100 cross-sector PERCENTILE `industry_heat_score` per ticker (§4.3).
+def industry_heat_block(members_by_ticker: Any, *, spy_series: Any = None, qqq_series: Any = None) -> dict[str, Any]:
+    """Map per-ticker {sector, series} → a 0-100 cross-sector PERCENTILE `industry_heat_score` per ticker (§4.3).
 
-    members_by_ticker = {ticker: {"sector": <GICS str>, "closes": <ascending daily close series>}} — the BASE
-    universe / GICS peer group (NOT the candidate pool; see the self-certification contract above). spy_closes /
-    qqq_closes = the SPY/QQQ benchmark close series for relative strength.
+    members_by_ticker = {ticker: {"sector": <GICS str>, "series": <PIT-bearing dated CLOSE series>}} — the BASE
+    universe / GICS peer group (NOT the candidate pool; see the self-certification contract above). spy_series /
+    qqq_series = the SPY/QQQ benchmark dated series. Each series is PIT-cut to its as_of (future points BLOCKED)
+    and ALL valid series (members + benchmarks) must share ONE (as_of, session, adjustment_mode) decision clock —
+    a non-uniform clock is fail-closed (`IndustryHeatError`). Exact within-window member↔benchmark daily-date
+    alignment is the gated assembly's contract (R5 rationale); the sub-metric math is unchanged from the prior
+    bare-array version.
 
     Per GICS sector with >= MIN_SECTOR_MEMBERS usable members: compute the four §4.3 sub-metrics, cross-sectionally
     percentile-rank each across sectors, equal-weight into a composite (missing sub-metric → NEUTRAL percentile),
@@ -159,13 +232,21 @@ def industry_heat_block(members_by_ticker: Any, *, spy_closes: Any = None, qqq_c
 
     Returns {industry_heat_by_ticker: {ticker: 0-100}, sector_heat: {sector: 0-100},
              sector_metrics: {sector: {members, group_rel_strength, breadth_up_frac, new_high_frac, leader_rs}},
-             insufficient_sectors: [sector, ...], min_sector_members: int}.
+             insufficient_sectors: [sector, ...], min_sector_members: int}. Raises IndustryHeatError on a
+    non-uniform decision clock.
     """
     if not isinstance(members_by_ticker, dict):
         members_by_ticker = {}
-    bench_rs = _benchmark_return(spy_closes, qqq_closes, RS_WINDOW)
+    clocks: set = set()
+    spy_p = _parse_dated_series(spy_series)
+    qqq_p = _parse_dated_series(qqq_series)
+    for bp in (spy_p, qqq_p):
+        if bp is not None:
+            clocks.add((bp["as_of"], bp["session"], bp["adjustment_mode"]))
+    bench_rs = _benchmark_return(spy_p["closes"] if spy_p else None,
+                                 qqq_p["closes"] if qqq_p else None, RS_WINDOW)
 
-    # 1) per-member cleaned series + returns, grouped by GICS sector (bad/short/non-positive/sectorless drop out).
+    # 1) per-member PIT-cut series + returns, grouped by GICS sector (bad/short/non-positive/sectorless drop out).
     #    `seen_sectors` records every sector that appeared with a valid GICS label, so a sector whose members are
     #    ALL dropped (e.g. all non-positive closes) still falls to insufficient_sectors, not silently vanishing.
     by_sector: dict[str, list[dict]] = {}
@@ -178,15 +259,23 @@ def industry_heat_block(members_by_ticker: Any, *, spy_closes: Any = None, qqq_c
             continue
         sector = sector.strip()
         seen_sectors.add(sector)
-        px = _clean_series(rec.get("closes"))
-        if px is None:
+        parsed = _parse_dated_series(rec.get("series"))
+        if parsed is None:
             continue
+        clocks.add((parsed["as_of"], parsed["session"], parsed["adjustment_mode"]))
+        px = parsed["closes"]
         by_sector.setdefault(sector, []).append({
             "ticker": tkr,
             "ret_3m": _ret(px, RS_WINDOW),
             "ret_1m": _ret(px, BREADTH_WINDOW),
             "at_new_high": px[-1] >= max(px[-NEW_HIGH_WINDOW:]),
         })
+
+    # uniform decision clock (Cut 3a): every valid member + benchmark series must share one as_of/session/adjustment
+    if len(clocks) > 1:
+        raise IndustryHeatError(
+            "industry_heat 输入序列时钟不统一（须同一 as_of/session/adjustment_mode；fail-closed）: "
+            + str(sorted(str(c) for c in clocks)))
 
     # 2) per-sector raw sub-metrics over EVERY seen sector (a sector thinned below the gate by dropped members —
     #    including one emptied entirely — falls to insufficient_sectors and emits no heat, never neutral/positive)

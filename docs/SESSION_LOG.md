@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-06-30 - Codex review PASS (US-short batch5 Cut 3a industry_heat PIT/clock offline layer)
+
+- **Verdict/Action**: PASS; reviewed only Cut 3a `engine/us_short_industry_heat.py` + `tests/test_us_short_industry_heat.py`. Cut 1 1a and Cut 2 are not included in this verdict.
+- **Required**: None; no new material register finding. Provider/live GICS extraction, exact member-benchmark assembly, R3/Pass2/DataHub/production, broker/order paths, A-share, A-long, and US-long remain gated/out of scope.
+- **Verify**: focused industry_heat tests ran `30 OK`; combined Cut 2/Cut 3a focused suites ran `77 OK`; full offline `*us_short*` ran `2881 OK`; doc-route guards ran `52 OK`; `py_compile` OK; `git diff --check` warning-only CRLF. Direct probes confirmed future `NaN` close after `as_of` is PIT-excluded and still scores from current history, non-uniform clocks raise, non-positive closes remain rejected, and no network/provider/A-share import boundary was introduced.
+- **Next**: Codex commit Cut 3a only.
+
 ## 2026-06-30 — Claude 执行 (A-long VY forward-paper 首笔月度捕获 as_of=20260630)
 
 - **Verdict/Action**: 首笔前向纸面捕获完成落盘。复用已 Codex-PASS 的 capture runner / data-layer **不改**;真 Tushare gated 抓数(3005 calls,用户逐笔授权)经 `pro`-注入的**临时**节流+撞限重试 driver 跑完(temp 脚本、不入库、未改 reviewed 文件)。产出 schema+一致性双校验通过的 accumulator,落**私密 gitignored** 路径 `research/results/a_long/value_yield_forward_paper/accumulator_20260630.json`。research-only / paper / 不碰真钱 / 不计 ship-gate。
