@@ -59,6 +59,9 @@ state/*/shadow_compare_private/
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---
 research/results/a_short/m67_validation_*/
 
+# --- A-long value-yield forward-PAPER capture accumulator (research-only paper evidence; holds selected_symbols 选股明细) → private ---
+research/results/a_long/value_yield_forward_paper/
+
 # --- Large API caches (regenerable from Tushare) ---
 # Tushare daily/financial/concept caches (~860MB)
 A-EGS/Result/egs_cache/

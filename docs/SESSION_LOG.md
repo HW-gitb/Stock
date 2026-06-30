@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-06-30 — Claude 执行 (A-long VY forward-paper 首笔月度捕获 as_of=20260630)
+
+- **Verdict/Action**: 首笔前向纸面捕获完成落盘。复用已 Codex-PASS 的 capture runner / data-layer **不改**;真 Tushare gated 抓数(3005 calls,用户逐笔授权)经 `pro`-注入的**临时**节流+撞限重试 driver 跑完(temp 脚本、不入库、未改 reviewed 文件)。产出 schema+一致性双校验通过的 accumulator,落**私密 gitignored** 路径 `research/results/a_long/value_yield_forward_paper/accumulator_20260630.json`。research-only / paper / 不碰真钱 / 不计 ship-gate。
+- **Verify**: provider 形状现写现验通过(字段 / float-NaN / 行业 ASCII `l2_code` / CSI300 全收益 `H00300.CSI` / 日历 / entry-anchor 全对齐数据层假设,token 全 10 endpoint 有权);artifact 独立重验 `validate_accumulator_dict`(schema+`validate_accumulator_consistency`)OK;1 cohort / universe=500 / 3 构造各 basket=96 / entry=20260701=ok / **全 15 horizon pending** / matured=0 / routing=`insufficient_cohorts`;`boundary`+`prohibited_claims` 全 false;`git check-ignore` 命中 .gitignore + `git status` 该 dir 空 = 私密。唯一仓库改动 = 加 1 行 `.gitignore`(`research/results/a_long/value_yield_forward_paper/`)。
+- **Next**: 7 月末(7/31 收盘+EOD 发布后)跑第二笔 `--prior .../accumulator_20260630.json --out .../accumulator_20260731.json`(别用无节流 plain CLI:撞限频+前台超时)。攒满 12 matured cohort(~1 年)→ 评 primary 构造 promote/stay/drop。本 lane 不交叉 us_short;**未提交**(worktree 含并行 us_short catalyst 改动,非本人产出)。
+
 ## 2026-06-30 - Codex review PASS (US-short provisional theme heat volume-coverage repair)
 
 - **Verdict/Action**: PASS; `R-USSHORT-PROVISIONAL-THEME-HEAT-PARTIAL-VOLUME-COVERAGE-FAILOPEN` is resolved. Scope was limited to the US-short provisional-theme heat repair plus adjacent theme confirmation consumers; the already-reviewed industry heat sibling was included only for joint closeout routing.
