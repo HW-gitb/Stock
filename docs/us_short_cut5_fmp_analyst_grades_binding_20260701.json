@@ -1,0 +1,58 @@
+{
+  "binding_name": "us_short_cut5_fmp_analyst_grades_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §4.2 (分析师修正) / §5.2 (分析师集体下调 candidate veto) / §3.1 (provenance) / §3.5 (PIT: 评级动作日与 as_of 是不同事实; 不用 look-ahead) / §18.2 (跨模块契约先 schema-first 冻结再消费)",
+  "authorization_note": "OFFLINE contract SHAPE only. Live FMP fetch + runner wiring stay gated under SR-PROVIDER-001. Reachability + real shape were proven 2026-07-01 (docs/us_short_cut5_pass2_feasibility_probe_summary_20260701.json + captured gitignored raw): FMP stable /grades returns a LIST of {symbol, date, gradingCompany, newGrade, previousGrade, action} analyst rating-change records; the observed `action` values are {upgrade, downgrade, maintain}. FMP CLASSIFIES the action directly, so this binding uses `action` and needs NO grade-string ranking. This is the FREE proxy for the (paywalled, user-deferred 2026-07-01) numeric analyst-estimate revisions.",
+  "provider_id": "fmp",
+  "endpoint_or_filing_type": "grades",
+  "decision_timezone": "America/New_York",
+  "recency_window_days": 90,
+  "recency_window_basis": "calendar days before as_of. §4.2/§5.2 recent-analyst-sentiment prior — a REVIEWED calibration prior, NOT validated alpha (FMP grades go back to 2012; only recent actions bear on current sentiment). Change = reviewed schema + binding version bump.",
+  "direction_map": {"upgrade": "up", "downgrade": "down", "_default": "neutral"},
+  "direction_note": "FMP's own `action` field drives direction: upgrade -> up, downgrade -> down, ANY OTHER action (maintain / initiate / reiterate / unknown) -> neutral. No analyst grade-string ranking (scales differ: Buy / Overweight / Outperform / Neutral / Equal Weight / Market Perform / ...); a non-upgrade/downgrade action can NEVER fabricate a direction. The raw `action` string is carried verbatim in each fact.",
+  "record_fields_required": ["date", "action", "gradingCompany", "newGrade", "previousGrade"],
+  "summary_contract": {
+    "over": "the recent-window (<= recency_window_days) fit records only",
+    "fields": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"],
+    "net": "upgrades - downgrades",
+    "note": "the §4.2 analyst-revision-DIRECTION signal + the §5.2 collective-downgrade basis (distinct_firms = distinct gradingCompany acting in the window; many distinct firms downgrading is the §5.2 signal)."
+  },
+  "pit_rule": "each record `date` must be a real YYYY-MM-DD <= as_of; a future-dated record is EXCLUDED (look-ahead, §3.5); a record older than recency_window_days is OUT-OF-WINDOW (counted, not in the summary/records). A malformed (bad-shape) date fails closed (raise). If a record carries `symbol`, canonical(symbol) must equal the ticker key (no mis-attribution).",
+  "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
+  "coverage_status_allowed": ["full", "partial", "missing"],
+  "parser_status_allowed": ["ok", "degraded", "failed"],
+  "emission_fitness": {
+    "coverage_status": "full",
+    "parser_status": "ok",
+    "note": "only a full-coverage clean-parse ticker emits an analyst-grades signal; partial / missing / failed / degraded -> excluded (conservative). A full/ok ticker with ZERO in-window records emits NO signal (no recent analyst activity = neutral; the consumer defaults neutral per §4.2 缺分量中性)."
+  },
+  "date_format": "as_of / record date = YYYY-MM-DD (ASCII, real-calendar); observed_at = tz-aware RFC3339 date-time",
+  "consumer_note": "Produces the §4.2 分析师修正 direction signal + §5.2 collective-downgrade basis as a FACT+summary layer. The SCORE wiring (feed the catalyst analyst component / a §5.2 candidate-veto accumulator) is a LATER seam. This slice freezes the fact contract + parses/validates it; it does NOT score.",
+  "pit_clock_contract": {
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["record_date", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing"
+  },
+  "duplicate_policy": {
+    "source_row_identity": ["record_date", "grading_company", "action", "new_grade", "previous_grade"],
+    "firm_identity_normalization": "strip_and_casefold",
+    "on_duplicate": "reject",
+    "note": "a grade action's identity; grading_company is normalized (whitespace-collapsed + casefold) so ` bankx `/`BankX`/`BANKX` are ONE firm — a repeated identity fails closed (never inflating net or distinct_firms). record_date is a day-only grade date bound to the observation date (a same-day action is in-window only if provably observed pre-open)."
+  },
+  "checked_empty_disposition": "checked_no_recent_activity",
+  "checked_empty_note": "a full-coverage clean-parse ticker with ZERO in-window grade records emits a CHECKED coverage record (disposition checked_no_recent_activity) retaining its provenance — DISTINCT from a never-queried ticker (§3.3, must not collapse checked to unknown). Downstream defaults neutral either way, but the audit distinction is retained.",
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "runner_wired": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false
+  }
+}

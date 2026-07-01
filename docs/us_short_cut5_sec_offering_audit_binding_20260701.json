@@ -1,0 +1,69 @@
+{
+  "binding_name": "us_short_cut5_sec_offering_audit_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §5.1a (SEC 增发/转售 hard veto = 近期+已激活+重大; 挂着的 shelf/陈旧/小额不当硬否决) / §3.1 (provenance) / §3.3 (关键 unknown 不当 clean) / §3.5 (PIT: 观测/来源不得晚于决策 as_of)",
+  "authorization_note": "OFFLINE contract SHAPE only. Live SEC fetch + runner wiring stay gated under SR-PROVIDER-001. Reachability of the SEC submissions form-type + filing-date channel was proven 2026-07-01 (docs/us_short_cut5_pass2_feasibility_probe_summary_20260701.json: SEC submissions 3/3 reachable, form families + filingDate/acceptanceDateTime available). This binding freezes the shape a producer must honor; it selects no provider and authorizes no fetch/DataHub/production/ship-gate.",
+  "provider_id": "sec_edgar",
+  "endpoint_or_filing_type": "submissions",
+  "decision_timezone": "America/New_York",
+  "offering_form_families": {
+    "primary_registration": {"match": "exact_or_amend", "forms": ["S-1", "S-11", "F-1"], "dilution_role": "registration"},
+    "shelf_registration": {"match": "exact_or_amend", "forms": ["S-3", "S-3ASR", "F-3", "F-3ASR"], "dilution_role": "registration"},
+    "prospectus_supplement": {"match": "prefix", "forms": ["424B"], "dilution_role": "takedown"}
+  },
+  "foreign_and_reit_note": "Families cover DOMESTIC registrations (S-1 IPO / S-11 REIT / S-3 + S-3ASR shelf) AND FOREIGN-issuer analogs (F-1 / F-3 / F-3ASR) — NYSE/NASDAQ-listed ADRs file the F-* series for offerings with identical dilution mechanics, so a domestic-only family set would miss a real ADR dilution. 424B prospectus supplements (takedowns) are domicile-agnostic and cover both. exact_or_amend matches 'FORM' and 'FORM/A...' but not longer forms (S-1 != S-11, S-3 != S-30/S-3ASR listed separately).",
+  "takedown_family": "prospectus_supplement",
+  "recency_window_days": 90,
+  "recency_window_basis": "calendar days before as_of. §5.1a '近期' recency prior — a REVIEWED calibration prior, NOT validated alpha; it does not imply a ship-gate. Change = reviewed schema + binding version bump (never a silent drift).",
+  "status_derivation": {
+    "active": "a RECENT takedown (424B*) offering filing exists (an actual prospectus supplement / ATM sale — the shelf is being used)",
+    "registered_shelf": "only a recent registration (S-1 / S-3 / S-3ASR) exists with NO recent takedown (挂着的 shelf ≠ 马上增发)"
+  },
+  "materiality_policy": "materiality (offering SIZE / dollar amount) is UNAVAILABLE from the submissions form-type list; it needs 424B document-text parsing (gated, a later slice). It is emitted as null. Downstream hard_veto maps recent + active + materiality=null to strong_downgrade (没数据≠安全), NOT a hard veto (materiality not confirmed material).",
+  "excluded_forms_note": "S-8 (employee benefit-plan shares — routine comp, not a §5.1a dilution veto) and 25-NSE (delisting notice — owned by the status source, not the offering audit) are deliberately NOT offering-dilution vetoes and contribute no active_offering signal here.",
+  "signal_contract": {
+    "consumer": "engine/us_short_hard_veto.py::classify_hard_veto (the active_offering object)",
+    "active_offering": {
+      "recency": ["recent", "stale"],
+      "status": ["active", "registered_shelf"],
+      "materiality": [null]
+    }
+  },
+  "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
+  "coverage_status_allowed": ["full", "partial", "missing"],
+  "parser_status_allowed": ["ok", "degraded", "failed"],
+  "emission_fitness": {
+    "coverage_status": "full",
+    "parser_status": "ok",
+    "note": "only a full-coverage clean-parse ticker emits an offering audit signal; partial / missing / failed / degraded -> excluded (conservative — the offline slice has no data-quality downgrade channel to the gate, so it fails closed rather than assert offering status on incomplete data)."
+  },
+  "filing_fields": ["form", "filing_date", "acceptance_datetime", "accession"],
+  "date_format": "as_of / filing_date / source_as_of = YYYY-MM-DD (SEC-native, ASCII, real-calendar); observed_at + acceptance_datetime = tz-aware RFC3339 date-time (instant)",
+  "pit_rule": "observed_at is an INSTANT STRICTLY before the 09:30 ET decision open on as_of (half-open window [prior_close, decision_open), matching resolve_canonical_asof); chronology observed_at ET-date <= source_as_of <= as_of; per filing acceptance_datetime (the EDGAR public instant) <= observed_at — a filing made public AFTER the observation (or at/after the decision open) is look-ahead and EXCLUDED, never contributing recency/status; filing_date <= observed ET-date.",
+  "pit_clock_contract": {
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["acceptance_datetime", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing"
+  },
+  "duplicate_policy": {
+    "source_row_identity": "accession",
+    "on_duplicate": "reject",
+    "note": "a SEC accession is a globally-unique per-filing identity; a repeated/blank/whitespace accession within a ticker fails closed (never silently deduped or double-counted into recency/status)."
+  },
+  "checked_empty_disposition": "audited_no_active_offering",
+  "checked_empty_note": "a full-coverage clean-parse ticker with NO in-window offering filing emits a CHECKED coverage record (disposition audited_no_active_offering) retaining its provenance — a safety-audit 'looked, found no active offering', DISTINCT from a ticker never queried (§3.3, must not collapse audited-clean to unknown).",
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "runner_wired": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false
+  }
+}

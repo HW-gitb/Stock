@@ -1,0 +1,107 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_cut5_massive_actual_financials_binding.schema.json",
+  "title": "US-short Cut 5-b Massive actual-financials source binding",
+  "description": "Frozen schema-first contract for the offline Massive/Polygon actual-financials (§4.2 财报实际/基础财务) source. Const-pins the load-bearing semantics (provider/endpoint, allowed timeframes, bound line-item concept map, PIT rule, provenance fields, coverage/parser enums, emission fitness, decision tz) so a producer + the engine consts cannot silently drift. Offline shape only; live fetch gated under SR-PROVIDER-001.",
+  "type": "object",
+  "required": [
+    "binding_name", "binding_version", "provider_id", "endpoint_or_filing_type", "decision_timezone",
+    "allowed_timeframes", "bound_line_items", "line_item_value_contract", "pit_rule",
+    "provenance_fields", "coverage_status_allowed", "parser_status_allowed", "emission_fitness",
+    "pit_clock_contract", "duplicate_policy", "checked_empty_disposition", "lineage_ref_format",
+    "authorization_boundary"
+  ],
+  "properties": {
+    "binding_name": { "const": "us_short_cut5_massive_actual_financials_binding" },
+    "binding_version": { "type": "string" },
+    "design_authority": { "type": "string" },
+    "authorization_note": { "type": "string" },
+    "provider_id": { "const": "massive" },
+    "endpoint_or_filing_type": { "const": "reference_financials" },
+    "decision_timezone": { "const": "America/New_York" },
+    "allowed_timeframes": { "const": ["quarterly", "annual"] },
+    "excluded_timeframe_note": { "type": "string" },
+    "bound_line_items": {
+      "type": "object",
+      "required": ["income_statement", "balance_sheet", "cash_flow_statement"],
+      "properties": {
+        "income_statement": {
+          "const": ["revenues", "gross_profit", "operating_income_loss", "net_income_loss", "diluted_earnings_per_share", "basic_earnings_per_share"]
+        },
+        "balance_sheet": {
+          "const": ["assets", "liabilities", "equity", "current_assets", "current_liabilities", "long_term_debt"]
+        },
+        "cash_flow_statement": {
+          "const": ["net_cash_flow_from_operating_activities"]
+        }
+      },
+      "additionalProperties": false
+    },
+    "line_item_value_contract": { "type": "string" },
+    "pit_rule": { "type": "string" },
+    "provenance_fields": {
+      "const": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"]
+    },
+    "coverage_status_allowed": { "const": ["full", "partial", "missing"] },
+    "parser_status_allowed": { "const": ["ok", "degraded", "failed"] },
+    "emission_fitness": {
+      "type": "object",
+      "required": ["coverage_status", "parser_status"],
+      "properties": {
+        "coverage_status": { "const": "full" },
+        "parser_status": { "const": "ok" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "date_format": { "type": "string" },
+    "consumer_note": { "type": "string" },
+    "pit_clock_contract": {
+      "type": "object",
+      "required": ["observed_at_cutoff_operator", "observed_at_cutoff_reference", "chronology_order", "chronology_relation"],
+      "properties": {
+        "observed_at_cutoff_operator": { "const": "strictly_before" },
+        "observed_at_cutoff_reference": { "const": "decision_session_open" },
+        "chronology_order": { "const": ["acceptance_datetime", "observed_at", "source_as_of", "as_of"] },
+        "chronology_relation": { "const": "non_decreasing" }
+      },
+      "additionalProperties": false
+    },
+    "duplicate_policy": {
+      "type": "object",
+      "required": ["source_row_identity", "on_duplicate"],
+      "properties": {
+        "source_row_identity": { "const": ["timeframe", "fiscal_year", "fiscal_period"] },
+        "on_duplicate": { "const": "reject" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "checked_empty_disposition": { "const": "checked_no_pit_fit_period" },
+    "checked_empty_note": { "type": "string" },
+    "lineage_ref_format": {
+      "type": "object",
+      "required": ["structure", "record_id_rule"],
+      "properties": {
+        "structure": { "const": "provider_id:endpoint_or_filing_type:source_as_of#record_id" },
+        "record_id_rule": { "const": "nonempty_ascii_no_colon_hash_whitespace" }
+      },
+      "additionalProperties": false
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "required": ["live_fetch", "network", "raw_capture", "runner_wired", "datahub", "production", "ship_gate"],
+      "properties": {
+        "live_fetch": { "const": false },
+        "network": { "const": false },
+        "raw_capture": { "const": false },
+        "runner_wired": { "const": false },
+        "datahub": { "const": false },
+        "production": { "const": false },
+        "ship_gate": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

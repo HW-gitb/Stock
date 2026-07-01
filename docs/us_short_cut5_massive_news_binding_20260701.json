@@ -1,0 +1,60 @@
+{
+  "binding_name": "us_short_cut5_massive_news_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §4.2 (catalyst: 8-K/订单/产品/监管/LLM 语义 — 新闻事件) / §5.1b (news 类: 正式做空报告/欺诈指控 = advisory-first) / §3.1 (provenance) / §3.5 (发布时刻与 as_of 是不同 PIT 事实; 不用 look-ahead) / §18.2 (跨模块契约先 schema-first 冻结再消费)",
+  "authorization_note": "OFFLINE contract SHAPE only. Live Massive fetch + runner wiring stay gated under SR-PROVIDER-001. Reachability + real shape proven 2026-07-01 (docs/us_short_cut5_pass2_feasibility_probe_summary_20260701.json + captured gitignored raw): Massive/Polygon /v2/reference/news returns a list of items each {id, published_utc, publisher{name,...}, title, article_url, tickers[], insights[{ticker, sentiment, sentiment_reasoning}], description, author, keywords, image_url}. `insights` carries PER-TICKER sentiment ∈ {positive, negative, neutral} (10/10 sampled records had it), so a structured sentiment tally needs NO LLM. This binding freezes the shape a producer must honor; it selects no provider and authorizes no fetch/DataHub/production/ship-gate.",
+  "provider_id": "massive",
+  "endpoint_or_filing_type": "reference_news",
+  "decision_timezone": "America/New_York",
+  "recency_window_days": 30,
+  "recency_window_basis": "calendar days before as_of. News is time-sensitive (decays faster than filings/grades), so a TIGHTER 30-day recent-news window than the 90-day offering/grades window. Reviewed calibration prior, NOT validated alpha; change = reviewed schema + binding version bump.",
+  "sentiment_allowed": ["positive", "negative", "neutral"],
+  "sentiment_unknown": "unknown",
+  "sentiment_note": "PER-TICKER sentiment is taken from the `insights` entry whose ticker == the (canonical) ticker. A news item with NO matching ticker-specific insight, or a sentiment value outside {positive, negative, neutral}, yields `unknown` — never a fabricated positive/negative. Massive/Polygon's OWN insights sentiment drives it; there is NO LLM in this offline slice (the §5.1b semantic reasoning / advisory escalation stays a later, gated layer — title/url/reasoning are carried for it).",
+  "record_fields_required": ["id", "published_utc", "publisher", "title", "tickers", "insights"],
+  "ticker_coverage_rule": "the (canonical) ticker MUST appear in the item's canonicalized `tickers` list; otherwise the item was mis-attributed to this ticker and fails closed (mirrors the fmp-grades symbol cross-check).",
+  "summary_contract": {
+    "over": "the recent-window fit items",
+    "fields": ["news_count", "distinct_publishers", "positive", "negative", "neutral", "unknown", "net_sentiment", "window_days"],
+    "net_sentiment": "positive - negative",
+    "note": "the §4.2 recent-news catalyst intensity + a per-ticker sentiment tally from Massive's own insights (net_sentiment > 0 = net-positive coverage; a cluster of negative items is the §5.1b advisory trigger for a later read)."
+  },
+  "pit_rule": "each item's `published_utc` (tz-aware RFC3339) normalized to its ET calendar date must be <= as_of; a future item is EXCLUDED (look-ahead, §3.5); an item older than recency_window_days is OUT-OF-WINDOW (counted, not in the summary). A malformed published_utc (not tz-aware RFC3339) fails closed (raise).",
+  "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
+  "coverage_status_allowed": ["full", "partial", "missing"],
+  "parser_status_allowed": ["ok", "degraded", "failed"],
+  "emission_fitness": {
+    "coverage_status": "full",
+    "parser_status": "ok",
+    "note": "only a full-coverage clean-parse ticker emits a news signal; partial / missing / failed / degraded -> excluded. A full/ok ticker with ZERO in-window items emits NO signal (no recent news = neutral; the consumer defaults neutral per §4.2 缺分量中性)."
+  },
+  "date_format": "as_of = YYYY-MM-DD (ASCII, real-calendar); published_utc + observed_at = tz-aware RFC3339 date-time",
+  "consumer_note": "Produces the §4.2 recent-news catalyst FACT + a per-ticker sentiment tally (from Massive's own insights) + the §5.1b advisory basis (title / article_url / sentiment_reasoning for a later LLM/human read). The SCORE wiring (catalyst news component / §5.1b advisory escalation) is a LATER seam. This slice freezes + parses the fact + tallies Massive's own sentiment; it does NOT score and does NOT perform LLM semantic judgment.",
+  "pit_clock_contract": {
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["published_utc", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing"
+  },
+  "duplicate_policy": {
+    "source_row_identity": "id",
+    "publisher_identity_normalization": "strip_and_casefold",
+    "on_duplicate": "reject",
+    "note": "the Massive news item `id` is the source-row identity (carried into each output record for reverse-lookup); a repeated id fails closed (never double-counted into news_count/net_sentiment). publisher_name is normalized (whitespace-collapsed + casefold) so `Pub`/` pub `/`PUB` are ONE publisher in distinct_publishers."
+  },
+  "checked_empty_disposition": "checked_no_recent_news",
+  "checked_empty_note": "a full-coverage clean-parse ticker with ZERO in-window news items emits a CHECKED coverage record (disposition checked_no_recent_news) retaining its provenance — DISTINCT from a never-queried ticker (§3.3). Downstream defaults neutral either way, but the audit distinction is retained.",
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "runner_wired": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false
+  }
+}

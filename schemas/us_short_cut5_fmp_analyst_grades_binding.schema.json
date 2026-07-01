@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_cut5_fmp_analyst_grades_binding.schema.json",
+  "title": "US-short Cut 5-c FMP analyst-grades source binding",
+  "description": "Frozen schema-first contract for the offline FMP analyst rating-change (§4.2 分析师修正 / §5.2 集体下调) source. Const-pins provider/endpoint, recency window, the action->direction map (FMP's own action field, no grade ranking), required record fields, provenance fields, coverage/parser enums, emission fitness, decision tz. Offline shape only; live fetch gated under SR-PROVIDER-001.",
+  "type": "object",
+  "required": [
+    "binding_name", "binding_version", "provider_id", "endpoint_or_filing_type", "decision_timezone",
+    "recency_window_days", "direction_map", "record_fields_required", "summary_contract", "pit_rule",
+    "provenance_fields", "coverage_status_allowed", "parser_status_allowed", "emission_fitness",
+    "pit_clock_contract", "duplicate_policy", "checked_empty_disposition", "lineage_ref_format",
+    "authorization_boundary"
+  ],
+  "properties": {
+    "binding_name": { "const": "us_short_cut5_fmp_analyst_grades_binding" },
+    "binding_version": { "type": "string" },
+    "design_authority": { "type": "string" },
+    "authorization_note": { "type": "string" },
+    "provider_id": { "const": "fmp" },
+    "endpoint_or_filing_type": { "const": "grades" },
+    "decision_timezone": { "const": "America/New_York" },
+    "recency_window_days": { "const": 90 },
+    "recency_window_basis": { "type": "string" },
+    "direction_map": {
+      "type": "object",
+      "required": ["upgrade", "downgrade", "_default"],
+      "properties": {
+        "upgrade": { "const": "up" },
+        "downgrade": { "const": "down" },
+        "_default": { "const": "neutral" }
+      },
+      "additionalProperties": false
+    },
+    "direction_note": { "type": "string" },
+    "record_fields_required": {
+      "const": ["date", "action", "gradingCompany", "newGrade", "previousGrade"]
+    },
+    "summary_contract": {
+      "type": "object",
+      "required": ["over", "fields", "net"],
+      "properties": {
+        "over": { "type": "string" },
+        "fields": { "const": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"] },
+        "net": { "type": "string" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "pit_rule": { "type": "string" },
+    "provenance_fields": {
+      "const": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"]
+    },
+    "coverage_status_allowed": { "const": ["full", "partial", "missing"] },
+    "parser_status_allowed": { "const": ["ok", "degraded", "failed"] },
+    "emission_fitness": {
+      "type": "object",
+      "required": ["coverage_status", "parser_status"],
+      "properties": {
+        "coverage_status": { "const": "full" },
+        "parser_status": { "const": "ok" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "date_format": { "type": "string" },
+    "consumer_note": { "type": "string" },
+    "pit_clock_contract": {
+      "type": "object",
+      "required": ["observed_at_cutoff_operator", "observed_at_cutoff_reference", "chronology_order", "chronology_relation"],
+      "properties": {
+        "observed_at_cutoff_operator": { "const": "strictly_before" },
+        "observed_at_cutoff_reference": { "const": "decision_session_open" },
+        "chronology_order": { "const": ["record_date", "observed_at", "source_as_of", "as_of"] },
+        "chronology_relation": { "const": "non_decreasing" }
+      },
+      "additionalProperties": false
+    },
+    "duplicate_policy": {
+      "type": "object",
+      "required": ["source_row_identity", "firm_identity_normalization", "on_duplicate"],
+      "properties": {
+        "source_row_identity": { "const": ["record_date", "grading_company", "action", "new_grade", "previous_grade"] },
+        "firm_identity_normalization": { "const": "strip_and_casefold" },
+        "on_duplicate": { "const": "reject" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "checked_empty_disposition": { "const": "checked_no_recent_activity" },
+    "checked_empty_note": { "type": "string" },
+    "lineage_ref_format": {
+      "type": "object",
+      "required": ["structure", "record_id_rule"],
+      "properties": {
+        "structure": { "const": "provider_id:endpoint_or_filing_type:source_as_of#record_id" },
+        "record_id_rule": { "const": "nonempty_ascii_no_colon_hash_whitespace" }
+      },
+      "additionalProperties": false
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "required": ["live_fetch", "network", "raw_capture", "runner_wired", "datahub", "production", "ship_gate"],
+      "properties": {
+        "live_fetch": { "const": false },
+        "network": { "const": false },
+        "raw_capture": { "const": false },
+        "runner_wired": { "const": false },
+        "datahub": { "const": false },
+        "production": { "const": false },
+        "ship_gate": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

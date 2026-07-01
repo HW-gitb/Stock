@@ -1,0 +1,54 @@
+{
+  "binding_name": "us_short_cut5_massive_actual_financials_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §4.2 (财报实际/基础财务) / §3.1 (provenance) / §3.5 (PIT: 观测/来源/公开日不得晚于决策 as_of; 不用 look-ahead 证据) / §18.2 (跨模块契约先 schema-first 冻结再消费)",
+  "authorization_note": "OFFLINE contract SHAPE only. Live Massive fetch + runner wiring stay gated under SR-PROVIDER-001. Reachability + real shape were proven 2026-07-01 (docs/us_short_cut5_pass2_feasibility_probe_summary_20260701.json + captured gitignored raw): Massive/Polygon /vX/reference/financials with timeframe=quarterly|annual returns a real filing_date + acceptance_datetime (the 10-Q/10-K public dates) plus income/balance/cash-flow concepts, each {value, unit, label, order}. The ttm DEFAULT returned a NULL filing_date and is excluded. This binding freezes the shape a producer must honor; it selects no provider and authorizes no fetch/DataHub/production/ship-gate.",
+  "provider_id": "massive",
+  "endpoint_or_filing_type": "reference_financials",
+  "decision_timezone": "America/New_York",
+  "allowed_timeframes": ["quarterly", "annual"],
+  "excluded_timeframe_note": "ttm is EXCLUDED: the trailing-twelve-month rollup has a NULL filing_date (no single 10-Q/10-K public date to PIT-anchor it, confirmed by the 2026-07-01 probe). Only quarterly / annual periods carry a real filing_date.",
+  "bound_line_items": {
+    "income_statement": ["revenues", "gross_profit", "operating_income_loss", "net_income_loss", "diluted_earnings_per_share", "basic_earnings_per_share"],
+    "balance_sheet": ["assets", "liabilities", "equity", "current_assets", "current_liabilities", "long_term_debt"],
+    "cash_flow_statement": ["net_cash_flow_from_operating_activities"]
+  },
+  "line_item_value_contract": "each Massive concept is {value, unit, label, order}; the parser extracts the finite numeric `value` (which MAY be negative — a net loss / negative operating cash flow is legal) and requires a nonempty `unit` string. A missing bound concept is recorded absent (never fabricated / never zero-filled); a present-but-non-finite value (NaN/Inf/bool/string) fails closed.",
+  "pit_rule": "filing_date (the SEC 10-Q/10-K public date Massive returns for periodic financials) must be a real YYYY-MM-DD <= as_of; a period with a null / missing / future filing_date is EXCLUDED (unknowable PIT / look-ahead, §3.5). period_end (fiscal period end) is NOT a public date and is NEVER used as a PIT anchor.",
+  "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
+  "coverage_status_allowed": ["full", "partial", "missing"],
+  "parser_status_allowed": ["ok", "degraded", "failed"],
+  "emission_fitness": {
+    "coverage_status": "full",
+    "parser_status": "ok",
+    "note": "only a full-coverage clean-parse ticker emits actual-financials records; partial / missing / failed / degraded -> excluded (conservative — the offline slice has no data-quality downgrade channel, so it fails closed rather than emit partial fundamentals)."
+  },
+  "date_format": "as_of / filing_date / period_start / period_end = YYYY-MM-DD (ASCII, real-calendar); acceptance_datetime + observed_at = tz-aware RFC3339 date-time",
+  "consumer_note": "Produces the §4.2 财报实际/基础财务 FACT layer (per fiscal period, PIT-anchored to the real filing_date). The specific SCORE wiring — an earnings-growth signal, or the 财报实际vs预期 surprise once the estimate half is un-gated (per the 2026-07-01 user decision the analyst-estimate/consensus half stays un-hooked, future-paid-gated) — is a LATER seam. This slice freezes the fact contract + parses/validates it; it does NOT score.",
+  "pit_clock_contract": {
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["acceptance_datetime", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing"
+  },
+  "duplicate_policy": {
+    "source_row_identity": ["timeframe", "fiscal_year", "fiscal_period"],
+    "on_duplicate": "reject",
+    "note": "one report per fiscal period; a repeated (timeframe, fiscal_year, fiscal_period) within a ticker fails closed (never silently deduped or double-counted). An amended/restated period is resolved to the authoritative filing upstream (gated live half), not injected as a duplicate."
+  },
+  "checked_empty_disposition": "checked_no_pit_fit_period",
+  "checked_empty_note": "a full-coverage clean-parse ticker with NO PIT-fit period emits a CHECKED coverage record (disposition checked_no_pit_fit_period) retaining its provenance — DISTINCT from a ticker never queried (§3.3, must not collapse checked to unknown).",
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "runner_wired": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false
+  }
+}
