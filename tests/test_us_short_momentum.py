@@ -8,6 +8,7 @@ percentile mapping (ties, single, empty), and the full momentum_block pipeline +
 import math
 import sys
 import unittest
+from datetime import datetime, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -19,15 +20,40 @@ from engine.us_short_momentum import (  # noqa: E402
     momentum_block,
     _percentile_rank,
     _clean_series,
+    _parse_dated_series,
     _ret,
     MIN_HISTORY_DAYS,
+    LOOKBACK_1M,
     LOOKBACK_3M,
     VOL_SURGE_LONG,
 )
 
+_AS_OF = "2026-06-26"
+
 
 def _rising(n, start=10.0, step=1.0):
     return [start + i * step for i in range(n)]
+
+
+def _dates(n, as_of=_AS_OF):
+    """n ascending unique daily date strings ending at as_of (calendar-agnostic — the engine aligns by
+    date string, so consecutive-day stamps are fine for tests)."""
+    end = datetime.strptime(as_of, "%Y-%m-%d").date()
+    return [(end - timedelta(days=(n - 1 - i))).isoformat() for i in range(n)]
+
+
+def _series(closes, *, as_of=_AS_OF, session="RTH", adjustment_mode="split_div_adjusted",
+            volumes=None, dates=None):
+    """Build a PIT-bearing dated series from a closes list (+ optional volumes / explicit dates)."""
+    n = len(closes)
+    ds = dates if dates is not None else _dates(n, as_of)
+    points = []
+    for i in range(n):
+        pt = {"date": ds[i], "close": closes[i]}
+        if volumes is not None:
+            pt["volume"] = volumes[i]
+        points.append(pt)
+    return {"as_of": as_of, "session": session, "adjustment_mode": adjustment_mode, "points": points}
 
 
 class TestCleanSeries(unittest.TestCase):
@@ -52,6 +78,13 @@ class TestCleanSeries(unittest.TestCase):
         s = _rising(MIN_HISTORY_DAYS)
         self.assertEqual(len(_clean_series(s)), MIN_HISTORY_DAYS)
 
+    def test_rejects_nonpositive(self):
+        # Codex F-A: a non-positive close is malformed price data, never evidence (mirrors industry_heat)
+        s = _rising(MIN_HISTORY_DAYS); s[2] = 0.0
+        self.assertIsNone(_clean_series(s))
+        s = _rising(MIN_HISTORY_DAYS); s[3] = -1.0
+        self.assertIsNone(_clean_series(s))
+
 
 class TestRet(unittest.TestCase):
     def test_simple_return(self):
@@ -68,43 +101,208 @@ class TestRet(unittest.TestCase):
 
 class TestComputeFeatures(unittest.TestCase):
     def test_empty_when_insufficient_history(self):
-        out = compute_momentum_features([1.0, 2.0])
+        out = compute_momentum_features(_series([1.0, 2.0]))
         self.assertEqual(out["n_features"], 0)
         self.assertEqual(out["features"], {})
 
     def test_short_history_gets_short_features_only(self):
         # exactly MIN_HISTORY_DAYS → ret_5d computable, ret_1m/3m not
-        out = compute_momentum_features(_rising(MIN_HISTORY_DAYS))
+        out = compute_momentum_features(_series(_rising(MIN_HISTORY_DAYS)))
         self.assertIn("ret_5d", out["features"])
         self.assertNotIn("ret_3m", out["features"])
 
     def test_full_history_all_price_features(self):
-        out = compute_momentum_features(_rising(LOOKBACK_3M + 5))
+        out = compute_momentum_features(_series(_rising(LOOKBACK_3M + 5)))
         for f in ("ret_1m", "ret_3m", "ret_5d", "ret_10d"):
             self.assertIn(f, out["features"])
 
     def test_relative_strength_vs_benchmark(self):
         closes = _rising(30, start=100.0, step=2.0)   # strong uptrend
         spy = _rising(30, start=100.0, step=0.5)       # weak uptrend
-        out = compute_momentum_features(closes, spy_closes=spy)
+        out = compute_momentum_features(_series(closes), spy_series=_series(spy))
         self.assertIn("rel_spy_1m", out["features"])
         self.assertGreater(out["features"]["rel_spy_1m"], 0)  # outperforms SPY
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "ok")
 
     def test_no_benchmark_no_rel_feature(self):
-        out = compute_momentum_features(_rising(30))
+        out = compute_momentum_features(_series(_rising(30)))
         self.assertNotIn("rel_spy_1m", out["features"])
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "no_benchmark")
 
     def test_volume_surge(self):
         closes = _rising(VOL_SURGE_LONG + 5)
         vols = [1000.0] * VOL_SURGE_LONG + [5000.0] * 5  # recent spike
-        out = compute_momentum_features(closes, volumes=vols)
+        out = compute_momentum_features(_series(closes, volumes=vols))
         self.assertIn("vol_surge", out["features"])
         self.assertGreater(out["features"]["vol_surge"], 1.0)
 
     def test_volume_too_short_no_surge(self):
-        closes = _rising(30)
-        out = compute_momentum_features(closes, volumes=[1000.0] * 30)  # < VOL_SURGE_LONG
+        out = compute_momentum_features(_series(_rising(30), volumes=[1000.0] * 30))  # < VOL_SURGE_LONG
         self.assertNotIn("vol_surge", out["features"])
+
+    def test_partial_volume_coverage_no_surge(self):
+        # a missing (None) volume INSIDE the VOL_SURGE_LONG window omits vol_surge — no partial-coverage surge
+        vols = [1000.0] * (VOL_SURGE_LONG + 4) + [None]
+        out = compute_momentum_features(_series(_rising(VOL_SURGE_LONG + 5), volumes=vols))
+        self.assertNotIn("vol_surge", out["features"])
+
+    def test_vol_surge_ignores_early_missing_volume(self):
+        # F-C (self-review): a missing volume OUTSIDE the VOL_SURGE_LONG window must NOT omit a computable
+        # surge (over-omission would drop a feature and could push the ticker below min_coverage).
+        n = VOL_SURGE_LONG + 5
+        vols = [None] + [1000.0] * (n - 6) + [5000.0] * 5   # only index 0 (outside the last VOL_SURGE_LONG) is None
+        self.assertEqual(len(vols), n)
+        out = compute_momentum_features(_series(_rising(n), volumes=vols))
+        self.assertIn("vol_surge", out["features"])
+        self.assertGreater(out["features"]["vol_surge"], 1.0)
+
+    def test_negative_last_volume_omits_vol_surge(self):
+        # Codex residual: a negative kept volume is malformed market data — it must NOT enter vol_surge
+        vols = [1000.0] * (VOL_SURGE_LONG + 4) + [-5.0]      # negative last volume (inside the window)
+        out = compute_momentum_features(_series(_rising(VOL_SURGE_LONG + 5), volumes=vols))
+        self.assertNotIn("vol_surge", out["features"])
+
+    def test_negative_volume_in_window_omits_vol_surge(self):
+        n = VOL_SURGE_LONG + 5
+        vols = [1000.0] * n; vols[-3] = -1.0                 # negative inside the VOL_SURGE_LONG tail
+        out = compute_momentum_features(_series(_rising(n), volumes=vols))
+        self.assertNotIn("vol_surge", out["features"])
+
+    def test_nonfinite_or_nonnumeric_volume_omits_vol_surge(self):
+        n = VOL_SURGE_LONG + 5
+        for bad in (float("nan"), "1000", True):
+            vols = [1000.0] * n; vols[-2] = bad              # non-finite / numeric-string / bool → None → omit
+            out = compute_momentum_features(_series(_rising(n), volumes=vols))
+            self.assertNotIn("vol_surge", out["features"], bad)
+
+    def test_valid_zero_volume_kept(self):
+        # positive control: a zero volume is VALID (kept, unlike negative) — a no-trade day, not malformed
+        n = VOL_SURGE_LONG + 5
+        vols = [1000.0] * n; vols[-20] = 0.0                 # a zero inside the window stays (>=0)
+        out = compute_momentum_features(_series(_rising(n), volumes=vols))
+        self.assertIn("vol_surge", out["features"])
+
+
+class TestPitAlignment(unittest.TestCase):
+    """R-USSHORT-BATCH5-MOMENTUM-COVERAGE-PIT-COMPARABILITY-GAP — PIT/alignment input-rework half."""
+
+    # --- dated-series parse / fail-closed ---
+    def test_parse_rejects_non_dict_and_bad_shape(self):
+        self.assertIsNone(_parse_dated_series([1, 2, 3]))
+        self.assertIsNone(_parse_dated_series({"as_of": _AS_OF, "points": []}))   # missing keys
+        extra = _series(_rising(30)); extra["surprise"] = 1
+        self.assertIsNone(_parse_dated_series(extra))                              # closed-world
+
+    def test_parse_rejects_bad_as_of(self):
+        s = _series(_rising(30)); s["as_of"] = "2026-13-99"
+        self.assertIsNone(_parse_dated_series(s))
+
+    def test_parse_rejects_blank_metadata(self):
+        s = _series(_rising(30)); s["session"] = ""
+        self.assertIsNone(_parse_dated_series(s))
+
+    def test_parse_rejects_nonascending_or_duplicate_dates(self):
+        s = _series(_rising(30)); s["points"][5]["date"] = s["points"][4]["date"]  # duplicate -> corrupt axis
+        self.assertIsNone(_parse_dated_series(s))
+
+    def test_parse_rejects_nonfinite_close(self):
+        s = _series(_rising(30)); s["points"][10]["close"] = float("nan")
+        self.assertIsNone(_parse_dated_series(s))
+
+    def test_future_point_blocked_pit_cut(self):
+        # a point dated AFTER as_of is BLOCKED: the return uses the last <=as_of close, not the future one
+        closes = _rising(40, start=100.0, step=1.0)
+        s = _series(closes)
+        future = (datetime.strptime(_AS_OF, "%Y-%m-%d").date() + timedelta(days=5)).isoformat()
+        s["points"].append({"date": future, "close": 99999.0})   # absurd close that WOULD dominate if used
+        out = compute_momentum_features(s)
+        self.assertAlmostEqual(out["features"]["ret_5d"], closes[-1] / closes[-6] - 1.0)
+        self.assertEqual(out["pit"]["n_points"], 40)             # future point not counted
+
+    def test_future_nonfinite_close_not_rejected(self):
+        # F-D (self-review): a future point's value is PIT-BLOCKED and never validated, so a future NON-FINITE
+        # close must NOT over-reject an otherwise-valid <=as_of series (a kept non-finite close is still rejected
+        # — see test_parse_rejects_nonfinite_close). Consistent with industry_heat.
+        closes = _rising(40, start=100.0, step=1.0)
+        s = _series(closes)
+        fut = (datetime.strptime(_AS_OF, "%Y-%m-%d").date() + timedelta(days=4)).isoformat()
+        s["points"].append({"date": fut, "close": float("nan")})   # future NaN — must be ignored, not reject
+        out = compute_momentum_features(s)
+        self.assertAlmostEqual(out["features"]["ret_5d"], closes[-1] / closes[-6] - 1.0)
+        self.assertEqual(out["pit"]["n_points"], 40)               # future point excluded, series still scored
+
+    def test_last_zero_close_rejected(self):
+        # Codex F-A: a non-positive close IN the kept window makes the ticker unusable (no features)
+        closes = _rising(40, start=100.0, step=1.0); closes[-1] = 0.0
+        self.assertEqual(compute_momentum_features(_series(closes))["features"], {})
+
+    def test_earlier_negative_close_in_kept_rejected(self):
+        closes = _rising(40, start=100.0, step=1.0); closes[5] = -5.0
+        self.assertEqual(compute_momentum_features(_series(closes))["features"], {})
+
+    def test_nonpositive_benchmark_omits_rel(self):
+        out = compute_momentum_features(_series(_rising(40, start=100.0, step=2.0)),
+                                        spy_series=_series([0.0] * 40))   # non-positive benchmark → unusable
+        self.assertNotIn("rel_spy_1m", out["features"])
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "parse_failed")
+
+    def test_ipo_short_history_after_cut_no_features(self):
+        self.assertEqual(compute_momentum_features(_series(_rising(3)))["features"], {})
+
+    # --- relative-strength alignment: common dates + matching as_of/session/adjustment ---
+    def test_missing_benchmark_dates_aligns_on_common(self):
+        closes = _rising(40, start=100.0, step=2.0)
+        spy_series = _series(_rising(40, start=100.0, step=0.5))
+        spy_series["points"] = spy_series["points"][3:]          # benchmark missing 3 early dates
+        out = compute_momentum_features(_series(closes), spy_series=spy_series)
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "ok")   # aligned over the common dates
+        self.assertIn("rel_spy_1m", out["features"])
+
+    def test_insufficient_overlap_omits_rel(self):
+        spy_series = _series(_rising(40))
+        spy_series["points"] = spy_series["points"][-(LOOKBACK_1M - 2):]   # < LOOKBACK_1M+1 common days
+        out = compute_momentum_features(_series(_rising(40)), spy_series=spy_series)
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "insufficient_overlap")
+        self.assertNotIn("rel_spy_1m", out["features"])
+
+    def test_adjustment_mismatch_omits_rel(self):
+        out = compute_momentum_features(
+            _series(_rising(30), adjustment_mode="split_div_adjusted"),
+            spy_series=_series(_rising(30), adjustment_mode="raw"))
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "adjustment_mismatch")
+        self.assertNotIn("rel_spy_1m", out["features"])
+
+    def test_session_mismatch_omits_rel(self):
+        out = compute_momentum_features(
+            _series(_rising(30), session="RTH"), spy_series=_series(_rising(30), session="ETH"))
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "session_mismatch")
+        self.assertNotIn("rel_spy_1m", out["features"])
+
+    def test_as_of_mismatch_omits_rel(self):
+        out = compute_momentum_features(
+            _series(_rising(30), as_of="2026-06-26"), spy_series=_series(_rising(30), as_of="2026-06-25"))
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "as_of_mismatch")
+        self.assertNotIn("rel_spy_1m", out["features"])
+
+    def test_benchmark_parse_failed_note(self):
+        out = compute_momentum_features(_series(_rising(30)), spy_series={"as_of": _AS_OF})  # bad shape
+        self.assertEqual(out["alignment"]["rel_spy_1m"], "parse_failed")
+        self.assertNotIn("rel_spy_1m", out["features"])
+
+    def test_pit_provenance_recorded(self):
+        out = compute_momentum_features(_series(_rising(30)))
+        self.assertEqual(out["pit"]["as_of"], _AS_OF)
+        self.assertEqual(out["pit"]["session"], "RTH")
+        self.assertEqual(out["pit"]["n_points"], 30)
+
+    def test_same_day_alignment_value_correct(self):
+        # positive control: identical axes → rel = own 1m return − benchmark 1m return over the same days
+        closes = _rising(40, start=100.0, step=2.0)
+        spy = _rising(40, start=100.0, step=0.5)
+        out = compute_momentum_features(_series(closes), spy_series=_series(spy))
+        own_r = closes[-1] / closes[-1 - LOOKBACK_1M] - 1.0
+        spy_r = spy[-1] / spy[-1 - LOOKBACK_1M] - 1.0
+        self.assertAlmostEqual(out["features"]["rel_spy_1m"], own_r - spy_r)
 
 
 class TestPercentileRank(unittest.TestCase):
