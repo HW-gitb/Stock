@@ -1,0 +1,122 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_catalyst_source_binding/1.0.0/schema.json",
+  "title": "US-short Batch5 Cut 4 Catalyst-Source Binding",
+  "description": "Machine-checkable FROZEN offline contract for the US-short catalyst-source layer (engine/us_short_catalyst_source.py). Const-pins each source's value/date field + provider/endpoint family, the required per-signal provenance field set (§3.1), the allowed coverage/parser states, and an all-gated authorization boundary. Executes NO live/provider/network call; the live endpoint strings + real values are supplied by the SR-PROVIDER-001-gated live half. A conformance test triangulates the engine module consts == this binding.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "sources",
+               "provenance_required_fields", "coverage_status_allowed", "parser_status_allowed",
+               "pit_clock_contract", "emission_fitness", "lineage_ref_format",
+               "authorization_boundary", "source_artifact_refs"],
+  "properties": {
+    "schema_name": {"const": "us_short_catalyst_source_binding"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"const": "20260701"},
+    "status": {"const": "offline_contract_no_live_access"},
+    "sources": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["earnings", "analyst", "event_8k", "semantic"],
+      "properties": {
+        "earnings": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {
+          "value_key": {"const": "earnings_surprise_pct"}, "date_key": {"const": "earnings_report_date"},
+          "provider_id": {"const": "fmp"}, "endpoint_or_filing_type": {"const": "earnings_surprises"}}}]},
+        "analyst": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {
+          "value_key": {"const": "analyst_revision_net"}, "date_key": {"const": "analyst_revision_date"},
+          "provider_id": {"const": "fmp"}, "endpoint_or_filing_type": {"const": "analyst_estimate_revisions"}}}]},
+        "event_8k": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {
+          "value_key": {"const": "event_8k_class"}, "date_key": {"const": "event_8k_date"},
+          "provider_id": {"const": "sec_edgar"}, "endpoint_or_filing_type": {"const": "form_8k"}}}]},
+        "semantic": {"allOf": [{"$ref": "#/$defs/source"}, {"properties": {
+          "value_key": {"const": "semantic_advisory_score"}, "date_key": {"const": "semantic_advisory_date"},
+          "provider_id": {"const": "llm_advisory"}, "endpoint_or_filing_type": {"const": "semantic_advisory"}}}]}
+      }
+    },
+    "provenance_required_fields": {"const": ["coverage_status", "endpoint_or_filing_type", "lineage_ref",
+                                             "observed_at", "parser_status", "provider_id", "source_as_of"]},
+    "coverage_status_allowed": {"const": ["full", "missing", "partial"]},
+    "parser_status_allowed": {"const": ["degraded", "failed", "ok"]},
+    "pit_clock_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of_format", "event_date_format", "source_as_of_format", "observed_at_format",
+                   "decision_timezone", "decision_cutoff_et", "observed_at_cutoff_operator",
+                   "observed_at_cutoff_reference", "chronology_order", "chronology_relation", "chronology"],
+      "properties": {
+        "as_of_format": {"const": "YYYYMMDD"},
+        "event_date_format": {"const": "YYYYMMDD"},
+        "source_as_of_format": {"const": "YYYYMMDD"},
+        "observed_at_format": {"const": "rfc3339_tz_aware_instant"},
+        "decision_timezone": {"const": "America/New_York"},
+        "decision_cutoff_et": {"const": "09:30"},
+        "observed_at_cutoff_operator": {"const": "strictly_before"},
+        "observed_at_cutoff_reference": {"const": "decision_session_open"},
+        "chronology_order": {"const": ["event_date", "observed_at", "source_as_of", "as_of"]},
+        "chronology_relation": {"const": "non_decreasing"},
+        "chronology": {"type": "string", "minLength": 1}
+      }
+    },
+    "emission_fitness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["score_ready_coverage_status", "score_ready_parser_status", "all_other_states"],
+      "properties": {
+        "score_ready_coverage_status": {"const": "full"},
+        "score_ready_parser_status": {"const": "ok"},
+        "all_other_states": {"const": "excluded"}
+      }
+    },
+    "lineage_ref_format": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["structure", "record_id_rule"],
+      "properties": {
+        "structure": {"const": "provider_id:endpoint_or_filing_type:source_as_of#record_id"},
+        "record_id_rule": {"const": "nonempty_ascii_no_colon_hash_whitespace"}
+      }
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["live_fetch_executed_by_this_artifact", "network_access_required",
+                   "provider_calls_authorized", "sr_provider_001_gated"],
+      "properties": {
+        "live_fetch_executed_by_this_artifact": {"const": false},
+        "network_access_required": {"const": false},
+        "provider_calls_authorized": {"const": false},
+        "sr_provider_001_gated": {"const": true}
+      }
+    },
+    "source_artifact_refs": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "additionalItems": false,
+      "items": [
+        {"const": {"artifact_id": "us_short_system_design",
+                   "path": "docs/us_short_system_design.md",
+                   "role": "§4.2 catalyst subscore / §3.1 per-field provenance / §3.5 event-date vs observed-at PIT / §18.2 schema-first-before-consumption authority"}},
+        {"const": {"artifact_id": "us_short_catalyst_engine",
+                   "path": "engine/us_short_catalyst.py",
+                   "role": "the rule-mapping scoring engine that consumes the merged flat signals and OWNS all value/PIT validation + scoring"}},
+        {"const": {"artifact_id": "us_short_catalyst_source_engine",
+                   "path": "engine/us_short_catalyst_source.py",
+                   "role": "this offline identity+provenance+merge layer; its module consts are triangulated == this binding so the consumer copy cannot drift"}}
+      ]
+    }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value_key", "date_key", "provider_id", "endpoint_or_filing_type"],
+      "properties": {
+        "value_key": {"type": "string", "minLength": 1},
+        "date_key": {"type": "string", "minLength": 1},
+        "provider_id": {"type": "string", "minLength": 1},
+        "endpoint_or_filing_type": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

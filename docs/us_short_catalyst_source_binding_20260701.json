@@ -1,0 +1,88 @@
+{
+  "schema_name": "us_short_catalyst_source_binding",
+  "schema_version": "1.0.0",
+  "as_of": "20260701",
+  "status": "offline_contract_no_live_access",
+  "sources": {
+    "earnings": {
+      "value_key": "earnings_surprise_pct",
+      "date_key": "earnings_report_date",
+      "provider_id": "fmp",
+      "endpoint_or_filing_type": "earnings_surprises"
+    },
+    "analyst": {
+      "value_key": "analyst_revision_net",
+      "date_key": "analyst_revision_date",
+      "provider_id": "fmp",
+      "endpoint_or_filing_type": "analyst_estimate_revisions"
+    },
+    "event_8k": {
+      "value_key": "event_8k_class",
+      "date_key": "event_8k_date",
+      "provider_id": "sec_edgar",
+      "endpoint_or_filing_type": "form_8k"
+    },
+    "semantic": {
+      "value_key": "semantic_advisory_score",
+      "date_key": "semantic_advisory_date",
+      "provider_id": "llm_advisory",
+      "endpoint_or_filing_type": "semantic_advisory"
+    }
+  },
+  "provenance_required_fields": [
+    "coverage_status",
+    "endpoint_or_filing_type",
+    "lineage_ref",
+    "observed_at",
+    "parser_status",
+    "provider_id",
+    "source_as_of"
+  ],
+  "coverage_status_allowed": ["full", "missing", "partial"],
+  "parser_status_allowed": ["degraded", "failed", "ok"],
+  "pit_clock_contract": {
+    "as_of_format": "YYYYMMDD",
+    "event_date_format": "YYYYMMDD",
+    "source_as_of_format": "YYYYMMDD",
+    "observed_at_format": "rfc3339_tz_aware_instant",
+    "decision_timezone": "America/New_York",
+    "decision_cutoff_et": "09:30",
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["event_date", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing",
+    "chronology": "event_date <= observed_at(ET date) <= source_as_of <= as_of (chronology_order, non_decreasing), AND the observed INSTANT is STRICTLY BEFORE the decision-session 09:30 ET open on as_of (half-open window [prior_close, decision_open); exactly 09:30 is out-of-window, matching resolve_canonical_asof; §2.1/§3.5). observed_at is a tz-aware RFC3339 INSTANT; event_date/source_as_of/as_of are YYYYMMDD dates."
+  },
+  "emission_fitness": {
+    "score_ready_coverage_status": "full",
+    "score_ready_parser_status": "ok",
+    "all_other_states": "excluded"
+  },
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch_executed_by_this_artifact": false,
+    "network_access_required": false,
+    "provider_calls_authorized": false,
+    "sr_provider_001_gated": true
+  },
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "§4.2 catalyst subscore / §3.1 per-field provenance / §3.5 event-date vs observed-at PIT / §18.2 schema-first-before-consumption authority"
+    },
+    {
+      "artifact_id": "us_short_catalyst_engine",
+      "path": "engine/us_short_catalyst.py",
+      "role": "the rule-mapping scoring engine that consumes the merged flat signals and OWNS all value/PIT validation + scoring"
+    },
+    {
+      "artifact_id": "us_short_catalyst_source_engine",
+      "path": "engine/us_short_catalyst_source.py",
+      "role": "this offline identity+provenance+merge layer; its module consts are triangulated == this binding so the consumer copy cannot drift"
+    }
+  ]
+}
