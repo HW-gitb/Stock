@@ -50,6 +50,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from engine.us_short_eligibility_gate import canonical_us_ticker  # noqa: E402 — the repo's SINGLE US identity policy
+
 ACCOUNT_SCHEMA_NAME = "us_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.0.0"
 LINEAGE_SCHEMA_NAME = "us_short_account_state_lineage"
@@ -88,9 +90,8 @@ TRADE_SELL_ACTIONS = ("减仓", "清仓-止损", "清仓-止盈", "清仓-事件
 TRADE_NOFILL_ACTIONS = ("持有", "观察", "否决/避开")   # design-exact §9 values (no `否决` alias)
 TRADE_ACTIONS = TRADE_BUY_ACTIONS + TRADE_SELL_ACTIONS + TRADE_NOFILL_ACTIONS
 
-# US listing symbol: uppercase, starts with a LETTER (so A-share digit codes like 000001.SZ are
-# rejected), 1..6 leading alnum + optional .CLASS / -CLASS suffix (e.g. BRK.B, RDS-A).
-_US_TICKER_RE = re.compile(r"^[A-Z][A-Z0-9]{0,5}([.\-][A-Z]{1,3})?$")
+# US listing-symbol acceptance is delegated to engine `canonical_us_ticker` (single identity policy). Only the
+# A-share pattern is kept here, ONLY to sharpen `_parse_us_ticker`'s diagnostic (not to make the accept/reject).
 _A_SHARE_CODE_RE = re.compile(r"^\d{6}\.(SH|SZ|BJ)$", re.IGNORECASE)
 
 
@@ -162,12 +163,18 @@ def _parse_int_shares(raw, field: str) -> int:
 
 
 def _parse_us_ticker(raw, field: str) -> str:
+    # SINGLE US identity policy: delegate accept/reject to the engine `canonical_us_ticker` (ASCII-only, so a
+    # non-ASCII key that `.upper()` would fold into a fake ticker — 'ſ'->'S' — is rejected; A-share codes + non-US
+    # shapes rejected). This converter must NOT keep a divergent second policy
+    # (R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP ripple: the shared canonicalizer now rejects
+    # Unicode folds, so this mirror must too). The local A-share regex is kept ONLY to sharpen the diagnostic.
+    ct = canonical_us_ticker(raw)
+    if ct is not None:
+        return ct
     s = ("" if raw is None else str(raw)).strip().upper()
-    if _A_SHARE_CODE_RE.fullmatch(s):
+    if isinstance(raw, str) and raw.isascii() and _A_SHARE_CODE_RE.fullmatch(s):
         raise ConvertError(f"{field}={raw!r} looks like an A-share code; US-short does NOT cross A-share. Manage A-share holdings with the A-share tools.")
-    if not _US_TICKER_RE.fullmatch(s):
-        raise ConvertError(f"{field}={raw!r} is not a valid US listing symbol (uppercase, letter-first, e.g. AAPL / BRK.B)")
-    return s
+    raise ConvertError(f"{field}={raw!r} is not a valid US listing symbol (uppercase, letter-first, e.g. AAPL / BRK.B)")
 
 
 def _opt_str(raw):

@@ -92,6 +92,14 @@ class BuildTests(unittest.TestCase):
             _build(positions=[_pos(ticker="000001.SZ")])
         self.assertIn("A-share", str(cm.exception))
 
+    def test_unicode_folding_ticker_rejected(self):
+        # single identity policy: a non-ASCII ticker that .upper() would fold into a fake symbol ('ſ'->'S') must be
+        # rejected — consistent with the shared engine canonical_us_ticker, no divergent second policy
+        # (R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP ripple).
+        for bad in ("ſ", "ß", "ı"):
+            with self.assertRaises(CE):
+                _build(positions=[_pos(ticker=bad)])
+
     def test_lowercase_ticker_normalized(self):
         state, _ = _build(positions=[_pos(ticker="aapl")])
         self.assertEqual(state["positions"][0]["ticker"], "AAPL")

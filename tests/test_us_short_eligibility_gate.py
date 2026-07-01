@@ -196,6 +196,16 @@ class CheapEligibleTests(unittest.TestCase):
         self.assertIn("ticker_unknown_or_invalid", out["reasons"])
         self.assertFalse(out["eligible"])
 
+    def test_unicode_folding_ticker_rejected(self):
+        # Unicode case-folding maps 'ſ'(U+017F)/'ß'(U+00DF)/'ı'(U+0131) onto ASCII S/SS/I; the single identity
+        # policy must reject non-ASCII on the RAW input BEFORE .upper(), so a non-ASCII string cannot fold
+        # through the ASCII shape regex and forge a US ticker (identity-forgery surface).
+        for bad in ("ſ", "ß", "ı", "AAPĿ"):
+            self.assertIsNone(eg.canonical_us_ticker(bad), repr(bad))
+        out = eg.cheap_eligible(_row(ticker="ſ"), governance=self.gov)
+        self.assertIn("ticker_unknown_or_invalid", out["reasons"])
+        self.assertFalse(out["eligible"])
+
 
 class Pass2SafetyAdmitTests(unittest.TestCase):
     def test_clean_candidate_admitted(self):
@@ -323,14 +333,19 @@ class CatalystRecallSlotTests(unittest.TestCase):
 
 
 class CanonicalTickerTriangulationTests(unittest.TestCase):
-    """engine `_canonical_us_ticker` must agree with the runner's `_parse_us_ticker` (no drift)."""
+    """engine `_canonical_us_ticker` must agree with the runner's `_parse_us_ticker` (no drift). The runner now
+    DELEGATES to the engine policy (single source), so agreement is structural — this test guards against a future
+    re-introduction of a divergent second identity space (R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-
+    VALIDATION-GAP residual: the converter had Unicode-folded ſ/ß/ı while the engine rejected them)."""
 
     def test_engine_canonical_matches_runner_parse(self):
         from runners.us_short_account_state_from_manual_tables import _parse_us_ticker, ConvertError
-        for raw in (" aapl ", "BRK.B", "msft", "BRK-A"):  # valid -> same canonical
+        for raw in (" aapl ", "BRK.B", "msft", "BRK-A"):  # valid + case/whitespace/class-share -> same canonical
             self.assertEqual(eg._canonical_us_ticker(raw), _parse_us_ticker(raw, "t"))
-        for raw in ("000001.SZ", "", "12345", "TOOLONGSYM"):  # invalid -> engine None, runner raises
-            self.assertIsNone(eg._canonical_us_ticker(raw))
+        # invalid -> engine None AND runner raises (no divergent second identity space): A-share, blank, shape,
+        # Unicode case-folding (ſ/ß/ı would .upper() to S/SS/I), and non-string must BOTH reject.
+        for raw in ("000001.SZ", "", "12345", "TOOLONGSYM", "ſ", "ß", "ı", 123, None):
+            self.assertIsNone(eg._canonical_us_ticker(raw), repr(raw))
             with self.assertRaises(ConvertError):
                 _parse_us_ticker(raw, "t")
 

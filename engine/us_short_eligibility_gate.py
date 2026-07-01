@@ -67,8 +67,15 @@ _A_SHARE_CODE_RE = re.compile(r"^\d{6}\.(SH|SZ|BJ)$", re.IGNORECASE)
 
 def _canonical_us_ticker(raw):
     """raw -> canonical US ticker (stripped + uppercased + shape-validated) or None if not a valid
-    US listing symbol (blank / wrong shape / A-share digit code all -> None)."""
-    if not isinstance(raw, str):
+    US listing symbol (blank / wrong shape / A-share digit code all -> None).
+
+    ASCII-only is enforced on the RAW input BEFORE `.upper()`: Unicode case-folding maps some non-ASCII
+    letters onto ASCII (`'ſ'.upper()=='S'`, `'ß'.upper()=='SS'`, `'ı'.upper()=='I'`), so a non-ASCII string
+    would otherwise fold THROUGH the ASCII shape regex and forge a valid-looking US ticker. A US listing symbol
+    is ASCII; rejecting non-ASCII here (the single identity policy) closes that identity-forgery surface for
+    every consumer (R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP: non-ASCII member keys folded
+    into fake tickers and fabricated theme-confirmation evidence)."""
+    if not isinstance(raw, str) or not raw.isascii():
         return None
     s = raw.strip().upper()
     if _A_SHARE_CODE_RE.fullmatch(s) or not _US_TICKER_RE.fullmatch(s):
