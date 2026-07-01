@@ -1,0 +1,167 @@
+{
+  "schema_name": "us_short_batch5_status_source_access_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-06-30T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_status_source_binding",
+      "path": "docs/us_short_batch5_status_source_binding_20260629.json",
+      "role": "Frozen per-flag status-source contract (delisted/otc -> ticker_reference, halted -> exchange_halt_feed, bankruptcy -> sec_8k_item_103 best-effort); this access packet resolves its status_source_access_packet_approval decision gate for the small-sample shape probe only."
+    },
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "Single design authority; §3.3 critical-status unknown must not be assumed clean, §3.7 provider health, §18.0 P0 provider authorization gate (SR-PROVIDER-001)."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker; this packet authorizes NO live status call — it records the reviewed boundary for a later user-confirmed + preflighted small-sample shape probe."
+    },
+    {
+      "artifact_id": "us_short_universe_fetch_runner",
+      "path": "runners/us_short_universe_fetch.py",
+      "role": "Round-1 Pass1 that currently hardwires delisted/halted/bankruptcy/otc to False behind an honest disclosure; the parser-into-apply_pass1 rewire that consumes the sourced status is deferred to 1b with the live fetch."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "packet_status": "status_source_access_packet_recorded_for_review_not_executed",
+    "user_authorized_real_status_source_integration": true,
+    "status_source_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "small_sample_first_required": true,
+    "future_status_fetch_requires_explicit_user_authorization": true,
+    "future_status_fetch_requires_preflight": true,
+    "status_calls_allowed_without_future_authorization": false,
+    "bankruptcy_8k_per_issuer_scan_allowed": false,
+    "full_market_or_per_symbol_fetch_allowed": false,
+    "parser_into_runner_integration_allowed": false,
+    "candidate_artifact_schema_change_allowed": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "yfinance_allowed": false,
+    "web_x_allowed": false,
+    "paid_access_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "live_normalized_evidence_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "status_source_probe_boundary": {
+    "authorization_status": "not_authorized_by_this_artifact_requires_future_user_confirmation",
+    "sample_universe": {
+      "symbols": ["AAPL", "MSFT", "JPM"],
+      "active_symbols": ["AAPL", "MSFT", "JPM"],
+      "max_symbols": 3,
+      "shape_validation_only": true,
+      "not_full_market_or_security_master": true
+    },
+    "endpoint_call_budget": {
+      "max_total_endpoint_calls": 2,
+      "ticker_reference_calls": 1,
+      "halt_feed_calls": 1,
+      "bankruptcy_8k_calls": 0,
+      "retry_count_allowed": 0,
+      "abort_if_budget_exceeded": true,
+      "budget_authorized_by_this_artifact": false
+    },
+    "endpoint_families": [
+      {
+        "source_id": "ticker_reference",
+        "endpoint_family": "active_listing_and_primary_exchange_reference",
+        "flags": ["delisted", "otc"],
+        "call_count": 1,
+        "provider_candidates": [
+          "SEC company_tickers_exchange.json (already used in round-1 for ticker+exchange+CIK; supplies primary exchange, partial active/delisted signal)",
+          "a dedicated active-listing reference dataset to be confirmed at preflight if the SEC list is insufficient for the active/delisted determination"
+        ],
+        "exact_endpoint_status": "pending_preflight_confirmation",
+        "provider_role": "One bulk reference observation supplies delisted (active-listing membership) and otc (primary-exchange venue vs the NYSE/NASDAQ whitelist). Whole-market application of the bulk feed is a separate later packet; this packet validates the response shape on the 3 sample symbols only.",
+        "authorizes_status_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false
+      },
+      {
+        "source_id": "exchange_halt_feed",
+        "endpoint_family": "public_trading_halt_feed",
+        "flags": ["halted"],
+        "call_count": 1,
+        "provider_candidates": [
+          "Nasdaq Trade Halts public feed (RSS/JSON) to be confirmed at preflight",
+          "an equivalent public exchange trading-halt feed if the Nasdaq feed is unsuitable"
+        ],
+        "exact_endpoint_status": "pending_preflight_confirmation",
+        "provider_role": "One observation of the complete current trading-halt list at the decision PIT; membership sets halted=True, observed absence sets halted=False.",
+        "authorizes_status_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false
+      }
+    ],
+    "validation_questions": [
+      "ticker_reference_active_and_primary_exchange_shape",
+      "halt_feed_membership_shape"
+    ]
+  },
+  "deferred_scope": {
+    "bankruptcy_8k_per_issuer_scan": "deferred_separate_packet_per_issuer_budget",
+    "full_market_application": "deferred_separate_packet_after_shape_validation",
+    "parser_into_runner_apply_pass1": "deferred_to_1b_with_live_fetch",
+    "candidate_artifact_status_provenance_schema": "deferred_to_1b_with_live_producer",
+    "live_status_fetch_execution": "deferred_requires_preflight_and_user_execute"
+  },
+  "storage_and_secret_boundary": {
+    "future_raw_sample_storage_path": "provider_samples/us_short_batch5_status_source_20260630/",
+    "future_tracked_summary_path": "docs/us_short_batch5_status_source_probe_summary_20260630.json",
+    "provider_samples_gitignore_check_required": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secrets": true,
+    "tracked_summary_write_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "production_storage_authorized": false
+  },
+  "preflight_gates": {
+    "schema_validation_required": true,
+    "provider_samples_gitignore_check_required": true,
+    "future_raw_path_scope_check_required": true,
+    "future_summary_no_secret_contract_required": true,
+    "budget_precheck_required": true,
+    "exact_endpoint_confirmation_required": true,
+    "no_full_market_guard_required": true,
+    "no_bankruptcy_8k_scan_guard_required": true,
+    "no_datahub_consumption_guard_required": true,
+    "no_ship_gate_claim_guard_required": true
+  },
+  "prohibited_claims": {
+    "status_call_authorized_now": false,
+    "provider_selected": false,
+    "bankruptcy_8k_scanned": false,
+    "full_market_fetch_authorized": false,
+    "datahub_consumable": false,
+    "runner_consumable": false,
+    "candidate_artifact_schema_changed": false,
+    "production_storage_rights_cleared": false,
+    "yfinance_authorized": false,
+    "web_x_authorized": false,
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Review this offline status-source access packet before any live call.",
+    "On the user's post-review confirmation, run a preflight that confirms the exact ticker_reference + halt-feed endpoints, the gitignored raw path scope, the no-secret summary contract, and the 2-call zero-retry budget — no status call before that.",
+    "After preflight + the user's execute, run the bounded shape probe (2 bulk calls) and validate the response shapes on AAPL / MSFT / JPM only.",
+    "Whole-market application of the two bulk feeds, the per-issuer bankruptcy 8-K scan, the apply_pass1 rewire, and the candidate-artifact status-provenance schema are separate later steps (1b / separate packets)."
+  ],
+  "limitations": [
+    "This artifact performs no status-source calls, reads no raw payloads, scans no bankruptcy 8-Ks, fetches no full market, and rewires no runner or schema.",
+    "It authorizes ONLY a future user-confirmed + preflighted small-sample SHAPE probe of the ticker reference and the halt feed (delisted/otc/halted); the exact endpoints are confirmed at preflight, not here.",
+    "bankruptcy is positive-detection-only and best-effort (binding mark_unscreened_not_clean); the per-issuer 8-K scan is deferred to a separate budgeted packet, and an unscreened bankruptcy universe is disclosed, never asserted clean.",
+    "It does not resolve SR-PROVIDER-001; the live fetch, parser-into-runner integration, candidate-artifact status-provenance schema, full-market application, DataHub/runner consumption, production storage, live_normalized evidence, and ship-gate claims remain gated pending separate reviewed steps."
+  ]
+}

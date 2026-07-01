@@ -1,0 +1,316 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_status_source_access_packet/1.0.0/schema.json",
+  "title": "US-short Batch5 Status-Source Access Packet",
+  "description": "Machine-checkable US-short batch5 status-source ACCESS packet (Cut 1, slice 1a). It records the offline, reviewed authorization boundary for a later separately-confirmed small-sample status-source SHAPE probe (delisted/otc via a ticker reference, halted via a public exchange halt feed). It resolves the frozen status-source binding's `status_source_access_packet_approval` decision gate; it executes NO status-source call, reads no raw payloads, does not scan bankruptcy 8-Ks per issuer, does not fetch the full market, does not rewire the universe runner or the candidate-artifact schema, and authorizes no DataHub / production / ship-gate use. The exact per-source endpoints are confirmed at preflight, not by this packet.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "status_source_probe_boundary",
+    "deferred_scope",
+    "storage_and_secret_boundary",
+    "preflight_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_batch5_status_source_access_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"const": "2026-06-30T00:00:00+08:00"},
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceArtifactRef"},
+      "minItems": 4,
+      "maxItems": 4,
+      "allOf": [
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_status_source_binding"},
+            "path": {"const": "docs/us_short_batch5_status_source_binding_20260629.json"},
+            "role": {"const": "Frozen per-flag status-source contract (delisted/otc -> ticker_reference, halted -> exchange_halt_feed, bankruptcy -> sec_8k_item_103 best-effort); this access packet resolves its status_source_access_packet_approval decision gate for the small-sample shape probe only."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_system_design"},
+            "path": {"const": "docs/us_short_system_design.md"},
+            "role": {"const": "Single design authority; §3.3 critical-status unknown must not be assumed clean, §3.7 provider health, §18.0 P0 provider authorization gate (SR-PROVIDER-001)."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "sr_provider_001"},
+            "path": {"const": "docs/system_risk_register.md"},
+            "role": {"const": "Open provider blocker; this packet authorizes NO live status call — it records the reviewed boundary for a later user-confirmed + preflighted small-sample shape probe."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_universe_fetch_runner"},
+            "path": {"const": "runners/us_short_universe_fetch.py"},
+            "role": {"const": "Round-1 Pass1 that currently hardwires delisted/halted/bankruptcy/otc to False behind an honest disclosure; the parser-into-apply_pass1 rewire that consumes the sourced status is deferred to 1b with the live fetch."}}}}
+      ]
+    },
+    "scope": {"$ref": "#/$defs/scope"},
+    "status_source_probe_boundary": {"$ref": "#/$defs/statusSourceProbeBoundary"},
+    "deferred_scope": {"$ref": "#/$defs/deferredScope"},
+    "storage_and_secret_boundary": {"$ref": "#/$defs/storageAndSecretBoundary"},
+    "preflight_gates": {"$ref": "#/$defs/preflightGates"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"const": [
+      "Review this offline status-source access packet before any live call.",
+      "On the user's post-review confirmation, run a preflight that confirms the exact ticker_reference + halt-feed endpoints, the gitignored raw path scope, the no-secret summary contract, and the 2-call zero-retry budget — no status call before that.",
+      "After preflight + the user's execute, run the bounded shape probe (2 bulk calls) and validate the response shapes on AAPL / MSFT / JPM only.",
+      "Whole-market application of the two bulk feeds, the per-issuer bankruptcy 8-K scan, the apply_pass1 rewire, and the candidate-artifact status-provenance schema are separate later steps (1b / separate packets)."
+    ]},
+    "limitations": {"const": [
+      "This artifact performs no status-source calls, reads no raw payloads, scans no bankruptcy 8-Ks, fetches no full market, and rewires no runner or schema.",
+      "It authorizes ONLY a future user-confirmed + preflighted small-sample SHAPE probe of the ticker reference and the halt feed (delisted/otc/halted); the exact endpoints are confirmed at preflight, not here.",
+      "bankruptcy is positive-detection-only and best-effort (binding mark_unscreened_not_clean); the per-issuer 8-K scan is deferred to a separate budgeted packet, and an unscreened bankruptcy universe is disclosed, never asserted clean.",
+      "It does not resolve SR-PROVIDER-001; the live fetch, parser-into-runner integration, candidate-artifact status-provenance schema, full-market application, DataHub/runner consumption, production storage, live_normalized evidence, and ship-gate claims remain gated pending separate reviewed steps."
+    ]}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "stringList": {"type": "array", "items": {"$ref": "#/$defs/nonEmptyString"}, "minItems": 1},
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "role"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market", "lane", "batch", "packet_status",
+        "user_authorized_real_status_source_integration",
+        "status_source_calls_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "network_access_required_for_this_artifact",
+        "small_sample_first_required",
+        "future_status_fetch_requires_explicit_user_authorization",
+        "future_status_fetch_requires_preflight",
+        "status_calls_allowed_without_future_authorization",
+        "bankruptcy_8k_per_issuer_scan_allowed",
+        "full_market_or_per_symbol_fetch_allowed",
+        "parser_into_runner_integration_allowed",
+        "candidate_artifact_schema_change_allowed",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "yfinance_allowed",
+        "web_x_allowed",
+        "paid_access_allowed",
+        "broker_or_order_automation_allowed",
+        "live_normalized_evidence_allowed",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "market": {"const": "US"},
+        "lane": {"const": "us_short"},
+        "batch": {"const": "batch5_provider_live"},
+        "packet_status": {"const": "status_source_access_packet_recorded_for_review_not_executed"},
+        "user_authorized_real_status_source_integration": {"const": true},
+        "status_source_calls_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "network_access_required_for_this_artifact": {"const": false},
+        "small_sample_first_required": {"const": true},
+        "future_status_fetch_requires_explicit_user_authorization": {"const": true},
+        "future_status_fetch_requires_preflight": {"const": true},
+        "status_calls_allowed_without_future_authorization": {"const": false},
+        "bankruptcy_8k_per_issuer_scan_allowed": {"const": false},
+        "full_market_or_per_symbol_fetch_allowed": {"const": false},
+        "parser_into_runner_integration_allowed": {"const": false},
+        "candidate_artifact_schema_change_allowed": {"const": false},
+        "datahub_consumption_allowed": {"const": false},
+        "production_storage_allowed": {"const": false},
+        "yfinance_allowed": {"const": false},
+        "web_x_allowed": {"const": false},
+        "paid_access_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "live_normalized_evidence_allowed": {"const": false},
+        "ship_gate_evidence_allowed": {"const": false},
+        "production_ready_claim_allowed": {"const": false}
+      }
+    },
+    "statusSourceProbeBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_status", "sample_universe", "endpoint_call_budget", "endpoint_families",
+                   "validation_questions"],
+      "properties": {
+        "authorization_status": {
+          "const": "not_authorized_by_this_artifact_requires_future_user_confirmation"},
+        "sample_universe": {"$ref": "#/$defs/sampleUniverse"},
+        "endpoint_call_budget": {"$ref": "#/$defs/endpointCallBudget"},
+        "endpoint_families": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/endpointFamily"},
+          "minItems": 2,
+          "maxItems": 2,
+          "allOf": [
+            {"contains": {"type": "object",
+              "required": ["source_id", "endpoint_family", "flags", "provider_role", "provider_candidates"],
+              "properties": {"source_id": {"const": "ticker_reference"},
+                             "endpoint_family": {"const": "active_listing_and_primary_exchange_reference"},
+                             "flags": {"const": ["delisted", "otc"]},
+                             "provider_role": {"const": "One bulk reference observation supplies delisted (active-listing membership) and otc (primary-exchange venue vs the NYSE/NASDAQ whitelist). Whole-market application of the bulk feed is a separate later packet; this packet validates the response shape on the 3 sample symbols only."},
+                             "provider_candidates": {"const": [
+                               "SEC company_tickers_exchange.json (already used in round-1 for ticker+exchange+CIK; supplies primary exchange, partial active/delisted signal)",
+                               "a dedicated active-listing reference dataset to be confirmed at preflight if the SEC list is insufficient for the active/delisted determination"]}}}},
+            {"contains": {"type": "object",
+              "required": ["source_id", "endpoint_family", "flags", "provider_role", "provider_candidates"],
+              "properties": {"source_id": {"const": "exchange_halt_feed"},
+                             "endpoint_family": {"const": "public_trading_halt_feed"},
+                             "flags": {"const": ["halted"]},
+                             "provider_role": {"const": "One observation of the complete current trading-halt list at the decision PIT; membership sets halted=True, observed absence sets halted=False."},
+                             "provider_candidates": {"const": [
+                               "Nasdaq Trade Halts public feed (RSS/JSON) to be confirmed at preflight",
+                               "an equivalent public exchange trading-halt feed if the Nasdaq feed is unsuitable"]}}}}
+          ]
+        },
+        "validation_questions": {
+          "type": "array",
+          "items": {"enum": ["ticker_reference_active_and_primary_exchange_shape",
+                             "halt_feed_membership_shape"]},
+          "minItems": 2,
+          "maxItems": 2,
+          "uniqueItems": true
+        }
+      }
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbols", "active_symbols", "max_symbols", "shape_validation_only",
+                   "not_full_market_or_security_master"],
+      "properties": {
+        "symbols": {"type": "array", "items": {"enum": ["AAPL", "MSFT", "JPM"]},
+                    "minItems": 3, "maxItems": 3, "uniqueItems": true},
+        "active_symbols": {"const": ["AAPL", "MSFT", "JPM"]},
+        "max_symbols": {"const": 3},
+        "shape_validation_only": {"const": true},
+        "not_full_market_or_security_master": {"const": true}
+      }
+    },
+    "endpointCallBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_total_endpoint_calls", "ticker_reference_calls", "halt_feed_calls",
+                   "bankruptcy_8k_calls", "retry_count_allowed", "abort_if_budget_exceeded",
+                   "budget_authorized_by_this_artifact"],
+      "properties": {
+        "max_total_endpoint_calls": {"const": 2},
+        "ticker_reference_calls": {"const": 1},
+        "halt_feed_calls": {"const": 1},
+        "bankruptcy_8k_calls": {"const": 0},
+        "retry_count_allowed": {"const": 0},
+        "abort_if_budget_exceeded": {"const": true},
+        "budget_authorized_by_this_artifact": {"const": false}
+      }
+    },
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "endpoint_family", "flags", "call_count", "provider_candidates",
+                   "exact_endpoint_status", "provider_role", "authorizes_status_call_now",
+                   "raw_parse_allowed_after_future_authorization", "authorizes_datahub_or_runner_consumption"],
+      "properties": {
+        "source_id": {"enum": ["ticker_reference", "exchange_halt_feed"]},
+        "endpoint_family": {"enum": ["active_listing_and_primary_exchange_reference",
+                                     "public_trading_halt_feed"]},
+        "flags": {"type": "array", "items": {"enum": ["delisted", "otc", "halted"]},
+                  "minItems": 1, "maxItems": 2, "uniqueItems": true},
+        "call_count": {"const": 1},
+        "provider_candidates": {"$ref": "#/$defs/stringList"},
+        "exact_endpoint_status": {"const": "pending_preflight_confirmation"},
+        "provider_role": {"$ref": "#/$defs/nonEmptyString"},
+        "authorizes_status_call_now": {"const": false},
+        "raw_parse_allowed_after_future_authorization": {"const": true},
+        "authorizes_datahub_or_runner_consumption": {"const": false}
+      }
+    },
+    "deferredScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bankruptcy_8k_per_issuer_scan", "full_market_application", "parser_into_runner_apply_pass1",
+                   "candidate_artifact_status_provenance_schema", "live_status_fetch_execution"],
+      "properties": {
+        "bankruptcy_8k_per_issuer_scan": {"const": "deferred_separate_packet_per_issuer_budget"},
+        "full_market_application": {"const": "deferred_separate_packet_after_shape_validation"},
+        "parser_into_runner_apply_pass1": {"const": "deferred_to_1b_with_live_fetch"},
+        "candidate_artifact_status_provenance_schema": {"const": "deferred_to_1b_with_live_producer"},
+        "live_status_fetch_execution": {"const": "deferred_requires_preflight_and_user_execute"}
+      }
+    },
+    "storageAndSecretBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["future_raw_sample_storage_path", "future_tracked_summary_path",
+                   "provider_samples_gitignore_check_required", "tracked_summary_must_exclude_raw_payloads",
+                   "tracked_summary_must_exclude_request_urls", "tracked_summary_must_exclude_secrets",
+                   "tracked_summary_write_authorized_by_this_artifact",
+                   "raw_payload_write_authorized_by_this_artifact", "production_storage_authorized"],
+      "properties": {
+        "future_raw_sample_storage_path": {
+          "const": "provider_samples/us_short_batch5_status_source_20260630/"},
+        "future_tracked_summary_path": {
+          "const": "docs/us_short_batch5_status_source_probe_summary_20260630.json"},
+        "provider_samples_gitignore_check_required": {"const": true},
+        "tracked_summary_must_exclude_raw_payloads": {"const": true},
+        "tracked_summary_must_exclude_request_urls": {"const": true},
+        "tracked_summary_must_exclude_secrets": {"const": true},
+        "tracked_summary_write_authorized_by_this_artifact": {"const": false},
+        "raw_payload_write_authorized_by_this_artifact": {"const": false},
+        "production_storage_authorized": {"const": false}
+      }
+    },
+    "preflightGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_validation_required", "provider_samples_gitignore_check_required",
+                   "future_raw_path_scope_check_required", "future_summary_no_secret_contract_required",
+                   "budget_precheck_required", "exact_endpoint_confirmation_required",
+                   "no_full_market_guard_required", "no_bankruptcy_8k_scan_guard_required",
+                   "no_datahub_consumption_guard_required", "no_ship_gate_claim_guard_required"],
+      "properties": {
+        "schema_validation_required": {"const": true},
+        "provider_samples_gitignore_check_required": {"const": true},
+        "future_raw_path_scope_check_required": {"const": true},
+        "future_summary_no_secret_contract_required": {"const": true},
+        "budget_precheck_required": {"const": true},
+        "exact_endpoint_confirmation_required": {"const": true},
+        "no_full_market_guard_required": {"const": true},
+        "no_bankruptcy_8k_scan_guard_required": {"const": true},
+        "no_datahub_consumption_guard_required": {"const": true},
+        "no_ship_gate_claim_guard_required": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status_call_authorized_now", "provider_selected", "bankruptcy_8k_scanned",
+                   "full_market_fetch_authorized", "datahub_consumable", "runner_consumable",
+                   "candidate_artifact_schema_changed", "production_storage_rights_cleared",
+                   "yfinance_authorized", "web_x_authorized", "live_normalized_evidence_claimed",
+                   "ship_gate_evidence_claimed", "production_ready_claimed", "broker_or_order_automation"],
+      "properties": {
+        "status_call_authorized_now": {"const": false},
+        "provider_selected": {"const": false},
+        "bankruptcy_8k_scanned": {"const": false},
+        "full_market_fetch_authorized": {"const": false},
+        "datahub_consumable": {"const": false},
+        "runner_consumable": {"const": false},
+        "candidate_artifact_schema_changed": {"const": false},
+        "production_storage_rights_cleared": {"const": false},
+        "yfinance_authorized": {"const": false},
+        "web_x_authorized": {"const": false},
+        "live_normalized_evidence_claimed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false},
+        "production_ready_claimed": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    }
+  }
+}
