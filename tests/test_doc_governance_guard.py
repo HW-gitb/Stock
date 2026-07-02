@@ -508,6 +508,45 @@ class DocGovernanceGuard(unittest.TestCase):
         ):
             self.assertNotIn(anchor, template_section, f"SESSION_LOG template still contains stale role binding: {anchor}")
 
+    def test_process_speed_defaults_are_shared_and_scripted(self):
+        # User-requested 2026-07-02: make command-speed defaults shared repo policy for both LLMs,
+        # not Codex memory. The anchors deliberately cover the six requested points once, without
+        # reintroducing a sprawling protocol body.
+        text = AGENTS.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^## Role split and command ownership.*?(?=^## Codex adversarial review standard)", text)
+        self.assertIsNotNone(m, "AGENTS lost the role-split section")
+        section = m.group(0)
+        for anchor in (
+            "Process-speed defaults (user-requested 2026-07-02)",
+            "fixed verification packs",
+            "`docs/process`",
+            ".tools/verify_doc_process.cmd",
+            "focused first, then the required full pack",
+        ):
+            self.assertIn(anchor, section, f"shared process-speed contract lost anchor: {anchor}")
+        for removed_soft_rule in (
+            "state one boundary line before tool use",
+            "narrow: current diff + current requirement",
+            "do not scan or run provider/live/DataHub/production/broker/automatic-order",
+        ):
+            self.assertNotIn(
+                removed_soft_rule,
+                section,
+                f"process-speed section reintroduced soft-rule tax: {removed_soft_rule}",
+            )
+
+        verifier = ROOT / ".tools" / "verify_doc_process.cmd"
+        self.assertTrue(verifier.exists(), "missing shared docs/process verification script")
+        script = verifier.read_text(encoding="utf-8").replace("\\", "/")
+        self.assertIn(".tools/run_unittest_with_repo_pythonpath.cmd", script,
+                      "doc-process verifier must route through the repo Python/jsonschema wrapper")
+        for module in (
+            "tests.test_doc_governance_guard",
+            "tests.test_readme_route_row_length",
+            "tests.test_route_doc_ledger_status_consistency",
+        ):
+            self.assertIn(module, script, f"doc-process verifier lost required module: {module}")
+
     # STRUCTURAL minimal-template contract (allowlist, not keyword blacklist — a blacklist is
     # whack-a-mole: alternate wording / another language escapes it). A compliant-zone review-cycle
     # entry's body may contain ONLY these labelled bullets; any free-form paragraph or extra

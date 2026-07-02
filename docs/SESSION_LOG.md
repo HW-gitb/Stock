@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (process-speed B + 用户选 A 输出段间空行 — R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD)
+
+- **Verdict/Action**: PASS + reviewer 提交整片。① B 复审 PASS：Codex 裁 process-speed 段到速核心、guard 加 `assertNotIn` 拒回填 3 软规则、脚本未动、57 OK。② 用户选 A → 我直接在 `AGENTS.md §输出结论规则` 加「三段之间各留一个空行」（cosmetic、user-approved；reviewer 禁令不含治理文档，上轮路由 Codex 卡住改直接做）。两处一并提交。
+- **Required**: R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD → resolved（closure 见 `system_risk_register.md`，单一来源）；空行为 user-directed cosmetic，无 R-ID。
+- **Verify**: `.tools/verify_doc_process.cmd` → 57 OK；空行句已入 `§输出结论规则`；`git diff --check` clean。
+- **Next**: 无（本片已提交）。
+
+## 2026-07-02 — Claude 审查 spec：审查输出段间空行 (→ Codex)
+
+- **Spec (user-requested 2026-07-02)**: `审查` 最终三段输出（`Verdict` / `Required·Optional·Options` / `下一步`）**段与段之间各留一个空行**，便于阅读。改在权威处 `AGENTS.md §输出结论规则`（~L278/L280）——加一句明确「三段之间以空行分隔」；单一来源在此。`§审查输出/落盘短入口`（~L18/L22）与 closeout gate「Reviewer output must follow」（~L371）只引用三段、不与空行规则矛盾，无需改（顺手一致化亦可）。不动 register/SESSION_LOG 落盘结构规则。可选：加一条 guard `assertIn` 钉住该空行句防 rule-text 漂移（非必需，Codex 自行判断）。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `修复` (R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD)
+
+- **Verdict/Action**: fixed；按用户选定 plan B 裁剪 `Process-speed defaults`，只保留验证包 + `.tools/verify_doc_process.cmd` + focused→full 两段式；脚本未改。
+- **Required**: `R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD` fixed pending reviewer；完整 finding/repair/closure 见 `system_risk_register.md`。
+- **Verify**: process-speed focused guard red→green；`.tools/verify_doc_process.cmd` 57 OK。
+- **Pre-Codex self-review**: A-F checked；B ripple=AGENTS/guard/register/SESSION_LOG；C reverse=未恢复 boundary-line/narrow-self-review/provider-live 软规则；independent agent PASS。
+- **Next**: Claude Code：审查 current process-speed defaults trim and commit if PASS。
+
+## 2026-07-02 — Claude 审查 (process-speed shared mechanism — R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD)
+
+- **Verdict/Action**: 机制核心（共享 `.tools/verify_doc_process.cmd`）正确、`57 OK`<1s、无并发风险、无硬编码路径——功能无缺陷。用户选 B：`AGENTS.md §Role split`「Process-speed defaults」段偏宽（提速核心 + 3 条冗余/软规则税），裁到提速核心后再提交。
+- **Required**: R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD — 裁段到速核心（留验证包+脚本+两段式，删 boundary-line / narrow-self-review / provider-live 三条）+ 同步 guard anchors；脚本不动；plan C 不加。完整见 `system_risk_register.md`（单一来源）。
+- **Verify**: `.tools/verify_doc_process.cmd` → 57 OK（0.864s）；段落/guard anchors 直读核对；未提交。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `修复` (process-speed defaults)
+
+- **Verdict/Action**: fixed；按用户要求把 1-6 合并为共享 `Process-speed defaults`，固化到 `AGENTS.md §Role split and command ownership`，并新增 `.tools/verify_doc_process.cmd`。
+- **Required**: 无新 R-ID；这是用户直接要求的流程提速机制，不新增 `system_risk_register.md` finding。
+- **Verify**: process-speed guard red→green；role-swap guard仍绿；`.tools/verify_doc_process.cmd` 57 OK。
+- **Pre-Codex self-review**: A-F checked；B ripple=只触及 AGENTS/guard/.tools/SESSION_LOG，无业务代码；C reverse=未把 provider/live/DataHub/production/broker/automatic-order 变成默认扫描；independent agent PASS。
+- **Next**: Claude Code：审查 current process-speed defaults + verify_doc_process script and commit if PASS。
+
 ## 2026-07-02 — Claude 审查 PASS (role-swap slice 收口 — R-ROLESWAP-CURRENT-STALE-ROLE-BINDING · R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP)
 
 - **Verdict/Action**: PASS，reviewer 收口提交整片（用户援引 auto-commit-on-PASS 规则放行原 `先别提交`）：AGENTS/AI_REVIEW_PROTOCOL/README/CURRENT 角色对调 + CURRENT 旧绑定修正 + 用户批准的 1 行 protocol gate（§Role split，钉进现有 role guard）+ 两轮 scope-creep（Options/Optional、命令批量）已剥离。

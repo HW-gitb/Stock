@@ -277,7 +277,7 @@ Stock/
 
 ## 输出结论规则
 
-**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 reviewer/committer PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Codex：Pass`、`Codex：修复`、`Codex：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 reviewer/committer 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Codex：提交`；Codex 只负责实现/修复。没有对应内容时写“无”。
+**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 reviewer/committer PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。**三段之间各留一个空行，便于阅读。**必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Codex：Pass`、`Codex：修复`、`Codex：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 reviewer/committer 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Codex：提交`；Codex 只负责实现/修复。没有对应内容时写“无”。
 
 面向用户输出结论时，必须先给**简单、清晰、可行动的结果**，再给必要依据。不要先堆专业术语、内部流程、文件名或审查细节。
 
@@ -324,6 +324,8 @@ Command binding is determined by who the user is addressing:
 Codex must use `using-superpowers` when available before `执行` / `修复` to enter the correct workflow. Codex must run an independent agent self-review before handing work to Claude Code for `审查`, then record the short proof in the handoff entry. The rule is: handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat; final chat should not repeat long operational commands unless the user asks.
 
 Protocol / guard additions require an explicit user request or a reviewed finding; no unilateral process hardening.
+
+Process-speed defaults (user-requested 2026-07-02): both LLMs save time by sharing fixed verification packs, without treating these defaults as new authorization. Use `docs/process` = focused guard first, then `.tools/verify_doc_process.cmd` before handoff / review / commit; schema = schema focused test + direct bad-input probe + adjacent consumer when touched; US-short offline engine = focused + adjacent consumers + full offline `*us_short*`. Two-stage verification is allowed: focused first, then the required full pack before claiming done.
 
 ## Codex adversarial review standard
 
