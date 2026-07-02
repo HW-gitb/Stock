@@ -112,7 +112,10 @@ def _select_top15(admitted_candidates, selection_inputs):
             % (sorted(admitted_set - set(scores)), sorted(set(scores) - admitted_set)))
 
     state = selection_inputs["theme_opportunity_state"]
-    seats = selection_seats(state if isinstance(state, str) else None)
+    if type(state) is not str:
+        raise WeekendPipelineError(
+            f"selection_inputs.theme_opportunity_state 须为 exact str: {type(state).__name__}")
+    seats = selection_seats(state)
     target_total = min(SELECTION_SEAT_TOTAL, len(admitted_candidates))
     core_rank = sorted(admitted_candidates, key=lambda t: (-scores[t]["core_score"], t))
     theme_rank = sorted(admitted_candidates,

@@ -183,10 +183,10 @@ class RunSelectionTests(unittest.TestCase):
         with self.assertRaises(wp.WeekendPipelineError):
             self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}, selection_inputs=bad))
 
-    def test_malformed_theme_state_fails_closed_to_no_strong_split(self):
+    def test_malformed_theme_state_fails_closed(self):
         si = _selection_inputs(["AAPL"], state=["strong"])
-        out = self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}, selection_inputs=si))
-        self.assertEqual(out["selection_seats"], {"core_top": 12, "theme_momentum": 3})
+        with self.assertRaises(wp.WeekendPipelineError):
+            self._run(_dc([_univ_row("AAPL")], pass2={"AAPL": {}}, selection_inputs=si))
 
     def test_holdings_forced_in_with_veto_surfaced(self):
         dc = _dc([_univ_row("AAPL")], holdings=[{"ticker": "GOOG", "signals": {"delisted": True}}],

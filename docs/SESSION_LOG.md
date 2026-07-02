@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (US-short selection theme_state fail-closed + context-builder PYTHONPATH)
+
+- **Verdict/Action**: PASS + reviewer 提交整片（4 文件：engine + 2 test + SESSION_LOG）。① `_select_top15` 对 `theme_opportunity_state` 非 str 改 `type(state) is not str: raise`——与本模块 per_ticker/pass2/holdings 全 fail-closed 惯例对齐、idiomatic exact-str（拒 hostile 子类）；设计权威 line76「未知→12+3」是**词表(值)域**，`selection_seats` 对未知 str/None/int 仍降级 12+3（未改、engine 层 `test_unknown_state_fails_closed_to_no_strong_split` 仍守），非 str **类型**属结构性违约、raise 不违设计（defense-in-depth：引擎宽容/消费者严格）。② 子进程测试助手保留 wrapper `PYTHONPATH`（ROOT 前置 + 追加既有 .tools/python_libs）→ 子进程能 import jsonschema、根治跨 env ACCOUNT_INVALID；test-harness only。
+- **Required**: 无（Codex in-round fixed、无新增 register 条目）。Optional 非阻塞：seat 设计 doc line76 可加一句区分「未知 str 值→12+3 / 非 str 类型→consumer raise」。
+- **Verify**: 亲跑 lane 全包 `discover -p test_us_short*.py` 3479 OK；focused weekend_pipeline+context_builder 49 OK；ripple 旧测试名 0 残留；`git diff --check` 仅 CRLF；3 文件无 BOM；未知 str→12+3 engine 层测试仍绿。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `执行` (US-short selection state fail-closed + context-builder subprocess PYTHONPATH)
+
+- **Verdict/Action**: fixed two offline US-short engineering guards. `_select_top15` now rejects non-exact-string `selection_inputs.theme_opportunity_state` instead of silently falling back to default seats. The batch4 context-builder subprocess test helper now preserves wrapper-provided `PYTHONPATH`, so child processes can import repo-local `jsonschema`.
+- **Required**: 无；Register: fixed in-round, no new R-ID. Scope stayed offline US-short validation/test harness only; no provider/live/DataHub/production/broker/order/A-share/A-long/US-long change.
+- **Verify**: red first selection-state test failed with `WeekendPipelineError not raised`; after patch focused green. Red first context-builder subprocess test failed `ACCOUNT_INVALID`; after helper patch context-builder 20 OK. Fixed packs: weekend_pipeline 29 OK; score seam/schema 16 OK; route guards 25 OK; full offline `discover -p test_us_short*.py` 3479 OK, skipped 1; py_compile/diff-check/encoding clean (CRLF warnings only).
+- **Pre-Codex self-review**: A-F/B2 checked by main-thread fallback; no subagent spawned because current tool policy requires explicit user authorization for subagents. Ripple grep found 0 old selection-state/PYTHONPATH forms; route-doc single-state unchanged; fixed pack ran once after code/test edits.
+- **Next**: Claude Code：审查当前 US-short offline validation/test-harness diff，PASS 后提交。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (review-completeness selective guard + scope gate — 低害版)
 
 - **Verdict/Action**: PASS + reviewer 提交整片。Codex 交付即低 downside 版：AGENTS 加 item 16d（复发完整性遗漏才为该确切 material 类窄焊 + planted-failure，明禁 repo-wide 扩张/always-on 审查税）+ closeout item 9 冠名 Scope gate（并发/无关脏改动既不进 commit 也不进 PASS verdict）+ 1 个 section-scoped assertIn guard 焊 8 锚点。故意不建「逼每轮跑满 16 步」的 forcing function——那是不可机器验证/可糊弄/打架 minimal-template 的高 downside 物，正合「缺点太大则不做」。

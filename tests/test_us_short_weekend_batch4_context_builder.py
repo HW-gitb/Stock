@@ -51,7 +51,11 @@ def _account(positions) -> dict:
 
 
 def _run(cmd):
-    env = {**os.environ, "PYTHONPATH": str(ROOT)}
+    existing_pythonpath = os.environ.get("PYTHONPATH")
+    pythonpath_parts = [str(ROOT)]
+    if existing_pythonpath:
+        pythonpath_parts.append(existing_pythonpath)
+    env = {**os.environ, "PYTHONPATH": os.pathsep.join(pythonpath_parts)}
     return subprocess.run([sys.executable, *cmd], cwd=str(ROOT), env=env, capture_output=True, text=True)
 
 
