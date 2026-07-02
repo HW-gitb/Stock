@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stock.local/schemas/us_short_seam_catalyst_binding.schema.json",
+  "title": "US-short Cut 6-c catalyst scoring-seam binding",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "schema_version",
+    "owner",
+    "design_authority",
+    "producer_refs",
+    "consumer_ref",
+    "identity_policy",
+    "projection_policy",
+    "input_contract",
+    "output_contract",
+    "authorization_boundary"
+  ],
+  "properties": {
+    "artifact_id": { "const": "us_short_seam_catalyst_binding_20260702" },
+    "schema_version": { "const": "1.0.0" },
+    "owner": { "const": "US-short batch5 Cut 6-c catalyst scoring seam" },
+    "design_authority": { "const": "docs/us_short_system_design.md section 4.2" },
+    "producer_refs": {
+      "const": [
+        "engine/us_short_catalyst_source.py::resolve_catalyst_signals",
+        "engine/us_short_catalyst.py::catalyst_block"
+      ]
+    },
+    "consumer_ref": { "const": "batch4 score composer -> score_blocks['catalyst'] -> engine/us_short_core_score.py" },
+    "identity_policy": { "const": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only" },
+    "projection_policy": { "const": "validated_source_result_then_catalyst_block_then_target_projection" },
+    "input_contract": {
+      "type": "object",
+      "required": [
+        "source_result_required_keys",
+        "signal_value_date_pairs",
+        "provenance_required_fields",
+        "score_ready_coverage_status",
+        "score_ready_parser_status",
+        "numeric_value_policy",
+        "block_value_domain"
+      ],
+      "properties": {
+        "source_result_required_keys": {
+          "const": [
+            "signals",
+            "provenance",
+            "excluded"
+          ]
+        },
+        "signal_value_date_pairs": {
+          "const": {
+            "earnings_surprise_pct": "earnings_report_date",
+            "analyst_revision_net": "analyst_revision_date",
+            "event_8k_class": "event_8k_date",
+            "semantic_advisory_score": "semantic_advisory_date"
+          }
+        },
+        "provenance_required_fields": {
+          "const": [
+            "coverage_status",
+            "endpoint_or_filing_type",
+            "lineage_ref",
+            "observed_at",
+            "parser_status",
+            "provider_id",
+            "source_as_of"
+          ]
+        },
+        "score_ready_coverage_status": { "const": "full" },
+        "score_ready_parser_status": { "const": "ok" },
+        "numeric_value_policy": { "const": "catalyst_block_owns_value_validation" },
+        "block_value_domain": { "const": [0.0, 100.0] }
+      },
+      "additionalProperties": false
+    },
+    "output_contract": {
+      "type": "object",
+      "required": ["required_keys", "coverage_dispositions", "neutral_fill_note"],
+      "properties": {
+        "required_keys": {
+          "const": [
+            "catalyst_block_by_ticker",
+            "neutral_fill_tickers",
+            "coverage",
+            "target_count",
+            "scored_count"
+          ]
+        },
+        "coverage_dispositions": {
+          "const": [
+            "scored_realized_catalyst",
+            "neutral_no_realized_catalyst",
+            "neutral_source_excluded",
+            "neutral_missing_catalyst_source"
+          ]
+        },
+        "neutral_fill_note": {
+          "const": "Targets without a realized score-ready catalyst value are omitted from catalyst_block_by_ticker and listed in neutral_fill_tickers so the composer can apply the core_score neutral-block rule."
+        }
+      },
+      "additionalProperties": false
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "required": [
+        "provider_call",
+        "live_data",
+        "datahub_write",
+        "production_runner",
+        "broker_or_order_execution"
+      ],
+      "properties": {
+        "provider_call": { "const": false },
+        "live_data": { "const": false },
+        "datahub_write": { "const": false },
+        "production_runner": { "const": false },
+        "broker_or_order_execution": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

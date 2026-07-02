@@ -1,0 +1,62 @@
+{
+  "artifact_id": "us_short_seam_catalyst_binding_20260702",
+  "schema_version": "1.0.0",
+  "owner": "US-short batch5 Cut 6-c catalyst scoring seam",
+  "design_authority": "docs/us_short_system_design.md section 4.2",
+  "producer_refs": [
+    "engine/us_short_catalyst_source.py::resolve_catalyst_signals",
+    "engine/us_short_catalyst.py::catalyst_block"
+  ],
+  "consumer_ref": "batch4 score composer -> score_blocks['catalyst'] -> engine/us_short_core_score.py",
+  "identity_policy": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only",
+  "projection_policy": "validated_source_result_then_catalyst_block_then_target_projection",
+  "input_contract": {
+    "source_result_required_keys": [
+      "signals",
+      "provenance",
+      "excluded"
+    ],
+    "signal_value_date_pairs": {
+      "earnings_surprise_pct": "earnings_report_date",
+      "analyst_revision_net": "analyst_revision_date",
+      "event_8k_class": "event_8k_date",
+      "semantic_advisory_score": "semantic_advisory_date"
+    },
+    "provenance_required_fields": [
+      "coverage_status",
+      "endpoint_or_filing_type",
+      "lineage_ref",
+      "observed_at",
+      "parser_status",
+      "provider_id",
+      "source_as_of"
+    ],
+    "score_ready_coverage_status": "full",
+    "score_ready_parser_status": "ok",
+    "numeric_value_policy": "catalyst_block_owns_value_validation",
+    "block_value_domain": [0.0, 100.0]
+  },
+  "output_contract": {
+    "required_keys": [
+      "catalyst_block_by_ticker",
+      "neutral_fill_tickers",
+      "coverage",
+      "target_count",
+      "scored_count"
+    ],
+    "coverage_dispositions": [
+      "scored_realized_catalyst",
+      "neutral_no_realized_catalyst",
+      "neutral_source_excluded",
+      "neutral_missing_catalyst_source"
+    ],
+    "neutral_fill_note": "Targets without a realized score-ready catalyst value are omitted from catalyst_block_by_ticker and listed in neutral_fill_tickers so the composer can apply the core_score neutral-block rule."
+  },
+  "authorization_boundary": {
+    "provider_call": false,
+    "live_data": false,
+    "datahub_write": false,
+    "production_runner": false,
+    "broker_or_order_execution": false
+  }
+}

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-c catalyst scoring seam)
+
+- **Verdict/Action**: PASS + reviewer 提交整片。`project_catalyst_block` 正确：catalyst 是逐票规则分非横截面百分位→无 pool-basis 问题(与 theme/momentum 不同、正确);consumer-validation 从 `us_short_catalyst_source` import 源契约常量单源三角化(signals/provenance/excluded/catalyst_result 全校验、lineage source-bound、score-ready 门、neutral⟺realized 一致);hostile str-subclass(eq-bomb)被 exact-str 在比较前拦下;real-producer positive control 四态覆盖;schema-first const-pin。无 code 缺陷。
+- **Required**: 无。Optional(非阻塞):real-producer positive control 仅跑 4 类信号里的 earnings/analyst 2 类(seam 对 `_SOURCES` 泛型统一、结构覆盖已足),可后续补 8k/semantic。
+- **Verify**: focused seam+schema `14 OK`;邻接 catalyst/catalyst_source/core_score `83 OK`;doc-gov `33 OK`;readme route `11 OK`;独立探针 hostile-target→CatalystSeamError + realized AAPL 70>neutral 50 scored_realized。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `执行` (US-short Cut 6-c catalyst scoring seam)
+
+- **Verdict/Action**: added offline Cut 6-c `project_catalyst_block` seam + binding/schema/tests + thin README route. It validates `resolve_catalyst_signals` output, calls `catalyst_block`, and projects the §4.2 25% catalyst block to targets; realized-only emits a score, while no-realized/source-excluded/missing targets are neutral-omit. Scope stayed offline US-short seam only; no provider/live/DataHub/production/broker/order/A-share path.
+- **Required**: none; no new R-ID and no `system_risk_register.md` update.
+- **Verify**: red first new focused tests failed on missing `engine.us_short_seam_catalyst`; hostile-provenance red failed as raw `RuntimeError` before exact-str repair, then green. Focused seam+schema `14 OK`; adjacent fixed pack `227 OK`; `.tools/verify_doc_process.cmd` `58 OK`; `py_compile` OK; `git diff --check` exit 0 (CRLF warning only); no-BOM/no-FFFD OK. Wide `discover -p test_us_short*.py` is not counted as green because existing batch4 context-builder account examples still fail `ACCOUNT_INVALID` outside this diff.
+- **Pre-Codex self-review / Proof-of-use**: loaded workspace Python and set `STOCK_TEST_PYTHON`; first no-history lightweight self-review timed out at 3 minutes and was closed; restarted narrower self-review returned PASS with no material Required. Module/binding const probe returned all `True`; diff is limited to Cut 6-c files + README row.
+- **Next**: Claude Code：审查当前 Cut 6-c diff，PASS 后提交；不要混入 provider/live/DataHub/production/A-share。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (pre-Codex checklist §0 speed-discipline docs-only)
 
 - **Verdict/Action**: PASS + reviewer 提交。docs-only 给 `pre_codex_self_review_checklist.md` 加 §0 执行速度纪律(固定测试 Python / 窄红绿 / 轻量自审 / 自审限时 / Proof-of-use 速度证据);一致、无害、放按需读的 checklist 而非 always-load AGENTS(与 process-speed 裁剪逻辑一致),且 point 1「不得把私有 runtime 路径写入 tracked wrapper」正好固化本会话踩过的 `.cmd` 坑;未把上轮裁掉的 3 条软规则换位置塞回。无 code/guard/schema 改。
