@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (pre-Codex checklist self-review anti-hang hardening — 清并发)
+
+- **Verdict/Action**: PASS + 提交(清 Codex 并发那摊)。docs-only:checklist §0 加 self-review anti-hang contract(current-diff-only 自审 / 输出 PASS-FAIL / do-not-run-big-packs / 2-3min 限时+restart-once+main-thread fallback / unrelated-dirty-files 标外)+ 对应 guard 锚点测试。一致(refine §0、放按需读 checklist 非 always-load AGENTS)、无害、无 code/schema。
+- **Required**: 无。
+- **Verify**: `tests.test_doc_governance_guard` 34 OK(含新 `test_pre_codex_checklist_pins_self_review_anti_hang_contract`);`git diff --check` clean。
+- **Next**: Claude Code：建 review-completeness 选择性焊 + scope 门
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-d score composer repair — R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP)
 
 - **Verdict/Action**: PASS + reviewer 提交 6d slice。两处 Required 全闭:real-producer positive control 真跑三 seam→composer→`analyze_rows`(scored+absent);value_key 改 runtime 从各 seam `OUTPUT_KEYS[0]` 派生(硬编码消失、改名自动传播)+ binding-conformance 三角化全链。只提交 6d slice;Codex 的 process-doc anti-hang WIP(checklist+guard)是独立 scope、不混入。

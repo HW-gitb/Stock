@@ -836,6 +836,19 @@ class DocGovernanceGuard(unittest.TestCase):
     CHECKLIST_BODY_ANCHORS = ("零残留", "字符串字面量", "test_", "全仓 guard",   # B body
                               "单一来源", "planted-failure", "靠人记",
                               "活跃设计文档")                                   # B2 body
+    CHECKLIST_SELF_REVIEW_SPEED_ANCHORS = (
+        "self-review anti-hang contract",
+        "current-diff-only",
+        "fork_context=false",
+        "PASS / FAIL",
+        "do not run big packs",
+        "2-3 minutes",
+        "close and restart once",
+        "second timeout",
+        "do not keep waiting",
+        "main-thread checklist fallback",
+        "unrelated dirty files",
+    )
     # Body phrases that MUST NOT reappear in AGENTS item 7. Naming a rule ("B ripple-grep") is fine;
     # restating its body is the AGENTS<->checklist drift this refactor eliminates.
     AGENTS_ITEM7_FORBIDDEN_BODY = ("零残留", "defect-class", "靠人记", "planted-failure")
@@ -853,6 +866,14 @@ class DocGovernanceGuard(unittest.TestCase):
             self.assertIn(h, cl, f"checklist lost gate section: {h}")
         for kw in self.CHECKLIST_BODY_ANCHORS:
             self.assertIn(kw, cl, f"checklist lost load-bearing anchor: {kw}")
+
+    def test_pre_codex_checklist_pins_self_review_anti_hang_contract(self):
+        # User-requested 2026-07-02: the independent self-review must stay lightweight and bounded.
+        # This is intentionally pinned in the checklist, not AGENTS, so future execution speed does
+        # not rely on chat memory and does not reintroduce a second rule body.
+        cl = self.PRE_CODEX_CHECKLIST.read_text(encoding="utf-8")
+        for anchor in self.CHECKLIST_SELF_REVIEW_SPEED_ANCHORS:
+            self.assertIn(anchor, cl, f"checklist lost self-review anti-hang anchor: {anchor}")
 
     def test_agents_item7_points_to_checklist_and_does_not_restate(self):
         # AGENTS item 7 must be a mandatory pointer (checklist path + 必读必走 + Proof-of-use) and
