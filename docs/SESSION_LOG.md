@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS (Codex jsonschema wrapper/guard 复审收口 — R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT)
+
+- **Verdict/Action**: PASS；复审 Codex 对 `R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT` 的修复，精确对齐 Required repair：坏的「`.tools/python_libs` 在 ambient sys.path」断言换成「`import jsonschema` 可导入 + Draft7Validator」+ 隔离 `python -S` 子进程验 vendored fallback；wrapper 路由 guard 另断言 `.cmd` 无 `-ExecutionPolicy Bypass`/无硬编码 runtime 路径。用户令「没意见就提交」→ 本轮提交整批（`.tools/*.cmd` + AGENTS §3/§5 + guard + finding resolved + 本 review-cycle 记录）。
+- **Required**: 无；`R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT` → resolved（closure 证据见 `system_risk_register.md`）。reviewer-role 角色边界为记录性 process note、非阻断（用户已授权提交本批）。
+- **Verify**: `python tests/test_doc_governance_guard.py` → 30 OK（原 29 / 1 FAILED 已转绿）；Cut 6-a focused seam+schema 62+21 OK 不受影响；`git diff --check` CRLF-only。
+- **Next**: 提交本批；后续接缝刀 Cut 6-b 赛道投影等 + provider/live/DataHub/production 仍 gated。
+
+## 2026-07-02 — Codex `修复` (jsonschema wrapper guard syspath overstrict)
+
+- **Verdict/Action**: 修复 `R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT`；review finding 成立，guard 从强制 `.tools/python_libs` 在 ambient `sys.path` 改为只断言 `jsonschema` 可导入，vendored fallback 改用隔离 `-S` 子进程验证。
+- **Required**: `R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT` fixed pending reviewer；完整 repair 细节见 `system_risk_register.md`。
+- **Verify**: user Python smoke `2 OK`；user Python doc-governance `30 OK`；wrapper doc-governance `30 OK`；representative schema `21 OK`；AGENTS/.tools 无 Codex runtime / `ExecutionPolicy Bypass` / old `.ps1` 引用；diff-check CRLF-only。
+- **Pre-Codex self-review**: A-F checked；class=ambient import vs vendored fallback 分离；B ripple 覆盖 AGENTS/wrapper/guard；C reverse 覆盖 global-jsonschema 与 `-S` vendored fallback；E 只更新 SESSION/register 当前态。Tests passing ≠ design closure。
+- **Next**: Claude Code：审查这批 wrapper/guard/AGENTS 修复并提交。
+
+## 2026-07-02 — Claude 审查 FAIL (Codex 未提交 WIP — jsonschema test-wrapper + doc-governance guard)
+
+- **Verdict/Action**: FAIL；用户令审查 Codex 刚做的**未提交**改动（jsonschema test-wrapper 批：`.tools/run_unittest_with_repo_pythonpath.cmd` 重写 + AGENTS §3/§5 指向 wrapper + doc-governance guard 新增）。不改代码、不提交（这批在飞、本会话已见 3 个版本）。核心缺陷：新 guard `test_jsonschema_imports_from_repo_pythonpath` 在正常 `python -m unittest`（jsonschema 全局装）下**必挂** → 整个 doc-governance 套件红、会连累 `.githooks/pre-commit`。`.cmd` 重写本身是改进（去掉了 `-ExecutionPolicy Bypass` + 硬编码 Codex runtime 路径）。
+- **Required**: `R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT` — 完整 finding/风险/边界/repair + reviewer-role 角色边界 process note 见 `system_risk_register.md`（单一来源）。整类=guard 应断言「jsonschema 可 import」（真需求），非「`.tools/python_libs` 必在 sys.path」；全局装的 jsonschema 须满足；别强制所有测试走 wrapper。
+- **Verify**: `python tests/test_doc_governance_guard.py` → 29 tests / 1 FAILED（仅 `test_jsonschema_imports_from_repo_pythonpath`：`import jsonschema` 从全局 site-packages 成功、但 `.tools/python_libs` 不在 sys.path）；Cut 6-a focused seam+schema 62+21 OK 不受影响；未提交、未改任何代码。
+- **Next**: 用户定——① 修这条 guard（改为断言可导入）转绿后再提交整批；或 ② 等 Codex 把这块弄稳定绿再审+提交；并裁决审查方 Codex 改 AGENTS/tooling 的角色边界。
+
 ## 2026-07-02 - Codex 复审 PASS (US-short batch5 Cut 6-a momentum projection seam)
 
 - **Verdict/Action**: PASS; 仅复审 Cut 6-a engine/binding/schema/tests/route，residual A/B 已闭合；不混入 Cut 6-b~6-g、provider/live/DataHub/production 或其他市场。

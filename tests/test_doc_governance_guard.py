@@ -10,7 +10,10 @@ historical review records that legitimately mention old counts never false-posit
 """
 from __future__ import annotations
 
+import os
 import re
+import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -789,6 +792,77 @@ class DocGovernanceGuard(unittest.TestCase):
         # planted-failure control: the detector is real, not a no-op regex
         self.assertTrue(self._USSHORT_COUNT_RE.search("| US-short foo … Tests (42): 10 eval | path us_short |"),
                         "detector must catch a reintroduced Tests (N) count")
+
+
+    def test_schema_tests_are_routed_through_repo_pythonpath_wrapper(self):
+        # The repo carries `.tools/python_libs/jsonschema`; future agents must not rediscover the same
+        # missing-jsonschema failure by running schema/project tests through a bare Python environment.
+        launcher = ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd"
+        self.assertTrue(launcher.exists(), "missing cmd launcher for the repo unittest wrapper")
+        launcher_script = launcher.read_text(encoding="utf-8")
+        normalized_script = launcher_script.replace("\\", "/")
+        for forbidden in ("codex-runtimes", "codex-primary-runtime", "-ExecutionPolicy Bypass"):
+            self.assertNotIn(forbidden, normalized_script,
+                             f"shared unittest wrapper must not require environment-private machinery: {forbidden}")
+        for anchor in (
+            "PYTHONPATH",
+            ".tools/python_libs",
+            "jsonschema",
+            "STOCK_TEST_PYTHON",
+            "%LOCALAPPDATA%/Programs/Python/Python*",
+            "%LOCALAPPDATA%/Programs/Python/Launcher/py.exe",
+            "-m unittest",
+        ):
+            self.assertIn(anchor, normalized_script, f"wrapper lost required test-runtime anchor: {anchor}")
+
+        agents = AGENTS.read_text(encoding="utf-8").replace("\\", "/")
+        self.assertIn(".tools/run_unittest_with_repo_pythonpath.cmd", agents,
+                      "AGENTS must name the canonical unittest wrapper launcher")
+        self.assertIn(".tools/python_libs", agents,
+                      "AGENTS must name the repo-local Python dependency directory")
+        self.assertIn("STOCK_TEST_PYTHON", agents,
+                      "AGENTS must document the explicit Python override for environments without python on PATH")
+        self.assertIn("%LOCALAPPDATA%/Programs/Python/Python*", agents,
+                      "AGENTS must document the common Windows user-install Python fallback")
+        self.assertIn("do not accept silent schema-skip behavior", agents,
+                      "AGENTS lost the no-silent-schema-skip rule")
+
+        env = os.environ.copy()
+        env["STOCK_TEST_PYTHON"] = sys.executable
+        result = subprocess.run(
+            [str(launcher), "tests.test_doc_governance_guard.JsonschemaImportSmoke"],
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+
+class JsonschemaImportSmoke(unittest.TestCase):
+    def test_jsonschema_is_importable(self):
+        import jsonschema
+
+        self.assertTrue(hasattr(jsonschema, "Draft7Validator"),
+                        "jsonschema import must expose Draft7Validator")
+
+    def test_repo_pythonpath_fallback_imports_without_site_packages(self):
+        repo_libs = str((ROOT / ".tools" / "python_libs").resolve())
+        env = os.environ.copy()
+        env["PYTHONPATH"] = repo_libs
+        result = subprocess.run(
+            [sys.executable, "-S", "-c", "import jsonschema; print(jsonschema.__file__)"],
+            cwd=str(ROOT),
+            env=env,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            timeout=30,
+        )
+        self.assertEqual(result.returncode, 0, result.stdout)
+        self.assertIn(str(Path(repo_libs)).casefold(), result.stdout.casefold())
 
 
 if __name__ == "__main__":
