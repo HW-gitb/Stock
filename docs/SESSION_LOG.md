@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-07-02 — Claude 修复 + 自审 PASS + 提交 (US-short data_context seam deferral/schema-first reconciliation — docs-only)
+
+- **Verdict/Action**: 用户确认 supersede(简单文档同步)+ 授权自修自审。docs-only reconcile 2 条 register 项：① SEAM-MISSING Status/DEFERRED 注改为「离线 selection-stage 半已建、deferral SUPERSEDED(2026-07-02)、余 live 半仍 gated」+ 记 schema-first 由 real-consumer `run_selection` E2E 兜(离线半无需独立 binding) ② 我上轮 finding 翻 resolved。零 code/schema/binding/provider/live 改；提交整片(assembler+test+5 docs)。
+- **Required**: `R-USSHORT-BATCH5-DATA-CONTEXT-ASSEMBLY-DEFERRAL-SCHEMA-FIRST-RECONCILIATION-GAP` → resolved(closure 见 `system_risk_register.md` 单一来源)；同步 reconcile SEAM-MISSING(仍 open、仅剩 live 半)。
+- **Verify**: 整类 grep 证 stale「deferred/unbuilt/gated data_context」仅存 SEAM-MISSING 项(已改)+ append-only 历史 SESSION_LOG(不改历史)；CURRENT/design/README 已 built 无残留、momentum-seam docstring 仅自述准确；doc-governance `35 OK` + readme-route + ledger-consistency 全包 `60 OK` 亲跑；assembler focused `6 OK`；`git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: judge-before-execute：finding 是我上轮自己的、用户已解 deferral、Required 合理在 scope。独立对抗 pass：不适用(docs-only 单轮、非 code/校验/授权/PIT/fail-closed 边界改动)。整类量词化(所有断言 deferred 处，非单条)、reverse-check 未误删历史。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-02 — Claude 审查 FAIL (US-short Batch5→Batch4 data_context source assembly — deferral + schema-first reconciliation)
+
+- **Verdict/Action**: FAIL(未提交)。代码本身对：纯/离线、无 provider/网络调用、validation-heavy 绑真契约(candidate 反伪造 / Cut6-d `OUTPUT_KEYS` / 真 Pass2 / real-consumer `run_selection` E2E)、strip provider clocks/lineage、fail-closed 全到位，focused `6 OK` 亲跑。但**扣 PASS**：此 `assemble_data_context` 正是 OPEN 且**用户已接受 DEFERRED**(2026-06-29)的 `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` 所述离线 seam builder，Codex 未引用/更新该项 + 跳过 register 明令的 schema-first(四条姊妹缝都有 binding、这条没)；CURRENT/design 已先行断言其 built=预判了用户 deferral 决定。
+- **Required**: R-USSHORT-BATCH5-DATA-CONTEXT-ASSEMBLY-DEFERRAL-SCHEMA-FIRST-RECONCILIATION-GAP(P2)—完整 finding/repair/边界见 `system_risk_register.md`(单一来源)。含 ①reconcile SEAM-MISSING 状态(记录离线 selection-stage 半已建、余 provider/live/E2E 仍 gated) ②schema-first：补 binding 或明文改用 real-consumer E2E 并同步 register 措辞。
+- **Verify**: focused `tests.provider.test_us_short_batch5_data_context` `6 OK`(亲跑)；`py_compile` OK；`git diff --check` 仅 CRLF；`git status` 证无 `*_binding_*.json`/`*.schema.json` 随缝；full `*us_short*` 绿跑推迟到 reconcile 后 re-审查(不 clean-PASS 期间不空跑 3479)。
+- **Next**: 用户：确认 2026-06-29 deferral 是否有意 supersede(用户级 scope 决策)；确认后 Codex：修复(reconcile register + schema-first)→ re-审查。
+
+## 2026-07-02 — Codex `执行` (US-short Batch5→Batch4 provider-fed data_context source assembly)
+
+- **Verdict/Action**: added pure/offline `runners/us_short_batch5_data_context.py::assemble_data_context` + focused tests. It validates the Massive+SEC candidate artifact, explicit Pass2 signals, and Cut 6-d score composition before emitting Batch4 runtime `data_context`; provider row clocks/lineage are stripped from universe rows before run_provenance binding. Route docs now mark source assembly done while live Pass2/status-source/DataHub/production remain gated.
+- **Required**: none; no new R-ID. Scope stayed US-short offline source assembly + route docs; no provider call, live fetch, state write, DataHub, production, broker/order, A-share, A-long, or US-long change.
+- **Verify**: red first missing module; focused source-assembly `6 OK`; fixed adjacent pack `199 OK`; doc-process `60 OK`; `py_compile` OK; `git diff --check` CRLF warnings only; touched files no BOM/FFFD; drift grep clean.
+- **Pre-Codex self-review**: main-thread fallback; checked source assembly boundary, no network/API/token usage in new code, provider-fed-unimplemented wording removed, no material Required for `system_risk_register.md`.
+- **Next**: Claude Code：审查当前 US-short Batch5→Batch4 `data_context` source assembly diff，PASS 后提交。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (US-short route-doc Cut 6 seams/context-builder settled-state sync)
 
 - **Verdict/Action**: PASS + reviewer 提交整片（3 docs：CURRENT + us_short_system_design + SESSION_LOG）。docs-only 路由态同步：把 Cut 6-a/b/c/d score-block seams（momentum/theme/catalyst projection + score composer）与 batch4 offline context packet builder/runner 标 settled；provider-fed `data_context`/live Pass2/status-source/DataHub/Skill/production/ship-gate evidence 逐处保留 GATED（SR-PROVIDER-001）。准、gating 全保、CURRENT 无 transient gate 词。
