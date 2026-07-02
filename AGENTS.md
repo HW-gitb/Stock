@@ -21,6 +21,8 @@
 
 屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**大白话只放在前两段**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写一行最简单给另一个 LLM 的命令，如 `Codex：Pass`、`Codex：修复`、`Codex：执行`，不写 `大白话`、不写解释，具体指示放 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后当前 reviewer/committer 自动提交已审查工作树，`下一步` 不再指示 executor/fixer `提交`；executor/fixer 只实现/修复。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
 
+另外，所有对话最终回复都不再另起 `验证结果` / `已验证` / `Verify` / `验证` 段；验证证据写入 `docs/SESSION_LOG.md` / `docs/system_risk_register.md` 或执行产物，需要在聊天说明时只能压成一句内联边界，不作为独立栏目。
+
 若没有写入 SESSION_LOG 极简 entry，当前 reviewer/committer 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
 
 **Route-doc 稳定性约定 (v3)**：**单一 live-state 真相源 = `docs/SESSION_LOG.md` 顶部最新 verdict + artifact 本身**(ledger 的 `tests_spent_count`、`research/results/.../execution_summary.json`)。
@@ -277,7 +279,9 @@ Stock/
 
 ## 输出结论规则
 
-**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 reviewer/committer PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。**三段之间各留一个空行，便于阅读。**必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Codex：Pass`、`Codex：修复`、`Codex：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 reviewer/committer 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Codex：提交`；Codex 只负责实现/修复。没有对应内容时写“无”。
+**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 reviewer/committer PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。**三段之间各留一个空行；每个段落之间也各留一个空行，便于阅读。**必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Codex：Pass`、`Codex：修复`、`Codex：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 reviewer/committer 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Codex：提交`；Codex 只负责实现/修复。没有对应内容时写“无”。
+
+**所有对话最终回复的验证段规则（2026-07-02 用户更新）**：所有对话最终回复都不再另起 `验证结果` / `已验证` / `Verify` / `验证` 段，也不把测试清单作为独立栏目输出。验证证据写入 `docs/SESSION_LOG.md` / `docs/system_risk_register.md` 或执行产物；若必须在聊天里交代，只能作为 `Verdict` 或普通收口句中的一行内联边界，不另起段落标题。
 
 面向用户输出结论时，必须先给**简单、清晰、可行动的结果**，再给必要依据。不要先堆专业术语、内部流程、文件名或审查细节。
 
@@ -322,8 +326,6 @@ Command binding is determined by who the user is addressing:
 - `批准` / `批准修改` is NOT required between a Claude Code `审查` and a Codex `修复`: the user's `修复` directly authorizes repairing the reviewed Required findings, and Codex records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains available only for a standalone approval the user explicitly chooses to record (e.g. a strategic or spend decision); when used, the addressed LLM records it in `docs/SESSION_LOG.md` before proceeding.
 
 Codex must use `using-superpowers` when available before `执行` / `修复` to enter the correct workflow. Codex must run an independent agent self-review before handing work to Claude Code for `审查`, then record the short proof in the handoff entry. The rule is: handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat; final chat should not repeat long operational commands unless the user asks.
-
-Protocol / guard additions require an explicit user request or a reviewed finding; no unilateral process hardening.
 
 Process-speed defaults (user-requested 2026-07-02): both LLMs save time by sharing fixed verification packs, without treating these defaults as new authorization. Use `docs/process` = focused guard first, then `.tools/verify_doc_process.cmd` before handoff / review / commit; schema = schema focused test + direct bad-input probe + adjacent consumer when touched; US-short offline engine = focused + adjacent consumers + full offline `*us_short*`. Two-stage verification is allowed: focused first, then the required full pack before claiming done.
 

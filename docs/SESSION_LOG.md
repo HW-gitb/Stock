@@ -8,6 +8,37 @@
 
 ---
 
+## 2026-07-02 — Claude 提交 (user-directed output-rule 三改 + .cmd revert — R-DOCGOV-WRAPPER-CODEX-RUNTIME-PATH-REGRESSION)
+
+- **Verdict/Action**: 提交 user-directed 输出规则三改（用户令无需审查）：① output-standard「不再单列验证段」用户确认 user-requested→保留;② 删 AGENTS §Role split「协议/guard 变更须显式用户请求」gate 行 + 其 guard assertIn(用户令删,以后 Codex 加的直接复制审查);③ §输出结论规则 空行规则加宽为「每个段落之间也各留一个空行」。另 revert `.tools` wrapper codex-runtimes 私有路径(解提交阻塞)。Cut 6-b theme seam FAIL 不在本批、仍待 Codex 修复。
+- **Required**: R-DOCGOV-WRAPPER-CODEX-RUNTIME-PATH-REGRESSION → resolved(.cmd 还原至 `589b350c`、guard 转绿);D1/D2/D3 为 user-directed 文档改、无新 R-ID;gate 移除关联 R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP(register 跟进注)。
+- **Verify**: `tests.test_doc_governance_guard` 全绿(codex-runtimes FAIL 消 + role-swap guard 去 assertIn 后仍绿 + output-standard 测试留);`git diff --check` clean。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Claude 审查 FAIL (US-short Cut 6-b theme seam + entangled wrapper/output-standard scopes — R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP · R-DOCGOV-WRAPPER-CODEX-RUNTIME-PATH-REGRESSION)
+
+- **Verdict/Action**: FAIL。Cut 6-b theme seam 防御严谨、生产者 key-set 匹配、20+110 OK 无回归;但 §4.2 35% theme block 在 target 子集内重新百分位,与 momentum seam 全池投影基准不一致→core_score 定权合成不可比(A),且无 real-producer positive control(B)。工作树另有 `.tools` wrapper codex-runtimes 私有路径 reddens doc-governance guard(挡提交)+ output-standard 文档独立 scope 待用户授权。未提交。
+- **Required**: R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP(P1/P2)· R-DOCGOV-WRAPPER-CODEX-RUNTIME-PATH-REGRESSION(P2)— 完整 finding/repair/边界见 `system_risk_register.md`(单一来源)。output-standard slice(AGENTS/AI_REVIEW_PROTOCOL/guard 禁独立验证段)非代码缺陷,按 standing gate 待用户确认 user-requested 再单独审。
+- **Verify**: focused seam+schema `20 OK`;邻接 core_score/theme_block/industry_heat/provisional_theme_heat/orthogonalize `110 OK`;`tests.test_doc_governance_guard` 33 中 1 FAIL(codex-runtimes wrapper);生产者 top-level key-set 手工核==seam 校验、不误拒真实输出。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `执行` (output conclusion no standalone verification section)
+
+- **Verdict/Action**: fixed pending Claude review; updated `AGENTS.md` front short entry + `## 输出结论规则` and `docs/AI_REVIEW_PROTOCOL.md` pointer so all final chat replies no longer start a standalone `验证结果` / `已验证` / `Verify` / `验证` section; added doc-governance guard.
+- **Required**: no new R-ID; user-directed output-standard change only. Existing dirty `.tools/run_unittest_with_repo_pythonpath.cmd` with `codex-runtimes` remains outside this slice and blocks full doc-process pack.
+- **Verify**: new guard red→green; focused output-standard guard `1 OK`; related output-rule guards `4 OK`; independent narrow self-review PASS; touched-file no-BOM/no-FFFD OK; scoped `git diff --check` OK (LF/CRLF warnings only).
+- **Pre-Codex self-review / Proof-of-use**: A-F checked; ripple covered AGENTS front + full rule + AI_REVIEW_PROTOCOL pointer + guard; reverse kept SESSION_LOG/register evidence recording intact while removing chat standalone verification section.
+- **Next**: Claude Code：审查当前 output-standard diff；不要混入 Cut 6-b 或 `.tools` dirty diff。
+
+## 2026-07-02 — Codex `执行` (US-short Cut 6-b theme/industry scoring seam)
+
+- **Verdict/Action**: fixed pending Claude review; added offline `project_theme_block` seam + binding/schema/tests + thin README route for §4.2 35% theme block projection. Scope stayed US-short Cut 6-b only; no provider/live/DataHub/production/broker/order path.
+- **Required**: no new R-ID. Independent narrow self-review #1 found bad producer refs (`compute_*` names) → fixed to real callable `industry_heat_block` / `provisional_theme_heat_block` + callable conformance; self-review #2 PASS.
+- **Verify**: focused seam+schema `20 OK`; fixed pack (seam/schema + industry/provisional-theme/theme-block/orthogonalize/core-score + route guards) `155 OK`; schema `test_us_short*` discover `775 OK`; broad `test_us_short*` ran `3442` with 6 known unrelated batch4 `ACCOUNT_INVALID` failures + 1 Windows symlink skip; `git diff --check`, `py_compile`, no-BOM/no-FFFD OK.
+- **Pre-Codex self-review / Proof-of-use**: A-F checklist covered entry/output/schema/validator/consumer/reverse failures; tests prove theme+industry direction, insufficient-theme→GICS fallback, duplicate/normalized identity fail-closed, bad values/hostile containers rejected, producer refs importable, neutral omit and scored theme value both feed `core_score`.
+- **Next**: Claude Code：审查当前 Cut 6-b diff，PASS 后提交；FAIL 则写 Required。
+
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (process-speed B + 用户选 A 输出段间空行 — R-DOCGOV-PROCESS-SPEED-DEFAULTS-OVERBROAD)
 
 - **Verdict/Action**: PASS + reviewer 提交整片。① B 复审 PASS：Codex 裁 process-speed 段到速核心、guard 加 `assertNotIn` 拒回填 3 软规则、脚本未动、57 OK。② 用户选 A → 我直接在 `AGENTS.md §输出结论规则` 加「三段之间各留一个空行」（cosmetic、user-approved；reviewer 禁令不含治理文档，上轮路由 Codex 卡住改直接做）。两处一并提交。

@@ -344,6 +344,26 @@ class DocGovernanceGuard(unittest.TestCase):
         self.assertEqual(self._front_review_output_gaps(real_front), [],
                          "the real AGENTS front entry must satisfy both the three-section and 大白话 gates")
 
+    def test_agents_bans_standalone_verification_result_section_in_final_chat(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        front = "\n".join(text.splitlines()[:60])
+        output_rule = re.search(r"(?ms)^## 输出结论规则.*?(?=^## System risk register discipline)", text)
+        self.assertIsNotNone(output_rule, "AGENTS lost output conclusion rules section")
+        output_section = output_rule.group(0)
+
+        anchors = (
+            "所有对话最终回复",
+            "不再另起 `验证结果`",
+            "`已验证` / `Verify` / `验证`",
+            "验证证据写入 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`",
+        )
+        for anchor in anchors:
+            self.assertIn(anchor, front, f"front output rule lost no-verification-section anchor: {anchor}")
+            self.assertIn(anchor, output_section, f"output rule lost no-verification-section anchor: {anchor}")
+        protocol = AI_REVIEW_PROTOCOL.read_text(encoding="utf-8")
+        self.assertIn("不再另起 `验证结果`", protocol,
+                      "AI_REVIEW_PROTOCOL lost the no-standalone-verification-section pointer")
+
     def test_agents_codex_review_requires_one_pass_defect_matrix(self):
         # User-directed 2026-06-13 correction: Codex review must not drip-feed one issue per
         # round. Pin the rule in the authoritative Codex review standard, not just chat memory.
@@ -397,7 +417,6 @@ class DocGovernanceGuard(unittest.TestCase):
             "Codex must use `using-superpowers` when available before `执行` / `修复`",
             "Codex must run an independent agent self-review before handing work to Claude Code for `审查`",
             "handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat",
-            "Protocol / guard additions require an explicit user request or a reviewed finding; no unilateral process hardening.",
         )
         for anchor in required:
             self.assertIn(anchor, section, f"role-swap contract lost anchor: {anchor}")
