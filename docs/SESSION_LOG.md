@@ -8,12 +8,423 @@
 
 ---
 
+## 2026-07-02 - Codex 修复+重审 PASS (US-short Cut 5 Pass-2 feasibility probe)
+
+- **Verdict/Action**: PASS; 仅修复并全量重审探针四件套与 route/closeout docs。primary/follow-up 共用单一 raw inventory，逐行 PIT 覆盖如实落 schema/summary；不改 Cut 4/Cut 5 producers，不运行 provider/network。
+- **Required**: 无；`R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` 已关闭，完整修复与复审证据见 register。
+- **Verify**: TDD RED 4+2 exact failures → GREEN；focused `81 OK`（1 symlink skip）、全离线 `3344 OK`（同 1 skip）、guards `52 OK`；真实 summary=`3 primary + 2 follow-up, 8 rows / 6 PIT-compatible, all=false`，schema mutants 与 raw/路径/权限/计数 probes 全拒。
+- **Proof-of-use**: 真实 gitignored raw 已离线 reconcile 到 schema `1.1.0` tracked summary；primary 三符号与 q/a 两调用精确对账，真实 8 行只标记 6 行 PIT-compatible，缺时钟行不再伪装 all-present。
+- **Next**: 探针复审 PASS；`.git` 写权限升级因会话用量限制被审批系统拒绝，确认未暂存/未提交，待权限恢复后由 Codex 提交这 7 个限定文件。provider/live/DataHub/production 仍 gated。
+
+## 2026-07-02 - Codex 重审 FAIL (US-short Cut 5 Pass-2 feasibility probe round-3)
+
+- **Verdict/Action**: FAIL; 仅重审探针四件套与现有 gitignored evidence，Cut 4/Cut 5 producers 和其他 lane 排除；不改业务代码、不提交、不运行 provider/network。
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` 仍 open；primary raw 清点与全结果行 PIT 真实性仍未闭合，完整 residual 与修复选项见 register。
+- **Verify**: focused `75 OK`（1 symlink skip）、全离线 `3338 OK`（1 skip）、guards `52 OK`；上轮精确 probes 已关闭，但未知股票 primary artifact、前缀目录/错放 artifact、首行合法后续行坏 PIT 均被接受。真实 q/a 样本各 4 行，完整 PIT 时钟仅各 3 行，builder 仍写 all=true。
+- **Next**: Claude Code: 仅修复探针 round-3 residual，不发起新 provider call。
+
+## 2026-07-02 — Claude `修复` (US-short Cut 5 Pass-2 探针 round-2 residual A+B — 穷举 follow-up 命名空间 + 值校验)
+
+- **Verdict/Action**: 修 Codex 探针 round-2 FAIL（用户令 `修复探针`；判 A+B 正确/在 scope、不 push back）。**A** `_scan_followup_files`（两硬编码名、对未知/改名盲）→ `_inventory_followup_files`：rglob 全部 `massive_financials*`，未授权后缀(`_monthly`)/改名/错扩展/嵌套深度/符号链接/重复 全 fail-closed；default-ttm `massive_financials.json` 认作 primary（不当 follow-up）。**B** `build_followup_execution_block` 校验 filing_date=真 YYYY-MM-DD + acceptance=tz-aware RFC3339 且 ET 归一可存活（语义==Cut5-b 消费者），非仅非空串。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` round-2 residual → fixed pending Codex（register 单源）。整类=follow-up 命名空间穷举拒未授权制品 + PIT 值真实性（非 presence）；schema 无需改（legs A/B 是 builder 命名空间/值检查、schema 看不到，primary 已由 endpoint_manifest 清点）。probe-only、无新 provider call、真 tracked summary 已 offline re-reconcile。
+- **Verify**: focused 探针 `75 OK`（穷举命名空间 + 值校验 + 3 §3.5 mutant）；全离线 `*us_short*` `3338 OK`（deps-complete env，零 us_short 回归）；doc guards `52 OK`；复现 Codex 确切 round-2 探针（`_monthly` 额外文件 + non-date/non-time 值）现全 RAISE；真 tracked summary re-reconcile + schema 过 + 无 secret；py_compile + diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（1 agent ~25 攻）**——两 residual 实质关闭（Codex 确切探针 fail-closed；30 输入 `_valid_ymd`/`_valid_acceptance_instant` vs 消费者零 predicate 分歧）；agent 揪 3 低危边缘（边界年 ET 过认证违「==消费者」/ 非 UTF-8 裸 UnicodeDecodeError 泄漏 / 符号链接子树漏枚举）→本轮全修+测试（边界年 ET 归一可存活镜像消费者、read 捕获 Unicode/OSError、massive 子树拒符号链接）。Tests passing ≠ closure。
+- **Next**: 待 Codex 复审探针 round-3（register 单源）。探针(runner+test) fixed pending、未提交；评审记录 docs(README/SESSION_LOG/register)与 open 探针纠缠、留未提交（Codex 先例）。cut4(`fe1fdefb`)+cut5 四源(`7f84e73`) 已提交。
+
+## 2026-07-02 - Codex 重审 FAIL (US-short Cut 5 Pass-2 feasibility probe round-2)
+
+- **Verdict/Action**: FAIL; 仅重审探针 runner/schema/summary/test，Cut 4/Cut 5 producers 与其他 lane 排除；不改业务代码、不提交、不运行 provider/network。
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` 仍 open；精确调用清点和 PIT 字段真实性仍可绕过，完整 residual 与修复边界见 register。
+- **Verify**: focused `59 OK`、全离线 `3322 OK`、guards `52 OK`；旧四 mutants 已关闭，但额外 periodic 文件与伪日期/时间均被 builder 接受并产出 `call_count=2`。
+- **Next**: Claude Code: 仅修复探针 residual，不发起新 provider call。
+
+## 2026-07-01 — Claude `提交`+`修复` (提交 cut4/cut5 producers · 修复 Pass-2 探针 round-2)
+
+- **Verdict/Action**: 用户令 `提交cut4和cut5.修复探针`。重读 live 态判：Codex 已 PASS cut4 + cut5 四源（但 `.git` 写权限被会话额度拒、Codex 未提交，用户令我代提）、re-FAIL 探针。**提交**：cut4(`fe1fdefb`)+cut5 四源(`7f84e73`) 各自 code-only by-path；评审记录 docs 因与 open 探针纠缠、按 Codex 先例留未提交。**修复探针 round-2**：follow-up 证据改**精确 fail-closed、schema-bound 2-call manifest**。详见 register 单源 Repair-residual。
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` residual → fixed pending Codex（register 单源）。整类=follow-up 证据不可空置/错配/伪造/漏：builder 强制集合恰 {AAPL q, AAPL a}+各 HTTP200+非空 results+filing/acceptance，否则 raise；schema const-pin calls(2)/count/flags + 顶层 `additionalProperties:false`；`periodic_evidence=="follow_up_execution"`⟹require block（cross-field）；reconcile 无条件重派 block + validate-before-write + raw-root 守。
+- **Verify**: focused 探针 `59 OK`（8 builder fail-closed + 9 schema/count/flag/auth mutant）；全离线 `*us_short*` `3322 OK`（零回归）；doc guards `52 OK`；Codex round-2 确切 4 schema mutant + empty-dir builder 全复现拒；真 tracked summary re-reconcile + schema 过 + 无 secret；py_compile + JSON + diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（1 agent ~50 攻）**——builder fail-closed / schema bind / end-to-end reconcile / consistency 四腿全 hold，无 forged/empty/missing/mismatch/extra/failed follow-up 能作为 periodic-PIT 证据存活；agent 2 条纵深加固（reconcile raw-root 对称、massive_financials 闭）均已应用。提交部分：cut4/cut5 code = Codex PASS 原物（§3.5 值守卫已含在 Codex 审的 266 内），by-path 只提 code、docs 留未提。Tests passing ≠ closure。
+- **Next**: 待 Codex 复审探针 round-2（register 单源 Repair-residual）。cut4(`fe1fdefb`)+cut5 四源(`7f84e73`) 已提交；探针(runner+schema+summary+test) fixed pending、未提交；评审记录 docs(README/SESSION_LOG/register)与 open 探针纠缠、留未提交（Codex 先例）。
+
+## 2026-07-01 - Codex 审查 PASS (US-short batch5 Cut 5 offline sources 5-a/5-b/5-c/5-d)
+
+- **Verdict/Action**: PASS; Cut 5 四个 offline producer 独立全量复审通过，与探针、Cut 4 分开判定和提交。
+- **Required**: 无；`R-USSHORT-CUT5-OFFLINE-SOURCES-PIT-DUPLICATE-COVERAGE-AND-AUTH-GAP` 已关闭，完整证据见 register。
+- **Verify**: focused 四源+四 schema `266 OK`；四族 exact-open、checked/provenance、授权/PIT/lineage schema mutants 通过；全离线与 guards 见本轮提交前验证。
+- **Next**: Cut 5 复审 PASS，但 `.git` 写权限升级因会话用量限制被审批系统拒绝，确认未暂存/未提交；待权限恢复后由 Codex 独立提交。live/provider/Pass2/DataHub/production 仍 gated。
+
+## 2026-07-01 - Codex 审查 FAIL (US-short Cut 5 Pass-2 feasibility probe re-review)
+
+- **Verdict/Action**: FAIL; 探针与 Cut 4/Cut 5 producer 分开复审；不提交探针文件，不运行 provider/network。
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` 仍 open；follow-up evidence 可被空置/错配/伪造，完整细节与修复边界见 register。
+- **Verify**: focused `42 OK`，但独立 mutants 证明 empty follow-up、wrong symbol、HTTP 403、额外授权声明均 0 schema error；空 raw 目录可生成合法形状的 0-call block。
+- **Next**: Claude Code: 修复探针，不发起新 provider call。
+
+## 2026-07-01 - Codex 审查 PASS (US-short batch5 Cut 4 catalyst-source full re-review)
+
+- **Verdict/Action**: PASS; 仅 Cut 4 独立全量复审通过，与探针、Cut 5 分开判定和提交。
+- **Required**: 无；`R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` 已关闭，完整证据见 register。
+- **Verify**: focused catalyst-source/binding/catalyst `88 OK`；四源族 09:29:59.999999 接受、09:30 拒绝；策略 schema mutants 均被拒；全离线与 guards 见本轮提交前验证。
+- **Next**: Cut 4 复审 PASS，但 `.git` 写权限升级因会话用量限制被审批系统拒绝，确认未暂存/未提交；待权限恢复后由 Codex 独立提交。live/provider/raw/runner/Pass2/DataHub/production 仍 gated。
+
+## 2026-07-01 — Claude `修复` (US-short Cut 5 四源 + Pass-2 探针 — 两 Codex finding)
+
+- **Verdict/Action**: 修 Codex 两 open finding（用户令 `修复探针和cut5`；判 Required 全合理/在 scope、不 push back）。**四源**(5-a/b/c/d) 一 defect class 修 A/B/C/D：instant 半开时钟(`<09:30 ET`+event≤observed)、source-row 去重(+firm/publisher strip-casefold)、checked-empty coverage record、schema 机器冻结策略+每源 mutation 测试+route row。**探针**：offline `reconcile_summary` 清点 2 follow-up call(distinct、非折进 21)+TTM-vs-periodic 拆分+frozen manifest+真路径+cross-field schema+route row。详见 register 两单源 Repair。
+- **Required**: `R-USSHORT-CUT5-OFFLINE-SOURCES-PIT-DUPLICATE-COVERAGE-AND-AUTH-GAP` + `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` → 均 fixed pending Codex（register 单源 Repair）。四源=一 defect class 四文件独立可审；探针=probe-only 无新 provider call、真 tracked summary 已 offline reconcile（读 gitignored raw、无联网）。
+- **Verify**: focused 四源+四 schema+探针 `308 OK`；全离线 `*us_short*` `3305 OK`（零回归）；doc guards `52 OK`；py_compile+全 cut5 JSON parse+tracked summary 无 secret/domain+`git diff --check` 仅 CRLF；四源 exact-09:30 拒/event-after-obs 排除/dup+whitespace fail-closed/checked-empty/policy-drift schema 错 + 探针 6 planted mutation + 6-probe 敌意值零裸泄漏 全复现。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（3 agent）**——agent C（schema-freeze）PASS 无未冻腿；agent B（探针）端到端无 bypass、schema-alone 残项应用 3 硬化余交 TrackedSummaryTests；**agent A 揪 REAL 整类值泄漏**：四源对外部 str **值** canonical/split/hash/`!r` 仅 isinstance 守→敌意 subclass 裸崩（news canonicalize VALUES=相对 key-only 姊妹偏离）→`type(x) is str` 整类扫全 value 点+每源 HostileValueTests，agent 6 bypass 复现零泄漏。Design flag：dup RAISE 非 dedup；5-a 载 acceptance（漏当日 pre-open 增发=veto false-neg）。Tests passing ≠ closure。
+- **Next**: 待 Codex 复审两 finding（register 两单源 Repair）。Cut1a/2/3a/3b + catalyst residual-3 已提交/待审；本轮四源(engine+binding+schema+test+schema-test)+探针(runner+schema+summary+test)+5 route row，各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `修复` (US-short Cut 4 residual-3 A+B — 半开决策边界 + schema 真冻策略 + `!r` 整类)
+
+- **Verdict/Action**: 修 Codex Cut4 full re-review residual-3（用户令 `修复cut4`；判 A+B 正确/在 scope/必要，不 push back）。**A** observed_at 决策截止改**严格半开** `< 09:30 ET open`（`>`→`>=` 拒恰好 09:30，对齐 resolve_canonical_asof 权威、DST 正确）。**B** binding/schema const-pin 机器策略字段（cutoff 算子+排他/chronology order+relation/emission-fitness full+ok/lineage 格式）+ 三角 engine + 每字段 drift mutant。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` residual-3 A+B → fixed pending Codex（register 单源 Repair）。**§3.5 agent 又揪 `!r` 整类回归**（residual-2-B 最后一腿）：错误消息 `{event_date!r}`/`{as_of!r}` 回显 hostile-`__repr__` 值致裸崩 → 整类扫 catalyst+4 姊妹 ~12 处 `{X!r}`→`{type(X).__name__}`；穷举 5 引擎 ReprBomb 零裸泄漏。
+- **Verify**: focused catalyst_source+binding-schema+catalyst 88 OK；全离线 `*us_short*` 3176 OK（零回归）；guards 52 OK；py_compile+schema JSON+diff-check 仅 CRLF；四源族 09:30-exact 拒 + 策略 drift schema 错 + 穷举 5 引擎 ReprBomb 零裸泄漏 全复现。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent 深审）**——A 半开（DST 正确、== resolve_canonical_asof、微秒边界）+ B（无未冻策略腿、const-flip 挂 conformance/binding-flip 挂 schema）全 clean，但**揪出 `!r` 错误消息整类漏两腿（event_date/as_of，我 type-is-str 收紧后 subclass 落消息触发 `__repr__`）→整类根治**（≈12 处含 4 姊妹）+ 穷举再验。LOW：3 mirror 常量装饰性（behavior 由行为测试另钉、不可利用）已披露。A-clock 姊妹 ET-date 粒度仍 flag follow-up。Tests passing ≠ design closure。
+- **Next**: 待 Codex 复审 Cut 4 residual-3（register 单源）。注：Codex 另 FAIL 了 Cut5 5-a/b/c/d（顶部条目、独立 scope）——本轮姊妹 `!r`/值守卫扫已改其文件、但 Cut5 自身 finding 是另一回事、非本 cut4 轮。Cut1a/2/3a/3b 已提交；catalyst+探针+5-a/b/c/d 待审、未提交本轮。
+
+## 2026-07-01 - Codex 审查 FAIL (US-short Cut 5 offline sources 5-a/5-b/5-c/5-d)
+
+- **Verdict/Action**: FAIL; Cut 5 offline producers were reviewed as their own group after the probe. No business code edited or committed; Cut 4 stayed excluded.
+- **Required**: `R-USSHORT-CUT5-OFFLINE-SOURCES-PIT-DUPLICATE-COVERAGE-AND-AUTH-GAP` is open; complete PIT/data/schema/authorization findings and repair boundary are in `docs/system_risk_register.md` (single source).
+- **Verify**: focused four-producer suites 159 OK; post-open/event-chronology, duplicate, checked-empty, whitespace-identity, and schema/auth mutants reproduced; full offline 3175 retained six unrelated batch4 subprocess failures.
+- **Next**: Claude Code: fix Cut 5 offline sources only.
+
+## 2026-07-01 - Codex 审查 FAIL (US-short Cut 5 Pass-2 feasibility probe)
+
+- **Verdict/Action**: FAIL; the probe was reviewed separately from Cut 5 producers. No business code edited or committed and no provider/network call was run.
+- **Required**: `R-USSHORT-CUT5-PASS2-PROBE-TRACEABILITY-AND-ARTIFACT-BINDING-GAP` is open; complete artifact/call-budget/path/schema findings and repair boundary are in `docs/system_risk_register.md` (single source).
+- **Verify**: focused probe suite 20 OK; tracked schema/secret scan passed, but raw inventory recomputed 23 artifacts vs summary 21 and live-without-auth/bad-time mutants passed schema; route row absent.
+- **Next**: Claude Code: fix the Cut 5 probe only without new provider calls.
+
+## 2026-07-01 - Codex 审查 FAIL (US-short batch5 Cut 4 full re-review)
+
+- **Verdict/Action**: FAIL; only Cut 4 was re-reviewed from current repo files. No business code edited and no commit; dirty Cut 5 siblings were excluded.
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` remains open; complete PIT/schema Required, materiality, scope, and repair boundary are in `docs/system_risk_register.md` (single source).
+- **Verify**: focused Cut 4/catalyst/schema 84 OK; exact-open four-family probes and chronology-schema mutant reproduced; route/doc guards 52 OK; full offline 3172 retained six unrelated batch4 subprocess dependency failures.
+- **Next**: Claude Code: fix Cut 4 only.
+
+## 2026-07-01 — Claude `修复` (US-short Cut 4 residual-2 A+B — instant PIT clock + 整类 provenance-value type)
+
+- **Verdict/Action**: 修 Codex Cut4 residual-2（用户令 `修复cut4`；判 A+B 均正确/在 scope/必要，不 push back）。**A** observed_at YYYYMMDD→tz-aware RFC3339 瞬时 + 决策截止（as_of 09:30 ET，同日盘后观测拒/盘前收）+ 完整时序 event≤observed≤source_as_of≤as_of；binding 加 pit_clock_contract + schema const 三角。**B** provenance 值成员/比较前 type-is-str 守卫。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` residual-2 A+B → fixed pending Codex（register 单源 Repair）。**整类=B 全 provenance 值面**（coverage/parser + provider/endpoint `!=` + source/event/observed/lineage 经 isinstance-validator 放过的 subclass）非只被点名那腿；穷举 7 字段+event_date×6 恶意形态全 CatalystSourceError 零裸泄漏。value_key 值 out-of-scope（catalyst_block 单源）。
+- **Verify**: focused catalyst_source+binding-schema+catalyst 81 OK；catalyst+4 姊妹+schema 200 OK；全离线 `*us_short*` 3172 OK（零回归）；guards 52 OK；py_compile+schema JSON+diff-check 仅 CRLF；穷举值面探针零裸泄漏；A-clock offset/DST/UTC-Z/边界年复现全 fail-closed。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent 深审）**——A-clock/chronology **无 bypass**（ET 归一+09:30 截止+全链跨 offset/DST/UTC-Z/边界年 hold），但**揪出我第一版 B 只修 coverage/parser 一腿、漏 provider/endpoint/source/observed/lineage**（Cut4 反复栽的"修实例不修类"我又犯一次）→整类根治+穷举再验零泄漏。**姊妹整类扫**：同 B 值类在 4 Cut5 姊妹 provenance+news sentiment 一并封（proactive、repo 先例）+各 mutant 测试。**A-clock 瞬时标准姊妹仍 ET-date 粒度**（较松）→ flag 专门 parity follow-up、未在本 Cut4 塞进 4 刀。Tests passing ≠ design closure。
+- **Next**: 待 Codex 复审 Cut 4 residual-2 A+B（register 单源）+ 裁 A-clock 姊妹 parity follow-up。Cut1a/2/3a/3b 已提交；探针/5-a/5-b/5-c/5-d 待审（含本轮姊妹 B 扫改动、一并审）；各刀独立、未提交本轮。
+
+## 2026-07-01 - Codex re-review FAIL (US-short batch5 Cut 4 catalyst-source round-3)
+
+- **Verdict/Action**: FAIL; Cut 4 re-reviewed separately. No business code edited or committed; dirty Cut 5 excluded.
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` remains open in `docs/system_risk_register.md`: decision/source chronology and malformed provenance-value containment are incomplete.
+- **Verify**: focused `79 OK`; direct source-clock and coverage/parser container probes reproduced; guards `52 OK`; pycompile/JSON/diff-check clean. Full `3159` retained six unrelated subprocess dependency failures.
+- **Next**: Claude Code: fix Cut 4 only.
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 5-d — Massive news 源 news binding+parser offline)
+
+- **Verdict/Action**: build-ahead 最后一个免费催化剂通道（Codex 暂不审、日后分刀审/提；用户令继续建）。新 `engine/us_short_massive_news.py`（offline 半）：注入 Massive news → canonical 身份 + ticker-coverage 交叉核对 + PIT（published_utc ET 日期≤as_of + 30 日 recency 窗）+ §3.1 provenance → **取本票专属 insights 情绪**（Massive 自带 per-ticker sentiment ∈ pos/neg/neu、多票文章取本票那条、无匹配/异常→unknown 不伪造、**不用 LLM**）→ §4.2 新闻催化剂 fact + 情绪 tally（net_sentiment/distinct_publishers）+ §5.1b advisory 基础（title/url/reasoning 载给后续读）。frozen binding+schema+const 三角。镜像 fmp_analyst_grades。**探针驱动**：读探针抓的 gitignored raw 证 insights 真带 per-ticker sentiment（10/10）。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（4 文件、独立零重叠）。**scope 裁决（提请确认）**：① 用 Massive 自带 insights sentiment、**不做 LLM 语义判断**（§5.1b 语义/做空报告判断留 gated advisory）；② 多票文章取**本票**那条 insight（非文章级/他票）、无匹配/out-of-enum→unknown 不伪造；③ recency 窗 **30 日**（新闻时效快、比 90 日紧、reviewed prior）；④ ticker-coverage：本票须在 item.tickers（否则误 attribution→raise）；⑤ 只产 fact+tally 不评分、zero in-window→无信号。
+- **Verify**: focused 38 OK；全离线 `*us_short*` 3159 OK（零回归）；py_compile OK；binding schema-validate OK；无 BOM/FFFD、diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent ~50 探针）**：PIT（future/stale/off-by-one 30 日、ET 洗白双向挡、边界年→MassiveNewsError）、per-ticker 情绪不 mis-source、tally/net 不错、ticker-coverage 误 attr raise、triangulation 全 hold。**agent 揪 1 HIGH（不可哈希 sentiment[list/dict]→`in _SENTIMENT_ALLOWED` 抛裸 TypeError 而非 unknown=镜像安全语义漂移，同教训⑫/⑯型）→已修（enum 测试前加 isinstance str 守卫、非 str/不可哈希→unknown）+测试**（agent 注:模块唯一消费未校验外部值的 enum 测试、守它即闭类）。`_et_date` 边界年 OverflowError 守卫一开始就加（吸取 Cut5-c）。B-ripple：新文件+docstring 同步、无下游消费者（wiring gated seam）。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 5-d（4 文件）+ 确认 5 scope 裁决。**Cut5 免费催化剂/审计数据层 offline 全建齐**：探针→5-a 增发审计→5-b 实际报表→5-c 评级→5-d 新闻，均 offline+待 Codex 分刀审。后续=各 live 半（真 fetch+runner，gated SR-PROVIDER-001）+ Pass2/§5.1b advisory/评分 wiring seam。Cut1a/2/3a/3b 已提交、Cut4/Cut5 探针/5-a/5-b/5-c 待审（暂缓）、各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 5-c — FMP grades 评级源 analyst-grades binding+parser offline)
+
+- **Verdict/Action**: build-ahead 下一刀（Codex 暂不审、日后分刀审/提；用户令继续建）。新 `engine/us_short_fmp_analyst_grades.py`（offline 半）：注入 FMP grades → canonical 身份 + symbol 交叉核对 + PIT（date≤as_of + 90 日 recency 窗、observed/source ET 归一）+ §3.1 provenance → **用 FMP 自带 `action` 字段定 direction**（upgrade→up/downgrade→down/其他→neutral，不用脆弱评级排序）→ §4.2 分析师修正方向 + §5.2 集体下调 fact+summary（net/distinct_firms）。frozen binding+schema+const 三角。镜像 massive_financials/offering_audit。**探针驱动**：读 Cut5 探针抓的 gitignored raw 证 action 字段真存在（distinct=upgrade/downgrade/maintain、1771 条回溯 2012 故需窗）。**付费/用户暂缓的数值预期的免费方向代理**。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（4 文件、独立零重叠）。**scope 裁决（提请确认）**：① direction 由 FMP `action` 定、非评级排序（各所口径不一）、未知 action→neutral 不伪造；② recency 窗 90 日；③ PIT=date≤as_of（future 排除、stale out-of-window 计数）；④ symbol present 须 canonical==ticker 键（防误 attribution）；⑤ 只产 fact+summary 不评分（wiring 后续 seam）、zero in-window→无信号。**Optional（agent 揪、提请 Codex 定）**：⒜ distinct_firms 用 gradingCompany 原样（变体虚增）——本刀不评分+FMP 自身归一化、design-defensible；⒝ `_observed_at_et_date` 边界年 OverflowError——**本刀已加守卫（→FmpGradesError）+ 测试**，但 **3 姊妹刀（massive_financials/offering_audit + committed status_source）共享同一 helper 同缺口**、建议专门 class-wide 硬化刀统一修（本刀未扩到改 committed 代码=surgical）。
+- **Verify**: focused 35 OK；全离线 `*us_short*` 3121 OK（零回归）；py_compile OK；binding schema-validate OK；无 BOM/FFFD、diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent ~70 探针）**：伪造方向（未知/大小写 action→neutral、net/distinct 不错）、PIT（future/stale/off-by-one 对、ET 洗白挡）、crash（hostile 全 fail-closed）、symbol 交叉核对（误 attr raise、变体过）、triangulation（含 _default）全 hold。2 LOW：OverflowError（class-wide、本刀已守卫+测试、姊妹刀留 class 刀）、distinct_firms 归一（design-defensible Optional）。judge：未在本刀扩到改 committed status_source（surgical、避 scope creep）。B-ripple：新文件+docstring 同步、无下游消费者（wiring gated seam）。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 5-c（4 文件）+ 确认 5 scope 裁决 + 2 Optional 处置。后续独立刀：Massive news binding（最后一个免费催化剂通道）。Cut1a/2/3a/3b 已提交、Cut4/Cut5 探针/Cut5-a/Cut5-b 待审（暂缓）、各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 5-b — Massive 实际报表源 actual-financials binding+parser offline)
+
+- **Verdict/Action**: build-ahead 下一刀（Codex 暂不审、日后分刀审/提；用户令继续建）。新 `engine/us_short_massive_financials.py`（offline 半）：注入 Massive periodic financials → 单源 canonical 身份 + PIT（filing_date≤as_of=真 10-Q/10-K 公开日、observed/acceptance ET 归一≤as_of、排除 ttm）+ §3.1 provenance → 扁平化绑定 line-item（income/balance/cashflow 真实概念键，负值合法/缺失记录不伪造）→ §4.2 财报实际 fact 层。frozen binding `docs/us_short_cut5_massive_actual_financials_binding_20260701.json`+schema+const 三角。镜像 offering_audit/catalyst_source。**探针驱动非投机**：读 Cut5 探针抓的 gitignored raw + 补 1 次授权 re-probe（timeframe=quarterly/annual 证真实字段结构 + filing_date PIT 真有值、ttm=null 故排除），据真实 shape 建。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（4 文件 engine+binding+schema+test、独立零重叠）。**scope 裁决（提请确认）**：① timeframe 绑 {quarterly,annual}（ttm 排除=null filing_date 无单一 PIT）；② PIT anchor=filing_date（真公开日）非 period_end；③ 绑 13 核心 line-item（revenues/gross_profit/operating/net_income/diluted+basicEPS + assets/liab/equity/current_a/current_l/long_term_debt + operating_cf）；④ 缺概念=记 missing 不伪造/不 zero-fill、坏值(NaN/Inf/bool/串/缺 unit/坏形状 filing_date)=fail-closed raise；⑤ 只产 fact 层不评分（earnings-growth/surprise 是后续 seam；预期半按用户决策留口）。
+- **Verify**: focused 37 OK；全离线 `*us_short*` 3086 OK（零回归）；py_compile OK；binding schema-validate OK；无 BOM/FFFD、diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent ~70 探针）**：伪造/inflate（缺概念不 zero-fill、无跨表 shadow、值=源 float）、crash（~70 hostile 零未捕获异常）、PIT（filing/ET/source 洗白挡、off-by-one 对）、triangulation 全 hold。**agent 揪 1 MED（坏形状 filing_date 被静默排除而非 raise、违 docstring+姊妹刀口径=malformed≠absent 分错，同教训⑫型）→已修整类**（拆 null→exclude / 坏形状→raise / future→exclude、镜像 offering_audit + 8 值 raise 测试）+1 LOW（acceptance_datetime 未 PIT 检查→加 ET≤as_of look-ahead 门+测试）。B-ripple：新文件+docstring 已同步、无下游消费者（wiring 是 gated seam）。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 5-b（4 文件）+ 确认 5 条 scope 裁决。后续独立刀：FMP grades 评级 binding / Massive news binding（各免费可达）。Cut1a/2/3a/3b 已提交、Cut4+Cut5 探针+Cut5-a 待审（暂缓）、各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 5-a — SEC 增发审计源 offering-audit binding+parser offline)
+
+- **Verdict/Action**: build-ahead 下一刀（Codex 暂不审、日后分刀审/提）。新 `engine/us_short_sec_offering_audit.py`（offline 半）：注入 SEC submissions filings → 单源 `canonical_us_ticker` 身份 + PIT（filing_date/source_as_of/observed_at≤as_of、observed_at ET 归一）+ §3.1 provenance → §5.1a `active_offering`{recency,status,materiality=None} 信号喂 `classify_hard_veto`。frozen binding `docs/us_short_cut5_sec_offering_audit_binding_20260701.json`+schema+const 三角。镜像 catalyst_source/status_source。materiality 恒 None（金额需 424B 正文、gated）→ hard_veto recent+active+None→strong_downgrade（没数据≠安全）、非硬否决。真 fetch+runner gated（SR-PROVIDER-001）。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（4 文件 engine+binding+schema+test，与探针/Cut4/已提交刀零重叠、独立审）。**scope 裁决（提请确认）**：① 只做 offering（delisted/8-K/破产已归 status_source/catalyst_source、不重复；S-8 员工股/25-NSE 退市不属增发否决、排除）；② status=active 仅当有近期 424B* takedown（bare shelf=registered_shelf）；③ recency 窗=90 日历日（reviewed 校准 prior、非 alpha）；④ materiality offline 拿不到=None；⑤ **含外国发行人 F-1/F-3/F-3ASR + REIT S-11**（对抗 agent 揪出的覆盖缺口：NYSE/NASDAQ ADR 填 F-3 不是 S-3）。
+- **Verify**: focused 41 OK（含喂 hard_veto：recent 424B→strong_downgrade、recent shelf→soft_tag、stale→soft_tag、F-3→registered_shelf）；全离线 `*us_short*` 3049 OK（零回归）；py_compile OK；binding schema-validate OK；无 BOM/FFFD、diff-check 仅 CRLF。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent ~60 探针）**：安全不变式全 hold——**永不伪造/升级到硬否决**（materiality 恒 None→最高 strong_downgrade、candidate+holding 双验）、PIT/ET 洗白双向挡、hostile 输入 fail-closed、form 家族无 over-match。**agent 揪 1 MED（本土-only 漏外国 F-*/REIT）→已修整类**（加 F-1/F-3/F-3ASR/S-11 + schema+const+三角+4 测同封）+1 LOW（tz 常量未三角→已加 binding+三角+判别测试）；str-subclass 值那条=与 catalyst_source/status_source 同规范、有意保持一致不改。B-ripple：新文件+in-file docstring 已同步、无下游消费者（wiring 是 gated seam）。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 5-a（4 文件）+ 确认 5 条 scope 裁决。后续独立刀（各免费可达、独立可分审）：Massive financials 实际报表 binding / FMP grades 评级 binding / Massive news binding；earnings surprise 预期半按用户决策留口不接。Cut1a/2/3a/3b 已提交、Cut4+Cut5 探针待审（暂缓）、各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 5 — 第二遍 audit-gate + catalyst 数据层可行性探针)
+
+- **Verdict/Action**: 用户授权 SR-PROVIDER-001，先探针再建。新 `runners/us_short_cut5_pass2_feasibility_probe.py`（复用 us_egs_sample_validation）真跑 AAPL/MSFT/NVDA 小样本：SEC submissions §5.1a form-type（增发/8-K/退市/审计）+PIT 日期；FMP earnings-surprises/analyst-estimates/grades；Massive 单票日线；**round-2（用户令"换 Massive/Polygon 再试拿不到的"）加** Massive reference financials/news + benzinga earnings 探路。gitignored raw + tracked 脱敏 schema-validated summary。**只探不建**，SR-PROVIDER-001 仍 open。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（runner+schema+test+summary，与 Cut4 零重叠）。**结果**：SEC 3/3 通（form 全类+PIT）；FMP grades 3/3 通（评级变动）+Massive 单票 OHLCV 通；**Massive financials 3/3 通（4 季实际报表 income/balance/cashflow，但无 top-level filing_date→PIT 靠 SEC filingDate 补）+ Massive news 3/3 通（10 条带 published_utc）**；**"预期"数据两源都无**：FMP earnings-surprises 404/analyst-estimates 400、Massive benzinga earnings 403（付费墙）——earnings surprise 的"预期"半免费源都拿不到，"实际"半有（financials/income-statement）。
+- **Verify**: focused 20 OK；全离线 `*us_short*` 3007 OK（零回归）；py_compile OK；dry-run-env 三 key present/无网络；live 21 calls within_budget；tracked summary 泄漏扫描 0、raw gitignored、summary tracked、无残留测试文件。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑**——round-1 全 agent（~40 mutation+43 pinned flag+15 hostile SEC payload）无 HIGH/MED（泄漏/gate/parser/诚实全 hold、2 LOW fail-safe）。round-2 delta（Massive reference 端点）走同一已验管线（fetch_and_store→gitignored raw→pre-write schema+scan）；针对性对抗：往 news 标题/URL/公司名塞密钥+域名，summary 只发 field_presence bool、值 0 泄漏（real 数据 summary 扫描也 0）。B-ripple：additive、复用 unchanged sample_validation、无消费者。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 5 探针（4 文件）。下一刀=对**免费可达**通道 schema-first binding+parser（SEC 审计 filing PIT + Massive financials 实际报表 + news + 单票价格反应 + FMP grades 评级；镜像 status_source/catalyst_source provenance）。**用户决策（2026-07-01）：earnings surprise 的"预期"半（分析师一致预期/consensus）v1 留接口位不接**——binding schema 该字段可选、默认缺失、标 future-paid-gated；catalyst 引擎已有"缺分量→中性+data_quality 标签"天然吃缺失；付费源 gated 到系统证实可实盘（ship-gate）后再接；建 binding 那刀把此留口写进设计 §13 registry。免费信号照接。Cut1a/2/3a/3b 已提交、Cut4 待审（暂缓）、未提交本轮。
+
+## 2026-07-01 — Claude `修复` (US-short Cut 4 round-3 residual A1/A2/A3/B — chronology/emission/lineage/refs/keys)
+
+- **Verdict/Action**: 修 Codex Cut 4 round-3 复审 A1/A2/A3/B（审查结果 Codex 已写 register；其 SESSION_LOG verdict 因工具额度门待它恢复自补）。**A1** resolve 加 `as_of` + PIT chronology（event≤observed≤as_of、source≤as_of）。**A2** 仅 full+ok emit（其余→`excluded`）+ 结构化 source-bound lineage。**A3** schema const-pin 3 refs（tuple-items）+ as_of + README route row。**B** exact-`str` 键**三面全封**（record + outer ticker + provenance 子dict）。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` round-3 A1/A2/A3/B → fixed pending Codex（register 单源 Repair）。整类：A1 PIT chronology 四源；A2 coverage/parser emission fitness + 结构化 lineage；A3 refs const + as_of const + README；B hostile-key 三面（`type(k) is str`）。值语义仍归 catalyst 引擎；hostile 值 out-of-scope（finding=key、json 值 plain）。
+- **Verify**: focused catalyst_source+binding-schema+catalyst 77 OK；全离线 `*us_short*` 2986 OK（零回归）；guards 52 OK；py_compile + schema JSON 可解析；diff-check 仅 CRLF。复现残留探针：future/observe-before-event chronology 拒；coverage=missing/parser=failed → excluded；free-form lineage 拒；outer/provenance str-subclass 键 fail-closed 不裸崩；forged/dup ref schema 拒。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent）**——判 A1/A2/A3 solid、**揪出我 round-3 又漏的 2 个 hostile-key 面**（outer ticker + provenance 子dict；我只修了 inner record 键=又「修被演示面、没修整类」）→已补齐 3 面全封。B-ripple：resolve/`_canonical_keyed` 无外部消费者、新文件与已提交刀零重叠。Tests passing ≠ design closure。
+- **Next**: 待 Codex 恢复额度补其 SESSION_LOG verdict + 复审 Cut 4 round-3 Repair（register 单源）。Cut1a/2/3b 已提交、各刀独立、未提交本轮。
+
+## 2026-07-01 — Claude `修复` (US-short Cut 4 A+B — schema-first provenance binding + hostile-key 硬化)
+
+- **Verdict/Action**: 修 Codex Cut 4 复审 A+B（用户令 `修复 cut4`、撤回上轮 deferral）。**A**=新冻结 binding + schema（per-source const 用 `allOf` 避 `$ref`-sibling 坑）+ engine 三角；record 须 {value,date,provenance}、emit 前 `_validate_provenance` fail-close（7 字段 exact / provider-endpoint 对齐冻结源 / 双 YYYYMMDD 钟 / 枚举 / lineage）。**B**=`_canonical_keyed` isinstance 验键为 str + 错误不回显敌意键 → non-str/str-subclass repr-bomb 均 CatalystSourceError。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` A+B → fixed pending Codex（register 单源 Repair）。整类=A{binding 冻结+schema+三角 + provenance exact-set/provider-pin/双钟/枚举/lineage、emit 前验} + B{键 type/membership 验、绝不格式化敌意键}。值/PIT 仍归 catalyst 引擎单源；live 具体仍 gated、只冻结 offline 形状。
+- **Verify**: focused catalyst_source+binding-schema+catalyst 74 OK；全离线 `*us_short*` 2983 OK（零回归）；guards 52 OK；py_compile + schema JSON 可解析；diff-check 仅 CRLF。复现残留探针：hostile `__repr__` 键（non-str + str-subclass）→CatalystSourceError（非 raw RuntimeError）；缺/伪 provenance→fail-closed；thin-provenance→现全 §3.1。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent ~50 探针、无 bug）**——五 claim（provenance/身份/hostile-key/binding-schema/契约）全 hold、allOf const 分支 agent 验 load-bearing。两非问题不改（drop-vs-raise 是有意 fail-closed 方向差异；dict-subclass `.items()` bomb out-of-scope + sibling 同、LOW-info）。B-ripple：resolve/`_canonical_keyed` 无外部消费者（grep）、新文件与 3b 零重叠。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 4 A+B（register 单源）。Cut1a/Cut2 已提交、Cut3b 已提交(`55b21c4`)、各刀独立、未提交本轮。
+
+## 2026-07-01 - Codex review FAIL (US-short batch5 Cut 4 catalyst-source offline layer)
+
+- **Verdict/Action**: FAIL; Cut 4 reviewed separately. No business code edited or committed.
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` remains open: A lacks the schema-first PIT/provenance contract; B still leaks a hostile-key raw exception. Full detail is in the register.
+- **Verify**: focused Cut 3b/Cut 4/adjacent `363 OK`; hostile-key and thin-provenance probes reproduced; guards `52 OK`; pycompile/diff-check clean. Full `2965` had six unrelated subprocess dependency failures.
+- **Next**: Claude Code: fix Cut 4 only.
+
+## 2026-07-01 - Codex re-review PASS (US-short batch5 Cut 3b identity/clock repair)
+
+- **Verdict/Action**: PASS; Cut 3b reviewed separately and committed as `55b21c4`.
+- **Required**: none. `R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP` resolved in `docs/system_risk_register.md`; account conversion now delegates to the single ticker identity policy.
+- **Verify**: focused Cut 3b/Cut 4/adjacent `363 OK`; direct ticker triangulation passed; guards `52 OK`; pycompile/diff-check clean. Full `2965` had six unrelated subprocess dependency failures.
+- **Next**: PASS; Cut 3b committed. Cut 4 remains separate and uncommitted.
+
+## 2026-07-01 — Claude `修复` (US-short Cut 3b residual [账户转换器单源] + Cut 4-B [mixed-key TypeError]；Cut 4-A deferred)
+
+- **Verdict/Action**: 修 Codex 两刀复审（ID 见 Required）。**Cut 3b residual**：`runners/us_short_account_state_from_manual_tables.py::_parse_us_ticker` 委托到单源 `canonical_us_ticker`（消除 unicode 折叠分歧的第二身份策略）、删孤儿 `_US_TICKER_RE`、扩 `CanonicalTickerTriangulationTests`。**Cut 4-B**：`_canonical_keyed` 错误 `sorted(v)`→`sorted(map(repr,v))`（mixed key raise CatalystSourceError、非 raw TypeError）。**Cut 4-A（schema-first binding+§3.1 provenance）明确 deferred**。详见 register 单源。
+- **Required**: **Cut 3b** `R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP` residual→fixed pending Codex：账户转换器不留第二身份策略（委托 canonical_us_ticker + 三角测试加 unicode/非串/A股/class-share/case/whitespace 防漂移）。**Cut 4** `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP`：**B fixed pending Codex**；**A STILL OPEN、deferred**（status_source 级 binding、部分耦合 gated live、不赶工防 churn；无消费者故 gap 非 live）。
+- **Verify**: focused 账户转换器+eligibility(三角)+catalyst_source 147 OK；全离线 `*us_short*` 2965 OK（零回归）；guards 52 OK；py_compile + diff-check 仅 CRLF。复现 Codex 探针：`_parse_us_ticker('ſ')`→ConvertError（合引擎 canonical=None）；mixed-key record→CatalystSourceError（非 raw TypeError）。
+- **Pre-Codex self-review**: **独立对抗 pass: N/A**——Cut 3b residual=薄委托到上轮 agent 已破+验的 canonical_us_ticker unicode 拒（身份核心带前轮 agent 证据）+ 三角测试机械防漂移；Cut 4-B=单点 error 格式化。B-ripple：`_parse_us_ticker` 是转换器唯一 US ticker 出口、grep 确认删 `_US_TICKER_RE` 无残留引用；改的是 committed batch1 转换器但仅单源修、full offline 零回归证不破下游。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 3b residual（closed）+ Cut 4-B（B closed）。**Cut 4-A = 聚焦下一刀**（schema-first catalyst-source binding + §3.1 provenance）。Cut1a/Cut2 已提交、各刀独立、未提交本轮。
+
+## 2026-07-01 - Codex review FAIL (US-short batch5 Cut 4 catalyst-source offline layer)
+
+- **Verdict/Action**: FAIL; first clean-slate review of Cut 4 only. No business code edited; no commit.
+- **Required**: `R-USSHORT-CATALYST-SOURCE-PROVENANCE-CONTRACT-AND-MALFORMED-KEY-GAP` open: the claimed provenance layer has no schema-first/PIT-auditable binding, and mixed-type record keys escape as raw `TypeError`. Full detail is in the register.
+- **Verify**: catalyst-source + catalyst `55 OK`; direct provenance trace and mixed-key crash reproduced; route/doc guards `52 OK`; pycompile/diff-check/boundary scans clean. Full `2963` attempt had 6 unrelated failures because this Codex Python lacks `jsonschema`.
+- **Next**: Claude Code: fix Cut 4 only.
+
+## 2026-07-01 - Codex re-review FAIL (US-short batch5 Cut 3b identity/clock repair)
+
+- **Verdict/Action**: FAIL; re-reviewed Cut 3b and its explicit shared canonical-ticker ripple only. Cut 3b-local probes are fixed, but the shared-policy mirror remains divergent. No business code edited; no commit.
+- **Required**: `R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP` remains open: account-state `_parse_us_ticker` still Unicode-folds `ſ/ß/ı` to `S/SS/I` while the shared engine canonicalizer rejects them. Full detail is in the register.
+- **Verify**: focused Cut 3b/shared consumers/account converter `306 OK`; original alias/A-share/theme-ID/clock probes closed; direct Unicode mirror probe reproduced. Guards `52 OK`; pycompile/diff-check clean. Full `2963` attempt had 6 unrelated failures because this Codex Python lacks `jsonschema`.
+- **Next**: Claude Code: fix Cut 3b only.
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 4 offline — catalyst-source 身份+provenance+merge 层)
+
+- **Verdict/Action**: build-ahead 下一刀=新 `engine/us_short_catalyst_source.py`（offline 半）：把注入的 per-source 催化剂载荷（earnings/analyst/8-K/semantic）经**单源 `canonical_us_ticker`** 规范化身份、merge 成 `catalyst_block` 的扁平信号契约、附 per-signal source provenance。值/PIT 语义仍归 catalyst 引擎单源（源层只管 身份+provenance+merge+结构 fail-closed）。新文件+测试、与 3b 零文件重叠（可分刀审）。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审。**契约裁决待确认**：①无 frozen binding（不同于 status_source）、per-source 载荷用引擎自身扁平键名（不 rename）= 提案、Codex 审；②invalid/A股/non-ASCII key **drop**（fail-closed=缺席即 neutral，非 status_source 的 raise[那里缺席即 clean]）；③别名 collision **raise**。offline 不需数据授权（live FMP/SEC fetch + runner 仍 gated、授权先存）。
+- **Verify**: focused catalyst_source 12 OK；全离线 `*us_short*` 2963 OK（零回归）；guards 52 OK；py_compile 通过 + diff-check 仅 CRLF；B-ripple=新文件无下游消费者、import `canonical_us_ticker`（已修 unicode）。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent）**——四 claim（身份伪造/误attr/fail-open/契约匹配）全 hold（unicode/A股/非串/collision 全挡、跨源 merge 正确、端到端喂 catalyst_block 评分正确、drop-invalid 是正确 fail-closed）；仅 1 LOW benign（空/仅日期记录→phantom neutral_fallback 条目）→已加 docstring 说明（无行为改动、属正确「已检查无催化剂」语义）。Pass1 我 B-ripple + 身份镜像 precedent 已核。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 4（+确认契约提案：无 binding / drop-invalid / collision-raise）。Cut1a/Cut2 已提交、Cut3b 待审（用户暂缓）、各刀独立。
+
+## 2026-07-01 — Claude `修复` (US-short 批5 Cut 3b — identity/clock FAIL A/B/C + 独立对抗揪出 unicode 根因)
+
+- **Verdict/Action**: 修 Codex Cut 3b FAIL（ID 见 Required）。**A** member 身份：新 `_canonical_members` 计数前过 `canonical_us_ticker`——invalid/非串/A股 drop 不计、别名 collision raise `ProvisionalThemeHeatError`。**B** theme_id：新 `_canonical_theme_ids` 须非空串+strip 归一+collision raise（灭 mixed-type `sorted()` TypeError）。**C** clock：session/adj 须非空且无首尾空白漂移（`_nonblank_no_drift`）。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP` → fixed pending Codex（register 单源 Repair）。整类=member{canonical-先于计数/拒 invalid-A股/别名 collision raise/仅 unique 贡献} + theme_id{非空串/strip/collision/无 TypeError} + clock{非空无漂移}。裁决：invalid member=drop、collision=raise、theme_id=strip 归一、clock=拒漂移。**跨切**：unicode 根因修在 `canonical_us_ticker`（见 Pre-Codex）。
+- **Verify**: focused provisional 37 OK；消费者(eligibility+provisional+status_source+orchestrator) 241 OK；全离线 `*us_short*` 2951 OK（零回归）；guards 52 OK；py_compile + diff-check 仅 CRLF。复现 Codex 四探针 + agent unicode 探针 全 fail-closed（alias/A股/非串 theme_id/whitespace clock/unicode 折叠 全挡；BRK.B class-share 正控计数）。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（1 agent，揪出我自审漏的 unicode 折叠 crack→根因修）**：`canonical_us_ticker` 先 `.upper()` 后过 ASCII 正则、`'ſ'→'S'` 折叠伪造 ticker、计入伪造成员。**⚠ 跨切根因修**=单源 `eligibility_gate::_canonical_us_ticker` 加 `raw.isascii()`（非 Cut3b 本地补——避免碎片化单一身份策略、一次堵所有消费者含 committed Cut1a/orchestrator），需 Codex 审 ripple；US ticker 全 ASCII、无合法消费者依赖折叠、消费者套件 241 OK 零回归。Tests passing ≠ design closure。
+- **Next**: 待 Codex 复审 Cut 3b Repair + **确认跨切 `canonical_us_ticker` isascii 硬化 ripple**（波及 status_source/orchestrator/candidate/cheap_eligible）。Cut1a/Cut2 已提交、各刀独立。
+
+## 2026-07-01 - Codex review FAIL (US-short batch5 Cut 3b provisional-theme heat PIT layer)
+
+- **Verdict/Action**: FAIL; clean-slate reviewed Cut 3b only. No business code edited; no commit.
+- **Required**: `R-USSHORT-PROVISIONAL-THEME-IDENTITY-AND-CLOCK-VALIDATION-GAP` open: aliases/invalid or cross-market member IDs can fabricate theme confirmation; malformed theme IDs can crash; whitespace-only clock metadata scores. Full evidence is in the register.
+- **Verify**: focused/adjacent `72 OK`; full offline `*us_short*` `2940 OK`; route/doc guards `52 OK`; py_compile/diff-check/boundary scan OK; direct identity, cross-market, mixed-ID, and blank-clock probes reproduced the Required.
+- **Next**: Claude Code: fix Cut 3b only.
+
+## 2026-07-01 — Claude `执行` (US-short 批5 Cut 3b — provisional_theme_heat PIT dated-series 转换 build-ahead)
+
+- **Verdict/Action**: build-ahead 下一刀=把 `engine/us_short_provisional_theme_heat.py` 从旧扁平契约（`{closes,volumes}` + `spy_closes=`）转成 PIT-bearing dated 序列（`{as_of,session,adjustment_mode,points:[{date,close,volume?}]}` + `spy_series=`），镜像 Cut 3a(industry_heat) 组结构+统一时钟门 + Cut 2(momentum) 的 dated 逐点 volume。metric 数学不变。新增 `_parse_dated_series`/`_valid_date`/`ProvisionalThemeHeatError`+统一时钟门；test 全改 dated + 加 PIT/clock 测试。独立成刀（与 Cut2 零文件重叠）。
+- **Required**: 无（build、非 finding 修复）；待 Codex 分刀审查。**两处设计裁决待确认**：① `_vol_surge` 改 tail-only（吃 [float|None]、只查 VOL_SURGE_LONG 尾窗，镜像 momentum、避免 flat 整数组 over-omission）；② `_clean_series` 去 min_len/positive 参（volume 不再走它、对齐 industry_heat 单参正价版）。无下游 caller（grep 仅 engine+test；输出 dict 键不变故 theme_heat/theme_block 输出消费者不受影响）；真 discovery/member/price 装配仍 gated（SR-PROVIDER-001）。
+- **Verify**: focused provisional 28 OK；全离线 `*us_short*` 2940 OK（零回归）；py_compile 通过；diff-check 仅 CRLF；B-ripple grep 无扁平契约残留 caller；doc-drift（design 无匹配、README+CURRENT 行为级非 stale、Cut3b 待审故不进 CURRENT）。
+- **Pre-Codex self-review**: **独立对抗 pass: 已跑（两独立 agent 攻不破）**——(A) metric-math agent 载 committed 扁平版并排比对 bit-identical（theme_heat/leader_rs/volume_confirm 全同）、两裁决判安全；(B) PIT/clock agent 四 claim 全 hold、future-leak/corrupt-axis/非统一时钟/fail-open 全挡、与 siblings 零 divergence（`_vol_surge` fuzz momentum 2000 窗 0 mismatch）。Pass1 我 B-ripple/doc-drift/边界自审已清。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审查 Cut 3b（+ 确认 tail-only vol_surge / `_clean_series` 单参 两裁决）。Cut 1a 已 PASS+提交(4351ebc8)；Cut 2 待 Codex；各刀独立。
+
+## 2026-07-01 - Codex repair + full review PASS (US-short batch5 Cut 1a only)
+
+- **Verdict/Action**: PASS; user-authorized repair completed, then Cut 1a was re-reviewed clean-slate and its five artifacts committed as `4351ebc8`. Source clocks are independent and bound to the frozen prior-close-to-decision-open window; no business scope outside 1a was changed.
+- **Required**: none. `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` residual 5 is closed for offline 1a (register R1 closure); live fetch/runner/candidate-artifact work remains gated 1b, not part of this verdict.
+- **Verify**: focused status/access/binding `149 OK`; full offline `*us_short*` `2932 OK`; route/doc guards `52 OK`; py_compile/JSON/diff-check OK; status/provenance/consumer probes `11 OK`, authorization mutations `6 rejected`, gitignore/secret/boundary scans clean.
+- **Next**: PASS; five Cut 1a artifacts committed. Shared review docs remain uncommitted because their working-tree diff also contains Cut 2 changes.
+
+## 2026-07-01 - Codex review FAIL (US-short batch5 Cut 1a re-review after Repair 5)
+
+- **Verdict/Action**: FAIL; reviewed Cut 1a only. Repair 5 closes timezone normalization and the dated packet pin, but critical-source freshness remains incomplete. No business code edited; no commit.
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` remains open: the shared seven-day clock lets a stale halt-feed observation emit `halted=False`, contrary to the binding's decision-PIT effective-feed rule. Full evidence is in the register.
+- **Verify**: focused `138 OK`; full offline `*us_short*` `2921 OK`; route/doc guards `52 OK`; py_compile/schema JSON/diff-check OK; direct stale-halt probe reproduced the residual.
+- **Next**: Claude Code: fix Cut 1a critical-source freshness only.
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — Codex 残留4 A1/A2/A3 + 两轮对抗审查)
+
+- **Verdict/Action**: 一次修 Codex round-5 clock 三残留（ID 见 Required）+ 用户要求的两轮对抗审查。**A1** 时区：新 `_observed_at_et_date` 把 instant 归一到 ET（America/New_York、DST-aware via zoneinfo）再取 PIT 日期，caller offset 不能再移日期。**A2** freshness：`_observed_at_in_pit_window` 要 ET 日期 ∈ [as_of-7d, as_of]，far-stale 拒、窗口内 prior 保留，resolve+validate+consumer 三门。**A3** packet：schema const-pin generated_at 到确切值。详见 register R1 Repair 5 单源。
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` 残留4 A1/A2/A3 → fixed pending Codex（register R1 Repair 5 单源）。clock 整类全封 {ASCII+parseable as_of、tz-aware observed_at、ET 归一、not-future、not-far-stale、per-flag==record}。**有意裁决待确认**：freshness=reviewed bounded 7 日（Codex Required 允许此选项）、精确 session freshness→1b；tz 库缺→fail-closed raise；as_of 上界不 cap（caller 决策日、1a 无 now oracle）。
+- **Verify**: focused status/access 117 OK；全离线 `*us_short*` 2921 OK（零回归）；guards 52 OK；py_compile 通过、schema JSON 可解析；diff-check 仅 CRLF（本环境 tzdata 在）。复现：A1 -12:00→ET07-01 拒 / 00:30Z→ET06-30 收 / EST 冬控收；A2 6yr+8日拒 / 7日边界+周五收；A3 future/day-after/non-exact 拒、真 artifact 过。
+- **Pre-Codex self-review**: 两轮对抗审查（用户令）——Pass1 我重读全引擎无新发现；Pass2 两独立 agent ~120+ mutation 攻不破 A1/A2/A3+三门+const-pin，揪出并修 LOW-1（`_valid_as_of` 接 Unicode 数字→加 isascii 对齐 market_calendar）+ doc-drift（docstring regex→const）；LOW-2（tzdata 缺时 validate 抛）有意 fail-closed-loud 留。B-ripple：in-file docstring 已对齐 const。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut1a Repair 5（register R1）+ 确认三裁决（7日窗口/tz-fail-closed/as_of 上界）。Cut2 无新 Required、Cut3a 已 PASS+提交，各刀独立。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 1a re-review after Repair 4)
+
+- **Verdict/Action**: FAIL; reviewed Cut 1a only. Repair 4 closes caller-schema injection and authorization-prose drift, but the clock Required remains incomplete. No business code edited; no commit.
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` remains open: status time comparison is not normalized to the US decision timezone, stale observations still clear critical unknowns, and the dated packet accepts future `generated_at`. Full evidence is in the register.
+- **Verify**: focused `134 OK`; full offline `*us_short*` `2917 OK`; route/doc guards `52 OK`; py_compile/diff-check OK; direct timezone/stale/future-packet probes reproduced the residual.
+- **Next**: Claude Code: fix Cut 1a clock boundary only.
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — Codex 全量复审残留3 A/B/C 一并修)
+
+- **Verdict/Action**: 一次修 Codex clean-slate 复审三条残留（ID 见 Required）。**A** future PIT clock：新 `_observed_at_not_after_as_of` 要求 observed 日期 ≤ as_of，resolve+validate+consumer 三出口全 fail-closed；旧 fixture 本身 observed 晚一天=embody 了 bug、已改同日。**B** caller schema 绕过：删 `validate_access_packet_errors` 的 `schema=` 参数、永远用 canonical schema。**C** prose↔typed-gate：const-pin next_steps/limitations/provider_role×2/provider_candidates×2（收敛版）。详见 register R1 Repair 4 单源。
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` 残留3 A/B/C → fixed pending Codex（register R1 Repair 4 单源）。**clock 整类一次封死** {parseable+tz（已）+future（本轮）+mismatched（已）}。**方向裁决待 Codex 确认**：as_of=决策时钟、observed≤as_of=PIT（合 Codex 措辞+设计 §3.3/§3.5/§62）；apply_pass1 是另一套价格时钟、不调 status 引擎故不波及。真 live/runner/候选 artifact 仍 gated。
+- **Verify**: focused status/access 113 OK；全离线 `*us_short*` 2917 OK（零回归、universe_fetch 等不受影响）；route/doc guards 52 OK；py_compile + schema JSON 解析 OK；diff-check 仅 CRLF。复现三探针：A 次日/2099 拒、前日/周末/同日 收；B 签名仅 packet、schema= 报 TypeError；C 真 artifact 空错、4 prose mutant 全拒。
+- **Pre-Codex self-review**: A 整类（clock 四腿全列+三出口；正控=prior/weekend 保留防 over-reject）；B=验证门自持规则、测试走无注入路径（1b 同路径）；C=只 pin Codex 点名 4 字段（收敛、当前值安全无需 scrub）；B-ripple grep `resolve_status_record` 全仓仅 engine+test、runner 未调=universe_fetch 不破；in-file docstring+设计方向已注；未碰 CURRENT。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut1a `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` Repair 4（register R1）+ 确认 PIT 方向裁决。Cut2 无新 Required、Cut3a 已 PASS+提交、各刀独立。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 1a full re-review)
+
+- **Verdict/Action**: FAIL; clean-slate reviewed Cut 1a status-source offline layer + access packet only. No business code edited; no commit.
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` remains open: future `observed_at` can emit clean flags, caller-supplied schema can bypass packet const-pins, and authorization prose can contradict typed gates while validation passes. Full evidence is in the register.
+- **Verify**: focused `126 OK`; full offline `*us_short*` `2909 OK`; route/doc guards `52 OK`; py_compile/diff-check OK; direct mutation probes reproduced all three residuals.
+- **Next**: Claude Code: fix Cut 1a only.
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — Codex 残留2: generated_at 语义绑定验证路径)
+
+- **Verdict/Action**: 修复 Codex Cut1a 复审残留2（ID 见 Required）：上轮 generated_at 语义检查只在旁挂 helper-only 测试、未绑验证路径，jsonschema 仍放行 impossible 值。新增 repo helper `validate_access_packet_errors`=jsonschema(shape+const-pin)+`_valid_observed_at(generated_at)`(语义)，schema 测试 `_errors` 全走它；选 Codex option2(repo helper)非 FormatChecker（date-time checker 依赖可选库、缺则静默 no-op）。详见 register R1 Repair 3 单源。
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` 残留2 → fixed pending Codex（register R1 Repair 3 单源）。整类=generated_at 语义校验绑到**验证路径**(测试+1b 共用 repo helper)，覆盖 Codex 探的两值（`2026-99-99T...` impossible-range + `2026-02-31T...` Feb31）；正控(真 artifact/Z/offset)经路径仍过；regex 保留作 shape 预筛；jsonschema 缺则 fail-closed raise。
+- **Verify**: focused status/access 105 OK；全离线 `*us_short*` 2909 OK（零回归）；route/doc guards 52 OK；py_compile + diff-check 仅 CRLF。复现残留探针：两 impossible 值经绑定路径 errors=1（裸 jsonschema 曾 0）；真 artifact+Z+offset 经路径空错；shape mutant（多余键）仍被 jsonschema 半拦。
+- **Pre-Codex self-review**: A 整类（语义门绑到唯一验证路径、覆盖 Codex 两探值+Feb31、非旁挂 helper）；B ripple=`validate_access_packet_errors` 单源、测试 `_errors` 路由经它、引擎 docstring 已注、1b 复用同 helper；C 反向=正控(真/Z/offset 经路径空错、shape mutant 仍拦)防 over-reject；D jsonschema 缺→fail-closed raise 非漏；E 未碰 CURRENT/design；F py_compile/diff-check/无 BOM。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut1a `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` Repair 3（register R1）。Cut2 该轮无新 Required、Cut3a 已 PASS+提交、各刀独立。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 1a + Cut 2 re-review)
+
+- **Verdict/Action**: FAIL; reviewed Cut 1a and Cut 2 as separate US-short batch5 offline slices. No business code edited; no commit because Cut 1a still has a Required.
+- **Required**: Cut 1a still has `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP`: impossible `generated_at` still yields `0` packet validation errors. Cut 2 has no new Required in this pass. Details: R1/R5 in `docs/system_risk_register.md`.
+- **Verify**: focused status/access `104 OK`; focused momentum `56 OK`; full offline `*us_short*` `2908 OK`; route/doc guards `52 OK`; direct probes confirm the remaining 1a gap.
+- **Next**: Claude Code: fix Cut 1a only.
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — Codex 残留: observed_at 严格 tz + generated_at 语义)
+
+- **Verdict/Action**: 修复 Codex Cut1a 复审残留（finding ID 见 Required）。**A**：`_valid_observed_at` 改严——要 `T` 分隔 + tz-aware（拒 date-only/无tz/空格、接 offset+Z），resolve+validate 两边界共用。**B**：generated_at 正则仅 shape，schema 测试加语义校验（复用单源 `_valid_observed_at`），日历不可能值过正则但语义拒。详见 register R1 Repair 2 单源。
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` → fixed pending Codex（register R1 单源 Repair 2）。整类：A observed_at 严格 RFC3339 × resolve+validate 两边界；B generated_at 语义解析（regex 只 shape、单源 `_valid_observed_at` 兜语义）。as_of 仍 YYYY-MM-DD（date-only 正确、'2026-02-31' 已拒）。真 live fetch/runner 改写/候选 artifact schema 仍 gated（1b）；与 Cut2/Cut3a 分刀独立。
+- **Verify**: focused status/access 套件绿；全离线 `*us_short*` 2908 OK（零回归）；route/doc guards 52 OK；py_compile + diff-check 仅 CRLF。复现残留探针：observed_at date-only/无tz/空格 三式 resolve+validate 均拒；impossible generated_at 语义拒；offset+Z 正控过。
+- **Pre-Codex self-review**: A 整类（observed_at T+tz-aware 两边界全封；generated_at 语义+regex 双层）；B ripple=`_valid_observed_at` 单源、status 引擎+access schema 测试 import 共用（非复制、防漂移）、access doc 未改仍 valid；C 反向=正控（offset/Z 过、真 artifact 过、合法 as_of 过）防过约束；D 非法→拒非漏；E 未碰 CURRENT/design；F py_compile/diff-check/无 BOM。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut1a `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP`（register R1 Repair 2）。Cut2/Cut3a 独立。
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut 2 — Codex 残留: 负成交量进 vol_surge)
+
+- **Verdict/Action**: 修复 Codex Cut2 复审残留（finding ID 见 Required）：负 kept volume 仍进 vol_surge。`_parse_dated_series` 对 kept 行加非负 finite volume 契约——负 volume→None（vol_surge 该窗不可用、永不入均值），0 仍有效（no-trade 日）。非有限/数字串/bool→None（既有）。详见 register R5 Repair 2 单源。
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP` → fixed pending Codex（register R5 单源 Repair 2）。整类=kept volume 非负契约（负→不可用、0 有效），唯一出口 `_parse_dated_series`→vol_surge。先前 Repair 闭收盘腿(非正 close+future)，本 Repair 2 闭成交量腿。真 Massive 装配（Cut2b）仍 gated；与 Cut1/Cut3a 分刀独立。
+- **Verify**: focused momentum 套件绿；全离线 `*us_short*` 2908 OK（零回归）；route/doc guards 52 OK；py_compile + diff-check 仅 CRLF。复现残留探针：负 last/窗口内 volume → vol_surge 省略（修前 ≈0.83/≈1.03、n_features=5）；valid 0 仍算。
+- **Pre-Codex self-review**: A 整类（负 volume 落 parse 边界 kept-only；非有限/串/bool 既有 None；0 保留=正控）；B ripple=改动仅 `_parse_dated_series` volume 收集、in-file 注释已注非负契约、零外部 consumer；C 反向=正控（合法正/零 volume 仍算、窗外缺量不误省[F-C 保留]）防把修复变 over-omit；D malformed→omit 非漏；E 未碰 CURRENT/design；F py_compile/diff-check/无 BOM。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut2 `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP`（register R5 Repair 2）。Cut1/Cut3a 独立。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 1a + Cut 2 re-review)
+
+- **Verdict/Action**: FAIL; reviewed Cut 1a status-source/access-packet and Cut 2 momentum as separate US-short batch5 offline slices. No business code edited; no commit.
+- **Required**: Cut 1a still has `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` residuals; Cut 2 still has `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP` residuals. Full material details are appended under R1 and R5 in `docs/system_risk_register.md`.
+- **Verify**: focused status/access tests `99 OK`; focused momentum tests `52 OK`; full offline `*us_short*` `2899 OK`; route/doc guards `52 OK`. Direct probes reproduced both residuals despite green suites: date-only/no-timezone `observed_at` and semantically impossible `generated_at` still validate; negative kept volume still emits `vol_surge`.
+- **Next**: Claude Code: fix Cut 1a and Cut 2 separately.
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — Codex FAIL: status clock + access-packet schema 钉)
+
+- **Verdict/Action**: 修复 Codex Cut1 FAIL 两项（finding ID 见 Required）。**A clock**：新 `_valid_as_of`(YYYY-MM-DD)+`_valid_observed_at`(ISO) 在 resolve(入口 raise)+validate(False) 两边界都验，`as_of='not-a-date'`/`observed_at='not-a-time'` 不再冒充 sourced clean。**B access-packet schema**：const-pin source_artifact_refs 基数(maxItems4)+id↔path↔role、endpoint source↔family↔flags、generated_at 严格 ISO 正则(不依赖 FormatChecker)。详见 register R1 单源 Repair。
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` → fixed pending Codex（register R1 单源）。整类两面：A clock=as_of+observed_at × resolve+validate 两边界两字段；B schema=ref 基数/id-path-role + endpoint source-flag + generated_at（Codex 5 mutant 全覆盖）。F-E(`_canonical_keyed` garbage 键 raise)是另一深审项、已记 register、非本 Codex finding。真 live fetch / runner 改写 / 候选 artifact schema 仍 gated（1b，SR-PROVIDER-001）；与 Cut2/Cut3a 分刀独立、未碰其文件。
+- **Verify**: focused status/access 套件绿；全离线 `*us_short*` 2899 OK（零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF。复现 Codex 探针：as_of='not-a-date'→validate False + resolve raise；5 access-packet mutant（path/role·extra·ticker-flags·halt-flags·gen_at）全 error、真 artifact 仍 valid。
+- **Pre-Codex self-review**: A 整类（clock 两边界两字段全封；schema 三类 pin 全封 + 5 mutant 各测 + 真 artifact 正控）；B ripple=`_valid_as_of`/`_valid_observed_at` 仅本引擎、schema 的 role/path const 逐字取自 doc（漂移即拒=三角）、access packet doc 未改仍 valid；C 反向=正控（合法 YYYY-MM-DD/ISO 仍过、真 artifact 仍 valid、合法 flags 不 error）防过约束；D 非法→拒非漏；E 未碰 CURRENT/design；F py_compile/diff-check/无 BOM。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut1 `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP`（register R1 单源 Repair + F-E）。Cut2/Cut3a 独立。
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut 2 — Codex FAIL: 非正收盘 + future 坏点)
+
+- **Verdict/Action**: 修复 Codex Cut2 FAIL 唯一 Required `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP` 两腿。**腿 A 非正收盘**：`_clean_series` 拒 ≤0（镜像 industry_heat）——kept(≤as_of) 0/负收盘使该票/基准不可用(无特征)、不再出 ret/rel。**腿 B future 坏点抹历史**：`_parse_dated_series` 值校验只对 kept 点(原始轴形/日期/升序唯一仍全点查)，future 点 PIT 排除在值校验前，future NaN/非有限/非正 close 不再抹掉有效 ≤as_of 序列。详见 register R5 单源 Repair。
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP` → fixed pending Codex（register R5 单源）。腿 B 是先前 Self-review hardening 2 / F-D；腿 A 是 Codex 探针补的（我之前漏的非正收盘）。整类=价格序列边界(非正拒 + future 不抹)、唯一出口 `_parse_dated_series`/`_clean_series`。真 Massive 装配（Cut2b）仍 gated（SR-PROVIDER-001）；与 Cut1/Cut3a 分刀独立、未碰其文件。
+- **Verify**: focused momentum/status/access 套件绿；全离线 `*us_short*` 2899 OK（零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF。复现 Codex 探针：last close=0.0 / earlier=-5.0 → features={}；future NaN → ret_5d 仍算、n_points 排除它。
+- **Pre-Codex self-review**: A 整类（非正拒落 `_clean_series`[ticker+benchmark 同源]、future 值校验移 kept-only；kept 非有限/非正仍拒=反向控）；B ripple=`_clean_series`/`_parse_dated_series` 仅本引擎、docstring 已同步（非正拒 + future 值不验）、零外部 consumer；C 反向=正控（合法正价仍打分、finite-future 仍排除 ret 正确、非正 benchmark→rel 省略）防把修复变 fail-open/漏报；D over-reject 与 fail-open 双向都堵；E 未碰 CURRENT/design；F py_compile/diff-check/无 BOM。Tests passing ≠ design closure.
+- **Next**: 待 Codex 复审 Cut2 `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP`（register R5 单源 Repair）。Cut1/Cut3a 独立。
+
 ## 2026-06-30 - Codex review PASS (US-short batch5 Cut 3a industry_heat PIT/clock offline layer)
 
 - **Verdict/Action**: PASS; reviewed only Cut 3a `engine/us_short_industry_heat.py` + `tests/test_us_short_industry_heat.py`. Cut 1 1a and Cut 2 are not included in this verdict.
 - **Required**: None; no new material register finding. Provider/live GICS extraction, exact member-benchmark assembly, R3/Pass2/DataHub/production, broker/order paths, A-share, A-long, and US-long remain gated/out of scope.
 - **Verify**: focused industry_heat tests ran `30 OK`; combined Cut 2/Cut 3a focused suites ran `77 OK`; full offline `*us_short*` ran `2881 OK`; doc-route guards ran `52 OK`; `py_compile` OK; `git diff --check` warning-only CRLF. Direct probes confirmed future `NaN` close after `as_of` is PIT-excluded and still scores from current history, non-uniform clocks raise, non-positive closes remain rejected, and no network/provider/A-share import boundary was introduced.
 - **Next**: Codex commit Cut 3a only.
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 2 momentum PIT/alignment offline layer)
+
+- **Verdict/Action**: FAIL; reviewed only Cut 2 `engine/us_short_momentum.py` + `tests/test_us_short_momentum.py`. No business code edited; Cut 1 1a / Cut 3a not included in this verdict.
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-NONPOSITIVE-CLOSE-AND-FUTURE-BADPOINT-GAP` open under R5; full repro and repair boundary are in `docs/system_risk_register.md`.
+- **Verify**: focused momentum tests ran `47 OK`, but direct probes showed `close=0.0` and an earlier negative close still emit 5 momentum features, while a future `NaN` close after `as_of` makes an otherwise valid PIT-cut series return empty features.
+- **Next**: Claude Code `fix`.
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 Cut 1 1a status-source offline layer)
+
+- **Verdict/Action**: FAIL; reviewed only Cut 1 1a status-source offline layer + access packet. No business code edited; Cut 2 / Cut 3a not included in this verdict.
+- **Required**: `R-USSHORT-BATCH5-STATUS-SOURCE-CLOCK-AND-ACCESS-PACKET-PIN-GAP` open under R1; full repro and repair boundary are in `docs/system_risk_register.md`.
+- **Verify**: prior wrong-row probe now rejects; lowercase source-key bankruptcy probe detects found 8-K. New probes still accepted invalid status clocks (`as_of='not-a-date'`, `observed_at='not-a-time'`) and access-packet same-shape drifts (source-ref path/role, extra ref, endpoint-family flag swaps, bad `generated_at`) with `0` schema errors. Focused status/access tests not rerun after this finding in this entry; earlier read showed existing tests do not cover these mutants.
+- **Next**: Claude Code `修复`.
+
+## 2026-06-30 — Claude 对抗性自审 (US-short 批5 Cut 3a — clean，无代码改动)
+
+- **Verdict/Action**: 按 AGENTS.md 对抗审标准自审 Cut 3a（`engine/us_short_industry_heat.py` PIT/统一时钟离线层），结论 **clean、零代码改动**（对抗审标准:无问题就说 clean、别编 fix）。跑的对抗矩阵：`_parse_dated_series` 各坏形 fail-closed（非 dict/缺多键/坏 as_of/空 meta/非升序或重复日/非正 close/短）；future-point PIT 切（未来点不入 kept、值不入算→无 look-ahead）；统一时钟门三维（成员 as_of·基准 session·成员 adjustment）各 raise；度量数学不变（值断言全保留=零回归）；正控（hot/cold/mid/缺基准/单 sector）全过=无过约束；无 fail-open（heat 是相对分位、非准入门）。
+- **设计选择（透明给 Codex，非缺陷）**: ① 非统一时钟→`IndustryHeatError` raise（fail-closed、相对旧版的新失败模式；接线后 R3 seam 须 catch→no-emit；docstring 已注）；② 精简范围（用户拍板）:组级成员↔基准精确同日对齐留给 gated 装配 Cut 3b（R5 据「对齐在装配边界才有意义」），引擎只 enforce PIT 切 + 统一 as_of/session/adjustment。
+- **跨刀观察（非 Cut3a 缺陷，留 Codex 联审取舍）**: momentum(Cut2) 对 future-point 的 close 值更严（future 非有限值整条拒），industry_heat(Cut3a) 忽略被 PIT 排除的 future 值（PIT 正确、未来点本就不用）——两者均可辩、口径不一致、future 异常罕见；供 Codex 统一口径。
+- **Verify**: industry_heat 30 OK；全离线 `*us_short*` 2881 OK；route/doc guards 52 OK（均为本轮前已跑、无改动故未新增测试/未重跑全量）。**未提交**；Cut 3a 仍待 Codex 正常审（额度恢复后）。Cut 1/Cut 2 独立、不与本刀混。
+
+## 2026-06-30 — Claude 起草 (US-short 批5 Cut 3a — industry_heat PIT/统一时钟离线层)
+
+- **Verdict/Action**: 起草 Cut 3a（赛道/行业热度数据层之 industry_heat，**精简范围=用户拍板**）。`engine/us_short_industry_heat.py::industry_heat_block` 从裸数组（`{ticker:{sector,closes}}` + spy_closes/qqq_closes）改吃 **PIT-bearing dated 序列**（`{ticker:{sector,series}}` + spy_series/qqq_series，序列=`{as_of,session,adjustment_mode,points:[{date,close}]}`）。新 `_valid_date`+`_parse_dated_series`（per-engine 副本、用本引擎拒非正的 `_clean_series`）：PIT 切到 as_of（拦 future）、原始日轴严格升序唯一否则 None。新增**全局统一时钟门**：所有有效成员+基准须同一 (as_of,session,adjustment_mode)，非统一→`IndustryHeatError` fail-closed。度量数学（group_rel/breadth/new_high/leader_rs/分位）**不变**。单源=引擎 docstring。
+- **Boundary（精简范围 + 分刀独立 + 尊重 R5 据）**: 用户选「精简 3a」——industry_heat 只做 PIT 切 + 统一时钟一致性、**保留现有度量数学**；**组级成员↔基准精确同日对齐留给 gated 装配层（Cut 3b，SR-PROVIDER-001）**，与 R5 据「对齐在数据层装配边界才有意义」一致。本刀**只动 `engine/us_short_industry_heat.py` + 其测试**，**绝不碰 momentum(Cut2)/status(Cut1)/runner**；per-engine helper（非共享模块）合既有约定 + 与 Cut2 解耦可分刀审。provisional_theme_heat（Cut 3b 同模式）未做、待选。真 Massive/GICS 装配 gated。不交叉 A 股、未 push。
+- **Required**: 无（新起草，非修 Codex finding；industry_heat 无对应 register finding，PIT 据 §4.3「mirrors momentum」+ R5 类比，单源在引擎 docstring）。
+- **Verify**: industry_heat 30 OK（旧 21 + 新 9：dated-series parse/future-block/非统一时钟 raise/clock 一致性）；全离线 `*us_short*` 2881 OK（2869+12、零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF；无 BOM。
+- **Pre-Codex self-review**: A 整类（`_parse_dated_series` 各坏形 fail-closed：非 dict/缺键/多键/坏 as_of/空 meta/非升序或重复日/非正 close/短；future PIT 切；非统一时钟[成员 as_of·基准 session·成员 adjustment 各]raise）；B ripple=`industry_heat_block` 零外部 consumer（grep；theme_block/theme_heat 取注入的 industry_heat_score、不调本函数），module+函数 docstring 同步 dated-series 契约、`_clean_series`/`_ret`/`_benchmark_return`/`_percentile_rank` 未动（per-engine 既有）；C 反向=度量值正控（hot>cold=100/0、3-way mid、breadth/new_high 0.75、缺/非正基准降级、单 sector=50）全保留防过约束 + 统一时钟正控不 raise；D future=拦非漏；E 未碰 CURRENT/design；F py_compile/diff-check/BOM。Tests passing ≠ design closure.
+- **Next**: Codex 审查 Cut 3a（`engine/us_short_industry_heat.py` + `tests/test_us_short_industry_heat.py`，对照引擎 docstring 的 PIT/clock 契约 + §4.3）；PASS 后提交时更 README + design §18.2 + CURRENT §0。Cut 3b（provisional_theme_heat 同模式）+ 真装配仍 gated（SR-PROVIDER-001）。Cut 1/Cut 2 独立、不与本刀混。
+
+## 2026-06-30 — Claude 自审修复 (US-short 批5 Cut1 1a — 源键规范化 fail-open + otc 白名单单源)
+
+- **Verdict/Action**: 按对抗审查标准自审 Cut1（status-source 层）发现并修两个真问题（留在 1a 内）。F-A（fail-OPEN+过度拒）：`_resolve_halted` 对 halt 成员做了 canonical 规范化，但 `_resolve_delisted_and_otc`(active_listings)/`_resolve_bankruptcy`(by_ticker) 用 canonical ticker 查 RAW payload 键 → 小写键 `'bankr'` 让 `get('BANKR')` 漏检 found 破产（漏检破产=fail-open）、小写键活跃票读成 absent→delisted（过度拒）。新 `_canonical_keyed` 把两个记录映射按 canonical 重键（丢非美键、碰撞 raise），三源统一键规范化。F-B（drift）：otc 白名单与 cheap-eligibility gate 未单源。详见 register R1 单源 note。
+- **Required**: 无 Codex Required（自审发现、非 Codex finding）；advances R1（已记自审 hardening note）。F-A=源键规范化整类（listings+by_ticker，halt 早已做）；F-B=`_DEFAULT_EXCHANGE_WHITELIST` 改 import `eligibility_gate._V1_EXCHANGE_WHITELIST`（单源+三角测试）+ 裸字符串 whitelist footgun 守卫。真 live fetch/runner 改写/候选 artifact schema 仍 gated（1b，SR-PROVIDER-001）；与 Cut 2 分刀独立、未碰其文件。
+- **Verify**: 全离线 `*us_short*` 2869 OK（2861+8 自审测试、零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF。复现 F-A 探针：小写键 `bankr` found → bankruptcy=True（修前 False=漏检）。
+- **Pre-Codex self-review**: A 整类（F-A 三源键规范化一致：listings/by_ticker 经 `_canonical_keyed`、halt 既有；规范化后碰撞 raise）；B ripple=`_canonical_keyed` 仅本引擎、`_DEFAULT_EXCHANGE_WHITELIST` 单 import 无第二定义；C 反向=正控（规范键仍解析、碰撞 raise、裸字符串 whitelist raise、合法 tuple 过）防过约束；D fail-open→fail-closed 方向对；E 未碰 CURRENT/design；F py_compile/diff-check。Tests passing ≠ design closure.
+- **Next**: 待 Codex（额度恢复）分刀审 Cut1 status-source 层（对照 register R1 自审 hardening + Slice 1a + record↔row Repair）。Cut 2 独立、不与本刀混。
+
+## 2026-06-30 — Claude 自审修复 (US-short 批5 Cut 2 — momentum vol_surge 窗口 over-omit)
+
+- **Verdict/Action**: 按对抗审查标准自审 Cut 2（momentum PIT 层）发现并修一个真问题（留在 Cut 2 内）。F-C（reverse-failure/over-omit）：`vol_surge` 存在性检查 `all(v is not None for v in vols)` 查**整条序列**，早期单个缺量就丢掉本可计算的 vol_surge（→ 该票特征 -1、可能跌破 min_coverage 不被打分）。改为只查实际平均的窗口 `vols[-VOL_SURGE_LONG:]`（short⊂long⊂该尾）。非 fail-open（保守方向），但确属 over-omission。详见 register R5 单源 note。
+- **Required**: 无 Codex Required（自审发现）；advances R5 PIT/alignment 余项（已记自审 note）。其余对抗探针（`_parse_dated_series` 闭世界 / future-block / 共同日对齐 / mismatch 省略）复核干净、无 fail-open。真 Massive 序列装配（Cut 2b）仍 gated（SR-PROVIDER-001）；与 Cut 1 分刀独立、未碰其文件。
+- **Verify**: momentum 47 OK（+1 F-C 测试：窗口外缺量不省略 vol_surge）；全离线 `*us_short*` 2869 OK（零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（vol_surge 窗口=short⊂long⊂`vols[-LONG:]`，窗口内缺量仍省略[正控]、窗口外缺量不省略[F-C 测试]）；B ripple=改动仅 `compute_momentum_features` 内 vol_surge 块、零外部 consumer；C 反向=窗口内缺量 still omit（`test_partial_volume_coverage_no_surge`）防把 fail-safe 改成 fail-open；D 方向对（保守 over-omit→正确、不引入 fail-open）；E 未碰 CURRENT/design；F py_compile/diff-check。Tests passing ≠ design closure.
+- **Next**: 待 Codex（额度恢复）分刀审 Cut 2 momentum PIT 层（对照 register R5 PIT/alignment 余项 note + 自审 F-C）。Cut 1 独立、不与本刀混。
+
+## 2026-06-30 — Claude 起草 (US-short 批5 Cut 2 — momentum PIT/对齐离线层，R5 余项)
+
+- **Verdict/Action**: 起草 Cut 2（价格/PIT 序列层，R5 PIT/alignment 余项）的**离线半**。`engine/us_short_momentum.py::compute_momentum_features` 从裸数组改吃 **PIT-bearing dated 序列**（`{as_of, session, adjustment_mode, points:[{date,close,volume?}]}`）：新 `_parse_dated_series` 校验+PIT 切（>as_of 的点 BLOCKED、无 look-ahead；原始日轴须严格升序唯一否则 None；closes 严格有限复用 `_clean_series`；volume 任一缺→无 vol_surge）；新 `_aligned_rel_1m` 把 rel_spy/qqq_1m 按 ticker∩benchmark **共同日对齐**、且 as_of/session/adjustment 须一致，否则带 note 省略（绝不做错配/跨复权比较）。`momentum_block`/`_percentile_rank`/`_ret`/`_clean_series` 不变。详见 register R5 单源 note。
+- **Boundary（分刀独立 + 尊重 register deferral）**: 本刀**只动** `engine/us_short_momentum.py` + `tests/test_us_short_momentum.py`，**绝不碰 1a 的 5 个文件**、不碰 runner/候选 artifact；register/SESSION_LOG 各写独立 block（R5 vs R1）→ Codex 可分刀审/分刀提交。register 曾 defer「纯引擎 PIT proves nothing」→ 故本刀=**真 enforce 的契约+校验器**（gated 半=真 Massive 序列装配 Cut 2b，SR-PROVIDER-001），与 1a 同构、可审有值非 no-op。`compute_momentum_features` 零外部 consumer（grep、R3 未接）→ 签名变（裸数组→dated 序列、spy_closes→spy_series）无破坏。不交叉 A 股、未 push。
+- **Required**: 无（新起草，非修 Codex finding；advances register R5 的 PIT/alignment 余项，R5 已记 Cut 2 offline 半 note）。
+- **Verify**: momentum 46 OK（30+16 新）；全离线 `*us_short*` 2861 OK（2845+16、零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF；无 BOM。
+- **Pre-Codex self-review**: A 整类（`_parse_dated_series` 各坏形 fail-closed：非 dict/缺键/多键/坏 as_of/空 meta/非升序或重复日/非有限 close；future-point PIT 切；IPO 短史→无特征；rel 5 类 mismatch+overlap 各 note 省略）；B ripple=`compute_momentum_features` 仅本测试消费（grep 零外部），其它引擎的 `spy_closes` 是各自函数 kwarg、未碰；module + 函数 docstring 已同步 dated-series 契约；C 反向=正控（同轴 rel=own−bench 精确、aligned-on-common→ok、pit provenance）防过约束；D future=拦非漏、unknown 不伪造；E 未碰 CURRENT/design（PASS 后随 commit 更）；F py_compile/diff-check/UTF-8 无 BOM。Tests passing ≠ design closure.
+- **Next**: Codex 审查 Cut 2（`engine/us_short_momentum.py` + `tests/test_us_short_momentum.py`，对照 register R5 PIT/alignment 余项 note）；PASS 后提交时更 README momentum 行 + design §18.2 + CURRENT §0 delta。Cut 2b（真 Massive 序列装配→PIT 序列）仍 gated（SR-PROVIDER-001）。1a（Cut 1）独立待 Codex 复审，不与本刀混。
+
+## 2026-06-30 — Claude `修复` (US-short 批5 Cut1 1a — status record↔row 绑定 + 闭世界 validate)
+
+- **Verdict/Action**: 修复 Codex slice-1a FAIL 唯一 Required `R-USSHORT-BATCH5-STATUS-RECORD-ROW-BINDING-GAP`：`status_flags_for_row` 原返回脱离 record.ticker 的 row_flags（可把一票 clean 套到另一票行）、`validate_status_record` 太松。改 `status_flags_for_row(record, *, row_ticker)` 须 `record.ticker==canonical(row_ticker)` 才出 flags；validate 全闭世界（canonical top ticker + 每旗 as_of/observed_at==record + (value,coverage[,screen_status]) 按 resolver emitted 组合表 + source-specific 值型 + bankruptcy accession 归一）。详见 register 单源 Repair。
+- **Required**: `R-USSHORT-BATCH5-STATUS-RECORD-ROW-BINDING-GAP` → fixed pending Codex（register 单源 Repair，A 行枚举整类 A-G 全覆盖）。修整类非逐腿：探针只演示 record↔row + delisted.as_of/coverage + 非规范 ticker，整类=4 旗 ×{as_of,observed_at,coverage,(value,coverage)组合}+source-specific 值型+跨字段。真 live fetch / runner apply_pass1 改写 / 候选 artifact status-provenance schema 仍 gated（1b，SR-PROVIDER-001）。
+- **Verify**: focused status-source+access 79 OK（60+19 新对抗）；全离线 `*us_short*` 2845 OK（2826+19、零回归）；route/doc guards 52 OK；py_compile + `git diff --check` 仅 CRLF。复现 Codex 确切两探针：AAPL clean record→DEAD row 现 raise；非规范 top ticker+错 as_of+坏 coverage 现 validate=False + status_flags_for_row raise。
+- **Pre-Codex self-review**: A 整类（按 Required 文本枚举 A-G 全修+各配对抗：A record↔row 绑定·B canonical top ticker·C/D 4 旗 as_of+observed_at==record·E 4 旗 coverage 闭世界·F source-specific 值型·G (value,coverage[,screen_status]) resolver 组合表+bankruptcy value⟺found⟹accession+halted observed⟺value）；B ripple=`status_flags_for_row` 仅本刀+测试、签名变无外部破坏；C 反向=7 正控全 validate True 防过约束；D unknown 仍保守拒；E 未碰 CURRENT/design；F diff-check。Tests passing ≠ design closure.
+- **Next**: Codex 复审 `R-USSHORT-BATCH5-STATUS-RECORD-ROW-BINDING-GAP`；PASS 后提交时加 README batch5 状态源离线层行 + design §18.2 + CURRENT §0 delta。1b（access packet 用户终批→preflight→真 live fetch + apply_pass1 改写 + 候选 artifact status-provenance schema）仍 gated（SR-PROVIDER-001）。
+
+## 2026-06-30 - Codex review FAIL (US-short batch5 status-source offline layer)
+
+- **Verdict/Action**: FAIL; reviewed the current US-short batch5 Cut 1 slice 1a status-source offline layer and 1b access-packet contract only. No business code edited.
+- **Required**: `R-USSHORT-BATCH5-STATUS-RECORD-ROW-BINDING-GAP` open under R1; full repro and repair boundary are in `docs/system_risk_register.md`.
+- **Verify**: direct anti-forgery probe accepted an AAPL clean status record applied to a DEAD row (`eligible=True`), and a mutated status record with noncanonical top ticker plus mismatched per-flag `as_of`/`coverage` still validated and emitted clean row flags. Existing focused status/access tests `60 OK`; full offline `*us_short*` `2826 OK`; doc-route guards `52 OK`; `py_compile` OK; `git diff --check` warning-only CRLF.
+- **Next**: Claude Code `修复`.
+
+## 2026-06-30 — Claude 起草 (US-short 批5 Cut 1 slice 1a — 状态源离线层 + 1b access packet)
+
+- **Verdict/Action**: 起草批5 Cut1（状态源→cheap_eligible，R1 余项 (a)）的**离线半 1a**，零真实 provider 调用。新 `engine/us_short_status_source.py`：把注入的 status 源 payload（ticker_reference / 公开停牌 feed / SEC 8-K Item 1.03）解析成每票每旗 provenance record，映射进 cheap_eligible 行契约——delisted/halted/otc 三态、unknown→省略→cheap_eligible 既有保守拒（unknown 留 unknown、绝不 clean-by-omission）；bankruptcy 仅 positive-detection（found 才拒，screened_no_filing/unscreened 均 gate False 但记 screen_status，落实 binding mark_unscreened_not_clean 以免「不扫破产=整宇宙塌零」）+ `classify_status_source_outcomes`（critical 源全挂→block/no-emit、不吞）。access packet schema+doc 冻结 1b 小样本 2-bulk-feed shape 探针授权（零重试）。
+- **Boundary（关键 scope 精化，judge-before-execute）**: 原提案 1a 的「删 runner 硬写 False」读码后拆出 **3a 集成函数=本刀**、**3b runner apply_pass1 改写=1b**（无真源时改 runner 只会塌宇宙或注 fixture 占位＝register 警告的 caller-forgeable scaffolding）；同理**候选 artifact status-provenance schema 扩展=1b**（放开 cc_r1_v1 const-pinned status_flags_sourced=false 须有 live producer）。本刀**不碰 runner、不碰候选 artifact schema**＝纯增量。bankruptcy 8-K 逐票 + 全市场 = 另立 packet（access packet 内显式 deferred）。真 live fetch / parser-into-runner / DataHub / 生产 仍 gated（SR-PROVIDER-001）。不交叉 A 股、未 push。
+- **Required**: 无（新起草，非修 Codex finding；advances register R1 余项 (a)，R1 已记 slice 1a 进度行）。
+- **Verify**: 新引擎+access-packet schema **60 OK**；全离线 `*us_short*` **2826 OK**（2766+60、零回归）；route/doc guards 52 OK（doc-gov 27 + readme-len + ledger-consistency 25）；py_compile + `git diff --check` 仅 CRLF。
+- **Pre-Codex self-review**: A 整类（4 旗全覆盖；各源 observed/未观测/坏形 fail-closed；bankruptcy 三 screen_status + found-须-accession；strict bool `is True`、payload 非 dict/非 bool observed/坏 coverage 各 raise；ticker 非规范 raise）；B ripple grep=新符号仅本刀 5 文件、`us_short_status_source` 零外部消费者（1b 才接 runner）、三角校验 flag 集/源/policy==eligibility gate+binding、无 A 股 import；C 反向（unknown→保守拒、sample partial 不误判 delisted、bankruptcy unscreened 不拒、fabricated record/坏 source_id/bankruptcy None 各拒）；D 方向对（unknown=拒非漏、positive-detection 不误拒未扫名）；E 未碰 CURRENT/design（PASS 后随 commit 更）；F py_compile/diff-check/UTF-8 无 BOM。Tests passing ≠ design closure.
+- **Next**: Codex 审查 1a（`engine/us_short_status_source.py` + `schemas/us_short_batch5_status_source_access_packet.schema.json` + `docs/us_short_batch5_status_source_access_packet_20260630.json` + 2 test）；PASS 后提交时加 README batch5 状态源离线层行 + design §18.2 batch5 row（access packet + 离线引擎）+ CURRENT §0 delta。1b（access packet 用户终批→preflight→真 live fetch + apply_pass1 改写 + 候选 artifact status-provenance schema）仍 gated（SR-PROVIDER-001）。
 
 ## 2026-06-30 — Claude 执行 (A-long VY forward-paper 首笔月度捕获 as_of=20260630)
 

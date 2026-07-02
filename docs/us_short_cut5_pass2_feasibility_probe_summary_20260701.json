@@ -1,0 +1,1245 @@
+{
+  "schema_name": "us_short_cut5_pass2_feasibility_probe_summary",
+  "schema_version": "1.1.0",
+  "schema_ref": "schemas/us_short_cut5_pass2_feasibility_probe_summary.schema.json",
+  "authorization_ref": "user_chat_20260701_cut5_pass2_feasibility_probe",
+  "generated_at": "2026-07-01T10:31:44+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "cut": "cut5_pass2_audit_gate_and_catalyst_data_layer",
+    "purpose": "data_layer_feasibility_probe_only",
+    "status": "feasibility_probe_completed_with_endpoint_errors",
+    "provider_live_probe_performed": true,
+    "raw_payload_storage_performed": true,
+    "validation_only_raw_parse_performed": true,
+    "binding_or_parser_built": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "paid_tier_used": false,
+    "broker_or_order_execution_performed": false,
+    "manual_order_only": true,
+    "ship_gate_or_live_normalized_evidence_claimed": false
+  },
+  "pre_execution_checks": {
+    "user_authorization_confirmed": true,
+    "provider_samples_gitignore_confirmed": true,
+    "environment_precheck_passed": true,
+    "fmp_api_key_present": true,
+    "sec_user_agent_present": true,
+    "massive_api_key_present": true,
+    "budget_precheck_passed": true,
+    "no_yfinance": true,
+    "no_datahub": true,
+    "no_full_market": true,
+    "no_production_storage": true,
+    "no_broker_or_order_execution": true
+  },
+  "environment": {
+    "fmp_api_key_present": true,
+    "fmp_api_key_source": "process",
+    "sec_user_agent_present": true,
+    "sec_user_agent_source": "process",
+    "massive_api_key_present": true,
+    "massive_api_key_source": "process",
+    "secrets_logged": false
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_path": "docs/us_short_cut5_pass2_feasibility_probe_summary_20260701.json",
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_raw_payload": false,
+    "secrets_in_summary": false,
+    "request_urls_in_summary": false
+  },
+  "sample_universe": {
+    "symbol_source": "cut5_feasibility_probe_fixed_active_only_sample",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "NVDA"
+    ],
+    "active_symbols_only": true,
+    "max_symbols": 3,
+    "full_market_sample": false
+  },
+  "channels_probed": {
+    "sec_submissions_form_families": [
+      "S-1",
+      "S-3",
+      "424B",
+      "S-8",
+      "8-K",
+      "10-K",
+      "10-Q",
+      "25-NSE",
+      "form_4",
+      "144",
+      "SC_13G",
+      "SC_13D"
+    ],
+    "fmp_catalyst_endpoint_families": [
+      "earnings_surprises",
+      "analyst_estimates",
+      "grades"
+    ],
+    "massive_per_ticker_aggregates_symbol": "AAPL",
+    "massive_reference_endpoint_families": [
+      "massive_financials",
+      "massive_news",
+      "massive_earnings_analyst_probe"
+    ]
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 24,
+    "actual_total_endpoint_calls": 21,
+    "retry_count": 0,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider": "SEC",
+      "endpoint_family": "company_tickers_mapping",
+      "symbol": null,
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/sec_edgar/_market/company_tickers_mapping.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "field_presence": {
+        "ticker": true,
+        "cik_str": true
+      }
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "earnings_surprises",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 404,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/AAPL/earnings_surprises.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 0
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "actualEarningResult": false,
+        "estimatedEarning": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "actualEarningResult",
+        "estimatedEarning"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "analyst_estimates",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 400,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/AAPL/analyst_estimates.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "estimatedRevenueAvg": false,
+        "estimatedEpsAvg": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "estimatedRevenueAvg",
+        "estimatedEpsAvg"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "grades",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/AAPL/grades.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1771
+      },
+      "field_presence": {
+        "symbol": true,
+        "date": true,
+        "gradingCompany": true,
+        "newGrade": true,
+        "previousGrade": true
+      },
+      "date_fields_present": {
+        "date": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "earnings_surprises",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 404,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/MSFT/earnings_surprises.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 0
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "actualEarningResult": false,
+        "estimatedEarning": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "actualEarningResult",
+        "estimatedEarning"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "analyst_estimates",
+      "symbol": "MSFT",
+      "status": "error",
+      "http_status": 400,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/MSFT/analyst_estimates.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "estimatedRevenueAvg": false,
+        "estimatedEpsAvg": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "estimatedRevenueAvg",
+        "estimatedEpsAvg"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "grades",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/MSFT/grades.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 939
+      },
+      "field_presence": {
+        "symbol": true,
+        "date": true,
+        "gradingCompany": true,
+        "newGrade": true,
+        "previousGrade": true
+      },
+      "date_fields_present": {
+        "date": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "earnings_surprises",
+      "symbol": "NVDA",
+      "status": "error",
+      "http_status": 404,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/NVDA/earnings_surprises.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 0
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "actualEarningResult": false,
+        "estimatedEarning": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "actualEarningResult",
+        "estimatedEarning"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "analyst_estimates",
+      "symbol": "NVDA",
+      "status": "error",
+      "http_status": 400,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/NVDA/analyst_estimates.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "field_presence": {
+        "date": false,
+        "symbol": false,
+        "estimatedRevenueAvg": false,
+        "estimatedEpsAvg": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "symbol",
+        "estimatedRevenueAvg",
+        "estimatedEpsAvg"
+      ]
+    },
+    {
+      "provider": "FMP",
+      "endpoint_family": "grades",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/financial_modeling_prep/NVDA/grades.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1130
+      },
+      "field_presence": {
+        "symbol": true,
+        "date": true,
+        "gradingCompany": true,
+        "newGrade": true,
+        "previousGrade": true
+      },
+      "date_fields_present": {
+        "date": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "SEC",
+      "endpoint_family": "submissions",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/sec_edgar/AAPL/submissions.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 4,
+          "most_recent_filing_date": "2024-11-01",
+          "most_recent_acceptance_datetime": "2024-11-01T10:49:43.000Z"
+        },
+        "424B": {
+          "count": 48,
+          "most_recent_filing_date": "2025-05-06",
+          "most_recent_acceptance_datetime": "2025-05-06T20:31:12.000Z"
+        },
+        "S-8": {
+          "count": 4,
+          "most_recent_filing_date": "2025-09-26",
+          "most_recent_acceptance_datetime": "2025-09-26T20:33:30.000Z"
+        },
+        "8-K": {
+          "count": 105,
+          "most_recent_filing_date": "2026-04-30",
+          "most_recent_acceptance_datetime": "2026-04-30T20:30:41.000Z"
+        },
+        "10-K": {
+          "count": 11,
+          "most_recent_filing_date": "2025-10-31",
+          "most_recent_acceptance_datetime": "2025-10-31T10:01:26.000Z"
+        },
+        "10-Q": {
+          "count": 33,
+          "most_recent_filing_date": "2026-05-01",
+          "most_recent_acceptance_datetime": "2026-05-01T10:01:00.000Z"
+        },
+        "25-NSE": {
+          "count": 5,
+          "most_recent_filing_date": "2025-11-14",
+          "most_recent_acceptance_datetime": "2025-11-14T21:10:12.000Z"
+        },
+        "form_4": {
+          "count": 590,
+          "most_recent_filing_date": "2026-06-17",
+          "most_recent_acceptance_datetime": "2026-06-17T22:40:43.000Z"
+        },
+        "144": {
+          "count": 45,
+          "most_recent_filing_date": "2026-05-27",
+          "most_recent_acceptance_datetime": "2026-05-27T20:00:33.000Z"
+        },
+        "SC_13G": {
+          "count": 23,
+          "most_recent_filing_date": "2024-02-14",
+          "most_recent_acceptance_datetime": "2024-02-14T21:47:05.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      }
+    },
+    {
+      "provider": "SEC",
+      "endpoint_family": "submissions",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/sec_edgar/MSFT/submissions.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 3,
+          "most_recent_filing_date": "2024-12-12",
+          "most_recent_acceptance_datetime": "2024-12-12T21:18:24.000Z"
+        },
+        "424B": {
+          "count": 3,
+          "most_recent_filing_date": "2024-05-06",
+          "most_recent_acceptance_datetime": "2024-05-06T20:20:48.000Z"
+        },
+        "S-8": {
+          "count": 2,
+          "most_recent_filing_date": "2025-12-30",
+          "most_recent_acceptance_datetime": "2025-12-30T21:11:18.000Z"
+        },
+        "8-K": {
+          "count": 66,
+          "most_recent_filing_date": "2026-06-05",
+          "most_recent_acceptance_datetime": "2026-06-05T14:36:56.000Z"
+        },
+        "10-K": {
+          "count": 6,
+          "most_recent_filing_date": "2025-07-30",
+          "most_recent_acceptance_datetime": "2025-07-30T20:11:40.000Z"
+        },
+        "10-Q": {
+          "count": 19,
+          "most_recent_filing_date": "2026-04-29",
+          "most_recent_acceptance_datetime": "2026-04-29T20:06:24.000Z"
+        },
+        "25-NSE": {
+          "count": 1,
+          "most_recent_filing_date": "2021-09-03",
+          "most_recent_acceptance_datetime": "2021-09-03T20:58:34.000Z"
+        },
+        "form_4": {
+          "count": 733,
+          "most_recent_filing_date": "2026-06-16",
+          "most_recent_acceptance_datetime": "2026-06-16T22:07:25.000Z"
+        },
+        "144": {
+          "count": 41,
+          "most_recent_filing_date": "2026-06-04",
+          "most_recent_acceptance_datetime": "2026-06-04T20:15:29.000Z"
+        },
+        "SC_13G": {
+          "count": 8,
+          "most_recent_filing_date": "2024-02-13",
+          "most_recent_acceptance_datetime": "2024-02-13T22:09:47.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      }
+    },
+    {
+      "provider": "SEC",
+      "endpoint_family": "submissions",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/sec_edgar/NVDA/submissions.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 3,
+          "most_recent_filing_date": "2025-05-28",
+          "most_recent_acceptance_datetime": "2025-05-28T20:39:19.000Z"
+        },
+        "424B": {
+          "count": 4,
+          "most_recent_filing_date": "2026-06-17",
+          "most_recent_acceptance_datetime": "2026-06-17T00:47:08.000Z"
+        },
+        "S-8": {
+          "count": 4,
+          "most_recent_filing_date": "2022-08-31",
+          "most_recent_acceptance_datetime": "2022-08-31T21:25:49.000Z"
+        },
+        "8-K": {
+          "count": 61,
+          "most_recent_filing_date": "2026-06-30",
+          "most_recent_acceptance_datetime": "2026-06-30T20:27:26.000Z"
+        },
+        "10-K": {
+          "count": 6,
+          "most_recent_filing_date": "2026-02-25",
+          "most_recent_acceptance_datetime": "2026-02-25T21:42:19.000Z"
+        },
+        "10-Q": {
+          "count": 18,
+          "most_recent_filing_date": "2026-05-20",
+          "most_recent_acceptance_datetime": "2026-05-20T20:35:52.000Z"
+        },
+        "25-NSE": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "form_4": {
+          "count": 568,
+          "most_recent_filing_date": "2026-06-29",
+          "most_recent_acceptance_datetime": "2026-06-29T21:07:02.000Z"
+        },
+        "144": {
+          "count": 248,
+          "most_recent_filing_date": "2026-06-22",
+          "most_recent_acceptance_datetime": "2026-06-22T20:55:42.000Z"
+        },
+        "SC_13G": {
+          "count": 14,
+          "most_recent_filing_date": "2024-11-12",
+          "most_recent_acceptance_datetime": "2024-11-12T15:32:12.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      }
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "ticker_daily_aggregates",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/AAPL/ticker_daily_aggregates.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "bar_count": 17,
+      "ohlcv_fields_present": {
+        "t": true,
+        "o": true,
+        "h": true,
+        "l": true,
+        "c": true,
+        "v": true
+      }
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_financials",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/AAPL/massive_financials.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 4,
+      "field_presence": {
+        "cik": true,
+        "fiscal_period": true,
+        "fiscal_year": true,
+        "start_date": true,
+        "end_date": true,
+        "filing_date": false
+      },
+      "date_fields_present": {
+        "filing_date": false,
+        "end_date": true
+      },
+      "missing_required_fields": [
+        "filing_date"
+      ]
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_news",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/AAPL/massive_news.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 10,
+      "field_presence": {
+        "id": true,
+        "publisher": true,
+        "title": true,
+        "published_utc": true,
+        "article_url": true,
+        "tickers": true
+      },
+      "date_fields_present": {
+        "published_utc": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_financials",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/MSFT/massive_financials.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 4,
+      "field_presence": {
+        "cik": true,
+        "fiscal_period": true,
+        "fiscal_year": true,
+        "start_date": true,
+        "end_date": true,
+        "filing_date": false
+      },
+      "date_fields_present": {
+        "filing_date": false,
+        "end_date": true
+      },
+      "missing_required_fields": [
+        "filing_date"
+      ]
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_news",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/MSFT/massive_news.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 10,
+      "field_presence": {
+        "id": true,
+        "publisher": true,
+        "title": true,
+        "published_utc": true,
+        "article_url": true,
+        "tickers": true
+      },
+      "date_fields_present": {
+        "published_utc": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_financials",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/NVDA/massive_financials.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 4,
+      "field_presence": {
+        "cik": true,
+        "fiscal_period": true,
+        "fiscal_year": true,
+        "start_date": true,
+        "end_date": true,
+        "filing_date": false
+      },
+      "date_fields_present": {
+        "filing_date": false,
+        "end_date": true
+      },
+      "missing_required_fields": [
+        "filing_date"
+      ]
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_news",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/NVDA/massive_news.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 10,
+      "field_presence": {
+        "id": true,
+        "publisher": true,
+        "title": true,
+        "published_utc": true,
+        "article_url": true,
+        "tickers": true
+      },
+      "date_fields_present": {
+        "published_utc": true
+      },
+      "missing_required_fields": []
+    },
+    {
+      "provider": "Massive",
+      "endpoint_family": "massive_earnings_analyst_probe",
+      "symbol": "AAPL",
+      "status": "error",
+      "http_status": 403,
+      "error_type": "http_error",
+      "raw_sample_ref": "provider_samples/us_short_cut5_pass2_feasibility_20260701/raw/massive/AAPL/massive_earnings_analyst_probe.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": null
+      },
+      "result_count": 0,
+      "field_presence": {
+        "date": false,
+        "ticker": false,
+        "eps": false,
+        "eps_est": false,
+        "eps_surprise": false
+      },
+      "date_fields_present": {
+        "date": false
+      },
+      "missing_required_fields": [
+        "date",
+        "ticker",
+        "eps",
+        "eps_est",
+        "eps_surprise"
+      ]
+    }
+  ],
+  "symbol_results": [
+    {
+      "symbol": "AAPL",
+      "active_symbol_assumption": true,
+      "sec_cik_found": true,
+      "sec_cik10": "0000320193",
+      "sec_submissions_status": "success",
+      "sec_form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 4,
+          "most_recent_filing_date": "2024-11-01",
+          "most_recent_acceptance_datetime": "2024-11-01T10:49:43.000Z"
+        },
+        "424B": {
+          "count": 48,
+          "most_recent_filing_date": "2025-05-06",
+          "most_recent_acceptance_datetime": "2025-05-06T20:31:12.000Z"
+        },
+        "S-8": {
+          "count": 4,
+          "most_recent_filing_date": "2025-09-26",
+          "most_recent_acceptance_datetime": "2025-09-26T20:33:30.000Z"
+        },
+        "8-K": {
+          "count": 105,
+          "most_recent_filing_date": "2026-04-30",
+          "most_recent_acceptance_datetime": "2026-04-30T20:30:41.000Z"
+        },
+        "10-K": {
+          "count": 11,
+          "most_recent_filing_date": "2025-10-31",
+          "most_recent_acceptance_datetime": "2025-10-31T10:01:26.000Z"
+        },
+        "10-Q": {
+          "count": 33,
+          "most_recent_filing_date": "2026-05-01",
+          "most_recent_acceptance_datetime": "2026-05-01T10:01:00.000Z"
+        },
+        "25-NSE": {
+          "count": 5,
+          "most_recent_filing_date": "2025-11-14",
+          "most_recent_acceptance_datetime": "2025-11-14T21:10:12.000Z"
+        },
+        "form_4": {
+          "count": 590,
+          "most_recent_filing_date": "2026-06-17",
+          "most_recent_acceptance_datetime": "2026-06-17T22:40:43.000Z"
+        },
+        "144": {
+          "count": 45,
+          "most_recent_filing_date": "2026-05-27",
+          "most_recent_acceptance_datetime": "2026-05-27T20:00:33.000Z"
+        },
+        "SC_13G": {
+          "count": 23,
+          "most_recent_filing_date": "2024-02-14",
+          "most_recent_acceptance_datetime": "2024-02-14T21:47:05.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      },
+      "fmp_catalyst_status": {
+        "earnings_surprises": "error",
+        "analyst_estimates": "error",
+        "grades": "success"
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "active_symbol_assumption": true,
+      "sec_cik_found": true,
+      "sec_cik10": "0000789019",
+      "sec_submissions_status": "success",
+      "sec_form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 3,
+          "most_recent_filing_date": "2024-12-12",
+          "most_recent_acceptance_datetime": "2024-12-12T21:18:24.000Z"
+        },
+        "424B": {
+          "count": 3,
+          "most_recent_filing_date": "2024-05-06",
+          "most_recent_acceptance_datetime": "2024-05-06T20:20:48.000Z"
+        },
+        "S-8": {
+          "count": 2,
+          "most_recent_filing_date": "2025-12-30",
+          "most_recent_acceptance_datetime": "2025-12-30T21:11:18.000Z"
+        },
+        "8-K": {
+          "count": 66,
+          "most_recent_filing_date": "2026-06-05",
+          "most_recent_acceptance_datetime": "2026-06-05T14:36:56.000Z"
+        },
+        "10-K": {
+          "count": 6,
+          "most_recent_filing_date": "2025-07-30",
+          "most_recent_acceptance_datetime": "2025-07-30T20:11:40.000Z"
+        },
+        "10-Q": {
+          "count": 19,
+          "most_recent_filing_date": "2026-04-29",
+          "most_recent_acceptance_datetime": "2026-04-29T20:06:24.000Z"
+        },
+        "25-NSE": {
+          "count": 1,
+          "most_recent_filing_date": "2021-09-03",
+          "most_recent_acceptance_datetime": "2021-09-03T20:58:34.000Z"
+        },
+        "form_4": {
+          "count": 733,
+          "most_recent_filing_date": "2026-06-16",
+          "most_recent_acceptance_datetime": "2026-06-16T22:07:25.000Z"
+        },
+        "144": {
+          "count": 41,
+          "most_recent_filing_date": "2026-06-04",
+          "most_recent_acceptance_datetime": "2026-06-04T20:15:29.000Z"
+        },
+        "SC_13G": {
+          "count": 8,
+          "most_recent_filing_date": "2024-02-13",
+          "most_recent_acceptance_datetime": "2024-02-13T22:09:47.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      },
+      "fmp_catalyst_status": {
+        "earnings_surprises": "error",
+        "analyst_estimates": "error",
+        "grades": "success"
+      }
+    },
+    {
+      "symbol": "NVDA",
+      "active_symbol_assumption": true,
+      "sec_cik_found": true,
+      "sec_cik10": "0001045810",
+      "sec_submissions_status": "success",
+      "sec_form_families": {
+        "S-1": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "S-3": {
+          "count": 3,
+          "most_recent_filing_date": "2025-05-28",
+          "most_recent_acceptance_datetime": "2025-05-28T20:39:19.000Z"
+        },
+        "424B": {
+          "count": 4,
+          "most_recent_filing_date": "2026-06-17",
+          "most_recent_acceptance_datetime": "2026-06-17T00:47:08.000Z"
+        },
+        "S-8": {
+          "count": 4,
+          "most_recent_filing_date": "2022-08-31",
+          "most_recent_acceptance_datetime": "2022-08-31T21:25:49.000Z"
+        },
+        "8-K": {
+          "count": 61,
+          "most_recent_filing_date": "2026-06-30",
+          "most_recent_acceptance_datetime": "2026-06-30T20:27:26.000Z"
+        },
+        "10-K": {
+          "count": 6,
+          "most_recent_filing_date": "2026-02-25",
+          "most_recent_acceptance_datetime": "2026-02-25T21:42:19.000Z"
+        },
+        "10-Q": {
+          "count": 18,
+          "most_recent_filing_date": "2026-05-20",
+          "most_recent_acceptance_datetime": "2026-05-20T20:35:52.000Z"
+        },
+        "25-NSE": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        },
+        "form_4": {
+          "count": 568,
+          "most_recent_filing_date": "2026-06-29",
+          "most_recent_acceptance_datetime": "2026-06-29T21:07:02.000Z"
+        },
+        "144": {
+          "count": 248,
+          "most_recent_filing_date": "2026-06-22",
+          "most_recent_acceptance_datetime": "2026-06-22T20:55:42.000Z"
+        },
+        "SC_13G": {
+          "count": 14,
+          "most_recent_filing_date": "2024-11-12",
+          "most_recent_acceptance_datetime": "2024-11-12T15:32:12.000Z"
+        },
+        "SC_13D": {
+          "count": 0,
+          "most_recent_filing_date": null,
+          "most_recent_acceptance_datetime": null
+        }
+      },
+      "fmp_catalyst_status": {
+        "earnings_surprises": "error",
+        "analyst_estimates": "error",
+        "grades": "success"
+      }
+    }
+  ],
+  "feasibility_findings": {
+    "sec_filing_channel": {
+      "reachable_symbol_count": 3,
+      "form_families_seen": [
+        "10-K",
+        "10-Q",
+        "144",
+        "25-NSE",
+        "424B",
+        "8-K",
+        "S-3",
+        "S-8",
+        "SC_13G",
+        "form_4"
+      ],
+      "pit_dates_available": true,
+      "note": "SEC submissions gives form type + filingDate + acceptanceDateTime per filing — the §5.1a recency/materiality PIT clock. Materiality (active vs stale shelf, offering size) is a later parser concern; this probe proves the channel + dates are reachable & parseable."
+    },
+    "fmp_earnings_surprises": {
+      "reachable_symbol_count": 0,
+      "shape_ok_symbol_count": 0,
+      "observed_http_statuses": [
+        404
+      ],
+      "reachable": false
+    },
+    "fmp_analyst_estimates": {
+      "reachable_symbol_count": 0,
+      "shape_ok_symbol_count": 0,
+      "observed_http_statuses": [
+        400
+      ],
+      "reachable": false
+    },
+    "fmp_grades": {
+      "reachable_symbol_count": 3,
+      "shape_ok_symbol_count": 3,
+      "observed_http_statuses": [
+        200
+      ],
+      "reachable": true
+    },
+    "massive_per_ticker": {
+      "reachable": true,
+      "bar_count": 17,
+      "ohlcv_fields_present": {
+        "t": true,
+        "o": true,
+        "h": true,
+        "l": true,
+        "c": true,
+        "v": true
+      },
+      "note": "Per-ticker daily aggregates for the event window (catalyst price-reaction §4.2/§5.2); complements round-1's grouped-daily universe call."
+    },
+    "massive_financials": {
+      "reachable_symbol_count": 3,
+      "shape_ok_symbol_count": 0,
+      "observed_http_statuses": [
+        200
+      ],
+      "reachable": true,
+      "default_timeframe_probed": "ttm",
+      "filing_date_present_in_default_ttm": false,
+      "periodic_shape_evidence": "follow_up_execution",
+      "note": "the primary probe used the DEFAULT (ttm) timeframe, whose rollup returns a NULL filing_date, so shape_ok_symbol_count is 0 for the filing_date PIT field. The distinct PERIODIC quarterly/annual follow-up contains consumer-compatible PIT rows, but row coverage is partial; exact total/valid/invalid counts are frozen in follow_up_execution and no missing-clock row is represented as ready."
+    },
+    "massive_news": {
+      "reachable_symbol_count": 3,
+      "shape_ok_symbol_count": 3,
+      "observed_http_statuses": [
+        200
+      ],
+      "reachable": true
+    },
+    "massive_earnings_analyst_probe": {
+      "reachable_symbol_count": 0,
+      "shape_ok_symbol_count": 0,
+      "observed_http_statuses": [
+        403
+      ],
+      "reachable": false
+    },
+    "fmp_catalyst_vs_massive_note": [
+      "FMP earnings-surprises/analyst-estimates returned 404/400, so they were retried on Massive (Polygon). Polygon's reference model carries ACTUAL financials (massive_financials, with PIT filing_date) + news, but sell-side consensus/estimate/earnings-surprise is not a Polygon channel — the earnings/analyst probe records whether Massive proxies any such extension. Earnings SURPRISE needs an estimate half that no free source tried here (FMP catalyst or Massive/Polygon) returned; the actual-EPS half is available via massive_financials (and FMP income-statement, proven earlier)."
+    ],
+    "sec_semantic_5_1b": {
+      "channel": "filing_document_text",
+      "reachable_via_this_probe": false,
+      "note": "Going-concern / auditor-resignation / short-seller reports need filing-DOCUMENT text parsing, not companyfacts — out of this probe's scope. Confirms the semantic_audit_unavailable default stays honest until a document parser is built (later, gated)."
+    }
+  },
+  "validation_decision": {
+    "status": "feasibility_probe_completed_with_endpoint_errors",
+    "sr_provider_001_remains_open": true,
+    "provider_selection_allowed": false,
+    "binding_or_parser_authorized": false,
+    "datahub_allowed": false,
+    "production_storage_allowed": false,
+    "full_market_fetch_allowed": false,
+    "ship_gate_evidence_allowed": false
+  },
+  "prohibited_claims": {
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_readiness_claimed": false,
+    "provider_selected": false,
+    "datahub_ready": false,
+    "binding_or_parser_built": false,
+    "paper_result_relabelled_as_live": false
+  },
+  "limitations": [
+    "This is a three-symbol active-only feasibility probe of response shape / reachability, NOT coverage, PIT-semantics, license, or alpha evidence.",
+    "Raw payloads are stored only under gitignored provider_samples/; the tracked summary excludes secrets, request URLs, and raw payload rows.",
+    "FMP catalyst endpoints (earnings-surprises / analyst-estimates / grades) may be paid-tier — a 403/404 here is a feasibility finding, not an error to route around silently.",
+    "Massive/Polygon reference financials give ACTUAL statements (with PIT filing_date) + news, but sell-side estimates / consensus / earnings-surprise are not a Polygon channel; earnings SURPRISE needs an estimate half that no free source tried here returned — only the actual-EPS half is reachable.",
+    "The §5.1b semantic audit layer (going-concern / auditor-resignation / short-seller) needs filing-document text parsing and is out of scope; semantic_audit_unavailable stays the honest default.",
+    "Materiality/recency logic for dilution filings (active vs stale shelf, offering size) is a later parser concern; this probe proves only that the form-type + PIT dates are reachable and parseable.",
+    "No provider selection, schema-first binding, parser, DataHub, production storage, or ship-gate evidence is built or claimed; SR-PROVIDER-001 stays open.",
+    "Massive periodic-financials PIT coverage is partial: follow_up_execution freezes total and consumer-compatible row counts; null/invalid-clock rows are not PIT-ready evidence."
+  ],
+  "next_steps": [
+    "Codex review before any commit.",
+    "From the observed real shapes, decide per channel: schema-first binding + parser (if reachable + usable), or degrade/defer (if paid-walled/unreachable) — mirror the status_source / catalyst_source provenance pattern; do NOT broaden symbols, endpoints, providers, or market coverage without separate authorization."
+  ],
+  "endpoint_manifest": {
+    "per_family": {
+      "FMP:analyst_estimates": 3,
+      "FMP:earnings_surprises": 3,
+      "FMP:grades": 3,
+      "Massive:massive_earnings_analyst_probe": 1,
+      "Massive:massive_financials": 3,
+      "Massive:massive_news": 3,
+      "Massive:ticker_daily_aggregates": 1,
+      "SEC:company_tickers_mapping": 1,
+      "SEC:submissions": 3
+    },
+    "actual_total": 21,
+    "expected_manifest": {
+      "FMP:analyst_estimates": 3,
+      "FMP:earnings_surprises": 3,
+      "FMP:grades": 3,
+      "Massive:massive_earnings_analyst_probe": 1,
+      "Massive:massive_financials": 3,
+      "Massive:massive_news": 3,
+      "Massive:ticker_daily_aggregates": 1,
+      "SEC:company_tickers_mapping": 1,
+      "SEC:submissions": 3
+    },
+    "expected_total": 21,
+    "matches_expected": true
+  },
+  "follow_up_execution": {
+    "authorization_ref": "user_chat_20260701_cut5_massive_financials_periodic_reprobe",
+    "purpose": "massive_financials_periodic_shape_reprobe",
+    "endpoint_family": "massive_financials_periodic",
+    "reason": "the 21-call primary run probed massive_financials with the DEFAULT (ttm) timeframe, which returns a NULL filing_date; the distinct quarterly/annual follow-up found consumer-compatible PIT rows for 6/8 returned rows. Coverage is partial and is recorded explicitly; the follow-up is NOT folded into the primary budget.",
+    "calls": [
+      {
+        "symbol": "AAPL",
+        "timeframe": "quarterly",
+        "http_status": 200,
+        "results_count": 4,
+        "valid_filing_date_count": 3,
+        "valid_acceptance_datetime_count": 3,
+        "valid_pit_row_count": 3,
+        "all_filing_dates_valid": false,
+        "all_acceptance_datetimes_valid": false,
+        "raw_sample_ref_gitignored": true
+      },
+      {
+        "symbol": "AAPL",
+        "timeframe": "annual",
+        "http_status": 200,
+        "results_count": 4,
+        "valid_filing_date_count": 4,
+        "valid_acceptance_datetime_count": 3,
+        "valid_pit_row_count": 3,
+        "all_filing_dates_valid": true,
+        "all_acceptance_datetimes_valid": false,
+        "raw_sample_ref_gitignored": true
+      }
+    ],
+    "call_count": 2,
+    "primary_raw_artifact_count": 3,
+    "primary_raw_symbols": [
+      "AAPL",
+      "MSFT",
+      "NVDA"
+    ],
+    "total_result_count": 8,
+    "valid_pit_row_count": 6,
+    "all_filing_dates_valid": false,
+    "all_acceptance_datetimes_valid": false
+  }
+}

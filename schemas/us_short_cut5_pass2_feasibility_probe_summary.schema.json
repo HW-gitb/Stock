@@ -1,0 +1,410 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_cut5_pass2_feasibility_probe_summary.schema.json",
+  "title": "US-short Cut 5 Pass-2 audit-gate + catalyst data-layer feasibility probe summary",
+  "description": "Tracked, no-secret diagnostic summary of the gated small-sample feasibility probe. Pins every safety/honesty flag closed (const) and the legal status set; accepts the per-endpoint / per-symbol / feasibility diagnostic branches. Feasibility probe only: builds no binding/parser, selects no provider, authorizes no DataHub/production/ship-gate.",
+  "type": "object",
+  "required": [
+    "schema_name",
+    "schema_version",
+    "authorization_ref",
+    "generated_at",
+    "scope",
+    "pre_execution_checks",
+    "environment",
+    "storage",
+    "sample_universe",
+    "channels_probed",
+    "endpoint_call_budget",
+    "endpoint_manifest",
+    "endpoint_results",
+    "symbol_results",
+    "feasibility_findings",
+    "validation_decision",
+    "prohibited_claims",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_cut5_pass2_feasibility_probe_summary" },
+    "schema_version": { "const": "1.1.0" },
+    "schema_ref": { "type": "string" },
+    "authorization_ref": { "const": "user_chat_20260701_cut5_pass2_feasibility_probe" },
+    "generated_at": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}([.][0-9]+)?(Z|[+-][0-9]{2}:[0-9]{2})$" },
+    "scope": {
+      "type": "object",
+      "required": [
+        "market", "route", "batch", "cut", "purpose", "status",
+        "provider_live_probe_performed", "raw_payload_storage_performed",
+        "validation_only_raw_parse_performed", "binding_or_parser_built",
+        "datahub_consumption_performed", "production_storage_performed",
+        "full_market_call_performed", "yfinance_consumption_performed", "paid_tier_used",
+        "broker_or_order_execution_performed", "manual_order_only",
+        "ship_gate_or_live_normalized_evidence_claimed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "cut": { "const": "cut5_pass2_audit_gate_and_catalyst_data_layer" },
+        "purpose": { "const": "data_layer_feasibility_probe_only" },
+        "status": {
+          "enum": [
+            "dry_run_env_only",
+            "feasibility_probe_completed",
+            "feasibility_probe_completed_with_endpoint_errors"
+          ]
+        },
+        "provider_live_probe_performed": { "type": "boolean" },
+        "raw_payload_storage_performed": { "type": "boolean" },
+        "validation_only_raw_parse_performed": { "type": "boolean" },
+        "binding_or_parser_built": { "const": false },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "full_market_call_performed": { "const": false },
+        "yfinance_consumption_performed": { "const": false },
+        "paid_tier_used": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "manual_order_only": { "const": true },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "pre_execution_checks": {
+      "type": "object",
+      "required": [
+        "user_authorization_confirmed", "provider_samples_gitignore_confirmed",
+        "environment_precheck_passed", "fmp_api_key_present", "sec_user_agent_present",
+        "massive_api_key_present", "budget_precheck_passed", "no_yfinance", "no_datahub",
+        "no_full_market", "no_production_storage", "no_broker_or_order_execution"
+      ],
+      "properties": {
+        "user_authorization_confirmed": { "type": "boolean" },
+        "provider_samples_gitignore_confirmed": { "const": true },
+        "environment_precheck_passed": { "const": true },
+        "fmp_api_key_present": { "type": "boolean" },
+        "sec_user_agent_present": { "type": "boolean" },
+        "massive_api_key_present": { "type": "boolean" },
+        "budget_precheck_passed": { "const": true },
+        "no_yfinance": { "const": true },
+        "no_datahub": { "const": true },
+        "no_full_market": { "const": true },
+        "no_production_storage": { "const": true },
+        "no_broker_or_order_execution": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "environment": {
+      "type": "object",
+      "required": [
+        "fmp_api_key_present", "sec_user_agent_present", "massive_api_key_present", "secrets_logged"
+      ],
+      "properties": {
+        "fmp_api_key_present": { "type": "boolean" },
+        "fmp_api_key_source": { "type": "string" },
+        "sec_user_agent_present": { "type": "boolean" },
+        "sec_user_agent_source": { "type": "string" },
+        "massive_api_key_present": { "type": "boolean" },
+        "massive_api_key_source": { "type": "string" },
+        "secrets_logged": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "storage": {
+      "type": "object",
+      "required": [
+        "raw_payload_root", "raw_payload_root_gitignored", "tracked_summary_path",
+        "tracked_summary_contains_raw_rows", "tracked_summary_contains_raw_payload",
+        "secrets_in_summary", "request_urls_in_summary"
+      ],
+      "properties": {
+        "raw_payload_root": { "type": "string", "pattern": "^provider_samples/" },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_path": { "type": "string", "pattern": "^(docs/|provider_samples/)" },
+        "tracked_summary_contains_raw_rows": { "const": false },
+        "tracked_summary_contains_raw_payload": { "const": false },
+        "secrets_in_summary": { "const": false },
+        "request_urls_in_summary": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "sample_universe": {
+      "type": "object",
+      "required": ["symbols", "active_symbols_only", "max_symbols", "full_market_sample"],
+      "properties": {
+        "symbol_source": { "type": "string" },
+        "symbols": { "type": "array", "items": { "type": "string" }, "maxItems": 5 },
+        "active_symbols_only": { "const": true },
+        "max_symbols": { "type": "integer", "maximum": 5 },
+        "full_market_sample": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "channels_probed": {
+      "type": "object",
+      "required": [
+        "sec_submissions_form_families", "fmp_catalyst_endpoint_families",
+        "massive_per_ticker_aggregates_symbol", "massive_reference_endpoint_families"
+      ],
+      "properties": {
+        "sec_submissions_form_families": { "type": "array", "items": { "type": "string" } },
+        "fmp_catalyst_endpoint_families": { "type": "array", "items": { "type": "string" } },
+        "massive_per_ticker_aggregates_symbol": { "type": "string" },
+        "massive_reference_endpoint_families": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "endpoint_call_budget": {
+      "type": "object",
+      "required": ["max_total_endpoint_calls", "actual_total_endpoint_calls", "retry_count", "within_budget"],
+      "properties": {
+        "max_total_endpoint_calls": { "type": "integer", "maximum": 24 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 0, "maximum": 24 },
+        "retry_count": { "const": 0 },
+        "within_budget": { "const": true }
+      },
+      "additionalProperties": false
+    },
+    "endpoint_manifest": {
+      "type": "object",
+      "required": ["per_family", "actual_total", "expected_manifest", "expected_total", "matches_expected"],
+      "properties": {
+        "per_family": { "type": "object", "additionalProperties": { "type": "integer", "minimum": 0 } },
+        "actual_total": { "type": "integer", "minimum": 0, "maximum": 24 },
+        "expected_manifest": {
+          "const": {
+            "SEC:company_tickers_mapping": 1,
+            "SEC:submissions": 3,
+            "FMP:earnings_surprises": 3,
+            "FMP:analyst_estimates": 3,
+            "FMP:grades": 3,
+            "Massive:ticker_daily_aggregates": 1,
+            "Massive:massive_financials": 3,
+            "Massive:massive_news": 3,
+            "Massive:massive_earnings_analyst_probe": 1
+          }
+        },
+        "expected_total": { "const": 21 },
+        "matches_expected": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "follow_up_execution": {
+      "type": "object",
+      "required": [
+        "authorization_ref", "purpose", "endpoint_family", "calls", "call_count",
+        "primary_raw_artifact_count", "primary_raw_symbols", "total_result_count", "valid_pit_row_count",
+        "all_filing_dates_valid", "all_acceptance_datetimes_valid"
+      ],
+      "properties": {
+        "authorization_ref": { "const": "user_chat_20260701_cut5_massive_financials_periodic_reprobe" },
+        "purpose": { "const": "massive_financials_periodic_shape_reprobe" },
+        "endpoint_family": { "const": "massive_financials_periodic" },
+        "reason": { "type": "string" },
+        "calls": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": [
+            {
+              "type": "object",
+              "required": ["symbol", "timeframe", "http_status", "results_count", "valid_filing_date_count", "valid_acceptance_datetime_count", "valid_pit_row_count", "all_filing_dates_valid", "all_acceptance_datetimes_valid", "raw_sample_ref_gitignored"],
+              "properties": {
+                "symbol": { "const": "AAPL" }, "timeframe": { "const": "quarterly" },
+                "http_status": { "const": 200 }, "results_count": { "const": 4 },
+                "valid_filing_date_count": { "const": 3 }, "valid_acceptance_datetime_count": { "const": 3 },
+                "valid_pit_row_count": { "const": 3 }, "all_filing_dates_valid": { "const": false },
+                "all_acceptance_datetimes_valid": { "const": false }, "raw_sample_ref_gitignored": { "const": true }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "object",
+              "required": ["symbol", "timeframe", "http_status", "results_count", "valid_filing_date_count", "valid_acceptance_datetime_count", "valid_pit_row_count", "all_filing_dates_valid", "all_acceptance_datetimes_valid", "raw_sample_ref_gitignored"],
+              "properties": {
+                "symbol": { "const": "AAPL" }, "timeframe": { "const": "annual" },
+                "http_status": { "const": 200 }, "results_count": { "const": 4 },
+                "valid_filing_date_count": { "const": 4 }, "valid_acceptance_datetime_count": { "const": 3 },
+                "valid_pit_row_count": { "const": 3 }, "all_filing_dates_valid": { "const": true },
+                "all_acceptance_datetimes_valid": { "const": false }, "raw_sample_ref_gitignored": { "const": true }
+              },
+              "additionalProperties": false
+            }
+          ],
+          "additionalItems": false
+        },
+        "call_count": { "const": 2 },
+        "primary_raw_artifact_count": { "const": 3 },
+        "primary_raw_symbols": { "const": ["AAPL", "MSFT", "NVDA"] },
+        "total_result_count": { "const": 8 },
+        "valid_pit_row_count": { "const": 6 },
+        "all_filing_dates_valid": { "const": false },
+        "all_acceptance_datetimes_valid": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "endpoint_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["provider", "endpoint_family", "status", "raw_sample_ref_gitignored"],
+        "properties": {
+          "provider": { "enum": ["FMP", "SEC", "Massive"] },
+          "endpoint_family": { "type": "string" },
+          "symbol": { "type": ["string", "null"] },
+          "status": { "enum": ["success", "error"] },
+          "http_status": { "type": ["integer", "null"] },
+          "error_type": { "type": ["string", "null"] },
+          "raw_sample_ref": { "type": "string" },
+          "raw_sample_ref_gitignored": { "const": true }
+        },
+        "additionalProperties": true
+      }
+    },
+    "symbol_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["symbol", "sec_cik_found", "sec_submissions_status", "fmp_catalyst_status"],
+        "additionalProperties": true
+      }
+    },
+    "feasibility_findings": {
+      "type": "object",
+      "required": [
+        "sec_filing_channel", "fmp_earnings_surprises", "fmp_analyst_estimates",
+        "fmp_grades", "massive_per_ticker", "massive_financials", "sec_semantic_5_1b"
+      ],
+      "properties": {
+        "massive_financials": {
+          "type": "object",
+          "required": ["default_timeframe_probed", "filing_date_present_in_default_ttm", "periodic_shape_evidence"],
+          "properties": {
+            "reachable_symbol_count": { "type": "integer", "minimum": 0 },
+            "shape_ok_symbol_count": { "type": "integer", "minimum": 0 },
+            "observed_http_statuses": { "type": "array", "items": { "type": "integer" } },
+            "reachable": { "type": "boolean" },
+            "default_timeframe_probed": { "const": "ttm" },
+            "filing_date_present_in_default_ttm": { "const": false },
+            "periodic_shape_evidence": { "enum": ["pending_followup_reprobe", "follow_up_execution"] },
+            "note": { "type": "string" }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": true
+    },
+    "validation_decision": {
+      "type": "object",
+      "required": [
+        "status", "sr_provider_001_remains_open", "provider_selection_allowed",
+        "binding_or_parser_authorized", "datahub_allowed", "production_storage_allowed",
+        "full_market_fetch_allowed", "ship_gate_evidence_allowed"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "dry_run_env_only",
+            "feasibility_probe_completed",
+            "feasibility_probe_completed_with_endpoint_errors"
+          ]
+        },
+        "sr_provider_001_remains_open": { "const": true },
+        "provider_selection_allowed": { "const": false },
+        "binding_or_parser_authorized": { "const": false },
+        "datahub_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "full_market_fetch_allowed": { "const": false },
+        "ship_gate_evidence_allowed": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "required": [
+        "live_normalized_evidence_claimed", "ship_gate_evidence_claimed",
+        "production_readiness_claimed", "provider_selected", "datahub_ready",
+        "binding_or_parser_built", "paper_result_relabelled_as_live"
+      ],
+      "properties": {
+        "live_normalized_evidence_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "production_readiness_claimed": { "const": false },
+        "provider_selected": { "const": false },
+        "datahub_ready": { "const": false },
+        "binding_or_parser_built": { "const": false },
+        "paper_result_relabelled_as_live": { "const": false }
+      },
+      "additionalProperties": false
+    },
+    "limitations": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+    "next_steps": { "type": "array", "items": { "type": "string" }, "minItems": 1 }
+  },
+  "allOf": [
+    {
+      "$comment": "a LIVE provider probe requires confirmed user authorization (no live-without-auth summary)",
+      "if": {
+        "required": ["scope"],
+        "properties": { "scope": { "required": ["provider_live_probe_performed"], "properties": { "provider_live_probe_performed": { "const": true } } } }
+      },
+      "then": {
+        "required": ["pre_execution_checks"],
+        "properties": { "pre_execution_checks": { "required": ["user_authorization_confirmed"], "properties": { "user_authorization_confirmed": { "const": true } } } }
+      }
+    },
+    {
+      "$comment": "a dry-run-env summary must claim NO live probe / NO raw storage / NO raw parse",
+      "if": {
+        "required": ["scope"],
+        "properties": { "scope": { "required": ["status"], "properties": { "status": { "const": "dry_run_env_only" } } } }
+      },
+      "then": {
+        "properties": { "scope": { "properties": {
+          "provider_live_probe_performed": { "const": false },
+          "raw_payload_storage_performed": { "const": false },
+          "validation_only_raw_parse_performed": { "const": false }
+        } } }
+      }
+    },
+    {
+      "$comment": "a COMPLETED run's recomputed manifest + budget are frozen at the 21-call plan (wrong per-family/total cannot pass)",
+      "if": {
+        "required": ["scope"],
+        "properties": { "scope": { "required": ["status"], "properties": { "status": { "enum": ["feasibility_probe_completed", "feasibility_probe_completed_with_endpoint_errors"] } } } }
+      },
+      "then": {
+        "properties": {
+          "endpoint_manifest": {
+            "properties": {
+              "actual_total": { "const": 21 },
+              "matches_expected": { "const": true },
+              "per_family": {
+                "const": {
+                  "SEC:company_tickers_mapping": 1,
+                  "SEC:submissions": 3,
+                  "FMP:earnings_surprises": 3,
+                  "FMP:analyst_estimates": 3,
+                  "FMP:grades": 3,
+                  "Massive:ticker_daily_aggregates": 1,
+                  "Massive:massive_financials": 3,
+                  "Massive:massive_news": 3,
+                  "Massive:massive_earnings_analyst_probe": 1
+                }
+              }
+            }
+          },
+          "endpoint_call_budget": { "properties": { "actual_total_endpoint_calls": { "const": 21 } } }
+        }
+      }
+    },
+    {
+      "$comment": "if the summary claims the periodic filing_date evidence lives in follow_up_execution, the exact 2-call block MUST be present — a reconciled/tracked artifact cannot cite it without carrying it (Codex re-review residual)",
+      "if": {
+        "required": ["feasibility_findings"],
+        "properties": { "feasibility_findings": { "required": ["massive_financials"], "properties": { "massive_financials": { "required": ["periodic_shape_evidence"], "properties": { "periodic_shape_evidence": { "const": "follow_up_execution" } } } } } }
+      },
+      "then": { "required": ["follow_up_execution"] }
+    }
+  ],
+  "additionalProperties": false
+}
