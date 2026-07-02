@@ -1,0 +1,77 @@
+{
+  "artifact_id": "us_short_seam_score_binding_20260702",
+  "schema_version": "1.0.0",
+  "owner": "US-short batch5 Cut 6-d score composer seam",
+  "design_authority": "docs/us_short_system_design.md section 4.0, 4.2, and 4.5",
+  "composer_ref": "engine/us_short_seam_score.py::compose_score_inputs",
+  "component_projection_refs": [
+    "engine/us_short_seam_momentum.py::project_momentum_block",
+    "engine/us_short_seam_theme.py::project_theme_block",
+    "engine/us_short_seam_catalyst.py::project_catalyst_block"
+  ],
+  "selection_inputs_consumer_ref": "engine/us_short_weekend_pipeline.py::_select_top15",
+  "analysis_consumer_ref": "engine/us_short_weekend_analysis.py::analyze_rows",
+  "identity_policy": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only",
+  "component_keys": [
+    "momentum",
+    "theme",
+    "catalyst"
+  ],
+  "score_block_keys": [
+    "momentum",
+    "theme",
+    "catalyst"
+  ],
+  "theme_momentum_policy": "theme_momentum_score uses the scored theme block when present; neutral or missing theme evidence maps to 0.0 for theme seats while core_score still applies its neutral-block rule",
+  "theme_momentum_neutral_score": 0.0,
+  "input_contract": {
+    "projection_required_keys": [
+      "value_map",
+      "neutral_fill_tickers",
+      "coverage",
+      "target_count",
+      "scored_count"
+    ],
+    "component_value_maps": {
+      "momentum": "momentum_by_ticker",
+      "theme": "theme_block_by_ticker",
+      "catalyst": "catalyst_block_by_ticker"
+    },
+    "projection_partition_policy": "For each component, scored value identities plus neutral_fill_tickers must exactly partition target_tickers; coverage must exactly cover target_tickers; target_count and scored_count must match.",
+    "risk_downgrade_policy": "risk_downgrade_by_ticker must exactly cover target_tickers; every row must validate as engine.us_short_risk_downgrade.validate_risk_downgrade_input output; missing does not default to zero.",
+    "numeric_value_policy": "exact_builtin_int_or_float_only",
+    "block_value_domain": [0.0, 100.0]
+  },
+  "output_contract": {
+    "required_keys": [
+      "selection_inputs",
+      "analysis_by_ticker",
+      "coverage_by_ticker",
+      "target_tickers",
+      "scoring_profile",
+      "scored_component_counts"
+    ],
+    "selection_row_keys": [
+      "core_score",
+      "theme_momentum_score"
+    ],
+    "analysis_row_keys": [
+      "score_blocks",
+      "risk_downgrade",
+      "scoring_profile"
+    ],
+    "coverage_row_keys": [
+      "momentum",
+      "theme",
+      "catalyst"
+    ],
+    "same_run_reconciliation": "selection_inputs.per_ticker[ticker].core_score is composed from the same score_blocks and risk_downgrade carried to analysis_by_ticker[ticker]."
+  },
+  "authorization_boundary": {
+    "provider_call": false,
+    "live_data": false,
+    "datahub_write": false,
+    "production_runner": false,
+    "broker_or_order_execution": false
+  }
+}

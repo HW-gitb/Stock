@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-d score composer repair — R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP)
+
+- **Verdict/Action**: PASS + reviewer 提交 6d slice。两处 Required 全闭:real-producer positive control 真跑三 seam→composer→`analyze_rows`(scored+absent);value_key 改 runtime 从各 seam `OUTPUT_KEYS[0]` 派生(硬编码消失、改名自动传播)+ binding-conformance 三角化全链。只提交 6d slice;Codex 的 process-doc anti-hang WIP(checklist+guard)是独立 scope、不混入。
+- **Required**: R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP → resolved(closure 见 `system_risk_register.md`,单一来源)。Optional(composer→`_select_top15` 对称 e2e 测试)未加、非阻塞。
+- **Verify**: full offline `discover -p test_us_short*.py` `3479 OK`(亲跑、收紧);focused seam+schema `16 OK`;邻接 core_score/risk_downgrade/weekend_analysis `87 OK`;独立对抗探针 hostile eq-bomb ticker→ScoreSeamError。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `修复` (US-short Cut 6-d score composer real-producer/value-key repair)
+
+- **Verdict/Action**: fixed pending Claude review for `R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP`. Added a real-producer positive control that runs the actual momentum/theme/catalyst seams into `compose_score_inputs`, and moved score-composer component value keys to seam-derived `COMPONENT_VALUE_KEYS`. Scope stayed offline US-short Cut 6-d only; no scoring-weight, provider/live/DataHub/runner/production/broker/order/A-share/A-long/US-long change.
+- **Required**: current R-ID fixed pending reviewer; full repair/closure evidence is in `docs/system_risk_register.md`. Existing process-doc anti-hang WIP remains a separate uncommitted slice and is not part of this Cut 6-d repair.
+- **Verify**: red first `tests.test_us_short_seam_score` failed on missing `COMPONENT_VALUE_KEYS`; after repair focused seam+schema `16 OK`, fixed adjacent pack `276 OK`. Independent lightweight self-review returned PASS.
+- **Proof-of-use**: workspace Python loaded and `STOCK_TEST_PYTHON` used; TDD red→green used; one no-history current-diff-only self-review used `fork_context=false`, did not run big packs, returned PASS within 2-3 minutes, no restart/fallback needed; fixed pack run concentrated once after code/register edits.
+- **Next**: Claude Code：审查当前 Cut 6-d repair diff，PASS 后提交；不要混入 provider/live/DataHub/production/A-share 或无关 process-doc WIP。
+
+## 2026-07-02 — Claude 审查 FAIL (US-short Cut 6-d score composer — R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP)
+
+- **Verdict/Action**: FAIL。composer 打分/同源正确(analysis 真 `analyze_rows` 重算==selection、happy-path 81/45/34.5 手核、消费者字段匹配、consumer-validation 硬闭、全包 3478 OK 亲跑);但**输入侧无 real-producer positive control + value_key(engine↔binding↔seam `OUTPUT_KEYS`)未三角化**→seam 输出键漂移静默拒真输出无测试抓。§18.2 同类、sibling 都闭过。未提交。
+- **Required**: R-USSHORT-BATCH5-SEAM-SCORE-COMPOSER-REAL-PRODUCER-AND-VALUE-KEY-TRIANGULATION-GAP(P2)— 完整 finding/repair/边界见 `system_risk_register.md`(单一来源)。
+- **Verify**: focused seam+schema `15 OK`;邻接 core_score/risk_downgrade/weekend_analysis `87 OK`;full offline `discover -p test_us_short*.py` `3478 OK`(亲跑、收紧全包);grep 证 `_select_top15` 消费 `{core_score,theme_momentum_score}` + 无真-seam→composer 测试 + binding-conformance 不查 value_maps。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `执行` (pre-Codex checklist self-review anti-hang hardening)
+
+- **Verdict/Action**: user-approved process hardening; extended `docs/pre_codex_self_review_checklist.md §0` with a pinned self-review anti-hang contract: `fork_context=false`, current-diff-only prompt, `PASS / FAIL` output, no big packs in subagent, one close/restart, second-timeout stop, main-thread checklist fallback, and unrelated-dirty-file scope marking. Added doc-governance guard anchors so this no longer relies on chat memory.
+- **Required**: none; no new R-ID. Docs/process only; no business/schema/runner/provider/live/DataHub/production/broker/order/A-share change.
+- **Verify**: red first new guard failed on missing `self-review anti-hang contract`; after checklist patch focused guard `1 OK`, doc-governance `34 OK`, docs/process `59 OK`; `git diff --check` clean (CRLF warnings only).
+- **Pre-Codex self-review / Proof-of-use**: TDD red→green used. First narrow self-review FAIL found missing current-diff-only + 2-3 minute timeout guard anchors; fixed both. Second narrow self-review PASS. Current task scope is only checklist + doc-governance guard + this SESSION_LOG entry. Existing Cut 6-d WIP remains a separate uncommitted slice and must not be mixed into this process-doc review.
+- **Next**: Claude Code：审查当前 self-review anti-hang docs/guard diff，PASS 后提交；不要混入 Cut 6-d WIP。
+
 ## 2026-07-02 — Claude 提交 (reviewer full-pack 收紧 + 亲跑全包回溯验证)
 
 - **Verdict/Action**: 提交 user-directed「收紧」——`AGENTS.md §Role split` process-speed 加「Reviewer full-pack rule」:`审查` PASS 前 reviewer 必**亲跑** lane 全包(US-short=full offline `*us_short*` discover)、**不采信执行方 full-suite 报告/转述计数**、每个失败按因归类(reviewed-slice→FAIL / 已存 tracked / 执行方 env 产物 / 未跟踪并发 WIP);doc-governance guard 加 assertIn 钉死;memory 同步。**回溯验证**:亲跑本机 = `3478 OK` 全绿——Codex 一直转述的「6 batch4 ACCOUNT_INVALID」是其 env 子进程缺 jsonschema 的产物、本机不存在;theme(`abad9ea6`)/catalyst(`721d2ef3`)全包级干净。撞见 Codex 并发写 Cut 6-d(`us_short_seam_score`)在飞 WIP(现已交接、待我下一轮审)。
