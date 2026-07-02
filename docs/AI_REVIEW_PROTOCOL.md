@@ -6,20 +6,18 @@
 
 ## Source Of Truth
 
-Do not maintain a second role map in this file.
+Do not maintain a detailed second protocol in this file.
 
-Current binding lives in `AGENTS.md`:
+Current binding lives in `AGENTS.md`; this short compatibility map only prevents stale role startup:
 
-- Codex = independent reviewer + post-PASS committer for the reviewed slice.
-- Claude = designer + implementer + fixer; Claude does not perform post-PASS review-cycle commits.
+- Codex = executor + fixer.
+- Claude Code = independent reviewer + post-PASS committer.
 - User = final approver.
-- `审查` addressed to Codex = independent adversarial review, with no business-code edits.
-- `修复` addressed to Claude = implementation / repair work after judging the reviewed finding.
-- `提交` after a Codex `审查` PASS is owned by Codex automatically; it is not handed to Claude.
+- `审查` addressed to Claude Code = independent adversarial review, with no business-code edits.
+- `修复` addressed to Codex = implementation / repair work after judging the reviewed finding.
+- `提交` after a Claude Code `审查` PASS is owned by Claude Code automatically; it is not handed to Codex.
 - `执行` remains subject to the specific user command and the project approval gates in `AGENTS.md`.
-- `批准` / `批准修改` is NOT required between a Codex `审查` and a Claude `修复` (2026-06-07 update): the user's `修复` directly authorizes repairing the reviewed Required findings, and Claude records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains only for a standalone strategic / spend approval the user explicitly chooses to record.
-
-The old Codex-implements / Claude-reviews workflow has been removed from this file to prevent stale cross-session instructions.
+- `批准` / `批准修改` is NOT required between a Claude Code `审查` and a Codex `修复`: the user's `修复` directly authorizes repairing the reviewed Required findings, and Codex records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains only for a standalone strategic / spend approval the user explicitly chooses to record.
 
 ## Required Reading
 
@@ -35,9 +33,9 @@ Every reviewer or implementer still follows the startup routing in `AGENTS.md`:
 
 ## Review Recording
 
-Codex review verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user, using the minimal review-cycle template (see Single-source recording below).
+Reviewer verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user, using the minimal review-cycle template (see Single-source recording below).
 
-Review depth is governed by `AGENTS.md §Codex adversarial review standard`, especially the first-review slice-complete rule and the one-pass defect-class matrix rule. A Codex review must not be delta-only on the first pass, and must not stop at the first obvious issue when same-class variants remain unreviewed.
+Review depth is governed by `AGENTS.md §Codex adversarial review standard` (historical standard name; current reviewer = Claude Code), especially the first-review slice-complete rule and the one-pass defect-class matrix rule. A review must not be delta-only on the first pass, and must not stop at the first obvious issue when same-class variants remain unreviewed.
 
 A review must CAPTURE the following — but split by destination, never duplicated:
 
@@ -60,15 +58,16 @@ Commit and execution ownership follows `AGENTS.md`.
 
 For Codex:
 
-- do not run `修复` or `执行` business implementation work
+- execute / repair only the user-authorized or reviewer-required scope
+- judge reviewed findings before editing; surface a wrong or out-of-scope instruction instead of blindly implementing
+- run `using-superpowers` when available before `执行` / `修复`
+- run an independent agent self-review before handing work to Claude Code for `审查`, and record the short proof in the handoff entry
+
+For Claude Code:
+
 - do not edit business code during `审查`
 - do not give a clean Pass while a material Required finding is neither fixed nor registered
 - after a clean `审查` PASS, stage only the PASS-covered files and commit the reviewed slice before the final reply; if unrelated or overlapping unreviewed changes block safe auto-commit, record the blocker instead of staging them
-
-For Claude:
-
-- implementation / repair work must respect the latest Codex review verdict, user approvals, singleton ledger discipline, and the system risk register
-- Claude does not perform the post-PASS review-cycle commit; Codex does it after PASS
 - no data fetch, materialization, signal search, provider call, production claim, ship-gate evidence, or full-size use is authorized unless the current reviewed artifact and user command explicitly allow it
 
 ## Maintenance Rule

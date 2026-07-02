@@ -8,6 +8,74 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS (role-swap slice 收口 — R-ROLESWAP-CURRENT-STALE-ROLE-BINDING · R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP)
+
+- **Verdict/Action**: PASS，reviewer 收口提交整片（用户援引 auto-commit-on-PASS 规则放行原 `先别提交`）：AGENTS/AI_REVIEW_PROTOCOL/README/CURRENT 角色对调 + CURRENT 旧绑定修正 + 用户批准的 1 行 protocol gate（§Role split，钉进现有 role guard）+ 两轮 scope-creep（Options/Optional、命令批量）已剥离。
+- **Required**: R-ROLESWAP-CURRENT-STALE-ROLE-BINDING + R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP → resolved（closure 见 `system_risk_register.md`，单一来源）。
+- **Verify**: doc-governance 31 OK；gate 行在 §Role split 且被现有 `test_role_swap_execution_review_contract_is_pinned` assertIn 钉住；strip 两契约 grep 0；CURRENT 角色 token 正确；`git diff --check` clean。
+- **Next**: 无（本片已提交）。
+
+## 2026-07-02 — Codex `修复` (R-DOCGOV one-line gate)
+
+- **Verdict/Action**: fixed；按用户批准补 1 行 protocol/guard gate 到 `AGENTS.md §Role split and command ownership`，并只在现有 role-swap guard 增加 1 个 `assertIn`。
+- **Required**: `R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP` fixed pending reviewer；完整 finding/repair/closure 见 `system_risk_register.md`。
+- **Verify**: one-line gate focused guard red→green；doc-governance+README+route-doc 56 OK；diff-check CRLF-only。
+- **Pre-Codex self-review**: `using-superpowers` + `receiving-code-review` + TDD used；Required judged correct；no new test method, no restored Options/Optional or command-batching protocol, no business-code files touched. Tests passing ≠ design closure.
+- **Next**: Claude Code：审查 current role-swap/CURRENT + one-line gate repair and commit if PASS。
+
+## 2026-07-02 — Claude 审查 (R-DOCGOV strip 复审 PASS + 用户批准 gate 待加 — R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP)
+
+- **Verdict/Action**: 剥离复审 PASS——两条自加协议 + 2 guard 已干净移除、role-swap + CURRENT 完整、guard 31 OK。但用户 `加gate` 批准在 Codex strip 之后到达、gate 尚未加，slice 未完，先不提交。
+- **Required**: R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP — 余项=加 1 行 gate（§Role split and command ownership，钉进现有 `test_role_swap_execution_review_contract_is_pinned` 一个 assertIn、不新建测试）；完整见 `system_risk_register.md`（单一来源）。
+- **Verify**: doc-governance 31 OK；AGENTS `Optional is disposition-first`/`Batch command dispatch default` grep 0；AGENTS diff 回到纯 role-swap；CURRENT 未回归。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `修复` (R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP)
+
+- **Verdict/Action**: fixed；剥离两条未授权 AGENTS implementer 协议扩展及对应两个 guard，保留 role-swap + CURRENT 修复。
+- **Required**: `R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP` fixed pending reviewer；完整 finding/repair/closure 见 `system_risk_register.md`。
+- **Verify**: removed Options/Optional + command-batching anchors/guards；doc-governance 31 OK；doc-governance+README+route-doc 56 OK；diff-check CRLF-only。
+- **Pre-Codex self-review**: `using-superpowers` + `receiving-code-review` used；Required judged correct；class = unrequested protocol expansion, both examples and both tests removed. Tests passing ≠ design closure.
+- **Next**: Claude Code：审查当前 protocol scope-creep repair and commit if PASS。
+
+## 2026-07-02 — Claude 审查 FAIL (role-swap slice 协议 scope-creep — R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP)
+
+- **Verdict/Action**: FAIL；R-ROLESWAP 的 CURRENT 修复仍正确、可提交，但 slice 连着两轮夹入执行方自加、用户未批准的 AGENTS 协议规则（Options/Optional + 命令批量调度）+ 2 个 guard，每会话付税且逐轮膨胀（guard 130→168→198）；命令批量与本地 review-efficiency hook 重复。用户指令「删掉导致这个的原因」。
+- **Required**: R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP — 剥离两条新增契约 + 两个 guard、还原为纯 role-swap + CURRENT 修复；standing gate + 完整边界见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: `.tools/run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard` → 33 OK（新增全绿、问题是范围非测试失败）；CURRENT 角色修复未回归。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `修复` (command batching process guard)
+
+- **Verdict/Action**: 固化执行方命令批量调度机制；`AGENTS.md` now requires safe independent status/diff/search/test checks to run in one batch, and `tests/test_doc_governance_guard.py` pins it.
+- **Required**: 无新 R-ID；process hardening only；independent agent found missing SESSION_LOG mention, now fixed here; no register finding needed.
+- **Verify**: command-batching guard red→green; doc-governance+README+route-doc 58 OK; batching anchors present in AGENTS + guard; diff-check CRLF-only.
+- **Pre-Codex self-review**: `using-superpowers` + TDD used; independent agent `019f21dc-fa46-7ae0-9ac2-2793e5ece308` found SESSION_LOG gap → fixed; no business-code files touched. Tests passing ≠ design closure.
+- **Next**: Claude Code：审查当前 command batching process guard repair and commit if PASS。
+
+## 2026-07-02 — Codex `修复` (role-swap CURRENT + Options/Optional guard)
+
+- **Verdict/Action**: 修复 `R-ROLESWAP-CURRENT-STALE-ROLE-BINDING`；CURRENT 两处旧角色绑定已改为 Codex=Executor+Fixer / Claude Code=Reviewer+Committer；新增 Optional/Options 执行方判断 guard。
+- **Required**: `R-ROLESWAP-CURRENT-STALE-ROLE-BINDING` fixed pending reviewer；完整 finding/repair/closure 见 `system_risk_register.md`；Options/Optional 为 process hardening，无新 R-ID。
+- **Verify**: new Options/Optional guard red→green；CURRENT role-swap guard red→green；doc-governance 32 OK；doc-governance+README+route-doc 57 OK；diff-check CRLF-only。
+- **Pre-Codex self-review**: `using-superpowers` used；independent agent `019f21ca-81bb-7d42-82cd-01f8685350a0` found CURRENT stale role binding → fixed + guard extended；A-F/B ripple covered AGENTS/CURRENT/AI_REVIEW_PROTOCOL/README。Tests passing ≠ design closure。
+- **Next**: Claude Code：审查当前 role-swap CURRENT + Optional/Options guard repair and commit if PASS。
+
+## 2026-07-02 — Claude 审查 FAIL (role-swap slice completeness — R-ROLESWAP-CURRENT-STALE-ROLE-BINDING)
+
+- **Verdict/Action**: FAIL；角色互换 5 文件（AGENTS / AI_REVIEW_PROTOCOL / README / SESSION_LOG / guard）本身正确一致，但漏改必读启动文档 `docs/CURRENT.md` L113+L157（仍写 Claude=Designer+Implementer、Codex=Independent Reviewer，与新分工相反）；Codex `修复` 的「active-doc old-role rg 0 hits」断言不成立。
+- **Required**: R-ROLESWAP-CURRENT-STALE-ROLE-BINDING — 完整 finding / 整类枚举 / Required repair（改 CURRENT 两行 + 扩 guard 覆盖 CURRENT）/ Optional（adversarial-review-standard 注脚）/ 边界见 `system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: `rg` 角色定义 token 跨 docs/*.md → 仅 CURRENT.md:113/157 为当前态旧绑定（handoff/archive 为历史、非 material）；`.tools/run_unittest_with_repo_pythonpath.cmd tests.test_doc_governance_guard` → 31 OK（全绿却漏 CURRENT = guard 覆盖缺口）。
+- **Next**: Codex：修复
+
+## 2026-07-02 — Codex `修复` (role-swap process gates)
+
+- **Verdict/Action**: 修复角色互换流程：Codex=执行/修复，Claude Code=审查/提交；同步 `AGENTS.md` / `docs/AI_REVIEW_PROTOCOL.md` / `docs/README.md`，并扩展 doc-governance guard。
+- **Required**: 无新 R-ID；process hardening only，register 不新增 finding；独立 agent 抓到的 closeout/template 旧绑定已本轮修复。
+- **Verify**: role-swap guard OK；doc-governance 31 OK；doc-governance+README+route-doc 56 OK；active-doc old-role `rg` 0 hits；wrapper no-override smoke 2 OK；diff-check CRLF-only。
+- **Pre-Codex self-review**: `using-superpowers` used；independent agent `019f21b5-56d8-77d0-a857-b001e7812420` FAIL found stale closeout/template binding → fixed；A-F/B ripple covered startup docs + guard。Tests passing ≠ design closure。
+- **Next**: Claude Code：审查当前 role-swap process gates + wrapper/guard docs changes and commit if PASS。
+
 ## 2026-07-02 — Claude 审查 PASS (Codex jsonschema wrapper/guard 复审收口 — R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT)
 
 - **Verdict/Action**: PASS；复审 Codex 对 `R-DOCGOV-JSONSCHEMA-WRAPPER-GUARD-SYSPATH-OVERSTRICT` 的修复，精确对齐 Required repair：坏的「`.tools/python_libs` 在 ambient sys.path」断言换成「`import jsonschema` 可导入 + Draft7Validator」+ 隔离 `python -S` 子进程验 vendored fallback；wrapper 路由 guard 另断言 `.cmd` 无 `-ExecutionPolicy Bypass`/无硬编码 runtime 路径。用户令「没意见就提交」→ 本轮提交整批（`.tools/*.cmd` + AGENTS §3/§5 + guard + finding resolved + 本 review-cycle 记录）。

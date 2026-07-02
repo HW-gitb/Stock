@@ -15,13 +15,13 @@
 - `docs/SESSION_LOG.md` 顶部 1-3 条：最新跨 LLM 交接、review verdict、pending Optional。
 - `docs/AI_REVIEW_PROTOCOL.md`：review 流程和短命令。
 
-## 审查输出/落盘短入口（Codex 必读）
+## 审查输出/落盘短入口（当前 reviewer/committer 必读；旧 Codex 标准）
 
-用户下达 `审查` 或要求按审查流程收口时，Codex 在发送最终回复前必须先完成落盘：把 `docs/SESSION_LOG.md` 顶部、`REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER` 之上 prepend 一条极简 review-cycle entry（`Verdict/Action` / `Required` / `Verify` / `Next`）；material Required 的完整细节只写 `docs/system_risk_register.md`。
+用户下达 `审查` 或要求按审查流程收口时，当前 reviewer/committer 在发送最终回复前必须先完成落盘：把 `docs/SESSION_LOG.md` 顶部、`REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER` 之上 prepend 一条极简 review-cycle entry（`Verdict/Action` / `Required` / `Verify` / `Next`）；material Required 的完整细节只写 `docs/system_risk_register.md`。
 
-屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**大白话只放在前两段**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写一行最简单给另一个 LLM 的命令，如 `Claude Code：Pass`、`Claude Code：修复`、`Claude Code：执行`，不写 `大白话`、不写解释，具体指示放 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 Codex 自动提交已审查工作树，`下一步` 不再指示 Claude `提交`；Claude 只实现/修复。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
+屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**大白话只放在前两段**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写一行最简单给另一个 LLM 的命令，如 `Codex：Pass`、`Codex：修复`、`Codex：执行`，不写 `大白话`、不写解释，具体指示放 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后当前 reviewer/committer 自动提交已审查工作树，`下一步` 不再指示 executor/fixer `提交`；executor/fixer 只实现/修复。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
 
-若没有写入 SESSION_LOG 极简 entry，Codex 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
+若没有写入 SESSION_LOG 极简 entry，当前 reviewer/committer 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
 
 **Route-doc 稳定性约定 (v3)**：**单一 live-state 真相源 = `docs/SESSION_LOG.md` 顶部最新 verdict + artifact 本身**(ledger 的 `tests_spent_count`、`research/results/.../execution_summary.json`)。
 
@@ -34,7 +34,7 @@
 - **状态转变过时是真正的复发根因**:此类 drift 已被 Codex 抓 ≥5 次(`R-CURRENT-POST-COMMIT-ROUTE` → `R-CASH-*-ROUTE-*` → `R-LOWVOL-ROUTE-LEDGER-STATUS-DRIFT`)。机制不是"复审周期瞬态词",而是:一行**写时正确**,但它描述的线**后来执行/花掉 ledger**,该行没被回扫就变错;且每轮只更新"当前线",**兄弟行的过时悄悄累积**。`research/README.md` 的 "Current result / ledger status" 节最易中招。
 - **机器强制 (v2.2)**:仅靠"记得遵守"在多 LLM / 跨会话下必然失守,所以必须跑机器校验——`tests/test_route_doc_ledger_status_consistency.py` 读每个 `*_program_test_budget_ledger_*.json` 的真实 `tests_spent_count`,若已花(>0)而任一 route-doc 行(`research/README.md` / `docs/README.md` / `docs/CURRENT.md`)仍以 "zero spent / one pending / planned not-reviewed / spends this singleton once / no valid … result" 等未花措辞引用该已花线,则 FAIL。引用不只按 ledger 文件名判断,还必须覆盖该线的 preregistration / result / runner / schema / packet aliases,否则 contract 行、runner 行、兄弟行会逃过检查。**每次 `执行` / 收尾、以及改任何 route-doc 行后必跑此测试再交 `审查` / `提交`**;它把"状态转变过时"从事后人肉抓变成过不了测试。**(v2.3)** 同测试再加两道**与位置无关**的 `CURRENT` 扫描:(a) §1/§5 durable 指针区出现 verdict 度量(backtick 小数 / `HAC t` / `mean net excess` / cohort 数)即 FAIL;(b) **整篇 `CURRENT`(header / preamble / §0 / 任意节)**出现 review/commit-cycle gate 词(`待 Codex` / `待审查` / `pending` / `awaiting` / `routed to Codex` / `result-closeout` / `before … commit` / `uncommitted`)即 FAIL。早先的 guard 都是**按节 / 按 ledger 文件名**作用域,所以同类 drift 每轮换个未覆盖的位置就逃掉(`research/README` → contract 行 → §1/§5 → header/§0);**整篇扫描是位置无关的根治**——drift 无处可搬。**(v2.4)** 整篇 `CURRENT` gate 扫描再加**同义改写**(`下一条命令` / `谁审` / `谁提交` / `谁执行` / `由 Codex 审` / `Claude 提交` / `Claude 执行` 等,堵 `R-EP-CURRENT-GATE-SYNONYM-GUARD-GAP` —— 词表 ≠ 概念,旧 guard 只抓字面,概念级仍靠 Codex + 本约定兜底)。**README 不做整篇扫描**(它合法描述 review 流程,会误报如"pending Optional disposition");README 的 transient drift 改由 **alias-scoped** 扫描覆盖——只在引用**已花线 alias** 的行上应用**与 `CURRENT` 相同的 strict+synonym regex**(含无空格 `待Codex`、`谁审`/`谁提交`/`谁执行`/`由 Codex 审`/`Claude 提交`/`Claude 执行` 等同义词,堵 `R-ROUTEDOC-README-SYNONYM-GUARD`),流程说明 prose(不含已花 alias)不受影响。防护层级:**① tracked 测试 = 主防线(`提交` / `审查` 前必跑);② `.githooks/pre-commit`(`git config core.hooksPath .githooks` 启用,新克隆各自跑一次)= 本机第二道门:先按 PATH 找 `python/python3/py`,找不到再回退到 Windows 安装位(`$HOME`/`$LOCALAPPDATA` 下 `Programs/Python/Python*/python.exe`——Git hook PATH 极简、常无 python,堵 `R-ROUTEDOC-PRECOMMIT-PYTHON-DISCOVERY`),仍找不到则**告警放行、不 brick commit**(主防线是 tracked 测试);guard FAIL 才 exit 1 挡 commit。Git hook 跨环境不保证自动生效,故不是唯一保障;③ 本约定 + Codex 复核 = 概念级人/规则兜底**。紧急绕过 `--no-verify` 需用户批准。
 
-这样**唯一会过时的只有 `SESSION_LOG` 顶部一处**(reverse-chrono,设计上每轮新增即新鲜);`CURRENT §0` 只放 settled 事实(falsified 永远 falsified,不会变错),不放在飞的 review/commit gate;其余路由对状态转变天然免疫。三道机器扫描(spent-ledger alias + §1/§5 度量 + 整篇 gate 词含同义,后两道覆盖 `CURRENT`,gate 词另扫两个 README)+ `.githooks/pre-commit` 自动兜底。作者(implementer)按此写、审查者(Codex)按此核。
+这样**唯一会过时的只有 `SESSION_LOG` 顶部一处**(reverse-chrono,设计上每轮新增即新鲜);`CURRENT §0` 只放 settled 事实(falsified 永远 falsified,不会变错),不放在飞的 review/commit gate;其余路由对状态转变天然免疫。三道机器扫描(spent-ledger alias + §1/§5 度量 + 整篇 gate 词含同义,后两道覆盖 `CURRENT`,gate 词另扫两个 README)+ `.githooks/pre-commit` 自动兜底。作者(implementer, 当前为 Codex)按此写、审查者(reviewer, 当前为 Claude Code)按此核。
 
 ## 项目背景
 
@@ -277,13 +277,13 @@ Stock/
 
 ## 输出结论规则
 
-**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 Codex PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Claude Code：Pass`、`Claude Code：修复`、`Claude Code：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 Codex 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Claude Code：提交`；Claude 只负责实现/修复。没有对应内容时写“无”。
+**`审查` 命令最终输出固定三段（2026-06-23 用户更新；2026-06-24 `下一步` 简化；2026-06-25 reviewer/committer PASS 后自动提交；仅影响对话框最终回复，落盘文档规则不变）**：仅当用户明确下达 `审查` 命令或要求按审查流程收口时，面向用户的最终结论只写三块，顺序固定为：`Verdict`、`Required / Optional / Options`、`下一步`。必须用中文；每块都要极简，不铺背景、不复述流程、不堆文件清单；不输出 `Findings` 段，不单列“已验证 / Verify / 验证”项，也不要另起“覆盖范围 / 运行阻塞 / 结论边界”等额外栏目。`Verdict` 第一位，直接写 PASS / FAIL / 未完全验证等结论，并在下一行用 `大白话：...` 说明能不能过；`Required / Optional / Options` 第二位，只写具体审查结果，每条具体项必须包含必要的技术标识和技术现状，并在下一行用 `大白话：...` 解释要修什么、可选什么或怎么选；`下一步` 第三位，只写一行最简单给另一个 LLM 的命令（例：`Codex：Pass`、`Codex：修复`、`Codex：执行`），不写 `大白话`、不写解释、不写修复细节；具体指示必须放在 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后 reviewer/committer 必须在最终回复前自动提交已审查工作树，`下一步` 不再写 `Codex：提交`；Codex 只负责实现/修复。没有对应内容时写“无”。
 
 面向用户输出结论时，必须先给**简单、清晰、可行动的结果**，再给必要依据。不要先堆专业术语、内部流程、文件名或审查细节。
 
 对 provider / 数据可用性 / 风险 / 设计漏洞 / 执行阻塞等判断，必须把专业内容翻译成用户能直接理解的话：先回答“能不能用”“意味着什么”“还缺什么”“下一步做什么”，再用简短边界说明证据范围。除非用户要求深入展开，默认保持短、直、明了。
 
-**含 Required / 修复 / 执行结果的输出加「大白话」层（2026-06-15 用户固化）**：凡 chat 输出里告诉用户有问题需要 `修复`（尤其 Codex `审查 FAIL` / PASS-with-Required），或 Claude `修复` 后说明修复结果，或任何 `执行` 后说明执行结果 / 风险 / 阻塞，除了极简结论，必须有一句**最直白的大白话**——用最简单清楚的人话说清「实际发生了什么 + 对你意味着什么 / 为什么要修或继续」，不要废话、越直白越好。**例外**：`审查` 最终回复的 `下一步` 段按上条固定为一行命令，不写 `大白话`。**这层是给用户理解的，和写进 `SESSION_LOG` / `register` / execution summary 的技术细节不是同一个**（文档放 Required ID / 文件名 / 自审 / lineage；chat 的大白话只为让用户秒懂后果）。
+**含 Required / 修复 / 执行结果的输出加「大白话」层（2026-06-15 用户固化）**：凡 chat 输出里告诉用户有问题需要 `修复`（尤其 reviewer `审查 FAIL` / PASS-with-Required），或 implementer `修复` 后说明修复结果，或任何 `执行` 后说明执行结果 / 风险 / 阻塞，除了极简结论，必须有一句**最直白的大白话**——用最简单清楚的人话说清「实际发生了什么 + 对你意味着什么 / 为什么要修或继续」，不要废话、越直白越好。**例外**：`审查` 最终回复的 `下一步` 段按上条固定为一行命令，不写 `大白话`。**这层是给用户理解的，和写进 `SESSION_LOG` / `register` / execution summary 的技术细节不是同一个**（文档放 Required ID / 文件名 / 自审 / lineage；chat 的大白话只为让用户秒懂后果）。
 
 > R-ASHORT-M67-EGSSCORE-ARTIFACT-DRIFT
 > 代码已经加了 EGS分 和 regime 横幅，但当前 `research/results/a_short/20260612/weekly_m67.json/md` 还是旧产物：JSON 15/15 都没有 EGS分，Markdown 也没有 EGS分 列和横幅。
@@ -299,29 +299,31 @@ Stock/
 
 **Register = material finding 详情的单一来源（2026-06-13）**：一个 finding 的**完整**内容——Required 文本、风险说明、修复条件/边界、closure evidence（working-tree-repaired 注记 + 验证结果）——只写在 `system_risk_register.md` 这一处。`SESSION_LOG.md` 的评审循环 entry（`审查`/`修复`/PASS）**不得复述完整分析**，只放本轮最小交接事实并**指向 Required ID**（详见 §Session log discipline → 评审循环 entry 极简模板）。理由：本会话反复出现的多轮返工，部分来自同一份修复详情在 register 与 SESSION_LOG **双写**、其一漂移。双写由 `tests/test_doc_governance_guard.py` 守护（评审循环 entry 引用 R-ID 时必须含 register 指针）。
 
-## Multi-LLM Review Protocol
+## Role split and command ownership
 
-Codex acts as the Independent Reviewer.
+Codex acts as the Executor + Fixer.
 
-Claude acts as the Designer + Implementer.
+Claude Code acts as the Independent Reviewer + Committer.
 
 The user remains the Final Approver.
 
+Role-swap contract (2026-07-02): the standards do not move with the model names. Codex must follow the implementer/fixer standard when executing or repairing; Claude Code must follow the adversarial review, closeout, commit, and final-output standards when reviewing or submitting. Historical wording such as "Codex review" or "Claude implementer" names the original standard; apply it to the current role unless the user explicitly swaps again.
+
 `AGENTS.md` remains the highest-level project rule. If `docs/AI_REVIEW_PROTOCOL.md`, older handoff text, or an older SESSION_LOG entry conflicts with this role split, `AGENTS.md` wins.
-
-2026-06-07 one-time exception: the user explicitly authorized Codex to land this `AGENTS.md` protocol update and commit it. After that exception, Codex must not use `修复` / `执行` to write business implementation changes; Claude owns implementation and execution.
-
-2026-06-25 review-cycle commit update: after a Codex `审查` PASS, Codex owns the local commit for the reviewed slice and must auto-submit it before the final reply when the PASS-covered worktree can be safely staged as one coherent commit. Claude owns implementation / repair only in the review loop and does not perform the post-PASS commit. If unrelated or overlapping unreviewed changes make safe auto-commit impossible, Codex must record the blocker in `docs/SESSION_LOG.md` and surface the exact boundary instead of staging unreviewed work.
 
 ## Short Command Aliases
 
 Command binding is determined by who the user is addressing:
 
-- `审查` = Codex reviews Claude's current changes independently. Codex must not write business code, runner code, schema, preregistration, ledger, or result artifacts during review.
-- `修复` = Claude implements the reviewed repair scope and records dispositions, after judging the reviewed findings per the **Claude implementer standard** below (judge before executing; surface a wrong instruction rather than blindly implement). After a Codex `审查`, the user sends `修复` directly to Claude to authorize repairing the reviewed Required findings; a separate `批准修改` is not required. Codex does not perform the repair, and the Claude `修复` `docs/SESSION_LOG.md` entry records the user-directed authorization for cross-LLM continuity.
-- `执行` = Claude runs the next approved execution slice, including real data/materialization/search only when the project approval gates and user command allow it.
-- `提交` = review-cycle commit is owned by Codex after `审查` PASS; Codex stages only the PASS-covered files and commits them as one coherent commit before replying. Claude does not perform post-PASS commit work; Claude only implements / repairs.
-- `批准` / `批准修改` is NOT required between a Codex `审查` and a Claude `修复` (2026-06-07 update): the user's `修复` directly authorizes repairing the reviewed Required findings, and Claude records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains available only for a standalone approval the user explicitly chooses to record (e.g. a strategic or spend decision); when used, the addressed LLM records it in `docs/SESSION_LOG.md` before proceeding.
+- `审查` = Claude Code reviews Codex's current changes independently. Claude Code must not write business code, runner code, schema, preregistration, ledger, or result artifacts during review.
+- `修复` = Codex implements the reviewed repair scope and records dispositions, after judging the reviewed findings per the **Claude implementer standard** below (judge before executing; surface a wrong instruction rather than blindly implement). After a Claude Code `审查`, the user sends `修复` directly to Codex to authorize repairing the reviewed Required findings; a separate `批准修改` is not required. Claude Code does not perform the repair, and the Codex `修复` `docs/SESSION_LOG.md` entry records the user-directed authorization for cross-LLM continuity.
+- `执行` = Codex runs the next approved execution slice, including real data/materialization/search only when the project approval gates and user command allow it.
+- `提交` = review-cycle commit is owned by Claude Code after `审查` PASS; Claude Code stages only the PASS-covered files and commits them as one coherent commit before replying. Codex does not perform post-PASS commit work; Codex only implements / repairs.
+- `批准` / `批准修改` is NOT required between a Claude Code `审查` and a Codex `修复`: the user's `修复` directly authorizes repairing the reviewed Required findings, and Codex records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains available only for a standalone approval the user explicitly chooses to record (e.g. a strategic or spend decision); when used, the addressed LLM records it in `docs/SESSION_LOG.md` before proceeding.
+
+Codex must use `using-superpowers` when available before `执行` / `修复` to enter the correct workflow. Codex must run an independent agent self-review before handing work to Claude Code for `审查`, then record the short proof in the handoff entry. The rule is: handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat; final chat should not repeat long operational commands unless the user asks.
+
+Protocol / guard additions require an explicit user request or a reviewed finding; no unilateral process hardening.
 
 ## Codex adversarial review standard
 
@@ -349,7 +351,9 @@ Every Codex `审查` must internalize the full deep review and output only the d
 
 ### Codex review closeout gate
 
-Before Codex replies to any `审查`, Codex must complete this closeout gate and make the result true in repository state:
+Under the current role split, Claude Code is the reviewer/committer that follows this gate. The heading is retained as a compatibility anchor for older docs and tests.
+
+Before the reviewer/committer replies to any `审查`, the reviewer/committer must complete this closeout gate and make the result true in repository state:
 
 1. `docs/SESSION_LOG.md` has been prepended with the review verdict, including scope, Required / Optional, material-risk status, verification run, and next step.
 2. Every Required finding has a materiality label. Material means it affects data integrity, PIT safety, schema contract, execution / ledger correctness, security / raw / secret hygiene, ship-gate evidence, cross-LLM continuity, or current docs whose drift can affect system quality / review quality under item 15a. Low-impact historical / superseded / non-contract prose is not material and must not block PASS.
@@ -359,24 +363,26 @@ Before Codex replies to any `审查`, Codex must complete this closeout gate and
 6. Guard / mutation checks were attempted for frozen fields, ledgers, approvals, and hygiene gates where feasible; otherwise the review states why not.
 7. The verdict layers are not collapsed: computation, schema / ledger, PIT / data, statistical claim, risk / deployability, and production / ship-gate readiness are separated when relevant.
 8. Final response confirms the register outcome and must not issue Pass while any material Required finding is neither fixed nor registered.
-9. On PASS, Codex must auto-commit the reviewed slice before sending the final response, after rerunning the relevant local verification and confirming the staged files match the PASS scope. Stage only reviewed files; never include unrelated or unreviewed work. If safe auto-commit is blocked, record the reason in `docs/SESSION_LOG.md` and say exactly what remains uncommitted.
-10. Final response must end with the fixed `下一步` section containing exactly one standalone command line for the next actor, with no `大白话` line and no repair details. Use the shortest command form, for example `Claude Code：Pass`, `Claude Code：修复`, or `Claude Code：执行`; put detailed instructions in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in chat. Do not use `Claude Code：提交` after a PASS; Codex already owns that commit. If visual emphasis is used, emphasize only the command token; never output raw HTML tags such as `<span>` / `<strong>` in the final reply.
+9. On PASS, the reviewer/committer must auto-commit the reviewed slice before sending the final response, after rerunning the relevant local verification and confirming the staged files match the PASS scope. Stage only reviewed files; never include unrelated or unreviewed work. If safe auto-commit is blocked, record the reason in `docs/SESSION_LOG.md` and say exactly what remains uncommitted.
+10. Final response must end with the fixed `下一步` section containing exactly one standalone command line for the next actor, with no `大白话` line and no repair details. Use the shortest command form, for example `Codex：Pass`, `Codex：修复`, or `Codex：执行`; put detailed instructions in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in chat. Do not use `Codex：提交` after a PASS; the reviewer/committer already owns that commit. If visual emphasis is used, emphasize only the command token; never output raw HTML tags such as `<span>` / `<strong>` in the final reply.
 
-Codex review output must follow `## 输出结论规则`: exactly `Verdict` / `Required / Optional / Options` / `下一步`; `大白话` belongs only to the first two sections, while `下一步` is one command line only. No `Findings`, no standalone chat verification section, and no extra sections. Codex must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
+Reviewer output must follow `## 输出结论规则`: exactly `Verdict` / `Required / Optional / Options` / `下一步`; `大白话` belongs only to the first two sections, while `下一步` is one command line only. No `Findings`, no standalone chat verification section, and no extra sections. The reviewer/committer must prepend the review verdict to `docs/SESSION_LOG.md` before replying. If no issue remains, say it is clean; do not invent fixes to appear thorough.
 
 ## Claude implementer standard
 
-When the user sends `修复` (or any implementation of a Codex-reviewed Required / Options / fix), Claude must judge the instruction before writing code — `修复` does not make Claude a blind executor. Because the `批准修改` step has been dropped, the user's `修复` is itself the authorization, so this judgment is the main safeguard between review and change.
+Under the current role split, Codex is the implementer/fixer and follows this section. The heading is retained as a compatibility anchor for older docs and tests.
+
+When the user sends `修复` (or any implementation of a reviewed Required / Options / fix), the implementer must judge the instruction before writing code — `修复` does not make the implementer a blind executor. Because the `批准修改` step has been dropped, the user's `修复` is itself the authorization, so this judgment is the main safeguard between review and change.
 
 1. Read the actual reviewed finding(s) in `docs/SESSION_LOG.md` (and any cited code, schema, or artifact). Do not infer the change from the command word alone.
 2. Independently verify each Required is correct, sound, in scope, and necessary. For an Options finding, the implementer selects the optimal option and states why; do not auto-defer to the reviewer's recommendation.
 3. If any reviewed item is wrong, harmful, out of scope, or based on a misunderstanding, STOP and surface it to the user (Final Approver) with the reason and a better alternative. Do not silently implement something believed wrong, and do not silently refuse.
 4. Implement only the reviewed scope. No scope creep. Do not change frozen design values, factor definitions, measurement, thresholds, the universe, or the ledger unless that exact change is the reviewed fix.
 5. Record Optional dispositions (accept / reject + reason) and run the relevant schema / runner tests via `.tools/run_unittest_with_repo_pythonpath.cmd` or an exactly equivalent setup that prepends `.tools/python_libs`, with `jsonschema` importable, before handing back for `审查`. The launcher searches `PATH`, then common Windows installs such as `%LOCALAPPDATA%/Programs/Python/Python*`; if a sandbox blocks that executable or no Python is found, set `STOCK_TEST_PYTHON` to the current runtime's `python.exe`. Shared scripts must not hard-code agent-private runtime paths.
-6. The Claude `修复` `docs/SESSION_LOG.md` entry must record which findings were fixed, any item pushed back on with its reason, the disposition of each Optional, and the user-directed authorization (since `批准修改` is no longer a separate step).
+6. The implementer `修复` `docs/SESSION_LOG.md` entry must record which findings were fixed, any item pushed back on with its reason, the disposition of each Optional, and the user-directed authorization (since `批准修改` is no longer a separate step).
 7. **Pre-Codex self-review gate (run before EVERY `起草`/`修复` handoff).** Repeated avoidable round-trips came from fixing only the named instance and not tracing a fix's ripple. **完整规则正文是单一来源 → `docs/pre_codex_self_review_checklist.md`**(A class-not-instance / B ripple-grep / B2 single-source+drift-guard / C reverse-failure / D ambiguous-NL / E route-doc-single-state / F pre-flight,**含 Proof-of-use 行的格式**)。起草/修复前**必读必走**;本文**只点名、不复述规则正文**(防 AGENTS↔checklist 双写漂移——守护 `tests/test_doc_governance_guard.py`)。`修复`/`起草` 的 SESSION_LOG entry **必带一行 Proof-of-use**(格式见 checklist,**不可砍**——砍掉就退回"每轮漏一个面"):"Tests passing ≠ design closure."
 
-This judge-before-execute duty is symmetric to the Codex adversarial review standard; "reviewed" or "Required" does not remove Claude's responsibility to catch a wrong instruction before it lands.
+This judge-before-execute duty is symmetric to the adversarial review standard; "reviewed" or "Required" does not remove the implementer's responsibility to catch a wrong instruction before it lands.
 
 ## 交接记录
 
@@ -463,7 +469,7 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 
 ### 评审循环 entry 极简模板（`审查` FAIL / `修复` / `审查` PASS）
 
-上面的七节格式用于 **session 级**交接(会话收尾、phase 决策)。**单个评审循环回合**(一次 Codex FAIL、一次 Claude 修复、一次 PASS)**不用**七节——material finding 的完整详情是 `system_risk_register.md` 的单一职责(§System risk register discipline),SESSION_LOG 这里只放最小交接事实、并指向 Required ID:
+上面的七节格式用于 **session 级**交接(会话收尾、phase 决策)。**单个评审循环回合**(一次 reviewer FAIL、一次 implementer 修复、一次 PASS)**不用**七节——material finding 的完整详情是 `system_risk_register.md` 的单一职责(§System risk register discipline),SESSION_LOG 这里只放最小交接事实、并指向 Required ID:
 
 ```markdown
 ## YYYY-MM-DD — <LLM> <审查 FAIL | 修复 | 审查 PASS> (<Required ID 或 slice 名>)
@@ -473,9 +479,9 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 - **Next**: <下一步>
 ```
 
-`修复` 回合**必须**额外带一行 **Proof-of-use**(§Claude implementer standard item 7,压成一行证据,**不可砍**——砍掉就退回"每轮漏一个面")。`审查` verdict 仍须 prepend 后再回用户。
+`修复` 回合**必须**额外带一行 **Proof-of-use**(§Claude implementer standard item 7；legacy section name，current implementer = Codex；压成一行证据，**不可砍**——砍掉就退回"每轮漏一个面")。`审查` verdict 仍须 prepend 后再回用户。
 
-**精确集合契约(最强不变式,非子集放行)**:compliant-zone(marker 之上)引用 R-ID 的评审 entry,正文 bullet 标签集合必须**恰好**= `{Verdict/Action, Required(指 R-ID + register), Verify, Next}`(`修复` 再加恰好一个 `Pre-Codex self-review`/`Proof-of-use`)。**缺项 / 多项 / 重复标签 / 任何自由段落(任何语言)/ `Verify` 占位符(`N OK`/`<N>`/`TODO`/`TBD`/`XXX`/占位)/ 单条 bullet 超 ~500 字符(把 register 全文塞一条)都会 FAIL**——完整 finding 详情只进 `system_risk_register.md`。守护覆盖三类 header:`审查`/`修复`/`PASS`(纯 `Codex PASS (R-ID)` 也照查)。这是结构化精确集合,不靠列举禁词,换措辞/换语言/换 header 形态都绕不过。守护:`tests/test_doc_governance_guard.py::test_review_cycle_minimal_template_enforced_above_marker` + `test_review_cycle_guard_planted_failures`(九植入失败 + 一合规通过)。
+**精确集合契约(最强不变式,非子集放行)**:compliant-zone(marker 之上)引用 R-ID 的评审 entry,正文 bullet 标签集合必须**恰好**= `{Verdict/Action, Required(指 R-ID + register), Verify, Next}`(`修复` 再加恰好一个 `Pre-Codex self-review`/`Proof-of-use`)。**缺项 / 多项 / 重复标签 / 任何自由段落(任何语言)/ `Verify` 占位符(`N OK`/`<N>`/`TODO`/`TBD`/`XXX`/占位)/ 单条 bullet 超 ~500 字符(把 register 全文塞一条)都会 FAIL**——完整 finding 详情只进 `system_risk_register.md`。守护覆盖三类 header:`审查`/`修复`/`PASS`(纯 `<LLM> PASS (R-ID)` 也照查)。这是结构化精确集合,不靠列举禁词,换措辞/换语言/换 header 形态都绕不过。守护:`tests/test_doc_governance_guard.py::test_review_cycle_minimal_template_enforced_above_marker` + `test_review_cycle_guard_planted_failures`(九植入失败 + 一合规通过)。
 
 **位置(marker 门,非 date 门)**:`SESSION_LOG.md` 顶部 archive 指针下有一行 `REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER`。**新评审循环 entry 一律 prepend 到该 marker 之上**(compliant zone);marker 之下是 adoption 前的历史,grandfather 不动。守护只校验 marker 之上的 entry(`tests/test_doc_governance_guard.py::test_review_cycle_minimal_template_enforced_above_marker`,配同日/带指针复述/合规三植入测试)——故"今天就是 adoption 日"也照样生效(date 门做不到)。**marker 不要删、不要移**。
 

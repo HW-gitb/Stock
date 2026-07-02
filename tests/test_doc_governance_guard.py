@@ -19,6 +19,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 AGENTS = ROOT / "AGENTS.md"
+AI_REVIEW_PROTOCOL = ROOT / "docs" / "AI_REVIEW_PROTOCOL.md"
+CURRENT = ROOT / "docs" / "CURRENT.md"
 HANDOFF_DIR = ROOT / "docs" / "handoff"
 HANDOFF_INDEX = HANDOFF_DIR / "README.md"
 ARCHIVE_SESSION_LOG_DIR = ROOT / "docs" / "archive" / "session_log"
@@ -378,6 +380,134 @@ class DocGovernanceGuard(unittest.TestCase):
         ):
             self.assertIn(kw, section, f"Codex design-code authority matrix lost anchor: {kw}")
 
+    def test_role_swap_execution_review_contract_is_pinned(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        m = re.search(r"(?ms)^## Role split and command ownership.*?(?=^## Codex adversarial review standard)", text)
+        self.assertIsNotNone(m, "AGENTS lost the role-split section")
+        section = m.group(0)
+
+        required = (
+            "Codex acts as the Executor + Fixer.",
+            "Claude Code acts as the Independent Reviewer + Committer.",
+            "standards do not move with the model names",
+            "`审查` = Claude Code reviews Codex's current changes independently",
+            "`修复` = Codex implements the reviewed repair scope",
+            "`执行` = Codex runs the next approved execution slice",
+            "`提交` = review-cycle commit is owned by Claude Code after `审查` PASS",
+            "Codex must use `using-superpowers` when available before `执行` / `修复`",
+            "Codex must run an independent agent self-review before handing work to Claude Code for `审查`",
+            "handoff commands belong in `docs/SESSION_LOG.md` / `docs/system_risk_register.md`, not in the final chat",
+            "Protocol / guard additions require an explicit user request or a reviewed finding; no unilateral process hardening.",
+        )
+        for anchor in required:
+            self.assertIn(anchor, section, f"role-swap contract lost anchor: {anchor}")
+
+        forbidden = (
+            "Codex acts as the Independent Reviewer.",
+            "Claude acts as the Designer + Implementer.",
+            "`审查` = Codex reviews Claude's current changes independently",
+            "`修复` = Claude implements the reviewed repair scope",
+            "`提交` = review-cycle commit is owned by Codex after `审查` PASS",
+        )
+        for anchor in forbidden:
+            self.assertNotIn(anchor, section, f"role-swap section still contains old role binding: {anchor}")
+
+        front = "\n".join(text.splitlines()[:60])
+        self.assertIn("`Codex：修复`", front, "front review closeout entry must route fixes to current implementer")
+        self.assertIn("当前 reviewer/committer 自动提交", front,
+                      "front review closeout entry must route PASS commits to current reviewer/committer")
+        for anchor in ("`Claude Code：修复`", "`Claude Code：执行`", "Codex 自动提交已审查工作树"):
+            self.assertNotIn(anchor, front, f"front review closeout entry still contains old next-actor wording: {anchor}")
+
+        output_rule = re.search(r"(?ms)^## 输出结论规则.*?(?=^## System risk register discipline)", text)
+        self.assertIsNotNone(output_rule, "AGENTS lost output conclusion rules section")
+        output_section = output_rule.group(0)
+        for anchor in (
+            "reviewer/committer PASS 后自动提交",
+            "`Codex：修复`",
+            "`审查` PASS 后 reviewer/committer 必须",
+            "Codex 只负责实现/修复",
+            "reviewer `审查 FAIL`",
+            "implementer `修复`",
+        ):
+            self.assertIn(anchor, output_section, f"output rules lost role-neutral/current-role anchor: {anchor}")
+        for anchor in (
+            "2026-06-25 Codex PASS 后自动提交",
+            "`Claude Code：修复`",
+            "`Claude Code：执行`",
+            "`审查` PASS 后 Codex 必须",
+            "Claude 只负责实现/修复",
+            "Codex `审查 FAIL`",
+            "Claude `修复`",
+        ):
+            self.assertNotIn(anchor, output_section, f"output rules still contain old role binding: {anchor}")
+
+        protocol = AI_REVIEW_PROTOCOL.read_text(encoding="utf-8")
+        for anchor in (
+            "Codex = executor + fixer.",
+            "Claude Code = independent reviewer + post-PASS committer.",
+            "`审查` addressed to Claude Code",
+            "`修复` addressed to Codex",
+        ):
+            self.assertIn(anchor, protocol, f"AI_REVIEW_PROTOCOL lost role-swap pointer: {anchor}")
+        for anchor in (
+            "Codex = independent reviewer + post-PASS committer",
+            "Claude = designer + implementer + fixer",
+            "`审查` addressed to Codex",
+            "`修复` addressed to Claude",
+            "do not run `修复` or `执行` business implementation work",
+        ):
+            self.assertNotIn(anchor, protocol, f"AI_REVIEW_PROTOCOL still contains old role binding: {anchor}")
+
+        current = CURRENT.read_text(encoding="utf-8")
+        for anchor in (
+            "Codex = Executor+Fixer",
+            "Claude Code = Independent Reviewer+Committer",
+            "`AGENTS.md` §Role split and command ownership",
+        ):
+            self.assertIn(anchor, current, f"CURRENT.md lost current role-swap pointer: {anchor}")
+        for anchor in (
+            "Claude = Designer + Implementer；Codex = Independent Reviewer",
+            "Claude = 设计+实现,Codex = 独立审查",
+            "2026-06-07 角色互换",
+        ):
+            self.assertNotIn(anchor, current, f"CURRENT.md still contains old role binding: {anchor}")
+
+        closeout = re.search(r"(?ms)^### Codex review closeout gate.*?(?=^## Claude implementer standard)", text)
+        self.assertIsNotNone(closeout, "AGENTS lost the review closeout gate")
+        closeout_section = closeout.group(0)
+        for anchor in (
+            "Claude Code is the reviewer/committer that follows this gate",
+            "Before the reviewer/committer replies to any `审查`",
+            "On PASS, the reviewer/committer must auto-commit",
+            "the reviewer/committer already owns that commit",
+            "The reviewer/committer must prepend the review verdict",
+        ):
+            self.assertIn(anchor, closeout_section, f"closeout gate lost role-neutral anchor: {anchor}")
+        for anchor in (
+            "Before Codex replies",
+            "Codex must auto-commit",
+            "Codex already owns that commit",
+            "Codex review output must follow",
+            "Codex must prepend the review verdict",
+        ):
+            self.assertNotIn(anchor, closeout_section, f"closeout gate still contains stale Codex committer binding: {anchor}")
+
+        template = re.search(r"(?ms)^### 评审循环 entry 极简模板.*?(?=^### 三层保险机制)", text)
+        self.assertIsNotNone(template, "AGENTS lost the review-cycle minimal template section")
+        template_section = template.group(0)
+        for anchor in (
+            "一次 reviewer FAIL、一次 implementer 修复、一次 PASS",
+            "legacy section name，current implementer = Codex",
+            "纯 `<LLM> PASS (R-ID)` 也照查",
+        ):
+            self.assertIn(anchor, template_section, f"SESSION_LOG template lost role-neutral anchor: {anchor}")
+        for anchor in (
+            "一次 Codex FAIL、一次 Claude 修复、一次 PASS",
+            "纯 `Codex PASS (R-ID)` 也照查",
+        ):
+            self.assertNotIn(anchor, template_section, f"SESSION_LOG template still contains stale role binding: {anchor}")
+
     # STRUCTURAL minimal-template contract (allowlist, not keyword blacklist — a blacklist is
     # whack-a-mole: alternate wording / another language escapes it). A compliant-zone review-cycle
     # entry's body may contain ONLY these labelled bullets; any free-form paragraph or extra
@@ -457,14 +587,17 @@ class DocGovernanceGuard(unittest.TestCase):
         # Checklist line 62: every 起草/修复 handoff SESSION_LOG entry must carry a `Pre-Codex
         # self-review` line. 修复 is enforced by _review_cycle_offenders (missing-proof-of-use); this
         # closes the 起草/强化 (draft-class, non-review-cycle header) gap that let a session-style
-        # handoff omit the line. A Claude entry whose header names draft work must carry the proof line.
+        # handoff omit the line. Any current implementer entry whose header names draft work must
+        # carry the proof line.
         offenders = []
         parts = re.split(r"(?m)^## (\d{4}-\d{2}-\d{2}) [—–-] ", zone_text)   # — / – / - header separators
         for i in range(1, len(parts), 2):
             block = parts[i + 1]
             lines = block.splitlines()
             header = lines[0] if lines else ""
-            if "Claude" not in header or not any(k in header for k in cls.DRAFT_HEADER_KEYS):
+            if not any(name in header for name in ("Claude", "Codex")):
+                continue
+            if not any(k in header for k in cls.DRAFT_HEADER_KEYS):
                 continue
             if not cls._PROOF_LINE.search(block):    # actual labeled line, not a prose token mention
                 offenders.append(("missing-pre-codex-self-review", header[:50]))
@@ -566,6 +699,11 @@ class DocGovernanceGuard(unittest.TestCase):
         present = ("## 2026-06-20 — Claude (US-short 批X foo 起草)\n"
                    "**Worked on**: did a thing\n**Next**: Codex `审查`\n"
                    "**Pre-Codex self-review**: A-F checked — evidence\n")
+        codex_missing = ("## 2026-07-02 — Codex (role-swap foo 起草)\n"
+                         "**Worked on**: did a thing\n**Next**: Claude Code `审查`\n")
+        codex_present = ("## 2026-07-02 — Codex (role-swap foo 起草)\n"
+                         "**Worked on**: did a thing\n**Next**: Claude Code `审查`\n"
+                         "**Pre-Codex self-review**: independent agent checked — evidence\n")
         harden_missing = ("## 2026-06-20 — Claude (强化 some checklist 规则)\n"
                           "**Worked on**: hardened a rule\n**Next**: Codex `审查`\n")
         prose_token_no_label = ("## 2026-06-20 — Claude (US-short 批X foo 起草)\n"
@@ -580,8 +718,12 @@ class DocGovernanceGuard(unittest.TestCase):
                         "guard must flag a 强化 handoff missing the Pre-Codex line")
         self.assertTrue(self._draft_handoff_proof_offenders(prose_token_no_label),
                         "guard must flag a draft handoff that only MENTIONS the token in prose (no labeled line)")
+        self.assertTrue(self._draft_handoff_proof_offenders(codex_missing),
+                        "guard must flag a Codex draft handoff missing the Pre-Codex line after role swap")
         self.assertEqual(self._draft_handoff_proof_offenders(present), [],
                          "guard must not flag a 起草 handoff that has the line")
+        self.assertEqual(self._draft_handoff_proof_offenders(codex_present), [],
+                         "guard must not flag a Codex draft handoff that has the line")
         self.assertEqual(self._draft_handoff_proof_offenders(not_draft), [],
                          "guard must not flag a non-draft (执行) entry")
         self.assertEqual(self._draft_handoff_proof_offenders(codex_entry), [],

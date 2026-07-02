@@ -110,7 +110,7 @@
 - **当前 P0 / P1 目标**：五条 A-long 大盘单因子线 + 一轮 pre-registered batch+BH-FDR 多因子轮均已执行入库,终判见 §0。batch **NOT dry** → 2 条 research-only clue(`cash_flow_to_circ_mv` / `sales_to_circ_mv`,均 NOT tradeable),batch singleton 已花;**下一步 = 这 2 条 clue 的 forward-live 验证;验证系统(forward-paper capture 数据层+brain)已建+提交(§0 `e5bd1902`)、进入月度捕获执行期(首笔 `as_of=20260630`,cadence 见 memory `project_a_long_vy_forward_paper_monthly_cadence`)**(任何样本内 follow-up 需新 reviewed prereg+ledger,不得 rerun / 换定义 / 换 q / 换阈值 / drop-losers 重跑 FDR / 诊断 rescue)。进度见 §0 + `docs/SESSION_LOG.md`(单一实时来源)。所有已入库/已花的线**均不得 rerun / 换阈值 / 换基准 / 换 universe / 换 trailing-window / 换 earnings-basis / 换 denominator / 诊断 rescue**,除非新 reviewed prereg+ledger 或 forward-live。
 - **当前 P1 provider blocker**：US inactive / delisted historical coverage is user-accepted as scoped out for the current active-only forward model. `SR-PROVIDER-001` remains open for license / storage, active-symbol PIT if fundamentals are used, active price-adjustment / corporate actions if used, SEC parser / mapping if used, fallback / stability, provider selection, DataHub / runner consumption, and production readiness. US forward universes must be PIT-frozen at start and must capture real delisting / halt / merger / no-trade outcomes during the forward window; the 12-month forward-live ship-gate requirement is unchanged.
 - **执行锁**：`ep_value`、`low_volatility`、`cash_conversion`、large-cap pure-quality、全主板五条线 + batch 多因子轮的 singleton ledger 均已花;**不得 rerun / 换阈值 / 换基准 / 换 universe / 换 trailing-window / 换 q / drop-losers 重跑 FDR / 诊断 rescue / production / ship-gate / full-size**,除非新 reviewed prereg+ledger 或 forward-live。各线终判与 ledger 状态见 §0 + `docs/SESSION_LOG.md` + 各自 `execution_summary.json`。
-- **协作模式**：Claude = Designer + Implementer；Codex = Independent Reviewer；用户 = Final Approver(2026-06-07 角色互换;详 `AGENTS.md` §角色分工 与 commit `bf26f13`)。
+- **协作模式**：Codex = Executor+Fixer；Claude Code = Independent Reviewer+Committer；用户 = Final Approver(2026-07-02 current split；详 `AGENTS.md` §Role split and command ownership)。
 - **后台线**：A-short Phase 6b 只保留 weekly forward capture、comparison-track accumulator、forward evidence accumulation；不扩无关小工具。
 
 ---
@@ -154,7 +154,7 @@
 
 - `AGENTS.md` - 最高项目规则、固化决策、命令别名、启动顺序。
 - `docs/README.md` - 完整 routing table 和文档维护规则。
-- `docs/AI_REVIEW_PROTOCOL.md` - review/修复/提交 工作流的兼容指针;**权威角色分工(2026-06-07 互换:Claude = 设计+实现,Codex = 独立审查)、命令绑定、对抗式深审标准均以 `AGENTS.md` 为准**。
+- `docs/AI_REVIEW_PROTOCOL.md` - review/修复/提交 工作流的兼容指针;**权威角色分工(2026-07-02:Codex = Executor+Fixer,Claude Code = Independent Reviewer+Committer)、命令绑定、对抗式深审标准均以 `AGENTS.md` §Role split and command ownership 为准**。
 - `docs/system_risk_register.md` - durable open-risk queue；`执行` / `审查` 必读。
 - `docs/SESSION_LOG.md` - 最新 cross-LLM reasoning / review verdict；只读顶部 1-3 条。
 - `docs/ALPHA_VALIDATION_ACTION_GUIDE.md` - Phase 7a+ 最高行动指南。
