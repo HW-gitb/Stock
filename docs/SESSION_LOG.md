@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-07-02 - Codex 复审 PASS (US-short batch5 Cut 6-a momentum projection seam)
+
+- **Verdict/Action**: PASS; 仅复审 Cut 6-a engine/binding/schema/tests/route，residual A/B 已闭合；不混入 Cut 6-b~6-g、provider/live/DataHub/production 或其他市场。
+- **Required**: 无；`R-USSHORT-BATCH5-SEAM-MOMENTUM-CONTRACT-AND-COVERAGE-CONSISTENCY-GAP` resolved，closure evidence 见 register。
+- **Verify**: focused+schema 83 passed；adjacent producer/core-score 155 passed；direct probes + Gale-Ryser 小穷举 passed；guards 52 passed；全离线 `*us_short*` 3427 ran with 6 known unrelated batch4 context-builder failures + 1 skip；py_compile/diff-check/no-BOM/JSON parse passed。
+- **Next**: Codex 自动提交 Cut 6-a reviewed slice；后续 6-b~6-g、provider/live/DataHub/production 仍 gated。
+
+## 2026-07-02 — Claude `修复` (US-short Cut 6-a residual-2 — coverage 边际守恒/可实现 + 公共容器边界 + overflow)
+
+- **Verdict/Action**: 修 Codex Cut 6-a 复审 round-2 FAIL（用户令 `修复`；两残类 judge 后全成立/在 scope、不 push back）。照 residual **文本**枚举整类：**A** coverage 两组边际同源一个 incidence → 强制 Σ 守恒 + Gale-Ryser 可实现（不等总/等总不可实现都拒）+ margin 政策 const + const-pin identity/neutral_fill + fixture 从真 incidence 重建 + 真 producer 正控；**B** 全容器精确 `type is dict/list`（拒子类先于 dispatch）+ 每 dict 键 `type(k) is str` + 诊断不格式化未信任键。详见 register 单源。
+- **Required**: `R-USSHORT-BATCH5-SEAM-MOMENTUM-CONTRACT-AND-COVERAGE-CONSISTENCY-GAP` → fixed pending Codex（register 单源）。整类=residual 文本：{行/列守恒+Gale-Ryser+margin const+incidence fixture+真 producer 正控} ∪ {identity_policy/neutral_fill_note const-pin+三角} ∪ {精确容器类型+每 dict str 键守+无未信任值诊断+overflow containment}。live/Cut6-b~g 仍 gated。
+- **Verify**: focused unit 62 + schema 21 OK；全离线 `*us_short*` 3427 OK（零回归）；doc/route guards 52 OK；Codex 残类探针（不等总/等总不可实现/容器子类/hostile-key）+ agent 揪的 huge-int 全复现为 `MomentumSeamError`；py_compile + 新文件 LF/no-BOM/JSON parse。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（1 冷打 agent，告知 producer 双边际同源；672k 穷举验 Gale-Ryser 零误、1680 真 producer 输出零误拒、全容器/键/诊断电池 contained）**——**揪 1 HIGH：合法巨型 int `10**309` 使 `float()` 抛裸 `OverflowError`（两轮 Codex+我自审都漏）→当场闭**（`_finite_block_value` 包 OverflowError→None+2 测试），非 disclose-defer。盲点="exact-type 封了子类、漏了合法溢出内建"。Tests passing ≠ design closure。
+- **Next**: 待 Codex 复审 Cut 6-a residual-2（engine+binding+schema+2 tests+README，6 文件）。后续接缝块刀：6-b 赛道投影｜6-c 催化剂｜6-d Pass2 signals｜6-e risk_downgrade｜6-f core_score+selection｜6-g composer；各 offline、live 半 gated。Cut1a/2/3a/3b/4/5 已提交、本刀未提交。
+
+## 2026-07-02 - Codex 复审 FAIL (US-short batch5 Cut 6-a momentum projection seam)
+
+- **Verdict/Action**: FAIL; 仅全量复审 Cut 6-a 当前 engine/binding/schema/tests/route，不改业务代码、不提交，不混入 Cut 6-b~6-g、provider/live/DataHub/production 或其他市场。
+- **Required**: `R-USSHORT-BATCH5-SEAM-MOMENTUM-CONTRACT-AND-COVERAGE-CONSISTENCY-GAP` 重新 open；coverage 两套边际仍可互相矛盾而投影有效分数，schema-first 冻结与 hostile 公共边界仍有 residual，完整细节见 register。
+- **Verify**: focused runtime `55 OK`；schema suite 因当前解释器缺 `jsonschema` 为 `16 errors`；全离线 `3415` 中 `6` 个既有 batch4 子进程依赖失败、`1 skip`；guards `52 OK`；直接矩阵探针复现 7 个 coverage 矛盾接受与 7 个 raw `RuntimeError` 泄漏。
+- **Next**: Claude Code：仅修复 Cut 6-a register residual；补 coverage 边际守恒/可实现性、真正 const-pinned binding policy 与 hostile 容器/诊断整类测试，保持其余切片 gated。
+
+## 2026-07-02 — Claude `修复` (US-short Cut 6-a — seam schema-first 契约 + coverage partition + 精确数值/去重整类)
+
+- **Verdict/Action**: 修 Codex Cut 6-a `审查 FAIL`（用户令 `修复`；三条 Required judge 后全成立/在 scope、不 push back）。照 Required **文本**（非探针单腿）枚举整类修：**A** schema-first 跨模块 binding+schema+mutation+engine 三角+README route；**B** coverage 整块 partition 校验（consume 之前被忽略的 coverage_matrix/min_coverage/sub_feature_coverage）；**C** 精确内建数值一刀封子类整类（含 `__float__` 泄漏）+ 每 disposition 集拒 post-canonical 重复；**(5)** 端到端 core_score 中性。整类细节见 register 单源 Repair。
+- **Required**: `R-USSHORT-BATCH5-SEAM-MOMENTUM-CONTRACT-AND-COVERAGE-CONSISTENCY-GAP` → fixed pending Codex（register 单源）。整类=Required 5 项文本：{binding+schema+mutation+三角+route} ∪ {coverage partition：身份==union+行形+scored/n_present/min_coverage 关系+per-disposition band+sub_feature 宇宙+物理上界} ∪ {每集合拒 post-canonical 重复} ∪ {精确内建数值封 `__float__`/`__le__`/子类} ∪ {端到端中性}。probe-only 无 provider call；live/Cut6-b~g 仍 gated。
+- **Verify**: focused unit 55 + schema 16 OK；全离线 `*us_short*` 3415 OK（零回归）；doc/route guards 52 OK（doc-governance + route-doc 14 + readme-row 11）；Codex 三探针（forged coverage / canonical duplicate / hostile `__float__`）全复现为 `MomentumSeamError`；py_compile + 新文件 LF/no-BOM/JSON parse。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（1 general-purpose agent 冷打整制品、不予看修法、要它自推不变量，117 攻 26 组）**——0 bypass / 0 裸异常 / 0 输入变异；5 不变量全 hold。agent 揪 1 LOW（n_present/min_coverage 未设物理上界≤7、不可利用但不自洽）→**当场闭**（binding+schema+engine+test 加上界，吸取上轮 disclosed-not-closed 被 Codex 逮的教训）。忽略 coverage_matrix 正是"只修被点名腿"根因、本轮从 Required 文本整类封。Tests passing ≠ design closure。
+- **Next**: 待 Codex 复审 Cut 6-a（engine+binding+schema+2 tests+README route，6 文件）。后续接缝块刀：6-b 赛道投影｜6-c 催化剂｜6-d Pass2 signals｜6-e risk_downgrade｜6-f core_score+selection 单源｜6-g composer；各 offline、live 半 gated。Cut1a/2/3a/3b/4/5 已提交、本刀未提交。
+
+## 2026-07-02 - Codex 审查 FAIL (US-short batch5 Cut 6-a momentum projection seam)
+
+- **Verdict/Action**: FAIL; 仅审 Cut 6-a 的 momentum projection seam，不改业务代码、不提交，不混入已提交探针、Cut 4/Cut 5 producers、Cut 6-b~6-g 或其他市场/联网路径。
+- **Required**: `R-USSHORT-BATCH5-SEAM-MOMENTUM-CONTRACT-AND-COVERAGE-CONSISTENCY-GAP` open；缺 schema-first 跨模块契约，且 producer coverage 可与 scored/neutral disposition 矛盾而仍被接受，完整修复边界见 register。
+- **Verify**: focused `34 OK`；全离线 `test_us_short*.py` `3378 OK`（1 个 Windows symlink 环境 skip）；guards `52 OK`；direct probes 复现 forged coverage 接受、canonical duplicate 静默折叠与 hostile `__float__` 原始异常泄漏。
+- **Next**: Claude Code：仅修复 Cut 6-a；补 schema/binding/route、coverage 一致性与 hostile/duplicate/end-to-end tests，保持 provider/live/DataHub/production/Cut 6-b~6-g gated。
+
+## 2026-07-02 — Claude `执行` (US-short 批5 Cut 6-a — batch5→batch4 打分接缝·动量投影 offline 半)
+
+- **Verdict/Action**: 用户经 AskUserQuestion 授权「先建离线接缝半」（不联网/不抓真数据/不产真实选股，真跑仍 gated SR-PROVIDER-001）。查设计权威 §18.2/§19：batch5→batch4 scoring seam 是 gated capstone → 切清晰独立块刀，本刀=首块。新 `engine/us_short_seam_momentum.py::project_momentum_block`：把 `momentum_block` 全池结果投影成每票 §4.2 40% 动量分量——scored→其 0-100 值；insufficient_history/coverage/absent→neutral-fill（composer 省略该分量→core_score 走 §4.2 中性、绝不伪造）。纯投影 glue、无 binding/无新阈值（对齐 weekend_analysis 纯引擎、非 Cut5 数据源四件套）。
+- **Required**: 无（build、非 finding）；待 Codex 分刀审（engine+test 2 文件、与探针/Cut5/已提交刀零重叠独立审）。**scope 裁决（提请确认）**：① 消费 producer 输出、不 re-run producer（producer 已审）；② 缺/insufficient→neutral-fill（omit→§4.2 中性）非伪造分；③ producer 值越 [0,100]→fail-closed raise（非 clamp、免掩 producer bug；core_score 另 clamp 任意块作纵深）；④ producer 键 + 目标票均须 canonical（一股一态）、非 plain-str（hostile 子类）fail-closed；⑤ scored/insufficient 三集须互斥。
+- **Verify**: focused 34 OK；全离线 `*us_short*` 3378 OK（= 3344+2 新刀 hostile-cmp 测试，零回归）；py_compile OK；新 2 文件 no-BOM/LF/no-FFFD。
+- **Pre-Codex self-review**: **独立对抗 pass：已跑（1 general-purpose agent、66 攻）**——五不变式（伪造值/伪造身份/裸崩/静默丢分-错分/跨一致）无可达 bypass；`type(x) is not str` 在任何 method dispatch 前拦 hostile str 子类、`_finite_block_value` 拒 bool/串/NaN/Inf/越域。agent 揪 3 LOW/MED：#1 numpy.float64（强制 plain float、非泄漏、全仓惯例）不动；#2 hostile dict/list 子类裸崩=committed 姊妹刀 catalyst_source 同惯例（容器 type isinstance、真 producer plain dict 走不到）不 diverge；#3 数值子类 hostile `__le__/__ge__` 炸 range（本模块独有面、真 producer 走不到）→**当场闭**（`_finite_block_value` 先 `float()` 强制再比较）+2 对抗测试。Tests passing ≠ design closure。
+- **Next**: 待 Codex 分刀审 Cut 6-a（2 文件）+ 确认 5 scope 裁决。后续接缝块刀：6-b 赛道投影（两跳 theme-id→ticker + industry⊥theme）｜6-c 催化剂投影｜6-d Pass2 signals 合并｜6-e risk_downgrade 装配｜6-f core_score+selection 单源｜6-g 顶层 data_context composer；各 offline、live 半仍 gated。Cut1a/2/3a/3b/4/5 已提交、本刀未提交。
+
 ## 2026-07-02 - Codex 修复+重审 PASS (US-short Cut 5 Pass-2 feasibility probe)
 
 - **Verdict/Action**: PASS; 仅修复并全量重审探针四件套与 route/closeout docs。primary/follow-up 共用单一 raw inventory，逐行 PIT 覆盖如实落 schema/summary；不改 Cut 4/Cut 5 producers，不运行 provider/network。

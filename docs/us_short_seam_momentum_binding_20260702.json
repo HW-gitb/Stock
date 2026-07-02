@@ -1,0 +1,39 @@
+{
+  "binding_name": "us_short_seam_momentum_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §4.2 (core_score 40% 动量 block; 缺分量→中性) / §4.0 (两遍打分) / §18.2 (跨模块共享契约先 schema-first 冻结再消费) / §19",
+  "authorization_note": "OFFLINE cross-module glue contract SHAPE only. This seam is pure projection: it consumes the batch5 momentum PRODUCER result (engine/us_short_momentum.py::momentum_block) and emits the batch4 score-composer input (a per-ticker §4.2 40% momentum block scalar, or a neutral-fill disposition). It fetches nothing, scores nothing, re-runs no producer, and selects no provider. Live provider fetch of the daily series that feeds the producer stays gated under SR-PROVIDER-001. This binding freezes BOTH sides of the new shared contract — the accepted producer-result shape, the projection output shape, the coverage partition policy, and the disposition vocabulary — so nothing can silently drift before Cut 6 composition consumes it.",
+  "producer_ref": "engine/us_short_momentum.py::momentum_block",
+  "consumer_ref": "batch4 score composer -> engine/us_short_weekend_analysis.py score_blocks['momentum'] -> engine/us_short_core_score.py",
+  "identity_policy": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only (a str subclass is rejected before any method dispatch)",
+  "block_value_domain": [0.0, 100.0],
+  "numeric_value_policy": "exact_builtin_int_or_float_only",
+  "numeric_value_note": "a momentum block value must be an EXACT built-in int/float (bool, numeric string, numpy/other numeric subclass, and any object with a hostile __float__/__le__/__ge__ are ALL rejected) that is finite and within block_value_domain; the projected value is a plain float. momentum_block computes plain-float percentiles, so exact-type is the correct + strictest contract — it closes the whole numeric-subclass dunder class at the boundary (no __float__/__le__ dispatch on an untrusted value).",
+  "accepted_producer_result_keys": ["momentum_block", "insufficient_history", "insufficient_coverage", "coverage_matrix", "sub_feature_coverage", "min_coverage"],
+  "sub_feature_universe": ["ret_1m", "ret_3m", "ret_5d", "ret_10d", "rel_spy_1m", "rel_qqq_1m", "vol_surge"],
+  "coverage_row_shape": ["n_present", "scored"],
+  "disposition_vocabulary": ["scored", "insufficient_history", "insufficient_coverage", "absent_from_pool"],
+  "coverage_partition_policy": {
+    "matrix_identity": "coverage_matrix keys (canonical) must EXACTLY equal the union of momentum_block ∪ insufficient_history ∪ insufficient_coverage identities — no missing, no extra, no contradictory",
+    "scored_relation": "coverage_matrix[t].scored == (n_present >= min_coverage)",
+    "history_relation": "a ticker in insufficient_history has n_present == 0",
+    "insufficient_coverage_relation": "a ticker in insufficient_coverage has 0 < n_present < min_coverage",
+    "duplicate_policy": "reject a post-canonical duplicate within EVERY identity-bearing collection (momentum_block keys, coverage_matrix keys, insufficient_history, insufficient_coverage); never silently set-collapse",
+    "sub_feature_relation": "sub_feature_coverage keys must exactly equal sub_feature_universe; each count is an exact int in [0, number_of_identities]",
+    "min_coverage_rule": "min_coverage is an exact int in [1, len(sub_feature_universe)]",
+    "n_present_bound": "each coverage_matrix n_present is an exact int in [0, len(sub_feature_universe)]",
+    "margin_conservation": "Σ coverage_matrix n_present (row degrees) == Σ sub_feature_coverage counts (column degrees) — both count the same ticker×sub-feature incidence cells",
+    "margin_realizability": "the row-degree (per-ticker n_present) and column-degree (per-sub_feature count) sequences must be jointly realizable as a binary ticker×sub-feature incidence matrix (Gale-Ryser)"
+  },
+  "projection_output_keys": ["momentum_by_ticker", "neutral_fill_tickers", "coverage", "target_count", "scored_count"],
+  "neutral_fill_note": "a target ticker that is insufficient_history / insufficient_coverage / absent_from_pool is NOT scored — it is reported in neutral_fill_tickers so the composer OMITS the momentum block and core_score applies the §4.2 neutral-block rule (never a fabricated momentum value).",
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "runner_wired": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false
+  }
+}

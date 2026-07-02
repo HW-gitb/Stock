@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_seam_momentum_binding.schema.json",
+  "title": "US-short Cut 6-a momentum scoring-seam binding",
+  "description": "Frozen schema-first contract for the offline batch5->batch4 momentum score-block seam (§4.2 40% momentum leg). Const-pins BOTH sides of the shared contract — the accepted producer-result key set, the block value domain + numeric policy, the sub-feature universe, the coverage row shape + partition policy, the disposition vocabulary, the projection output shape — plus the identity/producer refs and an all-gated authorization boundary, so the producer input shape and the composer output shape cannot silently drift before Cut 6 composition consumes them. Offline glue shape only; live fetch gated under SR-PROVIDER-001.",
+  "type": "object",
+  "required": [
+    "binding_name", "binding_version", "producer_ref", "consumer_ref", "identity_policy",
+    "block_value_domain", "numeric_value_policy", "accepted_producer_result_keys",
+    "sub_feature_universe", "coverage_row_shape", "disposition_vocabulary",
+    "coverage_partition_policy", "projection_output_keys", "neutral_fill_note", "authorization_boundary"
+  ],
+  "properties": {
+    "binding_name": { "const": "us_short_seam_momentum_binding" },
+    "binding_version": { "type": "string" },
+    "design_authority": { "type": "string" },
+    "authorization_note": { "type": "string" },
+    "producer_ref": { "const": "engine/us_short_momentum.py::momentum_block" },
+    "consumer_ref": { "const": "batch4 score composer -> engine/us_short_weekend_analysis.py score_blocks['momentum'] -> engine/us_short_core_score.py" },
+    "identity_policy": { "const": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only (a str subclass is rejected before any method dispatch)" },
+    "block_value_domain": { "const": [0.0, 100.0] },
+    "numeric_value_policy": { "const": "exact_builtin_int_or_float_only" },
+    "numeric_value_note": { "type": "string" },
+    "accepted_producer_result_keys": {
+      "const": ["momentum_block", "insufficient_history", "insufficient_coverage", "coverage_matrix", "sub_feature_coverage", "min_coverage"]
+    },
+    "sub_feature_universe": {
+      "const": ["ret_1m", "ret_3m", "ret_5d", "ret_10d", "rel_spy_1m", "rel_qqq_1m", "vol_surge"]
+    },
+    "coverage_row_shape": { "const": ["n_present", "scored"] },
+    "disposition_vocabulary": {
+      "const": ["scored", "insufficient_history", "insufficient_coverage", "absent_from_pool"]
+    },
+    "coverage_partition_policy": {
+      "type": "object",
+      "required": [
+        "matrix_identity", "scored_relation", "history_relation",
+        "insufficient_coverage_relation", "duplicate_policy", "sub_feature_relation", "min_coverage_rule", "n_present_bound",
+        "margin_conservation", "margin_realizability"
+      ],
+      "properties": {
+        "matrix_identity": { "const": "coverage_matrix keys (canonical) must EXACTLY equal the union of momentum_block ∪ insufficient_history ∪ insufficient_coverage identities — no missing, no extra, no contradictory" },
+        "scored_relation": { "const": "coverage_matrix[t].scored == (n_present >= min_coverage)" },
+        "history_relation": { "const": "a ticker in insufficient_history has n_present == 0" },
+        "insufficient_coverage_relation": { "const": "a ticker in insufficient_coverage has 0 < n_present < min_coverage" },
+        "duplicate_policy": { "const": "reject a post-canonical duplicate within EVERY identity-bearing collection (momentum_block keys, coverage_matrix keys, insufficient_history, insufficient_coverage); never silently set-collapse" },
+        "sub_feature_relation": { "const": "sub_feature_coverage keys must exactly equal sub_feature_universe; each count is an exact int in [0, number_of_identities]" },
+        "min_coverage_rule": { "const": "min_coverage is an exact int in [1, len(sub_feature_universe)]" },
+        "n_present_bound": { "const": "each coverage_matrix n_present is an exact int in [0, len(sub_feature_universe)]" },
+        "margin_conservation": { "const": "Σ coverage_matrix n_present (row degrees) == Σ sub_feature_coverage counts (column degrees) — both count the same ticker×sub-feature incidence cells" },
+        "margin_realizability": { "const": "the row-degree (per-ticker n_present) and column-degree (per-sub_feature count) sequences must be jointly realizable as a binary ticker×sub-feature incidence matrix (Gale-Ryser)" }
+      },
+      "additionalProperties": false
+    },
+    "projection_output_keys": {
+      "const": ["momentum_by_ticker", "neutral_fill_tickers", "coverage", "target_count", "scored_count"]
+    },
+    "neutral_fill_note": { "const": "a target ticker that is insufficient_history / insufficient_coverage / absent_from_pool is NOT scored — it is reported in neutral_fill_tickers so the composer OMITS the momentum block and core_score applies the §4.2 neutral-block rule (never a fabricated momentum value)." },
+    "authorization_boundary": {
+      "type": "object",
+      "required": ["live_fetch", "network", "raw_capture", "runner_wired", "datahub", "production", "ship_gate"],
+      "properties": {
+        "live_fetch": { "const": false },
+        "network": { "const": false },
+        "raw_capture": { "const": false },
+        "runner_wired": { "const": false },
+        "datahub": { "const": false },
+        "production": { "const": false },
+        "ship_gate": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
