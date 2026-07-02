@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (US-short route-doc Cut 6 seams/context-builder settled-state sync)
+
+- **Verdict/Action**: PASS + reviewer 提交整片（3 docs：CURRENT + us_short_system_design + SESSION_LOG）。docs-only 路由态同步：把 Cut 6-a/b/c/d score-block seams（momentum/theme/catalyst projection + score composer）与 batch4 offline context packet builder/runner 标 settled；provider-fed `data_context`/live Pass2/status-source/DataHub/Skill/production/ship-gate evidence 逐处保留 GATED（SR-PROVIDER-001）。准、gating 全保、CURRENT 无 transient gate 词。
+- **Required**: 无；non-material、不新增 `system_risk_register.md` 条目（docs/route 硬化，无假/陈旧契约、不 misroute；SR-PROVIDER-001 仅引用既有 gate、非本片新 finding）。
+- **Verify**: 4 seam 引擎 + context-builder runner/test 实在仓（settled 属实）；README:84-89 已 per-slice 标 built+live-gated（一致非 stale、故不在 diff）；design line44/121 core_score/Pass2 是设计意图非状态；AGENTS 无 seam 状态语；doc-process guard 亲跑 `60 OK`；`git diff --check` 仅 CRLF、3 文件无 BOM/FFFD。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `执行` (US-short route-doc settled-state sync for Cut 6 seams/context-builder)
+
+- **Verdict/Action**: docs-only route-state repair. `docs/CURRENT.md` and `docs/us_short_system_design.md` now mark US-short Cut 6-a/b/c/d score-block seams plus the supported batch4 offline context packet builder/runner path as settled, while keeping provider-fed `data_context`, live Pass2/status-source runner rewiring, DataHub, production evidence, and ship-gate evidence separately gated.
+- **Required**: none; no new R-ID. Scope stayed route docs + this SESSION_LOG entry only; no business code, schema, runner, provider/live, DataHub, production, broker/order, A-share, A-long, or US-long change.
+- **Verify**: `.tools\verify_doc_process.cmd` 60 OK; active-doc stale scoring-seam phrases grep 0; `git diff --check` CRLF warnings only; touched docs no BOM/FFFD.
+- **Pre-Codex self-review**: A-F/B2 checked by main-thread fallback; no subagent spawned because current subagent tool policy requires explicit user authorization. Ripple grep covered active `CURRENT`/US-short design/README phrasing; reverse check kept provider-fed/live work gated and avoided review/commit-cycle wording in `CURRENT`.
+- **Next**: Claude Code：审查当前 US-short route-doc settled-state diff，PASS 后提交。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (US-short selection theme_state fail-closed + context-builder PYTHONPATH)
 
 - **Verdict/Action**: PASS + reviewer 提交整片（4 文件：engine + 2 test + SESSION_LOG）。① `_select_top15` 对 `theme_opportunity_state` 非 str 改 `type(state) is not str: raise`——与本模块 per_ticker/pass2/holdings 全 fail-closed 惯例对齐、idiomatic exact-str（拒 hostile 子类）；设计权威 line76「未知→12+3」是**词表(值)域**，`selection_seats` 对未知 str/None/int 仍降级 12+3（未改、engine 层 `test_unknown_state_fails_closed_to_no_strong_split` 仍守），非 str **类型**属结构性违约、raise 不违设计（defense-in-depth：引擎宽容/消费者严格）。② 子进程测试助手保留 wrapper `PYTHONPATH`（ROOT 前置 + 追加既有 .tools/python_libs）→ 子进程能 import jsonschema、根治跨 env ACCOUNT_INVALID；test-harness only。
