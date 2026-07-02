@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (review-completeness selective guard + scope gate — 低害版)
+
+- **Verdict/Action**: PASS + reviewer 提交整片。Codex 交付即低 downside 版：AGENTS 加 item 16d（复发完整性遗漏才为该确切 material 类窄焊 + planted-failure，明禁 repo-wide 扩张/always-on 审查税）+ closeout item 9 冠名 Scope gate（并发/无关脏改动既不进 commit 也不进 PASS verdict）+ 1 个 section-scoped assertIn guard 焊 8 锚点。故意不建「逼每轮跑满 16 步」的 forcing function——那是不可机器验证/可糊弄/打架 minimal-template 的高 downside 物，正合「缺点太大则不做」。
+- **Required**: 无；Register: non-material（纯 docs/process 硬化，无假/陈旧契约、不 misroute）。
+- **Verify**: 亲跑 doc-process 全包（test_doc_governance_guard + readme_route_row_length + route_doc_ledger_status_consistency）60 OK；focused 新 guard 1 OK；`git diff --check` 仅 CRLF；两 tracked 文件无 BOM；16c/closeout 旧锚点 ripple 后仍在。
+- **Next**: 无（本片已提交）。
+
+## 2026-07-02 — Codex `执行` (review-completeness selective guard + PASS scope gate)
+
+- **Verdict/Action**: added process-only anchors for review completeness: selective guards apply only to a recurring material class/surface, and PASS closeout now has an explicit scope gate for PASS-covered files only. Touched only `AGENTS.md` + `tests/test_doc_governance_guard.py`; no business/schema/runner/provider/live/DataHub/production/broker/order/A-share change.
+- **Required**: 无；Register: non-material（docs/process hardening only）。
+- **Verify**: red first focused guard failed on missing `Review-completeness selective guard`; after patch focused OK, `tests.test_doc_governance_guard` 35 OK, `.tools/verify_doc_process.cmd` 60 OK, `git diff --check` CRLF-only.
+- **Pre-Codex self-review**: A-F/B2 checked; ripple grep for new anchors hit only AGENTS/test/current SESSION; lightweight current-diff-only self-review `fork_context=false` returned PASS with no timeout/fallback; fixed pack ran once after code/doc edits.
+- **Next**: Claude Code：审查当前 review-completeness/scope-gate docs/process diff，PASS 后提交。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (pre-Codex checklist self-review anti-hang hardening — 清并发)
 
 - **Verdict/Action**: PASS + 提交(清 Codex 并发那摊)。docs-only:checklist §0 加 self-review anti-hang contract(current-diff-only 自审 / 输出 PASS-FAIL / do-not-run-big-packs / 2-3min 限时+restart-once+main-thread fallback / unrelated-dirty-files 标外)+ 对应 guard 锚点测试。一致(refine §0、放按需读 checklist 非 always-load AGENTS)、无害、无 code/schema。

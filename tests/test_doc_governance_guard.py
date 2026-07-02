@@ -400,6 +400,30 @@ class DocGovernanceGuard(unittest.TestCase):
         ):
             self.assertIn(kw, section, f"Codex design-code authority matrix lost anchor: {kw}")
 
+    def test_agents_pins_review_completeness_selective_guard_and_scope_gate(self):
+        text = AGENTS.read_text(encoding="utf-8")
+        review = re.search(r"(?ms)^## Codex adversarial review standard.*?(?=^### Codex review closeout gate)", text)
+        self.assertIsNotNone(review, "AGENTS lost the Codex adversarial review standard section")
+        review_section = review.group(0)
+        for kw in (
+            "Review-completeness selective guard",
+            "recurring review-completeness miss",
+            "exact material class / surface",
+            "not a repo-wide protocol expansion",
+        ):
+            self.assertIn(kw, review_section, f"review-completeness selective guard lost anchor: {kw}")
+
+        closeout = re.search(r"(?ms)^### Codex review closeout gate.*?(?=^## Claude implementer standard)", text)
+        self.assertIsNotNone(closeout, "AGENTS lost the review closeout gate section")
+        closeout_section = closeout.group(0)
+        for kw in (
+            "Scope gate",
+            "PASS-covered files",
+            "unrelated or concurrent dirty work",
+            "do not stage or commit unreviewed files",
+        ):
+            self.assertIn(kw, closeout_section, f"review scope gate lost anchor: {kw}")
+
     def test_role_swap_execution_review_contract_is_pinned(self):
         text = AGENTS.read_text(encoding="utf-8")
         m = re.search(r"(?ms)^## Role split and command ownership.*?(?=^## Codex adversarial review standard)", text)
