@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-b theme seam full-pool repair — R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP)
+
+- **Verdict/Action**: PASS + reviewer 提交整片。Codex 全池修复正确：`project_theme_block` 全池(industry∪theme 身份)装配后按 target 投影、schema const-pin `projection_basis_policy`(mutation 拒 target_subset)、real-producer positive control 四态覆盖;独立探针证 AAPL=33.33 全池值≠子集 100、absent-target neutral 无 KeyError。顺手把 Codex 修复 entry 的极简模板违规(bullet 超长/label 合并/缺 register 指针)压成合规(仅格式、实质不变),否则 doc-gov guard 红挡提交。
+- **Required**: R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP → resolved(closure 见 `system_risk_register.md`,单一来源)。
+- **Verify**: focused seam+schema `22 OK`;邻接 core_score/theme_block/industry_heat/provisional_theme_heat/orthogonalize `110 OK`;独立探针 full-pool==33.33≠subset 100 + absent-target neutral 无 KeyError;`tests.test_doc_governance_guard` 全绿(压 Codex entry 后);`git diff --check` clean。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `修复` (US-short Cut 6-b theme seam full-pool repair)
+
+- **Verdict/Action**: fixed pending Claude review; `project_theme_block` now assembles §4.2 35% theme block on the full producer/membership pool before target projection, and adds real-producer positive control. Scope stayed US-short Cut 6-b only; no provider/live/DataHub/production/broker/order path.
+- **Required**: `R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP` fixed pending reviewer — 完整 finding/repair/closure 见 `system_risk_register.md`（单一来源）。`.tools`/output-standard 已在 `dcb11e20` 提交、不在本修复。
+- **Verify**: red first `tests.test_us_short_seam_theme` failed on `AAPL 100.0` vs full-pool `33.33333333333333`; after repair seam+schema `22 OK`, fixed adjacent pack `157 OK`, schema `test_us_short*` discover `777 OK`, `py_compile` OK, `git diff --check` clean (CRLF warning only), no-BOM/no-FFFD OK.
+- **Pre-Codex self-review**: A-F checked；A full-pool 整类(industry∪theme 身份/target 投影/neutral 出口/schema const/core_score 消费)；C absent-target neutral 无 KeyError；E route-doc 单 README 指针；independent agent PASS。Tests passing ≠ design closure.
+- **Next**: Claude Code：审查当前 Cut 6-b diff，PASS 后提交；不要混入 output-standard/.tools 已提交批。
+
 ## 2026-07-02 — Claude 提交 (user-directed output-rule 三改 + .cmd revert — R-DOCGOV-WRAPPER-CODEX-RUNTIME-PATH-REGRESSION)
 
 - **Verdict/Action**: 提交 user-directed 输出规则三改（用户令无需审查）：① output-standard「不再单列验证段」用户确认 user-requested→保留;② 删 AGENTS §Role split「协议/guard 变更须显式用户请求」gate 行 + 其 guard assertIn(用户令删,以后 Codex 加的直接复制审查);③ §输出结论规则 空行规则加宽为「每个段落之间也各留一个空行」。另 revert `.tools` wrapper codex-runtimes 私有路径(解提交阻塞)。Cut 6-b theme seam FAIL 不在本批、仍待 Codex 修复。

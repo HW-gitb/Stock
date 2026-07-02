@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stock.local/schemas/us_short_seam_theme_binding.schema.json",
+  "title": "US-short Cut 6-b theme/industry scoring-seam binding",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "schema_version",
+    "owner",
+    "design_authority",
+    "producer_refs",
+    "consumer_ref",
+    "identity_policy",
+    "projection_basis_policy",
+    "input_contract",
+    "output_contract",
+    "authorization_boundary"
+  ],
+  "properties": {
+    "artifact_id": { "const": "us_short_seam_theme_binding_20260702" },
+    "schema_version": { "const": "1.0.0" },
+    "owner": { "const": "US-short batch5 Cut 6-b theme/industry scoring seam" },
+    "design_authority": { "const": "docs/us_short_system_design.md section 4.2 and 4.3" },
+    "producer_refs": {
+      "const": [
+        "engine/us_short_industry_heat.py::industry_heat_block",
+        "engine/us_short_provisional_theme_heat.py::provisional_theme_heat_block"
+      ]
+    },
+    "consumer_ref": { "const": "batch4 score composer -> score_blocks['theme'] -> engine/us_short_core_score.py" },
+    "identity_policy": { "const": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only" },
+    "projection_basis_policy": { "const": "full_producer_membership_pool_then_target_projection" },
+    "input_contract": {
+      "type": "object",
+      "required": [
+        "industry_result_required_keys",
+        "provisional_theme_result_required_keys",
+        "confirm_flag_keys",
+        "theme_membership_policy",
+        "numeric_value_policy",
+        "block_value_domain"
+      ],
+      "properties": {
+        "industry_result_required_keys": {
+          "const": [
+            "industry_heat_by_ticker",
+            "sector_heat",
+            "sector_metrics",
+            "insufficient_sectors",
+            "min_sector_members"
+          ]
+        },
+        "provisional_theme_result_required_keys": {
+          "const": [
+            "theme_heat",
+            "confirm_flags",
+            "theme_metrics",
+            "insufficient_themes",
+            "min_theme_members"
+          ]
+        },
+        "confirm_flag_keys": {
+          "const": [
+            "theme_breadth_up_frac",
+            "theme_volume_confirm_frac",
+            "theme_leader_rs",
+            "theme_member_count"
+          ]
+        },
+        "theme_membership_policy": { "const": "one_primary_theme_per_ticker_fail_closed" },
+        "numeric_value_policy": { "const": "exact_builtin_int_or_float_only" },
+        "block_value_domain": { "const": [0.0, 100.0] }
+      },
+      "additionalProperties": false
+    },
+    "output_contract": {
+      "type": "object",
+      "required": ["required_keys", "coverage_dispositions", "neutral_fill_note"],
+      "properties": {
+        "required_keys": {
+          "const": [
+            "theme_block_by_ticker",
+            "neutral_fill_tickers",
+            "coverage",
+            "target_count",
+            "scored_count"
+          ]
+        },
+        "coverage_dispositions": {
+          "const": [
+            "scored_theme_base",
+            "scored_industry_base",
+            "neutral_insufficient_theme_no_industry",
+            "neutral_missing_theme_and_industry_base"
+          ]
+        },
+        "neutral_fill_note": {
+          "const": "Targets with no usable theme or industry base are omitted from theme_block_by_ticker and listed in neutral_fill_tickers so the composer can apply the core_score neutral-block rule."
+        }
+      },
+      "additionalProperties": false
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "required": [
+        "provider_call",
+        "live_data",
+        "datahub_write",
+        "production_runner",
+        "broker_or_order_execution"
+      ],
+      "properties": {
+        "provider_call": { "const": false },
+        "live_data": { "const": false },
+        "datahub_write": { "const": false },
+        "production_runner": { "const": false },
+        "broker_or_order_execution": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}
