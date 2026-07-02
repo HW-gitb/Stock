@@ -541,6 +541,7 @@ class DocGovernanceGuard(unittest.TestCase):
             "`docs/process`",
             ".tools/verify_doc_process.cmd",
             "focused first, then the required full pack",
+            "the reviewer must personally run the lane full pack",
         ):
             self.assertIn(anchor, section, f"shared process-speed contract lost anchor: {anchor}")
         for removed_soft_rule in (

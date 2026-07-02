@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 提交 (reviewer full-pack 收紧 + 亲跑全包回溯验证)
+
+- **Verdict/Action**: 提交 user-directed「收紧」——`AGENTS.md §Role split` process-speed 加「Reviewer full-pack rule」:`审查` PASS 前 reviewer 必**亲跑** lane 全包(US-short=full offline `*us_short*` discover)、**不采信执行方 full-suite 报告/转述计数**、每个失败按因归类(reviewed-slice→FAIL / 已存 tracked / 执行方 env 产物 / 未跟踪并发 WIP);doc-governance guard 加 assertIn 钉死;memory 同步。**回溯验证**:亲跑本机 = `3478 OK` 全绿——Codex 一直转述的「6 batch4 ACCOUNT_INVALID」是其 env 子进程缺 jsonschema 的产物、本机不存在;theme(`abad9ea6`)/catalyst(`721d2ef3`)全包级干净。撞见 Codex 并发写 Cut 6-d(`us_short_seam_score`)在飞 WIP(现已交接、待我下一轮审)。
+- **Required**: 无新 R-ID;user-directed process 收紧,无 business/schema/runner 改。
+- **Verify**: `discover -p test_us_short*.py` → `3478 OK`(本机亲跑);theme+catalyst 目标 `36 OK`;`tests.test_doc_governance_guard` `33 OK`(新 anchor 绿);`git diff --check` clean。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `执行` (US-short Cut 6-d score composer seam)
+
+- **Verdict/Action**: added offline Cut 6-d `compose_score_inputs` seam + binding/schema/tests + thin README route. It composes Cut 6-a/b/c component projections plus explicit `risk_downgrade` into same-source `selection_inputs` and `analysis_by_ticker`; missing component blocks are omitted so `core_score` applies its neutral rule, while missing theme evidence maps to `theme_momentum_score=0.0`. Scope stayed offline US-short seam only; no provider/live/DataHub/runner/production/broker/order/A-share path.
+- **Required**: none; no new R-ID and no `system_risk_register.md` update.
+- **Verify**: red first focused tests failed on missing `engine.us_short_seam_score`; focused seam+schema `15 OK`; fixed adjacent pack `275 OK`; `.tools/verify_doc_process.cmd` first failed without `STOCK_TEST_PYTHON`, rerun with bundled Python `58 OK`; README route + score schema spot check `16 OK`.
+- **Pre-Codex self-review / Proof-of-use**: loaded workspace Python and set `STOCK_TEST_PYTHON`; TDD red→green used; first no-history lightweight self-review timed out at 3 minutes and was closed; restarted narrower self-review returned PASS. Cut 6-d scope diff is the score seam files + README row; current worktree also contains dirty `AGENTS.md` and `tests/test_doc_governance_guard.py` outside this Cut 6-d slice, so reviewer should not mix them into this review unless separately authorized.
+- **Next**: Claude Code：审查当前 Cut 6-d diff，PASS 后提交；不要混入 provider/live/DataHub/production/A-share 或非 Cut 6-d dirty docs。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-c catalyst scoring seam)
 
 - **Verdict/Action**: PASS + reviewer 提交整片。`project_catalyst_block` 正确：catalyst 是逐票规则分非横截面百分位→无 pool-basis 问题(与 theme/momentum 不同、正确);consumer-validation 从 `us_short_catalyst_source` import 源契约常量单源三角化(signals/provenance/excluded/catalyst_result 全校验、lineage source-bound、score-ready 门、neutral⟺realized 一致);hostile str-subclass(eq-bomb)被 exact-str 在比较前拦下;real-producer positive control 四态覆盖;schema-first const-pin。无 code 缺陷。
