@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-02 — Claude 审查 PASS + 提交 (pre-Codex checklist §0 speed-discipline docs-only)
+
+- **Verdict/Action**: PASS + reviewer 提交。docs-only 给 `pre_codex_self_review_checklist.md` 加 §0 执行速度纪律(固定测试 Python / 窄红绿 / 轻量自审 / 自审限时 / Proof-of-use 速度证据);一致、无害、放按需读的 checklist 而非 always-load AGENTS(与 process-speed 裁剪逻辑一致),且 point 1「不得把私有 runtime 路径写入 tracked wrapper」正好固化本会话踩过的 `.cmd` 坑;未把上轮裁掉的 3 条软规则换位置塞回。无 code/guard/schema 改。
+- **Required**: 无。Optional:§0 point 2「focused→固定包」与 AGENTS process-speed 措辞轻度重叠(不同 altitude、无 guard 强制、drift 风险低),可后续改指针;非阻塞。
+- **Verify**: `tests.test_doc_governance_guard` 33 OK(Codex 执行 entry 合规 + checklist 单一来源 guard 仍绿);`.tools/verify_doc_process.cmd` 58 OK;`git diff --check` clean。
+- **Next**: Codex：执行
+
+## 2026-07-02 — Codex `执行` (pre-Codex checklist speed discipline)
+
+- **Verdict/Action**: user-approved process-doc update; added `docs/pre_codex_self_review_checklist.md §0 执行速度纪律` to pin runtime setup, focused red→green, one fixed-pack pass after docs, lightweight no-history self-review, 2-3 minute self-review timeout/restart, and Proof-of-use speed evidence.
+- **Required**: 无新 R-ID; no business/schema/runner/provider/live/DataHub/production/broker/order change.
+- **Verify**: `.tools/verify_doc_process.cmd` → `58 OK`; `git diff --check` clean (CRLF warning only).
+- **Pre-Codex self-review**: N-A for code A/C; B/E scoped to one checklist section + SESSION_LOG entry; speed rule explicitly avoids AGENTS bloat and tracked wrapper runtime-path edits.
+- **Next**: Claude Code：审查当前 checklist speed-discipline docs-only diff，PASS 后提交。
+
 ## 2026-07-02 — Claude 审查 PASS + 提交 (US-short Cut 6-b theme seam full-pool repair — R-USSHORT-BATCH5-SEAM-THEME-POOL-BASIS-AND-POSITIVE-CONTROL-GAP)
 
 - **Verdict/Action**: PASS + reviewer 提交整片。Codex 全池修复正确：`project_theme_block` 全池(industry∪theme 身份)装配后按 target 投影、schema const-pin `projection_basis_policy`(mutation 拒 target_subset)、real-producer positive control 四态覆盖;独立探针证 AAPL=33.33 全池值≠子集 100、absent-target neutral 无 KeyError。顺手把 Codex 修复 entry 的极简模板违规(bullet 超长/label 合并/缺 register 指针)压成合规(仅格式、实质不变),否则 doc-gov guard 红挡提交。
