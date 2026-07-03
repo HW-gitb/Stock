@@ -1,0 +1,213 @@
+{
+  "schema_name": "us_short_batch5_status_source_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-03T02:59:49+00:00",
+  "access_packet_ref": "docs/us_short_batch5_status_source_access_packet_20260630.json",
+  "authorization_ref": "user_chat_20260703_execute_if_needed_authorized",
+  "schema_ref": "schemas/us_short_batch5_status_source_probe_summary.schema.json",
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "purpose": "small_sample_status_source_shape_probe",
+    "probe_status": "completed",
+    "status_source_probe_performed": true,
+    "status_source_calls_performed": true,
+    "validation_only_parse_performed": true,
+    "raw_storage_performed": true,
+    "tracked_summary_written": true,
+    "status_records_written": false,
+    "bankruptcy_8k_scan_performed": false,
+    "full_market_application_performed": false,
+    "security_master_built": false,
+    "parser_into_runner_integration_performed": false,
+    "candidate_artifact_schema_changed": false,
+    "runner_consumption_allowed": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "provider_selection_allowed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "pre_execution_checks": {
+    "access_packet_validated": true,
+    "offline_preflight_reused": true,
+    "user_authorization_confirmed": true,
+    "post_preflight_execute_confirmed": true,
+    "provider_samples_gitignore_confirmed": true,
+    "raw_root_under_approved_provider_samples": true,
+    "environment_precheck_passed": true,
+    "sec_fair_access_user_agent_present": true,
+    "exact_endpoint_confirmation_passed": true,
+    "budget_precheck_passed": true,
+    "no_bankruptcy_8k_scan_guard_passed": true,
+    "no_full_market_application_guard_passed": true,
+    "no_datahub_consumption_guard_passed": true,
+    "no_ship_gate_claim_guard_passed": true
+  },
+  "environment": {
+    "sec_fair_access_user_agent_present": true,
+    "sec_fair_access_user_agent_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false,
+    "status_source_credentials_required": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_symbols": 3,
+    "universe_role": "bounded_shape_validation_sample_not_runner_consumable"
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 2,
+    "planned_total_endpoint_calls": 2,
+    "actual_total_endpoint_calls": 2,
+    "ticker_reference_calls": 1,
+    "halt_feed_calls": 1,
+    "bankruptcy_8k_calls": 0,
+    "retry_count_allowed": 0,
+    "retry_count_used": 0,
+    "within_budget": true
+  },
+  "exact_endpoint_confirmation": [
+    {
+      "source_id": "ticker_reference",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_tickers_exchange_json",
+      "request_url_in_summary": false
+    },
+    {
+      "source_id": "exchange_halt_feed",
+      "provider_id": "nasdaq_trader",
+      "endpoint_family": "trade_halts_rss",
+      "request_url_in_summary": false
+    }
+  ],
+  "storage": {
+    "raw_sample_storage_path": "provider_samples/us_short_batch5_status_source_20260630/",
+    "raw_samples_gitignored": true,
+    "tracked_summary_path": "docs/us_short_batch5_status_source_probe_summary_20260630.json",
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "secrets_in_summary": false
+  },
+  "endpoint_results": [
+    {
+      "source_id": "ticker_reference",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_tickers_exchange_json",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_status_source_20260630/raw/sec_edgar/_market/ticker_reference.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 2,
+        "row_count": 10415
+      },
+      "shape_validation_status": "ok"
+    },
+    {
+      "source_id": "exchange_halt_feed",
+      "provider_id": "nasdaq_trader",
+      "endpoint_family": "trade_halts_rss",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_status_source_20260630/raw/nasdaq_trader/_market/exchange_halt_feed.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "xml_text",
+        "top_level_key_count": null,
+        "row_count": 83
+      },
+      "shape_validation_status": "ok"
+    }
+  ],
+  "sample_shape_results": {
+    "ticker_reference": {
+      "source_id": "ticker_reference",
+      "feed_shape_valid": true,
+      "sample_symbols_checked": [
+        "AAPL",
+        "MSFT",
+        "JPM"
+      ],
+      "required_fields_present": {
+        "ticker": true,
+        "exchange": true,
+        "cik": true
+      },
+      "observed_row_count": 10415,
+      "sample_symbol_presence": {
+        "AAPL": {
+          "row_present": true,
+          "primary_exchange_present": true,
+          "cik_present": true
+        },
+        "MSFT": {
+          "row_present": true,
+          "primary_exchange_present": true,
+          "cik_present": true
+        },
+        "JPM": {
+          "row_present": true,
+          "primary_exchange_present": true,
+          "cik_present": true
+        }
+      }
+    },
+    "exchange_halt_feed": {
+      "source_id": "exchange_halt_feed",
+      "feed_shape_valid": true,
+      "sample_symbols_checked": [
+        "AAPL",
+        "MSFT",
+        "JPM"
+      ],
+      "rss_channel_present": true,
+      "observed_item_count": 83,
+      "halted_symbol_count": 55,
+      "sample_symbols_in_halt_feed": []
+    }
+  },
+  "aggregate_shape_metrics": {
+    "endpoint_success_count": 2,
+    "endpoint_error_count": 0,
+    "shape_valid_source_count": 2,
+    "sample_ticker_reference_rows_found": 3,
+    "sample_halt_feed_hit_count": 0
+  },
+  "validation_decision": {
+    "decision": "bounded_status_source_shape_probe_completed_keep_sr_provider_001_open",
+    "sr_provider_001_closed": false,
+    "runner_consumption_allowed": false,
+    "rationale": "This validates only the response-shape feasibility of two public bulk status-source families for AAPL/MSFT/JPM. It does not authorize runner consumption, DataHub, production storage, full-market application, bankruptcy screening, provider selection, alpha evidence, or ship-gate evidence."
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_application_performed": false,
+    "bankruptcy_8k_scanned": false,
+    "status_records_runner_consumable": false,
+    "candidate_artifact_written": false,
+    "datahub_or_adapter_implemented": false,
+    "production_runner_consumption_authorized": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This is a two-feed shape probe for three active sample symbols, not a runner-consumable status universe.",
+    "Ticker-reference and halt-feed observations are stored only as gitignored samples; tracked summary contains counts and shape flags only.",
+    "Bankruptcy 8-K screening, full-market application, status-record production, DataHub, production storage, provider selection, and ship-gate evidence remain gated."
+  ],
+  "next_steps": [
+    "Have Claude review the runner, schema, tracked summary, raw-path boundary, no-secret/no-URL scan, endpoint budget, and SR-PROVIDER-001 wording before commit.",
+    "Keep live runner wiring and any status-record consumption as a separate reviewed packet after this shape result is accepted."
+  ]
+}

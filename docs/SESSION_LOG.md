@@ -8,7 +8,21 @@
 
 ---
 
-## 2026-07-03 — Claude 审查 PASS + 提交 (US-short offline status-record injection + candidate provenance schema v1.1.0)
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source LIVE shape probe — bounded, SR-PROVIDER-001 kept open)
+
+- **Verdict/Action**: PASS + 提交整片(probe runner+schema+summary+test+2 docs)。首次 live 跨 SR-PROVIDER-001：实调 2 公开 feed(SEC company_tickers + Nasdaq halt RSS)/0 retry/shape-only。技术面 clean：tracked summary 无 URL/secret/raw(独立 grep 零命中)、raw gitignored+零跟踪+在盘、live 双确认 flag 门+预算硬闸+summary 写前后双扫消毒、仅读 SEC_USER_AGENT 不写入、无 API key。SR-PROVIDER-001 保持 open。用户定标准授权:artifact 干净 + escalation 批准 → 直接提交(本刀满足、escalation rerun 已批)。register in-place、无过度声明。
+- **Required**: 无。R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN 仍 open(live producer + run_fetch 接线 + provider-health 仍 gated;probe 是 shape 证据、不闭 R1)。
+- **Verify**: 亲跑 full offline `*us_short*` `3502 OK`;focused probe `4 OK`;`git check-ignore` 证 raw gitignored、`git ls-files provider_samples/` 零跟踪;summary 独立 secret/URL 扫零命中;doc-process `60 OK`;`git diff --check` 仅 CRLF。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short status-source shape probe execution)
+
+- **Verdict/Action**: added `runners/us_short_batch5_status_source_probe.py`, `schemas/us_short_batch5_status_source_probe_summary.schema.json`, and focused tests, then executed the user-authorized exact status-source shape probe. Tracked summary `docs/us_short_batch5_status_source_probe_summary_20260630.json`: 2/2 HTTP 200, shape_valid_source_count=2, AAPL/MSFT/JPM ticker-reference rows found=3, sample halt-feed hits=0.
+- **Required**: no new R-ID; updates existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` as bounded live shape-only evidence (register: `docs/system_risk_register.md`). `SR-PROVIDER-001` remains open for status-record producer + `run_fetch` wiring; no status_records, candidate artifact consumption, bankruptcy 8-K scan, full-market application, DataHub, production, provider selection, ship-gate, broker/order.
+- **Verify**: red first missing module; focused status-source probe 4 OK; adjacent status/source/schema pack 210 OK; live probe completed after sandbox `url_error` + approved escalated rerun, 2 calls/0 retry/2 HTTP 200; summary no URL/secret/raw_payload scan clean; raw refs gitignored; `py_compile` OK; full offline `*us_short*` 3502 OK (1 skipped) with project local dependency path; doc-process 60 OK; `git diff --check` warning-only CRLF.
+- **Next**: Claude Code: review current US-short status-source shape-probe execution diff; PASS then commit.
+
+## 2026-07-03 – Claude 审查 PASS + 提交 (US-short offline status-record injection + candidate provenance schema v1.1.0)
 
 - **Verdict/Action**: PASS + 提交整片(runner+engine+schema+2 test+2 docs)。`apply_pass1(status_records=)` 离线注入扎实：默认路径不变(既有 disclosed interim)、注入 fail-closed(缺 record→raise、复用 slice-1a record↔row 身份绑定、unknown→None→保守拒、provenance 深拷);validator 从 stored provenance 重导 flags 核对;schema v1.1.0 条件 pinning(unsourced=四旗 false+禁 provenance / sourced=必须 provenance)+ closed-world const-pin。run_fetch 未动、无 live/网络(live wiring 仍 SR-PROVIDER-001 gated)。register in-place + B-ripple(工作约定生效)。
 - **Required**: 无。PASS1-STATUS-HEALTH 仍 open(partial offline closure、live remainder gated)。offline 注入 caller-forgeable 是已文档化设计(真实性靠 gated live producer)、非 finding。
