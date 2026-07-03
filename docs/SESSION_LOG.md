@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source run_fetch wiring — offline, live run gated)
+
+- **Verdict/Action**: PASS + 提交整片(runner+test+5 docs)。**offline 接线**(无 live run、测试全 mock halt feed)：`run_fetch` 从 SEC 参考 + Nasdaq halt feed 建每票 `status_records` 喂 `apply_pass1`。fail-closed：halt-down→unknown→保守拒、all-critical→no-emit、record↔row 绑定复用、bankruptcy unscreened。payloads 进 gitignored raw、tracked summary 只 counts。`fetch_sec_tickers` 已预过滤白名单→新 raise 非回归。SR-PROVIDER-001 open、register in-place、design 仅 status。
+- **Required**: 无。R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN 仍 open(per-execution live run 证据 + bankruptcy 8-K + broader provider-health + Pass2 仍 gated)。观察(非阻塞)：halt-feed 一挂全宇宙保守拒(fail-closed 正确)、halt fetch `except Exception` 宽(fail-closed 安全)。
+- **Verify**: 亲跑 full offline `*us_short*` `3506 OK`(+4 wiring 测试、全 mock 无 live 调用);doc-process `60 OK`;覆盖 happy/halted-true/halt-down-unknown/all-critical-no-emit/RSS-IssueSymbol;`git diff --check` 仅 CRLF。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short status-source `run_fetch` wiring)
+
+- **Verdict/Action**: wired `runners/us_short_universe_fetch.py::run_fetch` to build Pass1 `status_records` from the already-fetched SEC active-listing reference plus Nasdaq current halt feed before `apply_pass1`. Halt-feed failure stays unknown/rejected; all-critical status-source failure no-emits before candidate artifact. Bankruptcy 8-K remains zero-call/unscreened.
+- **Required**: no new R-ID; updates existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` as the live-capable status-record producer + runner-consumption path. `SR-PROVIDER-001` remains open for per-execution live run evidence, broader provider-health/fallback behavior, live Pass2 source wiring, DataHub/production/provider-selection/ship-gate gates, broker/order exclusion, and forward evidence.
+- **Verify**: red first: the two new universe-fetch wiring tests failed on missing `fetch_nasdaq_trade_halt_feed`; green: focused universe-fetch 72 OK, adjacent status/source/schema pack 248 OK, full offline `*us_short*` 3506 OK (1 skipped), doc-process 60 OK, `py_compile` OK, `git diff --check` warning-only CRLF.
+- **Pre-Codex self-review**: checklist A-F/B2 checked by main-thread fallback; scope held to US-short status-source `run_fetch` wiring + route docs. Covered classes: halted true, halt-feed down unknown-not-clean, all-critical no-emit, RSS `IssueSymbol` parsing, existing clean positive. No live full-market run, no 8-K scan, no Pass2/DataHub/production/provider-selection/ship-gate/broker/order/A-share/A-long/US-long.
+- **Next**: Claude Code: review current US-short status-source `run_fetch` wiring diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source LIVE shape probe — bounded, SR-PROVIDER-001 kept open)
 
 - **Verdict/Action**: PASS + 提交整片(probe runner+schema+summary+test+2 docs)。首次 live 跨 SR-PROVIDER-001：实调 2 公开 feed(SEC company_tickers + Nasdaq halt RSS)/0 retry/shape-only。技术面 clean：tracked summary 无 URL/secret/raw(独立 grep 零命中)、raw gitignored+零跟踪+在盘、live 双确认 flag 门+预算硬闸+summary 写前后双扫消毒、仅读 SEC_USER_AGENT 不写入、无 API key。SR-PROVIDER-001 保持 open。用户定标准授权:artifact 干净 + escalation 批准 → 直接提交(本刀满足、escalation rerun 已批)。register in-place、无过度声明。

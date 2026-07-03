@@ -43,6 +43,7 @@ import gzip as _gzip
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import time
@@ -52,6 +53,7 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -85,6 +87,7 @@ SEC_FRAMES_URL = "https://data.sec.gov/api/xbrl/frames/dei/EntityCommonStockShar
 SEC_SHARE_FRAMES = ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"]
 SEC_FAIR_ACCESS_SLEEP = 0.15
 EXCHANGE_WHITELIST = ("NYSE", "NASDAQ")
+NASDAQ_TRADE_HALTS_RSS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts"
 
 MASSIVE_GROUPED_URL = "https://api.massive.com/v2/aggs/grouped/locale/us/market/stocks/{date}?apiKey={key}"
 
@@ -205,6 +208,122 @@ def fetch_sec_tickers(sec_ua: str) -> dict[str, dict[str, Any]]:
         if ct and ct not in out and isinstance(cik, int):
             out[ct] = {"cik": cik, "exchange": exch}
     return out
+
+
+# ---------------------------------------------------------------------------
+# Status-source live producer: ticker reference + current exchange halt feed
+# ---------------------------------------------------------------------------
+
+def _status_as_of_from_decision_date(decision_date: str) -> str:
+    if not (isinstance(decision_date, str) and len(decision_date) == 8 and decision_date.isdigit()):
+        raise RuntimeError(f"decision_date must be YYYYMMDD for status-source as_of: {decision_date!r}")
+    return _iso_from_yyyymmdd(decision_date)
+
+
+def _ticker_reference_payload_from_sec_map(sec_map: dict[str, dict[str, Any]], *, observed_at: str) -> dict[str, Any]:
+    active_listings: dict[str, dict[str, Any]] = {}
+    for symbol, meta in sec_map.items():
+        ct = canonical_us_ticker(symbol)
+        exchange = meta.get("exchange") if isinstance(meta, dict) else None
+        if ct is None or exchange not in EXCHANGE_WHITELIST:
+            raise RuntimeError(f"SEC ticker map contains non-canonical / non-whitelisted listing: {symbol!r}")
+        active_listings[ct] = {"active": True, "primary_exchange": exchange}
+    return {
+        "observed": True,
+        "observed_at": observed_at,
+        "coverage": "full",
+        "active_listings": active_listings,
+    }
+
+
+def _local_xml_name(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _xml_child_text(item: ElementTree.Element, name: str) -> str:
+    target = name.lower()
+    for child in item:
+        if _local_xml_name(child.tag).lower() == target:
+            return "".join(child.itertext()).strip()
+    return ""
+
+
+def _symbol_from_halt_item(item: ElementTree.Element) -> str | None:
+    issue_symbol = _xml_child_text(item, "IssueSymbol")
+    if issue_symbol:
+        return canonical_us_ticker(issue_symbol)
+    text = " ".join([_xml_child_text(item, "title"), _xml_child_text(item, "description")])
+    match = re.search(r"\bSymbol\s*:?\s*([A-Z][A-Z0-9.\-]{0,9})\b", text, flags=re.IGNORECASE)
+    raw = match.group(1) if match else _xml_child_text(item, "title")
+    return canonical_us_ticker(raw)
+
+
+def parse_halt_symbols_from_rss(xml_text: str) -> list[str]:
+    try:
+        root = ElementTree.fromstring(xml_text)
+    except ElementTree.ParseError as exc:
+        raise RuntimeError("Nasdaq trade-halt RSS did not parse as XML") from exc
+    items = [elem for elem in root.iter() if _local_xml_name(elem.tag).lower() == "item"]
+    return sorted({symbol for item in items if (symbol := _symbol_from_halt_item(item))})
+
+
+def fetch_nasdaq_trade_halt_feed(*, observed_at: str) -> dict[str, Any]:
+    req = urllib.request.Request(
+        NASDAQ_TRADE_HALTS_RSS_URL,
+        headers={"User-Agent": "StockSystem/0.1 us-short-status-source"},
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = resp.read().decode("utf-8", errors="replace")
+    return {
+        "observed": True,
+        "observed_at": observed_at,
+        "halted_symbols": parse_halt_symbols_from_rss(body),
+    }
+
+
+def build_live_status_records(
+    sec_map: dict[str, dict[str, Any]],
+    *,
+    decision_date: str,
+    observed_at: str,
+    halt_feed: dict[str, Any] | None,
+    halt_feed_state: str,
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, Any]]:
+    """Build runner-consumable status_records from reviewed live status sources.
+
+    This is the live 1b wiring for the already-reviewed offline status parser. It consumes the SEC ticker map
+    already fetched by `fetch_sec_tickers` as the full active-listing reference, consumes the Nasdaq current halt
+    feed, and deliberately leaves bankruptcy as `unscreened` (zero 8-K calls in this slice). If both critical
+    status sources fail, classify_status_source_outcomes blocks/no-emits before candidate artifacts can be written.
+    """
+    ticker_reference = _ticker_reference_payload_from_sec_map(sec_map, observed_at=observed_at) if sec_map else None
+    outcomes = {
+        "ticker_reference": "ok" if ticker_reference is not None else "missing",
+        "exchange_halt_feed": halt_feed_state,
+        "sec_8k_item_103": "missing",
+    }
+    status_source_outcome = _status_source.classify_status_source_outcomes(outcomes)
+    if status_source_outcome["block_or_no_emit"]:
+        raise RuntimeError("all critical status sources failed; refusing to emit a candidate artifact")
+
+    status_as_of = _status_as_of_from_decision_date(decision_date)
+    records = {
+        symbol: _status_source.resolve_status_record(
+            symbol,
+            ticker_reference=ticker_reference,
+            halt_feed=halt_feed,
+            bankruptcy_screen=None,
+            as_of=status_as_of,
+            observed_at=observed_at,
+        )
+        for symbol in sec_map
+    }
+    payloads = {
+        "ticker_reference": ticker_reference,
+        "exchange_halt_feed": halt_feed,
+        "sec_8k_item_103": None,
+    }
+    return records, status_source_outcome, payloads
 
 
 # ---------------------------------------------------------------------------
@@ -773,36 +892,54 @@ def run_fetch(
     _sv.validate_raw_root(raw_root)
     _validate_candidate_path(candidate_list_path, decision_date)   # gitignored-root gate BEFORE any fetch/write
 
-    print("[1/4] SEC NYSE/NASDAQ 列表 + CIK...", flush=True)
+    print("[1/5] SEC NYSE/NASDAQ 列表 + CIK...", flush=True)
     sec_map = fetch_sec_tickers(sec_ua)
     print(f"      {len(sec_map)} tickers", flush=True)
+
+    print("[2/5] Status source (SEC active-listing reference + Nasdaq halt feed)...", flush=True)
+    try:
+        halt_feed = fetch_nasdaq_trade_halt_feed(observed_at=generated_at)
+        halt_feed_state = "ok"
+    except Exception:
+        halt_feed = {"observed": False}
+        halt_feed_state = "down"
+    status_records, status_source_outcome, status_source_payloads = build_live_status_records(
+        sec_map,
+        decision_date=decision_date,
+        observed_at=generated_at,
+        halt_feed=halt_feed,
+        halt_feed_state=halt_feed_state,
+    )
+    print(f"      status_records={len(status_records)}  "
+          f"critical_failed={status_source_outcome['critical_failed']}", flush=True)
 
     window_dates = adv_window_session_dates(
         price_basis_date, calendar,
         count=ADV_WINDOW_TRADING_DAYS + ADV_WINDOW_FETCH_BUFFER_SESSIONS,
     )
-    print(f"[2/4] Massive grouped daily ADV 窗口 ({ADV_WINDOW_TRADING_DAYS} 交易日均额, "
+    print(f"[3/5] Massive grouped daily ADV 窗口 ({ADV_WINDOW_TRADING_DAYS} 交易日均额, "
           f"price_basis={price_basis_date})...", flush=True)
     used_date, observed_window_dates, market_data = fetch_massive_window(massive_key, window_dates)
     print(f"      used_date={used_date}  observed_days={len(observed_window_dates)}  "
           f"{len(market_data)} symbols with data", flush=True)
 
-    print("[3/4] SEC 流通股 frames (bulk)...", flush=True)
+    print("[4/5] SEC 流通股 frames (bulk)...", flush=True)
     sec_shares = fetch_sec_shares(sec_ua)
     print(f"      {len(sec_shares)} CIK 有流通股", flush=True)
 
     _write_json_atomic(
         {"decision_date": decision_date, "price_basis_date": price_basis_date,
          "used_date": used_date, "observed_window_dates": observed_window_dates,
+         "status_source_payloads": status_source_payloads,
          "sec_shares_by_cik": {str(k): v for k, v in sec_shares.items()},
          "market_data": market_data},
         raw_root / "raw_universe_data.json",
     )
 
-    print("[4/4] Pass1 准入 (市值=SEC流通股×收盘价; ADV=窗口日均成交额)...", flush=True)
+    print("[5/5] Pass1 准入 (市值=SEC流通股×收盘价; ADV=窗口日均成交额; status=sourced)...", flush=True)
     governance = load_eligibility_governance(governance_path)
     rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance,
-                       as_of=used_date, observed_at=generated_at)
+                       as_of=used_date, observed_at=generated_at, status_records=status_records)
     summary_counts = summarize_rows(rows)
     print(f"      pass-A eligible={summary_counts['eligible_count']}  "
           f"needs_mktcap={len(summary_counts['needs_market_cap'])}", flush=True)
@@ -817,7 +954,7 @@ def run_fetch(
         print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_attempted}...", flush=True)
         fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key)
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,
-                           as_of=used_date, observed_at=generated_at)
+                           as_of=used_date, observed_at=generated_at, status_records=status_records)
         summary_counts = summarize_rows(rows)
     elif fallback_targets and not fmp_key:
         print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fallback_targets)} 缺市值未救回", flush=True)
@@ -883,13 +1020,15 @@ def run_fetch(
         },
         "pass1_result": {**summary_counts, "eligible_tickers": eligible_tickers_from_rows(rows)},
         "status_screening": {
-            "status_flags_sourced": False,
-            "screening_scope": "exchange_price_adv_market_cap_only",
-            "hardwired_status_flags": ["delisted", "halted", "bankruptcy", "otc"],
+            "status_flags_sourced": True,
+            "screening_scope": "exchange_price_adv_market_cap_with_ticker_reference_and_halt_feed_status",
+            "status_source_outcome": status_source_outcome,
+            "status_records_total": len(status_records),
+            "bankruptcy_8k_scan_performed": False,
             "disclosure": (
-                "Pass1 hardwires delisted/halted/bankruptcy/otc to False (no status source in round-1), "
-                "so eligible_tickers reflects exchange/price/ADV/market-cap screening ONLY — NOT "
-                "listing-status / halt / bankruptcy / OTC screening; the list may include non-tradable names."
+                "Pass1 now sources delisted/otc from the SEC active-listing reference and halted from the "
+                "Nasdaq current halt feed. Bankruptcy remains positive-detection-only and unscreened in this "
+                "slice (zero 8-K calls), so it is recorded as unscreened provenance rather than proof of clean."
             ),
             "status_source_contract_ref": "docs/us_short_batch5_status_source_binding_20260629.json",
             "finding_ref": "R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN",
@@ -904,7 +1043,7 @@ def run_fetch(
         },
         "sr_provider_001_remains_open": True,
         "limitations": [
-            "Pass1 status flags (delisted/halted/bankruptcy/otc) are NOT sourced in round-1 — hardwired to False; eligible_tickers screens exchange/price/ADV/market-cap ONLY and may include non-tradable (delisted/halted/bankrupt/OTC) names. Real per-flag source frozen schema-first in docs/us_short_batch5_status_source_binding_20260629.json (R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN), gated under SR-PROVIDER-001.",
+            "Pass1 status flags are sourced only for the current SEC active-listing reference and Nasdaq current halt feed in this slice. Bankruptcy 8-K scanning remains zero-call/unscreened, and broader provider health / Pass2 / DataHub / production consumption remain gated under SR-PROVIDER-001.",
             f"ADV = mean daily dollar volume over the last {ADV_WINDOW_TRADING_DAYS} trading days ending at used_date (a real multi-day average, governance floor is $5M/day). A ticker observed on < {ADV_MIN_DAYS_REQUIRED} days has adv_usd=null (insufficient coverage) and fails the gate conservatively — it is never admitted on a one-day spike.",
             "decision_date / price_basis_date are resolved from the FROZEN NYSE/NASDAQ calendar, whose data_provenance.verification_status is recorded here; it is still pending_authoritative_cross_check until verified (SR-PROVIDER-001) — disclosed, not laundered.",
             "market_cap = latest SEC shares × Massive close; SEC-missing-shares names use FMP fallback (bounded by FMP free daily cap; overflow stays ineligible).",

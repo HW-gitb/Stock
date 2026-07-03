@@ -679,6 +679,9 @@ class TestRunFetchE2E(unittest.TestCase):
                  patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
                  patch.object(_mod, "fetch_sec_shares", return_value=shares), \
                  patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
+                              return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
+                                            "halted_symbols": []}), \
                  patch.object(_mod.time, "sleep"), \
                  patch.object(_mod._sv, "validate_raw_root"):
                 summary = _mod.run_fetch(
@@ -704,6 +707,116 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertTrue(aapl["adv_coverage_ok"])
         self.assertEqual(summary["pass1_result"], {**_mod.summarize_rows(artifact["rows"]),
                                                    "eligible_tickers": ["AAPL"]})
+
+    def test_live_run_wires_status_records_from_sec_reference_and_halt_feed(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+                   "HALT": {"cik": 999999, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  999999: {"shares": 1_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
+                    {"T": "HALT", "c": 20.0, "v": 10_000_000}]
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
+                              return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
+                                            "halted_symbols": ["HALT"]}), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        self.assertTrue(summary["status_screening"]["status_flags_sourced"])
+        self.assertFalse(summary["status_screening"]["bankruptcy_8k_scan_performed"])
+        self.assertEqual(summary["status_screening"]["status_source_outcome"]["per_source"]["ticker_reference"], "ok")
+        self.assertEqual(summary["status_screening"]["status_source_outcome"]["per_source"]["exchange_halt_feed"], "ok")
+        self.assertEqual(summary["pass1_result"]["eligible_tickers"], ["AAPL"])
+        by_ticker = {row["ticker"]: row for row in artifact["rows"]}
+        self.assertTrue(by_ticker["AAPL"]["status_flags_sourced"])
+        self.assertFalse(by_ticker["AAPL"]["halted"])
+        self.assertTrue(by_ticker["HALT"]["status_flags_sourced"])
+        self.assertTrue(by_ticker["HALT"]["halted"])
+        self.assertFalse(by_ticker["HALT"]["eligible"])
+        self.assertIn("status_halted", by_ticker["HALT"]["reasons"])
+        self.assertEqual(by_ticker["HALT"]["status_provenance"]["flags"]["halted"]["source_id"], "exchange_halt_feed")
+
+    def test_halt_feed_failure_keeps_halted_unknown_not_clean(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000}]
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", side_effect=RuntimeError("halt feed down")), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        row = artifact["rows"][0]
+        self.assertTrue(row["status_flags_sourced"])
+        self.assertIsNone(row["halted"])
+        self.assertFalse(row["eligible"])
+        self.assertIn("status_halted_unknown_or_invalid", row["reasons"])
+        self.assertEqual(summary["status_screening"]["status_source_outcome"]["per_source"]["exchange_halt_feed"], "down")
+        self.assertFalse(summary["status_screening"]["status_source_outcome"]["block_or_no_emit"])
+
+    def test_all_critical_status_sources_fail_no_emit(self):
+        with self.assertRaisesRegex(RuntimeError, "all critical status sources failed"):
+            _mod.build_live_status_records(
+                {},
+                decision_date="20260629",
+                observed_at="2026-06-29T12:00:00+00:00",
+                halt_feed={"observed": False},
+                halt_feed_state="down",
+            )
+
+    def test_parse_halt_symbols_prefers_namespaced_issue_symbol(self):
+        xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
+  <channel>
+    <item>
+      <title>Company name, not the parser source</title>
+      <ndaq:IssueSymbol>ABTC</ndaq:IssueSymbol>
+      <description>Issue Symbol table cell may also contain ABTC</description>
+    </item>
+  </channel>
+</rss>"""
+        self.assertEqual(_mod.parse_halt_symbols_from_rss(xml), ["ABTC"])
 
 
 class SummarySafetyAndGitignore(unittest.TestCase):
