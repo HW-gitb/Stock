@@ -307,16 +307,27 @@ def build_live_status_records(
     halt_feed: dict[str, Any] | None,
     halt_feed_state: str,
     bankruptcy_screen: dict[str, Any] | None = None,
+    bankruptcy_submissions_by_ticker: dict[str, Any] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Build runner-consumable status_records from reviewed live status sources.
 
     This is the live 1b wiring for the already-reviewed offline status parser. It consumes the SEC ticker map
     already fetched by `fetch_sec_tickers` as the full active-listing reference, consumes the Nasdaq current halt
-    feed, and can consume a caller-supplied SEC 8-K Item 1.03 bankruptcy screen. This function never fetches the
-    bankruptcy screen itself; `run_fetch` still passes None until a separate reviewed scan is authorized. If both
+    feed, and can consume either a caller-supplied SEC 8-K Item 1.03 bankruptcy screen or caller-supplied SEC
+    submissions payloads that are assembled into that screen. This function never fetches the bankruptcy payloads
+    itself; `run_fetch` still passes None until a separate reviewed scan is authorized. If both
     critical status sources fail, classify_status_source_outcomes blocks/no-emits before candidate artifacts can
     be written.
     """
+    if bankruptcy_screen is not None and bankruptcy_submissions_by_ticker is not None:
+        raise RuntimeError("provide only one bankruptcy source shape: screen or SEC submissions")
+    status_as_of = _status_as_of_from_decision_date(decision_date)
+    if bankruptcy_submissions_by_ticker is not None:
+        bankruptcy_screen = _status_source.build_bankruptcy_screen_from_sec_submissions(
+            as_of=status_as_of,
+            observed_at=observed_at,
+            submissions_by_ticker=bankruptcy_submissions_by_ticker,
+        )
     ticker_reference = _ticker_reference_payload_from_sec_map(sec_map, observed_at=observed_at) if sec_map else None
     outcomes = {
         "ticker_reference": "ok" if ticker_reference is not None else "missing",
@@ -327,7 +338,6 @@ def build_live_status_records(
     if status_source_outcome["block_or_no_emit"]:
         raise RuntimeError("all critical status sources failed; refusing to emit a candidate artifact")
 
-    status_as_of = _status_as_of_from_decision_date(decision_date)
     records = {
         symbol: _status_source.resolve_status_record(
             symbol,

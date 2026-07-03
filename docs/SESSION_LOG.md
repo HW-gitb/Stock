@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short build_live_status_records 接 SEC submissions raw 源 — Codex execute 复审)
+
+- **Verdict/Action**: PASS + 提交 3 文件(runner + test + SESSION_LOG)。**分级=轻量**(+16 行 wiring:把上轮 agent 审过的 `build_bankruptcy_screen_from_sec_submissions` parser + 已审 resolver 接进 seam、无新 fail-closed 逻辑)→整读 + 反向探针、不强制新 agent。新参 `bankruptcy_submissions_by_ticker` + XOR 守卫(screen/submissions 互斥);run_fetch 仍不传源(零 8-K)。
+- **Required**: 无(本刀无新 finding、register 无翻转)。
+- **Verify**: 我整读 seam 改动(XOR 守卫、status_as_of 上移、parser 调用无 try/except);反向探针:both 源→RuntimeError、submissions-only→内建 screen→BANKR bankrupt+accession/AAPL screened/sec_8k=ok/全 validate、默认(无源)→unscreened+sec_8k=missing、screen-only 向后兼容、parser raise(len-mismatch/future/observed_at 越窗)全传播 StatusSourceError 不吞。亲跑 full offline `*us_short*` `3527 OK` 零回归、doc 60 OK。**未审(gated)**:真 8-K live fetch(SR-PROVIDER-001、run_fetch 仍 None)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short build_live_status_records consumes injected SEC submissions)
+
+- **Verdict/Action**: extended `runners/us_short_universe_fetch.py::build_live_status_records` so a caller can pass injected SEC submissions via `bankruptcy_submissions_by_ticker`; the seam internally builds the existing `bankruptcy_screen` with `build_bankruptcy_screen_from_sec_submissions` and then uses the reviewed status resolver. Added a mutual-exclusion guard so callers cannot supply both a prebuilt screen and raw submissions. `run_fetch` still passes no bankruptcy source and performs zero 8-K calls.
+- **Required**: none new. No network/provider call, no live SEC 8-K scan, no raw storage, no access-packet expansion, no Pass2 live wiring, no DataHub/production/ship-gate/broker/order/cross-lane work. `SR-PROVIDER-001` remains open for the live scan/fetch remainder.
+- **Verify**: red first: two focused tests failed with `unexpected keyword argument 'bankruptcy_submissions_by_ticker'`. Green: focused 2 OK; `test_us_short_universe_fetch` 82 OK; `test_us_short_status_source` 100 OK; full offline `test_us_short*.py` 3527 OK (1 skipped); doc-process 60 OK; `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. B grep: `rg -n "bankruptcy_submissions_by_ticker|bankruptcy_screen itself|zero 8-K calls|build_bankruptcy_screen_from_sec_submissions|bankruptcy_8k_scan_performed|bankruptcy 8-K scanning remains zero-call" runners engine tests docs/README.md docs/CURRENT.md docs/system_risk_register.md docs/SESSION_LOG.md` confirms the new seam parameter is only in runner/tests and durable docs still state `run_fetch` zero 8-K calls. C reverse: both source shapes at once raises; default `run_fetch` path unchanged. No independent subagent timeout/restart.
+- **Next**: Claude Code: review current 2-file diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short SEC submissions→bankruptcy_screen offline 解析器 — 最高危独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交 5 文件(engine parser + 2 tests + README route + SESSION_LOG)。**分级=最高危**(新 +109 行解析器消费外部 SEC submissions 喂 bankruptcy disqualifier)→满标准。`build_bankruptcy_screen_from_sec_submissions` fabrication/fail-open/crash/PIT tight;run_fetch 仍传 None(live gated)。README route 准确(明说 run_fetch 仍零 8-K 调用)。
