@@ -1,0 +1,323 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_bankruptcy_8k_access_packet/1.0.0/schema.json",
+  "title": "US-short Batch5 Bankruptcy 8-K Access Packet",
+  "description": "Machine-checkable US-short batch5 bankruptcy 8-K ACCESS packet. It records the offline reviewed boundary for a later separately confirmed small-sample SEC EDGAR company-submissions Item 1.03 shape scan. It executes NO SEC call, reads no raw payloads, writes no raw or tracked summary, does not scan the full universe, does not wire run_fetch, and authorizes no DataHub / production / ship-gate use.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_artifact_refs",
+    "scope",
+    "bankruptcy_8k_scan_boundary",
+    "deferred_scope",
+    "storage_and_secret_boundary",
+    "preflight_gates",
+    "prohibited_claims",
+    "next_steps",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_batch5_bankruptcy_8k_access_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"const": "2026-07-03T00:00:00+08:00"},
+    "source_artifact_refs": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/sourceArtifactRef"},
+      "minItems": 5,
+      "maxItems": 5,
+      "allOf": [
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_status_source_binding"},
+            "path": {"const": "docs/us_short_batch5_status_source_binding_20260629.json"},
+            "role": {"const": "Frozen per-flag status-source contract: bankruptcy binds to sec_8k_item_103 as positive-detection-only best effort and does not prove clean when unscreened."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_system_design"},
+            "path": {"const": "docs/us_short_system_design.md"},
+            "role": {"const": "Single US-short design authority; SR-PROVIDER-001 gates live provider access, runner consumption, DataHub, production, and ship-gate evidence."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "sr_provider_001"},
+            "path": {"const": "docs/system_risk_register.md"},
+            "role": {"const": "Open provider blocker; this packet authorizes no live SEC call and records only the boundary for a future reviewed + user-executed small-sample scan."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_status_source_access_packet"},
+            "path": {"const": "docs/us_short_batch5_status_source_access_packet_20260630.json"},
+            "role": {"const": "Prior status-source access packet explicitly deferred per-issuer bankruptcy 8-K scanning to a separate budgeted packet."}}}},
+        {"contains": {"type": "object", "required": ["artifact_id", "path", "role"],
+          "properties": {"artifact_id": {"const": "us_short_universe_fetch_runner"},
+            "path": {"const": "runners/us_short_universe_fetch.py"},
+            "role": {"const": "run_fetch currently performs zero bankruptcy 8-K calls; injected SEC submissions can assemble an offline bankruptcy screen, but the live scan remains separate."}}}}
+      ]
+    },
+    "scope": {"$ref": "#/$defs/scope"},
+    "bankruptcy_8k_scan_boundary": {"$ref": "#/$defs/bankruptcy8kScanBoundary"},
+    "deferred_scope": {"$ref": "#/$defs/deferredScope"},
+    "storage_and_secret_boundary": {"$ref": "#/$defs/storageAndSecretBoundary"},
+    "preflight_gates": {"$ref": "#/$defs/preflightGates"},
+    "prohibited_claims": {"$ref": "#/$defs/prohibitedClaims"},
+    "next_steps": {"const": [
+      "Review this offline bankruptcy 8-K access packet before any SEC company-submissions call.",
+      "On a later post-review user execute command, run a preflight that confirms the exact SEC submissions endpoint family, the gitignored raw path scope, the no-secret summary contract, and the 3-call zero-retry budget.",
+      "After preflight plus user execute, run only the bounded AAPL/MSFT/JPM company-submissions shape scan and validate fields needed by build_bankruptcy_screen_from_sec_submissions.",
+      "Full-universe bankruptcy screening, run_fetch wiring, candidate-artifact status provenance changes, Pass2, DataHub, production, and ship-gate evidence remain separate reviewed steps."
+    ]},
+    "limitations": {"const": [
+      "This artifact performs no SEC call, reads no raw payload, writes no raw sample, writes no tracked summary, scans no bankruptcy 8-Ks, and rewires no runner or schema.",
+      "It authorizes only a future reviewed + user-executed small-sample shape scan of SEC EDGAR company submissions for AAPL/MSFT/JPM; the exact call occurs only after preflight.",
+      "Bankruptcy remains positive-detection-only and best-effort: a missing Item 1.03 observation is not proof of clean, and an unscreened universe must be disclosed rather than asserted clean.",
+      "It does not resolve SR-PROVIDER-001; live full-universe fetch, runner consumption, DataHub, production storage, provider selection, live_normalized evidence, and ship-gate claims remain gated."
+    ]}
+  },
+  "$defs": {
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "sourceArtifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "path", "role"],
+      "properties": {
+        "artifact_id": {"$ref": "#/$defs/nonEmptyString"},
+        "path": {"$ref": "#/$defs/nonEmptyString"},
+        "role": {"$ref": "#/$defs/nonEmptyString"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "packet_status",
+        "status_source_calls_executed_by_this_artifact",
+        "raw_payloads_read_by_this_artifact",
+        "network_access_required_for_this_artifact",
+        "small_sample_first_required",
+        "future_bankruptcy_scan_requires_explicit_user_authorization",
+        "future_bankruptcy_scan_requires_preflight",
+        "future_bankruptcy_scan_requires_user_execute",
+        "bankruptcy_8k_calls_allowed_without_future_authorization",
+        "full_market_or_per_symbol_fetch_allowed",
+        "parser_into_runner_integration_allowed",
+        "candidate_artifact_schema_change_allowed",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "provider_selection_allowed",
+        "broker_or_order_automation_allowed",
+        "live_normalized_evidence_allowed",
+        "ship_gate_evidence_allowed",
+        "production_ready_claim_allowed"
+      ],
+      "properties": {
+        "market": {"const": "US"},
+        "lane": {"const": "us_short"},
+        "batch": {"const": "batch5_provider_live"},
+        "packet_status": {"const": "bankruptcy_8k_access_packet_recorded_for_review_not_executed"},
+        "status_source_calls_executed_by_this_artifact": {"const": false},
+        "raw_payloads_read_by_this_artifact": {"const": false},
+        "network_access_required_for_this_artifact": {"const": false},
+        "small_sample_first_required": {"const": true},
+        "future_bankruptcy_scan_requires_explicit_user_authorization": {"const": true},
+        "future_bankruptcy_scan_requires_preflight": {"const": true},
+        "future_bankruptcy_scan_requires_user_execute": {"const": true},
+        "bankruptcy_8k_calls_allowed_without_future_authorization": {"const": false},
+        "full_market_or_per_symbol_fetch_allowed": {"const": false},
+        "parser_into_runner_integration_allowed": {"const": false},
+        "candidate_artifact_schema_change_allowed": {"const": false},
+        "datahub_consumption_allowed": {"const": false},
+        "production_storage_allowed": {"const": false},
+        "provider_selection_allowed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "live_normalized_evidence_allowed": {"const": false},
+        "ship_gate_evidence_allowed": {"const": false},
+        "production_ready_claim_allowed": {"const": false}
+      }
+    },
+    "bankruptcy8kScanBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_status", "sample_universe", "endpoint_call_budget", "endpoint_families", "validation_questions"],
+      "properties": {
+        "authorization_status": {"const": "not_authorized_by_this_artifact_requires_future_user_confirmation_after_review"},
+        "sample_universe": {"$ref": "#/$defs/sampleUniverse"},
+        "endpoint_call_budget": {"$ref": "#/$defs/endpointCallBudget"},
+        "endpoint_families": {
+          "type": "array",
+          "items": {"$ref": "#/$defs/endpointFamily"},
+          "minItems": 1,
+          "maxItems": 1
+        },
+        "validation_questions": {"const": ["sec_submissions_recent_fields_shape", "bankruptcy_item_103_detection_shape"]}
+      }
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbols", "cik_by_symbol", "max_symbols", "shape_validation_only", "not_full_market_or_security_master"],
+      "properties": {
+        "symbols": {"const": ["AAPL", "MSFT", "JPM"]},
+        "cik_by_symbol": {"const": {"AAPL": 320193, "MSFT": 789019, "JPM": 19617}},
+        "max_symbols": {"const": 3},
+        "shape_validation_only": {"const": true},
+        "not_full_market_or_security_master": {"const": true}
+      }
+    },
+    "endpointCallBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "sec_company_submissions_calls",
+        "bankruptcy_8k_calls",
+        "retry_count_allowed",
+        "abort_if_budget_exceeded",
+        "budget_authorized_by_this_artifact"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": {"const": 3},
+        "sec_company_submissions_calls": {"const": 3},
+        "bankruptcy_8k_calls": {"const": 3},
+        "retry_count_allowed": {"const": 0},
+        "abort_if_budget_exceeded": {"const": true},
+        "budget_authorized_by_this_artifact": {"const": false}
+      }
+    },
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "provider_id",
+        "endpoint_family",
+        "flags",
+        "call_count",
+        "provider_role",
+        "exact_endpoint_status",
+        "parser_shape_required",
+        "authorizes_status_call_now",
+        "raw_parse_allowed_after_future_authorization",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "source_id": {"const": "sec_8k_item_103"},
+        "provider_id": {"const": "sec_edgar"},
+        "endpoint_family": {"const": "company_submissions_recent_filings"},
+        "flags": {"const": ["bankruptcy"]},
+        "call_count": {"const": 3},
+        "provider_role": {"const": "One SEC company-submissions observation per sample issuer supplies recent form, filingDate, accessionNumber, and items arrays for offline Item 1.03 shape validation only."},
+        "exact_endpoint_status": {"const": "pending_preflight_confirmation"},
+        "parser_shape_required": {"const": "filings.recent.form + filingDate + accessionNumber + items arrays consumed by build_bankruptcy_screen_from_sec_submissions"},
+        "authorizes_status_call_now": {"const": false},
+        "raw_parse_allowed_after_future_authorization": {"const": true},
+        "authorizes_datahub_or_runner_consumption": {"const": false}
+      }
+    },
+    "deferredScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "live_sec_company_submissions_execution",
+        "full_market_or_candidate_universe_bankruptcy_scan",
+        "run_fetch_bankruptcy_wiring",
+        "candidate_artifact_status_provenance_schema",
+        "pass2_live_source_wiring"
+      ],
+      "properties": {
+        "live_sec_company_submissions_execution": {"const": "deferred_requires_preflight_user_execute_and_review"},
+        "full_market_or_candidate_universe_bankruptcy_scan": {"const": "deferred_separate_packet_after_small_sample_shape_review"},
+        "run_fetch_bankruptcy_wiring": {"const": "deferred_after_reviewed_scan_packet"},
+        "candidate_artifact_status_provenance_schema": {"const": "deferred_after_live_producer_contract"},
+        "pass2_live_source_wiring": {"const": "deferred_separate_live_pass2_source_wiring"}
+      }
+    },
+    "storageAndSecretBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_raw_sample_storage_path",
+        "future_tracked_summary_path",
+        "provider_samples_gitignore_check_required",
+        "tracked_summary_must_exclude_raw_payloads",
+        "tracked_summary_must_exclude_request_urls",
+        "tracked_summary_must_exclude_secrets",
+        "tracked_summary_write_authorized_by_this_artifact",
+        "raw_payload_write_authorized_by_this_artifact",
+        "production_storage_authorized"
+      ],
+      "properties": {
+        "future_raw_sample_storage_path": {"const": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/"},
+        "future_tracked_summary_path": {"const": "docs/us_short_batch5_bankruptcy_8k_probe_summary_20260703.json"},
+        "provider_samples_gitignore_check_required": {"const": true},
+        "tracked_summary_must_exclude_raw_payloads": {"const": true},
+        "tracked_summary_must_exclude_request_urls": {"const": true},
+        "tracked_summary_must_exclude_secrets": {"const": true},
+        "tracked_summary_write_authorized_by_this_artifact": {"const": false},
+        "raw_payload_write_authorized_by_this_artifact": {"const": false},
+        "production_storage_authorized": {"const": false}
+      }
+    },
+    "preflightGates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_validation_required",
+        "provider_samples_gitignore_check_required",
+        "future_raw_path_scope_check_required",
+        "future_summary_no_secret_contract_required",
+        "budget_precheck_required",
+        "exact_endpoint_confirmation_required",
+        "no_full_market_guard_required",
+        "no_runner_consumption_guard_required",
+        "no_datahub_consumption_guard_required",
+        "no_ship_gate_claim_guard_required"
+      ],
+      "properties": {
+        "schema_validation_required": {"const": true},
+        "provider_samples_gitignore_check_required": {"const": true},
+        "future_raw_path_scope_check_required": {"const": true},
+        "future_summary_no_secret_contract_required": {"const": true},
+        "budget_precheck_required": {"const": true},
+        "exact_endpoint_confirmation_required": {"const": true},
+        "no_full_market_guard_required": {"const": true},
+        "no_runner_consumption_guard_required": {"const": true},
+        "no_datahub_consumption_guard_required": {"const": true},
+        "no_ship_gate_claim_guard_required": {"const": true}
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status_call_authorized_now",
+        "bankruptcy_8k_scanned",
+        "provider_selected",
+        "full_market_application_performed",
+        "status_records_runner_consumable",
+        "candidate_artifact_written",
+        "datahub_or_adapter_implemented",
+        "production_runner_consumption_authorized",
+        "production_storage_rights_cleared",
+        "live_normalized_evidence_claimed",
+        "ship_gate_evidence_claimed",
+        "production_ready_claimed",
+        "broker_or_order_automation"
+      ],
+      "properties": {
+        "status_call_authorized_now": {"const": false},
+        "bankruptcy_8k_scanned": {"const": false},
+        "provider_selected": {"const": false},
+        "full_market_application_performed": {"const": false},
+        "status_records_runner_consumable": {"const": false},
+        "candidate_artifact_written": {"const": false},
+        "datahub_or_adapter_implemented": {"const": false},
+        "production_runner_consumption_authorized": {"const": false},
+        "production_storage_rights_cleared": {"const": false},
+        "live_normalized_evidence_claimed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false},
+        "production_ready_claimed": {"const": false},
+        "broker_or_order_automation": {"const": false}
+      }
+    }
+  }
+}

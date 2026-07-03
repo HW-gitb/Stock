@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy 8-K access packet + offline preflight — 最高危独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交 8 文件(packet json + preflight runner + schema + 2 tests + README route + register in-place 调和 + SESSION_LOG)。**分级=最高危**(新 fail-closed 授权/边界门 + tracked artifact)→满标准。preflight 纯离线:schema + strict-identity 边界重检双层防御;packet all-false boundary、无 secret/URL;register 是 in-place 调和(非底部新块、合上次 placement 教训)。
+- **Required**: 无(本刀无新 finding、register 无翻转)。Optional(非阻塞、仍 fail-closed):packet JSON 根为非-object(`[]`/`"x"`)时 preflight line 98 `packet.get` 抛 AttributeError 而非契约 ValueError——仍不授权/不写、非现实向量(packet 是 repo-tracked object)、一行 isinstance 守可统一错误契约。
+- **Verify**: 我整读 preflight 全体(纯度/strict-identity/empty-gate 闭/path 守卫)+ packet all-false;探针 21 越权 mutation 全拒(boundary→True/strict-id `0`/`"false"`/`1`/empty-null gate/budget/path escape) + env sentinel 不泄 + 模块无 os.environ/网络/写。**独立 §3.5 agent(只读当前树)**全 6 目标 HELD、66+ mutation 全拒、双层(schema∧re-check)独立各拒、path triple-gated、纯度+packet 无 secret 证;仅 1 cosmetic 非-object-root note(已列 Optional)。亲跑 full offline `3537 OK` 零回归、preflight+schema 10 OK、doc/route 绿。**未审(gated)**:真 SEC 8-K live(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short bankruptcy 8-K access packet + offline preflight)
+
+- **Verdict/Action**: added a separate schema-first bankruptcy 8-K access packet and offline preflight for a future bounded SEC EDGAR company-submissions Item 1.03 shape scan (AAPL/MSFT/JPM, max 3 calls, zero retry). The preflight validates packet/path/budget/no-secret/no-live/no-runner guards in memory only.
+- **Required**: none new. No SEC call, no network, no raw/tracked write, no `run_fetch` bankruptcy scan/wiring, no status_records, no full-market/candidate-universe scan, no Pass2/DataHub/production/provider-selection/ship-gate/broker/order/cross-lane work. `SR-PROVIDER-001` remains open for actual scan/fetch and consumption.
+- **Verify**: red first: new focused tests initially failed on missing runner/schema/artifact; after implementation, schema/artifact const drift was caught and fixed. Green: focused 10 OK; offline preflight CLI OK; adjacent provider/schema/status/universe pack 196 OK; full offline `test_us_short*.py` 3537 OK (1 skipped); doc-process 60 OK; route-doc guards 25 OK; `py_compile` OK; `git diff --check` warning-only CRLF.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. B grep: no runner env/network/raw write path; hits are read-only packet/schema open, boundary prose, and tests. C reverse: scope/storage/prohibited-claim mutants and missing `provider_samples` gitignore fail closed. No independent subagent timeout/restart.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short build_live_status_records 接 SEC submissions raw 源 — Codex execute 复审)
 
 - **Verdict/Action**: PASS + 提交 3 文件(runner + test + SESSION_LOG)。**分级=轻量**(+16 行 wiring:把上轮 agent 审过的 `build_bankruptcy_screen_from_sec_submissions` parser + 已审 resolver 接进 seam、无新 fail-closed 逻辑)→整读 + 反向探针、不强制新 agent。新参 `bankruptcy_submissions_by_ticker` + XOR 守卫(screen/submissions 互斥);run_fetch 仍不传源(零 8-K)。

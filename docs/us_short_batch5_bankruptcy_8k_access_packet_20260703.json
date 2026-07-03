@@ -1,0 +1,154 @@
+{
+  "schema_name": "us_short_batch5_bankruptcy_8k_access_packet",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-03T00:00:00+08:00",
+  "source_artifact_refs": [
+    {
+      "artifact_id": "us_short_status_source_binding",
+      "path": "docs/us_short_batch5_status_source_binding_20260629.json",
+      "role": "Frozen per-flag status-source contract: bankruptcy binds to sec_8k_item_103 as positive-detection-only best effort and does not prove clean when unscreened."
+    },
+    {
+      "artifact_id": "us_short_system_design",
+      "path": "docs/us_short_system_design.md",
+      "role": "Single US-short design authority; SR-PROVIDER-001 gates live provider access, runner consumption, DataHub, production, and ship-gate evidence."
+    },
+    {
+      "artifact_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "role": "Open provider blocker; this packet authorizes no live SEC call and records only the boundary for a future reviewed + user-executed small-sample scan."
+    },
+    {
+      "artifact_id": "us_short_status_source_access_packet",
+      "path": "docs/us_short_batch5_status_source_access_packet_20260630.json",
+      "role": "Prior status-source access packet explicitly deferred per-issuer bankruptcy 8-K scanning to a separate budgeted packet."
+    },
+    {
+      "artifact_id": "us_short_universe_fetch_runner",
+      "path": "runners/us_short_universe_fetch.py",
+      "role": "run_fetch currently performs zero bankruptcy 8-K calls; injected SEC submissions can assemble an offline bankruptcy screen, but the live scan remains separate."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "packet_status": "bankruptcy_8k_access_packet_recorded_for_review_not_executed",
+    "status_source_calls_executed_by_this_artifact": false,
+    "raw_payloads_read_by_this_artifact": false,
+    "network_access_required_for_this_artifact": false,
+    "small_sample_first_required": true,
+    "future_bankruptcy_scan_requires_explicit_user_authorization": true,
+    "future_bankruptcy_scan_requires_preflight": true,
+    "future_bankruptcy_scan_requires_user_execute": true,
+    "bankruptcy_8k_calls_allowed_without_future_authorization": false,
+    "full_market_or_per_symbol_fetch_allowed": false,
+    "parser_into_runner_integration_allowed": false,
+    "candidate_artifact_schema_change_allowed": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "provider_selection_allowed": false,
+    "broker_or_order_automation_allowed": false,
+    "live_normalized_evidence_allowed": false,
+    "ship_gate_evidence_allowed": false,
+    "production_ready_claim_allowed": false
+  },
+  "bankruptcy_8k_scan_boundary": {
+    "authorization_status": "not_authorized_by_this_artifact_requires_future_user_confirmation_after_review",
+    "sample_universe": {
+      "symbols": ["AAPL", "MSFT", "JPM"],
+      "cik_by_symbol": {
+        "AAPL": 320193,
+        "MSFT": 789019,
+        "JPM": 19617
+      },
+      "max_symbols": 3,
+      "shape_validation_only": true,
+      "not_full_market_or_security_master": true
+    },
+    "endpoint_call_budget": {
+      "max_total_endpoint_calls": 3,
+      "sec_company_submissions_calls": 3,
+      "bankruptcy_8k_calls": 3,
+      "retry_count_allowed": 0,
+      "abort_if_budget_exceeded": true,
+      "budget_authorized_by_this_artifact": false
+    },
+    "endpoint_families": [
+      {
+        "source_id": "sec_8k_item_103",
+        "provider_id": "sec_edgar",
+        "endpoint_family": "company_submissions_recent_filings",
+        "flags": ["bankruptcy"],
+        "call_count": 3,
+        "provider_role": "One SEC company-submissions observation per sample issuer supplies recent form, filingDate, accessionNumber, and items arrays for offline Item 1.03 shape validation only.",
+        "exact_endpoint_status": "pending_preflight_confirmation",
+        "parser_shape_required": "filings.recent.form + filingDate + accessionNumber + items arrays consumed by build_bankruptcy_screen_from_sec_submissions",
+        "authorizes_status_call_now": false,
+        "raw_parse_allowed_after_future_authorization": true,
+        "authorizes_datahub_or_runner_consumption": false
+      }
+    ],
+    "validation_questions": [
+      "sec_submissions_recent_fields_shape",
+      "bankruptcy_item_103_detection_shape"
+    ]
+  },
+  "deferred_scope": {
+    "live_sec_company_submissions_execution": "deferred_requires_preflight_user_execute_and_review",
+    "full_market_or_candidate_universe_bankruptcy_scan": "deferred_separate_packet_after_small_sample_shape_review",
+    "run_fetch_bankruptcy_wiring": "deferred_after_reviewed_scan_packet",
+    "candidate_artifact_status_provenance_schema": "deferred_after_live_producer_contract",
+    "pass2_live_source_wiring": "deferred_separate_live_pass2_source_wiring"
+  },
+  "storage_and_secret_boundary": {
+    "future_raw_sample_storage_path": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/",
+    "future_tracked_summary_path": "docs/us_short_batch5_bankruptcy_8k_probe_summary_20260703.json",
+    "provider_samples_gitignore_check_required": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secrets": true,
+    "tracked_summary_write_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "production_storage_authorized": false
+  },
+  "preflight_gates": {
+    "schema_validation_required": true,
+    "provider_samples_gitignore_check_required": true,
+    "future_raw_path_scope_check_required": true,
+    "future_summary_no_secret_contract_required": true,
+    "budget_precheck_required": true,
+    "exact_endpoint_confirmation_required": true,
+    "no_full_market_guard_required": true,
+    "no_runner_consumption_guard_required": true,
+    "no_datahub_consumption_guard_required": true,
+    "no_ship_gate_claim_guard_required": true
+  },
+  "prohibited_claims": {
+    "status_call_authorized_now": false,
+    "bankruptcy_8k_scanned": false,
+    "provider_selected": false,
+    "full_market_application_performed": false,
+    "status_records_runner_consumable": false,
+    "candidate_artifact_written": false,
+    "datahub_or_adapter_implemented": false,
+    "production_runner_consumption_authorized": false,
+    "production_storage_rights_cleared": false,
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "next_steps": [
+    "Review this offline bankruptcy 8-K access packet before any SEC company-submissions call.",
+    "On a later post-review user execute command, run a preflight that confirms the exact SEC submissions endpoint family, the gitignored raw path scope, the no-secret summary contract, and the 3-call zero-retry budget.",
+    "After preflight plus user execute, run only the bounded AAPL/MSFT/JPM company-submissions shape scan and validate fields needed by build_bankruptcy_screen_from_sec_submissions.",
+    "Full-universe bankruptcy screening, run_fetch wiring, candidate-artifact status provenance changes, Pass2, DataHub, production, and ship-gate evidence remain separate reviewed steps."
+  ],
+  "limitations": [
+    "This artifact performs no SEC call, reads no raw payload, writes no raw sample, writes no tracked summary, scans no bankruptcy 8-Ks, and rewires no runner or schema.",
+    "It authorizes only a future reviewed + user-executed small-sample shape scan of SEC EDGAR company submissions for AAPL/MSFT/JPM; the exact call occurs only after preflight.",
+    "Bankruptcy remains positive-detection-only and best-effort: a missing Item 1.03 observation is not proof of clean, and an unscreened universe must be disclosed rather than asserted clean.",
+    "It does not resolve SR-PROVIDER-001; live full-universe fetch, runner consumption, DataHub, production storage, provider selection, live_normalized evidence, and ship-gate claims remain gated."
+  ]
+}
