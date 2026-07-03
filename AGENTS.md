@@ -21,7 +21,7 @@
 
 屏幕最终回复固定三段且只用这三段：`Verdict`、`Required / Optional / Options`、`下一步`。不再输出 `Findings` 段，也不单列“已验证 / Verify / 验证”项；无内容写“无”；不要另起“覆盖范围 / 验证 / 结论边界 / Findings”等额外栏目。**大白话只放在前两段**：`Verdict` 用单独一行 `大白话：…` 说明能不能过；`Required / Optional / Options` 下每条具体项都带单独一行 `大白话：…` 说清后果或怎么选；`下一步` 只写一行最简单给另一个 LLM 的命令，如 `Codex：Pass`、`Codex：修复`、`Codex：执行`，不写 `大白话`、不写解释，具体指示放 `docs/SESSION_LOG.md` / `docs/system_risk_register.md`。`审查` PASS 后当前 reviewer/committer 自动提交已审查工作树，`下一步` 不再指示 executor/fixer `提交`；executor/fixer 只实现/修复。任何 `FAIL` / `Required` 用「技术标识 + 技术现状 + 大白话」三件套。完整规则见 `## 输出结论规则`。
 
-另外，所有对话最终回复都不再另起 `验证结果` / `已验证` / `Verify` / `验证` 段；验证证据写入 `docs/SESSION_LOG.md` / `docs/system_risk_register.md` 或执行产物，需要在聊天说明时只能压成一句内联边界，不作为独立栏目。
+另外，所有对话最终回复都不再另起 `验证结果` / `已验证` / `Verify` / `验证` 段；验证证据写入 `docs/SESSION_LOG.md` / `docs/system_risk_register.md` 或执行产物，需要在聊天说明时只能压成一句内联边界，不作为独立栏目。**DO NOT send optional commentary.**
 
 若没有写入 SESSION_LOG 极简 entry，当前 reviewer/committer 不得发送 `审查` 最终回复。详细规则见 `### Codex review closeout gate` 与 `### 评审循环 entry 极简模板`；本短入口只防漏读，不另立第二套规则。
 
