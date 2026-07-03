@@ -14,11 +14,10 @@ stays unknown (OMITTED -> cheap_eligible's existing conservative reject; NEVER c
 critical-all-fail run must block / no-emit, not report "completed", per the binding's
 provider_failure_health_policy).
 
-WHAT THIS IS NOT — gated 1b (SR-PROVIDER-001): NO network/provider call (it consumes payloads, never fetches);
-it does NOT rewire runners/us_short_universe_fetch.py::apply_pass1 (that still hardwires False behind an honest
-disclosure until 1b) and does NOT relax the candidate-artifact schema's const-pinned
-status_flags_sourced=false (the per-row status provenance lands there in 1b, where a real producer exists).
-Pure / offline; no A-share crossing.
+WHAT THIS IS NOT - live 1b (SR-PROVIDER-001): NO network/provider call (it consumes payloads, never fetches).
+The universe runner may inject already-resolved offline status records into apply_pass1 for tests/fixtures and
+schema validation, but the live producer / run_fetch provider wiring remains separately gated. Pure / offline;
+no A-share crossing.
 
 Per-flag gate policy (== the frozen binding's unknown_policy, triangulated by a test):
   * delisted / halted / otc  -> conservative_reject: a True/False value needs a real observation; UNKNOWN

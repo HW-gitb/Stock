@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short offline status-record injection + candidate provenance schema v1.1.0)
+
+- **Verdict/Action**: PASS + 提交整片(runner+engine+schema+2 test+2 docs)。`apply_pass1(status_records=)` 离线注入扎实：默认路径不变(既有 disclosed interim)、注入 fail-closed(缺 record→raise、复用 slice-1a record↔row 身份绑定、unknown→None→保守拒、provenance 深拷);validator 从 stored provenance 重导 flags 核对;schema v1.1.0 条件 pinning(unsourced=四旗 false+禁 provenance / sourced=必须 provenance)+ closed-world const-pin。run_fetch 未动、无 live/网络(live wiring 仍 SR-PROVIDER-001 gated)。register in-place + B-ripple(工作约定生效)。
+- **Required**: 无。PASS1-STATUS-HEALTH 仍 open(partial offline closure、live remainder gated)。offline 注入 caller-forgeable 是已文档化设计(真实性靠 gated live producer)、非 finding。
+- **Verify**: 亲跑 full offline `*us_short*` `3498 OK`；focused provider+schema 覆盖 happy/unknown-reject/missing-raise/forged-mismatch-raise/shape-mutants;doc-process guards `60 OK`;`git diff --check` 仅 CRLF。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-03 - Codex `执行` (US-short PASS1 status-record offline injection + candidate provenance schema)
+
+- **Verdict/Action**: added offline status-record injection into `runners/us_short_universe_fetch.py::apply_pass1(..., status_records=...)` and bumped `schemas/us_short_universe_candidate_artifact.schema.json` to v1.1.0 with per-row `status_provenance`. Default no-status path is unchanged: no status map means `status_flags_sourced=false`, four status flags false, and no provenance.
+- **Required**: no new R-ID; updates existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` as a partial offline closure (register: `docs/system_risk_register.md`). Remaining live work is status-source producer + `run_fetch` wiring that supplies reviewed live status records; real provider calls remain `SR-PROVIDER-001` per-execution gated.
+- **Verify**: red first: provider focused failed on unexpected `status_records`, schema focused failed on v1.0/const-false. Green: focused provider 29 OK + schema 19 OK; related status/source/schema pack 219 OK; full offline `*us_short*` 3498 OK (1 skipped); doc-process 60 OK; `py_compile` OK; `git diff --check` warning-only CRLF. Checklist A-F/B2 by main-thread fallback; no provider/live/network/env read/raw write/DataHub/production/ship-gate/broker/order/A-share/A-long/US-long change.
+- **Next**: Claude Code: review current US-short offline status-record injection/schema diff; PASS then commit.
+
 ## 2026-07-03 — Claude re-审查 PASS + 提交 (US-short status-source offline preflight — docs placement reconciled)
 
 - **Verdict/Action**: PASS + reviewer 提交整片(runner+test+3 docs)。Codex docs-only 修复到位：preflight 状态更新已 reconcile 进 PASS1-STATUS-HEALTH 项(挨 slice-1/1a 注 + SUPERSEDED line 列入)、register 底部独立块已删、SESSION_LOG preamble 回顶 + Codex 执行条目移进 `---` 下 reverse-chrono 区。preflight code 未改、仍干净(上轮已审:纯离线/fail-closed/empty-map 类关闭/SR-PROVIDER-001 边界保全)。

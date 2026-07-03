@@ -38,6 +38,7 @@ Requires env: MASSIVE_API_KEY, SEC_USER_AGENT (FMP_API_KEY optional, for market-
 from __future__ import annotations
 
 import argparse
+import copy
 import gzip as _gzip
 import json
 import math
@@ -68,6 +69,7 @@ from engine.us_short_market_calendar import (  # noqa: E402
     load_market_calendar,
     sessions_for_window,
 )
+from engine import us_short_status_source as _status_source  # noqa: E402
 from runners import us_egs_sample_validation as _sv  # noqa: E402
 
 AUTHORIZATION_REF = "user_chat_20260626_universe_fetch"
@@ -400,6 +402,7 @@ def apply_pass1(
     *,
     governance: dict[str, Any],
     fmp_caps: dict[str, float] | None = None,
+    status_records: dict[str, dict[str, Any]] | None = None,
     as_of: str,
     observed_at: str,
     window_days: int = ADV_WINDOW_TRADING_DAYS,
@@ -414,6 +417,9 @@ def apply_pass1(
     from these rows by `summarize_rows` (single source).
     """
     fmp_caps = fmp_caps or {}
+    status_supplied = status_records is not None
+    if status_supplied and not isinstance(status_records, dict):
+        raise RuntimeError("status_records must be a dict keyed by canonical ticker")
     rows: list[dict[str, Any]] = []
     for sym, meta in sec_tickers.items():
         d = market_data.get(sym) or {}
@@ -435,14 +441,29 @@ def apply_pass1(
             market_cap = float(fmp_caps[sym])
             market_cap_source = "fmp_profile"
 
+        status_values = {flag: False for flag in _status_source.DISQUALIFYING_FLAGS}
+        status_record = None
+        if status_supplied:
+            if sym not in status_records:
+                raise RuntimeError(f"missing status record for {sym}")
+            status_record = status_records[sym]
+            row_flags, _ = _status_source.status_flags_for_row(status_record, row_ticker=sym)
+            status_values = {
+                flag: row_flags[flag] if flag in row_flags else None
+                for flag in _status_source.DISQUALIFYING_FLAGS
+            }
+
         gate_row = {
             "ticker": sym, "exchange": meta["exchange"],
             "price": price, "adv_usd": adv_usd, "market_cap_usd": market_cap,
-            "delisted": False, "halted": False, "bankruptcy": False, "otc": False,
+            "delisted": status_values["delisted"],
+            "halted": status_values["halted"],
+            "bankruptcy": status_values["bankruptcy"],
+            "otc": status_values["otc"],
         }
         verdict = cheap_eligible(gate_row, governance=governance)
 
-        rows.append({
+        row = {
             "ticker": verdict["ticker"] or sym,
             "exchange": meta["exchange"],
             "price": price if _is_finite(price) else None,
@@ -454,8 +475,11 @@ def apply_pass1(
             "shares": float(shares) if _is_finite(shares) else None,
             "market_cap_usd": market_cap if _is_finite(market_cap) else None,
             "market_cap_source": market_cap_source,
-            "delisted": False, "halted": False, "bankruptcy": False, "otc": False,
-            "status_flags_sourced": False,
+            "delisted": status_values["delisted"],
+            "halted": status_values["halted"],
+            "bankruptcy": status_values["bankruptcy"],
+            "otc": status_values["otc"],
+            "status_flags_sourced": status_supplied,
             "eligible": verdict["eligible"],
             "reasons": verdict["reasons"],
             "provider_id": ROW_PROVIDER_ID,
@@ -470,7 +494,10 @@ def apply_pass1(
                 "shares_source": shares_source,
                 "market_cap_source": market_cap_source,
             },
-        })
+        }
+        if status_supplied:
+            row["status_provenance"] = copy.deepcopy(status_record)
+        rows.append(row)
     return rows
 
 
@@ -525,7 +552,7 @@ def build_candidate_artifact(
     eligible = eligible_tickers_from_rows(rows)
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "decision_date": decision_date,
@@ -597,9 +624,21 @@ def validate_candidate_artifact(artifact: dict[str, Any], *, expected_decision_d
         v = cheap_eligible(gate_row, governance=governance)
         if r["eligible"] != v["eligible"] or r["reasons"] != v["reasons"]:
             raise RuntimeError(f"行 {r['ticker']} 的 eligible/reasons 与按存储输入重算的 cheap_eligible 不一致（反伪造）")
-        if r["status_flags_sourced"] is not False or any(
-                r[f] is not False for f in ("delisted", "halted", "bankruptcy", "otc")):
-            raise RuntimeError(f"行 {r['ticker']} round-1 状态不变式被破坏（status 旗 + status_flags_sourced 须均为 False）")
+        if r["status_flags_sourced"] is False:
+            if "status_provenance" in r or any(
+                    r[f] is not False for f in _status_source.DISQUALIFYING_FLAGS):
+                raise RuntimeError(
+                    f"row {r['ticker']} unsourced status row must keep all status flags false")
+        elif r["status_flags_sourced"] is True:
+            status_record = r.get("status_provenance")
+            row_flags, _ = _status_source.status_flags_for_row(status_record, row_ticker=r["ticker"])
+            for flag in _status_source.DISQUALIFYING_FLAGS:
+                expected = row_flags[flag] if flag in row_flags else None
+                if r[flag] is not expected:
+                    raise RuntimeError(
+                        f"row {r['ticker']} status {flag} disagrees with stored status_provenance")
+        else:
+            raise RuntimeError(f"row {r['ticker']} status_flags_sourced must be bool")
         if r["adv_coverage_ok"] != (r["adv_days_observed"] >= min_days):
             raise RuntimeError(f"行 {r['ticker']} 的 adv_coverage_ok 与 adv_days_observed/min_days 不一致")
         if r["coverage_status"] != _coverage_status(r["price"], r["shares"], r["adv_days_observed"], window_days, min_days):

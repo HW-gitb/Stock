@@ -11,7 +11,7 @@
   ],
   "properties": {
     "schema_name": {"const": "us_short_universe_candidate_artifact"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "authorization_ref": {"const": "user_chat_20260626_universe_fetch"},
     "generated_at": {"type": "string", "minLength": 1,
       "description": "When this artifact was produced (observed_at for every row)."},
@@ -75,12 +75,14 @@
         "shares": {"type": ["number", "null"], "description": "SEC XBRL free-float shares outstanding; null if absent."},
         "market_cap_usd": {"type": ["number", "null"]},
         "market_cap_source": {"type": "string", "enum": ["sec_shares_x_close", "fmp_profile", "none"]},
-        "delisted": {"const": false},
-        "halted": {"const": false},
-        "bankruptcy": {"const": false},
-        "otc": {"const": false},
-        "status_flags_sourced": {"const": false,
-          "description": "Round-1: const false — delisted/halted/bankruptcy/otc hardwired false (status source gated, R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN); const-pinned (F4) so a forged status-sourced shape is rejected by the schema itself, matching the sibling batch5 schemas' self-sufficiency."},
+        "delisted": {"type": ["boolean", "null"]},
+        "halted": {"type": ["boolean", "null"]},
+        "bankruptcy": {"type": ["boolean", "null"]},
+        "otc": {"type": ["boolean", "null"]},
+        "status_flags_sourced": {"type": "boolean",
+          "description": "False preserves the original offline round-1 hardwired status path; true requires per-row status_provenance from the offline status-source parser. Live provider fetching remains separately gated by SR-PROVIDER-001."},
+        "status_provenance": {"$ref": "#/definitions/statusRecord",
+          "description": "Per-row status-source record emitted by engine.us_short_status_source for status_flags_sourced=true rows."},
         "eligible": {"type": "boolean"},
         "reasons": {"type": "array", "items": {"type": "string"},
           "description": "All failing Pass1 reasons (empty iff eligible)."},
@@ -102,6 +104,103 @@
             "market_cap_source": {"type": "string", "enum": ["sec_shares_x_close", "fmp_profile", "none"]}
           }
         }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status_flags_sourced": {"const": false}}, "required": ["status_flags_sourced"]},
+          "then": {
+            "properties": {
+              "delisted": {"const": false},
+              "halted": {"const": false},
+              "bankruptcy": {"const": false},
+              "otc": {"const": false}
+            },
+            "not": {"required": ["status_provenance"]}
+          }
+        },
+        {
+          "if": {"properties": {"status_flags_sourced": {"const": true}}, "required": ["status_flags_sourced"]},
+          "then": {"required": ["status_provenance"]}
+        }
+      ]
+    },
+    "statusRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "as_of", "observed_at", "status_flags_sourced", "flags"],
+      "properties": {
+        "ticker": {"type": "string", "minLength": 1},
+        "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": "string", "minLength": 1},
+        "status_flags_sourced": {"const": true},
+        "flags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["delisted", "halted", "bankruptcy", "otc"],
+          "properties": {
+            "delisted": {"$ref": "#/definitions/statusFlagDelisted"},
+            "halted": {"$ref": "#/definitions/statusFlagHalted"},
+            "bankruptcy": {"$ref": "#/definitions/statusFlagBankruptcy"},
+            "otc": {"$ref": "#/definitions/statusFlagOtc"}
+          }
+        }
+      }
+    },
+    "statusFlagDelisted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_id", "as_of", "observed_at", "reference_active_value", "coverage"],
+      "properties": {
+        "value": {"type": ["boolean", "null"]},
+        "source_id": {"const": "ticker_reference"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": ["string", "null"]},
+        "reference_active_value": {"type": ["boolean", "null"]},
+        "coverage": {"enum": ["observed", "absent_full", "absent_partial", "observed_failed", "not_consulted", "stale"]}
+      }
+    },
+    "statusFlagHalted": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_id", "as_of", "observed_at", "halt_feed_observed", "coverage"],
+      "properties": {
+        "value": {"type": ["boolean", "null"]},
+        "source_id": {"const": "exchange_halt_feed"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": ["string", "null"]},
+        "halt_feed_observed": {"type": "boolean"},
+        "coverage": {"enum": ["observed", "observed_failed", "not_consulted", "stale"]}
+      }
+    },
+    "statusFlagBankruptcy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value", "source_id", "as_of", "observed_at", "lookback_window",
+        "filing_accession_if_found", "coverage", "screen_status"
+      ],
+      "properties": {
+        "value": {"type": ["boolean", "null"]},
+        "source_id": {"const": "sec_8k_item_103"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": ["string", "null"]},
+        "lookback_window": {"type": ["string", "null"]},
+        "filing_accession_if_found": {"type": ["string", "null"]},
+        "coverage": {"enum": ["observed", "stale_positive", "not_in_screen_set", "observed_failed", "not_consulted", "stale"]},
+        "screen_status": {"enum": ["bankrupt_8k_found", "screened_no_filing", "unscreened"]}
+      }
+    },
+    "statusFlagOtc": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "source_id", "as_of", "observed_at", "primary_exchange_value", "coverage"],
+      "properties": {
+        "value": {"type": ["boolean", "null"]},
+        "source_id": {"const": "ticker_reference"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "observed_at": {"type": ["string", "null"]},
+        "primary_exchange_value": {"type": ["string", "null"]},
+        "coverage": {"enum": ["observed", "absent_full", "absent_partial", "observed_failed", "not_consulted", "stale"]}
       }
     },
     "summary": {

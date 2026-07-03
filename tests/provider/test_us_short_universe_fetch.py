@@ -48,6 +48,40 @@ def _md(close, adv_usd, *, volume=None, adv_days=20, price_as_of="2026-06-26"):
             "adv_days_observed": adv_days, "price_as_of": price_as_of}
 
 
+STATUS_AS_OF = "2026-06-29"
+STATUS_OBSERVED_AT = "2026-06-29T12:00:00+00:00"
+_DEFAULT_STATUS_PAYLOAD = object()
+
+
+def _status_ref(ticker="AAPL", *, exchange="NASDAQ", observed_at=STATUS_OBSERVED_AT):
+    return {"observed": True, "observed_at": observed_at, "coverage": "full",
+            "active_listings": {ticker: {"active": True, "primary_exchange": exchange}}}
+
+
+def _status_halt(symbols=(), *, observed_at=STATUS_OBSERVED_AT):
+    return {"observed": True, "observed_at": observed_at, "halted_symbols": list(symbols)}
+
+
+def _status_bank(ticker="AAPL", *, screen_status="screened_no_filing", observed_at=STATUS_OBSERVED_AT):
+    return {"observed": True, "observed_at": observed_at, "lookback_window": "P90D",
+            "by_ticker": {ticker: {"screen_status": screen_status}}}
+
+
+def _status_record(ticker="AAPL", *, exchange="NASDAQ", ticker_reference=_DEFAULT_STATUS_PAYLOAD,
+                   halt_feed=_DEFAULT_STATUS_PAYLOAD, bankruptcy_screen=_DEFAULT_STATUS_PAYLOAD):
+    from engine import us_short_status_source as ss
+    return ss.resolve_status_record(
+        ticker, as_of=STATUS_AS_OF, observed_at=STATUS_OBSERVED_AT,
+        ticker_reference=(
+            _status_ref(ticker, exchange=exchange)
+            if ticker_reference is _DEFAULT_STATUS_PAYLOAD else ticker_reference),
+        halt_feed=_status_halt() if halt_feed is _DEFAULT_STATUS_PAYLOAD else halt_feed,
+        bankruptcy_screen=(
+            _status_bank(ticker)
+            if bankruptcy_screen is _DEFAULT_STATUS_PAYLOAD else bankruptcy_screen),
+    )
+
+
 class TestFetchSecTickers(unittest.TestCase):
     def _resp(self, rows):
         return {"fields": ["cik", "name", "ticker", "exchange"], "data": rows}
@@ -289,6 +323,42 @@ class TestApplyPass1(unittest.TestCase):
         self.assertEqual(r["lineage"]["shares_source"], "sec_xbrl_frames")
         self.assertFalse(r["status_flags_sourced"])
 
+    def test_status_records_are_consumed_and_recorded(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+        rec = _status_record("AAPL")
+        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0)},
+                          status_records={"AAPL": rec})
+        r = rows[0]
+        self.assertTrue(r["eligible"], r["reasons"])
+        self.assertTrue(r["status_flags_sourced"])
+        self.assertEqual(r["status_provenance"], rec)
+        self.assertEqual({k: r[k] for k in ("delisted", "halted", "bankruptcy", "otc")},
+                         {"delisted": False, "halted": False, "bankruptcy": False, "otc": False})
+
+    def test_status_record_unknown_conservative_flags_remain_unknown(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+        rec = _status_record("AAPL", ticker_reference=None)
+        rows = self._rows(sec, shares, {"AAPL": _md(200.0, 50_000_000.0)},
+                          status_records={"AAPL": rec})
+        r = rows[0]
+        self.assertTrue(r["status_flags_sourced"])
+        self.assertIsNone(r["delisted"])
+        self.assertIsNone(r["otc"])
+        self.assertFalse(r["eligible"])
+        self.assertIn("status_delisted_unknown_or_invalid", r["reasons"])
+        self.assertIn("status_otc_unknown_or_invalid", r["reasons"])
+
+    def test_missing_status_record_raises_when_status_map_supplied(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+               "MSFT": {"cik": 789019, "exchange": "NASDAQ"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  789019: {"shares": 7_400_000_000, "end": "2026-03-31"}}
+        md = {"AAPL": _md(200.0, 50_000_000.0), "MSFT": _md(450.0, 60_000_000.0)}
+        with self.assertRaises(RuntimeError):
+            self._rows(sec, shares, md, status_records={"AAPL": _status_record("AAPL")})
+
 
 class TestAdvSemantics(unittest.TestCase):
     """The finding's core: single-day dollar volume mislabeled as ADV. A one-day spike that clears the
@@ -344,6 +414,26 @@ class TestSummaryAndArtifact(unittest.TestCase):
             generated_at="2026-06-29T12:00:00+00:00",
             calendar_verification_status="pending_authoritative_cross_check")
 
+    def _status_rows(self):
+        sec = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+               "LOW": {"cik": 5, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  5: {"shares": 10_000_000_000, "end": "2026-03-31"}}
+        md = {"AAPL": _md(200.0, 50_000_000.0), "LOW": _md(10.0, 1000.0)}
+        return _mod.apply_pass1(
+            sec, shares, md, governance=self.gov, as_of="2026-06-26",
+            observed_at="2026-06-29T12:00:00+00:00",
+            status_records={"AAPL": _status_record("AAPL"),
+                            "LOW": _status_record("LOW", exchange="NYSE")},
+        )
+
+    def _status_artifact(self):
+        return _mod.build_candidate_artifact(
+            rows=self._status_rows(), decision_date="20260629", price_basis_date="20260626",
+            used_date="2026-06-26", observed_window_dates=["2026-06-26", "2026-06-25"],
+            generated_at="2026-06-29T12:00:00+00:00",
+            calendar_verification_status="pending_authoritative_cross_check")
+
     def test_summary_recomputed_matches_rows(self):
         art = self._artifact()
         self.assertEqual(art["summary"], _mod.summarize_rows(art["rows"]))
@@ -354,6 +444,23 @@ class TestSummaryAndArtifact(unittest.TestCase):
     def test_validate_accepts_valid_artifact(self):
         art = self._artifact()
         _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_accepts_status_sourced_artifact(self):
+        art = self._status_artifact()
+        self.assertTrue(art["rows"][0]["status_flags_sourced"])
+        _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
+
+    def test_validate_rejects_status_flag_provenance_mismatch(self):
+        art = self._status_artifact()
+        row = art["rows"][0]
+        row["delisted"] = True
+        row["eligible"] = False
+        row["reasons"] = ["status_delisted"]
+        art["summary"] = _mod.summarize_rows(art["rows"])
+        art["eligible_tickers"] = _mod.eligible_tickers_from_rows(art["rows"])
+        art["eligible_count"] = len(art["eligible_tickers"])
+        with self.assertRaises(RuntimeError):
+            _mod.validate_candidate_artifact(art, expected_decision_date="20260629", governance=self.gov)
 
     def test_validate_rejects_tampered_summary(self):
         art = self._artifact()

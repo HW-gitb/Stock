@@ -15,14 +15,52 @@ if PYTHON_LIBS.exists() and str(PYTHON_LIBS) not in sys.path:
 SCHEMA_PATH = ROOT / "schemas" / "us_short_universe_candidate_artifact.schema.json"
 
 
-def _row(ticker, *, eligible, adv_usd, reasons):
+def _status_provenance(ticker="AAPL", *, delisted=False, halted=False, bankruptcy=False, otc=False):
     return {
+        "ticker": ticker,
+        "as_of": "2026-06-29",
+        "observed_at": "2026-06-29T12:00:00+00:00",
+        "status_flags_sourced": True,
+        "flags": {
+            "delisted": {
+                "value": delisted, "source_id": "ticker_reference", "as_of": "2026-06-29",
+                "observed_at": "2026-06-29T12:00:00+00:00",
+                "reference_active_value": False if delisted else True, "coverage": "observed",
+            },
+            "halted": {
+                "value": halted, "source_id": "exchange_halt_feed", "as_of": "2026-06-29",
+                "observed_at": "2026-06-29T12:00:00+00:00",
+                "halt_feed_observed": True, "coverage": "observed",
+            },
+            "bankruptcy": {
+                "value": bankruptcy, "source_id": "sec_8k_item_103", "as_of": "2026-06-29",
+                "observed_at": "2026-06-29T12:00:00+00:00",
+                "lookback_window": "P90D",
+                "filing_accession_if_found": "0001140361-26-000001" if bankruptcy else None,
+                "coverage": "observed",
+                "screen_status": "bankrupt_8k_found" if bankruptcy else "screened_no_filing",
+            },
+            "otc": {
+                "value": otc, "source_id": "ticker_reference", "as_of": "2026-06-29",
+                "observed_at": "2026-06-29T12:00:00+00:00",
+                "primary_exchange_value": "OTC" if otc else "NYSE", "coverage": "observed",
+            },
+        },
+    }
+
+
+def _row(ticker, *, eligible, adv_usd, reasons, status_sourced=False, status_values=None):
+    status_values = status_values or {}
+    row = {
         "ticker": ticker, "exchange": "NYSE",
         "price": 200.0, "price_as_of": "2026-06-26", "volume": 600000.0,
         "adv_usd": adv_usd, "adv_days_observed": 20, "adv_coverage_ok": True,
         "shares": 15000000000.0, "market_cap_usd": 3e12, "market_cap_source": "sec_shares_x_close",
-        "delisted": False, "halted": False, "bankruptcy": False, "otc": False,
-        "status_flags_sourced": False,
+        "delisted": status_values.get("delisted", False),
+        "halted": status_values.get("halted", False),
+        "bankruptcy": status_values.get("bankruptcy", False),
+        "otc": status_values.get("otc", False),
+        "status_flags_sourced": bool(status_sourced),
         "eligible": eligible, "reasons": reasons,
         "provider_id": "massive_grouped_daily+sec_xbrl_frames(+fmp_profile)",
         "as_of": "2026-06-26", "observed_at": "2026-06-29T12:00:00+00:00",
@@ -33,6 +71,18 @@ def _row(ticker, *, eligible, adv_usd, reasons):
             "market_cap_source": "sec_shares_x_close",
         },
     }
+    if status_sourced:
+        row["status_provenance"] = _status_provenance(
+            ticker,
+            delisted=row["delisted"] is True,
+            halted=row["halted"] is True,
+            bankruptcy=row["bankruptcy"] is True,
+            otc=row["otc"] is True,
+        )
+        for flag, value in status_values.items():
+            if value is None:
+                row["status_provenance"]["flags"][flag]["value"] = None
+    return row
 
 
 def _valid_artifact() -> dict:
@@ -40,7 +90,7 @@ def _valid_artifact() -> dict:
             _row("LOW", eligible=False, adv_usd=1000.0, reasons=["adv_usd_below_floor"])]
     return {
         "schema_name": "us_short_universe_candidate_artifact",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "authorization_ref": "user_chat_20260626_universe_fetch",
         "generated_at": "2026-06-29T12:00:00+00:00",
         "decision_date": "20260629",
@@ -146,15 +196,49 @@ class UsShortUniverseCandidateArtifactSchemaTest(unittest.TestCase):
         self.assertTrue(self._errors(a))
 
     def test_status_flags_sourced_true_rejected(self):
-        # F4: round-1 honesty invariant pinned IN the schema (status source is gated → must be false).
+        # A sourced row without its per-row status provenance is still a forgery.
         a = copy.deepcopy(_valid_artifact())
         a["rows"][0]["status_flags_sourced"] = True
         self.assertTrue(self._errors(a))
 
     def test_status_flag_true_rejected(self):
-        # F4: delisted/halted/bankruptcy/otc const false in round-1 (never sourced-true by omission).
+        # Unsourced round-1 rows still pin status flags to false (never sourced-true by omission).
         a = copy.deepcopy(_valid_artifact())
         a["rows"][0]["delisted"] = True
+        self.assertTrue(self._errors(a))
+
+    def test_status_sourced_row_with_provenance_passes(self):
+        a = _valid_artifact()
+        a["rows"][0] = _row("AAPL", eligible=True, adv_usd=1e10, reasons=[], status_sourced=True)
+        self.assertEqual(self._errors(a), [])
+
+    def test_status_sourced_unknown_flag_null_allowed(self):
+        a = _valid_artifact()
+        a["rows"][0] = _row(
+            "AAPL", eligible=False, adv_usd=1e10,
+            reasons=["status_delisted_unknown_or_invalid"],
+            status_sourced=True, status_values={"delisted": None},
+        )
+        a["eligible_tickers"] = []
+        a["eligible_count"] = 0
+        a["summary"]["eligible_count"] = 0
+        a["summary"]["ineligible_count"] = 2
+        a["summary"]["reason_distribution"] = {
+            "status_delisted_unknown_or_invalid": 1,
+            "adv_usd_below_floor": 1,
+        }
+        self.assertEqual(self._errors(a), [])
+
+    def test_status_provenance_unknown_key_rejected(self):
+        a = _valid_artifact()
+        a["rows"][0] = _row("AAPL", eligible=True, adv_usd=1e10, reasons=[], status_sourced=True)
+        a["rows"][0]["status_provenance"]["surprise"] = 1
+        self.assertTrue(self._errors(a))
+
+    def test_status_provenance_missing_flag_rejected(self):
+        a = _valid_artifact()
+        a["rows"][0] = _row("AAPL", eligible=True, adv_usd=1e10, reasons=[], status_sourced=True)
+        del a["rows"][0]["status_provenance"]["flags"]["halted"]
         self.assertTrue(self._errors(a))
 
 
