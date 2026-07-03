@@ -33,6 +33,7 @@ Per-flag gate policy (== the frozen binding's unknown_policy, triangulated by a 
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
@@ -85,6 +86,7 @@ BANKRUPTCY_SCREEN_STATES = frozenset({"bankrupt_8k_found", "screened_no_filing",
 SEC_BANKRUPTCY_8K_FORMS = frozenset({"8-K", "8-K/A"})
 SEC_BANKRUPTCY_ITEM = "1.03"
 SEC_SUBMISSIONS_RECENT_FIELDS = ("form", "filingDate", "accessionNumber", "items")
+SEC_ACCESSION_RE = re.compile(r"^[0-9]{10}-[0-9]{2}-[0-9]{6}$")
 
 # Single source: otc uses the SAME §3.1 exchange whitelist as the cheap-eligibility gate (the binding's otc
 # semantics bind otc to "the §3.1 exchange whitelist"), so importing it makes drift impossible (a test
@@ -246,7 +248,7 @@ def _parse_ymd_for_source(value, *, where):
 
 
 def _valid_accession(value):
-    return type(value) is str and value and value.isascii() and not any(c.isspace() for c in value)
+    return type(value) is str and SEC_ACCESSION_RE.fullmatch(value) is not None
 
 
 def _items_include_bankruptcy(raw_items, *, where):
@@ -299,7 +301,7 @@ def _find_bankruptcy_accession_from_submissions(record, *, ticker, as_of_date, l
             raise StatusSourceError(f"{where}.filingDate is later than as_of")
         accession = arrays["accessionNumber"][idx]
         if not _valid_accession(accession):
-            raise StatusSourceError(f"{where}.accessionNumber must be nonempty ASCII without whitespace")
+            raise StatusSourceError(f"{where}.accessionNumber must match SEC accession format")
         if not _items_include_bankruptcy(arrays["items"][idx], where=where):
             continue
         if lookback_start <= filing_date <= as_of_date:

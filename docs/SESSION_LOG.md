@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy 8-K accession tracked-leak fix — Codex repair 复审, 轻量)
+
+- **Verdict/Action**: PASS + 提交整片 live 探针刀(runner+schema+summary+2 tests + engine fix + status test + README + register resolved + SESSION_LOG)。**分级=轻量**(小校验改动:`_valid_accession` 加 SEC 正则;上轮 runner/边界已深审+独立 agent)→整读 fix + 反向探针、不强制 agent。Codex 把 accession 锚 `^[0-9]{10}-[0-9]{2}-[0-9]{6}$` 于 parser 边界 + schema pattern 兜底。
+- **Required**: 无(`R-USSHORT-BATCH5-BANKRUPTCY-8K-ACCESSION-FORMAT-UNVALIDATED-TRACKED-LEAK` 翻 resolved、register 单源)。
+- **Verify**: 我整读 `_valid_accession`(type 守在正则前)+ 消费点 + schema `secAccessionOrNull`;反向探针:hostile token/email/错长度/非数字/空白 全→False→build raise、真 SEC 格式→bankrupt_8k_found 无 over-reject、committed summary 仍过新 schema、hostile accession mutant 被 schema 拒;`_valid_accession` 仅 SEC-parser 用(`_resolve_bankruptcy` isinstance 不受影响)。亲跑 full offline `*us_short*` `3548 OK` 零回归、doc 60 OK。escalation 已批 + committed summary 独立扫干净(positive=0/null)。**未审(gated)**:真 SEC on-wire(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `fix` (US-short bankruptcy 8-K accession tracked-summary guard)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-BANKRUPTCY-8K-ACCESSION-FORMAT-UNVALIDATED-TRACKED-LEAK`; pending Claude re-review. SEC submissions `accessionNumber` now must match `^[0-9]{10}-[0-9]{2}-[0-9]{6}$` at the parser source, and the tracked probe-summary schema mirrors the same pattern for `filing_accession_if_found`.
+- **Required**: hostile token/email-shaped accessions now fail closed at `build_bankruptcy_screen_from_sec_submissions` and cannot be emitted as tracked `filing_accession_if_found`; the probe summary may only record `null` on parser error, and the schema rejects any non-SEC-format accession if a future artifact is mutated. No live/provider re-run; existing 3-call tracked summary remains the bounded result with `bankruptcy_8k_positive_count=0` and null accessions.
+- **Verify**: red first: focused probe/schema tests failed on hostile accession not rejected. Green: focused parser/probe/schema 14 OK; adjacent bankruptcy/status/universe pack 203 OK; full offline `test_us_short*.py` 3548 OK (1 skipped); `.tools/verify_doc_process.cmd` 60 OK; route-doc guard 14 OK; `py_compile` OK; `git diff --check` exit 0 with CRLF warnings only; tracked-summary safety scan `NO_FORBIDDEN_SUMMARY_FRAGMENTS`.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. A: whole class covered at parser source + tracked schema + probe summary output; B: `rg -n "filing_accession_if_found|SEC_ACCESSION|R-USSHORT-BATCH5-BANKRUPTCY-8K-ACCESSION"` reviewed expected new hits plus historical status-source schema/test field mentions, and tracked summary accessions remain null with no hostile value; C: real SEC accession fixture still passes while hostile accession fails; E: `CURRENT` untouched, README unchanged in this fix, material Required detail single-sourced in register. No independent subagent timeout/restart; no live/provider call.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
+## 2026-07-03 — Claude 审查 FAIL (US-short bankruptcy 8-K live probe — 独立 agent 揪 tracked-summary accession raw-leak)
+
+- **Verdict/Action**: FAIL(1 Required、未提交)。**分级=最高危 live 刀**(tier① 真 SEC 抓数 + ② tracked/raw 落盘)→满标准。runner 主体 sound(整读+探针+agent:budget≤3/0-retry、raw 限 gitignored、auth 门、dry_run 零网络、over-claim schema-const 挡、UA 值不泄、committed summary 独立扫干净、SR-PROVIDER-001 open)。判 FAIL 因 agent 揪出我探针漏的 1 real leak。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-8K-ACCESSION-FORMAT-UNVALIDATED-TRACKED-LEAK`(P2、register 单源)。positive 检测时 `filing_accession_if_found` 逐字复制 provider raw `accessionNumber`、仅 `_valid_accession`(ASCII+无空白、**无格式**)校验;schema 无 pattern、`_assert_summary_safe_text` 只扫 URL/key/auth→敌意 token/PII 形状 accession 漏进 committed 文件。committed 干净(positive=0→null)、leak 潜在。修=`_valid_accession` 锚 `^\d{10}-\d{2}-\d{6}$` + schema pattern + hostile-accession 测试(无需重跑 live)。
+- **Verify**: 我整读 runner 全体(fetch/budget/sanitize 双扫/raw-write/build_summary)+ 消费 parser;探针 budget/sanitize(URL/UA 值/auth 全拒)/raw-escape/committed 重扫干净/dry_run 零网络。**独立 §3.5 agent(只读当前树)**5 攻击面除 leak 全 HELD、复现 `sk-live-...`/email accession 过三层进 tracked 文件、committed 独立证干净。我复现 `_valid_accession(hostile)=True`→漏、真 SEC 格式匹配正则/敌意不匹配。亲跑 full offline `*us_short*` `3545 OK`。**未审(gated)**:真 SEC on-wire(SR-PROVIDER-001)。
+- **Next**: Codex：修复
+
+## 2026-07-03 - Codex `execute` (US-short bankruptcy 8-K 3-call SEC submissions shape probe)
+
+- **Verdict/Action**: added and executed the post-review bounded bankruptcy 8-K shape probe. New runner/schema/tests write a sanitized tracked summary at `docs/us_short_batch5_bankruptcy_8k_probe_summary_20260703.json`; raw SEC submissions payloads are only under gitignored `provider_samples/us_short_batch5_bankruptcy_8k_20260703/raw/`.
+- **Required**: none new. Final execution used exactly 3 SEC company-submissions calls for AAPL/MSFT/JPM, zero retry; 3/3 HTTP 200; shape_valid_symbol_count=3; parser_ok_symbol_count=3; bankruptcy_8k_positive_count=0. This is sample shape evidence only: no status_records, no `run_fetch` wiring, no full/candidate-universe bankruptcy screen, no Pass2/DataHub/production/provider-selection/live_normalized/ship-gate/broker/order/cross-lane work. `SR-PROVIDER-001` remains open for consumption and broader provider gates.
+- **Verify**: red first: focused tests failed on missing runner/schema. Green before live: focused fake-client/schema 7 OK (1 skipped pending real summary). Preflight OK; dry-run env OK. Sandboxed live run wrote an error summary with 3 `url_error`s, then approved escalated rerun overwrote it with completed 3/3 HTTP 200 summary. Final: focused bankruptcy access+probe 18 OK; adjacent status/source/probe pack 208 OK; full offline `test_us_short*.py` 3545 OK (1 skipped); doc-process 60 OK; route-doc guards 25 OK; `py_compile` OK; `git diff --check` warning-only CRLF.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. B/C/E grep confirmed summary has no URL / SEC endpoint / UA / API key / Authorization / Bearer / test sentinel / raw `payload` / raw `filings`; related symbol grep shows the new path is confined to this slice + route/handoff docs; `CURRENT` untouched. No independent subagent timeout/restart.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy 8-K access packet + offline preflight — 最高危独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交 8 文件(packet json + preflight runner + schema + 2 tests + README route + register in-place 调和 + SESSION_LOG)。**分级=最高危**(新 fail-closed 授权/边界门 + tracked artifact)→满标准。preflight 纯离线:schema + strict-identity 边界重检双层防御;packet all-false boundary、无 secret/URL;register 是 in-place 调和(非底部新块、合上次 placement 教训)。

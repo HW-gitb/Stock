@@ -1,0 +1,284 @@
+{
+  "schema_name": "us_short_batch5_bankruptcy_8k_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-03T00:00:00+00:00",
+  "access_packet_ref": "docs/us_short_batch5_bankruptcy_8k_access_packet_20260703.json",
+  "authorization_ref": "user_chat_20260703_execute_after_claude_pass",
+  "schema_ref": "schemas/us_short_batch5_bankruptcy_8k_probe_summary.schema.json",
+  "status_as_of": "2026-07-06",
+  "source_observed_at": "2026-07-02T23:50:43-04:00",
+  "source_parser_ref": "engine.us_short_status_source.build_bankruptcy_screen_from_sec_submissions",
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "purpose": "small_sample_bankruptcy_8k_company_submissions_shape_probe",
+    "probe_status": "completed",
+    "bankruptcy_8k_probe_performed": true,
+    "status_source_calls_performed": true,
+    "sec_company_submissions_calls_performed": true,
+    "validation_only_parse_performed": true,
+    "raw_storage_performed": true,
+    "tracked_summary_written": true,
+    "status_records_written": false,
+    "run_fetch_bankruptcy_wiring_performed": false,
+    "full_market_application_performed": false,
+    "candidate_artifact_written": false,
+    "candidate_artifact_schema_changed": false,
+    "runner_consumption_allowed": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "provider_selection_allowed": false,
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "pre_execution_checks": {
+    "access_packet_validated": true,
+    "offline_preflight_reused": true,
+    "user_authorization_confirmed": true,
+    "post_preflight_execute_confirmed": true,
+    "provider_samples_gitignore_confirmed": true,
+    "raw_root_under_approved_provider_samples": true,
+    "environment_precheck_passed": true,
+    "sec_fair_access_user_agent_present": true,
+    "exact_endpoint_confirmation_passed": true,
+    "budget_precheck_passed": true,
+    "no_full_market_application_guard_passed": true,
+    "no_run_fetch_wiring_guard_passed": true,
+    "no_datahub_consumption_guard_passed": true,
+    "no_ship_gate_claim_guard_passed": true,
+    "parser_shape_validation_passed": true
+  },
+  "environment": {
+    "sec_fair_access_user_agent_present": true,
+    "sec_fair_access_user_agent_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false,
+    "sec_credentials_required": false
+  },
+  "sample_universe": {
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "cik_by_symbol": {
+      "AAPL": 320193,
+      "MSFT": 789019,
+      "JPM": 19617
+    },
+    "max_symbols": 3,
+    "universe_role": "bounded_shape_validation_sample_not_runner_consumable"
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 3,
+    "planned_total_endpoint_calls": 3,
+    "actual_total_endpoint_calls": 3,
+    "sec_company_submissions_calls": 3,
+    "bankruptcy_8k_calls": 3,
+    "retry_count_allowed": 0,
+    "retry_count_used": 0,
+    "within_budget": true
+  },
+  "exact_endpoint_confirmation": [
+    {
+      "symbol": "AAPL",
+      "cik": 320193,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "request_url_in_summary": false
+    },
+    {
+      "symbol": "MSFT",
+      "cik": 789019,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "request_url_in_summary": false
+    },
+    {
+      "symbol": "JPM",
+      "cik": 19617,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "request_url_in_summary": false
+    }
+  ],
+  "storage": {
+    "raw_sample_storage_path": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/",
+    "raw_samples_gitignored": true,
+    "tracked_summary_path": "docs/us_short_batch5_bankruptcy_8k_probe_summary_20260703.json",
+    "tracked_summary_contains_raw_payloads": false,
+    "tracked_summary_contains_request_urls": false,
+    "secrets_in_summary": false
+  },
+  "endpoint_results": [
+    {
+      "symbol": "AAPL",
+      "cik": 320193,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/raw/sec_edgar/AAPL/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 24,
+        "recent_row_count": 1000,
+        "recent_arrays_equal_length": true,
+        "required_recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        }
+      },
+      "shape_validation_status": "ok"
+    },
+    {
+      "symbol": "MSFT",
+      "cik": 789019,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/raw/sec_edgar/MSFT/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 24,
+        "recent_row_count": 1004,
+        "recent_arrays_equal_length": true,
+        "required_recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        }
+      },
+      "shape_validation_status": "ok"
+    },
+    {
+      "symbol": "JPM",
+      "cik": 19617,
+      "source_id": "sec_8k_item_103",
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "status": "ok",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_20260703/raw/sec_edgar/JPM/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "payload_type": "dict",
+        "top_level_key_count": 24,
+        "recent_row_count": 25280,
+        "recent_arrays_equal_length": true,
+        "required_recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        }
+      },
+      "shape_validation_status": "ok"
+    }
+  ],
+  "sample_shape_results": {
+    "by_symbol": {
+      "AAPL": {
+        "submission_shape_valid": true,
+        "recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        },
+        "recent_array_lengths_equal": true,
+        "recent_row_count": 1000,
+        "form_8k_count": 105,
+        "item_103_candidate_count": 0,
+        "parser_status": "ok",
+        "bankruptcy_screen_status": "screened_no_filing",
+        "filing_accession_if_found": null
+      },
+      "MSFT": {
+        "submission_shape_valid": true,
+        "recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        },
+        "recent_array_lengths_equal": true,
+        "recent_row_count": 1004,
+        "form_8k_count": 66,
+        "item_103_candidate_count": 0,
+        "parser_status": "ok",
+        "bankruptcy_screen_status": "screened_no_filing",
+        "filing_accession_if_found": null
+      },
+      "JPM": {
+        "submission_shape_valid": true,
+        "recent_fields_present": {
+          "form": true,
+          "filingDate": true,
+          "accessionNumber": true,
+          "items": true
+        },
+        "recent_array_lengths_equal": true,
+        "recent_row_count": 25280,
+        "form_8k_count": 25,
+        "item_103_candidate_count": 0,
+        "parser_status": "ok",
+        "bankruptcy_screen_status": "screened_no_filing",
+        "filing_accession_if_found": null
+      }
+    }
+  },
+  "aggregate_shape_metrics": {
+    "endpoint_success_count": 3,
+    "endpoint_error_count": 0,
+    "shape_valid_symbol_count": 3,
+    "parser_ok_symbol_count": 3,
+    "bankruptcy_8k_positive_count": 0
+  },
+  "validation_decision": {
+    "decision": "bounded_bankruptcy_8k_shape_probe_completed_keep_sr_provider_001_open",
+    "sr_provider_001_closed": false,
+    "runner_consumption_allowed": false,
+    "rationale": "This validates only a bounded three-symbol SEC company-submissions response shape and parser compatibility for Item 1.03 screening. It does not authorize runner consumption, status_records, full-market bankruptcy screening, DataHub, production storage, provider selection, live_normalized evidence, or ship-gate evidence."
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_application_performed": false,
+    "bankruptcy_8k_full_universe_scanned": false,
+    "status_records_runner_consumable": false,
+    "candidate_artifact_written": false,
+    "datahub_or_adapter_implemented": false,
+    "production_runner_consumption_authorized": false,
+    "live_normalized_evidence_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "production_ready_claimed": false,
+    "broker_or_order_automation": false
+  },
+  "limitations": [
+    "This is a three-symbol SEC company-submissions shape probe, not a full-market or candidate-universe bankruptcy screen.",
+    "A missing Item 1.03 observation is not proof that the universe is clean; bankruptcy remains positive-detection-only and best-effort.",
+    "Raw provider payloads are stored only under gitignored provider_samples; tracked summary contains counts, shapes, accessions-if-positive, and boundary flags only.",
+    "No run_fetch wiring, status_records, candidate artifact, DataHub, production storage, provider selection, live_normalized evidence, or ship-gate evidence is claimed."
+  ],
+  "next_steps": [
+    "Have Claude review the runner, schema, tracked summary, raw-path boundary, no-secret/no-URL scan, endpoint budget, parser shape result, and SR-PROVIDER-001 wording before commit.",
+    "If accepted, use this as bounded shape evidence only; full/candidate-universe bankruptcy screening and run_fetch consumption require a separate reviewed packet."
+  ]
+}

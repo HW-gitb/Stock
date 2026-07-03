@@ -238,6 +238,20 @@ class BuildBankruptcyScreenFromSecSubmissionsTest(unittest.TestCase):
                 submissions_by_ticker={"AAPL": bad},
             )
 
+    def test_malformed_sec_accession_raises_without_screened_no_filing(self):
+        bad = _sec_submissions(
+            forms=["8-K"],
+            filing_dates=["2026-06-20"],
+            accessions=["sk-live-token@example.com"],
+            items=["1.03"],
+        )
+        with self.assertRaises(ss.StatusSourceError):
+            ss.build_bankruptcy_screen_from_sec_submissions(
+                as_of=AS_OF,
+                observed_at=OBSERVED_AT,
+                submissions_by_ticker={"AAPL": bad},
+            )
+
     def test_duplicate_canonical_ticker_keys_raise(self):
         payload = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
         with self.assertRaises(ss.StatusSourceError):
