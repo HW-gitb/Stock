@@ -33,7 +33,7 @@ Per-flag gate policy (== the frozen binding's unknown_policy, triangulated by a 
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import lru_cache
 from pathlib import Path
 
@@ -82,6 +82,9 @@ _SOURCE_FAIL = frozenset({"down", "missing"})
 _SOURCE_STATES = _SOURCE_OK | _SOURCE_FAIL
 
 BANKRUPTCY_SCREEN_STATES = frozenset({"bankrupt_8k_found", "screened_no_filing", "unscreened"})
+SEC_BANKRUPTCY_8K_FORMS = frozenset({"8-K", "8-K/A"})
+SEC_BANKRUPTCY_ITEM = "1.03"
+SEC_SUBMISSIONS_RECENT_FIELDS = ("form", "filingDate", "accessionNumber", "items")
 
 # Single source: otc uses the SAME §3.1 exchange whitelist as the cheap-eligibility gate (the binding's otc
 # semantics bind otc to "the §3.1 exchange whitelist"), so importing it makes drift impossible (a test
@@ -234,6 +237,110 @@ def _canonical_keyed(mapping, *, source_id):
             raise StatusSourceError(f"{source_id} 规范化后重复 ticker 键 {ck!r}（歧义记录，fail-closed）")
         out[ck] = v
     return out
+
+
+def _parse_ymd_for_source(value, *, where):
+    if not _valid_as_of(value):
+        raise StatusSourceError(f"{where} must be strict ASCII YYYY-MM-DD")
+    return datetime.strptime(value, "%Y-%m-%d").date()
+
+
+def _valid_accession(value):
+    return type(value) is str and value and value.isascii() and not any(c.isspace() for c in value)
+
+
+def _items_include_bankruptcy(raw_items, *, where):
+    if type(raw_items) is not str:
+        raise StatusSourceError(f"{where}.items must be exact str")
+    for raw_token in raw_items.replace(";", ",").split(","):
+        token = raw_token.strip().lower()
+        if token.startswith("item "):
+            token = token[5:].strip()
+        if token == SEC_BANKRUPTCY_ITEM:
+            return True
+    return False
+
+
+def _sec_submissions_recent_arrays(record, *, ticker):
+    if not isinstance(record, dict):
+        raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}] must be dict")
+    filings = record.get("filings")
+    if not isinstance(filings, dict):
+        raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}].filings must be dict")
+    recent = filings.get("recent")
+    if not isinstance(recent, dict):
+        raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}].filings.recent must be dict")
+    arrays = {}
+    expected_len = None
+    for field in SEC_SUBMISSIONS_RECENT_FIELDS:
+        value = recent.get(field)
+        if not isinstance(value, list):
+            raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}].recent.{field} must be list")
+        if expected_len is None:
+            expected_len = len(value)
+        elif len(value) != expected_len:
+            raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}].recent arrays length mismatch")
+        arrays[field] = value
+    return arrays, expected_len or 0
+
+
+def _find_bankruptcy_accession_from_submissions(record, *, ticker, as_of_date, lookback_start):
+    arrays, row_count = _sec_submissions_recent_arrays(record, ticker=ticker)
+    best = None
+    for idx in range(row_count):
+        form = arrays["form"][idx]
+        if type(form) is not str:
+            raise StatusSourceError(f"sec_8k_item_103.submissions[{ticker}].form[{idx}] must be exact str")
+        if form not in SEC_BANKRUPTCY_8K_FORMS:
+            continue
+        where = f"sec_8k_item_103.submissions[{ticker}].row[{idx}]"
+        filing_date = _parse_ymd_for_source(arrays["filingDate"][idx], where=f"{where}.filingDate")
+        if filing_date > as_of_date:
+            raise StatusSourceError(f"{where}.filingDate is later than as_of")
+        accession = arrays["accessionNumber"][idx]
+        if not _valid_accession(accession):
+            raise StatusSourceError(f"{where}.accessionNumber must be nonempty ASCII without whitespace")
+        if not _items_include_bankruptcy(arrays["items"][idx], where=where):
+            continue
+        if lookback_start <= filing_date <= as_of_date:
+            candidate = (filing_date, accession)
+            if best is None or candidate > best:
+                best = candidate
+    return None if best is None else best[1]
+
+
+def build_bankruptcy_screen_from_sec_submissions(*, as_of, observed_at, submissions_by_ticker, lookback_days=90):
+    """Build the injected sec_8k_item_103 bankruptcy_screen payload from SEC submissions data.
+
+    Pure/offline source assembly only: no network, no raw storage, no runner fetch. Input is the SEC
+    submissions JSON shape keyed by ticker. A screened_no_filing row means the ticker's submissions recent arrays
+    were parsed and no in-lookback 8-K/8-K/A Item 1.03 was found; omitted tickers remain unscreened downstream.
+    """
+    if not (_valid_as_of(as_of) and _valid_observed_at(observed_at)):
+        raise StatusSourceError("as_of must be YYYY-MM-DD and observed_at must be tz-aware ISO-8601")
+    if not _observed_at_in_decision_window(observed_at, as_of):
+        raise StatusSourceError("sec_8k_item_103 observed_at must be inside the status decision window")
+    if type(lookback_days) is not int or lookback_days <= 0:
+        raise StatusSourceError("lookback_days must be a positive exact int")
+    if not isinstance(submissions_by_ticker, dict):
+        raise StatusSourceError("submissions_by_ticker must be dict")
+    as_of_date = _parse_ymd_for_source(as_of, where="sec_8k_item_103.as_of")
+    lookback_start = as_of_date - timedelta(days=lookback_days)
+    keyed = _canonical_keyed(submissions_by_ticker, source_id="sec_8k_item_103.submissions_by_ticker")
+    by_ticker = {}
+    for ticker, record in keyed.items():
+        accession = _find_bankruptcy_accession_from_submissions(
+            record, ticker=ticker, as_of_date=as_of_date, lookback_start=lookback_start)
+        if accession is None:
+            by_ticker[ticker] = {"screen_status": "screened_no_filing"}
+        else:
+            by_ticker[ticker] = {"screen_status": "bankrupt_8k_found", "filing_accession": accession}
+    return {
+        "observed": True,
+        "observed_at": observed_at,
+        "lookback_window": f"P{lookback_days}D",
+        "by_ticker": by_ticker,
+    }
 
 
 def _resolve_delisted_and_otc(ref, ticker, *, exchange_whitelist, as_of, record_observed_at):

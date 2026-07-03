@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short SEC submissions→bankruptcy_screen offline 解析器 — 最高危独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交 5 文件(engine parser + 2 tests + README route + SESSION_LOG)。**分级=最高危**(新 +109 行解析器消费外部 SEC submissions 喂 bankruptcy disqualifier)→满标准。`build_bankruptcy_screen_from_sec_submissions` fabrication/fail-open/crash/PIT tight;run_fetch 仍传 None(live gated)。README route 准确(明说 run_fetch 仍零 8-K 调用)。
+- **Required**: 无(本刀无新 finding;register 无翻转)。
+- **Verify**: 我整读 parser+5 helper+下游 `_resolve_bankruptcy`/`validate`;探针 items(真格式 detect/`10.03` 无假匹配)/PIT(future→raise/闭区间/fullwidth)/12 类坏形状→StatusSourceError 零裸崩/输出全 validate 且不发 unscreened。**独立 §3.5 agent(只读当前树)**全 6 目标 HELD、**用真 EDGAR raw(455 真 8-K 行)证 items 恒 bare-comma→`==1.03` 对真源正确**、无 fail-open/裸崩。亲跑 full offline `3526 OK` 零回归、doc/route 60 OK。**gated note**:每 8-K 行先查 future-date 再过 items→broad live blob 会 over-reject(fail-closed 非 fail-open);真 live 半定 scoping。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short SEC submissions -> bankruptcy_screen offline source assembly)
+
+- **Verdict/Action**: added pure/offline provider-fed source assembly `build_bankruptcy_screen_from_sec_submissions(...)` in `engine/us_short_status_source.py`: injected SEC submissions `filings.recent` arrays -> existing `bankruptcy_screen` payload for 8-K/8-K/A Item 1.03 within `P90D`. Added a runner seam positive control feeding that real parser output through `build_live_status_records`. Updated the README route pointer. `run_fetch` still performs zero 8-K calls and defaults bankruptcy to unscreened.
+- **Required**: none new. This slice does not authorize or execute live SEC 8-K fetch/scan, raw storage, Pass2 live wiring, DataHub, production, broker/order, provider selection, ship-gate evidence, forward evidence, or cross-lane work; those remain separately gated under `SR-PROVIDER-001`.
+- **Verify**: red first: focused tests failed because `build_bankruptcy_screen_from_sec_submissions` was absent. Green: parser focused 3 OK; runner seam focused 1 OK; `test_us_short_status_source` 100 OK; `test_us_short_universe_fetch` 81 OK; full offline `test_us_short*.py` 3526 OK (1 skipped); route-doc guards 25 OK; doc-process 60 OK; `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. B grep: `rg -n "build_bankruptcy_screen_from_sec_submissions|SEC_BANKRUPTCY|bankruptcy_screen_from_sec|bankruptcy stays zero-call|bankruptcy remains zero-call|bankruptcy 8-K remains zero-call|parser_implemented" engine tests docs runners` shows new helper only in engine/tests, README still records `run_fetch` zero 8-K calls, and dated schema/contracts with `parser_implemented=false` remain historical/contract artifacts. C reverse: malformed recent arrays and duplicate canonical ticker keys fail closed; non-1.03 / old / non-8-K rows do not fabricate a positive. No independent subagent timeout/restart.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy_screen unhashable screen_status crash — Codex repair 复审)
 
 - **Verdict/Action**: PASS + 提交 6 文件(seam runner + engine guard + 2 tests + register resolved + SESSION_LOG;seam 上轮已深审+独立 agent、本轮连 fix 一并提交)。**分级=轻量**(既有 validator 加 1 行 isinstance 守 + 测试)→整读 + 反向探针。Codex line 345 改 `not isinstance(screen_status,str) or ... not in ...`——短路在前、非-str/unhashable 全 fail-closed。

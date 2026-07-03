@@ -67,6 +67,15 @@ def _status_bank(ticker="AAPL", *, screen_status="screened_no_filing", observed_
             "by_ticker": {ticker: {"screen_status": screen_status}}}
 
 
+def _sec_submissions(*, forms, filing_dates, accessions, items):
+    return {"filings": {"recent": {
+        "form": list(forms),
+        "filingDate": list(filing_dates),
+        "accessionNumber": list(accessions),
+        "items": list(items),
+    }}}
+
+
 def _status_record(ticker="AAPL", *, exchange="NASDAQ", ticker_reference=_DEFAULT_STATUS_PAYLOAD,
                    halt_feed=_DEFAULT_STATUS_PAYLOAD, bankruptcy_screen=_DEFAULT_STATUS_PAYLOAD):
     from engine import us_short_status_source as ss
@@ -867,6 +876,51 @@ class TestRunFetchE2E(unittest.TestCase):
             sec_map,
             decision_date="20260629",
             observed_at="2026-06-29T12:00:00+00:00",
+            halt_feed=_status_halt(),
+            halt_feed_state="ok",
+            bankruptcy_screen=bankruptcy_screen,
+        )
+
+        self.assertEqual(outcome["per_source"]["sec_8k_item_103"], "ok")
+        self.assertIs(payloads["sec_8k_item_103"], bankruptcy_screen)
+        self.assertFalse(records["AAPL"]["flags"]["bankruptcy"]["value"])
+        self.assertEqual(records["AAPL"]["flags"]["bankruptcy"]["screen_status"], "screened_no_filing")
+        self.assertTrue(records["BANKR"]["flags"]["bankruptcy"]["value"])
+        self.assertEqual(
+            records["BANKR"]["flags"]["bankruptcy"]["filing_accession_if_found"],
+            "0001140361-26-000001",
+        )
+
+    def test_build_live_status_records_consumes_sec_submissions_bankruptcy_screen(self):
+        from engine import us_short_status_source as ss
+
+        sec_map = {
+            "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+            "BANKR": {"cik": 123456, "exchange": "NYSE"},
+        }
+        bankruptcy_screen = ss.build_bankruptcy_screen_from_sec_submissions(
+            as_of=STATUS_AS_OF,
+            observed_at=STATUS_OBSERVED_AT,
+            submissions_by_ticker={
+                "AAPL": _sec_submissions(
+                    forms=["8-K"],
+                    filing_dates=["2026-06-20"],
+                    accessions=["0000320193-26-000111"],
+                    items=["9.01"],
+                ),
+                "BANKR": _sec_submissions(
+                    forms=["8-K"],
+                    filing_dates=["2026-06-20"],
+                    accessions=["0001140361-26-000001"],
+                    items=["1.03,9.01"],
+                ),
+            },
+        )
+
+        records, outcome, payloads = _mod.build_live_status_records(
+            sec_map,
+            decision_date="20260629",
+            observed_at=STATUS_OBSERVED_AT,
             halt_feed=_status_halt(),
             halt_feed_state="ok",
             bankruptcy_screen=bankruptcy_screen,

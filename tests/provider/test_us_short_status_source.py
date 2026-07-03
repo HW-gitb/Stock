@@ -55,6 +55,15 @@ def _bank(by=None, *, observed_at=OBSERVED_AT):
                 "AAPL": {"screen_status": "screened_no_filing"}}}
 
 
+def _sec_submissions(*, forms, filing_dates, accessions, items):
+    return {"filings": {"recent": {
+        "form": list(forms),
+        "filingDate": list(filing_dates),
+        "accessionNumber": list(accessions),
+        "items": list(items),
+    }}}
+
+
 def _record(ticker, **kw):
     return ss.resolve_status_record(ticker, as_of=AS_OF, observed_at=OBSERVED_AT, **kw)
 
@@ -176,6 +185,67 @@ class ResolveBankruptcyTest(unittest.TestCase):
                 }
                 with self.assertRaises(ss.StatusSourceError):
                     _record("AAPL", bankruptcy_screen=screen)
+
+
+class BuildBankruptcyScreenFromSecSubmissionsTest(unittest.TestCase):
+    def test_item_103_8k_builds_screen_consumed_by_status_record(self):
+        screen = ss.build_bankruptcy_screen_from_sec_submissions(
+            as_of=AS_OF,
+            observed_at=OBSERVED_AT,
+            submissions_by_ticker={
+                "AAPL": _sec_submissions(
+                    forms=["8-K", "10-K"],
+                    filing_dates=["2026-06-20", "2026-06-21"],
+                    accessions=["0000320193-26-000111", "0000320193-26-000112"],
+                    items=["1.03,9.01", "1.03"],
+                ),
+                "MSFT": _sec_submissions(
+                    forms=["8-K", "8-K/A", "10-K"],
+                    filing_dates=["2026-06-20", "2026-03-01", "2026-06-21"],
+                    accessions=["0000789019-26-000111", "0000789019-26-000112", "0000789019-26-000113"],
+                    items=["9.01", "1.03", "1.03"],
+                ),
+            },
+        )
+
+        self.assertEqual(screen["observed"], True)
+        self.assertEqual(screen["observed_at"], OBSERVED_AT)
+        self.assertEqual(screen["lookback_window"], "P90D")
+        self.assertEqual(
+            screen["by_ticker"]["AAPL"],
+            {"screen_status": "bankrupt_8k_found", "filing_accession": "0000320193-26-000111"},
+        )
+        self.assertEqual(screen["by_ticker"]["MSFT"], {"screen_status": "screened_no_filing"})
+
+        found = _record("AAPL", bankruptcy_screen=screen)
+        clean = _record("MSFT", bankruptcy_screen=screen)
+        self.assertTrue(ss.validate_status_record(found))
+        self.assertTrue(ss.validate_status_record(clean))
+        self.assertIs(found["flags"]["bankruptcy"]["value"], True)
+        self.assertIs(clean["flags"]["bankruptcy"]["value"], False)
+
+    def test_malformed_recent_arrays_raise_without_screened_no_filing(self):
+        bad = {"filings": {"recent": {
+            "form": ["8-K"],
+            "filingDate": ["2026-06-20"],
+            "accessionNumber": ["0000320193-26-000111"],
+            "items": [],
+        }}}
+        with self.assertRaises(ss.StatusSourceError):
+            ss.build_bankruptcy_screen_from_sec_submissions(
+                as_of=AS_OF,
+                observed_at=OBSERVED_AT,
+                submissions_by_ticker={"AAPL": bad},
+            )
+
+    def test_duplicate_canonical_ticker_keys_raise(self):
+        payload = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
+        with self.assertRaises(ss.StatusSourceError):
+            ss.build_bankruptcy_screen_from_sec_submissions(
+                as_of=AS_OF,
+                observed_at=OBSERVED_AT,
+                submissions_by_ticker={"AAPL": payload, "aapl": payload},
+            )
 
 
 class CheapEligibleIntegrationTest(unittest.TestCase):
