@@ -145,7 +145,7 @@ def _assert_text_safe(text: str, sensitive: list[str]) -> None:
     """Fail-closed scan of serialized summary text: no API key / request URL / provider-domain leak."""
     lower = text.lower()
     for fragment in ("apikey=", "api.massive.com", "financialmodelingprep.com",
-                     "data.sec.gov", "www.sec.gov"):
+                     "data.sec.gov", "www.sec.gov", "nasdaqtrader.com"):
         if fragment in lower:
             raise RuntimeError(f"tracked summary contains forbidden fragment: {fragment}")
     for value in sensitive:
@@ -267,7 +267,18 @@ def parse_halt_symbols_from_rss(xml_text: str) -> list[str]:
     except ElementTree.ParseError as exc:
         raise RuntimeError("Nasdaq trade-halt RSS did not parse as XML") from exc
     items = [elem for elem in root.iter() if _local_xml_name(elem.tag).lower() == "item"]
-    return sorted({symbol for item in items if (symbol := _symbol_from_halt_item(item))})
+    symbols = set()
+    unparseable = 0
+    for item in items:
+        symbol = _symbol_from_halt_item(item)
+        if symbol is None:
+            unparseable += 1
+        else:
+            symbols.add(symbol)
+    if unparseable:
+        raise RuntimeError(
+            f"Nasdaq trade-halt RSS contained {unparseable} unparseable item(s); treating halt feed as down")
+    return sorted(symbols)
 
 
 def fetch_nasdaq_trade_halt_feed(*, observed_at: str) -> dict[str, Any]:

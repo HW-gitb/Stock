@@ -549,6 +549,8 @@ def validate_status_record(record):
         if prov["as_of"] != as_of:
             return False
         source_clock, coverage = prov["observed_at"], prov["coverage"]
+        if not isinstance(coverage, str):
+            return False
         no_observation = coverage in {"not_consulted", "observed_failed"}
         if no_observation:
             if source_clock is not None:
@@ -562,6 +564,13 @@ def validate_status_record(record):
             if (coverage in {"stale", "stale_positive"}) == in_window:
                 return False
         value, coverage = prov["value"], prov["coverage"]
+        if flag == "bankruptcy":
+            if value is not True and value is not False:
+                return False
+            if not isinstance(prov["screen_status"], str):
+                return False
+        elif not _bool_or_none(value):
+            return False
         if flag == "delisted":
             if (value, coverage) not in _VALID_DELISTED or not _bool_or_none(prov["reference_active_value"]):
                 return False

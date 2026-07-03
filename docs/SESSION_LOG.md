@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source halt-parse + validator 硬化 — Codex repair 复审, 最高危独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交 6 文件(status_source + universe_fetch + 2 tests + register + SESSION_LOG)。**分级=最高危**(fail-closed 校验器 + halt 解析器 + secret 扫描器)→满标准。两 open finding 都封整类:validator `_bool_or_none` 身份守卫 + coverage/screen_status isinstance + bankruptcy 严格身份 → int/unhashable/hostile 全拒且零裸 raise;halt 解析器 any-unparseable→RuntimeError→run_fetch `except` 捕获→feed down→unknown→保守拒。
+- **Required**: 无(`R-USSHORT-BATCH5-VALIDATE-STATUS-RECORD-NONBOOL-FLAG-VALUE-GAP` + `R-USSHORT-BATCH5-HALT-FEED-PARSE-SILENT-DROP-FAILOPEN` 均翻 resolved、register 单源)。新登 Optional latent `R-USSHORT-BATCH5-HALT-SYMBOL-WRONG-CANONICAL-MISATTRIB-LATENT`(agent 揪的 pre-existing 残留:`_symbol_from_halt_item` regex fallback 可 mis-attribute 到错 canonical、对真源 dead)。Optional Latent-2 未取。
+- **Verify**: 我整读 `validate_status_record`+`_bool_or_none`(身份非等值)+halt 异常路径;我探针:4 flag×全坏值→False 零 raise、合法记录→True(无 over-reject)、hostile int-subclass→拒、halt bad→RuntimeError/happy→symbols/empty→[]。**独立 §3.5 agent(只读当前树、改动未提交)**:whole-class HELD(全 JSON 敌意→False、guard 顺序对)+反向 over-reject HELD(13 真记录+100% `_VALID_*` 表→True)+halt 端到端 fail-closed(GME→ineligible)+揪 1 pre-existing 残留。亲跑 full offline `*us_short*` `3518 OK` 零回归、doc governance `60 OK`。**未审(gated)**:真网络 halt fetch(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute/fix` (US-short status-source halt parser + validator hardening)
+
+- **Verdict/Action**: repaired two open status-source Hot Queue items offline. `validate_status_record` now rejects non-strict flag values / coverage / bankruptcy screen_status before `_VALID_*` membership; Nasdaq halt RSS unparseable items now fail closed via the existing halt-feed-down path; tracked summary scanning now blocks `nasdaqtrader.com`.
+- **Required**: `R-USSHORT-BATCH5-HALT-FEED-PARSE-SILENT-DROP-FAILOPEN` + `R-USSHORT-BATCH5-VALIDATE-STATUS-RECORD-NONBOOL-FLAG-VALUE-GAP` fixed pending Claude Code re-review in `docs/system_risk_register.md`. Optional Latent-2 not taken; no live/provider call, bankruptcy 8-K scan, Pass2, DataHub, production, broker/order, or cross-lane work.
+- **Verify**: red first: validator test failed on int pass + `TypeError`; halt parser tests failed no `RuntimeError`; `nasdaqtrader.com` scanner test failed no `RuntimeError`. Green: status_source 96 OK; universe_fetch 77 OK; full offline `test_us_short*.py` 3518 OK (1 skipped); doc-process 60 OK; `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback; no subagent timeout/restart. Fixed the whole called class for status flag values/coverage and halt item parsing, checked the reverse path remains halt-down -> unknown/reject, left `CURRENT` untouched, and kept scope offline/status-source only.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short offering-audit Pass2 real-producer positive control — Codex repair 复审)
 
 - **Verdict/Action**: PASS + 提交 seam 文件(runner docstring + tests + register resolved + README route + SESSION_LOG)。**分级**:transform diff 逐字未变(与上轮深审+独立 agent+探针的零-bypass 结论延续)、本轮修复=测试 positive control + fixture 对齐 + docstring→轻量类不强制新 agent。Codex 整类封:真源 positive control 跑真 `resolve_offering_audit` 喂 seam、三 fixture 全对齐真源、docstring 记 dormant-veto。

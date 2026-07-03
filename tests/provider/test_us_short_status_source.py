@@ -287,6 +287,28 @@ class ValidateStatusRecordTest(unittest.TestCase):
         with self.assertRaises(ss.StatusSourceError):
             ss.status_flags_for_row({"ticker": "AAPL", "flags": {}}, row_ticker="AAPL")
 
+    def test_non_strict_flag_values_rejected_without_typeerror(self):
+        bad_values = (0, 1, 1.0, "True", [], {})
+        for flag in ss.DISQUALIFYING_FLAGS:
+            for bad in bad_values:
+                rec = _record("AAPL", ticker_reference=_ref(), halt_feed=_halt(), bankruptcy_screen=_bank())
+                rec["flags"][flag]["value"] = bad
+                self.assertFalse(ss.validate_status_record(rec), (flag, bad))
+        found = _record("BANKR", ticker_reference=_ref(
+            listings={"BANKR": {"active": True, "primary_exchange": "NYSE"}}),
+            halt_feed=_halt(), bankruptcy_screen=_bank())
+        found["flags"]["bankruptcy"]["value"] = 1
+        self.assertFalse(ss.validate_status_record(found))
+
+    def test_non_str_coverage_and_bankruptcy_status_rejected_without_typeerror(self):
+        for flag in ss.DISQUALIFYING_FLAGS:
+            rec = _record("AAPL", ticker_reference=_ref(), halt_feed=_halt(), bankruptcy_screen=_bank())
+            rec["flags"][flag]["coverage"] = []
+            self.assertFalse(ss.validate_status_record(rec), flag)
+        rec = _record("AAPL", ticker_reference=_ref(), halt_feed=_halt(), bankruptcy_screen=_bank())
+        rec["flags"]["bankruptcy"]["screen_status"] = []
+        self.assertFalse(ss.validate_status_record(rec))
+
 
 class MalformedPayloadTest(unittest.TestCase):
     def test_non_dict_payload_raises(self):

@@ -858,6 +858,36 @@ class TestRunFetchE2E(unittest.TestCase):
 </rss>"""
         self.assertEqual(_mod.parse_halt_symbols_from_rss(xml), ["ABTC"])
 
+    def test_parse_halt_symbols_rejects_unparseable_items(self):
+        xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Trading halt notice</title>
+      <description>No ticker field was captured</description>
+    </item>
+  </channel>
+</rss>"""
+        with self.assertRaisesRegex(RuntimeError, "unparseable"):
+            _mod.parse_halt_symbols_from_rss(xml)
+
+    def test_parse_halt_symbols_rejects_partial_feed_with_unparseable_item(self):
+        xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
+  <channel>
+    <item>
+      <ndaq:IssueSymbol>HALT</ndaq:IssueSymbol>
+      <title>HALT</title>
+    </item>
+    <item>
+      <title>Trading halt notice</title>
+      <description>No ticker field was captured</description>
+    </item>
+  </channel>
+</rss>"""
+        with self.assertRaisesRegex(RuntimeError, "unparseable"):
+            _mod.parse_halt_symbols_from_rss(xml)
+
 
 class SummarySafetyAndGitignore(unittest.TestCase):
     """R-USSHORT-BATCH5-UNIVERSE-FETCH-SECRET-SCAN-GITIGNORE-GAP (cc_r1 O3): the tracked summary is scanned for
@@ -880,6 +910,11 @@ class SummarySafetyAndGitignore(unittest.TestCase):
 
     def test_assert_summary_safe_rejects_forbidden_fragment(self):
         p = self._write('{"url": "https://api.massive.com/v2/aggs?apiKey=zzz"}')
+        with self.assertRaises(RuntimeError):
+            _mod._assert_summary_safe(p, [])
+
+    def test_assert_summary_safe_rejects_nasdaqtrader_domain(self):
+        p = self._write('{"url": "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts"}')
         with self.assertRaises(RuntimeError):
             _mod._assert_summary_safe(p, [])
 
