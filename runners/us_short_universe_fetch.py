@@ -43,7 +43,6 @@ import gzip as _gzip
 import json
 import math
 import os
-import re
 import subprocess
 import sys
 import time
@@ -253,12 +252,9 @@ def _xml_child_text(item: ElementTree.Element, name: str) -> str:
 
 def _symbol_from_halt_item(item: ElementTree.Element) -> str | None:
     issue_symbol = _xml_child_text(item, "IssueSymbol")
-    if issue_symbol:
-        return canonical_us_ticker(issue_symbol)
-    text = " ".join([_xml_child_text(item, "title"), _xml_child_text(item, "description")])
-    match = re.search(r"\bSymbol\s*:?\s*([A-Z][A-Z0-9.\-]{0,9})\b", text, flags=re.IGNORECASE)
-    raw = match.group(1) if match else _xml_child_text(item, "title")
-    return canonical_us_ticker(raw)
+    if not issue_symbol:
+        return None
+    return canonical_us_ticker(issue_symbol)
 
 
 def parse_halt_symbols_from_rss(xml_text: str) -> list[str]:

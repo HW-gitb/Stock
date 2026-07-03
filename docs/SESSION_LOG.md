@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short halt-feed IssueSymbol-only parse — Codex Optional-repair 复审)
+
+- **Verdict/Action**: PASS + 提交 4 文件(universe_fetch + test + register resolved + SESSION_LOG)。**分级=轻量**(既有 parser 微调/删码、无新 fail-closed 面、上两轮独立 agent 已分析此路径)→整读 + 反向探针、不强制新 agent。Codex 取我上轮记的 Optional latent、把 `_symbol_from_halt_item` 改为只认权威 `<IssueSymbol>`、删 title/`Symbol:` fallback → misattribution fail-open 彻底消除。judge-before-execute:Optional 修复轮可取、此修是净改进且合 fail-closed 哲学。
+- **Required**: 无(`R-USSHORT-BATCH5-HALT-SYMBOL-WRONG-CANONICAL-MISATTRIB-LATENT` 翻 resolved、register 单源)。
+- **Verify**: 我整读 `_symbol_from_halt_item`+`_xml_child_text`(`.strip()`→blank→None);我反向探针:IssueSymbol 各形状(plain/lower/whitespace)→正确 canonical、blank/missing/`Symbol: XYZ`/bare-title→RuntimeError、agent 的 GME→XYZ misattrib repro 现 RAISE(真闭环);grep 证无既有正控依赖被删 fallback(dead code、零 over-reject)。亲跑 full offline `*us_short*` `3520 OK` 零回归、doc governance `60 OK`。**未审(gated、安全方向)**:真 feed 若有合法非-IssueSymbol item 会 feed down over-reject(保守、可经 critical_failed 检测)(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short halt-feed `IssueSymbol`-only parse hardening)
+
+- **Verdict/Action**: repaired Optional latent `R-USSHORT-BATCH5-HALT-SYMBOL-WRONG-CANONICAL-MISATTRIB-LATENT` offline. `_symbol_from_halt_item` now requires the authoritative `<IssueSymbol>` field; missing/blank `IssueSymbol` no longer falls back to title/description `Symbol:` guessing and instead feeds the existing unparseable halt-feed path.
+- **Required**: none new. Optional latent repaired pending Claude Code re-review in `docs/system_risk_register.md`; no live/provider call, bankruptcy 8-K scan, Pass2 wiring, DataHub, production, broker/order, or cross-lane work.
+- **Verify**: red first: the two new missing/blank-`IssueSymbol` tests failed because no `RuntimeError` was raised. Green: focused 2 OK; universe_fetch 79 OK; full offline `*us_short*` 3520 OK (1 skipped); doc-process 60 OK; `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback; class covered was all non-`IssueSymbol` extraction fallback in this parser, reverse positive `IssueSymbol` path stayed green, `CURRENT` untouched, no independent subagent timeout/restart.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source halt-parse + validator 硬化 — Codex repair 复审, 最高危独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交 6 文件(status_source + universe_fetch + 2 tests + register + SESSION_LOG)。**分级=最高危**(fail-closed 校验器 + halt 解析器 + secret 扫描器)→满标准。两 open finding 都封整类:validator `_bool_or_none` 身份守卫 + coverage/screen_status isinstance + bankruptcy 严格身份 → int/unhashable/hostile 全拒且零裸 raise;halt 解析器 any-unparseable→RuntimeError→run_fetch `except` 捕获→feed down→unknown→保守拒。

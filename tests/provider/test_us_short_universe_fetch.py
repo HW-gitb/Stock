@@ -871,6 +871,32 @@ class TestRunFetchE2E(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unparseable"):
             _mod.parse_halt_symbols_from_rss(xml)
 
+    def test_parse_halt_symbols_rejects_symbol_text_without_issue_symbol(self):
+        xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <item>
+      <title>Trading halt notice for another issue</title>
+      <description>Operational message includes Symbol: XYZ but omits the authoritative field</description>
+    </item>
+  </channel>
+</rss>"""
+        with self.assertRaisesRegex(RuntimeError, "unparseable"):
+            _mod.parse_halt_symbols_from_rss(xml)
+
+    def test_parse_halt_symbols_rejects_blank_issue_symbol_instead_of_title_fallback(self):
+        xml = """<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
+  <channel>
+    <item>
+      <ndaq:IssueSymbol> </ndaq:IssueSymbol>
+      <title>GME</title>
+    </item>
+  </channel>
+</rss>"""
+        with self.assertRaisesRegex(RuntimeError, "unparseable"):
+            _mod.parse_halt_symbols_from_rss(xml)
+
     def test_parse_halt_symbols_rejects_partial_feed_with_unparseable_item(self):
         xml = """<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">
