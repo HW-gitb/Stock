@@ -899,6 +899,7 @@ def run_fetch(
     generated_at: str | None = None,
     confirm_user_authorization: bool = False,
     dry_run_env: bool = False,
+    bankruptcy_submissions_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not confirm_user_authorization and not dry_run_env:
         raise RuntimeError("live execution requires --confirm-user-authorization")
@@ -954,6 +955,7 @@ def run_fetch(
         observed_at=generated_at,
         halt_feed=halt_feed,
         halt_feed_state=halt_feed_state,
+        bankruptcy_submissions_by_ticker=bankruptcy_submissions_by_ticker,
     )
     print(f"      status_records={len(status_records)}  "
           f"critical_failed={status_source_outcome['critical_failed']}", flush=True)
@@ -1008,6 +1010,30 @@ def run_fetch(
           f"ineligible={summary_counts['ineligible_count']}  "
           f"no_price={summary_counts['no_price_count']}  no_shares={summary_counts['no_shares_count']}  "
           f"fmp_rescued={len(fmp_caps)}", flush=True)
+    bankruptcy_8k_scan_performed = bankruptcy_submissions_by_ticker is not None
+    bankruptcy_disclosure = (
+        "Pass1 sources delisted/otc from the SEC active-listing reference, halted from the Nasdaq current halt "
+        "feed, and bankruptcy from injected SEC company-submissions Item 1.03 screen output. The runner still "
+        "does not fetch per-issuer bankruptcy payloads itself; supplied submissions are an explicitly injected "
+        "provider-fed source and unscreened tickers remain disclosed as unscreened, not proven clean."
+        if bankruptcy_8k_scan_performed
+        else (
+            "Pass1 now sources delisted/otc from the SEC active-listing reference and halted from the "
+            "Nasdaq current halt feed. Bankruptcy remains positive-detection-only and unscreened in this "
+            "slice (zero 8-K calls), so it is recorded as unscreened provenance rather than proof of clean."
+        )
+    )
+    bankruptcy_limitation = (
+        "Pass1 can consume injected SEC company-submissions Item 1.03 bankruptcy screen output in this test seam, "
+        "but run_fetch still performs zero per-issuer bankruptcy SEC calls itself; broader provider health / Pass2 "
+        "/ DataHub / production consumption remain gated under SR-PROVIDER-001."
+        if bankruptcy_8k_scan_performed
+        else (
+            "Pass1 status flags are sourced only for the current SEC active-listing reference and Nasdaq current "
+            "halt feed in this slice. Bankruptcy 8-K scanning remains zero-call/unscreened, and broader provider "
+            "health / Pass2 / DataHub / production consumption remain gated under SR-PROVIDER-001."
+        )
+    )
 
     # Per-run candidate artifact: schema + semantic validate BEFORE the atomic write (carries prices →
     # gitignored state/ root). Validation re-derives the summary and rejects any drifted/forged content.
@@ -1069,12 +1095,12 @@ def run_fetch(
             "screening_scope": "exchange_price_adv_market_cap_with_ticker_reference_and_halt_feed_status",
             "status_source_outcome": status_source_outcome,
             "status_records_total": len(status_records),
-            "bankruptcy_8k_scan_performed": False,
-            "disclosure": (
-                "Pass1 now sources delisted/otc from the SEC active-listing reference and halted from the "
-                "Nasdaq current halt feed. Bankruptcy remains positive-detection-only and unscreened in this "
-                "slice (zero 8-K calls), so it is recorded as unscreened provenance rather than proof of clean."
+            "bankruptcy_8k_scan_performed": bankruptcy_8k_scan_performed,
+            "bankruptcy_8k_source": "injected_sec_submissions" if bankruptcy_8k_scan_performed else "not_supplied",
+            "bankruptcy_8k_input_symbol_count": (
+                len(bankruptcy_submissions_by_ticker) if isinstance(bankruptcy_submissions_by_ticker, dict) else 0
             ),
+            "disclosure": bankruptcy_disclosure,
             "status_source_contract_ref": "docs/us_short_batch5_status_source_binding_20260629.json",
             "finding_ref": "R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN",
         },
@@ -1088,7 +1114,7 @@ def run_fetch(
         },
         "sr_provider_001_remains_open": True,
         "limitations": [
-            "Pass1 status flags are sourced only for the current SEC active-listing reference and Nasdaq current halt feed in this slice. Bankruptcy 8-K scanning remains zero-call/unscreened, and broader provider health / Pass2 / DataHub / production consumption remain gated under SR-PROVIDER-001.",
+            bankruptcy_limitation,
             f"ADV = mean daily dollar volume over the last {ADV_WINDOW_TRADING_DAYS} trading days ending at used_date (a real multi-day average, governance floor is $5M/day). A ticker observed on < {ADV_MIN_DAYS_REQUIRED} days has adv_usd=null (insufficient coverage) and fails the gate conservatively — it is never admitted on a one-day spike.",
             "decision_date / price_basis_date are resolved from the FROZEN NYSE/NASDAQ calendar, whose data_provenance.verification_status is recorded here; it is still pending_authoritative_cross_check until verified (SR-PROVIDER-001) — disclosed, not laundered.",
             "market_cap = latest SEC shares × Massive close; SEC-missing-shares names use FMP fallback (bounded by FMP free daily cap; overflow stays ineligible).",

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short run_fetch 消费 injected bankruptcy SEC submissions — 独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交 5 文件(runner + test + README route + CURRENT §0 + SESSION_LOG)。**分级=轻量偏谨慎**(既有 run_fetch 编排器 +38 接线已审 seam、无真 live 抓数、无新引擎;但触及 Pass1 准入数据流 + bankruptcy 硬否决 + tracked 落盘)→整读 run_fetch + build_live_status_records 引擎体 + 我的对抗探针 + 起独立对抗 agent(未提交→只读当前树)。default 路径仍零 8-K。
+- **Required**: 无(本刀无新 finding、register 无翻转;Register: non-material)。
+- **Verify**: 整读 run_fetch(接线/元数据/tracked summary)+build_live_status_records(XOR/no-emit/payloads→gitignored)。探针+独立 §3.5 agent(只读当前树)25+ 面全 HELD:default 零8-K不伪造、injected 1.03→BANKR eligible=False 硬否决、非dict/hostile accession/future/dup-key→controlled、唯一注入 accession 只进 gitignored(tracked summary 仅固定英文 disclosure 无 raw)、default 零调用 spy 证。亲跑 full offline `*us_short*` 3549 OK、doc 60 OK。未审(gated):真 SEC on-wire(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `execute` (US-short run_fetch consumes injected bankruptcy SEC submissions)
+
+- **Verdict/Action**: wired `runners/us_short_universe_fetch.py::run_fetch` to pass injected `bankruptcy_submissions_by_ticker` into the already-reviewed `build_live_status_records` / `build_bankruptcy_screen_from_sec_submissions` seam, so a provider-fed SEC submissions source can reach Pass1 `status_provenance` and the candidate artifact. Default CLI/live path still has no 8-K fetch and no new CLI flag. README thin pointer updated.
+- **Required**: none new. No provider/network call, no real SEC per-issuer fetch, no full/candidate-universe live scan, no DataHub/production/ship-gate/Pass2/broker/order/cross-lane work. `SR-PROVIDER-001` remains open for any real SEC per-issuer calls or broader runner consumption beyond this injected seam.
+- **Verify**: red first: new `run_fetch` injection test failed with `TypeError: unexpected keyword argument 'bankruptcy_submissions_by_ticker'`. Green: focused injection test OK; default-path + adjacent seam tests OK; `test_us_short_universe_fetch` 83 OK; `test_us_short_status_source` + `test_us_short_batch5_data_context` 112 OK; route-doc guards 25 OK; full offline `*us_short*` 3549 OK (1 skipped); doc-process 60 OK; `py_compile` OK; `git diff --check` exit 0 with CRLF warnings only.
+- **Pre-Codex self-review**: A/B/C/E checked in main thread. B grep confirms the new `run_fetch` kwarg is confined to runner/tests plus README pointer; default-path test still asserts `bankruptcy_8k_scan_performed=false`; injected path now records `bankruptcy_8k_source=injected_sec_submissions`. `CURRENT` and register untouched because no new Required and no review/commit-cycle gate text.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy 8-K accession tracked-leak fix — Codex repair 复审, 轻量)
 
 - **Verdict/Action**: PASS + 提交整片 live 探针刀(runner+schema+summary+2 tests + engine fix + status test + README + register resolved + SESSION_LOG)。**分级=轻量**(小校验改动:`_valid_accession` 加 SEC 正则;上轮 runner/边界已深审+独立 agent)→整读 fix + 反向探针、不强制 agent。Codex 把 accession 锚 `^[0-9]{10}-[0-9]{2}-[0-9]{6}$` 于 parser 边界 + schema pattern 兜底。

@@ -806,6 +806,68 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertIn("status_halted", by_ticker["HALT"]["reasons"])
         self.assertEqual(by_ticker["HALT"]["status_provenance"]["flags"]["halted"]["source_id"], "exchange_halt_feed")
 
+    def test_run_fetch_can_consume_injected_sec_bankruptcy_submissions(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+                   "BANKR": {"cik": 123456, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  123456: {"shares": 1_000_000_000, "end": "2026-03-31"}}
+        submissions_by_ticker = {
+            "AAPL": _sec_submissions(
+                forms=["8-K"],
+                filing_dates=["2026-06-20"],
+                accessions=["0000320193-26-000111"],
+                items=["9.01"],
+            ),
+            "BANKR": _sec_submissions(
+                forms=["8-K"],
+                filing_dates=["2026-06-20"],
+                accessions=["0001140361-26-000001"],
+                items=["1.03,9.01"],
+            ),
+        }
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
+                    {"T": "BANKR", "c": 20.0, "v": 10_000_000}]
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
+                              return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
+                                            "halted_symbols": []}), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    bankruptcy_submissions_by_ticker=submissions_by_ticker,
+                )
+
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        self.assertTrue(summary["status_screening"]["bankruptcy_8k_scan_performed"])
+        self.assertEqual(summary["status_screening"]["status_source_outcome"]["per_source"]["sec_8k_item_103"], "ok")
+        by_ticker = {row["ticker"]: row for row in artifact["rows"]}
+        self.assertFalse(by_ticker["AAPL"]["bankruptcy"])
+        self.assertTrue(by_ticker["BANKR"]["bankruptcy"])
+        self.assertFalse(by_ticker["BANKR"]["eligible"])
+        self.assertIn("status_bankruptcy", by_ticker["BANKR"]["reasons"])
+        self.assertEqual(
+            by_ticker["BANKR"]["status_provenance"]["flags"]["bankruptcy"]["filing_accession_if_found"],
+            "0001140361-26-000001",
+        )
+
     def test_halt_feed_failure_keeps_halted_unknown_not_clean(self):
         sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
