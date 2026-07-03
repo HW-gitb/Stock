@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-03 — Claude re-审查 PASS + 提交 (US-short status-source offline preflight — docs placement reconciled)
+
+- **Verdict/Action**: PASS + reviewer 提交整片(runner+test+3 docs)。Codex docs-only 修复到位：preflight 状态更新已 reconcile 进 PASS1-STATUS-HEALTH 项(挨 slice-1/1a 注 + SUPERSEDED line 列入)、register 底部独立块已删、SESSION_LOG preamble 回顶 + Codex 执行条目移进 `---` 下 reverse-chrono 区。preflight code 未改、仍干净(上轮已审:纯离线/fail-closed/empty-map 类关闭/SR-PROVIDER-001 边界保全)。
+- **Required**: R-USSHORT-STATUS-PREFLIGHT-DOCS-PLACEMENT-RECONCILE-GAP → resolved(closure 见 `system_risk_register.md` 单一来源)。Optional(endpoint_families 严格拒)未做、非阻塞。
+- **Verify**: 亲跑 full offline `*us_short*` `3489 OK`；doc-process guards `60 OK`；focused preflight `4 OK`；grep 证 register 底块已删(仅剩 finding 引用)+ PASS1 项含 in-place 注；`git diff --check` 仅 CRLF。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-03 — Codex `修复` (US-short status-source preflight docs placement reconcile)
+
+- **Verdict/Action**: fixed `R-USSHORT-STATUS-PREFLIGHT-DOCS-PLACEMENT-RECONCILE-GAP` docs-only: reconciled the status-source preflight note into the PASS1-STATUS-HEALTH Hot Queue item, removed the disconnected bottom register block, restored the SESSION_LOG preamble under the title, and moved the prior Codex execution entry into the normal reverse-chrono zone below `---`.
+- **Required**: current Required repaired pending Claude Code re-review; code/preflight runner/tests unchanged. Remaining `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` work is still live status-source fetch + `apply_pass1` rewire + candidate status-provenance schema under `SR-PROVIDER-001`.
+- **Verify**: placement grep clean for bottom register block and preamble-above-entry; doc-process 60 OK; focused preflight 4 OK; full offline `*us_short*` 3489 OK (1 skipped); `py_compile` OK; `git diff --check` warning-only CRLF.
+- **Pre-Codex self-review**: A-F checked by main-thread fallback; docs-only Required accepted after repo verification; route-doc single-source restored; no provider/live/network/DataHub/production path and no code change.
+- **Next**: Claude Code: re-review current US-short status-source preflight docs-placement repair diff; PASS then commit.
+
+## 2026-07-03 — Claude 审查 FAIL (US-short status-source offline preflight — docs placement reconcile)
+
+- **Verdict/Action**: FAIL(未提交)。preflight 代码干净：纯离线 in-memory validator、无 network/env-read/write、fail-closed(strict bool、missing/empty raise、sibling 的 empty-gate-map fail-open 类显式关闭)、schema-first(过 frozen access-packet validator)、SR-PROVIDER-001 边界保全(test 证不读不泄 env secret)、反向测试齐。**但扣 PASS**：解封后第一刀执行 deferred，两处 docs 记录放错位——① 状态更新贴 register 底部独立块、没 reconcile 进 Hot Queue 的 PASS1-STATUS-HEALTH 项(单源拆两处、违 cb8799a 工作约定)；② Codex 执行条目插在 SESSION_LOG preamble 之上、出 `---` 条目区。
+- **Required**: R-USSHORT-STATUS-PREFLIGHT-DOCS-PLACEMENT-RECONCILE-GAP(P3)—完整 finding/repair 见 `system_risk_register.md`(单一来源)。docs-only：① 更新并进 PASS1-STATUS-HEALTH 项+删底部块 ② Codex 执行条目移进 `---` 下条目区。code 不动。Optional：preflight `endpoint_families` 严格 len/dup/非dict 拒(低危、packet 是 frozen tracked doc)。
+- **Verify**: focused `tests.provider.test_us_short_batch5_status_source_preflight` `4 OK`(亲跑)；`py_compile` OK；`validate_access_packet_errors` 实在 `engine/us_short_status_source.py:595`；register diff 证更新在底部非 Hot Queue 项、SESSION_LOG 证 Codex 条目在 preamble 上；full `*us_short*` 绿跑推迟到 reconcile 后 re-审查。
+- **Next**: Codex：修复(reconcile 进项+删底块+移 SESSION_LOG 条目)→ re-审查。
+
+## 2026-07-03 — Codex `执行` (US-short batch5 status-source offline preflight)
+
+- **Verdict/Action**: added `runners/us_short_batch5_status_source_preflight.py` + focused tests. It validates the status-source access packet and preflight guards in memory only: provider_samples path, 2-call/zero-retry budget, no-secret/no-live/no-full-market/no-DataHub/no-ship-gate boundaries.
+- **Required**: none new; `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` remains open for live status-source fetch, `apply_pass1` rewire, and candidate-artifact status-provenance schema. Real status-source calls remain `SR-PROVIDER-001` user-execute gated.
+- **Verify**: red import test -> green 4 OK; adjacent status-source/access/preflight pack 136 OK; full offline `*us_short*` 3489 OK (1 skipped); doc-process 60 OK; `py_compile` OK; `git diff --check` warning-only CRLF. No env read, raw/summary write, provider/live/network/DataHub/production path.
+- **Pre-Codex self-review**: scope held to US-short status-source preflight; no secrets surfaced; README thin route and register boundary update added.
+- **Next**: Claude Code: review current US-short status-source preflight diff; PASS then commit.
+
 ## 2026-07-02 — Claude 修复 + 自审 PASS + 提交 (US-short data_context seam deferral/schema-first reconciliation — docs-only)
 
 - **Verdict/Action**: 用户确认 supersede(简单文档同步)+ 授权自修自审。docs-only reconcile 2 条 register 项：① SEAM-MISSING Status/DEFERRED 注改为「离线 selection-stage 半已建、deferral SUPERSEDED(2026-07-02)、余 live 半仍 gated」+ 记 schema-first 由 real-consumer `run_selection` E2E 兜(离线半无需独立 binding) ② 我上轮 finding 翻 resolved。零 code/schema/binding/provider/live 改；提交整片(assembler+test+5 docs)。
