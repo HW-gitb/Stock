@@ -8,6 +8,34 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (Codex live-run-attempt handoff — Massive 403, docs-only)
+
+- **Verdict/Action**: PASS + 提交。全标准审 Codex live run_fetch attempt(`20260706`)handoff:**亲验盘上三产物全 MISSING**(证 Massive 403 卡在写盘前、未产 artifact);独立扫 docs 无 secret/URL/key 泄漏;register/CURRENT 准确(price/ADV access blocker、SR-PROVIDER-001 open、无过度声明);调用有界(SEC+Nasdaq+Massive 403 即停)。escalation 已批=授权。本提交连带我 (1)/(3) re-review findings(open、同文件 tangled、随 Codex 修复解)。
+- **Required**: 无(handoff docs-only 干净)。已 open findings 见 register:`R-USSHORT-BATCH5-HALT-FEED-PARSE-SILENT-DROP-FAILOPEN` + `R-USSHORT-BATCH5-VALIDATE-STATUS-RECORD-NONBOOL-FLAG-VALUE-GAP`(P2/P3 hardening)。
+- **Verify**: 盘上 artifact 缺席逐一确认;secret 扫描零 40+ token;`git ls-files|grep 20260706`=空;doc-governance guard 绿。
+- **Next**: Codex：修复
+
+## 2026-07-03 — Claude §3.5 满标准回扫 (US-short probe `e1ea7f6a` + injection `72f20fab`)
+
+- **Verdict/Action**: 用户授权 (3) 把 probe+injection 两刀按满标准回扫(各 1 独立对抗 agent + 我整读/探针)。**两刀核心都零 bypass**：probe summary allowlist-shaped、无泄漏(agent+我独立扫 committed 干净);injection ~20 类 forgery/launder/identity/clock 全 HELD(我 forgery 探针也证:停牌 launder 被 validator 重导拒、抽 provenance 被 schema 拒)。probe 我原审查够(0 material、1 optional advisory:sanitizer 独立黑名单不全但当前无自由文本可达)。injection 找到 2 条我漏的 contained validator 缺陷。
+- **Required**: `R-USSHORT-BATCH5-VALIDATE-STATUS-RECORD-NONBOOL-FLAG-VALUE-GAP`(P3、详见 register 单源):`validate_status_record` 的 `x in frozenset` 接受 int 0/1(bool 等值)+ 对 unhashable value 抛裸 TypeError(违 fail-closed 契约、正是 教训⑰);都 contained(is-identity + schema 兜)、非 bypass。修=membership 前加 `type(value) is bool` 守。可 bundle 进 halt-parse 硬化。
+- **Verify**: probe agent 全 HELD(sanitizer/budget/确认门/raw-root/错误体 + committed 独立扫);injection agent ~20 mutant + 我 forgery 探针 HELD;两 agent 均 throwaway worktree、无网、无 repo 改。
+- **Next**: Codex：修复
+
+## 2026-07-03 — Claude re-审查(满标准, 自查) (US-short run_fetch status wiring `bf95b35` — 硬化 gaps + 自纠)
+
+- **Verdict/Action**: 用户质疑上轮审查是否达对抗式全量标准 → 我按满标准重审**已提交**的 `bf95b35`(整读引擎全体 + 我自己的对抗探针 + §3.5 独立 agent)。核心 fail-closed 多层成立(agent 独立 ~13 类攻击、零 live bypass)。但找到 3 条我**上轮 PASS 漏**的硬化 gap;且我重审时把主 gap **夸大成 active P1、被独立 agent 纠正回 latent P2**。已落 register 单源。与并发的 Codex live-run-attempt 是两摊、树里交织(scope-gate:分开处理、未提交)。
+- **Required**: `R-USSHORT-BATCH5-HALT-FEED-PARSE-SILENT-DROP-FAILOPEN`(P2 latent) + 内含 Latent-3(P2:secret 扫描器漏本刀新引入的 `nasdaqtrader.com`)。修复=halt 解析器不静默丢 item(缺 IssueSymbol/解析不全→feed degraded→halted unknown→保守拒) + 扫描器补 `nasdaqtrader.com`。Optional=Latent-2(`_status_as_of` 补 `.isascii`/日历、下游已兜)。
+- **Verify**: 离线探针复现 latent fail-open(无 IssueSymbol→`parsed=[]`→halted 当 clean);独立 agent(throwaway worktree、无网)确认核心 fail-closed(unknown→拒 / halt-down→拒 / all-critical→no-emit / 12+8 伪造 mutant 全拒 / 身份绑定 / 时钟)、独立复现同 gap 评 latent、另揪 Latent-2/3。
+- **Next**: Codex：修复
+
+## 2026-07-03 - Codex `execute` (US-short live `run_fetch` attempt blocked at Massive)
+
+- **Verdict/Action**: user-authorized live `run_fetch` attempt for canonical `decision_date=20260706` / `price_basis_date=20260702` / `run_datetime_et=2026-07-02T23:50:43`. Dry-run env showed required keys present. Sandbox network failed at SEC with WinError 10013; approved escalated rerun fetched SEC ticker reference (`7641` tickers) and Nasdaq halt feed, built `7641` status_records with `critical_failed=[]`, then stopped on Massive grouped-daily HTTP 403 (`auth/quota`).
+- **Required**: no new R-ID; updates existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` / `SR-PROVIDER-001` as a price/ADV provider access blocker. No candidate universe, tracked summary, raw universe payload, Pass2, DataHub, production, provider-selection, ship-gate, broker/order, or cross-market output was produced.
+- **Verify**: confirmed absent on disk: `docs/us_short_universe_fetch_summary_20260706.json`, `state/us_short/candidate_universe_20260706.json`, and `provider_samples/us_short_universe_fetch_20260706/raw/raw_universe_data.json`; canonical resolver confirmed `decision_date=20260706`; `docs/system_risk_register.md` updated in place.
+- **Next**: Claude Code: review docs-only live-run-attempt handoff; PASS then commit, or route next executor to resolve Massive access/quota / alternate price-ADV provider before rerun.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short status-source run_fetch wiring — offline, live run gated)
 
 - **Verdict/Action**: PASS + 提交整片(runner+test+5 docs)。**offline 接线**(无 live run、测试全 mock halt feed)：`run_fetch` 从 SEC 参考 + Nasdaq halt feed 建每票 `status_records` 喂 `apply_pass1`。fail-closed：halt-down→unknown→保守拒、all-critical→no-emit、record↔row 绑定复用、bankruptcy unscreened。payloads 进 gitignored raw、tracked summary 只 counts。`fetch_sec_tickers` 已预过滤白名单→新 raise 非回归。SR-PROVIDER-001 open、register in-place、design 仅 status。
