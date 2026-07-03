@@ -35,6 +35,8 @@ UNIVERSE_ROW_KEYS = (
 )
 SELECTION_INPUT_KEYS = {"theme_opportunity_state", "per_ticker"}
 SELECTION_ROW_KEYS = {"core_score", "theme_momentum_score"}
+PASS2_SOURCE_KEYS = {"offering_audit"}
+PASS2_SOURCE_DISPOSITIONS = ("signals", "checked", "excluded")
 
 
 class DataContextAssemblyError(ValueError):
@@ -129,6 +131,85 @@ def _canonical_signal_map(value: Any, *, expected_candidates: list[str]) -> dict
             f"(missing {sorted(expected - actual)} / stale {sorted(actual - expected)})"
         )
     return out
+
+
+def _canonical_source_disposition_map(value: Any, *, source_name: str, disposition: str) -> dict[str, dict[str, Any]]:
+    if type(value) is not dict:
+        _fail(f"pass2_sources.{source_name}.{disposition} must be an exact dict")
+    out: dict[str, dict[str, Any]] = {}
+    for raw_ticker, raw_row in value.items():
+        ticker = _canonical_ticker(raw_ticker, where=f"pass2_sources.{source_name}.{disposition} key")
+        if ticker in out:
+            _fail(f"pass2_sources.{source_name}.{disposition} contains duplicate canonical ticker: {ticker}")
+        if type(raw_row) is not dict:
+            _fail(f"pass2_sources.{source_name}.{disposition}[{ticker}] must be an exact dict")
+        out[ticker] = dict(raw_row)
+    return out
+
+
+def _source_disposition_maps(source: Any, *, source_name: str) -> dict[str, dict[str, dict[str, Any]]]:
+    if type(source) is not dict:
+        _fail(f"pass2_sources.{source_name} must be an exact dict")
+    maps = {
+        disposition: _canonical_source_disposition_map(
+            source.get(disposition),
+            source_name=source_name,
+            disposition=disposition,
+        )
+        for disposition in PASS2_SOURCE_DISPOSITIONS
+    }
+    owner: dict[str, str] = {}
+    for disposition, rows in maps.items():
+        for ticker in rows:
+            if ticker in owner:
+                _fail(
+                    f"pass2_sources.{source_name} has ambiguous disposition for {ticker}: "
+                    f"{owner[ticker]} and {disposition}"
+                )
+            owner[ticker] = disposition
+    return maps
+
+
+def _pass2_signals_from_offering_audit(source: Any, *, expected_candidates: list[str]) -> dict[str, dict[str, Any]]:
+    maps = _source_disposition_maps(source, source_name="offering_audit")
+    expected = set(expected_candidates)
+    actual = set().union(*(set(rows) for rows in maps.values()))
+    if actual != expected:
+        _fail(
+            "pass2_sources.offering_audit must exactly disposition final candidates "
+            f"(missing {sorted(expected - actual)} / stale {sorted(actual - expected)})"
+        )
+
+    out: dict[str, dict[str, Any]] = {}
+    for ticker in expected_candidates:
+        if ticker in maps["signals"]:
+            active_offering = maps["signals"][ticker].get("active_offering")
+            if type(active_offering) is not dict:
+                _fail(f"pass2_sources.offering_audit.signals[{ticker}].active_offering must be an exact dict")
+            out[ticker] = {"active_offering": dict(active_offering)}
+        elif ticker in maps["checked"]:
+            checked = maps["checked"][ticker].get("active_offering")
+            if type(checked) is not dict:
+                _fail(f"pass2_sources.offering_audit.checked[{ticker}].active_offering must be an exact dict")
+            out[ticker] = {}
+        elif ticker in maps["excluded"]:
+            if "active_offering" not in maps["excluded"][ticker]:
+                _fail(f"pass2_sources.offering_audit.excluded[{ticker}] missing active_offering disposition")
+            out[ticker] = {"critical_data_missing": True}
+        else:  # pragma: no cover - covered by the exact-disposition guard above.
+            _fail(f"pass2_sources.offering_audit missing disposition for {ticker}")
+    return out
+
+
+def _pass2_signals_from_sources(pass2_sources: Any, *, expected_candidates: list[str]) -> dict[str, dict[str, Any]]:
+    if type(pass2_sources) is not dict:
+        _fail("pass2_sources must be an exact dict")
+    if set(pass2_sources) != PASS2_SOURCE_KEYS:
+        _fail(f"pass2_sources must contain exactly {sorted(PASS2_SOURCE_KEYS)}")
+    return _pass2_signals_from_offering_audit(
+        pass2_sources["offering_audit"],
+        expected_candidates=expected_candidates,
+    )
 
 
 def _canonical_holdings(value: Any) -> list[dict[str, Any]]:
@@ -241,7 +322,8 @@ def assemble_data_context(
     expected_decision_date: str,
     eligibility_governance: dict[str, Any],
     score_composition: dict[str, Any],
-    candidate_pass2_signals: dict[str, Any],
+    candidate_pass2_signals: dict[str, Any] | None,
+    pass2_sources: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -250,6 +332,10 @@ def assemble_data_context(
     Pure/offline: no provider calls, no state writes, no DataHub. The provider candidate artifact
     remains the priced/lineage source of record; Batch4 universe rows intentionally strip provider
     clocks and lineage so run_provenance can bind family-level clocks without dirty row overrides.
+    `pass2_sources.offering_audit` consumes the resolved SEC offering-audit output shape. That
+    producer currently emits real recent+active offerings with materiality=None, so they are
+    admitted as strong_downgrade rather than entry_hard_veto until a later materiality parser lands;
+    excluded offering-audit rows become critical_data_missing and fail closed.
     """
     artifact = _validated_candidate_artifact(
         candidate_artifact,
@@ -269,6 +355,13 @@ def assemble_data_context(
     except Exception as exc:
         raise DataContextAssemblyError(f"catalyst recall candidate set rejected: {exc}") from exc
     candidates = recalled["candidates"]
+    if (candidate_pass2_signals is None) == (pass2_sources is None):
+        _fail("provide exactly one of candidate_pass2_signals or pass2_sources")
+    if pass2_sources is not None:
+        candidate_pass2_signals = _pass2_signals_from_sources(
+            pass2_sources,
+            expected_candidates=candidates,
+        )
     pass2_signals = _canonical_signal_map(candidate_pass2_signals, expected_candidates=candidates)
     pass2_clean = [
         ticker

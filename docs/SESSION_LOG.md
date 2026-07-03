@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short offering-audit Pass2 real-producer positive control — Codex repair 复审)
+
+- **Verdict/Action**: PASS + 提交 seam 文件(runner docstring + tests + register resolved + README route + SESSION_LOG)。**分级**:transform diff 逐字未变(与上轮深审+独立 agent+探针的零-bypass 结论延续)、本轮修复=测试 positive control + fixture 对齐 + docstring→轻量类不强制新 agent。Codex 整类封:真源 positive control 跑真 `resolve_offering_audit` 喂 seam、三 fixture 全对齐真源、docstring 记 dormant-veto。
+- **Required**: 无(`R-USSHORT-BATCH5-SEAM-OFFERING-AUDIT-PASS2-REAL-PRODUCER-POSITIVE-CONTROL-GAP` 两部分全闭、register 翻 resolved)。Optional OBS-2(checked/excluded 只认标签不核内容、仅绕源可 launder)未取、非阻塞。**scope gate**:`AGENTS.md` 被塞无关 `**DO NOT send optional commentary.**`(未请求协议增补、匹配 open `R-DOCGOV-UNREQUESTED-PROTOCOL-SCOPECREEP`)→**排除出本 commit、留工作树、surface 用户定夺**。
+- **Verify**: 我亲验非假绿:`test_real_sec_offering_audit_output_feeds_pass2_source_seam` 真调 `resolve_offering_audit`+断言真 active(materiality=None)→strong_downgrade→admit=True、excluded string→critical_data_missing→拒;三 disposition fixture 对齐真源(materiality=None/3键 checked/string excluded);runner transform diff 逐字未变;亲跑 full offline `*us_short*` `3513 OK` 零回归、focused `11 OK`、doc governance `60 OK`。**未审(gated)**:真网络 fetch / live Pass2 wiring(SR-PROVIDER-001)。
+- **Next**: 无(seam 已提交;AGENTS.md scope-out 待用户定夺)。
+
+## 2026-07-03 - Codex `修复` (US-short offering-audit Pass2 real-producer positive control)
+
+- **Verdict/Action**: repaired Claude Required by adding a real `resolve_offering_audit` -> `assemble_data_context(pass2_sources=...)` positive control and aligning synthetic offering fixtures to the real producer shape. Real active offering now tests as `materiality=None` -> `strong_downgrade` -> admitted, not an entry veto; excluded source rows still fail closed through `critical_data_missing`.
+- **Required**: `R-USSHORT-BATCH5-SEAM-OFFERING-AUDIT-PASS2-REAL-PRODUCER-POSITIVE-CONTROL-GAP` fixed pending Claude re-review in `docs/system_risk_register.md`. Optional OBS-2 was not taken; no provider/live/DataHub/production/broker/order/A-share/A-long/US-long work.
+- **Verify**: red first: aligning the active fixture to `materiality=None` made the old test fail with missing `MSFT` score target. Green: data_context 11 OK; SEC offering audit 55 OK; hard_veto 28 OK; eligibility_gate 61 OK; full offline `*us_short*` 3513 OK (1 skipped); doc-process 60 OK; `py_compile` OK; `git diff --check` warning-only CRLF.
+- **Pre-Codex self-review**: A/B/C/E checked; fixed the whole called class by covering real signals/checked/excluded output, checked the reverse fact that active is admitted-downgraded, left `CURRENT` untouched, and kept scope to assembler/tests/register/SESSION_LOG.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
+## 2026-07-03 — Claude 审查 FAIL (US-short SEC offering-audit → data_context Pass2 seam — 最高危, 独立 agent HELD, real-producer positive-control 缺口)
+
+- **Verdict/Action**: FAIL(1 Required + 1 Optional、未提交)。**分级=最高危**(新 fail-closed seam ~91 行喂 Pass2/选股)→满标准。代码本身 fail-closed 无 bypass:excluded→critical_data_missing→entry_hard_veto→不放行、XOR/exact-partition/ambiguous/非dict/hostile-key 全 HELD、seam 键消费与真 `resolve_offering_audit` 输出精确对齐。判 FAIL 因缺 real-producer positive control(同 Cut 6-a/b/d 兄弟刀被 held 的标准)+ active→veto 测试用真源永不发的 materiality→假信心。
+- **Required**: `R-USSHORT-BATCH5-SEAM-OFFERING-AUDIT-PASS2-REAL-PRODUCER-POSITIVE-CONTROL-GAP`(P2、register 单源)。5 测试全手搓 `_offering_source`、三 disposition 形状全非产线(materiality=material vs 真 None、checked 1键 vs 3键、excluded dict vs 真 string)、无测试喂真 `resolve_offering_audit` 输出。修=加真源 positive control(真 active materiality=None→strong_downgrade→admit 进 Top-N、excluded string→critical_data_missing→拒)+ 显式记 dormant-veto 事实。Optional=checked/excluded 只认标签不核内容(仅绕源可 launder、OBS-2)。
+- **Verify**: **独立 §3.5 read-only-current-tree agent 跑了**(改动未提交→worktree 抓不到、只读/无网/无 repo 改)→~15 类攻击全 HELD、零 bypass、独立复现 OBS-1/2。**我整读** `classify_hard_veto`(materiality=None→strong_downgrade L119-124)+`pass2_safety_admit`+`_derive_active_offering`(materiality≡None L320);**我探针**:真源 active→admit=True、material→拒、critical_data_missing→拒、真 `resolve_offering_audit` 端到端过 seam 全符;亲跑 full offline `*us_short*` `3512 OK` 零回归。**未审(gated)**:真网络 fetch / live Pass2 wiring(SR-PROVIDER-001)。
+- **Next**: Codex：修复
+
+## 2026-07-03 - Codex `execute` (US-short SEC offering-audit Pass2 source -> `data_context` seam)
+
+- **Verdict/Action**: added a pure/offline `pass2_sources.offering_audit` path to `assemble_data_context`. Resolved SEC offering-audit `signals` / `checked` / `excluded` rows now assemble `candidate_pass2_signals`: active offerings flow into Pass2 `active_offering`, audited-clean checked rows emit `{}`, and excluded or missing dispositions fail closed. No provider call, live fetch, DataHub, production, broker/order, A-share, A-long, or US-long work.
+- **Required**: no new R-ID; see `docs/system_risk_register.md` existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` / `SR-PROVIDER-001`. This is a partial Batch5->Batch4 source-assembly step only; those items remain open for bankruptcy 8-K screening, non-offering/live Pass2 source wiring, broader provider-health/fallback evidence, DataHub/production/provider-selection/ship-gate evidence, broker/order exclusion, and forward evidence.
+- **Verify**: red first: 4 new data_context tests failed on unexpected `pass2_sources`; green: focused data_context 10 OK; adjacent SEC offering audit 55 OK, hard_veto 28 OK, eligibility_gate 61 OK; full offline `*us_short*` 3512 OK (1 skipped); doc-process 60 OK; `py_compile` OK; `git diff --check` warning-only CRLF. Checklist A-F/B2 checked; no `CURRENT` settled-state update before independent review.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short Massive pacing repair + live full-run 20260706 — 最高危, 独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交整片(runner+test+summary+3 docs)。**分级=最高危**(live 执行+tracked artifact+新 provider 重试代码)→ 走满标准。Massive 重试 fail-closed(429-耗尽/403/401→raise、有界 3 次、500→coverage-floor→raise);summary 无 key/token 泄漏、无 over-claim、counts 一致可重导、SR-PROVIDER-001 open、raw/candidate gitignored+零 tracked;register in-place 准确;复原了 Codex 误删的 CURRENT「gate=SESSION_LOG」route-doc 句。
