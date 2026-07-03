@@ -164,6 +164,11 @@ class TestAdvWindowSessionDates(unittest.TestCase):
 
 
 class TestFetchMassiveWindow(unittest.TestCase):
+    def setUp(self):
+        self._sleep_patch = patch.object(_mod.time, "sleep")
+        self.sleep_mock = self._sleep_patch.start()
+        self.addCleanup(self._sleep_patch.stop)
+
     def test_collects_window_and_averages_adv(self):
         # 20 days of constant $6M/day dollar volume → adv_usd == 6M, used_date == newest
         dates = [f"2026-06-{d:02d}" for d in range(26, 6, -1)]   # newest-first, 20 entries
@@ -213,6 +218,41 @@ class TestFetchMassiveWindow(unittest.TestCase):
             with self.assertRaises(RuntimeError) as ctx:
                 _mod.fetch_massive_window("k", ["2026-06-26", "2026-06-25"], window=20, min_days=1)
         self.assertIn("401", str(ctx.exception))
+
+    def test_rate_limit_429_retried_instead_of_failing(self):
+        import urllib.error
+
+        calls = []
+
+        def fake(date, key):
+            calls.append(date)
+            if len(calls) == 1:
+                raise urllib.error.HTTPError(None, 429, "rate", {}, None)
+            return [{"T": "AAPL", "c": 10.0, "v": 600_000}]
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            used, observed, md = _mod.fetch_massive_window("k", ["2026-06-26"], window=1, min_days=1)
+
+        self.assertEqual(calls, ["2026-06-26", "2026-06-26"])
+        self.assertEqual(used, "2026-06-26")
+        self.assertEqual(observed, ["2026-06-26"])
+        self.assertIn("AAPL", md)
+        self.sleep_mock.assert_called_with(_mod.MASSIVE_RATE_LIMIT_RETRY_SECONDS)
+
+    def test_massive_window_paces_between_grouped_daily_calls(self):
+        dates = ["2026-06-26", "2026-06-25", "2026-06-24"]
+
+        def fake(date, key):
+            return [{"T": "AAPL", "c": 10.0, "v": 600_000}]
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            _mod.fetch_massive_window("k", dates, window=3, min_days=1)
+
+        self.assertEqual(
+            [call.args[0] for call in self.sleep_mock.call_args_list],
+            [_mod.MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS,
+             _mod.MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS],
+        )
 
     def test_adv_insufficient_coverage_null(self):
         # ticker only trades on 4 of the collected days (< min 10) → adv_usd is None (conservative)

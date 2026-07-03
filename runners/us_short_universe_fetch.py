@@ -90,6 +90,9 @@ EXCHANGE_WHITELIST = ("NYSE", "NASDAQ")
 NASDAQ_TRADE_HALTS_RSS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts"
 
 MASSIVE_GROUPED_URL = "https://api.massive.com/v2/aggs/grouped/locale/us/market/stocks/{date}?apiKey={key}"
+MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS = 13.0
+MASSIVE_RATE_LIMIT_RETRY_SECONDS = 65.0
+MASSIVE_RATE_LIMIT_MAX_RETRIES = 2
 
 # ADV window (§13.1 #2 liquidity prior — measurement methodology, recorded per-run in lineage so it is
 # auditable and cannot silently drift to a 1-day spike). 20 trading days ≈ one trading month smooths a
@@ -437,16 +440,30 @@ def fetch_massive_window(
     trading day, §3.7). If fewer than `min_days` days come back with data, raises (insufficient for ADV).
     """
     collected: list[tuple[str, list[dict[str, Any]]]] = []
+    request_count = 0
     for d in session_dates_desc:
         if len(collected) >= window:
             break
+        retry_count = 0
         try:
-            results = _massive_grouped_for_date(d, key)
+            while True:
+                if request_count > 0 and retry_count == 0:
+                    time.sleep(MASSIVE_GROUPED_REQUEST_INTERVAL_SECONDS)
+                request_count += 1
+                try:
+                    results = _massive_grouped_for_date(d, key)
+                    break
+                except urllib.error.HTTPError as exc:
+                    if exc.code == 429 and retry_count < MASSIVE_RATE_LIMIT_MAX_RETRIES:
+                        retry_count += 1
+                        time.sleep(MASSIVE_RATE_LIMIT_RETRY_SECONDS)
+                        continue
+                    raise
         except urllib.error.HTTPError as exc:
             if exc.code in (401, 403, 429):
                 raise RuntimeError(
-                    f"Massive grouped daily HTTP {exc.code} (auth/quota — check MASSIVE_API_KEY / rate "
-                    "limit); not a missing trading day"
+                    f"Massive grouped daily HTTP {exc.code} (auth/quota/rate-limit after {retry_count} "
+                    "retry attempt(s)); not a missing trading day"
                 ) from exc
             continue
         if results:

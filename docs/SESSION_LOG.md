@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short Massive pacing repair + live full-run 20260706 — 最高危, 独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交整片(runner+test+summary+3 docs)。**分级=最高危**(live 执行+tracked artifact+新 provider 重试代码)→ 走满标准。Massive 重试 fail-closed(429-耗尽/403/401→raise、有界 3 次、500→coverage-floor→raise);summary 无 key/token 泄漏、无 over-claim、counts 一致可重导、SR-PROVIDER-001 open、raw/candidate gitignored+零 tracked;register in-place 准确;复原了 Codex 误删的 CURRENT「gate=SESSION_LOG」route-doc 句。
+- **Required**: 无。Optional(非阻塞):① 加 429-耗尽 fail-closed 测试;② `_assert_text_safe` 补 `sec_ua`(含邮箱=PII)+ `nasdaqtrader.com`(并入 Latent-3);③ 5xx 当 missing-day 跳(pre-existing、min_days 兜、可议)。
+- **Verify**: **独立 §3.5 agent 跑了**(只读当前树/无网/无 repo 改)→ 零可复现 fail-open/泄漏/over-claim、~15 类攻击全 HELD、独立重算 counts、证 eligible_tickers 是既有已审惯例;**我整读+探针**证 429-耗尽/403/401/500 全 fail-closed;亲跑 full offline `*us_short*` `3508 OK`;独立扫 summary 零 secret/URL/email/price;`git check-ignore`+`ls-files` 证 gitignored+零 tracked。**未审(gated)**:真网络/Retry-After 头/真墙钟 sleep/live e2e。
+- **Next**: 无(本片已提交)。
+
+## 2026-07-03 - Codex `fix+execute` (US-short Massive pacing + live `run_fetch`)
+
+- **Verdict/Action**: fixed the Massive grouped-daily rate-limit path by pacing requests (`13.0s`) and retrying HTTP 429 after `65.0s` (max 2), then reran the user-authorized canonical live `run_fetch` for `decision_date=20260706`. The run completed Pass1 candidate-universe assembly and wrote tracked summary `docs/us_short_universe_fetch_summary_20260706.json`; raw universe payload and candidate artifact stayed under gitignored `provider_samples/` / `state/us_short/`.
+- **Required**: no new R-ID; updates existing `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` / `SR-PROVIDER-001`. This closes only the Massive price/ADV rate-limit execution blocker for this run. Remaining: bankruptcy 8-K screening, live Pass2 source wiring, broader provider-health/fallback evidence, DataHub/production/provider-selection/ship-gate evidence, broker/order exclusion, and forward evidence.
+- **Verify**: red first: new 429-retry and pacing tests failed before implementation; green: focused universe-fetch 74 OK, adjacent status/source/schema pack 250 OK, full offline `*us_short*` 3508 OK (1 skipped), doc-process 60 OK, `py_compile` OK, `git diff --check` warning-only CRLF. Live rerun: SEC tickers=7641, status_records=7641, critical_failed=[], Massive observed_days=20 / symbols=13051, SEC shares-CIK=5773, eligible=2633, ineligible=5008, no_price=571, no_shares=2337, fmp_rescued=239. Secret/URL/raw-row scan on tracked summary had no key/domain/raw-row hits; `git check-ignore` confirmed raw/candidate paths are ignored and `git ls-files` found no tracked raw/candidate artifacts.
+- **Pre-Codex self-review**: checklist A-F/B2 checked; scope held to `runners/us_short_universe_fetch.py`, `tests/provider/test_us_short_universe_fetch.py`, `docs/us_short_universe_fetch_summary_20260706.json`, and route handoff docs. HTTP 401/403/429 still fail closed after retry budget; non-auth missing trading days still skip as before. No 8-K implementation, Pass2, DataHub, production, ship-gate, broker/order, A-share, A-long, or US-long work.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (Codex live-run-attempt handoff — Massive 403, docs-only)
 
 - **Verdict/Action**: PASS + 提交。全标准审 Codex live run_fetch attempt(`20260706`)handoff:**亲验盘上三产物全 MISSING**(证 Massive 403 卡在写盘前、未产 artifact);独立扫 docs 无 secret/URL/key 泄漏;register/CURRENT 准确(price/ADV access blocker、SR-PROVIDER-001 open、无过度声明);调用有界(SEC+Nasdaq+Massive 403 即停)。escalation 已批=授权。本提交连带我 (1)/(3) re-review findings(open、同文件 tangled、随 Codex 修复解)。
