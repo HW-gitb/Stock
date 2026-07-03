@@ -342,7 +342,7 @@ def _resolve_bankruptcy(screen, ticker, *, as_of, record_observed_at):
     if not isinstance(rec, dict):
         raise StatusSourceError(f"sec_8k_item_103.by_ticker[{ticker}] 须为 dict")
     screen_status = rec.get("screen_status")
-    if screen_status not in BANKRUPTCY_SCREEN_STATES:
+    if not isinstance(screen_status, str) or screen_status not in BANKRUPTCY_SCREEN_STATES:
         raise StatusSourceError(f"sec_8k_item_103 screen_status 非法: {screen_status!r}")
     accession = rec.get("filing_accession") if isinstance(rec.get("filing_accession"), str) and rec.get("filing_accession") else None
     found = screen_status == "bankrupt_8k_found"

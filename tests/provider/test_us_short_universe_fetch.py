@@ -845,6 +845,43 @@ class TestRunFetchE2E(unittest.TestCase):
                 halt_feed_state="down",
             )
 
+    def test_build_live_status_records_consumes_provider_fed_bankruptcy_screen(self):
+        sec_map = {
+            "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+            "BANKR": {"cik": 123456, "exchange": "NYSE"},
+        }
+        bankruptcy_screen = {
+            "observed": True,
+            "observed_at": "2026-06-29T12:00:00+00:00",
+            "lookback_window": "P90D",
+            "by_ticker": {
+                "AAPL": {"screen_status": "screened_no_filing"},
+                "BANKR": {
+                    "screen_status": "bankrupt_8k_found",
+                    "filing_accession": "0001140361-26-000001",
+                },
+            },
+        }
+
+        records, outcome, payloads = _mod.build_live_status_records(
+            sec_map,
+            decision_date="20260629",
+            observed_at="2026-06-29T12:00:00+00:00",
+            halt_feed=_status_halt(),
+            halt_feed_state="ok",
+            bankruptcy_screen=bankruptcy_screen,
+        )
+
+        self.assertEqual(outcome["per_source"]["sec_8k_item_103"], "ok")
+        self.assertIs(payloads["sec_8k_item_103"], bankruptcy_screen)
+        self.assertFalse(records["AAPL"]["flags"]["bankruptcy"]["value"])
+        self.assertEqual(records["AAPL"]["flags"]["bankruptcy"]["screen_status"], "screened_no_filing")
+        self.assertTrue(records["BANKR"]["flags"]["bankruptcy"]["value"])
+        self.assertEqual(
+            records["BANKR"]["flags"]["bankruptcy"]["filing_accession_if_found"],
+            "0001140361-26-000001",
+        )
+
     def test_parse_halt_symbols_prefers_namespaced_issue_symbol(self):
         xml = """<?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:ndaq="http://www.nasdaqtrader.com/">

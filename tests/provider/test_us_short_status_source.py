@@ -165,6 +165,18 @@ class ResolveBankruptcyTest(unittest.TestCase):
             with self.assertRaises(ss.StatusSourceError):
                 _record("AAPL", bankruptcy_screen=screen)
 
+    def test_non_string_screen_status_rejected_without_typeerror(self):
+        for screen_status in ([], {}, 1, ("x",)):
+            with self.subTest(screen_status=repr(screen_status)):
+                screen = {
+                    "observed": True,
+                    "observed_at": OBSERVED_AT,
+                    "lookback_window": "P90D",
+                    "by_ticker": {"AAPL": {"screen_status": screen_status}},
+                }
+                with self.assertRaises(ss.StatusSourceError):
+                    _record("AAPL", bankruptcy_screen=screen)
+
 
 class CheapEligibleIntegrationTest(unittest.TestCase):
     """status_flags_for_row -> cheap_eligible end to end."""

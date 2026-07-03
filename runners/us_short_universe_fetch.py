@@ -291,6 +291,14 @@ def fetch_nasdaq_trade_halt_feed(*, observed_at: str) -> dict[str, Any]:
     }
 
 
+def _status_source_state_from_observed_payload(payload: dict[str, Any] | None) -> str:
+    if payload is None:
+        return "missing"
+    if isinstance(payload, dict) and payload.get("observed") is True:
+        return "ok"
+    return "down"
+
+
 def build_live_status_records(
     sec_map: dict[str, dict[str, Any]],
     *,
@@ -298,19 +306,22 @@ def build_live_status_records(
     observed_at: str,
     halt_feed: dict[str, Any] | None,
     halt_feed_state: str,
+    bankruptcy_screen: dict[str, Any] | None = None,
 ) -> tuple[dict[str, dict[str, Any]], dict[str, Any], dict[str, Any]]:
     """Build runner-consumable status_records from reviewed live status sources.
 
     This is the live 1b wiring for the already-reviewed offline status parser. It consumes the SEC ticker map
     already fetched by `fetch_sec_tickers` as the full active-listing reference, consumes the Nasdaq current halt
-    feed, and deliberately leaves bankruptcy as `unscreened` (zero 8-K calls in this slice). If both critical
-    status sources fail, classify_status_source_outcomes blocks/no-emits before candidate artifacts can be written.
+    feed, and can consume a caller-supplied SEC 8-K Item 1.03 bankruptcy screen. This function never fetches the
+    bankruptcy screen itself; `run_fetch` still passes None until a separate reviewed scan is authorized. If both
+    critical status sources fail, classify_status_source_outcomes blocks/no-emits before candidate artifacts can
+    be written.
     """
     ticker_reference = _ticker_reference_payload_from_sec_map(sec_map, observed_at=observed_at) if sec_map else None
     outcomes = {
         "ticker_reference": "ok" if ticker_reference is not None else "missing",
         "exchange_halt_feed": halt_feed_state,
-        "sec_8k_item_103": "missing",
+        "sec_8k_item_103": _status_source_state_from_observed_payload(bankruptcy_screen),
     }
     status_source_outcome = _status_source.classify_status_source_outcomes(outcomes)
     if status_source_outcome["block_or_no_emit"]:
@@ -322,7 +333,7 @@ def build_live_status_records(
             symbol,
             ticker_reference=ticker_reference,
             halt_feed=halt_feed,
-            bankruptcy_screen=None,
+            bankruptcy_screen=bankruptcy_screen,
             as_of=status_as_of,
             observed_at=observed_at,
         )
@@ -331,7 +342,7 @@ def build_live_status_records(
     payloads = {
         "ticker_reference": ticker_reference,
         "exchange_halt_feed": halt_feed,
-        "sec_8k_item_103": None,
+        "sec_8k_item_103": bankruptcy_screen,
     }
     return records, status_source_outcome, payloads
 

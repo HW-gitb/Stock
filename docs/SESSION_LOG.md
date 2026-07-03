@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-03 — Claude 审查 PASS + 提交 (US-short bankruptcy_screen unhashable screen_status crash — Codex repair 复审)
+
+- **Verdict/Action**: PASS + 提交 6 文件(seam runner + engine guard + 2 tests + register resolved + SESSION_LOG;seam 上轮已深审+独立 agent、本轮连 fix 一并提交)。**分级=轻量**(既有 validator 加 1 行 isinstance 守 + 测试)→整读 + 反向探针。Codex line 345 改 `not isinstance(screen_status,str) or ... not in ...`——短路在前、非-str/unhashable 全 fail-closed。
+- **Required**: 无(`R-USSHORT-BATCH5-BANKRUPTCY-SCREEN-STATUS-UNHASHABLE-MEMBERSHIP-CRASH` 翻 resolved、register 单源)。
+- **Verify**: 我整读引擎守卫(短路语义)+ grep 证 345 唯一 frozenset membership(324 `==` 安全);我探针非-str/unhashable(`[]`/`{}`/set/int/float/tuple/None)全→StatusSourceError 零裸崩、合法 str 仍解析+validate(无 over-reject)。亲跑 full offline `*us_short*` `3522 OK` 零回归、doc governance 60 OK。**探针撞一 pre-existing 安全边**(非本 fix、已记 register):observed-`unscreened`→resolver 发 validate-拒记录→下游 `status_flags_for_row` **受控 StatusSourceError**(fail-closed、非 fail-open/崩、gated 真 8-K)。**未审(gated)**:真 8-K live fetch(SR-PROVIDER-001)。
+- **Next**: 无(已提交)。
+
+## 2026-07-03 - Codex `修复` (US-short bankruptcy_screen screen_status unhashable crash)
+
+- **Verdict/Action**: repaired Required `R-USSHORT-BATCH5-BANKRUPTCY-SCREEN-STATUS-UNHASHABLE-MEMBERSHIP-CRASH` offline. `_resolve_bankruptcy` now rejects non-string `screen_status` before `BANKRUPTCY_SCREEN_STATES` membership, so provider-fed `[]` / `{}` / other non-str values raise `StatusSourceError` instead of bare `TypeError`.
+- **Required**: fixed pending Claude Code re-review in `docs/system_risk_register.md`. No seam semantics change, no eligibility contract change, no bankruptcy positive-detection semantics change, no schema change, no live/provider call, no 8-K fetch, no Pass2/DataHub/production/broker/order/cross-lane work.
+- **Verify**: red first: new resolver test failed with bare `TypeError` for `screen_status=[]/{}`. Green: focused new test OK; status_source+universe_fetch 177 OK; full offline `*us_short*` 3522 OK (1 skipped); doc-process 60 OK; `py_compile` OK; grep found the only `BANKRUPTCY_SCREEN_STATES` membership now guarded by `isinstance(screen_status, str)`.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. Touched class is `_resolve_bankruptcy` external enum-membership guard; non-str set `{[], {}, 1, ("x",)}` covered, stale-positive leg uses equality not hash membership, reverse/default fact held because `run_fetch` still passes `bankruptcy_screen=None`. `CURRENT` untouched; no provider/live/network path.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
+## 2026-07-03 — Claude 审查 FAIL (US-short bankruptcy_screen 装配 seam — 最高危独立 agent 揪 unhashable screen_status 裸崩)
+
+- **Verdict/Action**: FAIL(1 Required、未提交)。**分级=最高危**(新 seam 把 provider payload 喂进 bankruptcy fail-closed disqualifier)→满标准。seam 本身 fabrication/fail-open tight(整读+我探针+agent 全 HELD:坏 payload→StatusSourceError 传播、无伪造/漏检/misattrib、observed=False→unscreened、sec_8k 非-critical、run_fetch 仍 None、记录过 validate)。判 FAIL 因 agent 揪出我探针漏的 1 material crash。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-SCREEN-STATUS-UNHASHABLE-MEMBERSHIP-CRASH`(P3、register 单源)。`_resolve_bankruptcy`(`us_short_status_source.py:345`)对 provider 供的 `screen_status` 做 frozenset membership 无 isinstance 守→unhashable([]/{})→**裸 TypeError** 非 StatusSourceError=教训⑰;本 seam 新引入可达(改前 payload 恒 None)。修=345 前加 `isinstance(screen_status,str)` fail-closed + hostile []/{} 测试(sibling validate_status_record 刚修同类、input resolver 漏)。
+- **Verify**: 我整读 `_resolve_bankruptcy`/`_observed`/`classify_status_source_outcomes`;我探针 8 种坏 payload→StatusSourceError 传播(漏了 unhashable screen_status);**独立 §3.5 agent(只读当前树、改动未提交)**揪 screen_status=[]/{}→裸 TypeError@345、其余 fabrication/fail-open/key/observed/boundary 全 HELD;我复现 `[]`→TypeError list、`{}`→dict、`set()`→controlled、stale-`==`-path 安全。亲跑 full offline `*us_short*` `3521 OK`。**未审(gated)**:真 8-K live fetch(SR-PROVIDER-001)。
+- **Next**: Codex：修复
+
+## 2026-07-03 - Codex `execute` (US-short status-source bankruptcy_screen provider-fed assembly seam)
+
+- **Verdict/Action**: added the offline/provider-fed assembly seam for Pass1 bankruptcy status: `build_live_status_records(..., bankruptcy_screen=...)` now consumes a caller-supplied SEC 8-K Item 1.03 screen payload, marks `sec_8k_item_103` source outcome from that payload, and feeds it into the existing reviewed status resolver. `run_fetch` still passes `None`; no new SEC 8-K fetch, live scan, provider call, DataHub, production, broker/order, A-share, A-long, or US-long work.
+- **Required**: no new R-ID. This closes only the injected-payload assembly gap; the actual bankruptcy 8-K scan/fetch packet, live Pass2 source wiring, broader provider-health/fallback evidence, DataHub/production/provider-selection/ship-gate evidence, and forward evidence remain gated under `SR-PROVIDER-001`.
+- **Verify**: red first: the new provider-fed bankruptcy-screen test failed with `unexpected keyword argument 'bankruptcy_screen'`. Green: focused new test OK; universe_fetch 80 OK; status_source 96 OK; full offline `*us_short*` 3521 OK (1 skipped); doc-process 60 OK; `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked by main-thread fallback. Whole touched class is the status-record assembly seam; reverse/default fact held because `run_fetch` still performs zero 8-K calls and keeps `bankruptcy_8k_scan_performed=false`. `CURRENT` untouched; no provider/live/network path.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short halt-feed IssueSymbol-only parse — Codex Optional-repair 复审)
 
 - **Verdict/Action**: PASS + 提交 4 文件(universe_fetch + test + register resolved + SESSION_LOG)。**分级=轻量**(既有 parser 微调/删码、无新 fail-closed 面、上两轮独立 agent 已分析此路径)→整读 + 反向探针、不强制新 agent。Codex 取我上轮记的 Optional latent、把 `_symbol_from_halt_item` 改为只认权威 `<IssueSymbol>`、删 title/`Symbol:` fallback → misattribution fail-open 彻底消除。judge-before-execute:Optional 修复轮可取、此修是净改进且合 fail-closed 哲学。
