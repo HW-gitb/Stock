@@ -8,6 +8,10 @@ from engine.us_short_eligibility_gate import (
     inject_catalyst_recall,
     pass2_safety_admit,
 )
+from engine.us_short_sec_offering_audit import (
+    OfferingAuditError,
+    build_offering_audit_from_sec_submissions,
+)
 from engine.us_short_seam_score import OUTPUT_KEYS
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
@@ -332,10 +336,11 @@ def assemble_data_context(
     Pure/offline: no provider calls, no state writes, no DataHub. The provider candidate artifact
     remains the priced/lineage source of record; Batch4 universe rows intentionally strip provider
     clocks and lineage so run_provenance can bind family-level clocks without dirty row overrides.
-    `pass2_sources.offering_audit` consumes the resolved SEC offering-audit output shape. That
-    producer currently emits real recent+active offerings with materiality=None, so they are
-    admitted as strong_downgrade rather than entry_hard_veto until a later materiality parser lands;
-    excluded offering-audit rows become critical_data_missing and fail closed.
+    `pass2_sources.offering_audit` consumes the resolved SEC offering-audit output shape; callers that hold raw
+    injected SEC submissions can use `assemble_data_context_from_sec_offering_submissions` to build that source
+    without hand-authoring a Pass2 map. The offering producer currently emits real recent+active offerings with
+    materiality=None, so they are admitted as strong_downgrade rather than entry_hard_veto until a later materiality
+    parser lands; excluded offering-audit rows become critical_data_missing and fail closed.
     """
     artifact = _validated_candidate_artifact(
         candidate_artifact,
@@ -379,3 +384,40 @@ def assemble_data_context(
         "candidate_pass2_signals": pass2_signals,
         "selection_inputs": selection_inputs,
     }
+
+
+def assemble_data_context_from_sec_offering_submissions(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    score_composition: dict[str, Any],
+    offering_as_of: str,
+    offering_observed_at: str,
+    offering_submissions_by_ticker: Any,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble Batch4 data_context directly from injected SEC company-submissions payloads.
+
+    Pure/offline: no SEC fetch, no raw persistence, no DataHub. This is a convenience wiring seam for callers that
+    already hold reviewed SEC submissions payloads and should not hand-author a Pass2 signal map.
+    """
+    try:
+        offering_source = build_offering_audit_from_sec_submissions(
+            as_of=offering_as_of,
+            observed_at=offering_observed_at,
+            submissions_by_ticker=offering_submissions_by_ticker,
+        )
+    except OfferingAuditError as exc:
+        raise DataContextAssemblyError(f"offering SEC submissions rejected: {exc}") from exc
+    return assemble_data_context(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        score_composition=score_composition,
+        candidate_pass2_signals=None,
+        pass2_sources={"offering_audit": offering_source},
+        holdings=holdings,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )

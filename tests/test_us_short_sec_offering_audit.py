@@ -52,6 +52,15 @@ def rec(filings, **prov_kw):
     return {"filings": filings, "provenance": prov(**prov_kw)}
 
 
+def submissions(*, forms, filing_dates, acceptances, accessions):
+    return {"filings": {"recent": {
+        "form": list(forms),
+        "filingDate": list(filing_dates),
+        "acceptanceDateTime": list(acceptances),
+        "accessionNumber": list(accessions),
+    }}}
+
+
 class BindingTriangulationTests(unittest.TestCase):
     def test_module_consts_equal_binding(self):
         b = oa.load_binding()
@@ -408,6 +417,36 @@ class HostileValueTests(unittest.TestCase):
 
 
 class IdentityAndMalformedTests(unittest.TestCase):
+    def test_build_from_sec_submissions_rejects_non_sec_accession_shape(self):
+        with self.assertRaises(oa.OfferingAuditError):
+            oa.build_offering_audit_from_sec_submissions(
+                as_of=AS_OF,
+                observed_at=PREOPEN,
+                submissions_by_ticker={
+                    "AAPL": submissions(
+                        forms=["424B5"],
+                        filing_dates=["2026-05-01"],
+                        acceptances=["2026-05-01T16:00:00-04:00"],
+                        accessions=["aapl-424b5"],
+                    )
+                },
+            )
+
+    def test_build_from_sec_submissions_rejects_misaligned_recent_arrays(self):
+        with self.assertRaises(oa.OfferingAuditError):
+            oa.build_offering_audit_from_sec_submissions(
+                as_of=AS_OF,
+                observed_at=PREOPEN,
+                submissions_by_ticker={
+                    "AAPL": submissions(
+                        forms=["424B5", "10-Q"],
+                        filing_dates=["2026-05-01"],
+                        acceptances=["2026-05-01T16:00:00-04:00"],
+                        accessions=["0000320193-26-000111"],
+                    )
+                },
+            )
+
     def test_lowercase_ticker_canonicalized(self):
         out = oa.resolve_offering_audit(
             as_of=AS_OF, filings_by_ticker={"aapl": rec([filing("424B5", "2026-05-01")])})

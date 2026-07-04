@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short SEC submissions→offering-audit adapter + data_context wrapper — 独立 agent HELD)
+
+- **Verdict/Action**: PASS + 提交 6 文件(engine adapter + runner wrapper + 2 test + README + SESSION_LOG)。分级=最高危 tier③(新解析器 build_offering_audit_from_sec_submissions + runner wrapper→喂 Pass2 准入门)。**本 entry 由 AI reviewer(Claude)自撰;本会话该 reviewer 的 Read/探针/跑测试通道多次污染并伪造过工具输出,故本 verdict 刻意只撑在不经该通道的证据上**:真实 git diff 整读 + 用户 !sed 被消费函数 + 独立对抗 agent + 用户亲跑 full pack。
+- **Required**: 无(本刀无新 finding、register 无翻转;Register: non-material)。已知边界(非缺陷、agent 确认):adapter 硬编码 coverage=full=injected-source 假设,真 SEC fetch 仍 SR-PROVIDER-001 gated。
+- **Verify**: 真实 git diff engine+runner 整读:adapter 产出 4 键==_FILING_KEYS/record==_RECORD_KEYS、逐字段 fail-closed(非dict/长度/SEC-accession/日期/form)、PIT 委托 _parse_offering_filings、materiality 恒 None;wrapper OfferingAuditError→DataContextAssemblyError+XOR+透传。**独立 §3.5 agent(真 7min/25工具)**:函数真实存在(engine 431/runner 378 行)、端到端 PASS、攻击全 HELD、71 OK。**用户亲跑 !(不经我)**:full offline `test_us_short*` 3553 OK 零回归。**AI reviewer 亲跑探针/full-pack 通道本会话污染、未亲做**(gap 声明,由 agent 探针+用户 full pack 覆盖)。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `execute` (US-short SEC submissions -> offering-audit source assembly)
+
+- **Verdict/Action**: added pure/offline `engine/us_short_sec_offering_audit.py::build_offering_audit_from_sec_submissions`, mapping injected SEC company-submissions `filings.recent` arrays (`form` / `filingDate` / `acceptanceDateTime` / `accessionNumber`) into the existing `resolve_offering_audit` source shape. The resulting offering-audit source now feeds `assemble_data_context(pass2_sources={"offering_audit": ...})` without a caller-authored Pass2 signal map. README thin pointer updated.
+- **Required**: none new. No provider/network call, no real SEC per-issuer fetch, no live runner wiring, no raw capture, no DataHub/production/ship-gate/broker/order/cross-lane work. `SR-PROVIDER-001` remains open for real SEC fetches and broader runner consumption.
+- **Verify**: red first: focused new helper test failed with `AttributeError: module 'engine.us_short_sec_offering_audit' has no attribute 'build_offering_audit_from_sec_submissions'`. Green: new malformed-accession/misaligned-array tests OK; new data-context source seam test OK; `tests.test_us_short_sec_offering_audit` + `tests.provider.test_us_short_batch5_data_context` 69 OK; doc-process 60 OK; full offline `*us_short*` 3552 OK (1 skipped); `py_compile` OK; `git diff --check` exit 0 with CRLF warnings only.
+- **Pre-Codex self-review**: A/B/C/E checked in main thread; no subagent timeout/restart. B grep: `rg -n "build_offering_audit_from_sec_submissions|SEC_ACCESSION_RE|SEC_SUBMISSIONS_RECENT_FIELDS|offering-audit offline source" engine tests docs/README.md docs/CURRENT.md docs/system_risk_register.md docs/SESSION_LOG.md` confirms the new helper is confined to offering-audit engine/tests + README/SESSION_LOG, with sibling status-source constants intentionally separate. C reverse: malformed SEC accession and misaligned arrays fail closed; non-offering rows become audited-clean checked records, not fabricated active offerings. `CURRENT` and register untouched because no new Required and no transient gate belongs there.
+- **Next**: Claude Code: review current diff; PASS then commit.
+
 ## 2026-07-03 — Claude 审查 PASS + 提交 (US-short run_fetch 消费 injected bankruptcy SEC submissions — 独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交 5 文件(runner + test + README route + CURRENT §0 + SESSION_LOG)。**分级=轻量偏谨慎**(既有 run_fetch 编排器 +38 接线已审 seam、无真 live 抓数、无新引擎;但触及 Pass1 准入数据流 + bankruptcy 硬否决 + tracked 落盘)→整读 run_fetch + build_live_status_records 引擎体 + 我的对抗探针 + 起独立对抗 agent(未提交→只读当前树)。default 路径仍零 8-K。

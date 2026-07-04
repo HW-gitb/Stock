@@ -13,13 +13,17 @@ if str(ROOT) not in sys.path:
 from engine.us_short_eligibility_gate import load_eligibility_governance, pass2_safety_admit  # noqa: E402
 from engine.us_short_risk_downgrade import risk_downgrade  # noqa: E402
 from engine.us_short_run_provenance import reconcile_run_provenance  # noqa: E402
-from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
+from engine.us_short_sec_offering_audit import (  # noqa: E402
+    build_offering_audit_from_sec_submissions,
+    resolve_offering_audit,
+)
 from engine.us_short_seam_score import compose_score_inputs  # noqa: E402
 from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
     DataContextAssemblyError,
     assemble_data_context,
+    assemble_data_context_from_sec_offering_submissions,
 )
 
 
@@ -194,6 +198,19 @@ def _offering_record(filings, **provenance_kwargs):
     }
 
 
+def _sec_submissions(*, forms, filing_dates, acceptances, accessions):
+    return {
+        "filings": {
+            "recent": {
+                "form": list(forms),
+                "filingDate": list(filing_dates),
+                "acceptanceDateTime": list(acceptances),
+                "accessionNumber": list(accessions),
+            }
+        }
+    }
+
+
 def _assemble(artifact, score_targets=("AAPL",), pass2=None):
     return assemble_data_context(
         candidate_artifact=artifact,
@@ -317,6 +334,114 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         self.assertEqual(jpm_verdict["veto_tier"], "entry_hard_veto")
         self.assertFalse(jpm_verdict["admit_to_topn"])
         self.assertEqual(list(data_context["selection_inputs"]["per_ticker"]), ["AAPL", "MSFT"])
+
+    def test_sec_submissions_offering_audit_source_feeds_data_context(self):
+        source = build_offering_audit_from_sec_submissions(
+            as_of=_OFFERING_AS_OF,
+            observed_at=_OFFERING_OBSERVED_AT,
+            submissions_by_ticker={
+                "AAPL": _sec_submissions(
+                    forms=["424B5", "10-Q"],
+                    filing_dates=["2026-06-01", "2026-05-01"],
+                    acceptances=["2026-06-01T07:00:00-04:00", "2026-05-01T16:00:00-04:00"],
+                    accessions=["0000320193-26-000111", "0000320193-26-000112"],
+                ),
+                "MSFT": _sec_submissions(
+                    forms=["10-Q"],
+                    filing_dates=["2026-05-01"],
+                    acceptances=["2026-05-01T16:00:00-04:00"],
+                    accessions=["0000789019-26-000111"],
+                ),
+                "JPM": _sec_submissions(
+                    forms=["8-K"],
+                    filing_dates=["2026-05-01"],
+                    acceptances=["2026-05-01T16:00:00-04:00"],
+                    accessions=["0000019617-26-000111"],
+                ),
+            },
+        )
+        self.assertEqual(
+            source["signals"]["AAPL"]["active_offering"],
+            {"recency": "recent", "status": "active", "materiality": None},
+        )
+        self.assertEqual(source["checked"]["MSFT"]["active_offering"], _checked_offering())
+        self.assertEqual(source["checked"]["JPM"]["active_offering"], _checked_offering())
+
+        data_context = assemble_data_context(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            score_composition=_score_composition(("AAPL", "MSFT", "JPM")),
+            candidate_pass2_signals=None,
+            pass2_sources={"offering_audit": source},
+        )
+
+        pass2 = data_context["candidate_pass2_signals"]
+        self.assertEqual(pass2["AAPL"], {"active_offering": source["signals"]["AAPL"]["active_offering"]})
+        self.assertEqual(pass2["MSFT"], {})
+        self.assertEqual(pass2["JPM"], {})
+        aapl_verdict = pass2_safety_admit(pass2["AAPL"], row_context="candidate")
+        self.assertEqual(aapl_verdict["veto_tier"], "strong_downgrade")
+        self.assertTrue(aapl_verdict["admit_to_topn"])
+        self.assertEqual(list(data_context["selection_inputs"]["per_ticker"]), ["AAPL", "MSFT", "JPM"])
+
+    def test_sec_submissions_wrapper_feeds_data_context_without_prebuilt_source(self):
+        data_context = assemble_data_context_from_sec_offering_submissions(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            score_composition=_score_composition(("AAPL", "MSFT", "JPM")),
+            offering_as_of=_OFFERING_AS_OF,
+            offering_observed_at=_OFFERING_OBSERVED_AT,
+            offering_submissions_by_ticker={
+                "AAPL": _sec_submissions(
+                    forms=["424B5"],
+                    filing_dates=["2026-06-01"],
+                    acceptances=["2026-06-01T07:00:00-04:00"],
+                    accessions=["0000320193-26-000111"],
+                ),
+                "MSFT": _sec_submissions(
+                    forms=["10-Q"],
+                    filing_dates=["2026-05-01"],
+                    acceptances=["2026-05-01T16:00:00-04:00"],
+                    accessions=["0000789019-26-000111"],
+                ),
+                "JPM": _sec_submissions(
+                    forms=["8-K"],
+                    filing_dates=["2026-05-01"],
+                    acceptances=["2026-05-01T16:00:00-04:00"],
+                    accessions=["0000019617-26-000111"],
+                ),
+            },
+        )
+
+        pass2 = data_context["candidate_pass2_signals"]
+        self.assertEqual(
+            pass2["AAPL"]["active_offering"],
+            {"recency": "recent", "status": "active", "materiality": None},
+        )
+        self.assertEqual(pass2["MSFT"], {})
+        self.assertEqual(pass2["JPM"], {})
+        self.assertEqual(list(data_context["selection_inputs"]["per_ticker"]), ["AAPL", "MSFT", "JPM"])
+
+    def test_sec_submissions_wrapper_rejects_missing_candidate_source(self):
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_data_context_from_sec_offering_submissions(
+                candidate_artifact=_candidate_artifact(("AAPL", "MSFT")),
+                expected_decision_date=_DECISION_DATE,
+                eligibility_governance=_gov(),
+                score_composition=_score_composition(("AAPL", "MSFT")),
+                offering_as_of=_OFFERING_AS_OF,
+                offering_observed_at=_OFFERING_OBSERVED_AT,
+                offering_submissions_by_ticker={
+                    "AAPL": _sec_submissions(
+                        forms=["10-Q"],
+                        filing_dates=["2026-05-01"],
+                        acceptances=["2026-05-01T16:00:00-04:00"],
+                        accessions=["0000320193-26-000111"],
+                    )
+                },
+            )
 
     def test_sec_offering_pass2_source_missing_candidate_disposition_rejected(self):
         with self.assertRaises(DataContextAssemblyError):

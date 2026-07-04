@@ -34,6 +34,7 @@ source's domain) are deliberately NOT offering vetoes. Only the offline contract
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -69,6 +70,8 @@ _PARSER_EMIT = "ok"
 # indistinguishable). filing_date stays for the recency window; acceptance_datetime is the PIT instant.
 _FILING_KEYS = frozenset({"form", "filing_date", "acceptance_datetime", "accession"})
 _RECORD_KEYS = frozenset({"filings", "provenance"})
+SEC_SUBMISSIONS_RECENT_FIELDS = ("form", "filingDate", "acceptanceDateTime", "accessionNumber")
+SEC_ACCESSION_RE = re.compile(r"^[0-9]{10}-[0-9]{2}-[0-9]{6}$")
 _DECISION_TZ_NAME = "America/New_York"
 _DECISION_CUTOFF_HHMM = (9, 30)                       # decision-session open (§2.1); observed_at must be strictly before
 # Machine-readable PIT / identity / checked-empty / authorization POLICY consts — triangulated == the binding's
@@ -259,6 +262,77 @@ def _canonical_keyed(filings_by_ticker: Any) -> dict:
     return out
 
 
+def _valid_sec_accession_number(value: Any) -> bool:
+    return type(value) is str and SEC_ACCESSION_RE.fullmatch(value) is not None
+
+
+def _canonical_submissions_keyed(submissions_by_ticker: Any) -> dict:
+    if submissions_by_ticker is None:
+        return {}
+    if not isinstance(submissions_by_ticker, dict):
+        raise OfferingAuditError(f"submissions_by_ticker must be dict or None: {type(submissions_by_ticker).__name__}")
+    out: dict[str, Any] = {}
+    for k, v in submissions_by_ticker.items():
+        if type(k) is not str:
+            continue
+        ck = canonical_us_ticker(k)
+        if ck is None:
+            continue
+        if ck in out:
+            raise OfferingAuditError(f"duplicate canonical ticker {ck!r} in submissions_by_ticker")
+        out[ck] = v
+    return out
+
+
+def _sec_submissions_recent_arrays(record: Any, *, ticker: str) -> tuple[dict[str, list], int]:
+    if not (isinstance(record, dict) and all(type(k) is str for k in record)):
+        raise OfferingAuditError(f"sec_submissions[{ticker}] must be dict with exact str keys")
+    filings = record.get("filings")
+    if not (isinstance(filings, dict) and all(type(k) is str for k in filings)):
+        raise OfferingAuditError(f"sec_submissions[{ticker}].filings must be dict with exact str keys")
+    recent = filings.get("recent")
+    if not (isinstance(recent, dict) and all(type(k) is str for k in recent)):
+        raise OfferingAuditError(f"sec_submissions[{ticker}].filings.recent must be dict with exact str keys")
+    arrays: dict[str, list] = {}
+    expected_len = None
+    for field in SEC_SUBMISSIONS_RECENT_FIELDS:
+        value = recent.get(field)
+        if not isinstance(value, list):
+            raise OfferingAuditError(f"sec_submissions[{ticker}].recent.{field} must be list")
+        if expected_len is None:
+            expected_len = len(value)
+        elif len(value) != expected_len:
+            raise OfferingAuditError(f"sec_submissions[{ticker}].recent arrays length mismatch")
+        arrays[field] = value
+    return arrays, expected_len or 0
+
+
+def _filings_from_sec_submissions(record: Any, *, ticker: str) -> list[dict]:
+    arrays, row_count = _sec_submissions_recent_arrays(record, ticker=ticker)
+    out: list[dict] = []
+    for idx in range(row_count):
+        where = f"sec_submissions[{ticker}].row[{idx}]"
+        form = arrays["form"][idx]
+        if type(form) is not str:
+            raise OfferingAuditError(f"{where}.form must be exact str")
+        filing_date = arrays["filingDate"][idx]
+        if not _valid_ymd(filing_date):
+            raise OfferingAuditError(f"{where}.filingDate must be strict ASCII YYYY-MM-DD")
+        acceptance = arrays["acceptanceDateTime"][idx]
+        if not _valid_observed_at(acceptance):
+            raise OfferingAuditError(f"{where}.acceptanceDateTime must be tz-aware RFC3339 datetime")
+        accession = arrays["accessionNumber"][idx]
+        if not _valid_sec_accession_number(accession):
+            raise OfferingAuditError(f"{where}.accessionNumber must match SEC accession format")
+        out.append({
+            "form": form,
+            "filing_date": filing_date,
+            "acceptance_datetime": acceptance,
+            "accession": accession,
+        })
+    return out
+
+
 def _parse_offering_filings(filings: Any, *, ticker: str, as_of: str, observed_at_et: datetime) -> list[dict]:
     """Return the PIT-cut offering filings (offering-family form) whose EVENT instant `acceptance_datetime` is at or
     before the observation instant (a filing that only became public AFTER we observed the ticker, or after the
@@ -375,6 +449,36 @@ def resolve_offering_audit(*, as_of: str, filings_by_ticker: Any) -> dict[str, A
             ],
         }}
     return {"signals": signals, "provenance": provenance, "excluded": excluded, "checked": checked}
+
+
+def build_offering_audit_from_sec_submissions(*, as_of: str, observed_at: str,
+                                              submissions_by_ticker: Any) -> dict[str, Any]:
+    """Build the offline SEC offering-audit source from injected SEC company-submissions JSON.
+
+    This is a pure source-assembly adapter: no network, no raw storage, no runner wiring. It consumes the SEC
+    `filings.recent` arrays (`form`, `filingDate`, `acceptanceDateTime`, `accessionNumber`), pins generated
+    provenance to the reviewed SEC submissions source, and delegates PIT / checked-clean / active-offering
+    derivation to `resolve_offering_audit`.
+    """
+    if not _valid_ymd(as_of):
+        raise OfferingAuditError(f"as_of must be strict ASCII YYYY-MM-DD: {type(as_of).__name__}")
+    if not _valid_observed_at(observed_at):
+        raise OfferingAuditError(f"observed_at must be tz-aware RFC3339 datetime: {type(observed_at).__name__}")
+    records: dict[str, dict] = {}
+    for ticker, record in _canonical_submissions_keyed(submissions_by_ticker).items():
+        records[ticker] = {
+            "filings": _filings_from_sec_submissions(record, ticker=ticker),
+            "provenance": {
+                "provider_id": PROVIDER_ID,
+                "endpoint_or_filing_type": ENDPOINT,
+                "source_as_of": as_of,
+                "observed_at": observed_at,
+                "coverage_status": _COVERAGE_EMIT,
+                "parser_status": _PARSER_EMIT,
+                "lineage_ref": f"{PROVIDER_ID}:{ENDPOINT}:{as_of}#{ticker}",
+            },
+        }
+    return resolve_offering_audit(as_of=as_of, filings_by_ticker=records)
 
 
 def load_binding() -> dict:
