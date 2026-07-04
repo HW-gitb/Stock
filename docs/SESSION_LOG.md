@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short composite resolved-Pass2-sources data_context wrapper)
+
+- **Verdict/Action**: PASS + 提交 4 文件(runner + test + README route 行 + 本 SESSION_LOG)。新 `assemble_data_context_from_resolved_pass2_sources`:offering-audit 主 Pass2 准入 + analyst-grades→`risk_downgrade` + Massive-news→catalyst,一次 `compose_score_inputs` 出 Batch4 `selection_inputs`(合并前几刀三源、纯/离线)。分级=中(新 composite fail-closed wrapper)→整读 composite + `_prepare_context_inputs`/offering 路径 + 消费投影 + 自撰 12 探针 + **独立 §3.5 对抗 agent(真起)** + 亲跑全包。**Codex 已吸取上刀 F1 教训**:except 主动含 `CatalystGovernanceError`、无 F1 复发。
+- **Required**: 无(本刀无新 finding、register 无翻转)。Optional(非阻塞、**pre-existing、非本刀引入**):offering 子 dict 未 closed-world 键检(共享 helper `_source_disposition_maps`、base/SEC wrapper 同款);agent 实证 benign——无法夹带/翻转/注入 ticker、结果与 baseline 逐位相同。
+- **Verify**: (`review-evidence:cd5a9f3071fa`) except 对每个内部调用完整(analyst→AnalystGradeRiskError、news→MassiveNewsCatalystSeamError+内部 catalyst_block→CatalystGovernanceError、compose→ScoreSeamError、_prepare 外抛 DataContextAssemblyError)。评分独立重算:AAPL 43.5=(40%·50+35%·50+25%·56)−8(news catalyst 上 + analyst risk 下、一次合成);MSFT 50 baseline;JPM offering-排除→不评分、其数据不泄(删 JPM 源数据 AAPL/MSFT 逐位不变)。我 12 探针 + agent 40+ 畸形全 fail-closed 零裸异常(含 offering 在 try 外)。亲跑 focused 23 + 全离线 `*us_short*` 3586 OK 零回归;纯/离线未接 live runner。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `执行` (US-short Batch5 resolved Pass2 sources composite data_context wiring)
+
+- **Verdict/Action**: added pure/offline `assemble_data_context_from_resolved_pass2_sources` in `runners/us_short_batch5_data_context.py`. It consumes offering-audit Pass2 source + analyst-grade actions + Massive-news events, then uses the canonical analyst/news projections and one `compose_score_inputs` call to emit Batch4 `selection_inputs`.
+- **Required**: none new. `docs/system_risk_register.md` untouched because this is a planned offline wiring slice, not a material finding or risk-state flip. No provider/live/network/raw/DataHub/production/broker/order/A-share path run.
+- **Verify**: red first focused data_context failed on missing composite function; green focused `23 OK`, related pack `210 OK`, full offline `*us_short*` `3586 OK` (1 skipped), US-short schema `808 OK`, doc/process and route/doc guards `60 OK` each, py_compile OK, `git diff --check` CRLF-only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: composite covers Pass2-excluded candidate not scored, analyst risk and news catalyst both applied to Pass2-clean targets, and malformed catalyst governance is wrapped as `DataContextAssemblyError`. B/E: scope is runner/test/README/SESSION_LOG only; `CURRENT` untouched. No independent agent used; checklist fallback.
+- **Next**: Claude Code: review current resolved-source composite data_context wiring diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Massive news O1/O2 硬化 + data_context wrapper + CatalystGovernanceError 补裹)
 
 - **Verdict/Action**: re-`审查` PASS + 提交整刀 10 文件(seam O1/O2 硬化 + 新 news data_context wrapper + F1 修复 + binding/schema + tests + README + register + 本 SESSION_LOG)。F1(`R-USSHORT-BATCH5-NEWS-DATACONTEXT-WRAPPER-CATALYST-GOVERNANCE-RAW-LEAK`)已修:wrapper 现 import + `except` 加 `CatalystGovernanceError`→畸形 governance fail-closed 为 `DataContextAssemblyError`;隔壁 analyst wrapper(不内部调 catalyst_block)正确未动、seam O1/O2 未动。分级=中(上轮已起独立 §3.5 agent;本轮一行修=incremental,按 6a 整读+亲复现+跑全包、不重起 agent)。

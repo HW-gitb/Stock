@@ -534,6 +534,62 @@ def assemble_data_context_with_massive_news_catalyst(
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
 
+def assemble_data_context_from_resolved_pass2_sources(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection: dict[str, Any],
+    theme_projection: dict[str, Any],
+    offering_audit_source: dict[str, Any],
+    analyst_grade_actions: dict[str, Any],
+    massive_news_events: dict[str, Any],
+    catalyst_governance: dict[str, Any],
+    theme_opportunity_state: str,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble data_context from already-resolved Pass2/provider fact layers.
+
+    Pure/offline: no provider calls, raw persistence, DataHub, or second scoring formula. Offering audit
+    owns Pass2 safety signals; analyst grades and Massive news are projected into the canonical score composer.
+    """
+    prepared = _prepare_context_inputs(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        candidate_pass2_signals=None,
+        pass2_sources={"offering_audit": offering_audit_source},
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    try:
+        analyst_projection = project_analyst_grade_risk_downgrade(
+            target_tickers=prepared["pass2_clean"],
+            analyst_grade_actions=analyst_grade_actions,
+        )
+        catalyst_projection = project_massive_news_catalyst(
+            news_events=massive_news_events,
+            governance=catalyst_governance,
+            as_of=expected_decision_date,
+            target_tickers=prepared["pass2_clean"],
+        )
+        score_composition = compose_score_inputs(
+            target_tickers=prepared["pass2_clean"],
+            momentum_projection=momentum_projection,
+            theme_projection=theme_projection,
+            catalyst_projection=catalyst_projection,
+            risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
+            theme_opportunity_state=theme_opportunity_state,
+        )
+    except (AnalystGradeRiskError, MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
+        raise DataContextAssemblyError(f"resolved Pass2 source score composition rejected: {exc}") from exc
+    selection_inputs = _validate_score_composition(
+        score_composition,
+        expected_pass2_clean=prepared["pass2_clean"],
+    )
+    return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
+
+
 def assemble_data_context_from_sec_offering_submissions(
     *,
     candidate_artifact: dict[str, Any],

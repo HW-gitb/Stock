@@ -27,6 +27,7 @@ from runners.us_short_batch5_data_context import (  # noqa: E402
     DataContextAssemblyError,
     assemble_data_context,
     assemble_data_context_from_sec_offering_submissions,
+    assemble_data_context_from_resolved_pass2_sources,
     assemble_data_context_with_analyst_grade_risk,
     assemble_data_context_with_massive_news_catalyst,
 )
@@ -771,6 +772,88 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
                 catalyst_governance={"broken": True},
                 theme_opportunity_state="strong",
                 candidate_pass2_signals={"AAPL": {}},
+            )
+
+    def test_resolved_pass2_sources_compose_offering_analyst_and_news_in_one_data_context(self):
+        offering_source = _offering_source(
+            checked={
+                "AAPL": {"active_offering": _checked_offering()},
+                "MSFT": {"active_offering": _checked_offering()},
+            },
+            excluded={
+                "JPM": {"active_offering": "coverage=partial/parser=ok"},
+            },
+        )
+        analyst_grade_actions = resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={
+                "AAPL": _grade_source("AAPL", [
+                    _grade_record("AAPL", date="2026-06-10", company="BankA"),
+                    _grade_record("AAPL", date="2026-06-11", company="BankB"),
+                ]),
+                "JPM": _grade_source("JPM", [
+                    _grade_record("JPM", date="2026-06-10", company="BankA"),
+                    _grade_record("JPM", date="2026-06-11", company="BankB"),
+                ]),
+            },
+        )
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={
+                "AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")]),
+                "JPM": _news_source("JPM", [_news_item(id="j", ticker="JPM", sentiment="positive")]),
+            },
+        )
+
+        data_context = assemble_data_context_from_resolved_pass2_sources(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL", "MSFT"), "scored_theme_base"),
+            offering_audit_source=offering_source,
+            analyst_grade_actions=analyst_grade_actions,
+            massive_news_events=news_events,
+            catalyst_governance=load_catalyst_governance(),
+            theme_opportunity_state="strong",
+        )
+
+        pass2 = data_context["candidate_pass2_signals"]
+        self.assertEqual(pass2["AAPL"], {})
+        self.assertEqual(pass2["MSFT"], {})
+        self.assertEqual(pass2["JPM"], {"critical_data_missing": True})
+        self.assertEqual(set(data_context["selection_inputs"]["per_ticker"]), {"AAPL", "MSFT"})
+        scores = data_context["selection_inputs"]["per_ticker"]
+        self.assertAlmostEqual(scores["AAPL"]["core_score"], 51.5 - ANALYST_DOWNGRADE_PENALTY)
+        self.assertAlmostEqual(scores["MSFT"]["core_score"], 50.0)
+
+    def test_resolved_pass2_sources_wrap_malformed_catalyst_governance(self):
+        offering_source = _offering_source(
+            checked={
+                "AAPL": {"active_offering": _checked_offering()},
+            },
+        )
+        analyst_grade_actions = resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={"AAPL": _grade_source("AAPL", [])},
+        )
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={"AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")])},
+        )
+
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_data_context_from_resolved_pass2_sources(
+                candidate_artifact=_candidate_artifact(("AAPL",)),
+                expected_decision_date=_DECISION_DATE,
+                eligibility_governance=_gov(),
+                momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+                theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+                offering_audit_source=offering_source,
+                analyst_grade_actions=analyst_grade_actions,
+                massive_news_events=news_events,
+                catalyst_governance={"broken": True},
+                theme_opportunity_state="strong",
             )
 
     def test_rejects_forged_candidate_artifact_instead_of_trusting_summary(self):
