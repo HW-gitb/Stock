@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 live Pass2 source-packet runner；scalar `_payload_shape` schema-drift 已闭)
+
+- **Verdict/Action**: PASS + 提交整刀 6 文件(live runner + summary schema + test + README route + register + 本 SESSION_LOG)。Codex 采用 Required 选项 a:`_payload_shape` 非 list/dict/None→`{"kind":"scalar",row_count:null}`+schema enum 加 `scalar`。分级=最高危 live 边界 incremental 一处修复(§6a:整读改动+亲复现+跑全包,不重起对抗 agent——改动只动 kind 值域、不触 secret/路径/授权/fail-closed/预算面)。**未真执行**(SR-PROVIDER-001 保持 open)。
+- **Required**: 上轮 `R-USSHORT-BATCH5-LIVE-SOURCE-PACKET-PAYLOAD-SHAPE-KIND-SCHEMA-DRIFT` 已 **resolved**(全文见 register)。整类封净:所有非 list/dict/None(bool/int/float/str)→scalar、非只 bool 一腿;happy path 产原 kind 不变。无新 finding。
+- **Verify**: (`review-evidence:172c82f9175a`) 亲验:`_payload_shape` output_domain==schema enum==`[list,object_results,sec_submissions,object,null,scalar]`(6 值三角封死、零 unused/overflow);scalar 全 schema 接受、happy path 不变。新 test 真验证:scalar 端到端→summary 诚实写(不崩)+`unexpected scalar news payload`/secret/`"payload"` 全不入;subset 焊 9 类 payload⊆enum。亲跑 focused 6+全离线 `test_us_short*.py` 3600+doc-gov/route/ledger 60 全 OK 零回归;scope=6 文件、无 residue。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `fix` (US-short Batch5 live source-packet scalar payload shape)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-LIVE-SOURCE-PACKET-PAYLOAD-SHAPE-KIND-SCHEMA-DRIFT`; `_payload_shape` now records every non-list/dict/null provider payload as schema-pinned `scalar`, and the summary schema enum accepts `scalar`. This preserves the unexpected-shape signal without writing raw payloads or crashing at the final summary gate. No provider/live/network/DataHub/production/broker/order/A-share path run; atomicity Optional not touched.
+- **Required**: fixed the latest Claude Required; `docs/system_risk_register.md` updated to `in_progress` pending Claude re-review + commit.
+- **Verify**: red first: focused live-source-packet failed on scalar summary schema drift (`bool/int/float/str` outside enum). Green after fix: focused live-source-packet `6 OK`; related live/source-packet/data_context pack `37 OK`; full offline `discover -s tests -p *us_short*.py` `3600 OK` (1 skipped); US-short schema `808 OK`; route guards `25 OK`; doc-process `60 OK`.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A: bool/int/float/string and other scalar payloads now share the explicit `scalar` enum member; `_payload_shape` output is tested as a subset of the schema enum. B/C: scalar end-to-end regression asserts summary is written, no scalar raw value/secret/API key/raw `payload` string enters summary, and existing happy-path scoring still passes in the related pack. E: `CURRENT` untouched because this is an in-flight repair handoff, not a settled reviewed state.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-04 — Claude 审查 FAIL (US-short Batch5 live Pass2 source-packet runner — `_payload_shape` kind ↔ summary schema drift)
+
+- **Verdict/Action**: FAIL(1 Required、P3 safe-direction、未提交)。整刀 6 文件(live runner+summary schema+test+README route+register note+本 log)。分级=最高危(真 SEC/FMP/Massive fetch 边界+私密输出+tracked summary secret 面)→整读 runner/schema/test+被消费 sample_validation/offering-audit/analyst-grades 函数体+独立 §3.5 主树黑盒对抗 agent(真起、~30 探针含真 symlink+12 hostile payload;核心文件 untracked→worktree 不带、改主树黑盒,边界已声明)+亲跑全包。**未真执行**(无 tracked summary/artifact、SR-PROVIDER-001 保持 open)。安全面全 sealed;唯一缺陷=producer↔自身 schema 契约漂移。
+- **Required**: `R-USSHORT-BATCH5-LIVE-SOURCE-PACKET-PAYLOAD-SHAPE-KIND-SCHEMA-DRIFT`(P3;全文见 register)。`_payload_shape`(runner:536-550)对 bare scalar payload(bool/int/float/str,ok=True)产 `kind=type(payload).__name__` ∉ summary schema enum→provider 返回 scalar 时源解析器合法降级、gitignored state/data_context 写成功、但 summary 最后一步 schema 崩(非原子)。修=`_payload_shape` 输出恒 ⊆ enum(补 scalar kind 或映射既有)+测 scalar→summary 仍诚实写。safe-direction(tracked summary 永不带坏值、无泄露/bypass)。
+- **Verify**: (`review-evidence:4adb0dd63ef2`) 亲验:`_payload_shape(True/123/4.5/'x')`→`bool/int/float/str` 全被 summary schema enum 拒。§3.5 agent 复现 scalar+ok=True→gitignored state/data_context 写成功、summary schema 崩不写(fail-closed);其余全 HELD 无 P1/P2(secret/URL/raw 不入 summary、symlink+`..`+非 gitignored 逃逸全挡、授权 gate 第一、hostile/unhashable 零裸异常、预算/schema-drift 全封);AUTHORIZATION_REF=self-asserted label、dormant。亲跑 focused 4+全离线 3598+route 11+schema 808+doc-gov 49 OK 零回归。
+- **Next**: Codex：修复
+
+## 2026-07-04 - Codex `执行` (US-short Batch5 live source-packet runner)
+
+- **Verdict/Action**: added bounded `us_short_batch5_live_source_packet` runner. It validates a caller-selected <=3-symbol sample from an existing candidate artifact, fetches authorized SEC submissions + FMP grades + Massive news, stores raw only under gitignored `provider_samples/`, resolves offering/analyst/news source artifacts under gitignored `state/us_short/`, writes an existing-schema local source packet, and can call the already-reviewed source-packet data_context runner. Added a no-secret/no-URL summary schema plus README route pointer. No full-market Pass2, yfinance, DataHub, production, ship-gate, broker/order, or A-share path touched.
+- **Required**: no new R-ID. Updated existing `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` with an implementation note; it remains open for broader provider health/fallback behavior, bankruptcy 8-K full/candidate scan, live momentum/theme source artifacts, per_ticker_analysis/provenance families, subprocess E2E to weekly/action outputs, DataHub/production/provider-selection/ship-gate evidence, and forward evidence.
+- **Verify**: red first: focused test failed on missing `runners.us_short_batch5_live_source_packet`. Green after fix: focused live-source-packet `4 OK`; related data_context/source-packet pack `35 OK`; full offline `discover -s tests -p *us_short*.py` `3598 OK` (1 skipped); README/route guards `25 OK`; doc-process `60 OK`; py_compile OK; `git diff --check` CRLF-only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: happy path proves fake SEC/FMP/Massive -> resolved artifacts -> source packet -> data_context, with AAPL analyst/news scoring and MSFT neutral baseline; reverse cases cover missing authorization, missing score projection, and raw-root escape before network/write. B/E: scope is new runner/schema/test plus README/register/SESSION_LOG only; `CURRENT` untouched because this is an in-flight execution handoff, not settled live-state.
+- **Next**: Claude Code: review current live Pass2 source-packet runner diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short data_context source-packet 本地 runner/preflight)
 
 - **Verdict/Action**: PASS + 提交 5 文件(新 runner + schema + test + README route 行 + 本 SESSION_LOG)。新 `us_short_batch5_data_context_source_packet`:schema-first 本地 packet(列各 resolved 源路径 + scope/gate/prohibited 旗)→ `run_preflight`(纯校验不写)/ `run_packet`(校验后调 composite `assemble_data_context_from_resolved_pass2_sources` 写 gitignored `state/us_short/*.json`)。分级=最高危(路径安全 + 私密输出 + 落盘 + 新 fail-closed 校验器)→整读全体 + schema + 自撰 14 路径探针 + **独立 §3.5 对抗 agent(真起、含真 symlink 逃逸)** + 亲跑全包。纯/离线、未接 live runner、无 provider fetch。
