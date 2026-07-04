@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short data_context source-packet 本地 runner/preflight)
+
+- **Verdict/Action**: PASS + 提交 5 文件(新 runner + schema + test + README route 行 + 本 SESSION_LOG)。新 `us_short_batch5_data_context_source_packet`:schema-first 本地 packet(列各 resolved 源路径 + scope/gate/prohibited 旗)→ `run_preflight`(纯校验不写)/ `run_packet`(校验后调 composite `assemble_data_context_from_resolved_pass2_sources` 写 gitignored `state/us_short/*.json`)。分级=最高危(路径安全 + 私密输出 + 落盘 + 新 fail-closed 校验器)→整读全体 + schema + 自撰 14 路径探针 + **独立 §3.5 对抗 agent(真起、含真 symlink 逃逸)** + 亲跑全包。纯/离线、未接 live runner、无 provider fetch。
+- **Required**: 无(本刀无新 finding、register 无翻转)。无 Optional。
+- **Verify**: (`review-evidence:110d9e90d9ae`) 路径安全全封:`../..`/绝对/anchor/UNC/embedded-`..` + **真 symlink 逃逸(agent 实建、`.resolve()`+`relative_to(ROOT)` 挡)** + provider_samples(含 symlink 潜入)→ 全 SourcePacketError。私密输出:preflight 不写、输出强制 gitignored(嵌套 `state/us_short/sub` 非-gitignore 缺口被独立 `_git_ignored` 挡)、holdings 不入结果 dict 只落 gitignored 输出、失败不留半写。scope/schema:旗全 const-pin + runtime 双检、additionalProperties:false、const 伪造全拒。fail-closed:坏 JSON/源/governance/缺件/坏日期全 SourcePacketError 零裸异常。happy:JPM offering-排除不评分、AAPL 43.5/MSFT 50。亲跑 focused 8 + 全离线 `*us_short*` 3594 OK 零回归;loader path 签名核实。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `执行` (US-short Batch5 local source-packet runner/preflight -> composite data_context)
+
+- **Verdict/Action**: added schema-first local `us_short_batch5_data_context_source_packet` runner/preflight. It validates a reviewed resolved-source packet, rejects scope-creep flags, confirms output is gitignored `state/us_short/*.json`, rejects `provider_samples/` raw-payload roots as source artifacts, then calls `assemble_data_context_from_resolved_pass2_sources` to write Batch4 `data_context`. Updated the README thin route pointer. No network/provider fetch, raw capture, DataHub, production, ship-gate, broker/order, or A-share path touched.
+- **Required**: none new. `docs/system_risk_register.md` untouched because this is planned local runner/preflight wiring, not a new material finding or risk-state flip. `SR-PROVIDER-001` remains open for real provider fetch, provider health/fallback, live execution evidence, DataHub/production, and ship-gate evidence.
+- **Verify**: red first: focused source-packet test failed on missing `runners.us_short_batch5_data_context_source_packet`; self-review red: provider_samples raw-root test failed until runner rejected that path. Green after fix: source-packet focused `8 OK`; related data_context + source-packet pack `31 OK`; README/route guards `25 OK`; doc-process `60 OK`; full offline `*us_short*` `3594 OK` (1 skipped); py_compile OK; `git diff --check` CRLF-only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: packet/schema fail closed on wrong root shape, scope-creep flags, missing artifacts, non-gitignored output, malformed catalyst governance, and provider_samples raw roots; happy path proves AAPL/MSFT composite scoring and JPM Pass2 exclusion. B/E: scope is new runner/schema/test plus README/SESSION_LOG only; `CURRENT` and register left untouched. Independent agent not used because current sub-agent tool requires explicit user authorization; checklist fallback used.
+- **Next**: Claude Code: review current local source-packet runner/preflight diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short composite resolved-Pass2-sources data_context wrapper)
 
 - **Verdict/Action**: PASS + 提交 4 文件(runner + test + README route 行 + 本 SESSION_LOG)。新 `assemble_data_context_from_resolved_pass2_sources`:offering-audit 主 Pass2 准入 + analyst-grades→`risk_downgrade` + Massive-news→catalyst,一次 `compose_score_inputs` 出 Batch4 `selection_inputs`(合并前几刀三源、纯/离线)。分级=中(新 composite fail-closed wrapper)→整读 composite + `_prepare_context_inputs`/offering 路径 + 消费投影 + 自撰 12 探针 + **独立 §3.5 对抗 agent(真起)** + 亲跑全包。**Codex 已吸取上刀 F1 教训**:except 主动含 `CatalystGovernanceError`、无 F1 复发。
