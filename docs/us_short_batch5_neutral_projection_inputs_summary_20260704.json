@@ -1,0 +1,85 @@
+{
+  "schema_name": "us_short_batch5_neutral_projection_inputs_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_neutral_projection_inputs_summary.schema.json",
+  "generated_at": "2026-07-04T15:22:41+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "neutral_missing_source_projection_inputs",
+    "status": "neutral_projection_inputs_written",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "raw_payload_storage_performed": false,
+    "momentum_projection_written": true,
+    "theme_projection_written": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "source_as_of": "2026-07-06"
+  },
+  "sample_universe": {
+    "symbol_source": "caller_selected_from_validated_candidate_artifact",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_symbols": 3,
+    "full_market_sample": false,
+    "candidate_artifact_row_count": 7641,
+    "candidate_artifact_eligible_count": 2633
+  },
+  "paths": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
+    "momentum_projection_path": "state/us_short/us_short_batch5_neutral_projection_inputs_20260704_momentum.json",
+    "theme_projection_path": "state/us_short/us_short_batch5_neutral_projection_inputs_20260704_theme.json",
+    "summary_path": "docs/us_short_batch5_neutral_projection_inputs_summary_20260704.json"
+  },
+  "storage": {
+    "projection_paths_gitignored": true,
+    "summary_path_gitignored": false,
+    "summary_contains_raw_rows": false,
+    "summary_contains_raw_payload": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "projection_contract": {
+    "momentum_disposition": "absent_from_pool",
+    "theme_disposition": "neutral_missing_theme_and_industry_base",
+    "target_count": 3,
+    "momentum_scored_count": 0,
+    "theme_scored_count": 0,
+    "neutral_fill_only": true,
+    "real_momentum_source_consumed": false,
+    "real_theme_or_gics_source_consumed": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "live_momentum_source_evidence": false,
+    "live_theme_source_evidence": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This runner creates explicit neutral-fill projection inputs for missing momentum/theme sources.",
+    "It does not fetch price history, GICS, theme membership, provider data, or full-market evidence.",
+    "The generated projections are acceptable local inputs for the existing score composer, but they do not close live momentum/theme source artifacts.",
+    "No provider selection, DataHub, production storage, broker/order execution, live-normalized, or ship-gate evidence is claimed."
+  ]
+}

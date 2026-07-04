@@ -1,0 +1,205 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_neutral_projection_inputs_summary.schema.json",
+  "title": "US-short Batch5 neutral projection-input summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "sample_universe",
+    "paths",
+    "storage",
+    "projection_contract",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_neutral_projection_inputs_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "schema_ref": { "const": "schemas/us_short_batch5_neutral_projection_inputs_summary.schema.json" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_storage_performed",
+        "momentum_projection_written",
+        "theme_projection_written",
+        "datahub_consumption_performed",
+        "production_storage_performed",
+        "full_market_call_performed",
+        "yfinance_consumption_performed",
+        "broker_or_order_execution_performed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "purpose": { "const": "neutral_missing_source_projection_inputs" },
+        "status": { "const": "neutral_projection_inputs_written" },
+        "network_access_performed": { "const": false },
+        "provider_calls_performed": { "const": false },
+        "raw_payload_storage_performed": { "const": false },
+        "momentum_projection_written": { "const": true },
+        "theme_projection_written": { "const": true },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "full_market_call_performed": { "const": false },
+        "yfinance_consumption_performed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_decision_date", "source_as_of"],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "sample_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol_source",
+        "symbols",
+        "max_symbols",
+        "full_market_sample",
+        "candidate_artifact_row_count",
+        "candidate_artifact_eligible_count"
+      ],
+      "properties": {
+        "symbol_source": { "const": "caller_selected_from_validated_candidate_artifact" },
+        "symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "max_symbols": { "const": 3 },
+        "full_market_sample": { "const": false },
+        "candidate_artifact_row_count": { "type": "integer", "minimum": 1 },
+        "candidate_artifact_eligible_count": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_artifact_path",
+        "momentum_projection_path",
+        "theme_projection_path",
+        "summary_path"
+      ],
+      "properties": {
+        "candidate_artifact_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "momentum_projection_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "theme_projection_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_batch5_neutral_projection_inputs_summary_20260704\\.json|provider_samples/us_short_batch5_neutral_projection_inputs_20260704/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "projection_paths_gitignored",
+        "summary_path_gitignored",
+        "summary_contains_raw_rows",
+        "summary_contains_raw_payload",
+        "summary_contains_request_urls",
+        "summary_contains_secrets"
+      ],
+      "properties": {
+        "projection_paths_gitignored": { "const": true },
+        "summary_path_gitignored": { "type": "boolean" },
+        "summary_contains_raw_rows": { "const": false },
+        "summary_contains_raw_payload": { "const": false },
+        "summary_contains_request_urls": { "const": false },
+        "summary_contains_secrets": { "const": false }
+      }
+    },
+    "projection_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "momentum_disposition",
+        "theme_disposition",
+        "target_count",
+        "momentum_scored_count",
+        "theme_scored_count",
+        "neutral_fill_only",
+        "real_momentum_source_consumed",
+        "real_theme_or_gics_source_consumed"
+      ],
+      "properties": {
+        "momentum_disposition": { "const": "absent_from_pool" },
+        "theme_disposition": { "const": "neutral_missing_theme_and_industry_base" },
+        "target_count": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "momentum_scored_count": { "const": 0 },
+        "theme_scored_count": { "const": 0 },
+        "neutral_fill_only": { "const": true },
+        "real_momentum_source_consumed": { "const": false },
+        "real_theme_or_gics_source_consumed": { "const": false }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_download_performed",
+        "yfinance_used",
+        "paid_access_used",
+        "live_momentum_source_evidence",
+        "live_theme_source_evidence",
+        "datahub_consumed",
+        "production_readiness_claimed",
+        "ship_gate_evidence_claimed",
+        "live_normalized_evidence_claimed",
+        "broker_or_order_execution_performed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "full_market_download_performed": { "const": false },
+        "yfinance_used": { "const": false },
+        "paid_access_used": { "const": false },
+        "live_momentum_source_evidence": { "const": false },
+        "live_theme_source_evidence": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_readiness_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

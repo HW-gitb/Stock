@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 neutral projection-input runner/preflight)
+
+- **Verdict/Action**: PASS + 提交 7 文件(runner + summary schema + test + tracked summary + README route + register note + 本 SESSION_LOG)。纯离线工具:validate candidate + <=3 symbols→写 gitignored neutral-fill momentum/theme projection(state/us_short)+ tracked no-secret summary;替代此前手写 projection 输入。分级=中(离线、无 provider/network/secret 来源/无 live 边界→§6a 整读+反向探针+全包,不起对抗 agent;核心正确性=neutral→core_score 中性、不虚构分)。
+- **Required**: 无(本刀无新 finding、register 无翻转)。无 Optional 阻塞。
+- **Verify**: (`review-evidence:1dbf7a72c8ce`) 核心正控:test 用真 `compose_score_inputs` 证 neutral projection→momentum/theme scored=0、`score_blocks={catalyst:50}`(neutral 走中性、不虚构分)。fail-closed:非 eligible→raise before write;path 校验(gitignored state json、collision momentum≠theme≠candidate);schema scope-creep mutant 全拒。tracked summary secret 0 命中、const-pin;原子性:summary 前置校验(写 projection 前)避免上刀 P3 类。scope gate 净。亲跑 focused 7+全离线 3607+doc-gov 60 全 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-04 - Codex `execute` (US-short Batch5 neutral projection-input runner/preflight)
+
+- **Verdict/Action**: added and executed the local `us_short_batch5_neutral_projection_inputs` runner. It validates `state/us_short/candidate_universe_20260706.json` plus <=3 Pass1-eligible symbols, writes gitignored neutral-fill momentum/theme projection inputs under `state/us_short/`, and records tracked no-secret summary `docs/us_short_batch5_neutral_projection_inputs_summary_20260704.json`. This replaces the prior hand-authored local projection inputs only; it does not claim real live momentum price-history or theme/GICS source evidence.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with the narrow implementation/execution note; it remains open for real live momentum/theme source artifacts, provider health/fallback, bankruptcy 8-K scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence.
+- **Verify**: red first: focused test failed on missing `runners.us_short_batch5_neutral_projection_inputs`; collision-boundary red failed before the path-collision guard, then passed after fix. Green after fix: new+related provider pack `44 OK`, route/doc guards `60 OK`, full offline `discover -s tests -p *us_short*.py` `3607 OK` (1 skipped), summary Draft7 `schema_errors 0`, tracked summary secret/API-domain/`"payload":` scan clean, `py_compile` OK, `git diff --check` OK (CRLF warnings only). Local runner execution wrote AAPL/MSFT/JPM neutral projection files under gitignored `state/us_short/`; `git check-ignore` confirmed both projection files.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: generated projections are `absent_from_pool` / `neutral_missing_theme_and_industry_base` only and are consumed by the real score composer in test; schema rejects provider/live/ship/DataHub claim mutations. B/E: no network/provider fetch, raw payload, DataHub, production, broker/order, ship-gate, or A-share path run; `CURRENT` untouched because this is an in-flight execution handoff. Independent sub-agent not used because the available sub-agent tool requires explicit user subagent authorization.
+- **Next**: Claude Code: review current neutral projection-input runner/preflight slice; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 live source-packet 执行 summary — 用户澄清授权后追认)
 
 - **Verdict/Action**: PASS + 提交 3 文件(tracked summary + 本 SESSION_LOG + register)。**用户当场澄清授权模型**:Codex 执行/新增=用户已授权(含跨 SR-PROVIDER-001 真 fetch);startup"暂时不动等命令"仅针对 /clear 后第一步、之后失效。→ 这次 AAPL/MSFT/JPM live run(10/10 真调用)授权成立;我上轮基于逐次授权假设判 FAIL、被用户纠正(套过严)。tracked summary 上轮已独立验干净→追认提交为 live 刀。
