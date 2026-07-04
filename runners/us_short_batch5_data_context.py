@@ -8,11 +8,15 @@ from engine.us_short_eligibility_gate import (
     inject_catalyst_recall,
     pass2_safety_admit,
 )
+from engine.us_short_analyst_grade_risk import (
+    AnalystGradeRiskError,
+    project_analyst_grade_risk_downgrade,
+)
 from engine.us_short_sec_offering_audit import (
     OfferingAuditError,
     build_offering_audit_from_sec_submissions,
 )
-from engine.us_short_seam_score import OUTPUT_KEYS
+from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_score_inputs
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
     validate_candidate_artifact,
@@ -320,28 +324,15 @@ def _validated_selection_inputs(value: Any, *, expected_tickers: set[str]) -> di
     return {"theme_opportunity_state": state, "per_ticker": out_per}
 
 
-def assemble_data_context(
+def _prepare_context_inputs(
     *,
     candidate_artifact: dict[str, Any],
     expected_decision_date: str,
     eligibility_governance: dict[str, Any],
-    score_composition: dict[str, Any],
     candidate_pass2_signals: dict[str, Any] | None,
-    pass2_sources: dict[str, Any] | None = None,
-    holdings: list[dict[str, Any]] | None = None,
-    catalyst_recall_feed: list[str] | None = None,
+    pass2_sources: dict[str, Any] | None,
+    catalyst_recall_feed: list[str] | None,
 ) -> dict[str, Any]:
-    """Assemble Batch5 provider-fed local artifacts into the Batch4 data_context seam.
-
-    Pure/offline: no provider calls, no state writes, no DataHub. The provider candidate artifact
-    remains the priced/lineage source of record; Batch4 universe rows intentionally strip provider
-    clocks and lineage so run_provenance can bind family-level clocks without dirty row overrides.
-    `pass2_sources.offering_audit` consumes the resolved SEC offering-audit output shape; callers that hold raw
-    injected SEC submissions can use `assemble_data_context_from_sec_offering_submissions` to build that source
-    without hand-authoring a Pass2 map. The offering producer currently emits real recent+active offerings with
-    materiality=None, so they are admitted as strong_downgrade rather than entry_hard_veto until a later materiality
-    parser lands; excluded offering-audit rows become critical_data_missing and fail closed.
-    """
     artifact = _validated_candidate_artifact(
         candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -373,17 +364,115 @@ def assemble_data_context(
         for ticker in candidates
         if pass2_safety_admit(pass2_signals[ticker], row_context="candidate")["admit_to_topn"]
     ]
-    selection_inputs = _validate_score_composition(
-        score_composition,
-        expected_pass2_clean=pass2_clean,
-    )
     return {
-        "universe": universe_rows,
-        "catalyst_recall_feed": recall_feed,
+        "universe_rows": universe_rows,
+        "recall_feed": recall_feed,
+        "pass2_signals": pass2_signals,
+        "pass2_clean": pass2_clean,
+    }
+
+
+def _assembled_context_from_prepared(
+    prepared: dict[str, Any],
+    *,
+    selection_inputs: dict[str, Any],
+    holdings: list[dict[str, Any]] | None,
+) -> dict[str, Any]:
+    return {
+        "universe": prepared["universe_rows"],
+        "catalyst_recall_feed": prepared["recall_feed"],
         "holdings": _canonical_holdings(holdings),
-        "candidate_pass2_signals": pass2_signals,
+        "candidate_pass2_signals": prepared["pass2_signals"],
         "selection_inputs": selection_inputs,
     }
+
+
+def assemble_data_context(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    score_composition: dict[str, Any],
+    candidate_pass2_signals: dict[str, Any] | None,
+    pass2_sources: dict[str, Any] | None = None,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble Batch5 provider-fed local artifacts into the Batch4 data_context seam.
+
+    Pure/offline: no provider calls, no state writes, no DataHub. The provider candidate artifact
+    remains the priced/lineage source of record; Batch4 universe rows intentionally strip provider
+    clocks and lineage so run_provenance can bind family-level clocks without dirty row overrides.
+    `pass2_sources.offering_audit` consumes the resolved SEC offering-audit output shape; callers that hold raw
+    injected SEC submissions can use `assemble_data_context_from_sec_offering_submissions` to build that source
+    without hand-authoring a Pass2 map. The offering producer currently emits real recent+active offerings with
+    materiality=None, so they are admitted as strong_downgrade rather than entry_hard_veto until a later materiality
+    parser lands; excluded offering-audit rows become critical_data_missing and fail closed.
+    """
+    prepared = _prepare_context_inputs(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        candidate_pass2_signals=candidate_pass2_signals,
+        pass2_sources=pass2_sources,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    selection_inputs = _validate_score_composition(
+        score_composition,
+        expected_pass2_clean=prepared["pass2_clean"],
+    )
+    return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
+
+
+def assemble_data_context_with_analyst_grade_risk(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection: dict[str, Any],
+    theme_projection: dict[str, Any],
+    catalyst_projection: dict[str, Any],
+    analyst_grade_actions: dict[str, Any],
+    theme_opportunity_state: str,
+    candidate_pass2_signals: dict[str, Any] | None,
+    pass2_sources: dict[str, Any] | None = None,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble data_context while deriving score risk from resolved FMP analyst-grade facts.
+
+    Pure/offline: this consumes an already-resolved analyst-grade fact layer; it does not fetch FMP grades,
+    persist raw data, or create a second scoring formula. The final selection surface still comes from
+    `compose_score_inputs`.
+    """
+    prepared = _prepare_context_inputs(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        candidate_pass2_signals=candidate_pass2_signals,
+        pass2_sources=pass2_sources,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    try:
+        analyst_projection = project_analyst_grade_risk_downgrade(
+            target_tickers=prepared["pass2_clean"],
+            analyst_grade_actions=analyst_grade_actions,
+        )
+        score_composition = compose_score_inputs(
+            target_tickers=prepared["pass2_clean"],
+            momentum_projection=momentum_projection,
+            theme_projection=theme_projection,
+            catalyst_projection=catalyst_projection,
+            risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
+            theme_opportunity_state=theme_opportunity_state,
+        )
+    except (AnalystGradeRiskError, ScoreSeamError) as exc:
+        raise DataContextAssemblyError(f"analyst-grade score composition rejected: {exc}") from exc
+    selection_inputs = _validate_score_composition(
+        score_composition,
+        expected_pass2_clean=prepared["pass2_clean"],
+    )
+    return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
 
 def assemble_data_context_from_sec_offering_submissions(

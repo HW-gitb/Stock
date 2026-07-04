@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short analyst-grades→data_context score wrapper)
+
+- **Verdict/Action**: PASS + 提交 4 文件(runner `us_short_batch5_data_context` + test + README route 行 + 本 SESSION_LOG)。新 `assemble_data_context_with_analyst_grade_risk`:复用 pass2_clean 分区、经 `project_analyst_grade_risk_downgrade` 消费 resolved 分析师评级 → `compose_score_inputs` 把集体下调软扣进 Batch4 `selection_inputs`(无手写 risk map、无第二套评分公式);并把原 `assemble_data_context` 重构出 `_prepare_context_inputs`/`_assembled_context_from_prepared` 共享 helper。分级=中(重构已提交函数 + 评分接线)→整读重构后全体 + `compose_score_inputs`/`_validate_projection` 契约 + 自撰 8 探针 + **独立 §3.5 对抗 agent(真起、含 OLD-vs-NEW 行为等价证明)** + 亲跑全包。纯/离线、未接 live runner、无 provider/DataHub。
+- **Required**: 无(本刀无新 finding、register 无翻转)。
+- **Verify**: (`review-evidence:4d449e4019a8`) **重构行为保真**:独立 agent 用 `git show HEAD` 载旧模块跨输入矩阵对比 → 成功态 repr 全等、错误态同类型同消息;唯一外部 caller(`assemble_data_context_from_sec_offering_submissions`@503)成功态 OLD==NEW。**wrapper fail-closed**:我 8 探针 + agent ~35 类畸形输入(非dict/None/错key投影/非str tos/畸形分析师源/错票集)全 → DataContextAssemblyError、零裸异常;vetoed 候选不进评分、缺/中性/单家不伪造扣分;真 2 家下调 → core 恰 −8(42.0)、MSFT 空源=50。亲跑:focused 17 OK、全离线 `*us_short*` 3565 OK、schema/doc guards 全绿;grep 确认无外部 caller 破裂。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `执行` (US-short analyst-grades -> data_context score wrapper)
+
+- **Verdict/Action**: added pure/offline `assemble_data_context_with_analyst_grade_risk` in `runners/us_short_batch5_data_context.py`. It reuses the existing candidate/Pass2-clean partition, consumes resolved `resolve_analyst_grade_actions` output through `project_analyst_grade_risk_downgrade`, and calls `compose_score_inputs` so analyst collective downgrades affect Batch4 `selection_inputs` without hand-authored risk maps or a second scoring formula. Updated the `docs/README.md` thin route row. No provider/live/network/raw/DataHub/production/ship-gate/A-share path touched.
+- **Required**: none new. `docs/system_risk_register.md` untouched because this introduces no material open risk or verdict flip.
+- **Verify**: red first `tests.provider.test_us_short_batch5_data_context` failed on missing `assemble_data_context_with_analyst_grade_risk`; green after fix: focused data_context 17 OK, related data_context+analyst source+risk+score 84 OK, US-short schema 803 OK, route/doc/boundary guards 68 OK, doc-process 60 OK, full offline `*us_short*` 3565 OK (1 skip), `py_compile` OK.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. B: scope is limited to data_context wrapper, focused tests, README route row, and this handoff; no `CURRENT` or register transient update. C: wrapper computes targets after Pass2 safety so vetoed candidates are not scored; malformed analyst-grade source fails closed as `DataContextAssemblyError`; scoring still uses `compose_score_inputs`.
+- **Next**: Claude Code: review current analyst-grades data_context wrapper diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS (analyst-grades ddf 精度修复 + AGENTS 执行/修复三段式规则) + 提交
 
 - **Verdict/Action**: PASS + 分两笔提交(scope 纪律):① AGENTS.md「普通执行/修复三段式」治理规则——**用户经 AskUserQuestion 确认「是我要的」**才提交(防 Codex 自加 AGENTS 规则的既知 scope-creep 类、未在本会话核实前不盖章);② 精度修复 8 文件(producer/seam/binding/schema/3 tests/README)——闭合上刀我的 Optional:producer 新 emit `distinct_downgrading_firms`(仅有下调的家)、seam gate 改 `>=2` + 新增 bounds、四方(producer/seam/binding/schema)三角同步。分级=中(改 producer 契约 + 评分 gate)→整读双引擎 + 四方三角 + 自撰 10 探针 + **独立 §3.5 对抗 agent(本刀真起、contract-changing)** + 亲跑全包。**审查中撞见 Codex 并发改 SESSION_LOG**(串行违规)→未 race,经用户确认 Codex 收手 + 树静止(code numstat 稳定)后才提交。

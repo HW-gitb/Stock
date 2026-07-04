@@ -11,7 +11,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import load_eligibility_governance, pass2_safety_admit  # noqa: E402
-from engine.us_short_risk_downgrade import risk_downgrade  # noqa: E402
+from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
+from engine.us_short_risk_downgrade import ANALYST_DOWNGRADE_PENALTY, risk_downgrade  # noqa: E402
 from engine.us_short_run_provenance import reconcile_run_provenance  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
     build_offering_audit_from_sec_submissions,
@@ -24,6 +25,7 @@ from runners.us_short_batch5_data_context import (  # noqa: E402
     DataContextAssemblyError,
     assemble_data_context,
     assemble_data_context_from_sec_offering_submissions,
+    assemble_data_context_with_analyst_grade_risk,
 )
 
 
@@ -34,6 +36,8 @@ _USED_DATE = "2026-06-12"
 _GENERATED_AT = "2026-06-13T10:00:00+00:00"
 _OFFERING_AS_OF = "2026-06-15"
 _OFFERING_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
+_GRADE_AS_OF = "2026-06-15"
+_GRADE_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
 _NOW_ET = datetime(2026, 6, 13, 10, 0, 0)
 _SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]
 _DATA_CONTEXT_KEYS = {
@@ -153,6 +157,16 @@ def _score_composition(targets):
     )
 
 
+def _constant_projection(value_key, targets, disposition, *, score=50.0):
+    return {
+        value_key: {ticker: score for ticker in targets},
+        "neutral_fill_tickers": [],
+        "coverage": {ticker: disposition for ticker in targets},
+        "target_count": len(targets),
+        "scored_count": len(targets),
+    }
+
+
 def _offering_source(*, signals=None, checked=None, excluded=None):
     return {
         "signals": dict(signals or {}),
@@ -208,6 +222,36 @@ def _sec_submissions(*, forms, filing_dates, acceptances, accessions):
                 "accessionNumber": list(accessions),
             }
         }
+    }
+
+
+def _grade_provenance(ticker, *, coverage="full", parser="ok"):
+    return {
+        "provider_id": "fmp",
+        "endpoint_or_filing_type": "grades",
+        "source_as_of": _GRADE_AS_OF,
+        "observed_at": _GRADE_OBSERVED_AT,
+        "coverage_status": coverage,
+        "parser_status": parser,
+        "lineage_ref": f"fmp:grades:{_GRADE_AS_OF}#{ticker.lower()}grades",
+    }
+
+
+def _grade_record(ticker, *, date, action="downgrade", company="BankA", new="Sell", prev="Hold"):
+    return {
+        "symbol": ticker,
+        "date": date,
+        "gradingCompany": company,
+        "newGrade": new,
+        "previousGrade": prev,
+        "action": action,
+    }
+
+
+def _grade_source(ticker, records, **provenance_kwargs):
+    return {
+        "records": list(records),
+        "provenance": _grade_provenance(ticker, **provenance_kwargs),
     }
 
 
@@ -505,6 +549,84 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
                         checked={"AAPL": {"active_offering": _checked_offering()}},
                     )
                 },
+            )
+
+    def test_analyst_grade_source_feeds_data_context_score_without_manual_risk_map(self):
+        targets = ("AAPL", "MSFT")
+        analyst_grade_actions = resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={
+                "AAPL": _grade_source("AAPL", [
+                    _grade_record("AAPL", date="2026-06-10", company="BankA"),
+                    _grade_record("AAPL", date="2026-06-11", company="BankB"),
+                ]),
+                "MSFT": _grade_source("MSFT", []),
+            },
+        )
+
+        data_context = assemble_data_context_with_analyst_grade_risk(
+            candidate_artifact=_candidate_artifact(targets),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", targets, "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", targets, "scored_theme_base"),
+            catalyst_projection=_constant_projection(
+                "catalyst_block_by_ticker",
+                targets,
+                "scored_realized_catalyst",
+            ),
+            analyst_grade_actions=analyst_grade_actions,
+            theme_opportunity_state="strong",
+            candidate_pass2_signals={"AAPL": {}, "MSFT": {}},
+        )
+
+        scores = data_context["selection_inputs"]["per_ticker"]
+        self.assertAlmostEqual(scores["AAPL"]["core_score"], 50.0 - ANALYST_DOWNGRADE_PENALTY)
+        self.assertAlmostEqual(scores["MSFT"]["core_score"], 50.0)
+        self.assertEqual(data_context["candidate_pass2_signals"], {"AAPL": {}, "MSFT": {}})
+
+    def test_analyst_grade_wrapper_scores_only_pass2_clean_candidates(self):
+        analyst_grade_actions = resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={
+                "AAPL": _grade_source("AAPL", [
+                    _grade_record("AAPL", date="2026-06-10", company="BankA"),
+                    _grade_record("AAPL", date="2026-06-11", company="BankB"),
+                ]),
+            },
+        )
+
+        data_context = assemble_data_context_with_analyst_grade_risk(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+            catalyst_projection=_constant_projection("catalyst_block_by_ticker", ("AAPL",), "scored_realized_catalyst"),
+            analyst_grade_actions=analyst_grade_actions,
+            theme_opportunity_state="strong",
+            candidate_pass2_signals={"AAPL": {}, "MSFT": {"critical_data_missing": True}},
+        )
+
+        self.assertEqual(list(data_context["selection_inputs"]["per_ticker"]), ["AAPL"])
+        self.assertEqual(set(data_context["candidate_pass2_signals"]), {"AAPL", "MSFT"})
+
+    def test_analyst_grade_wrapper_rejects_malformed_source(self):
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_data_context_with_analyst_grade_risk(
+                candidate_artifact=_candidate_artifact(("AAPL",)),
+                expected_decision_date=_DECISION_DATE,
+                eligibility_governance=_gov(),
+                momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+                theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+                catalyst_projection=_constant_projection(
+                    "catalyst_block_by_ticker",
+                    ("AAPL",),
+                    "scored_realized_catalyst",
+                ),
+                analyst_grade_actions={"signals": {"AAPL": {"analyst_actions_recent": {"downgrades": "2"}}}},
+                theme_opportunity_state="strong",
+                candidate_pass2_signals={"AAPL": {}},
             )
 
     def test_rejects_forged_candidate_artifact_instead_of_trusting_summary(self):
