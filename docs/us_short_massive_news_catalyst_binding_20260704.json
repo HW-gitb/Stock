@@ -31,7 +31,22 @@
     ],
     "source_provider_id": "massive",
     "source_endpoint_or_filing_type": "reference_news",
-    "checked_empty_disposition": "checked_no_recent_news"
+    "checked_empty_disposition": "checked_no_recent_news",
+    "provenance_required_keys": [
+      "provider_id",
+      "endpoint_or_filing_type",
+      "source_as_of",
+      "observed_at",
+      "coverage_status",
+      "parser_status",
+      "lineage_ref",
+      "total_record_count",
+      "out_of_window_count",
+      "future_excluded_count"
+    ],
+    "source_as_of_policy": "must_equal_catalyst_as_of_date",
+    "emission_fitness": "coverage_status=full AND parser_status=ok",
+    "lineage_ref_format": "provider_id:endpoint_or_filing_type:source_as_of#record_id"
   },
   "scoring_transform": {
     "score_formula": "net_sentiment / news_count",

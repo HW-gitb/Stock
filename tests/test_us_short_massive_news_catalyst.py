@@ -7,9 +7,12 @@ from engine.us_short_massive_news import resolve_news_events
 from engine.us_short_massive_news_catalyst import (
     BINDING_PATH,
     COVERAGE_DISPOSITIONS,
+    EMISSION_FITNESS,
+    LINEAGE_REF_FORMAT,
     OUTPUT_KEYS,
     PRODUCER_REFS,
     PROJECTION_POLICY,
+    SOURCE_AS_OF_POLICY,
     MassiveNewsCatalystSeamError,
     load_binding,
     project_massive_news_catalyst,
@@ -183,6 +186,47 @@ class MassiveNewsCatalystProjectionTest(unittest.TestCase):
                 target_tickers=["AAPL"],
             )
 
+    def test_rejects_source_as_of_drift_instead_of_silent_neutral(self):
+        source = resolve_news_events(
+            as_of=NEWS_AS_OF,
+            news_by_ticker={"AAPL": _record([_news(sentiment="positive")])},
+        )
+
+        with self.assertRaisesRegex(MassiveNewsCatalystSeamError, "source_as_of"):
+            project_massive_news_catalyst(
+                news_events=source,
+                governance=GOV,
+                as_of="20260615",
+                target_tickers=["AAPL"],
+            )
+
+    def test_rejects_loose_provenance_rows(self):
+        source = resolve_news_events(
+            as_of=NEWS_AS_OF,
+            news_by_ticker={"AAPL": _record([_news(sentiment="positive")])},
+        )
+
+        for mutate in (
+            lambda row: row.pop("lineage_ref"),
+            lambda row: row.update({"extra": "drift"}),
+            lambda row: row.update({"lineage_ref": "free-form"}),
+            lambda row: row.update({"coverage_status": "partial"}),
+            lambda row: row.update({"parser_status": "degraded"}),
+        ):
+            with self.subTest(mutate=mutate):
+                bad = resolve_news_events(
+                    as_of=NEWS_AS_OF,
+                    news_by_ticker={"AAPL": _record([_news(sentiment="positive")])},
+                )
+                mutate(bad["provenance"]["AAPL"])
+                with self.assertRaisesRegex(MassiveNewsCatalystSeamError, "provenance"):
+                    project_massive_news_catalyst(
+                        news_events=bad,
+                        governance=GOV,
+                        as_of=CATALYST_AS_OF,
+                        target_tickers=["AAPL"],
+                    )
+
     def test_binding_conformance(self):
         binding = load_binding()
 
@@ -192,6 +236,24 @@ class MassiveNewsCatalystProjectionTest(unittest.TestCase):
         self.assertEqual(PROJECTION_POLICY, binding["projection_policy"])
         self.assertEqual(COVERAGE_DISPOSITIONS, tuple(binding["output_contract"]["coverage_dispositions"]))
         self.assertEqual(binding["scoring_transform"]["score_formula"], "net_sentiment / news_count")
+        self.assertEqual(
+            binding["input_contract"]["provenance_required_keys"],
+            [
+                "provider_id",
+                "endpoint_or_filing_type",
+                "source_as_of",
+                "observed_at",
+                "coverage_status",
+                "parser_status",
+                "lineage_ref",
+                "total_record_count",
+                "out_of_window_count",
+                "future_excluded_count",
+            ],
+        )
+        self.assertEqual(binding["input_contract"]["source_as_of_policy"], SOURCE_AS_OF_POLICY)
+        self.assertEqual(binding["input_contract"]["emission_fitness"], EMISSION_FITNESS)
+        self.assertEqual(binding["input_contract"]["lineage_ref_format"], LINEAGE_REF_FORMAT)
         self.assertEqual(
             binding["authorization_boundary"],
             {

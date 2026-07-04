@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from engine.us_short_catalyst import CatalystGovernanceError
 from engine.us_short_eligibility_gate import (
     canonical_us_ticker,
     inject_catalyst_recall,
@@ -12,6 +13,11 @@ from engine.us_short_analyst_grade_risk import (
     AnalystGradeRiskError,
     project_analyst_grade_risk_downgrade,
 )
+from engine.us_short_massive_news_catalyst import (
+    MassiveNewsCatalystSeamError,
+    project_massive_news_catalyst,
+)
+from engine.us_short_risk_downgrade import risk_downgrade
 from engine.us_short_sec_offering_audit import (
     OfferingAuditError,
     build_offering_audit_from_sec_submissions,
@@ -468,6 +474,59 @@ def assemble_data_context_with_analyst_grade_risk(
         )
     except (AnalystGradeRiskError, ScoreSeamError) as exc:
         raise DataContextAssemblyError(f"analyst-grade score composition rejected: {exc}") from exc
+    selection_inputs = _validate_score_composition(
+        score_composition,
+        expected_pass2_clean=prepared["pass2_clean"],
+    )
+    return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
+
+
+def assemble_data_context_with_massive_news_catalyst(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection: dict[str, Any],
+    theme_projection: dict[str, Any],
+    massive_news_events: dict[str, Any],
+    catalyst_governance: dict[str, Any],
+    theme_opportunity_state: str,
+    candidate_pass2_signals: dict[str, Any] | None,
+    pass2_sources: dict[str, Any] | None = None,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble data_context while deriving the catalyst block from resolved Massive news facts.
+
+    Pure/offline: this consumes an already-resolved Massive news fact layer; it does not fetch news,
+    call an LLM, persist raw data, or create a second scoring formula. The final selection surface
+    still comes from `compose_score_inputs`.
+    """
+    prepared = _prepare_context_inputs(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        candidate_pass2_signals=candidate_pass2_signals,
+        pass2_sources=pass2_sources,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    try:
+        catalyst_projection = project_massive_news_catalyst(
+            news_events=massive_news_events,
+            governance=catalyst_governance,
+            as_of=expected_decision_date,
+            target_tickers=prepared["pass2_clean"],
+        )
+        score_composition = compose_score_inputs(
+            target_tickers=prepared["pass2_clean"],
+            momentum_projection=momentum_projection,
+            theme_projection=theme_projection,
+            catalyst_projection=catalyst_projection,
+            risk_downgrade_by_ticker={ticker: risk_downgrade() for ticker in prepared["pass2_clean"]},
+            theme_opportunity_state=theme_opportunity_state,
+        )
+    except (MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
+        raise DataContextAssemblyError(f"Massive-news score composition rejected: {exc}") from exc
     selection_inputs = _validate_score_composition(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],

@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Massive news O1/O2 硬化 + data_context wrapper + CatalystGovernanceError 补裹)
+
+- **Verdict/Action**: re-`审查` PASS + 提交整刀 10 文件(seam O1/O2 硬化 + 新 news data_context wrapper + F1 修复 + binding/schema + tests + README + register + 本 SESSION_LOG)。F1(`R-USSHORT-BATCH5-NEWS-DATACONTEXT-WRAPPER-CATALYST-GOVERNANCE-RAW-LEAK`)已修:wrapper 现 import + `except` 加 `CatalystGovernanceError`→畸形 governance fail-closed 为 `DataContextAssemblyError`;隔壁 analyst wrapper(不内部调 catalyst_block)正确未动、seam O1/O2 未动。分级=中(上轮已起独立 §3.5 agent;本轮一行修=incremental,按 6a 整读+亲复现+跑全包、不重起 agent)。
+- **Required**: F1 已 **resolved**(全文见 system_risk_register;Codex 一行 import+except 修 + 新 malformed-governance 测试)。本轮无新 finding。
+- **Verify**: (`review-evidence:1c53c9d1c41c`) 亲复现:`{"broken":True}`/`{}` governance→`DataContextAssemblyError`、frozen preset happy 无恙(AAPL core 51.5)。同类完整:wrapper try 块恰 2 内部调、3 类内部异常全裹、`_prepare_context_inputs` 在 try 外自抛 `DataContextAssemblyError`。collateral:O1/O2 硬化探针重跑全对(无 over-reject、mismatch + loose-provenance 全 fail-closed)。亲跑 focused + 全离线 `*us_short*` 3584 OK + schema + doc guards 全绿零回归。Optional(DRY `_valid_lineage_ref`)Codex 未取、非阻塞(字节同逻辑、无 over-reject)。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `修复` (US-short Massive news data_context wrapper CatalystGovernanceError)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-NEWS-DATACONTEXT-WRAPPER-CATALYST-GOVERNANCE-RAW-LEAK`; the wrapper now converts malformed governance `CatalystGovernanceError` into `DataContextAssemblyError`. Happy path and O1/O2 behavior unchanged.
+- **Required**: fixed the latest Claude Required; `docs/system_risk_register.md` updated to `in_progress` pending Claude re-review + commit. No provider/live/network/DataHub/production/broker/order/A-share path run.
+- **Verify**: red first provider wrapper leaked raw `CatalystGovernanceError`; green provider wrapper `21 OK`, related pack `36 OK`, full offline `*us_short*` `3584 OK` (1 skipped), py_compile OK, doc/process `60 OK`, `git diff --check` CRLF-only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: same internal `catalyst_block` wrapper class now fails closed as `DataContextAssemblyError`; frozen-governance happy path stays covered. B/E: scope is runner/test/register/SESSION_LOG only; `CURRENT` untouched. No independent agent used; checklist fallback.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-04 — Claude 审查 FAIL (US-short Massive news O1/O2 硬化 + data_context wrapper — wrapper 漏裹 CatalystGovernanceError)
+
+- **Verdict/Action**: FAIL(1 Required、P3 fail-closed、未提交)。O1(source_as_of 须同决策日)+ O2(provenance key-lock)硬化 CLEAN(四方三角、无 over-reject、全 fail-closed);但新 `assemble_data_context_with_massive_news_catalyst` 是首个内部调 `catalyst_block` 的 wrapper,其 `except` 只裹 `(MassiveNewsCatalystSeamError, ScoreSeamError)`、漏 `CatalystGovernanceError`→畸形 catalyst_governance 泄裸异常(非契约 `DataContextAssemblyError`)。
+- **Required**: `R-USSHORT-BATCH5-NEWS-DATACONTEXT-WRAPPER-CATALYST-GOVERNANCE-RAW-LEAK`(P3;详见 system_risk_register)。一行修:import + `except` 加 `CatalystGovernanceError` + 畸形-governance 测试。
+- **Verify**: (`review-evidence:ea1476025162`) 我亲验:`issubclass(CatalystGovernanceError,(MassiveNewsCatalystSeamError,ScoreSeamError))=False`、`catalyst_governance={"broken":True}`→裸 `CatalystGovernanceError`、frozen preset happy 无恙。**此项由本刀真起的独立 §3.5 agent 抓到(我自读+探针漏了)**;其余全 HELD:11 shape 无 over-reject、O1/O2 正确、30 provenance + 19 wrapper 畸形全 fail-closed。亲跑 focused 35 + 全离线 `*us_short*` 3583 OK 零回归。Optional(非阻塞):seam 复制 producer 的 `_valid_lineage_ref`(字节同逻辑、无 over-reject,DRY 可 import)。
+- **Next**: Codex：修复
+
+## 2026-07-04 - Codex `执行` (US-short Massive news Optional + data_context wrapper)
+
+- **Verdict/Action**: closed the latest Claude Optional on the Massive news catalyst seam and executed the next offline package-1 step. `project_massive_news_catalyst` now rejects source clock drift instead of letting a mismatched news `source_as_of` silently neutralize through `catalyst_block`, and it key-locks score-ready Massive news provenance (`full/ok`, structured lineage, counts). Added pure/offline `assemble_data_context_with_massive_news_catalyst`, which consumes resolved `resolve_news_events` output, derives the catalyst projection through the canonical seam, fills zero `risk_downgrade`, and calls `compose_score_inputs` for Batch4 `selection_inputs`. No provider/live/network/raw/LLM/DataHub/production/ship-gate/A-share path touched.
+- **Required**: none new. `docs/system_risk_register.md` untouched because this closes non-blocking Optional and introduces no material open risk or verdict flip.
+- **Verify**: red first: focused Massive-news catalyst/data_context tests failed on missing source-as_of/provenance guards and missing `assemble_data_context_with_massive_news_catalyst`; green after fix. Focused related pack 156 OK; full offline `*us_short*` 3583 OK (1 skip); US-short schema discover 805 OK; doc/route/process guards 60 OK + `.tools\verify_doc_process.cmd` 60 OK; py_compile OK; JSON parse OK; `git diff --check` exit 0 with CRLF warnings only; code-level network/secret grep 0 hits.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A: provenance key set includes source 7 fields + 3 emitted count fields, source_as_of policy, emission fitness, and lineage format const-pinned in binding/schema with schema mutants. B: grep found new wrapper only in runner/tests and new contract fields in binding/schema/tests/route; no stale "silent neutral" behavior outside the regression test name. C: reverse tests cover positive news score-up, pass2-vetoed candidate not scored, source-clock mismatch rejection, loose provenance rejection, and schema drift rejection. E: README route rows are thin pointers; `CURRENT` untouched. Independent self-review agent not used because the available subagent tool forbids spawning unless the user explicitly asks for subagents; used checklist fallback.
+- **Next**: Claude Code: review current Massive-news Optional + data_context wrapper diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Massive news→catalyst projection seam)
 
 - **Verdict/Action**: PASS + 提交 9 文件(新 engine `us_short_massive_news_catalyst` + binding + schema + 2 tests + 改 `us_short_massive_news` docstring + 改其 binding consumer_note + README route 行 + 本 SESSION_LOG)。新 `project_massive_news_catalyst`:消费真 `resolve_news_events` → `net_sentiment/news_count`∈[-1,1] → 喂 `catalyst_block` 的 semantic_advisory 低权通道(±6 封顶)→ 投影 catalyst projection 面(与 `compose_score_inputs` 同契约)。分级=中(新评分 seam + 改已提交源[docstring-only])→整读 seam 全体 + 四方契约三角 + catalyst_block 复用语义 + 自撰探针 + **独立 §3.5 对抗 agent(真起)** + 亲跑全包。纯/离线、未接 live runner、无 provider/LLM/DataHub。

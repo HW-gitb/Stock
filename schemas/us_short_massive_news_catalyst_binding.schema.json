@@ -39,7 +39,11 @@
         "summary_fields",
         "source_provider_id",
         "source_endpoint_or_filing_type",
-        "checked_empty_disposition"
+        "checked_empty_disposition",
+        "provenance_required_keys",
+        "source_as_of_policy",
+        "emission_fitness",
+        "lineage_ref_format"
       ],
       "properties": {
         "source_result_required_keys": {
@@ -66,7 +70,24 @@
         },
         "source_provider_id": { "const": "massive" },
         "source_endpoint_or_filing_type": { "const": "reference_news" },
-        "checked_empty_disposition": { "const": "checked_no_recent_news" }
+        "checked_empty_disposition": { "const": "checked_no_recent_news" },
+        "provenance_required_keys": {
+          "const": [
+            "provider_id",
+            "endpoint_or_filing_type",
+            "source_as_of",
+            "observed_at",
+            "coverage_status",
+            "parser_status",
+            "lineage_ref",
+            "total_record_count",
+            "out_of_window_count",
+            "future_excluded_count"
+          ]
+        },
+        "source_as_of_policy": { "const": "must_equal_catalyst_as_of_date" },
+        "emission_fitness": { "const": "coverage_status=full AND parser_status=ok" },
+        "lineage_ref_format": { "const": "provider_id:endpoint_or_filing_type:source_as_of#record_id" }
       },
       "additionalProperties": false
     },

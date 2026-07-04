@@ -21,6 +21,10 @@ from engine.us_short_massive_news import (
     ENDPOINT as MASSIVE_NEWS_ENDPOINT,
     PROVIDER_ID as MASSIVE_PROVIDER_ID,
     _CHECKED_EMPTY_DISPOSITION,
+    _COVERAGE_EMIT as MASSIVE_NEWS_COVERAGE_EMIT,
+    _LINEAGE_REF_FORMAT,
+    _PARSER_EMIT as MASSIVE_NEWS_PARSER_EMIT,
+    _PROVENANCE_FIELDS as MASSIVE_NEWS_PROVENANCE_FIELDS,
     _RECENCY_WINDOW_DAYS,
 )
 from engine.us_short_seam_catalyst import (
@@ -75,9 +79,14 @@ CHECKED_ROW_KEYS = frozenset({
     "out_of_window_count",
     "future_excluded_count",
 })
+PROVENANCE_COUNT_KEYS = ("total_record_count", "out_of_window_count", "future_excluded_count")
+PROVENANCE_ROW_KEYS = frozenset(MASSIVE_NEWS_PROVENANCE_FIELDS) | frozenset(PROVENANCE_COUNT_KEYS)
 CATALYST_SIGNAL_KEY = "semantic_advisory_score"
 CATALYST_DATE_KEY = "semantic_advisory_date"
 NEWS_SCORE_FORMULA = "net_sentiment / news_count"
+SOURCE_AS_OF_POLICY = "must_equal_catalyst_as_of_date"
+EMISSION_FITNESS = "coverage_status=full AND parser_status=ok"
+LINEAGE_REF_FORMAT = _LINEAGE_REF_FORMAT
 _BLOCK_MIN, _BLOCK_MAX = 0.0, 100.0
 
 
@@ -105,6 +114,36 @@ def _require_exact_str(value, *, name):
     if type(value) is not str:
         raise MassiveNewsCatalystSeamError(f"{name} must be exact str: {type(value).__name__}")
     return value
+
+
+def _source_date_for_catalyst_as_of(as_of):
+    _require_exact_str(as_of, name="as_of")
+    try:
+        dt = datetime.strptime(as_of, "%Y%m%d")
+    except ValueError as exc:
+        raise MassiveNewsCatalystSeamError("as_of must be real YYYYMMDD") from exc
+    return dt.strftime("%Y-%m-%d")
+
+
+def _valid_rfc3339(value):
+    if type(value) is not str or "T" not in value:
+        return False
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None
+
+
+def _valid_lineage_ref(value, *, source_as_of):
+    if type(value) is not str or not value.isascii():
+        return False
+    prefix, sep, record_id = value.rpartition("#")
+    if sep != "#" or not record_id or any(ch.isspace() for ch in record_id):
+        return False
+    if ":" in record_id or "#" in record_id:
+        return False
+    return prefix == f"{MASSIVE_PROVIDER_ID}:{MASSIVE_NEWS_ENDPOINT}:{source_as_of}"
 
 
 def _key_set(value, *, name):
@@ -287,7 +326,7 @@ def _validate_checked(raw_checked):
     return checked
 
 
-def _validate_provenance(raw_provenance, signal_tickers, checked_tickers):
+def _validate_provenance(raw_provenance, signal_tickers, checked_tickers, *, expected_source_as_of):
     _require_exact_dict(raw_provenance, name="news_events.provenance")
     provenance = {}
     for raw_ticker, raw_row in raw_provenance.items():
@@ -295,6 +334,8 @@ def _validate_provenance(raw_provenance, signal_tickers, checked_tickers):
         if ticker in provenance:
             raise MassiveNewsCatalystSeamError(f"provenance contains duplicate canonical ticker: {ticker}")
         _require_exact_dict(raw_row, name=f"provenance[{ticker}]")
+        if _key_set(raw_row, name=f"provenance[{ticker}]") != PROVENANCE_ROW_KEYS:
+            raise MassiveNewsCatalystSeamError("provenance row keys drifted from Massive news contract")
         provider = _require_exact_str(raw_row.get("provider_id"), name=f"provenance[{ticker}].provider_id")
         endpoint = _require_exact_str(
             raw_row.get("endpoint_or_filing_type"),
@@ -302,6 +343,20 @@ def _validate_provenance(raw_provenance, signal_tickers, checked_tickers):
         )
         if provider != MASSIVE_PROVIDER_ID or endpoint != MASSIVE_NEWS_ENDPOINT:
             raise MassiveNewsCatalystSeamError("provenance provider/endpoint drifted from Massive news contract")
+        source_as_of = _require_exact_str(raw_row.get("source_as_of"), name=f"provenance[{ticker}].source_as_of")
+        if source_as_of != expected_source_as_of:
+            raise MassiveNewsCatalystSeamError("provenance source_as_of must equal catalyst as_of date")
+        observed_at = raw_row.get("observed_at")
+        if not _valid_rfc3339(observed_at):
+            raise MassiveNewsCatalystSeamError("provenance observed_at must be tz-aware RFC3339")
+        coverage = _require_exact_str(raw_row.get("coverage_status"), name=f"provenance[{ticker}].coverage_status")
+        parser = _require_exact_str(raw_row.get("parser_status"), name=f"provenance[{ticker}].parser_status")
+        if coverage != MASSIVE_NEWS_COVERAGE_EMIT or parser != MASSIVE_NEWS_PARSER_EMIT:
+            raise MassiveNewsCatalystSeamError("provenance coverage/parser is not score-ready full/ok")
+        if not _valid_lineage_ref(raw_row.get("lineage_ref"), source_as_of=source_as_of):
+            raise MassiveNewsCatalystSeamError("provenance lineage_ref drifted from source-bound format")
+        for key in PROVENANCE_COUNT_KEYS:
+            _non_negative_int(raw_row[key], name=f"provenance[{ticker}].{key}")
         provenance[ticker] = raw_row
     expected = set(signal_tickers) | set(checked_tickers)
     if set(provenance) != expected:
@@ -309,7 +364,7 @@ def _validate_provenance(raw_provenance, signal_tickers, checked_tickers):
     return provenance
 
 
-def _validate_news_events(news_events):
+def _validate_news_events(news_events, *, expected_source_as_of):
     _require_exact_dict(news_events, name="news_events")
     if _key_set(news_events, name="news_events") != SOURCE_RESULT_KEYS:
         raise MassiveNewsCatalystSeamError("news_events keys drifted from the Massive news source contract")
@@ -317,7 +372,12 @@ def _validate_news_events(news_events):
     records = _validate_records(news_events["records"], signals)
     excluded = _validate_excluded(news_events["excluded"])
     checked = _validate_checked(news_events["checked"])
-    _validate_provenance(news_events["provenance"], signals, checked)
+    _validate_provenance(
+        news_events["provenance"],
+        signals,
+        checked,
+        expected_source_as_of=expected_source_as_of,
+    )
     overlap = (set(signals) & set(excluded)) | (set(signals) & set(checked)) | (set(checked) & set(excluded))
     if overlap:
         raise MassiveNewsCatalystSeamError("news_events signal/checked/excluded identities must be disjoint")
@@ -376,9 +436,12 @@ def project_massive_news_catalyst(*, news_events, governance, as_of, target_tick
     controls its maximum point impact. Checked-empty, excluded, and missing
     targets are neutral-omitted for the score composer.
     """
-    _require_exact_str(as_of, name="as_of")
+    expected_source_as_of = _source_date_for_catalyst_as_of(as_of)
     targets = _canonical_targets(target_tickers)
-    signals, records, checked, excluded = _validate_news_events(news_events)
+    signals, records, checked, excluded = _validate_news_events(
+        news_events,
+        expected_source_as_of=expected_source_as_of,
+    )
     catalyst_inputs = _news_tally_to_catalyst_signals(signals, records)
     raw_result = catalyst_block(catalyst_inputs, governance, as_of=as_of)
     block, neutral = _validate_catalyst_result(raw_result, as_of=as_of)

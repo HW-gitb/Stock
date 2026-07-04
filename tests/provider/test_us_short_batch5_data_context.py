@@ -12,6 +12,8 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_eligibility_gate import load_eligibility_governance, pass2_safety_admit  # noqa: E402
 from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
+from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
+from engine.us_short_massive_news import resolve_news_events  # noqa: E402
 from engine.us_short_risk_downgrade import ANALYST_DOWNGRADE_PENALTY, risk_downgrade  # noqa: E402
 from engine.us_short_run_provenance import reconcile_run_provenance  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
@@ -26,6 +28,7 @@ from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context,
     assemble_data_context_from_sec_offering_submissions,
     assemble_data_context_with_analyst_grade_risk,
+    assemble_data_context_with_massive_news_catalyst,
 )
 
 
@@ -38,6 +41,8 @@ _OFFERING_AS_OF = "2026-06-15"
 _OFFERING_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
 _GRADE_AS_OF = "2026-06-15"
 _GRADE_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
+_NEWS_AS_OF = "2026-06-15"
+_NEWS_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
 _NOW_ET = datetime(2026, 6, 13, 10, 0, 0)
 _SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]
 _DATA_CONTEXT_KEYS = {
@@ -252,6 +257,45 @@ def _grade_source(ticker, records, **provenance_kwargs):
     return {
         "records": list(records),
         "provenance": _grade_provenance(ticker, **provenance_kwargs),
+    }
+
+
+def _news_insight(ticker="AAPL", sentiment="positive"):
+    return {
+        "ticker": ticker,
+        "sentiment": sentiment,
+        "sentiment_reasoning": "source sentiment",
+    }
+
+
+def _news_item(*, id="n1", ticker="AAPL", published="2026-06-12T12:00:00Z", sentiment="positive"):
+    return {
+        "id": id,
+        "published_utc": published,
+        "publisher": {"name": "Publisher"},
+        "title": f"{ticker} news",
+        "article_url": "https://example.test/news",
+        "tickers": [ticker],
+        "insights": [_news_insight(ticker, sentiment)],
+    }
+
+
+def _news_provenance(ticker, *, coverage="full", parser="ok"):
+    return {
+        "provider_id": "massive",
+        "endpoint_or_filing_type": "reference_news",
+        "source_as_of": _NEWS_AS_OF,
+        "observed_at": _NEWS_OBSERVED_AT,
+        "coverage_status": coverage,
+        "parser_status": parser,
+        "lineage_ref": f"massive:reference_news:{_NEWS_AS_OF}#{ticker.lower()}news",
+    }
+
+
+def _news_source(ticker, records, **provenance_kwargs):
+    return {
+        "records": list(records),
+        "provenance": _news_provenance(ticker, **provenance_kwargs),
     }
 
 
@@ -625,6 +669,106 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
                     "scored_realized_catalyst",
                 ),
                 analyst_grade_actions={"signals": {"AAPL": {"analyst_actions_recent": {"downgrades": "2"}}}},
+                theme_opportunity_state="strong",
+                candidate_pass2_signals={"AAPL": {}},
+            )
+
+    def test_massive_news_source_feeds_data_context_score_without_manual_catalyst_projection(self):
+        targets = ("AAPL", "MSFT")
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={
+                "AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")]),
+                "MSFT": _news_source("MSFT", []),
+            },
+        )
+
+        data_context = assemble_data_context_with_massive_news_catalyst(
+            candidate_artifact=_candidate_artifact(targets),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", targets, "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", targets, "scored_theme_base"),
+            massive_news_events=news_events,
+            catalyst_governance=load_catalyst_governance(),
+            theme_opportunity_state="strong",
+            candidate_pass2_signals={"AAPL": {}, "MSFT": {}},
+        )
+
+        scores = data_context["selection_inputs"]["per_ticker"]
+        self.assertAlmostEqual(scores["AAPL"]["core_score"], 51.5)
+        self.assertAlmostEqual(scores["MSFT"]["core_score"], 50.0)
+        self.assertEqual(data_context["candidate_pass2_signals"], {"AAPL": {}, "MSFT": {}})
+
+    def test_massive_news_wrapper_scores_only_pass2_clean_candidates(self):
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={
+                "AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")]),
+                "MSFT": _news_source("MSFT", [_news_item(id="m", ticker="MSFT", sentiment="positive")]),
+            },
+        )
+
+        data_context = assemble_data_context_with_massive_news_catalyst(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+            massive_news_events=news_events,
+            catalyst_governance=load_catalyst_governance(),
+            theme_opportunity_state="strong",
+            candidate_pass2_signals={"AAPL": {}, "MSFT": {"critical_data_missing": True}},
+        )
+
+        self.assertEqual(list(data_context["selection_inputs"]["per_ticker"]), ["AAPL"])
+        self.assertEqual(set(data_context["candidate_pass2_signals"]), {"AAPL", "MSFT"})
+
+    def test_massive_news_wrapper_rejects_source_clock_mismatch(self):
+        news_events = resolve_news_events(
+            as_of="2026-06-30",
+            news_by_ticker={
+                "AAPL": {
+                    "records": [_news_item(id="a", sentiment="positive")],
+                    "provenance": {
+                        **_news_provenance("AAPL"),
+                        "source_as_of": "2026-06-30",
+                        "lineage_ref": "massive:reference_news:2026-06-30#aaplnews",
+                    },
+                }
+            },
+        )
+
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_data_context_with_massive_news_catalyst(
+                candidate_artifact=_candidate_artifact(("AAPL",)),
+                expected_decision_date=_DECISION_DATE,
+                eligibility_governance=_gov(),
+                momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+                theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+                massive_news_events=news_events,
+                catalyst_governance=load_catalyst_governance(),
+                theme_opportunity_state="strong",
+                candidate_pass2_signals={"AAPL": {}},
+            )
+
+    def test_massive_news_wrapper_wraps_malformed_catalyst_governance(self):
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={
+                "AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")]),
+            },
+        )
+
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_data_context_with_massive_news_catalyst(
+                candidate_artifact=_candidate_artifact(("AAPL",)),
+                expected_decision_date=_DECISION_DATE,
+                eligibility_governance=_gov(),
+                momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+                theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+                massive_news_events=news_events,
+                catalyst_governance={"broken": True},
                 theme_opportunity_state="strong",
                 candidate_pass2_signals={"AAPL": {}},
             )
