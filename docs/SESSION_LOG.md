@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 live source-packet 执行 summary — 用户澄清授权后追认)
+
+- **Verdict/Action**: PASS + 提交 3 文件(tracked summary + 本 SESSION_LOG + register)。**用户当场澄清授权模型**:Codex 执行/新增=用户已授权(含跨 SR-PROVIDER-001 真 fetch);startup"暂时不动等命令"仅针对 /clear 后第一步、之后失效。→ 这次 AAPL/MSFT/JPM live run(10/10 真调用)授权成立;我上轮基于逐次授权假设判 FAIL、被用户纠正(套过严)。tracked summary 上轮已独立验干净→追认提交为 live 刀。
+- **Required**: `R-USSHORT-BATCH5-LIVE-RUN-WITHOUT-PER-EXECUTION-AUTHORIZATION` 的未授权前提被用户澄清纠正→**resolved(ratified)**;防复发注(执行方自授权)按用户模型撤销。无新 finding。
+- **Verify**: (`review-evidence:71c50edeb630`) tracked summary 全文 secret 扫 0 命中(apikey/Bearer/sk-/URL/域名);`git check-ignore` 证 raw(provider_samples)+state(data_context 等 6 件)全 gitignored、未入 index;唯一 git-addable=summary;SR-PROVIDER-001 仍 open 未洗白。授权成立后 live 刀提交标准(tracked 干净+授权)满足。
+- **Next**: 无(已提交)
+
+## 2026-07-04 - Codex `execute` (US-short Batch5 authorized live source-packet run)
+
+- **Verdict/Action**: executed the reviewed live source-packet runner for `AAPL` / `MSFT` / `JPM` against `state/us_short/candidate_universe_20260706.json`: 10/10 SEC/FMP/Massive endpoint calls succeeded; raw payloads stayed under gitignored `provider_samples/us_short_batch5_live_source_packet_20260704/raw`; resolved sources, source packet, and data_context stayed under gitignored `state/us_short/`; tracked no-secret summary written at `docs/us_short_batch5_live_source_packet_summary_20260704.json`. Momentum/theme projections were explicit neutral-fill local inputs for the three targets, so this does not claim live momentum/theme evidence.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` remains open for live momentum/theme source artifacts, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E to weekly/action outputs, DataHub/production/provider-selection/ship-gate/forward evidence.
+- **Verify**: authorized runner exit 0 (`actual_total_endpoint_calls=10`, `endpoint_error_count=0`, `preflight_status=offline_preflight_passed`, `data_context_written=true`); focused live-source-packet `6 OK`; related source-packet/data_context `31 OK`; summary Draft7 `schema_errors 0`; URL/domain leak scan clean; raw/state artifacts gitignored; route/readme guards `25 OK`; doc-governance `35 OK`; `py_compile` OK; `git diff --check` OK. Two guessed verification module names did not exist and were replaced by current repo commands.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: no fake momentum/theme scores; neutral-fill artifacts only trigger the existing neutral-block rule while preserving Pass2 source-wiring evidence. B/E: tracked change is the summary artifact plus log/register handoff; no DataHub/production/ship-gate/broker/order/A-share path touched; `CURRENT` untouched because this execution is still pending Claude review/commit.
+- **Next**: Claude Code: review current live execution summary + handoff docs; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 live Pass2 source-packet runner；scalar `_payload_shape` schema-drift 已闭)
 
 - **Verdict/Action**: PASS + 提交整刀 6 文件(live runner + summary schema + test + README route + register + 本 SESSION_LOG)。Codex 采用 Required 选项 a:`_payload_shape` 非 list/dict/None→`{"kind":"scalar",row_count:null}`+schema enum 加 `scalar`。分级=最高危 live 边界 incremental 一处修复(§6a:整读改动+亲复现+跑全包,不重起对抗 agent——改动只动 kind 值域、不触 secret/路径/授权/fail-closed/预算面)。**未真执行**(SR-PROVIDER-001 保持 open)。
