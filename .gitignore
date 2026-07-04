@@ -104,4 +104,7 @@ desktop.ini
 # --- Claude Code local state (per-project; private) ---
 .claude/
 
+# --- Local reviewer scratch probes ---
+reviewer_probes/
+
 # Human-written result notes and docs remain trackable.

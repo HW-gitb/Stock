@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (reviewer_probes ignore hygiene — Codex fix 复审, 轻量)
+
+- **Verdict/Action**: PASS + 提交 2 文件(`.gitignore` + 本 SESSION_LOG)。分级=轻量(3 行 `.gitignore` 加 `reviewer_probes/`,纯本地 scratch 忽略、无业务/代码/schema)→整读 diff + 验证忽略生效 + 无 over-ignore/无 tracked 消费者,不起独立 agent。采纳上刀 Options。
+- **Required**: 无(无新 finding、register 无翻转)。
+- **Verify**: `git diff .gitignore` 仅加 `reviewer_probes/`(第 108 行);`check-ignore -v` 确认 4 probe + __pycache__ 全命中 `.gitignore:108:reviewer_probes/`、无 over-ignore;`ls-files reviewer_probes/` 空(从未 tracked→其他 clone 无影响);grep `reviewer_probes` 仅 `.gitignore`/SESSION_LOG(无 tracked 代码消费者);post-fix `git status` 只剩 `.gitignore`+SESSION_LOG。本轮 gate 未自动 re-arm(=上刀 Optional③,active_review.json 陈旧完成态),经门自身 `handle_prompt_hook` 重 arm 当前树 → 本 Verify 携 `review-evidence:bac70058808e`(snapshot= M .gitignore / M SESSION_LOG,即受审树)。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `fix` (reviewer scratch probes ignore hygiene)
+
+- **Verdict/Action**: added `.gitignore` coverage for local `reviewer_probes/` scratch scripts left by adversarial review probes, so review-only probe files no longer keep the post-PASS worktree dirty. No probe file was deleted or committed.
+- **Required**: none new. No business runner/schema/result/provider/live/DataHub/production/ship-gate/cross-lane code changed; current SESSION_LOG top had no FAIL/Required to repair.
+- **Verify**: red first: `git check-ignore -v reviewer_probes\probe_adapter_attacks.py` exited 1 before the fix. Green: same command now reports `.gitignore:108:reviewer_probes/`; `git status --short --untracked-files=all` now shows only `.gitignore` before this handoff entry.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. B grep/source review found `reviewer_probes/` only in the current PASS handoff scope note and untracked scratch path; C reverse chose ignore coverage rather than deleting local probes, preserving reviewer scratch evidence while restoring normal clean-worktree semantics. `CURRENT` and register untouched because no material Required or settled lane state changed.
+- **Next**: Claude Code: review this hygiene diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (Claude review anti-fabrication gate — 本地 hook + 门脚本 + AGENTS/协议锚)
 
 - **Verdict/Action**: PASS + 提交 5 文件(`.tools/claude_review_gate.py` + `tests/test_claude_review_gate.py` + AGENTS.md 新 §Claude review anti-fabrication gate + AI_REVIEW_PROTOCOL 指针 + 本 SESSION_LOG)。分级=治理/审查工具刀(本地 gitignored hook + 门脚本 + doc 锚,无业务/provider/live/schema),整读全 scope + 自跑测试 + 自撰对抗探针;非 provider-live fail-closed 边界故未起独立 agent(已声明)。Scope-gate:未跟踪 `reviewer_probes/`(4 个上一刀 offering-audit 审查遗留探针、与本刀无关)未纳入提交、只 stage 这 5 文件。
