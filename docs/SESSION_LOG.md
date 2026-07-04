@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (US-short batch5 analyst-grades→risk_downgrade offline seam)
+
+- **Verdict/Action**: PASS + 提交 4 文件(`engine/us_short_analyst_grade_risk.py` + `tests/test_us_short_analyst_grade_risk.py` + `docs/README.md` route 行 + 本 SESSION_LOG)。分级=中(新纯/离线消费引擎,把 Cut5-c FMP 评级事实投影进 §4.2 软 `risk_downgrade`→喂 core_score 扣分、永不硬否决、非 provider-live/gate 边界)→整读 seam + 被消费引擎(`risk_downgrade` 全体 + producer 输出/summary/checked/excluded emit) + 设计 §4.2/§5.2 + 自撰 7 例对抗探针 + 亲跑全包;非 provider-live/fail-closed 边界故未起独立 agent(已声明)。
+- **Required**: 无(本刀无新 finding、register 无翻转)。Optional(非阻塞、§13#7 校准 prior、soft-only):`_collective_downgrade` 用 summary 的总 `distinct_firms`(含 up/neu 行)当"集体下调"代理→单一 firm 双降 + 任一第二 firm(哪怕 neutral)且 net<0 会触发 8 分软扣;精确"≥2 家下调"语义需 Cut5-c producer 额外 emit distinct_downgrading_firms(跨刀、非本 seam scope)。
+- **Verify**: (`review-evidence:b9d11e11c76e`) 契约三角校验 4 常量(_RESULT/_SIGNAL/_SUMMARY/checked-disposition)+ excluded str 值全 == 真 producer(`resolve_analyst_grade_actions` L302/341-346),seam 的 net==up−dn 复校永不误拒真输出;评分独立重算 40·50%+35·50%+25·50%−8=42.0==断言。亲跑:focused 5 OK、全离线 `*us_short*` 3559 OK、schema 802 OK、doc/route guards 60 OK。7 探针全 fail-closed/fail-safe:错标 checked→raise、缺/未覆盖→中性零扣、hostile 大小写跨图歧义→raise、真 2-firm→8 分、net=0→0、9 降 hard_veto 仍 False。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `执行` (US-short batch5 analyst-grades -> risk_downgrade offline seam)
+
+- **Verdict/Action**: built the pure/offline FMP analyst-grades consumer seam. New `engine/us_short_analyst_grade_risk.py` consumes resolved `resolve_analyst_grade_actions` facts and projects §5.2 collective analyst downgrade into the existing soft `risk_downgrade_by_ticker` map, while preserving checked/excluded/missing coverage states. Added `tests/test_us_short_analyst_grade_risk.py` and a thin `docs/README.md` route row. No provider/live/network/raw/DataHub/production/ship-gate/A-share path touched.
+- **Required**: none new. `system_risk_register` untouched because no material finding or risk-state flip was introduced.
+- **Verify**: red first `tests.test_us_short_analyst_grade_risk` failed on missing module; green after fix: new seam 5 OK, related source/risk/score tests 88 OK, US-short discover 3559 OK (1 skip), US-short schema 802 OK, route-doc guards 25 OK, doc/review guards 41 OK, `py_compile` OK, `git diff --check` exit 0 with README CRLF warning only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. B scope grep found no network/provider/secret/live strings in new code/test; new Python/test files are ASCII-only. C reverse cases cover single-firm/nonnegative-net no penalty, checked neutral, excluded/missing distinct coverage, malformed signal fail-closed, and real `resolve_analyst_grade_actions` -> score composer positive control.
+- **Next**: Claude Code: review current US-short analyst-grades risk seam diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (Claude review gate Optional ①②③ 硬化 — Codex option修复 复审)
 
 - **Verdict/Action**: PASS + 提交 3 文件(`.tools/claude_review_gate.py` + `tests/test_claude_review_gate.py` + 本 SESSION_LOG)。分级=中(改的是 gate 自身=门控我审查的工具,但纯本地工具、无业务/PIT/数据安全面)→整读 diff + 全函数控制流 + 自跑套件 + 自打逐分支对抗探针,不起独立 agent(逐分支已亲验)。采纳上刀 Options 三项。
