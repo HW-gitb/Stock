@@ -3,7 +3,7 @@
 
 Covers the whole class: binding<->const triangulation + schema, canonical identity + hostile-key hardening +
 symbol cross-check, §3.1 provenance + §3.5 PIT (date <= as_of; future excluded; recency window out-of-window),
-direction from FMP's own action (upgrade/downgrade/else->neutral, never fabricated), the net/distinct-firms
+direction from FMP's own action (upgrade/downgrade/else->neutral, never fabricated), net/distinct-downgrading-firms
 summary, coverage/parser emission fitness, and structural fail-closed. No network / provider.
 """
 from __future__ import annotations
@@ -69,6 +69,7 @@ class BindingTriangulationTests(unittest.TestCase):
         self.assertEqual(b["checked_empty_disposition"], g._CHECKED_EMPTY_DISPOSITION)
         self.assertEqual(b["lineage_ref_format"]["structure"], g._LINEAGE_REF_FORMAT)
         self.assertEqual(b["authorization_boundary"], g._AUTHORIZATION_BOUNDARY)
+        self.assertEqual(tuple(b["summary_contract"]["fields"]), g._SUMMARY_FIELDS)
 
     def test_binding_matches_schema(self):
         import jsonschema
@@ -101,7 +102,20 @@ class DirectionAndSummaryTests(unittest.TestCase):
         s = out["signals"]["AAPL"]["analyst_actions_recent"]
         self.assertEqual((s["upgrades"], s["downgrades"], s["neutrals"], s["net"]), (2, 1, 1, 1))
         self.assertEqual(s["distinct_firms"], 3)         # A, B, C distinct
+        self.assertEqual(s["distinct_downgrading_firms"], 1)
         self.assertEqual(s["window_days"], 90)
+
+    def test_distinct_downgrading_firms_excludes_neutral_second_firm(self):
+        out = g.resolve_analyst_grade_actions(as_of=AS_OF, grades_by_ticker={"AAPL": rec([
+            grade(action="downgrade", company="BankA", date="2026-06-01", new="Sell"),
+            grade(action="downgrade", company=" banka ", date="2026-06-02", new="Underperform"),
+            grade(action="maintain", company="BankB", date="2026-06-03", new="Hold"),
+        ])})
+
+        s = out["signals"]["AAPL"]["analyst_actions_recent"]
+        self.assertEqual(s["downgrades"], 2)
+        self.assertEqual(s["distinct_firms"], 2)
+        self.assertEqual(s["distinct_downgrading_firms"], 1)
 
     def test_records_sorted_by_date(self):
         out = g.resolve_analyst_grade_actions(as_of=AS_OF, grades_by_ticker={"AAPL": rec([

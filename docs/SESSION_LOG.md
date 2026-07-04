@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS (analyst-grades ddf 精度修复 + AGENTS 执行/修复三段式规则) + 提交
+
+- **Verdict/Action**: PASS + 分两笔提交(scope 纪律):① AGENTS.md「普通执行/修复三段式」治理规则——**用户经 AskUserQuestion 确认「是我要的」**才提交(防 Codex 自加 AGENTS 规则的既知 scope-creep 类、未在本会话核实前不盖章);② 精度修复 8 文件(producer/seam/binding/schema/3 tests/README)——闭合上刀我的 Optional:producer 新 emit `distinct_downgrading_firms`(仅有下调的家)、seam gate 改 `>=2` + 新增 bounds、四方(producer/seam/binding/schema)三角同步。分级=中(改 producer 契约 + 评分 gate)→整读双引擎 + 四方三角 + 自撰 10 探针 + **独立 §3.5 对抗 agent(本刀真起、contract-changing)** + 亲跑全包。**审查中撞见 Codex 并发改 SESSION_LOG**(串行违规)→未 race,经用户确认 Codex 收手 + 树静止(code numstat 稳定)后才提交。
+- **Required**: 无(精度修复无新 finding、register 无翻转;AGENTS 规则经用户确认来源、非缺陷)。
+- **Verify**: (`review-evidence:2def1561f20e`) 四方字段列(producer `_SUMMARY_FIELDS` / seam `_SUMMARY_KEYS` / binding / schema const)全等 7 字段;producer set-comprehension 结构保证 ddf≤distinct_firms 且 ≤downgrades→seam bounds 永不误拒真输出(agent 4000 随机真样本 0 触发/0 误拒)。亲跑:focused 71 OK、全离线 `*us_short*` 3562 OK、schema 803 OK、doc/route guards 60 OK;grep 确认 engine/runners 无第三方 6-key 消费者。10 探针 + 独立 agent 全 CLEAN:FP(1家双降+中性2家 ddf=1)压 0、真 2 家下调 ddf=2 仍 8 分、单家 5 降=0、net=0=0、bounds/old-6key/bool-ddf 全 raise、soft-only 不漏 hard_veto。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `执行` (ordinary execute/fix final-reply three-section rule)
+
+- **Verdict/Action**: added/refined the user's ordinary executor/fixer final-reply rule in `AGENTS.md §输出结论规则`: non-review `执行` / `修复` closeouts use exactly three sections — `大白话`, `给 Claude Code 的命令`, `下一步我需要做什么`; the Claude Code command section is the shortest command token only (e.g. `审查`), while the next-step section names the substantive business/design next step (e.g. the next US-short design item), not the review/commit flow. This does not reuse or override the separate `审查` verdict template. No business code, provider/live, schema/data behavior, or review gate behavior changed.
+- **Required**: none new. `system_risk_register` untouched because this is a collaboration-output docs rule only.
+- **Verify**: doc/governance/review/route guards 66 OK; `git diff --check` exit 0 with CRLF warnings only. No business test pack rerun because this slice is docs-only and does not affect runtime behavior.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. B: rule was written only in `AGENTS.md`, the project root instruction source; C/E: wording explicitly scopes the new three-section format to ordinary executor/fixer final replies, forces the command section to a minimal command word, puts the business/design next step in the third section, and says it does not change the `审查` `Verdict` / `Required / Optional / Options` / `下一步` standard.
+- **Next**: Claude Code: review current docs-rule addition together with the pending Optional precision diff; PASS then commit.
+
+## 2026-07-04 - Codex `执行` (US-short analyst-grades collective-downgrade precision Optional)
+
+- **Verdict/Action**: closed the latest Claude Optional for the analyst-grades→risk seam. `resolve_analyst_grade_actions` now emits `distinct_downgrading_firms` (only firms with at least one downgrade), the binding/schema const-pin that summary field, and `project_analyst_grade_risk_downgrade` requires `distinct_downgrading_firms >= 2` before applying the analyst soft penalty. A second firm with only neutral/up actions no longer turns one firm's repeated downgrades into a collective downgrade.
+- **Required**: none new. `system_risk_register` untouched because this closes a non-blocking Optional and introduces no material open risk.
+- **Verify**: red first: focused producer+risk tests failed on missing `distinct_downgrading_firms` / old seam contract. Green after fix: producer+risk+schema focused 71 OK; related source/risk/score/schema 105 OK; route guards 25 OK; US-short schema 803 OK; full US-short discover 3562 OK (1 skip); doc/review guards 41 OK; `py_compile` OK; `git diff --check` exit 0 with CRLF warnings only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A: summary field set is pinned in module const + binding JSON + schema + schema-mutant test. B: grep for `distinct_downgrading_firms` shows only producer, seam, binding/schema, tests, and this active handoff; stale active test docstring updated. C: reverse test `test_neutral_second_firm_does_not_make_single_firm_downgrade_collective` prevents the original false-positive class; bounds validation rejects impossible downgrading-firm counts. E: README row is a thin pointer; no CURRENT/register transient state changed.
+- **Next**: Claude Code: review current Optional precision diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short batch5 analyst-grades→risk_downgrade offline seam)
 
 - **Verdict/Action**: PASS + 提交 4 文件(`engine/us_short_analyst_grade_risk.py` + `tests/test_us_short_analyst_grade_risk.py` + `docs/README.md` route 行 + 本 SESSION_LOG)。分级=中(新纯/离线消费引擎,把 Cut5-c FMP 评级事实投影进 §4.2 软 `risk_downgrade`→喂 core_score 扣分、永不硬否决、非 provider-live/gate 边界)→整读 seam + 被消费引擎(`risk_downgrade` 全体 + producer 输出/summary/checked/excluded emit) + 设计 §4.2/§5.2 + 自撰 7 例对抗探针 + 亲跑全包;非 provider-live/fail-closed 边界故未起独立 agent(已声明)。

@@ -40,7 +40,7 @@
       "required": ["over", "fields", "net"],
       "properties": {
         "over": { "type": "string" },
-        "fields": { "const": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"] },
+        "fields": { "const": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "distinct_downgrading_firms", "window_days"] },
         "net": { "type": "string" },
         "note": { "type": "string" }
       },

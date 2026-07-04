@@ -72,6 +72,8 @@ _AUTHORIZATION_BOUNDARY = {
     "live_fetch": False, "network": False, "raw_capture": False, "runner_wired": False,
     "datahub": False, "production": False, "ship_gate": False,
 }
+_SUMMARY_FIELDS = ("upgrades", "downgrades", "neutrals", "net", "distinct_firms",
+                   "distinct_downgrading_firms", "window_days")
 
 
 class FmpGradesError(ValueError):
@@ -281,7 +283,8 @@ def resolve_analyst_grade_actions(*, as_of: str, grades_by_ticker: Any) -> dict[
     `checked_no_recent_activity`) retaining its provenance — DISTINCT from a never-queried ticker (§3.3).
 
     Returns {signals: {ticker: {analyst_actions_recent: {upgrades, downgrades, neutrals, net, distinct_firms,
-    window_days}}}, records: {ticker: [ {date, grading_company, new_grade, previous_grade, action, direction} ...
+    distinct_downgrading_firms, window_days}}}, records: {ticker: [ {date, grading_company, new_grade,
+    previous_grade, action, direction} ...
     sorted by date ]}, provenance: {ticker: {...7 §3.1 fields, total_record_count, out_of_window_count,
     future_excluded_count}}, excluded: {ticker: reason}, checked: {ticker: {disposition, coverage_status,
     parser_status, total_record_count, out_of_window_count, future_excluded_count}}}. Raises FmpGradesError on any
@@ -338,9 +341,13 @@ def resolve_analyst_grade_actions(*, as_of: str, grades_by_ticker: Any) -> dict[
         downgrades = sum(1 for r in fit if r["direction"] == "down")
         neutrals = len(fit) - upgrades - downgrades
         distinct_firms = len({_norm_firm(r["grading_company"]) for r in fit})
+        distinct_downgrading_firms = len({
+            _norm_firm(r["grading_company"]) for r in fit if r["direction"] == "down"
+        })
         signals[ct] = {"analyst_actions_recent": {
             "upgrades": upgrades, "downgrades": downgrades, "neutrals": neutrals,
-            "net": upgrades - downgrades, "distinct_firms": distinct_firms, "window_days": _RECENCY_WINDOW_DAYS}}
+            "net": upgrades - downgrades, "distinct_firms": distinct_firms,
+            "distinct_downgrading_firms": distinct_downgrading_firms, "window_days": _RECENCY_WINDOW_DAYS}}
         records[ct] = fit
         provenance[ct] = {**base_prov, **counts}
     return {"signals": signals, "records": records, "provenance": provenance, "excluded": excluded, "checked": checked}

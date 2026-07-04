@@ -74,6 +74,12 @@ class FmpGradesBindingSchemaTest(unittest.TestCase):
         # re-mapping a maintain/unknown action to a fabricated direction must fail
         self.assertTrue(self._errors(self._mutated(["direction_map", "_default"], "down")))
 
+    def test_summary_fields_drift_rejected(self):
+        self.assertTrue(self._errors(self._mutated(
+            ["summary_contract", "fields"],
+            ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"],
+        )))
+
     def test_lineage_format_drift_rejected(self):
         self.assertTrue(self._errors(self._mutated(["lineage_ref_format", "structure"], "free_text")))
 

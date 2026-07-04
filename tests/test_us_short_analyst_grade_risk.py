@@ -31,7 +31,17 @@ def _result(*, signals=None, checked=None, excluded=None):
     }
 
 
-def _signal(*, upgrades=0, downgrades=0, neutrals=0, distinct_firms=2, net=None):
+def _signal(
+    *,
+    upgrades=0,
+    downgrades=0,
+    neutrals=0,
+    distinct_firms=2,
+    distinct_downgrading_firms=None,
+    net=None,
+):
+    if distinct_downgrading_firms is None:
+        distinct_downgrading_firms = min(distinct_firms, downgrades)
     return {
         "analyst_actions_recent": {
             "upgrades": upgrades,
@@ -39,6 +49,7 @@ def _signal(*, upgrades=0, downgrades=0, neutrals=0, distinct_firms=2, net=None)
             "neutrals": neutrals,
             "net": upgrades - downgrades if net is None else net,
             "distinct_firms": distinct_firms,
+            "distinct_downgrading_firms": distinct_downgrading_firms,
             "window_days": 90,
         }
     }
@@ -114,6 +125,23 @@ class AnalystGradeRiskProjectionTest(unittest.TestCase):
         self.assertEqual(projection["risk_downgrade_by_ticker"]["MSFT"]["points"], 0.0)
         self.assertFalse(projection["analyst_collective_downgrade_by_ticker"]["AAPL"])
         self.assertFalse(projection["analyst_collective_downgrade_by_ticker"]["MSFT"])
+
+    def test_neutral_second_firm_does_not_make_single_firm_downgrade_collective(self):
+        projection = project_analyst_grade_risk_downgrade(
+            target_tickers=["AAPL"],
+            analyst_grade_actions=_result(signals={
+                "AAPL": _signal(
+                    upgrades=0,
+                    downgrades=2,
+                    neutrals=1,
+                    distinct_firms=2,
+                    distinct_downgrading_firms=1,
+                )
+            }),
+        )
+
+        self.assertEqual(projection["risk_downgrade_by_ticker"]["AAPL"]["points"], 0.0)
+        self.assertFalse(projection["analyst_collective_downgrade_by_ticker"]["AAPL"])
 
     def test_checked_excluded_and_missing_are_distinct_coverage_states(self):
         projection = project_analyst_grade_risk_downgrade(

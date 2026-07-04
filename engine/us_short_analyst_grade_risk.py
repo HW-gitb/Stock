@@ -23,7 +23,15 @@ MIN_COLLECTIVE_DISTINCT_FIRMS = 2
 
 _RESULT_KEYS = frozenset({"signals", "records", "provenance", "checked", "excluded"})
 _SIGNAL_KEYS = frozenset({"analyst_actions_recent"})
-_SUMMARY_KEYS = frozenset({"upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"})
+_SUMMARY_KEYS = frozenset({
+    "upgrades",
+    "downgrades",
+    "neutrals",
+    "net",
+    "distinct_firms",
+    "distinct_downgrading_firms",
+    "window_days",
+})
 _CHECKED_DISPOSITION = "checked_no_recent_activity"
 
 
@@ -97,6 +105,10 @@ def _summary(row: Any, *, ticker: str) -> dict[str, int]:
     neutrals = _strict_nonnegative_int(recent["neutrals"], name=f"{ticker}.neutrals")
     net = _strict_int(recent["net"], name=f"{ticker}.net")
     distinct_firms = _strict_nonnegative_int(recent["distinct_firms"], name=f"{ticker}.distinct_firms")
+    distinct_downgrading_firms = _strict_nonnegative_int(
+        recent["distinct_downgrading_firms"],
+        name=f"{ticker}.distinct_downgrading_firms",
+    )
     window_days = _strict_nonnegative_int(recent["window_days"], name=f"{ticker}.window_days")
     if window_days <= 0:
         _fail(f"{ticker}.window_days must be positive")
@@ -104,12 +116,15 @@ def _summary(row: Any, *, ticker: str) -> dict[str, int]:
         _fail(f"{ticker}.net must equal upgrades - downgrades")
     if distinct_firms > upgrades + downgrades + neutrals:
         _fail(f"{ticker}.distinct_firms cannot exceed recent action count")
+    if distinct_downgrading_firms > distinct_firms or distinct_downgrading_firms > downgrades:
+        _fail(f"{ticker}.distinct_downgrading_firms exceeds downgrade/firms bounds")
     return {
         "upgrades": upgrades,
         "downgrades": downgrades,
         "neutrals": neutrals,
         "net": net,
         "distinct_firms": distinct_firms,
+        "distinct_downgrading_firms": distinct_downgrading_firms,
         "window_days": window_days,
     }
 
@@ -117,7 +132,7 @@ def _summary(row: Any, *, ticker: str) -> dict[str, int]:
 def _collective_downgrade(summary: dict[str, int]) -> bool:
     return (
         summary["downgrades"] >= MIN_COLLECTIVE_DOWNGRADES
-        and summary["distinct_firms"] >= MIN_COLLECTIVE_DISTINCT_FIRMS
+        and summary["distinct_downgrading_firms"] >= MIN_COLLECTIVE_DISTINCT_FIRMS
         and summary["net"] < 0
     )
 

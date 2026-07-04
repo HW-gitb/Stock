@@ -13,9 +13,9 @@
   "record_fields_required": ["date", "action", "gradingCompany", "newGrade", "previousGrade"],
   "summary_contract": {
     "over": "the recent-window (<= recency_window_days) fit records only",
-    "fields": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "window_days"],
+    "fields": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "distinct_downgrading_firms", "window_days"],
     "net": "upgrades - downgrades",
-    "note": "the §4.2 analyst-revision-DIRECTION signal + the §5.2 collective-downgrade basis (distinct_firms = distinct gradingCompany acting in the window; many distinct firms downgrading is the §5.2 signal)."
+    "note": "the §4.2 analyst-revision-DIRECTION signal + the §5.2 collective-downgrade basis (distinct_downgrading_firms = distinct gradingCompany with at least one downgrade in the window; neutral/up firms do not create the collective-downgrade signal)."
   },
   "pit_rule": "each record `date` must be a real YYYY-MM-DD <= as_of; a future-dated record is EXCLUDED (look-ahead, §3.5); a record older than recency_window_days is OUT-OF-WINDOW (counted, not in the summary/records). A malformed (bad-shape) date fails closed (raise). If a record carries `symbol`, canonical(symbol) must equal the ticker key (no mis-attribution).",
   "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
