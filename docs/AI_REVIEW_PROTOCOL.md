@@ -35,6 +35,8 @@ Every reviewer or implementer still follows the startup routing in `AGENTS.md`:
 
 Reviewer verdicts must be prepended to `docs/SESSION_LOG.md` before replying to the user, using the minimal review-cycle template (see Single-source recording below).
 
+Claude Code review evidence is also subject to the anti-fabrication gate in `AGENTS.md §Claude review anti-fabrication gate`. In short: only actual tool results, user-run `!` outputs, or the local `.tools/claude_review_gate.py` `REVIEW EVIDENCE SNAPSHOT` count as command/file/test evidence; simulated Bash / Read / Agent output is never evidence; uncertain provenance must be marked `NOT_VERIFIED`.
+
 Review depth is governed by `AGENTS.md §Codex adversarial review standard` (historical standard name; current reviewer = Claude Code), especially the first-review slice-complete rule and the one-pass defect-class matrix rule. A review must not be delta-only on the first pass, and must not stop at the first obvious issue when same-class variants remain unreviewed.
 
 A review must CAPTURE the following — but split by destination, never duplicated:

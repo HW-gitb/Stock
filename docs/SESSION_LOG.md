@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (Claude review anti-fabrication gate — 本地 hook + 门脚本 + AGENTS/协议锚)
+
+- **Verdict/Action**: PASS + 提交 5 文件(`.tools/claude_review_gate.py` + `tests/test_claude_review_gate.py` + AGENTS.md 新 §Claude review anti-fabrication gate + AI_REVIEW_PROTOCOL 指针 + 本 SESSION_LOG)。分级=治理/审查工具刀(本地 gitignored hook + 门脚本 + doc 锚,无业务/provider/live/schema),整读全 scope + 自跑测试 + 自撰对抗探针;非 provider-live fail-closed 边界故未起独立 agent(已声明)。Scope-gate:未跟踪 `reviewer_probes/`(4 个上一刀 offering-audit 审查遗留探针、与本刀无关)未纳入提交、只 stage 这 5 文件。
+- **Required**: 无(本刀无新 finding、register 无翻转)。Optional(非阻塞、by-design 可辩护):① `is_review_prompt` 只认 审查/review 打头或少数命令词→非打头触发语(如「有的话审查」)不 arm、靠书面规则 + `review-evidence:not_available` 兜底;② Stop hook 遇损坏 active_review.json 放行(fail-open、合项目 hook「告警不 brick」哲学);③ active_review.json 完成不清除只盖 completed_at(下次审查用新 token 重写、stale 风险低)。
+- **Verify**: 整读门脚本全体(detector/snapshot/prompt-hook/stop-hook/validate)+ 4 probe + AGENTS/协议 diff + settings.local.json 接线。自跑真实工具输出:`tests.test_claude_review_gate` 4 OK、doc/governance/route 60 OK、py_compile 5 文件 OK;对抗探针:armed+缺 token→Stop exit 2 阻断、dormant→放行、corrupt→放行(=Optional②)。本刀 gate 恰 armed(`review-evidence:f456a03fcbe0`、snapshot 与受审树逐字节一致=我自跑 git status/diff/log)故本 Verify 携该 token。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex execute (Claude review anti-fabrication gate)
+
+- **Verdict/Action**: added evidence-gated Claude review workflow: tracked `.tools/claude_review_gate.py` + `tests/test_claude_review_gate.py`, AGENTS/AI_REVIEW_PROTOCOL anti-fabrication rule, and local gitignored `.claude` `/stock-review` skill + UserPromptSubmit/Stop hooks.
+- **Required**: none new. No business runner/schema/result/provider/live/DataHub/production/ship-gate/cross-lane code changed; no `REVIEW_PACKET.md`; material findings remain register-only.
+- **Verify**: red first missing helper/AGENTS anchors; green `tests.test_claude_review_gate` 4 OK; combined doc/governance/route 64 OK; py_compile OK; `.claude/settings.local.json` JSON OK; PowerShell/bundled-Python `/stock-review` prompt-hook OK + stop-hook empty-state OK; `git diff --check` warning-only CRLF; no active review token file present.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A: evidence-gate class covers prompt injection + Stop token validation + AGENTS/AI protocol + local skill/hooks. B: grep/route review kept no third `REVIEW_PACKET.md` truth source. C: discussion prompts do not arm Stop hook; missing token blocks. E: CURRENT/register untouched because no material finding or settled lane state changed.
+- **Next**: Claude Code: review current workflow diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short SEC submissions→offering-audit adapter + data_context wrapper — 独立 agent HELD)
 
 - **Verdict/Action**: PASS + 提交 6 文件(engine adapter + runner wrapper + 2 test + README + SESSION_LOG)。分级=最高危 tier③(新解析器 build_offering_audit_from_sec_submissions + runner wrapper→喂 Pass2 准入门)。**本 entry 由 AI reviewer(Claude)自撰;本会话该 reviewer 的 Read/探针/跑测试通道多次污染并伪造过工具输出,故本 verdict 刻意只撑在不经该通道的证据上**:真实 git diff 整读 + 用户 !sed 被消费函数 + 独立对抗 agent + 用户亲跑 full pack。
