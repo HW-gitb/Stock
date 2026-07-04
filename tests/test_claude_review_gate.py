@@ -25,6 +25,7 @@ class ClaudeReviewGateTests(unittest.TestCase):
         gate = _load_gate()
         self.assertTrue(gate.is_review_prompt("审查当前 diff"))
         self.assertTrue(gate.is_review_prompt("请复审这次修改"))
+        self.assertTrue(gate.is_review_prompt("有的话审查"))
         self.assertTrue(gate.is_review_prompt("/stock-review standard"))
         self.assertFalse(gate.is_review_prompt("帮我修改 claude code 的审查 workflow"))
         self.assertFalse(gate.is_review_prompt("讨论审查制度，不进入实际 review"))
@@ -70,6 +71,44 @@ class ClaudeReviewGateTests(unittest.TestCase):
         self.assertEqual(gate.validate_session_log_text(compliant_log, token), [])
         self.assertIn("Verify", "\n".join(gate.validate_session_log_text(missing, token)))
         self.assertIn("Verify", "\n".join(gate.validate_session_log_text(wrong_line, token)))
+
+    def test_stop_hook_blocks_corrupt_active_review_state(self):
+        gate = _load_gate()
+        with tempfile.TemporaryDirectory() as td:
+            state_dir = Path(td) / "state"
+            state_dir.mkdir()
+            state_path = state_dir / "active_review.json"
+            state_path.write_text("{bad json", encoding="utf-8")
+
+            self.assertEqual(gate.handle_stop_hook(root=Path(td), state_dir=state_dir), 2)
+            self.assertTrue(state_path.exists())
+
+    def test_stop_hook_clears_active_review_state_after_success(self):
+        gate = _load_gate()
+        token = "review-evidence:abc123"
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            docs = root / "docs"
+            docs.mkdir()
+            (docs / "SESSION_LOG.md").write_text(
+                "# log\n\n---\n\n"
+                "## 2026-07-04 - Claude review PASS (slice)\n"
+                "- **Verdict/Action**: PASS\n"
+                "- **Required**: none\n"
+                f"- **Verify**: full pack OK; {token}\n"
+                "- **Next**: none\n",
+                encoding="utf-8",
+            )
+            state_dir = root / ".claude" / "review_gate"
+            state_dir.mkdir(parents=True)
+            state_path = state_dir / "active_review.json"
+            state_path.write_text(
+                json.dumps({"evidence_token": token}, ensure_ascii=False),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(gate.handle_stop_hook(root=root, state_dir=state_dir), 0)
+            self.assertFalse(state_path.exists())
 
     def test_agents_pins_review_anti_fabrication_gate(self):
         text = AGENTS.read_text(encoding="utf-8")

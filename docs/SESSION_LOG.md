@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-04 — Claude 审查 PASS + 提交 (Claude review gate Optional ①②③ 硬化 — Codex option修复 复审)
+
+- **Verdict/Action**: PASS + 提交 3 文件(`.tools/claude_review_gate.py` + `tests/test_claude_review_gate.py` + 本 SESSION_LOG)。分级=中(改的是 gate 自身=门控我审查的工具,但纯本地工具、无业务/PIT/数据安全面)→整读 diff + 全函数控制流 + 自跑套件 + 自打逐分支对抗探针,不起独立 agent(逐分支已亲验)。采纳上刀 Options 三项。
+- **Required**: 无(无新 finding、register 无翻转)。Optional(非阻塞):① success-path `state_path.unlink()` 未裹 try/except(completed 分支裹了),exists-check→unlink 间被删的竞态会抛错=轻微不对称;② corrupt-state 现硬挡每回合直到手清(比原 fail-open 略重的 brick,但对反伪造门可辩护 + stderr 有恢复指引)。
+- **Verify**: 整读 diff + 新 `is_review_prompt`/`handle_stop_hook` 全控制流。自跑真实工具输出:`tests.test_claude_review_gate` 6 OK(4+2 新)、doc/governance/route 60 OK、py_compile OK。逐分支对抗探针:detector 新词组(有的话审查/请审查/继续审查/再审查)arm、讨论/误报控制仍 False;stop-hook corrupt→2(留文件)、completed→0(清)、missing-token→2、success→0(清)、**armed+错 token→2(核心 fail-closed 保留)**、no-state→0;Optional①②③ 全闭。本轮 gate 仍未自动 re-arm,经门自身 `handle_prompt_hook` 重 arm 当前树 → 本 Verify 携 `review-evidence:d6fc36a84745`(snapshot= 3 文件 M,即受审树)。
+- **Next**: 无(已提交)。
+
+## 2026-07-04 - Codex `option修复` (Claude review anti-fabrication gate Optional closeout)
+
+- **Verdict/Action**: repaired the three non-blocking Claude review gate Optional items from commit `433e4240`: non-leading command intent such as `有的话审查` now arms review detection; corrupt `active_review.json` now blocks Stop instead of fail-open; successful Stop validation now clears active state instead of leaving a completed marker. No business runner/schema/result/provider/live/DataHub/production/ship-gate/cross-lane code changed.
+- **Required**: none new. This is Option-only hardening; `CURRENT` and `system_risk_register` untouched because no material Required or settled lane state changed.
+- **Verify**: red first `tests.test_claude_review_gate` failed 3 cases (`有的话审查`, corrupt state fail-open, success state not cleared). Green after fix: `tests.test_claude_review_gate` 6 OK; `.tools\verify_doc_process.cmd` 60 OK; `py_compile` OK for gate + test; `git diff --check` exit 0 with CRLF warnings only.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. B grep kept changes confined to `.tools/claude_review_gate.py`, `tests/test_claude_review_gate.py`, and this handoff. C reverse: discussion prompts remain excluded before narrow command-phrase matching; stale completed state is only cleaned if already completed; corrupt/missing-token active state now fails closed with stderr guidance.
+- **Next**: Claude Code: review current Option hardening diff; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (reviewer_probes ignore hygiene — Codex fix 复审, 轻量)
 
 - **Verdict/Action**: PASS + 提交 2 文件(`.gitignore` + 本 SESSION_LOG)。分级=轻量(3 行 `.gitignore` 加 `reviewer_probes/`,纯本地 scratch 忽略、无业务/代码/schema)→整读 diff + 验证忽略生效 + 无 over-ignore/无 tracked 消费者,不起独立 agent。采纳上刀 Options。

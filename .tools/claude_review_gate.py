@@ -42,6 +42,27 @@ def is_review_prompt(prompt: str) -> bool:
     )
     if any(marker in lowered for marker in command_markers):
         return True
+    command_phrase_markers = (
+        "请审查",
+        "请复审",
+        "麻烦审查",
+        "麻烦复审",
+        "帮我审查",
+        "帮我复审",
+        "有的话审查",
+        "顺便审查",
+        "顺便复审",
+        "可以审查",
+        "可以复审",
+        "可否审查",
+        "可否复审",
+        "继续审查",
+        "继续复审",
+        "再审查",
+        "再复审",
+    )
+    if any(marker in text for marker in command_phrase_markers):
+        return True
     return bool(re.match(r"^[`\"'“”\s]*(审查|review)\b", text, re.IGNORECASE))
 
 
@@ -208,10 +229,18 @@ def handle_stop_hook(*, root: Path = ROOT, state_dir: Path = STATE_DIR) -> int:
     try:
         state = json.loads(state_path.read_text(encoding="utf-8"))
     except Exception:
+        print("stock-review-gate: active_review.json is unreadable; re-arm or remove the corrupt state file", file=sys.stderr)
+        return 2
+    if state.get("completed_at_utc"):
+        try:
+            state_path.unlink()
+        except OSError:
+            pass
         return 0
     token = state.get("evidence_token")
     if not token:
-        return 0
+        print("stock-review-gate: active_review.json is missing evidence_token; re-arm the review gate", file=sys.stderr)
+        return 2
     log_path = root / "docs" / "SESSION_LOG.md"
     if not log_path.exists():
         print("stock-review-gate: docs/SESSION_LOG.md not found", file=sys.stderr)
@@ -224,8 +253,7 @@ def handle_stop_hook(*, root: Path = ROOT, state_dir: Path = STATE_DIR) -> int:
         print(f"- required token: {token}", file=sys.stderr)
         print("Put the token in the review-cycle SESSION_LOG Verify line, or mark NOT_VERIFIED if evidence is unavailable.", file=sys.stderr)
         return 2
-    state["completed_at_utc"] = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    state_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
+    state_path.unlink()
     return 0
 
 
