@@ -1,0 +1,142 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://stock.local/schemas/us_short_massive_news_catalyst_binding.schema.json",
+  "title": "US-short Massive news catalyst projection seam binding",
+  "type": "object",
+  "required": [
+    "artifact_id",
+    "schema_version",
+    "owner",
+    "design_authority",
+    "producer_refs",
+    "consumer_ref",
+    "identity_policy",
+    "projection_policy",
+    "input_contract",
+    "scoring_transform",
+    "output_contract",
+    "authorization_boundary"
+  ],
+  "properties": {
+    "artifact_id": { "const": "us_short_massive_news_catalyst_binding_20260704" },
+    "schema_version": { "const": "1.0.0" },
+    "owner": { "const": "US-short batch5 Massive news catalyst projection seam" },
+    "design_authority": { "const": "docs/us_short_system_design.md section 4.2 and section 5.1b" },
+    "producer_refs": {
+      "const": [
+        "engine/us_short_massive_news.py::resolve_news_events",
+        "engine/us_short_catalyst.py::catalyst_block"
+      ]
+    },
+    "consumer_ref": { "const": "batch4 score composer -> catalyst_projection -> score_blocks['catalyst'] -> engine/us_short_core_score.py" },
+    "identity_policy": { "const": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only" },
+    "projection_policy": { "const": "massive_news_sentiment_tally_then_bounded_catalyst_projection" },
+    "input_contract": {
+      "type": "object",
+      "required": [
+        "source_result_required_keys",
+        "summary_key",
+        "summary_fields",
+        "source_provider_id",
+        "source_endpoint_or_filing_type",
+        "checked_empty_disposition"
+      ],
+      "properties": {
+        "source_result_required_keys": {
+          "const": [
+            "signals",
+            "records",
+            "provenance",
+            "excluded",
+            "checked"
+          ]
+        },
+        "summary_key": { "const": "news_recent" },
+        "summary_fields": {
+          "const": [
+            "news_count",
+            "distinct_publishers",
+            "positive",
+            "negative",
+            "neutral",
+            "unknown",
+            "net_sentiment",
+            "window_days"
+          ]
+        },
+        "source_provider_id": { "const": "massive" },
+        "source_endpoint_or_filing_type": { "const": "reference_news" },
+        "checked_empty_disposition": { "const": "checked_no_recent_news" }
+      },
+      "additionalProperties": false
+    },
+    "scoring_transform": {
+      "type": "object",
+      "required": [
+        "score_formula",
+        "input_bounds",
+        "catalyst_signal_key",
+        "catalyst_date_key",
+        "governance_cap",
+        "note"
+      ],
+      "properties": {
+        "score_formula": { "const": "net_sentiment / news_count" },
+        "input_bounds": { "const": [-1.0, 1.0] },
+        "catalyst_signal_key": { "const": "semantic_advisory_score" },
+        "catalyst_date_key": { "const": "semantic_advisory_date" },
+        "governance_cap": { "const": "catalyst_governance.semantic_advisory.max_abs_points" },
+        "note": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "output_contract": {
+      "type": "object",
+      "required": ["required_keys", "coverage_dispositions", "neutral_fill_note"],
+      "properties": {
+        "required_keys": {
+          "const": [
+            "catalyst_block_by_ticker",
+            "neutral_fill_tickers",
+            "coverage",
+            "target_count",
+            "scored_count"
+          ]
+        },
+        "coverage_dispositions": {
+          "const": [
+            "scored_realized_catalyst",
+            "neutral_no_realized_catalyst",
+            "neutral_source_excluded",
+            "neutral_missing_catalyst_source"
+          ]
+        },
+        "neutral_fill_note": {
+          "const": "Targets without a realized Massive-news catalyst value are omitted from catalyst_block_by_ticker and listed in neutral_fill_tickers so the composer can apply the core_score neutral-block rule."
+        }
+      },
+      "additionalProperties": false
+    },
+    "authorization_boundary": {
+      "type": "object",
+      "required": [
+        "provider_call",
+        "live_data",
+        "llm_call",
+        "datahub_write",
+        "production_runner",
+        "broker_or_order_execution"
+      ],
+      "properties": {
+        "provider_call": { "const": false },
+        "live_data": { "const": false },
+        "llm_call": { "const": false },
+        "datahub_write": { "const": false },
+        "production_runner": { "const": false },
+        "broker_or_order_execution": { "const": false }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

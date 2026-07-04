@@ -1,0 +1,68 @@
+{
+  "artifact_id": "us_short_massive_news_catalyst_binding_20260704",
+  "schema_version": "1.0.0",
+  "owner": "US-short batch5 Massive news catalyst projection seam",
+  "design_authority": "docs/us_short_system_design.md section 4.2 and section 5.1b",
+  "producer_refs": [
+    "engine/us_short_massive_news.py::resolve_news_events",
+    "engine/us_short_catalyst.py::catalyst_block"
+  ],
+  "consumer_ref": "batch4 score composer -> catalyst_projection -> score_blocks['catalyst'] -> engine/us_short_core_score.py",
+  "identity_policy": "engine/us_short_eligibility_gate.py::canonical_us_ticker; one canonical identity per stock; plain str only",
+  "projection_policy": "massive_news_sentiment_tally_then_bounded_catalyst_projection",
+  "input_contract": {
+    "source_result_required_keys": [
+      "signals",
+      "records",
+      "provenance",
+      "excluded",
+      "checked"
+    ],
+    "summary_key": "news_recent",
+    "summary_fields": [
+      "news_count",
+      "distinct_publishers",
+      "positive",
+      "negative",
+      "neutral",
+      "unknown",
+      "net_sentiment",
+      "window_days"
+    ],
+    "source_provider_id": "massive",
+    "source_endpoint_or_filing_type": "reference_news",
+    "checked_empty_disposition": "checked_no_recent_news"
+  },
+  "scoring_transform": {
+    "score_formula": "net_sentiment / news_count",
+    "input_bounds": [-1.0, 1.0],
+    "catalyst_signal_key": "semantic_advisory_score",
+    "catalyst_date_key": "semantic_advisory_date",
+    "governance_cap": "catalyst_governance.semantic_advisory.max_abs_points",
+    "note": "Massive's own per-ticker sentiment tally is projected into the existing low-weight catalyst advisory channel. This is deterministic and bounded; it is not an LLM call and does not replace later section 5.1b human/LLM adverse-news review."
+  },
+  "output_contract": {
+    "required_keys": [
+      "catalyst_block_by_ticker",
+      "neutral_fill_tickers",
+      "coverage",
+      "target_count",
+      "scored_count"
+    ],
+    "coverage_dispositions": [
+      "scored_realized_catalyst",
+      "neutral_no_realized_catalyst",
+      "neutral_source_excluded",
+      "neutral_missing_catalyst_source"
+    ],
+    "neutral_fill_note": "Targets without a realized Massive-news catalyst value are omitted from catalyst_block_by_ticker and listed in neutral_fill_tickers so the composer can apply the core_score neutral-block rule."
+  },
+  "authorization_boundary": {
+    "provider_call": false,
+    "live_data": false,
+    "llm_call": false,
+    "datahub_write": false,
+    "production_runner": false,
+    "broker_or_order_execution": false
+  }
+}

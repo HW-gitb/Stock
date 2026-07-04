@@ -22,10 +22,10 @@ canonical ticker (a missing / out-of-enum sentiment yields `unknown`, NEVER a fa
 item's `tickers` list must include this ticker (else it was mis-attributed -> fail closed).
 
 WHAT THIS IS NOT — no fetch (no network/provider; SR-PROVIDER-001 gates the live half + the runner wiring), does
-NOT SCORE (this is the fact+tally layer; the catalyst news-component / §5.1b advisory-escalation wiring is a later
-seam), does NOT perform LLM SEMANTIC judgment (§5.1b reasoning stays gated/advisory — only Massive's own insights
-sentiment is tallied; title/url/reasoning are carried for a later read), and does NOT cross A-share. Only the
-offline contract SHAPE is frozen here.
+NOT SCORE itself (this remains the fact+tally layer; `engine.us_short_massive_news_catalyst` is the separate
+bounded projection seam), does NOT perform LLM SEMANTIC judgment (§5.1b reasoning stays gated/advisory — only
+Massive's own insights sentiment is tallied; title/url/reasoning are carried for a later read), and does NOT cross
+A-share. Only the offline contract SHAPE is frozen here.
 """
 from __future__ import annotations
 

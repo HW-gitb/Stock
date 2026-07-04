@@ -29,7 +29,7 @@
     "note": "only a full-coverage clean-parse ticker emits a news signal; partial / missing / failed / degraded -> excluded. A full/ok ticker with ZERO in-window items emits NO signal (no recent news = neutral; the consumer defaults neutral per §4.2 缺分量中性)."
   },
   "date_format": "as_of = YYYY-MM-DD (ASCII, real-calendar); published_utc + observed_at = tz-aware RFC3339 date-time",
-  "consumer_note": "Produces the §4.2 recent-news catalyst FACT + a per-ticker sentiment tally (from Massive's own insights) + the §5.1b advisory basis (title / article_url / sentiment_reasoning for a later LLM/human read). The SCORE wiring (catalyst news component / §5.1b advisory escalation) is a LATER seam. This slice freezes + parses the fact + tallies Massive's own sentiment; it does NOT score and does NOT perform LLM semantic judgment.",
+  "consumer_note": "Produces the §4.2 recent-news catalyst FACT + a per-ticker sentiment tally (from Massive's own insights) + the §5.1b advisory basis (title / article_url / sentiment_reasoning for a later LLM/human read). The source itself does NOT score; bounded catalyst projection lives in engine/us_short_massive_news_catalyst.py. Deeper §5.1b LLM/human adverse-news review remains a later gated layer.",
   "pit_clock_contract": {
     "observed_at_cutoff_operator": "strictly_before",
     "observed_at_cutoff_reference": "decision_session_open",
