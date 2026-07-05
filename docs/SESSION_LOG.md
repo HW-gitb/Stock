@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme/GICS membership source packet producer)
+
+- **Verdict/Action**: PASS + 提交 8 文件(producer runner + packet schema + summary schema + tracked summary + test + README + register + 本 SESSION_LOG)。live fetch producer(真跑 FMP stable profile 3/3、AAPL/MSFT/JPM、本会话授权 user_chat_20260705)→selected-symbol GICS membership packet + **neutral theme projection**(不算 heat)。分级=最高危 live 边界→整读 runner/schema/test+被消费 sample_validation+**独立 §3.5 主树黑盒对抗 agent(真起、~40 hostile-FMP/path 探针含真 symlink)**+亲跑全包。
+- **Required**: 无(agent PASS no defects + 我独立审无 active 缺陷、register 无翻转)。**Optional**(非阻塞): `_assert_text_safe` 缺 exact-value 兜底扫描(sibling momentum packet producer 有 `[massive_env.value]`);latent——key 结构上不进 summary、denylist 主防线覆盖 key 形状、无 active 泄露;建议后续单独轮加 `[fmp_env.value]` 对齐 sibling defense-in-depth。
+- **Verify**: (`review-evidence:d01d3c9172f8`) 假 heat 结构性防死(`_neutral_theme_projection` 恒 neutral+`_validate_theme_projection` 强制 scored=0+schema const:false);sector/industry 只进 gitignored packet(`_required_label` 拒 http/apikey/token)、不进 summary(sector 值零命中);secret sealed(provider_id 硬编码、denylist+@/key=、agent AKIA canary 不达);路径含真 symlink 挡、授权 first、预算 3;2 summary CLEAN、raw/state gitignored。亲跑 focused+全离线 3632+doc-gov 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 theme/GICS membership source packet)
+
+- **Verdict/Action**: added `us_short_batch5_theme_gics_source` producer + packet/summary schemas, then executed the user-authorized bounded FMP stable `profile` fetch for `AAPL` / `MSFT` / `JPM`. The producer wrote gitignored raw payloads, a gitignored selected-symbol GICS membership packet, a gitignored neutral theme projection, and a tracked no-secret summary. No full GICS peer pool, industry/theme heat scoring, yfinance, full-market fetch, DataHub, production storage, broker/order automation, A-share crossing, or ship-gate/live-normalized evidence claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with this producer/execution note; it remains open for full GICS peer pool / provisional theme discovery-member source, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence, and corporate-action reconciliation.
+- **Verify**: red first focused test failed on missing module. Green after fix: focused theme/GICS source `5 OK`; adjacent source/seam pack `48 OK`; schema JSON + `py_compile` OK; authorized escalated FMP run `3/3 HTTP 200`, membership rows resolved `3`, `theme_scored_count=0`. Sandbox network attempt failed first with `url_error`/no HTTP status and wrote only gitignored raw error samples before the approved rerun overwrote the same raw paths.
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: tests prove authorization-required, missing-sector fail-closed before packet/projection/summary writes, and selected-only membership cannot self-certify GICS heat. B/E: raw/source/projection stay gitignored; tracked summary excludes raw payloads/request URLs/secrets and does not log sector/industry labels; README route is a thin pointer; `CURRENT` untouched because the remaining business gate is still open.
+- **Next**: Claude Code: review current theme/GICS membership source packet slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 momentum price-packet producer — 数值 fail-closed 整类已闭 + sibling)
 
 - **Verdict/Action**: PASS + 提交 10 文件(producer runner + packet-summary schema + producer test + 2 tracked summary + **sibling consumer runner+test**(whole-class) + README + register + 本 SESSION_LOG)。Codex 4-leg whole-class 修:`_finite_number` float 包 try/except(producer+sibling)+`fromtimestamp` 包+volume present-non-finite 拒。分级=最高危 live 边界 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent)。本会话授权(user_chat_20260705)。

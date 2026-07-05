@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_theme_gics_source_packet.schema.json",
+  "title": "US-short Batch5 theme/GICS membership source packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "membership_pool",
+    "gics_membership_by_ticker",
+    "provenance_by_ticker",
+    "projection_guard",
+    "prohibited_claims"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_theme_gics_source_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "packet_status",
+        "network_access_performed_by_packet_producer",
+        "provider_calls_performed_by_packet_producer",
+        "raw_payload_refs_gitignored",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation_allowed",
+        "a_share_crossing_allowed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "lane": { "const": "us_short" },
+        "batch": { "const": "batch5_provider_live" },
+        "packet_status": { "const": "selected_symbol_gics_membership_ready_for_neutral_projection_guard" },
+        "network_access_performed_by_packet_producer": { "const": true },
+        "provider_calls_performed_by_packet_producer": { "const": true },
+        "raw_payload_refs_gitignored": { "const": true },
+        "datahub_consumption_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false },
+        "a_share_crossing_allowed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_decision_date",
+        "candidate_price_basis_date",
+        "price_basis_date",
+        "source_as_of"
+      ],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "candidate_price_basis_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "price_basis_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "membership_pool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol_source",
+        "selected_symbols",
+        "membership_pool_basis",
+        "selected_symbols_only",
+        "full_gics_peer_pool",
+        "full_market_sample",
+        "max_symbols"
+      ],
+      "properties": {
+        "symbol_source": { "const": "caller_selected_from_validated_candidate_artifact" },
+        "selected_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "membership_pool_basis": { "const": "selected_symbols_only_not_full_gics_peer_pool" },
+        "selected_symbols_only": { "const": true },
+        "full_gics_peer_pool": { "const": false },
+        "full_market_sample": { "const": false },
+        "max_symbols": { "const": 3 }
+      }
+    },
+    "gics_membership_by_ticker": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 3,
+      "additionalProperties": { "$ref": "#/$defs/membership" }
+    },
+    "provenance_by_ticker": {
+      "type": "object",
+      "minProperties": 1,
+      "maxProperties": 3,
+      "additionalProperties": { "$ref": "#/$defs/provenance" }
+    },
+    "projection_guard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "real_gics_membership_source_consumed",
+        "full_gics_peer_pool_consumed",
+        "industry_heat_scoring_allowed",
+        "theme_scoring_allowed",
+        "neutral_projection_required"
+      ],
+      "properties": {
+        "real_gics_membership_source_consumed": { "const": true },
+        "full_gics_peer_pool_consumed": { "const": false },
+        "industry_heat_scoring_allowed": { "const": false },
+        "theme_scoring_allowed": { "const": false },
+        "neutral_projection_required": { "const": true }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection_complete",
+        "full_market_download_performed",
+        "full_gics_peer_pool_consumed",
+        "industry_heat_scored",
+        "theme_heat_scored",
+        "yfinance_used",
+        "live_normalized_evidence",
+        "ship_gate_evidence",
+        "production_ready",
+        "datahub_consumed"
+      ],
+      "properties": {
+        "provider_selection_complete": { "const": false },
+        "full_market_download_performed": { "const": false },
+        "full_gics_peer_pool_consumed": { "const": false },
+        "industry_heat_scored": { "const": false },
+        "theme_heat_scored": { "const": false },
+        "yfinance_used": { "const": false },
+        "live_normalized_evidence": { "const": false },
+        "ship_gate_evidence": { "const": false },
+        "production_ready": { "const": false },
+        "datahub_consumed": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sector", "industry"],
+      "properties": {
+        "sector": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "industry": { "type": "string", "minLength": 1, "maxLength": 160 },
+        "market_cap": {
+          "anyOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_or_family",
+        "source_as_of",
+        "observed_at",
+        "coverage_status",
+        "parser_status",
+        "lineage_ref",
+        "raw_sample_ref"
+      ],
+      "properties": {
+        "provider_id": { "const": "financial_modeling_prep" },
+        "endpoint_or_family": { "const": "profile_or_company_metadata" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "observed_at": { "type": "string", "minLength": 1 },
+        "coverage_status": { "const": "full" },
+        "parser_status": { "const": "ok" },
+        "lineage_ref": { "type": "string", "minLength": 1 },
+        "raw_sample_ref": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_batch5_theme_gics_source_20260705/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        }
+      }
+    }
+  }
+}
