@@ -1,0 +1,200 @@
+{
+  "schema_name": "us_short_batch5_momentum_price_source_packet_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_momentum_price_source_packet_summary.schema.json",
+  "authorization_ref": "user_chat_20260705_us_short_momentum_price_source_packet",
+  "generated_at": "2026-07-05T02:41:27+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "bounded_momentum_price_history_source_packet",
+    "status": "price_history_source_packet_written",
+    "network_access_performed": true,
+    "provider_calls_performed": true,
+    "raw_payload_storage_performed": true,
+    "source_packet_written": true,
+    "momentum_projection_written_by_this_runner": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "source_as_of": "2026-07-02"
+  },
+  "environment": {
+    "massive_api_key_present": true,
+    "massive_api_key_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false
+  },
+  "sample_universe": {
+    "symbol_source": "caller_selected_from_validated_candidate_artifact",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_symbols": 3,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "full_market_sample": false,
+    "candidate_artifact_row_count": 7641,
+    "candidate_artifact_eligible_count": 2633
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 5,
+    "actual_total_endpoint_calls": 5,
+    "endpoint_error_count": 0,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw/massive/AAPL/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw/massive/MSFT/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "JPM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw/massive/JPM/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "SPY",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw/massive/SPY/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "QQQ",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw/massive/QQQ/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    }
+  ],
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_batch5_momentum_price_source_packet_20260705/raw",
+    "raw_payload_root_gitignored": true,
+    "source_packet_path": "state/us_short/us_short_batch5_momentum_price_source_20260705_packet.json",
+    "source_packet_path_gitignored": true,
+    "tracked_summary_path": "docs/us_short_batch5_momentum_price_source_packet_summary_20260705.json",
+    "tracked_summary_contains_price_rows": false,
+    "tracked_summary_contains_raw_payload": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secrets": false
+  },
+  "price_packet": {
+    "schema_ref": "schemas/us_short_batch5_momentum_price_source_packet.schema.json",
+    "provider_ids": [
+      "massive"
+    ],
+    "endpoint_family": "ticker_daily_aggregates_adjusted",
+    "series_count": 5,
+    "selected_series_count": 3,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "session": "RTH",
+    "adjustment_mode": "split_div_adjusted",
+    "min_points_per_series": 64,
+    "lookback_calendar_days": 140,
+    "bar_counts_by_ticker": {
+      "AAPL": 97,
+      "MSFT": 97,
+      "JPM": 97,
+      "SPY": 97,
+      "QQQ": 97
+    },
+    "earliest_bar_by_ticker": {
+      "AAPL": "2026-02-12",
+      "MSFT": "2026-02-12",
+      "JPM": "2026-02-12",
+      "SPY": "2026-02-12",
+      "QQQ": "2026-02-12"
+    },
+    "latest_bar_by_ticker": {
+      "AAPL": "2026-07-02",
+      "MSFT": "2026-07-02",
+      "JPM": "2026-07-02",
+      "SPY": "2026-07-02",
+      "QQQ": "2026-07-02"
+    },
+    "corporate_action_reconciliation_performed": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This is a bounded per-ticker price-history packet for <=3 selected symbols plus SPY/QQQ, not a full-market fetch.",
+    "Raw provider payloads stay under gitignored provider_samples; tracked summary excludes request URLs, raw rows, and secrets.",
+    "The packet is shaped for the existing local momentum projection runner; this runner does not write the projection.",
+    "Corporate-action reconciliation, broader provider health/fallback, theme/GICS, DataHub, production, and ship-gate evidence remain out of scope."
+  ]
+}

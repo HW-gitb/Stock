@@ -331,6 +331,24 @@ class MomentumPriceSourceRunnerTest(unittest.TestCase):
         self.assertFalse(self.paths["projection"].exists())
         self.assertFalse(self.paths["summary"].exists())
 
+    def test_huge_price_number_fails_closed_without_bare_overflow(self):
+        packet = _source_packet()
+        packet["series_by_ticker"]["AAPL"]["points"][10]["close"] = 10**400
+        _write_json(self.paths["source_packet"], packet)
+        runner = _runner()
+
+        with self.assertRaises(runner.MomentumPriceSourceError):
+            runner.run_packet(
+                candidate_artifact_path=self.paths["candidate"],
+                source_packet_path=self.paths["source_packet"],
+                output_projection_path=self.paths["projection"],
+                summary_path=self.paths["summary"],
+                generated_at="2026-06-15T12:00:00+00:00",
+            )
+
+        self.assertFalse(self.paths["projection"].exists())
+        self.assertFalse(self.paths["summary"].exists())
+
     def test_missing_required_benchmark_rejected(self):
         packet = _source_packet()
         del packet["series_by_ticker"]["QQQ"]

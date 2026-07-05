@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 momentum price-packet producer — 数值 fail-closed 整类已闭 + sibling)
+
+- **Verdict/Action**: PASS + 提交 10 文件(producer runner + packet-summary schema + producer test + 2 tracked summary + **sibling consumer runner+test**(whole-class) + README + register + 本 SESSION_LOG)。Codex 4-leg whole-class 修:`_finite_number` float 包 try/except(producer+sibling)+`fromtimestamp` 包+volume present-non-finite 拒。分级=最高危 live 边界 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent)。本会话授权(user_chat_20260705)。
+- **Required**: 上轮 `R-USSHORT-BATCH5-MOMENTUM-PRICE-PACKET-NUMERIC-FAIL-CLOSED-CLASS` 已 **resolved**(全文见 register)。整类封净 4 legs+sibling;sibling diff surgical(仅 float 包一处)。无新 finding。
+- **Verify**: (`review-evidence:cd4bd4425ea3`) 亲验 4 legs 全 fail-closed:`_finite_number(10**400)`→None(producer+sibling);t=1e18/1e300/−1e18+c/t/v huge-int→MomentumPriceSourcePacketError;v∈{NaN,Inf,dict,"123",True}→拒(不再 drop)。git diff 证 sibling 仅 `float()` 包 try/except 一处(surgical)。亲跑 focused packet+consumer 20+全离线 3627+doc-gov 60 全 OK 零回归。2 tracked summary 上轮已扫 CLEAN。a_short 独立提交 e5f5c871 不涉本刀。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `fix` (US-short Batch5 momentum price-packet numeric fail-closed)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-MOMENTUM-PRICE-PACKET-NUMERIC-FAIL-CLOSED-CLASS` offline. Both producer and sibling consumer `_finite_number` copies now fail closed on huge numeric values, the producer wraps out-of-range timestamps as `MomentumPriceSourcePacketError`, and present invalid volume is rejected instead of silently dropped. No provider/live/network/DataHub/production/broker/order/A-share path run.
+- **Required**: current diff addresses the 4 Claude Required legs: huge `c`/`t`/`v` no longer raises bare `OverflowError`, finite out-of-range `t` no longer raises bare `OSError`/`OverflowError`, present non-finite/wrong-type `v` is no longer dropped, and sibling consumer huge close no longer bare-crashes. `docs/system_risk_register.md` updated to `in_progress` pending Claude re-review + commit.
+- **Verify**: red first focused producer+consumer tests reproduced the bare numeric exceptions and silent volume drop. Green after fix: focused producer+consumer `20 OK`; adjacent Batch5 pack `90 OK`; full offline `discover -s tests -p '*us_short*.py'` `3627 OK` (1 skipped); doc guard `60 OK`; `py_compile` OK; tracked JSON summaries parse; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: clean rows and missing-volume rows remain accepted by the existing happy-path coverage, while hostile present volume and timestamp/close mutants now fail closed before writes. B: same-class grep confirmed only the two `_finite_number` copies in this slice; `fromtimestamp` and `raw_volume` handling are localized to the producer. E: only the Required repair files plus register/SESSION_LOG were touched; `CURRENT` untouched because this is an in-flight repair handoff.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-05 — Claude 审查 FAIL (US-short Batch5 momentum price-packet producer — 数值 fail-closed 整类:huge-int/out-of-range-ts 裸异常 + volume 静默 drop + sibling)
+
+- **Verdict/Action**: FAIL(1 Required、P3 safe/bounded、未提交)。live fetch packet producer(真跑 Massive daily aggs 5/5、AAPL/MSFT/JPM+SPY/QQQ 各 97 bars、本会话授权)。分级=最高危 live 边界→整读 runner/schema/test+被消费 sample_validation+**独立 §3.5 主树黑盒对抗 agent(真起、~50 hostile-Massive/path 探针含真 symlink)**+亲跑全包。secret/PIT/路径/授权/预算/schema drift 全 sealed、2 tracked summary CLEAN;唯一=数值 fail-closed 整类(hostile payload robustness、非当前 artifact 缺陷)。
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-PRICE-PACKET-NUMERIC-FAIL-CLOSED-CLASS`(P3、全文见 register)。4 legs 一类:①`_finite_number` `float(10**400)`→裸 OverflowError ②`_point_from_raw` `fromtimestamp(1e18/1e300)`→裸 OSError/OverflowError ③present-non-finite volume(NaN/Inf/dict)静默 drop(与 negative 拒不对称)④**已提交 sibling consumer `_finite_number` 同 gap**。均 bounded(写前 crash/drop、无泄露/orphan)。修=`_finite_number` float 包 try/except(两副本 whole-class)+timestamp 守卫+volume present-non-finite 拒+测试。教训⑰+整类扫净。
+- **Verify**: (`review-evidence:edcdb1250d57`) 亲验 4 legs:`_finite_number(10**400)`→OverflowError(producer+sibling);t=1e18/−1e18→OSError、1e300→OverflowError;v∈{NaN,Inf,dict,"123",True}→全 DROPPED。§3.5 agent ~50 探针复现+确认其余全 HELD(2 summary CLEAN、metadata+shape only、provider_id 硬编码、denylist+exact-value scan、PIT double-layer、真 symlink 逃逸、授权 first、预算 5、schema drift 0、consumer 端到端真实 scored 3)。亲跑 focused 7+全离线 3623+doc-gov 60 OK 零回归。a_short 已独立提交 e5f5c871 不涉本刀。
+- **Next**: Codex：修复
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 momentum price-source packet producer/fetch)
+
+- **Verdict/Action**: added `us_short_batch5_momentum_price_source_packet` producer + summary schema, then executed the user-authorized bounded Massive price-history fetch for `AAPL` / `MSFT` / `JPM` plus `SPY` / `QQQ`. The producer wrote gitignored raw payloads and a gitignored price source packet, and the existing consumer wrote the real momentum projection + tracked no-secret summary. No yfinance, full-market fetch, DataHub, production storage, broker/order automation, A-share crossing, or ship-gate/live-normalized evidence claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with this producer/execution note; it remains open for theme/GICS membership source, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence.
+- **Verify**: red first focused producer test failed on missing module. Green after fix: focused producer `7 OK`; adjacent momentum/source/data_context/live-source pack `86 OK`; authorized escalated Massive run `5/5 HTTP 200`, `97` bars each, latest bar `2026-07-02`; consumer projection `momentum_scored_count=3`. Sandbox network attempt failed first with `url_error`/no HTTP status and wrote only gitignored raw error samples before the approved rerun overwrote the same raw paths.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: tests prove packet producer output is consumed by the real momentum runner, and endpoint/price/authorization/scope-creep failures do not write source packet or tracked summary. B/E: raw and source packet stay gitignored; tracked summaries exclude price rows/raw/request URLs/secrets; README route updated as a thin pointer only; `CURRENT` untouched because the remaining business gate still includes theme/GICS and broader provider work.
+- **Next**: Claude Code: review current momentum price-source packet producer/execution slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 momentum price-source — provider_id format-pin + summary-write fail-closed 已闭)
 
 - **Verdict/Action**: PASS + 提交 7 文件(runner + packet schema + summary schema + test + README + register + 本 SESSION_LOG)。Codex 双 fix 采纳 2 Required:P2=provider_id 双层 format-pin(runner `_safe_provider_id`+schema pattern、三角一致 `^[a-z][a-z0-9_]{0,63}$`);P3=`_prepare_json_target` 前置两目标 parent 校验→fail-closed 无 orphan。分级=中-高 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮修不重起)。

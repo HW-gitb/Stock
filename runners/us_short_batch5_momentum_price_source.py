@@ -181,7 +181,10 @@ def _compact_to_ymd(value: str, *, field: str) -> str:
 def _finite_number(value: Any) -> float | None:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    x = float(value)
+    try:
+        x = float(value)
+    except (OverflowError, ValueError):
+        return None
     return x if math.isfinite(x) else None
 
 
