@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 bankruptcy 8-K local source-packet screen)
+
+- **Verdict/Action**: PASS + 提交 11 文件(runner + source/summary schema + test + tracked summary + CURRENT/README/register/design/doc-guard + 本 log)。**离线工具**(消费 gitignored local fixture SEC submissions→复用已审 `build_bankruptcy_screen_from_sec_submissions`→gitignored screen + counts-only tracked summary;不 fetch、run_fetch 未 invoke、SR-PROVIDER-001 open)。分级=中低离线(无 provider-live 边界)→§6a 轻量:整读+自撰反向探针+跑 guards,未起对抗 agent(覆盖边界声明:核心 counts-only 防泄+复用已审 engine)。
+- **Required**: 无(离线、复用已审 engine、无新 finding、register 无翻转)。
+- **Verify**: (`review-evidence:c9db22b8b88b`) 反向探针:hostile screen(accession+secret)→build_summary→counts-only 不含 accession/secret(避上审 P2 类)、`_assert_summary_safe` 过+forbidden 兜底 catch `accessionNumber`。独立扫 tracked summary CLEAN(无 accession-format/URL/token)。positive-detection-only。packet+screen gitignored、summary tracked。doc_guard 新 stale-term entry scoped(planted-failure、full/candidate scan remaining 不 flag)、CURRENT gate clean。亲跑 focused 7+全离线 3655+doc-gov 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 bankruptcy 8-K local source-packet screen)
+
+- **Verdict/Action**: added offline `us_short_batch5_bankruptcy_8k_source_packet` runner + source/summary schemas + focused tests, then executed a gitignored local fixture SEC-submissions source packet into a gitignored `bankruptcy_screen` plus tracked counts-only summary `docs/us_short_batch5_bankruptcy_8k_source_packet_summary_20260705.json`. No provider/network/raw capture/`run_fetch`/status_records/full-market/DataHub/production/broker/order/A-share/ship-gate claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` remains open for full/candidate provider scan/fetch execution, true-scan `run_fetch`/status-record execution, broader provider-health/fallback, DataHub/production/provider-selection/ship-gate gates, and forward evidence.
+- **Verify**: red first focused test failed on missing runner module; self-review red then proved summary path/schema could drift to gitignored `provider_samples` (2 failures) before the docs-only summary boundary fix. Green: focused bankruptcy source-packet `7 OK`; adjacent status/universe/probe pack `196 OK`; doc-governance/route/README guards `60 OK`; full offline `discover -s tests -p '*us_short*.py'` `3655 OK` (1 skipped); runner execution exit 0 (`input_symbol_count=2`, `bankruptcy_8k_positive_count=1`); `py_compile` OK; source/summary schema JSON parse OK; tracked summary leak scan `0 hits`; source packet + screen `git check-ignore` OK and tracked summary not ignored; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: tests cover local-only packet path, non-gitignored packet rejection, non-gitignored output rejection, non-docs/gitignored summary rejection, malformed submissions fail-closed, duplicate canonical ticker fail-closed, and summary scope-creep schema mutants. B/E: route docs now distinguish local screen layer done from provider full/candidate scan still separate; guard added to prevent listing the local screen layer as remaining; raw source packet/screen stay gitignored; tracked summary excludes raw SEC arrays/request URLs/secrets.
+- **Next**: Claude Code: review current bankruptcy 8-K local source-packet screen slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 full theme source packet producer — timestamp fail-closed 已闭)
 
 - **Verdict/Action**: PASS + 提交 12 文件(producer runner + plan schema + summary schema + test + plan/producer/consumer summary + CURRENT/README/design/register + 本 SESSION_LOG)。Codex 采纳 Required:`_series_from_record` timestamp 用 `_finite_number`(huge-int/bool→None→skip)+`fromtimestamp` try/except(OverflowError/OSError/ValueError)→skip,镜像 momentum-packet sibling。分级=最高危 live 边界 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮不重起)。本会话授权、真跑数据干净、offline guard 不改 summary。

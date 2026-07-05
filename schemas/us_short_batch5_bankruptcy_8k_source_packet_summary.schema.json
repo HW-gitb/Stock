@@ -1,0 +1,217 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_bankruptcy_8k_source_packet_summary.schema.json",
+  "title": "US-short Batch5 bankruptcy 8-K local source-packet summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "source_packet_ref",
+    "source_parser_ref",
+    "status_as_of",
+    "source_observed_at",
+    "scope",
+    "source_contract",
+    "storage",
+    "source_packet",
+    "aggregate_shape_metrics",
+    "validation_decision",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_bankruptcy_8k_source_packet_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "schema_ref": { "const": "schemas/us_short_batch5_bankruptcy_8k_source_packet_summary.schema.json" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "source_packet_ref": {
+      "type": "string",
+      "pattern": "^state/us_short/.+\\.json$",
+      "not": { "pattern": "\\.\\." }
+    },
+    "source_parser_ref": {
+      "const": "engine.us_short_status_source.build_bankruptcy_screen_from_sec_submissions"
+    },
+    "status_as_of": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+    "source_observed_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "purpose",
+        "status",
+        "local_source_packet_consumed",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_capture_performed",
+        "bankruptcy_screen_written",
+        "status_records_written",
+        "run_fetch_invoked",
+        "full_market_scan_performed",
+        "candidate_artifact_written",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation_allowed",
+        "a_share_crossing_allowed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "lane": { "const": "us_short" },
+        "batch": { "const": "batch5_provider_live" },
+        "purpose": { "const": "local_sec_submissions_to_bankruptcy_8k_screen" },
+        "status": { "const": "bankruptcy_screen_written" },
+        "local_source_packet_consumed": { "const": true },
+        "network_access_performed": { "const": false },
+        "provider_calls_performed": { "const": false },
+        "raw_payload_capture_performed": { "const": false },
+        "bankruptcy_screen_written": { "const": true },
+        "status_records_written": { "const": false },
+        "run_fetch_invoked": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "candidate_artifact_written": { "const": false },
+        "datahub_consumption_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false },
+        "a_share_crossing_allowed": { "const": false }
+      }
+    },
+    "source_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_id", "provider_id", "endpoint_family", "input_source", "lookback_days"],
+      "properties": {
+        "source_id": { "const": "sec_8k_item_103" },
+        "provider_id": { "const": "sec_edgar" },
+        "endpoint_family": { "const": "company_submissions_recent_filings" },
+        "input_source": {
+          "enum": [
+            "reviewed_local_sec_submissions_source_packet",
+            "local_fixture_sec_submissions_source_packet"
+          ]
+        },
+        "lookback_days": { "type": "integer", "minimum": 1, "maximum": 365 }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_packet_path",
+        "source_packet_gitignored",
+        "bankruptcy_screen_output_path",
+        "bankruptcy_screen_output_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_contains_raw_payload",
+        "tracked_summary_contains_request_urls",
+        "secrets_in_summary"
+      ],
+      "properties": {
+        "source_packet_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "source_packet_gitignored": { "const": true },
+        "bankruptcy_screen_output_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "bankruptcy_screen_output_gitignored": { "const": true },
+        "tracked_summary_path": {
+          "type": "string",
+          "pattern": "^docs/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "tracked_summary_contains_raw_payload": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "secrets_in_summary": { "const": false }
+      }
+    },
+    "source_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["input_symbol_count", "input_symbols"],
+      "properties": {
+        "input_symbol_count": { "type": "integer", "minimum": 1 },
+        "input_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        }
+      }
+    },
+    "aggregate_shape_metrics": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "input_symbol_count",
+        "screen_symbol_count",
+        "bankruptcy_8k_positive_count",
+        "screened_no_filing_count",
+        "parser_error_count"
+      ],
+      "properties": {
+        "input_symbol_count": { "type": "integer", "minimum": 1 },
+        "screen_symbol_count": { "type": "integer", "minimum": 1 },
+        "bankruptcy_8k_positive_count": { "type": "integer", "minimum": 0 },
+        "screened_no_filing_count": { "type": "integer", "minimum": 0 },
+        "parser_error_count": { "const": 0 }
+      }
+    },
+    "validation_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision", "runner_consumption_form", "sr_provider_001_closed", "rationale"],
+      "properties": {
+        "decision": { "const": "local_bankruptcy_8k_source_packet_screen_written_keep_sr_provider_001_open" },
+        "runner_consumption_form": { "const": "bankruptcy_screen_payload_for_build_live_status_records" },
+        "sr_provider_001_closed": { "const": false },
+        "rationale": { "type": "string", "minLength": 1 }
+      }
+    },
+    "prohibited_claims": { "$ref": "#/$defs/prohibitedClaims" },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_scan_performed",
+        "candidate_artifact_written",
+        "status_records_runner_consumable",
+        "datahub_consumed",
+        "production_ready_claimed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "candidate_artifact_written": { "const": false },
+        "status_records_runner_consumable": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_ready_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    }
+  }
+}

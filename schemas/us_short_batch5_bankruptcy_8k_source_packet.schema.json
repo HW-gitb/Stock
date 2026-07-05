@@ -1,0 +1,203 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_bankruptcy_8k_source_packet.schema.json",
+  "title": "US-short Batch5 bankruptcy 8-K local source packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "source_packet_ref",
+    "scope",
+    "decision_clock",
+    "source_contract",
+    "paths",
+    "sec_submissions_by_ticker",
+    "preflight_gates",
+    "prohibited_claims"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_bankruptcy_8k_source_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "source_packet_ref": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "purpose",
+        "packet_status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_capture_performed",
+        "full_market_scan_performed",
+        "candidate_artifact_written",
+        "status_records_written",
+        "run_fetch_invoked",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation_allowed",
+        "a_share_crossing_allowed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "lane": { "const": "us_short" },
+        "batch": { "const": "batch5_provider_live" },
+        "purpose": { "const": "local_sec_submissions_to_bankruptcy_8k_screen" },
+        "packet_status": { "const": "local_source_packet_ready_for_bankruptcy_screen" },
+        "network_access_performed": { "const": false },
+        "provider_calls_performed": { "const": false },
+        "raw_payload_capture_performed": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "candidate_artifact_written": { "const": false },
+        "status_records_written": { "const": false },
+        "run_fetch_invoked": { "const": false },
+        "datahub_consumption_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false },
+        "a_share_crossing_allowed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status_as_of", "source_observed_at"],
+      "properties": {
+        "status_as_of": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "source_observed_at": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "provider_id",
+        "endpoint_family",
+        "parser_ref",
+        "input_source",
+        "lookback_days"
+      ],
+      "properties": {
+        "source_id": { "const": "sec_8k_item_103" },
+        "provider_id": { "const": "sec_edgar" },
+        "endpoint_family": { "const": "company_submissions_recent_filings" },
+        "parser_ref": {
+          "const": "engine.us_short_status_source.build_bankruptcy_screen_from_sec_submissions"
+        },
+        "input_source": {
+          "enum": [
+            "reviewed_local_sec_submissions_source_packet",
+            "local_fixture_sec_submissions_source_packet"
+          ]
+        },
+        "lookback_days": { "type": "integer", "minimum": 1, "maximum": 365 }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["bankruptcy_screen_output_path"],
+      "properties": {
+        "bankruptcy_screen_output_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        }
+      }
+    },
+    "sec_submissions_by_ticker": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": { "$ref": "#/$defs/secSubmissions" },
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z][A-Za-z0-9.:-]*$"
+      }
+    },
+    "preflight_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_files_only",
+        "source_packet_must_be_gitignored",
+        "output_screen_must_be_gitignored",
+        "no_provider_fetch",
+        "no_datahub_or_production",
+        "tracked_summary_must_exclude_raw_payload"
+      ],
+      "properties": {
+        "local_files_only": { "const": true },
+        "source_packet_must_be_gitignored": { "const": true },
+        "output_screen_must_be_gitignored": { "const": true },
+        "no_provider_fetch": { "const": true },
+        "no_datahub_or_production": { "const": true },
+        "tracked_summary_must_exclude_raw_payload": { "const": true }
+      }
+    },
+    "prohibited_claims": { "$ref": "#/$defs/prohibitedClaims" }
+  },
+  "$defs": {
+    "stringArray": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "secSubmissions": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["filings"],
+      "properties": {
+        "filings": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": ["recent"],
+          "properties": {
+            "recent": {
+              "type": "object",
+              "additionalProperties": true,
+              "required": ["form", "filingDate", "accessionNumber", "items"],
+              "properties": {
+                "form": { "$ref": "#/$defs/stringArray" },
+                "filingDate": { "$ref": "#/$defs/stringArray" },
+                "accessionNumber": { "$ref": "#/$defs/stringArray" },
+                "items": { "$ref": "#/$defs/stringArray" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_scan_performed",
+        "candidate_artifact_written",
+        "status_records_runner_consumable",
+        "datahub_consumed",
+        "production_ready_claimed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "candidate_artifact_written": { "const": false },
+        "status_records_runner_consumable": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_ready_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    }
+  }
+}

@@ -122,6 +122,31 @@ CURRENT_FACT_REGISTRY = (
             )),
         ),
     },
+    {
+        # 2026-07-05: the local bankruptcy 8-K source-packet -> bankruptcy_screen runner now exists.
+        # Active route docs must not list this local screen-wiring layer as future work; the broader
+        # full/candidate provider scan/fetch and status-record/run_fetch execution remain separate.
+        "name": "us_short_bankruptcy_8k_local_source_packet_screen",
+        "future_terms": (
+            "bankruptcy 8-K local source-packet screen",
+            "bankruptcy 8-K source-packet screen runner",
+        ),
+        "anchors": (
+            (ROOT / "runners" / "us_short_batch5_bankruptcy_8k_source_packet.py", (
+                "def run_packet",
+                "build_bankruptcy_screen_from_sec_submissions",
+                "bankruptcy_screen_payload_for_build_live_status_records",
+            )),
+            (ROOT / "schemas" / "us_short_batch5_bankruptcy_8k_source_packet.schema.json", (
+                "us_short_batch5_bankruptcy_8k_source_packet",
+                "local_sec_submissions_to_bankruptcy_8k_screen",
+            )),
+            (ROOT / "docs" / "us_short_batch5_bankruptcy_8k_source_packet_summary_20260705.json", (
+                "bankruptcy_screen_written",
+                "local_fixture_sec_submissions_source_packet",
+            )),
+        ),
+    },
 )
 FUTURE_WORK_MARKERS = (
     "仍未来",
@@ -219,6 +244,19 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard must not flag a line that states source-packet wiring is done")
         self.assertFalse(self._line_lists_completed_fact_as_future(us_short_unrelated, us_short_fact),
                          "guard must not block unrelated remaining US-short batch5 work")
+        bankruptcy_fact = CURRENT_FACT_REGISTRY[3]
+        bankruptcy_stale = (
+            "Remaining batch5 work includes bankruptcy 8-K local source-packet screen "
+            "and DataHub."
+        )
+        bankruptcy_done = "Bankruptcy 8-K source-packet screen runner writes a local screen."
+        bankruptcy_unrelated = "Remaining batch5 work includes bankruptcy 8-K full/candidate provider scan."
+        self.assertTrue(self._line_lists_completed_fact_as_future(bankruptcy_stale, bankruptcy_fact),
+                        "guard must catch completed bankruptcy 8-K local screen wiring listed as remaining")
+        self.assertFalse(self._line_lists_completed_fact_as_future(bankruptcy_done, bankruptcy_fact),
+                         "guard must not flag a line that states the local screen runner is done")
+        self.assertFalse(self._line_lists_completed_fact_as_future(bankruptcy_unrelated, bankruptcy_fact),
+                         "guard must not block the separate full/candidate provider scan")
 
     @staticmethod
     def _usshort_old_spec_live_input_offenders(text: str) -> list:
