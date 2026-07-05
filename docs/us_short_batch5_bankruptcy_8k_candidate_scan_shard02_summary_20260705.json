@@ -1,0 +1,534 @@
+{
+  "schema_name": "us_short_batch5_bankruptcy_8k_candidate_scan_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_bankruptcy_8k_candidate_scan_summary.schema.json",
+  "authorization_ref": "user_chat_20260705_us_short_bankruptcy_8k_candidate_shard_scan",
+  "generated_at": "2026-07-05T14:00:00+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "candidate_shard_bankruptcy_8k_sec_submissions_source_packet",
+    "status": "candidate_shard_source_packet_and_bankruptcy_screen_written",
+    "network_access_performed": true,
+    "provider_calls_performed": true,
+    "raw_payload_storage_performed": true,
+    "source_packet_written": true,
+    "bankruptcy_screen_written_by_consumer": true,
+    "consumer_summary_written": true,
+    "run_fetch_invoked": false,
+    "status_records_written": false,
+    "full_market_scan_performed": false,
+    "full_candidate_universe_scan_completed": false,
+    "candidate_artifact_written": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "status_as_of": "2026-07-06",
+    "source_observed_at": "2026-07-05T14:00:00+00:00"
+  },
+  "environment": {
+    "sec_fair_access_user_agent_present": true,
+    "sec_fair_access_user_agent_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false,
+    "sec_credentials_required": false
+  },
+  "candidate_scope": {
+    "symbol_source": "eligible_tickers_shard_from_validated_candidate_artifact",
+    "symbols": [
+      "UNH",
+      "ARM",
+      "HD",
+      "KO",
+      "KLAC",
+      "PG",
+      "MS",
+      "CVX",
+      "HSBC",
+      "NFLX",
+      "MRK",
+      "GEV",
+      "PLTR",
+      "SNDK",
+      "GS",
+      "NVS",
+      "RY",
+      "PANW",
+      "AZN",
+      "PM",
+      "DELL",
+      "TXN",
+      "IBM",
+      "WFC",
+      "RTX"
+    ],
+    "selected_symbol_count": 25,
+    "max_shard_symbols": 25,
+    "shard_start": 25,
+    "shard_size": 25,
+    "excluded_symbols": [
+      "NVDA",
+      "MSFT",
+      "AAPL"
+    ],
+    "candidate_artifact_row_count": 7641,
+    "candidate_artifact_eligible_count": 2633,
+    "eligible_after_exclusions_count": 2630,
+    "full_market_scan_performed": false,
+    "full_candidate_universe_scan_completed": false
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 26,
+    "actual_total_endpoint_calls": 26,
+    "sec_ticker_reference_calls": 1,
+    "sec_company_submissions_calls": 25,
+    "endpoint_error_count": 0,
+    "retry_count_allowed": 0,
+    "retry_count_used": 0,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_tickers_exchange",
+      "symbol": null,
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/company_tickers_exchange.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object",
+        "row_count": 10415
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "UNH",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/UNH/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "ARM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/ARM/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 147
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "HD",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/HD/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1001
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "KO",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/KO/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1003
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "KLAC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/KLAC/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "PG",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/PG/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "MS",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/MS/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 19120
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "CVX",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/CVX/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "HSBC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/HSBC/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "NFLX",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/NFLX/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "MRK",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/MRK/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "GEV",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/GEV/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 205
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "PLTR",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/PLTR/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 972
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "SNDK",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/SNDK/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 205
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "GS",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/GS/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 14891
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "NVS",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/NVS/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "RY",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/RY/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 4398
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "PANW",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/PANW/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "AZN",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/AZN/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1001
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "PM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/PM/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "DELL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/DELL/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "TXN",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/TXN/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1003
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "IBM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/IBM/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1007
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "WFC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/WFC/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1000
+      }
+    },
+    {
+      "provider_id": "sec_edgar",
+      "endpoint_family": "company_submissions_recent_filings",
+      "symbol": "RTX",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw/sec_edgar/RTX/company_submissions_recent_filings.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_recent",
+        "row_count": 1001
+      }
+    }
+  ],
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_batch5_bankruptcy_8k_candidate_scan_20260705/shard02_start25/raw",
+    "raw_payload_root_gitignored": true,
+    "source_packet_path": "state/us_short/us_short_batch5_bankruptcy_8k_candidate_scan_shard02_20260705_packet.json",
+    "source_packet_path_gitignored": true,
+    "bankruptcy_screen_output_path": "state/us_short/us_short_batch5_bankruptcy_8k_candidate_scan_shard02_20260705_screen.json",
+    "bankruptcy_screen_output_gitignored": true,
+    "producer_tracked_summary_path": "docs/us_short_batch5_bankruptcy_8k_candidate_scan_shard02_summary_20260705.json",
+    "consumer_tracked_summary_path": "docs/us_short_batch5_bankruptcy_8k_candidate_scan_shard02_consumer_summary_20260705.json",
+    "tracked_summaries_contain_raw_payload": false,
+    "tracked_summaries_contain_request_urls": false,
+    "tracked_summaries_contain_secrets": false
+  },
+  "source_packet": {
+    "schema_ref": "schemas/us_short_batch5_bankruptcy_8k_source_packet.schema.json",
+    "input_symbol_count": 25,
+    "input_symbols": [
+      "UNH",
+      "ARM",
+      "HD",
+      "KO",
+      "KLAC",
+      "PG",
+      "MS",
+      "CVX",
+      "HSBC",
+      "NFLX",
+      "MRK",
+      "GEV",
+      "PLTR",
+      "SNDK",
+      "GS",
+      "NVS",
+      "RY",
+      "PANW",
+      "AZN",
+      "PM",
+      "DELL",
+      "TXN",
+      "IBM",
+      "WFC",
+      "RTX"
+    ],
+    "source_contract_input_source": "provider_fetched_candidate_sec_submissions_source_packet"
+  },
+  "consumer_screen": {
+    "bankruptcy_screen_written": true,
+    "screen_symbol_count": 25,
+    "bankruptcy_8k_positive_count": 0,
+    "screened_no_filing_count": 25,
+    "parser_error_count": 0
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_scan_performed": false,
+    "full_candidate_universe_complete": false,
+    "status_records_written": false,
+    "run_fetch_invoked": false,
+    "candidate_artifact_written": false,
+    "datahub_consumed": false,
+    "production_ready_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_automation": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This is one bounded candidate shard of SEC submissions, not a completed full candidate-universe bankruptcy scan.",
+    "It writes a local source packet and uses the existing local bankruptcy screen consumer; it does not invoke run_fetch or write status_records.",
+    "Raw provider payloads stay under gitignored provider_samples; tracked summaries exclude raw SEC arrays, request URLs, and environment values.",
+    "No DataHub, production storage, provider selection, live-normalized evidence, ship-gate evidence, broker/order automation, or A-share crossing is claimed."
+  ]
+}

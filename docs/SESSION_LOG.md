@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 bankruptcy 8-K 第二个 25 票候选分片 shard02 执行)
+
+- **Verdict/Action**: PASS + 提交 7 文件(2 shard02 tracked summary + CURRENT/README/SESSION_LOG/register/design)。**零代码改动**:复用已提交 `87bd071f` candidate_scan runner、`shard_start=25` 跑第二分片 UNH..RTX、26/26 SEC HTTP 200、positive=0;输出路径含 shard02 不覆盖 shard01。分级=live 边界但代码复用已审→审执行产物(2 summary + doc scope)非重审代码;不重起 agent(同 runner 上刀 §3.5 已证 shard 参数/budget/path/secret 安全)。Codex 执行=已授权、真跑数据干净。
+- **Required**: 无(no new R-ID)。`R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` 仍 open for full candidate-universe completion beyond 首两 shard(register 已加 shard02 事实、未删既有 finding)。无 Optional/Options。
+- **Verify**: (`review-evidence:3f8a1d6c92b4`) 亲扫 2 份 shard02 summary counts-only、敏感 pattern grep 0 命中(accession `\d{10}-\d{2}-\d{6}`/http/apikey/token/bearer 全无)、诚实标记全 False、`shard_start=25` 正确、输出路径含 shard02 不覆盖 shard01。register/design/CURRENT doc 改动核过在 scope(first two shards、remaining 措辞更新、未删 finding、未把 gated 说成 done)。全离线 3667+doc-gov 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 bankruptcy 8-K candidate-shard shard02 SEC scan)
+
+- **Verdict/Action**: reused the committed `us_short_batch5_bankruptcy_8k_candidate_scan` runner to execute the user-authorized second 25-symbol Pass1-eligible shard (`shard_start=25`) after excluding `NVDA`/`MSFT`/`AAPL`. It wrote raw under gitignored `provider_samples/.../shard02_start25/raw`, wrote gitignored source packet + `bankruptcy_screen` under `state/us_short/`, and wrote tracked no-secret producer + consumer summaries. No full candidate-universe completion, `run_fetch`, status_records, candidate-artifact write, DataHub, production, broker/order, A-share, ship-gate, or live-normalized claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` remains open for full candidate-universe bankruptcy 8-K scan/fetch completion beyond the first two candidate shards, true-scan `run_fetch`/status-record execution, broader provider-health/fallback, DataHub/production/provider-selection/ship-gate gates, and forward evidence.
+- **Verify**: preflight exit 0 (`planned_total_endpoint_calls=26`, symbols `UNH`..`RTX`); authorized escalated run `26/26` SEC HTTP 200, `bankruptcy_8k_positive_count=0`; doc-governance/route/README guards `60 OK`; adjacent bankruptcy/status/universe pack `208 OK`; full offline `discover -s tests -p '*us_short*.py'` `3667 OK` (1 skipped); shard02 tracked summaries JSON parse OK; tracked summary leak scan `0 hits`; raw/source/screen `git check-ignore` OK and tracked summaries not ignored; active-route stale first-shard scan `0 hits`; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: this run reused the reviewed runner and schema; the preflight proved shard02 paths and budget before network; output paths include `shard02` so shard01 artifacts are not overwritten. B/E: route docs/register distinguish first two candidate shards done from full candidate-universe completion and `run_fetch`/status-record still remaining; raw/source/screen stay gitignored; tracked summaries exclude raw SEC arrays/request URLs/env/secrets.
+- **Next**: Claude Code: review current shard02 bankruptcy 8-K scan execution slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 bankruptcy 8-K 首个 25 票候选分片 SEC 扫描)
 
 - **Verdict/Action**: PASS + 提交 11 文件(candidate_scan runner + summary schema + test + 2 tracked summary + doc-gov guard[scoped stale-term 窄焊] + CURRENT/README/design/register)。live 边界新 runner:排除已跑 NVDA/MSFT/AAPL、选首 25 票 Pass1-eligible shard、26/26 SEC HTTP 200、positive=0;大量复用已审 sibling(case-aware summary guard/accession 校验/source-packet build/consumer screen)。分级=最高危 live→整读 runner/test + 独立 §3.5 主树黑盒对抗 agent + 亲探针 + 亲跑全包。Codex 执行=已授权、真跑数据干净。
