@@ -1,0 +1,78 @@
+{
+  "schema_name": "us_short_batch5_theme_source_packet_plan",
+  "schema_version": "1.0.0",
+  "authorization_ref": "user_chat_20260705_us_short_theme_source_packet",
+  "generated_at": "2026-07-05T00:00:00+00:00",
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "purpose": "bounded_full_theme_source_packet_plan",
+    "network_access_authorized": true,
+    "full_market_download_allowed": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "ship_gate_evidence_claimed": false,
+    "broker_or_order_automation_allowed": false,
+    "a_share_crossing_allowed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706"
+  },
+  "selected_symbols": [
+    "AAPL",
+    "MSFT",
+    "JPM"
+  ],
+  "industry_peer_symbols_by_selected": {
+    "AAPL": [
+      "NVDA"
+    ],
+    "MSFT": [
+      "NVDA"
+    ],
+    "JPM": [
+      "BAC",
+      "WFC"
+    ]
+  },
+  "provisional_themes_by_id": {
+    "AI": [
+      "AAPL",
+      "MSFT",
+      "NVDA"
+    ],
+    "BANKS": [
+      "JPM",
+      "BAC",
+      "WFC"
+    ]
+  },
+  "source_contract": {
+    "symbol_source": "reviewed_local_peer_theme_plan",
+    "profile_provider_id": "financial_modeling_prep",
+    "price_provider_id": "massive",
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "session": "RTH",
+    "adjustment_mode": "split_div_adjusted",
+    "min_points_per_series": 64,
+    "lookback_calendar_days": 140,
+    "max_selected_symbols": 3,
+    "max_industry_symbols": 8,
+    "max_total_endpoint_calls": 18,
+    "full_gics_peer_pool": true,
+    "provisional_theme_membership_frozen": true
+  },
+  "prohibited_claims": {
+    "provider_selection_complete": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "live_normalized_evidence": false,
+    "ship_gate_evidence": false,
+    "production_ready": false,
+    "datahub_consumed": false
+  }
+}

@@ -1,0 +1,103 @@
+{
+  "schema_name": "us_short_batch5_theme_source_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_theme_source_summary.schema.json",
+  "generated_at": "2026-07-05T06:52:12+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "local_full_gics_and_theme_source_to_projection",
+    "status": "theme_projection_written",
+    "network_access_performed_by_runner": false,
+    "provider_calls_performed_by_runner": false,
+    "raw_payload_storage_performed_by_runner": false,
+    "source_packet_consumed": true,
+    "theme_projection_written": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "source_as_of": "2026-07-02"
+  },
+  "sample_universe": {
+    "symbol_source": "caller_selected_from_validated_candidate_artifact",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_symbols": 3,
+    "full_market_sample": false,
+    "candidate_artifact_row_count": 7641,
+    "candidate_artifact_eligible_count": 2633
+  },
+  "paths": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
+    "source_packet_path": "state/us_short/us_short_batch5_theme_source_20260705_packet.json",
+    "output_projection_path": "state/us_short/us_short_batch5_theme_source_20260705_theme.json",
+    "summary_path": "docs/us_short_batch5_theme_source_summary_20260705.json"
+  },
+  "storage": {
+    "source_packet_path_gitignored": true,
+    "output_projection_path_gitignored": true,
+    "summary_path_gitignored": false,
+    "summary_contains_price_rows": false,
+    "summary_contains_raw_payload": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "theme_source": {
+    "industry_member_count": 6,
+    "selected_symbol_count": 3,
+    "theme_count": 2,
+    "theme_member_count": 6,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "session": "RTH",
+    "adjustment_mode": "split_div_adjusted",
+    "min_points_per_series": 64,
+    "full_gics_peer_pool_consumed": true,
+    "provisional_theme_membership_consumed": true,
+    "selected_symbol_only_membership_rejected": true,
+    "scored_sector_count": 2,
+    "insufficient_sector_count": 0,
+    "scored_theme_count": 2,
+    "insufficient_theme_count": 0
+  },
+  "projection_contract": {
+    "target_count": 3,
+    "theme_scored_count": 3,
+    "neutral_fill_count": 0,
+    "real_theme_or_gics_source_consumed": true,
+    "full_gics_peer_pool_consumed": true,
+    "selected_symbol_only_membership_rejected": true
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This runner consumes an already-built local full GICS/theme source packet; it does not fetch provider endpoints.",
+    "The tracked summary excludes price rows, raw payloads, request URLs, and secrets.",
+    "This narrows local theme/GICS source consumption only; provider health, DataHub, production, and ship-gate evidence remain out of scope."
+  ]
+}

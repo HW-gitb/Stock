@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 full theme source packet producer — timestamp fail-closed 已闭)
+
+- **Verdict/Action**: PASS + 提交 12 文件(producer runner + plan schema + summary schema + test + plan/producer/consumer summary + CURRENT/README/design/register + 本 SESSION_LOG)。Codex 采纳 Required:`_series_from_record` timestamp 用 `_finite_number`(huge-int/bool→None→skip)+`fromtimestamp` try/except(OverflowError/OSError/ValueError)→skip,镜像 momentum-packet sibling。分级=最高危 live 边界 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮不重起)。本会话授权、真跑数据干净、offline guard 不改 summary。
+- **Required**: 上轮 `R-USSHORT-BATCH5-THEME-SOURCE-PACKET-TIMESTAMP-NUMERIC-FAIL-CLOSED-REGRESSION` 已 **resolved**(register)。timestamp+bool 整类封(同 fix)。无新 finding。
+- **Verify**: (`review-evidence:e657a758e874`) 亲验:`_series_from_record` t∈{10**400,1e18,−1e18,1e300,True}→ThemeSourcePacketError(domain、无裸 OverflowError/OSError);genuine 70-good-point series 仍 build(no over-reject)。新 test `test_hostile_timestamps_fail_closed_without_bare_exception`(L303)。亲跑 focused 7+全离线 3648+doc-gov 60 全 OK 零回归;2 tracked summary 仍 CLEAN(offline guard 不改数据)。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `fix` (US-short Batch5 full theme source packet timestamp fail-closed)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-THEME-SOURCE-PACKET-TIMESTAMP-NUMERIC-FAIL-CLOSED-REGRESSION` offline. `_series_from_record` now parses Massive `t` with `_finite_number` and wraps `datetime.fromtimestamp` platform exceptions, so hostile/out-of-range/bool timestamps are dropped and converted to the existing `ThemeSourcePacketError` min-points path. No provider/live/network/raw re-run, DataHub/production/broker/order/A-share path, or ship-gate/live-normalized claim.
+- **Required**: timestamp numeric fail-closed class is closed for this runner only; fetch/URL/budget/plan/path/heat logic and tracked summaries were not changed.
+- **Verify**: red first focused test failed as expected (`10**30` -> `OverflowError`, `1e18` -> `OSError`, `True` accepted). Green after fix: focused theme source packet `7 OK`; adjacent theme source packet/theme source/theme GICS source `21 OK`; full offline `discover -s tests -p '*us_short*.py'` `3648 OK` (1 skipped); doc-process guard `60 OK`; `py_compile` OK; stale bare-timestamp grep `0 hits`; tracked summary leak scan `0 hits`.
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: hostile timestamp test covers out-of-range int, out-of-range float, and bool. B/E: old `float(timestamp)` / `row.get("t")` timestamp pattern scan is 0 hits; no CURRENT/README route-state update was added.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-05 — Claude 审查 FAIL (US-short Batch5 full theme source packet producer — timestamp numeric fail-closed 复发)
+
+- **Verdict/Action**: FAIL(1 Required、P3、未提交)。live fetch producer(真跑 FMP profile+Massive prices、6 members bounded reviewed-plan+SPY/QQQ、budget 18/14、本会话授权、非 full-market)→full GICS packet→consumer 真跑算 theme heat(scored 3)。分级=最高危 live 边界→整读 runner/schema/test+**独立 §3.5 主树黑盒对抗 agent(真起、~40 hostile-plan/payload/path 探针含真 symlink)**+亲跑全包。plan 校验/防假 heat 三层/secret/路径/预算/授权/原子性 全 sealed、2 tracked summary CLEAN;唯一=timestamp numeric fail-closed 上刀类复发。
+- **Required**: `R-USSHORT-BATCH5-THEME-SOURCE-PACKET-TIMESTAMP-NUMERIC-FAIL-CLOSED-REGRESSION`(P3;register)。新 `_series_from_record:490` timestamp 用裸 `float()`+`fromtimestamp`(close 有 `_finite_number` 守卫、timestamp 没)→out-of-range `t` 裸 OverflowError/OSError。**上刀 momentum-packet numeric-fail-closed 类在新 runner 复发**(Codex 修了 sibling 却没继承)。bool `t`→1970 点(minor、同 fix 顺带)。均 bounded(写前 crash、无 partial/泄露)。修=timestamp 用 `_finite_number`+try/except(镜像 sibling)+hostile-ts 测试。
+- **Verify**: (`review-evidence:6a25887606a6`) 亲验:`_series_from_record` t=10**400/1e300→OverflowError、±1e18→OSError(全裸)。§3.5 agent ~40 探针复现+其余全 HELD(scale/plan-overreach[budget 18+max_industry cap 8+reviewed local+无 discovery]、fake-heat 三层[plan 非-selected peer+heat MIN=3+consumer backstop、agent 强塞 3 selected→拒]、secret/sector 不入 2 summary[硬编码 provider_id+exact-value 双 key]、真 symlink、atomicity 无 partial、schema drift 0)。亲跑 focused 6+全离线 3647+doc-gov 60 OK 零回归;2 summary CLEAN。
+- **Next**: Codex：修复
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 full theme source packet producer)
+
+- **Verdict/Action**: added `us_short_batch5_theme_source_packet` producer + plan/summary schemas, then executed the user-authorized bounded reviewed-local-plan full theme source packet for `AAPL` / `MSFT` / `JPM`. The run fetched FMP stable profile rows for the 6 plan members plus Massive adjusted daily prices for those 6 + `SPY` / `QQQ`, wrote gitignored raw/source/projection artifacts, and wrote tracked no-secret producer + consumer summaries. No full-market/yfinance/DataHub/production/broker/order/A-share path or ship-gate/live-normalized evidence claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with this producer/execution note; it remains open for automated/broader peer-theme discovery beyond the reviewed local plan, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence, and corporate-action reconciliation.
+- **Verify**: red first focused test failed on missing module/schema. Green after fix: focused full theme source packet `6 OK`; authorized escalated live run `14/14` actual FMP/Massive calls HTTP 200 within `18` ceiling and `theme_scored_count=3`; tracked summary secret/URL/raw scans clean; broader verification pack green; `git diff --check` reported CRLF conversion warnings only.
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: tests prove auth gate, plan peer support gate before fetch, schema scope-creep rejects, and exact sensitive summary leak is blocked before state writes. B/E: raw/source/projection stay gitignored; tracked summaries exclude request URLs/raw rows/secrets/sector labels/industry labels; docs route settled reviewed-plan source wiring and leave broader discovery/provider gates open.
+- **Next**: Claude Code: review current full theme source packet producer slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 source-wiring route-state reconciliation)
 
 - **Verdict/Action**: PASS + 提交 5 文件(CURRENT + design + register + doc-governance guard + 本 SESSION_LOG)。纯 docs/治理 reconciliation:把已实现的 bounded live Pass2 source-packet wiring 从 CURRENT/design/register 的 remaining 列表移除+加 settled 事实,新增 scoped stale-term guard(防 route doc 再把已实现列 remaining)。无代码/runner/provider/live 改动。分级=纯 docs 轻量(§6a:整读改动+跑 route-doc guards、不起 agent)。

@@ -1,0 +1,327 @@
+{
+  "schema_name": "us_short_batch5_theme_source_packet_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_theme_source_packet_summary.schema.json",
+  "authorization_ref": "user_chat_20260705_us_short_theme_source_packet",
+  "generated_at": "2026-07-05T06:52:12+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "bounded_full_theme_source_packet_producer",
+    "status": "theme_source_packet_written_and_projection_written",
+    "network_access_performed": true,
+    "provider_calls_performed": true,
+    "raw_payload_storage_performed": true,
+    "source_packet_written": true,
+    "theme_projection_written": true,
+    "consumer_summary_written": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "source_as_of": "2026-07-02"
+  },
+  "environment": {
+    "fmp_api_key_present": true,
+    "fmp_api_key_source": "process",
+    "massive_api_key_present": true,
+    "massive_api_key_source": "process",
+    "environment_values_logged": false,
+    "secrets_logged": false
+  },
+  "sample_universe": {
+    "symbol_source": "reviewed_local_peer_theme_plan",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_symbols": 3,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "full_market_sample": false,
+    "industry_member_count": 6,
+    "theme_count": 2,
+    "candidate_artifact_row_count": 7641,
+    "candidate_artifact_eligible_count": 2633
+  },
+  "endpoint_call_budget": {
+    "max_total_endpoint_calls": 18,
+    "actual_total_endpoint_calls": 14,
+    "actual_profile_endpoint_calls": 6,
+    "actual_price_endpoint_calls": 8,
+    "endpoint_error_count": 0,
+    "within_budget": true
+  },
+  "endpoint_results": [
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/AAPL/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/NVDA/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/MSFT/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "JPM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/JPM/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "BAC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/BAC/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "financial_modeling_prep",
+      "endpoint_family": "profile_or_company_metadata",
+      "symbol": "WFC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/financial_modeling_prep/WFC/profile_or_company_metadata.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "list",
+        "row_count": 1
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "AAPL",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/AAPL/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "NVDA",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/NVDA/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "MSFT",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/MSFT/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "JPM",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/JPM/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "BAC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/BAC/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "WFC",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/WFC/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "SPY",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/SPY/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    },
+    {
+      "provider_id": "massive",
+      "endpoint_family": "ticker_daily_aggregates_adjusted",
+      "symbol": "QQQ",
+      "status": "success",
+      "http_status": 200,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw/massive/QQQ/ticker_daily_aggregates_adjusted.json",
+      "raw_sample_ref_gitignored": true,
+      "payload_shape": {
+        "kind": "object_results",
+        "row_count": 97
+      }
+    }
+  ],
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_batch5_theme_source_packet_20260705/raw",
+    "raw_payload_root_gitignored": true,
+    "source_packet_path": "state/us_short/us_short_batch5_theme_source_20260705_packet.json",
+    "source_packet_path_gitignored": true,
+    "theme_projection_path": "state/us_short/us_short_batch5_theme_source_20260705_theme.json",
+    "theme_projection_path_gitignored": true,
+    "consumer_summary_path": "docs/us_short_batch5_theme_source_summary_20260705.json",
+    "producer_summary_path": "docs/us_short_batch5_theme_source_packet_summary_20260705.json",
+    "producer_summary_contains_price_rows": false,
+    "producer_summary_contains_raw_payload": false,
+    "producer_summary_contains_request_urls": false,
+    "producer_summary_contains_secrets": false,
+    "producer_summary_contains_sector_or_industry_labels": false
+  },
+  "theme_source_packet": {
+    "schema_ref": "schemas/us_short_batch5_theme_source_packet.schema.json",
+    "profile_provider_ids": [
+      "financial_modeling_prep"
+    ],
+    "price_provider_ids": [
+      "massive"
+    ],
+    "full_gics_peer_pool": true,
+    "industry_member_count": 6,
+    "theme_count": 2,
+    "theme_member_count": 6,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "session": "RTH",
+    "adjustment_mode": "split_div_adjusted",
+    "min_points_per_series": 64,
+    "lookback_calendar_days": 140,
+    "corporate_action_reconciliation_performed": false
+  },
+  "consumer_projection": {
+    "target_count": 3,
+    "theme_scored_count": 3,
+    "neutral_fill_count": 0,
+    "real_theme_or_gics_source_consumed": true,
+    "full_gics_peer_pool_consumed": true,
+    "selected_symbol_only_membership_rejected": true
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This producer executes only the reviewed local peer/theme plan, not a full-market download.",
+    "Raw provider payloads stay under gitignored provider_samples; tracked summaries exclude URLs, raw rows, sector labels, industry labels, and secrets.",
+    "The output is a source packet and local projection for Batch5 source wiring; it is not provider selection, DataHub, production, or ship-gate evidence."
+  ]
+}
