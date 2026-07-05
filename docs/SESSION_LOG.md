@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 source-wiring route-state reconciliation)
+
+- **Verdict/Action**: PASS + 提交 5 文件(CURRENT + design + register + doc-governance guard + 本 SESSION_LOG)。纯 docs/治理 reconciliation:把已实现的 bounded live Pass2 source-packet wiring 从 CURRENT/design/register 的 remaining 列表移除+加 settled 事实,新增 scoped stale-term guard(防 route doc 再把已实现列 remaining)。无代码/runner/provider/live 改动。分级=纯 docs 轻量(§6a:整读改动+跑 route-doc guards、不起 agent)。
+- **Required**: 无(route-state reconciliation、无新 finding、无判定翻转)。
+- **Verify**: (`review-evidence:85cfc8197d82`) CURRENT:header+§0=settled 事实、无瞬态 gate 词(待审/pending/谁审 零命中)、无 verdict 度量;design/register:live Pass2 wiring 移入已实现、full peer-theme producer/bankruptcy 8-K/DataHub 仍准确 gated,四处一致无越界(未删 finding/未改判定)。guard=AND(FUTURE_WORK_MARKER+已实现 future_term 同现才 flag)、只 ACTIVE_DESIGN_DOCS、anchors-live+planted-failure(unrelated remaining 不 flag)——R4 route-drift 窄焊非通用税。亲跑 route-doc/doc-gov 60+全离线 3641 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 source-wiring route-state reconciliation)
+
+- **Verdict/Action**: reconciled active route docs/register to settled repo state: the bounded source-packet runner+summary already connect authorized AAPL/MSFT/JPM SEC/FMP/Massive source artifacts to local `data_context`. Added a guard against listing old "live Pass2 source wiring" as remaining. No provider/network/raw/DataHub/production/broker/order/A-share/ship-gate claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` remains open for wider provider health/fallback, bankruptcy 8-K full/candidate scan, full peer/theme source producer/fetch/discovery, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence, and corporate-action reconciliation.
+- **Verify**: red first guard failed with 6 active-doc offenders. Green: doc-governance/route/README `60 OK`; adjacent source-packet/data-context `37 OK`; planted+anchor guard `2 OK`; `py_compile` OK; stale scans `0 hits`; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. B/C/E: completed-vs-future class pinned in `CURRENT_FACT_REGISTRY`; active docs state the bounded source-packet leg as settled and leave wider live/provider gates open.
+- **Next**: Claude Code: review current route-state reconciliation diff; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme full-source — per-scored-group selected-only guard 已闭)
 
 - **Verdict/Action**: PASS + 提交 7 文件(runner + packet schema + summary schema + test + README + register + 本 SESSION_LOG)。Codex 采纳选项 1(per-group enforcement):新 `_assert_scored_groups_have_nonselected_support`(L411) 在 heat block 后、project/summary/preflight 前,拒任一 SCORED sector/theme 成员 ⊆ selected(无非-selected 支撑)。分级=中-高 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮一处修不重起)。离线未真跑。

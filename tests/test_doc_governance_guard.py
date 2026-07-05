@@ -42,6 +42,7 @@ ACTIVE_DESIGN_DOCS = (
     ROOT / "docs" / "CURRENT.md",
     ROOT / "docs" / "a_short_holdings_in_m67_design.md",
     ROOT / "docs" / "a_short_holdings_s3_system_levels_design.md",
+    ROOT / "docs" / "us_short_system_design.md",
 )
 CURRENT_FACT_REGISTRY = (
     {
@@ -96,6 +97,31 @@ CURRENT_FACT_REGISTRY = (
             )),
         ),
     },
+    {
+        # 2026-07-05: bounded live Pass2 source-packet runner + authorized AAPL/MSFT/JPM execution
+        # now exist. Active route docs must not keep listing the old "live Pass2 source wiring"
+        # as remaining/unimplemented work; broader provider/production gates remain separate.
+        "name": "us_short_live_pass2_source_packet_wiring",
+        "future_terms": (
+            "live Pass2 source wiring",
+        ),
+        "anchors": (
+            (ROOT / "runners" / "us_short_batch5_live_source_packet.py", (
+                "def run_live_source_packet",
+                "run_local_source_packet_preflight",
+                "run_local_source_packet",
+            )),
+            (ROOT / "runners" / "us_short_batch5_data_context_source_packet.py", (
+                "def run_preflight",
+                "def run_packet",
+                "assemble_data_context_from_resolved_pass2_sources",
+            )),
+            (ROOT / "docs" / "us_short_batch5_live_source_packet_summary_20260704.json", (
+                "source_packet_built_and_data_context_written",
+                '"data_context_written": true',
+            )),
+        ),
+    },
 )
 FUTURE_WORK_MARKERS = (
     "仍未来",
@@ -108,6 +134,10 @@ FUTURE_WORK_MARKERS = (
     "待起草",
     "待实现",
     "未实现",
+    "Remaining batch5 work",
+    "STILL unimplemented",
+    "remain unimplemented",
+    "仍 GATED",
 )
 
 
@@ -176,6 +206,19 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard must not flag a 4.2/S3b line that states it is done")
         self.assertFalse(self._line_lists_completed_fact_as_future(s3b_unrelated, s3b_fact),
                          "guard must not block unrelated future work (US-short burst)")
+        us_short_fact = CURRENT_FACT_REGISTRY[2]
+        us_short_stale = (
+            "Remaining batch5 work includes bankruptcy 8-K screening, "
+            "live Pass2 source wiring, DataHub."
+        )
+        us_short_done = "Bounded live Pass2 source-packet runner and data_context output exist."
+        us_short_unrelated = "Remaining batch5 work includes bankruptcy 8-K screening and DataHub."
+        self.assertTrue(self._line_lists_completed_fact_as_future(us_short_stale, us_short_fact),
+                        "guard must catch completed live Pass2 source wiring listed as remaining")
+        self.assertFalse(self._line_lists_completed_fact_as_future(us_short_done, us_short_fact),
+                         "guard must not flag a line that states source-packet wiring is done")
+        self.assertFalse(self._line_lists_completed_fact_as_future(us_short_unrelated, us_short_fact),
+                         "guard must not block unrelated remaining US-short batch5 work")
 
     @staticmethod
     def _usshort_old_spec_live_input_offenders(text: str) -> list:
