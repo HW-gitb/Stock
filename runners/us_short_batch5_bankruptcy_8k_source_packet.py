@@ -340,7 +340,10 @@ def build_summary(
             "decision": "local_bankruptcy_8k_source_packet_screen_written_keep_sr_provider_001_open",
             "runner_consumption_form": "bankruptcy_screen_payload_for_build_live_status_records",
             "sr_provider_001_closed": False,
-            "rationale": "Local source-packet wiring exists; broader/full bankruptcy scan and provider gates remain open.",
+            "rationale": (
+                "Local source-packet wiring exists; broader/full candidate-universe bankruptcy scan and provider "
+                "gates remain open."
+            ),
         },
         "prohibited_claims": {
             "provider_selected": False,
@@ -354,8 +357,14 @@ def build_summary(
             "a_share_crossing_performed": False,
         },
         "limitations": [
-            "This is a local source-packet to bankruptcy-screen wiring result only.",
-            "No SEC/FMP/Massive provider call, full-market scan, run_fetch invocation, DataHub, production, or ship-gate evidence is claimed.",
+            (
+                "This consumer summary covers only the local source-packet to bankruptcy-screen runner; upstream "
+                "fetch evidence, when present, belongs in the producer summary."
+            ),
+            (
+                "This consumer runner performed no SEC/FMP/Massive provider call, full-market scan, run_fetch "
+                "invocation, DataHub, production, or ship-gate evidence claim."
+            ),
         ],
     }
 

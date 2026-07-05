@@ -94,7 +94,8 @@
         "input_source": {
           "enum": [
             "reviewed_local_sec_submissions_source_packet",
-            "local_fixture_sec_submissions_source_packet"
+            "local_fixture_sec_submissions_source_packet",
+            "provider_fetched_candidate_sec_submissions_source_packet"
           ]
         },
         "lookback_days": { "type": "integer", "minimum": 1, "maximum": 365 }
