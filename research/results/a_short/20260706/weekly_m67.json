@@ -1,0 +1,1980 @@
+{
+  "schema_name": "a_short_weekly_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-05T09:21:41+08:00",
+  "as_of": "20260706",
+  "iv_feed_ref": "iv_feed.json",
+  "n_stocks": 8,
+  "reports": [
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "601688.SH",
+      "name": "华泰证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "21.19 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):资产负债率上升;资产负债率 76.27%→82.74%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 76.69,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 21.068,
+          "ma10": 21.054,
+          "ma20": 20.315,
+          "rsi14": 58.06878306878309,
+          "atr14": 0.9114285714285716,
+          "support": 18.43,
+          "support_quality": "strong",
+          "recent_low_20": 18.43,
+          "resistance": 22.01,
+          "resistance_quality": "strong",
+          "recent_high_20": 22.01
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升;资产负债率 76.27%→82.74%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "603978.SH",
+      "name": "深圳新星",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "30.16 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓 | 语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):资产负债率上升、应收占比上升;资产负债率 56.86%→64.01% / 应收占比 13.99%→16.57%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)｜财报趋势对照(业绩预告):业绩预告类型「续亏」(负面);预告净利变动 76.3027~84.2018%(报告期20251231)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 76.48,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 31.630000000000003,
+          "ma10": 30.069,
+          "ma20": 27.979000000000003,
+          "rsi14": 64.16666666666666,
+          "atr14": 2.277142857142857,
+          "support": 23.92,
+          "support_quality": "strong",
+          "recent_low_20": 23.92,
+          "resistance": 35.2,
+          "resistance_quality": "strong",
+          "recent_high_20": 35.2
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "low",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "关于全资子公司涉及诉讼的进展公告",
+                "category": "诉讼仲裁",
+                "disclosure_date": "20260612",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-06-12/1225365736.PDF",
+                "risk_type": "litigation",
+                "severity": "low"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升、应收占比上升;资产负债率 56.86%→64.01% / 应收占比 13.99%→16.57%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_forecast",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(业绩预告):业绩预告类型「续亏」(负面);预告净利变动 76.3027~84.2018%(报告期20251231)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[forecast]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "002299.SZ",
+      "name": "圣农发展",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "16.33 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):资产负债率上升、应收占比上升;资产负债率 50.32%→53.5% / 应收占比 5.12%→5.71%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 60.27,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 15.828,
+          "ma10": 15.700999999999999,
+          "ma20": 15.925,
+          "rsi14": 48.95522388059701,
+          "atr14": 0.5807142857142864,
+          "support": 14.82,
+          "support_quality": "strong",
+          "recent_low_20": 14.82,
+          "resistance": 16.6,
+          "resistance_quality": "strong",
+          "recent_high_20": 16.6
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升、应收占比上升;资产负债率 50.32%→53.5% / 应收占比 5.12%→5.71%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "002083.SZ",
+      "name": "孚日股份",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "10.21 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓 | 语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):应收占比上升;应收占比 11.38%→11.92%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 59.44,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 10.708,
+          "ma10": 11.094,
+          "ma20": 10.2825,
+          "rsi14": 56.25942684766215,
+          "atr14": 0.8864285714285713,
+          "support": 8.57,
+          "support_quality": "strong",
+          "recent_low_20": 8.57,
+          "resistance": 12.71,
+          "resistance_quality": "strong",
+          "recent_high_20": 12.71
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "medium",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "会计师事务所对非经营性资金占用及其他关联资金往来情况的专项审核报告",
+                "category": "资金占用",
+                "disclosure_date": "20260408",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-08/1225082681.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              },
+              {
+                "source": "cninfo",
+                "title": "非经营性资金占用及其他关联资金往来汇总表",
+                "category": "资金占用",
+                "disclosure_date": "20260408",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-04-08/1225082680.PDF",
+                "risk_type": "fund_occupation",
+                "severity": "medium"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):应收占比上升;应收占比 11.38%→11.92%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "600030.SH",
+      "name": "中信证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "28.95 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓",
+          "板块资金事件": "neutral",
+          "风控触发": "财报质量对照(comparison-only,不改决策/EGS/选股/股数):EGS扣非净利质量旗标(ESP-Q);扣非净利同比56.97% / 扣非净利10202684596.22 / ROE3.1218% / 经营现金流/利润568.5353(财报质量红旗,仅 advisory 降优先级参考,绝不否决)｜财报趋势对照(资产负债表):资产负债率上升、商誉减值迹象;资产负债率 82.8%→84.84% / 商誉 8447148257.78→8428348286.01(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 55.0,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 28.851999999999997,
+          "ma10": 28.583,
+          "ma20": 27.336000000000002,
+          "rsi14": 63.35341365461847,
+          "atr14": 1.0935714285714286,
+          "support": 24.8,
+          "support_quality": "strong",
+          "recent_low_20": 24.8,
+          "resistance": 29.88,
+          "resistance_quality": "strong",
+          "recent_high_20": 29.88
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_quality",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报质量对照(comparison-only,不改决策/EGS/选股/股数):EGS扣非净利质量旗标(ESP-Q);扣非净利同比56.97% / 扣非净利10202684596.22 / ROE3.1218% / 经营现金流/利润568.5353(财报质量红旗,仅 advisory 降优先级参考,绝不否决)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "fundamental.profitability / fundamental.quality / scores.l2_flags",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报质量对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升、商誉减值迹象;资产负债率 82.8%→84.84% / 商誉 8447148257.78→8428348286.01(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "002415.SZ",
+      "name": "海康威视",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "34.0 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓",
+          "板块资金事件": "neutral",
+          "风控触发": "财报质量对照(comparison-only,不改决策/EGS/选股/股数):EGS扣非净利质量旗标(ESP-Q);扣非净利同比37.44% / 扣非净利2647647238.1 / ROE3.2833% / 经营现金流/利润-57.505(财报质量红旗,仅 advisory 降优先级参考,绝不否决)|未来事件 earnings_disclosure@20260725(公告20260630/manual_review)｜财报趋势对照(资产负债表):资产负债率上升、存货占比上升、商誉减值迹象;资产负债率 29.31%→30.26% / 存货占比 15.31%→18.02% / 商誉 312373272.24→309565980.13(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。｜⚠️ 未来已知事件(1项近端将至):先人工复核/转观察/谨慎建仓,不改 EGS/TopN/生产决策(advisory)"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 54.7,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 33.766000000000005,
+          "ma10": 33.486000000000004,
+          "ma20": 32.255,
+          "rsi14": 67.40740740740742,
+          "atr14": 1.7249999999999996,
+          "support": 29.76,
+          "support_quality": "strong",
+          "recent_low_20": 29.76,
+          "resistance": 36.16,
+          "resistance_quality": "strong",
+          "recent_high_20": 36.16
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_quality",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报质量对照(comparison-only,不改决策/EGS/选股/股数):EGS扣非净利质量旗标(ESP-Q);扣非净利同比37.44% / 扣非净利2647647238.1 / ROE3.2833% / 经营现金流/利润-57.505(财报质量红旗,仅 advisory 降优先级参考,绝不否决)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "fundamental.profitability / fundamental.quality / scores.l2_flags",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报质量对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "forward_event_earnings_disclosure",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "manual_review",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "未来已知事件(财报预约披露)1项近端将至 → advisory 提示(不改决策/EGS/选股/TopN)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "upcoming_events.events[earnings_disclosure]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发+操作建议(未来事件)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升、存货占比上升、商誉减值迹象;资产负债率 29.31%→30.26% / 存货占比 15.31%→18.02% / 商誉 312373272.24→309565980.13(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "002388.SZ",
+      "name": "新亚制程",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "5.43 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓 | 语义待核:官方 medium/low 命中(例行件),待复核(未扣分,待 web/LLM 实判)",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):资产负债率上升、存货占比上升;资产负债率 53.05%→57.68% / 存货占比 8.99%→12.77%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)｜财报趋势对照(业绩预告):业绩预告类型「续亏」(负面);预告净利变动 89.0~95.0%(报告期20251231)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)｜财报趋势对照(利润表):净利率同比下滑;净利率 3.51%→1.02%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 53.29,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 5.274,
+          "ma10": 5.371,
+          "ma20": 5.3420000000000005,
+          "rsi14": 63.35403726708074,
+          "atr14": 0.32999999999999996,
+          "support": 4.96,
+          "support_quality": "strong",
+          "recent_low_20": 4.96,
+          "resistance": 5.9,
+          "resistance_quality": "strong",
+          "recent_high_20": 5.9
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "semantic_pending_review=官方 medium/low 命中(例行件)(待核,未扣分)",
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "risk",
+            "severity_max": "low",
+            "events": [
+              {
+                "source": "cninfo",
+                "title": "关于子公司新增诉讼、达成调解暨逾期事项签署还款协议的公告",
+                "category": "诉讼仲裁",
+                "disclosure_date": "20260618",
+                "url_or_pdf": "http://static.cninfo.com.cn/finalpage/2026-06-18/1225376970.PDF",
+                "risk_type": "litigation",
+                "severity": "low"
+              }
+            ],
+            "impact": "pending",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升、存货占比上升;资产负债率 53.05%→57.68% / 存货占比 8.99%→12.77%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_forecast",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(业绩预告):业绩预告类型「续亏」(负面);预告净利变动 89.0~95.0%(报告期20251231)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[forecast]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_income",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(利润表):净利率同比下滑;净利率 3.51%→1.02%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[income]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    },
+    {
+      "schema_name": "a_short_m67_report",
+      "schema_version": "1.0.0",
+      "generated_at": "2026-07-05T09:21:41+08:00",
+      "as_of": "20260706",
+      "ts_code": "601878.SH",
+      "name": "浙商证券",
+      "m67": {
+        "精简结论区": {
+          "当前环境": "震荡期(EGS regime unknown,保守fallback)",
+          "波动率状态": "IV分位≈90.0794% | Rule3减半:否 | IV/HV 0.8239 IV<HV 隐含偏低(情绪偏松/或低估波动)(advisory)",
+          "现价与成本": "9.75 | 试探仓",
+          "否决审查触发": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓",
+          "板块资金事件": "neutral",
+          "风控触发": "财报趋势对照(资产负债表):资产负债率上升;资产负债率 78.42%→80.48%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)｜财报趋势对照(利润表):营收同比下滑;营收 2993854049.22→2359025663.39(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级参考,绝不否决/不改 EGS/选股/股数)",
+          "操作建议": "否决,禁止建仓。硬否决:EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓。"
+        },
+        "table": {
+          "操作": "否决",
+          "股数": null,
+          "入": null,
+          "盈一": null,
+          "盈二": null,
+          "损": null,
+          "类型": "N/A",
+          "EGS分": 52.29,
+          "优先级": "—",
+          "触发条件": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        }
+      },
+      "machine": {
+        "indicators": {
+          "ma5": 9.674,
+          "ma10": 9.654,
+          "ma20": 9.431000000000001,
+          "rsi14": 57.42574257425741,
+          "atr14": 0.3285714285714287,
+          "support": 8.89,
+          "support_quality": "strong",
+          "recent_low_20": 8.89,
+          "resistance": 9.96,
+          "resistance_quality": "strong",
+          "recent_high_20": 9.96
+        },
+        "risk_families": {
+          "overheat_crowding": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "liquidity_execution": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "negative_event": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "market_regime": {
+            "hit": true,
+            "action": "hard_veto",
+            "reasons": [
+              "EGS market_regime unknown/missing→按震荡期保守处理",
+              "IV分位90.0794>90.0 不可建仓"
+            ]
+          },
+          "portfolio_concentration": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_official": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "semantic_web_llm": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          },
+          "stateful_risk": {
+            "hit": false,
+            "action": null,
+            "reasons": []
+          }
+        },
+        "layer": {
+          "hard_veto": [
+            "EGS market_regime unknown/missing→按震荡期保守处理",
+            "IV分位90.0794>90.0 不可建仓"
+          ],
+          "downgrade": [],
+          "observe_only": [
+            "market_regime_status=unknown_fallback_to_shock"
+          ],
+          "llm_enrichment": [],
+          "semantic_risk": {
+            "official_status": "clear",
+            "severity_max": null,
+            "events": [],
+            "impact": "none",
+            "evidence_incomplete_high": 0,
+            "web_llm": {
+              "status": "unknown",
+              "risk_level": "unknown",
+              "action": "no_action",
+              "sources_count": 0,
+              "impact": "none",
+              "invalid_neutralized": false
+            }
+          }
+        },
+        "entry_exit_size_star": {
+          "action": "否决",
+          "type": "N/A",
+          "star": 0,
+          "plan": null,
+          "reject_reason": "EGS market_regime unknown/missing→按震荡期保守处理|IV分位90.0794>90.0 不可建仓"
+        },
+        "iv_gate": {
+          "iv_percentile_252d": 90.0794,
+          "halve": false,
+          "status": "ok",
+          "iv_value": 0.198114,
+          "hv_value": 0.240466,
+          "iv_hv_ratio": 0.8239,
+          "iv_hv_regime": "iv_cheap"
+        },
+        "stateful_risk": {},
+        "consumption": {
+          "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
+          "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
+          "overlay.eligible": "→ 星级(赛道红利)",
+          "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
+          "industry_trend": "→ 逆风降星",
+          "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
+          "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
+          "account/liquidity": "→ 仓位上限/冲击成本/100股",
+          "stateful_risk": "→ positions 决定 持有/新开仓 分流;Rule12 冷静期禁新开仓/恢复首笔限仓;Rule13 止损后再入冷静期或复核限仓",
+          "semantic": "→ semantic_official 族(official high **且证据齐全(非空 url_or_pdf)**→否决;缺 URL 的 high→待核;medium·low→待核不扣分)/ semantic_web_llm 族(web risk/headwind **有 sources 证据→downgrade,绝不 hard_veto**;tailwind/clear_light 不救回硬风控;unknown/无输入/违反契约→中性)/ trace machine.layer.semantic_risk"
+        },
+        "operation_impact": [
+          {
+            "source_field": "financial_trend_balancesheet",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(资产负债表):资产负债率上升;资产负债率 78.42%→80.48%(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[balancesheet]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          },
+          {
+            "source_field": "financial_trend_income",
+            "field_class": "structured",
+            "visibility_shape": "candidate_row_impact",
+            "impact_scope": "new_entry",
+            "new_entry_effect": "priority_down",
+            "holding_effect": "none",
+            "blocked_add_required": false,
+            "veto_class": "none",
+            "reason": "财报趋势对照(利润表):营收同比下滑;营收 2993854049.22→2359025663.39(报告期20260331 vs 20250331)(财报红旗,仅 advisory 降优先级;不改决策/EGS/选股/TopN/股数)",
+            "evidence_ref": {
+              "kind": "lineage_key",
+              "value": "financial_trends.records[income]",
+              "as_of": "20260706"
+            },
+            "confidence": "high",
+            "pit_basis": "disclosure_date",
+            "production_effect_enabled": false,
+            "implementation_status": "implemented",
+            "m67_landing_surface": "精简结论区.风控触发(财报趋势对照)",
+            "terminal_surface_target": "already_structured",
+            "pending_successor_slice": null,
+            "privacy_class": "public_tracked"
+          }
+        ]
+      },
+      "boundary": {
+        "production": false,
+        "real_money": false,
+        "is_validated_alpha": false,
+        "satisfies_ship_gate": false
+      },
+      "row_source": "egs_candidate",
+      "coverage_status": "full"
+    }
+  ],
+  "cash_allocation": null,
+  "run_lineage": {
+    "analysis_input": "result/a_short/20260706/analysis_input.json",
+    "selection_bucket": "result/a_short/20260706",
+    "iv_feed": "research/results/a_short/iv_feed_20260706/iv_feed.json",
+    "account_ref": "",
+    "account_status": "absent",
+    "sizing_mode": "observation_only_no_account",
+    "price_freshness": {
+      "mode": "intraday_prior_settled",
+      "run_date": "20260705",
+      "accepted_prior_settled_date": "20260703",
+      "price_data_through": "20260703"
+    }
+  },
+  "boundary": {
+    "production": false,
+    "real_money": false,
+    "is_validated_alpha": false,
+    "satisfies_ship_gate": false
+  },
+  "upcoming_events": {
+    "as_of": "20260706",
+    "status": "checked",
+    "events": [
+      {
+        "ts_code": "002415.SZ",
+        "name": "海康威视",
+        "event_type": "earnings_disclosure",
+        "event_date": "20260725",
+        "observed_at": "20260630",
+        "source_id": "tushare.disclosure_date",
+        "expected_effect": "manual_review",
+        "confidence": "medium",
+        "days_to_event": 19
+      }
+    ]
+  },
+  "dragon_list": {
+    "as_of": "20260706",
+    "lookback_trading_days": 5,
+    "window_dates": [
+      "20260630",
+      "20260701",
+      "20260702",
+      "20260703",
+      "20260706"
+    ],
+    "status": "checked",
+    "events": [],
+    "seats_status": "checked"
+  },
+  "block_trade": {
+    "as_of": "20260706",
+    "lookback_trading_days": 5,
+    "window_dates": [
+      "20260630",
+      "20260701",
+      "20260702",
+      "20260703",
+      "20260706"
+    ],
+    "status": "checked",
+    "events": [],
+    "discount_status": "checked"
+  },
+  "financial_trends": {
+    "as_of": "20260706",
+    "status": "checked",
+    "records": [
+      {
+        "ts_code": "002083.SZ",
+        "name": "孚日股份",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260415",
+        "red_flags": [
+          "应收占比上升"
+        ],
+        "summary": "应收占比上升;应收占比 11.38%→11.92%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "002299.SZ",
+        "name": "圣农发展",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260423",
+        "red_flags": [
+          "资产负债率上升",
+          "应收占比上升"
+        ],
+        "summary": "资产负债率上升、应收占比上升;资产负债率 50.32%→53.5% / 应收占比 5.12%→5.71%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "002388.SZ",
+        "name": "新亚制程",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260428",
+        "red_flags": [
+          "资产负债率上升",
+          "存货占比上升"
+        ],
+        "summary": "资产负债率上升、存货占比上升;资产负债率 53.05%→57.68% / 存货占比 8.99%→12.77%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "002388.SZ",
+        "name": "新亚制程",
+        "statement_type": "forecast",
+        "period": "20251231",
+        "observed_at": "20260131",
+        "red_flags": [
+          "业绩预告类型「续亏」(负面)"
+        ],
+        "summary": "业绩预告类型「续亏」(负面);预告净利变动 89.0~95.0%(报告期20251231)"
+      },
+      {
+        "ts_code": "002388.SZ",
+        "name": "新亚制程",
+        "statement_type": "income",
+        "period": "20260331",
+        "observed_at": "20260428",
+        "red_flags": [
+          "净利率同比下滑"
+        ],
+        "summary": "净利率同比下滑;净利率 3.51%→1.02%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "002415.SZ",
+        "name": "海康威视",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260418",
+        "red_flags": [
+          "资产负债率上升",
+          "存货占比上升",
+          "商誉减值迹象"
+        ],
+        "summary": "资产负债率上升、存货占比上升、商誉减值迹象;资产负债率 29.31%→30.26% / 存货占比 15.31%→18.02% / 商誉 312373272.24→309565980.13(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "600030.SH",
+        "name": "中信证券",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260425",
+        "red_flags": [
+          "资产负债率上升",
+          "商誉减值迹象"
+        ],
+        "summary": "资产负债率上升、商誉减值迹象;资产负债率 82.8%→84.84% / 商誉 8447148257.78→8428348286.01(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "601688.SH",
+        "name": "华泰证券",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260430",
+        "red_flags": [
+          "资产负债率上升"
+        ],
+        "summary": "资产负债率上升;资产负债率 76.27%→82.74%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "601878.SH",
+        "name": "浙商证券",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260428",
+        "red_flags": [
+          "资产负债率上升"
+        ],
+        "summary": "资产负债率上升;资产负债率 78.42%→80.48%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "601878.SH",
+        "name": "浙商证券",
+        "statement_type": "income",
+        "period": "20260331",
+        "observed_at": "20260428",
+        "red_flags": [
+          "营收同比下滑"
+        ],
+        "summary": "营收同比下滑;营收 2993854049.22→2359025663.39(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "603978.SH",
+        "name": "深圳新星",
+        "statement_type": "balancesheet",
+        "period": "20260331",
+        "observed_at": "20260430",
+        "red_flags": [
+          "资产负债率上升",
+          "应收占比上升"
+        ],
+        "summary": "资产负债率上升、应收占比上升;资产负债率 56.86%→64.01% / 应收占比 13.99%→16.57%(报告期20260331 vs 20250331)"
+      },
+      {
+        "ts_code": "603978.SH",
+        "name": "深圳新星",
+        "statement_type": "forecast",
+        "period": "20251231",
+        "observed_at": "20260130",
+        "red_flags": [
+          "业绩预告类型「续亏」(负面)"
+        ],
+        "summary": "业绩预告类型「续亏」(负面);预告净利变动 76.3027~84.2018%(报告期20251231)"
+      }
+    ]
+  },
+  "industry_fundamentals": {
+    "as_of": "20260706",
+    "scope": "candidates_only",
+    "by_industry": [
+      {
+        "sw_l2_name": "其他电子",
+        "candidate_count": 1,
+        "red_flag_candidate_count": 1,
+        "red_flag_codes": [
+          "002388.SZ"
+        ],
+        "summary": "其他电子:1 候选中 1 只有财报红旗(净利率同比下滑、存货占比上升、资产负债率上升)"
+      },
+      {
+        "sw_l2_name": "畜禽养殖",
+        "candidate_count": 1,
+        "red_flag_candidate_count": 1,
+        "red_flag_codes": [
+          "002299.SZ"
+        ],
+        "summary": "畜禽养殖:1 候选中 1 只有财报红旗(应收占比上升、资产负债率上升)"
+      },
+      {
+        "sw_l2_name": "纺织制造",
+        "candidate_count": 1,
+        "red_flag_candidate_count": 1,
+        "red_flag_codes": [
+          "002083.SZ"
+        ],
+        "summary": "纺织制造:1 候选中 1 只有财报红旗(应收占比上升)"
+      },
+      {
+        "sw_l2_name": "计算机设备",
+        "candidate_count": 1,
+        "red_flag_candidate_count": 1,
+        "red_flag_codes": [
+          "002415.SZ"
+        ],
+        "summary": "计算机设备:1 候选中 1 只有财报红旗(商誉减值迹象、存货占比上升、资产负债率上升)"
+      },
+      {
+        "sw_l2_name": "证券",
+        "candidate_count": 3,
+        "red_flag_candidate_count": 3,
+        "red_flag_codes": [
+          "600030.SH",
+          "601688.SH",
+          "601878.SH"
+        ],
+        "summary": "证券:3 候选中 3 只有财报红旗(商誉减值迹象、营收同比下滑、资产负债率上升)"
+      },
+      {
+        "sw_l2_name": "金属非金属新材料",
+        "candidate_count": 1,
+        "red_flag_candidate_count": 1,
+        "red_flag_codes": [
+          "603978.SH"
+        ],
+        "summary": "金属非金属新材料:1 候选中 1 只有财报红旗(应收占比上升、资产负债率上升)"
+      }
+    ]
+  },
+  "exclusion_summary": {
+    "as_of": "20260706",
+    "total_excluded": 163,
+    "by_reason": [
+      {
+        "source_field": "holder_reduction_veto_10d",
+        "stage": "l0_filter",
+        "veto_class": "production_hard_veto",
+        "count": 146,
+        "pit_basis": "disclosure_date",
+        "production_effect_enabled": true,
+        "privacy_class": "public_tracked"
+      },
+      {
+        "source_field": "share_float_unlock",
+        "stage": "l0_filter",
+        "veto_class": "production_hard_veto",
+        "count": 3,
+        "pit_basis": "disclosure_date",
+        "production_effect_enabled": true,
+        "privacy_class": "public_tracked"
+      },
+      {
+        "source_field": "suspended",
+        "stage": "l0_filter",
+        "veto_class": "production_hard_veto",
+        "count": 11,
+        "pit_basis": "trade_date_window",
+        "production_effect_enabled": true,
+        "privacy_class": "public_tracked"
+      },
+      {
+        "source_field": "relisted",
+        "stage": "l0_filter",
+        "veto_class": "production_hard_veto",
+        "count": 3,
+        "pit_basis": "trade_date_window",
+        "production_effect_enabled": true,
+        "privacy_class": "public_tracked"
+      }
+    ],
+    "m67_text": "本轮上游过滤(无 M6.7 个股行,批次级;按原因计数、可能重叠、非去重票数): 10日减持 146 只、大额解禁 3 只、停牌 11 只、次新/relisted 3 只。",
+    "evidence_ref": {
+      "kind": "lineage_key",
+      "value": "analysis_input.universe_summary.excluded_counts",
+      "as_of": "20260706"
+    }
+  }
+}
