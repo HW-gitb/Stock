@@ -227,6 +227,14 @@ class Bankruptcy8kSourcePacketProducerTest(unittest.TestCase):
                 with self.assertRaises(producer.Bankruptcy8kSourcePacketProducerError):
                     producer._assert_summary_safe_text(f"{{{raw_key}: []}}", [])
 
+    def test_summary_safe_guard_allows_form_ticker_but_rejects_raw_form_key(self):
+        import importlib
+
+        producer = importlib.import_module(PRODUCER_MODULE)
+        producer._assert_summary_safe_text('{"symbol": "FORM"}', [])
+        with self.assertRaises(producer.Bankruptcy8kSourcePacketProducerError):
+            producer._assert_summary_safe_text('{"form": []}', [])
+
     def test_requires_authorization_before_fetch_or_write(self):
         import importlib
 

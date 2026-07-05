@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -64,7 +65,7 @@ PROHIBITED_FALSE_FIELDS = (
     "broker_or_order_automation",
     "a_share_crossing_performed",
 )
-SUMMARY_FORBIDDEN_FRAGMENTS = (
+SUMMARY_FORBIDDEN_SUBSTRINGS = (
     "http://",
     "https://",
     "data.sec.gov",
@@ -72,12 +73,10 @@ SUMMARY_FORBIDDEN_FRAGMENTS = (
     "api_key",
     "token=",
     "bearer ",
-    '"filings"',
-    '"recent"',
-    '"form"',
-    '"filingDate"',
-    '"accessionNumber"',
-    '"items"',
+)
+SUMMARY_FORBIDDEN_RAW_KEY_RE = re.compile(
+    r'"(?:filings|recent|form|filingDate|accessionNumber|items)"\s*:',
+    re.IGNORECASE,
 )
 
 
@@ -372,10 +371,12 @@ def build_summary(
 def _assert_summary_safe(summary: dict[str, Any]) -> None:
     text = json.dumps(summary, ensure_ascii=False, sort_keys=True)
     lower = text.lower()
-    for fragment in SUMMARY_FORBIDDEN_FRAGMENTS:
-        haystack = lower if fragment == fragment.lower() else text
-        if fragment in haystack:
+    for fragment in SUMMARY_FORBIDDEN_SUBSTRINGS:
+        if fragment in lower:
             raise BankruptcySourcePacketError(f"tracked summary contains forbidden fragment: {fragment}")
+    match = SUMMARY_FORBIDDEN_RAW_KEY_RE.search(text)
+    if match:
+        raise BankruptcySourcePacketError(f"tracked summary contains forbidden raw key: {match.group(0).rstrip(':')}")
 
 
 def _write_json_atomic(path: Path, payload: dict[str, Any]) -> None:

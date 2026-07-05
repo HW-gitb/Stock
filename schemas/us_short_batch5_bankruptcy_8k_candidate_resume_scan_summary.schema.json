@@ -1,0 +1,389 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_bankruptcy_8k_candidate_resume_scan_summary.schema.json",
+  "title": "US-short Batch5 bankruptcy 8-K candidate resume scan summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "authorization_ref",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "environment",
+    "round_plan",
+    "manifest",
+    "endpoint_call_budget",
+    "endpoint_results",
+    "storage",
+    "source_packet",
+    "consumer_screen",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_bankruptcy_8k_candidate_resume_scan_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "schema_ref": { "const": "schemas/us_short_batch5_bankruptcy_8k_candidate_resume_scan_summary.schema.json" },
+    "authorization_ref": { "const": "user_chat_20260705_us_short_bankruptcy_8k_candidate_resume_scan_3_rounds" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_storage_performed",
+        "source_packet_written",
+        "bankruptcy_screen_written_by_consumer",
+        "consumer_summary_written",
+        "run_fetch_invoked",
+        "status_records_written",
+        "full_market_scan_performed",
+        "full_candidate_universe_scan_completed",
+        "candidate_artifact_written",
+        "datahub_consumption_performed",
+        "production_storage_performed",
+        "broker_or_order_execution_performed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "purpose": { "const": "resumable_candidate_universe_bankruptcy_8k_sec_submissions_scan" },
+        "status": { "enum": ["resume_round_source_packet_and_bankruptcy_screen_written", "full_candidate_universe_scan_completed"] },
+        "network_access_performed": { "const": true },
+        "provider_calls_performed": { "const": true },
+        "raw_payload_storage_performed": { "const": true },
+        "source_packet_written": { "const": true },
+        "bankruptcy_screen_written_by_consumer": { "const": true },
+        "consumer_summary_written": { "const": true },
+        "run_fetch_invoked": { "const": false },
+        "status_records_written": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "full_candidate_universe_scan_completed": { "type": "boolean" },
+        "candidate_artifact_written": { "const": false },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_decision_date", "status_as_of", "source_observed_at"],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "status_as_of": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "source_observed_at": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sec_fair_access_user_agent_present",
+        "sec_fair_access_user_agent_source",
+        "environment_values_logged",
+        "secrets_logged",
+        "sec_credentials_required"
+      ],
+      "properties": {
+        "sec_fair_access_user_agent_present": { "const": true },
+        "sec_fair_access_user_agent_source": { "type": "string", "minLength": 1 },
+        "environment_values_logged": { "const": false },
+        "secrets_logged": { "const": false },
+        "sec_credentials_required": { "const": false }
+      }
+    },
+    "round_plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "round_index",
+        "max_rounds_total",
+        "max_shards_per_round",
+        "shard_size",
+        "total_shard_count",
+        "precompleted_shard_indices",
+        "completed_before_round",
+        "round_window_shard_indices",
+        "finalize_only",
+        "target_shard_indices",
+        "target_symbol_count",
+        "remaining_shards_after_round",
+        "full_candidate_universe_scan_completed_if_round_succeeds"
+      ],
+      "properties": {
+        "round_index": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "max_rounds_total": { "const": 3 },
+        "max_shards_per_round": { "type": "integer", "minimum": 1, "maximum": 35 },
+        "shard_size": { "const": 25 },
+        "total_shard_count": { "type": "integer", "minimum": 1 },
+        "precompleted_shard_indices": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "completed_before_round": { "type": "integer", "minimum": 0 },
+        "round_window_shard_indices": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 35,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "finalize_only": { "type": "boolean" },
+        "target_shard_indices": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 35,
+          "uniqueItems": true,
+          "items": { "type": "integer", "minimum": 0 }
+        },
+        "target_symbol_count": { "type": "integer", "minimum": 0, "maximum": 875 },
+        "remaining_shards_after_round": { "type": "integer", "minimum": 0 },
+        "full_candidate_universe_scan_completed_if_round_succeeds": { "type": "boolean" }
+      }
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "manifest_path",
+        "manifest_gitignored",
+        "candidate_artifact_row_count",
+        "candidate_artifact_eligible_count",
+        "eligible_after_exclusions_count",
+        "completed_shard_count",
+        "resume_completed_shard_count",
+        "completed_symbol_count",
+        "round_runs_recorded"
+      ],
+      "properties": {
+        "manifest_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "manifest_gitignored": { "const": true },
+        "candidate_artifact_row_count": { "type": "integer", "minimum": 1 },
+        "candidate_artifact_eligible_count": { "type": "integer", "minimum": 1 },
+        "eligible_after_exclusions_count": { "type": "integer", "minimum": 1 },
+        "completed_shard_count": { "type": "integer", "minimum": 1 },
+        "resume_completed_shard_count": { "type": "integer", "minimum": 0 },
+        "completed_symbol_count": { "type": "integer", "minimum": 1 },
+        "round_runs_recorded": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "endpoint_callBudget": false,
+    "endpoint_call_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls_per_round",
+        "actual_total_endpoint_calls",
+        "sec_ticker_reference_calls",
+        "sec_company_submissions_calls",
+        "endpoint_error_count",
+        "retry_count_allowed",
+        "retry_count_used",
+        "within_budget"
+      ],
+      "properties": {
+        "max_total_endpoint_calls_per_round": { "type": "integer", "minimum": 2, "maximum": 876 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 876 },
+        "sec_ticker_reference_calls": { "type": "integer", "minimum": 0, "maximum": 1 },
+        "sec_company_submissions_calls": { "type": "integer", "minimum": 1, "maximum": 875 },
+        "endpoint_error_count": { "const": 0 },
+        "retry_count_allowed": { "const": 0 },
+        "retry_count_used": { "const": 0 },
+        "within_budget": { "const": true }
+      }
+    },
+    "endpoint_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 876,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "provider_id",
+          "endpoint_family",
+          "symbol",
+          "status",
+          "http_status",
+          "error_type",
+          "raw_sample_ref",
+          "raw_sample_ref_gitignored",
+          "payload_shape"
+        ],
+        "properties": {
+          "provider_id": { "const": "sec_edgar" },
+          "endpoint_family": { "enum": ["company_tickers_exchange", "company_submissions_recent_filings"] },
+          "symbol": {
+            "anyOf": [
+              { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" },
+              { "type": "null" }
+            ]
+          },
+          "status": { "const": "success" },
+          "http_status": {
+            "anyOf": [
+              { "type": "integer", "minimum": 100, "maximum": 599 },
+              { "type": "null" }
+            ]
+          },
+          "error_type": { "type": "null" },
+          "raw_sample_ref": {
+            "type": "string",
+            "pattern": "^provider_samples/us_short_batch5_bankruptcy_8k_candidate_resume_scan_20260705/.+\\.json$",
+            "not": { "pattern": "\\.\\." }
+          },
+          "raw_sample_ref_gitignored": { "const": true },
+          "payload_shape": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["kind", "row_count"],
+            "properties": {
+              "kind": { "enum": ["object", "object_recent", "list", "null", "scalar"] },
+              "row_count": {
+                "anyOf": [
+                  { "type": "integer", "minimum": 0 },
+                  { "type": "null" }
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "source_packet_path",
+        "source_packet_path_gitignored",
+        "bankruptcy_screen_output_path",
+        "bankruptcy_screen_output_gitignored",
+        "producer_tracked_summary_path",
+        "consumer_tracked_summary_path",
+        "tracked_summaries_contain_raw_payload",
+        "tracked_summaries_contain_request_urls",
+        "tracked_summaries_contain_secrets"
+      ],
+      "properties": {
+        "raw_payload_root": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_batch5_bankruptcy_8k_candidate_resume_scan_20260705/.+",
+          "not": { "pattern": "\\.\\." }
+        },
+        "raw_payload_root_gitignored": { "const": true },
+        "source_packet_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "source_packet_path_gitignored": { "const": true },
+        "bankruptcy_screen_output_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "bankruptcy_screen_output_gitignored": { "const": true },
+        "producer_tracked_summary_path": {
+          "type": "string",
+          "pattern": "^docs/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "consumer_tracked_summary_path": {
+          "type": "string",
+          "pattern": "^docs/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "tracked_summaries_contain_raw_payload": { "const": false },
+        "tracked_summaries_contain_request_urls": { "const": false },
+        "tracked_summaries_contain_secrets": { "const": false }
+      }
+    },
+    "source_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_ref", "input_symbol_count", "source_contract_input_source"],
+      "properties": {
+        "schema_ref": { "const": "schemas/us_short_batch5_bankruptcy_8k_source_packet.schema.json" },
+        "input_symbol_count": { "type": "integer", "minimum": 1 },
+        "source_contract_input_source": { "const": "provider_fetched_candidate_sec_submissions_source_packet" }
+      }
+    },
+    "consumer_screen": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bankruptcy_screen_written",
+        "screen_symbol_count",
+        "bankruptcy_8k_positive_count",
+        "screened_no_filing_count",
+        "parser_error_count"
+      ],
+      "properties": {
+        "bankruptcy_screen_written": { "const": true },
+        "screen_symbol_count": { "type": "integer", "minimum": 1 },
+        "bankruptcy_8k_positive_count": { "type": "integer", "minimum": 0 },
+        "screened_no_filing_count": { "type": "integer", "minimum": 0 },
+        "parser_error_count": { "const": 0 }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_scan_performed",
+        "full_candidate_universe_scan_completed_only_by_scan",
+        "status_records_written",
+        "run_fetch_invoked",
+        "candidate_artifact_written",
+        "datahub_consumed",
+        "production_ready_claimed",
+        "ship_gate_evidence_claimed",
+        "live_normalized_evidence_claimed",
+        "broker_or_order_automation",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "full_market_scan_performed": { "const": false },
+        "full_candidate_universe_scan_completed_only_by_scan": { "type": "boolean" },
+        "status_records_written": { "const": false },
+        "run_fetch_invoked": { "const": false },
+        "candidate_artifact_written": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_ready_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_automation": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 import time
@@ -619,16 +620,14 @@ def _assert_summary_safe_text(text: str, sensitive_values: list[str]) -> None:
         "api_key",
         "token=",
         "bearer ",
-        '"filings"',
-        '"recent"',
-        '"form"',
-        '"filingDate"',
-        '"accessionNumber"',
-        '"items"',
     ):
-        haystack = lower if fragment == fragment.lower() else text
-        if fragment in haystack:
+        if fragment in lower:
             raise Bankruptcy8kSourcePacketProducerError(f"tracked summary contains forbidden fragment: {fragment}")
+    raw_key_match = re.search(r'"(?:filings|recent|form|filingDate|accessionNumber|items)"\s*:', text, re.IGNORECASE)
+    if raw_key_match:
+        raise Bankruptcy8kSourcePacketProducerError(
+            f"tracked summary contains forbidden raw key: {raw_key_match.group(0).rstrip(':')}"
+        )
     for value in sensitive_values:
         if value and value in text:
             raise Bankruptcy8kSourcePacketProducerError("tracked summary contains a sensitive environment value")

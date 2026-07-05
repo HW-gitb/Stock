@@ -178,6 +178,11 @@ class UsShortBatch5Bankruptcy8kSourcePacketTest(unittest.TestCase):
         self.assertNotIn("apikey=", text.lower())
         self.assertNotIn("token=", text.lower())
 
+    def test_summary_safe_guard_allows_form_ticker_but_rejects_raw_form_key(self):
+        runner._assert_summary_safe({"source_packet": {"input_symbols": ["FORM"]}})
+        with self.assertRaises(runner.BankruptcySourcePacketError):
+            runner._assert_summary_safe({"raw": {"form": ["8-K"]}})
+
     def test_preflight_rejects_non_gitignored_packet_path_before_write(self):
         leaky_packet = ROOT / "docs" / f"{self.slug}_packet.json"
         self.addCleanup(leaky_packet.unlink, missing_ok=True)
