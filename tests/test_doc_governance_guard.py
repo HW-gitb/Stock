@@ -147,6 +147,32 @@ CURRENT_FACT_REGISTRY = (
             )),
         ),
     },
+    {
+        # 2026-07-05: the first bounded candidate-shard bankruptcy 8-K SEC scan now exists.
+        # Active route docs must not list that bounded candidate-shard provider scan as future work;
+        # full candidate-universe completion and true run_fetch/status-record execution remain separate.
+        "name": "us_short_bankruptcy_8k_candidate_shard_scan",
+        "future_terms": (
+            "bankruptcy 8-K candidate-shard provider scan",
+            "candidate-shard provider scan",
+        ),
+        "anchors": (
+            (ROOT / "runners" / "us_short_batch5_bankruptcy_8k_candidate_scan.py", (
+                "def run_candidate_shard_scan",
+                "MAX_SHARD_SYMBOLS = 25",
+                "candidate_shard_source_packet_and_bankruptcy_screen_written",
+            )),
+            (ROOT / "schemas" / "us_short_batch5_bankruptcy_8k_candidate_scan_summary.schema.json", (
+                "us_short_batch5_bankruptcy_8k_candidate_scan_summary",
+                "full_candidate_universe_scan_completed",
+            )),
+            (ROOT / "docs" / "us_short_batch5_bankruptcy_8k_candidate_scan_summary_20260705.json", (
+                "candidate_shard_source_packet_and_bankruptcy_screen_written",
+                '"actual_total_endpoint_calls": 26',
+                '"full_candidate_universe_scan_completed": false',
+            )),
+        ),
+    },
 )
 FUTURE_WORK_MARKERS = (
     "仍未来",
@@ -257,6 +283,19 @@ class DocGovernanceGuard(unittest.TestCase):
                          "guard must not flag a line that states the local screen runner is done")
         self.assertFalse(self._line_lists_completed_fact_as_future(bankruptcy_unrelated, bankruptcy_fact),
                          "guard must not block the separate full/candidate provider scan")
+        candidate_shard_fact = CURRENT_FACT_REGISTRY[4]
+        candidate_shard_stale = (
+            "Remaining batch5 work includes bankruptcy 8-K candidate-shard provider scan "
+            "and DataHub."
+        )
+        candidate_shard_done = "First 25-symbol bankruptcy candidate shard scan is done."
+        candidate_shard_unrelated = "Remaining batch5 work includes full candidate-universe bankruptcy scan."
+        self.assertTrue(self._line_lists_completed_fact_as_future(candidate_shard_stale, candidate_shard_fact),
+                        "guard must catch completed bankruptcy 8-K candidate-shard scan listed as remaining")
+        self.assertFalse(self._line_lists_completed_fact_as_future(candidate_shard_done, candidate_shard_fact),
+                         "guard must not flag a completed candidate-shard line")
+        self.assertFalse(self._line_lists_completed_fact_as_future(candidate_shard_unrelated, candidate_shard_fact),
+                         "guard must not block the separate full candidate-universe scan")
 
     @staticmethod
     def _usshort_old_spec_live_input_offenders(text: str) -> list:

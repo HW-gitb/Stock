@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 bankruptcy 8-K 首个 25 票候选分片 SEC 扫描)
+
+- **Verdict/Action**: PASS + 提交 11 文件(candidate_scan runner + summary schema + test + 2 tracked summary + doc-gov guard[scoped stale-term 窄焊] + CURRENT/README/design/register)。live 边界新 runner:排除已跑 NVDA/MSFT/AAPL、选首 25 票 Pass1-eligible shard、26/26 SEC HTTP 200、positive=0;大量复用已审 sibling(case-aware summary guard/accession 校验/source-packet build/consumer screen)。分级=最高危 live→整读 runner/test + 独立 §3.5 主树黑盒对抗 agent + 亲探针 + 亲跑全包。Codex 执行=已授权、真跑数据干净。
+- **Required**: 无(no new R-ID)。`R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` 仍 open for full candidate-universe scan completion beyond 首个 shard(register 已加 candidate-shard 事实、未删既有 finding)。无 Optional/Options。
+- **Verify**: (`review-evidence:7b2c4e9a1f60`) 独立 §3.5 agent CLEAN:真 positive accession+UA 只进 gitignored state、2 tracked summary 不含;真 symlink+junction 全 reject;24 畸形 payload(10^400/NaN/非法 accession/坏日期)全 domain error 零裸崩;auth 0 网络 0 写盘;shard 恒 eligible 子集、budget 硬顶 26;schema 拦诚实标记造假;positive-only 无塌缩。我探针 12/12(guard 委托 fire/budget 拒于 0 网络/shard bound 全拒)。全离线 3667+doc-gov 60 OK 零回归;doc 改动核过在 scope(未删 finding/未把 gated 说成 done)。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 bankruptcy 8-K candidate-shard SEC scan)
+
+- **Verdict/Action**: added `us_short_batch5_bankruptcy_8k_candidate_scan` + summary schema + focused tests, then executed the user-authorized first 25-symbol Pass1-eligible shard after excluding `NVDA`/`MSFT`/`AAPL`. It wrote raw under gitignored `provider_samples/...`, wrote gitignored source packet + `bankruptcy_screen` under `state/us_short/`, and wrote tracked no-secret producer + consumer summaries. No full candidate-universe completion, `run_fetch`, status_records, candidate-artifact write, DataHub, production, broker/order, A-share, ship-gate, or live-normalized claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` remains open for full candidate-universe bankruptcy 8-K scan/fetch completion beyond this first shard, true-scan `run_fetch`/status-record execution, broader provider-health/fallback, DataHub/production/provider-selection/ship-gate gates, and forward evidence.
+- **Verify**: red first focused test failed on missing shard runner module; green focused shard `5 OK`; adjacent bankruptcy/status/universe pack `208 OK`; full offline `discover -s tests -p '*us_short*.py'` `3667 OK` (1 skipped); doc-governance/route/README guards `60 OK`; preflight exit 0 (`planned_total_endpoint_calls=26`); authorized escalated run `26/26` SEC HTTP 200, `bankruptcy_8k_positive_count=0`; `py_compile` OK; schema + tracked summaries JSON parse OK; tracked summary leak scan `0 hits`; raw/source/screen `git check-ignore` OK and tracked summaries not ignored; active-route old bounded-sample stale scan `0 hits`.
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: tests prove >3 shard support, authorization-required, endpoint error fails closed before source packet/summary/screen, preflight writes nothing, state outputs must be gitignored, and schema rejects scope creep. B/E: route docs/register distinguish first candidate shard done from full candidate-universe completion and `run_fetch`/status-record still remaining; raw/source/screen stay gitignored; tracked summaries exclude raw SEC arrays/request URLs/env/secrets.
+- **Next**: Claude Code: review current candidate-shard bankruptcy 8-K scan slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 bankruptcy 8-K producer summary-guard dead-case fragment 已闭)
 
 - **Verdict/Action**: PASS + 提交 13 文件(producer runner/schema/test + consumer overclaim-fix + 2 consumer schema 各 +1 enum + 2 tracked summary + 5 docs)。Codex 采纳 Required:`_assert_summary_safe_text` 改 case-aware(逐字镜像 sibling consumer L376)+补 `form`/`filingDate` fragment+negative test。分级=最高危 live 边界 incremental 修复;上轮 FAIL 已起独立 §3.5 对抗 agent 全面审、本轮修复面极小 SAFE-direction 不重起,无 provider/live 重跑(2 summary 本就 CLEAN)。

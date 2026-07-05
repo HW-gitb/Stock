@@ -1,0 +1,106 @@
+{
+  "schema_name": "us_short_batch5_bankruptcy_8k_source_packet_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_bankruptcy_8k_source_packet_summary.schema.json",
+  "generated_at": "2026-07-05T13:00:00+00:00",
+  "source_packet_ref": "state/us_short/us_short_batch5_bankruptcy_8k_candidate_scan_20260705_packet.json",
+  "source_parser_ref": "engine.us_short_status_source.build_bankruptcy_screen_from_sec_submissions",
+  "status_as_of": "2026-07-06",
+  "source_observed_at": "2026-07-05T13:00:00+00:00",
+  "scope": {
+    "market": "US",
+    "lane": "us_short",
+    "batch": "batch5_provider_live",
+    "purpose": "local_sec_submissions_to_bankruptcy_8k_screen",
+    "status": "bankruptcy_screen_written",
+    "local_source_packet_consumed": true,
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "raw_payload_capture_performed": false,
+    "bankruptcy_screen_written": true,
+    "status_records_written": false,
+    "run_fetch_invoked": false,
+    "full_market_scan_performed": false,
+    "candidate_artifact_written": false,
+    "datahub_consumption_allowed": false,
+    "production_storage_allowed": false,
+    "ship_gate_evidence_claimed": false,
+    "broker_or_order_automation_allowed": false,
+    "a_share_crossing_allowed": false
+  },
+  "source_contract": {
+    "source_id": "sec_8k_item_103",
+    "provider_id": "sec_edgar",
+    "endpoint_family": "company_submissions_recent_filings",
+    "input_source": "provider_fetched_candidate_sec_submissions_source_packet",
+    "lookback_days": 90
+  },
+  "storage": {
+    "source_packet_path": "state/us_short/us_short_batch5_bankruptcy_8k_candidate_scan_20260705_packet.json",
+    "source_packet_gitignored": true,
+    "bankruptcy_screen_output_path": "state/us_short/us_short_batch5_bankruptcy_8k_candidate_scan_20260705_screen.json",
+    "bankruptcy_screen_output_gitignored": true,
+    "tracked_summary_path": "docs/us_short_batch5_bankruptcy_8k_candidate_scan_consumer_summary_20260705.json",
+    "tracked_summary_contains_raw_payload": false,
+    "tracked_summary_contains_request_urls": false,
+    "secrets_in_summary": false
+  },
+  "source_packet": {
+    "input_symbol_count": 25,
+    "input_symbols": [
+      "ABBV",
+      "AMAT",
+      "AMD",
+      "AMZN",
+      "ASML",
+      "AVGO",
+      "BAC",
+      "CAT",
+      "COST",
+      "CSCO",
+      "GE",
+      "GOOGL",
+      "INTC",
+      "JNJ",
+      "JPM",
+      "LLY",
+      "LRCX",
+      "MA",
+      "META",
+      "MU",
+      "ORCL",
+      "TSLA",
+      "V",
+      "WMT",
+      "XOM"
+    ]
+  },
+  "aggregate_shape_metrics": {
+    "input_symbol_count": 25,
+    "screen_symbol_count": 25,
+    "bankruptcy_8k_positive_count": 0,
+    "screened_no_filing_count": 25,
+    "parser_error_count": 0
+  },
+  "validation_decision": {
+    "decision": "local_bankruptcy_8k_source_packet_screen_written_keep_sr_provider_001_open",
+    "runner_consumption_form": "bankruptcy_screen_payload_for_build_live_status_records",
+    "sr_provider_001_closed": false,
+    "rationale": "Local source-packet wiring exists; broader/full candidate-universe bankruptcy scan and provider gates remain open."
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_scan_performed": false,
+    "candidate_artifact_written": false,
+    "status_records_runner_consumable": false,
+    "datahub_consumed": false,
+    "production_ready_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "broker_or_order_automation": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This consumer summary covers only the local source-packet to bankruptcy-screen runner; upstream fetch evidence, when present, belongs in the producer summary.",
+    "This consumer runner performed no SEC/FMP/Massive provider call, full-market scan, run_fetch invocation, DataHub, production, or ship-gate evidence claim."
+  ]
+}
