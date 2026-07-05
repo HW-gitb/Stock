@@ -256,6 +256,67 @@ class ThemeGicsSourceTest(unittest.TestCase):
             cursor[path[-1]] = value
             self.assertGreater(len(list(validator.iter_errors(mutated))), 0, path)
 
+    def test_summary_write_rejects_exact_sensitive_env_value_before_file_write(self):
+        runner = _runner()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_theme_gics_source(
+                candidate_artifact_path=self.paths["candidate"],
+                price_source_packet_path=self.paths["price_packet"],
+                expected_decision_date=_DECISION_DATE,
+                selected_symbols=["AAPL"],
+                output_source_packet_path=self.paths["source_packet"],
+                output_theme_projection_path=self.paths["theme_projection"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=FakeFmpProfileClient(),
+                confirm_user_authorization=True,
+                generated_at="2026-06-15T12:00:00+00:00",
+                observed_at="2026-06-15T12:00:00+00:00",
+            )
+
+        leaking_summary = json.loads(json.dumps(summary))
+        leaking_summary["limitations"] = ["UNIT_TEST_FMP_SECRET"]
+        leak_path = SAMPLE_ROOT / self.slug / "leaking_summary.json"
+
+        with self.assertRaises(runner.ThemeGicsSourceError):
+            runner._write_summary_validated(leaking_summary, leak_path, ["UNIT_TEST_FMP_SECRET"])
+
+        self.assertFalse(leak_path.exists())
+
+    def test_run_rejects_exact_sensitive_summary_value_before_any_output_write(self):
+        runner = _runner()
+        original_build_summary = runner._build_summary
+
+        def leaking_summary(**kwargs):
+            summary = original_build_summary(**kwargs)
+            summary["limitations"] = ["UNIT_TEST_FMP_SECRET"]
+            return summary
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ), mock.patch.object(runner, "_build_summary", side_effect=leaking_summary):
+            with self.assertRaises(runner.ThemeGicsSourceError):
+                runner.run_theme_gics_source(
+                    candidate_artifact_path=self.paths["candidate"],
+                    price_source_packet_path=self.paths["price_packet"],
+                    expected_decision_date=_DECISION_DATE,
+                    selected_symbols=["AAPL"],
+                    output_source_packet_path=self.paths["source_packet"],
+                    output_theme_projection_path=self.paths["theme_projection"],
+                    summary_path=self.paths["summary"],
+                    raw_root=self.raw_root,
+                    client=FakeFmpProfileClient(),
+                    confirm_user_authorization=True,
+                    generated_at="2026-06-15T12:00:00+00:00",
+                    observed_at="2026-06-15T12:00:00+00:00",
+                )
+
+        self.assertFalse(self.paths["source_packet"].exists())
+        self.assertFalse(self.paths["theme_projection"].exists())
+        self.assertFalse(self.paths["summary"].exists())
+
 
 if __name__ == "__main__":
     unittest.main()

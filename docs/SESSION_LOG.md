@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme/GICS summary exact-value secret scan 加固)
+
+- **Verdict/Action**: PASS + 提交 3 文件(runner + test + 本 SESSION_LOG)。Codex 采纳上轮 Optional:`_assert_text_safe` 加 `sensitive_values` 参数 + exact-value scan,run 预检 + `_write_summary_validated` 双处传 `[fmp_env.value]`,对齐 sibling momentum packet producer。分级=离线 defense-in-depth 小改(§6a:整读 diff+亲验+跑全包;上轮已全面对抗审 PASS、本轮不重起 agent)。无 provider/live 重跑、tracked summary 未变、register/README 未动。
+- **Required**: 无(defense-in-depth、register 无翻转、无新 finding;上轮 Optional 已闭)。
+- **Verify**: (`review-evidence:e5b12bc73e56`) 亲验:新签名 `(text, sensitive_values)`;bare secret(无 denylist fragment)经 exact-value scan 被拒;denylist 仍工作(apikey= caught)、clean pass、empty sensitive 不误拒。新 test 真验证:summary 含 exact env value→`_write_summary_validated` + run 级均 raise before file/output write。亲跑 focused 7+全离线 3634+doc-gov 60 全 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 theme/GICS summary exact-value secret scan)
+
+- **Verdict/Action**: closed the prior non-blocking Optional for `runners/us_short_batch5_theme_gics_source.py`: tracked summary validation now exact-scans the real `FMP_API_KEY` environment value before writing, aligned with the sibling momentum price-packet producer. No provider/live/network run, no raw/state artifact regeneration, no DataHub/production/ship-gate/broker/order/A-share path.
+- **Required**: no new R-ID; this was defense-in-depth only. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` remains open for full GICS peer pool / provisional theme discovery-member source, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence, and corporate-action reconciliation.
+- **Verify**: red first focused tests failed on missing 3-arg summary writer (`TypeError`) and then on partial source-packet output before summary safety preflight. Green after fix: focused theme/GICS source `7 OK`; adjacent source/projection pack `50 OK`; full offline `discover -s tests -p *us_short*.py` via repo-pythonpath wrapper `3634 OK` (1 skipped); route/doc guards `25 OK`; `py_compile` OK; `git diff --check` OK (CRLF warnings only). Bare full discover without `.tools/python_libs` in child `PYTHONPATH` reproduced the known unrelated batch4 `ACCOUNT_INVALID` redaction mode, then the wrapper rerun passed.
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: new mutants prove a valid-shaped summary containing the exact env value is rejected before summary write and before any run-path packet/projection/summary output. B: same-class grep shows theme/GICS now matches the existing sibling producer sensitive-value scan; no other theme/GICS summary call sites left behind. E: only runner/test/SESSION_LOG changed; `CURRENT`, README, register, tracked summary, and live artifacts untouched because this is an in-flight execution handoff, not a settled route-state change.
+- **Next**: Claude Code: review current exact-value summary scan hardening; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme/GICS membership source packet producer)
 
 - **Verdict/Action**: PASS + 提交 8 文件(producer runner + packet schema + summary schema + tracked summary + test + README + register + 本 SESSION_LOG)。live fetch producer(真跑 FMP stable profile 3/3、AAPL/MSFT/JPM、本会话授权 user_chat_20260705)→selected-symbol GICS membership packet + **neutral theme projection**(不算 heat)。分级=最高危 live 边界→整读 runner/schema/test+被消费 sample_validation+**独立 §3.5 主树黑盒对抗 agent(真起、~40 hostile-FMP/path 探针含真 symlink)**+亲跑全包。

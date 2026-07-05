@@ -643,7 +643,7 @@ def _build_summary(
     }
 
 
-def _assert_text_safe(text: str) -> None:
+def _assert_text_safe(text: str, sensitive_values: list[str]) -> None:
     lower = text.lower()
     forbidden = (
         "apikey=",
@@ -665,12 +665,15 @@ def _assert_text_safe(text: str) -> None:
     for fragment in forbidden:
         if fragment in lower:
             raise ThemeGicsSourceError(f"summary contains forbidden fragment: {fragment}")
+    for value in sensitive_values:
+        if value and value in text:
+            raise ThemeGicsSourceError("summary contains a sensitive environment value")
 
 
-def _write_summary_validated(summary: dict[str, Any], summary_path: Path) -> None:
+def _write_summary_validated(summary: dict[str, Any], summary_path: Path, sensitive_values: list[str]) -> None:
     _validate_schema(summary, SUMMARY_SCHEMA_PATH, label="theme/GICS source summary")
     text = json.dumps(summary, ensure_ascii=False, indent=2) + "\n"
-    _assert_text_safe(text)
+    _assert_text_safe(text, sensitive_values)
     _write_json_atomic(summary, summary_path, field="summary_path")
 
 
@@ -781,9 +784,10 @@ def run_theme_gics_source(
     )
     _validate_theme_projection(projection, selected)
     _validate_schema(summary, SUMMARY_SCHEMA_PATH, label="theme/GICS source summary")
+    _assert_text_safe(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", [fmp_env.value])
     _write_json_atomic(packet, source_packet_path, field="output_source_packet_path")
     _write_json_atomic(projection, theme_projection_path, field="output_theme_projection_path")
-    _write_summary_validated(summary, summary_resolved)
+    _write_summary_validated(summary, summary_resolved, [fmp_env.value])
     return summary
 
 
