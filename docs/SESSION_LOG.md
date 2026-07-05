@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 momentum price-source — provider_id format-pin + summary-write fail-closed 已闭)
+
+- **Verdict/Action**: PASS + 提交 7 文件(runner + packet schema + summary schema + test + README + register + 本 SESSION_LOG)。Codex 双 fix 采纳 2 Required:P2=provider_id 双层 format-pin(runner `_safe_provider_id`+schema pattern、三角一致 `^[a-z][a-z0-9_]{0,63}$`);P3=`_prepare_json_target` 前置两目标 parent 校验→fail-closed 无 orphan。分级=中-高 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮修不重起)。
+- **Required**: 上轮 2 Required 均 **resolved**(全文见 register)。整类封净:P2 拒全部 hostile provider_id(Bearer/token/AKID/user:pass@/空格/大写/非str)、happy clean slug 过;P3 parent-file→MomentumPriceSourceError 无 orphan。无新 finding。
+- **Verify**: (`review-evidence:4c2b35f4fc67`) 亲验 P2:11 种 hostile provider_id LEAK-PASS=[]、5 clean OVER-REJECT=[]、schema==runner regex True;`_assert_text_safe` 保留(3rd 层)。P3:code-trace L645-646 前置两 parent 校验 before write。新 test 真验证(hostile→schema+runner 双拒无写;parent-file→无 orphan)。亲跑 focused 9+全离线 3616+doc-gov 60 全 OK 零回归。scope:3 个 a_short weekly 文件已消失、工作树只本刀 7 文件。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `fix` (US-short Batch5 momentum price-source provider_id + summary write)
+
+- **Verdict/Action**: repaired the two latest Claude Required items. `provider_id` is format-pinned as a lowercase provider slug in schema and runner before tracked summary build, with the same summary-schema pin. Summary/output targets are preflighted before projection write, and atomic-write filesystem failures are wrapped as `MomentumPriceSourceError`.
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-PRICE-SOURCE-PROVIDER-ID-TRACKED-SUMMARY-LEAK` and `R-USSHORT-BATCH5-MOMENTUM-PRICE-SOURCE-SUMMARY-WRITE-NONATOMIC-BARE-EXCEPTION` are addressed in current uncommitted diff; `docs/system_risk_register.md` updated to `in_progress` pending Claude re-review + commit. No provider/live/network/DataHub/production/broker/order/A-share path run.
+- **Verify**: red first focused test failed as expected: hostile provider_id schema had 0 errors, and summary parent=file raised bare `FileExistsError`. Green after fix: focused momentum-price-source `9 OK`; adjacent momentum/source/data_context/score pack `201 OK`; full offline `discover -s tests -p *us_short*.py` `3616 OK` (1 skipped); doc-process guard `60 OK`.
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: hostile Bearer/token URL/AKIA/internal-userinfo/whitespace provider ids now fail at schema+runner before writes, while clean `local_test_price_packet` still passes; parent-as-file summary path fails closed before projection write. B/E: scope is runner/schema/test/register/SESSION_LOG only; README existing route untouched, `CURRENT` untouched because this is an in-flight repair handoff, not settled route state. Independent sub-agent not used; main-thread checklist fallback used.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-05 — Claude 审查 FAIL (US-short Batch5 momentum price-source — provider_id tracked-summary 泄露 + summary-write 非原子裸异常)
+
+- **Verdict/Action**: FAIL(2 Required:P2+P3、未提交)。纯离线工具(消费已建 gitignored price packet→算 momentum→写 seam projection+tracked summary,不 fetch;未真跑)。分级=中-高(消费外部 packet+价格 PIT+tracked summary secret 面)→整读 runner/schema/test+被消费 momentum engine+**独立 §3.5 主树黑盒对抗 agent(真起、~60 hostile-packet/path 探针含真 symlink)**+亲跑全包。价格 PIT/packet 契约/路径逃逸/fail-closed 全 sealed;2 缺陷在 tracked-summary/write 路径。
+- **Required**: ①`R-USSHORT-BATCH5-MOMENTUM-PRICE-SOURCE-PROVIDER-ID-TRACKED-SUMMARY-LEAK`(P2):packet `provider_id` 逐字进 tracked summary,`_assert_text_safe` denylist 放行 Bearer/token=/AKID/URL、canonical summary NOT gitignored→泄露入库;修=format-pin(schema+runner)+测试。②`R-USSHORT-BATCH5-MOMENTUM-PRICE-SOURCE-SUMMARY-WRITE-NONATOMIC-BARE-EXCEPTION`(P3 低危):projection 先于 summary、parent=file→裸 FileExistsError+orphan;修=fail-closed 包住+测试。全文见 register、一并修。
+- **Verify**: (`review-evidence:6b36d5b89b85`) 亲验 P2:`_assert_text_safe` 放行 6 种 secret provider_id、catch apikey=/域名;git check-ignore 证 canonical summary NOT gitignored(tracked)。P3 code-trace L607-608。§3.5 agent ~60 探针端到端复现 P2(canary token 落 tracked、文件自称 no-secret)+P3(orphan+裸异常)、其余全 HELD(价格 PIT double-layer/packet 契约/真 symlink/fail-closed/schema drift/momentum 真算 AAPL>MSFT)。亲跑 focused 7+全离线 3614+doc-gov 60 OK 零回归;3 个 a_short weekly 文件并发无关、不入本刀。
+- **Next**: Codex：修复
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 momentum price-source runner/preflight)
+
+- **Verdict/Action**: added local `us_short_batch5_momentum_price_source` runner/preflight. It validates an already-built gitignored `state/us_short` price-history source packet, candidate price-basis clock, <=3 Pass1-eligible symbols, exact SPY/QQQ RTH split/div-adjusted series/provenance, then computes real momentum features and writes the existing momentum seam projection. It does not fetch provider/network/raw payloads, use DataHub/production/broker/order, cross A-share, or claim ship-gate/live-normalized evidence.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with the narrow implementation note; it remains open for the actual authorized price-source producer/fetch, theme/GICS membership source, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence.
+- **Verify**: red first: focused test failed on missing `runners.us_short_batch5_momentum_price_source`. Green after fix: focused momentum-price-source `7 OK`; adjacent momentum/seam/source-packet pack `146 OK`; full offline `discover -s tests -p *us_short*.py` with project `PYTHONPATH` `3614 OK` (1 skipped); route/doc guards `60 OK`; both new schemas parse via `json.tool`; `py_compile` OK; `git diff --check` OK (CRLF warnings only). A bare full run without `.tools/python_libs` in `PYTHONPATH` failed only because existing batch4 subprocess tests lacked `jsonschema` in child env and redacted that as `ACCOUNT_INVALID`; rerun with the checklist-mandated `PYTHONPATH` passed.
+- **Pre-Codex self-review**: A/B/C/E checked main-thread. A/C: source-packet clocks, benchmark presence, full/ok provenance, and summary scope-creep mutants are tested; projection is consumed by the real score composer. B/E: output source/projection files are constrained to gitignored `state/us_short`; tracked summary excludes price rows/raw/request URL/secret; no provider/live/network/DataHub/production/broker/order/A-share path run; `CURRENT` untouched because this is an execution handoff, not settled route state. Independent sub-agent not used because the available sub-agent tool requires explicit user subagent authorization.
+- **Next**: Claude Code: review current momentum price-source runner/preflight slice; PASS then commit.
+
 ## 2026-07-04 — Claude 审查 PASS + 提交 (US-short Batch5 neutral projection-input runner/preflight)
 
 - **Verdict/Action**: PASS + 提交 7 文件(runner + summary schema + test + tracked summary + README route + register note + 本 SESSION_LOG)。纯离线工具:validate candidate + <=3 symbols→写 gitignored neutral-fill momentum/theme projection(state/us_short)+ tracked no-secret summary;替代此前手写 projection 输入。分级=中(离线、无 provider/network/secret 来源/无 live 边界→§6a 整读+反向探针+全包,不起对抗 agent;核心正确性=neutral→core_score 中性、不虚构分)。

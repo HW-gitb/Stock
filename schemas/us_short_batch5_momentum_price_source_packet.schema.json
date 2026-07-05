@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_momentum_price_source_packet.schema.json",
+  "title": "US-short Batch5 momentum price-history source packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "series_contract",
+    "series_by_ticker",
+    "provenance_by_ticker",
+    "preflight_gates",
+    "prohibited_claims"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_momentum_price_source_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "batch",
+        "packet_status",
+        "network_access_performed_by_packet_producer",
+        "provider_calls_performed_by_packet_producer",
+        "raw_payload_refs_gitignored",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation_allowed",
+        "a_share_crossing_allowed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "lane": { "const": "us_short" },
+        "batch": { "const": "batch5_provider_live" },
+        "packet_status": { "const": "price_history_source_packet_ready_for_local_momentum_projection" },
+        "network_access_performed_by_packet_producer": { "type": "boolean" },
+        "provider_calls_performed_by_packet_producer": { "type": "boolean" },
+        "raw_payload_refs_gitignored": { "const": true },
+        "datahub_consumption_allowed": { "const": false },
+        "production_storage_allowed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false },
+        "a_share_crossing_allowed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "expected_decision_date",
+        "candidate_price_basis_date",
+        "price_basis_date",
+        "source_as_of"
+      ],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "candidate_price_basis_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "price_basis_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "series_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbol_source",
+        "selected_symbols",
+        "benchmark_symbols",
+        "session",
+        "adjustment_mode",
+        "min_points_per_series",
+        "full_market_sample"
+      ],
+      "properties": {
+        "symbol_source": { "const": "caller_selected_from_validated_candidate_artifact" },
+        "selected_symbols": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "benchmark_symbols": { "const": ["SPY", "QQQ"] },
+        "session": { "const": "RTH" },
+        "adjustment_mode": { "const": "split_div_adjusted" },
+        "min_points_per_series": { "type": "integer", "minimum": 64, "maximum": 3000 },
+        "full_market_sample": { "const": false }
+      }
+    },
+    "series_by_ticker": {
+      "type": "object",
+      "minProperties": 3,
+      "additionalProperties": { "$ref": "#/$defs/series" }
+    },
+    "provenance_by_ticker": {
+      "type": "object",
+      "minProperties": 3,
+      "additionalProperties": { "$ref": "#/$defs/provenance" }
+    },
+    "preflight_gates": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "local_files_only",
+        "candidate_artifact_must_match_price_basis",
+        "selected_symbols_must_be_pass1_eligible",
+        "benchmarks_required",
+        "output_must_be_gitignored",
+        "no_provider_fetch_by_runner",
+        "no_datahub_or_production"
+      ],
+      "properties": {
+        "local_files_only": { "const": true },
+        "candidate_artifact_must_match_price_basis": { "const": true },
+        "selected_symbols_must_be_pass1_eligible": { "const": true },
+        "benchmarks_required": { "const": true },
+        "output_must_be_gitignored": { "const": true },
+        "no_provider_fetch_by_runner": { "const": true },
+        "no_datahub_or_production": { "const": true }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection_complete",
+        "full_market_download_performed",
+        "yfinance_used",
+        "live_normalized_evidence",
+        "ship_gate_evidence",
+        "production_ready",
+        "datahub_consumed"
+      ],
+      "properties": {
+        "provider_selection_complete": { "const": false },
+        "full_market_download_performed": { "const": false },
+        "yfinance_used": { "const": false },
+        "live_normalized_evidence": { "const": false },
+        "ship_gate_evidence": { "const": false },
+        "production_ready": { "const": false },
+        "datahub_consumed": { "const": false }
+      }
+    }
+  },
+  "$defs": {
+    "series": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["as_of", "session", "adjustment_mode", "points"],
+      "properties": {
+        "as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "session": { "const": "RTH" },
+        "adjustment_mode": { "const": "split_div_adjusted" },
+        "points": {
+          "type": "array",
+          "minItems": 64,
+          "maxItems": 3000,
+          "items": { "$ref": "#/$defs/point" }
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["date", "close"],
+      "properties": {
+        "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "close": { "type": "number", "exclusiveMinimum": 0 },
+        "volume": {
+          "anyOf": [
+            { "type": "number", "minimum": 0 },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_or_family",
+        "source_as_of",
+        "observed_at",
+        "coverage_status",
+        "parser_status",
+        "lineage_ref"
+      ],
+      "properties": {
+        "provider_id": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]{0,63}$",
+          "maxLength": 64
+        },
+        "endpoint_or_family": { "type": "string", "minLength": 1 },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "observed_at": { "type": "string", "minLength": 1 },
+        "coverage_status": { "enum": ["full", "partial", "missing"] },
+        "parser_status": { "enum": ["ok", "partial", "failed"] },
+        "lineage_ref": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

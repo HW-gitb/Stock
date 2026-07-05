@@ -8,6 +8,7 @@ Use this routing table instead of guessing which file to read.
 
 | Need | Read |
 |---|---|
+| US-short batch5 momentum price source runner: local price-history source packet -> real momentum projection with SPY/QQQ alignment; no provider fetch/full-market/DataHub/production/ship-gate | `runners/us_short_batch5_momentum_price_source.py`, `schemas/us_short_batch5_momentum_price_source_packet.schema.json`, `schemas/us_short_batch5_momentum_price_source_summary.schema.json`, `tests/provider/test_us_short_batch5_momentum_price_source.py` |
 | US-short batch5 neutral projection input runner: local generator for explicit missing-source momentum/theme neutral-fill files consumed by the source-packet path; no provider/full-market/DataHub/production/ship-gate | `runners/us_short_batch5_neutral_projection_inputs.py`, `schemas/us_short_batch5_neutral_projection_inputs_summary.schema.json`, `docs/us_short_batch5_neutral_projection_inputs_summary_20260704.json`, `tests/provider/test_us_short_batch5_neutral_projection_inputs.py` |
 | Highest-level project rules, fixed decisions, command aliases, required reading order | `AGENTS.md` |
 | Current state and next implementation step | `docs/CURRENT.md` |
