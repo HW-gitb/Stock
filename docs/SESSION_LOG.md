@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme full-source — per-scored-group selected-only guard 已闭)
+
+- **Verdict/Action**: PASS + 提交 7 文件(runner + packet schema + summary schema + test + README + register + 本 SESSION_LOG)。Codex 采纳选项 1(per-group enforcement):新 `_assert_scored_groups_have_nonselected_support`(L411) 在 heat block 后、project/summary/preflight 前,拒任一 SCORED sector/theme 成员 ⊆ selected(无非-selected 支撑)。分级=中-高 incremental 修复(§6a:整读改动+亲复现+跑全包;上轮已起对抗 agent、本轮一处修不重起)。离线未真跑。
+- **Required**: 上轮 `R-USSHORT-BATCH5-THEME-SOURCE-SELECTED-ONLY-REJECTION-OVERCLAIM-PER-GROUP-WIDTH-GAP` 已 **resolved**(register)。summary/preflight flag `=True` 现真实(enforcement 在写前 gate artifact)。无新 finding。
+- **Verify**: (`review-evidence:e10af6b95e8b`) 亲验:q3 packet(3 selected 全塞 MegaHot+inert ZZZZZ、theme AI 全 selected)→run_packet RAISED ThemeSourceError before write;genuine wide pool 仍 SUCCESS scored_count=3(无 over-reject)。enforcement 只检查 scored groups(sector_heat/theme_heat)、用全成员减 selected、精准。新 test `test_per_scored_group_selected_only_membership_rejected...`(L332)。亲跑 focused 7+全离线 3641+doc-gov 60 全 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-05 - Codex `fix` (US-short Batch5 theme full-source selected-only scored-group guard)
+
+- **Verdict/Action**: repaired `R-USSHORT-BATCH5-THEME-SOURCE-SELECTED-ONLY-REJECTION-OVERCLAIM-PER-GROUP-WIDTH-GAP` offline. `us_short_batch5_theme_source` now rejects any scored sector/theme group whose members are only the selected symbols before preflight preview, projection write, or summary write. No provider/live/network/raw payload fetch, DataHub/production/broker/order, A-share crossing, or ship-gate/live-normalized evidence claim.
+- **Required**: the q3 wide-aggregate packet can no longer self-certify heat through a 100%-selected scored sector/theme plus inert filler. The existing summary/preflight `selected_symbol_only_membership_rejected=True` is now backed by per-scored-group enforcement instead of only aggregate pool width.
+- **Verify**: red first focused q3 test failed with `ThemeSourceError not raised`. Green after fix: focused theme-source `7 OK`; adjacent theme/industry/seam/score/source pack `112 OK`; full offline `discover -s tests -p '*us_short*.py'` `3641 OK` (1 skipped); `py_compile` OK; source-packet/summary schema JSON parse OK; doc-process guard `60 OK`; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. B/C/E: `rg selected_symbol_only_membership_rejected|scored_groups_have_nonselected_support` hits are limited to this runner/schema/test plus current handoff docs; happy wide-pool test still scores real heat and is consumed by `compose_score_inputs`, while the q3 packet fails closed for both `run_preflight` and `run_packet`; `CURRENT` untouched and the prior README route remains a thin pointer.
+- **Next**: Claude Code: review current Required repair diff; PASS then commit.
+
+## 2026-07-05 — Claude 审查 FAIL (US-short Batch5 theme full-source — selected-only rejection overclaim:per-group width gap 造假 heat)
+
+- **Verdict/Action**: FAIL(1 Required、P2、未提交)。离线工具(消费 full GICS/theme packet→算真实 industry/theme heat→theme projection,不 fetch、未真跑)。分级=中-高(消费外部 packet+heat 正确性+假-heat 防线)→整读 runner/schema/test+被消费 heat engine+**独立 §3.5 主树黑盒对抗 agent(真起、~40 hostile-packet 探针含真 symlink)**+亲跑全包。价格 PIT/路径/membership drift/fail-closed/secret 全 sealed、真实 heat 对(AAPL>JPM、composer theme scored 2);唯一=selected-only rejection overclaim(我独立审漏、agent 抓)。
+- **Required**: `R-USSHORT-BATCH5-THEME-SOURCE-SELECTED-ONLY-REJECTION-OVERCLAIM-PER-GROUP-WIDTH-GAP`(P2;register)。唯一 enforcement=aggregate 宽度(`_canonicalize_industry_members:346`),per-sector 无检查、theme 完全无 width gate;MIN_MEMBERS=3+selected≤3→3 selected 全塞一 sector+1 inert filler(aggregate 4>3 过)→scored group 100% selected 造满 heat,summary 硬断言 rejected=True(假保证、fixture-self-certifies 反模式)。修=per-scored-group width enforcement(scored ⊆ selected 不 emit heat)+summary flag 真实化+q3 测试。
+- **Verify**: (`review-evidence:996e355acc2a`) 亲验 q3:selected=[AAPL,MSFT,JPM] 全塞 MegaHot+inert ZZZZZ→run_packet 成功、theme_block 全 100.0、scored_count=3、summary 两处 rejected=True(假)。§3.5 agent ~40 探针复现 q3/sector-only/theme-only+其余全 HELD(alias/dup canonical-collapse before width、价格 PIT double-layer、真 symlink、fail-closed、secret[无 key 源]、genuine wide pool 真实 heat AAPL>JPM composer scored 2)。亲跑 focused 6+全离线 3640+doc-gov 60 OK 零回归。
+- **Next**: Codex：修复
+
+## 2026-07-05 - Codex `execute` (US-short Batch5 theme full-source runner/preflight)
+
+- **Verdict/Action**: added local `us_short_batch5_theme_source` runner/preflight. It validates an already-built gitignored `state/us_short` full GICS peer-pool / provisional theme-member source packet, candidate price-basis clock, <=3 Pass1-eligible symbols, exact SPY/QQQ RTH split/div-adjusted benchmark series, full GICS peer-pool declaration, and theme membership-map consistency, then computes real industry/theme heat and writes the existing theme seam projection. It rejects selected-only membership before any write. No provider/live/network/raw payload fetch, DataHub/production/broker/order, A-share crossing, or ship-gate/live-normalized evidence claim.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-TO-WEEKEND-PIPELINE-SEAM-MISSING` updated with the narrow implementation note; it remains open for the actual authorized full peer/theme source producer/fetch/discovery, broader provider health/fallback, bankruptcy 8-K full/candidate scan, `per_ticker_analysis`/`provenance`, subprocess E2E, DataHub/production/provider-selection/ship-gate/forward evidence, and corporate-action reconciliation.
+- **Verify**: red first focused test failed on missing `runners.us_short_batch5_theme_source`. Green after fix: focused theme-source `6 OK`; adjacent theme/industry/seam/source pack `111 OK`; full offline `discover -s tests -p *us_short*.py` `3640 OK` (1 skipped); doc-process guard `60 OK`; schema JSON parse + `py_compile` OK; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: tests prove selected-only membership fails closed before writes, preflight writes nothing, projection is consumed by the real score composer, and summary scope-creep mutants are rejected. B/E: source/projection files are constrained to gitignored `state/us_short`; tracked summary excludes price rows/raw/request URLs/secrets; README route is a thin pointer; `CURRENT` untouched because this is an execution handoff, not settled route-state.
+- **Next**: Claude Code: review current theme full-source runner/preflight slice; PASS then commit.
+
 ## 2026-07-05 — Claude 审查 PASS + 提交 (US-short Batch5 theme/GICS summary exact-value secret scan 加固)
 
 - **Verdict/Action**: PASS + 提交 3 文件(runner + test + 本 SESSION_LOG)。Codex 采纳上轮 Optional:`_assert_text_safe` 加 `sensitive_values` 参数 + exact-value scan,run 预检 + `_write_summary_validated` 双处传 `[fmp_env.value]`,对齐 sibling momentum packet producer。分级=离线 defense-in-depth 小改(§6a:整读 diff+亲验+跑全包;上轮已全面对抗审 PASS、本轮不重起 agent)。无 provider/live 重跑、tracked summary 未变、register/README 未动。
