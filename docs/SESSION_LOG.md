@@ -8,11 +8,26 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Massive alternative cut5 no-access 计划 — schema/artifact/test 已闭)
+
+- **Verdict/Action**: PASS + 提交 8 文件(新 plan json+schema+schema-test + CURRENT/README/design/register/SESSION_LOG)。design-only 无接入计划:把 Massive 公共文档端点映射到 cut5 的 2404/12021,记 analyst-grade 为 unresolved gap(Massive 无对应端点、不许 silent neutral-fill/yfinance),SEC 审计留用。无 network/provider/secret/runner/可执行授权门;所有授权 flag schema const-pin false。(本次 SESSION_LOG 含 Codex 对上条我 live-packet PASS 的超长 Verify bullet 的 doc-guard 压缩,PASS 事实不变、原文留 git 史。)
+- **Required**: 无。Register: non-material(无新 R-ID;Codex execute note 已记)。
+- **Verify**: 整读 plan(589 行)+schema:全授权/执行 flag const-pin false、`contains` 强制 analyst-gap+7 组件+关键 source_ref、负控 test 一次翻 16 flag→schema 拒。hygiene:provider 公共文档 URL 在 tracked `docs/*.json` evidence 工件是既有惯例(sibling `provider_evidence_*`)、非带 apikey 请求 URL、无 secret。风险=较低危(design-only schema-first、无 network/secret/可执行门)→整读+负控 reverse probe,§6a 强制 agent 不适用(已声明分类)。亲跑 schema 8 OK + full offline `*us_short*` 3754 OK(+8)+ doc/route 60 OK 零回归。1 非阻塞 Optional:`unresolved_source_gaps[].no_silent_default_allowed` 命名易误读/疑倒置,但 const-pin false+无 runner 消费+姊妹字段已明确 fail-closed→非 material。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short Massive alternative cut5 access/budget/source-packet plan; no access)
+
+- **Verdict/Action**: added a no-access Massive alternative cut5 plan schema/artifact/test: maps Massive public-doc candidates for ticker metadata/news/splits/dividends, retains SEC audit submissions, and records analyst grades as an unresolved gap. No provider/network/raw/source-packet/DataHub/production/ship-gate/yfinance/broker/A-share path executed.
+- **Required**: no new R-ID; material caveat is in `docs/system_risk_register.md`. SR-PROVIDER-001 remains open for Massive entitlement/budget/storage, analyst-grade sourcing, corporate-action reconciliation, provider selection, DataHub, production, and ship-gate evidence.
+- **Verify**: red first missing schema/artifact `FileNotFoundError`; focused 8 OK; batch5 schema 155 OK; batch5 provider 186 OK; doc/route 60 OK; full offline `*us_short*` 3754 OK (1 skipped); py_compile OK; narrow secret grep 0; URL grep only official Massive docs/schema refs; diff-check OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. B/E: route docs carry settled no-access facts only; CURRENT has no actor/commit gate. C: lower-call Massive scenario still blocks because analyst grades and Massive entitlement/budget remain unresolved. Doc guard exposed and compressed a pre-existing overlong Claude `Verify` bullet without changing its PASS fact.
+- **Next**: Claude Code: review current US-short Massive alternative cut5 no-access plan; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate live source-packet runner — code/schema/test 已闭, 真跑仍 gated)
 
 - **Verdict/Action**: PASS + 提交 8 文件(新 runner+schema+test + CURRENT/README/design/register/SESSION_LOG)。cut⑤ 批 II live 层 runner:授权+preflight-ready+预算匹配(12021)+路径 gitignored+summary schema+no-secret 全在 fetch 前 fail-closed;真 provider 跑**未执行**(FMP Basic 250/day < 12021 forecast,Codex 主动停在预算门)→无 tracked live summary、零 network/raw/secret。提交 code ≠ 授权跑 12021,真跑仍 SR-PROVIDER-001 逐次门。
 - **Required**: 无。Register: non-material(仅 1 非阻塞 P3 Optional、runner 不可达)。
-- **Verify**: 整读 runner + 被消费 `sample_validation` 助手:预算 assert=`len+1>max` 精确封顶(无 off-by-one)、`read_required_env` 缺 secret fail-closed 且不打印值、`FetchRecord.error_type` 仅固定 token(结构上不泄 URL/secret)+`_assert_text_safe` 第二道网。§6a 最高危(新 live 授权门)独立对抗 agent 五向全 HELD:授权/预算门不可绕(伪造本地 preflight 只节流+中止、不超授权)、tracked summary 不泄 secret/URL/raw、schema minima 令零调用 summary 不可能(不可伪造 live 证据)、4 类 fail-closed 崩溃全 typed、路径全 confined。亲跑 full offline `*us_short*` 3746 OK(+6)+ doc/route 60 OK 零回归;树恰 8 文件无残留;review-evidence:not_available(裸 `审查` 未触发本地 hook token;证据=本会话真实工具输出)。1 Optional:summary schema 未交叉绑定 `data_context_written`↔`status`(runner builder 恒一致设+唯一 writer+无注入路径→非 material、留作未来可选加固)。
+- **Verify**: reviewer read runner/schema/tests and checked auth/budget/path/no-secret gates; full offline `*us_short*` 3746 OK(+6), doc/route 60 OK; optional summary-schema cross-field note was non-material and left as future optional.
 - **Next**: 无(已提交)
 
 ## 2026-07-06 - Codex `execute` (US-short cut5 full-candidate live source-packet runner; provider run fail-closed)

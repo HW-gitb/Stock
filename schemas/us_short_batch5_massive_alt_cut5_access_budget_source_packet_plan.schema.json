@@ -1,0 +1,1079 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan/1.0.0/schema.json",
+  "title": "US-short Batch5 Massive Alternative Cut5 Access Budget Source Packet Plan",
+  "description": "Schema for a US-short batch5 cut5 Massive alternative access/budget/source-packet plan. This is a Massive alternative planning artifact only; it does not execute provider calls, read or write raw payloads, select providers, authorize yfinance, authorize full-market fetches, implement a source-packet runner, authorize DataHub or production storage, or claim ship-gate/live-normalized evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "review_date",
+    "authorization_ref",
+    "scope",
+    "official_doc_review",
+    "source_refs",
+    "current_cut5_baseline",
+    "provider_substitution_map",
+    "call_budget_model",
+    "source_packet_plan",
+    "unresolved_source_gaps",
+    "no_silent_default_policy",
+    "prohibited_claims",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "schema_ref": {
+      "const": "schemas/us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan.schema.json"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review_date": {
+      "const": "2026-07-06"
+    },
+    "authorization_ref": {
+      "const": "user_chat_20260706_write_massive_alt_cut5_plan"
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "official_doc_review": {
+      "$ref": "#/$defs/officialDocReview"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 10,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_stocks_overview_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_splits_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_dividends_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_news_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_financial_ratios_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "us_short_batch5_full_candidate_pass2_preflight_summary_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "sr_provider_001"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        }
+      ]
+    },
+    "current_cut5_baseline": {
+      "$ref": "#/$defs/currentCut5Baseline"
+    },
+    "provider_substitution_map": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/providerSubstitution"
+      },
+      "minItems": 7,
+      "maxItems": 7,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "ticker_reference_company_metadata"
+              }
+            },
+            "required": [
+              "component_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "market_price_ohlcv_volume"
+              }
+            },
+            "required": [
+              "component_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "news_catalyst_source"
+              },
+              "replacement_status": {
+                "const": "retained_existing_massive_source_requires_access_budget_review"
+              }
+            },
+            "required": [
+              "component_id",
+              "replacement_status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "corporate_action_splits_dividends"
+              }
+            },
+            "required": [
+              "component_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "financials_ratios_optional"
+              },
+              "replacement_status": {
+                "const": "candidate_optional_requires_financials_ratios_expansion_review"
+              }
+            },
+            "required": [
+              "component_id",
+              "replacement_status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "analyst_grades"
+              },
+              "replacement_status": {
+                "const": "unresolved_source_gap_no_massive_equivalent_found"
+              }
+            },
+            "required": [
+              "component_id",
+              "replacement_status"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "component_id": {
+                "const": "sec_audit_submissions"
+              },
+              "replacement_status": {
+                "const": "retained_sec_source_not_replaced_by_massive"
+              }
+            },
+            "required": [
+              "component_id",
+              "replacement_status"
+            ]
+          }
+        }
+      ]
+    },
+    "call_budget_model": {
+      "$ref": "#/$defs/callBudgetModel"
+    },
+    "source_packet_plan": {
+      "$ref": "#/$defs/sourcePacketPlan"
+    },
+    "unresolved_source_gaps": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unresolvedSourceGap"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "analyst_grades_no_massive_equivalent_found_in_reviewed_overview"
+              },
+              "blocks_live_run": {
+                "const": true
+              }
+            },
+            "required": [
+              "gap_id",
+              "blocks_live_run"
+            ]
+          }
+        }
+      ]
+    },
+    "no_silent_default_policy": {
+      "$ref": "#/$defs/noSilentDefaultPolicy"
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "contract_status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_read_or_parsed",
+        "raw_payload_written",
+        "source_packet_written",
+        "data_context_written",
+        "massive_calls_authorized_by_this_artifact",
+        "fmp_calls_authorized_by_this_artifact",
+        "sec_calls_authorized_by_this_artifact",
+        "provider_selection_allowed",
+        "provider_ranking_allowed",
+        "provider_switch_claimed",
+        "yfinance_allowed",
+        "full_market_fetch_allowed",
+        "provider_status_polling_allowed",
+        "provider_contact_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "datahub_allowed",
+        "production_storage_allowed",
+        "production_runner_consumption_allowed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "broker_or_order_execution_allowed",
+        "a_share_crossing_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "route": {
+          "const": "US-short"
+        },
+        "batch": {
+          "const": "batch5"
+        },
+        "purpose": {
+          "const": "massive_alt_cut5_access_budget_source_packet_plan"
+        },
+        "contract_status": {
+          "const": "plan_only_no_access_no_provider_selection"
+        },
+        "network_access_performed": {
+          "const": false
+        },
+        "provider_calls_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "raw_payload_written": {
+          "const": false
+        },
+        "source_packet_written": {
+          "const": false
+        },
+        "data_context_written": {
+          "const": false
+        },
+        "massive_calls_authorized_by_this_artifact": {
+          "const": false
+        },
+        "fmp_calls_authorized_by_this_artifact": {
+          "const": false
+        },
+        "sec_calls_authorized_by_this_artifact": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_ranking_allowed": {
+          "const": false
+        },
+        "provider_switch_claimed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "full_market_fetch_allowed": {
+          "const": false
+        },
+        "provider_status_polling_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "datahub_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "ship_gate_or_live_normalized_evidence_claimed": {
+          "const": false
+        },
+        "broker_or_order_execution_allowed": {
+          "const": false
+        },
+        "a_share_crossing_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "officialDocReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider",
+        "review_status",
+        "official_doc_url",
+        "public_web_docs_reviewed",
+        "provider_call_performed",
+        "account_entitlement_verified",
+        "analyst_endpoint_found_in_reviewed_overview",
+        "observations"
+      ],
+      "properties": {
+        "provider": {
+          "const": "Massive"
+        },
+        "review_status": {
+          "const": "public_docs_review_only_no_access_no_call"
+        },
+        "official_doc_url": {
+          "const": "https://massive.com/docs/rest/stocks/overview"
+        },
+        "public_web_docs_reviewed": {
+          "const": true
+        },
+        "provider_call_performed": {
+          "const": false
+        },
+        "account_entitlement_verified": {
+          "const": false
+        },
+        "analyst_endpoint_found_in_reviewed_overview": {
+          "const": false
+        },
+        "observations": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "path",
+        "source_type",
+        "consumption_role"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_type": {
+          "enum": [
+            "repo_artifact",
+            "repo_doc",
+            "repo_schema",
+            "official_public_docs"
+          ]
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "currentCut5Baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight_summary_path",
+        "eligible_count",
+        "current_forecast_total_calls",
+        "fmp_grades_calls",
+        "sec_submissions_calls",
+        "massive_news_calls",
+        "fmp_split_calls",
+        "fmp_dividend_calls",
+        "known_fmp_basic_daily_call_limit",
+        "current_live_run_performed",
+        "call_budget_cleared",
+        "source_packet_written"
+      ],
+      "properties": {
+        "preflight_summary_path": {
+          "const": "docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json"
+        },
+        "eligible_count": {
+          "const": 2404
+        },
+        "current_forecast_total_calls": {
+          "const": 12021
+        },
+        "fmp_grades_calls": {
+          "const": 2404
+        },
+        "sec_submissions_calls": {
+          "const": 2404
+        },
+        "massive_news_calls": {
+          "const": 2404
+        },
+        "fmp_split_calls": {
+          "const": 2404
+        },
+        "fmp_dividend_calls": {
+          "const": 2404
+        },
+        "known_fmp_basic_daily_call_limit": {
+          "const": 250
+        },
+        "current_live_run_performed": {
+          "const": false
+        },
+        "call_budget_cleared": {
+          "const": false
+        },
+        "source_packet_written": {
+          "const": false
+        }
+      }
+    },
+    "endpointRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "endpoint_path",
+        "docs_source_id",
+        "planned_role",
+        "access_verified_by_this_artifact"
+      ],
+      "properties": {
+        "endpoint_path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "docs_source_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "planned_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "access_verified_by_this_artifact": {
+          "const": false
+        }
+      }
+    },
+    "providerSubstitution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component_id",
+        "current_cut5_role",
+        "candidate_massive_endpoints",
+        "replacement_status",
+        "estimated_call_effect",
+        "replacement_allowed_by_this_artifact",
+        "authorizes_provider_call",
+        "authorizes_source_packet_write",
+        "call_budget_cleared",
+        "notes"
+      ],
+      "properties": {
+        "component_id": {
+          "enum": [
+            "ticker_reference_company_metadata",
+            "market_price_ohlcv_volume",
+            "news_catalyst_source",
+            "corporate_action_splits_dividends",
+            "financials_ratios_optional",
+            "analyst_grades",
+            "sec_audit_submissions"
+          ]
+        },
+        "current_cut5_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "candidate_massive_endpoints": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/endpointRef"
+          }
+        },
+        "replacement_status": {
+          "enum": [
+            "candidate_replacement_requires_access_budget_review",
+            "retained_existing_massive_source_requires_access_budget_review",
+            "unresolved_source_gap_no_massive_equivalent_found",
+            "retained_sec_source_not_replaced_by_massive",
+            "candidate_optional_requires_financials_ratios_expansion_review"
+          ]
+        },
+        "estimated_call_effect": {
+          "$ref": "#/$defs/callEffect"
+        },
+        "replacement_allowed_by_this_artifact": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "authorizes_source_packet_write": {
+          "const": false
+        },
+        "call_budget_cleared": {
+          "const": false
+        },
+        "notes": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "callEffect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "current_planned_calls",
+        "massive_plan_calls",
+        "call_budget_cleared",
+        "coverage_complete_if_used"
+      ],
+      "properties": {
+        "current_planned_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "massive_plan_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "call_budget_cleared": {
+          "const": false
+        },
+        "coverage_complete_if_used": {
+          "const": false
+        }
+      }
+    },
+    "callBudgetModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_eligible_count",
+        "current_cut5_forecast_total_calls",
+        "known_fmp_basic_daily_call_limit",
+        "total_call_budget_cleared",
+        "massive_account_call_limit_verified",
+        "output_coverage_complete",
+        "analyst_gap_disposition",
+        "scenarios"
+      ],
+      "properties": {
+        "candidate_eligible_count": {
+          "const": 2404
+        },
+        "current_cut5_forecast_total_calls": {
+          "const": 12021
+        },
+        "known_fmp_basic_daily_call_limit": {
+          "const": 250
+        },
+        "total_call_budget_cleared": {
+          "const": false
+        },
+        "massive_account_call_limit_verified": {
+          "const": false
+        },
+        "output_coverage_complete": {
+          "const": false
+        },
+        "analyst_gap_disposition": {
+          "const": "unresolved_source_gap_no_massive_equivalent_found"
+        },
+        "scenarios": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/budgetScenario"
+          },
+          "minItems": 3,
+          "maxItems": 3,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "scenario_id": {
+                    "const": "current_fmp_cut5_forecast"
+                  },
+                  "planned_total_calls": {
+                    "const": 12021
+                  }
+                },
+                "required": [
+                  "scenario_id",
+                  "planned_total_calls"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "scenario_id": {
+                    "const": "massive_like_for_like_without_analyst"
+                  },
+                  "planned_total_calls": {
+                    "const": 9617
+                  }
+                },
+                "required": [
+                  "scenario_id",
+                  "planned_total_calls"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "scenario_id": {
+                    "const": "massive_plus_ticker_overview_metadata"
+                  },
+                  "planned_total_calls": {
+                    "const": 12021
+                  }
+                },
+                "required": [
+                  "scenario_id",
+                  "planned_total_calls"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "budgetScenario": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scenario_id",
+        "planned_total_calls",
+        "scenario_role",
+        "call_budget_cleared",
+        "output_coverage_complete",
+        "authorizes_provider_call",
+        "notes"
+      ],
+      "properties": {
+        "scenario_id": {
+          "enum": [
+            "current_fmp_cut5_forecast",
+            "massive_like_for_like_without_analyst",
+            "massive_plus_ticker_overview_metadata"
+          ]
+        },
+        "planned_total_calls": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "scenario_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "call_budget_cleared": {
+          "const": false
+        },
+        "output_coverage_complete": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        },
+        "notes": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "sourcePacketPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "plan_status",
+        "ready_for_reviewed_live_execution",
+        "source_packet_schema_change_authorized",
+        "source_packet_runner_change_authorized",
+        "provider_calls_authorized",
+        "missing_component_behavior",
+        "planned_components",
+        "pre_execution_gates"
+      ],
+      "properties": {
+        "plan_status": {
+          "const": "access_budget_source_packet_plan_only"
+        },
+        "ready_for_reviewed_live_execution": {
+          "const": false
+        },
+        "source_packet_schema_change_authorized": {
+          "const": false
+        },
+        "source_packet_runner_change_authorized": {
+          "const": false
+        },
+        "provider_calls_authorized": {
+          "const": false
+        },
+        "missing_component_behavior": {
+          "const": "fail_closed_do_not_silent_neutral_fill"
+        },
+        "planned_components": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourcePacketComponent"
+          },
+          "minItems": 5
+        },
+        "pre_execution_gates": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/preExecutionGate"
+          },
+          "minItems": 6
+        }
+      }
+    },
+    "sourcePacketComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "component_id",
+        "planned_source",
+        "packet_role",
+        "execution_status",
+        "missing_behavior"
+      ],
+      "properties": {
+        "component_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "planned_source": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "packet_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "execution_status": {
+          "const": "not_authorized_not_executed"
+        },
+        "missing_behavior": {
+          "enum": [
+            "retain_existing_sec_source",
+            "massive_candidate_pending_review",
+            "block_output_until_gap_disposition"
+          ]
+        }
+      }
+    },
+    "preExecutionGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "status",
+        "blocks_execution",
+        "required_resolution",
+        "authorizes_provider_call"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "blocked",
+            "pending_review",
+            "pending_user_approval"
+          ]
+        },
+        "blocks_execution": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_call": {
+          "const": false
+        }
+      }
+    },
+    "unresolvedSourceGap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gap_id",
+        "status",
+        "blocks_live_run",
+        "required_resolution",
+        "no_silent_default_allowed",
+        "authorizes_provider_call"
+      ],
+      "properties": {
+        "gap_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "blocked_pending_review",
+            "blocked_pending_user_or_provider_evidence"
+          ]
+        },
+        "blocks_live_run": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "no_silent_default_allowed": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        }
+      }
+    },
+    "noSilentDefaultPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policy_status",
+        "analyst_grade_absence_blocks_complete_packet_claim",
+        "massive_endpoint_listing_is_not_access_validation",
+        "call_count_reduction_is_not_budget_clearance",
+        "silent_neutral_fill_allowed",
+        "yfinance_substitution_allowed",
+        "authorizes_provider_call"
+      ],
+      "properties": {
+        "policy_status": {
+          "const": "plan_only_fail_closed_missing_components"
+        },
+        "analyst_grade_absence_blocks_complete_packet_claim": {
+          "const": true
+        },
+        "massive_endpoint_listing_is_not_access_validation": {
+          "const": true
+        },
+        "call_count_reduction_is_not_budget_clearance": {
+          "const": true
+        },
+        "silent_neutral_fill_allowed": {
+          "const": false
+        },
+        "yfinance_substitution_allowed": {
+          "const": false
+        },
+        "authorizes_provider_call": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "fmp_replaced",
+        "massive_account_entitlement_verified",
+        "massive_call_budget_cleared",
+        "analyst_grade_source_resolved",
+        "source_packet_ready_to_run",
+        "provider_call_authorized",
+        "full_market_download_authorized",
+        "yfinance_used_or_authorized",
+        "datahub_authorized",
+        "production_ready",
+        "ship_gate_evidence"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "fmp_replaced": {
+          "const": false
+        },
+        "massive_account_entitlement_verified": {
+          "const": false
+        },
+        "massive_call_budget_cleared": {
+          "const": false
+        },
+        "analyst_grade_source_resolved": {
+          "const": false
+        },
+        "source_packet_ready_to_run": {
+          "const": false
+        },
+        "provider_call_authorized": {
+          "const": false
+        },
+        "full_market_download_authorized": {
+          "const": false
+        },
+        "yfinance_used_or_authorized": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        }
+      }
+    }
+  }
+}

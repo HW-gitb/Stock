@@ -1,0 +1,589 @@
+{
+  "schema_name": "us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan.schema.json",
+  "generated_at": "2026-07-06T14:10:00+00:00",
+  "review_date": "2026-07-06",
+  "authorization_ref": "user_chat_20260706_write_massive_alt_cut5_plan",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "massive_alt_cut5_access_budget_source_packet_plan",
+    "contract_status": "plan_only_no_access_no_provider_selection",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "raw_payload_written": false,
+    "source_packet_written": false,
+    "data_context_written": false,
+    "massive_calls_authorized_by_this_artifact": false,
+    "fmp_calls_authorized_by_this_artifact": false,
+    "sec_calls_authorized_by_this_artifact": false,
+    "provider_selection_allowed": false,
+    "provider_ranking_allowed": false,
+    "provider_switch_claimed": false,
+    "yfinance_allowed": false,
+    "full_market_fetch_allowed": false,
+    "provider_status_polling_allowed": false,
+    "provider_contact_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "datahub_allowed": false,
+    "production_storage_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_allowed": false,
+    "a_share_crossing_allowed": false,
+    "manual_order_only": true
+  },
+  "official_doc_review": {
+    "provider": "Massive",
+    "review_status": "public_docs_review_only_no_access_no_call",
+    "official_doc_url": "https://massive.com/docs/rest/stocks/overview",
+    "public_web_docs_reviewed": true,
+    "provider_call_performed": false,
+    "account_entitlement_verified": false,
+    "analyst_endpoint_found_in_reviewed_overview": false,
+    "observations": [
+      "Massive public Stocks overview lists U.S. stock market data, company information, corporate-action endpoints, news, and selected financials/ratios endpoint families.",
+      "Ticker reference, ticker overview, grouped daily market summary, splits, dividends, and news endpoint families are visible in the reviewed public docs.",
+      "The reviewed overview did not expose an analyst grades or analyst ratings endpoint; that absence is treated as an unresolved source gap, not a neutral-fill permission.",
+      "Public endpoint listing and plan labels do not prove this account entitlement, call limit, storage rights, PIT safety, or source-packet readiness."
+    ]
+  },
+  "source_refs": [
+    {
+      "source_id": "massive_stocks_overview_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Official public overview used to identify Massive stock endpoint families; no API/provider call."
+    },
+    {
+      "source_id": "massive_reference_tickers_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list all-tickers and ticker-overview paths for security reference and company metadata planning."
+    },
+    {
+      "source_id": "massive_daily_market_summary_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list grouped daily market summary and custom bars; this plan does not authorize broad/full-market price fetch."
+    },
+    {
+      "source_id": "massive_splits_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list current splits endpoint path GET/stocks/v1/splits; entitlement and reconciliation remain unverified."
+    },
+    {
+      "source_id": "massive_dividends_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list current dividends endpoint path GET/stocks/v1/dividends; entitlement and total-return semantics remain unverified."
+    },
+    {
+      "source_id": "massive_news_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list news path GET/v2/reference/news; current cut5 already used Massive news as a source family."
+    },
+    {
+      "source_id": "massive_financial_ratios_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Public docs list selected financial statements and ratios endpoint families; this plan does not enable them."
+    },
+    {
+      "source_id": "massive_no_analyst_endpoint_in_reviewed_overview_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Reviewed overview search found no analyst endpoint; analyst-grade replacement remains unresolved."
+    },
+    {
+      "source_id": "us_short_batch5_full_candidate_pass2_preflight_summary_20260706",
+      "path": "docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json",
+      "source_type": "repo_artifact",
+      "consumption_role": "Canonical local preflight basis: 2404 eligible candidates and 12021 current cut5 call forecast; no provider call performed."
+    },
+    {
+      "source_id": "us_short_batch5_full_candidate_live_source_packet_schema",
+      "path": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json",
+      "source_type": "repo_schema",
+      "consumption_role": "Current runner summary contract; this plan does not modify or execute it."
+    },
+    {
+      "source_id": "fmp_paid_tier_license_public_docs_review_20260603",
+      "path": "docs/provider_evidence_p1_us_fmp_paid_tier_license_public_docs_review_20260603.json",
+      "source_type": "repo_artifact",
+      "consumption_role": "Repo evidence for FMP Basic 250 calls/day and unresolved terms/coverage/entitlement blockers."
+    },
+    {
+      "source_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "source_type": "repo_doc",
+      "consumption_role": "Open provider risk queue for entitlement, storage, PIT, corporate actions, stability, selection, DataHub, production, and ship-gate gates."
+    }
+  ],
+  "current_cut5_baseline": {
+    "preflight_summary_path": "docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json",
+    "eligible_count": 2404,
+    "current_forecast_total_calls": 12021,
+    "fmp_grades_calls": 2404,
+    "sec_submissions_calls": 2404,
+    "massive_news_calls": 2404,
+    "fmp_split_calls": 2404,
+    "fmp_dividend_calls": 2404,
+    "known_fmp_basic_daily_call_limit": 250,
+    "current_live_run_performed": false,
+    "call_budget_cleared": false,
+    "source_packet_written": false
+  },
+  "provider_substitution_map": [
+    {
+      "component_id": "ticker_reference_company_metadata",
+      "current_cut5_role": "Potential company metadata, identifier, market-cap, and classification support if later runner changes need Massive metadata rather than FMP profile fields.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /v3/reference/tickers",
+          "docs_source_id": "massive_reference_tickers_public_docs_20260706",
+          "planned_role": "Security reference list or class-filter planning only; not a full-market fetch authorization.",
+          "access_verified_by_this_artifact": false
+        },
+        {
+          "endpoint_path": "GET /v3/reference/tickers/{ticker}",
+          "docs_source_id": "massive_reference_tickers_public_docs_20260706",
+          "planned_role": "Per-candidate ticker overview metadata if a later reviewed packet chooses it.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "candidate_replacement_requires_access_budget_review",
+      "estimated_call_effect": {
+        "current_planned_calls": 0,
+        "massive_plan_calls": 2404,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "Ticker overview can add up to one per-candidate call if used; this does not clear budget or account entitlement.",
+        "SEC company-ticker mapping remains the cheaper existing CIK basis unless a later reviewed packet changes the runner."
+      ]
+    },
+    {
+      "component_id": "market_price_ohlcv_volume",
+      "current_cut5_role": "Price and volume refresh is not required by the current ready local cut5 preflight because momentum/theme projection inputs already cover the 2404 candidates.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /v2/aggs/grouped/locale/us/market/stocks/{date}",
+          "docs_source_id": "massive_daily_market_summary_public_docs_20260706",
+          "planned_role": "Existing repo pattern for broad daily coverage, but this plan does not authorize broad/full-market fetch.",
+          "access_verified_by_this_artifact": false
+        },
+        {
+          "endpoint_path": "GET /v2/aggs/ticker/{stocksTicker}/range/{multiplier}/{timespan}/{from}/{to}",
+          "docs_source_id": "massive_daily_market_summary_public_docs_20260706",
+          "planned_role": "Candidate per-ticker historical OHLCV path if a future bounded price packet is reviewed.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "candidate_replacement_requires_access_budget_review",
+      "estimated_call_effect": {
+        "current_planned_calls": 0,
+        "massive_plan_calls": 0,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "Do not add price refresh to cut5 unless a later reviewed packet proves it is necessary.",
+        "Grouped daily market summary is treated as broad/full-market for this plan and remains blocked here."
+      ]
+    },
+    {
+      "component_id": "news_catalyst_source",
+      "current_cut5_role": "Current cut5 already forecasts one Massive news call per eligible candidate.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /v2/reference/news",
+          "docs_source_id": "massive_news_public_docs_20260706",
+          "planned_role": "Retain as the candidate news/catalyst source family after access and call-budget review.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "retained_existing_massive_source_requires_access_budget_review",
+      "estimated_call_effect": {
+        "current_planned_calls": 2404,
+        "massive_plan_calls": 2404,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "Retained source does not become authorized; it still needs account entitlement, rate, storage, and no-secret packet review.",
+        "News sentiment cannot fill analyst-grade fields."
+      ]
+    },
+    {
+      "component_id": "corporate_action_splits_dividends",
+      "current_cut5_role": "Current cut5 forecast uses FMP split and dividend calls for live corporate-action capture.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /stocks/v1/splits",
+          "docs_source_id": "massive_splits_public_docs_20260706",
+          "planned_role": "Candidate replacement for per-candidate split event capture after endpoint entitlement and semantics review.",
+          "access_verified_by_this_artifact": false
+        },
+        {
+          "endpoint_path": "GET /stocks/v1/dividends",
+          "docs_source_id": "massive_dividends_public_docs_20260706",
+          "planned_role": "Candidate replacement for per-candidate dividend event capture after endpoint entitlement and total-return semantics review.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "candidate_replacement_requires_access_budget_review",
+      "estimated_call_effect": {
+        "current_planned_calls": 4808,
+        "massive_plan_calls": 4808,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "Endpoint listing does not prove corporate-action correctness, adjustment factors, ex-date consistency, or reconciliation safety.",
+        "Paper-performance evaluability still needs reviewed reconciliation evidence before ship-gate or alpha use."
+      ]
+    },
+    {
+      "component_id": "financials_ratios_optional",
+      "current_cut5_role": "Optional future fundamentals/ratio replacement path only; not required to clear the current cut5 live-source packet blocker.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /stocks/financials/v1/income-statements",
+          "docs_source_id": "massive_financial_ratios_public_docs_20260706",
+          "planned_role": "Potential future fundamentals field-family source pending expansion entitlement and PIT review.",
+          "access_verified_by_this_artifact": false
+        },
+        {
+          "endpoint_path": "GET /stocks/financials/v1/ratios",
+          "docs_source_id": "massive_financial_ratios_public_docs_20260706",
+          "planned_role": "Potential future ratio source pending Financials and Ratios Expansion review.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "candidate_optional_requires_financials_ratios_expansion_review",
+      "estimated_call_effect": {
+        "current_planned_calls": 0,
+        "massive_plan_calls": 0,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "Reviewed public docs show these endpoint families as selected-plan/expansion territory; this plan does not enable or price them.",
+        "No PIT, fiscal period, observed-date, or derivation lineage proof is produced here."
+      ]
+    },
+    {
+      "component_id": "analyst_grades",
+      "current_cut5_role": "Current cut5 forecast includes FMP analyst-grade calls for each eligible candidate.",
+      "candidate_massive_endpoints": [],
+      "replacement_status": "unresolved_source_gap_no_massive_equivalent_found",
+      "estimated_call_effect": {
+        "current_planned_calls": 2404,
+        "massive_plan_calls": 0,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "The reviewed Massive overview did not expose an analyst grades or analyst ratings endpoint.",
+        "Dropping FMP analyst-grade calls lowers the call count but leaves the source packet incomplete unless the design explicitly changes the field contract.",
+        "No yfinance, news sentiment, or neutral default may fill this component."
+      ]
+    },
+    {
+      "component_id": "sec_audit_submissions",
+      "current_cut5_role": "Current cut5 uses SEC company-ticker mapping and per-candidate SEC submissions for audit source evidence.",
+      "candidate_massive_endpoints": [
+        {
+          "endpoint_path": "GET /stocks/filings/vX/index",
+          "docs_source_id": "massive_stocks_overview_public_docs_20260706",
+          "planned_role": "Possible auxiliary filing discovery only; not a replacement for the current SEC audit source in this plan.",
+          "access_verified_by_this_artifact": false
+        }
+      ],
+      "replacement_status": "retained_sec_source_not_replaced_by_massive",
+      "estimated_call_effect": {
+        "current_planned_calls": 2405,
+        "massive_plan_calls": 0,
+        "call_budget_cleared": false,
+        "coverage_complete_if_used": false
+      },
+      "replacement_allowed_by_this_artifact": false,
+      "authorizes_provider_call": false,
+      "authorizes_source_packet_write": false,
+      "call_budget_cleared": false,
+      "notes": [
+        "SEC remains the audit authority for company-ticker mapping and submissions in this plan.",
+        "Massive filings/disclosures can be considered later as auxiliary evidence only after endpoint-level review."
+      ]
+    }
+  ],
+  "call_budget_model": {
+    "candidate_eligible_count": 2404,
+    "current_cut5_forecast_total_calls": 12021,
+    "known_fmp_basic_daily_call_limit": 250,
+    "total_call_budget_cleared": false,
+    "massive_account_call_limit_verified": false,
+    "output_coverage_complete": false,
+    "analyst_gap_disposition": "unresolved_source_gap_no_massive_equivalent_found",
+    "scenarios": [
+      {
+        "scenario_id": "current_fmp_cut5_forecast",
+        "planned_total_calls": 12021,
+        "scenario_role": "Current reviewed preflight forecast: SEC company mapping plus FMP analyst grades plus SEC submissions plus Massive news plus FMP splits/dividends.",
+        "call_budget_cleared": false,
+        "output_coverage_complete": false,
+        "authorizes_provider_call": false,
+        "notes": [
+          "Repo evidence records FMP Basic at 250 calls/day, which does not clear 12021.",
+          "The current live runner remains blocked before network."
+        ]
+      },
+      {
+        "scenario_id": "massive_like_for_like_without_analyst",
+        "planned_total_calls": 9617,
+        "scenario_role": "Replace FMP splits/dividends with Massive splits/dividends, retain SEC mapping/submissions and Massive news, and omit FMP analyst-grade calls because no Massive equivalent was found.",
+        "call_budget_cleared": false,
+        "output_coverage_complete": false,
+        "authorizes_provider_call": false,
+        "notes": [
+          "Arithmetic: 1 SEC mapping + 2404 SEC submissions + 2404 Massive news + 2404 Massive splits + 2404 Massive dividends = 9617.",
+          "This is not complete source-packet coverage because analyst grades remain unresolved.",
+          "Massive account call limits, endpoint entitlement, rate policy, retry policy, and storage rights are unverified."
+        ]
+      },
+      {
+        "scenario_id": "massive_plus_ticker_overview_metadata",
+        "planned_total_calls": 12021,
+        "scenario_role": "Same as the Massive no-analyst scenario, plus one Massive ticker-overview metadata call per candidate.",
+        "call_budget_cleared": false,
+        "output_coverage_complete": false,
+        "authorizes_provider_call": false,
+        "notes": [
+          "Arithmetic: 9617 plus 2404 ticker-overview calls = 12021.",
+          "Ticker metadata does not resolve analyst grades or corporate-action reconciliation.",
+          "This scenario is included to prevent accidental budget undercounting if ticker overview becomes required."
+        ]
+      }
+    ]
+  },
+  "source_packet_plan": {
+    "plan_status": "access_budget_source_packet_plan_only",
+    "ready_for_reviewed_live_execution": false,
+    "source_packet_schema_change_authorized": false,
+    "source_packet_runner_change_authorized": false,
+    "provider_calls_authorized": false,
+    "missing_component_behavior": "fail_closed_do_not_silent_neutral_fill",
+    "planned_components": [
+      {
+        "component_id": "sec_company_tickers_mapping",
+        "planned_source": "SEC public company-tickers mapping retained",
+        "packet_role": "CIK lookup and audit-source keying for candidate submissions",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "retain_existing_sec_source"
+      },
+      {
+        "component_id": "sec_submissions_audit",
+        "planned_source": "SEC submissions retained",
+        "packet_role": "Per-candidate audit source evidence",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "retain_existing_sec_source"
+      },
+      {
+        "component_id": "massive_news",
+        "planned_source": "Massive news candidate endpoint",
+        "packet_role": "News/catalyst source evidence after access and call-budget review",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "massive_candidate_pending_review"
+      },
+      {
+        "component_id": "massive_splits",
+        "planned_source": "Massive splits candidate endpoint",
+        "packet_role": "Split event capture after endpoint entitlement and reconciliation review",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "massive_candidate_pending_review"
+      },
+      {
+        "component_id": "massive_dividends",
+        "planned_source": "Massive dividends candidate endpoint",
+        "packet_role": "Dividend event capture after endpoint entitlement and adjustment semantics review",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "massive_candidate_pending_review"
+      },
+      {
+        "component_id": "analyst_grades",
+        "planned_source": "unresolved_source_gap_no_massive_source",
+        "packet_role": "Currently required FMP analyst-grade component has no Massive equivalent in reviewed overview",
+        "execution_status": "not_authorized_not_executed",
+        "missing_behavior": "block_output_until_gap_disposition"
+      }
+    ],
+    "pre_execution_gates": [
+      {
+        "gate_id": "massive_access_entitlement_budget_review",
+        "status": "blocked",
+        "blocks_execution": true,
+        "required_resolution": "Verify Massive account plan, endpoint entitlements, daily/monthly call limits, rate limits, retry policy, and abort behavior for the exact 2404-candidate packet.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "analyst_grade_gap_disposition",
+        "status": "blocked",
+        "blocks_execution": true,
+        "required_resolution": "Either identify a reviewed authorized analyst-grade source, or explicitly revise the cut5 source-packet contract to omit the field without silent defaults.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "license_storage_retention_review",
+        "status": "blocked",
+        "blocks_execution": true,
+        "required_resolution": "Review Massive license, storage, retention, local raw sample, derived summary, redistribution, and termination/deletion terms for the exact use.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "corporate_action_semantics_and_reconciliation_review",
+        "status": "pending_review",
+        "blocks_execution": true,
+        "required_resolution": "Review split/dividend fields, adjustment factors, ex-date behavior, price-basis alignment, and fail-closed paper-evaluability integration before use.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "reviewed_massive_source_packet_schema_runner_change",
+        "status": "pending_review",
+        "blocks_execution": true,
+        "required_resolution": "Write and review the schema/runner change that consumes Massive splits/dividends and handles analyst-grade absence before any provider run.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "no_secret_storage_gitignore_packet",
+        "status": "pending_review",
+        "blocks_execution": true,
+        "required_resolution": "Define gitignored raw path, tracked no-secret summary, request URL redaction, raw row exclusion, and summary secret grep before execution.",
+        "authorizes_provider_call": false
+      },
+      {
+        "gate_id": "explicit_user_live_execution_approval",
+        "status": "pending_user_approval",
+        "blocks_execution": true,
+        "required_resolution": "User approves the exact Massive/SEC call packet, cost, endpoint list, symbol count, storage, and network/tool boundary after review.",
+        "authorizes_provider_call": false
+      }
+    ]
+  },
+  "unresolved_source_gaps": [
+    {
+      "gap_id": "analyst_grades_no_massive_equivalent_found_in_reviewed_overview",
+      "status": "open",
+      "blocks_live_run": true,
+      "required_resolution": "Do not run a complete cut5 replacement packet until analyst-grade sourcing is resolved or the source-packet contract is explicitly changed and reviewed.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    },
+    {
+      "gap_id": "massive_account_entitlement_and_call_budget_unverified",
+      "status": "blocked_pending_user_or_provider_evidence",
+      "blocks_live_run": true,
+      "required_resolution": "Verify current Massive account plan and endpoint-level call budget for the exact packet before any network execution.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    },
+    {
+      "gap_id": "massive_license_storage_retention_unreviewed_for_cut5",
+      "status": "blocked_pending_review",
+      "blocks_live_run": true,
+      "required_resolution": "Resolve terms, storage, retention, derived summaries, and local raw payload handling for this cut before any call.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    },
+    {
+      "gap_id": "corporate_action_reconciliation_semantics_unproven",
+      "status": "blocked_pending_review",
+      "blocks_live_run": true,
+      "required_resolution": "Prove split/dividend field semantics, adjustment factors, and ex-date/price-basis alignment with a reviewed bounded packet before paper-performance use.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    },
+    {
+      "gap_id": "source_packet_schema_and_runner_not_updated_for_massive_replacement",
+      "status": "blocked_pending_review",
+      "blocks_live_run": true,
+      "required_resolution": "Create a reviewed schema/runner change before a Massive alternative packet can be executed.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    },
+    {
+      "gap_id": "provider_selection_not_made_or_authorized",
+      "status": "open",
+      "blocks_live_run": true,
+      "required_resolution": "Treat this artifact as a plan only; separate provider-selection review is required before declaring Massive the replacement.",
+      "no_silent_default_allowed": false,
+      "authorizes_provider_call": false
+    }
+  ],
+  "no_silent_default_policy": {
+    "policy_status": "plan_only_fail_closed_missing_components",
+    "analyst_grade_absence_blocks_complete_packet_claim": true,
+    "massive_endpoint_listing_is_not_access_validation": true,
+    "call_count_reduction_is_not_budget_clearance": true,
+    "silent_neutral_fill_allowed": false,
+    "yfinance_substitution_allowed": false,
+    "authorizes_provider_call": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "fmp_replaced": false,
+    "massive_account_entitlement_verified": false,
+    "massive_call_budget_cleared": false,
+    "analyst_grade_source_resolved": false,
+    "source_packet_ready_to_run": false,
+    "provider_call_authorized": false,
+    "full_market_download_authorized": false,
+    "yfinance_used_or_authorized": false,
+    "datahub_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false
+  },
+  "limitations": [
+    "This artifact performs no provider call, provider status polling, raw-payload read, raw-payload write, source-packet write, DataHub work, production storage, broker/order automation, or ship-gate/live-normalized evidence claim.",
+    "Massive public endpoint docs are planning evidence only and do not prove current account entitlement, rate limits, storage rights, PIT safety, active-symbol coverage, or corporate-action correctness.",
+    "Replacing FMP split/dividend endpoints with Massive split/dividend endpoints may reduce FMP dependence but does not resolve the analyst-grade source gap.",
+    "The 9617-call Massive no-analyst scenario is incomplete source-packet coverage and cannot be used as a live-run authorization.",
+    "yfinance remains out of scope and cannot serve as the formal replacement source."
+  ],
+  "next_steps": [
+    "If the user wants to continue, write a reviewed Massive access packet that resolves account entitlement, call budget, license/storage, no-secret summary, raw gitignore, endpoint list, and analyst-grade gap disposition before any call.",
+    "If analyst grades are intentionally removed, first revise the US-short cut5 field contract and tests so the missing component fails closed rather than silently neutral-filling.",
+    "Keep SR-PROVIDER-001 open until endpoint entitlement, storage/retention, PIT, corporate-action reconciliation, stability, provider selection, DataHub, production, and ship-gate gates are separately resolved."
+  ]
+}
