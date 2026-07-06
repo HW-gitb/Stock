@@ -1350,6 +1350,28 @@ class CandidatePathGuard(unittest.TestCase):
             self.assertFalse(cand.with_name(cand.name + ".tmp").exists())
             self.assertFalse(summ.exists())
 
+    def test_bankruptcy_screen_non_string_status_rejected_without_typeerror(self):
+        screen_path = ROOT / "state" / "us_short" / f"screen_status_bad_{os.getpid()}_{self._testMethodName}.json"
+        self.addCleanup(screen_path.unlink, missing_ok=True)
+        for bad_status in ([], {}):
+            with self.subTest(screen_status=type(bad_status).__name__):
+                screen_path.parent.mkdir(parents=True, exist_ok=True)
+                screen_path.write_text(json.dumps({
+                    "observed": True,
+                    "observed_at": STATUS_OBSERVED_AT,
+                    "lookback_window": "P90D",
+                    "by_ticker": {
+                        "AAPL": {"screen_status": "screened_no_filing"},
+                        "MSFT": {"screen_status": bad_status},
+                    },
+                }), encoding="utf-8")
+                with self.assertRaisesRegex(RuntimeError, "invalid screen_status"):
+                    _mod._load_bankruptcy_screen_paths(
+                        [screen_path],
+                        decision_date="20260629",
+                        generated_at=STATUS_OBSERVED_AT,
+                    )
+
     def test_full_run_wrong_date_candidate_leaves_no_residue(self):
         # Codex's exact probe: a gitignored but WRONG-DATE candidate path on a 20260629 run must fail closed
         # BEFORE writing the priced artifact or the tracked summary (no candidate/.tmp/summary residue).

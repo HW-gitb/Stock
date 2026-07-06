@@ -72,6 +72,31 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
             clear=False,
         )
 
+    def _successful_submission_wrapper(self, producer, symbol: str = "T050") -> dict:
+        return {
+            "ok": True,
+            "provider_id": "sec_edgar",
+            "endpoint_family": producer.ENDPOINT_SUBMISSIONS,
+            "symbol": symbol,
+            "http_status": 200,
+            "error_type": None,
+            "payload": {"filings": {"recent": {"form": [], "filingDate": [], "accessionNumber": [], "items": []}}},
+        }
+
+    def _manifest_with_raw_ref(self, raw_ref: str, symbol: str = "T050") -> dict:
+        return {
+            "completed_shards": [
+                {
+                    "shard_index": 2,
+                    "source": "resume_scan",
+                    "round_index": 1,
+                    "symbols": [symbol],
+                    "raw_refs_by_symbol": {symbol: raw_ref},
+                    "completed_at": "2026-07-05T12:00:00+00:00",
+                }
+            ]
+        }
+
     def test_preflight_selects_next_unfinished_shards_and_writes_nothing(self):
         import importlib
 
@@ -316,6 +341,67 @@ class Bankruptcy8kCandidateResumeScanTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 51)
         self.assertEqual(summary["endpoint_call_budget"]["sec_ticker_reference_calls"], 1)
         self.assertEqual(summary["endpoint_call_budget"]["sec_company_submissions_calls"], 50)
+
+    def test_manifest_raw_refs_must_stay_under_round_raw_root(self):
+        import importlib
+
+        producer = importlib.import_module(MODULE)
+        rogue = STATE_DIR / f"{self.slug}_rogue_raw.json"
+        self.addCleanup(rogue.unlink, missing_ok=True)
+        _write_json(rogue, self._successful_submission_wrapper(producer))
+        manifest = self._manifest_with_raw_ref(producer._repo_rel(rogue))
+
+        with self.assertRaisesRegex(producer.Bankruptcy8kCandidateResumeScanError, "raw_root"):
+            producer._records_from_manifest_round(
+                manifest=manifest,
+                raw_root=self.raw_root,
+                round_index=1,
+                shard_indices=[2],
+            )
+
+    def test_manifest_raw_refs_must_be_gitignored(self):
+        import importlib
+
+        producer = importlib.import_module(MODULE)
+        raw_path = producer._raw_ref_for(
+            self.raw_root,
+            producer.ENDPOINT_SUBMISSIONS,
+            round_index=1,
+            shard_index=2,
+            symbol="T050",
+        )
+        _write_json(raw_path, self._successful_submission_wrapper(producer))
+        manifest = self._manifest_with_raw_ref(producer._repo_rel(raw_path))
+
+        with mock.patch.object(producer, "_git_ignored", return_value=False):
+            with self.assertRaisesRegex(producer.Bankruptcy8kCandidateResumeScanError, "gitignored"):
+                producer._records_from_manifest_round(
+                    manifest=manifest,
+                    raw_root=self.raw_root,
+                    round_index=1,
+                    shard_indices=[2],
+                )
+
+    def test_missing_manifest_raw_ref_raises_domain_error(self):
+        import importlib
+
+        producer = importlib.import_module(MODULE)
+        raw_path = producer._raw_ref_for(
+            self.raw_root,
+            producer.ENDPOINT_SUBMISSIONS,
+            round_index=1,
+            shard_index=2,
+            symbol="T050",
+        )
+        manifest = self._manifest_with_raw_ref(producer._repo_rel(raw_path))
+
+        with self.assertRaisesRegex(producer.Bankruptcy8kCandidateResumeScanError, "does not exist"):
+            producer._records_from_manifest_round(
+                manifest=manifest,
+                raw_root=self.raw_root,
+                round_index=1,
+                shard_indices=[2],
+            )
 
     def test_final_round_marks_full_complete_only_after_all_shards_are_covered(self):
         import importlib

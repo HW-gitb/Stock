@@ -152,6 +152,23 @@ def _validate_raw_root(raw_root: Path | str) -> Path:
     return resolved
 
 
+def _resolve_manifest_raw_ref(raw_ref: Any, *, raw_root: Path) -> Path:
+    if not isinstance(raw_ref, str) or not raw_ref.strip():
+        raise Bankruptcy8kCandidateResumeScanError("manifest raw ref must be a non-empty repo-relative string")
+    if Path(raw_ref).is_absolute():
+        raise Bankruptcy8kCandidateResumeScanError("manifest raw ref must be repo-relative")
+    raw_path = (ROOT / raw_ref).resolve()
+    try:
+        raw_path.relative_to(raw_root.resolve())
+    except ValueError as exc:
+        raise Bankruptcy8kCandidateResumeScanError("manifest raw ref must stay under the round raw_root") from exc
+    if not _git_ignored(raw_path):
+        raise Bankruptcy8kCandidateResumeScanError("manifest raw ref must be gitignored")
+    if not raw_path.is_file():
+        raise Bankruptcy8kCandidateResumeScanError(f"manifest raw ref does not exist: {raw_ref}")
+    return raw_path
+
+
 def _write_json_atomic(payload: Any, path: Path, *, field: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists() and path.is_dir():
@@ -537,18 +554,14 @@ def _record_completed_shard(
     )
 
 
-def _load_resume_submissions(manifest: dict[str, Any]) -> dict[str, Any]:
+def _load_resume_submissions(manifest: dict[str, Any], *, raw_root: Path) -> dict[str, Any]:
     out: dict[str, Any] = {}
     for entry in sorted(manifest["completed_shards"], key=lambda row: row["shard_index"]):
         if entry.get("source") != "resume_scan":
             continue
         for symbol in entry["symbols"]:
             rel = entry["raw_refs_by_symbol"][symbol]
-            raw_path = (ROOT / rel).resolve()
-            try:
-                raw_path.relative_to(ROOT.resolve())
-            except ValueError as exc:
-                raise Bankruptcy8kCandidateResumeScanError("manifest raw ref escaped repository root") from exc
+            raw_path = _resolve_manifest_raw_ref(rel, raw_root=raw_root)
             wrapper = _read_json(raw_path)
             if wrapper.get("ok") is not True or wrapper.get("endpoint_family") != ENDPOINT_SUBMISSIONS:
                 raise Bankruptcy8kCandidateResumeScanError(f"manifest raw ref is not a successful SEC submissions payload: {rel}")
@@ -558,12 +571,8 @@ def _load_resume_submissions(manifest: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-def _fetch_record_from_wrapper(raw_ref: str) -> FetchRecord:
-    raw_path = (ROOT / raw_ref).resolve()
-    try:
-        raw_path.relative_to(ROOT.resolve())
-    except ValueError as exc:
-        raise Bankruptcy8kCandidateResumeScanError("manifest raw ref escaped repository root") from exc
+def _fetch_record_from_wrapper(raw_ref: Any, *, raw_root: Path) -> FetchRecord:
+    raw_path = _resolve_manifest_raw_ref(raw_ref, raw_root=raw_root)
     wrapper = _read_json(raw_path)
     if wrapper.get("ok") is not True:
         raise Bankruptcy8kCandidateResumeScanError(f"manifest raw ref is not a successful provider payload: {raw_ref}")
@@ -589,7 +598,7 @@ def _records_from_manifest_round(
     records: list[FetchRecord] = []
     ticker_ref = _raw_ref_for(raw_root, ENDPOINT_TICKER_MAP, round_index=round_index)
     if ticker_ref.exists():
-        records.append(_fetch_record_from_wrapper(_repo_rel(ticker_ref)))
+        records.append(_fetch_record_from_wrapper(_repo_rel(ticker_ref), raw_root=raw_root))
     entries = {
         entry["shard_index"]: entry
         for entry in manifest["completed_shards"]
@@ -600,7 +609,7 @@ def _records_from_manifest_round(
         if entry is None:
             raise Bankruptcy8kCandidateResumeScanError(f"manifest is missing completed shard {shard_index}")
         for symbol in entry["symbols"]:
-            records.append(_fetch_record_from_wrapper(entry["raw_refs_by_symbol"][symbol]))
+            records.append(_fetch_record_from_wrapper(entry["raw_refs_by_symbol"][symbol], raw_root=raw_root))
     return records
 
 
@@ -1022,7 +1031,7 @@ def run_resume_round(
             )
             _save_manifest(manifest, paths["manifest"], updated_at=observed_at)
 
-    submissions = _load_resume_submissions(manifest)
+    submissions = _load_resume_submissions(manifest, raw_root=paths["raw_root"])
     packet = _build_source_packet(
         generated_at=generated_at,
         observed_at=observed_at,

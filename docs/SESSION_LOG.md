@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short 批 I 收尾 2 P3 fold-in — screen_status isinstance + resume raw_ref confinement 已闭)
+
+- **Verdict/Action**: PASS + 提交 6 文件(universe_fetch + resume_scan runner/test 各 + SESSION_LOG/register)。两 P3 fold-in 闭合:① `run_fetch` `_canonical_screen_rows` 加 `not isinstance(screen_status, str) or` 短路(unhashable→domain error 非裸 TypeError);② resume-scan 新 `_resolve_manifest_raw_ref` 把 manifest raw_ref 限定 raw_root+gitignored+exist(取代 relative_to(ROOT)-only + 裸 FileNotFoundError,两消费点共用)。均 offline、guard/round/budget/provider 逻辑不变。
+- **Required**: `R-USSHORT-BATCH5-RUNFETCH-SCREEN-STATUS-UNHASHABLE-BARE-TYPEERROR` + `R-USSHORT-BATCH5-RESUME-SCAN-MANIFEST-RAWREF-CONFINEMENT-AND-BARE-FILENOTFOUND`(均 P3)已 resolved — 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 自测 `_resolve_manifest_raw_ref`:非str/绝对/raw_root外/`../`越界/不存在 → 全 typed domain error(无裸 FileNotFoundError、无 confinement bypass);screen_status diff 恰 1 行 isinstance 短路(与已闭 exchange fix 同 pattern);两 fix 对上 register Required 规格、外科。亲跑 `*us_short*` 3740 OK(+4)+ doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short P3 fold-in: screen_status + resume raw_ref hardening)
+
+- **Verdict/Action**: folded two offline P3 hardening items: run_fetch bankruptcy-screen `screen_status` now type-checks before enum membership, and resume-scan manifest `raw_ref` now must stay under the round raw_root, be gitignored, and exist before read. No provider/network/raw fetch/source-packet execution/DataHub/production/ship-gate/broker/A-share path.
+- **Required**: working-tree repaired `R-USSHORT-BATCH5-RESUME-SCAN-MANIFEST-RAWREF-CONFINEMENT-AND-BARE-FILENOTFOUND` and `R-USSHORT-BATCH5-RUNFETCH-SCREEN-STATUS-UNHASHABLE-BARE-TYPEERROR`; full details in `docs/system_risk_register.md`. Pending Claude review; SR-PROVIDER-001 unchanged.
+- **Verify**: red first focused tests exposed bare TypeError/FileNotFound + missing raw_root/gitignore checks; green focused `1+3 OK`; modules `89/10 OK`; provider discover `457 OK (1 skipped)`; doc/route `60 OK`; full offline `*us_short*` `3740 OK (1 skipped)`; py_compile + diff-check OK; no tracked summary changed. A-F checked main-thread.
+- **Next**: Claude Code: review current offline P3 fold-in; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate projection-input merge → preflight ready 已闭)
 
 - **Verdict/Action**: PASS + 提交 12 文件(新 merge runner+schema+2 test+tracked summary + preflight runner/schema/summary 改 + design/README/CURRENT/SESSION_LOG)。新 `full_candidate_projection_inputs` 把 3 真 scored momentum/theme 投影 + 2401 缺失票**合法 neutral-fill**(用 seam 契约 disposition、**不伪造分数**)合并成全候选投影;preflight coverage 改为 scored∪neutral partition → full_coverage(2404)→ ready_for_reviewed_live_execution。诚实:两 summary 记 scored=3/neutral=2401 + live_evidence_all=False;ready 仍需 separate_network_approval+budget(不自动放行 12021 live)。

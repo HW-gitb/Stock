@@ -978,7 +978,7 @@ def _canonical_screen_rows(screen: dict[str, Any], *, decision_date: str, genera
         if not isinstance(rec, dict):
             raise RuntimeError(f"bankruptcy screen by_ticker[{ct}] must be an object")
         screen_status = rec.get("screen_status")
-        if screen_status not in {"bankrupt_8k_found", "screened_no_filing", "unscreened"}:
+        if not isinstance(screen_status, str) or screen_status not in {"bankrupt_8k_found", "screened_no_filing", "unscreened"}:
             raise RuntimeError(f"bankruptcy screen by_ticker[{ct}] has invalid screen_status: {screen_status!r}")
         if screen_status == "bankrupt_8k_found":
             _status_source.resolve_status_record(
