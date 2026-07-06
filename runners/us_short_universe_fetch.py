@@ -108,6 +108,7 @@ ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames(+fmp_profile)"
 FMP_PROFILE_URL = "https://financialmodelingprep.com/stable/profile?symbol={sym}&apikey={key}"
 FMP_FALLBACK_SLEEP = 0.2
 FMP_FREE_DAILY_CAP = 240
+_RUN_STATE_SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}
 
 
 def _is_finite(x: Any) -> bool:
@@ -150,6 +151,60 @@ def _assert_text_safe(text: str, sensitive: list[str]) -> None:
     for value in sensitive:
         if value and value in text:
             raise RuntimeError("tracked summary contains a sensitive environment value")
+
+
+def _worst_run_state(states: list[str]) -> str:
+    return max(states, key=lambda state: _RUN_STATE_SEVERITY[state])
+
+
+def _build_run_fetch_provider_health(
+    *,
+    status_source_outcome: dict[str, Any],
+    fallback_needed_count: int,
+    fmp_attempted: int,
+    fmp_rescued: int,
+) -> dict[str, Any]:
+    """Summarize provider run-state from already-observed run outcomes.
+
+    Massive grouped daily and SEC bulk calls are critical for this runner; if they fail, `run_fetch` raises before
+    any completed summary is emitted. FMP market-cap fallback is opportunistic: it can rescue SEC-missing-share
+    names, but partial/no rescue must not be laundered into provider-readiness evidence.
+    """
+    status_state = "clean"
+    if status_source_outcome.get("block_or_no_emit"):
+        status_state = "blocked"
+    elif status_source_outcome.get("critical_failed"):
+        status_state = "restricted"
+
+    if fallback_needed_count <= 0:
+        fmp_state = "clean"
+    else:
+        fmp_state = "usable_with_fallback"
+
+    return {
+        "overall_run_state": _worst_run_state(["clean", status_state, fmp_state]),
+        "critical_sources": {
+            "massive_grouped_daily": "clean",
+            "sec_edgar": "clean",
+        },
+        "status_sources": {
+            "state": status_state,
+            "outcome": status_source_outcome,
+        },
+        "opportunistic_fallbacks": {
+            "fmp_profile_market_cap": {
+                "state": fmp_state,
+                "needed_count": fallback_needed_count,
+                "attempted_count": fmp_attempted,
+                "rescued_count": fmp_rescued,
+                "unresolved_count": max(fallback_needed_count - fmp_rescued, 0),
+                "provider_readiness_evidence": False,
+                "policy": "opportunistic_rescue_only_not_provider_readiness",
+            },
+        },
+        "critical_failure_no_emit_policy": True,
+        "provider_selection_or_production_claimed": False,
+    }
 
 
 def _assert_summary_safe(path: Path, sensitive: list[str]) -> None:
@@ -1171,6 +1226,12 @@ def run_fetch(
             "halt feed in this slice. Bankruptcy 8-K scanning remains zero-call/unscreened, and broader provider "
             "health / Pass2 / DataHub / production consumption remain gated under SR-PROVIDER-001."
         )
+    provider_health = _build_run_fetch_provider_health(
+        status_source_outcome=status_source_outcome,
+        fallback_needed_count=len(fallback_targets),
+        fmp_attempted=fmp_attempted,
+        fmp_rescued=len(fmp_caps),
+    )
 
     # Per-run candidate artifact: schema + semantic validate BEFORE the atomic write (carries prices →
     # gitignored state/ root). Validation re-derives the summary and rejects any drifted/forged content.
@@ -1184,7 +1245,7 @@ def run_fetch(
 
     summary = {
         "schema_name": "us_short_universe_fetch_summary",
-        "schema_version": "1.1.0",
+        "schema_version": "1.2.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "scope": {
@@ -1226,6 +1287,7 @@ def run_fetch(
             "fmp_mktcap_fallback_attempted": fmp_attempted,
             "fmp_mktcap_fallback_rescued": len(fmp_caps),
         },
+        "provider_health": provider_health,
         "pass1_result": {**summary_counts, "eligible_tickers": eligible_tickers_from_rows(rows)},
         "status_screening": {
             "status_flags_sourced": True,

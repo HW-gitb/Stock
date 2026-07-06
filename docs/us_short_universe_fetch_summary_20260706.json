@@ -1,6 +1,6 @@
 {
   "schema_name": "us_short_universe_fetch_summary",
-  "schema_version": "1.1.0",
+  "schema_version": "1.2.0",
   "authorization_ref": "user_chat_20260626_universe_fetch",
   "generated_at": "2026-07-06T00:00:00+08:00",
   "scope": {
@@ -46,6 +46,42 @@
     "sec_ciks_with_shares": 5773,
     "fmp_mktcap_fallback_attempted": 240,
     "fmp_mktcap_fallback_rescued": 10
+  },
+  "provider_health": {
+    "overall_run_state": "usable_with_fallback",
+    "critical_sources": {
+      "massive_grouped_daily": "clean",
+      "sec_edgar": "clean"
+    },
+    "status_sources": {
+      "state": "clean",
+      "outcome": {
+        "per_source": {
+          "ticker_reference": "ok",
+          "exchange_halt_feed": "ok",
+          "sec_8k_item_103": "ok"
+        },
+        "failed_sources": [],
+        "failed_count": 0,
+        "total_sources": 3,
+        "critical_failed": [],
+        "critical_all_failed": false,
+        "block_or_no_emit": false
+      }
+    },
+    "opportunistic_fallbacks": {
+      "fmp_profile_market_cap": {
+        "state": "usable_with_fallback",
+        "needed_count": 575,
+        "attempted_count": 240,
+        "rescued_count": 10,
+        "unresolved_count": 565,
+        "provider_readiness_evidence": false,
+        "policy": "opportunistic_rescue_only_not_provider_readiness"
+      }
+    },
+    "critical_failure_no_emit_policy": true,
+    "provider_selection_or_production_claimed": false
   },
   "pass1_result": {
     "eligible_count": 2404,

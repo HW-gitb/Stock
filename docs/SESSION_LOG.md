@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 `run_fetch` provider-health/fallback run-state summary + FMP needed/unresolved 已闭)
+
+- **Verdict/Action**: PASS + 提交 8 文件(runner + test + summary + CURRENT/README/SESSION_LOG/register/design)。Codex 修复 = tracked summary `provider_health.fmp` 订正为 needed=575/unresolved=565(attempted 保持 240),并加读实际 artifact 的交叉核对 guard。R-ID `...UNDERCOUNT` 收口;O1/O2(dead branch/severity 重复)非阻塞、本轮未取,留 register。
+- **Required**: `R-USSHORT-BATCH5-RUNFETCH-PROVIDER-HEALTH-FMP-NEEDED-UNRESOLVED-UNDERCOUNT`(P2)已 resolved — 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 亲复算 4 项自洽全 True(unresolved==needs_market_cap=565、needed==565+10=575、attempted==min(575,240)==universe 240、rescued==10);新 guard 读真 artifact 断言这些不变式,`unresolved==len(needs_market_cap)` 正是原 230≠565 死穴。修复外科(runner/design/CURRENT/README 未再动)。亲跑全离线 `*us_short*` 3681 OK(+1 guard)+ doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `fix` (US-short Batch5 provider_health FMP needed/unresolved undercount)
+
+- **Verdict/Action**: fixed Claude Required `R-USSHORT-BATCH5-RUNFETCH-PROVIDER-HEALTH-FMP-NEEDED-UNRESOLVED-UNDERCOUNT`. The tracked 20260706 summary now records FMP fallback `needed_count=575` and `unresolved_count=565` (same-file derivation: `needs_market_cap=565`, rescued=10), while attempted remains the capped 240. Added a tracked-artifact guard test cross-checking provider_health FMP counts against recorded summary counts. No provider re-run, provider selection, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: fixed; pending Claude re-review. No new R-ID.
+- **Verify**: red first focused guard failed `230 != 565`; green focused guard 1 OK; full `tests.provider.test_us_short_universe_fetch` 88 OK; adjacent provider/status/data_context/source-packet/schema pack 246 OK; doc/route guards 60 OK; full offline `discover -s tests -p '*us_short*.py'` 3681 OK (1 skipped); `py_compile` OK; summary JSON parse OK (`575/240/10/565`); summary secret/URL grep 0 hits; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: fixed the whole count-family invariant (`unresolved`, `needed`, `attempted`, `rescued`) rather than only the named bad field; B/E: register updated with repair evidence, durable docs not expanded with transient review gate.
+- **Next**: Claude Code: re-review current provider_health FMP count repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short Batch5 `run_fetch` provider-health/fallback run-state summary — tracked artifact fmp needed/unresolved 低报)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。代码/接线/test 逻辑 sound(critical 硬编码 clean=correct-by-construction、worst-of、opportunistic honesty、两套分类器分层 均 held)。但 tracked summary 的 provider_health.fmp 块 needed/unresolved=240/230 与同文件 needs_market_cap=565 矛盾(capped attempted 误当 needed)。落 register `R-USSHORT-BATCH5-RUNFETCH-PROVIDER-HEALTH-FMP-NEEDED-UNRESOLVED-UNDERCOUNT`(P2)。
+- **Required**: `R-USSHORT-BATCH5-RUNFETCH-PROVIDER-HEALTH-FMP-NEEDED-UNRESOLVED-UNDERCOUNT`(P2) — 完整 finding/复算/修复/closure 见 `system_risk_register.md`(单一来源)。
+- **Verify**: (`review-evidence:not_available` — 裸 `审查` 未触发 hook;证据皆 harness 真实 tool 结果)独立复算 HEAD needs_market_cap=565+rescued=10 → 真 needed=575/unresolved=565、artifact 写 240/230。独立 §3.5 agent 佐证并纠我初判(先判 PASS);item 1/2/4/5 held。亲跑 `*us_short*` 3680 OK + doc/route 60 OK 零回归。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `execute` (US-short Batch5 `run_fetch` provider-health/fallback run-state summary)
+
+- **Verdict/Action**: wired `run_fetch` provider-health summary for already-observed outcomes: Massive/SEC critical completed runs report clean, status-source critical degradation drives restricted/blocked, and FMP market-cap fallback is `usable_with_fallback` opportunistic-only. Updated 20260706 summary to `schema_version=1.2.0` and route/design/register docs. No provider call, provider selection, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID. `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` remains open under `SR-PROVIDER-001` for broader provider stability behavior and downstream gated work.
+- **Verify**: red first focused test failed on missing `provider_health`; green focused `tests.provider.test_us_short_universe_fetch` 87 OK; adjacent provider/status/data_context/source-packet/schema pack 246 OK; doc/route guards 60 OK; full offline `discover -s tests -p '*us_short*.py'` 3680 OK (1 skipped); `py_compile` OK; 20260706 summary JSON parse OK; summary secret/URL grep 0 hits; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. Boundaries held to US-short batch5 provider-health/fallback summary wiring; no networking or raw/provider execution.
+- **Next**: Claude Code: review current provider-health/fallback run-state summary slice; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 完成破产 screen → `run_fetch` status provenance wiring + 授权 live run)
 
 - **Verdict/Action**: PASS + 提交 8 文件(runner + test + universe_fetch summary + CURRENT/README/SESSION_LOG/register/design)。真代码:`run_fetch` 加 `--bankruptcy-screen-path`(gitignored state/us_short 限定 + real git-check-ignore + .json/exists、可重复 merge、两 source 互斥、**校验在 fetch 之前**),把扫完 3 份破产 screen 接进 Pass1 status provenance。授权 canonical live run(decision_date=20260706):`bankruptcy_8k_source=injected_bankruptcy_screen`、input=2630、file_count=3、eligible=2404。

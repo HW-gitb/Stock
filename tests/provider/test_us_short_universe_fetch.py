@@ -707,6 +707,22 @@ class TestGuards(unittest.TestCase):
 
 
 class TestRunFetchE2E(unittest.TestCase):
+    def test_tracked_20260706_summary_provider_health_fmp_counts_match_recorded_counts(self):
+        summary_path = ROOT / "docs" / "us_short_universe_fetch_summary_20260706.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+        needs_market_cap = summary["pass1_result"]["needs_market_cap"]
+        fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
+        attempted = summary["universe"]["fmp_mktcap_fallback_attempted"]
+        rescued = summary["universe"]["fmp_mktcap_fallback_rescued"]
+        free_cap = _mod.FMP_FREE_DAILY_CAP
+
+        self.assertEqual(fallback["unresolved_count"], len(needs_market_cap))
+        self.assertEqual(fallback["needed_count"], len(needs_market_cap) + rescued)
+        self.assertEqual(fallback["attempted_count"], attempted)
+        self.assertEqual(fallback["rescued_count"], rescued)
+        self.assertEqual(attempted, min(fallback["needed_count"], free_cap))
+
     def test_full_offline_run_binds_decision_date_and_recomputes(self):
         sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
                    "LOWADV": {"cik": 5, "exchange": "NYSE"}}
@@ -746,6 +762,7 @@ class TestRunFetchE2E(unittest.TestCase):
             self.assertNotIn("LOWADV", summary["pass1_result"]["eligible_tickers"])
             self.assertFalse(summary["storage"]["tracked_summary_contains_prices"])
             self.assertTrue(summary["storage"]["candidate_artifact_gitignored"])   # real True on a completed run
+            self.assertEqual(summary["provider_health"]["overall_run_state"], "clean")
 
             artifact = json.loads(cand.read_text(encoding="utf-8"))
         self.assertEqual(artifact["decision_date"], "20260629")
@@ -974,6 +991,58 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertIn("status_halted_unknown_or_invalid", row["reasons"])
         self.assertEqual(summary["status_screening"]["status_source_outcome"]["per_source"]["exchange_halt_feed"], "down")
         self.assertFalse(summary["status_screening"]["status_source_outcome"]["block_or_no_emit"])
+        self.assertEqual(summary["provider_health"]["status_sources"]["state"], "restricted")
+        self.assertEqual(summary["provider_health"]["overall_run_state"], "restricted")
+
+    def test_run_fetch_provider_health_marks_fmp_fallback_as_opportunistic(self):
+        sec_map = {
+            "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+            "GOOGL": {"cik": 1652044, "exchange": "NASDAQ"},
+        }
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [
+                {"T": "AAPL", "c": 200.0, "v": 50_000_000},
+                {"T": "GOOGL", "c": 340.0, "v": 50_000_000},
+            ]
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "FMP_SECRET_ZZZ"}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_fmp_market_caps", return_value={}), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
+                              return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
+                                            "halted_symbols": []}), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                )
+
+        health = summary["provider_health"]
+        self.assertEqual(health["overall_run_state"], "usable_with_fallback")
+        self.assertEqual(health["critical_sources"]["massive_grouped_daily"], "clean")
+        self.assertEqual(health["critical_sources"]["sec_edgar"], "clean")
+        fallback = health["opportunistic_fallbacks"]["fmp_profile_market_cap"]
+        self.assertEqual(fallback["state"], "usable_with_fallback")
+        self.assertEqual(fallback["attempted_count"], 1)
+        self.assertEqual(fallback["rescued_count"], 0)
+        self.assertEqual(fallback["unresolved_count"], 1)
+        self.assertFalse(fallback["provider_readiness_evidence"])
+        self.assertTrue(health["critical_failure_no_emit_policy"])
+        self.assertFalse(health["provider_selection_or_production_claimed"])
 
     def test_all_critical_status_sources_fail_no_emit(self):
         with self.assertRaisesRegex(RuntimeError, "all critical status sources failed"):
