@@ -283,8 +283,14 @@ def run_packet(
     packet_path: Path | str = DEFAULT_PACKET_PATH,
     *,
     generated_at: str | None = None,
+    context_components_output_path: Path | str | None = None,
 ) -> dict[str, Any]:
     packet, paths = _load_and_validate_packet(packet_path)
+    if context_components_output_path is not None:
+        paths["output_context_components_path"] = _validate_output_path(
+            context_components_output_path,
+            field="output_context_components_path",
+        )
     try:
         eligibility_governance = load_eligibility_governance(paths["eligibility_governance_path"])
         catalyst_governance = load_catalyst_governance(paths["catalyst_governance_path"])
@@ -393,6 +399,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--packet-path", type=Path, default=DEFAULT_PACKET_PATH)
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--generated-at", help="Optional deterministic timestamp for tests.")
+    parser.add_argument(
+        "--context-components-out",
+        help="Optional repo-relative state/us_short/*.json path for official data_context/per_ticker/run_provenance.",
+    )
     return parser.parse_args(argv)
 
 
@@ -401,7 +411,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.preflight_only:
         result = run_preflight(args.packet_path, generated_at=args.generated_at)
     else:
-        result = run_packet(args.packet_path, generated_at=args.generated_at)
+        result = run_packet(
+            args.packet_path,
+            generated_at=args.generated_at,
+            context_components_output_path=args.context_components_out,
+        )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0
 

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5→Batch4 weekend E2E bridge 离线半 [cut⑥] 已闭)
+
+- **Verdict/Action**: PASS + 提交 7 文件(新 E2E runner + 新 test + source-packet runner[`--context-components-out`] + design/README/CURRENT/SESSION_LOG)。新 `us_short_batch5_to_batch4_weekend_e2e.py`:本地源 packet→official components→叠 batch4 模板/provider-health/私密 account→私密 context_packet(P0 guard)→in-process 跑 batch4 weekend runner→私密 weekly_report/action_table。纯离线;CLI/subprocess/no-residue 硬化 Codex 声明为下一刀(design 已标 gated)。
+- **Required**: 无。Register: non-material(defense-in-depth 硬化已在 design "CLI/subprocess/no-residue hardening" gated 项跟踪)。
+- **Verify**: 独立 §3.5 agent 六不变式全 HELD 且**实证** `--run-mode live` on 离线数据=fail-closed 零输出(run_origin/日历门/离线哨兵三重拦、无 live 伪装);私密 context_packet 经 `reject_nonprivate_output_path`(symlink/`..`/绝对/tracked 全拒)、account 只嵌路径、summary/tracked 零 ticker;components 经 source-packet runner `_git_ignored` 兜底;design/README 诚实标 offline/hardening-gated。亲跑全离线 `*us_short*` 3689 OK(+2)+ doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short Batch5 -> Batch4 weekend E2E bridge)
+
+- **Verdict/Action**: added local/offline `runners/us_short_batch5_to_batch4_weekend_e2e.py`: it consumes a gitignored Batch5 source packet, writes official context components through the existing source-packet runner, overlays an explicit batch4 template + provider-health + private account/root, and runs the supported Batch4 weekend runner to private `weekly_report.md` / `action_table.csv`. `runners/us_short_batch5_data_context_source_packet.py` now also supports optional `--context-components-out`. No provider fetch, raw payload read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID.
+- **Verify**: red first focused test failed on missing E2E runner import; green focused E2E `2 OK`; source-packet `10 OK`; batch4 context/runner `28 OK`; orchestrator/provider-health `54 OK`; provider `*us_short*` `437 OK (1 skipped)`; doc/route guards `25 OK`; full offline `discover -s tests -p '*us_short*.py'` `3689 OK (1 skipped)`; `py_compile` OK; changed-hunk secret/URL grep `0 hits`; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread. The bridge requires explicit provider-health and private account/root, writes the sensitive context packet only to a provably private path, and leaves CLI/subprocess/no-residue hardening as the next separate cut.
+- **Next**: Claude Code: review current Batch5->Batch4 E2E bridge; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 cut① per_ticker/provenance 装配器 + observed_at + 设计 status 已闭)
 
 - **Verdict/Action**: PASS + 提交 16 文件(engine reconciler + 装配器 runner + source-packet runner + 2 schema + 2 example + 4 test + design/CURRENT/README/SESSION_LOG/register)。两 R-ID resolved:observed_at 裸 OverflowError→typed(wrap OverflowError/ValueError/OSError→DataContextAssemblyError + 公共路径回归)、cut① 设计权威 status 补齐(离线装配器入"已在 repo"清单、gate 精确改指 live 数据路径、§19 去 unimplemented、CURRENT §0 加 settled delta、README route)。
