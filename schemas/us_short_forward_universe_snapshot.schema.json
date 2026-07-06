@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_forward_universe_snapshot",
+  "description": "US-short forward-start active universe freeze artifact. It is produced only from local reviewed input and written under gitignored state/us_short. It freezes the active symbol list, listing status, provider/as_of, deterministic hashes, row_count, and retention policy for later delist/halt/merger/bankruptcy/no-trade events. It does not perform provider calls and does not claim DataHub, production, ship-gate, broker, or A-share readiness.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "forward_start_date",
+    "provider_as_of",
+    "provider_label",
+    "source_refs",
+    "scope",
+    "row_count",
+    "active_symbols",
+    "active_universe",
+    "hashes",
+    "retention_policy",
+    "prohibited_claims"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_universe_snapshot"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "minLength": 1},
+    "forward_start_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "provider_as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "provider_label": {"type": "string", "minLength": 1},
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/definitions/sourceRef"}
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "lane",
+        "artifact_status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_capture_performed",
+        "datahub_consumption_allowed",
+        "production_storage_allowed",
+        "ship_gate_evidence_claimed",
+        "broker_or_order_automation_allowed",
+        "a_share_crossing_allowed"
+      ],
+      "properties": {
+        "market": {"const": "US"},
+        "lane": {"const": "us_short"},
+        "artifact_status": {"const": "forward_universe_snapshot_frozen_offline"},
+        "network_access_performed": {"const": false},
+        "provider_calls_performed": {"const": false},
+        "raw_payload_capture_performed": {"const": false},
+        "datahub_consumption_allowed": {"const": false},
+        "production_storage_allowed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "a_share_crossing_allowed": {"const": false}
+      }
+    },
+    "row_count": {"type": "integer", "minimum": 0},
+    "active_symbols": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9.]{0,9}$"}
+    },
+    "active_universe": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/activeRow"}
+    },
+    "hashes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "active_symbols_sha256", "active_universe_rows_sha256"],
+      "properties": {
+        "algorithm": {"const": "sha256"},
+        "active_symbols_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "active_universe_rows_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "retention_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "delist_events_retained",
+        "halt_events_retained",
+        "merger_events_retained",
+        "bankruptcy_events_retained",
+        "no_trade_events_retained",
+        "post_forward_start_deletion_allowed"
+      ],
+      "properties": {
+        "delist_events_retained": {"const": true},
+        "halt_events_retained": {"const": true},
+        "merger_events_retained": {"const": true},
+        "bankruptcy_events_retained": {"const": true},
+        "no_trade_events_retained": {"const": true},
+        "post_forward_start_deletion_allowed": {"const": false}
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selection_complete",
+        "live_normalized_evidence",
+        "production_ready",
+        "ship_gate_evidence",
+        "datahub_consumed"
+      ],
+      "properties": {
+        "provider_selection_complete": {"const": false},
+        "live_normalized_evidence": {"const": false},
+        "production_ready": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "datahub_consumed": {"const": false}
+      }
+    }
+  },
+  "definitions": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "path": {
+          "type": "string",
+          "pattern": "^(?!.*://)(?![A-Za-z]:)(?!/)(?!.*\\\\)(?!.*(^|/)\\.\\.($|/))[^:]+$"
+        },
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "activeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "listing_status", "primary_exchange", "provider_as_of"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.]{0,9}$"},
+        "listing_status": {"const": "active"},
+        "primary_exchange": {"type": "string", "minLength": 1},
+        "provider_as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "cik": {"type": ["string", "null"], "pattern": "^[0-9]{1,10}$"}
+      }
+    }
+  }
+}

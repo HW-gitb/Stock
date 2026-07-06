@@ -479,7 +479,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 **Batch I - offline engineering closure, may be built in one parallel planning batch, then handed off/reviewed by cut**:
 
 1. `per_ticker_analysis` / `provenance` offline assembler: implemented for resolved local sources; live/real-provider-resolved data path remains gated.
-2. `forward_universe_snapshot` freeze artifact.
+2. `forward_universe_snapshot` offline freeze artifact: implemented as a local gitignored active-listing input -> canonical snapshot builder/schema with row_count/hash/retention policy; live true event capture remains gated.
 3. Corporate-action / price-adjustment gate detection logic, offline half.
 4. `run_fetch` provider-health outcome -> run-state summary wiring: implemented for Massive/SEC critical-source clean/no-emit policy plus opportunistic FMP market-cap fallback (`usable_with_fallback`; not provider-readiness evidence). Broader provider stability evidence remains gated.
 

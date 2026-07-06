@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut② forward_universe_snapshot + exchange type-guard 已闭)
+
+- **Verdict/Action**: PASS + 提交 9 文件(新 runner+schema+2 test + design/README/CURRENT/SESSION_LOG/register)。cut② 离线冻结快照 builder(本地 gitignored active-listing→canonical gitignored snapshot、真 git-check-ignore、冻结 hash/retention 规则);exchange unhashable Required 已修(L216 前加 `type is not str` 短路守卫→typed error)。design/§18.3/CURRENT/README 诚实标 offline builder implemented、live 真捕获仍 gated。
+- **Required**: `R-USSHORT-BATCH5-FORWARD-UNIVERSE-EXCHANGE-UNHASHABLE-BARE-TYPEERROR`(P3)已 resolved — 完整详情见 `system_risk_register.md`(单一来源)。sibling P3 `...SCREEN-STATUS-UNHASHABLE` 未 fold、仍 open。
+- **Verify**: 亲复现 dict/list/bool exchange→typed、valid/invalid-str 不变;新回归覆盖 primary_exchange+fallback×dict/list;上轮独立 §3.5 agent 六向除此外全 HELD(confinement/hash/forged-claims/fabrication/schema-runner/offline)、本轮修复外科;design de-gate 诚实(live 真捕获+DataHub+ship-gate 仍 gated)。亲跑 `*us_short*` 3707 OK(+1)+ doc/route 60 OK 零回归。1 trivial Optional(Status L3 inventory 可为一致性列 offline builder)。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `fix` (US-short forward_universe_snapshot exchange type guard)
+
+- **Verdict/Action**: fixed Claude Required `R-USSHORT-BATCH5-FORWARD-UNIVERSE-EXCHANGE-UNHASHABLE-BARE-TYPEERROR`. `_normalize_active_row` now rejects non-string `primary_exchange` / fallback `exchange` before whitelist membership, so dict/list values raise typed `ForwardUniverseSnapshotError` instead of bare `TypeError`. No path/hash/schema/provider/live/DataHub/production/ship-gate/broker/order/A-share behavior changed.
+- **Required**: fixed; pending Claude re-review. No new R-ID. Optional sibling `R-USSHORT-BATCH5-RUNFETCH-SCREEN-STATUS-UNHASHABLE-BARE-TYPEERROR` was not folded into this runner-only Required repair.
+- **Verify**: red first focused regression leaked four bare `TypeError`s; green focused regression `1 OK`; snapshot/schema `16 OK`; related provider/status/data_context/E2E/paper-gate pack `128 OK`; doc/route guards `25 OK`; provider `*us_short*` `445 OK (1 skipped)`; full offline `discover -s tests -p '*us_short*.py'` `3707 OK (1 skipped)`; `py_compile` OK; changed-hunk secret/URL grep `0 hits`; new-file full grep matched only JSON-schema URI + negative URL rejection sentinel; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: covered both exchange ingress fields (`primary_exchange`, fallback `exchange`) times dict/list and preserved valid/invalid string behavior. B/E: runner grep shows only one `EXCHANGE_WHITELIST` membership site and it is type-guarded; CURRENT/README/design unchanged in this repair, so no durable route gate drift added.
+- **Next**: Claude Code: re-review current forward_universe_snapshot exchange type-guard repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short cut② forward_universe_snapshot — exchange unhashable 裸 TypeError 复发类)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。builder 核心 sound(路径 confinement/hash 冻结重算/forged-claims/fabrication/datetime 类/offline 全 HELD)。但 `_normalize_active_row` L216 `exchange not in {frozenset}` 对 unhashable(dict/list)`primary_exchange` 抛裸 TypeError(复发 unhashable-in-set 类、未继承 sibling isinstance 守卫、与 open P3 SCREEN-STATUS-UNHASHABLE 同款)。落 register(P3、见 Required)。
+- **Required**: `R-USSHORT-BATCH5-FORWARD-UNIVERSE-EXCHANGE-UNHASHABLE-BARE-TYPEERROR`(P3)— 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 亲复现 dict/list exchange→裸 TypeError、valid/invalid-str→accepted/typed;整类 grep 证 L216 是唯一 input set-membership;独立 §3.5 agent 端到端复现 + 其余六向全 HELD(confinement/hash/forged-claims/fabrication/schema-runner/offline)。亲跑全离线 `*us_short*` 3706 OK(+15)+ doc/route 60 OK 零回归。1 非阻塞 Optional(validate 不重验 source_ref sha256、builder 路径不可达)。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `execute` (US-short forward_universe_snapshot offline freeze artifact)
+
+- **Verdict/Action**: added offline `forward_universe_snapshot` builder/schema. `runners/us_short_forward_universe_snapshot.py` consumes only local gitignored `state/us_short/*.json` active-listing input, writes canonical gitignored `state/us_short/forward_universe_snapshot_<YYYYMMDD>.json`, validates `schemas/us_short_forward_universe_snapshot.schema.json`, and freezes active symbols/listing status/provider_as_of/row_count/hashes plus delist/halt/merger/bankruptcy/no-trade retention rules. No provider fetch, raw read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID.
+- **Verify**: red first focused tests failed on missing runner/schema; green focused snapshot/schema `15 OK`; related provider/status/data_context/E2E/paper-gate pack `127 OK`; doc/route guards `25 OK`; provider `*us_short*` `444 OK (1 skipped)`; full offline `discover -s tests -p '*us_short*.py'` `3706 OK (1 skipped)`; `py_compile` OK; changed-hunk secret/URL grep `0 hits`; new-file full grep matched only JSON-schema URI + negative URL rejection sentinel; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread. A/C: output path is decision-date-bound and gitignored via real `git check-ignore` before write; source refs are existing gitignored state JSON and hashed. B/E: `CURRENT` contains only settled mechanism facts and no actor/commit-cycle gate; live true event capture and corporate-action reconciliation remain separate.
+- **Next**: Claude Code: review current forward_universe_snapshot offline freeze artifact; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short E2E bridge CLI/subprocess/no-residue 硬化 已闭)
 
 - **Verdict/Action**: PASS + 提交 6 文件(E2E runner + test + design/README/CURRENT/SESSION_LOG)。硬化:失败时清理本次新建的 state/us_short components/data_context + 私密 context_packet + 私密 lifecycle/runs/weekly 子树(existed_before 快照、只删本次前不存在的)、source-packet 错误脱敏、subprocess CLI 测试。design/README/CURRENT 把 hardening 移出 gated(live/provider/DataHub/ship-gate 门保留)。
