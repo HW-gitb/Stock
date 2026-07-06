@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate Pass2 preflight + price_basis_date guard 已闭)
+
+- **Verdict/Action**: PASS + 提交 10 文件(runner+schema+2 test+tracked summary + design/README/CURRENT/SESSION_LOG/register)。cut⑤ 离线 preflight(读本地候选+momentum/theme 投影→预测 live 调用 12021、覆盖 3/2404→blocked、零 provider call、写 tracked summary);Required 修复:`price_basis_date` 走新 `_format_price_basis_date`(type+len+ascii+isdigit+strptime try→typed),invalid-calendar 不再裸崩。design/§18.3/CURRENT/README 诚实标 offline preflight 已建、live 全候选真跑仍 gated。
+- **Required**: `R-USSHORT-BATCH5-PASS2-PREFLIGHT-PRICE-BASIS-STRPTIME-BARE-VALUEERROR`(P3)已 resolved — 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 亲复现 20261301/20260230/非ascii/None→typed、20260702→2026-07-02(无 over-reject);读 `_format_price_basis_date` 守 type+format+calendar;新回归覆盖 typed+无 summary;上轮 §3.5 agent 已证其余五向 HELD(no-network/honest-forecast/hygiene/path-auth/schema)。亲跑 `*us_short*` 3731 OK(+1、canonical 2404/12021 不变)+ doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `fix` (US-short full-candidate preflight price date)
+
+- **Verdict/Action**: fixed `R-USSHORT-BATCH5-PASS2-PREFLIGHT-PRICE-BASIS-STRPTIME-BARE-VALUEERROR`. `price_basis_date` now goes through `_format_price_basis_date`, requiring exact ASCII `YYYYMMDD` and wrapping invalid calendar dates as `FullCandidatePass2PreflightError` before summary write. Forecast/coverage/path/auth/network behavior unchanged.
+- **Required**: fixed; see register. Pending Claude re-review; no new R-ID.
+- **Verify**: red first invalid-calendar focused test leaked bare `ValueError`; green focused/schema `8 OK`; canonical preflight unchanged `2404`/`12021`; related pack `343 OK`; provider discover `450 OK (1 skipped)`; full offline `*us_short*` `3731 OK (1 skipped)`.
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: invalid-calendar class covered for `20261301` and `20260230`; legal `20260702` canonical preflight still writes the same summary outcome. B/E: no CURRENT/README/design route text changed in this repair.
+- **Next**: Claude Code: re-review current preflight price-date repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short cut⑤ full-candidate Pass2 preflight — price_basis_date strptime 裸 ValueError 复发类)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。preflight 核心全 HELD(local-only 零 provider call[只 validate_candidate_artifact 纯校验+本地 git-check-ignore]、forecast 诚实 2404×5+1=12021/3-of-2404→blocked、safe 旗 const-pin 不可翻、tracked summary 干净、路径/auth confinement、schema runtime 校验,独立 §3.5 agent 佐证)。但 `_build_summary` L272 `strptime(price_basis_date)` 无 try→regex-valid 但 invalid-calendar 日期(20261301/20260230)抛裸 ValueError(复发类、上游只 regex 不校历法、我整读 flag+agent 复现)。落 register(P3、见 Required)。
+- **Required**: `R-USSHORT-BATCH5-PASS2-PREFLIGHT-PRICE-BASIS-STRPTIME-BARE-VALUEERROR`(P3)— 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 自己整类 grep(L127 fromisoformat 有 try、L272 strptime 无);独立 §3.5 agent 复现 4 个 invalid-calendar 日期→裸 ValueError + 证 validate_candidate_artifact 只 regex + 其余五向全 HELD(no-network/honest-forecast/hygiene/path-auth/schema)。亲跑 `*us_short*` 3730 OK(+7)+ doc/route 60 OK 零回归。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `execute` (US-short full-candidate Pass2 preflight)
+
+- **Verdict/Action**: added local-only full-candidate Pass2 preflight/schema/summary. Canonical summary: `eligible_count=2404`, forecast `12021` Pass2+split/dividend calls, blocked before network because momentum/theme local projections cover only `3/2404` tickers each. No provider/network/raw/source-packet/DataHub/production/provider-selection/ship-gate/broker/A-share path.
+- **Required**: no new R-ID; see register. `R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN` / `SR-PROVIDER-001` remain open for actual full-candidate live execution, broader provider stability, DataHub/production/provider-selection/ship-gate gates, and forward evidence.
+- **Verify**: red first focused test failed on missing runner; focused/schema `7 OK`; canonical preflight `blocked_missing_local_inputs`, `2404`, `12021`; related pack `335 OK`; doc/route `68 OK`; provider discover `449 OK (1 skipped)`; full offline `*us_short*` `3730 OK (1 skipped)`; `py_compile` OK; summary secret/URL grep `0`; `diff --check` CRLF-only.
+- **Next**: Claude Code: review current full-candidate Pass2 preflight; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut③ 复权门离线半 + schema 校验 已闭)
 
 - **Verdict/Action**: PASS + 提交 9 文件(engine + test + schema + schema-test + design/README/CURRENT/SESSION_LOG/register)。cut③ 复权/公司行动门离线半(本地证据 packet→§12.1 三确认位→已存 fail-closed paper gate);Required 根因修复:`derive_..._from_offline_evidence` 入口加 jsonschema 校验(镜像 forward_universe_snapshot),一举闭三 gap(dict/list status/mode→typed、缺 scope→拒、身份漂移→拒),确认位/ship-gate 逻辑不变。design/§18.3/CURRENT/README 诚实标 offline 已实现、live 检测仍 gated。

@@ -1,0 +1,164 @@
+{
+  "schema_name": "us_short_batch5_full_candidate_pass2_preflight_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
+  "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
+  "generated_at": "2026-07-06T10:07:53+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "full_candidate_pass2_live_source_packet_preflight",
+    "status": "blocked_missing_local_inputs",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "raw_payload_storage_performed": false,
+    "source_packet_written": false,
+    "data_context_written": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "used_date": "2026-07-02"
+  },
+  "candidate_universe": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
+    "candidate_artifact_path_gitignored": true,
+    "row_count": 7641,
+    "eligible_count": 2404,
+    "eligible_symbol_sample": [
+      "NVDA",
+      "GOOGL",
+      "AAPL",
+      "MSFT",
+      "AMZN",
+      "AVGO",
+      "TSLA",
+      "META",
+      "MU",
+      "LLY"
+    ],
+    "symbol_scope": "full_pass1_eligible_candidate_set",
+    "full_market_sample": false
+  },
+  "local_input_coverage": {
+    "momentum_projection": {
+      "status": "missing_or_stale",
+      "path": "state/us_short/us_short_batch5_momentum_price_source_20260705_momentum.json",
+      "covered_count": 3,
+      "missing_count": 2401,
+      "stale_count": 0,
+      "missing_sample": [
+        "A",
+        "AA",
+        "AAL",
+        "AAMI",
+        "AAOI",
+        "AAON",
+        "AAP",
+        "AAT",
+        "AAUC",
+        "AB"
+      ],
+      "stale_sample": [],
+      "target_count": 3,
+      "scored_count": 3
+    },
+    "theme_projection": {
+      "status": "missing_or_stale",
+      "path": "state/us_short/us_short_batch5_theme_source_20260705_theme.json",
+      "covered_count": 3,
+      "missing_count": 2401,
+      "stale_count": 0,
+      "missing_sample": [
+        "A",
+        "AA",
+        "AAL",
+        "AAMI",
+        "AAOI",
+        "AAON",
+        "AAP",
+        "AAT",
+        "AAUC",
+        "AB"
+      ],
+      "stale_sample": [],
+      "target_count": 3,
+      "scored_count": 3
+    },
+    "all_required_local_inputs_cover_candidates": false
+  },
+  "endpoint_call_forecast": {
+    "families": {
+      "pass2_source_packet": {
+        "sec_company_tickers_mapping_calls": 1,
+        "fmp_grades_calls": 2404,
+        "sec_submissions_calls": 2404,
+        "massive_reference_news_calls": 2404,
+        "total_calls": 7213
+      },
+      "corporate_action_live_half": {
+        "fmp_split_calls": 2404,
+        "fmp_dividend_calls": 2404,
+        "total_calls": 4808,
+        "corporate_action_reconciliation_performed_by_preflight": false
+      },
+      "momentum_price_refresh_if_local_projection_missing": {
+        "massive_daily_aggregates_calls": 2406,
+        "benchmark_symbols": [
+          "SPY",
+          "QQQ"
+        ],
+        "not_in_total_until_separate_price_packet_review": true
+      }
+    },
+    "total_calls_for_full_candidate_cut": 12021,
+    "call_budget_must_be_explicit_before_network": true,
+    "full_market_call_performed": false
+  },
+  "execution_gate": {
+    "ready_to_run_full_candidate_live_packet": false,
+    "block_reasons": [
+      "missing_or_stale_local_score_projection_inputs"
+    ],
+    "requires_separate_network_tool_approval": true,
+    "requires_explicit_call_budget": true,
+    "provider_selection_claimed": false,
+    "corporate_action_reconciliation_claimed": false,
+    "datahub_or_production_allowed": false,
+    "ship_gate_evidence_allowed": false
+  },
+  "storage": {
+    "tracked_summary_path": "docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json",
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_raw_payload": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secrets": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This preflight performs no provider calls and writes no source packet; it only computes full-candidate readiness and call forecast.",
+    "Full-candidate means the current Pass1-eligible candidate set, not full-market coverage evidence.",
+    "Corporate-action live half is forecast as split/dividend endpoint capture only; reconciliation, returns, DataHub, production, and ship-gate evidence remain out of scope.",
+    "Automated broader peer-theme discovery remains separate; this preflight only verifies whether the provided local theme projection already covers all candidates."
+  ]
+}
