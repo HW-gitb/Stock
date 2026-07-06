@@ -232,6 +232,15 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             run_preflight(self.packet, generated_at="2026-07-04T00:00:05Z")
         self.assertFalse(self.paths["output"].exists())
 
+    def test_preflight_rejects_non_gitignored_packet_path_before_write(self):
+        leaky_packet = ROOT / "docs" / f"{self.slug}_packet.json"
+        self.addCleanup(leaky_packet.unlink, missing_ok=True)
+        _write_json(leaky_packet, self._packet_payload())
+
+        with self.assertRaises(SourcePacketError):
+            run_preflight(leaky_packet, generated_at="2026-07-04T00:00:05Z")
+        self.assertFalse(self.paths["output"].exists())
+
     def test_malformed_catalyst_governance_is_wrapped_by_packet_runner(self):
         bad_governance = STATE_DIR / f"{self.slug}_bad_catalyst_governance.json"
         self.paths["bad_governance"] = bad_governance

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 data_context source-packet 输入边界收紧 gitignored state/us_short)
+
+- **Verdict/Action**: PASS + 提交 4 文件(runner + test + README + SESSION_LOG)。新 `_validate_source_packet_path`:packet 输入须 is_file + parent 在 state/us_short + `.json` + `_git_ignored`(真 `git check-ignore`),读取前 fail-closed;DEFAULT 从缺失 tracked docs 占位改指真实 gitignored live packet。无 provider/raw/write 新增、纯 preflight 离线。
+- **Required**: 无。Register: non-material。
+- **Verify**: 整读 `_git_ignored`=真 `git check-ignore -q`(非裸字符串、rigor 继承 ae9941d8 sibling);独立 §3.5 agent 全 HELD(confinement/symlink-out/ordering/default-safety/leak fail-closed live-probed、无 bypass)。Optional(非阻塞):新 test 的 docs 包走 parent 腿先拒、未单独锁 gitignore/非json/symlink 腿(behavior 已验对、仅回归覆盖)。亲跑 `*us_short*` 3682 OK(+1)+ doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short Batch5 data_context source-packet input boundary)
+
+- **Verdict/Action**: tightened `us_short_batch5_data_context_source_packet` runner/preflight so the packet input itself must be an actual gitignored `state/us_short/*.json` source packet; default CLI preflight now points at the existing live source packet instead of the absent docs placeholder. Added a red/green guard for rejecting non-gitignored `docs/*.json` packet files and updated the README thin route pointer. No provider fetch, raw read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID.
+- **Verify**: red first focused test failed `SourcePacketError not raised`; green focused source-packet `9 OK`; adjacent source/data/live packet pack `79 OK`; actual default preflight passed with `packet_ref=state/us_short/us_short_batch5_live_source_packet_20260704_source_packet.json` and `data_context_written=false`; related provider/status/data_context pack `255 OK`; full offline `discover -s tests -p '*us_short*.py'` `3682 OK` (1 skipped); doc/route guards `60 OK`; `py_compile` OK.
+- **Pre-Codex self-review**: A-F checked main-thread. Boundary narrowed only at the packet-entry layer; composite `assemble_data_context_from_resolved_pass2_sources` and provider/live fetch logic were not changed.
+- **Next**: Claude Code: review current data_context source-packet input-boundary slice; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 `run_fetch` provider-health/fallback run-state summary + FMP needed/unresolved 已闭)
 
 - **Verdict/Action**: PASS + 提交 8 文件(runner + test + summary + CURRENT/README/SESSION_LOG/register/design)。Codex 修复 = tracked summary `provider_health.fmp` 订正为 needed=575/unresolved=565(attempted 保持 240),并加读实际 artifact 的交叉核对 guard。R-ID `...UNDERCOUNT` 收口;O1/O2(dead branch/severity 重复)非阻塞、本轮未取,留 register。

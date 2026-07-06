@@ -22,8 +22,8 @@ from runners.us_short_batch5_data_context import assemble_data_context_from_reso
 
 
 SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_data_context_source_packet.schema.json"
-DEFAULT_PACKET_PATH = ROOT / "docs" / "us_short_batch5_data_context_source_packet.json"
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
+DEFAULT_PACKET_PATH = STATE_US_SHORT_DIR / "us_short_batch5_live_source_packet_20260704_source_packet.json"
 PROVIDER_SAMPLES_DIR = ROOT / "provider_samples"
 SOURCE_PATH_FIELDS = (
     "candidate_artifact_path",
@@ -88,6 +88,19 @@ def _resolve_invocation_path(path: Path | str) -> Path:
     if not resolved.exists():
         raise SourcePacketError(f"packet_path does not exist: {_display_path(resolved)}")
     return resolved
+
+
+def _validate_source_packet_path(packet_path: Path) -> None:
+    if not packet_path.is_file():
+        raise SourcePacketError(f"packet_path must be a file: {_display_path(packet_path)}")
+    try:
+        packet_path.resolve().parent.relative_to(STATE_US_SHORT_DIR.resolve())
+    except ValueError as exc:
+        raise SourcePacketError("packet_path must stay under state/us_short/") from exc
+    if packet_path.suffix != ".json":
+        raise SourcePacketError("packet_path must be a .json file")
+    if not _git_ignored(packet_path):
+        raise SourcePacketError("packet_path must be gitignored")
 
 
 def _display_path(path: Path) -> str:
@@ -176,6 +189,7 @@ def _validate_yyyymmdd(value: Any, *, field: str) -> str:
 
 def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], dict[str, Path]]:
     resolved_packet_path = _resolve_invocation_path(packet_path)
+    _validate_source_packet_path(resolved_packet_path)
     try:
         packet = _read_json(resolved_packet_path)
     except Exception as exc:
