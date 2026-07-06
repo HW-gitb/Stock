@@ -1,0 +1,884 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_batch5_massive_quota_access_bounded_probe_packet/1.0.0/schema.json",
+  "title": "US-short Batch5 Massive Quota Access Bounded Probe Packet",
+  "description": "Schema for a US-short batch5 Massive quota/access bounded probe packet. It records the exact future 12-call Massive-only access/response-shape probe boundary and does not execute provider calls, read or write raw payloads, select providers, authorize yfinance, authorize full-market fetches, write source packets, authorize DataHub or production storage, or claim ship-gate/live-normalized evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "review_date",
+    "authorization_ref",
+    "source_refs",
+    "scope",
+    "future_bounded_probe_boundary",
+    "quota_validation_limits",
+    "future_storage_and_summary_contract",
+    "execution_fail_closed_gates",
+    "unresolved_gates_after_probe",
+    "prohibited_claims",
+    "limitations",
+    "next_steps"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_batch5_massive_quota_access_bounded_probe_packet"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "schema_ref": {
+      "const": "schemas/us_short_batch5_massive_quota_access_bounded_probe_packet.schema.json"
+    },
+    "generated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "review_date": {
+      "const": "2026-07-06"
+    },
+    "authorization_ref": {
+      "const": "user_chat_20260706_massive_bounded_probe_packet"
+    },
+    "source_refs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      },
+      "minItems": 8,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_alt_cut5_access_budget_source_packet_plan_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "us_short_batch5_full_candidate_pass2_preflight_summary_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "sr_provider_001"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_ticker_overview_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_news_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_splits_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "source_id": {
+                "const": "massive_dividends_public_docs_20260706"
+              }
+            },
+            "required": [
+              "source_id"
+            ]
+          }
+        }
+      ]
+    },
+    "scope": {
+      "$ref": "#/$defs/scope"
+    },
+    "future_bounded_probe_boundary": {
+      "$ref": "#/$defs/futureBoundedProbeBoundary"
+    },
+    "quota_validation_limits": {
+      "$ref": "#/$defs/quotaValidationLimits"
+    },
+    "future_storage_and_summary_contract": {
+      "$ref": "#/$defs/futureStorageAndSummaryContract"
+    },
+    "execution_fail_closed_gates": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/executionFailClosedGate"
+      },
+      "minItems": 8
+    },
+    "unresolved_gates_after_probe": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unresolvedGate"
+      },
+      "minItems": 5,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "analyst_grades_no_massive_equivalent_found"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "massive_full_cut5_call_budget_not_cleared_by_tiny_probe"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "gap_id": {
+                "const": "massive_license_storage_retention_unreviewed_for_cut5"
+              }
+            },
+            "required": [
+              "gap_id"
+            ]
+          }
+        }
+      ]
+    },
+    "prohibited_claims": {
+      "$ref": "#/$defs/prohibitedClaims"
+    },
+    "limitations": {
+      "$ref": "#/$defs/stringList"
+    },
+    "next_steps": {
+      "$ref": "#/$defs/stringList"
+    }
+  },
+  "$defs": {
+    "nonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "stringList": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/nonEmptyString"
+      },
+      "minItems": 1
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_id",
+        "path",
+        "source_type",
+        "consumption_role"
+      ],
+      "properties": {
+        "source_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "path": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "source_type": {
+          "enum": [
+            "repo_artifact",
+            "repo_doc",
+            "repo_schema",
+            "official_public_docs"
+          ]
+        },
+        "consumption_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "provider",
+        "purpose",
+        "contract_status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "provider_status_polling_performed",
+        "raw_payload_read_or_parsed",
+        "raw_payload_written",
+        "source_packet_written",
+        "data_context_written",
+        "provider_selection_allowed",
+        "provider_switch_claimed",
+        "yfinance_allowed",
+        "fmp_allowed",
+        "sec_calls_allowed_by_this_packet",
+        "full_market_fetch_allowed",
+        "grouped_daily_full_market_allowed",
+        "provider_contact_allowed",
+        "new_token_or_trial_allowed",
+        "paid_access_allowed",
+        "datahub_allowed",
+        "production_storage_allowed",
+        "production_runner_consumption_allowed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "broker_or_order_execution_allowed",
+        "a_share_crossing_allowed",
+        "manual_order_only"
+      ],
+      "properties": {
+        "market": {
+          "const": "US"
+        },
+        "route": {
+          "const": "US-short"
+        },
+        "batch": {
+          "const": "batch5"
+        },
+        "provider": {
+          "const": "Massive"
+        },
+        "purpose": {
+          "const": "quota_access_response_shape_probe_packet"
+        },
+        "contract_status": {
+          "const": "bounded_probe_packet_no_access_not_executed"
+        },
+        "network_access_performed": {
+          "const": false
+        },
+        "provider_calls_performed": {
+          "const": false
+        },
+        "provider_status_polling_performed": {
+          "const": false
+        },
+        "raw_payload_read_or_parsed": {
+          "const": false
+        },
+        "raw_payload_written": {
+          "const": false
+        },
+        "source_packet_written": {
+          "const": false
+        },
+        "data_context_written": {
+          "const": false
+        },
+        "provider_selection_allowed": {
+          "const": false
+        },
+        "provider_switch_claimed": {
+          "const": false
+        },
+        "yfinance_allowed": {
+          "const": false
+        },
+        "fmp_allowed": {
+          "const": false
+        },
+        "sec_calls_allowed_by_this_packet": {
+          "const": false
+        },
+        "full_market_fetch_allowed": {
+          "const": false
+        },
+        "grouped_daily_full_market_allowed": {
+          "const": false
+        },
+        "provider_contact_allowed": {
+          "const": false
+        },
+        "new_token_or_trial_allowed": {
+          "const": false
+        },
+        "paid_access_allowed": {
+          "const": false
+        },
+        "datahub_allowed": {
+          "const": false
+        },
+        "production_storage_allowed": {
+          "const": false
+        },
+        "production_runner_consumption_allowed": {
+          "const": false
+        },
+        "ship_gate_or_live_normalized_evidence_claimed": {
+          "const": false
+        },
+        "broker_or_order_execution_allowed": {
+          "const": false
+        },
+        "a_share_crossing_allowed": {
+          "const": false
+        },
+        "manual_order_only": {
+          "const": true
+        }
+      }
+    },
+    "futureBoundedProbeBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorization_status",
+        "requires_post_review_execution_command",
+        "requires_network_tool_approval_at_execution_time",
+        "requires_existing_massive_api_key_env",
+        "api_key_env_name",
+        "sample_universe",
+        "endpoint_call_budget",
+        "endpoint_families",
+        "validation_questions"
+      ],
+      "properties": {
+        "authorization_status": {
+          "const": "recorded_for_future_post_review_execution_not_executed"
+        },
+        "requires_post_review_execution_command": {
+          "const": true
+        },
+        "requires_network_tool_approval_at_execution_time": {
+          "const": true
+        },
+        "requires_existing_massive_api_key_env": {
+          "const": true
+        },
+        "api_key_env_name": {
+          "const": "MASSIVE_API_KEY"
+        },
+        "sample_universe": {
+          "$ref": "#/$defs/sampleUniverse"
+        },
+        "endpoint_call_budget": {
+          "$ref": "#/$defs/endpointCallBudget"
+        },
+        "endpoint_families": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/endpointFamily"
+          },
+          "minItems": 4,
+          "maxItems": 4,
+          "allOf": [
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "const": "massive"
+                  },
+                  "endpoint_family": {
+                    "const": "ticker_overview"
+                  },
+                  "call_count": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "endpoint_family",
+                  "call_count"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "const": "massive"
+                  },
+                  "endpoint_family": {
+                    "const": "news"
+                  },
+                  "call_count": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "endpoint_family",
+                  "call_count"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "const": "massive"
+                  },
+                  "endpoint_family": {
+                    "const": "splits"
+                  },
+                  "call_count": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "endpoint_family",
+                  "call_count"
+                ]
+              }
+            },
+            {
+              "contains": {
+                "type": "object",
+                "properties": {
+                  "provider_id": {
+                    "const": "massive"
+                  },
+                  "endpoint_family": {
+                    "const": "dividends"
+                  },
+                  "call_count": {
+                    "const": 3
+                  }
+                },
+                "required": [
+                  "provider_id",
+                  "endpoint_family",
+                  "call_count"
+                ]
+              }
+            }
+          ]
+        },
+        "validation_questions": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "massive_api_key_env_present_without_logging_value",
+              "endpoint_entitlement_status_code_shape",
+              "response_json_shape_without_raw_tracked_rows",
+              "quota_or_rate_limit_header_presence_if_available",
+              "ticker_overview_shape_for_active_symbols",
+              "news_shape_for_active_symbols",
+              "splits_shape_for_active_symbols",
+              "dividends_shape_for_active_symbols"
+            ]
+          },
+          "minItems": 8,
+          "maxItems": 8,
+          "uniqueItems": true
+        }
+      }
+    },
+    "sampleUniverse": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "symbols",
+        "max_symbols",
+        "active_symbols_only",
+        "inactive_or_delisted_scope",
+        "not_full_market_or_security_master",
+        "forward_universe_snapshot_written_by_this_packet"
+      ],
+      "properties": {
+        "symbols": {
+          "const": [
+            "AAPL",
+            "MSFT",
+            "JPM"
+          ]
+        },
+        "max_symbols": {
+          "const": 3
+        },
+        "active_symbols_only": {
+          "const": true
+        },
+        "inactive_or_delisted_scope": {
+          "const": "scoped_out_for_this_probe"
+        },
+        "not_full_market_or_security_master": {
+          "const": true
+        },
+        "forward_universe_snapshot_written_by_this_packet": {
+          "const": false
+        }
+      }
+    },
+    "endpointCallBudget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "massive_planned_endpoint_calls",
+        "retry_count_allowed",
+        "abort_if_budget_exceeded",
+        "full_cut5_budget_cleared_by_this_probe"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": {
+          "const": 12
+        },
+        "massive_planned_endpoint_calls": {
+          "const": 12
+        },
+        "retry_count_allowed": {
+          "const": 0
+        },
+        "abort_if_budget_exceeded": {
+          "const": true
+        },
+        "full_cut5_budget_cleared_by_this_probe": {
+          "const": false
+        }
+      }
+    },
+    "endpointFamily": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_family",
+        "docs_source_id",
+        "endpoint_path_family",
+        "call_count",
+        "planned_probe_role",
+        "authorizes_provider_call_now",
+        "raw_shape_parse_allowed_after_future_authorization",
+        "authorizes_full_candidate_run",
+        "authorizes_source_packet_write",
+        "authorizes_datahub_or_runner_consumption"
+      ],
+      "properties": {
+        "provider_id": {
+          "const": "massive"
+        },
+        "endpoint_family": {
+          "enum": [
+            "ticker_overview",
+            "news",
+            "splits",
+            "dividends"
+          ]
+        },
+        "docs_source_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "endpoint_path_family": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "call_count": {
+          "const": 3
+        },
+        "planned_probe_role": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_call_now": {
+          "const": false
+        },
+        "raw_shape_parse_allowed_after_future_authorization": {
+          "const": true
+        },
+        "authorizes_full_candidate_run": {
+          "const": false
+        },
+        "authorizes_source_packet_write": {
+          "const": false
+        },
+        "authorizes_datahub_or_runner_consumption": {
+          "const": false
+        }
+      }
+    },
+    "quotaValidationLimits": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cut5_eligible_count",
+        "current_cut5_forecast_total_calls",
+        "massive_no_analyst_scenario_total_calls",
+        "account_plan_quota_verified",
+        "account_plan_or_quota_header_required_to_continue",
+        "quota_header_absence_clears_full_budget",
+        "tiny_probe_can_clear_full_cut5_budget",
+        "full_cut5_budget_cleared",
+        "analyst_gap_status",
+        "interpretation"
+      ],
+      "properties": {
+        "cut5_eligible_count": {
+          "const": 2404
+        },
+        "current_cut5_forecast_total_calls": {
+          "const": 12021
+        },
+        "massive_no_analyst_scenario_total_calls": {
+          "const": 9617
+        },
+        "account_plan_quota_verified": {
+          "const": false
+        },
+        "account_plan_or_quota_header_required_to_continue": {
+          "const": true
+        },
+        "quota_header_absence_clears_full_budget": {
+          "const": false
+        },
+        "tiny_probe_can_clear_full_cut5_budget": {
+          "const": false
+        },
+        "full_cut5_budget_cleared": {
+          "const": false
+        },
+        "analyst_gap_status": {
+          "const": "unresolved_not_probeable_with_reviewed_massive_docs"
+        },
+        "interpretation": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "futureStorageAndSummaryContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "future_raw_sample_storage_path",
+        "future_tracked_summary_path",
+        "provider_samples_gitignore_check_required",
+        "tracked_summary_must_exclude_raw_payloads",
+        "tracked_summary_must_exclude_request_urls",
+        "tracked_summary_must_exclude_secrets",
+        "tracked_summary_must_exclude_authorization_headers",
+        "tracked_summary_write_authorized_by_this_artifact",
+        "raw_payload_write_authorized_by_this_artifact",
+        "production_storage_authorized",
+        "allowed_tracked_summary_fields"
+      ],
+      "properties": {
+        "future_raw_sample_storage_path": {
+          "const": "provider_samples/us_short_batch5_massive_quota_access_probe_20260706/raw/"
+        },
+        "future_tracked_summary_path": {
+          "const": "docs/us_short_batch5_massive_quota_access_probe_summary_20260706.json"
+        },
+        "provider_samples_gitignore_check_required": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_raw_payloads": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_request_urls": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_secrets": {
+          "const": true
+        },
+        "tracked_summary_must_exclude_authorization_headers": {
+          "const": true
+        },
+        "tracked_summary_write_authorized_by_this_artifact": {
+          "const": false
+        },
+        "raw_payload_write_authorized_by_this_artifact": {
+          "const": false
+        },
+        "production_storage_authorized": {
+          "const": false
+        },
+        "allowed_tracked_summary_fields": {
+          "$ref": "#/$defs/stringList"
+        }
+      }
+    },
+    "executionFailClosedGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate_id",
+        "required",
+        "fail_closed_behavior"
+      ],
+      "properties": {
+        "gate_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "required": {
+          "const": true
+        },
+        "fail_closed_behavior": {
+          "$ref": "#/$defs/nonEmptyString"
+        }
+      }
+    },
+    "unresolvedGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gap_id",
+        "status",
+        "blocks_full_cut5_live_run",
+        "required_resolution",
+        "authorizes_provider_call_now"
+      ],
+      "properties": {
+        "gap_id": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "status": {
+          "enum": [
+            "open",
+            "blocked_pending_review",
+            "blocked_pending_user_or_provider_evidence"
+          ]
+        },
+        "blocks_full_cut5_live_run": {
+          "const": true
+        },
+        "required_resolution": {
+          "$ref": "#/$defs/nonEmptyString"
+        },
+        "authorizes_provider_call_now": {
+          "const": false
+        }
+      }
+    },
+    "prohibitedClaims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "massive_account_entitlement_verified",
+        "massive_full_cut5_call_budget_cleared",
+        "analyst_grade_source_resolved",
+        "source_packet_ready_to_run",
+        "provider_call_executed",
+        "provider_call_authorized_now",
+        "full_market_download_authorized",
+        "grouped_daily_download_authorized",
+        "yfinance_used_or_authorized",
+        "fmp_used_or_authorized",
+        "sec_call_authorized_by_this_packet",
+        "datahub_authorized",
+        "production_ready",
+        "ship_gate_evidence"
+      ],
+      "properties": {
+        "provider_selected": {
+          "const": false
+        },
+        "massive_account_entitlement_verified": {
+          "const": false
+        },
+        "massive_full_cut5_call_budget_cleared": {
+          "const": false
+        },
+        "analyst_grade_source_resolved": {
+          "const": false
+        },
+        "source_packet_ready_to_run": {
+          "const": false
+        },
+        "provider_call_executed": {
+          "const": false
+        },
+        "provider_call_authorized_now": {
+          "const": false
+        },
+        "full_market_download_authorized": {
+          "const": false
+        },
+        "grouped_daily_download_authorized": {
+          "const": false
+        },
+        "yfinance_used_or_authorized": {
+          "const": false
+        },
+        "fmp_used_or_authorized": {
+          "const": false
+        },
+        "sec_call_authorized_by_this_packet": {
+          "const": false
+        },
+        "datahub_authorized": {
+          "const": false
+        },
+        "production_ready": {
+          "const": false
+        },
+        "ship_gate_evidence": {
+          "const": false
+        }
+      }
+    }
+  }
+}

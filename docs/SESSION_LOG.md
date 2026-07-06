@@ -8,11 +8,26 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Massive quota/access bounded probe packet — schema/artifact/test 已闭, 未执行)
+
+- **Verdict/Action**: PASS + 提交 8 文件(新 probe-packet json+schema+schema-test + CURRENT/README/design/register/SESSION_LOG)。design-only 执行边界工件:钉死未来 12 次 Massive-only AAPL/MSFT/JPM×(ticker_overview/news/splits/dividends) 探测,**未执行**、`authorizes_provider_call_now` 处处 false、执行仍需 post-review command + network 批准。无 network/provider/secret/raw/runner。
+- **Required**: 无。Register: non-material(无新 R-ID;Codex execute note 已记)。
+- **Verify**: 整读 packet+schema:全授权 flag const-pin false、budget const 12(4 族×3)、`contains` 强制 analyst-gap/预算未清/license 门、负控 test 翻 13 字段→拒。hygiene:4 个 massive.com/docs 公共 URL 同既有惯例、无 apikey/secret。较低危(design-only、无 network/secret/可执行门)→整读+负控,§6a agent 不适用。schema 7 OK + full offline `*us_short*` 3761 OK(+7)+ doc/route 60 OK 零回归。(本 SESSION_LOG 含 Codex 对上条我 Verify bullet 的 doc-guard 压缩,PASS 事实不变、原文留 git 史。)
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short Massive quota/access bounded probe packet; no access)
+
+- **Verdict/Action**: added a no-access Massive quota/access bounded probe packet schema/artifact/test: exact future 12-call Massive-only AAPL/MSFT/JPM ticker-overview/news/splits/dividends access/shape boundary. No provider/network/env/raw/source-packet/DataHub/production/ship-gate/yfinance/FMP/SEC/broker/A-share path executed.
+- **Required**: no new R-ID; material caveat is in `docs/system_risk_register.md`. SR-PROVIDER-001 remains open for full `9617`/`12021` budget proof, account entitlement, storage/license, analyst-grade sourcing, corporate-action reconciliation, provider selection, DataHub, production, and ship-gate evidence.
+- **Verify**: red first missing schema/artifact `FileNotFoundError`; focused 7 OK; batch5 schema 162 OK; batch5 provider 186 OK; doc/route 60 OK; full offline `*us_short*` 3761 OK (1 skipped); py_compile OK; new-file secret/request-URL pattern grep 0 (env var name only); URL grep only schema ids + official Massive docs; diff-check OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. B/E: route docs carry settled no-access facts only; CURRENT has no actor/commit gate. C: the 12-call probe cannot clear full cut5 budget or analyst gap; doc guard also required compressing a prior Claude `Verify` bullet without changing its PASS fact.
+- **Next**: Claude Code: review current US-short Massive quota/access bounded probe packet; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Massive alternative cut5 no-access 计划 — schema/artifact/test 已闭)
 
 - **Verdict/Action**: PASS + 提交 8 文件(新 plan json+schema+schema-test + CURRENT/README/design/register/SESSION_LOG)。design-only 无接入计划:把 Massive 公共文档端点映射到 cut5 的 2404/12021,记 analyst-grade 为 unresolved gap(Massive 无对应端点、不许 silent neutral-fill/yfinance),SEC 审计留用。无 network/provider/secret/runner/可执行授权门;所有授权 flag schema const-pin false。(本次 SESSION_LOG 含 Codex 对上条我 live-packet PASS 的超长 Verify bullet 的 doc-guard 压缩,PASS 事实不变、原文留 git 史。)
 - **Required**: 无。Register: non-material(无新 R-ID;Codex execute note 已记)。
-- **Verify**: 整读 plan(589 行)+schema:全授权/执行 flag const-pin false、`contains` 强制 analyst-gap+7 组件+关键 source_ref、负控 test 一次翻 16 flag→schema 拒。hygiene:provider 公共文档 URL 在 tracked `docs/*.json` evidence 工件是既有惯例(sibling `provider_evidence_*`)、非带 apikey 请求 URL、无 secret。风险=较低危(design-only schema-first、无 network/secret/可执行门)→整读+负控 reverse probe,§6a 强制 agent 不适用(已声明分类)。亲跑 schema 8 OK + full offline `*us_short*` 3754 OK(+8)+ doc/route 60 OK 零回归。1 非阻塞 Optional:`unresolved_source_gaps[].no_silent_default_allowed` 命名易误读/疑倒置,但 const-pin false+无 runner 消费+姊妹字段已明确 fail-closed→非 material。
+- **Verify**: schema 8 OK; full offline `*us_short*` 3754 OK; doc/route 60 OK; no secret/request URL; PASS fact unchanged.
 - **Next**: 无(已提交)
 
 ## 2026-07-06 - Codex `execute` (US-short Massive alternative cut5 access/budget/source-packet plan; no access)

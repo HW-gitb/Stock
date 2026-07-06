@@ -1,0 +1,342 @@
+{
+  "schema_name": "us_short_batch5_massive_quota_access_bounded_probe_packet",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_massive_quota_access_bounded_probe_packet.schema.json",
+  "generated_at": "2026-07-06T15:20:00+00:00",
+  "review_date": "2026-07-06",
+  "authorization_ref": "user_chat_20260706_massive_bounded_probe_packet",
+  "source_refs": [
+    {
+      "source_id": "massive_alt_cut5_access_budget_source_packet_plan_20260706",
+      "path": "docs/us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan_20260706.json",
+      "source_type": "repo_artifact",
+      "consumption_role": "Prior no-access plan that mapped Massive public-doc candidates to cut5 and recorded analyst grades as an unresolved gap."
+    },
+    {
+      "source_id": "massive_alt_cut5_access_budget_source_packet_plan_schema",
+      "path": "schemas/us_short_batch5_massive_alt_cut5_access_budget_source_packet_plan.schema.json",
+      "source_type": "repo_schema",
+      "consumption_role": "Prior plan schema; this packet narrows its next step into a tiny account/access probe boundary."
+    },
+    {
+      "source_id": "us_short_batch5_full_candidate_pass2_preflight_summary_20260706",
+      "path": "docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706.json",
+      "source_type": "repo_artifact",
+      "consumption_role": "Canonical current cut5 baseline: 2404 eligible candidates and 12021 current live call forecast."
+    },
+    {
+      "source_id": "sr_provider_001",
+      "path": "docs/system_risk_register.md",
+      "source_type": "repo_doc",
+      "consumption_role": "Open provider-risk gate for entitlement, budget, storage, PIT, corporate action reconciliation, selection, DataHub, production, and ship-gate blockers."
+    },
+    {
+      "source_id": "massive_ticker_overview_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Official public docs family used only to name the future ticker-overview response-shape probe."
+    },
+    {
+      "source_id": "massive_news_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Official public docs family used only to name the future news response-shape probe."
+    },
+    {
+      "source_id": "massive_splits_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Official public docs family used only to name the future splits response-shape probe."
+    },
+    {
+      "source_id": "massive_dividends_public_docs_20260706",
+      "path": "https://massive.com/docs/rest/stocks/overview",
+      "source_type": "official_public_docs",
+      "consumption_role": "Official public docs family used only to name the future dividends response-shape probe."
+    }
+  ],
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "provider": "Massive",
+    "purpose": "quota_access_response_shape_probe_packet",
+    "contract_status": "bounded_probe_packet_no_access_not_executed",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "provider_status_polling_performed": false,
+    "raw_payload_read_or_parsed": false,
+    "raw_payload_written": false,
+    "source_packet_written": false,
+    "data_context_written": false,
+    "provider_selection_allowed": false,
+    "provider_switch_claimed": false,
+    "yfinance_allowed": false,
+    "fmp_allowed": false,
+    "sec_calls_allowed_by_this_packet": false,
+    "full_market_fetch_allowed": false,
+    "grouped_daily_full_market_allowed": false,
+    "provider_contact_allowed": false,
+    "new_token_or_trial_allowed": false,
+    "paid_access_allowed": false,
+    "datahub_allowed": false,
+    "production_storage_allowed": false,
+    "production_runner_consumption_allowed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_allowed": false,
+    "a_share_crossing_allowed": false,
+    "manual_order_only": true
+  },
+  "future_bounded_probe_boundary": {
+    "authorization_status": "recorded_for_future_post_review_execution_not_executed",
+    "requires_post_review_execution_command": true,
+    "requires_network_tool_approval_at_execution_time": true,
+    "requires_existing_massive_api_key_env": true,
+    "api_key_env_name": "MASSIVE_API_KEY",
+    "sample_universe": {
+      "symbols": [
+        "AAPL",
+        "MSFT",
+        "JPM"
+      ],
+      "max_symbols": 3,
+      "active_symbols_only": true,
+      "inactive_or_delisted_scope": "scoped_out_for_this_probe",
+      "not_full_market_or_security_master": true,
+      "forward_universe_snapshot_written_by_this_packet": false
+    },
+    "endpoint_call_budget": {
+      "max_total_endpoint_calls": 12,
+      "massive_planned_endpoint_calls": 12,
+      "retry_count_allowed": 0,
+      "abort_if_budget_exceeded": true,
+      "full_cut5_budget_cleared_by_this_probe": false
+    },
+    "endpoint_families": [
+      {
+        "provider_id": "massive",
+        "endpoint_family": "ticker_overview",
+        "docs_source_id": "massive_ticker_overview_public_docs_20260706",
+        "endpoint_path_family": "GET /v3/reference/tickers/{ticker}",
+        "call_count": 3,
+        "planned_probe_role": "Check whether the account can access per-active-symbol ticker overview and return a JSON shape suitable for later source-packet design review.",
+        "authorizes_provider_call_now": false,
+        "raw_shape_parse_allowed_after_future_authorization": true,
+        "authorizes_full_candidate_run": false,
+        "authorizes_source_packet_write": false,
+        "authorizes_datahub_or_runner_consumption": false
+      },
+      {
+        "provider_id": "massive",
+        "endpoint_family": "news",
+        "docs_source_id": "massive_news_public_docs_20260706",
+        "endpoint_path_family": "GET /v2/reference/news",
+        "call_count": 3,
+        "planned_probe_role": "Check whether the account can access per-active-symbol news rows and whether response shape stays compatible with the existing Massive news source-family expectations.",
+        "authorizes_provider_call_now": false,
+        "raw_shape_parse_allowed_after_future_authorization": true,
+        "authorizes_full_candidate_run": false,
+        "authorizes_source_packet_write": false,
+        "authorizes_datahub_or_runner_consumption": false
+      },
+      {
+        "provider_id": "massive",
+        "endpoint_family": "splits",
+        "docs_source_id": "massive_splits_public_docs_20260706",
+        "endpoint_path_family": "GET /stocks/v1/splits",
+        "call_count": 3,
+        "planned_probe_role": "Check whether the account can access split-event response shape; no adjustment or reconciliation semantics are cleared.",
+        "authorizes_provider_call_now": false,
+        "raw_shape_parse_allowed_after_future_authorization": true,
+        "authorizes_full_candidate_run": false,
+        "authorizes_source_packet_write": false,
+        "authorizes_datahub_or_runner_consumption": false
+      },
+      {
+        "provider_id": "massive",
+        "endpoint_family": "dividends",
+        "docs_source_id": "massive_dividends_public_docs_20260706",
+        "endpoint_path_family": "GET /stocks/v1/dividends",
+        "call_count": 3,
+        "planned_probe_role": "Check whether the account can access dividend-event response shape; no total-return or adjustment semantics are cleared.",
+        "authorizes_provider_call_now": false,
+        "raw_shape_parse_allowed_after_future_authorization": true,
+        "authorizes_full_candidate_run": false,
+        "authorizes_source_packet_write": false,
+        "authorizes_datahub_or_runner_consumption": false
+      }
+    ],
+    "validation_questions": [
+      "massive_api_key_env_present_without_logging_value",
+      "endpoint_entitlement_status_code_shape",
+      "response_json_shape_without_raw_tracked_rows",
+      "quota_or_rate_limit_header_presence_if_available",
+      "ticker_overview_shape_for_active_symbols",
+      "news_shape_for_active_symbols",
+      "splits_shape_for_active_symbols",
+      "dividends_shape_for_active_symbols"
+    ]
+  },
+  "quota_validation_limits": {
+    "cut5_eligible_count": 2404,
+    "current_cut5_forecast_total_calls": 12021,
+    "massive_no_analyst_scenario_total_calls": 9617,
+    "account_plan_quota_verified": false,
+    "account_plan_or_quota_header_required_to_continue": true,
+    "quota_header_absence_clears_full_budget": false,
+    "tiny_probe_can_clear_full_cut5_budget": false,
+    "full_cut5_budget_cleared": false,
+    "analyst_gap_status": "unresolved_not_probeable_with_reviewed_massive_docs",
+    "interpretation": [
+      "A 12-call probe can test endpoint reachability, entitlement-like status codes, safe response-shape parsing, and whether useful quota/rate-limit headers are exposed.",
+      "A 12-call probe cannot prove that the account can sustain 9617 or 12021 calls for the full cut5 packet.",
+      "If the provider response exposes no usable quota or rate-limit header, the probe summary must record quota_header_absent and keep full_cut5_budget_cleared=false.",
+      "The analyst-grade source gap remains unresolved because reviewed Massive public docs did not identify an analyst-grade equivalent."
+    ]
+  },
+  "future_storage_and_summary_contract": {
+    "future_raw_sample_storage_path": "provider_samples/us_short_batch5_massive_quota_access_probe_20260706/raw/",
+    "future_tracked_summary_path": "docs/us_short_batch5_massive_quota_access_probe_summary_20260706.json",
+    "provider_samples_gitignore_check_required": true,
+    "tracked_summary_must_exclude_raw_payloads": true,
+    "tracked_summary_must_exclude_request_urls": true,
+    "tracked_summary_must_exclude_secrets": true,
+    "tracked_summary_must_exclude_authorization_headers": true,
+    "tracked_summary_write_authorized_by_this_artifact": false,
+    "raw_payload_write_authorized_by_this_artifact": false,
+    "production_storage_authorized": false,
+    "allowed_tracked_summary_fields": [
+      "generated_at",
+      "scope flags",
+      "sample symbols",
+      "endpoint family names",
+      "per-endpoint status code classes",
+      "success and error counts",
+      "response shape booleans",
+      "sanitized non-secret quota or rate-limit header presence when available",
+      "budget counters",
+      "no-secret/no-url/no-raw-row hygiene booleans",
+      "unresolved gate dispositions"
+    ]
+  },
+  "execution_fail_closed_gates": [
+    {
+      "gate_id": "schema_validation_before_network",
+      "required": true,
+      "fail_closed_behavior": "Abort before reading environment or fetching if the packet fails schema validation."
+    },
+    {
+      "gate_id": "post_review_execution_command",
+      "required": true,
+      "fail_closed_behavior": "Abort before network unless a later reviewed execution step uses this exact packet."
+    },
+    {
+      "gate_id": "network_tool_approval",
+      "required": true,
+      "fail_closed_behavior": "Abort before provider call if network/tool approval is unavailable for this exact 12-call Massive probe."
+    },
+    {
+      "gate_id": "massive_api_key_env_present",
+      "required": true,
+      "fail_closed_behavior": "Abort without printing the value if MASSIVE_API_KEY is missing or empty."
+    },
+    {
+      "gate_id": "provider_samples_gitignored",
+      "required": true,
+      "fail_closed_behavior": "Abort before writing raw payloads unless the future raw sample path is confirmed gitignored."
+    },
+    {
+      "gate_id": "endpoint_family_allowlist",
+      "required": true,
+      "fail_closed_behavior": "Abort before network if an endpoint family outside ticker_overview/news/splits/dividends is requested."
+    },
+    {
+      "gate_id": "call_budget_counter",
+      "required": true,
+      "fail_closed_behavior": "Abort if planned or actual calls exceed 12, if retry count is nonzero, or if any grouped-daily/full-market endpoint is requested."
+    },
+    {
+      "gate_id": "tracked_summary_hygiene",
+      "required": true,
+      "fail_closed_behavior": "Abort summary write if tracked text contains secrets, request URLs, raw payload rows, auth headers, or provider host request strings."
+    },
+    {
+      "gate_id": "malformed_response_typed_disposition",
+      "required": true,
+      "fail_closed_behavior": "Record a typed endpoint error and do not parse unsafe shapes if a response is non-JSON or has an unexpected top-level shape."
+    }
+  ],
+  "unresolved_gates_after_probe": [
+    {
+      "gap_id": "analyst_grades_no_massive_equivalent_found",
+      "status": "open",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Find a reviewed analyst-grade source or explicitly revise the cut5 source-packet contract; no news/yfinance/neutral fallback may silently fill this component.",
+      "authorizes_provider_call_now": false
+    },
+    {
+      "gap_id": "massive_full_cut5_call_budget_not_cleared_by_tiny_probe",
+      "status": "blocked_pending_user_or_provider_evidence",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Obtain account plan or quota evidence sufficient for either 9617 incomplete calls or 12021 current/full scenario calls before any full-candidate run.",
+      "authorizes_provider_call_now": false
+    },
+    {
+      "gap_id": "massive_license_storage_retention_unreviewed_for_cut5",
+      "status": "blocked_pending_review",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Review Massive terms for local raw payloads, derived summaries, retention, redistribution, and deletion obligations before production-like storage.",
+      "authorizes_provider_call_now": false
+    },
+    {
+      "gap_id": "corporate_action_reconciliation_semantics_unproven",
+      "status": "blocked_pending_review",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Review split/dividend fields, adjustment factors, ex-date behavior, and price-basis alignment before paper-performance or source-packet consumption.",
+      "authorizes_provider_call_now": false
+    },
+    {
+      "gap_id": "source_packet_schema_runner_not_changed_for_massive_replacement",
+      "status": "blocked_pending_review",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Create and review the source-packet schema/runner changes before treating Massive as a replacement source.",
+      "authorizes_provider_call_now": false
+    },
+    {
+      "gap_id": "provider_selection_not_made_or_authorized",
+      "status": "open",
+      "blocks_full_cut5_live_run": true,
+      "required_resolution": "Keep this as an access probe only; provider selection requires a separate reviewed decision.",
+      "authorizes_provider_call_now": false
+    }
+  ],
+  "prohibited_claims": {
+    "provider_selected": false,
+    "massive_account_entitlement_verified": false,
+    "massive_full_cut5_call_budget_cleared": false,
+    "analyst_grade_source_resolved": false,
+    "source_packet_ready_to_run": false,
+    "provider_call_executed": false,
+    "provider_call_authorized_now": false,
+    "full_market_download_authorized": false,
+    "grouped_daily_download_authorized": false,
+    "yfinance_used_or_authorized": false,
+    "fmp_used_or_authorized": false,
+    "sec_call_authorized_by_this_packet": false,
+    "datahub_authorized": false,
+    "production_ready": false,
+    "ship_gate_evidence": false
+  },
+  "limitations": [
+    "This packet performs no provider call, provider status polling, raw-payload read, raw-payload write, source-packet write, DataHub work, production storage, broker/order automation, or ship-gate/live-normalized evidence claim.",
+    "The future 12-call probe is Massive-only and active-symbol-only; it is not full-market, not a security master, not a source packet, and not provider selection.",
+    "Endpoint success in the tiny probe would prove only bounded access and response shape for AAPL/MSFT/JPM endpoint families, not full cut5 budget, storage rights, PIT safety, or corporate-action correctness.",
+    "If quota/rate-limit headers are absent or insufficient, the later summary must keep the full cut5 live run blocked.",
+    "The analyst-grade gap remains unresolved and cannot be closed by this probe."
+  ],
+  "next_steps": [
+    "After Claude review, a future execution step may implement/run only this 12-call Massive bounded probe if MASSIVE_API_KEY exists, provider_samples is gitignored, network/tool approval is granted, and all gates pass.",
+    "The future tracked summary must record endpoint status classes, response-shape booleans, call counters, and sanitized quota-header presence if available; it must not contain secrets, request URLs, raw rows, or auth headers.",
+    "Do not proceed to any 9617/12021 full-candidate cut5 run until account plan/quota evidence and the analyst-grade gap disposition are separately resolved and reviewed."
+  ]
+}
