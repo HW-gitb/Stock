@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-06 — Claude 记录方向增补 (US-short 加 Step 1b:数值预期催化剂 entitlement-aware 自动接入 seam;用户已定)
+
+- **Verdict/Action**: 应用户指令给 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION` 加 Step 1b(Step 1 后紧接)+ 相应调 Step 6/Reminder B/Closure + CURRENT。Step 1b=把 FMP 数值催化剂(`earnings_surprises`+`analyst_estimate_revisions`)建成 entitlement-aware 自动接入 seam:接 live fetch→现有 `resolve_catalyst_signals`→`catalyst_block`(已吃这俩字段),未授权(免费 404)探一次/缓存跳过→中性(不烧 250/天),授权(付费 200)→打分。目标:月 12 一付费自动流入、不改代码。
+- **Required**: 无本轮代码改动(仅 register/CURRENT direction 增补)。Step 1b 是待 Codex `执行` 的建刀。
+- **Verify**: caveat 已诚实入 register:付费端点从无真数据→按假定形状建、真形状不符时 **fail-safe 到中性不污染**,月 12 留一次真形状校验(非从零建);Reminder B 收窄为「Step 1b 建 seam→月 12 只校验」。doc/route 守护待跑。无代码/schema/runner 改。
+- **Next**: Codex:执行 Step 1→紧接 Step 1b(用户 `执行` 触发)
+
 ## 2026-07-06 — Claude 记录方向 (US-short 免费 12 月运行 = 漏斗路线;用户已定;落 register+CURRENT)
 
 - **Verdict/Action**: 应用户指令把免费运行方向落进 `system_risk_register.md`(新 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION`,P2 open)+ CURRENT §0(Codex 读 repo 不读聊天)。方向:Pass 2 只跑动量收窄候选+强制持仓(非全 2404)、评级(FMP grades)免费从第 1 天用、splits/dividends 候选挪 Massive(待验额度)。免费期 12021 全量框架被取代(它只是离线中性动量下「Pass 2 跑全 2404」的产物)。
