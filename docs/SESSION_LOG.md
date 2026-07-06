@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut③ 复权门离线半 + schema 校验 已闭)
+
+- **Verdict/Action**: PASS + 提交 9 文件(engine + test + schema + schema-test + design/README/CURRENT/SESSION_LOG/register)。cut③ 复权/公司行动门离线半(本地证据 packet→§12.1 三确认位→已存 fail-closed paper gate);Required 根因修复:`derive_..._from_offline_evidence` 入口加 jsonschema 校验(镜像 forward_universe_snapshot),一举闭三 gap(dict/list status/mode→typed、缺 scope→拒、身份漂移→拒),确认位/ship-gate 逻辑不变。design/§18.3/CURRENT/README 诚实标 offline 已实现、live 检测仍 gated。
+- **Required**: `R-USSHORT-BATCH5-PAPER-EVAL-OFFLINE-EVIDENCE-NOT-SCHEMA-VALIDATED`(P3)已 resolved — 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 亲复现 dict/list status/mode(4 site)+缺 required→全 typed PaperEvalGateError(无裸崩);读 `_validate_offline_evidence_schema` fail-closed(error→typed);新回归覆盖 unhashable/required-scope/identity-drift 三 gap + 保留原有;上轮 §3.5 agent 已证安全核心(无 false-confirm/ship-gate leak)HELD。亲跑 `*us_short*` 3723 OK(+3、valid 证据仍评估=无 over-reject)+ doc/route 60 OK 零回归。1 trivial Optional(Status L3 inventory 可为一致性补列)。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `fix` (US-short offline paper-gate schema validation)
+
+- **Verdict/Action**: fixed Claude Required `R-USSHORT-BATCH5-PAPER-EVAL-OFFLINE-EVIDENCE-NOT-SCHEMA-VALIDATED`. `derive_adjustment_context_from_offline_evidence` now validates the incoming evidence against `schemas/us_short_paper_eval_adjustment_evidence.schema.json` before inline derivation, so dict/list `status`/`mode` fail as `PaperEvalGateError`, omitted `scope` is rejected, and identity/date-shape drift is rejected by schema. Confirmation-bit and ship-gate logic unchanged. No provider fetch, live source capture, raw parse, return calculation, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: fixed; pending Claude re-review. No new R-ID.
+- **Verify**: red first focused class reproduced 10 bare `TypeError` subcases plus missing-scope/identity drift not rejected; green focused class `9 OK`; paper-gate/schema `26 OK`; related US-short/status/data_context/provider pack `199 OK`; doc/route guards `68 OK`; provider `*us_short*` `445 OK (1 skipped)`; full offline `discover -s tests -p '*us_short*.py'` `3723 OK (1 skipped)`; `py_compile` OK.
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: all four reviewer-named membership sites are covered by dict/list regressions and legal valid evidence still evaluates. B/E: no CURRENT/README/design route text changed in this repair; live split/dividend/ex-date evidence remains SR-PROVIDER-001 gated.
+- **Next**: Claude Code: re-review current offline paper-gate schema-validation repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short cut③ 复权门离线半 — engine 自称 schema-bound 却不跑 schema 校验、3 gaps)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。安全核心 HELD(3 确认位无 false-confirm[需 status enum+非空 source_ref_ids⊆已声明 hashed refs]、ship-gate 不变式 const False,独立 §3.5 agent 佐证)。但 `derive_adjustment_context_from_offline_evidence` 从不 jsonschema 校验、inline 弱于 schema→3 gap:(a)dict/list status/mode 裸 TypeError(复发类 L165/169/179/198、我自己复现)、(b)省略 scope 跳过 offline/no-ship-gate 安全断言块、(c)const 身份不校验。落 register(P3、见 Required)。
+- **Required**: `R-USSHORT-BATCH5-PAPER-EVAL-OFFLINE-EVIDENCE-NOT-SCHEMA-VALIDATED`(P3)— 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: 亲复现 status/mode dict/list→裸 TypeError(4 site)、invalid-str→typed、empty→fail-closed;整类 grep + schema grep(status enum/required scope/const 身份)证根因;独立 §3.5 agent 佐证 3 gap + 确认无 false-confirm/ship-gate leak(5^3 bit 组合+注入键)。亲跑 `*us_short*` 3720 OK(+13)+ doc/route 60 OK 零回归。根因修法=派生入口跑 schema 校验(镜像 forward_universe_snapshot)一举闭三 gap。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `execute` (US-short corporate-action / price-adjustment offline paper gate)
+
+- **Verdict/Action**: added the offline half of the US-short corporate-action / price-adjustment paper gate. `engine/us_short_paper_eval_gate.py::paper_performance_evaluability_from_offline_evidence` consumes a local schema-bound evidence packet, derives the existing three section 12.1 confirmation bits (`adjustment_mode_confirmed`, `split_dividend_handled`, `ex_date_price_consistent`), and then calls the existing `paper_performance_evaluability` fail-closed gate. Added `schemas/us_short_paper_eval_adjustment_evidence.schema.json` and schema/unit tests. No provider fetch, live source capture, raw parse, return calculation, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID.
+- **Verify**: red first focused tests failed on missing offline-evidence function and missing schema; red direct engine source-ref path/hash guard failed before the guard was added. Green focused paper-gate/schema `23 OK`; related US-short/status/data_context/provider pack `199 OK`; doc/route guards `68 OK`; provider `*us_short*` `445 OK (1 skipped)`; full offline `discover -s tests -p '*us_short*.py'` `3720 OK (1 skipped)`; `py_compile` OK; changed-hunk secret/URL grep `0 hits`; new-file full grep matched only JSON-schema URI/schema id plus negative URL rejection sentinel; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: derivation is closed-world, source-ref-bound, and preserves the existing paper gate's "paper never full-size ship-gate" boundary. B/E: `CURRENT` records only the repo-state mechanism and keeps live split/dividend/ex-date evidence under SR-PROVIDER-001; README/design route text does not authorize provider/live/DataHub/production/A-share work.
+- **Next**: Claude Code: review current corporate-action / price-adjustment offline paper-gate derivation; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut② forward_universe_snapshot + exchange type-guard 已闭)
 
 - **Verdict/Action**: PASS + 提交 9 文件(新 runner+schema+2 test + design/README/CURRENT/SESSION_LOG/register)。cut② 离线冻结快照 builder(本地 gitignored active-listing→canonical gitignored snapshot、真 git-check-ignore、冻结 hash/retention 规则);exchange unhashable Required 已修(L216 前加 `type is not str` 短路守卫→typed error)。design/§18.3/CURRENT/README 诚实标 offline builder implemented、live 真捕获仍 gated。

@@ -1,0 +1,224 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_paper_eval_adjustment_evidence/1.0.0/schema.json",
+  "title": "US-short Paper Evaluation Adjustment Evidence",
+  "description": "Offline-only local evidence packet for deriving the three section 12.1 paper-performance corporate-action confirmation bits. This schema does not authorize provider calls, raw payload parsing, return calculation, corporate-action reconciliation claims, production, DataHub, ship-gate evidence, broker/order execution, or A-share crossing.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "source_refs",
+    "adjustment_mode",
+    "split_handling",
+    "dividend_handling",
+    "ex_date_price_consistency",
+    "scope"
+  ],
+  "properties": {
+    "schema_name": {
+      "const": "us_short_paper_eval_adjustment_evidence"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "decision_date": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "source_refs": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/sourceRef"
+      }
+    },
+    "adjustment_mode": {
+      "$ref": "#/$defs/adjustmentModeEvidence"
+    },
+    "split_handling": {
+      "$ref": "#/$defs/corporateActionHandling"
+    },
+    "dividend_handling": {
+      "$ref": "#/$defs/corporateActionHandling"
+    },
+    "ex_date_price_consistency": {
+      "$ref": "#/$defs/exDatePriceConsistency"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offline_detection_only",
+        "provider_call_performed",
+        "corporate_action_reconciliation_claimed",
+        "ship_gate_or_production_authorized"
+      ],
+      "properties": {
+        "offline_detection_only": {
+          "const": true
+        },
+        "provider_call_performed": {
+          "const": false
+        },
+        "corporate_action_reconciliation_claimed": {
+          "const": false
+        },
+        "ship_gate_or_production_authorized": {
+          "const": false
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "path": {
+          "type": "string",
+          "pattern": "^(?!.*://)(?!.*\\\\)(?!/)(?![A-Za-z]:)(?!.*(?:^|/)\\.\\.(?:/|$))[A-Za-z0-9_./-]+\\.json$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "sourceRefIds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+      }
+    },
+    "adjustmentModeEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "mode",
+        "source_ref_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "confirmed",
+            "missing",
+            "ambiguous",
+            "conflict"
+          ]
+        },
+        "mode": {
+          "enum": [
+            "split_dividend_adjusted",
+            "split_adjusted_price_return",
+            "total_return_adjusted",
+            "unadjusted_with_events_reconciled",
+            "unknown"
+          ]
+        },
+        "source_ref_ids": {
+          "$ref": "#/$defs/sourceRefIds"
+        }
+      }
+    },
+    "corporateActionHandling": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_ref_ids",
+        "event_refs"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "no_events",
+            "events_reconciled",
+            "missing",
+            "ambiguous",
+            "conflict"
+          ]
+        },
+        "source_ref_ids": {
+          "$ref": "#/$defs/sourceRefIds"
+        },
+        "event_refs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/corporateActionEventRef"
+          }
+        }
+      }
+    },
+    "corporateActionEventRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "ticker",
+        "ex_date",
+        "source_ref_ids"
+      ],
+      "properties": {
+        "event_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+        },
+        "ticker": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9.-]{0,9}$"
+        },
+        "ex_date": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+        },
+        "source_ref_ids": {
+          "$ref": "#/$defs/sourceRefIds"
+        }
+      }
+    },
+    "exDatePriceConsistency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status",
+        "source_ref_ids",
+        "checked_event_ids"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "consistent",
+            "not_applicable_no_events",
+            "missing",
+            "ambiguous",
+            "conflict"
+          ]
+        },
+        "source_ref_ids": {
+          "$ref": "#/$defs/sourceRefIds"
+        },
+        "checked_event_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]*$"
+          }
+        }
+      }
+    }
+  }
+}
