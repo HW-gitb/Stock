@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-06 — Claude 记录方向 (US-short 免费 12 月运行 = 漏斗路线;用户已定;落 register+CURRENT)
+
+- **Verdict/Action**: 应用户指令把免费运行方向落进 `system_risk_register.md`(新 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION`,P2 open)+ CURRENT §0(Codex 读 repo 不读聊天)。方向:Pass 2 只跑动量收窄候选+强制持仓(非全 2404)、评级(FMP grades)免费从第 1 天用、splits/dividends 候选挪 Massive(待验额度)。免费期 12021 全量框架被取代(它只是离线中性动量下「Pass 2 跑全 2404」的产物)。
+- **Required**: 无代码/schema/runner 改动(纯 direction/planning 记录)。含 2 条跨-LLM 连续性提醒:A=12 次探测只证可达/形状/quota-header 有无、**不证总额度**(否则读套餐文档);B=月 12 上付费时「数值分析师催化剂 earnings_surprises+analyst_estimate_revisions→§4.2」live 接线**非自动、需 build+review**(而评级→risk_downgrade 那半是自动)。
+- **Verify**: 实证:grades 免费=`us_short_cut5_pass2_feasibility_probe_summary_20260701.json`(grades 200/`paid_tier_used:false`;estimates/earnings 400/404);数值预期未接线=`engine/us_short_catalyst_source.py` `_SOURCES`+文件「no fetch/live half gated」;探测包自限=`quota_header_absence_clears_full_budget:false`。doc/route 守护待跑。无代码改动。
+- **Next**: Codex:执行 Step 1(用户 `执行` 触发;Pass 2 只跑动量收窄候选+持仓,把 preflight 预算从 12021 降到几百;offline/free)
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Massive quota/access bounded probe packet — schema/artifact/test 已闭, 未执行)
 
 - **Verdict/Action**: PASS + 提交 8 文件(新 probe-packet json+schema+schema-test + CURRENT/README/design/register/SESSION_LOG)。design-only 执行边界工件:钉死未来 12 次 Massive-only AAPL/MSFT/JPM×(ticker_overview/news/splits/dividends) 探测,**未执行**、`authorizes_provider_call_now` 处处 false、执行仍需 post-review command + network 批准。无 network/provider/secret/raw/runner。
