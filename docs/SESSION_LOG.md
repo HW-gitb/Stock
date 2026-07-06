@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-06 — Claude 记录标准 (us_short 审查也核设计意图一致性,不只代码;用户指令)
+
+- **Verdict/Action**: 用户指令——未来 us_short `审查` 除代码正确性外,必须核「是否按记录的设计方向实现」。给 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION` 加 Review criterion(设计意图漂移=FAIL,即回归 12021 全量/数值预期无 entitlement-aware skip/评级拖付费/伪造 coverage/无视 Reminder A·B——即便代码技术正确);沉淀为 memory `feedback_review_design_intent_conformance`。是 `AGENTS.md §Codex adversarial review standard 16c` 对 us_short 的具体落地。
+- **Required**: 无代码/schema/runner 改动(register 加 1 bullet + 我的 memory)。设计一致性判定写进固定 Verdict/Action+Verify 标签、不新增标签(doc-gov guard 只认 4 标签)。
+- **Verify**: doc/route 守护待跑。无 code 改。
+- **Next**: Codex:执行 Step 1→Step 1b(用户 `执行` 触发;交审时我会同时核代码 + 设计意图)
+
 ## 2026-07-06 — Claude 记录方向增补 (US-short 加 Step 1b:数值预期催化剂 entitlement-aware 自动接入 seam;用户已定)
 
 - **Verdict/Action**: 应用户指令给 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION` 加 Step 1b(Step 1 后紧接)+ 相应调 Step 6/Reminder B/Closure + CURRENT。Step 1b=把 FMP 数值催化剂(`earnings_surprises`+`analyst_estimate_revisions`)建成 entitlement-aware 自动接入 seam:接 live fetch→现有 `resolve_catalyst_signals`→`catalyst_block`(已吃这俩字段),未授权(免费 404)探一次/缓存跳过→中性(不烧 250/天),授权(付费 200)→打分。目标:月 12 一付费自动流入、不改代码。
