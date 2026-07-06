@@ -3,13 +3,13 @@
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
-  "generated_at": "2026-07-06T10:07:53+00:00",
+  "generated_at": "2026-07-06T12:35:00+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
     "batch": "batch5",
     "purpose": "full_candidate_pass2_live_source_packet_preflight",
-    "status": "blocked_missing_local_inputs",
+    "status": "ready_for_reviewed_live_execution",
     "network_access_performed": false,
     "provider_calls_performed": false,
     "raw_payload_storage_performed": false,
@@ -51,50 +51,30 @@
   },
   "local_input_coverage": {
     "momentum_projection": {
-      "status": "missing_or_stale",
-      "path": "state/us_short/us_short_batch5_momentum_price_source_20260705_momentum.json",
-      "covered_count": 3,
-      "missing_count": 2401,
+      "status": "full_coverage",
+      "path": "state/us_short/us_short_batch5_full_candidate_projection_inputs_20260706_momentum.json",
+      "covered_count": 2404,
+      "missing_count": 0,
       "stale_count": 0,
-      "missing_sample": [
-        "A",
-        "AA",
-        "AAL",
-        "AAMI",
-        "AAOI",
-        "AAON",
-        "AAP",
-        "AAT",
-        "AAUC",
-        "AB"
-      ],
+      "neutral_fill_count": 2401,
+      "missing_sample": [],
       "stale_sample": [],
-      "target_count": 3,
+      "target_count": 2404,
       "scored_count": 3
     },
     "theme_projection": {
-      "status": "missing_or_stale",
-      "path": "state/us_short/us_short_batch5_theme_source_20260705_theme.json",
-      "covered_count": 3,
-      "missing_count": 2401,
+      "status": "full_coverage",
+      "path": "state/us_short/us_short_batch5_full_candidate_projection_inputs_20260706_theme.json",
+      "covered_count": 2404,
+      "missing_count": 0,
       "stale_count": 0,
-      "missing_sample": [
-        "A",
-        "AA",
-        "AAL",
-        "AAMI",
-        "AAOI",
-        "AAON",
-        "AAP",
-        "AAT",
-        "AAUC",
-        "AB"
-      ],
+      "neutral_fill_count": 2401,
+      "missing_sample": [],
       "stale_sample": [],
-      "target_count": 3,
+      "target_count": 2404,
       "scored_count": 3
     },
-    "all_required_local_inputs_cover_candidates": false
+    "all_required_local_inputs_cover_candidates": true
   },
   "endpoint_call_forecast": {
     "families": {
@@ -125,10 +105,8 @@
     "full_market_call_performed": false
   },
   "execution_gate": {
-    "ready_to_run_full_candidate_live_packet": false,
-    "block_reasons": [
-      "missing_or_stale_local_score_projection_inputs"
-    ],
+    "ready_to_run_full_candidate_live_packet": true,
+    "block_reasons": [],
     "requires_separate_network_tool_approval": true,
     "requires_explicit_call_budget": true,
     "provider_selection_claimed": false,

@@ -296,6 +296,7 @@
         "covered_count",
         "missing_count",
         "stale_count",
+        "neutral_fill_count",
         "missing_sample",
         "stale_sample",
         "target_count",
@@ -311,6 +312,7 @@
         "covered_count": { "type": "integer", "minimum": 0 },
         "missing_count": { "type": "integer", "minimum": 0 },
         "stale_count": { "type": "integer", "minimum": 0 },
+        "neutral_fill_count": { "type": "integer", "minimum": 0 },
         "missing_sample": {
           "type": "array",
           "maxItems": 10,

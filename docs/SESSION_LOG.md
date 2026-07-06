@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate projection-input merge → preflight ready 已闭)
+
+- **Verdict/Action**: PASS + 提交 12 文件(新 merge runner+schema+2 test+tracked summary + preflight runner/schema/summary 改 + design/README/CURRENT/SESSION_LOG)。新 `full_candidate_projection_inputs` 把 3 真 scored momentum/theme 投影 + 2401 缺失票**合法 neutral-fill**(用 seam 契约 disposition、**不伪造分数**)合并成全候选投影;preflight coverage 改为 scored∪neutral partition → full_coverage(2404)→ ready_for_reviewed_live_execution。诚实:两 summary 记 scored=3/neutral=2401 + live_evidence_all=False;ready 仍需 separate_network_approval+budget(不自动放行 12021 live)。
+- **Required**: 无 material Required;`system_risk_register.md` 无新增(non-material)。
+- **Verify**: 自己整类探针全 typed(`_finite_score` bool/inf/>100/huge-int、`_date8` invalid-calendar、`_canonical_coverage` unhashable disposition——本会话首次新 runner **全继承** fail-closed 类);独立 §3.5 agent 五向全 HELD(无 fabricated score / dishonest ready / network / hygiene 问题、neutral 用合法 seam disposition);preflight ready 共存 network-approval+budget gate;design/CURRENT 诚实标 3-real/2401-neutral + live gated。亲跑 `*us_short*` 3736 OK(+6)+ doc/route 60 OK 零回归。1 非阻塞 Optional:preflight `_projection_coverage` 只校 disposition key 不校 value(producer 是完整性边界、hand-authored 需 auth + scored_count 诚实、gate 不松)。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short full-candidate projection inputs -> Pass2 preflight ready)
+
+- **Verdict/Action**: added local-only full-candidate projection-input merge for cut⑤; canonical preflight now sees scored+neutral local coverage for `2404` candidates and forecasts `12021` calls. No provider/network/raw/source-packet/DataHub/production/ship-gate/broker/A-share path.
+- **Required**: no new R-ID; see `docs/system_risk_register.md`. Full-candidate provider/source-packet execution and live corporate-action capture remain gated by explicit call budget and separate network approval under SR-PROVIDER-001.
+- **Verify**: focused/preflight `8 OK`; schema `5 OK`; doc/route guards `60 OK`; provider discover `453 OK (1 skipped)`; related pack `306 OK`; full offline `*us_short*` `3736 OK (1 skipped)`; `py_compile` OK; summary secret/URL grep `0`; gitignored outputs yes; stale blocked grep `0`; diff-check OK. Main-thread A-F fallback used; no subagent because tool policy needs explicit subagent request.
+- **Next**: Claude Code: review current full-candidate projection-input/preflight-ready slice; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate Pass2 preflight + price_basis_date guard 已闭)
 
 - **Verdict/Action**: PASS + 提交 10 文件(runner+schema+2 test+tracked summary + design/README/CURRENT/SESSION_LOG/register)。cut⑤ 离线 preflight(读本地候选+momentum/theme 投影→预测 live 调用 12021、覆盖 3/2404→blocked、零 provider call、写 tracked summary);Required 修复:`price_basis_date` 走新 `_format_price_basis_date`(type+len+ascii+isdigit+strptime try→typed),invalid-calendar 不再裸崩。design/§18.3/CURRENT/README 诚实标 offline preflight 已建、live 全候选真跑仍 gated。

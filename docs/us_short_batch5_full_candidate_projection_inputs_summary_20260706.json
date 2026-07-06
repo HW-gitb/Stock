@@ -1,0 +1,91 @@
+{
+  "schema_name": "us_short_batch5_full_candidate_projection_inputs_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_full_candidate_projection_inputs_summary.schema.json",
+  "generated_at": "2026-07-06T12:30:00+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "full_candidate_local_score_projection_inputs",
+    "status": "full_candidate_projection_inputs_written",
+    "network_access_performed": false,
+    "provider_calls_performed": false,
+    "raw_payload_storage_performed": false,
+    "momentum_projection_written": true,
+    "theme_projection_written": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "used_date": "2026-07-02"
+  },
+  "candidate_universe": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
+    "candidate_artifact_path_gitignored": true,
+    "row_count": 7641,
+    "eligible_count": 2404,
+    "symbol_scope": "full_pass1_eligible_candidate_set",
+    "full_market_sample": false
+  },
+  "source_inputs": {
+    "source_momentum_projection_path": "state/us_short/us_short_batch5_momentum_price_source_20260705_momentum.json",
+    "source_theme_projection_path": "state/us_short/us_short_batch5_theme_source_20260705_theme.json",
+    "source_momentum_scored_count": 3,
+    "source_theme_scored_count": 3,
+    "source_momentum_neutral_fill_count": 0,
+    "source_theme_neutral_fill_count": 0,
+    "real_momentum_source_consumed": true,
+    "real_theme_or_gics_source_consumed": true
+  },
+  "output_projection_contract": {
+    "target_count": 2404,
+    "momentum_scored_count": 3,
+    "theme_scored_count": 3,
+    "momentum_neutral_fill_count": 2401,
+    "theme_neutral_fill_count": 2401,
+    "coverage_exactly_matches_full_candidate_set": true,
+    "neutral_fill_only_for_missing_source_inputs": true,
+    "full_candidate_local_inputs_ready": true,
+    "live_momentum_source_evidence_for_all_candidates": false,
+    "live_theme_source_evidence_for_all_candidates": false
+  },
+  "paths": {
+    "output_momentum_projection_path": "state/us_short/us_short_batch5_full_candidate_projection_inputs_20260706_momentum.json",
+    "output_theme_projection_path": "state/us_short/us_short_batch5_full_candidate_projection_inputs_20260706_theme.json",
+    "summary_path": "docs/us_short_batch5_full_candidate_projection_inputs_summary_20260706.json"
+  },
+  "storage": {
+    "projection_paths_gitignored": true,
+    "summary_contains_raw_rows": false,
+    "summary_contains_raw_payload": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This runner only merges existing local projections with explicit neutral-fill entries for missing candidates.",
+    "Neutral-filled candidates have local score inputs but no live momentum/theme source evidence from this runner.",
+    "The output is a local prerequisite for the reviewed full-candidate Pass2 preflight; it does not execute provider calls or write a source packet.",
+    "Provider selection, DataHub, production storage, broker/order execution, live-normalized, and ship-gate evidence remain out of scope."
+  ]
+}

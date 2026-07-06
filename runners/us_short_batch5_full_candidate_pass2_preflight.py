@@ -27,8 +27,12 @@ PROVIDER_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_candidate
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260706.json"
-DEFAULT_MOMENTUM_PROJECTION_PATH = STATE_US_SHORT_DIR / "us_short_batch5_momentum_price_source_20260705_momentum.json"
-DEFAULT_THEME_PROJECTION_PATH = STATE_US_SHORT_DIR / "us_short_batch5_theme_source_20260705_theme.json"
+DEFAULT_MOMENTUM_PROJECTION_PATH = (
+    STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_projection_inputs_20260706_momentum.json"
+)
+DEFAULT_THEME_PROJECTION_PATH = (
+    STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_projection_inputs_20260706_theme.json"
+)
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
 
 
@@ -154,6 +158,22 @@ def _canonical_keys(value: Any, *, field: str) -> set[str]:
     return out
 
 
+def _canonical_list_keys(value: Any, *, field: str) -> set[str]:
+    if type(value) is not list:
+        raise FullCandidatePass2PreflightError(f"{field} must be an exact list")
+    out: set[str] = set()
+    for raw in value:
+        if type(raw) is not str:
+            raise FullCandidatePass2PreflightError(f"{field} must contain exact ticker strings")
+        ticker = canonical_us_ticker(raw)
+        if ticker is None:
+            raise FullCandidatePass2PreflightError(f"{field} contains a non-canonicalizable ticker")
+        if ticker in out:
+            raise FullCandidatePass2PreflightError(f"{field} contains duplicate canonical ticker: {ticker}")
+        out.add(ticker)
+    return out
+
+
 def _projection_coverage(
     *,
     projection: Any,
@@ -164,17 +184,25 @@ def _projection_coverage(
     if type(projection) is not dict:
         raise FullCandidatePass2PreflightError(f"{projection_name} must be an exact dict")
     value_keys = _canonical_keys(projection.get(value_key), field=f"{projection_name}.{value_key}")
+    neutral_keys = _canonical_list_keys(
+        projection.get("neutral_fill_tickers"),
+        field=f"{projection_name}.neutral_fill_tickers",
+    )
+    if value_keys & neutral_keys:
+        raise FullCandidatePass2PreflightError(f"{projection_name} has scored/neutral overlap")
     coverage_keys = _canonical_keys(projection.get("coverage"), field=f"{projection_name}.coverage")
+    partition_keys = value_keys | neutral_keys
     expected = set(expected_tickers)
-    covered = expected & value_keys & coverage_keys
+    covered = expected & partition_keys & coverage_keys
     missing = sorted(expected - covered)
-    stale = sorted((value_keys | coverage_keys) - expected)
+    stale = sorted((partition_keys | coverage_keys) - expected)
     return {
         "status": "full_coverage" if not missing and not stale else "missing_or_stale",
         "path": None,
         "covered_count": len(covered),
         "missing_count": len(missing),
         "stale_count": len(stale),
+        "neutral_fill_count": len(neutral_keys),
         "missing_sample": missing[:10],
         "stale_sample": stale[:10],
         "target_count": projection.get("target_count") if type(projection.get("target_count")) is int else None,
