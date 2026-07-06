@@ -28,6 +28,7 @@ from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context,
     assemble_data_context_from_sec_offering_submissions,
     assemble_data_context_from_resolved_pass2_sources,
+    assemble_official_context_components_from_resolved_pass2_sources,
     assemble_data_context_with_analyst_grade_risk,
     assemble_data_context_with_massive_news_catalyst,
 )
@@ -318,6 +319,7 @@ def _family(*, row_count, price_bearing):
         "session": "RTH" if price_bearing else None,
         "adjustment": "split_div_adjusted" if price_bearing else None,
         "row_count": row_count,
+        "source_refs": [{"role": "test_fixture", "path": "tests/provider/test_us_short_batch5_data_context.py"}],
     }
 
 
@@ -826,6 +828,149 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         scores = data_context["selection_inputs"]["per_ticker"]
         self.assertAlmostEqual(scores["AAPL"]["core_score"], 51.5 - ANALYST_DOWNGRADE_PENALTY)
         self.assertAlmostEqual(scores["MSFT"]["core_score"], 50.0)
+
+    def test_resolved_pass2_sources_emit_official_components_with_source_refs(self):
+        offering_source = resolve_offering_audit(
+            as_of=_OFFERING_AS_OF,
+            filings_by_ticker={
+                "AAPL": _offering_record([]),
+                "MSFT": _offering_record([]),
+                "JPM": _offering_record([], coverage="partial"),
+            },
+        )
+        analyst_grade_actions = resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={
+                "AAPL": _grade_source(
+                    "AAPL",
+                    [
+                        _grade_record("AAPL", date="2026-06-10", company="BankA"),
+                        _grade_record("AAPL", date="2026-06-11", company="BankB"),
+                    ],
+                ),
+                "MSFT": _grade_source("MSFT", []),
+            },
+        )
+        news_events = resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={
+                "AAPL": _news_source("AAPL", [_news_item(id="a", sentiment="positive")]),
+                "MSFT": _news_source("MSFT", []),
+            },
+        )
+        source_ref_paths = {
+            "candidate_artifact_path": "state/us_short/test_candidate.json",
+            "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+            "momentum_projection_path": "state/us_short/test_momentum.json",
+            "theme_projection_path": "state/us_short/test_theme.json",
+            "offering_audit_source_path": "state/us_short/test_offering.json",
+            "analyst_grade_actions_path": "state/us_short/test_analyst.json",
+            "massive_news_events_path": "state/us_short/test_news.json",
+            "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+        }
+
+        components = assemble_official_context_components_from_resolved_pass2_sources(
+            candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL", "MSFT"), "scored_theme_base"),
+            offering_audit_source=offering_source,
+            analyst_grade_actions=analyst_grade_actions,
+            massive_news_events=news_events,
+            catalyst_governance=load_catalyst_governance(),
+            theme_opportunity_state="strong",
+            source_ref_paths=source_ref_paths,
+        )
+
+        data_context = components["data_context"]
+        per_ticker_analysis = components["per_ticker_analysis"]
+        self.assertEqual(set(components), {"data_context", "per_ticker_analysis", "run_provenance"})
+        self.assertEqual(set(per_ticker_analysis), set(data_context["selection_inputs"]["per_ticker"]))
+        self.assertEqual(per_ticker_analysis["AAPL"]["ticker"], "AAPL")
+        self.assertEqual(per_ticker_analysis["AAPL"]["row_source"], "top15_candidate")
+        self.assertEqual(
+            set(per_ticker_analysis["AAPL"]["score_blocks"]),
+            {"momentum", "theme", "catalyst"},
+        )
+        self.assertEqual(data_context["candidate_pass2_signals"]["JPM"], {"critical_data_missing": True})
+
+        run_provenance = components["run_provenance"]
+        families = run_provenance["families"]
+        self.assertEqual(families["universe"]["row_count"], len(data_context["universe"]))
+        self.assertEqual(families["candidate_pass2_signals"]["row_count"], len(data_context["candidate_pass2_signals"]))
+        self.assertEqual(families["selection_inputs"]["row_count"], len(data_context["selection_inputs"]["per_ticker"]))
+        self.assertEqual(families["per_ticker_analysis"]["row_count"], len(per_ticker_analysis))
+        for family in families.values():
+            self.assertTrue(family["source_refs"])
+        self.assertIn(
+            {"role": "candidate_artifact", "path": source_ref_paths["candidate_artifact_path"]},
+            families["universe"]["source_refs"],
+        )
+        self.assertIn(
+            {"role": "offering_audit_source", "path": source_ref_paths["offering_audit_source_path"]},
+            families["candidate_pass2_signals"]["source_refs"],
+        )
+
+        reconciled = reconcile_run_provenance(
+            run_provenance,
+            now_et=datetime(2026, 6, 15, 8, 30, 0),
+            decision_date=_DECISION_DATE,
+            price_basis_date=_PRICE_BASIS_DATE,
+            run_date="20260615",
+            payloads={
+                "universe": data_context["universe"],
+                "per_ticker_analysis": per_ticker_analysis,
+                "candidate_pass2_signals": data_context["candidate_pass2_signals"],
+                "selection_inputs": data_context["selection_inputs"],
+            },
+        )
+        self.assertEqual(reconciled["as_of"], _DECISION_DATE)
+
+    def test_resolved_pass2_sources_wrap_boundary_tz_observed_at_overflow(self):
+        source_ref_paths = {
+            "candidate_artifact_path": "state/us_short/test_candidate.json",
+            "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+            "momentum_projection_path": "state/us_short/test_momentum.json",
+            "theme_projection_path": "state/us_short/test_theme.json",
+            "offering_audit_source_path": "state/us_short/test_offering.json",
+            "analyst_grade_actions_path": "state/us_short/test_analyst.json",
+            "massive_news_events_path": "state/us_short/test_news.json",
+            "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+        }
+
+        for observed_at in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
+            with self.subTest(observed_at=observed_at):
+                offering_source = _offering_source(
+                    checked={"AAPL": {"active_offering": _checked_offering()}},
+                )
+                offering_source["provenance"] = {
+                    "AAPL": {"active_offering": _offering_provenance()},
+                }
+                offering_source["provenance"]["AAPL"]["active_offering"]["observed_at"] = observed_at
+                analyst_grade_actions = resolve_analyst_grade_actions(
+                    as_of=_GRADE_AS_OF,
+                    grades_by_ticker={"AAPL": _grade_source("AAPL", [])},
+                )
+                news_events = resolve_news_events(
+                    as_of=_NEWS_AS_OF,
+                    news_by_ticker={"AAPL": _news_source("AAPL", [])},
+                )
+
+                with self.assertRaises(DataContextAssemblyError):
+                    assemble_official_context_components_from_resolved_pass2_sources(
+                        candidate_artifact=_candidate_artifact(("AAPL",)),
+                        expected_decision_date=_DECISION_DATE,
+                        eligibility_governance=_gov(),
+                        momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL",), "scored"),
+                        theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL",), "scored_theme_base"),
+                        offering_audit_source=offering_source,
+                        analyst_grade_actions=analyst_grade_actions,
+                        massive_news_events=news_events,
+                        catalyst_governance=load_catalyst_governance(),
+                        theme_opportunity_state="strong",
+                        source_ref_paths=source_ref_paths,
+                    )
 
     def test_resolved_pass2_sources_wrap_malformed_catalyst_governance(self):
         offering_source = _offering_source(

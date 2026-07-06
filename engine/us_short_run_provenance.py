@@ -42,9 +42,11 @@ EXPECTED_FAMILIES = PRICE_BEARING_FAMILIES | NON_PRICE_FAMILIES
 APPROVED_SESSIONS = frozenset({"RTH"})
 APPROVED_ADJUSTMENTS = frozenset({"split_div_adjusted"})
 
-_PRICE_FAMILY_KEYS = frozenset({"as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count"})
-_NON_PRICE_FAMILY_KEYS = frozenset({"as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count"})
+_FAMILY_COMMON_KEYS = frozenset({"as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count", "source_refs"})
+_PRICE_FAMILY_KEYS = _FAMILY_COMMON_KEYS
+_NON_PRICE_FAMILY_KEYS = _FAMILY_COMMON_KEYS
 _MANIFEST_KEYS = frozenset({"as_of", "price_basis_date", "families"})
+_SOURCE_REF_KEYS = frozenset({"role", "path"})
 
 
 class RunProvenanceError(Exception):
@@ -79,6 +81,27 @@ def _parse_observed_at(value, where):
     if dt.tzinfo is not None:
         raise RunProvenanceError(f"{where}.observed_at 须为 naive ET 时间戳（与 resolver now_et 同口径）: {value!r}")
     return dt
+
+
+def _validate_source_refs(value, where):
+    if not isinstance(value, list) or not value:
+        raise RunProvenanceError(f"{where}.source_refs must be a non-empty list")
+    seen = set()
+    for idx, ref in enumerate(value):
+        if not (isinstance(ref, dict) and set(ref) == _SOURCE_REF_KEYS):
+            raise RunProvenanceError(f"{where}.source_refs[{idx}] keys must be {sorted(_SOURCE_REF_KEYS)}")
+        role = ref["role"]
+        path = ref["path"]
+        if not (type(role) is str and role.strip()):
+            raise RunProvenanceError(f"{where}.source_refs[{idx}].role must be a non-empty str")
+        if not (type(path) is str and path.strip()):
+            raise RunProvenanceError(f"{where}.source_refs[{idx}].path must be a non-empty str")
+        if "://" in path or "\\" in path or ":" in path or path.startswith("/") or "/../" in f"/{path}/":
+            raise RunProvenanceError(f"{where}.source_refs[{idx}].path must be a clean repo-relative path")
+        identity = (role, path)
+        if identity in seen:
+            raise RunProvenanceError(f"{where}.source_refs contains duplicate role/path")
+        seen.add(identity)
 
 
 def _family_entries(name, payload):
@@ -170,6 +193,7 @@ def reconcile_run_provenance(run_provenance, *, now_et, decision_date, price_bas
                 f"families[{name!r}].observed_at {fam['observed_at']!r} 晚于运行时刻 now_et={now_et.isoformat()!r}"
                 "（未来观测守卫，§2.1 observed_at<=运行时刻）")
         families_observed[name] = fam["observed_at"]
+        _validate_source_refs(fam["source_refs"], f"families[{name!r}]")
         # ①a bind manifest entry to the ACTUAL payload: row_count must match, and NO payload row may carry its OWN
         # as_of/observed_at that contradicts the manifest (clean-manifest/dirty-payload guard — a row tagged
         # as_of=2099 behind a clean manifest now fails closed HERE, not silently dropped by downstream projection).

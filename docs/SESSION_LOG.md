@@ -8,6 +8,51 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 cut① per_ticker/provenance 装配器 + observed_at + 设计 status 已闭)
+
+- **Verdict/Action**: PASS + 提交 16 文件(engine reconciler + 装配器 runner + source-packet runner + 2 schema + 2 example + 4 test + design/CURRENT/README/SESSION_LOG/register)。两 R-ID resolved:observed_at 裸 OverflowError→typed(wrap OverflowError/ValueError/OSError→DataContextAssemblyError + 公共路径回归)、cut① 设计权威 status 补齐(离线装配器入"已在 repo"清单、gate 精确改指 live 数据路径、§19 去 unimplemented、CURRENT §0 加 settled delta、README route)。
+- **Required**: `R-USSHORT-BATCH5-DATA-CONTEXT-OBSERVED-AT-BARE-OVERFLOW-FAIL-CLOSED-CLASS`(P3)+ `R-USSHORT-BATCH5-CUT1-DESIGN-STATUS-STALE-PER-TICKER-PROVENANCE-UNIMPLEMENTED`(P3)均 resolved — 详情见 `system_risk_register.md`(单一来源)。O2(schema↔reconciler path 收敛)仍非阻塞挂 register。
+- **Verify**: observed_at 亲复现修复生效;读 design/CURRENT/README diff 确认离线装配器列为已建、live 路径仍 gated(无反向 over-claim)、CURRENT §0 仅 settled 无 gate 词;cut① 核心经上轮独立 §3.5 agent 六不变式全 HELD。亲跑全离线 `*us_short*` 3687 OK + doc/route 60 OK 零回归。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `fix` (US-short Batch5 cut1 design-status doc drift)
+
+- **Verdict/Action**: fixed Claude Required `R-USSHORT-BATCH5-CUT1-DESIGN-STATUS-STALE-PER-TICKER-PROVENANCE-UNIMPLEMENTED` as a docs-only repair. `docs/us_short_system_design.md` now records the offline official-context assembler (`data_context` + `per_ticker_analysis` + source-ref-bound `run_provenance`) as existing, narrows the remaining gate to the live/real-provider-resolved data path, and no longer calls the offline assembler unimplemented. `docs/CURRENT.md` §0 and `docs/README.md` route row are synced. No code/schema/test behavior changes, no provider fetch, raw read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: fixed; pending Claude re-review. No new R-ID.
+- **Verify**: targeted stale grep for old unimplemented/bare per_ticker gate wording `0 hits`; doc/route guards `60 OK`; `git diff --check` OK (CRLF warnings only). Full `*us_short*` was not rerun because this slice is docs-only and the immediately preceding code repair already ran `3687 OK` (1 skipped).
+- **Pre-Codex self-review**: A-F checked main-thread. B/E: `CURRENT` only gained settled facts and no transient review/commit gate; SR-PROVIDER-001 live path gating remains intact. C: wording avoids the reverse error of implying live/real-provider per_ticker/provenance is implemented.
+- **Next**: Claude Code: re-review current provenance/per_ticker + observed_at + docs-only status repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short Batch5 provenance/per_ticker cut① — observed_at fix 已验证但设计权威 status 未同步 cut①)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。observed_at Required 已修+我亲验(边界年→typed DataContextAssemblyError、正常值不 over-reject、公共路径回归测试)。但 B-ripple 发现 cut① 落了离线 per_ticker/provenance 装配器,设计权威 §19 仍写其 "remain unimplemented"、Status/§18.2 "exist in repo" 清单漏它、CURRENT §0 无 delta——单一权威 status 陈旧(item 15a material,同族 data_context assembly 已列)。落 register `R-USSHORT-BATCH5-CUT1-DESIGN-STATUS-STALE-PER-TICKER-PROVENANCE-UNIMPLEMENTED`(P3)。
+- **Required**: `R-USSHORT-BATCH5-CUT1-DESIGN-STATUS-STALE-PER-TICKER-PROVENANCE-UNIMPLEMENTED`(P3)— 完整详情见 `system_risk_register.md`(单一来源)。observed_at R-ID 已修、随本 slice 一并提交。
+- **Verify**: observed_at 亲复现修复生效(裸 OverflowError→typed);B-ripple grep 证 design L3/L464/L499 把已建离线装配器列为 gated/unimplemented + CURRENT §0 无 cut① 落地;cut① 代码经上轮独立 §3.5 agent 六不变式全 HELD、本轮修复外科。亲跑 `*us_short*` 3687 OK(+1)+ doc/route 60 OK 零回归。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `fix` (US-short Batch5 observed_at boundary timezone overflow)
+
+- **Verdict/Action**: fixed Claude Required `R-USSHORT-BATCH5-DATA-CONTEXT-OBSERVED-AT-BARE-OVERFLOW-FAIL-CLOSED-CLASS`. `_observed_at_to_naive_et` now wraps boundary timezone-normalization failures (`OverflowError` / `ValueError` / `OSError`) as `DataContextAssemblyError`, keeping the public official-context assembler fail-closed and typed. Added a public-path regression for boundary-year tz-aware `observed_at` values in resolved Pass2 source provenance. No provider fetch, raw read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: fixed; pending Claude re-review. No new R-ID.
+- **Verify**: red first focused regression errored with bare `OverflowError` for `0001-01-01T00:00:00+14:00` and `9999-12-31T23:59:59-14:00`; green focused regression `1 OK`; focused official/source-packet/orchestrator/provenance pack `84 OK`; provider/status/data_context pack `244 OK`; batch4/provenance pack `141 OK`; doc/route guards `60 OK`; full offline `discover -s tests -p '*us_short*.py'` `3687 OK` (1 skipped); `py_compile` OK; changed-hunk secret/URL grep only matched existing no-secret prose and test sentinel; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: fixed the shared timestamp normalization helper that feeds candidate/root and recursive provider provenance observed clocks, not only one fixture; normal tz-aware values remain accepted via existing official-components test. B/E: CURRENT untouched; only SESSION_LOG/register updated for the active review cycle.
+- **Next**: Claude Code: re-review current observed_at boundary-overflow repair; PASS then commit.
+
+## 2026-07-06 — Claude 审查 FAIL (US-short Batch5 provenance/per_ticker official-context-components — observed_at 裸 OverflowError 复发类)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。核心契约 sound——reconciler source_refs 整类 fail-closed(空/错键/`://`/`\`/`:`/绝对/`/../`/dup 全拒、hard index 无 fail-open)、no-dangling 由 producer `_existing_repo_path` 守、orchestrator 测试加强非削弱、离线无泄露,独立 §3.5 agent 六不变式核心全 HELD。但 `_observed_at_to_naive_et` 对边界年 tz-aware 抛裸 OverflowError(复发 datetime 类、未继承 sibling `_parse_observed_at`)。落 register `R-USSHORT-BATCH5-DATA-CONTEXT-OBSERVED-AT-BARE-OVERFLOW-FAIL-CLOSED-CLASS`(P3)。
+- **Required**: `R-USSHORT-BATCH5-DATA-CONTEXT-OBSERVED-AT-BARE-OVERFLOW-FAIL-CLOSED-CLASS`(P3)— 完整详情见 `system_risk_register.md`(单一来源)。
+- **Verify**: (`review-evidence:not_available`)亲复现 `0001/9999…±14:00`→裸 OverflowError、正常值 `2026-…`→08:00 不 over-reject、sibling 拒 tz-aware;独立 §3.5 agent 核心全 HELD 且抓此 P3(生产 caller `except Exception→SourcePacketError` 包住=operationally fail-closed,故 P3 非 P2)。亲跑 `*us_short*` 3686 OK(+4)+ doc/route 60 OK 零回归。另 1 Optional(schema↔reconciler path char-class 收敛)。
+- **Next**: Codex:修复
+
+## 2026-07-06 - Codex `execute` (US-short Batch5 provenance/per_ticker official context components)
+
+- **Verdict/Action**: added a pure-offline `assemble_official_context_components_from_resolved_pass2_sources` path that emits Batch4-aligned `data_context`, `per_ticker_analysis`, and source-ref-bound `run_provenance` from already resolved local Batch5 source artifacts. Tightened Batch4 provenance family schema/reconciler so every consumed family must carry non-empty clean repo-relative `source_refs`; source-packet runner can now optionally write gitignored `output_context_components_path` while keeping existing data_context-only packets compatible. No provider fetch, raw payload read, DataHub, production, ship-gate, broker/order, or A-share path.
+- **Required**: no new R-ID.
+- **Verify**: red first focused import failed on missing assembler; green focused official-components/source-packet/orchestrator/schema examples `10 OK`; provider/status/data_context pack `190 OK`; batch4/provenance pack `129 OK`; doc/route guards `60 OK`; full offline `discover -s tests -p '*us_short*.py'` `3686 OK` (1 skipped); `py_compile` OK; modified-file secret/URL grep only matched schema URIs/patterns and test sentinels; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: fixed the full consumed-family source-ref class (schema, reconciler, examples, tests, source-packet optional output) rather than only the new assembler. B/E: no durable route-doc transient gate added; CURRENT untouched.
+- **Next**: Claude Code: review current provenance/per_ticker official-context-components slice; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5 data_context source-packet 输入边界收紧 gitignored state/us_short)
 
 - **Verdict/Action**: PASS + 提交 4 文件(runner + test + README + SESSION_LOG)。新 `_validate_source_packet_path`:packet 输入须 is_file + parent 在 state/us_short + `.json` + `_git_ignored`(真 `git check-ignore`),读取前 fail-closed;DEFAULT 从缺失 tracked docs 占位改指真实 gitignored live packet。无 provider/raw/write 新增、纯 preflight 离线。

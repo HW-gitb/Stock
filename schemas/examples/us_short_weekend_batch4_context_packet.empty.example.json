@@ -20,7 +20,13 @@
         "price_basis_date": "20260612",
         "session": "RTH",
         "adjustment": "split_div_adjusted",
-        "row_count": 0
+        "row_count": 0,
+        "source_refs": [
+          {
+            "role": "synthetic_example_fixture",
+            "path": "schemas/examples/us_short_weekend_batch4_context_packet.empty.example.json"
+          }
+        ]
       },
       "per_ticker_analysis": {
         "as_of": "20260615",
@@ -28,7 +34,13 @@
         "price_basis_date": "20260612",
         "session": "RTH",
         "adjustment": "split_div_adjusted",
-        "row_count": 0
+        "row_count": 0,
+        "source_refs": [
+          {
+            "role": "synthetic_example_fixture",
+            "path": "schemas/examples/us_short_weekend_batch4_context_packet.empty.example.json"
+          }
+        ]
       },
       "candidate_pass2_signals": {
         "as_of": "20260615",
@@ -36,7 +48,13 @@
         "price_basis_date": null,
         "session": null,
         "adjustment": null,
-        "row_count": 0
+        "row_count": 0,
+        "source_refs": [
+          {
+            "role": "synthetic_example_fixture",
+            "path": "schemas/examples/us_short_weekend_batch4_context_packet.empty.example.json"
+          }
+        ]
       },
       "selection_inputs": {
         "as_of": "20260615",
@@ -44,7 +62,13 @@
         "price_basis_date": null,
         "session": null,
         "adjustment": null,
-        "row_count": 0
+        "row_count": 0,
+        "source_refs": [
+          {
+            "role": "synthetic_example_fixture",
+            "path": "schemas/examples/us_short_weekend_batch4_context_packet.empty.example.json"
+          }
+        ]
       }
     }
   },

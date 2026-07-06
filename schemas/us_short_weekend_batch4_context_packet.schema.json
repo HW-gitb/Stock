@@ -128,14 +128,32 @@
     "provenance_family": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count"],
+      "required": ["as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count", "source_refs"],
       "properties": {
         "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
         "observed_at": {"type": "string"},
         "price_basis_date": {"type": ["string", "null"]},
         "session": {"type": ["string", "null"]},
         "adjustment": {"type": ["string", "null"]},
-        "row_count": {"type": "integer", "minimum": 0}
+        "row_count": {"type": "integer", "minimum": 0},
+        "source_refs": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/source_ref"}
+        }
+      }
+    },
+    "source_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "path"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1},
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^(?!/)(?!.*\\.\\.)(?!.*://)(?!.*\\\\).+"
+        }
       }
     }
   }

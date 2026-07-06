@@ -34,10 +34,12 @@ _EMPTY_PAYLOADS = {"universe": [], "candidate_pass2_signals": {}, "per_ticker_an
 
 
 def _manifest(row_count=0, **over):
+    refs = [{"role": "test_fixture", "path": "tests/fixtures/us_short/run_provenance.json"}]
     price = {"as_of": _DD, "observed_at": _OBS, "price_basis_date": _PB,
-             "session": "RTH", "adjustment": "split_div_adjusted", "row_count": row_count}
+             "session": "RTH", "adjustment": "split_div_adjusted", "row_count": row_count,
+             "source_refs": list(refs)}
     nonprice = {"as_of": _DD, "observed_at": _OBS, "price_basis_date": None, "session": None,
-                "adjustment": None, "row_count": row_count}
+                "adjustment": None, "row_count": row_count, "source_refs": list(refs)}
     m = {"as_of": _DD, "price_basis_date": _PB,
          "families": {"universe": dict(price), "per_ticker_analysis": dict(price),
                       "candidate_pass2_signals": dict(nonprice), "selection_inputs": dict(nonprice)}}
@@ -123,6 +125,17 @@ class ManifestShape(unittest.TestCase):
         m2 = _manifest(); m2["families"]["candidate_pass2_signals"]["EXTRA"] = 1
         with self.assertRaises(RunProvenanceError):
             _run(m2)
+
+    def test_family_source_refs_required_and_repo_relative(self):
+        m = _manifest(); m["families"]["universe"].pop("source_refs")
+        with self.assertRaises(RunProvenanceError):
+            _run(m)
+        m2 = _manifest(); m2["families"]["selection_inputs"]["source_refs"] = []
+        with self.assertRaises(RunProvenanceError):
+            _run(m2)
+        m3 = _manifest(); m3["families"]["per_ticker_analysis"]["source_refs"][0]["path"] = "https://example.test/raw.json"
+        with self.assertRaises(RunProvenanceError):
+            _run(m3)
 
 
 class CrossRun(unittest.TestCase):

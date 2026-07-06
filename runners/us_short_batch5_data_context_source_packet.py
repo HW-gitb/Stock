@@ -18,7 +18,10 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
-from runners.us_short_batch5_data_context import assemble_data_context_from_resolved_pass2_sources  # noqa: E402
+from runners.us_short_batch5_data_context import (  # noqa: E402
+    assemble_data_context_from_resolved_pass2_sources,
+    assemble_official_context_components_from_resolved_pass2_sources,
+)
 
 
 SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_data_context_source_packet.schema.json"
@@ -152,16 +155,16 @@ def _git_ignored(path: Path) -> bool:
     return result.returncode == 0
 
 
-def _validate_output_path(value: Any) -> Path:
-    path = _validate_repo_relative_text(value, field="output_data_context_path")
+def _validate_output_path(value: Any, *, field: str) -> Path:
+    path = _validate_repo_relative_text(value, field=field)
     try:
         path.resolve().parent.relative_to(STATE_US_SHORT_DIR.resolve())
     except ValueError as exc:
-        raise SourcePacketError("paths.output_data_context_path must stay under state/us_short/") from exc
+        raise SourcePacketError(f"paths.{field} must stay under state/us_short/") from exc
     if path.suffix != ".json":
-        raise SourcePacketError("paths.output_data_context_path must be a .json file")
+        raise SourcePacketError(f"paths.{field} must be a .json file")
     if not _git_ignored(path):
-        raise SourcePacketError("paths.output_data_context_path must be gitignored")
+        raise SourcePacketError(f"paths.{field} must be gitignored")
     return path
 
 
@@ -216,7 +219,15 @@ def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], 
         field: _existing_repo_path(packet["paths"][field], field=field)
         for field in SOURCE_PATH_FIELDS
     }
-    paths["output_data_context_path"] = _validate_output_path(packet["paths"]["output_data_context_path"])
+    paths["output_data_context_path"] = _validate_output_path(
+        packet["paths"]["output_data_context_path"],
+        field="output_data_context_path",
+    )
+    if "output_context_components_path" in packet["paths"]:
+        paths["output_context_components_path"] = _validate_output_path(
+            packet["paths"]["output_context_components_path"],
+            field="output_context_components_path",
+        )
     paths["packet_path"] = resolved_packet_path
     return packet, paths
 
@@ -277,20 +288,42 @@ def run_packet(
     try:
         eligibility_governance = load_eligibility_governance(paths["eligibility_governance_path"])
         catalyst_governance = load_catalyst_governance(paths["catalyst_governance_path"])
-        data_context = assemble_data_context_from_resolved_pass2_sources(
-            candidate_artifact=_source_json(paths["candidate_artifact_path"], field="candidate_artifact_path"),
-            expected_decision_date=packet["decision_clock"]["expected_decision_date"],
-            eligibility_governance=eligibility_governance,
-            momentum_projection=_source_json(paths["momentum_projection_path"], field="momentum_projection_path"),
-            theme_projection=_source_json(paths["theme_projection_path"], field="theme_projection_path"),
-            offering_audit_source=_source_json(paths["offering_audit_source_path"], field="offering_audit_source_path"),
-            analyst_grade_actions=_source_json(paths["analyst_grade_actions_path"], field="analyst_grade_actions_path"),
-            massive_news_events=_source_json(paths["massive_news_events_path"], field="massive_news_events_path"),
-            catalyst_governance=catalyst_governance,
-            theme_opportunity_state=packet["decision_clock"]["theme_opportunity_state"],
-            holdings=packet["optional_inputs"]["holdings"],
-            catalyst_recall_feed=packet["optional_inputs"]["catalyst_recall_feed"],
-        )
+        source_payloads = {
+            field: _source_json(paths[field], field=field)
+            for field in (
+                "candidate_artifact_path",
+                "momentum_projection_path",
+                "theme_projection_path",
+                "offering_audit_source_path",
+                "analyst_grade_actions_path",
+                "massive_news_events_path",
+            )
+        }
+        common_kwargs = {
+            "candidate_artifact": source_payloads["candidate_artifact_path"],
+            "expected_decision_date": packet["decision_clock"]["expected_decision_date"],
+            "eligibility_governance": eligibility_governance,
+            "momentum_projection": source_payloads["momentum_projection_path"],
+            "theme_projection": source_payloads["theme_projection_path"],
+            "offering_audit_source": source_payloads["offering_audit_source_path"],
+            "analyst_grade_actions": source_payloads["analyst_grade_actions_path"],
+            "massive_news_events": source_payloads["massive_news_events_path"],
+            "catalyst_governance": catalyst_governance,
+            "theme_opportunity_state": packet["decision_clock"]["theme_opportunity_state"],
+            "holdings": packet["optional_inputs"]["holdings"],
+            "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
+        }
+        context_components = None
+        if "output_context_components_path" in paths:
+            context_components = assemble_official_context_components_from_resolved_pass2_sources(
+                **common_kwargs,
+                source_ref_paths={field: _repo_rel(paths[field]) for field in SOURCE_PATH_FIELDS},
+            )
+            data_context = context_components["data_context"]
+        else:
+            data_context = assemble_data_context_from_resolved_pass2_sources(
+                **common_kwargs,
+            )
     except SourcePacketError:
         raise
     except Exception as exc:
@@ -299,6 +332,13 @@ def run_packet(
     output_path = paths["output_data_context_path"]
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(data_context, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    context_components_output_path = paths.get("output_context_components_path")
+    if context_components_output_path is not None and context_components is not None:
+        context_components_output_path.parent.mkdir(parents=True, exist_ok=True)
+        context_components_output_path.write_text(
+            json.dumps(context_components, ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
     return {
         "schema_name": "us_short_batch5_data_context_source_packet_run_result",
         "schema_version": "1.0.0",
@@ -313,6 +353,7 @@ def run_packet(
             "provider_calls_performed": False,
             "raw_payloads_read": False,
             "data_context_written": True,
+            "context_components_written": context_components_output_path is not None,
             "datahub_consumption_allowed": False,
             "production_storage_allowed": False,
             "ship_gate_evidence_claimed": False,
@@ -323,6 +364,15 @@ def run_packet(
             "output_path": _repo_rel(output_path),
             "universe_count": len(data_context["universe"]),
             "selection_input_count": len(data_context["selection_inputs"]["per_ticker"]),
+        },
+        "context_components": {
+            "output_path": _repo_rel(context_components_output_path) if context_components_output_path is not None else None,
+            "per_ticker_analysis_count": (
+                len(context_components["per_ticker_analysis"]) if context_components is not None else 0
+            ),
+            "run_provenance_family_count": (
+                len(context_components["run_provenance"]["families"]) if context_components is not None else 0
+            ),
         },
         "source_artifacts": {
             "local_source_artifacts_read": len(SOURCE_PATH_FIELDS),

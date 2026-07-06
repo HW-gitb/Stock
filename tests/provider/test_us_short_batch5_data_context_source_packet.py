@@ -15,6 +15,7 @@ if str(ROOT) not in sys.path:
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import resolve_news_events  # noqa: E402
+from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     SourcePacketError,
     run_packet,
@@ -24,6 +25,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _GRADE_AS_OF,
     _NEWS_AS_OF,
+    _OFFERING_AS_OF,
     _candidate_artifact,
     _checked_offering,
     _constant_projection,
@@ -31,6 +33,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _grade_source,
     _news_item,
     _news_source,
+    _offering_record,
     _offering_source,
 )
 
@@ -60,6 +63,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "analyst": STATE_DIR / f"{self.slug}_analyst.json",
             "news": STATE_DIR / f"{self.slug}_news.json",
             "output": STATE_DIR / f"{self.slug}_data_context.json",
+            "components": STATE_DIR / f"{self.slug}_context_components.json",
             "raw_payload": ROOT / "provider_samples" / f"{self.slug}_raw_payload.json",
         }
         for path in self.paths.values():
@@ -196,6 +200,39 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertEqual(set(written["selection_inputs"]["per_ticker"]), {"AAPL", "MSFT"})
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 43.5)
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
+
+    def test_run_packet_optionally_writes_official_context_components(self):
+        _write_json(
+            self.paths["offering"],
+            resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    "AAPL": _offering_record([]),
+                    "MSFT": _offering_record([]),
+                    "JPM": _offering_record([], coverage="partial"),
+                },
+            ),
+        )
+        packet = self._packet_payload()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.paths["packet"], packet)
+
+        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        self.assertTrue(result["scope"]["context_components_written"])
+        self.assertEqual(result["context_components"]["output_path"], _rel(self.paths["components"]))
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        self.assertEqual(set(components), {"data_context", "per_ticker_analysis", "run_provenance"})
+        self.assertEqual(set(components["per_ticker_analysis"]), {"AAPL", "MSFT"})
+        self.assertEqual(
+            components["per_ticker_analysis"]["AAPL"]["row_source"],
+            "top15_candidate",
+        )
+        source_refs = components["run_provenance"]["families"]["candidate_pass2_signals"]["source_refs"]
+        self.assertIn(
+            {"role": "offering_audit_source", "path": _rel(self.paths["offering"])},
+            source_refs,
+        )
 
     def test_output_path_must_be_gitignored_state_file(self):
         packet = self._packet_payload()

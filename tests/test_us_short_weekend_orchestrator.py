@@ -70,12 +70,16 @@ def _run_provenance(counts=None, observed="2026-06-13T08:00:00", *, as_of=_DD, p
     # observe-at only (price lineage = None). row_count BINDS the manifest to the actual payload (①a). observed
     # defaults safely before the Sat 10:00 run wall clock.
     counts = counts or {f: 0 for f in _FAMS}
+    def source_refs(n):
+        return [{"role": "test_fixture", "path": f"tests/fixtures/us_short/{n}.json"}]
     def price_fam(n):
         return {"as_of": as_of, "observed_at": observed, "price_basis_date": price_basis,
-                "session": "RTH", "adjustment": "split_div_adjusted", "row_count": counts[n]}
+                "session": "RTH", "adjustment": "split_div_adjusted", "row_count": counts[n],
+                "source_refs": source_refs(n)}
     def nonprice_fam(n):
         return {"as_of": as_of, "observed_at": observed, "price_basis_date": None,
-                "session": None, "adjustment": None, "row_count": counts[n]}
+                "session": None, "adjustment": None, "row_count": counts[n],
+                "source_refs": source_refs(n)}
     return {"as_of": as_of, "price_basis_date": price_basis,
             "families": {"universe": price_fam("universe"), "per_ticker_analysis": price_fam("per_ticker_analysis"),
                          "candidate_pass2_signals": nonprice_fam("candidate_pass2_signals"),
@@ -301,6 +305,18 @@ class ProvenanceFailClosed(unittest.TestCase):
             self.assertTrue(out["emitted"])
             self.assertEqual(out["run_provenance"]["as_of"], _DD)
             self.assertEqual(out["run_provenance"]["session"], "RTH")
+
+
+    def test_source_refs_missing_input_family_rejected(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            rp = _run_provenance()
+            rp["families"]["universe"].pop("source_refs")
+            pc = _pipeline_context(reg, rr, wr, run_provenance=rp)
+            with self.assertRaises(RunProvenanceError):
+                orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertFalse(any(Path(wr).iterdir()))
 
 
 class RunGateHealthAndMode(unittest.TestCase):

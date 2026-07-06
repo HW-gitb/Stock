@@ -150,6 +150,10 @@
         "output_data_context_path": {
           "type": "string",
           "minLength": 1
+        },
+        "output_context_components_path": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

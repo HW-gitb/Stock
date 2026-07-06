@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import math
+from datetime import datetime
+from pathlib import PurePosixPath
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from engine.us_short_catalyst import CatalystGovernanceError
 from engine.us_short_eligibility_gate import (
@@ -51,6 +54,40 @@ SELECTION_INPUT_KEYS = {"theme_opportunity_state", "per_ticker"}
 SELECTION_ROW_KEYS = {"core_score", "theme_momentum_score"}
 PASS2_SOURCE_KEYS = {"offering_audit"}
 PASS2_SOURCE_DISPOSITIONS = ("signals", "checked", "excluded")
+SOURCE_REF_PATH_KEYS = (
+    "candidate_artifact_path",
+    "eligibility_governance_path",
+    "momentum_projection_path",
+    "theme_projection_path",
+    "offering_audit_source_path",
+    "analyst_grade_actions_path",
+    "massive_news_events_path",
+    "catalyst_governance_path",
+)
+_SOURCE_REF_ROLE_BY_PATH_KEY = {
+    key: key[:-5] if key.endswith("_path") else key
+    for key in SOURCE_REF_PATH_KEYS
+}
+_FAMILY_SOURCE_REF_ROLES = {
+    "universe": ("candidate_artifact", "eligibility_governance"),
+    "candidate_pass2_signals": ("offering_audit_source",),
+    "selection_inputs": (
+        "momentum_projection",
+        "theme_projection",
+        "offering_audit_source",
+        "analyst_grade_actions",
+        "massive_news_events",
+        "catalyst_governance",
+    ),
+    "per_ticker_analysis": (
+        "candidate_artifact",
+        "momentum_projection",
+        "theme_projection",
+        "analyst_grade_actions",
+        "massive_news_events",
+        "catalyst_governance",
+    ),
+}
 
 
 class DataContextAssemblyError(ValueError):
@@ -89,6 +126,92 @@ def _finite_score(value: Any, *, where: str) -> float:
     if not math.isfinite(score) or score < 0.0 or score > 100.0:
         _fail(f"{where} must be finite in [0,100]: {value!r}")
     return score
+
+
+def _validated_source_ref_paths(value: Any) -> dict[str, str]:
+    if type(value) is not dict:
+        _fail("source_ref_paths must be an exact dict")
+    if set(value) != set(SOURCE_REF_PATH_KEYS):
+        _fail(f"source_ref_paths must contain exactly {sorted(SOURCE_REF_PATH_KEYS)}")
+    out: dict[str, str] = {}
+    for path_key in SOURCE_REF_PATH_KEYS:
+        raw = value[path_key]
+        if type(raw) is not str or not raw.strip():
+            _fail(f"source_ref_paths.{path_key} must be a non-empty repo-relative path")
+        if "://" in raw or "\\" in raw or ":" in raw:
+            _fail(f"source_ref_paths.{path_key} must be repo-relative, not a URL or absolute path")
+        parts = PurePosixPath(raw).parts
+        if PurePosixPath(raw).is_absolute() or any(part in ("", ".", "..") for part in parts):
+            _fail(f"source_ref_paths.{path_key} must be a clean repo-relative path")
+        out[_SOURCE_REF_ROLE_BY_PATH_KEY[path_key]] = raw
+    return out
+
+
+def _source_refs_for_family(source_refs_by_role: dict[str, str], family: str) -> list[dict[str, str]]:
+    return [
+        {"role": role, "path": source_refs_by_role[role]}
+        for role in _FAMILY_SOURCE_REF_ROLES[family]
+    ]
+
+
+def _observed_at_to_naive_et(value: Any, *, where: str) -> datetime:
+    if type(value) is not str or "T" not in value:
+        _fail(f"{where} must be an ISO date-time string")
+    try:
+        dt = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as exc:
+        raise DataContextAssemblyError(f"{where} must be parseable ISO date-time") from exc
+    if dt.tzinfo is not None:
+        try:
+            dt = dt.astimezone(ZoneInfo("America/New_York")).replace(tzinfo=None)
+        except (OverflowError, ValueError, OSError) as exc:
+            raise DataContextAssemblyError(f"{where} must be timezone-normalizable ISO date-time") from exc
+    return dt
+
+
+def _collect_observed_at_instants(value: Any, *, where: str) -> list[datetime]:
+    out: list[datetime] = []
+
+    def walk(node: Any, path: str) -> None:
+        if type(node) is dict:
+            for key, child in node.items():
+                child_path = f"{path}.{key}" if path else str(key)
+                if key == "observed_at":
+                    out.append(_observed_at_to_naive_et(child, where=child_path))
+                else:
+                    walk(child, child_path)
+        elif type(node) is list:
+            for idx, child in enumerate(node):
+                walk(child, f"{path}[{idx}]")
+
+    walk(value, where)
+    return out
+
+
+def _max_observed_at(family: str, instants: list[datetime]) -> str:
+    if not instants:
+        _fail(f"run_provenance.families.{family} has no source observed_at clock")
+    return max(instants).isoformat(timespec="seconds")
+
+
+def _provenance_family(
+    *,
+    as_of: str,
+    observed_at: str,
+    price_basis_date: str | None,
+    row_count: int,
+    source_refs: list[dict[str, str]],
+) -> dict[str, Any]:
+    price_bearing = price_basis_date is not None
+    return {
+        "as_of": as_of,
+        "observed_at": observed_at,
+        "price_basis_date": price_basis_date,
+        "session": "RTH" if price_bearing else None,
+        "adjustment": "split_div_adjusted" if price_bearing else None,
+        "row_count": row_count,
+        "source_refs": source_refs,
+    }
 
 
 def _validated_candidate_artifact(
@@ -534,7 +657,7 @@ def assemble_data_context_with_massive_news_catalyst(
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
 
-def assemble_data_context_from_resolved_pass2_sources(
+def _assemble_resolved_pass2_source_context(
     *,
     candidate_artifact: dict[str, Any],
     expected_decision_date: str,
@@ -548,12 +671,7 @@ def assemble_data_context_from_resolved_pass2_sources(
     theme_opportunity_state: str,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
-) -> dict[str, Any]:
-    """Assemble data_context from already-resolved Pass2/provider fact layers.
-
-    Pure/offline: no provider calls, raw persistence, DataHub, or second scoring formula. Offering audit
-    owns Pass2 safety signals; analyst grades and Massive news are projected into the canonical score composer.
-    """
+) -> tuple[dict[str, Any], dict[str, Any]]:
     prepared = _prepare_context_inputs(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -587,7 +705,151 @@ def assemble_data_context_from_resolved_pass2_sources(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],
     )
-    return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
+    return (
+        _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings),
+        score_composition,
+    )
+
+
+def assemble_data_context_from_resolved_pass2_sources(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection: dict[str, Any],
+    theme_projection: dict[str, Any],
+    offering_audit_source: dict[str, Any],
+    analyst_grade_actions: dict[str, Any],
+    massive_news_events: dict[str, Any],
+    catalyst_governance: dict[str, Any],
+    theme_opportunity_state: str,
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble data_context from already-resolved Pass2/provider fact layers.
+
+    Pure/offline: no provider calls, raw persistence, DataHub, or second scoring formula. Offering audit
+    owns Pass2 safety signals; analyst grades and Massive news are projected into the canonical score composer.
+    """
+    data_context, _ = _assemble_resolved_pass2_source_context(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        momentum_projection=momentum_projection,
+        theme_projection=theme_projection,
+        offering_audit_source=offering_audit_source,
+        analyst_grade_actions=analyst_grade_actions,
+        massive_news_events=massive_news_events,
+        catalyst_governance=catalyst_governance,
+        theme_opportunity_state=theme_opportunity_state,
+        holdings=holdings,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    return data_context
+
+
+def _official_per_ticker_analysis(score_composition: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for ticker, row in score_composition["analysis_by_ticker"].items():
+        if type(row) is not dict:
+            _fail(f"score_composition.analysis_by_ticker[{ticker}] must be an exact dict")
+        if set(row) & {"ticker", "row_source", "signals"}:
+            _fail(f"score_composition.analysis_by_ticker[{ticker}] must not pre-populate official row identity")
+        out[ticker] = {
+            "ticker": ticker,
+            "row_source": "top15_candidate",
+            "signals": {},
+            **row,
+        }
+    return out
+
+
+def assemble_official_context_components_from_resolved_pass2_sources(
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection: dict[str, Any],
+    theme_projection: dict[str, Any],
+    offering_audit_source: dict[str, Any],
+    analyst_grade_actions: dict[str, Any],
+    massive_news_events: dict[str, Any],
+    catalyst_governance: dict[str, Any],
+    theme_opportunity_state: str,
+    source_ref_paths: dict[str, Any],
+    holdings: list[dict[str, Any]] | None = None,
+    catalyst_recall_feed: list[str] | None = None,
+) -> dict[str, Any]:
+    """Assemble official Batch4 data/provenance components from resolved local source artifacts.
+
+    This is still pure/offline and intentionally does not fabricate batch4 price bars or provider data. It adds
+    the official per-ticker score rows and a source-ref-bound run_provenance manifest beside the existing
+    data_context seam; the later batch5->batch4 E2E cut supplies the remaining analysis inputs.
+    """
+    source_refs_by_role = _validated_source_ref_paths(source_ref_paths)
+    data_context, score_composition = _assemble_resolved_pass2_source_context(
+        candidate_artifact=candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        momentum_projection=momentum_projection,
+        theme_projection=theme_projection,
+        offering_audit_source=offering_audit_source,
+        analyst_grade_actions=analyst_grade_actions,
+        massive_news_events=massive_news_events,
+        catalyst_governance=catalyst_governance,
+        theme_opportunity_state=theme_opportunity_state,
+        holdings=holdings,
+        catalyst_recall_feed=catalyst_recall_feed,
+    )
+    per_ticker_analysis = _official_per_ticker_analysis(score_composition)
+    if set(per_ticker_analysis) != set(data_context["selection_inputs"]["per_ticker"]):
+        _fail("per_ticker_analysis must exactly cover selection_inputs.per_ticker")
+
+    candidate_observed = _observed_at_to_naive_et(candidate_artifact.get("generated_at"), where="candidate_artifact.generated_at")
+    offering_observed = _collect_observed_at_instants(offering_audit_source, where="offering_audit_source")
+    analyst_observed = _collect_observed_at_instants(analyst_grade_actions, where="analyst_grade_actions")
+    news_observed = _collect_observed_at_instants(massive_news_events, where="massive_news_events")
+    score_family_observed = [candidate_observed, *offering_observed, *analyst_observed, *news_observed]
+    price_basis_date = candidate_artifact["price_basis_date"]
+    families = {
+        "universe": _provenance_family(
+            as_of=expected_decision_date,
+            observed_at=candidate_observed.isoformat(timespec="seconds"),
+            price_basis_date=price_basis_date,
+            row_count=len(data_context["universe"]),
+            source_refs=_source_refs_for_family(source_refs_by_role, "universe"),
+        ),
+        "per_ticker_analysis": _provenance_family(
+            as_of=expected_decision_date,
+            observed_at=_max_observed_at("per_ticker_analysis", score_family_observed),
+            price_basis_date=price_basis_date,
+            row_count=len(per_ticker_analysis),
+            source_refs=_source_refs_for_family(source_refs_by_role, "per_ticker_analysis"),
+        ),
+        "candidate_pass2_signals": _provenance_family(
+            as_of=expected_decision_date,
+            observed_at=_max_observed_at("candidate_pass2_signals", offering_observed),
+            price_basis_date=None,
+            row_count=len(data_context["candidate_pass2_signals"]),
+            source_refs=_source_refs_for_family(source_refs_by_role, "candidate_pass2_signals"),
+        ),
+        "selection_inputs": _provenance_family(
+            as_of=expected_decision_date,
+            observed_at=_max_observed_at("selection_inputs", score_family_observed),
+            price_basis_date=None,
+            row_count=len(data_context["selection_inputs"]["per_ticker"]),
+            source_refs=_source_refs_for_family(source_refs_by_role, "selection_inputs"),
+        ),
+    }
+    return {
+        "data_context": data_context,
+        "per_ticker_analysis": per_ticker_analysis,
+        "run_provenance": {
+            "as_of": expected_decision_date,
+            "price_basis_date": price_basis_date,
+            "families": families,
+        },
+    }
 
 
 def assemble_data_context_from_sec_offering_submissions(
