@@ -1,0 +1,406 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json",
+  "title": "US-short Batch5 full-candidate live source-packet summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "authorization_ref",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "environment",
+    "preflight_gate",
+    "candidate_universe",
+    "endpoint_call_budget",
+    "endpoint_results",
+    "storage",
+    "source_artifacts",
+    "source_packet",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_full_candidate_live_source_packet_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "schema_ref": { "const": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json" },
+    "authorization_ref": { "const": "user_chat_20260706_us_short_full_candidate_live_source_packet" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_payload_storage_performed",
+        "resolved_source_artifacts_written",
+        "corporate_action_capture_written",
+        "source_packet_written",
+        "data_context_written",
+        "context_components_written",
+        "corporate_action_reconciliation_performed",
+        "return_calculation_performed",
+        "datahub_consumption_performed",
+        "production_storage_performed",
+        "full_market_call_performed",
+        "yfinance_consumption_performed",
+        "broker_or_order_execution_performed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "purpose": { "const": "full_candidate_live_pass2_resolved_source_packet" },
+        "status": {
+          "enum": [
+            "source_packet_built_preflight_only",
+            "source_packet_built_and_data_context_written"
+          ]
+        },
+        "network_access_performed": { "const": true },
+        "provider_calls_performed": { "const": true },
+        "raw_payload_storage_performed": { "const": true },
+        "resolved_source_artifacts_written": { "const": true },
+        "corporate_action_capture_written": { "const": true },
+        "source_packet_written": { "const": true },
+        "data_context_written": { "type": "boolean" },
+        "context_components_written": { "type": "boolean" },
+        "corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "full_market_call_performed": { "const": false },
+        "yfinance_consumption_performed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_decision_date", "source_as_of", "observed_at"],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "observed_at": { "type": "string", "minLength": 1 }
+      }
+    },
+    "environment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fmp_api_key_present",
+        "fmp_api_key_source",
+        "sec_user_agent_present",
+        "sec_user_agent_source",
+        "massive_api_key_present",
+        "massive_api_key_source",
+        "environment_values_logged",
+        "secrets_logged"
+      ],
+      "properties": {
+        "fmp_api_key_present": { "const": true },
+        "fmp_api_key_source": { "type": "string", "minLength": 1 },
+        "sec_user_agent_present": { "const": true },
+        "sec_user_agent_source": { "type": "string", "minLength": 1 },
+        "massive_api_key_present": { "const": true },
+        "massive_api_key_source": { "type": "string", "minLength": 1 },
+        "environment_values_logged": { "const": false },
+        "secrets_logged": { "const": false }
+      }
+    },
+    "preflight_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preflight_summary_path",
+        "preflight_status",
+        "local_inputs_ready",
+        "expected_total_call_budget",
+        "preflight_total_call_forecast",
+        "call_budget_matches_preflight"
+      ],
+      "properties": {
+        "preflight_summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "preflight_status": { "const": "ready_for_reviewed_live_execution" },
+        "local_inputs_ready": { "const": true },
+        "expected_total_call_budget": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "preflight_total_call_forecast": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "call_budget_matches_preflight": { "const": true }
+      }
+    },
+    "candidate_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_artifact_path",
+        "candidate_artifact_path_gitignored",
+        "row_count",
+        "eligible_count",
+        "eligible_symbol_sample",
+        "symbol_scope",
+        "full_market_sample"
+      ],
+      "properties": {
+        "candidate_artifact_path": {
+          "type": "string",
+          "pattern": "^state/us_short/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "candidate_artifact_path_gitignored": { "const": true },
+        "row_count": { "type": "integer", "minimum": 1 },
+        "eligible_count": { "type": "integer", "minimum": 1 },
+        "eligible_symbol_sample": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "symbol_scope": { "const": "full_pass1_eligible_candidate_set" },
+        "full_market_sample": { "const": false }
+      }
+    },
+    "endpoint_call_budget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "max_total_endpoint_calls",
+        "actual_total_endpoint_calls",
+        "sec_ticker_reference_calls",
+        "fmp_grades_calls",
+        "sec_submissions_calls",
+        "massive_reference_news_calls",
+        "fmp_stock_split_calls",
+        "fmp_dividend_calls",
+        "endpoint_error_count",
+        "sec_cik_missing_count",
+        "retry_count_allowed",
+        "retry_count_used",
+        "within_budget"
+      ],
+      "properties": {
+        "max_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "sec_ticker_reference_calls": { "const": 1 },
+        "fmp_grades_calls": { "type": "integer", "minimum": 1 },
+        "sec_submissions_calls": { "type": "integer", "minimum": 0 },
+        "massive_reference_news_calls": { "type": "integer", "minimum": 1 },
+        "fmp_stock_split_calls": { "type": "integer", "minimum": 1 },
+        "fmp_dividend_calls": { "type": "integer", "minimum": 1 },
+        "endpoint_error_count": { "type": "integer", "minimum": 0 },
+        "sec_cik_missing_count": { "type": "integer", "minimum": 0 },
+        "retry_count_allowed": { "const": 0 },
+        "retry_count_used": { "const": 0 },
+        "within_budget": { "const": true }
+      }
+    },
+    "endpoint_results": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20000,
+      "items": { "$ref": "#/$defs/endpointResult" }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_raw_payload",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_secrets"
+      ],
+      "properties": {
+        "raw_payload_root": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/"
+        },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_batch5_full_candidate_live_source_packet_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "tracked_summary_contains_raw_rows": { "const": false },
+        "tracked_summary_contains_raw_payload": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_secrets": { "const": false }
+      }
+    },
+    "source_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "candidate_subset_path",
+        "offering_audit_source_path",
+        "analyst_grade_actions_path",
+        "massive_news_events_path",
+        "corporate_action_capture_path",
+        "artifacts_gitignored"
+      ],
+      "properties": {
+        "candidate_subset_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "offering_audit_source_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "analyst_grade_actions_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "massive_news_events_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "corporate_action_capture_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "artifacts_gitignored": { "const": true }
+      }
+    },
+    "source_packet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "preflight_status",
+        "run_data_context_requested",
+        "data_context_output_path",
+        "context_components_output_path"
+      ],
+      "properties": {
+        "path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "preflight_status": { "const": "offline_preflight_passed" },
+        "run_data_context_requested": { "type": "boolean" },
+        "data_context_output_path": {
+          "anyOf": [
+            { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+            { "type": "null" }
+          ]
+        },
+        "context_components_output_path": {
+          "anyOf": [
+            { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+            { "type": "null" }
+          ]
+        }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "full_market_download_performed",
+        "yfinance_used",
+        "paid_access_used",
+        "datahub_consumed",
+        "production_readiness_claimed",
+        "corporate_action_reconciliation_claimed",
+        "return_calculation_performed",
+        "ship_gate_evidence_claimed",
+        "live_normalized_evidence_claimed",
+        "broker_or_order_execution_performed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "full_market_download_performed": { "const": false },
+        "yfinance_used": { "const": false },
+        "paid_access_used": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_readiness_claimed": { "const": false },
+        "corporate_action_reconciliation_claimed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "endpointResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_id",
+        "endpoint_family",
+        "symbol",
+        "status",
+        "http_status",
+        "error_type",
+        "raw_sample_ref",
+        "raw_sample_ref_gitignored",
+        "payload_shape"
+      ],
+      "properties": {
+        "provider_id": {
+          "enum": ["sec_edgar", "financial_modeling_prep", "massive"]
+        },
+        "endpoint_family": {
+          "enum": [
+            "company_tickers_mapping",
+            "submissions",
+            "grades",
+            "reference_news",
+            "stock_splits",
+            "dividends"
+          ]
+        },
+        "symbol": {
+          "anyOf": [
+            { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" },
+            { "type": "null" }
+          ]
+        },
+        "status": { "enum": ["success", "error"] },
+        "http_status": {
+          "anyOf": [
+            { "type": "integer", "minimum": 100, "maximum": 599 },
+            { "type": "null" }
+          ]
+        },
+        "error_type": {
+          "anyOf": [
+            { "type": "string", "minLength": 1 },
+            { "type": "null" }
+          ]
+        },
+        "raw_sample_ref": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_batch5_full_candidate_live_source_packet_20260706/.+\\.json$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "raw_sample_ref_gitignored": { "const": true },
+        "payload_shape": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "row_count"],
+          "properties": {
+            "kind": {
+              "enum": ["list", "object_results", "sec_submissions", "object", "null", "scalar"]
+            },
+            "row_count": {
+              "anyOf": [
+                { "type": "integer", "minimum": 0 },
+                { "type": "null" }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

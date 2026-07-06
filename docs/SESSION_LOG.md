@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short cut⑤ full-candidate live source-packet runner — code/schema/test 已闭, 真跑仍 gated)
+
+- **Verdict/Action**: PASS + 提交 8 文件(新 runner+schema+test + CURRENT/README/design/register/SESSION_LOG)。cut⑤ 批 II live 层 runner:授权+preflight-ready+预算匹配(12021)+路径 gitignored+summary schema+no-secret 全在 fetch 前 fail-closed;真 provider 跑**未执行**(FMP Basic 250/day < 12021 forecast,Codex 主动停在预算门)→无 tracked live summary、零 network/raw/secret。提交 code ≠ 授权跑 12021,真跑仍 SR-PROVIDER-001 逐次门。
+- **Required**: 无。Register: non-material(仅 1 非阻塞 P3 Optional、runner 不可达)。
+- **Verify**: 整读 runner + 被消费 `sample_validation` 助手:预算 assert=`len+1>max` 精确封顶(无 off-by-one)、`read_required_env` 缺 secret fail-closed 且不打印值、`FetchRecord.error_type` 仅固定 token(结构上不泄 URL/secret)+`_assert_text_safe` 第二道网。§6a 最高危(新 live 授权门)独立对抗 agent 五向全 HELD:授权/预算门不可绕(伪造本地 preflight 只节流+中止、不超授权)、tracked summary 不泄 secret/URL/raw、schema minima 令零调用 summary 不可能(不可伪造 live 证据)、4 类 fail-closed 崩溃全 typed、路径全 confined。亲跑 full offline `*us_short*` 3746 OK(+6)+ doc/route 60 OK 零回归;树恰 8 文件无残留;review-evidence:not_available(裸 `审查` 未触发本地 hook token;证据=本会话真实工具输出)。1 Optional:summary schema 未交叉绑定 `data_context_written`↔`status`(runner builder 恒一致设+唯一 writer+无注入路径→非 material、留作未来可选加固)。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short cut5 full-candidate live source-packet runner; provider run fail-closed)
+
+- **Verdict/Action**: added the guarded full-candidate live source-packet runner/schema/test for cut5. It validates explicit authorization, canonical preflight, expected `12021` budget, gitignored raw/state paths, summary schema, and no-secret hygiene before any fetch. The real provider run was not started because repo evidence records current FMP Basic as `250` calls/day, which does not clear the `12021` forecast. No provider/network/raw/source-packet/tracked-live-summary/DataHub/production/ship-gate/broker/A-share path executed.
+- **Required**: no new R-ID; material caveat recorded in `docs/system_risk_register.md`. SR-PROVIDER-001 remains open for provider entitlement/stability/storage/PIT/corporate-action reconciliation/DataHub/production/ship-gate evidence.
+- **Verify**: red first missing-runner import + malformed preflight JSON leaked `JSONDecodeError`; focused `17 OK`; provider/status/data_context discover `463 OK (1 skipped)`; doc/route guards `60 OK`; full offline `*us_short*` `3746 OK (1 skipped)`; py_compile OK; no tracked live summary generated; diff-check OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. A/C: authorization, malformed JSON, invalid-calendar date, budget mismatch, scope/schema drift, and call-budget entitlement mismatch all stop before provider fetch or writes. B/E: route docs state only settled runner + budget blocker; CURRENT has no actor/commit gate; SR-PROVIDER-001 remains the provider-risk source.
+- **Next**: Claude Code: review current US-short cut5 full-candidate live source-packet runner and call-budget fail-closed handoff; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short 批 I 收尾 2 P3 fold-in — screen_status isinstance + resume raw_ref confinement 已闭)
 
 - **Verdict/Action**: PASS + 提交 6 文件(universe_fetch + resume_scan runner/test 各 + SESSION_LOG/register)。两 P3 fold-in 闭合:① `run_fetch` `_canonical_screen_rows` 加 `not isinstance(screen_status, str) or` 短路(unhashable→domain error 非裸 TypeError);② resume-scan 新 `_resolve_manifest_raw_ref` 把 manifest raw_ref 限定 raw_root+gitignored+exist(取代 relative_to(ROOT)-only + 裸 FileNotFoundError,两消费点共用)。均 offline、guard/round/budget/provider 逻辑不变。
