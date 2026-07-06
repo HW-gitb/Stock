@@ -868,6 +868,75 @@ class TestRunFetchE2E(unittest.TestCase):
             "0001140361-26-000001",
         )
 
+    def test_run_fetch_can_consume_merged_gitignored_bankruptcy_screen_paths(self):
+        sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+                   "BANKR": {"cik": 123456, "exchange": "NYSE"}}
+        shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+                  123456: {"shares": 1_000_000_000, "end": "2026-03-31"}}
+
+        def fake_grouped(date, key):
+            return [{"T": "AAPL", "c": 200.0, "v": 50_000_000},
+                    {"T": "BANKR", "c": 20.0, "v": 10_000_000}]
+
+        screen_a = ROOT / "state" / "us_short" / "test_bankruptcy_screen_a_20260629.json"
+        screen_b = ROOT / "state" / "us_short" / "test_bankruptcy_screen_b_20260629.json"
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        for p in (screen_a, screen_b, cand):
+            p.unlink(missing_ok=True)
+            self.addCleanup(p.unlink, missing_ok=True)
+            self.addCleanup(p.with_name(p.name + ".tmp").unlink, missing_ok=True)
+        screen_a.write_text(json.dumps({
+            "observed": True,
+            "observed_at": "2026-06-29T11:55:00+00:00",
+            "lookback_window": "P90D",
+            "by_ticker": {"AAPL": {"screen_status": "screened_no_filing"}},
+        }), encoding="utf-8")
+        screen_b.write_text(json.dumps({
+            "observed": True,
+            "observed_at": "2026-06-29T12:00:00+00:00",
+            "lookback_window": "P90D",
+            "by_ticker": {"BANKR": {
+                "screen_status": "bankrupt_8k_found",
+                "filing_accession": "0001140361-26-000001",
+            }},
+        }), encoding="utf-8")
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
+                              return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
+                                            "halted_symbols": []}), \
+                 patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json", raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                    bankruptcy_screen_paths=[screen_a, screen_b],
+                )
+
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        screening = summary["status_screening"]
+        self.assertTrue(screening["bankruptcy_8k_scan_performed"])
+        self.assertEqual(screening["bankruptcy_8k_source"], "injected_bankruptcy_screen")
+        self.assertEqual(screening["bankruptcy_8k_input_symbol_count"], 2)
+        self.assertEqual(screening["bankruptcy_8k_screen_file_count"], 2)
+        by_ticker = {row["ticker"]: row for row in artifact["rows"]}
+        self.assertEqual(
+            by_ticker["AAPL"]["status_provenance"]["flags"]["bankruptcy"]["screen_status"],
+            "screened_no_filing",
+        )
+        self.assertTrue(by_ticker["BANKR"]["bankruptcy"])
+        self.assertFalse(by_ticker["BANKR"]["eligible"])
+        self.assertIn("status_bankruptcy", by_ticker["BANKR"]["reasons"])
+
     def test_halt_feed_failure_keeps_halted_unknown_not_clean(self):
         sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"}}
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
@@ -1171,6 +1240,46 @@ class CandidatePathGuard(unittest.TestCase):
         for flag in ("--candidate-list-path", "--summary-path", "--raw-root"):
             with self.assertRaises(SystemExit):
                 _mod.parse_args([flag, "x"])
+
+    def test_cli_accepts_repeated_bankruptcy_screen_paths(self):
+        args = _mod.parse_args([
+            "--bankruptcy-screen-path", "state/us_short/a.json",
+            "--bankruptcy-screen-path", "state/us_short/b.json",
+        ])
+        self.assertEqual(args.bankruptcy_screen_paths, [Path("state/us_short/a.json"), Path("state/us_short/b.json")])
+
+    def test_full_run_non_gitignored_bankruptcy_screen_path_leaves_no_residue(self):
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            bad_screen = tmpp / "screen.json"
+            bad_screen.write_text(json.dumps({
+                "observed": True,
+                "observed_at": "2026-06-29T12:00:00+00:00",
+                "lookback_window": "P90D",
+                "by_ticker": {"AAPL": {"screen_status": "screened_no_filing"}},
+            }), encoding="utf-8")
+            cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+            cand.unlink(missing_ok=True)
+            self.addCleanup(cand.unlink, missing_ok=True)
+            self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+            summ = tmpp / "sum.json"
+
+            with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "k", "FMP_API_KEY": ""}), \
+                 patch.object(_mod, "fetch_sec_tickers", side_effect=AssertionError("must reject before provider fetch")), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                with self.assertRaises(RuntimeError) as ctx:
+                    _mod.run_fetch(
+                        now_et=datetime(2026, 6, 29, 8, 0, 0),
+                        summary_path=summ, raw_root=tmpp / "raw",
+                        candidate_list_path=cand,
+                        generated_at="2026-06-29T12:00:00+00:00", confirm_user_authorization=True,
+                        bankruptcy_screen_paths=[bad_screen],
+                    )
+            self.assertIn("bankruptcy screen", str(ctx.exception).lower())
+            self.assertFalse(cand.exists())
+            self.assertFalse(cand.with_name(cand.name + ".tmp").exists())
+            self.assertFalse(summ.exists())
 
     def test_full_run_wrong_date_candidate_leaves_no_residue(self):
         # Codex's exact probe: a gitignored but WRONG-DATE candidate path on a 20260629 run must fail closed

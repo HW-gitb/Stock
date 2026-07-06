@@ -315,7 +315,7 @@ def build_live_status_records(
     already fetched by `fetch_sec_tickers` as the full active-listing reference, consumes the Nasdaq current halt
     feed, and can consume either a caller-supplied SEC 8-K Item 1.03 bankruptcy screen or caller-supplied SEC
     submissions payloads that are assembled into that screen. This function never fetches the bankruptcy payloads
-    itself; `run_fetch` still passes None until a separate reviewed scan is authorized. If both
+    itself; `run_fetch` can now consume a reviewed, gitignored screen path when explicitly supplied. If both
     critical status sources fail, classify_status_source_outcomes blocks/no-emits before candidate artifacts can
     be written.
     """
@@ -870,6 +870,117 @@ def _validate_candidate_path(candidate_list_path: Path, decision_date: str) -> N
         )
 
 
+def _canonical_bankruptcy_screen_path(path: Path) -> Path:
+    raw = Path(path)
+    candidate = raw if raw.is_absolute() else ROOT / raw
+    canonical = candidate.resolve()
+    try:
+        canonical.relative_to(CANDIDATE_LIST_DIR.resolve())
+    except ValueError as exc:
+        raise RuntimeError(
+            "bankruptcy screen path must be a gitignored JSON under state/us_short "
+            "(refusing arbitrary local file input)"
+        ) from exc
+    if canonical.suffix.lower() != ".json":
+        raise RuntimeError("bankruptcy screen path must be a .json file under state/us_short")
+    if not canonical.exists():
+        raise RuntimeError(f"bankruptcy screen path does not exist: {_rel(canonical)}")
+    if not _git_check_ignored(canonical):
+        raise RuntimeError(
+            "bankruptcy screen path is not gitignored (real git check-ignore=false); "
+            "refusing to consume local source packet output from a tracked location"
+        )
+    return canonical
+
+
+def _parse_iso_instant(value: str) -> datetime:
+    return datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+
+
+def _canonical_screen_rows(screen: dict[str, Any], *, decision_date: str, generated_at: str) -> dict[str, dict[str, Any]]:
+    status_as_of = _status_as_of_from_decision_date(decision_date)
+    if screen.get("observed") is not True:
+        raise RuntimeError("bankruptcy screen payload must have observed=true")
+    if not isinstance(screen.get("lookback_window"), str) or not screen["lookback_window"].strip():
+        raise RuntimeError("bankruptcy screen payload must carry lookback_window")
+    by_ticker = screen.get("by_ticker")
+    if not isinstance(by_ticker, dict) or not by_ticker:
+        raise RuntimeError("bankruptcy screen payload must carry a non-empty by_ticker object")
+    # Let the status-source contract validate source clock/current-window semantics before any provider fetch.
+    _status_source.resolve_status_record(
+        "AAPL",
+        ticker_reference=None,
+        halt_feed=None,
+        bankruptcy_screen=screen,
+        as_of=status_as_of,
+        observed_at=generated_at,
+    )
+    out: dict[str, dict[str, Any]] = {}
+    for ticker, rec in by_ticker.items():
+        ct = canonical_us_ticker(ticker)
+        if ct is None:
+            raise RuntimeError(f"bankruptcy screen by_ticker contains non-canonical ticker: {ticker!r}")
+        if not isinstance(rec, dict):
+            raise RuntimeError(f"bankruptcy screen by_ticker[{ct}] must be an object")
+        screen_status = rec.get("screen_status")
+        if screen_status not in {"bankrupt_8k_found", "screened_no_filing", "unscreened"}:
+            raise RuntimeError(f"bankruptcy screen by_ticker[{ct}] has invalid screen_status: {screen_status!r}")
+        if screen_status == "bankrupt_8k_found":
+            _status_source.resolve_status_record(
+                ct,
+                ticker_reference=None,
+                halt_feed=None,
+                bankruptcy_screen=screen,
+                as_of=status_as_of,
+                observed_at=generated_at,
+            )
+        if ct in out and out[ct] != rec:
+            raise RuntimeError(f"bankruptcy screen has conflicting duplicate ticker row: {ct}")
+        out[ct] = copy.deepcopy(rec)
+    return out
+
+
+def _load_bankruptcy_screen_paths(
+    paths: list[Path] | tuple[Path, ...] | None,
+    *,
+    decision_date: str,
+    generated_at: str,
+) -> tuple[dict[str, Any] | None, int]:
+    if not paths:
+        return None, 0
+    merged_by_ticker: dict[str, dict[str, Any]] = {}
+    observed_ats: list[str] = []
+    lookback_window: str | None = None
+    for raw_path in paths:
+        path = _canonical_bankruptcy_screen_path(raw_path)
+        try:
+            screen = json.loads(path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"bankruptcy screen path is not valid JSON: {_rel(path)}") from exc
+        if not isinstance(screen, dict):
+            raise RuntimeError(f"bankruptcy screen path must contain a JSON object: {_rel(path)}")
+        rows = _canonical_screen_rows(screen, decision_date=decision_date, generated_at=generated_at)
+        lw = screen["lookback_window"]
+        if lookback_window is None:
+            lookback_window = lw
+        elif lookback_window != lw:
+            raise RuntimeError("bankruptcy screen paths use conflicting lookback_window values")
+        observed_ats.append(screen["observed_at"])
+        for ticker, rec in rows.items():
+            if ticker in merged_by_ticker and merged_by_ticker[ticker] != rec:
+                raise RuntimeError(f"bankruptcy screen paths contain conflicting duplicate ticker row: {ticker}")
+            merged_by_ticker[ticker] = rec
+    observed_at = max(observed_ats, key=_parse_iso_instant)
+    merged = {
+        "observed": True,
+        "observed_at": observed_at,
+        "lookback_window": lookback_window,
+        "by_ticker": merged_by_ticker,
+    }
+    _canonical_screen_rows(merged, decision_date=decision_date, generated_at=generated_at)
+    return merged, len(paths)
+
+
 # ---------------------------------------------------------------------------
 # Canonical decision_date (§2.1) — binds the output path; resolved offline from the frozen calendar
 # ---------------------------------------------------------------------------
@@ -899,6 +1010,7 @@ def run_fetch(
     generated_at: str | None = None,
     confirm_user_authorization: bool = False,
     dry_run_env: bool = False,
+    bankruptcy_screen_paths: list[Path] | tuple[Path, ...] | None = None,
     bankruptcy_submissions_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if not confirm_user_authorization and not dry_run_env:
@@ -937,6 +1049,10 @@ def run_fetch(
     candidate_list_path = candidate_list_path or _candidate_path_for(decision_date)
     _sv.validate_raw_root(raw_root)
     _validate_candidate_path(candidate_list_path, decision_date)   # gitignored-root gate BEFORE any fetch/write
+    if bankruptcy_screen_paths and bankruptcy_submissions_by_ticker is not None:
+        raise RuntimeError("provide only one bankruptcy source shape: screen path(s) or SEC submissions")
+    bankruptcy_screen, bankruptcy_screen_file_count = _load_bankruptcy_screen_paths(
+        bankruptcy_screen_paths, decision_date=decision_date, generated_at=generated_at)
 
     print("[1/5] SEC NYSE/NASDAQ 列表 + CIK...", flush=True)
     sec_map = fetch_sec_tickers(sec_ua)
@@ -955,6 +1071,7 @@ def run_fetch(
         observed_at=generated_at,
         halt_feed=halt_feed,
         halt_feed_state=halt_feed_state,
+        bankruptcy_screen=bankruptcy_screen,
         bankruptcy_submissions_by_ticker=bankruptcy_submissions_by_ticker,
     )
     print(f"      status_records={len(status_records)}  "
@@ -1010,30 +1127,50 @@ def run_fetch(
           f"ineligible={summary_counts['ineligible_count']}  "
           f"no_price={summary_counts['no_price_count']}  no_shares={summary_counts['no_shares_count']}  "
           f"fmp_rescued={len(fmp_caps)}", flush=True)
-    bankruptcy_8k_scan_performed = bankruptcy_submissions_by_ticker is not None
-    bankruptcy_disclosure = (
-        "Pass1 sources delisted/otc from the SEC active-listing reference, halted from the Nasdaq current halt "
-        "feed, and bankruptcy from injected SEC company-submissions Item 1.03 screen output. The runner still "
-        "does not fetch per-issuer bankruptcy payloads itself; supplied submissions are an explicitly injected "
-        "provider-fed source and unscreened tickers remain disclosed as unscreened, not proven clean."
-        if bankruptcy_8k_scan_performed
-        else (
+    if bankruptcy_screen is not None:
+        bankruptcy_source = "injected_bankruptcy_screen"
+        bankruptcy_input_count = len(bankruptcy_screen["by_ticker"])
+    elif bankruptcy_submissions_by_ticker is not None:
+        bankruptcy_source = "injected_sec_submissions"
+        bankruptcy_input_count = len(bankruptcy_submissions_by_ticker)
+    else:
+        bankruptcy_source = "not_supplied"
+        bankruptcy_input_count = 0
+    bankruptcy_8k_scan_performed = bankruptcy_source != "not_supplied"
+    if bankruptcy_source == "injected_bankruptcy_screen":
+        bankruptcy_disclosure = (
+            "Pass1 sources delisted/otc from the SEC active-listing reference, halted from the Nasdaq current "
+            "halt feed, and bankruptcy from user-authorized gitignored SEC Item 1.03 screen output. The runner "
+            "does not refetch per-issuer bankruptcy payloads in this step; unscreened tickers remain disclosed "
+            "as unscreened, not proven clean."
+        )
+        bankruptcy_limitation = (
+            "Pass1 consumed prebuilt gitignored SEC Item 1.03 bankruptcy screen output; this is status-source "
+            "wiring only and does not authorize broader provider health / Pass2 / DataHub / production use."
+        )
+    elif bankruptcy_source == "injected_sec_submissions":
+        bankruptcy_disclosure = (
+            "Pass1 sources delisted/otc from the SEC active-listing reference, halted from the Nasdaq current halt "
+            "feed, and bankruptcy from injected SEC company-submissions Item 1.03 screen output. The runner still "
+            "does not fetch per-issuer bankruptcy payloads itself; supplied submissions are an explicitly injected "
+            "provider-fed source and unscreened tickers remain disclosed as unscreened, not proven clean."
+        )
+        bankruptcy_limitation = (
+            "Pass1 can consume injected SEC company-submissions Item 1.03 bankruptcy screen output in this test seam, "
+            "but run_fetch still performs zero per-issuer bankruptcy SEC calls itself; broader provider health / Pass2 "
+            "/ DataHub / production consumption remain gated under SR-PROVIDER-001."
+        )
+    else:
+        bankruptcy_disclosure = (
             "Pass1 now sources delisted/otc from the SEC active-listing reference and halted from the "
             "Nasdaq current halt feed. Bankruptcy remains positive-detection-only and unscreened in this "
             "slice (zero 8-K calls), so it is recorded as unscreened provenance rather than proof of clean."
         )
-    )
-    bankruptcy_limitation = (
-        "Pass1 can consume injected SEC company-submissions Item 1.03 bankruptcy screen output in this test seam, "
-        "but run_fetch still performs zero per-issuer bankruptcy SEC calls itself; broader provider health / Pass2 "
-        "/ DataHub / production consumption remain gated under SR-PROVIDER-001."
-        if bankruptcy_8k_scan_performed
-        else (
+        bankruptcy_limitation = (
             "Pass1 status flags are sourced only for the current SEC active-listing reference and Nasdaq current "
             "halt feed in this slice. Bankruptcy 8-K scanning remains zero-call/unscreened, and broader provider "
             "health / Pass2 / DataHub / production consumption remain gated under SR-PROVIDER-001."
         )
-    )
 
     # Per-run candidate artifact: schema + semantic validate BEFORE the atomic write (carries prices →
     # gitignored state/ root). Validation re-derives the summary and rejects any drifted/forged content.
@@ -1096,10 +1233,9 @@ def run_fetch(
             "status_source_outcome": status_source_outcome,
             "status_records_total": len(status_records),
             "bankruptcy_8k_scan_performed": bankruptcy_8k_scan_performed,
-            "bankruptcy_8k_source": "injected_sec_submissions" if bankruptcy_8k_scan_performed else "not_supplied",
-            "bankruptcy_8k_input_symbol_count": (
-                len(bankruptcy_submissions_by_ticker) if isinstance(bankruptcy_submissions_by_ticker, dict) else 0
-            ),
+            "bankruptcy_8k_source": bankruptcy_source,
+            "bankruptcy_8k_input_symbol_count": bankruptcy_input_count,
+            "bankruptcy_8k_screen_file_count": bankruptcy_screen_file_count,
             "disclosure": bankruptcy_disclosure,
             "status_source_contract_ref": "docs/us_short_batch5_status_source_binding_20260629.json",
             "finding_ref": "R-USSHORT-BATCH5-PASS1-CRITICAL-STATUS-HEALTH-FAILOPEN",
@@ -1144,6 +1280,9 @@ def parse_args(argv=None):
     # No --summary-path / --raw-root / --candidate-list-path: all dated outputs derive from the canonical
     # decision_date so a caller can't redirect a priced artifact to a non-gitignored / wrong-date path
     # (R-USSHORT-BATCH5-PASS1-LIQUIDITY-LINEAGE-CONTRACT-GAP). Tests use the run_fetch kwargs (private seam).
+    p.add_argument("--bankruptcy-screen-path", dest="bankruptcy_screen_paths", type=Path, action="append",
+                   default=None,
+                   help="gitignored state/us_short/*.json SEC Item 1.03 bankruptcy screen output; repeatable")
     p.add_argument("--generated-at")
     return p.parse_args(argv)
 
@@ -1153,6 +1292,7 @@ def main(argv=None):
     summary = run_fetch(
         now_et=args.now_et, calendar_path=args.calendar_path, generated_at=args.generated_at,
         confirm_user_authorization=args.confirm_user_authorization, dry_run_env=args.dry_run_env,
+        bankruptcy_screen_paths=args.bankruptcy_screen_paths,
     )
     if summary.get("scope", {}).get("status") == "dry_run_env_only":
         print(json.dumps(summary, ensure_ascii=False, indent=2))
