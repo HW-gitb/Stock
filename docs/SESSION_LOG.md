@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-06 — Claude 审查 PASS + 提交 (US-short E2E bridge CLI/subprocess/no-residue 硬化 已闭)
+
+- **Verdict/Action**: PASS + 提交 6 文件(E2E runner + test + design/README/CURRENT/SESSION_LOG)。硬化:失败时清理本次新建的 state/us_short components/data_context + 私密 context_packet + 私密 lifecycle/runs/weekly 子树(existed_before 快照、只删本次前不存在的)、source-packet 错误脱敏、subprocess CLI 测试。design/README/CURRENT 把 hardening 移出 gated(live/provider/DataHub/ship-gate 门保留)。
+- **Required**: 无 material Required;`system_risk_register.md` 无新增条目(non-material)。
+- **Verify**: 整读清理逻辑 + 自己直测 `_cleanup_created_paths`:预存 root/file 全存活、本次建的删、未快照默认不删(零数据丢失)。独立 §3.5 agent 五维度全 HELD 且实证(预存 weekly/runs/lifecycle 子树存活、无残留、错误脱敏到类名无 ticker/URL/path、subprocess 平价、run_mode live 仍 fail-closed)。design 去 gate 诚实(SR-PROVIDER-001 live/DataHub/ship-gate 仍在)。亲跑 `*us_short*` 3691 OK(+2)+ doc/route 60 OK 零回归。1 trivial Optional(docstring 注 `--context-out` 为 overwrite-in-place)。
+- **Next**: 无(已提交)
+
+## 2026-07-06 - Codex `execute` (US-short CLI/subprocess/no-residue hardening)
+
+- **Verdict/Action**: hardened the local/offline Batch5->Batch4 weekend bridge CLI. `runners/us_short_batch5_to_batch4_weekend_e2e.py` now has subprocess-covered CLI execution, source-packet errors are redacted through the bridge boundary, and downstream failures clean newly created `state/us_short` data_context/components, private context packets, and private lifecycle/runs/weekly subtrees. `tests/provider/test_us_short_batch5_to_batch4_e2e.py` now covers CLI success plus batch4-failure no-residue/no ticker-or-URL leak. Design/README/CURRENT route text moved this hardening out of the remaining gated list while preserving live/provider/DataHub/production/ship-gate/A-share gates.
+- **Required**: no new R-ID.
+- **Verify**: red first focused CLI failure test left generated `data_context`; green E2E focused `4 OK`; E2E+source-packet `14 OK`; batch4/context/orchestrator/provider-health `82 OK`; doc/route guards `25 OK`; provider `*us_short*` `439 OK (1 skipped)`; full offline `discover -s tests -p '*us_short*.py'` `3691 OK (1 skipped)`; `py_compile` OK; stale CLI/no-residue route grep `0 hits`; changed-hunk secret/URL grep matched only new negative test assertions; `git diff --check` OK (CRLF warnings only).
+- **Pre-Codex self-review**: A-F checked main-thread; no lightweight subagent used. B/E: `CURRENT` contains only settled mechanism facts and no pending actor/commit gate; stale `CLI/subprocess/no-residue hardening` / `subprocess E2E` route text was removed from active CURRENT/design surfaces. C: failure cleanup only removes paths/subtrees absent before this invocation, so pre-existing private roots are not recursively removed.
+- **Next**: Claude Code: review current CLI/subprocess/no-residue hardening; PASS then commit.
+
 ## 2026-07-06 — Claude 审查 PASS + 提交 (US-short Batch5→Batch4 weekend E2E bridge 离线半 [cut⑥] 已闭)
 
 - **Verdict/Action**: PASS + 提交 7 文件(新 E2E runner + 新 test + source-packet runner[`--context-components-out`] + design/README/CURRENT/SESSION_LOG)。新 `us_short_batch5_to_batch4_weekend_e2e.py`:本地源 packet→official components→叠 batch4 模板/provider-health/私密 account→私密 context_packet(P0 guard)→in-process 跑 batch4 weekend runner→私密 weekly_report/action_table。纯离线;CLI/subprocess/no-residue 硬化 Codex 声明为下一刀(design 已标 gated)。

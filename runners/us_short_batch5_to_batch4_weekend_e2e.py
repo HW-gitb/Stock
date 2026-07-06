@@ -4,6 +4,7 @@ import argparse
 import copy
 import json
 import os
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -93,6 +94,66 @@ def _write_private_json(path: Path, payload: dict[str, Any]) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     os.replace(tmp, path)
+
+
+def _best_effort_source_data_context_path(source_packet_path: Path) -> Path | None:
+    try:
+        packet = _read_json(source_packet_path, "source packet")
+        value = packet.get("paths", {}).get("output_data_context_path")
+        if type(value) is not str:
+            return None
+        candidate = (ROOT / Path(value)).resolve()
+        candidate.relative_to(STATE_US_SHORT_DIR.resolve())
+        if candidate.suffix != ".json":
+            return None
+        return candidate
+    except Exception:
+        return None
+
+
+def _tmp_sidecar(path: Path) -> Path:
+    return path.with_suffix(path.suffix + ".tmp")
+
+
+def _cleanup_created_paths(paths: list[Path], roots: list[Path], existed_before: dict[Path, bool]) -> None:
+    for path in paths:
+        resolved = path.resolve()
+        if not existed_before.get(resolved, True):
+            try:
+                resolved.unlink(missing_ok=True)
+            except IsADirectoryError:
+                pass
+        tmp = _tmp_sidecar(resolved)
+        if not existed_before.get(tmp, True):
+            tmp.unlink(missing_ok=True)
+    for root in roots:
+        resolved = root.resolve()
+        if existed_before.get(resolved, True) or not resolved.exists():
+            continue
+        if resolved.is_dir():
+            shutil.rmtree(resolved)
+        else:
+            resolved.unlink(missing_ok=True)
+
+
+def _remember_path(path: Path | None, *, cleanup_paths: list[Path], existed_before: dict[Path, bool]) -> None:
+    if path is None:
+        return
+    resolved = path.resolve()
+    if resolved in existed_before:
+        return
+    existed_before[resolved] = resolved.exists()
+    tmp = _tmp_sidecar(resolved)
+    existed_before[tmp] = tmp.exists()
+    cleanup_paths.append(resolved)
+
+
+def _remember_root(path: Path, *, cleanup_roots: list[Path], existed_before: dict[Path, bool]) -> None:
+    resolved = path.resolve()
+    if resolved in existed_before:
+        return
+    existed_before[resolved] = resolved.exists()
+    cleanup_roots.append(resolved)
 
 
 def _load_template(path: Path) -> dict[str, Any]:
@@ -187,6 +248,24 @@ def _safe_batch4_run(packet_path: Path, *, now_et: datetime, run_mode: str, boot
         raise Batch5ToBatch4E2EError(f"batch4 runner failed with {type(exc).__name__}") from exc
 
 
+def _safe_source_packet_run(
+    source_packet: Path,
+    *,
+    generated_at: str | None,
+    context_components_path: Path,
+) -> dict[str, Any]:
+    try:
+        return source_packet_runner.run_packet(
+            source_packet,
+            generated_at=generated_at,
+            context_components_output_path=_repo_rel(context_components_path),
+        )
+    except source_packet_runner.SourcePacketError as exc:
+        raise Batch5ToBatch4E2EError("source packet runner failed") from exc
+    except Exception as exc:
+        raise Batch5ToBatch4E2EError(f"source packet runner failed with {type(exc).__name__}") from exc
+
+
 def run_e2e(
     *,
     source_packet_path: Path | str,
@@ -227,36 +306,59 @@ def run_e2e(
         label="context_packet_path",
     )
 
-    source_summary = source_packet_runner.run_packet(
-        source_packet,
-        generated_at=generated_at,
-        context_components_output_path=_repo_rel(components_path),
+    cleanup_paths: list[Path] = []
+    cleanup_roots: list[Path] = []
+    existed_before: dict[Path, bool] = {}
+    _remember_path(
+        _best_effort_source_data_context_path(source_packet),
+        cleanup_paths=cleanup_paths,
+        existed_before=existed_before,
     )
-    components = _read_json(components_path, "context components")
-    if not (
-        isinstance(components, dict)
-        and set(components) == {"data_context", "per_ticker_analysis", "run_provenance"}
+    _remember_path(components_path, cleanup_paths=cleanup_paths, existed_before=existed_before)
+    _remember_path(context_path, cleanup_paths=cleanup_paths, existed_before=existed_before)
+    for private_output_root in (
+        private_root_path / "lifecycle",
+        private_root_path / "runs_private",
+        private_root_path / "weekly_private",
     ):
-        raise Batch5ToBatch4E2EError("context components must contain data_context/per_ticker_analysis/run_provenance")
+        _remember_root(private_output_root, cleanup_roots=cleanup_roots, existed_before=existed_before)
 
-    packet = _assemble_batch4_packet(
-        components=components,
-        template=_load_template(template_path),
-        provider_health=provider_health,
-        account_state_path=account_path,
-        calendar_path=calendar,
-        governance_path=governance,
-        private_root=private_root_path,
-        now_et=now_et,
-    )
-    _write_private_json(context_path, packet)
-    batch4_summary = _safe_batch4_run(
-        context_path,
-        now_et=now_et,
-        run_mode=run_mode,
-        bootstrap_lifecycle=bootstrap_lifecycle,
-        dry_run=dry_run,
-    )
+    try:
+        source_summary = _safe_source_packet_run(
+            source_packet,
+            generated_at=generated_at,
+            context_components_path=components_path,
+        )
+        components = _read_json(components_path, "context components")
+        if not (
+            isinstance(components, dict)
+            and set(components) == {"data_context", "per_ticker_analysis", "run_provenance"}
+        ):
+            raise Batch5ToBatch4E2EError(
+                "context components must contain data_context/per_ticker_analysis/run_provenance"
+            )
+
+        packet = _assemble_batch4_packet(
+            components=components,
+            template=_load_template(template_path),
+            provider_health=provider_health,
+            account_state_path=account_path,
+            calendar_path=calendar,
+            governance_path=governance,
+            private_root=private_root_path,
+            now_et=now_et,
+        )
+        _write_private_json(context_path, packet)
+        batch4_summary = _safe_batch4_run(
+            context_path,
+            now_et=now_et,
+            run_mode=run_mode,
+            bootstrap_lifecycle=bootstrap_lifecycle,
+            dry_run=dry_run,
+        )
+    except Exception:
+        _cleanup_created_paths(cleanup_paths, cleanup_roots, existed_before)
+        raise
 
     return {
         "schema_name": "us_short_batch5_to_batch4_weekend_e2e_summary",

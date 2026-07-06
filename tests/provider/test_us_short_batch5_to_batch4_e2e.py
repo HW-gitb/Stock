@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -216,6 +217,104 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertFalse((private_root / "weekly_private").exists())
             self.assertFalse((private_root / "runs_private").exists())
             self.assertFalse(self.paths["components"].exists())
+
+    def test_cli_subprocess_writes_private_outputs_without_stdout_ticker_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "runners" / "us_short_batch5_to_batch4_weekend_e2e.py"),
+                    "--source-packet",
+                    str(self.paths["packet"]),
+                    "--batch4-template",
+                    str(template),
+                    "--account",
+                    str(account),
+                    "--provider-health",
+                    str(health),
+                    "--private-root",
+                    str(private_root),
+                    "--now-et",
+                    "2026-06-15T09:00:00",
+                    "--context-components-out",
+                    str(self.paths["components"]),
+                    "--bootstrap-lifecycle",
+                    "--generated-at",
+                    "2026-06-15T13:01:00Z",
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            summary = json.loads(result.stdout)
+            self.assertEqual(summary["scope"]["status"], "batch5_source_packet_to_batch4_outputs_completed")
+            self.assertTrue((private_root / "weekly_private" / _DECISION_DATE / "weekly_report.md").exists())
+            self.assertTrue((private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").exists())
+            self.assertTrue(self.paths["components"].exists())
+            emitted_text = result.stdout + result.stderr
+            self.assertNotIn("AAPL", emitted_text)
+            self.assertNotIn("https://", emitted_text)
+            self.assertNotIn("api_key", emitted_text.lower())
+
+    def test_cli_batch4_failure_leaves_no_generated_residue_or_ticker_leak(self) -> None:
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            context_out = private_root / "context_packet.json"
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "runners" / "us_short_batch5_to_batch4_weekend_e2e.py"),
+                    "--source-packet",
+                    str(self.paths["packet"]),
+                    "--batch4-template",
+                    str(TEMPLATE),
+                    "--account",
+                    str(account),
+                    "--provider-health",
+                    str(health),
+                    "--private-root",
+                    str(private_root),
+                    "--now-et",
+                    "2026-06-15T09:00:00",
+                    "--context-components-out",
+                    str(self.paths["components"]),
+                    "--context-out",
+                    str(context_out),
+                    "--bootstrap-lifecycle",
+                    "--generated-at",
+                    "2026-06-15T13:01:00Z",
+                ],
+                cwd=ROOT,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2, result.stderr)
+            emitted_text = result.stdout + result.stderr
+            self.assertNotIn("AAPL", emitted_text)
+            self.assertNotIn("https://", emitted_text)
+            self.assertNotIn("api_key", emitted_text.lower())
+            self.assertFalse(self.paths["data_context"].exists())
+            self.assertFalse(self.paths["components"].exists())
+            self.assertFalse(context_out.exists())
+            self.assertFalse(context_out.with_suffix(context_out.suffix + ".tmp").exists())
+            self.assertFalse((private_root / "weekly_private").exists())
+            self.assertFalse((private_root / "runs_private").exists())
+            self.assertFalse((private_root / "lifecycle").exists())
 
 
 if __name__ == "__main__":
