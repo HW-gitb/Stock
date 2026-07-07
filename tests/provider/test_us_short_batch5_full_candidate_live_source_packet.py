@@ -96,12 +96,51 @@ class FullCandidateFakeClient:
                     },
                 ]
             return (records, 200, True, None)
-        if parsed.netloc == "financialmodelingprep.com" and parsed.path.endswith("/splits"):
-            symbol = query["symbol"][0]
-            return ([{"symbol": symbol, "date": "2026-05-15", "numerator": 2, "denominator": 1}], 200, True, None)
-        if parsed.netloc == "financialmodelingprep.com" and parsed.path.endswith("/dividends"):
-            symbol = query["symbol"][0]
-            return ([{"symbol": symbol, "date": "2026-05-20", "adjDividend": 0.24}], 200, True, None)
+        if parsed.netloc == "api.massive.com" and parsed.path == "/stocks/v1/splits":
+            symbol = query["ticker"][0]
+            return (
+                {
+                    "results": [
+                        {
+                            "ticker": symbol,
+                            "execution_date": "2020-08-31",
+                            "split_from": 1,
+                            "split_to": 4,
+                            "adjustment_type": "split",
+                            "historical_adjustment_factor": 0.25,
+                            "id": f"{symbol}-split-1",
+                        }
+                    ]
+                },
+                200,
+                True,
+                None,
+            )
+        if parsed.netloc == "api.massive.com" and parsed.path == "/stocks/v1/dividends":
+            symbol = query["ticker"][0]
+            return (
+                {
+                    "results": [
+                        {
+                            "ticker": symbol,
+                            "ex_dividend_date": "2026-05-09",
+                            "cash_amount": 0.25,
+                            "pay_date": "2026-05-16",
+                            "record_date": "2026-05-12",
+                            "declaration_date": "2026-05-01",
+                            "currency": "USD",
+                            "frequency": 4,
+                            "distribution_type": "CD",
+                            "split_adjusted_cash_amount": 0.25,
+                            "historical_adjustment_factor": 1.0,
+                            "id": f"{symbol}-div-1",
+                        }
+                    ]
+                },
+                200,
+                True,
+                None,
+            )
         if parsed.netloc == "api.massive.com" and parsed.path == "/v2/reference/news":
             symbol = query["ticker"][0]
             records = []
@@ -242,8 +281,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
 
         self.assertEqual(len(client.urls), 16)
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 16)
-        self.assertEqual(summary["endpoint_call_budget"]["fmp_stock_split_calls"], 3)
-        self.assertEqual(summary["endpoint_call_budget"]["fmp_dividend_calls"], 3)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 3)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 3)
         self.assertTrue(summary["scope"]["provider_calls_performed"])
         self.assertTrue(summary["scope"]["source_packet_written"])
         self.assertTrue(summary["scope"]["data_context_written"])
@@ -332,8 +371,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
         self.assertEqual(summary["candidate_universe"]["eligible_count"], 2)
         self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 2)
-        self.assertEqual(summary["endpoint_call_budget"]["fmp_stock_split_calls"], 2)
-        self.assertEqual(summary["endpoint_call_budget"]["fmp_dividend_calls"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 2)
 
     def test_missing_authorization_aborts_before_network_or_writes(self):
         client = FullCandidateFakeClient()

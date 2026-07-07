@@ -314,8 +314,8 @@ def _forecast_calls(pass2_target_count: int, full_candidate_count: int) -> dict[
         "total_calls": 1 + (pass2_target_count * 3),
     }
     corporate_action = {
-        "fmp_split_calls": pass2_target_count,
-        "fmp_dividend_calls": pass2_target_count,
+        "massive_split_calls": pass2_target_count,
+        "massive_dividend_calls": pass2_target_count,
         "total_calls": pass2_target_count * 2,
         "corporate_action_reconciliation_performed_by_preflight": False,
     }

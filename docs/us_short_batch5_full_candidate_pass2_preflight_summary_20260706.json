@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
-  "generated_at": "2026-07-07T06:03:58+00:00",
+  "generated_at": "2026-07-07T10:17:47+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -108,8 +108,8 @@
         "total_calls": 10
       },
       "corporate_action_live_half": {
-        "fmp_split_calls": 3,
-        "fmp_dividend_calls": 3,
+        "massive_split_calls": 3,
+        "massive_dividend_calls": 3,
         "total_calls": 6,
         "corporate_action_reconciliation_performed_by_preflight": false
       },

@@ -52,6 +52,12 @@ DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH = (
     STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_live_source_packet_20260706_context_components.json"
 )
 MASSIVE_NEWS_URL = "https://api.massive.com/v2/reference/news?ticker={ticker}&limit=10&apiKey={key}"
+# Step 3 (R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING follow-on): the per-target split/dividend capture is
+# offloaded from FMP to Massive so FMP stays under its 250/day free grade cap at K=200 (FMP per target drops 3->1,
+# grades only). Endpoint paths confirmed by the 2026-07-07 live shape probe (GET /stocks/v1/{splits,dividends};
+# Polygon-style {"results":[...]} envelope), NOT the Polygon /v3/reference/* a guess would have used.
+MASSIVE_SPLITS_URL = "https://api.massive.com/stocks/v1/splits?ticker={ticker}&limit=10&apiKey={key}"
+MASSIVE_DIVIDENDS_URL = "https://api.massive.com/stocks/v1/dividends?ticker={ticker}&limit=10&apiKey={key}"
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250   # mirror the preflight; the funnel target + within-cap invariant is RE-DERIVED here at the live boundary, not trusted from the preflight
 # Mirror the preflight `_forecast_calls`: each Pass2 target costs 5 endpoint calls (3 source-packet: grades +
 # submissions + reference-news; 2 corporate-action: splits + dividends) plus 1 shared SEC ticker->CIK mapping.
@@ -420,12 +426,12 @@ def _fetch_live_records(
         records.append(
             sample_validation.fetch_and_store(
                 client,
-                url=_fmp_stable_url("splits", symbol, fmp_env.value),
-                provider_id="financial_modeling_prep",
+                url=MASSIVE_SPLITS_URL.format(ticker=symbol, key=massive_env.value),
+                provider_id="massive",
                 endpoint_family="stock_splits",
                 symbol=symbol,
                 raw_root=raw_root,
-                headers=fmp_headers,
+                headers=massive_headers,
             )
         )
 
@@ -433,12 +439,12 @@ def _fetch_live_records(
         records.append(
             sample_validation.fetch_and_store(
                 client,
-                url=_fmp_stable_url("dividends", symbol, fmp_env.value),
-                provider_id="financial_modeling_prep",
+                url=MASSIVE_DIVIDENDS_URL.format(ticker=symbol, key=massive_env.value),
+                provider_id="massive",
                 endpoint_family="dividends",
                 symbol=symbol,
                 raw_root=raw_root,
-                headers=fmp_headers,
+                headers=massive_headers,
             )
         )
     return records, cik_by_symbol
@@ -669,8 +675,8 @@ def _build_corporate_action_capture(
     split_events = 0
     dividend_events = 0
     for symbol in selected_symbols:
-        split_rec = by_key.get(("financial_modeling_prep", "stock_splits", symbol))
-        dividend_rec = by_key.get(("financial_modeling_prep", "dividends", symbol))
+        split_rec = by_key.get(("massive", "stock_splits", symbol))
+        dividend_rec = by_key.get(("massive", "dividends", symbol))
         split_count = _event_count(split_rec)
         dividend_count = _event_count(dividend_rec)
         split_calls += 1 if split_rec is not None else 0
@@ -892,8 +898,8 @@ def _build_summary(
             "fmp_grades_calls": _endpoint_count(endpoint_records, "financial_modeling_prep", "grades"),
             "sec_submissions_calls": _endpoint_count(endpoint_records, "sec_edgar", "submissions"),
             "massive_reference_news_calls": _endpoint_count(endpoint_records, "massive", "reference_news"),
-            "fmp_stock_split_calls": _endpoint_count(endpoint_records, "financial_modeling_prep", "stock_splits"),
-            "fmp_dividend_calls": _endpoint_count(endpoint_records, "financial_modeling_prep", "dividends"),
+            "massive_stock_split_calls": _endpoint_count(endpoint_records, "massive", "stock_splits"),
+            "massive_dividend_calls": _endpoint_count(endpoint_records, "massive", "dividends"),
             "endpoint_error_count": endpoint_errors,
             "sec_cik_missing_count": len([symbol for symbol in eligible if symbol not in cik_by_symbol]),
             "retry_count_allowed": 0,
@@ -995,8 +1001,8 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
         + budget["fmp_grades_calls"]
         + budget["sec_submissions_calls"]
         + budget["massive_reference_news_calls"]
-        + budget["fmp_stock_split_calls"]
-        + budget["fmp_dividend_calls"]
+        + budget["massive_stock_split_calls"]
+        + budget["massive_dividend_calls"]
     )
     if actual_family_calls != budget["actual_total_endpoint_calls"]:
         raise FullCandidateLiveSourcePacketError("summary endpoint family counts do not equal actual calls")

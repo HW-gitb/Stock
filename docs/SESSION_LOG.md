@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short Step 3 = Massive corporate-action offload 离线半 — splits/dividends FMP→Massive、§6a clean)
+
+- **Verdict/Action**: 按探针捕获真形状建 Step 3 离线半:funnel 每 target 的 splits/dividends fetch 从 FMP 换到 Massive(`/stocks/v1/*`、provider_id=massive、massive_headers)。**无新引擎**(simplicity-first:通用 `_payload_shape_from_payload` 已数 Massive `{"results":[...]}` 信封、capture 本就只计数不解析)=纯 provider swap。endpoint_call_budget/preflight `_forecast_calls`/两 schema 字段 `fmp_*`→`massive_*`(诚实、canonical preflight summary 重生成)。FMP 每 target 3→1(仅 grades)、K=200 时 200≤250 免费上限;per-target 仍 5 调用→forecast 总数+budget re-anchor+within_cap 不变。已自审+提交。
+- **Required**: 无 finding。register 记 Step 3 built note(单源)+§6a 裁决。SR-PROVIDER-001 保持 open、live 半仍 gated。
+- **Verify**: full_candidate 27 OK(fake client 换 Massive 真形状)+capstone 1 OK+full offline `*us_short*` 3792 OK+py_compile OK。B-ripple grep 无 FMP-split/dividend 叙述漂移。改动集 6 文件全属本刀。
+- **Pre-Codex self-review**: §6a 独立对抗 agent(worktree 黑盒、不告知修法)攻 swap:6 不变式全 HELD(无 FMP 残留/family-sum 诚实非空/FMP=仅 grades/只计数-复权字段 never 消费/summary+capture+raw 无 secret-URL 泄漏/坏形状 fail-closed 计 0/funnel+budget 不变)、无 P1/P2。2 P3 nit judge 后按设计意图接受不改(count-only len 多计 junk=有意 shape-only、不消费于决策;gitignored capture 未 text-scan 但结构上无 secret)。教训⑮:按真探针形状建+测。Massive-alt cut5 plan 的 fmp_split_calls 按 surgical 留(独立 superseded 工件)。
+- **Next**: 无(已提交;剩=Step 3 live 半真跑 gated + capstone 一键 E2E)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short Massive splits/dividends live 形状探针 — SR-PROVIDER-001 授权;真实形状捕获、解锁 Step 3)
 
 - **Verdict/Action**: 用户选「先跑 gated 形状探针」= SR-PROVIDER-001 per-execution 授权。新 `runners/us_short_batch5_massive_corporate_action_shape_probe.py`(bounded 2 票×2 族=4 calls、family allowlist=splits/dividends、fail-closed:缺授权/off-allowlist/raw 非 gitignored 均拒)真跑 Massive `/stocks/v1/splits`+`/dividends`(全 HTTP 200)。raw 落 gitignored,tracked summary(schema-validate+secret-scan 前置)只记形状/状态/计数。真形状捕获(container=`results`):splits=ticker/execution_date/split_from/split_to/adjustment_type/historical_adjustment_factor/id;dividends=+ex_dividend_date/cash_amount/pay_date/record_date/declaration_date/currency/frequency/distribution_type/split_adjusted_cash_amount。确认 pinned `/stocks/v1/*`(非猜的 /v3/reference/*、教训⑮)。已自审+提交。

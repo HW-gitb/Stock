@@ -215,14 +215,14 @@
               "type": "object",
               "additionalProperties": false,
               "required": [
-                "fmp_split_calls",
-                "fmp_dividend_calls",
+                "massive_split_calls",
+                "massive_dividend_calls",
                 "total_calls",
                 "corporate_action_reconciliation_performed_by_preflight"
               ],
               "properties": {
-                "fmp_split_calls": { "type": "integer", "minimum": 0 },
-                "fmp_dividend_calls": { "type": "integer", "minimum": 0 },
+                "massive_split_calls": { "type": "integer", "minimum": 0 },
+                "massive_dividend_calls": { "type": "integer", "minimum": 0 },
                 "total_calls": { "type": "integer", "minimum": 0 },
                 "corporate_action_reconciliation_performed_by_preflight": { "const": false }
               }
