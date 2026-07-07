@@ -2,7 +2,7 @@
   "schema_name": "us_short_batch5_full_candidate_projection_inputs_summary",
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_projection_inputs_summary.schema.json",
-  "generated_at": "2026-07-07T13:04:29+00:00",
+  "generated_at": "2026-07-07T15:28:39+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -38,20 +38,20 @@
   },
   "source_inputs": {
     "source_momentum_projection_path": "state/us_short/us_short_batch5_full_universe_momentum_20260707_momentum.json",
-    "source_theme_projection_path": "state/us_short/us_short_full_universe_theme_source_neutral_20260702.json",
+    "source_theme_projection_path": "state/us_short/us_short_batch5_full_universe_theme_20260702_theme.json",
     "source_momentum_scored_count": 2400,
-    "source_theme_scored_count": 0,
+    "source_theme_scored_count": 2359,
     "source_momentum_neutral_fill_count": 4,
-    "source_theme_neutral_fill_count": 0,
+    "source_theme_neutral_fill_count": 45,
     "real_momentum_source_consumed": true,
-    "real_theme_or_gics_source_consumed": false
+    "real_theme_or_gics_source_consumed": true
   },
   "output_projection_contract": {
     "target_count": 2404,
     "momentum_scored_count": 2400,
-    "theme_scored_count": 0,
+    "theme_scored_count": 2359,
     "momentum_neutral_fill_count": 4,
-    "theme_neutral_fill_count": 2404,
+    "theme_neutral_fill_count": 45,
     "coverage_exactly_matches_full_candidate_set": true,
     "neutral_fill_only_for_missing_source_inputs": true,
     "full_candidate_local_inputs_ready": true,

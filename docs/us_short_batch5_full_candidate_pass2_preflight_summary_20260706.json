@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
-  "generated_at": "2026-07-07T13:04:52+00:00",
+  "generated_at": "2026-07-07T15:28:42+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -68,11 +68,11 @@
       "covered_count": 2404,
       "missing_count": 0,
       "stale_count": 0,
-      "neutral_fill_count": 2404,
+      "neutral_fill_count": 45,
       "missing_sample": [],
       "stale_sample": [],
       "target_count": 2404,
-      "scored_count": 0
+      "scored_count": 2359
     },
     "all_required_local_inputs_cover_candidates": true
   },

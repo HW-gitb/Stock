@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short theme piece C 步2/3 = 全宇宙 SEC SIC 抓取真跑 + 真 theme + funnel top-200 带真 theme;§6a HELD 零发现;R-...THEME resolved)
+
+- **Verdict/Action**: 按用户「建完就跑」建全宇宙 SEC SIC 抓取 `runners/us_short_batch5_full_universe_sec_sic_classification_fetch.py`(+schema+8 测)+真跑(SR-PROVIDER-001,~2404 SEC 调用、复用 `_sec_get`/`fetch_sec_tickers`、粗化 sic[:2] 2 位大类)→ **2381/2404 分类入 66 组**。piece B 跑真序列包+真分类包 → **真全宇宙 theme 2359/2404 scored**(62 scored SIC 组)。projection_inputs+preflight 重跑 → **top-200 现带真 theme(scored 0→2359)**。`R-...FULL-UNIVERSE-THEME-PRODUCTION-MISSING` **resolved**。已自审+提交。
+- **Required**: 无 finding。R-ID resolved(pieces A/B/C 全建+真跑,详见 register 单一来源)。分类=SEC SIC 2 位大类(诚实 sec_sic_major_group、**非授权 GICS**);cross-sector provisional theme 与 GICS 升级留未来。
+- **Verify**: 真跑 fetch 2381/2404 入 66 组、raw 不落盘;theme producer 2359/2404 scored;preflight theme full_coverage scored=2359(原 0)、momentum 2400、pass2_target=200、ready。两 tracked summary(fetch 20260702 + theme 20260707)独立复扫零命中(无 data.sec.gov/URL/SEC-UA email/@/ticker/sector);分类包 42KB + theme 投影均 gitignored。8 fetch 测 + full offline `*us_short*` **3843 OK**。git status 仅 7 tracked(2 regen funnel summary + fetch runner/schema/test + 2 fetch/theme summary)。
+- **Pre-Codex self-review**: **§6a 独立对抗 agent(offline 黑盒、fake sic_source)HELD 全 5 claim、零发现**(最干净):试了 SEC-UA 邮箱夹带 generated_at→被 `_assert_text_safe([sec_ua])` 前置拦、URL 当 SIC→sic[:2] 截断、非法票名→canonical 拒、fail-closed 门+无残留、coarsening/packet 完整。教训⑮遵守:先 3 票探针证 sic 形状(上刀)再建全量。secret 卫生:SEC 无 apiKey-in-URL、UA(email/PII)经 secret-scan 前置永不落 summary。live 刀干净+escalation(「建完就跑」)→ 直接提交。"Tests passing ≠ design closure."
+- **Next**: 无(已提交;US-short 全宇宙 momentum+theme 双真、top-200 双分量真——「第一步全量真选股」闭环齐;剩=真 Pass2 深审抓取[1001 calls gated]/拆股复权[Step 3]/capstone 一键 E2E)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short theme piece C 步1 = SEC SIC 形状探针[用户选免费 SIC];纠正「GICS 记录」=系统的 GICS 一直是 FMP-sector、非授权 GICS)
 
 - **Verdict/Action**: 应用户「系统里有没有记录能拿到 GICS」核实并纠正:**系统从无授权 MSCI/S&P GICS**;设计 §4.3 的「GICS」原文=「FMP 价格 + 行业分类」,`theme_gics_source`(2026-07-05)已探过 FMP profile 3 票 200 拿到 sector/industry(即系统「GICS」=FMP-sector)——**我上条「没做过分类探针」说错、已纠**。用户选**免费 SEC SIC**。按「先探真形状再建」建+跑 `runners/us_short_batch5_sec_sic_shape_probe.py`(bounded 3 票 gated,SR-PROVIDER-001,复用已证 `_sec_get`)。已自审+提交。

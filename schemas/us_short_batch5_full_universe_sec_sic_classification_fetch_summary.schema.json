@@ -1,0 +1,174 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "schemas/us_short_batch5_full_universe_sec_sic_classification_fetch_summary.schema.json",
+  "title": "US-short Batch5 full-universe SEC SIC classification gated fetch summary",
+  "description": "Counts-only tracked summary for the SR-PROVIDER-001 gated SEC SIC classification fetch. No ticker lists, sector labels, SEC User-Agent, request URLs, or secrets. Not GICS (gics_classification_claimed const false).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "schema_ref",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "classification",
+    "paths",
+    "storage",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_batch5_full_universe_sec_sic_classification_fetch_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "schema_ref": { "const": "schemas/us_short_batch5_full_universe_sec_sic_classification_fetch_summary.schema.json" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "status",
+        "network_access_performed",
+        "provider_calls_performed",
+        "raw_submissions_persisted",
+        "gics_classification_claimed",
+        "datahub_consumption_performed",
+        "production_storage_performed",
+        "yfinance_consumption_performed",
+        "paid_access_performed",
+        "broker_or_order_execution_performed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "purpose": { "const": "full_universe_sec_sic_sector_classification_fetch" },
+        "status": { "const": "classification_packet_written" },
+        "network_access_performed": { "type": "boolean" },
+        "provider_calls_performed": { "type": "boolean" },
+        "raw_submissions_persisted": { "const": false },
+        "gics_classification_claimed": { "const": false },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "yfinance_consumption_performed": { "const": false },
+        "paid_access_performed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_decision_date", "candidate_price_basis_date", "price_basis_date", "source_as_of"],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "candidate_price_basis_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "price_basis_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+      }
+    },
+    "classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification_source",
+        "coarsening",
+        "provider_ids",
+        "eligible_count",
+        "sic_resolved_count",
+        "sic_missing_count",
+        "sector_group_count"
+      ],
+      "properties": {
+        "classification_source": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
+        "coarsening": { "const": "sic_2digit_major_group" },
+        "provider_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$", "maxLength": 64 }
+        },
+        "eligible_count": { "type": "integer", "minimum": 0 },
+        "sic_resolved_count": { "type": "integer", "minimum": 0 },
+        "sic_missing_count": { "type": "integer", "minimum": 0 },
+        "sector_group_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidate_artifact_path", "classification_packet_path", "summary_path"],
+      "properties": {
+        "candidate_artifact_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "classification_packet_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_batch5_full_universe_sec_sic_classification_fetch_summary_[0-9]{8}\\.json|provider_samples/us_short_batch5_full_universe_sec_sic_classification_fetch/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "classification_packet_path_gitignored",
+        "raw_submissions_persisted",
+        "summary_contains_ticker_lists",
+        "summary_contains_sector_labels",
+        "summary_contains_sec_user_agent",
+        "summary_contains_request_urls",
+        "summary_contains_secrets"
+      ],
+      "properties": {
+        "classification_packet_path_gitignored": { "const": true },
+        "raw_submissions_persisted": { "const": false },
+        "summary_contains_ticker_lists": { "const": false },
+        "summary_contains_sector_labels": { "const": false },
+        "summary_contains_sec_user_agent": { "const": false },
+        "summary_contains_request_urls": { "const": false },
+        "summary_contains_secrets": { "const": false }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "gics_classification_claimed",
+        "yfinance_used",
+        "paid_access_used",
+        "datahub_consumed",
+        "production_readiness_claimed",
+        "ship_gate_evidence_claimed",
+        "live_normalized_evidence_claimed",
+        "broker_or_order_execution_performed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "gics_classification_claimed": { "const": false },
+        "yfinance_used": { "const": false },
+        "paid_access_used": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_readiness_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
