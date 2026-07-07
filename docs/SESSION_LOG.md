@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 3 = gated grouped-window fetch + 用户授权真跑;§6a HELD + P3 from-None + 真feed去重;2400/2404 真打分)
+
+- **Verdict/Action**: 建 piece 3 = `runners/us_short_batch5_full_universe_momentum_fetch.py`（+ fetch-summary schema + 10 离线测,fake grouped seam 可离线）。复用已证 `_massive_grouped_for_date` grouped-daily 路径抓 price_basis=2026-07-02 往前 70 交易日全市场,只留 eligible+SPY/QQQ,per-session max-volume 去重,重建 gitignored 18.5MB 每票序列包（raw 全市场窗口不落盘）。**用户 `跑起来。我授权` = SR-PROVIDER-001 per-execution 授权** → 后台真跑 70 calls 全 200、0 retry。piece 2 producer 跑真包 → **2400/2404 eligible 真打分**（4 insufficient_coverage、0 history/absent）。已自审+提交。
+- **Required**: `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING` **resolved**（pieces 1-3 全建+真跑,详情见 register 单一来源）。
+- **Verify**: 10 离线测 OK + full offline `*us_short*` **3822 OK** + py_compile OK。真跑后独立复扫两 tracked summary（fetch `_20260702` + producer `_20260707`）零命中（无 apikey/massive.com/http/token/ticker/price）;packet 18.5MB + projection 0.12MB 均 git check-ignore=YES;git status 仅 5 新 tracked 文件（2 summary + runner + schema + test）。真 feed 折叠 140 dup 行、诚实记入 summary。
+- **Pre-Codex self-review**: 第一次真跑 fail-closed 于真 feed 的同日同票重复（BCPC 2026-03-24）——piece 1 严拒（对离线包对）→ 在**抓取层**加 max-volume 去重（reconstruct 契约不动、[[feedback_new_runner_recheck_recent_fixed_class]] surgical、universe_fetch 姊妹同容忍但我确定性）。**§6a 独立对抗 agent（缺席独立 reviewer 替身、offline 黑盒、fake seam）HELD 全 5 claim**（密钥卫生/fail-closed 门/无前视/纯净无残留/计数诚实）;其 1 P3（链式 `HTTPError.url` 含 apiKey→未来打印异常隐患）→ `raise ... from None` 堵死（code 已在消息、姊妹 universe_fetch 同潜在 Optional 不扩改）。live 刀干净+escalation 授权 → [[feedback_live_slice_commit_clean_plus_escalation]] 直接提交。"Tests passing ≠ design closure."
+- **Next**: 无（已提交;下一步=offline 把真动量喂 top-K funnel 出真 top-200 进 Pass2,theme 腿另track;split/div 复权=Step 3 gated）
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 2 = full-universe producer + engine `_finite` huge-int 硬化;§6a 揪 tracked-summary leak+orphan 收口)
 
 - **Verdict/Action**: 建 piece 2 = `runners/us_short_batch5_full_universe_momentum_producer.py`（+ series-packet/summary 两 schema + 13 离线测）。消费重建的每票序列包 + 已验候选工件,**复用已证引擎 verbatim**（`compute_momentum_features`→`momentum_block`→`project_momentum_block`,无 3-cap）给全 eligible 打分,emit funnel-consumable 动量投影 + counts-only 无泄漏 summary,per-ticker 诚实 disposition（scored/insufficient_history/insufficient_coverage/absent_from_pool）。ENVELOPE 坏（缺/坏 benchmark、stray 票、per-ticker look-ahead as_of、时钟不符）fail-closed 零残留;per-ticker 数据坏（薄/坏/huge close）引擎优雅处置不硬崩。已自审+提交。

@@ -1,0 +1,98 @@
+{
+  "schema_name": "us_short_batch5_full_universe_momentum_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_full_universe_momentum_summary.schema.json",
+  "generated_at": "2026-07-07T12:52:30+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "full_universe_momentum_series_packet_to_projection",
+    "status": "full_universe_momentum_projection_written",
+    "network_access_performed_by_runner": false,
+    "provider_calls_performed_by_runner": false,
+    "raw_payload_storage_performed_by_runner": false,
+    "series_packet_consumed": true,
+    "momentum_projection_written": true,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "full_market_call_performed": false,
+    "yfinance_consumption_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260706",
+    "candidate_price_basis_date": "20260702",
+    "price_basis_date": "2026-07-02",
+    "source_as_of": "2026-07-02"
+  },
+  "candidate_universe": {
+    "row_count": 7641,
+    "eligible_count": 2404,
+    "symbol_scope": "full_pass1_eligible_candidate_set",
+    "full_market_sample": false
+  },
+  "series_source": {
+    "series_count": 2406,
+    "eligible_with_series_count": 2404,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "provider_ids": [
+      "massive"
+    ],
+    "session": "RTH",
+    "adjustment_mode": "massive_grouped_daily",
+    "grouped_session_count": 70
+  },
+  "projection_contract": {
+    "target_count": 2404,
+    "momentum_scored_count": 2400,
+    "neutral_fill_count": 4,
+    "disposition_counts": {
+      "scored": 2400,
+      "insufficient_history": 0,
+      "insufficient_coverage": 4,
+      "absent_from_pool": 0
+    },
+    "coverage_exactly_matches_full_candidate_set": true,
+    "real_momentum_price_source_consumed": true
+  },
+  "paths": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
+    "series_packet_path": "state/us_short/us_short_batch5_full_universe_momentum_series_20260702_packet.json",
+    "output_projection_path": "state/us_short/us_short_batch5_full_universe_momentum_20260707_momentum.json",
+    "summary_path": "docs/us_short_batch5_full_universe_momentum_summary_20260707.json"
+  },
+  "storage": {
+    "series_packet_path_gitignored": true,
+    "output_projection_path_gitignored": true,
+    "summary_path_gitignored": false,
+    "summary_contains_ticker_lists": false,
+    "summary_contains_price_rows": false,
+    "summary_contains_raw_payload": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_download_performed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "This runner consumes an already-built local full-universe per-ticker series packet; it performs no provider fetch.",
+    "The tracked summary is counts-only: no ticker lists, price rows, raw payloads, request URLs, or secrets.",
+    "Neutral-filled / absent candidates have honest dispositions but no live momentum evidence from this runner.",
+    "The live grouped-window fetch that builds the series packet, DataHub, production storage, broker/order execution, live-normalized and ship-gate evidence remain out of scope (SR-PROVIDER-001)."
+  ]
+}
