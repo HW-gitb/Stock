@@ -92,13 +92,19 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["local_input_coverage"]["theme_projection"]["missing_count"], 1)
         self.assertEqual(
             summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["total_calls"],
-            10,
+            7,
         )
         self.assertEqual(
             summary["endpoint_call_forecast"]["families"]["corporate_action_live_half"]["total_calls"],
-            6,
+            4,
         )
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
         self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
+        self.assertTrue(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut_is_hypothetical"])
+        self.assertEqual(summary["pass2_target_universe"]["eligible_count"], 3)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertTrue(summary["pass2_target_universe"]["neutral_fill_tickers_excluded_from_expensive_pass2"])
         self.assertFalse(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
         self.assertTrue(self.paths["summary"].exists())
         text = self.paths["summary"].read_text(encoding="utf-8")
@@ -132,7 +138,60 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["scope"]["status"], "ready_for_reviewed_live_execution")
         self.assertFalse(summary["scope"]["network_access_performed"])
         self.assertEqual(summary["local_input_coverage"]["momentum_projection"]["missing_count"], 0)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 3)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 16)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
         self.assertTrue(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
+
+    def test_neutral_fill_local_coverage_is_not_used_as_expensive_pass2_target(self):
+        runner = self._module()
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 75.0, "MSFT": 70.0},
+                "neutral_fill_tickers": ["JPM"],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "absent_from_pool"},
+                "target_count": 3,
+                "scored_count": 2,
+            },
+        )
+        _write_json(
+            self.paths["theme"],
+            {
+                "theme_block_by_ticker": {"AAPL": 65.0},
+                "neutral_fill_tickers": ["MSFT", "JPM"],
+                "coverage": {
+                    "AAPL": "scored_theme_base",
+                    "MSFT": "neutral_missing_theme_and_industry_base",
+                    "JPM": "neutral_missing_theme_and_industry_base",
+                },
+                "target_count": 3,
+                "scored_count": 1,
+            },
+        )
+
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"],
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+
+        self.assertEqual(summary["scope"]["status"], "ready_for_reviewed_live_execution")
+        self.assertTrue(summary["local_input_coverage"]["all_required_local_inputs_cover_candidates"])
+        self.assertEqual(summary["candidate_universe"]["eligible_count"], 3)
+        self.assertEqual(summary["pass2_target_universe"]["selection_mode"], "momentum_scored_candidates_plus_forced_holdings")
+        self.assertEqual(summary["pass2_target_universe"]["momentum_scored_candidate_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["forced_holding_count"], 0)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertFalse(summary["pass2_target_universe"]["expensive_pass2_targets_full_eligible_set"])
+        self.assertEqual(summary["endpoint_call_forecast"]["families"]["pass2_source_packet"]["fmp_grades_calls"], 2)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
 
     def test_authorization_required_before_summary_write(self):
         runner = self._module()
@@ -195,6 +254,8 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             (("prohibited_claims", "datahub_consumed"), True),
             (("endpoint_call_forecast", "families", "pass2_source_packet", "sec_company_tickers_mapping_calls"), 2),
             (("endpoint_call_forecast", "families", "corporate_action_live_half", "corporate_action_reconciliation_performed_by_preflight"), True),
+            (("pass2_target_universe", "selection_mode"), "full_candidate_set"),
+            (("pass2_target_universe", "fmp_grade_call_cap"), 999),
         ):
             mutated = copy.deepcopy(summary)
             cursor = mutated

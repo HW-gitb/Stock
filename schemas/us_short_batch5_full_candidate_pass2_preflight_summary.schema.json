@@ -14,6 +14,7 @@
     "decision_clock",
     "candidate_universe",
     "local_input_coverage",
+    "pass2_target_universe",
     "endpoint_call_forecast",
     "execution_gate",
     "storage",
@@ -129,12 +130,54 @@
         "all_required_local_inputs_cover_candidates": { "type": "boolean" }
       }
     },
+    "pass2_target_universe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_mode",
+        "eligible_count",
+        "momentum_scored_candidate_count",
+        "forced_holding_count",
+        "target_count",
+        "target_symbols",
+        "target_symbol_sample",
+        "fmp_grade_call_cap",
+        "fmp_grade_calls_within_free_daily_cap",
+        "neutral_fill_tickers_excluded_from_expensive_pass2",
+        "expensive_pass2_targets_full_eligible_set"
+      ],
+      "properties": {
+        "selection_mode": { "const": "momentum_scored_candidates_plus_forced_holdings" },
+        "eligible_count": { "type": "integer", "minimum": 1 },
+        "momentum_scored_candidate_count": { "type": "integer", "minimum": 0 },
+        "forced_holding_count": { "type": "integer", "minimum": 0 },
+        "target_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "target_symbols": {
+          "type": "array",
+          "maxItems": 20000,
+          "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "target_symbol_sample": {
+          "type": "array",
+          "maxItems": 10,
+          "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" }
+        },
+        "fmp_grade_call_cap": { "const": 250 },
+        "fmp_grade_calls_within_free_daily_cap": { "type": "boolean" },
+        "neutral_fill_tickers_excluded_from_expensive_pass2": { "const": true },
+        "expensive_pass2_targets_full_eligible_set": { "type": "boolean" }
+      }
+    },
     "endpoint_call_forecast": {
       "type": "object",
       "additionalProperties": false,
       "required": [
         "families",
+        "forecast_basis",
+        "total_calls_for_pass2_target_cut",
         "total_calls_for_full_candidate_cut",
+        "total_calls_for_full_candidate_cut_is_hypothetical",
         "call_budget_must_be_explicit_before_network",
         "full_market_call_performed"
       ],
@@ -160,10 +203,10 @@
               ],
               "properties": {
                 "sec_company_tickers_mapping_calls": { "const": 1 },
-                "fmp_grades_calls": { "type": "integer", "minimum": 1 },
-                "sec_submissions_calls": { "type": "integer", "minimum": 1 },
-                "massive_reference_news_calls": { "type": "integer", "minimum": 1 },
-                "total_calls": { "type": "integer", "minimum": 4 }
+                "fmp_grades_calls": { "type": "integer", "minimum": 0 },
+                "sec_submissions_calls": { "type": "integer", "minimum": 0 },
+                "massive_reference_news_calls": { "type": "integer", "minimum": 0 },
+                "total_calls": { "type": "integer", "minimum": 1 }
               }
             },
             "corporate_action_live_half": {
@@ -176,9 +219,9 @@
                 "corporate_action_reconciliation_performed_by_preflight"
               ],
               "properties": {
-                "fmp_split_calls": { "type": "integer", "minimum": 1 },
-                "fmp_dividend_calls": { "type": "integer", "minimum": 1 },
-                "total_calls": { "type": "integer", "minimum": 2 },
+                "fmp_split_calls": { "type": "integer", "minimum": 0 },
+                "fmp_dividend_calls": { "type": "integer", "minimum": 0 },
+                "total_calls": { "type": "integer", "minimum": 0 },
                 "corporate_action_reconciliation_performed_by_preflight": { "const": false }
               }
             },
@@ -191,14 +234,17 @@
                 "not_in_total_until_separate_price_packet_review"
               ],
               "properties": {
-                "massive_daily_aggregates_calls": { "type": "integer", "minimum": 3 },
+                "massive_daily_aggregates_calls": { "type": "integer", "minimum": 2 },
                 "benchmark_symbols": { "const": ["SPY", "QQQ"] },
                 "not_in_total_until_separate_price_packet_review": { "const": true }
               }
             }
           }
         },
-        "total_calls_for_full_candidate_cut": { "type": "integer", "minimum": 6 },
+        "forecast_basis": { "const": "pass2_target_universe_not_full_eligible_count" },
+        "total_calls_for_pass2_target_cut": { "type": "integer", "minimum": 1 },
+        "total_calls_for_full_candidate_cut": { "type": "integer", "minimum": 1 },
+        "total_calls_for_full_candidate_cut_is_hypothetical": { "const": true },
         "call_budget_must_be_explicit_before_network": { "const": true },
         "full_market_call_performed": { "const": false }
       }

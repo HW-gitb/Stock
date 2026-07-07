@@ -184,6 +184,8 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_analyst_grade_actions.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_massive_news_events.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_corporate_action_capture.json"),
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_momentum_projection.json"),
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_projection.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_source_packet.json"),
         ]
         for path in cleanup:
@@ -267,6 +269,71 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("api.massive.com", text.lower())
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
+
+    def test_live_packet_uses_preflight_pass2_targets_not_neutral_full_candidate_fill(self):
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 75.0, "MSFT": 70.0},
+                "neutral_fill_tickers": ["JPM"],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "absent_from_pool"},
+                "target_count": 3,
+                "scored_count": 2,
+            },
+        )
+        _write_json(
+            self.paths["theme"],
+            {
+                "theme_block_by_ticker": {"AAPL": 65.0},
+                "neutral_fill_tickers": ["MSFT", "JPM"],
+                "coverage": {
+                    "AAPL": "scored_theme_base",
+                    "MSFT": "neutral_missing_theme_and_industry_base",
+                    "JPM": "neutral_missing_theme_and_industry_base",
+                },
+                "target_count": 3,
+                "scored_count": 1,
+            },
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        client = FullCandidateFakeClient()
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=11,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        joined_urls = "\n".join(client.urls)
+        self.assertEqual(len(client.urls), 11)
+        self.assertNotIn("JPM", joined_urls)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertEqual(summary["candidate_universe"]["eligible_count"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["fmp_stock_split_calls"], 2)
+        self.assertEqual(summary["endpoint_call_budget"]["fmp_dividend_calls"], 2)
 
     def test_missing_authorization_aborts_before_network_or_writes(self):
         client = FullCandidateFakeClient()
@@ -405,6 +472,83 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             with self.subTest(path=path):
                 with self.assertRaises(runner.FullCandidateLiveSourcePacketError):
                     runner._validate_summary_against_schema(mutated)
+
+    def test_forged_preflight_injecting_neutral_fill_target_is_rejected_before_fetch(self):
+        # R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED: the live runner must RE-DERIVE the
+        # funnel target from the momentum projection (scored∩eligible ∪ forced-holdings), not trust the preflight.
+        # Momentum scores only AAPL/MSFT; JPM is a neutral-fill eligible ticker. A forged preflight injecting JPM
+        # into target_symbols must be rejected before any provider fetch or summary write.
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 50.0, "MSFT": 50.0},
+                "neutral_fill_tickers": ["JPM"],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "neutral_fill"},
+                "target_count": 3,
+                "scored_count": 2,
+            },
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        preflight = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
+        budget = preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
+        preflight["pass2_target_universe"]["target_symbols"] = ["AAPL", "JPM", "MSFT"]
+        _write_json(self.paths["preflight"], preflight)
+
+        client = FullCandidateFakeClient()
+        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "funnel"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=budget,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
+
+    def test_forged_within_cap_preflight_is_rejected_when_target_exceeds_recomputed_cap(self):
+        # The runner must RECOMPUTE within-cap from the re-derived target, not trust the preflight's const-true
+        # attestation. With the cap lowered to 2, the canonical 3-target preflight (which self-attests within_cap)
+        # must be rejected before any fetch — the small-scale analog of a forged 2404 / 12021-call re-expansion.
+        client = FullCandidateFakeClient()
+        with mock.patch.object(runner, "FMP_FREE_DAILY_GRADE_CALL_CAP", 2), self.assertRaisesRegex(
+            runner.FullCandidateLiveSourcePacketError, "free daily grade-call cap"
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
 
 
 if __name__ == "__main__":

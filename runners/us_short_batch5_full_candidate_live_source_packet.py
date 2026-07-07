@@ -18,7 +18,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
-from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
+from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_fmp_analyst_grades import FmpGradesError, resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import MassiveNewsError, resolve_news_events  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
@@ -51,6 +51,7 @@ DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH = (
     STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_live_source_packet_20260706_context_components.json"
 )
 MASSIVE_NEWS_URL = "https://api.massive.com/v2/reference/news?ticker={ticker}&limit=10&apiKey={key}"
+FMP_FREE_DAILY_GRADE_CALL_CAP = 250   # mirror the preflight; the funnel target + within-cap invariant is RE-DERIVED here at the live boundary, not trusted from the preflight
 
 
 class FullCandidateLiveSourcePacketError(ValueError):
@@ -161,6 +162,8 @@ def _source_paths(prefix: Path) -> dict[str, Path]:
         "analyst_grade_actions": prefix.with_name(prefix.name + "_analyst_grade_actions.json"),
         "massive_news_events": prefix.with_name(prefix.name + "_massive_news_events.json"),
         "corporate_action_capture": prefix.with_name(prefix.name + "_corporate_action_capture.json"),
+        "momentum_projection": prefix.with_name(prefix.name + "_momentum_projection.json"),
+        "theme_projection": prefix.with_name(prefix.name + "_theme_projection.json"),
         "source_packet": prefix.with_name(prefix.name + "_source_packet.json"),
     }
 
@@ -257,11 +260,14 @@ def _load_ready_preflight(preflight_summary_path: Path, expected_total_call_budg
     status = ((preflight.get("scope") or {}).get("status"))
     gate = preflight.get("execution_gate") or {}
     local = preflight.get("local_input_coverage") or {}
-    forecast = ((preflight.get("endpoint_call_forecast") or {}).get("total_calls_for_full_candidate_cut"))
+    forecast = ((preflight.get("endpoint_call_forecast") or {}).get("total_calls_for_pass2_target_cut"))
+    targets = preflight.get("pass2_target_universe") or {}
     if status != "ready_for_reviewed_live_execution" or gate.get("ready_to_run_full_candidate_live_packet") is not True:
         raise FullCandidateLiveSourcePacketError("preflight summary is not ready for reviewed live execution")
     if local.get("all_required_local_inputs_cover_candidates") is not True:
         raise FullCandidateLiveSourcePacketError("preflight local inputs are not fully covered")
+    if targets.get("target_count") <= 0 or targets.get("fmp_grade_calls_within_free_daily_cap") is not True:
+        raise FullCandidateLiveSourcePacketError("preflight Pass2 target universe is not free-budget ready")
     if forecast != expected_total_call_budget:
         raise FullCandidateLiveSourcePacketError(
             f"expected call budget must match preflight forecast: {expected_total_call_budget} != {forecast}"
@@ -274,6 +280,7 @@ def _candidate_subset_artifact(
     candidate_artifact_path: Path,
     expected_decision_date: str,
     eligibility_governance: dict[str, Any],
+    selected_symbols: list[str],
 ) -> dict[str, Any]:
     artifact = _read_json(candidate_artifact_path)
     try:
@@ -286,7 +293,17 @@ def _candidate_subset_artifact(
         raise FullCandidateLiveSourcePacketError(f"candidate artifact failed validation: {exc}") from exc
     rows_by_ticker = {row["ticker"]: row for row in artifact["rows"]}
     eligible = list(artifact["eligible_tickers"])
-    rows = [rows_by_ticker[ticker] for ticker in eligible]
+    eligible_set = set(eligible)
+    if type(selected_symbols) is not list or not selected_symbols:
+        raise FullCandidateLiveSourcePacketError("selected_symbols must be a non-empty exact list")
+    seen: set[str] = set()
+    for symbol in selected_symbols:
+        if type(symbol) is not str or symbol in seen:
+            raise FullCandidateLiveSourcePacketError("selected_symbols must contain unique exact ticker strings")
+        if symbol not in eligible_set or symbol not in rows_by_ticker:
+            raise FullCandidateLiveSourcePacketError("selected_symbols must stay inside the reviewed eligible candidate set")
+        seen.add(symbol)
+    rows = [rows_by_ticker[ticker] for ticker in selected_symbols]
     adv_window = artifact["adv_window"]
     subset = universe_fetch.build_candidate_artifact(
         rows=rows,
@@ -421,6 +438,51 @@ def _fetch_live_records(
 
 def _record_map(records: list[sample_validation.FetchRecord]) -> dict[tuple[str, str, str | None], sample_validation.FetchRecord]:
     return {(record.provider_id, record.endpoint_family, record.symbol): record for record in records}
+
+
+def _target_scoped_projection(
+    *,
+    projection_path: Path,
+    value_key: str,
+    selected_symbols: list[str],
+) -> dict[str, Any]:
+    raw = _read_json(projection_path)
+    if type(raw) is not dict:
+        raise FullCandidateLiveSourcePacketError(f"{value_key} projection must be an exact dict")
+    values = raw.get(value_key)
+    neutral = raw.get("neutral_fill_tickers")
+    coverage = raw.get("coverage")
+    if type(values) is not dict or type(neutral) is not list or type(coverage) is not dict:
+        raise FullCandidateLiveSourcePacketError(f"{value_key} projection has an invalid shape")
+    if not all(type(key) is str for key in values) or not all(type(key) is str for key in coverage):
+        raise FullCandidateLiveSourcePacketError(f"{value_key} projection keys must be exact strings")
+    if not all(type(ticker) is str for ticker in neutral):
+        raise FullCandidateLiveSourcePacketError(f"{value_key} neutral_fill_tickers must contain exact strings")
+    neutral_set = set(neutral)
+    scoped_values: dict[str, Any] = {}
+    scoped_neutral: list[str] = []
+    scoped_coverage: dict[str, Any] = {}
+    seen: set[str] = set()
+    for symbol in selected_symbols:
+        if symbol in seen:
+            raise FullCandidateLiveSourcePacketError("selected_symbols contains a duplicate")
+        seen.add(symbol)
+        if symbol not in coverage:
+            raise FullCandidateLiveSourcePacketError(f"{value_key} coverage is missing a selected target")
+        if symbol in values:
+            scoped_values[symbol] = values[symbol]
+        elif symbol in neutral_set:
+            scoped_neutral.append(symbol)
+        else:
+            raise FullCandidateLiveSourcePacketError(f"{value_key} projection partition misses a selected target")
+        scoped_coverage[symbol] = coverage[symbol]
+    return {
+        value_key: scoped_values,
+        "neutral_fill_tickers": scoped_neutral,
+        "coverage": scoped_coverage,
+        "target_count": len(selected_symbols),
+        "scored_count": len(scoped_values),
+    }
 
 
 def _empty_provenance(
@@ -729,6 +791,7 @@ def _build_summary(
     preflight_total_call_forecast: int,
     candidate_artifact_path: Path,
     candidate_artifact: dict[str, Any],
+    pass2_target_universe: dict[str, Any],
     endpoint_records: list[sample_validation.FetchRecord],
     cik_by_symbol: dict[str, str],
     raw_root: Path,
@@ -798,8 +861,20 @@ def _build_summary(
             "row_count": len(candidate_artifact["rows"]),
             "eligible_count": len(eligible),
             "eligible_symbol_sample": eligible[:10],
-            "symbol_scope": "full_pass1_eligible_candidate_set",
+            "symbol_scope": "pass2_target_universe",
+            "source_full_candidate_eligible_count": pass2_target_universe["eligible_count"],
             "full_market_sample": False,
+        },
+        "pass2_target_universe": {
+            "selection_mode": pass2_target_universe["selection_mode"],
+            "target_count": pass2_target_universe["target_count"],
+            "target_symbols": list(pass2_target_universe["target_symbols"]),
+            "target_symbol_sample": list(pass2_target_universe["target_symbol_sample"]),
+            "fmp_grade_call_cap": pass2_target_universe["fmp_grade_call_cap"],
+            "fmp_grade_calls_within_free_daily_cap": pass2_target_universe["fmp_grade_calls_within_free_daily_cap"],
+            "neutral_fill_tickers_excluded_from_expensive_pass2": (
+                pass2_target_universe["neutral_fill_tickers_excluded_from_expensive_pass2"]
+            ),
         },
         "endpoint_call_budget": {
             "max_total_endpoint_calls": expected_total_call_budget,
@@ -832,6 +907,8 @@ def _build_summary(
             "analyst_grade_actions_path": _repo_rel(source_paths["analyst_grade_actions"]),
             "massive_news_events_path": _repo_rel(source_paths["massive_news_events"]),
             "corporate_action_capture_path": _repo_rel(source_paths["corporate_action_capture"]),
+            "momentum_projection_path": _repo_rel(source_paths["momentum_projection"]),
+            "theme_projection_path": _repo_rel(source_paths["theme_projection"]),
             "artifacts_gitignored": all(_git_ignored(source_paths[key]) for key in source_paths if key != "source_packet"),
         },
         "source_packet": {
@@ -866,7 +943,7 @@ def _build_summary(
             "a_share_crossing_performed": False,
         },
         "limitations": [
-            "This is a full Pass1-eligible candidate source-packet run, not full-market coverage evidence.",
+            "This source-packet run is narrowed to the reviewed Pass2 target universe, not full-market coverage evidence and not the full Pass1-eligible set.",
             "Split/dividend endpoints are captured as raw provider evidence only; this runner does not reconcile corporate actions or calculate returns.",
             "Raw payloads stay under gitignored provider_samples; tracked summary excludes request URLs, raw rows, and secrets.",
             "No provider selection, DataHub, production storage, broker/order execution, live-normalized, or ship-gate evidence is claimed.",
@@ -925,6 +1002,93 @@ def _write_summary_validated(summary: dict[str, Any], summary_path: Path, sensit
     _write_json_atomic(summary, summary_path)
 
 
+def _canonical_forced_holdings(
+    forced_holding_tickers: list[str] | tuple[str, ...] | None,
+    *,
+    eligible: set[str],
+) -> set[str]:
+    """Canonicalize the caller-supplied forced-holding tickers exactly as the preflight `_canonical_list_keys` does
+    (the repo single US-ticker identity policy) and require each to be in the reviewed Pass1-eligible set, so the
+    live target re-derivation matches the preflight rule `target = momentum-scored∩eligible ∪ forced-holdings`."""
+    if forced_holding_tickers is None:
+        return set()
+    if type(forced_holding_tickers) not in (list, tuple):
+        raise FullCandidateLiveSourcePacketError("forced_holding_tickers must be an exact list/tuple or None")
+    out: set[str] = set()
+    for raw in forced_holding_tickers:
+        if type(raw) is not str:
+            raise FullCandidateLiveSourcePacketError("forced_holding_tickers must contain exact ticker strings")
+        canon = canonical_us_ticker(raw)
+        if canon is None:
+            raise FullCandidateLiveSourcePacketError("forced_holding_tickers contains a non-canonicalizable ticker")
+        if canon not in eligible:
+            raise FullCandidateLiveSourcePacketError("forced_holding_tickers must be in the Pass1-eligible candidate set")
+        out.add(canon)
+    return out
+
+
+def _rederive_and_verify_pass2_targets(
+    *,
+    candidate_artifact_path: Path,
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+    momentum_projection_path: Path,
+    forced_holding_tickers: list[str] | tuple[str, ...] | None,
+    reviewed_target_symbols: list[str],
+    preflight_within_cap: Any,
+) -> dict[str, Any]:
+    """Independently RE-DERIVE the Step 1 funnel Pass2 target from the momentum projection + candidate artifact
+    (mirrors the preflight `_pass2_target_universe`: `sorted(momentum-scored∩eligible ∪ forced-holdings)`), and
+    REJECT any preflight whose `target_symbols` / within-cap disagree — so the expensive live boundary does NOT
+    trust the preflight's self-attestation. Closes R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-
+    REDERIVED (a forged preflight can otherwise inject a neutral-fill target or re-expand to the full 2404/12021).
+    Returns the runner-verified target universe for the summary, so its const-true within-cap / neutral-excluded
+    attestations are COMPUTED here (only reachable on the truly-true path), not copied from the preflight."""
+    artifact = _read_json(candidate_artifact_path)
+    try:
+        artifact = universe_fetch.validate_candidate_artifact(
+            artifact,
+            expected_decision_date=expected_decision_date,
+            governance=eligibility_governance,
+        )
+    except Exception as exc:
+        raise FullCandidateLiveSourcePacketError(f"candidate artifact failed validation: {exc}") from exc
+    eligible = set(artifact["eligible_tickers"])
+    raw = _read_json(momentum_projection_path)
+    if type(raw) is not dict or type(raw.get("momentum_by_ticker")) is not dict:
+        raise FullCandidateLiveSourcePacketError("momentum projection has an invalid shape for target re-derivation")
+    scored_keys = list(raw["momentum_by_ticker"].keys())
+    if not all(type(key) is str for key in scored_keys):
+        raise FullCandidateLiveSourcePacketError("momentum projection scored keys must be exact strings")
+    # Read the projection's scored keys as stored: the whole sanctioned pipeline (projection-inputs builder ->
+    # preflight -> this runner -> `_target_scoped_projection`) is canonical-keyed, so scored∩eligible matches the
+    # preflight for every real run. A hand-authored non-canonical-keyed projection fails closed HERE (before any
+    # fetch) rather than fetching and then failing in the raw-keyed `_target_scoped_projection` — the safe edge.
+    scored = {key for key in scored_keys if key in eligible}
+    forced = _canonical_forced_holdings(forced_holding_tickers, eligible=eligible)
+    expected = scored | forced
+    if type(reviewed_target_symbols) is not list or set(reviewed_target_symbols) != expected:
+        raise FullCandidateLiveSourcePacketError(
+            "preflight target_symbols do not match the re-derived momentum-scored-eligible plus forced-holdings funnel"
+        )
+    within_cap = len(expected) <= FMP_FREE_DAILY_GRADE_CALL_CAP
+    if not within_cap or preflight_within_cap is not True:
+        raise FullCandidateLiveSourcePacketError(
+            "re-derived Pass2 target exceeds the FMP free daily grade-call cap or disagrees with the preflight within-cap flag"
+        )
+    targets = sorted(expected)
+    return {
+        "selection_mode": "momentum_scored_candidates_plus_forced_holdings",
+        "eligible_count": len(artifact["eligible_tickers"]),
+        "target_count": len(targets),
+        "target_symbols": targets,
+        "target_symbol_sample": targets[:10],
+        "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
+        "fmp_grade_calls_within_free_daily_cap": within_cap,
+        "neutral_fill_tickers_excluded_from_expensive_pass2": True,
+    }
+
+
 def run_full_candidate_live_source_packet(
     *,
     preflight_summary_path: Path = PREFLIGHT_SUMMARY_PATH,
@@ -940,6 +1104,7 @@ def run_full_candidate_live_source_packet(
     generated_at: str | None = None,
     observed_at: str | None = None,
     theme_opportunity_state: str = "strong",
+    forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
     sec_sleep_seconds: float = sample_validation.SEC_FAIR_ACCESS_SLEEP_SECONDS,
 ) -> dict[str, Any]:
     if not confirm_user_authorization:
@@ -959,6 +1124,8 @@ def run_full_candidate_live_source_packet(
         preflight["candidate_universe"]["candidate_artifact_path"],
         field="preflight.candidate_artifact_path",
     )
+    preflight_targets = preflight["pass2_target_universe"]
+    reviewed_target_symbols = list(preflight_targets["target_symbols"])
     momentum_path = _existing_state_json(
         preflight["local_input_coverage"]["momentum_projection"]["path"],
         field="preflight.momentum_projection.path",
@@ -982,14 +1149,24 @@ def run_full_candidate_live_source_packet(
 
     eligibility_governance = load_eligibility_governance(ELIGIBILITY_GOVERNANCE_PATH)
     load_catalyst_governance()
+    verified_targets = _rederive_and_verify_pass2_targets(
+        candidate_artifact_path=candidate_path,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+        momentum_projection_path=momentum_path,
+        forced_holding_tickers=forced_holding_tickers,
+        reviewed_target_symbols=reviewed_target_symbols,
+        preflight_within_cap=preflight_targets.get("fmp_grade_calls_within_free_daily_cap"),
+    )
     candidate_subset = _candidate_subset_artifact(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,
         eligibility_governance=eligibility_governance,
+        selected_symbols=reviewed_target_symbols,
     )
     selected_symbols = list(candidate_subset["eligible_tickers"])
-    if len(selected_symbols) != preflight["candidate_universe"]["eligible_count"]:
-        raise FullCandidateLiveSourcePacketError("candidate eligible_count drifted from the reviewed preflight")
+    if selected_symbols != reviewed_target_symbols:
+        raise FullCandidateLiveSourcePacketError("candidate target symbols drifted from the reviewed preflight")
 
     fmp_env = sample_validation.read_required_env("FMP_API_KEY")
     sec_env = sample_validation.read_required_env("SEC_USER_AGENT")
@@ -1030,19 +1207,31 @@ def run_full_candidate_live_source_packet(
         selected_symbols=selected_symbols,
         records=records,
     )
+    target_momentum_projection = _target_scoped_projection(
+        projection_path=momentum_path,
+        value_key="momentum_by_ticker",
+        selected_symbols=selected_symbols,
+    )
+    target_theme_projection = _target_scoped_projection(
+        projection_path=theme_path,
+        value_key="theme_block_by_ticker",
+        selected_symbols=selected_symbols,
+    )
 
     _write_json_atomic(candidate_subset, paths["candidate_subset"])
     _write_json_atomic(resolved_sources["offering_audit_source"], paths["offering_audit_source"])
     _write_json_atomic(resolved_sources["analyst_grade_actions"], paths["analyst_grade_actions"])
     _write_json_atomic(resolved_sources["massive_news_events"], paths["massive_news_events"])
     _write_json_atomic(corporate_action_capture, paths["corporate_action_capture"])
+    _write_json_atomic(target_momentum_projection, paths["momentum_projection"])
+    _write_json_atomic(target_theme_projection, paths["theme_projection"])
     packet = _build_local_source_packet(
         generated_at=generated_at,
         expected_decision_date=expected_decision_date,
         theme_opportunity_state=theme_opportunity_state,
         paths=paths,
-        momentum_projection_path=momentum_path,
-        theme_projection_path=theme_path,
+        momentum_projection_path=paths["momentum_projection"],
+        theme_projection_path=paths["theme_projection"],
         output_data_context_path=output_path,
         context_components_output_path=components_path,
     )
@@ -1066,9 +1255,10 @@ def run_full_candidate_live_source_packet(
         env_summary=env_summary,
         preflight_summary_path=preflight_path,
         expected_total_call_budget=expected_total_call_budget,
-        preflight_total_call_forecast=preflight["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"],
+        preflight_total_call_forecast=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
         candidate_artifact_path=candidate_path,
         candidate_artifact=candidate_subset,
+        pass2_target_universe=verified_targets,
         endpoint_records=records,
         cik_by_symbol=cik_by_symbol,
         raw_root=raw_root_resolved,
@@ -1101,6 +1291,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--generated-at")
     parser.add_argument("--observed-at")
     parser.add_argument("--theme-opportunity-state", default="strong")
+    parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--run-data-context", action="store_true")
     return parser.parse_args(argv)
@@ -1122,6 +1313,7 @@ def main(argv: list[str] | None = None) -> int:
             generated_at=args.generated_at,
             observed_at=args.observed_at,
             theme_opportunity_state=args.theme_opportunity_state,
+            forced_holding_tickers=args.forced_holding_ticker,
         )
     except FullCandidateLiveSourcePacketError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

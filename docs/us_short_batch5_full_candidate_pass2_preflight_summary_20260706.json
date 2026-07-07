@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
-  "generated_at": "2026-07-06T12:35:00+00:00",
+  "generated_at": "2026-07-07T02:08:49+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -76,23 +76,44 @@
     },
     "all_required_local_inputs_cover_candidates": true
   },
+  "pass2_target_universe": {
+    "selection_mode": "momentum_scored_candidates_plus_forced_holdings",
+    "eligible_count": 2404,
+    "momentum_scored_candidate_count": 3,
+    "forced_holding_count": 0,
+    "target_count": 3,
+    "target_symbols": [
+      "AAPL",
+      "JPM",
+      "MSFT"
+    ],
+    "target_symbol_sample": [
+      "AAPL",
+      "JPM",
+      "MSFT"
+    ],
+    "fmp_grade_call_cap": 250,
+    "fmp_grade_calls_within_free_daily_cap": true,
+    "neutral_fill_tickers_excluded_from_expensive_pass2": true,
+    "expensive_pass2_targets_full_eligible_set": false
+  },
   "endpoint_call_forecast": {
     "families": {
       "pass2_source_packet": {
         "sec_company_tickers_mapping_calls": 1,
-        "fmp_grades_calls": 2404,
-        "sec_submissions_calls": 2404,
-        "massive_reference_news_calls": 2404,
-        "total_calls": 7213
+        "fmp_grades_calls": 3,
+        "sec_submissions_calls": 3,
+        "massive_reference_news_calls": 3,
+        "total_calls": 10
       },
       "corporate_action_live_half": {
-        "fmp_split_calls": 2404,
-        "fmp_dividend_calls": 2404,
-        "total_calls": 4808,
+        "fmp_split_calls": 3,
+        "fmp_dividend_calls": 3,
+        "total_calls": 6,
         "corporate_action_reconciliation_performed_by_preflight": false
       },
       "momentum_price_refresh_if_local_projection_missing": {
-        "massive_daily_aggregates_calls": 2406,
+        "massive_daily_aggregates_calls": 5,
         "benchmark_symbols": [
           "SPY",
           "QQQ"
@@ -100,7 +121,10 @@
         "not_in_total_until_separate_price_packet_review": true
       }
     },
+    "forecast_basis": "pass2_target_universe_not_full_eligible_count",
+    "total_calls_for_pass2_target_cut": 16,
     "total_calls_for_full_candidate_cut": 12021,
+    "total_calls_for_full_candidate_cut_is_hypothetical": true,
     "call_budget_must_be_explicit_before_network": true,
     "full_market_call_performed": false
   },
@@ -134,8 +158,8 @@
     "a_share_crossing_performed": false
   },
   "limitations": [
-    "This preflight performs no provider calls and writes no source packet; it only computes full-candidate readiness and call forecast.",
-    "Full-candidate means the current Pass1-eligible candidate set, not full-market coverage evidence.",
+    "This preflight performs no provider calls and writes no source packet; it only computes Pass2 target readiness and call forecast.",
+    "The full Pass1-eligible candidate set remains the local score coverage basis; expensive Pass2 live fetch is narrowed to momentum-scored candidates plus forced holdings.",
     "Corporate-action live half is forecast as split/dividend endpoint capture only; reconciliation, returns, DataHub, production, and ship-gate evidence remain out of scope.",
     "Automated broader peer-theme discovery remains separate; this preflight only verifies whether the provided local theme projection already covers all candidates."
   ]

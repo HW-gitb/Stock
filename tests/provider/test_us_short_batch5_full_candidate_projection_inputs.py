@@ -167,6 +167,10 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         self.assertTrue(summary["local_input_coverage"]["all_required_local_inputs_cover_candidates"])
         self.assertEqual(summary["local_input_coverage"]["momentum_projection"]["missing_count"], 0)
         self.assertEqual(summary["local_input_coverage"]["theme_projection"]["missing_count"], 0)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
         self.assertFalse(summary["scope"]["network_access_performed"])
 
     def test_unhashable_coverage_disposition_raises_typed_error_before_writes(self):

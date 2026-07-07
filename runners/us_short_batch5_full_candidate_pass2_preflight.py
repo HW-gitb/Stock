@@ -34,6 +34,8 @@ DEFAULT_THEME_PROJECTION_PATH = (
     STATE_US_SHORT_DIR / "us_short_batch5_full_candidate_projection_inputs_20260706_theme.json"
 )
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
+FMP_FREE_DAILY_GRADE_CALL_CAP = 250
+PASS2_TARGET_SELECTION_MODE = "momentum_scored_candidates_plus_forced_holdings"
 
 
 class FullCandidatePass2PreflightError(ValueError):
@@ -203,6 +205,8 @@ def _projection_coverage(
         "missing_count": len(missing),
         "stale_count": len(stale),
         "neutral_fill_count": len(neutral_keys),
+        "_scored_tickers": sorted(value_keys),
+        "_neutral_tickers": sorted(neutral_keys),
         "missing_sample": missing[:10],
         "stale_sample": stale[:10],
         "target_count": projection.get("target_count") if type(projection.get("target_count")) is int else None,
@@ -227,33 +231,84 @@ def _load_candidate_artifact(
         raise FullCandidatePass2PreflightError(f"candidate artifact failed validation: {exc}") from exc
 
 
-def _forecast_calls(candidate_count: int) -> dict[str, Any]:
+def _public_projection_coverage(coverage: dict[str, Any], *, path: Path) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in dict(coverage, path=_repo_rel(path)).items()
+        if not key.startswith("_")
+    }
+
+
+def _pass2_target_universe(
+    *,
+    eligible_tickers: list[str],
+    momentum_coverage: dict[str, Any],
+    forced_holding_tickers: list[str] | tuple[str, ...] | None,
+) -> dict[str, Any]:
+    eligible = set(eligible_tickers)
+    scored = [ticker for ticker in momentum_coverage["_scored_tickers"] if ticker in eligible]
+    if forced_holding_tickers is None:
+        forced_raw: list[str] = []
+    elif type(forced_holding_tickers) in (list, tuple):
+        forced_raw = list(forced_holding_tickers)
+    else:
+        raise FullCandidatePass2PreflightError("forced_holding_tickers must be an exact list/tuple or None")
+    forced = sorted(_canonical_list_keys(forced_raw, field="forced_holding_tickers"))
+    missing_forced = [ticker for ticker in forced if ticker not in eligible]
+    if missing_forced:
+        raise FullCandidatePass2PreflightError(
+            "forced_holding_tickers must be present in the reviewed Pass1-eligible candidate set"
+        )
+    targets = sorted(set(scored) | set(forced))
+    target_count = len(targets)
+    full_eligible = target_count == len(eligible_tickers)
+    within_cap = target_count <= FMP_FREE_DAILY_GRADE_CALL_CAP
+    return {
+        "selection_mode": PASS2_TARGET_SELECTION_MODE,
+        "eligible_count": len(eligible_tickers),
+        "momentum_scored_candidate_count": len(scored),
+        "forced_holding_count": len(forced),
+        "target_count": target_count,
+        "target_symbols": targets,
+        "target_symbol_sample": targets[:10],
+        "fmp_grade_call_cap": FMP_FREE_DAILY_GRADE_CALL_CAP,
+        "fmp_grade_calls_within_free_daily_cap": within_cap,
+        "neutral_fill_tickers_excluded_from_expensive_pass2": True,
+        "expensive_pass2_targets_full_eligible_set": full_eligible,
+    }
+
+
+def _forecast_calls(pass2_target_count: int, full_candidate_count: int) -> dict[str, Any]:
     pass2 = {
         "sec_company_tickers_mapping_calls": 1,
-        "fmp_grades_calls": candidate_count,
-        "sec_submissions_calls": candidate_count,
-        "massive_reference_news_calls": candidate_count,
-        "total_calls": 1 + (candidate_count * 3),
+        "fmp_grades_calls": pass2_target_count,
+        "sec_submissions_calls": pass2_target_count,
+        "massive_reference_news_calls": pass2_target_count,
+        "total_calls": 1 + (pass2_target_count * 3),
     }
     corporate_action = {
-        "fmp_split_calls": candidate_count,
-        "fmp_dividend_calls": candidate_count,
-        "total_calls": candidate_count * 2,
+        "fmp_split_calls": pass2_target_count,
+        "fmp_dividend_calls": pass2_target_count,
+        "total_calls": pass2_target_count * 2,
         "corporate_action_reconciliation_performed_by_preflight": False,
     }
     momentum_refresh = {
-        "massive_daily_aggregates_calls": candidate_count + len(BENCHMARK_SYMBOLS),
+        "massive_daily_aggregates_calls": pass2_target_count + len(BENCHMARK_SYMBOLS),
         "benchmark_symbols": list(BENCHMARK_SYMBOLS),
         "not_in_total_until_separate_price_packet_review": True,
     }
     total = pass2["total_calls"] + corporate_action["total_calls"]
+    hypothetical_full_candidate_total = 1 + (full_candidate_count * 3) + (full_candidate_count * 2)
     return {
         "families": {
             "pass2_source_packet": pass2,
             "corporate_action_live_half": corporate_action,
             "momentum_price_refresh_if_local_projection_missing": momentum_refresh,
         },
-        "total_calls_for_full_candidate_cut": total,
+        "forecast_basis": "pass2_target_universe_not_full_eligible_count",
+        "total_calls_for_pass2_target_cut": total,
+        "total_calls_for_full_candidate_cut": hypothetical_full_candidate_total,
+        "total_calls_for_full_candidate_cut_is_hypothetical": True,
         "call_budget_must_be_explicit_before_network": True,
         "full_market_call_performed": False,
     }
@@ -269,16 +324,31 @@ def _build_summary(
     artifact: dict[str, Any],
     momentum_coverage: dict[str, Any],
     theme_coverage: dict[str, Any],
+    forced_holding_tickers: list[str] | tuple[str, ...] | None,
 ) -> dict[str, Any]:
     eligible = list(artifact["eligible_tickers"])
     candidate_count = len(eligible)
+    pass2_targets = _pass2_target_universe(
+        eligible_tickers=eligible,
+        momentum_coverage=momentum_coverage,
+        forced_holding_tickers=forced_holding_tickers,
+    )
     local_ready = (
         momentum_coverage["status"] == "full_coverage"
         and theme_coverage["status"] == "full_coverage"
     )
-    status = "ready_for_reviewed_live_execution" if local_ready else "blocked_missing_local_inputs"
-    momentum_coverage = dict(momentum_coverage, path=_repo_rel(momentum_path))
-    theme_coverage = dict(theme_coverage, path=_repo_rel(theme_path))
+    pass2_targets_ready = pass2_targets["target_count"] > 0 and pass2_targets["fmp_grade_calls_within_free_daily_cap"]
+    ready = local_ready and pass2_targets_ready
+    status = "ready_for_reviewed_live_execution" if ready else "blocked_missing_local_inputs"
+    block_reasons: list[str] = []
+    if not local_ready:
+        block_reasons.append("missing_or_stale_local_score_projection_inputs")
+    if pass2_targets["target_count"] <= 0:
+        block_reasons.append("no_momentum_scored_or_forced_holding_pass2_targets")
+    if not pass2_targets["fmp_grade_calls_within_free_daily_cap"]:
+        block_reasons.append("pass2_target_count_exceeds_fmp_free_daily_grade_call_cap")
+    momentum_coverage = _public_projection_coverage(momentum_coverage, path=momentum_path)
+    theme_coverage = _public_projection_coverage(theme_coverage, path=theme_path)
     return {
         "schema_name": "us_short_batch5_full_candidate_pass2_preflight_summary",
         "schema_version": "1.0.0",
@@ -324,10 +394,11 @@ def _build_summary(
             "theme_projection": theme_coverage,
             "all_required_local_inputs_cover_candidates": local_ready,
         },
-        "endpoint_call_forecast": _forecast_calls(candidate_count),
+        "pass2_target_universe": pass2_targets,
+        "endpoint_call_forecast": _forecast_calls(pass2_targets["target_count"], candidate_count),
         "execution_gate": {
-            "ready_to_run_full_candidate_live_packet": local_ready,
-            "block_reasons": [] if local_ready else ["missing_or_stale_local_score_projection_inputs"],
+            "ready_to_run_full_candidate_live_packet": ready,
+            "block_reasons": block_reasons,
             "requires_separate_network_tool_approval": True,
             "requires_explicit_call_budget": True,
             "provider_selection_claimed": False,
@@ -355,8 +426,8 @@ def _build_summary(
             "a_share_crossing_performed": False,
         },
         "limitations": [
-            "This preflight performs no provider calls and writes no source packet; it only computes full-candidate readiness and call forecast.",
-            "Full-candidate means the current Pass1-eligible candidate set, not full-market coverage evidence.",
+            "This preflight performs no provider calls and writes no source packet; it only computes Pass2 target readiness and call forecast.",
+            "The full Pass1-eligible candidate set remains the local score coverage basis; expensive Pass2 live fetch is narrowed to momentum-scored candidates plus forced holdings.",
             "Corporate-action live half is forecast as split/dividend endpoint capture only; reconciliation, returns, DataHub, production, and ship-gate evidence remain out of scope.",
             "Automated broader peer-theme discovery remains separate; this preflight only verifies whether the provided local theme projection already covers all candidates.",
         ],
@@ -412,6 +483,7 @@ def run_preflight(
     momentum_projection_path: Path = DEFAULT_MOMENTUM_PROJECTION_PATH,
     theme_projection_path: Path = DEFAULT_THEME_PROJECTION_PATH,
     summary_path: Path = SUMMARY_PATH,
+    forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
     confirm_user_authorization: bool = False,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
@@ -450,6 +522,7 @@ def run_preflight(
         artifact=artifact,
         momentum_coverage=momentum_coverage,
         theme_coverage=theme_coverage,
+        forced_holding_tickers=forced_holding_tickers,
     )
     _write_summary_validated(summary, summary_resolved)
     return summary
@@ -467,6 +540,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--momentum-projection-path", type=Path, default=DEFAULT_MOMENTUM_PROJECTION_PATH)
     parser.add_argument("--theme-projection-path", type=Path, default=DEFAULT_THEME_PROJECTION_PATH)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
+    parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--generated-at")
     parser.add_argument("--confirm-user-authorization", action="store_true")
     return parser.parse_args(argv)
@@ -481,6 +555,7 @@ def main(argv: list[str] | None = None) -> int:
             momentum_projection_path=args.momentum_projection_path,
             theme_projection_path=args.theme_projection_path,
             summary_path=args.summary_path,
+            forced_holding_tickers=args.forced_holding_ticker,
             confirm_user_authorization=args.confirm_user_authorization,
             generated_at=args.generated_at,
         )
@@ -492,7 +567,8 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "status": summary["scope"]["status"],
                 "eligible_count": summary["candidate_universe"]["eligible_count"],
-                "forecast_calls": summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"],
+                "pass2_target_count": summary["pass2_target_universe"]["target_count"],
+                "forecast_calls": summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
                 "summary_path": summary["storage"]["tracked_summary_path"],
             },
             ensure_ascii=False,

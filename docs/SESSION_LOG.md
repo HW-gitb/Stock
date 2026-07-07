@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-07 — Claude 修复 (US-short Step 1/1b funnel — live 边界独立重算 target+within-cap;自修,用户指令)
+
+- **Verdict/Action**: 用户指令我自己修 `R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED`。live runner 现 fetch 前独立重算 `target=sorted(momentum-scored∩eligible∪canonical(holdings))` + 重算 within-cap,与 preflight 不符即拒;summary 的 target block 改从重算值建(const-true 变已验、非 copy);加 `--forced-holding-ticker` 镜像 preflight。整类覆盖 target 集/within-cap/neutral-excluded/count。已提交(自修+独立复审后)。
+- **Required**: `R-...LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED` resolved(详情见 register 单一来源)。+2 反控测试(注入 neutral-fill 目标→fetch 前拒;within-cap:true 但重算超 cap→拒),均 0 URL/无 summary 写。
+- **Verify**: focused 9 OK(2 反控复现两伪造、现全 fetch 前拒零残留)+ full offline `*us_short*` 3770 OK + doc/route 60 OK + py_compile OK。独立 §3.5 对抗 agent 冷 scope 攻整 runner:4 攻击目标全 HELD、无 bare 崩溃。
+- **Pre-Codex self-review**: 整类=每个 funnel 属性(target 集/within-cap/neutral/count)都从真相源重算、非只 target_symbols。独立对抗 pass:已跑——揪出非规范键 false-reject,判定 safe-by-design 不修(raw 读 fetch 前 fail-close、与 canonical pipeline+`_target_scoped_projection` 一致;仅重算侧 canonicalize 反致 fetch-then-fail 更差)。别把误报修成漏报。"Tests passing ≠ design closure."
+- **Next**: 无(已提交)
+
+## 2026-07-07 — Claude 审查 FAIL (US-short Step 1/1b — funnel 在 live 边界未重算、可被伪造 preflight 扩回 12021 + const-true summary 印谎)
+
+- **Verdict/Action**: FAIL + 路由 Codex 修复(未提交)。核心全对(preflight 漏斗 producer 正确、Step 1b entitlement 引擎正确、无泄漏、grades 免费——register HELD)。material gap:live runner 信任 preflight 的 `target_symbols`+`within_cap`、不重算漏斗→伪造 preflight 可注入 neutral-fill 目标或扩回 2404/12021,且 summary schema const-true 被迫印谎而非拒绝。register 点名「回归 12021」为 design-FAIL。落 register(P2、contained)。
+- **Required**: `R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED`(P2、contained)——完整详情见 `system_risk_register.md`(单一来源)。修法=live runner 独立重算 target=scored∩eligible+持仓、重算 within-cap、不符即拒;+2 反控测试(注入 neutral-fill 目标 / 伪造全 2404+12021 → fetch 前拒)。
+- **Verify**: 整读 runner diff 证它取 preflight target/within_cap 且 copy summary(非重算);独立 §3.5 agent 复现两伪造(neutral-fill JPM 被抓 / 伪造全 2404 驱动 loop 至 61 call)+ 六向 HELD。contained:需故意伪造 preflight+`--confirm`+显式 12021 预算,无 live 跑、SR-PROVIDER-001 门在。full-pack 复跑留修复轮。
+- **Next**: Codex:修复
+
+## 2026-07-07 - Codex execute (US-short free-run Step 1 + Step 1b; pending Claude review)
+
+- **Verdict/Action**: implemented target-narrowed Pass2 preflight/live runner plus an offline entitlement-aware numeric-catalyst seam. Canonical preflight now records `eligible_count=2404`, `pass2_target_count=3`, and `forecast_calls=16`; no provider/network/env/raw/DataHub/production/ship-gate/broker/A-share path executed.
+- **Required**: Claude review must check design intent as well as code: no regression to the superseded full-2404/12021 free-period run, no neutral-fill live target, and not-entitled numeric catalyst packets must skip to neutral. SR-PROVIDER-001 remains open for Massive quota, split/dividend offload, actual provider calls, and real paid numeric-catalyst shape validation.
+- **Verify**: focused red-green `21 OK`; batch5 provider `188 OK`; status `109 OK`; data_context `35 OK`; source-packet `56 OK`; batch5 schema `162 OK`; doc/route `60 OK`; full offline `*us_short*` `3768 OK (1 skipped)`; py_compile OK; tracked preflight summary grep only false hygiene attestation fields; diff-check OK (CRLF warnings only).
+- **Next**: Claude Code: review current Step 1/Step 1b slice; PASS then commit.
+
 ## 2026-07-06 — Claude 记录标准 (us_short 审查也核设计意图一致性,不只代码;用户指令)
 
 - **Verdict/Action**: 用户指令——未来 us_short `审查` 除代码正确性外,必须核「是否按记录的设计方向实现」。给 `R-USSHORT-BATCH5-FREE-RUN-FUNNEL-DIRECTION` 加 Review criterion(设计意图漂移=FAIL,即回归 12021 全量/数值预期无 entitlement-aware skip/评级拖付费/伪造 coverage/无视 Reminder A·B——即便代码技术正确);沉淀为 memory `feedback_review_design_intent_conformance`。是 `AGENTS.md §Codex adversarial review standard 16c` 对 us_short 的具体落地。
