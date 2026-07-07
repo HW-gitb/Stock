@@ -1,0 +1,202 @@
+from __future__ import annotations
+
+import json
+import os
+import sys
+import tempfile
+import unittest
+from datetime import datetime
+from pathlib import Path
+from unittest import mock
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PYTHON_LIBS = ROOT / ".tools" / "python_libs"
+if PYTHON_LIBS.exists() and str(PYTHON_LIBS) not in sys.path:
+    sys.path.insert(0, str(PYTHON_LIBS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from runners import us_short_batch5_full_candidate_live_source_packet as funnel  # noqa: E402
+from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
+from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
+from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
+    _DECISION_DATE,
+    _OFFERING_OBSERVED_AT,
+    _candidate_artifact,
+    _constant_projection,
+)
+from tests.provider.test_us_short_batch5_full_candidate_live_source_packet import (  # noqa: E402
+    FullCandidateFakeClient,
+)
+from tests.provider.test_us_short_batch5_to_batch4_e2e import _empty_account, _no_build_template  # noqa: E402
+
+
+STATE_DIR = ROOT / "state" / "us_short"
+SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_live_source_packet_20260706"
+PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+
+
+def _write_json(path: Path, payload) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+class CapstoneOfflineE2ETest(unittest.TestCase):
+    """Capstone offline E2E: the REAL funnel runner (fake client, no network) produces a momentum-narrowed
+    Pass2 source packet, which the REAL batch5->batch4 bridge turns into a private PAPER weekly_report.md /
+    action_table.csv. Neither the funnel test nor the bridge test ran the other before — this proves the funnel
+    output actually composes with the bridge into an honest offline paper report."""
+
+    def setUp(self) -> None:
+        self.slug = f"capstone_e2e_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
+        self.raw_root = SAMPLE_DIR / self.slug / "raw"
+        self.paths = {
+            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
+            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
+            "theme": STATE_DIR / f"{self.slug}_theme.json",
+            "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
+            "summary": SAMPLE_DIR / self.slug / "summary.json",
+            "prefix": STATE_DIR / self.slug,
+            "output": STATE_DIR / f"{self.slug}_data_context.json",
+            "components": STATE_DIR / f"{self.slug}_context_components.json",
+        }
+        self._cleanup_paths()
+        _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+
+    def _source_artifact_paths(self) -> list[Path]:
+        prefix = self.paths["prefix"]
+        return [
+            prefix.with_name(prefix.name + suffix)
+            for suffix in (
+                "_candidate_subset.json",
+                "_offering_audit_source.json",
+                "_analyst_grade_actions.json",
+                "_massive_news_events.json",
+                "_corporate_action_capture.json",
+                "_momentum_projection.json",
+                "_theme_projection.json",
+                "_source_packet.json",
+            )
+        ]
+
+    def _cleanup_paths(self) -> None:
+        state_files = [
+            self.paths["candidate"],
+            self.paths["momentum"],
+            self.paths["theme"],
+            self.paths["output"],
+            self.paths["components"],
+        ] + self._source_artifact_paths()
+        for path in state_files:
+            if path.is_file():
+                path.unlink()
+        for root in (SAMPLE_DIR / self.slug, PREFLIGHT_SAMPLE_DIR / self.slug):
+            if root.exists():
+                for item in sorted(root.rglob("*"), reverse=True):
+                    if item.is_file():
+                        item.unlink()
+                    elif item.is_dir():
+                        item.rmdir()
+                root.rmdir()
+
+    def tearDown(self) -> None:
+        self._cleanup_paths()
+
+    def _env(self):
+        return mock.patch.dict(
+            funnel.sample_validation.os.environ,
+            {
+                "FMP_API_KEY": "UNIT_TEST_FMP_SECRET",
+                "SEC_USER_AGENT": "UnitTest/0.1 contact:test@example.com",
+                "MASSIVE_API_KEY": "UNIT_TEST_MASSIVE_SECRET",
+            },
+            clear=False,
+        )
+
+    def test_funnel_output_flows_through_bridge_to_private_paper_weekly_report(self) -> None:
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            funnel.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            funnel_summary = funnel.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        source_packet_path = ROOT / funnel_summary["source_packet"]["path"]
+        self.assertTrue(source_packet_path.exists())
+        self.assertEqual(funnel_summary["pass2_target_universe"]["target_count"], 3)
+
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+
+            summary = e2e.run_e2e(
+                source_packet_path=source_packet_path,
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+
+            self.assertEqual(summary["scope"]["status"], "batch5_source_packet_to_batch4_outputs_completed")
+            self.assertFalse(summary["scope"]["network_access_required"])
+            self.assertFalse(summary["scope"]["provider_calls_performed"])
+            self.assertTrue(summary["batch4_run"]["emitted"])
+            self.assertEqual(summary["batch4_run"]["decision_date"], _DECISION_DATE)
+
+            report_path = private_root / "weekly_private" / _DECISION_DATE / "weekly_report.md"
+            action_path = private_root / "weekly_private" / _DECISION_DATE / "action_table.csv"
+            self.assertTrue(report_path.exists())
+            self.assertTrue(action_path.exists())
+            self.assertTrue((private_root / "runs_private" / _DECISION_DATE / "machine_record.json").exists())
+
+            # Paper / offline honesty: the report carries the offline-run sentinel, never an operational-clean claim.
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("离线", report_text)
+
+            # No secret / ticker leak in the returned summary.
+            blob = json.dumps(summary, ensure_ascii=False)
+            self.assertNotIn("UNIT_TEST_FMP_SECRET", blob)
+            self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
+            self.assertNotIn("AAPL", blob)
+
+
+if __name__ == "__main__":
+    unittest.main()

@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short Step 4 capstone 离线 E2E — 真漏斗→桥→paper 周报组合已证)
+
+- **Verdict/Action**: 执行 Step 4 离线半:新 `tests/provider/test_us_short_batch5_capstone_offline_e2e.py`——真漏斗 runner(fake client、无网络、run_data_context=False)产收窄 3-target source packet → 真 batch5→batch4 桥 → 私密 paper `weekly_report.md`/`action_table.csv`(带离线 sentinel)。证两块(此前从未一起跑)真能组合出诚实离线周报。纯测试、无生产代码改、复用已审 runner。已自审+提交。
+- **Required**: 无。Register: non-material(无新 R-ID;CURRENT/register direction Step 4 记「离线组合已证」)。
+- **Verify**: 断言 桥 status=completed / batch4 emitted / decision_date=_DECISION_DATE / weekly_report+action_table+machine_record 落私密 / 报告含离线 sentinel / summary 无 secret·无 ticker 泄漏。较低危(test-infra、复用已审 runner、无新 fail-closed/live/secret 生产代码)→整读+真路径亲验(非 stub)、§6a agent 不适用。full offline `*us_short*` 3771 OK(+1)+doc/route 60 OK 零回归、树仅 1 新文件无残留。**分工缺席期:此刀待 Codex 恢复后复审**(见 memory)。
+- **Next**: 无(已提交;Step 2/3 + 真 live 跑仍需用户批网络)
+
 ## 2026-07-07 — Claude 修复 (US-short Step 1/1b funnel — live 边界独立重算 target+within-cap;自修,用户指令)
 
 - **Verdict/Action**: 用户指令我自己修 `R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED`。live runner 现 fetch 前独立重算 `target=sorted(momentum-scored∩eligible∪canonical(holdings))` + 重算 within-cap,与 preflight 不符即拒;summary 的 target block 改从重算值建(const-true 变已验、非 copy);加 `--forced-holding-ticker` 镜像 preflight。整类覆盖 target 集/within-cap/neutral-excluded/count。已提交(自修+独立复审后)。
