@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+提交 (US-short 真动量喂 top-K 漏斗 → 真 top-200 Pass2 集;纯离线、复用已审 runner)
+
+- **Verdict/Action**: 应用户 `跑 top-200`,把真全量动量（2400 scored）喂进已接好的 top-K 漏斗（纯离线、无新代码、复用已审 `full_candidate_projection_inputs` + `pass2_preflight`）。因全宇宙 theme 腿未建,喂**诚实空 theme 源**（projection_inputs 全中性填充）。projection_inputs → target 2404 / momentum_scored 2400 / theme_scored 0;preflight `momentum_top_k=200` → **pass2_target_count=200**、within FMP 250 免费 grade 上限、`ready_for_reviewed_live_execution`、forecast 1001 calls。真 top-200 = 纯动量排序（theme 中性)。已提交。
+- **Required**: 无（离线跑已审 runner;`R-...FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING` 已 resolved,本轮只更新两 canonical tracked summary 占位→真值 + CURRENT/register 完成注）。
+- **Verify**: projection_inputs exit0（2404/2400/0）+ preflight exit0（200/within-cap/ready）。preflight summary 独立核:momentum full_coverage scored 2400、**theme full_coverage scored 0**（诚实未打分）、momentum_top_k 200、target_count 200、within_free_cap true;无 apikey/massive.com/http 命中。git status 仅两 canonical summary 改（3-ticker 旧样本→真 200）;gitignored state 投影/theme 源不入库。full pack `*us_short*` 3822 OK + doc 守护 60 OK。
+- **Next**: 无（已提交;theme 腿=另 track;真 live Pass2 抓取仍 SR-PROVIDER-001 gated、需授权;split/div 复权=Step 3）
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 3 = gated grouped-window fetch + 用户授权真跑;§6a HELD + P3 from-None + 真feed去重;2400/2404 真打分)
 
 - **Verdict/Action**: 建 piece 3 = `runners/us_short_batch5_full_universe_momentum_fetch.py`（+ fetch-summary schema + 10 离线测,fake grouped seam 可离线）。复用已证 `_massive_grouped_for_date` grouped-daily 路径抓 price_basis=2026-07-02 往前 70 交易日全市场,只留 eligible+SPY/QQQ,per-session max-volume 去重,重建 gitignored 18.5MB 每票序列包（raw 全市场窗口不落盘）。**用户 `跑起来。我授权` = SR-PROVIDER-001 per-execution 授权** → 后台真跑 70 calls 全 200、0 retry。piece 2 producer 跑真包 → **2400/2404 eligible 真打分**（4 insufficient_coverage、0 history/absent）。已自审+提交。
