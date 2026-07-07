@@ -183,6 +183,7 @@
       "additionalProperties": false,
       "required": [
         "selection_mode",
+        "momentum_top_k",
         "target_count",
         "target_symbols",
         "target_symbol_sample",
@@ -192,6 +193,7 @@
       ],
       "properties": {
         "selection_mode": { "const": "momentum_scored_candidates_plus_forced_holdings" },
+        "momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
         "target_count": { "type": "integer", "minimum": 1, "maximum": 20000 },
         "target_symbols": {
           "type": "array",

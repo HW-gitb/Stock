@@ -550,6 +550,126 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(client.urls, [])
         self.assertFalse(self.paths["summary"].exists())
 
+    def test_runner_narrows_to_preflight_top_k_and_never_fetches_below_top_k(self):
+        # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING: the runner reads momentum_top_k from the reviewed
+        # preflight and re-derives the SAME top-K funnel via select_pass2_targets, so with 3 scored + top_k=2 it
+        # fetches only the top-2 momentum tickers (11 calls) and never JPM (below the top-2).
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
+                "neutral_fill_tickers": [],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
+                "target_count": 3,
+                "scored_count": 3,
+            },
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            momentum_top_k=2,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=11,  # 1 SEC mapping + 2 targets * 5
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(summary["pass2_target_universe"]["momentum_top_k"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 11)
+        fetched_symbols = {row["symbol"] for row in summary["endpoint_results"] if row["symbol"] is not None}
+        self.assertEqual(fetched_symbols, {"AAPL", "MSFT"})
+        self.assertNotIn("JPM", fetched_symbols)
+
+    def test_runner_per_target_call_constants_match_preflight_forecast_formula(self):
+        # Single-source guard: the runner's mirrored per-target / SEC-mapping call constants must equal the
+        # preflight's canonical _forecast_calls, so the re-anchored spend budget can never silently drift from the
+        # forecast the operator budget is checked against.
+        for n in (1, 2, 3, 15, 200):
+            expected = preflight_runner._forecast_calls(n, n)["total_calls_for_pass2_target_cut"]
+            actual = runner._SEC_TICKER_MAPPING_CALLS + n * runner._PASS2_ENDPOINT_CALLS_PER_TARGET
+            self.assertEqual(actual, expected, f"per-target call-count drift at n={n}")
+
+    def test_forged_wider_top_k_with_honest_forecast_is_rejected_before_any_fetch(self):
+        # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING (circular-K seam): a forged preflight that widens
+        # momentum_top_k + target_symbols to the full scored set but KEEPS the honest narrow forecast/budget (so an
+        # operator passing the reviewed budget sails past _load_ready_preflight) must be rejected BEFORE any provider
+        # call — the runner re-anchors the spend budget to the re-derived target count, not the attested forecast/K.
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
+                "neutral_fill_tickers": [],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
+                "target_count": 3,
+                "scored_count": 3,
+            },
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            momentum_top_k=1,  # honest reviewed run: single richest target AAPL, forecast 6
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        forged = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
+        self.assertEqual(forged["pass2_target_universe"]["target_symbols"], ["AAPL"])
+        self.assertEqual(forged["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 6)
+        forged["pass2_target_universe"]["momentum_top_k"] = 3
+        forged["pass2_target_universe"]["target_count"] = 3
+        forged["pass2_target_universe"]["target_symbols"] = ["AAPL", "JPM", "MSFT"]
+        forged["pass2_target_universe"]["target_symbol_sample"] = ["AAPL", "JPM", "MSFT"]
+        _write_json(self.paths["preflight"], forged)  # forecast LEFT at the honest 6
+
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            with self.assertRaises(runner.FullCandidateLiveSourcePacketError) as ctx:
+                runner.run_full_candidate_live_source_packet(
+                    preflight_summary_path=self.paths["preflight"],
+                    expected_total_call_budget=6,  # the HONEST reviewed budget
+                    output_data_context_path=self.paths["output"],
+                    context_components_output_path=self.paths["components"],
+                    source_artifact_prefix=self.paths["prefix"],
+                    summary_path=self.paths["summary"],
+                    raw_root=self.raw_root,
+                    client=client,
+                    confirm_user_authorization=True,
+                    run_data_context=False,
+                    generated_at="2026-07-06T12:00:00+00:00",
+                    observed_at=_OFFERING_OBSERVED_AT,
+                    sec_sleep_seconds=0,
+                )
+        self.assertIn("re-derived Pass2 target count", str(ctx.exception))
+        self.assertEqual(client.urls, [])  # zero provider calls spent
+        self.assertFalse(self.paths["summary"].exists())
+
 
 if __name__ == "__main__":
     unittest.main()

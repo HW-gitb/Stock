@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_pass2_funnel import Pass2FunnelError, select_pass2_targets  # noqa: E402
 from engine.us_short_fmp_analyst_grades import FmpGradesError, resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import MassiveNewsError, resolve_news_events  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
@@ -52,6 +53,13 @@ DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH = (
 )
 MASSIVE_NEWS_URL = "https://api.massive.com/v2/reference/news?ticker={ticker}&limit=10&apiKey={key}"
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250   # mirror the preflight; the funnel target + within-cap invariant is RE-DERIVED here at the live boundary, not trusted from the preflight
+# Mirror the preflight `_forecast_calls`: each Pass2 target costs 5 endpoint calls (3 source-packet: grades +
+# submissions + reference-news; 2 corporate-action: splits + dividends) plus 1 shared SEC ticker->CIK mapping.
+# The live-spend budget is RE-ANCHORED to the runner-RE-DERIVED target count (not the preflight-attested
+# forecast/momentum_top_k), so a forged preflight cannot widen K/target_count without the operator independently
+# authorizing the matching budget. Cross-checked against the preflight formula by test.
+_SEC_TICKER_MAPPING_CALLS = 1
+_PASS2_ENDPOINT_CALLS_PER_TARGET = 5
 
 
 class FullCandidateLiveSourcePacketError(ValueError):
@@ -867,6 +875,7 @@ def _build_summary(
         },
         "pass2_target_universe": {
             "selection_mode": pass2_target_universe["selection_mode"],
+            "momentum_top_k": pass2_target_universe["momentum_top_k"],
             "target_count": pass2_target_universe["target_count"],
             "target_symbols": list(pass2_target_universe["target_symbols"]),
             "target_symbol_sample": list(pass2_target_universe["target_symbol_sample"]),
@@ -1036,9 +1045,11 @@ def _rederive_and_verify_pass2_targets(
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     reviewed_target_symbols: list[str],
     preflight_within_cap: Any,
+    momentum_top_k: int,
 ) -> dict[str, Any]:
     """Independently RE-DERIVE the Step 1 funnel Pass2 target from the momentum projection + candidate artifact
-    (mirrors the preflight `_pass2_target_universe`: `sorted(momentum-scored∩eligible ∪ forced-holdings)`), and
+    (mirrors the preflight `_pass2_target_universe` via the SAME `select_pass2_targets`: top-K by momentum score
+    plus forced holdings, with the SAME K read from the reviewed preflight), and
     REJECT any preflight whose `target_symbols` / within-cap disagree — so the expensive live boundary does NOT
     trust the preflight's self-attestation. Closes R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-
     REDERIVED (a forged preflight can otherwise inject a neutral-fill target or re-expand to the full 2404/12021).
@@ -1057,29 +1068,35 @@ def _rederive_and_verify_pass2_targets(
     raw = _read_json(momentum_projection_path)
     if type(raw) is not dict or type(raw.get("momentum_by_ticker")) is not dict:
         raise FullCandidateLiveSourcePacketError("momentum projection has an invalid shape for target re-derivation")
-    scored_keys = list(raw["momentum_by_ticker"].keys())
-    if not all(type(key) is str for key in scored_keys):
-        raise FullCandidateLiveSourcePacketError("momentum projection scored keys must be exact strings")
-    # Read the projection's scored keys as stored: the whole sanctioned pipeline (projection-inputs builder ->
-    # preflight -> this runner -> `_target_scoped_projection`) is canonical-keyed, so scored∩eligible matches the
-    # preflight for every real run. A hand-authored non-canonical-keyed projection fails closed HERE (before any
-    # fetch) rather than fetching and then failing in the raw-keyed `_target_scoped_projection` — the safe edge.
-    scored = {key for key in scored_keys if key in eligible}
     forced = _canonical_forced_holdings(forced_holding_tickers, eligible=eligible)
-    expected = scored | forced
+    # SINGLE-SOURCE funnel selection: the SAME select_pass2_targets the preflight used (top-K by momentum score +
+    # forced holdings), with the SAME K read from the reviewed preflight, so the runner re-derivation is provably
+    # identical to the preflight target. A hand-authored non-canonical-keyed projection fails closed HERE (before
+    # any fetch) as a funnel mismatch rather than fetching and then failing downstream.
+    try:
+        expected_list = select_pass2_targets(
+            momentum_scores=raw["momentum_by_ticker"],
+            eligible=eligible,
+            forced_holdings=forced,
+            top_k=momentum_top_k,
+        )
+    except Pass2FunnelError as exc:
+        raise FullCandidateLiveSourcePacketError(f"re-derived Pass2 funnel target is invalid: {exc}") from exc
+    expected = set(expected_list)
     if type(reviewed_target_symbols) is not list or set(reviewed_target_symbols) != expected:
         raise FullCandidateLiveSourcePacketError(
-            "preflight target_symbols do not match the re-derived momentum-scored-eligible plus forced-holdings funnel"
+            "preflight target_symbols do not match the re-derived momentum top-K plus forced-holdings funnel"
         )
     within_cap = len(expected) <= FMP_FREE_DAILY_GRADE_CALL_CAP
     if not within_cap or preflight_within_cap is not True:
         raise FullCandidateLiveSourcePacketError(
             "re-derived Pass2 target exceeds the FMP free daily grade-call cap or disagrees with the preflight within-cap flag"
         )
-    targets = sorted(expected)
+    targets = expected_list  # already sorted by select_pass2_targets
     return {
         "selection_mode": "momentum_scored_candidates_plus_forced_holdings",
         "eligible_count": len(artifact["eligible_tickers"]),
+        "momentum_top_k": momentum_top_k,
         "target_count": len(targets),
         "target_symbols": targets,
         "target_symbol_sample": targets[:10],
@@ -1157,7 +1174,19 @@ def run_full_candidate_live_source_packet(
         forced_holding_tickers=forced_holding_tickers,
         reviewed_target_symbols=reviewed_target_symbols,
         preflight_within_cap=preflight_targets.get("fmp_grade_calls_within_free_daily_cap"),
+        momentum_top_k=preflight_targets.get("momentum_top_k"),
     )
+    # Re-anchor the live-spend budget to the RUNNER-re-derived target count (not the preflight-attested
+    # forecast/momentum_top_k): the operator's authorized call budget must equal the forecast recomputed from the
+    # re-derived Pass2 target count, so a forged preflight that widens momentum_top_k / target_count is rejected
+    # BEFORE any provider call unless the operator independently authorized the matching wider budget. Closes the
+    # circular-K seam where the re-derivation otherwise consumes K from the very summary it distrusts.
+    rederived_call_forecast = _SEC_TICKER_MAPPING_CALLS + verified_targets["target_count"] * _PASS2_ENDPOINT_CALLS_PER_TARGET
+    if rederived_call_forecast != expected_total_call_budget:
+        raise FullCandidateLiveSourcePacketError(
+            "expected call budget must match the forecast recomputed from the re-derived Pass2 target count: "
+            f"{expected_total_call_budget} != {rederived_call_forecast}"
+        )
     candidate_subset = _candidate_subset_artifact(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,

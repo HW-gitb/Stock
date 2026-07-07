@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_pass2_funnel import select_pass2_targets  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 
@@ -36,6 +37,7 @@ DEFAULT_THEME_PROJECTION_PATH = (
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250
 PASS2_TARGET_SELECTION_MODE = "momentum_scored_candidates_plus_forced_holdings"
+MOMENTUM_TOP_K_DEFAULT = 200
 
 
 class FullCandidatePass2PreflightError(ValueError):
@@ -176,6 +178,20 @@ def _canonical_list_keys(value: Any, *, field: str) -> set[str]:
     return out
 
 
+def _canonical_score_map(value: Any, *, field: str) -> dict[str, Any]:
+    if type(value) is not dict:
+        raise FullCandidatePass2PreflightError(f"{field} must be an exact dict")
+    out: dict[str, Any] = {}
+    for raw_ticker, raw_score in value.items():
+        ticker = canonical_us_ticker(raw_ticker)
+        if ticker is None:
+            raise FullCandidatePass2PreflightError(f"{field} contains a non-canonicalizable ticker key")
+        if ticker in out:
+            raise FullCandidatePass2PreflightError(f"{field} contains duplicate canonical ticker: {ticker}")
+        out[ticker] = raw_score
+    return out
+
+
 def _projection_coverage(
     *,
     projection: Any,
@@ -206,6 +222,7 @@ def _projection_coverage(
         "stale_count": len(stale),
         "neutral_fill_count": len(neutral_keys),
         "_scored_tickers": sorted(value_keys),
+        "_scored_score_map": _canonical_score_map(projection.get(value_key), field=f"{projection_name}.{value_key}"),
         "_neutral_tickers": sorted(neutral_keys),
         "missing_sample": missing[:10],
         "stale_sample": stale[:10],
@@ -244,29 +261,39 @@ def _pass2_target_universe(
     eligible_tickers: list[str],
     momentum_coverage: dict[str, Any],
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
+    momentum_top_k: int,
 ) -> dict[str, Any]:
     eligible = set(eligible_tickers)
-    scored = [ticker for ticker in momentum_coverage["_scored_tickers"] if ticker in eligible]
+    momentum_scores = momentum_coverage["_scored_score_map"]
+    momentum_scored_candidate_count = len([ticker for ticker in momentum_scores if ticker in eligible])
     if forced_holding_tickers is None:
         forced_raw: list[str] = []
     elif type(forced_holding_tickers) in (list, tuple):
         forced_raw = list(forced_holding_tickers)
     else:
         raise FullCandidatePass2PreflightError("forced_holding_tickers must be an exact list/tuple or None")
-    forced = sorted(_canonical_list_keys(forced_raw, field="forced_holding_tickers"))
-    missing_forced = [ticker for ticker in forced if ticker not in eligible]
+    forced = _canonical_list_keys(forced_raw, field="forced_holding_tickers")
+    missing_forced = sorted(ticker for ticker in forced if ticker not in eligible)
     if missing_forced:
         raise FullCandidatePass2PreflightError(
             "forced_holding_tickers must be present in the reviewed Pass1-eligible candidate set"
         )
-    targets = sorted(set(scored) | set(forced))
+    # SINGLE-SOURCE funnel selection: top-K by momentum score plus forced holdings. The live runner re-derives
+    # via the SAME select_pass2_targets so the two are provably identical (funnel-not-rederived hardening).
+    targets = select_pass2_targets(
+        momentum_scores=momentum_scores,
+        eligible=eligible,
+        forced_holdings=forced,
+        top_k=momentum_top_k,
+    )
     target_count = len(targets)
     full_eligible = target_count == len(eligible_tickers)
     within_cap = target_count <= FMP_FREE_DAILY_GRADE_CALL_CAP
     return {
         "selection_mode": PASS2_TARGET_SELECTION_MODE,
         "eligible_count": len(eligible_tickers),
-        "momentum_scored_candidate_count": len(scored),
+        "momentum_scored_candidate_count": momentum_scored_candidate_count,
+        "momentum_top_k": momentum_top_k,
         "forced_holding_count": len(forced),
         "target_count": target_count,
         "target_symbols": targets,
@@ -325,6 +352,7 @@ def _build_summary(
     momentum_coverage: dict[str, Any],
     theme_coverage: dict[str, Any],
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
+    momentum_top_k: int,
 ) -> dict[str, Any]:
     eligible = list(artifact["eligible_tickers"])
     candidate_count = len(eligible)
@@ -332,6 +360,7 @@ def _build_summary(
         eligible_tickers=eligible,
         momentum_coverage=momentum_coverage,
         forced_holding_tickers=forced_holding_tickers,
+        momentum_top_k=momentum_top_k,
     )
     local_ready = (
         momentum_coverage["status"] == "full_coverage"
@@ -484,6 +513,7 @@ def run_preflight(
     theme_projection_path: Path = DEFAULT_THEME_PROJECTION_PATH,
     summary_path: Path = SUMMARY_PATH,
     forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
+    momentum_top_k: int = MOMENTUM_TOP_K_DEFAULT,
     confirm_user_authorization: bool = False,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
@@ -523,6 +553,7 @@ def run_preflight(
         momentum_coverage=momentum_coverage,
         theme_coverage=theme_coverage,
         forced_holding_tickers=forced_holding_tickers,
+        momentum_top_k=momentum_top_k,
     )
     _write_summary_validated(summary, summary_resolved)
     return summary
@@ -541,6 +572,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--theme-projection-path", type=Path, default=DEFAULT_THEME_PROJECTION_PATH)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
+    parser.add_argument("--momentum-top-k", type=int, default=MOMENTUM_TOP_K_DEFAULT)
     parser.add_argument("--generated-at")
     parser.add_argument("--confirm-user-authorization", action="store_true")
     return parser.parse_args(argv)
@@ -556,6 +588,7 @@ def main(argv: list[str] | None = None) -> int:
             theme_projection_path=args.theme_projection_path,
             summary_path=args.summary_path,
             forced_holding_tickers=args.forced_holding_ticker,
+            momentum_top_k=args.momentum_top_k,
             confirm_user_authorization=args.confirm_user_authorization,
             generated_at=args.generated_at,
         )

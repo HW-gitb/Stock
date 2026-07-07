@@ -114,6 +114,45 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_top_k_narrows_ready_preflight_to_top_k_by_momentum_score(self):
+        # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING: with all 3 candidates momentum-scored (full coverage
+        # -> ready), momentum_top_k=2 must narrow the expensive Pass2 target to the 2 highest-momentum tickers.
+        runner = self._module()
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
+                "neutral_fill_tickers": [],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
+                "target_count": 3,
+                "scored_count": 3,
+            },
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
+        )
+
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"],
+            momentum_top_k=2,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+
+        self.assertEqual(summary["scope"]["status"], "ready_for_reviewed_live_execution")
+        pass2 = summary["pass2_target_universe"]
+        self.assertEqual(pass2["momentum_top_k"], 2)
+        self.assertEqual(pass2["momentum_scored_candidate_count"], 3)  # all 3 scored (pre-cap)
+        self.assertEqual(pass2["target_count"], 2)  # narrowed to top-2
+        self.assertEqual(pass2["target_symbols"], ["AAPL", "MSFT"])  # top-2 by score = AAPL(90), MSFT(80); JPM(10) dropped
+        self.assertTrue(pass2["fmp_grade_calls_within_free_daily_cap"])
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+
     def test_preflight_can_mark_ready_without_network_when_local_inputs_cover_all_candidates(self):
         runner = self._module()
         _write_json(

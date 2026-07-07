@@ -137,6 +137,7 @@
         "selection_mode",
         "eligible_count",
         "momentum_scored_candidate_count",
+        "momentum_top_k",
         "forced_holding_count",
         "target_count",
         "target_symbols",
@@ -150,6 +151,7 @@
         "selection_mode": { "const": "momentum_scored_candidates_plus_forced_holdings" },
         "eligible_count": { "type": "integer", "minimum": 1 },
         "momentum_scored_candidate_count": { "type": "integer", "minimum": 0 },
+        "momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
         "forced_holding_count": { "type": "integer", "minimum": 0 },
         "target_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
         "target_symbols": {

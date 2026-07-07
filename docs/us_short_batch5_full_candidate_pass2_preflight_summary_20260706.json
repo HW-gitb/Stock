@@ -3,7 +3,7 @@
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_candidate_pass2_preflight_summary.schema.json",
   "authorization_ref": "user_chat_20260706_us_short_full_candidate_pass2_preflight",
-  "generated_at": "2026-07-07T02:08:49+00:00",
+  "generated_at": "2026-07-07T06:03:58+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -80,6 +80,7 @@
     "selection_mode": "momentum_scored_candidates_plus_forced_holdings",
     "eligible_count": 2404,
     "momentum_scored_candidate_count": 3,
+    "momentum_top_k": 200,
     "forced_holding_count": 0,
     "target_count": 3,
     "target_symbols": [

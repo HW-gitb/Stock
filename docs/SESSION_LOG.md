@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short top-K 收窄接线 preflight+runner;§6a 揪 circular-K seam→spend-anchor 收口)
+
+- **Verdict/Action**: 按设计决策(896807c9)把共享 `select_pass2_targets` 接进 preflight `_pass2_target_universe`(新 `momentum_top_k` 参数+`--momentum-top-k` CLI 默认 200、录入 summary)+ live runner `_rederive_and_verify_pass2_targets`(从 reviewed preflight 读同一 K)、两侧镜像→真全量动量跑收窄 top-200 不再 250 门 block。两 schema 加 `momentum_top_k`(int 1-250),canonical preflight summary 重生成(target 3 不变、加 K=200)。§6a agent 揪 circular-K seam→spend-anchor 收口。已自审+提交。
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING` **resolved**(接线+§6a P2 修复,详情见 register 单源)。无新 open R-ID。
+- **Verify**: full offline `*us_short*` 3788 OK + py_compile OK + diff 仅 CRLF。新测试:preflight 3-scored→top-2 按分;runner 只抓 top-2 永不抓 below-K;runner 常量交叉核对 preflight `_forecast_calls`;伪造 wider-K+诚实 forecast+诚实预算→fetch 前拒(0 URL/无 summary)。
+- **Pre-Codex self-review**: §6a 独立对抗 agent(worktree 黑盒、不告知修法):top-K 数学/fail-closed 形状/target_symbols-only 伪造拒 全 HELD;揪 circular-K(runner 从被 distrust 的 summary 读 K→重派生复现伪造 K)。judge:判 **P2/CONTAINED 非 agent 称的 P1**——operator `--expected-total-call-budget` 逐调用 pre-fetch 硬拦,撑大 K 要么抬 forecast 在 load 处被拒(除非 operator 授权)要么诚实 forecast→fetch 抓满诚实预算即 abort、注入票不被抓;agent 16-call 复现需把预算设 16(=授权)。仍修(纵深+re-derivation 标榜独立+设计意图一致性):spend 授权改锚**重派生 target 数**(镜像常量 cross-check preflight 公式)。
+- **Next**: 无(已提交;Step 3=Massive splits/dividends offload 下一刀;Codex 恢复后从 ef3c43f4 复审)
+
 ## 2026-07-07 — Claude 执行 (US-short top-K 核心共享函数 `select_pass2_targets` 已建+测;preflight/runner 接线待续)
 
 - **Verdict/Action**: 按已录设计决策(896807c9)开建 top-K。新 `engine/us_short_pass2_funnel.py::select_pass2_targets`(纯/离线/确定:`sorted(top_k(scored∩eligible 按分 DESC、ticker ASC) ∪ 持仓)`)——**未来 preflight+runner 都 import 它**保 provably-identical。**诚实态**:核心建好+13 单测全绿,但**尚未接进 preflight/runner**(接线是改硬化 funnel 的精细活、下一刀带 §6a)——现在无调用者=无行为变更、真数据 block gap 未闭,待接线。
