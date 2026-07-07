@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short theme piece C 步1 = SEC SIC 形状探针[用户选免费 SIC];纠正「GICS 记录」=系统的 GICS 一直是 FMP-sector、非授权 GICS)
+
+- **Verdict/Action**: 应用户「系统里有没有记录能拿到 GICS」核实并纠正:**系统从无授权 MSCI/S&P GICS**;设计 §4.3 的「GICS」原文=「FMP 价格 + 行业分类」,`theme_gics_source`(2026-07-05)已探过 FMP profile 3 票 200 拿到 sector/industry(即系统「GICS」=FMP-sector)——**我上条「没做过分类探针」说错、已纠**。用户选**免费 SEC SIC**。按「先探真形状再建」建+跑 `runners/us_short_batch5_sec_sic_shape_probe.py`(bounded 3 票 gated,SR-PROVIDER-001,复用已证 `_sec_get`)。已自审+提交。
+- **Required**: 无 finding。`R-USSHORT-BATCH5-FULL-UNIVERSE-THEME-PRODUCTION-MISSING` piece C 步1 done(register 单一来源);步2 全 2404 SEC SIC 抓取待建。
+- **Verify**: 真跑 3/3 HTTP 200 确认 SEC submissions 有 `sic`+`sicDescription` 且有值(AAPL 3571/MSFT 7372/JPM 6021,sic_present_all=true)。tracked summary 独立复扫零命中(无 data.sec.gov/URL/SEC-UA email/@)、raw gitignored;git status 仅 2 新 tracked(runner+summary)。**SIC 粒度发现**:sicDescription 细(~400 行业、AAPL/MSFT 不同组)→ 步2 抓取宜粗化到 2-digit major group 保 peer pool。
+- **Pre-Codex self-review**: 较低危 research-only shape probe(无 fail-closed binding/生产逻辑、SEC 无 apiKey-in-URL)→ 整读 + secret-scan 验证,§6a agent 按 shape-probe 先例(Massive corporate-action 探针同类)不起。secret 卫生:SEC_UA(email/PII)经 `_write_summary_safe` 前置扫描、never 落 summary;raw gitignored。教训⑮遵守:先探真形状(sic/sicDescription)再建全量 binding。live 刀干净+escalation(用户「选2」)→ 直接提交。
+- **Next**: 无(已提交;piece C 步2=全 2404 SEC SIC 抓取[粗化 SIC major group]→写分类包→跑 piece B 出真 theme→重跑 funnel top-200 带真 theme)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe THEME producer piece B 离线;§6a 揪 3 真洞[P1 huge-int/P2 stray/P2 look-ahead]全修+复现;应用户挑战纠正「theme 没建」)
 
 - **Verdict/Action**: 应用户「theme 腿真的没建过吗」实查代码纠正:theme 引擎全建 + ≤3 真产出(3 真分)存在,缺的是**全宇宙 producer**(三 theme source runner 全 MAX_SYMBOLS=3;gics source 明写 `selected_symbols_only_not_full_gics_peer_pool`)——和动量同一 gap。建 piece B=`runners/us_short_batch5_full_universe_theme_producer.py`(+2 schema+13 测):消费**已抓的动量序列包**+新 `{ticker:sector}` 分类包,复用引擎 verbatim(`industry_heat_block`→`project_theme_block` 空 provisional)给全 eligible 打行业热度(v1 industry-base、cross-sector provisional 后补)。落 register `R-USSHORT-BATCH5-FULL-UNIVERSE-THEME-PRODUCTION-MISSING`。已自审+提交。

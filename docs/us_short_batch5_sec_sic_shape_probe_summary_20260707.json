@@ -1,0 +1,97 @@
+{
+  "scope": {
+    "probe": "sec_sic_classification_shape",
+    "authorization_ref": "user_chat_20260707_sec_sic_shape_probe",
+    "generated_at": "2026-07-07T00:00:00+00:00",
+    "purpose": "feasibility/shape only; not a builder",
+    "classification_source_under_test": "sec_sic",
+    "symbols": [
+      "AAPL",
+      "MSFT",
+      "JPM"
+    ],
+    "max_total_calls": 3,
+    "actual_total_calls": 3
+  },
+  "endpoint_results": [
+    {
+      "symbol": "AAPL",
+      "cik": 320193,
+      "ok": true,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_sec_sic_shape_probe_20260707/raw/sec_submissions_AAPL.json",
+      "record_found": true,
+      "top_level_key_count": 24,
+      "classification_field_names": [
+        "sic",
+        "sicDescription"
+      ],
+      "classification_field_values": {
+        "sic": "3571",
+        "sicDescription": "Electronic Computers"
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "cik": 789019,
+      "ok": true,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_sec_sic_shape_probe_20260707/raw/sec_submissions_MSFT.json",
+      "record_found": true,
+      "top_level_key_count": 24,
+      "classification_field_names": [
+        "sic",
+        "sicDescription"
+      ],
+      "classification_field_values": {
+        "sic": "7372",
+        "sicDescription": "Services-Prepackaged Software"
+      }
+    },
+    {
+      "symbol": "JPM",
+      "cik": 19617,
+      "ok": true,
+      "error_type": null,
+      "raw_sample_ref": "provider_samples/us_short_batch5_sec_sic_shape_probe_20260707/raw/sec_submissions_JPM.json",
+      "record_found": true,
+      "top_level_key_count": 24,
+      "classification_field_names": [
+        "sic",
+        "sicDescription"
+      ],
+      "classification_field_values": {
+        "sic": "6021",
+        "sicDescription": "National Commercial Banks"
+      }
+    }
+  ],
+  "shape_findings": {
+    "all_ok": true,
+    "classification_field_names_union": [
+      "sic",
+      "sicDescription"
+    ],
+    "sic_present_all": true,
+    "sic_description_present_all": true
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_batch5_sec_sic_shape_probe_20260707",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_secrets": false,
+    "tracked_summary_contains_sec_user_agent": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_raw_filings_rows": false
+  },
+  "gate_flags": {
+    "provider_selected": false,
+    "binding_or_parser_built": false,
+    "full_universe_fetch_performed": false,
+    "classification_packet_written": false,
+    "private_state_written": false,
+    "datahub_consumed": false,
+    "production_or_ship_gate_claimed": false,
+    "sr_provider_001_closed": false,
+    "a_share_crossing_performed": false
+  }
+}
