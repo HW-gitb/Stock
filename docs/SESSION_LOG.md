@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 执行 (US-short top-K 核心共享函数 `select_pass2_targets` 已建+测;preflight/runner 接线待续)
+
+- **Verdict/Action**: 按已录设计决策(896807c9)开建 top-K。新 `engine/us_short_pass2_funnel.py::select_pass2_targets`(纯/离线/确定:`sorted(top_k(scored∩eligible 按分 DESC、ticker ASC) ∪ 持仓)`)——**未来 preflight+runner 都 import 它**保 provably-identical。**诚实态**:核心建好+13 单测全绿,但**尚未接进 preflight/runner**(接线是改硬化 funnel 的精细活、下一刀带 §6a)——现在无调用者=无行为变更、真数据 block gap 未闭,待接线。
+- **Required**: 无 finding。`R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING` 仍 open(核心已建、接线待续)。
+- **Verify**: 亲跑 `tests.test_us_short_pass2_funnel` 13 OK(top-K 按分/并列 ticker ASC 确定/持仓恒在即便非 top-K/scored 非 eligible 排除/K≥数返全部/1000 只→精确 top-200/空+持仓/反控:bad K·非 dict·非 str 键·非有限·bool·重复·非 eligible 持仓 全 typed 拒)。py_compile OK。较低危(纯新函数、无调用者、无 live/secret)→整读+反控,§6a 留接线刀。full offline 待接线刀一并跑。
+- **Next**: 无(下一刀=接 preflight+runner 用该函数镜像 top-K + K 参数 + §6a + full pack;用户已授权「开始建」)
+
 ## 2026-07-07 — Claude 记录设计决策 (US-short top-K 收窄放「选择层」不放动量投影;用户要求先文档化供 Codex 审思路+代码)
 
 - **Verdict/Action**: 应用户「先把设计思路写进文档、再建、让 Codex 一起审思路+代码」,把 top-K 放置决策写进 `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING` 的 Design decision(纠正我早先写错的「放动量投影/producer」)。**关键判断**:动量投影 coverage disposition 是冻结契约(scored/insufficient_history/insufficient_coverage/absent_from_pool=数据可得性),被 top-K 降级的票有数据、无诚实 disposition,塞进去=说谎破契约 → **top-K 放选择层(funnel target 派生)**:一个共享纯函数 `select_pass2_targets` 被 preflight+runner 同时 import(保 provably-identical、守住 R-...FUNNEL-NOT-REDERIVED 硬化),K=200 可配,250 门做兜底,持仓恒并入,动量投影不动。
