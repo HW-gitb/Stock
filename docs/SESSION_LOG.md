@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 执行 (US-short 只读调查:动量 top-K 收窄=未实现的 gap,阻断真数据全量跑)
+
+- **Verdict/Action**: 应用户「N 固定吗/未来 N 大」之问,只读核实动量收窄机制。**确认:设计的「Pass 1 动量收窄到几百只」根本没建**——产出方 `momentum_price_source` 是有界 ≤3 只样本(`MAX_SYMBOLS=3`),引擎 `momentum_block` 对给它的池算百分位、无 top-K,merge/preflight 纯透传+250 block 门(非选择器)。真跑全 universe 动量→~2404 全打分→preflight 250 门 block、stall。落 register `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING`(P1)+ CURRENT。
+- **Required**: `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING`(P1,open)——真数据全量跑的**关键路径 build**(详情见 register 单一来源)。要建:有界 top-K/阈值选择(K=设计参数、按免费预算定),让 funnel target=按动量取前 K;K 同时**确定 Step 3 要不要**(FMP 负载 3K vs 250/天)。纯离线/pure、真价格 fetch 仍 SR-PROVIDER-001 门。
+- **Verify**: 亲读 `momentum_price_source.py`(MAX_SYMBOLS=3/只算 selected) + 独立 §3.5 agent 全链路追踪(engine/seam/merge/preflight 均无 top-K,一致证 gap);设计 §2/§4.0 明写「收窄到候选集(几百只)」。无 code 改(纯只读调查+记录)。doc/route 守护待跑。
+- **Next**: 无(已记录;下一步=建 top-K 收窄由用户定 K 后开)
+
 ## 2026-07-07 — Claude 执行 (US-short Massive 免费档 docs 调研 — 纠正 analyst 结论 + 免费数据映射;无 provider 调用)
 
 - **Verdict/Action**: 公开文档调研(massive.com/docs/rest/… + WebSearch,**无 provider/network 数据调用、无 key**)定 Massive 免费档数据映射:免费(「Included in all Stocks plans」)= splits/dividends/daily-prices/news/ticker-overview(漏斗 Massive 侧所需);分析师评级/盈利 = **付费** Benzinga add-on(`/benzinga/v1/ratings`)。**纠正** 2026-07-06 Massive-alt 计划「Massive 无分析师等价物」错误(有、只是付费)。记进 register Hot Queue note + CURRENT §0。judge-before-execute:文档已答免费/付费分档 → **不盲建**最高危探测 runner(其主价值已被文档取代、仅剩 key 实证+确切速率头的增量)。
