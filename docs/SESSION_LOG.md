@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 记录设计 (US-short 全-universe 动量生产 = "第一步"真打分,build next;应用户 "第一步做过吗" 之问)
+
+- **Verdict/Action**: 应用户「第一步之前没做过吗」核实:全-universe 动量**生产**(给全 2404 真打分、喂已接的 top-K funnel)没建——`momentum_price_source.py` 卡 MAX_SYMBOLS=3,当前投影只 3 真分+neutral-fill。**已做过的**:grouped-daily 全市场抓取机制(universe fetch 证过、但只 20 天算 ADV+把序列聚合丢了)。落 register 设计决策 `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING`(build-ready 供 Codex 审思路+代码)。PIT 关键件先把设计做对再码。
+- **Required**: `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING`(P1,open)——build 是下一步(详情见 register 单源)。
+- **Verify**: reviewer 亲读证:动量需 63+ 交易日(LOOKBACK_3M/VOL_SURGE_LONG=63);引擎 `_parse_dated_series`/`_clean_series` 已做 PIT-cut+非正收盘拒+MIN_HISTORY 门;`compute_momentum_features` 对坏/短序列返空 features 不 raise→`momentum_block` 优雅分区(scored/insufficient_*)。grouped 行=`{T,c,v}`。无 code 改(纯设计录)。
+- **Pre-Codex self-review**: 设计岔口(90 天全市场 grouped≈100MB 巨包)已决:gated fetch 做 grouped→序列重建、写 ~10MB 每票序列包(非 raw grouped);重建纯函数离线单测。PIT 复用引擎不重写(避免动量 PIT bug 复发类,记忆:per-engine 副本须对齐参照安全语义)。§6a 留 build 刀(投影喂全 funnel+重建是新 PIT-adjacent 码)。
+- **Next**: 无(设计录;下一步 Claude 建 reconstruct 纯函数+full-universe producer+tests+§6a,solo)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short Step 3 = Massive corporate-action offload 离线半 — splits/dividends FMP→Massive、§6a clean)
 
 - **Verdict/Action**: 按探针捕获真形状建 Step 3 离线半:funnel 每 target 的 splits/dividends fetch 从 FMP 换到 Massive(`/stocks/v1/*`、provider_id=massive、massive_headers)。**无新引擎**(simplicity-first:通用 `_payload_shape_from_payload` 已数 Massive `{"results":[...]}` 信封、capture 本就只计数不解析)=纯 provider swap。endpoint_call_budget/preflight `_forecast_calls`/两 schema 字段 `fmp_*`→`massive_*`(诚实、canonical preflight summary 重生成)。FMP 每 target 3→1(仅 grades)、K=200 时 200≤250 免费上限;per-target 仍 5 调用→forecast 总数+budget re-anchor+within_cap 不变。已自审+提交。
