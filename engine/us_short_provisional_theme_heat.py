@@ -70,10 +70,17 @@ _METRIC_KEYS = ("breadth_up_frac", "volume_confirm_frac", "leader_rs")
 
 
 def _finite(x: Any) -> float | None:
-    """Strict finite number → float, else None (rejects bool, numeric string, NaN/Inf)."""
+    """Strict finite number → float, else None (rejects bool, numeric string, NaN/Inf). A legitimate huge int
+    that overflows float() is CONTAINED (returns None, never a raw OverflowError) so a forged/corrupt huge close
+    or volume in an injected series is dispositioned like any other bad value instead of bare-crashing a caller
+    that hands raw closes straight to this engine (mirrors engine/us_short_momentum.py::_finite)."""
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return float(x) if math.isfinite(x) else None
+    try:
+        xf = float(x)
+    except OverflowError:
+        return None
+    return xf if math.isfinite(xf) else None
 
 
 def _clean_series(series: Any) -> list[float] | None:

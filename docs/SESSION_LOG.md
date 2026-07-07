@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe THEME producer piece B 离线;§6a 揪 3 真洞[P1 huge-int/P2 stray/P2 look-ahead]全修+复现;应用户挑战纠正「theme 没建」)
+
+- **Verdict/Action**: 应用户「theme 腿真的没建过吗」实查代码纠正:theme 引擎全建 + ≤3 真产出(3 真分)存在,缺的是**全宇宙 producer**(三 theme source runner 全 MAX_SYMBOLS=3;gics source 明写 `selected_symbols_only_not_full_gics_peer_pool`)——和动量同一 gap。建 piece B=`runners/us_short_batch5_full_universe_theme_producer.py`(+2 schema+13 测):消费**已抓的动量序列包**+新 `{ticker:sector}` 分类包,复用引擎 verbatim(`industry_heat_block`→`project_theme_block` 空 provisional)给全 eligible 打行业热度(v1 industry-base、cross-sector provisional 后补)。落 register `R-USSHORT-BATCH5-FULL-UNIVERSE-THEME-PRODUCTION-MISSING`。已自审+提交。
+- **Required**: `R-USSHORT-BATCH5-FULL-UNIVERSE-THEME-PRODUCTION-MISSING`(P2,open;piece B built、piece C gated 分类抓取待续,详见 register 单一来源)。piece C 带**用户级决策待呈**:§4.3 要 GICS,但免费全宇宙分类=SEC SIC(~2404 免费调用),GICS 要付费。
+- **Verify**: 13 theme 测 + industry_heat/provisional 回归 81 OK + full offline `*us_short*` **3835 OK** + py_compile OK。直接探针证 3 价格引擎(industry_heat/provisional/momentum)`_finite` huge-int 全 CONTAINED 返 None、无裸崩。theme summary counts-only(无 ticker/sector 标签/secret)。E2E 证喂 projection_inputs theme 腿 0 missing。
+- **Pre-Codex self-review**: **§6a 独立对抗 agent(offline 黑盒)揪 3 真洞、全 in-slice 修+复现**——正是 [[feedback_new_runner_recheck_recent_fixed_class]] 教训(动量姊妹硬化没搬到 theme):(A,P1)`industry_heat._finite` 与本会话已修的 `momentum._finite` 同 huge-int 裸崩→硬化 industry_heat + 姊妹 provisional_theme_heat 两价格引擎(整类;其余 ~28 `_finite` 消费引擎算出的 0-100、raw huge-int 够不到、surgical 不动);(B,P2)producer 现拒 series/分类包里非 eligible stray 票;(E,P2)producer 现校每序列 as_of/session/adjustment==series_contract(堵伪造 future-as_of look-ahead)。honesty caveat D(classification_source 信任包标签)判文档化边界不修(producer 不断言 GICS、gics_claimed_when_proxy 恒 false、fetch 负责如实标)。补齐 agent 点名缺的 huge-close/stray/lookahead 测。"Tests passing ≠ design closure."
+- **Next**: 无(已提交;piece C=gated 全宇宙分类抓取,先呈 GICS-vs-免费SIC 决策给用户;之后重跑 projection_inputs+preflight 让 top-200 带真 theme)
+
 ## 2026-07-07 — Claude 执行+提交 (US-short 真动量喂 top-K 漏斗 → 真 top-200 Pass2 集;纯离线、复用已审 runner)
 
 - **Verdict/Action**: 应用户 `跑 top-200`,把真全量动量（2400 scored）喂进已接好的 top-K 漏斗（纯离线、无新代码、复用已审 `full_candidate_projection_inputs` + `pass2_preflight`）。因全宇宙 theme 腿未建,喂**诚实空 theme 源**（projection_inputs 全中性填充）。projection_inputs → target 2404 / momentum_scored 2400 / theme_scored 0;preflight `momentum_top_k=200` → **pass2_target_count=200**、within FMP 250 免费 grade 上限、`ready_for_reviewed_live_execution`、forecast 1001 calls。真 top-200 = 纯动量排序（theme 中性)。已提交。
