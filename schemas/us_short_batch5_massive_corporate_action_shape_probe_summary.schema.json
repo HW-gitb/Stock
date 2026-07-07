@@ -1,0 +1,139 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short batch5 Massive corporate-action (splits/dividends) shape probe summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "endpoint_results", "shape_findings", "storage", "gate_flags"],
+  "properties": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "probe",
+        "authorization_ref",
+        "generated_at",
+        "purpose",
+        "endpoint_family_allowlist",
+        "symbols",
+        "max_total_endpoint_calls",
+        "actual_total_endpoint_calls"
+      ],
+      "properties": {
+        "probe": { "const": "massive_corporate_action_shape" },
+        "authorization_ref": { "type": "string", "minLength": 1 },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "purpose": { "type": "string", "minLength": 1 },
+        "endpoint_family_allowlist": {
+          "type": "array",
+          "items": { "enum": ["splits", "dividends"] },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "symbols": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+        "max_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 6 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 0, "maximum": 6 }
+      }
+    },
+    "endpoint_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["symbol", "endpoint_family", "http_status", "ok", "error_type", "raw_sample_ref", "response_shape"],
+        "properties": {
+          "symbol": { "type": "string" },
+          "endpoint_family": { "enum": ["splits", "dividends"] },
+          "http_status": { "type": ["integer", "null"] },
+          "ok": { "type": "boolean" },
+          "error_type": { "type": ["string", "null"] },
+          "raw_sample_ref": { "type": "string" },
+          "response_shape": {
+            "type": ["object", "null"],
+            "additionalProperties": false,
+            "required": [
+              "payload_type",
+              "top_level_keys",
+              "event_container_key",
+              "event_count",
+              "event_item_key_names",
+              "has_pagination_field"
+            ],
+            "properties": {
+              "payload_type": { "type": "string" },
+              "top_level_keys": { "type": "array", "items": { "type": "string" } },
+              "event_container_key": { "type": ["string", "null"] },
+              "event_count": { "type": "integer", "minimum": 0 },
+              "event_item_key_names": { "type": "array", "items": { "type": "string" } },
+              "has_pagination_field": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "shape_findings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["splits", "dividends"],
+      "properties": {
+        "splits": { "$ref": "#/definitions/family_finding" },
+        "dividends": { "$ref": "#/definitions/family_finding" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_contains_secrets",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_raw_payload_rows"
+      ],
+      "properties": {
+        "raw_payload_root": { "type": "string" },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_contains_secrets": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_raw_payload_rows": { "const": false }
+      }
+    },
+    "gate_flags": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "binding_or_parser_built",
+        "corporate_action_reconciliation_claimed",
+        "return_or_adjustment_calculation_performed",
+        "private_state_written",
+        "datahub_consumed",
+        "production_or_ship_gate_claimed",
+        "sr_provider_001_closed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "binding_or_parser_built": { "const": false },
+        "corporate_action_reconciliation_claimed": { "const": false },
+        "return_or_adjustment_calculation_performed": { "const": false },
+        "private_state_written": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_or_ship_gate_claimed": { "const": false },
+        "sr_provider_001_closed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    }
+  },
+  "definitions": {
+    "family_finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["any_ok", "http_status_classes", "event_item_key_names"],
+      "properties": {
+        "any_ok": { "type": "boolean" },
+        "http_status_classes": { "type": "array", "items": { "type": ["integer", "null"] } },
+        "event_item_key_names": { "type": "array", "items": { "type": "string" } }
+      }
+    }
+  }
+}

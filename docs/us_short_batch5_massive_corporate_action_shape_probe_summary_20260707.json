@@ -1,0 +1,199 @@
+{
+  "endpoint_results": [
+    {
+      "endpoint_family": "splits",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_batch5_massive_corporate_action_shape_probe_20260707/raw/massive/AAPL/splits.json",
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 5,
+        "event_item_key_names": [
+          "adjustment_type",
+          "execution_date",
+          "historical_adjustment_factor",
+          "id",
+          "split_from",
+          "split_to",
+          "ticker"
+        ],
+        "has_pagination_field": false,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "symbol": "AAPL"
+    },
+    {
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_batch5_massive_corporate_action_shape_probe_20260707/raw/massive/AAPL/dividends.json",
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "symbol": "AAPL"
+    },
+    {
+      "endpoint_family": "splits",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_batch5_massive_corporate_action_shape_probe_20260707/raw/massive/MSFT/splits.json",
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 1,
+        "event_item_key_names": [
+          "adjustment_type",
+          "execution_date",
+          "historical_adjustment_factor",
+          "id",
+          "split_from",
+          "split_to",
+          "ticker"
+        ],
+        "has_pagination_field": false,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "symbol": "MSFT"
+    },
+    {
+      "endpoint_family": "dividends",
+      "error_type": null,
+      "http_status": 200,
+      "ok": true,
+      "raw_sample_ref": "provider_samples/us_short_batch5_massive_corporate_action_shape_probe_20260707/raw/massive/MSFT/dividends.json",
+      "response_shape": {
+        "event_container_key": "results",
+        "event_count": 10,
+        "event_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ],
+        "has_pagination_field": true,
+        "payload_type": "dict",
+        "top_level_keys": [
+          "next_url",
+          "request_id",
+          "results",
+          "status"
+        ]
+      },
+      "symbol": "MSFT"
+    }
+  ],
+  "gate_flags": {
+    "a_share_crossing_performed": false,
+    "binding_or_parser_built": false,
+    "corporate_action_reconciliation_claimed": false,
+    "datahub_consumed": false,
+    "private_state_written": false,
+    "production_or_ship_gate_claimed": false,
+    "provider_selected": false,
+    "return_or_adjustment_calculation_performed": false,
+    "sr_provider_001_closed": false
+  },
+  "scope": {
+    "actual_total_endpoint_calls": 4,
+    "authorization_ref": "user_chat_20260707_massive_corporate_action_shape_probe",
+    "endpoint_family_allowlist": [
+      "splits",
+      "dividends"
+    ],
+    "generated_at": "2026-07-07T00:00:00+00:00",
+    "max_total_endpoint_calls": 6,
+    "probe": "massive_corporate_action_shape",
+    "purpose": "feasibility/shape only; not a builder",
+    "symbols": [
+      "AAPL",
+      "MSFT"
+    ]
+  },
+  "shape_findings": {
+    "dividends": {
+      "any_ok": true,
+      "event_item_key_names": [
+        "cash_amount",
+        "currency",
+        "declaration_date",
+        "distribution_type",
+        "ex_dividend_date",
+        "frequency",
+        "historical_adjustment_factor",
+        "id",
+        "pay_date",
+        "record_date",
+        "split_adjusted_cash_amount",
+        "ticker"
+      ],
+      "http_status_classes": [
+        200
+      ]
+    },
+    "splits": {
+      "any_ok": true,
+      "event_item_key_names": [
+        "adjustment_type",
+        "execution_date",
+        "historical_adjustment_factor",
+        "id",
+        "split_from",
+        "split_to",
+        "ticker"
+      ],
+      "http_status_classes": [
+        200
+      ]
+    }
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_batch5_massive_corporate_action_shape_probe_20260707",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_payload_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secrets": false
+  }
+}

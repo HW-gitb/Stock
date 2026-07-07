@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short Massive splits/dividends live 形状探针 — SR-PROVIDER-001 授权;真实形状捕获、解锁 Step 3)
+
+- **Verdict/Action**: 用户选「先跑 gated 形状探针」= SR-PROVIDER-001 per-execution 授权。新 `runners/us_short_batch5_massive_corporate_action_shape_probe.py`(bounded 2 票×2 族=4 calls、family allowlist=splits/dividends、fail-closed:缺授权/off-allowlist/raw 非 gitignored 均拒)真跑 Massive `/stocks/v1/splits`+`/dividends`(全 HTTP 200)。raw 落 gitignored,tracked summary(schema-validate+secret-scan 前置)只记形状/状态/计数。真形状捕获(container=`results`):splits=ticker/execution_date/split_from/split_to/adjustment_type/historical_adjustment_factor/id;dividends=+ex_dividend_date/cash_amount/pay_date/record_date/declaration_date/currency/frequency/distribution_type/split_adjusted_cash_amount。确认 pinned `/stocks/v1/*`(非猜的 /v3/reference/*、教训⑮)。已自审+提交。
+- **Required**: 无 finding。register 记 Massive corporate-action live shape probe note(单源);解锁 Step 3(FMP split/dividend→Massive offload)。SR-PROVIDER-001 保持 open。
+- **Verify**: 真跑 4 calls 全 200(AAPL splits5/div10、MSFT splits1/div10 非空)。tracked summary 独立验干净:secret/URL 扫描 13 命中全字段名假阳性(http_status/payload_type/raw_payload_root、无 api.massive.com/apiKey=/raw 行);raw gitignored+未跟踪;gate flags 全 false、sr_closed=false。离线 4 探针测试 + full offline `*us_short*` 3792 OK 零回归。
+- **Pre-Codex self-review**: live slice 干净+escalation 授权→按 [[feedback_live_slice_commit_clean_plus_escalation]] 直接提交。secret 卫生:key 从不打印/日志,tracked summary secret-scan 前置(fake-key 测试证 key 永不落 summary),broad grep 13 命中亲核全字段名假阳性。§6a 不适用(research-only 探针、无 fail-closed 生产逻辑/binding);较低危→整读+反控测试。教训⑮遵守:先探真形状再建 binding。
+- **Next**: 无(已提交;下一刀=Step 3 Massive split/dividend source engine + wire live runner,按捕获真形状建)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short top-K 收窄接线 preflight+runner;§6a 揪 circular-K seam→spend-anchor 收口)
 
 - **Verdict/Action**: 按设计决策(896807c9)把共享 `select_pass2_targets` 接进 preflight `_pass2_target_universe`(新 `momentum_top_k` 参数+`--momentum-top-k` CLI 默认 200、录入 summary)+ live runner `_rederive_and_verify_pass2_targets`(从 reviewed preflight 读同一 K)、两侧镜像→真全量动量跑收窄 top-200 不再 250 门 block。两 schema 加 `momentum_top_k`(int 1-250),canonical preflight summary 重生成(target 3 不变、加 K=200)。§6a agent 揪 circular-K seam→spend-anchor 收口。已自审+提交。
