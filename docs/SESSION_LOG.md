@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 执行 (US-short Massive 免费档 docs 调研 — 纠正 analyst 结论 + 免费数据映射;无 provider 调用)
+
+- **Verdict/Action**: 公开文档调研(massive.com/docs/rest/… + WebSearch,**无 provider/network 数据调用、无 key**)定 Massive 免费档数据映射:免费(「Included in all Stocks plans」)= splits/dividends/daily-prices/news/ticker-overview(漏斗 Massive 侧所需);分析师评级/盈利 = **付费** Benzinga add-on(`/benzinga/v1/ratings`)。**纠正** 2026-07-06 Massive-alt 计划「Massive 无分析师等价物」错误(有、只是付费)。记进 register Hot Queue note + CURRENT §0。judge-before-execute:文档已答免费/付费分档 → **不盲建**最高危探测 runner(其主价值已被文档取代、仅剩 key 实证+确切速率头的增量)。
+- **Required**: 无代码/schema/runner 改(纯 docs/knowledge 记录)。纠正对象是已提交 Massive-alt 计划 JSON 的散文结论——不改那 const-pin 工件本身,在 register 记 correction(单一来源)。
+- **Verify**: 来源:`/stocks/corporate-actions/splits`(all plans)、`/aggregates/daily-ticker-summary`→`/v1/open-close`(all plans)、`/partners/benzinga/analyst-ratings`(付费 add-on);速率 ~5/min+延迟 = WebSearch 摘要(**未经权威页确认**——pricing/dashboard JS+登录门、offline 抓取读不到、用户 dashboard 权威)。doc/route 守护待跑。无 code 改。
+- **Next**: 无(已记录;探测建不建由用户定——文档已答免费/付费,探测仅增量)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short Step 4 capstone 离线 E2E — 真漏斗→桥→paper 周报组合已证)
 
 - **Verdict/Action**: 执行 Step 4 离线半:新 `tests/provider/test_us_short_batch5_capstone_offline_e2e.py`——真漏斗 runner(fake client、无网络、run_data_context=False)产收窄 3-target source packet → 真 batch5→batch4 桥 → 私密 paper `weekly_report.md`/`action_table.csv`(带离线 sentinel)。证两块(此前从未一起跑)真能组合出诚实离线周报。纯测试、无生产代码改、复用已审 runner。已自审+提交。
