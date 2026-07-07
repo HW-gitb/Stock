@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-07 — Claude 记录设计决策 (US-short top-K 收窄放「选择层」不放动量投影;用户要求先文档化供 Codex 审思路+代码)
+
+- **Verdict/Action**: 应用户「先把设计思路写进文档、再建、让 Codex 一起审思路+代码」,把 top-K 放置决策写进 `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING` 的 Design decision(纠正我早先写错的「放动量投影/producer」)。**关键判断**:动量投影 coverage disposition 是冻结契约(scored/insufficient_history/insufficient_coverage/absent_from_pool=数据可得性),被 top-K 降级的票有数据、无诚实 disposition,塞进去=说谎破契约 → **top-K 放选择层(funnel target 派生)**:一个共享纯函数 `select_pass2_targets` 被 preflight+runner 同时 import(保 provably-identical、守住 R-...FUNNEL-NOT-REDERIVED 硬化),K=200 可配,250 门做兜底,持仓恒并入,动量投影不动。
+- **Required**: 无本轮代码改动(仅 register/SESSION_LOG 设计文档)。下一步=按此建代码(共享函数+preflight/runner 镜像+K 参数+测试),§6a agent 必起(改硬化 funnel)。
+- **Verify**: 实证放置理由:`engine/us_short_seam_momentum.py` disposition 常量 = scored/insufficient_history/insufficient_coverage/absent_from_pool(冻结 binding+conformance)——无「top-K 降级」诚实项。doc/route 守护待跑。无 code 改。
+- **Next**: 无(设计已录;下一步 Claude 建 top-K 代码,solo,待 Codex 恢复复审)
+
 ## 2026-07-07 — Claude 执行 (US-short 只读调查:动量 top-K 收窄=未实现的 gap,阻断真数据全量跑)
 
 - **Verdict/Action**: 应用户「N 固定吗/未来 N 大」之问,只读核实动量收窄机制。**确认:设计的「Pass 1 动量收窄到几百只」根本没建**——产出方 `momentum_price_source` 是有界 ≤3 只样本(`MAX_SYMBOLS=3`),引擎 `momentum_block` 对给它的池算百分位、无 top-K,merge/preflight 纯透传+250 block 门(非选择器)。真跑全 universe 动量→~2404 全打分→preflight 250 门 block、stall。落 register `R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING`(P1)+ CURRENT。
