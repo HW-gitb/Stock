@@ -51,10 +51,17 @@ MIN_HISTORY_DAYS = LOOKBACK_5D + 1  # need at least a 5-day return to score anyt
 
 
 def _finite(x: Any) -> float | None:
-    """Strict finite number: rejects bool, numeric strings, NaN/Inf; else float or None."""
+    """Strict finite number: rejects bool, numeric strings, NaN/Inf; else float or None. A legitimate
+    huge int (abs ≳ 1.8e308) that overflows float() is CONTAINED (returns None, never a raw OverflowError)
+    so a forged/corrupt huge close or volume is dispositioned like any other bad value instead of bare-
+    crashing a caller that (by design) hands raw closes straight to this single clean authority."""
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return float(x) if math.isfinite(x) else None
+    try:
+        xf = float(x)
+    except OverflowError:
+        return None
+    return xf if math.isfinite(xf) else None
 
 
 def _clean_series(series: Any) -> list[float] | None:

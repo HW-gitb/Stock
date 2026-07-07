@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 2 = full-universe producer + engine `_finite` huge-int 硬化;§6a 揪 tracked-summary leak+orphan 收口)
+
+- **Verdict/Action**: 建 piece 2 = `runners/us_short_batch5_full_universe_momentum_producer.py`（+ series-packet/summary 两 schema + 13 离线测）。消费重建的每票序列包 + 已验候选工件,**复用已证引擎 verbatim**（`compute_momentum_features`→`momentum_block`→`project_momentum_block`,无 3-cap）给全 eligible 打分,emit funnel-consumable 动量投影 + counts-only 无泄漏 summary,per-ticker 诚实 disposition（scored/insufficient_history/insufficient_coverage/absent_from_pool）。ENVELOPE 坏（缺/坏 benchmark、stray 票、per-ticker look-ahead as_of、时钟不符）fail-closed 零残留;per-ticker 数据坏（薄/坏/huge close）引擎优雅处置不硬崩。已自审+提交。
+- **Required**: `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING` 仍 **open**（piece 2 built;piece 3 gated fetch 待续,详情见 register 单一来源）。§6a 2 finding（A/E）已 in-slice 收口（见 register）。
+- **Verify**: 亲跑新 13 测 OK + full offline `*us_short*` **3811 OK**（3792+7 piece1+12→13 本刀;零回归）+ py_compile OK。E2E 证投影喂进 `full_candidate_projection_inputs` 0 missing。
+- **Pre-Codex self-review**: **whole-class recheck**（feedback_new_runner_recheck_recent_fixed_class）：producer 把 raw close 直喂引擎（≠≤3 producer 先 `_finite_number` 兜），新暴露 `engine/us_short_momentum.py::_finite` 潜在 huge-int 裸崩（`math.isfinite(10**400)` 抛 OverflowError）→硬化 `_finite` 含住返 None（对齐其文档意图、对所有 consumer 严格更安全;≤3 producer 的 huge 测仍过因其更早拒）。**§6a 独立对抗 agent**（uncommitted 树只读黑盒、缺席独立 reviewer 替身）+ 我自跑 9 probe：forgery/clock（14 向）、funnel shape、look-ahead、graceful-vs-裸崩 全 HELD;2 hardening 收口：A(P2 contained)=tracked summary 的 session/adjustment_mode 逐字流入且 schema 仅 minLength→绑定 `^[A-Za-z0-9_-]{1,32}$`（两 schema、packet load 即 fail-closed）;E(P3)=投影先于 summary 写→summary 写失败 unlink 投影（§8 无残留;committed ≤3 sibling 同潜在、surgical 不动）。"Tests passing ≠ design closure."
+- **Next**: 无（已提交;下一刀=piece 3 gated grouped-window fetch 真跑写序列包,SR-PROVIDER-001,需用户批网络）
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 1 = `reconstruct_series_from_grouped` 纯函数+测)
 
 - **Verdict/Action**: 建 step-1 唯一新逻辑 `engine/us_short_momentum_grouped_reconstruct.py::reconstruct_series_from_grouped`(纯/离线):grouped-daily 全市场窗口按票分组→每票 dated series `{as_of,session,adjustment_mode,points}` 喂动量引擎。**不做任何 PIT/收益/清洗**(引擎 `_parse_dated_series`/`_clean_series` 单一权威、raw 透传);缺口省略不补零;fail-closed 坏形状。按 top-K 模式纯函数先独立提交。已自审+提交。
