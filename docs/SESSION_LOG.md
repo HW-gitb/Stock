@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-07 — Claude 执行+自审+提交 (US-short 全-universe 动量 piece 1 = `reconstruct_series_from_grouped` 纯函数+测)
+
+- **Verdict/Action**: 建 step-1 唯一新逻辑 `engine/us_short_momentum_grouped_reconstruct.py::reconstruct_series_from_grouped`(纯/离线):grouped-daily 全市场窗口按票分组→每票 dated series `{as_of,session,adjustment_mode,points}` 喂动量引擎。**不做任何 PIT/收益/清洗**(引擎 `_parse_dated_series`/`_clean_series` 单一权威、raw 透传);缺口省略不补零;fail-closed 坏形状。按 top-K 模式纯函数先独立提交。已自审+提交。
+- **Required**: `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING` 仍 open(piece 1 built;producer+gated fetch 待续,详见 register 单源)。
+- **Verify**: 亲跑 7 离线测试:分组升序/缺口省略非补零/raw 透传(负收盘不在此拒、引擎拒)/缺 close 省略/非升序·会话内重复票·坏形状·坏 clock fail-closed/**引擎兼容**(重建 64 会话→`compute_momentum_features` 出 ret_1m/ret_3m)。py_compile OK。较低危(纯数据变换、无 PIT/收益数学、无 live/secret)→整读+反控测试;§6a 留 producer-wiring 刀(投影喂全 funnel 处)。
+- **Pre-Codex self-review**: PIT 复用引擎不重写(合格票过 ADV 门=每日成交=无缺口→引擎位置式收益正确;薄票缺口引擎 MIN_HISTORY 门处置)。独立对抗 pass:不适用(单轮纯函数、非边界;§6a 留 wiring 刀)。教训:per-engine 副本须对齐参照安全语义→此处直接复用引擎、不复制。
+- **Next**: 无(已提交;下一刀=full-universe producer 消费重建包+全量打分+emit+§6a)
+
 ## 2026-07-07 — Claude 记录设计 (US-short 全-universe 动量生产 = "第一步"真打分,build next;应用户 "第一步做过吗" 之问)
 
 - **Verdict/Action**: 应用户「第一步之前没做过吗」核实:全-universe 动量**生产**(给全 2404 真打分、喂已接的 top-K funnel)没建——`momentum_price_source.py` 卡 MAX_SYMBOLS=3,当前投影只 3 真分+neutral-fill。**已做过的**:grouped-daily 全市场抓取机制(universe fetch 证过、但只 20 天算 ADV+把序列聚合丢了)。落 register 设计决策 `R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING`(build-ready 供 Codex 审思路+代码)。PIT 关键件先把设计做对再码。
