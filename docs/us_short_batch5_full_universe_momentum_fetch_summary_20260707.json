@@ -1,0 +1,84 @@
+{
+  "schema_name": "us_short_batch5_full_universe_momentum_fetch_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_full_universe_momentum_fetch_summary.schema.json",
+  "generated_at": "2026-07-08T04:44:41+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "full_universe_momentum_grouped_window_fetch",
+    "status": "series_packet_written",
+    "network_access_performed": true,
+    "provider_calls_performed": true,
+    "grouped_whole_market_calls_performed": true,
+    "raw_grouped_window_persisted": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "yfinance_consumption_performed": false,
+    "paid_access_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260708",
+    "candidate_price_basis_date": "20260707",
+    "price_basis_date": "2026-07-07",
+    "source_as_of": "2026-07-07"
+  },
+  "fetch_stats": {
+    "sessions_requested": 95,
+    "sessions_with_data": 70,
+    "grouped_calls_made": 70,
+    "rate_limit_retries": 0,
+    "duplicate_ticker_rows_collapsed": 140,
+    "session_window_target": 70,
+    "min_sessions_required": 64
+  },
+  "coverage": {
+    "eligible_count": 2629,
+    "benchmark_symbols": [
+      "SPY",
+      "QQQ"
+    ],
+    "benchmarks_present": true,
+    "series_ticker_count": 2631,
+    "grouped_session_count": 70,
+    "points_per_series_min": 11,
+    "points_per_series_median": 70,
+    "points_per_series_max": 70
+  },
+  "paths": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260708.json",
+    "series_packet_path": "state/us_short/us_short_batch5_full_universe_momentum_series_20260707_packet.json",
+    "summary_path": "docs/us_short_batch5_full_universe_momentum_fetch_summary_20260707.json"
+  },
+  "storage": {
+    "series_packet_path_gitignored": true,
+    "raw_grouped_window_persisted": false,
+    "summary_contains_ticker_lists": false,
+    "summary_contains_price_rows": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "full_market_raw_download_persisted": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "corporate_action_reconciliation_performed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "Closes are the Massive grouped-daily default adjustment; split/dividend reconciliation is a separate SR-PROVIDER-001 track.",
+    "Only the reconstructed eligible+benchmark per-ticker series (gitignored) is persisted; the raw whole-market grouped window is not.",
+    "The tracked summary is counts/shape-only: no ticker lists, price rows, request URLs, or secrets.",
+    "This is a bounded gated fetch; it selects no provider, and claims no DataHub / production / ship-gate / live-normalized evidence."
+  ]
+}

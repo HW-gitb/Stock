@@ -1,0 +1,73 @@
+{
+  "schema_name": "us_short_batch5_full_universe_sec_sic_classification_fetch_summary",
+  "schema_version": "1.0.0",
+  "schema_ref": "schemas/us_short_batch5_full_universe_sec_sic_classification_fetch_summary.schema.json",
+  "generated_at": "2026-07-08T04:45:10+00:00",
+  "scope": {
+    "market": "US",
+    "route": "US-short",
+    "batch": "batch5",
+    "purpose": "full_universe_sec_sic_sector_classification_fetch",
+    "status": "classification_packet_written",
+    "network_access_performed": true,
+    "provider_calls_performed": true,
+    "raw_submissions_persisted": false,
+    "gics_classification_claimed": false,
+    "datahub_consumption_performed": false,
+    "production_storage_performed": false,
+    "yfinance_consumption_performed": false,
+    "paid_access_performed": false,
+    "broker_or_order_execution_performed": false,
+    "ship_gate_or_live_normalized_evidence_claimed": false,
+    "a_share_crossing_performed": false
+  },
+  "decision_clock": {
+    "expected_decision_date": "20260708",
+    "candidate_price_basis_date": "20260707",
+    "price_basis_date": "2026-07-07",
+    "source_as_of": "2026-07-07"
+  },
+  "classification": {
+    "classification_source": "sec_sic_major_group",
+    "coarsening": "sic_2digit_major_group",
+    "provider_ids": [
+      "sec_edgar"
+    ],
+    "eligible_count": 2629,
+    "sic_resolved_count": 2605,
+    "sic_missing_count": 24,
+    "sector_group_count": 66
+  },
+  "paths": {
+    "candidate_artifact_path": "state/us_short/candidate_universe_20260708.json",
+    "classification_packet_path": "state/us_short/us_short_batch5_full_universe_sector_classification_20260707_packet.json",
+    "summary_path": "docs/us_short_batch5_full_universe_sec_sic_classification_fetch_summary_20260707.json"
+  },
+  "storage": {
+    "classification_packet_path_gitignored": true,
+    "raw_submissions_persisted": false,
+    "summary_contains_ticker_lists": false,
+    "summary_contains_sector_labels": false,
+    "summary_contains_sec_user_agent": false,
+    "summary_contains_request_urls": false,
+    "summary_contains_secrets": false
+  },
+  "prohibited_claims": {
+    "provider_selected": false,
+    "gics_classification_claimed": false,
+    "yfinance_used": false,
+    "paid_access_used": false,
+    "datahub_consumed": false,
+    "production_readiness_claimed": false,
+    "ship_gate_evidence_claimed": false,
+    "live_normalized_evidence_claimed": false,
+    "broker_or_order_execution_performed": false,
+    "a_share_crossing_performed": false
+  },
+  "limitations": [
+    "Classification is SEC SIC coarsened to the 2-digit major group (sec_sic_major_group); it is NOT licensed GICS and does not assert GICS.",
+    "Only the bounded {ticker: sector} packet (gitignored) is persisted; the ~2404 raw SEC submissions payloads are not.",
+    "The tracked summary is counts-only: no ticker lists, sector labels, SEC User-Agent, request URLs, or secrets.",
+    "A ticker whose SEC submissions failed or lacked a SIC is absent from the packet and is dispositioned neutral by the theme producer."
+  ]
+}
