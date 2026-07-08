@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-08 — Claude 执行+自审+提交 (US-short 交叉核验网页版 claude_r1 vs cc_r1:修 rpds 报错指引 + §18.3 target-count doc-drift;float-cap 验为潜在雷不改;写定版 cc_r2)
+
+**Commits**: 本提交（rpds import 报错指引 + §18.3 澄清注）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 capstone 接线收口（`a37c0276`）+ 桌面 cc_r1 审查。
+- **Refines**: 用户拿另一份网页版 Claude 审查（`claude_r1`,无 subagent、在不同环境跑）来交叉核验 cc_r1 的准确性。
+
+**Worked on**:
+1. 亲验 claude_r1 三条与 cc_r1 不同的断言:①rpds 可移植性=**真**(`.tools/python_libs/rpds` 是 `rpds.cp312/cp313-win_amd64.pyd` 编译扩展,换 OS/Python 会 `ModuleNotFoundError: rpds.rpds`)②position_sizing 浮点 cap 静默变 0=**真潜在雷但当前不触发**(`reduction_stack` 全仓唯一生产调用点 `weekend_sizing.py:108` 两 cap 都 int)③它说 Pass2「只约 3 只」**不准**——追踪 preflight/真跑是 **200**,它照 design §18.3 stale「target count 3」念的。
+2. 顺手修能安全修的:`run_unittest_with_repo_pythonpath.cmd` 的 jsonschema-import 失败加清晰报错(指明 rpds 平台绑死 + `pip install jsonschema`/`STOCK_TEST_PYTHON` 绕过);`us_short_system_design.md` §18.3 给「target count 3」加 additive 澄清注(2026-07-06 样本、现全宇宙 momentum 后 ≈200/1001,见 CURRENT.md)。float-cap 无生产触发,不改代码。
+3. 合并 cc_r1 + 对 claude_r1 的准确性判断,写干净定版桌面 `cc_r2`(只桌面、不入项目文件)。
+
+**Key decisions**:
+- rpds 非代码可根治(缺跨平台二进制)→ 只加报错指引、不动 vendored 二进制。
+- float-cap 不改 `reduction_stack`:当前调用点全 int,改「malformed→0」fail-closed 契约有风险,仅记可选未来硬化。
+- §18.3 用 additive 注、不重写 dated 计划段;doc guards 60 OK 确认没触发 design guard。
+- 提交但不 push(push 须显式命令)。
+
+**Alternatives considered and rejected**:
+- "改 `reduction_stack` 对非-int cap 报错" — 暂否。当前无生产触发,且改 docstring 明写的 fail-closed 契约、非必须。
+
+**Open questions handed off**:
+- rpds 彻底跨平台/CI 需另定依赖策略(非本项目 Windows 单机当前阻塞)。
+- Codex 额度恢复后:capstone fix(`a37c0276`)+ 本提交需独立复审。
+
+**Next natural step from my view**:
+1. 明日 07-09 fresh-quota 首跑验一键链 + FMP 日限。
+2. 留待:huge-int 整类硬化 / overextension 接线 / cost_floor 净利口径。
+
 ## 2026-07-08 — Claude 执行+自审+提交 (US-short capstone 一键路径接线收口:6 处 summary→各 runner 已接受的 provider_samples + no-emit 感知 + data_context 日期;桌面 cc_r1 复核驱动、不入项目文档)
 
 **Commits**: 本提交（capstone 一键路径接线收口）

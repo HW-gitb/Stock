@@ -58,6 +58,9 @@ if not defined PYTHON_EXE (
 "%PYTHON_EXE%" -c "import jsonschema"
 if errorlevel 1 (
     echo jsonschema is not importable after prepending "%REPO_PYTHON_LIBS%" to PYTHONPATH. 1>&2
+    echo The vendored jsonschema needs rpds, a COMPILED extension pinned to Windows + CPython 3.12/3.13 1>&2
+    echo [rpds.cp312/cp313-win_amd64.pyd]. On another OS or Python version it will NOT import; in that 1>&2
+    echo runtime install deps directly via 'pip install jsonschema', or set STOCK_TEST_PYTHON to a Python that has it. 1>&2
     exit /b 1
 )
 
