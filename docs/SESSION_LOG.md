@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-08 — Claude 起草+自审+提交 (US-short 一键 weekly capstone orchestrator 骨架=cut⑥ 收口;离线全测、gated 适配器 draft 待明日 live 验)
+
+- **Verdict/Action**: 按用户「先起草一键 capstone 骨架」建 cut⑥ orchestrator——把已存在的 9 个阶段 runner(universe→momentum-fetch/producer→SIC-fetch/theme-producer→projection-inputs→Pass2-preflight→Pass2-fetch→batch5→batch4 bridge)串成一条一键路径,收口 §18.3「weekly one-click path」目标(此前需手动 ~7 命令,走a 实证)。`runners/us_short_weekly_capstone.py`(编排框架)+ `us_short_weekly_capstone_stages.py`(9 个薄适配器)+ 8 测。**起草前 Explore agent 精确映射 9 阶段入口签名 + 核 canonical resolver 真契约**(别凭 agent map 猜)。已自审+提交(register R-...-WEEKLY-CAPSTONE-ONECLICK-SKELETON 单源)。
+- **Required**: 无 finding。**设计决策交 Codex 审**:(a) cut⑥=RUN-TIME 一键 orchestrator 收口 one-click 目标(bridge 只是最后一环);(b)**整轮单次授权**(非逐 cut)=run-time 闭包、与 build-time 逐 cut 审查纪律不同,gated 阶段仍串行(§18.3 不并行 provider);(c) provider_health **从真 Pass2 结果推导**(fmp=ok iff grades 拿到、sec=ok iff submissions 拿到)非手写→堵死 §3.2 绕过。**surface**:(b) 可接受否,还是每 gated 阶段须重新提示?
+- **Verify**: dry-run 真跑(离线)= canonical 正确(now_et 07-09 08:00 ET pre-open→decision 20260709/price-basis 20260708)+ 9 阶段计划(gated/offline 正确标注 + I/O 路径穿线)、零 fetch。8 测全绿:canonical+计划 / 盘中 now_et fail-closed / live 需授权 / tz-aware 拒 / **注入 fake 全链按序跑+出报告** / 缺输出 fail-fast **点名阶段** / 阶段异常裹阶段名 / **9 适配器 kwargs 全对真 runner 签名 introspection 校验零错**。full `*us_short*` **3864 OK** 零回归。
+- **Pre-Codex self-review**: 框架离线全测(注入 fake stage 证编排、非依赖真 runner);canonical 复用现成 resolver(§2.1)不重实现;gated 阶段串行(不并行);degraded 不 abort→走到 bridge 让 health 门定 emit(honest 07-08 行为);**未 overclaim**:骨架标 DRAFT、gated 适配器真 fetch 不可离线测→明日新配额首跑才 live 验(路径校验/输出命名),**不在 design §18.3/§19 声称 implemented 直到 live 验+Codex 审**(避免 CUT1-DESIGN-STATUS-STALE 反向坑);设计意图一致(§18.3 one-click 目标、§2.1 canonical、§3.2 health、不授权 provider/production/ship-gate)。
+- **Next**: 明日 07-09 fresh-quota 首跑 = 骨架的首次 live 验(gated 适配器路径/命名)+ FMP 日限验证二合一([[project_us_short_freshday_fmp_test]])。live 验+Codex 审后再折入 design 状态。
+
 ## 2026-07-08 — Claude 执行+自审(§6a)+提交 (US-short Pass2 抓取加 pacing + retry-on-429[402 不重试]=选项c;真跑探明 FMP=429/日限非付费墙)
 
 - **Verdict/Action**: 按用户「做c」给 gated Pass2 抓取(`us_short_batch5_full_candidate_live_source_packet`)的 FMP+Massive 腿加节奏控制(`provider_pace_seconds`)+ 有界 retry-on-429(`max_retries_per_call`≤6 硬顶、指数退避;**402 付费墙不重试**→ 让「限流」vs「付费墙」可观测区分)。retry 物理重试内联(只 append 最终 record)→ **逻辑记录数/授权预算/一致性不变**;`retry_count_allowed/used` 由硬编码 0 改真值(summary schema const:0 放松为 range)。SEC 腿不动(已有 pace、不 429)。默认全 0=向后兼容。已自审+§6a 独立对抗+提交。
