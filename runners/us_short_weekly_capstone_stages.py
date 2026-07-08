@@ -28,9 +28,26 @@ from runners import us_short_batch5_to_batch4_weekend_e2e as _bridge
 from runners import us_short_universe_fetch as _universe
 
 
-def _summary_path(ctx, name: str) -> Path:
-    """A gitignored per-run summary sidecar under state/us_short/ (not the tracked docs/ milestone summary)."""
-    return ctx.state_dir / f"us_short_batch5_capstone_{ctx.decision_date}_{name}_summary.json"
+def _stage_summary_targets(ctx) -> dict[str, Path]:
+    """The per-run summary sidecar EACH stage runner writes, keyed by stage. Each lands under the runner's OWN
+    reviewed `provider_samples/<runner>/` root (referenced via the runner's exported constant so it can NEVER drift
+    from that runner's fail-closed allowlist), with a decision-date-keyed filename. These runners were built as
+    one-shot MILESTONE runners whose only accepted summary paths are a fixed-date `docs/…` file or their own
+    gitignored `provider_samples/…` folder; the capstone reuses them as repeatable weekly PIPELINE stages, so it must
+    route their per-run summaries into that gitignored folder (a `state/us_short/…` summary is rejected by every one).
+    `sample_root` is the repo root the runners resolve provider_samples against (tests inject a tempdir). The
+    preflight summary is NOT here — it is `ctx.preflight_summary_path` (also stage-8's INPUT, so it lives where BOTH
+    runners accept it)."""
+    def _p(rel_root: Path, name: str) -> Path:
+        return ctx.sample_root / rel_root / f"us_short_batch5_capstone_{ctx.decision_date}_{name}_summary.json"
+    return {
+        "momentum_fetch": _p(_mom_fetch.SUMMARY_SAMPLE_REL_ROOT, "momentum_fetch"),
+        "momentum_producer": _p(_mom_prod.SAMPLE_REL_ROOT, "momentum_producer"),
+        "sic_classification": _p(_sic.SUMMARY_SAMPLE_REL_ROOT, "sic_classification"),
+        "theme_producer": _p(_theme.SAMPLE_REL_ROOT, "theme_producer"),
+        "projection_inputs": _p(_proj.SAMPLE_REL_ROOT, "projection_inputs"),
+        "pass2": _p(_pass2.RAW_SAMPLE_REL_ROOT, "pass2"),
+    }
 
 
 # --- GATED stages (live provider fetch; SR-PROVIDER-001) ---
@@ -48,7 +65,7 @@ def run_momentum_fetch(ctx) -> dict[str, Any]:
     return _mom_fetch.run_fetch(
         candidate_artifact_path=ctx.candidate_path,
         series_packet_path=ctx.series_packet_path,
-        summary_path=_summary_path(ctx, "momentum_fetch"),
+        summary_path=_stage_summary_targets(ctx)["momentum_fetch"],
         generated_at=ctx.generated_at,
         confirm_user_authorization=True,
     )
@@ -58,7 +75,7 @@ def run_sic_fetch(ctx) -> dict[str, Any]:
     return _sic.run_fetch(
         candidate_artifact_path=ctx.candidate_path,
         classification_packet_path=ctx.classification_packet_path,
-        summary_path=_summary_path(ctx, "sic_classification"),
+        summary_path=_stage_summary_targets(ctx)["sic_classification"],
         generated_at=ctx.generated_at,
         confirm_user_authorization=True,
     )
@@ -70,7 +87,8 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         expected_total_call_budget=_preflight_call_budget(ctx),
         source_artifact_prefix=ctx.source_artifact_prefix,
         context_components_output_path=ctx.context_components_path,
-        summary_path=_summary_path(ctx, "pass2"),
+        output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
+        summary_path=_stage_summary_targets(ctx)["pass2"],
         confirm_user_authorization=True,
         run_data_context=True,
         generated_at=ctx.generated_at,
@@ -89,7 +107,7 @@ def run_momentum_producer(ctx) -> dict[str, Any]:
         candidate_artifact_path=ctx.candidate_path,
         series_packet_path=ctx.series_packet_path,
         output_projection_path=ctx.momentum_projection_path,
-        summary_path=_summary_path(ctx, "momentum_producer"),
+        summary_path=_stage_summary_targets(ctx)["momentum_producer"],
         generated_at=ctx.generated_at,
     )
 
@@ -100,7 +118,7 @@ def run_theme_producer(ctx) -> dict[str, Any]:
         series_packet_path=ctx.series_packet_path,
         classification_packet_path=ctx.classification_packet_path,
         output_projection_path=ctx.theme_projection_path,
-        summary_path=_summary_path(ctx, "theme_producer"),
+        summary_path=_stage_summary_targets(ctx)["theme_producer"],
         generated_at=ctx.generated_at,
     )
 
@@ -113,7 +131,7 @@ def run_projection_inputs(ctx) -> dict[str, Any]:
         source_theme_projection_path=ctx.theme_projection_path,
         output_momentum_projection_path=ctx.merged_momentum_path,
         output_theme_projection_path=ctx.merged_theme_path,
-        summary_path=_summary_path(ctx, "projection_inputs"),
+        summary_path=_stage_summary_targets(ctx)["projection_inputs"],
         generated_at=ctx.generated_at,
     )
 
@@ -152,7 +170,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
 # --- honest provider_health derivation from the real Pass2 summary ---
 
 def _write_provider_health(ctx) -> None:
-    summary = json.loads(_summary_path(ctx, "pass2").read_text(encoding="utf-8"))
+    summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
     budget = summary.get("endpoint_call_budget", {})
     results = summary.get("endpoint_results", [])
 

@@ -47,6 +47,11 @@ from engine.us_short_market_calendar import load_market_calendar, sessions_for_w
 
 CALENDAR_PRESET = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 STATE_DIR = ROOT / "state" / "us_short"
+# The preflight summary is BOTH stage-7's OUTPUT and stage-8's preflight INPUT, so it must live where BOTH runners'
+# fail-closed allowlists accept it. This mirrors
+# runners.us_short_batch5_full_candidate_pass2_preflight.PROVIDER_SAMPLE_REL_ROOT (a conformance test pins equality)
+# — a per-run gitignored sidecar under the reviewed provider_samples/ tree, decision-date-keyed in the filename.
+_PREFLIGHT_SAMPLE_REL_ROOT = Path("provider_samples") / "us_short_batch5_full_candidate_pass2_preflight_20260706"
 
 
 class WeeklyCapstoneError(RuntimeError):
@@ -75,6 +80,7 @@ class CapstoneContext:
     max_retries_per_call: int = 0
     retry_backoff_seconds: float = 0.0
     state_dir: Path = STATE_DIR
+    sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
 
     # --- derived artifact paths (all gitignored under state/us_short/, keyed by the canonical dates) ---
     def _s(self, name: str) -> Path:
@@ -110,7 +116,10 @@ class CapstoneContext:
 
     @property
     def preflight_summary_path(self) -> Path:
-        return self._s(f"us_short_batch5_capstone_pass2_preflight_{self.decision_date}_summary.json")
+        # stage-7 preflight OUTPUT + stage-8 pass2 preflight INPUT — lives under the preflight runner's accepted
+        # provider_samples/ root (both runners' allowlists accept it), NOT under state/us_short/ (which the runners
+        # reject). Gitignored per-run sidecar, decision-date-keyed.
+        return self.sample_root / _PREFLIGHT_SAMPLE_REL_ROOT / f"us_short_batch5_capstone_pass2_preflight_{self.decision_date}_summary.json"
 
     @property
     def source_artifact_prefix(self) -> Path:
@@ -123,6 +132,10 @@ class CapstoneContext:
     @property
     def context_components_path(self) -> Path:
         return self._s(f"us_short_batch5_capstone_{self.decision_date}_context_components.json")
+
+    @property
+    def data_context_path(self) -> Path:
+        return self._s(f"us_short_batch5_capstone_{self.decision_date}_data_context.json")
 
     @property
     def provider_health_path(self) -> Path:
@@ -141,6 +154,7 @@ def resolve_capstone_context(
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
     state_dir: Path = STATE_DIR,
+    sample_root: Path = ROOT,
 ) -> CapstoneContext:
     """Resolve the §2.1 canonical decision_date + price_basis_date from `now_et` and the frozen calendar, and build
     the run context. Fail-closed: an intraday `now_et` (session dead zone) raises WeeklyCapstoneError (no run)."""
@@ -171,6 +185,7 @@ def resolve_capstone_context(
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
         state_dir=Path(state_dir),
+        sample_root=Path(sample_root),
     )
 
 
@@ -251,6 +266,7 @@ def run_weekly_capstone(
     retry_backoff_seconds: float = 0.0,
     stages: list[Stage] | None = None,
     state_dir: Path = STATE_DIR,
+    sample_root: Path = ROOT,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
@@ -261,6 +277,7 @@ def run_weekly_capstone(
         account_state_path=account_state_path, calendar_path=calendar_path,
         confirm_user_authorization=confirm_user_authorization, provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds, state_dir=state_dir,
+        sample_root=sample_root,
     )
     pipeline = stages if stages is not None else default_pipeline()
 
@@ -279,6 +296,19 @@ def run_weekly_capstone(
             result = stage.run(ctx)
         except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
             raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+        # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
+        # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
+        # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
+        if stage.name == "weekly_bridge" and _bridge_emitted(result) is False:
+            results.append({"name": stage.name, "gated": stage.gated, "result": result})
+            return {
+                "mode": "live",
+                "decision_date": ctx.decision_date,
+                "price_basis_date": ctx.price_basis_date,
+                "emitted": False,
+                "no_emit_reason": _bridge_no_emit_reason(result),
+                "stages": results,
+            }
         missing = [p for p in stage.outputs(ctx) if not Path(p).exists()]
         if missing:
             raise WeeklyCapstoneError(
@@ -289,9 +319,29 @@ def run_weekly_capstone(
         "mode": "live",
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
+        "emitted": True,
         "emitted_report": _rel(ctx.private_root / "weekly_private" / ctx.decision_date / "weekly_report.md"),
         "stages": results,
     }
+
+
+def _bridge_emitted(result: Any) -> bool | None:
+    """The weekend pipeline's honest emit flag surfaced by the bridge result (`batch4_run.emitted`), or None when the
+    shape is unexpected (then the normal output-existence check applies). A `False` = a legitimate provider_health /
+    out-of-window no-emit that wrote no weekly_report.md — NOT a stage failure."""
+    if isinstance(result, dict):
+        batch4 = result.get("batch4_run")
+        if isinstance(batch4, dict) and isinstance(batch4.get("emitted"), bool):
+            return batch4["emitted"]
+    return None
+
+
+def _bridge_no_emit_reason(result: Any) -> str | None:
+    if isinstance(result, dict):
+        batch4 = result.get("batch4_run")
+        if isinstance(batch4, dict) and isinstance(batch4.get("no_emit_reason"), str):
+            return batch4["no_emit_reason"]
+    return None
 
 
 def _parse_now_et(raw: str) -> datetime:

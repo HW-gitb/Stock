@@ -73,7 +73,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.state_dir, ignore_errors=True)
         shutil.rmtree(self.private_root, ignore_errors=True)
 
-    def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None):
+    def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None):
         def outs_for(name):
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
@@ -101,6 +101,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                         for p in outfn(ctx):
                             Path(p).parent.mkdir(parents=True, exist_ok=True)
                             Path(p).write_text("{}", encoding="utf-8")
+                    if nm == "weekly_bridge" and bridge_batch4 is not None:
+                        return {"batch4_run": bridge_batch4}   # exercise the real bridge return shape (emitted/no_emit_reason)
                     return {"stage": nm}
                 return run
 
@@ -116,6 +118,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
             dry_run=False,
             confirm_user_authorization=True,
             state_dir=self.state_dir,
+            sample_root=self.state_dir,   # keep the preflight provider_samples sidecar inside the tempdir (isolation)
             **kw,
         )
 
@@ -141,6 +144,26 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertIn("momentum_fetch", str(cm.exception))
         self.assertEqual(order, ["universe_fetch", "momentum_fetch"])   # fail-fast, no further stages
 
+    def test_bridge_no_emit_is_honest_success_not_failure(self):
+        # design §3.2: a non-clean provider_health (e.g. free-tier FMP-429) → the bridge honestly writes NO
+        # weekly_report.md. That must be a clean no-emit result, NOT a "missing output" hard failure.
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(
+            order, skip_output_stage="weekly_bridge",
+            bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
+        self.assertEqual(order, _STAGE_NAMES)                 # ran the whole chain
+        self.assertFalse(summary["emitted"])
+        self.assertEqual(summary["no_emit_reason"], "provider_health_blocked")
+
+    def test_bridge_emitted_true_but_missing_report_still_fails(self):
+        # an emit=True bridge that did NOT actually write the report is a real failure — the no-emit tolerance must
+        # not swallow it.
+        order: list[str] = []
+        with self.assertRaises(WeeklyCapstoneError) as cm:
+            self._run(order, stages=self._fake_stages(
+                order, skip_output_stage="weekly_bridge", bridge_batch4={"emitted": True}))
+        self.assertIn("weekly_bridge", str(cm.exception))
+
 
 class CapstoneAdapterSignatureTest(unittest.TestCase):
     """Regression guard: every kwarg each thin adapter passes must be a real parameter of the runner it wraps, so a
@@ -156,7 +179,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization"]),
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._proj.run_packet, ["candidate_artifact_path", "expected_decision_date", "source_momentum_projection_path", "source_theme_projection_path", "output_momentum_projection_path", "output_theme_projection_path", "summary_path", "generated_at"]),
@@ -167,6 +190,52 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             params = set(inspect.signature(fn).parameters)
             bad = [k for k in kwargs if k not in params]
             self.assertEqual(bad, [], f"{fn.__module__}.{fn.__name__} rejects kwargs {bad}")
+
+
+class CapstoneStageSummaryPathTest(unittest.TestCase):
+    """Regression guard for the exact seam a fake-stage chain structurally CANNOT cover: each per-run summary sidecar
+    the capstone routes to a stage runner must be ACCEPTED by that runner's real fail-closed path validator. This is
+    the check that would have caught the DRAFT path-allowlist break before a real run burned a provider fetch."""
+
+    def _ctx(self):
+        from runners.us_short_weekly_capstone import resolve_capstone_context
+        # default sample_root = repo ROOT, so the paths resolve against the real provider_samples/ tree the runners
+        # validate against.
+        return resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=Path(tempfile.gettempdir()) / "cap_priv",
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+        )
+
+    def test_every_stage_summary_path_accepted_by_its_runner_validator(self):
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = self._ctx()
+        targets = st._stage_summary_targets(ctx)
+        validators = {
+            "momentum_fetch": st._mom_fetch._validate_summary_path,
+            "momentum_producer": st._mom_prod._validate_summary_path,
+            "sic_classification": st._sic._validate_summary_path,
+            "theme_producer": st._theme._validate_summary_path,
+            "projection_inputs": st._proj._validate_summary_path,
+            "pass2": st._pass2._validate_summary_path,
+        }
+        self.assertEqual(set(targets), set(validators))   # every routed summary has a validator checked
+        for stage, path in targets.items():
+            try:
+                validators[stage](path)   # returns the resolved path; raises if the runner would reject it
+            except Exception as exc:  # noqa: BLE001
+                self.fail(f"stage '{stage}' summary path {path} rejected by its runner validator: {exc}")
+
+    def test_preflight_summary_path_accepted_as_both_output_and_input(self):
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = self._ctx()
+        st._preflight._validate_summary_path(ctx.preflight_summary_path)   # stage-7 write location — must not raise
+        # stage-8 reads the SAME path as its preflight INPUT: the path SHAPE must be accepted (it errors only because
+        # the file is not written yet at validation time — proving it is NOT an allowlist rejection).
+        with self.assertRaises(st._pass2.FullCandidateLiveSourcePacketError) as cm:
+            st._pass2._validate_preflight_path(ctx.preflight_summary_path)
+        self.assertIn("existing file", str(cm.exception))
 
 
 if __name__ == "__main__":

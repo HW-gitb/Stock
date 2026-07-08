@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-08 — Claude 执行+自审+提交 (US-short capstone 一键路径接线收口:6 处 summary→各 runner 已接受的 provider_samples + no-emit 感知 + data_context 日期;桌面 cc_r1 复核驱动、不入项目文档)
+
+**Commits**: 本提交（capstone 一键路径接线收口）
+
+**Relationship to prior session(s)**:
+- Builds on 2026-07-08 Claude (US-short 一键 weekly capstone orchestrator 骨架=cut⑥) — 收口该 DRAFT 骨架的 live-wiring 路径接缝。
+- **Refines**: 骨架自审「gated 适配器路径校验/输出命名待明日 live 验」。Adjustment: 用户桌面对抗审查(cc_r1)+穷尽静态接缝 trace 提前挖出并修好路径白名单阻塞,不必等真跑烧配额才暴露。
+
+**Worked on**:
+1. 桌面对抗审查(cc_r1,只写桌面不入项目文档)揪出 capstone 一键路径 3 个执行阻塞:①7/8 batch5 阶段的 summary/preflight 路径被各 runner 的 `_validate_summary_path`/`_validate_preflight_path` 白名单拒(只认 docs 钉死日期或各自 provider_samples)→第2阶段 abort(且已先烧 stage1 universe fetch);②终端 bridge 诚实 no-emit(provider_health 非 clean)被编排器输出存在性检查误判为阶段失败;③pass2 适配器漏传 output_data_context_path→data_context 落钉死 20260706 名。
+2. 穷尽静态接缝 trace(9 阶段逐个:适配器传路径 × runner 校验规则 × 输出名↔下阶段输入):证实所有真工件路径本就正确一致,卡点仅上述两类。
+3. 修复(capstone 3 文件 +150/−13,**零 fail-closed 校验器改动**):adapter 把各阶段 summary 改指各 runner **已接受的** gitignored provider_samples(引用各 runner 常量防漂移)+preflight summary 指 preflight provider_samples(S7 写/S8 读双接受)+新增 `CapstoneContext.sample_root` 保测试隔离;run 循环对 bridge 做 emit 感知(读 `batch4_run.emitted`,False→干净 no-emit);pass2 补传 `output_data_context_path=ctx.data_context_path`。
+4. 顺带修 `tests/test_doc_governance_guard.py` 一个**假阳性**:`REVIEW_HEADER_KEYS` 用子串匹配 "Pass",把话题含 "Pass2"(两遍打分第2遍)的**执行**日志误判成 PASS 评审条目、强套极简模板报红(dfa1c101 起本机 hook 未接、带红提交)。改英文裁决词 PASS/Pass/FAIL 为整词匹配(`\b…\b`,中文键仍子串)+加 planted 假阳性控制(Pass2 话题不误抓)+正控(真 `Codex PASS (R-ID)` 仍抓)。那两条旧日志本身没毛病、不动。
+
+**Key decisions**:
+- 选 adapter-only(改指 provider_samples)而非放松 7 个 fail-closed 校验器 — subagent 探针 + 我亲验证 provider_samples 路径本就被接受,零 guard 风险、最小侵入。
+- 新增回归测试用**真 runner 校验器**核每条 capstone summary 路径被接受(补上原「只验签名」测试没覆盖的语义缝);2 个 no-emit 测试锁诚实 no-emit;`sample_root` 默认=repo root、测试注入 tempdir。
+- 提交但不 push(push 须显式命令)。
+
+**Alternatives considered and rejected**:
+- "放松各 runner `_validate_summary_path` 接受 state/us_short capstone 路径" — 否决。要动 7 个 fail-closed 校验器 + 各配植入失败测试,风险大;provider_samples 已被接受,adapter-only 更省更稳。
+
+**Open questions handed off**:
+- 一键 live 链仍从未真跑一次(离线只能测框架+纯校验器);明日 07-09 首跑当 shakedown,剩余不确定=运营层(env key/真 provider 响应)非接线。
+- Codex 额度恢复后:本 capstone fix 为 solo 自审,需 Codex 独立复审。
+
+**Next natural step from my view**:
+1. 明日 07-09 fresh-quota 首跑(dry-run→真跑)验一键链 + FMP 日限假设。
+2. (可选,留待)cc_r1 记录的 huge-int 整类硬化 / overextension 接线 / cost_floor 净利口径。
+
 ## 2026-07-08 — Claude 起草+自审+提交 (US-short 一键 weekly capstone orchestrator 骨架=cut⑥ 收口;离线全测、gated 适配器 draft 待明日 live 验)
 
 - **Verdict/Action**: 按用户「先起草一键 capstone 骨架」建 cut⑥ orchestrator——把已存在的 9 个阶段 runner(universe→momentum-fetch/producer→SIC-fetch/theme-producer→projection-inputs→Pass2-preflight→Pass2-fetch→batch5→batch4 bridge)串成一条一键路径,收口 §18.3「weekly one-click path」目标(此前需手动 ~7 命令,走a 实证)。`runners/us_short_weekly_capstone.py`(编排框架)+ `us_short_weekly_capstone_stages.py`(9 个薄适配器)+ 8 测。**起草前 Explore agent 精确映射 9 阶段入口签名 + 核 canonical resolver 真契约**(别凭 agent map 猜)。已自审+提交(register R-...-WEEKLY-CAPSTONE-ONECLICK-SKELETON 单源)。

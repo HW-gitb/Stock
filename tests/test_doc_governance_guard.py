@@ -723,7 +723,12 @@ class DocGovernanceGuard(unittest.TestCase):
     # register's full finding into a single allowed bullet). Full detail belongs ONLY in the register.
     EXPECTED_BASE_LABELS = frozenset({"Verdict/Action", "Required", "Verify", "Next"})
     PROOF_LABELS = frozenset({"Pre-Codex self-review", "Proof-of-use"})
-    REVIEW_HEADER_KEYS = ("审查", "修复", "PASS", "Pass", "FAIL")     # incl. PASS-only headers
+    REVIEW_HEADER_KEYS = ("审查", "修复")     # Chinese review-cycle verbs (specific enough for a substring match)
+    # English verdict tokens (PASS / Pass / FAIL, incl. PASS-only headers) match ONLY as STANDALONE words
+    # (\b…\b). A topic word like "Pass2" (the two-pass scoring's second pass) contains the substring "Pass" but
+    # is NOT a PASS verdict — matching it as a substring was a real false-positive that flagged legitimate 执行
+    # entries whose topic mentions Pass2 (they were forced through the minimal-template check they never opted into).
+    _VERDICT_TOKEN_RE = re.compile(r"\b(?:PASS|Pass|FAIL)\b")
     VERIFY_PLACEHOLDERS = ("N OK", "<N>", "TODO", "占位", "XXX", "TBD")
     MAX_BULLET_LEN = 500          # real entries top out ~260; >500 means crammed copied detail
     ADOPTION_MARKER = "REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER"
@@ -751,8 +756,8 @@ class DocGovernanceGuard(unittest.TestCase):
             block = parts[i + 1]
             lines = block.splitlines()
             header = lines[0] if lines else ""
-            if not any(k in header for k in cls.REVIEW_HEADER_KEYS):
-                continue                                  # review-cycle rounds incl. PASS-only headers
+            if not (any(k in header for k in cls.REVIEW_HEADER_KEYS) or cls._VERDICT_TOKEN_RE.search(header)):
+                continue                                  # review-cycle rounds incl. standalone PASS/FAIL headers
             if not re.search(r"R-[A-Z0-9][A-Z0-9-]+", block):
                 continue                                  # only entries citing a Required ID
             tag = header[:50]
@@ -882,6 +887,20 @@ class DocGovernanceGuard(unittest.TestCase):
         with_blockquote = compliant + "\n> 📦 archive note: older entries moved to the archive file\n"
         self.assertEqual(self._review_cycle_offenders(with_blockquote), [],
                          "blockquote line false-flagged as a non-template line")
+        # false-positive control (Pass2-substring fix): a 执行 entry whose TOPIC merely contains "Pass2" (the
+        # two-pass scoring's second pass, NOT a PASS verdict) — even citing an R-ID and carrying rich non-minimal
+        # bullets — must be SKIPPED, not forced through the minimal template. Its body here would produce
+        # offenders (unexpected Pre-Codex label + free-form line) IF it were wrongly classified as review-cycle.
+        pass2_topic_not_verdict = ("## 2026-07-08 — Claude 执行+自审+提交 (US-short Pass2 抓取 pacing;R-TEST-FOO)\n"
+                                   "- **Verdict/Action**: did work citing R-TEST-FOO\n"
+                                   "- **Pre-Codex self-review**: ok\n"
+                                   "这是一段自由散文,若被误判成评审条目会判 free-form。\n")
+        self.assertEqual(self._review_cycle_offenders(pass2_topic_not_verdict), [],
+                         "guard false-positives a 执行 entry whose topic merely contains 'Pass2' (not a PASS verdict)")
+        # positive control: a STANDALONE PASS verdict header (space-delimited) is STILL enforced (regression guard
+        # for the word-boundary change — real `Codex PASS (R-ID)` entries must not slip through).
+        self.assertTrue(self._review_cycle_offenders(pass_header_with_detail),
+                        "word-boundary change wrongly lets a real standalone PASS verdict entry escape enforcement")
 
     def test_draft_handoff_proof_enforced_above_marker(self):
         # R-PRECODEX-CHECKLIST-HANDOFF-PROOF-OF-USE-GAP: a 起草/强化 handoff that omits the required
