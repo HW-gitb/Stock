@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-08 — Claude 执行+自审+提交 (US-short 核实已交付真动量的复权语义=Massive grouped 默认 split-adjusted;升级诚实注、纯 docs 验证无代码改)
+
+- **Verdict/Action**: 自决下一刀=先验证已交付「真动量」的正确性(而非往上建)。核 Massive 官方文档:grouped-daily `adjusted` 参数**默认 true(split-adjusted)**、「split adjustment is enabled by default」(docs/rest/stocks/aggregates/daily-market-summary)。故我交付的全宇宙动量**在关键维度(拆股)是对的**(fetch 从不传 adjusted=false),只是非 dividend-adjusted(~1-2% ex-date、对分位排序先验可忽略)。把 register+CURRENT 的「Massive 默认口径(未知)」注升级为「docs 证 split-adjusted」。纯 docs 验证、无代码改。已自审+提交。
+- **Required**: 无 finding、无代码改(register+CURRENT 诚实注升级)。未来纵深硬化(可选、非本刀):显式传 `adjusted=true` + 断言 grouped 响应顶层 `adjusted` 字段(`_massive_grouped_for_date` 现丢弃它)——需 gated re-fetch 验证,留待。
+- **Verify**: Massive 官方 docs(WebSearch)明证 grouped `adjusted` 默认 true + 响应带 adjusted:true。收盘价拆股复权=动量收益正确性关键维度(2:1 拆股若未复权=伪 -50%)、现已证处理。无 code 改、无测试影响(纯诚实注升级、doc/route 守护本轮跑绿见提交前 gate)。
+- **Next**: 无(已提交;真动量+真 theme+top-200 已交付且复权语义已证;下一大步=真 Pass2 深审抓取[1001 calls,gated,需授权]/dividend 总回报复权[Step 3,gated]/capstone 一键 E2E)
+
 ## 2026-07-07 — Claude 执行+自审+提交 (US-short theme piece C 步2/3 = 全宇宙 SEC SIC 抓取真跑 + 真 theme + funnel top-200 带真 theme;§6a HELD 零发现;R-...THEME resolved)
 
 - **Verdict/Action**: 按用户「建完就跑」建全宇宙 SEC SIC 抓取 `runners/us_short_batch5_full_universe_sec_sic_classification_fetch.py`(+schema+8 测)+真跑(SR-PROVIDER-001,~2404 SEC 调用、复用 `_sec_get`/`fetch_sec_tickers`、粗化 sic[:2] 2 位大类)→ **2381/2404 分类入 66 组**。piece B 跑真序列包+真分类包 → **真全宇宙 theme 2359/2404 scored**(62 scored SIC 组)。projection_inputs+preflight 重跑 → **top-200 现带真 theme(scored 0→2359)**。`R-...FULL-UNIVERSE-THEME-PRODUCTION-MISSING` **resolved**。已自审+提交。
