@@ -242,8 +242,8 @@
         "massive_dividend_calls": { "type": "integer", "minimum": 1 },
         "endpoint_error_count": { "type": "integer", "minimum": 0 },
         "sec_cik_missing_count": { "type": "integer", "minimum": 0 },
-        "retry_count_allowed": { "const": 0 },
-        "retry_count_used": { "const": 0 },
+        "retry_count_allowed": { "type": "integer", "minimum": 0, "maximum": 6 },
+        "retry_count_used": { "type": "integer", "minimum": 0 },
         "within_budget": { "const": true }
       }
     },

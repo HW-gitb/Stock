@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import subprocess
 import sys
 import time
@@ -351,6 +352,49 @@ def _fmp_stable_url(path_template: str, symbol: str, api_key: str) -> str:
     return sample_validation.fmp_url(path_template, symbol, {}, api_key, endpoint_mode="stable")
 
 
+_MAX_RETRIES_PER_CALL_CAP = 6   # hard ceiling on the per-call 429 retry count (bounds worst-case physical spend)
+
+
+def _fetch_with_retry(
+    client: sample_validation.JsonHttpClient,
+    *,
+    url: str,
+    provider_id: str,
+    endpoint_family: str,
+    symbol: str | None,
+    raw_root: Path,
+    headers: dict[str, str],
+    pace_seconds: float,
+    max_retries: int,
+    retry_backoff_seconds: float,
+    retry_stats: dict[str, int],
+) -> sample_validation.FetchRecord:
+    """Fetch one endpoint with bounded retry ONLY on HTTP 429 (rate-limit). A 402 paywall / 404 / any non-429
+    outcome is returned as-is and NOT retried — retrying a paywall is pointless, and it makes a rate-limit
+    (recoverable by waiting) observably distinct from a paywall/quota (not). Retries happen INSIDE this call (each
+    physical attempt overwrites the same raw path); only the FINAL FetchRecord is returned, so the caller's LOGICAL
+    endpoint-record count — and the authorized `max_total_endpoint_calls` budget — is UNCHANGED (retries are a
+    bounded multiplier on the SAME authorized targets, never a widening of the target set). `pace_seconds` spaces
+    consecutive endpoints AFTER the final attempt to stay under the free-tier rate. `retry_stats["used"]` accumulates
+    total physical retries for honest reporting."""
+    record = sample_validation.fetch_and_store(
+        client, url=url, provider_id=provider_id, endpoint_family=endpoint_family,
+        symbol=symbol, raw_root=raw_root, headers=headers,
+    )
+    attempt = 0
+    while (not record.ok) and record.http_status == 429 and attempt < max_retries:
+        time.sleep(retry_backoff_seconds * (2 ** attempt))   # exponential backoff on rate-limit
+        retry_stats["used"] += 1
+        attempt += 1
+        record = sample_validation.fetch_and_store(
+            client, url=url, provider_id=provider_id, endpoint_family=endpoint_family,
+            symbol=symbol, raw_root=raw_root, headers=headers,
+        )
+    if pace_seconds:
+        time.sleep(pace_seconds)
+    return record
+
+
 def _fetch_live_records(
     *,
     selected_symbols: list[str],
@@ -361,8 +405,12 @@ def _fetch_live_records(
     massive_env: sample_validation.EnvValue,
     sec_sleep_seconds: float,
     max_total_endpoint_calls: int,
-) -> tuple[list[sample_validation.FetchRecord], dict[str, str]]:
+    provider_pace_seconds: float,
+    max_retries_per_call: int,
+    retry_backoff_seconds: float,
+) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int]:
     records: list[sample_validation.FetchRecord] = []
+    retry_stats = {"used": 0}
     _assert_endpoint_budget(records, max_total_endpoint_calls)
     mapping = sample_validation.fetch_and_store(
         client,
@@ -382,7 +430,7 @@ def _fetch_live_records(
     for symbol in selected_symbols:
         _assert_endpoint_budget(records, max_total_endpoint_calls)
         records.append(
-            sample_validation.fetch_and_store(
+            _fetch_with_retry(
                 client,
                 url=_fmp_stable_url("grades", symbol, fmp_env.value),
                 provider_id="financial_modeling_prep",
@@ -390,6 +438,10 @@ def _fetch_live_records(
                 symbol=symbol,
                 raw_root=raw_root,
                 headers=fmp_headers,
+                pace_seconds=provider_pace_seconds,
+                max_retries=max_retries_per_call,
+                retry_backoff_seconds=retry_backoff_seconds,
+                retry_stats=retry_stats,
             )
         )
 
@@ -411,7 +463,7 @@ def _fetch_live_records(
 
         _assert_endpoint_budget(records, max_total_endpoint_calls)
         records.append(
-            sample_validation.fetch_and_store(
+            _fetch_with_retry(
                 client,
                 url=MASSIVE_NEWS_URL.format(ticker=symbol, key=massive_env.value),
                 provider_id="massive",
@@ -419,12 +471,16 @@ def _fetch_live_records(
                 symbol=symbol,
                 raw_root=raw_root,
                 headers=massive_headers,
+                pace_seconds=provider_pace_seconds,
+                max_retries=max_retries_per_call,
+                retry_backoff_seconds=retry_backoff_seconds,
+                retry_stats=retry_stats,
             )
         )
 
         _assert_endpoint_budget(records, max_total_endpoint_calls)
         records.append(
-            sample_validation.fetch_and_store(
+            _fetch_with_retry(
                 client,
                 url=MASSIVE_SPLITS_URL.format(ticker=symbol, key=massive_env.value),
                 provider_id="massive",
@@ -432,12 +488,16 @@ def _fetch_live_records(
                 symbol=symbol,
                 raw_root=raw_root,
                 headers=massive_headers,
+                pace_seconds=provider_pace_seconds,
+                max_retries=max_retries_per_call,
+                retry_backoff_seconds=retry_backoff_seconds,
+                retry_stats=retry_stats,
             )
         )
 
         _assert_endpoint_budget(records, max_total_endpoint_calls)
         records.append(
-            sample_validation.fetch_and_store(
+            _fetch_with_retry(
                 client,
                 url=MASSIVE_DIVIDENDS_URL.format(ticker=symbol, key=massive_env.value),
                 provider_id="massive",
@@ -445,9 +505,13 @@ def _fetch_live_records(
                 symbol=symbol,
                 raw_root=raw_root,
                 headers=massive_headers,
+                pace_seconds=provider_pace_seconds,
+                max_retries=max_retries_per_call,
+                retry_backoff_seconds=retry_backoff_seconds,
+                retry_stats=retry_stats,
             )
         )
-    return records, cik_by_symbol
+    return records, cik_by_symbol, retry_stats["used"]
 
 
 def _record_map(records: list[sample_validation.FetchRecord]) -> dict[tuple[str, str, str | None], sample_validation.FetchRecord]:
@@ -807,6 +871,8 @@ def _build_summary(
     candidate_artifact: dict[str, Any],
     pass2_target_universe: dict[str, Any],
     endpoint_records: list[sample_validation.FetchRecord],
+    retry_count_allowed: int,
+    retry_count_used: int,
     cik_by_symbol: dict[str, str],
     raw_root: Path,
     summary_path: Path,
@@ -902,8 +968,8 @@ def _build_summary(
             "massive_dividend_calls": _endpoint_count(endpoint_records, "massive", "dividends"),
             "endpoint_error_count": endpoint_errors,
             "sec_cik_missing_count": len([symbol for symbol in eligible if symbol not in cik_by_symbol]),
-            "retry_count_allowed": 0,
-            "retry_count_used": 0,
+            "retry_count_allowed": retry_count_allowed,
+            "retry_count_used": retry_count_used,
             "within_budget": len(endpoint_records) <= expected_total_call_budget,
         },
         "endpoint_results": [_summarize_endpoint(record) for record in endpoint_records],
@@ -1129,9 +1195,23 @@ def run_full_candidate_live_source_packet(
     theme_opportunity_state: str = "strong",
     forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
     sec_sleep_seconds: float = sample_validation.SEC_FAIR_ACCESS_SLEEP_SECONDS,
+    provider_pace_seconds: float = 0.0,
+    max_retries_per_call: int = 0,
+    retry_backoff_seconds: float = 0.0,
 ) -> dict[str, Any]:
     if not confirm_user_authorization:
         raise FullCandidateLiveSourcePacketError("full-candidate live provider execution requires explicit user authorization")
+    if not (isinstance(max_retries_per_call, int) and not isinstance(max_retries_per_call, bool)
+            and 0 <= max_retries_per_call <= _MAX_RETRIES_PER_CALL_CAP):
+        raise FullCandidateLiveSourcePacketError(
+            f"max_retries_per_call must be an int in [0, {_MAX_RETRIES_PER_CALL_CAP}]")
+    def _finite_pace(x: Any) -> bool:
+        # strict-finite, NOT just >= 0: inf passes `>= 0` and then time.sleep(inf) hangs/crashes (bare OverflowError
+        # outside the runner's error contract); an absurd-but-finite value would sleep for days. Bound to [0, 60]s.
+        return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and 0 <= x <= 60
+    if not (_finite_pace(provider_pace_seconds) and _finite_pace(retry_backoff_seconds)):
+        raise FullCandidateLiveSourcePacketError(
+            "provider_pace_seconds and retry_backoff_seconds must be finite numbers in [0, 60] seconds")
     generated_at = generated_at or iso_now()
     observed_at = observed_at or generated_at
     if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
@@ -1218,7 +1298,7 @@ def run_full_candidate_live_source_packet(
     }
 
     client = client or sample_validation.JsonHttpClient()
-    records, cik_by_symbol = _fetch_live_records(
+    records, cik_by_symbol, retry_count_used = _fetch_live_records(
         selected_symbols=selected_symbols,
         raw_root=raw_root_resolved,
         client=client,
@@ -1227,6 +1307,9 @@ def run_full_candidate_live_source_packet(
         massive_env=massive_env,
         sec_sleep_seconds=sec_sleep_seconds,
         max_total_endpoint_calls=expected_total_call_budget,
+        provider_pace_seconds=provider_pace_seconds,
+        max_retries_per_call=max_retries_per_call,
+        retry_backoff_seconds=retry_backoff_seconds,
     )
     resolved_sources = _resolved_source_artifacts(
         selected_symbols=selected_symbols,
@@ -1295,6 +1378,8 @@ def run_full_candidate_live_source_packet(
         candidate_artifact=candidate_subset,
         pass2_target_universe=verified_targets,
         endpoint_records=records,
+        retry_count_allowed=max_retries_per_call,
+        retry_count_used=retry_count_used,
         cik_by_symbol=cik_by_symbol,
         raw_root=raw_root_resolved,
         summary_path=summary_resolved,
@@ -1329,6 +1414,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--run-data-context", action="store_true")
+    parser.add_argument("--provider-pace-seconds", type=float, default=0.0,
+                        help="sleep between consecutive FMP/Massive endpoint calls to stay under the free-tier rate (SEC has its own pace)")
+    parser.add_argument("--max-retries-per-call", type=int, default=0,
+                        help="bounded retries on HTTP 429 (rate-limit) per FMP/Massive call; a 402 paywall is NOT retried")
+    parser.add_argument("--retry-backoff-seconds", type=float, default=0.0,
+                        help="base for exponential backoff (backoff*2^attempt) between 429 retries")
     return parser.parse_args(argv)
 
 
@@ -1349,6 +1440,9 @@ def main(argv: list[str] | None = None) -> int:
             observed_at=args.observed_at,
             theme_opportunity_state=args.theme_opportunity_state,
             forced_holding_tickers=args.forced_holding_ticker,
+            provider_pace_seconds=args.provider_pace_seconds,
+            max_retries_per_call=args.max_retries_per_call,
+            retry_backoff_seconds=args.retry_backoff_seconds,
         )
     except FullCandidateLiveSourcePacketError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
