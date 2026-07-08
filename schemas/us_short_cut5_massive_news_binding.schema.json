@@ -26,8 +26,9 @@
     "sentiment_unknown": { "const": "unknown" },
     "sentiment_note": { "type": "string" },
     "record_fields_required": {
-      "const": ["id", "published_utc", "publisher", "title", "tickers", "insights"]
+      "const": ["id", "published_utc", "publisher", "title", "tickers"]
     },
+    "insights_optionality_note": { "type": "string" },
     "ticker_coverage_rule": { "type": "string" },
     "summary_contract": {
       "type": "object",

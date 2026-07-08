@@ -11,7 +11,8 @@
   "sentiment_allowed": ["positive", "negative", "neutral"],
   "sentiment_unknown": "unknown",
   "sentiment_note": "PER-TICKER sentiment is taken from the `insights` entry whose ticker == the (canonical) ticker. A news item with NO matching ticker-specific insight, or a sentiment value outside {positive, negative, neutral}, yields `unknown` — never a fabricated positive/negative. Massive/Polygon's OWN insights sentiment drives it; there is NO LLM in this offline slice (the §5.1b semantic reasoning / advisory escalation stays a later, gated layer — title/url/reasoning are carried for it).",
-  "record_fields_required": ["id", "published_utc", "publisher", "title", "tickers", "insights"],
+  "record_fields_required": ["id", "published_utc", "publisher", "title", "tickers"],
+  "insights_optionality_note": "`insights` is OPTIONAL, NOT required. The 2026-07-01 probe's 10-record sample happened to carry it 10/10, but the 2026-07-08 full-candidate live run (1001 real articles) found ~21% carry no `insights` key (or an explicit null). A MISSING/null `insights` -> no ticker-specific sentiment -> `unknown` (never fail-closed on its absence); a PRESENT non-list `insights` is still malformed and fails closed. Real-data contract refinement: R-USSHORT-BATCH5-MASSIVE-NEWS-INSIGHTS-OPTIONAL.",
   "ticker_coverage_rule": "the (canonical) ticker MUST appear in the item's canonicalized `tickers` list; otherwise the item was mis-attributed to this ticker and fails closed (mirrors the fmp-grades symbol cross-check).",
   "summary_contract": {
     "over": "the recent-window fit items",

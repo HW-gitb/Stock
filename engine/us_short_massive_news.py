@@ -45,7 +45,7 @@ _DECISION_TZ_NAME = "America/New_York"
 _RECENCY_WINDOW_DAYS = 30                                # news is time-sensitive -> tighter than the 90-day siblings
 _SENTIMENT_ALLOWED = frozenset({"positive", "negative", "neutral"})
 _SENTIMENT_UNKNOWN = "unknown"                           # no ticker-specific insight / out-of-enum -> unknown (not fabricated)
-_RECORD_REQUIRED = ("id", "published_utc", "publisher", "title", "tickers", "insights")
+_RECORD_REQUIRED = ("id", "published_utc", "publisher", "title", "tickers")   # `insights` is OPTIONAL (a real article may carry none -> unknown sentiment, never fail-closed)
 _PROVENANCE_FIELDS = frozenset({"provider_id", "endpoint_or_filing_type", "source_as_of",
                                 "observed_at", "coverage_status", "parser_status", "lineage_ref"})
 _COVERAGE_ALLOWED = frozenset({"full", "partial", "missing"})
@@ -232,8 +232,8 @@ def _classify_news_record(record: Any, *, ticker: str, as_of: str, observed_at_e
                           window: int) -> tuple[str, dict | None]:
     """Validate ONE injected Massive news item -> ("fit", record) | ("future", None) | ("stale", None). A
     structurally malformed item (non-dict, missing a required key, bad-SHAPE published_utc, non-str/empty
-    id/title, publisher without a non-blank str name, non-list tickers/insights, or a `tickers` list NOT covering
-    this ticker) FAILS CLOSED (raise). An item published AFTER the observation instant (`published_utc > observed`)
+    id/title, publisher without a non-blank str name, non-list tickers, a PRESENT non-list insights, or a `tickers`
+    list NOT covering this ticker) FAILS CLOSED (raise). A MISSING/null `insights` is tolerated -> unknown sentiment. An item published AFTER the observation instant (`published_utc > observed`)
     is excluded — event-after-observation look-ahead (§3.5); older than `window` (from as_of) is out-of-window. The
     publisher name is normalized (whitespace-collapsed, case preserved) so distinct_publishers can casefold. Extra
     Massive keys (author/description/keywords/image_url) are tolerated."""
@@ -263,9 +263,13 @@ def _classify_news_record(record: Any, *, ticker: str, as_of: str, observed_at_e
         raise MassiveNewsError(f"[{ticker}] news item tickers 须为 list")
     if ticker not in {canonical_us_ticker(t) for t in tickers if type(t) is str}:   # EXACT str before canonical (hostile subclass)
         raise MassiveNewsError(f"[{ticker}] news item 的 tickers 未覆盖本票（误 attribution，fail-closed）")
-    insights = record["insights"]
-    if not isinstance(insights, list):
-        raise MassiveNewsError(f"[{ticker}] news item insights 须为 list")
+    # `insights` (per-ticker sentiment) is OPTIONAL: a real Massive article may carry none (or an explicit null) ->
+    # no ticker-specific sentiment -> unknown (never fail-closed on ABSENCE). A PRESENT non-list insights is still malformed.
+    insights = record.get("insights")
+    if insights is None:
+        insights = []
+    elif not isinstance(insights, list):
+        raise MassiveNewsError(f"[{ticker}] news item insights 若存在须为 list")
     article_url = record.get("article_url")
     if article_url is not None and not isinstance(article_url, str):
         raise MassiveNewsError(f"[{ticker}] news item article_url 若存在须为字符串")

@@ -290,9 +290,23 @@ class IdentityAndMalformedTests(unittest.TestCase):
             nw.resolve_news_events(as_of=AS_OF, news_by_ticker={"AAPL": {"records": "no", "provenance": prov()}})
 
     def test_item_missing_field_raises(self):
-        item = news(); del item["insights"]
+        item = news(); del item["title"]          # a genuinely-required field (insights is now OPTIONAL, see below)
         with self.assertRaises(nw.MassiveNewsError):
             nw.resolve_news_events(as_of=AS_OF, news_by_ticker={"AAPL": {"records": [item], "provenance": prov()}})
+
+    def test_missing_insights_is_optional_unknown(self):
+        # A real Massive article may carry NO `insights` key (2026-07-08 live run: ~21% of 1001 articles) -> the item
+        # is classified with `unknown` sentiment, NOT fail-closed. R-USSHORT-BATCH5-MASSIVE-NEWS-INSIGHTS-OPTIONAL.
+        item = news(); del item["insights"]
+        out = nw.resolve_news_events(as_of=AS_OF, news_by_ticker={"AAPL": rec([item])})
+        self.assertIn("AAPL", out["signals"])
+        self.assertEqual(out["records"]["AAPL"][0]["sentiment"], nw._SENTIMENT_UNKNOWN)
+
+    def test_null_insights_is_optional_unknown(self):
+        item = news(); item["insights"] = None    # explicit JSON null == absent -> unknown, not fail-closed
+        out = nw.resolve_news_events(as_of=AS_OF, news_by_ticker={"AAPL": rec([item])})
+        self.assertIn("AAPL", out["signals"])
+        self.assertEqual(out["records"]["AAPL"][0]["sentiment"], nw._SENTIMENT_UNKNOWN)
 
     def test_publisher_without_name_raises(self):
         item = news(); item["publisher"] = {"homepage_url": "https://x"}
