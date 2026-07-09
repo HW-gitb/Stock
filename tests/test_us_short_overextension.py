@@ -10,6 +10,7 @@ the frozen action_table contract.
 import json
 import sys
 import unittest
+from datetime import date as _date, timedelta as _timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -219,6 +220,110 @@ class OverextensionMetricsIntegrationTests(unittest.TestCase):
         out = ox.classify_overextension({**metrics, "close": 101.0, "atr": 2.0})
         self.assertEqual(out["overextension_state"], "none")
         self.assertFalse(out["strips_theme_score"])
+
+
+_OX_BASE = _date(2026, 6, 1)
+
+
+def _dt(i):
+    return (_OX_BASE + _timedelta(days=i)).isoformat()
+
+
+def _ohlcv(closes, volumes=None, *, future_closes=None, spread=0.5):
+    """Build an OHLCV dated series (ascending daily dates). as_of = the last CURRENT close's date;
+    future_closes (if given) become points dated AFTER as_of — for PIT / look-ahead tests."""
+    pts = []
+    for i, c in enumerate(closes):
+        p = {"date": _dt(i), "high": float(c) + spread, "low": float(c) - spread, "close": float(c)}
+        if volumes is not None:
+            p["volume"] = float(volumes[i])
+        pts.append(p)
+    as_of = _dt(len(closes) - 1)
+    for j, c in enumerate(future_closes or []):
+        pts.append({"date": _dt(len(closes) + j), "high": float(c) + spread, "low": float(c) - spread,
+                    "close": float(c)})
+    return {"as_of": as_of, "session": "RTH", "adjustment_mode": "split_adjusted", "points": pts}
+
+
+_PARABOLIC_CLOSES = [106 + i for i in range(24)] + [135]
+_PARABOLIC_VOLUMES = [1_000_000.0] * 24 + [3_000_000.0]
+
+
+class OverextensionFeaturesTests(unittest.TestCase):
+    """cut 2a: the per-ticker producer entry (OHLCV PIT-series → tier). ATR from the price engine + cut-1
+    metrics + classify, computed BEFORE ranking so chasing_extreme can strip theme at the selection layer."""
+
+    def test_parabolic_ohlcv_series_is_chasing(self):
+        out = ox.compute_overextension_features(_ohlcv(_PARABOLIC_CLOSES, _PARABOLIC_VOLUMES))
+        self.assertEqual(out["overextension_state"], "chasing_extreme")
+        self.assertTrue(out["strips_theme_score"])
+        self.assertEqual(out["disposition"], "scored")
+        self.assertGreaterEqual(out["conditions_met"], ox.CHASING_MIN_CONDITIONS)
+        self.assertEqual(out["pit"]["n_points"], len(_PARABOLIC_CLOSES))
+
+    def test_benign_ohlcv_series_is_none(self):
+        out = ox.compute_overextension_features(_ohlcv([100, 101] * 13, [1_000_000.0] * 26))
+        self.assertEqual(out["overextension_state"], "none")
+        self.assertFalse(out["strips_theme_score"])
+        self.assertEqual(out["disposition"], "scored")
+
+    def test_volume_absent_still_classifies_chasing(self):
+        # OHLC-only (no volume) → vol_ratio None → volume_climax can't fire, but the other 4 conditions still
+        # reach chasing (graceful degradation without volume).
+        out = ox.compute_overextension_features(_ohlcv(_PARABOLIC_CLOSES, volumes=None))
+        self.assertEqual(out["overextension_state"], "chasing_extreme")
+        self.assertNotIn("volume_climax", out["condition_names"])
+
+    # ---- PIT / look-ahead (the load-bearing safety) ----
+    def test_future_parabola_does_not_leak_no_look_ahead(self):
+        # ≤as_of is BENIGN; the parabolic spike lives ONLY in future (> as_of) points → must classify none.
+        s = _ohlcv([100, 101] * 13, [1_000_000.0] * 26, future_closes=[110, 120, 130, 140, 150, 160])
+        out = ox.compute_overextension_features(s)
+        self.assertEqual(out["overextension_state"], "none")   # future spike PIT-cut → no look-ahead
+
+    def test_future_malformed_point_does_not_reject_valid_current_series(self):
+        # a FUTURE point with non-finite values must NOT over-reject the valid ≤as_of series (future values
+        # are never validated — mirrors momentum).
+        s = _ohlcv([100, 101] * 13, [1_000_000.0] * 26)
+        s["points"].append({"date": _dt(999), "high": float("nan"), "low": float("nan"), "close": float("nan")})
+        out = ox.compute_overextension_features(s)
+        self.assertEqual(out["disposition"], "scored")
+        self.assertIn(out["overextension_state"], ox.OVEREXTENSION_STATES)
+
+    # ---- fail-closed / insufficient ----
+    def test_short_series_insufficient_atr(self):
+        out = ox.compute_overextension_features(_ohlcv([100, 101, 102, 103, 104], [1e6] * 5))  # < ATR window
+        self.assertEqual(out["disposition"], "insufficient_data")
+        self.assertEqual(out["overextension_state"], "none")
+
+    def test_malformed_kept_bar_high_below_low_fails_closed(self):
+        s = _ohlcv(_PARABOLIC_CLOSES, _PARABOLIC_VOLUMES)
+        s["points"][10]["high"] = s["points"][10]["low"] - 1.0   # high < low = malformed bar
+        self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
+
+    def test_nonpositive_close_kept_bar_fails_closed(self):
+        s = _ohlcv(_PARABOLIC_CLOSES, _PARABOLIC_VOLUMES)
+        s["points"][5]["close"] = 0.0   # non-positive close = malformed price
+        self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
+
+    def test_non_ascending_axis_fails_closed(self):
+        s = _ohlcv([100, 101, 102, 103, 104, 105], [1e6] * 6)
+        s["points"][3]["date"] = s["points"][2]["date"]   # duplicate date → not strictly ascending
+        self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
+
+    def test_point_missing_required_key_fails_closed(self):
+        s = _ohlcv([100, 101, 102, 103, 104, 105], [1e6] * 6)
+        del s["points"][2]["low"]   # missing required 'low'
+        self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
+
+    def test_malformed_series_shapes_are_insufficient_not_crash(self):
+        p = {"date": "2026-06-01", "high": 1.0, "low": 1.0, "close": 1.0}
+        for bad in (None, "bad", 123, {}, {"as_of": "2026-06-10"},
+                    {"as_of": "bad", "session": "RTH", "adjustment_mode": "x", "points": [p]},
+                    {"as_of": "2026-06-10", "session": "RTH", "adjustment_mode": "x", "points": []}):
+            out = ox.compute_overextension_features(bad)   # must not crash
+            self.assertEqual(out["disposition"], "insufficient_data", repr(bad))
+            self.assertEqual(out["overextension_state"], "none", repr(bad))
 
 
 if __name__ == "__main__":

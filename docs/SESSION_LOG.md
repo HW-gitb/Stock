@@ -8,6 +8,42 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2a：OHLCV PIT-series→tier producer 入口 + 架构修正 + 1-call Massive grouped 探针证 high/low 可得)
+
+**Commits**: 本提交（`compute_overextension_features` + `_parse_ohlcv_series` PIT + 11 测试 + register 架构修正）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 1（metrics 层，`00ced85`）+ 用户逐步授权链（继续→做实测→跑探针→开建 Slice A）。
+- **Refines/Reverses**: cut-1 register 写的「cut 2 在 `_analyze_one` 剥赛道分」——**架构修正**：不成立（见下）。
+
+**Worked on**:
+1. 深挖消费链，3 事改了计划：① chasing 剥赛道分是**选股层**效应，`_analyze_one` 断言 分析期==选股期 core_score（禁同 run 分叉）+ basket 用冻结 `selection_rank` 排序「不再重算 core_score」→ 剥分不能放 `_analyze_one`；② `theme_heat.py::continuous_theme_score(chasing_extreme=)` 是**死代码**（无人调；活路径是 `assemble_theme_block`、无此参）；③ overextension 要 ATR(high/low)+MA/量/形态(close/volume)，momentum 序列只 close+volume。
+2. **1-call live Massive grouped 探针（用户授权、SR-PROVIDER-001 逐次）**证 grouped-daily 免费层带**完整 OHLCV 含 high/low**（12440 行、抽查 500/500 有 h+l；raw 落 gitignored、tracked tree 干净、无 secret/URL 泄漏、SR-PROVIDER-001 保持 open）→ ATR 在 producer 可算 → 干净递增可行（cut 2a 是 Slice B 真前缀）。
+3. **cut 2a = producer 入口** `compute_overextension_features(ohlcv_series)`：`_parse_ohlcv_series` PIT 解析（镜像已 §6a 验过的 momentum `_parse_dated_series`：future 点 BLOCKED、无 look-ahead）→ ATR(`price_engine.atr`)+cut1 metrics → classify → tier+disposition+pit。11 测试含承重 look-ahead 反向控制（未来抛物线不得使今日 chasing）+ fail-closed（短/坏 bar h<l/非正 close/非升序/缺键/坏形）。
+
+**Key decisions**:
+- overextension 在**选股/producer 阶段算**（排名前）才符合设计「选股层剥分」且不撞 selection==analysis 冻结不变式。
+- cut 2a 镜像 momentum PIT 语义（`_valid_date` 已是 industry_heat/momentum/provisional_theme_heat 4 引擎既有私有模式、非碰撞）；overextension→`price_engine.atr` 单向无环。
+- 剥分口径 = `theme_off` 权重（theme→0 重分配 = 设计「退回动量+催化 base」），留 Slice B 在 `compose_score_inputs` 做。
+- §6a：cut 2a 纯离线 + PIT 是已验代码镜像 + look-ahead 反向测试 → lower-risk、不起强制 agent；**强制 agent 留给 cut 2b/2c/Slice B 接线刀**。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「在 `_analyze_one` 剥赛道分重算 core_score」— 否决。撞 selection==analysis 断言 + basket 冻结 selection_rank；剥分必须在排名前的选股层。
+- 「复活 `theme_heat.py` 的 dead chasing hook」— 否决。活路径是 `assemble_theme_block`；剥分走 `compose_score_inputs` 的 theme_off、不复活死码。
+- 「cut 2a 取已 PIT-cut 的 clean lists（如 cut 1）」— 否决。producer 拿 raw dated OHLCV，PIT-cut 是承重安全项、该随 features 函数自足可测（镜像 momentum `compute_momentum_features`）。
+
+**Pre-Codex self-review (A-F)**: A 覆盖 parse 成功/PIT(future-leak,future-malformed)/fail-closed(短,h<l,非正close,非升序,缺键,坏形) 全类；B 全仓 grep `compute_overextension_features`/`_parse_ohlcv_series`=仅 engine+test 零外引、`_valid_date` 4 引擎既有私有模式非碰撞、`weekend_action_table.py:18`「无源留空」cut2a 未接列故仍准确；C 承重反向=未来抛物线→none(无 look-ahead)+未来坏点不误拒有效当前序列；E 无 route-doc 改（CURRENT 不写在建 gate）；F `git diff --check` clean、两文件 no-BOM/no-FFFD、复用硬化 `_finite`、无环导入（41 OK 证）。Verify：focused 41 OK、full offline `*us_short*` 3906 OK。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Cut 2b：grouped fetch 保留 h/l = 动 gated live fetch runner（SR-PROVIDER-001）；离线 producer 半先建、live 半 gated。
+- Slice B：per-ticker `theme_off` override 与 §12.2 whole-track shadow `theme_off` 语义会否打架——建时核。
+- Codex 额度恢复后：本 cut（`ef3c43f4` 起）+ 1-call grouped 探针需独立复审。
+
+**Next natural step from my view**:
+1. Cut 2b：OHLCV 序列 packet + 离线 producer（emit `overextension_by_ticker` map）+ gated fetch h/l 保留，起 §6a 强制 agent。
+2. Cut 2c：analyze `warning`→pullback + state 落行。Cut 2d：action_table 列。Slice B：`compose_score_inputs` chasing→theme_off。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 1/3：§4.3 过热分档 pattern-metrics 层 + 模块 `_finite` huge-int 硬化；纯离线、零 pipeline 接线)
 
 **Commits**: 本提交（overextension metrics 层 + `_finite` huge-int 硬化 + 18 回归测试 + register 三刀追踪）

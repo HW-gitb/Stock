@@ -21,8 +21,17 @@ close (+ aligned volume) series — the same volume-bearing daily series the §4
 parses; the caller merges the §6 price-indicator `close` + `atr` in before classifying. Each metric is an
 honest None / False when its window is missing / short / bad (never fabricated); its windows / thresholds
 are §13.1 #36 forward priors too.
+
+`compute_overextension_features(ohlcv_series)` is the per-ticker producer entry: it PIT-parses a dated OHLCV
+daily series (the Pass-1 grouped-daily reconstruction), computes ATR via the §6 price engine (high/low/close)
++ the metrics above (close/volume), and returns the classify_overextension tier (+ `disposition` / `pit`).
+It is computed at the SCORING stage (before ranking) so `chasing_extreme` can strip theme at the §4.3
+selection layer; a point dated after `as_of` is BLOCKED (no look-ahead), mirroring the momentum engine's PIT.
 """
 import math
+from datetime import datetime
+
+from engine.us_short_price_engine import atr as price_engine_atr
 
 # §13.1 #36 forward priors (NOT frozen const): the warning band + the multi-condition parabolic gate.
 WARNING_MA10_ATR = 1.0        # warning: close > MA10 + this×ATR
@@ -202,3 +211,94 @@ def compute_overextension_metrics(closes, volumes):
         "vertical_run": _vertical_run(closes),
         "weak_retrace": _weak_retrace(closes),
     }
+
+
+# ── §4.3 per-ticker producer entry (PIT-bearing OHLCV series → overextension tier) ─────────
+# The Pass-1 scoring stage (where the grouped-daily OHLCV series lives) calls this per eligible ticker to get
+# the overextension tier BEFORE ranking — so `chasing_extreme` can strip theme at the §4.3 selection layer.
+# ATR needs high/low/close (the §6 price engine); the cut-1 metrics need close/volume; both come from the ONE
+# OHLCV series. PIT: a point dated after `as_of` is BLOCKED — its values are never validated, so a future
+# spike can neither leak into (no look-ahead: a future parabola must not make today chasing_extreme) nor
+# over-reject a valid ≤as_of series (mirrors engine/us_short_momentum.py::_parse_dated_series).
+_OHLCV_SERIES_KEYS = {"as_of", "session", "adjustment_mode", "points"}
+_OHLCV_POINT_REQUIRED = {"date", "high", "low", "close"}
+_OHLCV_POINT_ALLOWED = {"date", "open", "high", "low", "close", "volume"}
+
+
+def _valid_date(s):
+    """Strict YYYY-MM-DD → datetime.date, else None (no other format, no timezone games)."""
+    if not (isinstance(s, str) and len(s) == 10):
+        return None
+    try:
+        return datetime.strptime(s, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _parse_ohlcv_series(series):
+    """Validate + PIT-cut an OHLCV dated series → {as_of, session, adjustment_mode, dates, highs, lows,
+    closes, volumes} or None (fail-closed). Mirrors the momentum engine's PIT semantics: the RAW axis must be
+    strictly ascending + unique BEFORE the cut; a point dated after `as_of` is BLOCKED (its values are never
+    validated → a future non-finite/spike bar can neither leak nor over-reject a valid ≤as_of series, no
+    look-ahead); each KEPT bar must be a clean positive bar (high ≥ low > 0, close > 0) or the WHOLE series
+    fails (a hole would corrupt ATR/pattern math). Volume is finite-non-negative or None."""
+    if not (isinstance(series, dict) and set(series) == _OHLCV_SERIES_KEYS):
+        return None
+    as_of = _valid_date(series["as_of"])
+    if as_of is None:
+        return None
+    session, adj = series["session"], series["adjustment_mode"]
+    if not (isinstance(session, str) and session and isinstance(adj, str) and adj):
+        return None
+    pts = series["points"]
+    if not isinstance(pts, list) or not pts:
+        return None
+    dates, highs, lows, closes, vols = [], [], [], [], []
+    prev = None
+    for p in pts:
+        if not (isinstance(p, dict) and _OHLCV_POINT_REQUIRED <= set(p) <= _OHLCV_POINT_ALLOWED):
+            return None
+        d = _valid_date(p["date"])
+        if d is None:
+            return None
+        if prev is not None and d <= prev:
+            return None                       # raw axis must be strictly ascending + unique (corrupt → None)
+        prev = d
+        if d <= as_of:                        # PIT cut: future points BLOCKED (values not even validated)
+            hi, lo, cl = _finite(p["high"]), _finite(p["low"]), _finite(p["close"])
+            if hi is None or lo is None or cl is None or not (hi >= lo > 0.0 and cl > 0.0):
+                return None                   # a malformed kept bar corrupts ATR/pattern math → fail closed
+            dates.append(d)
+            highs.append(hi)
+            lows.append(lo)
+            closes.append(cl)
+            fv = _finite(p["volume"]) if p.get("volume") is not None else None
+            vols.append(fv if (fv is None or fv >= 0.0) else None)   # negative volume is malformed → None
+    if not dates:
+        return None
+    return {"as_of": as_of, "session": session, "adjustment_mode": adj,
+            "dates": dates, "highs": highs, "lows": lows, "closes": closes, "volumes": vols}
+
+
+def compute_overextension_features(ohlcv_series):
+    """Per-ticker §4.3 overextension tier from a PIT-bearing OHLCV daily series (the producer's grouped-daily
+    reconstruction). Returns the `classify_overextension` result plus `disposition` ∈ {scored,
+    insufficient_data} and `pit`. ATR = the §6 price engine on the PIT-cut high/low/close; MA/vol/pattern =
+    `compute_overextension_metrics` on the closes/volumes; close = the last PIT close. A malformed / empty /
+    all-future series → insufficient_data ('none', never fabricated); a series too short for ATR (< the price
+    engine's window) also dispositions insufficient_data (classify honestly returns 'none' on a missing ATR).
+    Pure; no look-ahead (future points are PIT-cut before any metric is computed)."""
+    insufficient = {"overextension_state": "none", "strips_theme_score": False, "execution_flags": {},
+                    "conditions_met": 0, "condition_names": [], "disposition": "insufficient_data", "pit": None}
+    parsed = _parse_ohlcv_series(ohlcv_series)
+    if parsed is None:
+        return insufficient
+    closes, volumes = parsed["closes"], parsed["volumes"]
+    bars = [{"high": h, "low": l, "close": c} for h, l, c in zip(parsed["highs"], parsed["lows"], closes)]
+    a = price_engine_atr(bars)   # None if fewer than the price engine's ATR window → classify returns 'none'
+    result = classify_overextension({**compute_overextension_metrics(closes, volumes),
+                                     "close": closes[-1], "atr": a})
+    result["disposition"] = "scored" if (a is not None and a > 0.0) else "insufficient_data"
+    result["pit"] = {"as_of": parsed["as_of"].isoformat(), "session": parsed["session"],
+                     "adjustment_mode": parsed["adjustment_mode"], "n_points": len(closes)}
+    return result
