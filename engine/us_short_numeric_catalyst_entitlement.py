@@ -78,7 +78,13 @@ def _record_id(raw: Any, *, field: str) -> str:
 
 
 def _finite_number(raw: Any, *, field: str) -> float:
-    if not (isinstance(raw, (int, float)) and not isinstance(raw, bool) and math.isfinite(raw)):
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        raise ValueError(f"{field} must be a finite number")
+    try:
+        finite = math.isfinite(raw)
+    except OverflowError:   # an over-large raw FMP int → ValueError (caught by the caller's malformed-200 neutral fallback), never a leaked OverflowError
+        raise ValueError(f"{field} must be a finite number")
+    if not finite:
         raise ValueError(f"{field} must be a finite number")
     return float(raw)
 

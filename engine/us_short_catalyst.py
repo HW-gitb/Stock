@@ -73,8 +73,15 @@ class CatalystGovernanceError(Exception):
 
 
 def _is_finite_number(x):
-    """Strict: a real finite number — rejects bool, None, strings, NaN/Inf."""
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    """Strict: a real finite number — rejects bool, None, strings, NaN/Inf, and an over-large int (a raw
+    provider catalyst value, passed verbatim by catalyst_source, could carry one; math.isfinite() would
+    raise OverflowError → treated as non-finite here, never a bare crash)."""
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:
+        return False
 
 
 def _finite(x):

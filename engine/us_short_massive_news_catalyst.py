@@ -387,7 +387,10 @@ def _validate_news_events(news_events, *, expected_source_as_of):
 def _finite_block_value(value, *, name):
     if type(value) is not int and type(value) is not float:
         raise MassiveNewsCatalystSeamError(f"{name} must be exact int/float in [0,100]")
-    out = float(value)
+    try:
+        out = float(value)   # an over-large int → typed error (mirrors sibling seam_catalyst), not a bare OverflowError
+    except OverflowError:
+        raise MassiveNewsCatalystSeamError(f"{name} must be finite in [0,100]")
     if not math.isfinite(out) or out < _BLOCK_MIN or out > _BLOCK_MAX:
         raise MassiveNewsCatalystSeamError(f"{name} must be finite in [0,100]")
     return out

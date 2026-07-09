@@ -45,7 +45,7 @@ def classify_vix(value):
     (never guessed; an unknown VIX degrades the regime via fallback, it does not pass as 进攻)."""
     try:
         v = float(value)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):   # an over-large raw FMP VIX int → unknown, not a bare crash
         return UNKNOWN
     if not math.isfinite(v):
         return UNKNOWN

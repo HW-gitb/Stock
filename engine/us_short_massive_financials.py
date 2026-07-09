@@ -87,7 +87,12 @@ class MassiveFinancialsError(ValueError):
 
 
 def _is_finite_number(x: Any) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)   # an over-large raw line-item int → non-finite, not a bare OverflowError
+    except OverflowError:
+        return False
 
 
 def _valid_ymd(s: Any) -> bool:

@@ -8,6 +8,34 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short 还 cc_r1 两个工程债:huge-int 整类硬化[真吃 raw provider 的 6 引擎]+cost_floor 毛利→净利;overextension 查明需价格指标层、非快修保留)
+
+**Commits**: 本提交（huge-int 6 引擎硬化 + cost_floor 净利口径 + 回归测试）
+
+**Relationship to prior session(s)**:
+- Builds on 桌面 cc_r1 审查（C6 huge-int / C7 overextension / C8 cost_floor）+ 用户「修并更新桌面文档、只留未解决」。
+
+**Worked on**:
+1. **huge-int 整类硬化——按项目自己的"外科手术式范围"逻辑**：只硬化**真吃 raw provider 数据**的 6 个（`eligibility_gate`[Pass1 全宇宙、扇出最大]/`massive_financials`/`catalyst`/`numeric_catalyst_entitlement`/`massive_news_catalyst`/`regime.classify_vix`[VIX 从 FMP]），各按其返回契约加 `try/except OverflowError`（→False / →ValueError[被 caller 中性网接] / →typed error / →unknown）。**吃 0-100 值的 ~10 个引擎有意不动**（register 原文"consume engine-computed 0-100 values, unreachable by a raw huge-int"、上游已 clamp）——这批是项目早先归类失误漏掉的 raw-facing 子集（我 cc_r1 审出）。+专门回归测试文件 `test_us_short_huge_int_hardening.py`（7 测）。
+2. **cost_floor 毛利→净利**：`us_short_cost_floor.py` 的门从 `gross ≤ cost×mult` 改为 `net(=gross−cost) ≤ cost×mult`——引擎自己 module docstring（line 4）就写着设计口径是"净利润"，但代码写成 gross（内部自相矛盾的隐性 bug）。同步改函数 docstring；更新既有边界测试（`above` 案例在净利下应 BLOCK）+加 `test_gate_is_on_net_not_gross`。
+3. **overextension 查明=非快修、保留未解决**：它需要 `{ma5,ma10,ma20,vol_ratio,vertical_run,weak_retrace}`，而 v1 pipeline **一个都没算**（价格引擎只出 close/atr/effective_*）→ 接线 = 先建价格指标+形态检测层 = 真实功能刀（`weekend_action_table.py:18-20` 明文有意延后 batch5）。不半成品强接。
+
+**Key decisions**:
+- huge-int 不 harden 全部 ~16 个 `_finite`——尊重项目"raw-facing 才硬化、0-100-consuming 跳过"的已记录范围决定；只补它归类失误漏掉的 raw-facing 6 个。
+- cost_floor 用 `net = gross − cost` 对齐 §8 + 引擎自己的 module docstring。
+- overextension 不强接（缺价格指标层、是 batch5 计划刀）。
+- 提交但不 push（push 须显式命令）。
+
+**Alternatives considered and rejected**:
+- "把全部 ~16 个 `_finite` 都硬化" — 否决。0-100-consuming 的够不到 raw huge-int、项目已明文决定跳过；全改=过度、且违背 surgical scope。
+
+**Open questions handed off**:
+- cc_r1 剩余未解决项（桌面文档单源）：A1 官方 emit 端到端未跑通（明早）、A2 价格 SPOF+Massive 延迟、B3 prior 未校准、B4 VIX 未接线（已证可拿）、B5 复杂度、C6 overextension 需价格指标层、D 次要。
+
+**Next natural step from my view**:
+1. 明早盘前跑通官方 emit（[[project_us_short_freshday_fmp_test]]）。
+2. Codex 额度恢复后复审 capstone + 本轮 huge-int/cost_floor fix。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short capstone 首次真跑 shakedown:修 tz-aware observed_at 接缝;实证 FMP 日限已重置+grades/VIX 可拿、但 Massive 免费不给当天数据→全量跑留明早)
 
 **Commits**: 本提交（capstone tz-aware observed_at 修复 + 回归测试）

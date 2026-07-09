@@ -44,12 +44,23 @@ class CostFloorGateTests(unittest.TestCase):
         self.assertEqual(out["reason"], "profit_below_cost_floor")
 
     def test_boundary_is_inclusive_block(self):
-        # gross exactly == cost × COST_SAFETY_MULT → blocked (≤); just above → cleared
+        # §8 口径 = NET profit (gross − round-trip cost) exactly == cost × COST_SAFETY_MULT → blocked (≤); just
+        # above → cleared. cost=1, mult=3: block when net ≤ 3, i.e. gross ≤ 4; clear when gross > 4.
         cost = 1.0  # commission 1 + slippage 0 + spread 0
-        at = cf.apply_cost_floor(1, 10.0, 10.0 + cf.COST_SAFETY_MULT, 1.0, 0.0, 0.0)        # gross == threshold
-        above = cf.apply_cost_floor(1, 10.0, 10.0 + cf.COST_SAFETY_MULT + 0.5, 1.0, 0.0, 0.0)
-        self.assertEqual(at["status"], "observe", "gross == cost*mult must block")
+        at = cf.apply_cost_floor(1, 10.0, 10.0 + cost * (cf.COST_SAFETY_MULT + 1), 1.0, 0.0, 0.0)   # net == threshold
+        above = cf.apply_cost_floor(1, 10.0, 10.0 + cost * (cf.COST_SAFETY_MULT + 1) + 0.5, 1.0, 0.0, 0.0)
+        self.assertEqual(at["status"], "observe", "net == cost*mult must block")
         self.assertEqual(above["status"], "ok")
+
+    def test_gate_is_on_net_not_gross(self):
+        # regression (cc_r1): the gate is on NET profit, not gross. A gross between cost*mult and cost*(mult+1)
+        # would CLEAR on the (wrong) gross rule but must BLOCK on the (correct) net rule.
+        # cost=1, mult=3: gross 3.5 → net 2.5 ≤ 3 → block.
+        out = cf.apply_cost_floor(1, 10.0, 13.5, 1.0, 0.0, 0.0)
+        self.assertEqual(out["status"], "observe")
+        self.assertEqual(out["reason"], "profit_below_cost_floor")
+        # gross 5 → net 4 > 3 → clears (proves it's not just "always block")
+        self.assertEqual(cf.apply_cost_floor(1, 10.0, 15.0, 1.0, 0.0, 0.0)["status"], "ok")
 
     def test_malformed_inputs_fail_closed_to_block(self):
         base = dict(entry_price=10.0, tp1_price=12.0, commission_round_trip=1.0,

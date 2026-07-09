@@ -42,8 +42,8 @@ def round_trip_cost(commission_round_trip, slippage_dollars, spread_dollars):
 
 
 def apply_cost_floor(shares, entry_price, tp1_price, commission_round_trip, slippage_dollars, spread_dollars):
-    """P0 最小仓成本地板 (§8 line 224, 真拦单). If the expected gross profit to TP1
-    (shares × (tp1 − entry)) ≤ round-trip cost × COST_SAFETY_MULT, the order is BLOCKED — returns a hard
+    """P0 最小仓成本地板 (§8 line 224, 真拦单). If the expected NET profit to TP1
+    (shares × (tp1 − entry) − round-trip cost) ≤ round-trip cost × COST_SAFETY_MULT, the order is BLOCKED — returns a hard
     zero-share observe (`cost_inefficient_min_size`), NOT a tag on a live position. Fail-closed: malformed
     shares / non-positive prices / tp1 ≤ entry / an unverifiable round-trip cost all BLOCK the order (an
     unverifiable cost-efficiency must never place a live order). Returns
@@ -54,8 +54,8 @@ def apply_cost_floor(shares, entry_price, tp1_price, commission_round_trip, slip
     cost = round_trip_cost(commission_round_trip, slippage_dollars, spread_dollars)
     if sh is None or entry is None or entry <= 0.0 or tp1 is None or tp1 <= 0.0 or tp1 <= entry or cost is None:
         return _blocked("unverifiable_cost_inputs")
-    gross_profit_to_tp1 = sh * (tp1 - entry)
-    if gross_profit_to_tp1 <= cost * COST_SAFETY_MULT:
+    net_profit_to_tp1 = sh * (tp1 - entry) - cost   # §8 口径 = 净利润 (gross − round-trip cost), NOT gross
+    if net_profit_to_tp1 <= cost * COST_SAFETY_MULT:
         return _blocked("profit_below_cost_floor")
     return {"shares": sh, "status": "ok", "observe_reason_type": None, "reason": "cost_floor_cleared"}
 
