@@ -8,6 +8,42 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-iii-A：pure OHLCV grouped-reconstruct 保留 high/low + 单源 walk 重构)
+
+**Commits**: 本提交（`reconstruct_ohlcv_series_from_grouped` + `_reconstruct_from_grouped` 单源重构 + 5 测试 + register/CURRENT 更新）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2b-ii-B（离线 producer，`9f6ca91`）。用户「选1」= cut 2b-iii（gated OHLCV fetch）。我拆 gated 刀为 2b-iii-A（纯 reconstruct，本轮）/ 2b-iii-B（离线 fetch 接线）/ 2b-iii-C（真 Massive fetch，SR-PROVIDER-001）——先建离线安全半、真调用留授权。
+
+**Worked on**:
+1. **cut 2b-iii-A = pure OHLCV grouped-reconstruct** `engine/us_short_momentum_grouped_reconstruct.py`：新 `reconstruct_ohlcv_series_from_grouped` 把升序 grouped-daily 窗口重整为 per-ticker `{date,high,low,close,volume?}` OHLCV 序列（**保留 high/low** for ATR）。**单源重构**：抽 `_reconstruct_from_grouped(..., point_builder)` 共享 walk（升序轴/per-session dedup/canonical filter fail-closed），momentum 与 OHLCV 只 point-builder 不同→安全逻辑单源不漂移（避 sibling-drift 陷阱）。momentum `{date,close,volume}` 输出 **byte-identical**（既有测试守）。纯/离线（不 fetch）；overextension 引擎 `_parse_ohlcv_series` 仍单 PIT/clean 权威（raw h/l/c 透传）。
+2. 5 新测试（groups+保留 h/l / raw 透传 / 缺 h·l·c→gap / 共享 fail-closed 信封 / 端到端 `compute_overextension_features` 引擎兼容）+ 既有 7 momentum 测试守 refactor byte-identical。
+3. Verify：focused 12 OK、full offline `*us_short*` 3999 OK（零回归）。
+
+**Key decisions**:
+- **单源 `_reconstruct_from_grouped` 重构**（非在新模块复制 walk）——safety-critical 升序/dedup/canonical 逻辑双份=漂移风险（[[feedback_new_runner_recheck_recent_fixed_class]]）；共享 point_builder callback 是最小改动的单源解。
+- **保留 module 名 `us_short_momentum_grouped_reconstruct`**——改名=ripple（更新 momentum fetch/producer import）；docstring 泛化说明现服务两 shape。
+- **拆 gated 刀为 A/B/C**——2b-iii-A 纯 reconstruct 离线低危（无 agent）；2b-iii-B fetch 接线离线（fake-client + 强制 §6a）；2b-iii-C 真 Massive fetch（SR-PROVIDER-001 逐次授权）。先建离线半、真调用留用户显式授权（守 SR-PROVIDER-001 + 保 freshday FMP 额度）。
+- OHLCV point 需 high/low/close 全在才成 bar（ATR 需 h/l）；缺任一→gap 略过（不 zero-fill）；raw 值透传（引擎清洗）。
+- §6a：2b-iii-A 纯/离线、镜像已审 momentum reconstruct、byte-identical-guarded → LOW-RISK、integral-read + 反向控制、不起 agent；2b-iii-B fetch 接线起强制 agent。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「新模块复制 walk」— 否决。双份 safety walk = 漂移风险（反 B2 单源）；共享重构更好。
+- 「同刀改 line 244（fetch 保留 h/l）」— 否决。line 244 改只对 2b-iii-B fetch runner 有用（momentum reconstruct 忽略 h/l）；本刀纯 reconstruct、不碰 committed fetch runner、保刀独立。
+- 「rename module」— 否决（ripple）。
+
+**Pre-Codex self-review (A-F)**: A OHLCV point-builder 缺字段全类（缺 high/low/close 任一→gap 测覆盖）+ 共享 walk fail-closed（升序/dup/malformed 两 shape 同守）；B grep `reconstruct_series_from_grouped`/新符号=消费者 momentum fetch/producer 签名+输出不变（3999 OK）、docs 引用 momentum 函数仍准（内部 refactor）、新 OHLCV 函数无消费者（待 2b-iii-B）；C 反向=momentum byte-identical（refactor 无反向错）+ gap 略过 vs 透传 + fail-closed raise；D N-A；E CURRENT §0 加 settled delta（无 gate 词）+ header 日期；F `git diff --check` clean、2 文件 no-BOM/no-FFFD、无环导入（engine 模块 imports 不变）。Verify：12 focused + 3999 full OK。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **cut 2b-iii-B（离线 fetch 接线）**：line 244 保留 h/l（additive、momentum 不变）+ 经 2b-iii-A reconstruct 写 SEPARATE OHLCV packet（2b-ii-A schema）；fake-client 测试；起强制 §6a agent。
+- **cut 2b-iii-C（真 fetch）**：bounded Massive grouped-daily → 真 OHLCV packet 喂 2b-ii-B producer；SR-PROVIDER-001 逐次授权；用户显式 go-ahead 后跑。
+- §8 warning sizing follow-on；orchestrator map 铺 compose+分析行。
+- Codex 额度恢复后：本刀 + 前序从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. cut 2b-iii-B：fetch 接线（line 244 保留 h/l + OHLCV packet），起 §6a agent。
+2. 呈报 2b-iii-C bounded live fetch 计划 → 用户授权 → 跑。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-ii-B：full-universe overextension 离线 producer runner；§6a 独立对抗 agent 全 HELD)
 
 **Commits**: 本提交（`runners/us_short_batch5_full_universe_overextension_producer.py` + 16 provider 测试 + §6a agent PASS + register cut 2b-ii-B 闭环）

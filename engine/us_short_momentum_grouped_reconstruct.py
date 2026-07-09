@@ -1,5 +1,11 @@
 # -*- coding: utf-8 -*-
-"""US-short full-universe momentum: reconstruct per-ticker dated series from a grouped-daily window (pure).
+"""US-short full-universe: reconstruct per-ticker dated series from a grouped-daily window (pure).
+
+Two shapes share ONE mechanical group-by-ticker walk (`_reconstruct_from_grouped`, single-source so the
+ascending-axis / dedup / canonical-filter safety can never drift between them): the momentum
+`{date,close,volume}` series (`reconstruct_series_from_grouped`, the §4.2 engine input) and the §4.3
+overextension `{date,high,low,close,volume}` OHLCV series (`reconstruct_ohlcv_series_from_grouped`, cut 2b-iii,
+which RETAINS high/low for ATR). Only the per-row point fields differ; the walk + fail-closed envelope are identical.
 
 Design authority: docs/system_risk_register.md::R-USSHORT-BATCH5-FULL-UNIVERSE-MOMENTUM-PRODUCTION-MISSING.
 The universe fetch already proved the cheap grouped-daily path — ONE Massive call per trading day returns
@@ -42,24 +48,24 @@ def _require_nonempty_str(value: Any, *, field: str) -> str:
     return value
 
 
-def reconstruct_series_from_grouped(
+def _reconstruct_from_grouped(
     grouped_sessions: Any,
     *,
     tickers: Any,
     as_of: str,
     session: str,
     adjustment_mode: str,
+    point_builder,
 ) -> dict[str, dict[str, Any]]:
-    """Reshape an ascending grouped-daily window into per-ticker dated series for the momentum engine.
+    """Shared MECHANICAL group-by-ticker for both reconstruct shapes (single-source safety).
 
-    grouped_sessions: list of {"date": "YYYY-MM-DD", "rows": [{"ticker": str, "close": num, "volume": num?}]},
-        STRICTLY ascending + unique by date (a corrupt/duplicated session axis fails closed).
-    tickers: the requested identity set (Pass1-eligible + SPY/QQQ); canonicalized before matching.
-    Returns {canonical_ticker: {"as_of", "session", "adjustment_mode", "points": [{"date","close","volume"?}]}}
-        for every requested ticker that appears in >=1 session (a ticker in NO session is simply absent from
-        the result → the producer dispositions it as absent_from_pool). Raw close/volume pass through unvalidated
-        by design; the momentum engine is the single PIT/clean authority.
-    """
+    Validates the clock + ticker set, walks the ascending grouped window (STRICTLY ascending + unique by date;
+    dedup per session; filter to the wanted canonical set), and delegates the per-row point fields to
+    `point_builder(row) -> dict | None` (None omits the point as a gap, never zero-filled). `date` is added by the
+    walk. Raw values pass through unvalidated by design — the consuming engine (`_parse_dated_series` /
+    `_parse_ohlcv_series`) is the single PIT/clean authority. A requested ticker in NO session is absent from the
+    result (the producer dispositions it). A corrupt/duplicated session axis or a duplicate ticker within a
+    session fails closed."""
     _require_nonempty_str(as_of, field="as_of")
     if not _DATE_RE.match(as_of):
         raise MomentumGroupedReconstructError("as_of must be YYYY-MM-DD")
@@ -102,13 +108,10 @@ def reconstruct_series_from_grouped(
             if ct in seen_this_session:
                 raise MomentumGroupedReconstructError(f"duplicate ticker {ct} within grouped session {date}")
             seen_this_session.add(ct)
-            if "close" not in row or row["close"] is None:
-                # No close for this ticker on this date → a gap; omit the point (never zero-fill).
-                continue
-            point: dict[str, Any] = {"date": date, "close": row["close"]}
-            if "volume" in row and row["volume"] is not None:
-                point["volume"] = row["volume"]
-            points_by_ticker.setdefault(ct, []).append(point)
+            fields = point_builder(row)
+            if fields is None:
+                continue   # a gap (missing a required field for this ticker on this date) → omit, never zero-fill
+            points_by_ticker.setdefault(ct, []).append({"date": date, **fields})
 
     return {
         ticker: {
@@ -119,3 +122,57 @@ def reconstruct_series_from_grouped(
         }
         for ticker, points in points_by_ticker.items()
     }
+
+
+def _momentum_point_fields(row: dict[str, Any]) -> dict[str, Any] | None:
+    if "close" not in row or row["close"] is None:
+        return None   # No close for this ticker on this date → a gap.
+    fields: dict[str, Any] = {"close": row["close"]}
+    if "volume" in row and row["volume"] is not None:
+        fields["volume"] = row["volume"]
+    return fields
+
+
+def reconstruct_series_from_grouped(
+    grouped_sessions: Any,
+    *,
+    tickers: Any,
+    as_of: str,
+    session: str,
+    adjustment_mode: str,
+) -> dict[str, dict[str, Any]]:
+    """Reshape an ascending grouped-daily window into per-ticker `{date,close,volume?}` series for the momentum
+    engine (§4.2). See `_reconstruct_from_grouped` for the shared walk / fail-closed envelope; raw close/volume
+    pass through (the momentum engine is the single PIT/clean authority)."""
+    return _reconstruct_from_grouped(
+        grouped_sessions, tickers=tickers, as_of=as_of, session=session,
+        adjustment_mode=adjustment_mode, point_builder=_momentum_point_fields)
+
+
+def _ohlcv_point_fields(row: dict[str, Any]) -> dict[str, Any] | None:
+    # Need high/low/close ALL present to form a valid §4.3 OHLCV bar (ATR needs high/low); any missing → a gap,
+    # omit (never zero-fill). Raw values pass through — engine/us_short_overextension.py::_parse_ohlcv_series owns
+    # finiteness / positivity / high>=low cleaning + the PIT cut.
+    if row.get("close") is None or row.get("high") is None or row.get("low") is None:
+        return None
+    fields: dict[str, Any] = {"high": row["high"], "low": row["low"], "close": row["close"]}
+    if "volume" in row and row["volume"] is not None:
+        fields["volume"] = row["volume"]
+    return fields
+
+
+def reconstruct_ohlcv_series_from_grouped(
+    grouped_sessions: Any,
+    *,
+    tickers: Any,
+    as_of: str,
+    session: str,
+    adjustment_mode: str,
+) -> dict[str, dict[str, Any]]:
+    """Reshape an ascending grouped-daily window into per-ticker `{date,high,low,close,volume?}` OHLCV series for
+    the §4.3 overextension producer (cut 2b-iii). Identical MECHANICAL group-by as the momentum reconstruct but
+    RETAINS high/low (ATR needs them); raw values pass through (the overextension engine is the single PIT/clean
+    authority). A row missing high/low/close on a date → that date is a gap (omitted)."""
+    return _reconstruct_from_grouped(
+        grouped_sessions, tickers=tickers, as_of=as_of, session=session,
+        adjustment_mode=adjustment_mode, point_builder=_ohlcv_point_fields)

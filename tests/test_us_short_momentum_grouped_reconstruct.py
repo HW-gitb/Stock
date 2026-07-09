@@ -10,8 +10,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_momentum import compute_momentum_features  # noqa: E402
+from engine.us_short_overextension import compute_overextension_features  # noqa: E402
 from engine.us_short_momentum_grouped_reconstruct import (  # noqa: E402
     MomentumGroupedReconstructError,
+    reconstruct_ohlcv_series_from_grouped,
     reconstruct_series_from_grouped,
 )
 
@@ -116,6 +118,82 @@ class ReconstructSeriesFromGroupedTest(unittest.TestCase):
         self.assertIn("ret_1m", computed["features"])
         self.assertIn("ret_3m", computed["features"])
         self.assertGreater(computed["n_features"], 0)
+
+
+class ReconstructOhlcvSeriesFromGroupedTest(unittest.TestCase):
+    def _base_kwargs(self):
+        return {
+            "tickers": ["AAPL", "MSFT"],
+            "as_of": "2026-07-02",
+            "session": "regular",
+            "adjustment_mode": "split_dividend_adjusted",
+        }
+
+    def test_groups_rows_into_ascending_per_ticker_ohlcv_series_retaining_high_low(self):
+        grouped = [
+            _session("2026-06-30", [{"ticker": "AAPL", "high": 10.5, "low": 9.5, "close": 10.0, "volume": 100},
+                                    {"ticker": "MSFT", "high": 20.5, "low": 19.5, "close": 20.0, "volume": 200}]),
+            _session("2026-07-01", [{"ticker": "AAPL", "high": 11.5, "low": 10.5, "close": 11.0, "volume": 110}]),
+        ]
+        out = reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
+        self.assertEqual(out["AAPL"]["as_of"], "2026-07-02")
+        self.assertEqual(
+            out["AAPL"]["points"],
+            [
+                {"date": "2026-06-30", "high": 10.5, "low": 9.5, "close": 10.0, "volume": 100},
+                {"date": "2026-07-01", "high": 11.5, "low": 10.5, "close": 11.0, "volume": 110},
+            ],
+        )
+        self.assertEqual([p["date"] for p in out["MSFT"]["points"]], ["2026-06-30"])  # MSFT gap on 07-01
+
+    def test_raw_ohlcv_passes_through_unvalidated_engine_owns_cleaning(self):
+        # non-positive close / high<low are NOT rejected here (the overextension engine's _parse_ohlcv_series owns
+        # that); they pass through unchanged.
+        grouped = [_session("2026-07-01", [{"ticker": "AAPL", "high": 1.0, "low": 2.0, "close": -1.0}])]
+        out = reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
+        self.assertEqual(out["AAPL"]["points"], [{"date": "2026-07-01", "high": 1.0, "low": 2.0, "close": -1.0}])
+
+    def test_missing_high_low_or_close_is_omitted_as_a_gap(self):
+        grouped = [
+            _session("2026-07-01", [{"ticker": "AAPL", "high": 10.5, "low": 9.5, "close": 10.0}]),
+            _session("2026-07-02", [{"ticker": "AAPL", "low": 10.5, "close": 11.0}]),   # no high -> gap
+            _session("2026-07-03", [{"ticker": "AAPL", "high": 12.5, "close": 12.0}]),  # no low  -> gap
+            _session("2026-07-04", [{"ticker": "AAPL", "high": 13.5, "low": 12.5}]),    # no close -> gap
+            _session("2026-07-05", [{"ticker": "AAPL", "high": 14.5, "low": 13.5, "close": 14.0}]),
+        ]
+        out = reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
+        self.assertEqual([p["date"] for p in out["AAPL"]["points"]], ["2026-07-01", "2026-07-05"])
+        self.assertNotIn("volume", out["AAPL"]["points"][0])   # volume omitted when absent
+
+    def test_shares_the_fail_closed_envelope_with_momentum(self):
+        # the OHLCV reconstruct goes through the SAME _reconstruct_from_grouped walk, so the ascending-axis /
+        # dup-ticker / malformed-shape guards apply identically.
+        for dates in (["2026-07-02", "2026-07-01"], ["2026-07-01", "2026-07-01"]):
+            grouped = [_session(d, [{"ticker": "AAPL", "high": 2.0, "low": 1.0, "close": 1.5}]) for d in dates]
+            with self.assertRaises(MomentumGroupedReconstructError):
+                reconstruct_ohlcv_series_from_grouped(grouped, **self._base_kwargs())
+        dup = [_session("2026-07-01", [{"ticker": "AAPL", "high": 2.0, "low": 1.0, "close": 1.5},
+                                       {"ticker": "AAPL", "high": 3.0, "low": 2.0, "close": 2.5}])]
+        with self.assertRaises(MomentumGroupedReconstructError):
+            reconstruct_ohlcv_series_from_grouped(dup, **self._base_kwargs())
+
+    def test_reconstructed_ohlcv_is_overextension_engine_compatible(self):
+        # 25 ascending OHLCV sessions -> the overextension engine parses the reconstructed shape, computes ATR
+        # (needs high/low) + the tier (proves the retained high/low flows end-to-end into a real disposition).
+        grouped = [
+            _session(f"2026-05-{(i % 28) + 1:02d}" if i < 28 else f"2026-06-{(i - 28) + 1:02d}",
+                     [{"ticker": "AAPL", "high": 100.0 + i + 0.5, "low": 100.0 + i - 0.5,
+                       "close": 100.0 + i, "volume": 1000.0 + i}])
+            for i in range(25)
+        ]
+        out = reconstruct_ohlcv_series_from_grouped(
+            grouped, tickers=["AAPL"], as_of=grouped[-1]["date"], session="regular",
+            adjustment_mode="split_dividend_adjusted",
+        )
+        computed = compute_overextension_features(out["AAPL"])
+        self.assertEqual(computed["disposition"], "scored")
+        self.assertIn(computed["overextension_state"], ("none", "warning", "chasing_extreme"))
+        self.assertIsNotNone(computed["pit"])
 
 
 if __name__ == "__main__":
