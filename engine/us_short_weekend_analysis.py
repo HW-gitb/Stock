@@ -34,6 +34,7 @@ from engine.us_short_core_score import PRIMARY_PROFILE, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_forward_events import event_data_gap_status, forward_event_effect
 from engine.us_short_hard_veto import classify_hard_veto, row_source_to_context
+from engine.us_short_overextension import OVEREXTENSION_STATES
 from engine.us_short_price_engine import PRICE_SUB_MODES, holding_exit_engine, support_atr_engine
 from engine.us_short_regime import compute_market_risk_regime
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
@@ -68,6 +69,24 @@ def _resolve_candidate_sub_mode(requested, regime, defensive_breakout_probe_allo
     return "breakout", False
 
 
+def _validate_overextension(value):
+    """Validate an injected §4.3 overextension result (from the scoring-stage `build_overextension_projection`
+    map, threaded onto the row). None (absent — the ticker had insufficient data or wasn't scored) → None (no
+    signal, no-op). A PRESENT record must be a well-formed classify_overextension result — a legal
+    `overextension_state` + a dict `execution_flags` — else it fails CLOSED (缺数据≠安全; a malformed injected
+    record must not silently skip the execution lever). Returns the record or None."""
+    if value is None:
+        return None
+    if not isinstance(value, dict):
+        raise WeekendAnalysisError(f"overextension 须为 dict 或缺省: {value!r}")
+    if value.get("overextension_state") not in OVEREXTENSION_STATES:
+        raise WeekendAnalysisError(
+            f"overextension.overextension_state 非法（须 ∈ {list(OVEREXTENSION_STATES)}）: {value.get('overextension_state')!r}")
+    if not isinstance(value.get("execution_flags"), dict):
+        raise WeekendAnalysisError(f"overextension.execution_flags 须为 dict: {value.get('execution_flags')!r}")
+    return value
+
+
 def _analyze_one(row, regime):
     """Run the per-row evidence chain for one pre-assembled analysis row under the (already computed)
     market `regime`. Fail-closed on a malformed row shape / non-canonical ticker / unknown row_source /
@@ -84,15 +103,27 @@ def _analyze_one(row, regime):
 
     veto = classify_hard_veto(row.get("signals"), context)       # fail-closed on a non-dict signals object
 
+    # §4.3 overextension (computed at the scoring/producer stage, injected onto the row): the `warning` tier's
+    # execution_flags carry force_pullback — a candidate execution lever applied here; chasing_extreme carries NO
+    # execution_flags (its SELECTION theme-strip is the separate Slice B; the two tiers are mutually exclusive).
+    # A PRESENT-but-malformed record fails CLOSED; absent → no signal (no-op).
+    overext = _validate_overextension(row.get("overextension"))
+
     if context == "holding":
         price = holding_exit_engine(row.get("price_input"), regime, row.get("event_reference_price"))
-        sub_mode_resolved, sub_mode_downgraded = None, False
+        sub_mode_resolved, sub_mode_downgraded, overext_forced_pullback = None, False, False
     else:  # candidate
         requested_sub_mode = row["sub_mode"] if "sub_mode" in row else "pullback"   # absent → pullback default
         probe = row.get("defensive_breakout_probe_allowed", False)                 # absent → not allowed
         if not isinstance(probe, bool):   # a PRESENT probe assertion must be a real bool — surface a bad caller flag
             raise WeekendAnalysisError(f"defensive_breakout_probe_allowed 须为 bool 或缺省: {probe!r}")
         sub_mode_resolved, sub_mode_downgraded = _resolve_candidate_sub_mode(requested_sub_mode, regime, probe)
+        # §4.3 warning → 强制 pullback_mode 入场（不追突破）: an execution-side downgrade applied AFTER the §8
+        # defensive downgrade (both only ever force breakout→pullback, never the reverse — so composing them is safe).
+        overext_forced_pullback = (sub_mode_resolved == "breakout" and overext is not None
+                                   and overext["execution_flags"].get("force_pullback") is True)
+        if overext_forced_pullback:
+            sub_mode_resolved = "pullback"
         price = support_atr_engine(row.get("price_input"), regime, sub_mode_resolved)
 
     # §8.1 forward known-date events (sizing/risk/display only — never selection, never a hard veto).
@@ -153,6 +184,8 @@ def _analyze_one(row, regime):
         "price": price,
         "sub_mode_resolved": sub_mode_resolved,
         "sub_mode_downgraded": sub_mode_downgraded,
+        "overextension": overext,                       # §4.3 tier result (or None) — rides to the §11.3 overextension_state column (cut 2d)
+        "overextension_forced_pullback": overext_forced_pullback,
         "forward_event": forward,
         "event_data_gap": event_gap,
         "score": score,
@@ -176,6 +209,8 @@ def analyze_rows(rows, *, market_axis_regimes, prior_regime=None, prior_upgrade_
              "score_blocks": {"momentum","theme","catalyst"},   # §4.2; absent → no score
              "scoring_profile": <PROFILE_NAMES>,                # default balanced; unknown → fail closed
              # optional (any row):
+             "overextension": <classify_overextension result> | None,   # §4.3 injected from the scoring-stage
+                                                                        #   producer map; warning→force pullback
              "forward_event": {"event_type","days_to_event","window_days"?},  # §8.1; absent → None
              "event_sensitive_type": str, "has_event_data": bool,             # §8.1 data gap
              "event_reference_price": float}, ...]              # holding event clear reference (§6.1)

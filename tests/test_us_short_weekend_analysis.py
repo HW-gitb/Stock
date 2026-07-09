@@ -332,5 +332,75 @@ class RiskDowngradeWiring(unittest.TestCase):
         self.assertIsNone(row["score"])
 
 
+_OX_WARNING = {"overextension_state": "warning", "strips_theme_score": False,
+               "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True},
+               "conditions_met": 0, "condition_names": []}
+_OX_CHASING = {"overextension_state": "chasing_extreme", "strips_theme_score": True, "execution_flags": {},
+               "conditions_met": 3, "condition_names": ["vertical_run", "volume_climax", "far_above_all_mas"]}
+_OX_NONE = {"overextension_state": "none", "strips_theme_score": False, "execution_flags": {},
+            "conditions_met": 0, "condition_names": []}
+
+
+class OverextensionWiring(unittest.TestCase):
+    """cut 2c: the §4.3 overextension EXECUTION lever — `warning` forces pullback entry (no breakout chase), and
+    the tier result rides onto the evidence row for the §11.3 column (cut 2d). chasing_extreme's effect is the
+    SELECTION theme-strip (Slice B), NOT here — it carries no execution_flags, so no execution effect at this stage."""
+
+    def test_warning_forces_pullback_over_breakout(self):
+        # aggressive regime normally honors breakout; the §4.3 warning must force pullback (不追突破).
+        row = _run([_cand_row(sub_mode="breakout", overextension=_OX_WARNING)])["rows"][0]
+        self.assertEqual(row["sub_mode_resolved"], "pullback")
+        self.assertTrue(row["overextension_forced_pullback"])
+        self.assertEqual(row["price"]["action_fields"]["price_sub_mode"], "pullback")
+
+    def test_warning_on_pullback_request_is_noop(self):
+        row = _run([_cand_row(sub_mode="pullback", overextension=_OX_WARNING)])["rows"][0]
+        self.assertEqual(row["sub_mode_resolved"], "pullback")
+        self.assertFalse(row["overextension_forced_pullback"])   # already pullback → nothing to force
+
+    def test_chasing_extreme_has_no_execution_effect_here(self):
+        # chasing_extreme carries NO execution_flags (its theme-strip is Slice B) → a breakout is NOT forced down.
+        row = _run([_cand_row(sub_mode="breakout", overextension=_OX_CHASING)])["rows"][0]
+        self.assertEqual(row["sub_mode_resolved"], "breakout")
+        self.assertFalse(row["overextension_forced_pullback"])
+
+    def test_none_state_has_no_effect(self):
+        row = _run([_cand_row(sub_mode="breakout", overextension=_OX_NONE)])["rows"][0]
+        self.assertEqual(row["sub_mode_resolved"], "breakout")
+        self.assertFalse(row["overextension_forced_pullback"])
+
+    def test_state_rides_onto_candidate_row(self):
+        row = _run([_cand_row(overextension=_OX_WARNING)])["rows"][0]
+        self.assertEqual(row["overextension"], _OX_WARNING)
+
+    def test_state_rides_onto_holding_row_no_submode_effect(self):
+        row = _run([_hold_row(overextension=_OX_WARNING)])["rows"][0]
+        self.assertEqual(row["overextension"], _OX_WARNING)
+        self.assertIsNone(row["sub_mode_resolved"])              # holdings have no new-entry sub_mode
+        self.assertFalse(row["overextension_forced_pullback"])
+
+    def test_absent_overextension_is_none_noop(self):
+        row = _run([_cand_row(sub_mode="breakout")])["rows"][0]   # no overextension injected
+        self.assertIsNone(row["overextension"])
+        self.assertFalse(row["overextension_forced_pullback"])
+        self.assertEqual(row["sub_mode_resolved"], "breakout")
+
+    def test_warning_composes_with_defensive_downgrade(self):
+        # §8 defensive already downgrades breakout→pullback; the overextension warning is then a no-op force
+        # (both only ever force breakout→pullback — no conflict). Outcome: pullback, downgraded by §8.
+        row = _run([_cand_row(sub_mode="breakout", overextension=_OX_WARNING)], axes=_DEFENSIVE)["rows"][0]
+        self.assertEqual(row["sub_mode_resolved"], "pullback")
+        self.assertTrue(row["sub_mode_downgraded"])              # §8 defensive did the downgrade
+        self.assertFalse(row["overextension_forced_pullback"])  # already pullback before the overext check
+
+    def test_malformed_overextension_fails_closed(self):
+        for bad in ("not-a-dict", 42,
+                    {"overextension_state": "bogus", "execution_flags": {}},          # illegal state
+                    {"overextension_state": "warning", "execution_flags": "nope"},    # execution_flags not a dict
+                    {"execution_flags": {}}):                                          # missing state
+            with self.assertRaises(wa.WeekendAnalysisError):
+                _run([_cand_row(overextension=bad)])
+
+
 if __name__ == "__main__":
     unittest.main()

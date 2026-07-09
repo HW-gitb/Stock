@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2c：analyze warning→强制 pullback 执行侧杠杆 + state 落 evidence 行；§6a agent PASS)
+
+**Commits**: 本提交（`_analyze_one` overextension 消费 + warning→pullback + state ride + 9 测试 + §6a agent PASS + register）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2b-ii-A（schemas，`69a7232`）。用户选「cut 2c」——采纳我建议：跳过 runner 管道、先做行为接线（真 payoff、离线可测）。
+
+**Worked on**:
+1. **cut 2c = analyze 执行侧接线** `engine/us_short_weekend_analysis.py::_analyze_one`：新 `_validate_overextension`（消费注入的 overextension 结果、fail-closed：非 dict/非法 state/execution_flags 非 dict → raise；缺省 None → no-op）；候选行 `warning`.execution_flags.force_pullback 把 breakout→pullback（§4.3 不追突破），在 `_resolve_candidate_sub_mode`（§8 防御降级）之后（两者只 breakout→pullback、可安全叠加）；tier 结果 `overextension` + `overextension_forced_pullback` 落 evidence 行供 cut 2d 填列。**不碰 core_score/selection**（chasing 剥赛道分是 Slice B）。
+2. **§6a 独立对抗 agent PASS**：A 不改分/选（warning/chasing/none/absent 同票 core_score 逐字节相同）、B 只 breakout→pullback（穷举 4 regime×2 submode×2 probe×7 overext）、C malformed fail-closed（13 坏形全 raise）、D 与 §8 防御+probe 组合正确、E chasing 无执行效应+其余 flag 不在此消费——全 HELD。1 non-finding（伪造 chasing+force_pullback→fail-safe 强 pullback、producer 不可达、不值得把校验器耦合 classify 内部 tier↔flag 契约）已接受。
+3. Verify：focused 57 OK、full offline `*us_short*` 3946 OK（下游 machine record/action_table 零回归、列仍空待 cut 2d）。
+
+**Key decisions**:
+- 采纳「行为接线优先于 runner 管道」再排序：runner(2b-ii-B)/gated-fetch(2b-iii) 产真数据 map、但对当前跑不了 emit 的系统次一档；2c/2d/Slice B 才是「接线」真 payoff 且离线可测。用户选了 2c。
+- overextension 在 analyze 是 CONSUMED（注入 map）非 computed——符合「producer 早算、analyze 消费」架构；批4 注入、批5 orchestrator 从 producer map 铺行（batch4/5 seam）。
+- warning 只做 force-pullback（reduce_size/raise_rr 是后续 sizing 刀）；chasing 无执行 flag（其效应=选股剥分 Slice B）——照读 execution_flags.force_pullback 自然区分。
+- `_validate_overextension` 只验 shape 不验 tier↔flag 一致性（避免复述/耦合 classify 契约）；agent 证此边 fail-safe+producer 不可达。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「先做 cut 2b-ii-B runner」— 用户选了行为接线（2c）；runner 管道留后。
+- 「chasing_extreme 在 analyze 也强 pullback」— 否决。设计 chasing=选股层剥分、warning=执行侧；引擎已用 execution_flags 编码（chasing 空 flags）、照读即对；额外给 chasing 加执行效应=偏离设计。
+- 「harden `_validate_overextension` 验 tier↔flag 一致」— 暂否。会复述 classify 契约（反单源）；agent 证边 fail-safe+producer 不可达。
+
+**Pre-Codex self-review (A-F)**: A 消费全类（none/warning/chasing/absent/malformed×5）+ 组合（§8 防御/probe/极度防御）；B grep `_validate_overextension`/`overextension_forced_pullback`=仅 analysis+test；C 反向=chasing 无效应、none 无效应、absent no-op、pullback-request no-op、malformed raise；D N-A；E 无 route-doc 改（column 待 cut 2d）；F `git diff --check` clean、2 文件 no-BOM/no-FFFD、无环导入（overextension 不 import analysis）。Verify：57 focused + 3946 full OK + §6a agent PASS(A-E)。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Cut 2d：把 `overextension_state` 从 evidence 行 lift 到 §11.3 action_table 列（更新 `weekend_action_table.py:18`「无源留空」注）+ §10 no-dangling registry。
+- orchestrator 把 producer `overextension_by_ticker` map 铺到 analysis 行（batch5 live 半；批4 注入已通）。
+- Codex 额度恢复后：本 cut + 前序需独立复审。
+
+**Next natural step from my view**:
+1. Cut 2d：action_table `overextension_state` 列（lift + no-dangling）。
+2. Slice B：`compose_score_inputs` chasing→theme_off 剥赛道分（选股层）。runner(2b-ii-B)/gated-fetch(2b-iii) 产数据管道。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2b-ii-A：OHLCV packet + overextension summary 两份 schema 契约 + 19 schema 测试)
 
 **Commits**: 本提交（OHLCV packet schema + overextension summary schema + 19 schema 测试 + register）
