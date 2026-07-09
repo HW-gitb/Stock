@@ -134,7 +134,7 @@
           ]
         },
         "same_run_reconciliation": {
-          "const": "selection_inputs.per_ticker[ticker].core_score is composed from the same score_blocks and risk_downgrade carried to analysis_by_ticker[ticker]."
+          "const": "selection_inputs.per_ticker[ticker].core_score is composed from the same score_blocks, risk_downgrade, and scoring_profile carried to analysis_by_ticker[ticker]; a section 4.3 chasing_extreme ticker uses the theme_off profile on both the selection and analysis side so the one core_score per run invariant holds."
         }
       },
       "additionalProperties": false

@@ -7,14 +7,17 @@ from engine import us_short_seam_score as score_seam
 from engine import us_short_seam_theme as theme_seam
 from engine.us_short_catalyst import load_catalyst_governance
 from engine.us_short_catalyst_source import resolve_catalyst_signals
+from engine.us_short_core_score import core_score
 from engine.us_short_industry_heat import industry_heat_block
 from engine.us_short_momentum import momentum_block
+from engine.us_short_overextension import classify_overextension
 from engine.us_short_provisional_theme_heat import provisional_theme_heat_block
 from engine.us_short_risk_downgrade import risk_downgrade
 from engine.us_short_seam_catalyst import project_catalyst_block
 from engine.us_short_seam_momentum import project_momentum_block
 from engine.us_short_seam_theme import project_theme_block
-from engine.us_short_weekend_analysis import analyze_rows
+from engine.us_short_weekend_analysis import WeekendAnalysisError, analyze_rows
+from engine.us_short_weekend_pipeline import _select_top15
 from engine.us_short_seam_score import (
     BINDING_PATH,
     COMPONENT_KEYS,
@@ -461,6 +464,269 @@ class ScoreComposerBindingConformanceTest(unittest.TestCase):
                 "broker_or_order_execution": False,
             },
         )
+
+
+# ── §4.3 overextension chasing theme-strip (Slice B) ──────────────────────────────────────────
+def _chasing_record():
+    return {"overextension_state": "chasing_extreme", "strips_theme_score": True, "execution_flags": {}}
+
+
+def _warning_record():
+    return {"overextension_state": "warning", "strips_theme_score": False,
+            "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True}}
+
+
+def _none_record():
+    return {"overextension_state": "none", "strips_theme_score": False, "execution_flags": {}}
+
+
+def _overext_map(*, chasing=(), warning=(), targets=("AAPL", "MSFT", "TSLA")):
+    """A full-EXACT-coverage §4.3 overextension map over targets (compose requires exact coverage)."""
+    chasing, warning = set(chasing), set(warning)
+    out = {}
+    for ticker in targets:
+        if ticker in chasing:
+            out[ticker] = _chasing_record()
+        elif ticker in warning:
+            out[ticker] = _warning_record()
+        else:
+            out[ticker] = _none_record()
+    return out
+
+
+_AAPL_BLOCKS = {"momentum": 80.0, "theme": 90.0, "catalyst": 70.0}
+_TSLA_BLOCKS = {"momentum": 20.0, "theme": 40.0}
+
+
+class ScoreComposerOverextensionStripTest(unittest.TestCase):
+    def test_absent_map_is_identical_to_pre_strip_behavior(self):
+        # a full none-map strips nothing → byte-identical to passing no map at all (backward-compat)
+        self.assertEqual(_compose(), _compose(overextension_by_ticker=_overext_map()))
+
+    def test_chasing_strips_theme_off_and_zeros_theme_momentum(self):
+        out = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        per = out["selection_inputs"]["per_ticker"]
+
+        self.assertAlmostEqual(per["AAPL"]["core_score"], core_score(_AAPL_BLOCKS, "theme_off")["core_score"])
+        self.assertLess(per["AAPL"]["core_score"], 81.0)      # theme was boosting AAPL → strip lowers the score
+        self.assertEqual(per["AAPL"]["theme_momentum_score"], THEME_MOMENTUM_NEUTRAL_SCORE)   # no §4.5 theme seat
+        self.assertEqual(out["analysis_by_ticker"]["AAPL"]["scoring_profile"], "theme_off")   # reconciliation carry
+        # non-chasing tickers untouched (score, theme seat, and profile stay on the balanced track)
+        self.assertAlmostEqual(per["MSFT"]["core_score"], 45.0)
+        self.assertAlmostEqual(per["TSLA"]["core_score"], 34.5)
+        self.assertEqual(per["TSLA"]["theme_momentum_score"], 40.0)
+        self.assertEqual(out["analysis_by_ticker"]["TSLA"]["scoring_profile"], "balanced")
+        self.assertEqual(out["scoring_profile"], "balanced")   # top-level = the run's TRACK profile, not per-ticker
+
+    def test_strip_makes_core_score_independent_of_theme_block(self):
+        hot, cold = _theme_projection(), _theme_projection()
+        hot["theme_block_by_ticker"]["AAPL"] = 90.0
+        cold["theme_block_by_ticker"]["AAPL"] = 10.0
+        chasing = _overext_map(chasing=["AAPL"])
+        a = _compose(theme_projection=hot, overextension_by_ticker=chasing)
+        b = _compose(theme_projection=cold, overextension_by_ticker=chasing)
+        # theme weight is 0 under the strip → the theme block value cannot move a stripped ticker's core_score
+        self.assertAlmostEqual(a["selection_inputs"]["per_ticker"]["AAPL"]["core_score"],
+                               b["selection_inputs"]["per_ticker"]["AAPL"]["core_score"])
+
+    def test_none_and_warning_tiers_never_strip(self):
+        base = _compose()
+        for label, mp in (("none", _overext_map()),
+                          ("warning", _overext_map(warning=["AAPL", "MSFT", "TSLA"]))):
+            with self.subTest(tier=label):
+                # warning is the execution-side tier (cut 2c) — it KEEPS the theme score, no selection strip here
+                self.assertEqual(_compose(overextension_by_ticker=mp), base)
+
+    def test_multiple_chasing_tickers_all_strip(self):
+        out = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL", "TSLA"]))
+        per = out["selection_inputs"]["per_ticker"]
+        self.assertAlmostEqual(per["AAPL"]["core_score"], core_score(_AAPL_BLOCKS, "theme_off")["core_score"])
+        self.assertAlmostEqual(per["TSLA"]["core_score"], core_score(_TSLA_BLOCKS, "theme_off")["core_score"])
+        self.assertEqual(per["AAPL"]["theme_momentum_score"], THEME_MOMENTUM_NEUTRAL_SCORE)
+        self.assertEqual(per["TSLA"]["theme_momentum_score"], THEME_MOMENTUM_NEUTRAL_SCORE)
+        self.assertAlmostEqual(per["MSFT"]["core_score"], 45.0)   # untouched
+
+    def test_real_classify_output_shape_flows_through(self):
+        # positive control: a REAL classify_overextension chasing result (carries conditions_met / condition_names,
+        # not just the three consumed fields) must be consumed without drift.
+        real = classify_overextension({"close": 200.0, "atr": 5.0, "ma5": 150.0, "ma10": 140.0, "ma20": 130.0,
+                                       "vol_ratio": 3.0, "daily_change": 20.0, "vertical_run": True,
+                                       "weak_retrace": True})
+        self.assertEqual(real["overextension_state"], "chasing_extreme")
+        self.assertIs(real["strips_theme_score"], True)
+        mp = _overext_map()
+        mp["AAPL"] = real
+        out = _compose(overextension_by_ticker=mp)
+        self.assertAlmostEqual(out["selection_inputs"]["per_ticker"]["AAPL"]["core_score"],
+                               core_score(_AAPL_BLOCKS, "theme_off")["core_score"])
+
+
+class ScoreComposerOverextensionReconciliationTest(unittest.TestCase):
+    def test_chasing_analysis_recompute_matches_stripped_selection_no_fork(self):
+        composed = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        row = {
+            "ticker": "AAPL",
+            "row_source": "top15_candidate",
+            "signals": {},
+            "price_input": {"close": 101.0, "bars": []},
+            "selection_record": {
+                "selection_rank": 1,
+                "selection_bucket": "core_top",
+                **composed["selection_inputs"]["per_ticker"]["AAPL"],
+            },
+        }
+        row.update(composed["analysis_by_ticker"]["AAPL"])   # carries scoring_profile="theme_off"
+        analyzed = analyze_rows([row], market_axis_regimes=_AGGRESSIVE)["rows"][0]
+        # the 承重接缝: the analysis recompute uses theme_off → equals the stripped selection core_score, so the
+        # one-core_score-per-run invariant does NOT false-trigger (no WeekendAnalysisError raised).
+        self.assertAlmostEqual(analyzed["score"]["core_score"],
+                               composed["selection_inputs"]["per_ticker"]["AAPL"]["core_score"])
+        self.assertEqual(analyzed["score"]["profile"], "theme_off")
+
+    def test_induced_selection_analysis_strip_mismatch_is_caught(self):
+        # reverse control for the 承重接缝: if a chasing ticker were stripped at selection but a STALE UNSTRIPPED
+        # score reached selection_record, the 1e-6 fork assertion MUST fire — proving the reconciliation guard is
+        # LIVE, not merely non-triggering on the happy path (a disabled guard would pass the positive test above).
+        composed = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        row = {
+            "ticker": "AAPL",
+            "row_source": "top15_candidate",
+            "signals": {},
+            "price_input": {"close": 101.0, "bars": []},
+            "selection_record": {
+                "selection_rank": 1,
+                "selection_bucket": "core_top",
+                "core_score": 81.0,               # UNSTRIPPED balanced score — forks vs the theme_off recompute
+                "theme_momentum_score": 0.0,
+            },
+        }
+        row.update(composed["analysis_by_ticker"]["AAPL"])   # scoring_profile="theme_off" → recompute ~76.154
+        with self.assertRaises(WeekendAnalysisError):
+            analyze_rows([row], market_axis_regimes=_AGGRESSIVE)
+
+    def test_selection_details_carry_stripped_score_and_zeroed_theme_seat(self):
+        composed = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        top = _select_top15(["AAPL", "MSFT", "TSLA"], composed["selection_inputs"])
+        details = {d["ticker"]: d for d in top["selection_details"]}
+        self.assertAlmostEqual(details["AAPL"]["core_score"], core_score(_AAPL_BLOCKS, "theme_off")["core_score"])
+        self.assertEqual(details["AAPL"]["theme_momentum_score"], THEME_MOMENTUM_NEUTRAL_SCORE)
+
+    def test_strip_reorders_top15_ranking(self):
+        # the exact per_ticker values compose emits for a chasing AAPL whose theme was ranking it above MSFT
+        base = _select_top15(["AAPL", "MSFT"], {
+            "theme_opportunity_state": "strong",
+            "per_ticker": {"AAPL": {"core_score": 67.5, "theme_momentum_score": 100.0},
+                           "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}})
+        self.assertEqual([d["ticker"] for d in base["selection_details"]], ["AAPL", "MSFT"])
+        stripped = _select_top15(["AAPL", "MSFT"], {
+            "theme_opportunity_state": "strong",
+            "per_ticker": {"AAPL": {"core_score": 50.0, "theme_momentum_score": 0.0},
+                           "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}})
+        # stripped AAPL core 50.0 < MSFT 64.0 → MSFT now ranks first: the strip changed Top15 order
+        self.assertEqual([d["ticker"] for d in stripped["selection_details"]], ["MSFT", "AAPL"])
+
+    def test_zeroed_theme_momentum_loses_a_contended_theme_seat(self):
+        # 8 high-core names fill core_top(8); 8 low-core contenders vie for theme(7) seats (strong = 8+7 = 15) so
+        # the 16th is EXCLUDED. A borderline contender included on its theme_momentum is dropped when it is zeroed.
+        core_names = ["AAPL", "MSFT", "TSLA", "NVDA", "JPM", "BAC", "WFC", "XOM"]
+        contenders = ["CVX", "COP", "AMZN", "GOOGL", "META", "NFLX", "INTC", "ORCL"]
+        theme_mom = {"CVX": 60.0, "COP": 59.0, "AMZN": 58.0, "GOOGL": 57.0,
+                     "META": 56.0, "NFLX": 55.0, "INTC": 54.0, "ORCL": 53.0}
+        all_names = core_names + contenders
+
+        def inputs(nflx_theme):
+            per = {t: {"core_score": 90.0 - i, "theme_momentum_score": 0.0} for i, t in enumerate(core_names)}
+            for t in contenders:
+                per[t] = {"core_score": 50.0,
+                          "theme_momentum_score": (nflx_theme if t == "NFLX" else theme_mom[t])}
+            return {"theme_opportunity_state": "strong", "per_ticker": per}
+
+        unstripped = set(_select_top15(all_names, inputs(55.0))["admitted"])
+        stripped = set(_select_top15(all_names, inputs(0.0))["admitted"])
+        self.assertIn("NFLX", unstripped)        # wins a theme seat on its 55 theme_momentum
+        self.assertNotIn("ORCL", unstripped)     # 53 is the odd-one-out (16th)
+        self.assertNotIn("NFLX", stripped)       # zeroed theme_momentum → drops out of the 7 theme seats
+        self.assertIn("ORCL", stripped)          # ORCL takes the freed seat
+
+
+class ScoreComposerOverextensionFailClosedTest(unittest.TestCase):
+    def test_non_dict_map_rejected(self):
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=["AAPL"])
+
+    def test_non_dict_record_rejected(self):
+        mp = _overext_map()
+        mp["AAPL"] = "chasing_extreme"
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_illegal_overextension_state_rejected(self):
+        mp = _overext_map()
+        mp["AAPL"]["overextension_state"] = "parabolic"
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_non_bool_strips_theme_score_rejected(self):
+        for bad in ("true", 1, 0, 1.0, 0.0, None):   # ints/floats/str/None all non-bool → not a strip decision
+            with self.subTest(value=bad):
+                mp = _overext_map()
+                mp["AAPL"]["strips_theme_score"] = bad
+                with self.assertRaises(ScoreSeamError):
+                    _compose(overextension_by_ticker=mp)
+
+    def test_non_dict_execution_flags_rejected(self):
+        mp = _overext_map()
+        mp["AAPL"]["execution_flags"] = None
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_duplicate_canonical_ticker_rejected(self):
+        mp = _overext_map()
+        mp["aapl"] = _none_record()   # canonicalizes to AAPL → duplicate identity
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_missing_target_coverage_rejected(self):
+        mp = _overext_map()
+        del mp["MSFT"]
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_stray_ticker_outside_targets_rejected(self):
+        mp = _overext_map()
+        mp["NVDA"] = _none_record()   # not in the target set → exact-coverage violation
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+    def test_non_canonical_ticker_key_rejected(self):
+        mp = _overext_map()
+        mp["123!"] = _none_record()
+        with self.assertRaises(ScoreSeamError):
+            _compose(overextension_by_ticker=mp)
+
+
+class ScoreComposerThemeStripNonConflationTest(unittest.TestCase):
+    def test_whole_track_theme_off_shadow_vs_per_ticker_strip_are_distinct(self):
+        # §12.2 WHOLE-TRACK theme_off shadow: scoring_profile="theme_off", NO overextension map → ALL tickers use
+        # theme_off and the top-level + every analysis row reports theme_off.
+        whole = _compose(scoring_profile="theme_off")
+        self.assertEqual(whole["scoring_profile"], "theme_off")
+        for ticker in ("AAPL", "MSFT", "TSLA"):
+            self.assertEqual(whole["analysis_by_ticker"][ticker]["scoring_profile"], "theme_off")
+
+        # PER-TICKER strip within the balanced track: only the chasing ticker flips to theme_off; the run's track
+        # stays balanced (top-level + non-chasing rows), so the two mechanisms are not conflated.
+        per = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        self.assertEqual(per["scoring_profile"], "balanced")
+        self.assertEqual(per["analysis_by_ticker"]["AAPL"]["scoring_profile"], "theme_off")
+        self.assertEqual(per["analysis_by_ticker"]["MSFT"]["scoring_profile"], "balanced")
+        self.assertEqual(per["analysis_by_ticker"]["TSLA"]["scoring_profile"], "balanced")
+
+    def test_unknown_track_profile_fails_closed_even_when_all_chasing(self):
+        # the up-front profile gate must not be bypassable by an all-chasing run (every ticker → theme_off)
+        with self.assertRaises(ScoreSeamError):
+            _compose(scoring_profile="garbage",
+                     overextension_by_ticker=_overext_map(chasing=["AAPL", "MSFT", "TSLA"]))
 
 
 if __name__ == "__main__":

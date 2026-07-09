@@ -8,6 +8,47 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice B：compose_score_inputs chasing→theme_off 剥赛道分 + reconciliation 承重接缝；§6a 独立对抗 agent 全 HELD)
+
+**Commits**: 本提交（`compose_score_inputs` overextension_by_ticker 剥赛道分 + theme_off per-ticker profile reconciliation + binding const 更新 + 17 测试 + §6a agent PASS + register 闭环）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2d（列填充，`24cd748`）。用户「继续」→ Slice B（overextension 接线最后一半、选股侧、最高危）。**Realizes** register 的 Slice B 承重接缝：reconciliation 选 option (a)（分析侧也用 theme_off）但经既有 per-row `scoring_profile` 字段实现、**零改 `_analyze_one`**。
+
+**Worked on**:
+1. **Slice B = 选股层 chasing 剥赛道分** `engine/us_short_seam_score.py::compose_score_inputs`：新增可选注入 `overextension_by_ticker` map；对 `strips_theme_score`=True（chasing_extreme）的 target：core_score 改用 `theme_off` profile 重算（theme 权重→0、reallocate 到动量+催化=§4.3 退回 base，影响 Top15 排名）+ theme_momentum_score 清零（丢 §4.5 赛道席）+ 该票 `analysis_by_ticker.scoring_profile` 记为 theme_off。map fail-closed 校验（EXACT target 覆盖、镜像 risk/projection map）。新增 up-front `scoring_profile ∈ PROFILE_NAMES` 闸（防 all-chasing 绕过 profile 校验）。
+2. **承重接缝 reconciliation**：`_analyze_one` 断言 分析期 core_score==选择期 selection_record.core_score（差>1e-6 raise）。剥分后选择分变 theme_off；解法=同一 per-ticker effective profile 经既有 `_official_per_ticker_analysis`（`**row`）+`_build_analysis_rows` 铺到分析行→`_analyze_one` 用 theme_off 重算=剥后分→不误触发。深挖消费链确认 `_official_per_ticker_analysis` `**row` 保留 per-ticker profile、`_select_top15` 按 core_score 排名 + theme_momentum_score 定赛道席。
+3. **binding 契约同步**：`same_run_reconciliation` const（docs json + schema，逐字一致）更新，记 per-ticker `scoring_profile` 也承载 reconciliation。
+4. **§6a 独立对抗 agent（read-only/blackbox/自派不变式）攻最高危 core_score/排名改动**：A 无假剥 / B 剥分正确 / C reconciliation 承重接缝（真 seam 穿透+非整数浮点+不可制造 fork）/ D fail-closed（16 坏形全 raise）/ E profile 闸 all-chasing 不可绕 / F §12.2 不混淆 / G order-independence·frozen-gov 不可变·无 NaN/Overflow·fork 检测确实触发 —— **全 HELD**，0 P1/P2；3 P3 缺测 nit（均已正确行为），**2 个当刀补**（扩 non-bool 矩阵 + 「fork guard 确实触发」反向控制）。
+5. Verify：focused 33 OK、full offline `*us_short*` 3978 OK（零回归）。
+
+**Key decisions**:
+- reconciliation 选 option (a) 但经既有 per-row `scoring_profile` 字段实现 → `_analyze_one` **零改动**，最省、最不扩面、既有不变式天然成立。
+- 剥分键在显式 `strips_theme_score is True` 意图 flag（非从 state enum 再推导）——镜像 cut 2c 键 `execution_flags.force_pullback`；shape 校验但不复述 classify 的 tier↔flag 契约（单源）。
+- 用 `theme_off` 命名 profile（非删 theme 块+balanced）——theme_off 才是设计「退回动量+催化 base」；删块+balanced 会给 theme 中性 50@35% 权重、语义错。
+- overextension_by_ticker 可选默认 None（opt-in per call）——§12.2 shadow / 非 overextension 调用不传→不剥→shadow 纯净、不混淆。
+- **§8 warning sizing（reduce_size/raise_rr_gate）本刀不做**——属 §8 sizing 4d-ii-b 不同阶段（非 compose），拆出以隔离最高危 core_score 改动、保持一刀独立；cut 2c 已接 warning→force_pullback。
+- binding const 更新=material 契约（reconciliation 现依赖 per-ticker profile、旧串不完整会误导），非 over-touch。
+- §6a 第 3 个 P3（走真 `_official_per_ticker_analysis` 端到端）不补——与既有 `**row` 测试+agent C 探针重叠、避免 runner import、surgical。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「reconciliation 走 option (b)：selection_record 携剥后分、`_analyze_one` 读而非重算」— 否决。会弱化 fork 重算校验；option (a) 经既有字段更省且保留重算校验。
+- 「compose 里删 theme 块+用 balanced」— 否决（语义错：theme 中性 50@35% ≠ theme_off 的 0 权重 reallocate）。
+- 「§8 warning sizing 并入本刀」— 否决（跨阶段混一刀=代码重叠+放大最高危刀审查面；拆 follow-on）。
+- 「strip decision 也校验 tier↔flag 一致」— 否决（复述 classify 契约、反单源；agent 证键 `strips_theme_score` flag + shape 校验已 fail-safe）。
+
+**Pre-Codex self-review (A-F)**: A map 校验全类（非 dict map|record/非法 state/非 bool strips[str/int/float/None]/非 dict execution_flags/dup-canonical/missing/stray/非规范键）+ 多票剥 + profile 闸 all-chasing；B grep 旧 reconciliation 串=0 残留（仅 binding+schema 更新；test_us_short_weekend_analysis 命中是方法名非串字面）、新符号仅预期文件、4 处 compose 调用方默认 None 不变（3978 OK）；C 反向=none/warning/absent 不剥（byte-identical baseline）+ theme-independence + **fork guard 确实触发**（induced strip mismatch→raise 反向控制）；D N-A；E 无 route-doc 改、binding const 单源；F `git diff --check` clean、4 文件 no-BOM/no-FFFD、无环导入（seam→overextension→price_engine DAG）、up-front profile fail-closed。Verify：33 focused + 3978 full OK + §6a agent 全 HELD(A-G)。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- 剩 overextension **live 数据管道**：cut 2b-ii-B 硬化 runner（consume candidate+OHLCV packet→`build_overextension_projection`→projection+no-secret summary，起 §6a agent）+ cut 2b-iii gated fetch h/l 保留（SR-PROVIDER-001）。
+- §8 warning sizing（reduce_size/raise_rr_gate）follow-on 子刀（§8 4d-ii-b 阶段）。
+- orchestrator 把 producer `overextension_by_ticker` map 铺到 compose 调用（batch5 live 半；批4 注入已通）。
+- Codex 额度恢复后：Slice B + 前序 cut 需从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. Cut 2b-ii-B：硬化 runner（overextension projection 产出）。
+2. Cut 2b-iii gated fetch h/l 保留；§8 warning sizing 子刀。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2d：overextension_state §11.3 列填充 + §10 field_record 登记)
 
 **Commits**: 本提交（machine_record overextension_state field_record + action_table 列 lift + boundary validation + 10 测试 + register）
