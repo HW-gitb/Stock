@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2b-ii-A：OHLCV packet + overextension summary 两份 schema 契约 + 19 schema 测试)
+
+**Commits**: 本提交（OHLCV packet schema + overextension summary schema + 19 schema 测试 + register）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2b-i（producer 逻辑，`8f80101`）。用户「继续」→ cut 2b-ii runner+schemas。**Refines**: cut 2b-ii 拆 schema-first（2b-ii-A 契约 / 2b-ii-B runner / 2b-iii gated fetch）——~800 行 runner+2 schema 混一刀太大，按项目 schema-first 惯例先出契约。
+
+**Worked on**:
+1. **OHLCV packet schema**（`us_short_batch5_full_universe_ohlcv_series_packet.schema.json`）：镜像 momentum series packet，但 point 必带 high/low（ATR 需要）、无 SPY/QQQ benchmark（overextension = per-ticker 绝对信号、非相对强度）、series_by_ticker minProperties 1。envelope-strict/series-lenient（引擎是 PIT/clean 单权威）。
+2. **overextension summary schema**（`..._overextension_summary.schema.json`）：counts-only 无密（no ticker/price/raw/secret），记 disposition_counts{scored,insufficient_data} + state_counts{none,warning,chasing_extreme} 诚实档位 tally。
+3. 19 schema 测试（schema 自身 Draft7 meta-valid + 正例过 + point 缺 high/low 拒 + benchmark 残留拒 + 空 series 拒 + summary_path traversal/非白名单拒 + const 违规拒）。
+4. Verify：19 focused + full offline `*us_short*` 3937 OK。
+
+**Key decisions**:
+- schema-first 拆：2b-ii-A 契约（本轮）/ 2b-ii-B 硬化 runner / 2b-iii gated fetch h/l 保留——避免 800 行混刀、契约先定住 gated fetch 与 runner 的输入输出。
+- summary 加 state_counts{none/warning/chasing_extreme}：overextension 特有诚实 tally（周报可见多少 chasing/warning）。
+- §6a：纯 schema 契约无代码逻辑 → LOW-RISK、不起 agent；runner(2b-ii-B) 起强制 agent。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「schema+runner+tests 一刀（照 momentum producer）」— 否决。~800 行难审；schema-first 先出契约、runner 独立一刀。
+- 「不写独立 schema 测试（等 runner 测）」— 否决。拆了 runner 后 schema 无消费者/无测试；独立 schema 测试给契约即时覆盖（项目有大量此类）。
+
+**Pre-Codex self-review (A-F)**: A schema 拒集全类（缺必填 high/low、benchmark 残留 additionalProps、空 series、const 违规、summary_path 白名单+traversal、非 state 路径）；B grep 新 schema 名=仅 schema+test（runner 待建、无残留）；C 反向=正例过 + 各类坏例拒；E 无 route-doc 改（README 路由行待 runner 落地再加）；F `git diff --check` clean、3 文件 no-BOM/no-FFFD、两 schema JSON parse + Draft7 check_schema 过。Verify：19 + 3937 OK。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Cut 2b-ii-B runner：mirror momentum producer（去 benchmark、envelope 已在 pure producer）；起 §6a agent。
+- Cut 2b-iii：gated fetch h/l 保留（SR-PROVIDER-001）。
+- Codex 额度恢复后：本 schema 刀 + 前序 cut 需独立复审。
+
+**Next natural step from my view**:
+1. Cut 2b-ii-B：硬化 runner（consume candidate+OHLCV packet → `build_overextension_projection` → projection+no-secret summary）。
+2. Cut 2b-iii gated fetch；再 2c/2d/Slice B 行为接线。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2b-i：pool producer 逻辑 + §6a 独立对抗 agent 攻安全核心→揪 2 真 bug[inf-ATR disposition / weak_retrace 单日闸] 全修)
 
 **Commits**: 本提交（`build_overextension_projection` + 10 测试 + §6a agent P2/P3 修复 + 2 回归 + register）
