@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension Cut 3 orchestrator last-mile：data_context 把 producer map 铺进真 compose+分析 消费面；§6a 独立对抗 agent A-G 全 HELD)
+
+**Commits**: 本提交（data_context `_scope_overextension` + 3 compose site 接线 + `_official_per_ticker_analysis` tier 铺行 + 4 测试 + §6a agent PASS + register/CURRENT）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 2b-iii-C（真 OHLCV 抓取+首个真 projection，`732be5d`）。用户问「全量还没跑，last-mile 可以做吗」→ 我答「能、离线可做、不依赖全量」→ 用户「选1」→ 建 consumption seam。
+
+**Worked on**:
+1. **Cut 3 = orchestrator last-mile（consumption seam）** `runners/us_short_batch5_data_context.py`：新 `_scope_overextension(map, pass2_clean)` 把 producer 全 eligible map 收窄到 Pass2-clean **恰覆盖**（compose 要 exact coverage；None→None no-op；非 dict/缺 Pass2 target fail-closed）。3 个 compose site（core `_assemble_resolved_pass2_source_context` + 2 test-only builder）传 scoped map 进 `compose_score_inputs(overextension_by_ticker=…)`（chasing→theme_off 剥分，Slice B）。`_official_per_ticker_analysis` 把每票 tier 铺到分析行 `overextension` 字段（warning→`_analyze_one` 强制 pullback；chasing 在此 inert——其效应是选股剥分）。core 返回 2-tuple→3-tuple（加 scoped_overextension，2 caller 同步）。**零改 `compose_score_inputs`/`_analyze_one`**（option (a)：reconciliation 靠既有 per-row theme_off scoring_profile carry）。
+2. **§6a 独立对抗 agent 攻真选股/分析消费面**：A backward-compat byte-identical / B scoping load-bearing+fail-closed（un-scoped 超集被 compose 拒、scoping 修正；非 dict/缺 target/坏 record 全 raise）/ C strip 真达选股（`_select_top15` 赛道席翻转+core rank 重排）/ D reconciliation 承重接缝 holds+双向 desync 被抓 / E tier 铺行 chasing inert 无双罚 / F whole-class 3 site+3-tuple caller / G 无下游漂移（全 orchestrator E2E 落 §11.3 列+render 干净无泄漏）—— **A-G 全 HELD + X1-X6 额外探针，0 P1/P2/P3；surgical +162/-7**。
+3. Verify：29 focused OK（4 新）、full offline `*us_short*` 4009 OK（零回归）。
+
+**Key decisions**:
+- **消费 seam 离线可建、不依赖全量真跑**——batch5 assembly 全吃注入 projection、纯离线；注入 map fixture 即可测「chasing 真在选股层剥分」。
+- **`_scope_overextension` 收窄到 pass2_clean 恰覆盖**——producer map 全 eligible ⊋ pass2_clean、compose 要 exact；scoping 承重（agent B 证 un-scoped 超集被 compose 拒）。
+- **3 compose site 全接（whole-class）**——core + 2 test-only builder 共享 compose 模式；避未来路径漏剥（checklist A）。
+- **option (a)、零改消费者**——reconciliation 靠既有 per-row scoring_profile；last-mile 只 PROVIDE map。core 返回 3-tuple 让官方 assembler 铺 tier 到分析行；2 caller 同步（agent F 证不破）。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「caller 预 scope map」— 否决。assembly 内 scope 更省 caller（传 producer 全 map 即可）。
+- 「只接官方路径、不接 2 test-only builder」— 否决。whole-class 避未来漏；agent F 验两 builder 都剥。
+- 「改 `_analyze_one` 加 overextension 参数」— 否决（option (a) 已靠 scoring_profile；零改消费者更安全）。
+
+**Pre-Codex self-review (A-F)**: A `_scope_overextension` 全类（None/非 dict/缺 target）+ 3 site 全接 + `_official_per_ticker_analysis` tier+identity-collision guard；B grep 新符号=仅 data_context+test、2 个 3-tuple caller（763/830）+ per_ticker_analysis caller（845）全同步、无其他 caller、backward-compat（25 既有+全 pack 绿）；C 反向=None→无剥/无字段（byte-identical）+ chasing 剥 + warning 不剥 + fail-closed + reconciliation holds through analyze_rows（双向 desync 被抓）；D N-A；E CURRENT §0 更新（无 gate 词）；F `git diff --check` clean、2 文件 no-BOM/no-FFFD、无新 import 环。Verify：29 focused + 4009 full OK + §6a agent A-G 全 HELD。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **capstone integration**（overextension 剩的最后 provision）：weekly 一键 capstone 须真跑 OHLCV fetch（2b-iii-C）+ producer + 把 map 传给 data_context assembly（seam 已接受 map、但 capstone 尚未 produce+provide）。
+- §8 warning sizing follow-on 子刀。
+- 真周报里 chasing 可见剥分还需 FMP emit gate（另一 register 项 `R-USSHORT-BATCH5-FREE-TIER-PROVIDER-ACCESS-BLOCKS-OFFICIAL-EMIT`）。
+- Codex 额度恢复后：本会话 overextension 全链（Slice B / 2b-ii-B / 2b-iii-A/B/C / Cut 3）从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. capstone integration（OHLCV fetch+producer 接进 weekly 一键、产 map 喂 assembly）。
+2. §8 warning sizing 子刀。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension cut 2b-iii-C：真 Massive OHLCV 抓取[70/70] + 首个真过热分档 projection[scored 2400：none 1600 / warning 738 / chasing 66])
 
 **Commits**: 本提交（2 份 tracked no-secret summary：momentum-fetch summary[+OHLCV 字段] 更新 + overextension producer summary 新建；register/CURRENT 闭环）

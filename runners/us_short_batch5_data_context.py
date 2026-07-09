@@ -553,6 +553,26 @@ def assemble_data_context(
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
 
+def _scope_overextension(
+    overextension_by_ticker: dict[str, Any] | None, pass2_clean: list[str]
+) -> dict[str, Any] | None:
+    """Scope an injected §4.3 overextension producer map (keyed by ALL eligible) down to the Pass2-clean targets
+    EXACTLY, so `compose_score_inputs` receives exact-coverage (its `_validated_theme_strip_targets` requires it).
+    None → None (no strip; backward-compatible default). A non-dict map, or a Pass2-clean target missing from the
+    map, fails closed — pass2_clean ⊆ eligible ⊆ the producer map keys, so a miss is a wiring bug, not a data gap.
+    The per-ticker record's shape is validated downstream by compose (state / bool strips / dict execution_flags)."""
+    if overextension_by_ticker is None:
+        return None
+    if type(overextension_by_ticker) is not dict:
+        _fail("overextension_by_ticker must be a dict or None")
+    scoped: dict[str, Any] = {}
+    for ticker in pass2_clean:
+        if ticker not in overextension_by_ticker:
+            _fail(f"overextension_by_ticker is missing Pass2-clean target {ticker!r} (must cover every eligible)")
+        scoped[ticker] = overextension_by_ticker[ticker]
+    return scoped
+
+
 def assemble_data_context_with_analyst_grade_risk(
     *,
     candidate_artifact: dict[str, Any],
@@ -567,6 +587,7 @@ def assemble_data_context_with_analyst_grade_risk(
     pass2_sources: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
+    overextension_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context while deriving score risk from resolved FMP analyst-grade facts.
 
@@ -594,6 +615,7 @@ def assemble_data_context_with_analyst_grade_risk(
             catalyst_projection=catalyst_projection,
             risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
             theme_opportunity_state=theme_opportunity_state,
+            overextension_by_ticker=_scope_overextension(overextension_by_ticker, prepared["pass2_clean"]),
         )
     except (AnalystGradeRiskError, ScoreSeamError) as exc:
         raise DataContextAssemblyError(f"analyst-grade score composition rejected: {exc}") from exc
@@ -618,6 +640,7 @@ def assemble_data_context_with_massive_news_catalyst(
     pass2_sources: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
+    overextension_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context while deriving the catalyst block from resolved Massive news facts.
 
@@ -647,6 +670,7 @@ def assemble_data_context_with_massive_news_catalyst(
             catalyst_projection=catalyst_projection,
             risk_downgrade_by_ticker={ticker: risk_downgrade() for ticker in prepared["pass2_clean"]},
             theme_opportunity_state=theme_opportunity_state,
+            overextension_by_ticker=_scope_overextension(overextension_by_ticker, prepared["pass2_clean"]),
         )
     except (MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
         raise DataContextAssemblyError(f"Massive-news score composition rejected: {exc}") from exc
@@ -671,7 +695,8 @@ def _assemble_resolved_pass2_source_context(
     theme_opportunity_state: str,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
-) -> tuple[dict[str, Any], dict[str, Any]]:
+    overextension_by_ticker: dict[str, Any] | None = None,
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
     prepared = _prepare_context_inputs(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -680,6 +705,7 @@ def _assemble_resolved_pass2_source_context(
         pass2_sources={"offering_audit": offering_audit_source},
         catalyst_recall_feed=catalyst_recall_feed,
     )
+    scoped_overextension = _scope_overextension(overextension_by_ticker, prepared["pass2_clean"])
     try:
         analyst_projection = project_analyst_grade_risk_downgrade(
             target_tickers=prepared["pass2_clean"],
@@ -698,6 +724,7 @@ def _assemble_resolved_pass2_source_context(
             catalyst_projection=catalyst_projection,
             risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
             theme_opportunity_state=theme_opportunity_state,
+            overextension_by_ticker=scoped_overextension,
         )
     except (AnalystGradeRiskError, MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
         raise DataContextAssemblyError(f"resolved Pass2 source score composition rejected: {exc}") from exc
@@ -708,6 +735,7 @@ def _assemble_resolved_pass2_source_context(
     return (
         _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings),
         score_composition,
+        scoped_overextension,
     )
 
 
@@ -725,13 +753,14 @@ def assemble_data_context_from_resolved_pass2_sources(
     theme_opportunity_state: str,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
+    overextension_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context from already-resolved Pass2/provider fact layers.
 
     Pure/offline: no provider calls, raw persistence, DataHub, or second scoring formula. Offering audit
     owns Pass2 safety signals; analyst grades and Massive news are projected into the canonical score composer.
     """
-    data_context, _ = _assemble_resolved_pass2_source_context(
+    data_context, _, _ = _assemble_resolved_pass2_source_context(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
         eligibility_governance=eligibility_governance,
@@ -744,23 +773,33 @@ def assemble_data_context_from_resolved_pass2_sources(
         theme_opportunity_state=theme_opportunity_state,
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
+        overextension_by_ticker=overextension_by_ticker,
     )
     return data_context
 
 
-def _official_per_ticker_analysis(score_composition: dict[str, Any]) -> dict[str, dict[str, Any]]:
+def _official_per_ticker_analysis(
+    score_composition: dict[str, Any], scoped_overextension: dict[str, Any] | None = None
+) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for ticker, row in score_composition["analysis_by_ticker"].items():
         if type(row) is not dict:
             _fail(f"score_composition.analysis_by_ticker[{ticker}] must be an exact dict")
-        if set(row) & {"ticker", "row_source", "signals"}:
+        if set(row) & {"ticker", "row_source", "signals", "overextension"}:
             _fail(f"score_composition.analysis_by_ticker[{ticker}] must not pre-populate official row identity")
-        out[ticker] = {
+        official_row = {
             "ticker": ticker,
             "row_source": "top15_candidate",
             "signals": {},
             **row,
         }
+        if scoped_overextension is not None:
+            # §4.3 (cut 2c): the per-ticker overextension tier rides onto the analysis row so _analyze_one applies a
+            # `warning` force-pullback. A `chasing_extreme` tier is inert HERE (empty execution_flags) — its effect
+            # was the SELECTION theme-strip already applied in compose (Slice B), and this row already carries the
+            # theme_off scoring_profile that reconciles the stripped selection score.
+            official_row["overextension"] = scoped_overextension[ticker]
+        out[ticker] = official_row
     return out
 
 
@@ -779,6 +818,7 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     source_ref_paths: dict[str, Any],
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
+    overextension_by_ticker: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble official Batch4 data/provenance components from resolved local source artifacts.
 
@@ -787,7 +827,7 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     data_context seam; the later batch5->batch4 E2E cut supplies the remaining analysis inputs.
     """
     source_refs_by_role = _validated_source_ref_paths(source_ref_paths)
-    data_context, score_composition = _assemble_resolved_pass2_source_context(
+    data_context, score_composition, scoped_overextension = _assemble_resolved_pass2_source_context(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
         eligibility_governance=eligibility_governance,
@@ -800,8 +840,9 @@ def assemble_official_context_components_from_resolved_pass2_sources(
         theme_opportunity_state=theme_opportunity_state,
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
+        overextension_by_ticker=overextension_by_ticker,
     )
-    per_ticker_analysis = _official_per_ticker_analysis(score_composition)
+    per_ticker_analysis = _official_per_ticker_analysis(score_composition, scoped_overextension)
     if set(per_ticker_analysis) != set(data_context["selection_inputs"]["per_ticker"]):
         _fail("per_ticker_analysis must exactly cover selection_inputs.per_ticker")
 

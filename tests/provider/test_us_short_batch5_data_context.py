@@ -20,7 +20,9 @@ from engine.us_short_sec_offering_audit import (  # noqa: E402
     build_offering_audit_from_sec_submissions,
     resolve_offering_audit,
 )
+from engine.us_short_core_score import core_score  # noqa: E402
 from engine.us_short_seam_score import compose_score_inputs  # noqa: E402
+from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
 from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
@@ -321,6 +323,57 @@ def _family(*, row_count, price_bearing):
         "row_count": row_count,
         "source_refs": [{"role": "test_fixture", "path": "tests/provider/test_us_short_batch5_data_context.py"}],
     }
+
+
+def _overext_record(state):
+    if state == "chasing_extreme":
+        return {"overextension_state": "chasing_extreme", "strips_theme_score": True, "execution_flags": {}}
+    if state == "warning":
+        return {"overextension_state": "warning", "strips_theme_score": False,
+                "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True}}
+    return {"overextension_state": "none", "strips_theme_score": False, "execution_flags": {}}
+
+
+def _overext_map(*, chasing=(), warning=(), targets=("AAPL", "MSFT", "JPM")):
+    """A full §4.3 overextension producer map over the Pass1-eligible set (keys = ALL eligible; the data_context
+    _scope_overextension scopes it down to the Pass2-clean targets)."""
+    chasing, warning = set(chasing), set(warning)
+    return {t: _overext_record("chasing_extreme" if t in chasing else "warning" if t in warning else "none")
+            for t in targets}
+
+
+def _official_kwargs():
+    # 3 eligible; JPM is Pass2-excluded (partial offering coverage) → pass2_clean = {AAPL, MSFT}. theme=90 (>momentum
+    # 50) so the theme_off strip visibly lowers a chasing ticker's core_score; empty grades/news keep risk/catalyst clean.
+    return dict(
+        candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
+        expected_decision_date=_DECISION_DATE,
+        eligibility_governance=_gov(),
+        momentum_projection=_constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored"),
+        theme_projection=_constant_projection("theme_block_by_ticker", ("AAPL", "MSFT"), "scored_theme_base", score=90.0),
+        offering_audit_source=resolve_offering_audit(
+            as_of=_OFFERING_AS_OF,
+            filings_by_ticker={"AAPL": _offering_record([]), "MSFT": _offering_record([]),
+                               "JPM": _offering_record([], coverage="partial")}),
+        analyst_grade_actions=resolve_analyst_grade_actions(
+            as_of=_GRADE_AS_OF,
+            grades_by_ticker={"AAPL": _grade_source("AAPL", []), "MSFT": _grade_source("MSFT", [])}),
+        massive_news_events=resolve_news_events(
+            as_of=_NEWS_AS_OF,
+            news_by_ticker={"AAPL": _news_source("AAPL", []), "MSFT": _news_source("MSFT", [])}),
+        catalyst_governance=load_catalyst_governance(),
+        theme_opportunity_state="strong",
+        source_ref_paths={
+            "candidate_artifact_path": "state/us_short/test_candidate.json",
+            "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+            "momentum_projection_path": "state/us_short/test_momentum.json",
+            "theme_projection_path": "state/us_short/test_theme.json",
+            "offering_audit_source_path": "state/us_short/test_offering.json",
+            "analyst_grade_actions_path": "state/us_short/test_analyst.json",
+            "massive_news_events_path": "state/us_short/test_news.json",
+            "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+        },
+    )
 
 
 class Batch5DataContextAssemblyTest(unittest.TestCase):
@@ -1074,6 +1127,67 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         )
 
         self.assertEqual(out["as_of"], _DECISION_DATE)
+
+
+    def test_overextension_map_strips_chasing_theme_and_threads_tier_onto_analysis_rows(self):
+        # AAPL chasing (theme-strip, selection) + MSFT warning (execution-side, keeps theme). JPM is Pass2-excluded,
+        # so the producer map covers it but _scope_overextension drops it before compose.
+        base = assemble_official_context_components_from_resolved_pass2_sources(**_official_kwargs())
+        comps = assemble_official_context_components_from_resolved_pass2_sources(
+            **_official_kwargs(), overextension_by_ticker=_overext_map(chasing=["AAPL"], warning=["MSFT"]))
+
+        per = comps["data_context"]["selection_inputs"]["per_ticker"]
+        rows = comps["per_ticker_analysis"]
+        base_per = base["data_context"]["selection_inputs"]["per_ticker"]
+
+        # AAPL chasing: core_score recomputed under theme_off (strictly LOWER than the un-stripped run since theme was
+        # boosting it), theme_momentum zeroed, analysis row carries theme_off + the chasing tier.
+        self.assertAlmostEqual(per["AAPL"]["core_score"],
+                               core_score(rows["AAPL"]["score_blocks"], "theme_off")["core_score"])
+        self.assertLess(per["AAPL"]["core_score"], base_per["AAPL"]["core_score"])
+        self.assertEqual(per["AAPL"]["theme_momentum_score"], 0.0)
+        self.assertEqual(rows["AAPL"]["scoring_profile"], "theme_off")
+        self.assertEqual(rows["AAPL"]["overextension"]["overextension_state"], "chasing_extreme")
+
+        # MSFT warning: does NOT strip — core/theme_momentum/profile unchanged vs base; its analysis row carries the
+        # warning tier with the execution flags _analyze_one consumes.
+        self.assertAlmostEqual(per["MSFT"]["core_score"], base_per["MSFT"]["core_score"])
+        self.assertEqual(per["MSFT"]["theme_momentum_score"], base_per["MSFT"]["theme_momentum_score"])
+        self.assertEqual(rows["MSFT"]["scoring_profile"], "balanced")
+        self.assertEqual(rows["MSFT"]["overextension"]["overextension_state"], "warning")
+        self.assertIs(rows["MSFT"]["overextension"]["execution_flags"]["force_pullback"], True)
+
+    def test_overextension_reconciliation_holds_through_analyze_rows(self):
+        # the 承重接缝 end-to-end through the REAL data_context: the chasing analysis row (theme_off) + its selection
+        # record (the stripped selection score) run through analyze_rows WITHOUT the 1e-6 same-run-fork raise.
+        comps = assemble_official_context_components_from_resolved_pass2_sources(
+            **_official_kwargs(), overextension_by_ticker=_overext_map(chasing=["AAPL"]))
+        per = comps["data_context"]["selection_inputs"]["per_ticker"]["AAPL"]
+        row = {
+            **comps["per_ticker_analysis"]["AAPL"],
+            "price_input": {"close": 101.0, "bars": []},
+            "selection_record": {"selection_rank": 1, "selection_bucket": "core_top", **per},
+        }
+        analyzed = analyze_rows(
+            [row], market_axis_regimes={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"})["rows"][0]
+        self.assertEqual(analyzed["score"]["profile"], "theme_off")
+        self.assertAlmostEqual(analyzed["score"]["core_score"], per["core_score"])
+
+    def test_no_overextension_map_leaves_rows_without_overextension_field(self):
+        comps = assemble_official_context_components_from_resolved_pass2_sources(**_official_kwargs())
+        for ticker in ("AAPL", "MSFT"):
+            self.assertNotIn("overextension", comps["per_ticker_analysis"][ticker])
+            self.assertEqual(comps["per_ticker_analysis"][ticker]["scoring_profile"], "balanced")
+
+    def test_overextension_map_missing_pass2_target_or_non_dict_fails_closed(self):
+        bad = _overext_map(chasing=["AAPL"])
+        del bad["MSFT"]   # MSFT is Pass2-clean but missing from the map → wiring bug → fail closed
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_official_context_components_from_resolved_pass2_sources(
+                **_official_kwargs(), overextension_by_ticker=bad)
+        with self.assertRaises(DataContextAssemblyError):
+            assemble_official_context_components_from_resolved_pass2_sources(
+                **_official_kwargs(), overextension_by_ticker=["AAPL"])
 
 
 if __name__ == "__main__":
