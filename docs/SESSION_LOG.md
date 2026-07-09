@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2b-i：pool producer 逻辑 + §6a 独立对抗 agent 攻安全核心→揪 2 真 bug[inf-ATR disposition / weak_retrace 单日闸] 全修)
+
+**Commits**: 本提交（`build_overextension_projection` + 10 测试 + §6a agent P2/P3 修复 + 2 回归 + register）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2a（producer 入口，`1088c056`）。用户「继续」→ cut 2b 离线 producer 半。
+
+**Worked on**:
+1. **Cut 2b-i = pool producer** `engine/us_short_overextension_producer.py::build_overextension_projection`：遍历 eligible 逐票 `compute_overextension_features` → `overextension_by_ticker` map + disposition_counts。ENVELOPE fail-closed（镜像 momentum `_canonical_series_by_ticker`）：stray/dup/非规范 ticker、clock mismatch（as_of/session/adj）= 伪造/look-ahead → raise；absent/thin = insufficient_data（不 raise）。10 测试（含 future-as_of forgery guard）。**故意先只做 pure 逻辑**（不做重 runner）、mirror momentum engine-vs-runner 拆分——runner+schemas+gated fetch = cut 2b-ii。
+2. **§6a 独立对抗 agent（black-box、read-only）攻累积安全核心**（cut 2a PIT-parse + 2b-i envelope）：look-ahead / forged-packet / fail-closed **三不变式全 HELD**（~40 恶意输入 + 边界全试）；揪 **2 真 bug 全修 + 加 agent 原始 repro 回归**：
+   - **P2**：`compute_overextension_features` 把「伪造巨高→ATR 溢出 inf」误标 `scored`（`inf>0` True 但 classify `_finite(inf)=None`→'none'，disposition 与 classify 打架、污染 scored_count）。修：`_finite` 再收 ATR，disposition⟺classify 一致。
+   - **P3**：单日末尾跳空虚触 `weak_retrace` → 3 条件 → chasing_extreme，违设计「绝不因单条件误判」+ docstring。修：`weak_retrace` 要求涨幅在末棒之前就存在（`WEAK_RETRACE_MIN_RUNUP_EX_LAST`），单日跳空不再算「弱回撤结构」。
+3. Verify：focused 53 OK、full offline `*us_short*` 3918 OK。
+
+**Key decisions**:
+- P2/P3 judge-before-execute：均真 bug、在 scope（overextension 特性内、含已提交 cut1/2a）、修法正确 → 一并修。P2 contained（forged-only、不 fabricate/crash）；P3 defeats 特性本意（误杀强单日票）+ doc↔behavior 不一致 → 都值得修。
+- cut 2b split：2b-i pure 逻辑（本轮）/ 2b-ii 重 runner+schemas+gated fetch——避免 ~600 行 runner 混一刀，mirror momentum engine/runner 拆分。
+- §6a agent 现在就跑（不等 wiring 刀）：安全核心（PIT+envelope）已成型 + 我 solo 无 Codex → 先独立验安全核心；wiring 刀（2b-ii/2c/Slice B）仍各起强制 agent。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「cut 2b 直接建全 runner」— 否决。~600 行硬化 runner+2 schema 混一刀太大难审；pure 逻辑先独立可测。
+- 「P3 只当 forward-calibration 记 note 不修」— 否决。设计硬意图「绝不因单条件误判」+ docstring「single move alone never triggers」被证伪 = doc↔behavior 不一致 + 误杀强单日票，真 bug 非仅调参。
+
+**Pre-Codex self-review (A-F)**: A envelope 全类（stray/dup/非规范/clock-mismatch/malformed-present/absent-honest）+ P2/P3 修均加回归；B grep `build_overextension_projection`/`OverextensionProducerError`=仅 producer engine+test 零外引；C 反向=absent 不 raise vs forged raise、单日跳空 not-chasing（P3 reverse）、inf-ATR insufficient（P2 reverse）；E 无 route-doc 改；F `git diff --check` clean、4 文件 no-BOM/no-FFFD、`_finite` 收 inf-ATR、无环导入。Verify：53 focused + 3918 full OK。§6a 独立 agent HELD 三不变式 + 2 bug 已修。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Cut 2b-ii：重 runner（mirror momentum producer）+ OHLCV packet/summary schema + gated fetch h/l 保留；起 §6a agent。
+- Codex 额度恢复后：cut 2b-i + P2/P3 修 + 那次 grouped 探针需独立复审。
+
+**Next natural step from my view**:
+1. Cut 2b-ii：OHLCV packet schema + 硬化 runner + gated fetch h/l 保留。
+2. Cut 2c（analyze warning→pullback + state）、2d（列）、Slice B（`compose_score_inputs` chasing→theme_off）。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2a：OHLCV PIT-series→tier producer 入口 + 架构修正 + 1-call Massive grouped 探针证 high/low 可得)
 
 **Commits**: 本提交（`compute_overextension_features` + `_parse_ohlcv_series` PIT + 11 测试 + register 架构修正）

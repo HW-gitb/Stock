@@ -115,6 +115,9 @@ VERTICAL_RUN_DAYS = 4         # vertical_run = this many consecutive strictly-up
                               #   gate in the classifier supplies specificity, so a moderate run signal is fine
 WEAK_RETRACE_WINDOW = 10      # window for the retracement-structure check ("回撤结构差")
 WEAK_RETRACE_MIN_RUNUP = 0.10 # only a REAL run-up qualifies: net window gain must be >= this
+WEAK_RETRACE_MIN_RUNUP_EX_LAST = 0.05  # ...AND the run-up must EXIST before the final bar (window[0]→[-2] >= this),
+                                       #   so a lone last-day gap-up is NOT a weak-retrace STRUCTURE — a single
+                                       #   move alone must never reach chasing_extreme (§4.3 绝不因单条件误判)
 WEAK_RETRACE_MAX_DRAWDOWN = 0.05  # ...AND the deepest pullback from any running peak stayed < this (shallow retrace)
 
 
@@ -171,17 +174,21 @@ def _vertical_run(closes):
 
 def _weak_retrace(closes):
     """True iff over the last WEAK_RETRACE_WINDOW closes the stock ran up (net gain >= WEAK_RETRACE_MIN_RUNUP)
-    AND the deepest pullback from any running peak stayed shallow (< WEAK_RETRACE_MAX_DRAWDOWN) — a weak
-    retracement structure (parabolic exhaustion risk). A flat/quiet window (no run-up) is NOT weak_retrace, so a
-    non-extended name never trips it. Needs WEAK_RETRACE_WINDOW strictly-positive finite closes, else False."""
+    over a SUSTAINED structure — the run-up must already exist before the final bar (window[0]→[-2] >=
+    WEAK_RETRACE_MIN_RUNUP_EX_LAST) AND the deepest pullback from any running peak stayed shallow (<
+    WEAK_RETRACE_MAX_DRAWDOWN). A flat/quiet window (no run-up) OR a lone last-day gap-up (no run-up before the
+    final bar) is NOT weak_retrace — so a single move alone never contributes this parabolic condition (§4.3
+    绝不因单条件误判). Needs WEAK_RETRACE_WINDOW strictly-positive finite closes, else False."""
     w = WEAK_RETRACE_WINDOW
     if len(closes) < w:
         return False
     window = [_finite(c) for c in closes[-w:]]
     if any(v is None or v <= 0.0 for v in window):
         return False
-    if window[-1] / window[0] - 1.0 < WEAK_RETRACE_MIN_RUNUP:   # only a real run-up can be "weak retrace"
+    if window[-1] / window[0] - 1.0 < WEAK_RETRACE_MIN_RUNUP:            # only a real net run-up can be "weak retrace"
         return False
+    if window[-2] / window[0] - 1.0 < WEAK_RETRACE_MIN_RUNUP_EX_LAST:    # ...that EXISTS before the final bar —
+        return False                                                    # a lone last-day gap-up is not a structure
     peak, max_dd = window[0], 0.0
     for c in window:
         if c > peak:
@@ -295,7 +302,11 @@ def compute_overextension_features(ohlcv_series):
         return insufficient
     closes, volumes = parsed["closes"], parsed["volumes"]
     bars = [{"high": h, "low": l, "close": c} for h, l, c in zip(parsed["highs"], parsed["lows"], closes)]
-    a = price_engine_atr(bars)   # None if fewer than the price engine's ATR window → classify returns 'none'
+    # `_finite` re-contains the ATR: it is None when the series is too short for the price engine's window, AND
+    # when a forged/huge high overflows the TR sum to inf (atr() sums finite TRs but the sum can overflow AFTER
+    # each input passed `_finite`). Re-containing here makes the disposition + classify AGREE ("scored" ⟺ a real
+    # FINITE ATR classification ran) — else `inf > 0` would mislabel an unclassifiable ticker "scored".
+    a = _finite(price_engine_atr(bars))
     result = classify_overextension({**compute_overextension_metrics(closes, volumes),
                                      "close": closes[-1], "atr": a})
     result["disposition"] = "scored" if (a is not None and a > 0.0) else "insufficient_data"

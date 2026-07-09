@@ -274,6 +274,23 @@ class OverextensionFeaturesTests(unittest.TestCase):
         self.assertEqual(out["overextension_state"], "chasing_extreme")
         self.assertNotIn("volume_climax", out["condition_names"])
 
+    def test_single_last_day_gap_up_is_not_chasing(self):
+        # §6a-agent P3 regression: a benign flat history + ONE big last-day gap-up must NOT reach
+        # chasing_extreme (design: a single move alone never triggers it). weak_retrace must not fire on a lone
+        # final jump (no run-up before the last bar). It may be `warning` (execution-side), never chasing.
+        out = ox.compute_overextension_features(_ohlcv([100.0] * 21 + [130.0], [1_000_000.0] * 22))
+        self.assertNotEqual(out["overextension_state"], "chasing_extreme")
+
+    def test_atr_overflow_to_inf_dispositions_insufficient_not_scored(self):
+        # §6a-agent P2 regression: a forged near-max high overflows the ATR sum to inf; the disposition must
+        # NOT claim "scored" (align with classify's _finite(atr) → 'none'), so producer tallies stay honest.
+        big = 1.7e308
+        pts = [{"date": _dt(i), "high": big, "low": 1.0, "close": 1.0, "volume": 1_000_000.0} for i in range(16)]
+        s = {"as_of": _dt(15), "session": "RTH", "adjustment_mode": "split_adjusted", "points": pts}
+        out = ox.compute_overextension_features(s)
+        self.assertEqual(out["disposition"], "insufficient_data")
+        self.assertEqual(out["overextension_state"], "none")
+
     # ---- PIT / look-ahead (the load-bearing safety) ----
     def test_future_parabola_does_not_leak_no_look_ahead(self):
         # ≤as_of is BENIGN; the parabolic spike lives ONLY in future (> as_of) points → must classify none.
