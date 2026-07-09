@@ -15,9 +15,9 @@ cells. This slice projects the rich machine layer onto the flat §11.3 columns s
     valid_entry_high / order_type / stop_clear_price / take_profit_* / risk_reward_ratio / price_engine_used /
     price_sub_mode / …) — each key that is a frozen §11.3 column is lifted onto the row;
   * `sizing.desired_model_shares` (a real sized build) → `model_position_size_shares`.
-  Columns with NO v1 pipeline source (macro_cluster / overextension_state / coverage_status /
-  live_permission_status / model_position_size_amount / …) are deliberately left EMPTY — honest, not fabricated
-  (they land in batch5 / the §11.2 assembly / later forward calibration).
+  Columns with NO v1 pipeline source (macro_cluster / coverage_status / …) are deliberately left EMPTY —
+  honest, not fabricated (they land in batch5 / the §11.2 assembly / later forward calibration).
+  `overextension_state` is now populated from the §4.3 tier (cut 2d) when the row carries it.
 
 Because the projection makes price.action_fields the OFFICIAL §11.3 cells, the lift boundary VALUE-validates the
 §6 price-engine contract (`_validate_price_projection`) BEFORE lifting: any present price/ratio column must be
@@ -41,6 +41,7 @@ from engine.us_short_action_table_renderer import action_table_columns, render_a
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import row_source_to_context
 from engine.us_short_no_dangling_validator import validate_official_machine_record
+from engine.us_short_overextension import OVEREXTENSION_STATES
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_weekend_decision import action_price_error, action_reason_error
@@ -160,6 +161,13 @@ def _flatten_row(row, ct):
         flat["selection_bucket"] = sel_rec["selection_bucket"]
     elif sel_rec is not None:
         raise WeekendActionTableError(f"{ct}: 非 Top15 持仓行不得带 selection_record（伪造拒）: {sel_rec!r}")
+
+    # §4.3 overextension_state (cut 2d): lift the tier onto its §11.3 column from the row's overextension result
+    # (validated at the machine-record boundary; the flattened record's design-locked-enum re-check also gates
+    # the value). Absent / malformed → the column stays empty (honest, never fabricated).
+    ox = row.get("overextension")
+    if isinstance(ox, dict) and ox.get("overextension_state") in OVEREXTENSION_STATES:
+        flat["overextension_state"] = ox["overextension_state"]
     return flat
 
 

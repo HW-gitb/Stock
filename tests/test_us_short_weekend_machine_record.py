@@ -558,5 +558,56 @@ class RiskDowngradeLanding(unittest.TestCase):
             mr.assemble_machine_record(_ranked([bad]), as_of=_AS_OF)
 
 
+_OX_WARNING = {"overextension_state": "warning", "strips_theme_score": False,
+               "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True},
+               "conditions_met": 0, "condition_names": []}
+
+
+class OverextensionFieldRecord(unittest.TestCase):
+    """cut 2d: a row carrying a §4.3 overextension result emits an `overextension_state` §10 field_record that
+    lands on its own §11.3 column as an advisory tag (its execution effect is via the `price` record); a
+    malformed present record fails closed; absent → no field_record."""
+
+    def _with_ox(self, ox):
+        r = _row()
+        r["overextension"] = ox
+        return mr.assemble_machine_record(_ranked([r]), as_of=_AS_OF)
+
+    def test_field_record_emitted_lands_on_column_and_clean(self):
+        rec = self._with_ox(_OX_WARNING)   # assemble_machine_record raises unless §10-clean, so success = clean
+        self.assertIn("overextension_state", _ids(rec))
+        fr = _fr_by_id(rec, "overextension_state")
+        self.assertEqual(fr["operation_impact"], "仅标签")
+        self.assertEqual(fr["terminal_surface_target"], "overextension_state")
+        self.assertEqual(fr["current_landing_surface"], "overextension_state")
+        self.assertEqual(fr["disposition"], "landed")
+        self.assertEqual(fr["lifecycle_item_id"], 36)   # §13.1 #36 过热分档阈值
+        self.assertEqual(fr["field_class"], "overextension")
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    def test_all_three_states_emit_clean(self):
+        for st in ("none", "warning", "chasing_extreme"):
+            rec = self._with_ox({**_OX_WARNING, "overextension_state": st})
+            self.assertIn("overextension_state", _ids(rec))
+
+    def test_no_field_record_when_absent(self):
+        rec = mr.assemble_machine_record(_ranked([_row()]), as_of=_AS_OF)   # no overextension
+        self.assertNotIn("overextension_state", _ids(rec))
+        self.assertTrue(validate_official_machine_record(rec)["clean"])
+
+    def test_not_in_official_manifest(self):
+        # overextension_state is NOT a manifest field_id → the reverse-completeness mandate neither requires nor
+        # forbids it (so an absent one is not a "missing" violation, a present one not "unexpected/fabricated").
+        self.assertNotIn("overextension_state", official_expected_field_ids(_row()))
+
+    def test_malformed_overextension_fails_closed(self):
+        for bad in ("not-a-dict", 42, {"overextension_state": "bogus", "execution_flags": {}},
+                    {"overextension_state": "warning", "execution_flags": "nope"}, {"execution_flags": {}}):
+            r = _row()
+            r["overextension"] = bad
+            with self.assertRaises(mr.WeekendMachineRecordError):
+                mr.assemble_machine_record(_ranked([r]), as_of=_AS_OF)
+
+
 if __name__ == "__main__":
     unittest.main()

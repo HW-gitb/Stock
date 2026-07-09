@@ -8,6 +8,41 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2d：overextension_state §11.3 列填充 + §10 field_record 登记)
+
+**Commits**: 本提交（machine_record overextension_state field_record + action_table 列 lift + boundary validation + 10 测试 + register）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2c（analyze 执行侧，`15ec1b8`）。用户「继续」→ cut 2d。**Refines**: 上轮我说 2d「小」，实为真 §10 集成（field_record + validator 交互 + schema 核对），非只填列——诚实修正低估。
+
+**Worked on**:
+1. **cut 2d = §11.3 列 + §10 登记**：① `machine_record.py`：`_SPECS` 加 overextension_state（owner=overextension、lifecycle §13.1 #36=过热分档阈值、field_class=overextension）；`_field_records` 在行带合法 overextension 时发 field_record（op=仅标签、落 overextension_state 列[已在 core_columns]、disposition=landed、非 core class 故无 impact_target 要求；执行效应已由 `price` field_record 登记、不双记）；`_validate_ranked_row` 加 boundary 校验（malformed→fail-closed）。② `action_table.py::_flatten_row`：从行 overextension lift `overextension_state` 列（flatten 再验 design-locked-enum）+ 更新「无源留空」注。
+2. 亲读 no-dangling validator + machine_record schema 全文核对：overextension_state ∉ MANIFEST_FIELD_IDS → 官方 manifest 反查不受影响；schema field_id/field_class 自由 string（无需改 schema）；仅标签 terminal 须 ∈ core_columns → overextension_state 已在 ✓；lifecycle 36 resolves ✓。**§10 是增强登记、非改 validator**、不弱化。
+3. 10 测试（5 machine_record：field_record 发+落列+clean/三态/absent 无记录/非 manifest/malformed fail-closed；5 action_table：列填/三态 lift/absent 空/render 端到端/malformed boundary 拒）。Verify：focused 119 OK、full offline `*us_short*` 3956 OK。
+
+**Key decisions**:
+- overextension_state field_record = 仅标签落自有列（执行效应经 price record 已登记、不双记）；非 core class 故无强制 impact_target；lifecycle §13.1 #36 对齐设计。
+- 2d 是真 §10 集成非「小填列」——诚实修正上轮低估；但增强登记不改 validator、风险低。
+- §6a：非 mandatory-agent 清单内 + §10-registry 增强（不弱化 validator）+ 亲读 validator/schema 全文 + 全测覆盖 → LOWER-RISK、不起 agent（前序 agent 已验安全核心）。
+- overextension 仍注入 map 消费（离线）；orchestrator 铺 producer map 是 batch4/5 seam。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「只填列不加 field_record」— 否决。validator 虽不强制（非 manifest），但 §10 设计要每个算出字段申报 landing、其余 §11.3 列都有 block field_record 覆盖；只填列=唯一无登记列、留 §10 完整性缺口。
+- 「field_record 用 shadow_record disposition」— 选 landed（状态真落自有列、非 advisory shadow terminal）；非 core class 故 landed+无 impact_target 合法。
+- 「起 §6a agent」— 否决（本刀）。非 mandatory 清单、增强登记不弱化、亲读全文+全测；前序 agent 已验核心。
+
+**Pre-Codex self-review (A-F)**: A field_record 全类（三态发+absent 不发+malformed 拒+非 manifest）+ 列 lift 全类（填/空/三态/render/malformed）；B grep overextension_state 无残留「empty/no source」engine 注（注已更新）；C 反向=absent→无 record/空列、malformed→boundary 拒（非静默填坏值）；E 无 route-doc 改（README 列已含 overextension_state）；F `git diff --check` clean、4 文件 no-BOM/no-FFFD、无环导入（machine_record/action_table→overextension 单向）、lifecycle 36 + core_columns 核实。Verify：119 focused + 3956 full OK。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Slice B（选股侧、overextension 最后一半）：`compose_score_inputs` chasing→theme_off 剥赛道分（影响 Top15 排名）+ zero theme_momentum_score（防占 theme 席）+ §8 sizing warning→reduce/raise-RR；起 §6a 强制 agent。
+- runner(2b-ii-B)/gated-fetch(2b-iii) 产真数据管道。
+- Codex 额度恢复后：本 cut + 前序需独立复审。
+
+**Next natural step from my view**:
+1. Slice B：`compose_score_inputs` chasing→theme_off 剥分（+theme seat 防占）+ §8 warning sizing。
+2. runner 2b-ii-B + gated fetch 2b-iii（真数据管道）。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice A cut 2c：analyze warning→强制 pullback 执行侧杠杆 + state 落 evidence 行；§6a agent PASS)
 
 **Commits**: 本提交（`_analyze_one` overextension 消费 + warning→pullback + state ride + 9 测试 + §6a agent PASS + register）

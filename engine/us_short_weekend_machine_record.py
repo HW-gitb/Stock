@@ -40,6 +40,7 @@ from engine.us_short_action_rank import ACTION_RANK_SKELETON, action_group as _e
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import VETO_TIERS
 from engine.us_short_no_dangling_validator import validate_official_machine_record
+from engine.us_short_overextension import OVEREXTENSION_STATES as _OVEREXTENSION_STATES
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
@@ -109,6 +110,9 @@ _SPECS = {
                                 "field_class": "theme_opportunity_state", "lifecycle_item_id": 27},
     "forward_event": {"owner_module": "engine.us_short_forward_events", "data_source": "row.forward_event (injected; live=batch5)",
                       "field_class": "trigger", "lifecycle_item_id": 15},
+    "overextension_state": {"owner_module": "engine.us_short_overextension",
+                            "data_source": "row.overextension (injected; live=batch5)",
+                            "field_class": "overextension", "lifecycle_item_id": 36},
 }
 
 
@@ -205,6 +209,15 @@ def _field_records(row):
     # as a clean shadow until the live evidence_ref traceback (provider row / SEC filing) is wired in batch5.
     if isinstance(row.get("forward_event"), dict):
         frs.append(_fr("forward_event", op="仅标签", terminal=_SHADOW_TERMINAL, disposition=_SHADOW, impact_target=None))
+
+    # §4.3 overextension_state (cut 2d) — the §4.3 tier computed at the scoring stage; its EXECUTION effect
+    # (warning→forced pullback) is already registered via the `price` field_record (the plan is pullback), so
+    # here the STATE lands on its own §11.3 overextension_state column as an advisory tag (仅标签). Emitted only
+    # when the row carries a valid tier result (a malformed one was rejected by `_validate_ranked_row`).
+    ox = row.get("overextension")
+    if isinstance(ox, dict) and ox.get("overextension_state") in _OVEREXTENSION_STATES:
+        frs.append(_fr("overextension_state", op="仅标签", terminal="overextension_state",
+                       disposition=_LANDED, impact_target=None))
 
     return frs
 
@@ -311,6 +324,15 @@ def _validate_ranked_row(row):
             raise WeekendMachineRecordError(
                 f"theme_probe sizing 须为 §8 forced-min（status='sized', desired_model_shares={MIN_EXECUTABLE_SHARES}, "
                 f"reason={_PROBE_SIZING_REASON!r}, pre_probe_risk_shares>=min）: {psz!r}")
+
+    # §4.3 overextension (cut 2d) — when a row carries the tier result, the assembler LANDS an
+    # overextension_state §10 field_record + the flatten lifts the §11.3 column, so a malformed PRESENT record
+    # must fail closed here (缺数据≠安全); a legitimately ABSENT overextension is left to the emitter's skip.
+    ox = row.get("overextension")
+    if ox is not None and not (isinstance(ox, dict) and ox.get("overextension_state") in _OVEREXTENSION_STATES
+                               and isinstance(ox.get("execution_flags"), dict)):
+        raise WeekendMachineRecordError(
+            f"overextension 非法（须含合法 overextension_state ∈ {list(_OVEREXTENSION_STATES)} + dict execution_flags 或缺省）: {ox!r}")
 
 
 def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN):

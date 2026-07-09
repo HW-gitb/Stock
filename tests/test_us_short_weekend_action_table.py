@@ -374,5 +374,44 @@ class Triangulation(unittest.TestCase):
         self.assertTrue(at._NUMERIC_PRICE_COLUMNS <= set(NEW_ENTRY_COLUMNS) | set(HOLDING_COLUMNS))
 
 
+_OX_WARNING = {"overextension_state": "warning", "strips_theme_score": False,
+               "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True},
+               "conditions_met": 0, "condition_names": []}
+
+
+class OverextensionColumn(unittest.TestCase):
+    """cut 2d: the §4.3 overextension_state §11.3 column is lifted from the row's tier result (previously a
+    deliberately-empty column); absent → empty; a malformed tier fails closed at the machine-record boundary."""
+
+    def _flat_row(self, overextension=None):
+        row = _candidate()
+        if overextension is not None:
+            row["overextension"] = overextension
+        return at.flatten_machine_record(_machine_record([row]))["rows"][0]
+
+    def test_column_populated_from_tier(self):
+        self.assertEqual(self._flat_row(_OX_WARNING)["overextension_state"], "warning")
+
+    def test_all_three_states_lift(self):
+        for st in ("none", "warning", "chasing_extreme"):
+            self.assertEqual(self._flat_row({**_OX_WARNING, "overextension_state": st})["overextension_state"], st)
+
+    def test_column_empty_when_absent(self):
+        self.assertIsNone(self._flat_row().get("overextension_state"))
+
+    def test_rendered_table_carries_the_column_value(self):
+        row = _candidate()
+        row["overextension"] = _OX_WARNING
+        table = at.build_action_table(_machine_record([row]))   # renders end-to-end (must not raise)
+        col_idx = table["columns"].index("overextension_state")
+        self.assertEqual(table["rows"][0][col_idx], "warning")
+
+    def test_malformed_tier_fails_closed_at_machine_boundary(self):
+        row = _candidate()
+        row["overextension"] = {"overextension_state": "bogus", "execution_flags": {}}
+        with self.assertRaises(mr.WeekendMachineRecordError):
+            _machine_record([row])   # rejected at assembly, before the flatten ever runs
+
+
 if __name__ == "__main__":
     unittest.main()
