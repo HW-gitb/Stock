@@ -132,7 +132,8 @@
           "type": "string",
           "pattern": "^(docs/us_short_batch5_full_universe_momentum_fetch_summary_[0-9]{8}\\.json|provider_samples/us_short_batch5_full_universe_momentum_fetch/.+\\.json)$",
           "not": { "pattern": "\\.\\." }
-        }
+        },
+        "ohlcv_series_packet_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" }
       }
     },
     "storage": {
@@ -148,6 +149,7 @@
       ],
       "properties": {
         "series_packet_path_gitignored": { "const": true },
+        "ohlcv_series_packet_path_gitignored": { "const": true },
         "raw_grouped_window_persisted": { "const": false },
         "summary_contains_ticker_lists": { "const": false },
         "summary_contains_price_rows": { "const": false },

@@ -46,11 +46,15 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
-from engine.us_short_momentum_grouped_reconstruct import reconstruct_series_from_grouped  # noqa: E402
+from engine.us_short_momentum_grouped_reconstruct import (  # noqa: E402
+    reconstruct_ohlcv_series_from_grouped,
+    reconstruct_series_from_grouped,
+)
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 
 PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_momentum_series_packet.schema.json"
+OHLCV_PACKET_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_ohlcv_series_packet.schema.json"
 SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_momentum_fetch_summary.schema.json"
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
@@ -241,7 +245,10 @@ def _fetch_grouped_series_window(
             ct = canonical_us_ticker(row.get("T"))
             if ct is None or ct not in wanted:
                 continue
-            cand = {"ticker": ct, "close": row.get("c"), "volume": row.get("v")}
+            # Retain high/low (cut 2b-iii): the momentum reconstruct reads only close/volume (so the momentum
+            # `{date,close,volume}` packet is byte-identical), while the §4.3 overextension OHLCV reconstruct needs
+            # h/l for ATR. The max-volume dedup below still picks the primary print (now carrying its own h/l).
+            cand = {"ticker": ct, "close": row.get("c"), "high": row.get("h"), "low": row.get("l"), "volume": row.get("v")}
             prev = by_ticker.get(ct)
             if prev is None:
                 by_ticker[ct] = cand
@@ -332,6 +339,60 @@ def _build_packet(
     }
 
 
+def _build_ohlcv_packet(
+    *,
+    generated_at: str,
+    artifact: dict[str, Any],
+    price_basis_ymd: str,
+    grouped_session_count: int,
+    ohlcv_series_by_ticker: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """The §4.3 overextension OHLCV packet (cut 2b-iii) — mirrors the momentum packet's clock/provenance but each
+    point carries high/low (ATR) and there are NO benchmarks (overextension is a per-ticker ABSOLUTE signal, so
+    series_by_ticker is ELIGIBLE-ONLY — the 2b-ii-B producer's envelope requires packet keys ⊆ eligible)."""
+    return {
+        "schema_name": "us_short_batch5_full_universe_ohlcv_series_packet",
+        "schema_version": "1.0.0",
+        "generated_at": generated_at,
+        "scope": {
+            "market": "US",
+            "lane": "us_short",
+            "batch": "batch5_provider_live",
+            "packet_status": "full_universe_per_ticker_ohlcv_series_ready_for_local_overextension_projection",
+            "full_market_reconstruction": True,
+            "network_access_performed_by_packet_producer": True,
+            "provider_calls_performed_by_packet_producer": True,
+            "raw_payload_refs_gitignored": True,
+            "datahub_consumption_allowed": False,
+            "production_storage_allowed": False,
+            "ship_gate_evidence_claimed": False,
+            "broker_or_order_automation_allowed": False,
+            "a_share_crossing_allowed": False,
+        },
+        "decision_clock": {
+            "expected_decision_date": artifact["decision_date"],
+            "candidate_price_basis_date": artifact["price_basis_date"],
+            "price_basis_date": price_basis_ymd,
+            "source_as_of": price_basis_ymd,
+        },
+        "series_contract": {
+            "session": SESSION_LABEL,
+            "adjustment_mode": ADJUSTMENT_MODE,
+            "as_of": price_basis_ymd,
+            "grouped_session_count": grouped_session_count,
+        },
+        "provenance": {
+            "provider_id": "massive",
+            "endpoint_or_family": "grouped_daily",
+            "source_as_of": price_basis_ymd,
+            "observed_at": generated_at,
+            "coverage_status": "full",
+            "parser_status": "ok",
+        },
+        "series_by_ticker": ohlcv_series_by_ticker,
+    }
+
+
 def _build_summary(
     *,
     generated_at: str,
@@ -345,8 +406,9 @@ def _build_summary(
     candidate_path: Path,
     packet_path: Path,
     summary_path: Path,
+    ohlcv_packet_path: Path | None = None,
 ) -> dict[str, Any]:
-    return {
+    summary: dict[str, Any] = {
         "schema_name": "us_short_batch5_full_universe_momentum_fetch_summary",
         "schema_version": "1.0.0",
         "schema_ref": "schemas/us_short_batch5_full_universe_momentum_fetch_summary.schema.json",
@@ -427,6 +489,10 @@ def _build_summary(
             "This is a bounded gated fetch; it selects no provider, and claims no DataHub / production / ship-gate / live-normalized evidence.",
         ],
     }
+    if ohlcv_packet_path is not None:  # cut 2b-iii: the SAME fetch also wrote a §4.3 overextension OHLCV packet
+        summary["paths"]["ohlcv_series_packet_path"] = _repo_rel(ohlcv_packet_path)
+        summary["storage"]["ohlcv_series_packet_path_gitignored"] = universe_fetch._git_check_ignored(ohlcv_packet_path)
+    return summary
 
 
 def run_fetch(
@@ -441,6 +507,7 @@ def run_fetch(
     min_sessions: int = SESSION_MIN_REQUIRED,
     grouped_fetch: Callable[[str], list[dict[str, Any]]] | None = None,
     interval_seconds: float = REQUEST_INTERVAL_SECONDS,
+    ohlcv_series_packet_path: Path | None = None,
 ) -> dict[str, Any]:
     if not confirm_user_authorization:
         raise FullUniverseMomentumFetchError(
@@ -469,6 +536,12 @@ def run_fetch(
     )
     if packet_path == candidate_path:
         raise FullUniverseMomentumFetchError("series_packet_path must not overwrite the candidate artifact")
+    ohlcv_packet_resolved = None
+    if ohlcv_series_packet_path is not None:
+        ohlcv_packet_resolved = _validate_packet_path(ohlcv_series_packet_path)
+        if ohlcv_packet_resolved in {packet_path, candidate_path}:
+            raise FullUniverseMomentumFetchError(
+                "ohlcv_series_packet_path must be distinct from the momentum packet + candidate artifact")
 
     eligible = [
         t for t in (canonical_us_ticker(raw) for raw in artifact["eligible_tickers"]) if t is not None
@@ -513,6 +586,21 @@ def run_fetch(
     )
     _validate_schema(packet, PACKET_SCHEMA_PATH, label="full-universe momentum series packet")
 
+    ohlcv_packet = None
+    if ohlcv_packet_resolved is not None:
+        # §4.3 overextension OHLCV (cut 2b-iii): reconstruct ELIGIBLE-ONLY (no benchmarks — overextension is a
+        # per-ticker ABSOLUTE signal, and the 2b-ii-B producer's envelope requires packet keys ⊆ eligible) from the
+        # SAME grouped window, retaining high/low for ATR. The momentum packet above is unaffected (byte-identical).
+        ohlcv_series_by_ticker = reconstruct_ohlcv_series_from_grouped(
+            grouped_sessions, tickers=sorted(eligible), as_of=price_basis_ymd,
+            session=SESSION_LABEL, adjustment_mode=ADJUSTMENT_MODE,
+        )
+        ohlcv_packet = _build_ohlcv_packet(
+            generated_at=generated_at, artifact=artifact, price_basis_ymd=price_basis_ymd,
+            grouped_session_count=len(grouped_sessions), ohlcv_series_by_ticker=ohlcv_series_by_ticker,
+        )
+        _validate_schema(ohlcv_packet, OHLCV_PACKET_SCHEMA_PATH, label="full-universe OHLCV series packet")
+
     summary = _build_summary(
         generated_at=generated_at,
         artifact=artifact,
@@ -525,16 +613,22 @@ def run_fetch(
         candidate_path=candidate_path,
         packet_path=packet_path,
         summary_path=summary_resolved,
+        ohlcv_packet_path=ohlcv_packet_resolved,
     )
     _validate_schema(summary, SUMMARY_SCHEMA_PATH, label="full-universe momentum fetch summary")
     # Secret-scan the tracked summary (key + provider-domain deny-list) BEFORE writing either artifact.
     universe_fetch._assert_text_safe(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", [massive_key])
 
     universe_fetch._write_json_atomic(packet, packet_path)
+    written = [packet_path]
     try:
+        if ohlcv_packet is not None:
+            universe_fetch._write_json_atomic(ohlcv_packet, ohlcv_packet_resolved)
+            written.append(ohlcv_packet_resolved)
         universe_fetch._write_summary_safe(summary, summary_resolved, [massive_key])
     except BaseException:
-        packet_path.unlink(missing_ok=True)  # all-or-nothing: no orphan packet if the summary write fails
+        for path in written:  # all-or-nothing: no orphan packet(s) if a later write fails
+            path.unlink(missing_ok=True)
         raise
     return summary
 
@@ -550,6 +644,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--candidate-artifact-path", type=Path, default=DEFAULT_CANDIDATE_ARTIFACT_PATH)
     parser.add_argument("--series-packet-path", type=Path, default=None)
+    parser.add_argument("--ohlcv-series-packet-path", type=Path, default=None)
     parser.add_argument("--summary-path", type=Path, default=None)
     parser.add_argument("--calendar-path", type=Path, default=CALENDAR_PRESET)
     parser.add_argument("--generated-at", default=None)
@@ -568,6 +663,7 @@ def main(argv: list[str] | None = None) -> int:
         generated_at=args.generated_at,
         confirm_user_authorization=args.confirm_user_authorization,
         session_window=args.session_window,
+        ohlcv_series_packet_path=args.ohlcv_series_packet_path,
     )
     print(json.dumps(
         {

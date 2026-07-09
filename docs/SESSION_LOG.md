@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-iii-B：momentum fetch opt-in 产 SEPARATE OHLCV packet；§6a 独立对抗 agent 全 HELD)
+
+**Commits**: 本提交（`run_fetch` opt-in OHLCV packet + line 244 保留 h/l + `_build_ohlcv_packet` + summary schema additive + 6 fetch 测试 + §6a agent PASS + register/CURRENT）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2b-iii-A（纯 OHLCV reconstruct，`96190d0`）。用户「按你的建议进行下一步」= 建 2b-iii-B（离线 fetch 接线）。
+
+**Worked on**:
+1. **cut 2b-iii-B = momentum fetch opt-in 产 SEPARATE OHLCV packet** `runners/us_short_batch5_full_universe_momentum_fetch.py`：`run_fetch` 加 opt-in `ohlcv_series_packet_path`——同一 grouped 窗口建 momentum packet 后**也**经 2b-iii-A reconstruct 建 SEPARATE overextension OHLCV packet（2b-ii-A schema）over **eligible-only**（无 SPY/QQQ——2b-ii-B envelope 要 keys ⊆ eligible），gitignored 落盘 + tracked summary 记录（additive-optional 字段）。line 244 additive 保留 h/l（momentum reconstruct 只读 close/volume → momentum `{date,close,volume}` packet **byte-identical**）。default（None）= 纯 no-op → momentum 路径 byte-identical（opt-out、既有测试不受影响）。两 packet + summary all-or-nothing（任一失败清两个）。
+2. **§6a 独立对抗 agent（read-only/blackbox/fake fetch seam、绝不触真 Massive）攻 gated fetch OHLCV 接线**：A momentum-byte-identical / B secret-raw-hygiene（key/URL/private ticker 不入 tracked summary、OHLCV packet gitignored）/ C eligible-only / D all-or-nothing / E auth+path gates / F fetch-fail-closed / G OHLCV-shape+端到端 —— **全 HELD**，0 P1/P2、无 bypass；3 P3 test-gap（OHLCV all-or-nothing / fail-closed-with-OHLCV / gap-not-crash）**全当刀补**为回归测试。
+3. Verify：16 focused OK（含端到端 OHLCV fetch → 2b-ii-B producer）、full offline `*us_short*` 4005 OK（零回归、momentum 10/10 byte-identical）。
+
+**Key decisions**:
+- **Option X（extend run_fetch opt-in default-off）胜 separate runner**——default byte-identical 使 momentum regression≈0、复用全部 fetch 机制（无 boilerplate/无 network-pacing 复制）、一 fetch 两 packet（未来 weekly 高效）；register「SEPARATE packet」满足（packet 分、非 runner 分）+「不碰 momentum frozen contract」满足。
+- OHLCV eligible-only（reconstruct over `sorted(eligible)`）——overextension per-ticker 绝对信号、2b-ii-B envelope 要 keys ⊆ eligible；benchmark/noise 不入。
+- summary 记 OHLCV packet path（additive-optional、gated fetch 应记全部产物）——existing momentum-only summary 仍验（optional）。
+- 补全 3 P3（fetch 安全承重属性的回归门：all-or-nothing / fail-closed / gap-not-crash）。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「separate OHLCV fetch runner」— 否决。复制 ~200 行 boilerplate + network-pacing、需第二次 live fetch；Option X default-off 更省更安全。
+- 「不在 summary 记 OHLCV path」— 否决。gated fetch 应记全部产物；additive-optional 低危。
+- 「OHLCV 含 benchmark」— 否决。2b-ii-B envelope 拒 stray；eligible-only 正确。
+
+**Pre-Codex self-review (A-F)**: A path 校验全类（reuse `_validate_packet_path` gitignored/state-json + distinct）+ all-or-nothing 两 packet + eligible-only + gap-not-crash；B grep 新符号（`ohlcv_series_packet_path`/`_build_ohlcv_packet`/`OHLCV_PACKET_SCHEMA_PATH`）=仅 3 文件、OHLCV packet schema 已被 2b-ii-B 消费（闭环）、momentum byte-identical（10/10 + 全 pack）；C 反向=default opt-out byte-identical + eligible-only + bad-path raise + all-or-nothing + fail-closed-with-OHLCV + gap-not-crash（全反向控制）；D N-A；E CURRENT §0 更新（无 gate 词）；F `git diff --check` clean、3 文件 no-BOM/no-FFFD、无环导入、summary schema additive-optional（existing 仍验）。Verify：16 focused + 4005 full OK + §6a agent 全 HELD(A-G)。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **cut 2b-iii-C（唯一剩的 live piece）**：真 bounded Massive grouped-daily fetch（`run_fetch --confirm-user-authorization --ohlcv-series-packet-path ...`）→ 真 OHLCV packet 喂 2b-ii-B producer 出真 overextension projection；SR-PROVIDER-001 逐次授权、Massive（非 FMP）；用户显式 go-ahead + bounded 计划后跑。
+- §8 warning sizing follow-on；orchestrator 把 producer map 铺 compose+分析行（batch5 live 半）。
+- Codex 额度恢复后：本会话五刀（Slice B / 2b-ii-B / 2b-iii-A / 2b-iii-B + 后续）从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. 呈报 2b-iii-C bounded live fetch 计划（call 数/窗口/raw 不留/no-secret summary）→ 用户授权 → 跑真数据。
+2. §8 warning sizing 子刀；orchestrator map 铺行。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-iii-A：pure OHLCV grouped-reconstruct 保留 high/low + 单源 walk 重构)
 
 **Commits**: 本提交（`reconstruct_ohlcv_series_from_grouped` + `_reconstruct_from_grouped` 单源重构 + 5 测试 + register/CURRENT 更新）

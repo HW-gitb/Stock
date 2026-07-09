@@ -27,8 +27,10 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
 STATE_DIR = ROOT / "state" / "us_short"
 SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum_fetch"
 PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_momentum_20260707"
+OVEREXT_PRODUCER_SAMPLE_ROOT = ROOT / "provider_samples" / "us_short_batch5_full_universe_overextension_20260709"
 FETCH_MODULE = "runners.us_short_batch5_full_universe_momentum_fetch"
 PRODUCER_MODULE = "runners.us_short_batch5_full_universe_momentum_producer"
+OVEREXT_PRODUCER_MODULE = "runners.us_short_batch5_full_universe_overextension_producer"
 
 _WANTED = list(_ALL_ELIGIBLE) + ["SPY", "QQQ"]
 _NOISE = ["ZZZA", "ZZZB"]          # whole-market noise the fetch must discard (not eligible / not a benchmark)
@@ -72,6 +74,24 @@ def _fake_grouped(*, tickers=None, only_dates=None):
     return fetch
 
 
+def _fake_grouped_ohlcv(*, tickers=None, only_dates=None):
+    """Like _fake_grouped but each Massive row also carries h/l (high/low) around the close, so the cut-2b-iii
+    OHLCV reconstruct can build ATR-bearing bars for the §4.3 overextension producer."""
+    row_tickers = (tickers if tickers is not None else _WANTED) + _NOISE
+
+    def fetch(date_iso: str):
+        if only_dates is not None and date_iso not in only_dates:
+            return []
+        i = _day_index(date_iso)
+        rows = []
+        for h, t in enumerate(row_tickers):
+            c = _BASES[t] + i * (0.1 + 0.01 * h)
+            rows.append({"T": t, "c": c, "h": c + 0.5, "l": c - 0.5, "v": 1_000_000 + (i % 50)})
+        return rows
+
+    return fetch
+
+
 def _fake_grouped_with_dupe():
     """Whole-market feed that emits a SECOND, lower-volume AAPL row each session (a real Massive quirk: >1 row
     for one symbol). The fetch must dedup to the max-volume (primary) print — the sentinel c=1.0 must be dropped."""
@@ -91,17 +111,20 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         self.slug = f"test_full_universe_momentum_fetch_{os.getpid()}_{self._testMethodName}"
         self.candidate = STATE_DIR / f"{self.slug}_candidate.json"
         self.packet = STATE_DIR / f"{self.slug}_packet.json"
+        self.ohlcv_packet = STATE_DIR / f"{self.slug}_ohlcv_packet.json"
         self.summary = SAMPLE_ROOT / self.slug / "summary.json"
         self.projection = STATE_DIR / f"{self.slug}_projection.json"
         self.producer_summary = PRODUCER_SAMPLE_ROOT / self.slug / "summary.json"
-        for path in (self.candidate, self.packet, self.projection):
+        self.overext_producer_summary = OVEREXT_PRODUCER_SAMPLE_ROOT / self.slug / "summary.json"
+        for path in (self.candidate, self.packet, self.ohlcv_packet, self.projection):
             path.unlink(missing_ok=True)
         _write_json(self.candidate, _candidate_artifact(_ALL_ELIGIBLE))
 
     def tearDown(self):
-        for path in (self.candidate, self.packet, self.projection):
+        for path in (self.candidate, self.packet, self.ohlcv_packet, self.projection):
             path.unlink(missing_ok=True)
-        for root in (SAMPLE_ROOT / self.slug, PRODUCER_SAMPLE_ROOT / self.slug):
+        for root in (SAMPLE_ROOT / self.slug, PRODUCER_SAMPLE_ROOT / self.slug,
+                     OVEREXT_PRODUCER_SAMPLE_ROOT / self.slug):
             if root.exists():
                 for item in sorted(root.rglob("*"), reverse=True):
                     if item.is_file():
@@ -231,6 +254,103 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
                 cursor = cursor[key]
             cursor[path[-1]] = value
             self.assertGreater(len(list(validator.iter_errors(mutated))), 0, path)
+
+
+    def test_opt_in_ohlcv_writes_separate_eligible_only_packet_and_feeds_overextension_producer(self):
+        summary = self._run(grouped_fetch=_fake_grouped_ohlcv(), ohlcv_series_packet_path=self.ohlcv_packet)
+
+        # the momentum packet is still written and its frozen {date,close,volume} point contract is BYTE-IDENTICAL
+        # (no high/low leaked in despite line-244 now retaining them upstream).
+        self.assertTrue(self.packet.exists())
+        momentum_packet = _read_json(self.packet)
+        self.assertEqual(momentum_packet["schema_name"], "us_short_batch5_full_universe_momentum_series_packet")
+        self.assertEqual(set(_ALL_ELIGIBLE) | {"SPY", "QQQ"}, set(momentum_packet["series_by_ticker"]))
+        self.assertEqual(set(momentum_packet["series_by_ticker"]["AAPL"]["points"][0]), {"date", "close", "volume"})
+
+        # the SEPARATE OHLCV packet is written: schema-valid, ELIGIBLE-ONLY (benchmarks excluded), points carry h/l.
+        self.assertTrue(self.ohlcv_packet.exists())
+        ohlcv_packet = _read_json(self.ohlcv_packet)
+        self.assertEqual(ohlcv_packet["schema_name"], "us_short_batch5_full_universe_ohlcv_series_packet")
+        self.assertEqual(set(_ALL_ELIGIBLE), set(ohlcv_packet["series_by_ticker"]))
+        self.assertNotIn("SPY", ohlcv_packet["series_by_ticker"])
+        self.assertNotIn("ZZZA", ohlcv_packet["series_by_ticker"])   # whole-market noise still discarded
+        self.assertEqual(
+            set(ohlcv_packet["series_by_ticker"]["AAPL"]["points"][0]), {"date", "high", "low", "close", "volume"})
+        from jsonschema import Draft7Validator
+        self.assertEqual(
+            list(Draft7Validator(_read_json(_fetch().OHLCV_PACKET_SCHEMA_PATH)).iter_errors(ohlcv_packet)), [])
+
+        # the tracked summary records the OHLCV packet (traceability) without leaking anything.
+        self.assertTrue(summary["paths"]["ohlcv_series_packet_path"].startswith("state/us_short/"))
+        self.assertTrue(summary["storage"]["ohlcv_series_packet_path_gitignored"])
+
+        # end-to-end: the OHLCV packet feeds the 2b-ii-B overextension producer over the eligible universe.
+        producer = importlib.import_module(OVEREXT_PRODUCER_MODULE)
+        producer_summary = producer.run_packet(
+            candidate_artifact_path=self.candidate,
+            series_packet_path=self.ohlcv_packet,
+            output_projection_path=self.projection,
+            summary_path=self.overext_producer_summary,
+            generated_at="2026-06-15T12:00:00+00:00",
+        )
+        self.assertEqual(producer_summary["projection_contract"]["target_count"], len(_ALL_ELIGIBLE))
+        self.assertGreater(producer_summary["projection_contract"]["overextension_scored_count"], 0)
+
+    def test_default_no_ohlcv_path_writes_only_the_momentum_packet(self):
+        summary = self._run()   # opt-out: no ohlcv_series_packet_path
+        self.assertTrue(self.packet.exists())
+        self.assertFalse(self.ohlcv_packet.exists())
+        self.assertNotIn("ohlcv_series_packet_path", summary["paths"])
+        self.assertNotIn("ohlcv_series_packet_path_gitignored", summary["storage"])
+
+    def test_ohlcv_packet_path_must_be_gitignored_state_json_and_distinct(self):
+        fetch = _fetch()
+        with self.assertRaises(fetch.FullUniverseMomentumFetchError):   # not gitignored / not under state/us_short/
+            self._run(grouped_fetch=_fake_grouped_ohlcv(),
+                      ohlcv_series_packet_path=ROOT / "docs" / f"{self.slug}_ohlcv.json")
+        with self.assertRaises(fetch.FullUniverseMomentumFetchError):   # same path as the momentum packet
+            self._run(grouped_fetch=_fake_grouped_ohlcv(), ohlcv_series_packet_path=self.packet)
+        self.assertFalse(self.ohlcv_packet.exists())
+
+    def test_ohlcv_all_or_nothing_no_orphan_when_summary_write_fails(self):
+        # if the summary write fails AFTER both packets are written, neither packet may remain (all-or-nothing).
+        with mock.patch("runners.us_short_universe_fetch._write_summary_safe", side_effect=RuntimeError("boom")):
+            with self.assertRaises(RuntimeError):
+                self._run(grouped_fetch=_fake_grouped_ohlcv(), ohlcv_series_packet_path=self.ohlcv_packet)
+        self.assertFalse(self.packet.exists())        # momentum packet cleaned up
+        self.assertFalse(self.ohlcv_packet.exists())  # OHLCV packet cleaned up
+
+    def test_fail_closed_with_ohlcv_path_set_writes_no_partial_artifact(self):
+        # a fetch auth/quota failure must fail closed for the OHLCV path too — no momentum packet, no OHLCV packet.
+        def hostile(date_iso: str):
+            raise urllib.error.HTTPError(url="x", code=403, msg="Forbidden", hdrs=None, fp=None)
+
+        with self.assertRaises(_fetch().FullUniverseMomentumFetchError):
+            self._run(grouped_fetch=hostile, ohlcv_series_packet_path=self.ohlcv_packet)
+        self.assertFalse(self.packet.exists())
+        self.assertFalse(self.ohlcv_packet.exists())
+
+    def test_missing_high_low_in_rows_is_gapped_not_crashed(self):
+        # a Massive row missing high/low → that ticker/date is a gap in the OHLCV packet (never zero-filled); the
+        # run still completes and the packet stays schema-valid + eligible-⊆ (the producer dispositions the absent
+        # ticker as insufficient_data). The momentum packet (close/volume) is unaffected.
+        base = _fake_grouped_ohlcv()
+
+        def fetch(date_iso: str):
+            rows = base(date_iso)
+            for row in rows:
+                if row["T"] == "MSFT":
+                    row.pop("l", None)   # MSFT loses its low every session → no valid OHLCV bar → dropped
+            return rows
+
+        self._run(grouped_fetch=fetch, ohlcv_series_packet_path=self.ohlcv_packet)
+        ohlcv_packet = _read_json(self.ohlcv_packet)
+        self.assertNotIn("MSFT", ohlcv_packet["series_by_ticker"])
+        self.assertIn("AAPL", ohlcv_packet["series_by_ticker"])
+        self.assertTrue(set(ohlcv_packet["series_by_ticker"]).issubset(set(_ALL_ELIGIBLE)))
+        from jsonschema import Draft7Validator
+        self.assertEqual(
+            list(Draft7Validator(_read_json(_fetch().OHLCV_PACKET_SCHEMA_PATH)).iter_errors(ohlcv_packet)), [])
 
 
 if __name__ == "__main__":
