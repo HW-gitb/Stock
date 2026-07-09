@@ -715,7 +715,10 @@ class TestRunFetchE2E(unittest.TestCase):
         fallback = summary["provider_health"]["opportunistic_fallbacks"]["fmp_profile_market_cap"]
         attempted = summary["universe"]["fmp_mktcap_fallback_attempted"]
         rescued = summary["universe"]["fmp_mktcap_fallback_rescued"]
-        free_cap = _mod.FMP_FREE_DAILY_CAP
+        # The 20260706 evidence summary was generated when the universe fallback cap was 240; the
+        # current _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET (40) is intentionally lower and does NOT
+        # retro-apply to this frozen artifact, so pin the historical cap for this consistency check.
+        free_cap = 240
 
         self.assertEqual(fallback["unresolved_count"], len(needs_market_cap))
         self.assertEqual(fallback["needed_count"], len(needs_market_cap) + rescued)

@@ -107,7 +107,13 @@ ROW_PROVIDER_ID = "massive_grouped_daily+sec_xbrl_frames(+fmp_profile)"
 
 FMP_PROFILE_URL = "https://financialmodelingprep.com/stable/profile?symbol={sym}&apikey={key}"
 FMP_FALLBACK_SLEEP = 0.2
-FMP_FREE_DAILY_CAP = 240
+# Universe market-cap fallback FMP budget -- deliberately SMALL, NOT the full ~250/day FMP free cap.
+# The weekly pipeline's Pass2 grades stage draws ~200 FMP calls from the SAME daily quota, so this
+# fallback is reserved to ~40 (~= 250 - 200 grades - buffer) so it cannot starve grades (the 429
+# collision that produced provider_health_blocked no-emit on 2026-07-08/09). Raising it re-introduces
+# that collision until a shared cross-stage FMP budget exists.
+# See R-USSHORT-BATCH5-UNIVERSE-FMP-FALLBACK-STARVES-PASS2-GRADES.
+UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET = 40
 _RUN_STATE_SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}
 
 
@@ -567,7 +573,7 @@ def fetch_massive_window(
 # FMP fallback: market cap only for SEC-missing-shares survivors (bounded, free tier)
 # ---------------------------------------------------------------------------
 
-def fetch_fmp_market_caps(tickers: list[str], fmp_key: str, *, budget: int = FMP_FREE_DAILY_CAP) -> dict[str, float]:
+def fetch_fmp_market_caps(tickers: list[str], fmp_key: str, *, budget: int = UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET) -> dict[str, float]:
     """Fetch marketCap from FMP stable/profile for a BOUNDED set (SEC-missing-shares survivors). Stops at
     `budget` calls or HTTP 429/403. Returns {ticker: market_cap}."""
     out: dict[str, float] = {}
@@ -1169,7 +1175,7 @@ def run_fetch(
     fallback_targets = summary_counts["needs_market_cap"]
     fmp_attempted = 0
     if fallback_targets and fmp_key:
-        fmp_attempted = min(len(fallback_targets), FMP_FREE_DAILY_CAP)
+        fmp_attempted = min(len(fallback_targets), UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
         print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_attempted}...", flush=True)
         fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key)
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,

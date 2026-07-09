@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short freshday FMP 全量真跑 [Pass2 进行中] + 修根因 universe FMP market-cap fallback 抢占 Pass2 grades 配额 → cap 240→40)
+
+**Commits**: 本提交（`us_short_universe_fetch.py` `FMP_FREE_DAILY_CAP`→`UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET=40` + 3 code refs + test 历史 pin + register 新条目 + P2 refinement + 本 entry + CURRENT §0）。freshday 真跑的证据 artifact（universe summary 等）跑完后单独提交。
+
+**Relationship to prior session(s)**:
+- 用户「跑」→ SR-PROVIDER-001 per-execution 授权，跑 freshday FMP 全量真测（[[project_us_short_freshday_fmp_test]]）。用 capstone `--live` 但先 offline dry-run 验证 canonical/plan/路径 + 逐阶段 file-monitor。stage-1 universe（2634 eligible）暴露根因 → 引出本修复。
+
+**Worked on**:
+1. **freshday FMP 全量真跑（Pass2 进行中）**：capstone `--live --confirm-user-authorization`，canonical decision 20260709 / price_basis 20260708（盘前 in-window，offline 已验）；stage 1-7 clean（universe 2634 eligible / momentum 70 grouped / SIC ~2400 / theme / projection / preflight 200 targets），Pass2 fetch 进行中。空 paper account + no-build template（沿用 offline e2e 证过的形状）；run config + 输出 + 日志全 gitignored（`state/us_short/weekly_private/20260709/`）。
+2. **根因修复 = `R-USSHORT-BATCH5-UNIVERSE-FMP-FALLBACK-STARVES-PASS2-GRADES`**：universe 的 market-cap fallback 与 Pass2 grades 共用 ~250/日 FMP 免费额度但各自独立预算 → universe 的 `FMP_FREE_DAILY_CAP=240`（误命名成"整个日额度"）每轮先花光额度、grades（~200）没份 → 429。改名 `UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET=40`（明确是小额预留、40+200=240<250 给 grades 留位）+ 更新 3 处代码引用（def / 默认参数 / summary 的 min）+ frozen 20260706 evidence-summary 一致性测试 pin 历史 240（新 cap 不追溯旧 artifact）+ regression-guard 注释。`test_us_short_universe_fetch` 89 OK、`grep FMP_FREE_DAILY_CAP`=0 残留。
+
+**Key decisions**:
+- **改名而非只改值**：`FMP_FREE_DAILY_CAP=40` 是自相矛盾的谎（40 不是日额度）——误命名正是 bug 的概念根（有人以为 universe 可用整个日额度）；改名 + 注释根治，防"下个读者把 40 调回 250"。
+- **值 40 = 250 − 200 grades − buffer**（用户拍板「砍到40」）：市值兜底是 opportunistic（救 SEC 缺流通股 survivors = ETF/外国 ADR/杂票、非做空候选、momentum top-200 有 SEC 股不受影响），砍到 40 高兜底日丢 ~200 边缘 eligible 换 grades 通路、值得。
+- **残留（诚实标注）**：STATIC 拆分（40 universe / ~200 grades），非跨阶段共享 FMP 预算账本；K 变大或日额度变则需重访。真干净 grades-on-fresh-quota 测试仍需 fix 后新配额日重跑（今天配额已被 fix 前的 universe 跑污染）。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「只改值 240→40、不改名」— 否决。留 `FMP_FREE_DAILY_CAP=40` 是误导地雷。
+- 「共享跨阶段 FMP 预算账本 / 把 grades 降级为非 health-critical」— 本轮不做（用户选简单 fix ①；更大改动、非本次 scope）；记为 residual + P2 option (b)。
+
+**Pre-Codex self-review**: `grep FMP_FREE_DAILY_CAP`=0 残留；3 code refs + 1 test ref 全改；frozen-artifact 测试历史 pin 正确（`min(575,240)=240`==recorded 240）；其他 `fetch_fmp_market_caps` 测试传显式 `budget=` 不受影响；89 OK。编辑不扰运行中的 capstone（已 import 旧 universe_fetch、不 re-import；tests 独立进程）。
+
+**Open questions handed off**:
+- **freshday 真跑结论待 Pass2 完成**：grades 是否如预测因 confound 而 429 / provider_health 派生（`_write_provider_health` 的「任一 grades success 即 fmp=ok」是否因 ~7 个成功而勉强 emit——一个可记的宽松性 quirk）/ emit vs no-emit。跑完补 register P2 + 单独提交证据 artifact。
+- **真干净 grades 测试 = fix 后新配额日重跑**（约明天）。
+- Codex 恢复后从 `ef3c43f4` 起 re-review（含本 cap fix）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension Cut 4 §8 warning sizing：warning→抬 RR gate + 缩仓（复用 §6/§8 levers）；§6a 独立对抗 agent A-G 全 HELD 400k fuzz)
 
 **Commits**: 本提交（price_engine raise_rr_gate + analysis 接线 + sizing reduce_size + 7 测试 + §6a agent PASS + register/CURRENT）
