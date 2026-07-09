@@ -33,11 +33,15 @@ from __future__ import annotations
 import math
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from engine.us_short_overextension import OVEREXTENSION_STATES
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES, reduction_stack, risk_based_base_shares
 from engine.us_short_weekend_decision import action_reason_error
 
 # §8 line 226 / §13.1 #4 forward-calibration prior (NOT a frozen const): 单票上限 10% of the short bucket.
 SINGLE_TICKER_CAP_FRAC = 0.10
+# §13.1 #4/#36 forward prior (NOT frozen const): §4.3 overextension `warning` → reduce size — a discount that folds
+# into the §8 削减叠法 step ③ (harshest single discount), NOT a new penalty stage.
+WARNING_REDUCE_MULT = 0.5
 
 _BUILD = "建仓"
 _OBSERVE = "观察"
@@ -102,6 +106,17 @@ def _size_build(row, *, bucket, position_cap, ticker, per_ticker):
         raise WeekendSizingError(
             f"建仓 行价位非法（须 valid_entry_high>stop_clear_price>0）: {ticker!r} entry={af.get('valid_entry_high')!r} stop={af.get('stop_clear_price')!r}")
     discount_mults, liquidity_cap = _ticker_sizing_inputs(per_ticker, ticker)
+    # §4.3 overextension `warning` → reduce size: fold WARNING_REDUCE_MULT into the §8 削减叠法 step ③ (`harshest`
+    # single discount — it weighs the injected discounts too, so co-occurring risks are not double-multiplied). The
+    # tier rode onto the row via analysis (cut 2c); a PRESENT-but-malformed overextension fails closed (缺数据≠安全,
+    # mirrors machine_record); a chasing tier carries NO reduce_size flag (its effect is the SELECTION strip, not sizing).
+    ox = row.get("overextension")
+    if ox is not None and not (isinstance(ox, dict) and ox.get("overextension_state") in OVEREXTENSION_STATES
+                               and isinstance(ox.get("execution_flags"), dict)):
+        raise WeekendSizingError(
+            f"overextension 非法（须含合法 overextension_state ∈ {list(OVEREXTENSION_STATES)} + dict execution_flags 或缺省）: {ox!r}")
+    if isinstance(ox, dict) and ox["execution_flags"].get("reduce_size") is True:
+        discount_mults = discount_mults + [WARNING_REDUCE_MULT]
 
     base = risk_based_base_shares(bucket, entry, stop)
     single_ticker_cap = int(math.floor(bucket * SINGLE_TICKER_CAP_FRAC / entry))

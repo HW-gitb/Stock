@@ -124,7 +124,10 @@ def _analyze_one(row, regime):
                                    and overext["execution_flags"].get("force_pullback") is True)
         if overext_forced_pullback:
             sub_mode_resolved = "pullback"
-        price = support_atr_engine(row.get("price_input"), regime, sub_mode_resolved)
+        # §4.3 warning → raise the RR gate (+WARNING_RR_BONUS, stricter only): another warning execution lever,
+        # independent of the pullback downgrade (entry mode) and the §8 size reduction (4d-ii-c).
+        overext_raise_rr = (overext is not None and overext["execution_flags"].get("raise_rr_gate") is True)
+        price = support_atr_engine(row.get("price_input"), regime, sub_mode_resolved, raise_rr_gate=overext_raise_rr)
 
     # §8.1 forward known-date events (sizing/risk/display only — never selection, never a hard veto).
     fe = row.get("forward_event")

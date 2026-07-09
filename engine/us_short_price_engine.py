@@ -46,6 +46,7 @@ _NEUTRAL_ATR_MULT = 1.25
 RR_FLOOR = {"进攻": 1.5, "震荡": 1.5, "防御": 2.0, "极度防御": 2.0}   # §13 #16 min_rr_gate (defensive stricter)
 ATR_MULT = {"进攻": 1.75, "震荡": 1.25, "防御": 1.0, "极度防御": 1.0}  # §13 #4/#33 trailing-stop / pullback-stop ATR multiple
 BREAKOUT_RR_BONUS = 0.5        # §13 #16/#33 breakout entry sits above price → higher RR floor (+0.5)
+WARNING_RR_BONUS = 0.5         # §13 #16/#36 §4.3 overextension `warning` → raise the RR gate (+0.5, STRICTER only)
 BREAKOUT_FAIL_ATR = 0.5        # §13 #33 breakout failure line = effective_resistance − this×ATR (近期突破位下沿, NOT far structure)
 BREAKOUT_CHASE_ATR = 0.5       # §13 #33/#13 breakout chase cap (valid_entry_high) = close + this×ATR
 BREAKOUT_TP_ATR = 3.0          # §13 #20 突破 tp ATR 倍数: breakout take-profit (no overhead resistance) = close + this×ATR
@@ -206,12 +207,14 @@ def _indicators(inp):
 
 
 # ── §6 support_atr_engine (new-entry / add; pure geometry, NO sizing) ──────────────────────
-def support_atr_engine(inp, regime, sub_mode="pullback"):
+def support_atr_engine(inp, regime, sub_mode="pullback", raise_rr_gate=False):
     """New-entry / add price plan. ``inp`` = {close, bars | indicators}. Returns a price-result
     dict: ``executable`` (could a valid buy plan be built?) + ``action_fields`` (frozen
     action_table price columns, None where not computable — never fabricated) + ``reject_reason``
     + ``trace``. Degrade-to-observe on missing close/ATR/structure. ``sub_mode`` ∈ {pullback,
-    breakout}; an unknown sub_mode is treated as pullback (safe default)."""
+    breakout}; an unknown sub_mode is treated as pullback (safe default). ``raise_rr_gate`` (a §4.3
+    overextension `warning` execution lever) adds WARNING_RR_BONUS to the RR floor — STRICTER only
+    (it can never lower the floor); only a real ``True`` raises it."""
     if sub_mode not in PRICE_SUB_MODES:
         sub_mode = "pullback"
     f = {c: None for c in NEW_ENTRY_COLUMNS}
@@ -255,7 +258,9 @@ def support_atr_engine(inp, regime, sub_mode="pullback"):
     if stop_raw >= close:
         return observe("止损≥现价(明显无效结构)")
     risk = close - stop_raw
-    rr_floor = RR_FLOOR.get(regime, _NEUTRAL_RR_FLOOR) + (BREAKOUT_RR_BONUS if sub_mode == "breakout" else 0.0)
+    rr_floor = (RR_FLOOR.get(regime, _NEUTRAL_RR_FLOOR)
+                + (BREAKOUT_RR_BONUS if sub_mode == "breakout" else 0.0)
+                + (WARNING_RR_BONUS if raise_rr_gate is True else 0.0))
     use_structural_res = bool(res is not None and res > close)
     if use_structural_res:
         t1_raw, t1_basis = res, "structural_resistance"

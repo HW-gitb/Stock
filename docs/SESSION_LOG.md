@@ -8,6 +8,42 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension Cut 4 §8 warning sizing：warning→抬 RR gate + 缩仓（复用 §6/§8 levers）；§6a 独立对抗 agent A-G 全 HELD 400k fuzz)
+
+**Commits**: 本提交（price_engine raise_rr_gate + analysis 接线 + sizing reduce_size + 7 测试 + §6a agent PASS + register/CURRENT）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 Cut 3（consumption seam，`288febb`）。用户问「为什么停 capstone」→ 我诚实解释 capstone 是 draft 大工程 → 推荐先做 §8 sizing → 用户「先做 §8 warning sizing」。
+
+**Worked on**:
+1. **Cut 4 = §8 warning sizing**（overextension warning 最后一个执行杠杆，复用现有 §6/§8 levers、无新 penalty stage）：
+   - **raise_rr_gate**：`us_short_price_engine.py::support_atr_engine` 加 `raise_rr_gate` 参数 → `rr_floor += WARNING_RR_BONUS`（0.5，§13 prior）**STRICTER only**（镜像 BREAKOUT_RR_BONUS；只能抬不能降；`holding_exit_engine` 不动——仅候选入场杠杆）；`_analyze_one` 对 warning 候选传该 flag。
+   - **reduce_size**：`us_short_weekend_sizing.py::_size_build` 读行的 warning tier → 把 WARNING_REDUCE_MULT（0.5，§13 prior）append 进 `discount_mults` → `reduction_stack` step ③ **HARSHEST**（min 非乘积、不双乘）；present-but-malformed overextension fail-closed（镜像 machine_record）；chasing/none/absent 不缩不抬（chasing 效应是选股剥分）。
+   - warning 票现在三个 distinct 杠杆：force-pullback 入场（cut 2c）+ 抬 RR gate + 缩仓，不双罚。
+2. **§6a 独立对抗 agent（400k fuzz）攻 §6 RR gate + §8 sizing**：A backward-compat byte-identical / B raise STRICTER-only（shipped RR 恒 ≥ 两个 floor、200k fuzz 0 违规）/ C reduce HARSHEST-not-product 只缩不涨 / D fail-closed 两层 / E 无双罚·tier 分离（chasing inert）/ F whole-class holding 不动·仅建仓 / G priors 合理·不可 caller-override —— **A-G 全 HELD、0 P1/P2**；唯一 fuzz 异常=rr_floor_fallback 分支的 **pre-existing 安全方向 FP 刀刃**（BREAKOUT_RR_BONUS 同型、非本刀引入）。
+3. Verify：7 新测试（price 2 + analysis 1 + sizing 4）；**reviewer full pack** 亲跑 full offline `*us_short*` **4016 OK**（agent 自身 env 的 9 个 `gbk`-locale subprocess-decode error 在无关 batch4 context-builder 测试、本机不复现——该文件本机 20 OK；照 [[feedback_full_discover_env_overclaim]] 归因 env 非本刀）。
+
+**Key decisions**:
+- **复用 §6/§8 levers、无新 penalty stage**（register 明示）：raise_rr=RR_FLOOR bonus（镜像 breakout）、reduce_size=discount_mults step ③（镜像 macro_cluster shrink）。
+- **WARNING_RR_BONUS/WARNING_REDUCE_MULT = §13.1 #36 forward priors**（module const、非 caller-overridable → 无 sizing/RR bypass）；值 0.5/0.5 对 mild warning 合理（非 no-op、非清零）；真 warning 率 738/2404≈31%（2b-iii-C）是校准点。
+- **reduce_size 读行 flag（非注入 sizing_context）**：行已带 overextension（cut 2c/Cut 3）；`_size_build` 直读 append discount 更省；harshest 保证不双乘。
+- **`is True` 严格闸**（镜像 cut 2c）：只 real bool True 触发 + shape fail-closed；agent 证 flag-value 松（reduce_size:1→不缩）unreachable（producer 只发 bool True）+ 与 cut 2c 一致，defensible 不改。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「reduce_size 经 sizing_context 注入」— 否决。行已带 flag；直读更省、不穿新 context。
+- 「raise_rr 改 RR_FLOOR const per-ticker override」— 否决。const 不可 override（防 bypass）；加 STRICTER-only bool（只抬）安全、镜像 breakout bonus。
+- 「tighten flag-value 校验（reduce_size 须 bool）」— 否决（agent 观察）。unreachable（producer 发 bool True）+ 与 cut 2c 一致（单源模式）；改会分叉 cut 2c。
+
+**Pre-Codex self-review (A-F)**: A raise 全类（False/None/int/str 不抬、只 True）+ reduce 全类（chasing/none/absent 不缩、harshest 不乘、malformed fail-closed）+ holding 不动；B grep 新符号=仅 3 engine+3 test、support_atr 唯一生产调用方 `_analyze_one` 已更新、backward-compat（116 既有+全 pack 绿）；C 反向=raise STRICTER-only + reduce 只缩不涨 + malformed raise + 无 warning byte-identical；D N-A；E CURRENT §0 更新（无 gate 词）；F `git diff --check` clean、6 文件 no-BOM/no-FFFD、无 import 环（sizing→overextension states、smoke 过）。Verify：123 focused + 4016 full OK（本机；batch4 file 20 OK）+ §6a agent A-G 全 HELD 400k fuzz。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **overextension 唯一剩：capstone integration**（feature wiring 已全完）：weekly 一键 capstone 真跑 OHLCV fetch（2b-iii-C）+ producer 产 map 喂 data_context assembly；capstone 本身是 draft skeleton（未 Codex 审）；真周报可见效果另需 FMP emit gate（`R-...-OFFICIAL-EMIT`）。
+- Codex 额度恢复后：本会话 overextension 全链（Slice B / 2b-ii-B / 2b-iii-A/B/C / Cut 3 / Cut 4，共 8 提交）从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. capstone integration（bottom-up：source-packet 层 → Pass2 runner → capstone stage；建在 draft 上、真效果待 emit gate）。
+2. 或先 freshday FMP 全流程测试探 emit gate。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension Cut 3 orchestrator last-mile：data_context 把 producer map 铺进真 compose+分析 消费面；§6a 独立对抗 agent A-G 全 HELD)
 
 **Commits**: 本提交（data_context `_scope_overextension` + 3 compose site 接线 + `_official_per_ticker_analysis` tier 铺行 + 4 测试 + §6a agent PASS + register/CURRENT）

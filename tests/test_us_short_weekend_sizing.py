@@ -222,5 +222,44 @@ class SizeRowsTests(unittest.TestCase):
         self.assertEqual(out["rows"][0]["ticker"], "GOOG")   # whitespace + lowercase normalized on output
 
 
+class SizeRowsOverextensionWarningTests(unittest.TestCase):
+    # a large per-share risk (entry 101.5 − stop 90) makes the risk-budget BASE (65) bind below the single-ticker
+    # cap (98), so the §4.3 warning reduce_size discount is visible in the final size. base = ⌊100000×0.0075/11.5⌋ = 65.
+    def _row(self, state, *, reduce_size=True):
+        row = _build_row(entry=101.5, stop=90.0)
+        row["overextension"] = {
+            "overextension_state": state, "strips_theme_score": state == "chasing_extreme",
+            "execution_flags": ({"force_pullback": True, "reduce_size": reduce_size, "raise_rr_gate": True}
+                                if state == "warning" else {})}
+        return row
+
+    def test_warning_reduce_size_shrinks_the_position(self):
+        base = ws.size_rows(_decision([self._row("none")]), sizing_context=_sctx())["rows"][0]["sizing"]
+        self.assertEqual(base["desired_model_shares"], 65)                      # un-reduced base binds
+        warn = ws.size_rows(_decision([self._row("warning")]), sizing_context=_sctx())["rows"][0]
+        self.assertEqual(warn["final_action"], "建仓")
+        self.assertEqual(warn["sizing"]["desired_model_shares"], 32)            # 65 × 0.5 warning discount
+        self.assertLess(warn["sizing"]["desired_model_shares"], base["desired_model_shares"])
+
+    def test_chasing_and_absent_overextension_do_not_reduce(self):
+        chasing = ws.size_rows(_decision([self._row("chasing_extreme")]), sizing_context=_sctx())["rows"][0]
+        absent = ws.size_rows(_decision([_build_row(entry=101.5, stop=90.0)]), sizing_context=_sctx())["rows"][0]
+        self.assertEqual(chasing["sizing"]["desired_model_shares"], 65)        # chasing carries NO reduce_size flag
+        self.assertEqual(absent["sizing"]["desired_model_shares"], 65)         # no overextension field at all
+
+    def test_warning_reduce_folds_into_harshest_not_multiplied(self):
+        # an injected 0.3 discount is HARSHER than the 0.5 warning → harshest (0.3) wins, NOT 0.3×0.5.
+        sized = ws.size_rows(_decision([self._row("warning")]), sizing_context=_sctx(discount=(0.3,)))["rows"][0]
+        self.assertEqual(sized["sizing"]["desired_model_shares"], int(65 * 0.3))   # ⌊65×0.3⌋=19, not ⌊65×0.3×0.5⌋=9
+
+    def test_malformed_present_overextension_fails_closed(self):
+        for bad in ("warning", {"overextension_state": "bogus", "execution_flags": {}},
+                    {"overextension_state": "warning", "execution_flags": "x"}):
+            row = _build_row(entry=101.5, stop=90.0)
+            row["overextension"] = bad
+            with self.assertRaises(ws.WeekendSizingError):
+                ws.size_rows(_decision([row]), sizing_context=_sctx())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -284,5 +284,23 @@ class ContractConformanceTests(unittest.TestCase):
             self.assertIn(r["price_engine_used"], pe.PRICE_ENGINES)
 
 
+class SupportAtrRaiseRrGateTests(unittest.TestCase):
+    def test_raise_rr_gate_makes_a_borderline_rr_observe(self):
+        # RR 1.636 passes the 进攻 base RR floor 1.5 but fails the §4.3 warning-raised floor 2.0 (+WARNING_RR_BONUS).
+        inp = {"close": 100.0, "indicators": _ind(98.0, 109.0, 2.0)}
+        base = pe.support_atr_engine(inp, "进攻", "pullback")
+        self.assertTrue(base["executable"])
+        self.assertEqual(base["action_fields"]["min_rr_gate_status"], "pass")
+        raised = pe.support_atr_engine(inp, "进攻", "pullback", raise_rr_gate=True)
+        self.assertFalse(raised["executable"])
+        self.assertEqual(raised["action_fields"]["min_rr_gate_status"], "fail_below_floor")
+
+    def test_raise_rr_gate_non_true_leaves_the_floor_unchanged(self):
+        # STRICTER only: only a real True adds the bonus; False / None / 1 / str leave the base floor (still executable).
+        inp = {"close": 100.0, "indicators": _ind(98.0, 109.0, 2.0)}
+        for val in (False, None, 1, "yes"):
+            self.assertTrue(pe.support_atr_engine(inp, "进攻", "pullback", raise_rr_gate=val)["executable"])
+
+
 if __name__ == "__main__":
     unittest.main()

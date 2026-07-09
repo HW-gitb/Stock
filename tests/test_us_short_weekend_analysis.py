@@ -401,6 +401,19 @@ class OverextensionWiring(unittest.TestCase):
             with self.assertRaises(wa.WeekendAnalysisError):
                 _run([_cand_row(overextension=bad)])
 
+    def test_warning_raises_the_rr_gate_via_the_price_engine(self):
+        # a §4.3 `warning` tier → _analyze_one passes raise_rr_gate to the §6 price engine → a borderline RR (1.636)
+        # that PASSES the base 进攻 floor 1.5 now OBSERVES (fails the raised floor 2.0); a `none`/absent tier does not.
+        ind = {"effective_support": 98.0, "support_quality": "strong", "effective_resistance": 109.0,
+               "resistance_quality": "strong", "atr": 2.0}
+        px = {"close": 100.0, "indicators": ind}
+        out = {r["ticker"]: r for r in _run([
+            _cand_row(ticker="AAPL", overextension=_OX_WARNING, price_input=px),
+            _cand_row(ticker="MSFT", price_input=px)])["rows"]}
+        self.assertFalse(out["AAPL"]["price"]["executable"])            # warning raised the RR gate → observe
+        self.assertEqual(out["AAPL"]["price"]["action_fields"]["min_rr_gate_status"], "fail_below_floor")
+        self.assertTrue(out["MSFT"]["price"]["executable"])            # none/absent → base floor → executable
+
 
 if __name__ == "__main__":
     unittest.main()
