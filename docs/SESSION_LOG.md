@@ -160,7 +160,7 @@
 
 **Key decisions**:
 - **改名而非只改值**：`FMP_FREE_DAILY_CAP=40` 是自相矛盾的谎（40 不是日额度）——误命名正是 bug 的概念根（有人以为 universe 可用整个日额度）；改名 + 注释根治，防"下个读者把 40 调回 250"。
-- **值 40 = 250 − 200 grades − buffer**（用户拍板「砍到40」）：市值兜底是 opportunistic（救 SEC 缺流通股 survivors = ETF/外国 ADR/杂票、非做空候选、momentum top-200 有 SEC 股不受影响），砍到 40 高兜底日丢 ~200 边缘 eligible 换 grades 通路、值得。
+- **值 40 = 250 − 200 grades − buffer**（用户拍板「砍到40」）：市值兜底是 opportunistic（救 SEC 缺流通股 survivors = ETF/外国 ADR/杂票、非选股候选、momentum top-200 有 SEC 股不受影响），砍到 40 高兜底日丢 ~200 边缘 eligible 换 grades 通路、值得。
 - **残留（诚实标注）**：STATIC 拆分（40 universe / ~200 grades），非跨阶段共享 FMP 预算账本；K 变大或日额度变则需重访。真干净 grades-on-fresh-quota 测试仍需 fix 后新配额日重跑（今天配额已被 fix 前的 universe 跑污染）。
 - 提交不 push。
 
