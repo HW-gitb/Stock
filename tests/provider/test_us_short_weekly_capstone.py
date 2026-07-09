@@ -60,6 +60,19 @@ class CapstoneDryRunTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(datetime(2026, 7, 9, 8, 0, 0, tzinfo=timezone.utc), dry_run=True)
 
+    def test_observed_at_is_tz_aware(self):
+        # regression: the first real run failed because a NAIVE observed_at was rejected by the status source
+        # (and the Cut5 engines) which require a tz-aware PIT clock. resolve_capstone_context must localize the
+        # naive ET now_et to a tz-aware ET instant.
+        from runners.us_short_weekly_capstone import resolve_capstone_context
+        ctx = resolve_capstone_context(
+            now_et=datetime(2026, 7, 8, 21, 16, 1),
+            private_root=Path(tempfile.gettempdir()) / "cap_priv",
+            batch4_template_path=Path("t.json"), account_state_path=Path("a.json"))
+        parsed = datetime.fromisoformat(ctx.observed_at)
+        self.assertIsNotNone(parsed.tzinfo, "observed_at must be tz-aware (status source rejects a naive clock)")
+        self.assertEqual(ctx.generated_at, ctx.observed_at)
+
 
 class CapstoneFakeChainTest(unittest.TestCase):
     """Prove the orchestration (ordering, per-stage output validation, fail-fast, auth gating) with INJECTED fake

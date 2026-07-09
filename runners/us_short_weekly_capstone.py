@@ -37,6 +37,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -170,7 +171,9 @@ def resolve_capstone_context(
             "post-close; fail-closed, no canonical decision_date") from exc
     except ValueError as exc:
         raise WeeklyCapstoneError(f"canonical decision_date resolution failed: {exc}") from exc
-    generated_at = now_et.strftime("%Y-%m-%dT%H:%M:%S")  # naive ET; a later thin runner may pass a tz-aware instant
+    # PIT observation instant = the ET run wall-clock made TZ-AWARE. The status source + Cut5 engines REQUIRE a
+    # tz-aware observed_at (a naive string is rejected as a non-PIT clock); America/New_York is DST-correct.
+    generated_at = now_et.replace(tzinfo=ZoneInfo("America/New_York")).isoformat(timespec="seconds")
     return CapstoneContext(
         decision_date=resolved["decision_date"],
         price_basis_date=resolved["price_basis_date"],

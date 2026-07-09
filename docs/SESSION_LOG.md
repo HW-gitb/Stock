@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short capstone 首次真跑 shakedown:修 tz-aware observed_at 接缝;实证 FMP 日限已重置+grades/VIX 可拿、但 Massive 免费不给当天数据→全量跑留明早)
+
+**Commits**: 本提交（capstone tz-aware observed_at 修复 + 回归测试）
+
+**Relationship to prior session(s)**:
+- Builds on 2026-07-08 capstone 一键接线收口（`a37c0276`）+ fresh-day FMP 测试记忆。
+- 用户「直接跑全量、中间无需授权」→ capstone DRAFT 首次真跑 shakedown。
+
+**Worked on**:
+1. **实证 FMP 日额度已重置（fresh UTC day 07-09）**：探针 `stable/grades?symbol=AAPL` = **HTTP 200、1771 行**（昨天全 429 → 今天 200，**日限耗尽假设证实、非付费墙**）。VIX 也拿到：`stable/quote ^VIX` = 200、16.9（**注：走 `/stable/`,v3 quote 是 legacy-403**）。Massive `I:VIX` = 403 付费墙（免费拿 VIX 只剩 FMP）。
+2. **capstone 首次真跑揪出并修 1 真 bug**：`resolve_capstone_context` 传 **naive** `observed_at`（`2026-07-08T21:16:01`），status source + Cut5 引擎要 **tz-aware** → stage-1 崩。修：`now_et.replace(tzinfo=ZoneInfo("America/New_York")).isoformat()` → tz-aware EDT。+回归测试。
+3. **全量跑今晚跑不完（非 bug、时机太早）**：Massive 免费层不给"当天"数据（`grouped 2026-07-08` = 403「request today's data before end of day」；`07-07` = 200），而 canonical price_basis=07-08 → 撞墙。**关键：今晚(07-09 UTC)和明早共用同一 250 FMP 日限，绝不能今晚烧 200 grades → 全量跑留明早**（Massive 发布 07-08 + FMP 仍 fresh + 正常盘前 cadence）。
+
+**Key decisions**:
+- tz-aware 用 America/New_York 本地化 now_et（DST 正确、语义=ET 决策时刻），非 UTC-now。
+- 不 hack universe_fetch 跳过 403-当天（会引入 1 日 staleness、且今晚跑会烧掉明早的 grades 额度）。
+- 提交 tz 修复但不 push（push 须显式命令）。
+
+**Alternatives considered and rejected**:
+- "今晚用 07-07 作 price_basis 强跑完机制验证" — 否决。① 1 日 staleness ② 烧 200 grades → 明早正经跑没额度（共用同日 250 cap）。
+
+**Open questions handed off**:
+- capstone DRAFT 可能还有更后面的接缝（Pass2/bridge）未验——明早真跑会继续暴露、逐个修。
+- universe_fetch 把 Massive「当天数据 403」当致命而非 skip-able：可选硬化（让它像缺日一样跳到上一发布日），但会引入 staleness、非必须。
+
+**Next natural step from my view**:
+1. 明早（07-09 盘前 ET，Massive 发布 07-08 后）跑全量：先确认 `grouped 2026-07-08`=200，再 capstone `--live`。FMP 预算 ~210 + 今日已花 ~4 探针 < 250。
+2. Codex 额度恢复后复审 capstone 全部 fix（`a37c0276`起 + 本 tz 修复）。
+
 ## 2026-07-08 — Claude 执行+自审+提交 (US-short 交叉核验网页版 claude_r1 vs cc_r1:修 rpds 报错指引 + §18.3 target-count doc-drift;float-cap 验为潜在雷不改;写定版 cc_r2)
 
 **Commits**: 本提交（rpds import 报错指引 + §18.3 澄清注）
