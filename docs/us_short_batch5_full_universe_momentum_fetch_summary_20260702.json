@@ -2,7 +2,7 @@
   "schema_name": "us_short_batch5_full_universe_momentum_fetch_summary",
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_universe_momentum_fetch_summary.schema.json",
-  "generated_at": "2026-07-07T12:32:42+00:00",
+  "generated_at": "2026-07-09T08:26:39+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -52,7 +52,8 @@
   "paths": {
     "candidate_artifact_path": "state/us_short/candidate_universe_20260706.json",
     "series_packet_path": "state/us_short/us_short_batch5_full_universe_momentum_series_20260702_packet.json",
-    "summary_path": "docs/us_short_batch5_full_universe_momentum_fetch_summary_20260702.json"
+    "summary_path": "docs/us_short_batch5_full_universe_momentum_fetch_summary_20260702.json",
+    "ohlcv_series_packet_path": "state/us_short/us_short_batch5_full_universe_ohlcv_series_20260702_packet.json"
   },
   "storage": {
     "series_packet_path_gitignored": true,
@@ -60,7 +61,8 @@
     "summary_contains_ticker_lists": false,
     "summary_contains_price_rows": false,
     "summary_contains_request_urls": false,
-    "summary_contains_secrets": false
+    "summary_contains_secrets": false,
+    "ohlcv_series_packet_path_gitignored": true
   },
   "prohibited_claims": {
     "provider_selected": false,

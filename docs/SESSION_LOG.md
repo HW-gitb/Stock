@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension cut 2b-iii-C：真 Massive OHLCV 抓取[70/70] + 首个真过热分档 projection[scored 2400：none 1600 / warning 738 / chasing 66])
+
+**Commits**: 本提交（2 份 tracked no-secret summary：momentum-fetch summary[+OHLCV 字段] 更新 + overextension producer summary 新建；register/CURRENT 闭环）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 cut 2b-iii-B（fetch opt-in OHLCV 接线，`d1ce453`）。用户「授权跑 2b-iii-C」→ 跑真 Massive OHLCV 抓取（SR-PROVIDER-001 逐次授权、Massive 非 FMP）。
+
+**Worked on**:
+1. **cut 2b-iii-C = 真 Massive OHLCV grouped-daily 抓取**（用户授权、后台跑）：pre-flight（MASSIVE_API_KEY 在位、candidate 2404 eligible / price_basis 2026-07-02、OHLCV+projection 路径 gitignored）→ `run_fetch --confirm-user-authorization --ohlcv-series-packet-path …`：**70/70 grouped calls、70 sessions**、benchmarks present；写 gitignored momentum+OHLCV 两包 + tracked no-secret momentum-fetch summary（带 ohlcv 路径字段、gitignored-flag true）。raw 全市场窗口**未落盘**；独立 secret-scan（含真 MASSIVE_API_KEY 值）**CLEAN**；OHLCV 包 **eligible-only**（SPY/QQQ 排除、已验）。
+2. **2b-ii-B producer 跑真 OHLCV 包**（离线、无 Massive、无速率竞争）→ **首个真过热分档 projection：2400/2404 scored（4 insufficient_data）；state tally none 1600 / warning 738 / chasing_extreme 66**。tracked counts-only summary `docs/us_short_batch5_full_universe_overextension_summary_20260709.json`（secret/ticker-clean、tracked）。
+3. **live-slice 验干净**：2 份 tracked summary 独立 secret/ticker-scan clean、raw 未落盘、两包+projection gitignored、SR-PROVIDER-001 STAYS OPEN（无 provider selection / ship-gate / production 声明）。
+
+**Key decisions**:
+- 后台跑抓取（~15-20 min）+ 期间不并发任何 Massive 调用（避上次污染跑的速率竞争）。
+- 复用现有 candidate（price_basis 2026-07-02）而非 fresh universe fetch——2b-iii-C 是「证 OHLCV 管道端到端跑真数据」的有界 proof，非 fresh weekly（后者需 universe fetch、另论）。
+- **live-slice 直接提交**（[[feedback_live_slice_commit_clean_plus_escalation]]）：用户授权 2b-iii-C（escalation）+ tracked artifact 独立验干净 → 直接提交 2 份 no-secret summary，不 push。
+- warning 31% = §13.1 #36 forward-prior 阈值（WARNING_MA10_ATR=1.0）首次真读、up-tape，诚实证据+校准点，非 bug（warning 是软执行 nudge、非硬排除）。
+
+**Alternatives considered and rejected**:
+- 「fresh universe fetch 拿今日 price_basis」— 否决（本刀是 OHLCV 管道 proof、有界；fresh weekly 另论、需 universe fetch）。
+- 「不提交 momentum-fetch summary 覆盖」— 否决。re-run 是诚实事实（现也产 OHLCV），更新的 summary 是真证据。
+
+**Pre-Codex self-review (A-F)**: A 两 tracked summary 独立 secret/ticker/url/rawrow-scan（含真 key 值）clean；B 无代码改（纯跑管道）；C 反向=OHLCV eligible-only（无 SPY leak）验、raw 未落盘验、两包 gitignored 验；D N-A；E CURRENT §0 更新（无 gate 词）；F git status 仅 2 tracked summary（其余 gitignored）、JSON no-BOM。Verify：fetch 70/70 exit0、producer 2400/2404 scored、artifact clean、SR-PROVIDER-001 open。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **orchestrator last-mile**（overextension 唯一剩的 wiring）：把 producer `overextension_by_ticker` map 铺到真 `compose_score_inputs` 调用 + `_analyze_one` 行（batch5 live-half seam）——map 现已产真数据、但尚未在真 selection/analysis run 被消费，故 chasing_extreme 尚未在真报告里剥赛道分。
+- §8 warning sizing follow-on 子刀。
+- Codex 额度恢复后：本会话 overextension 全链（Slice B / 2b-ii-B / 2b-iii-A/B/C）从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. orchestrator last-mile：threading producer map onto compose+分析行（让 chasing 在真报告剥分）。
+2. §8 warning sizing 子刀。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-iii-B：momentum fetch opt-in 产 SEPARATE OHLCV packet；§6a 独立对抗 agent 全 HELD)
 
 **Commits**: 本提交（`run_fetch` opt-in OHLCV packet + line 244 保留 h/l + `_build_ohlcv_packet` + summary schema additive + 6 fetch 测试 + §6a agent PASS + register/CURRENT）
