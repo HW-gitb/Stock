@@ -150,8 +150,9 @@ def run_pass2_preflight(ctx) -> dict[str, Any]:
 
 def run_weekly_bridge(ctx) -> dict[str, Any]:
     """Derive HONEST provider_health from the actual Pass2 outcome, then bridge the source packet → weekly report /
-    action table. provider_health is NOT hand-written: fmp = ok iff grades were obtained, sec_edgar = ok iff SEC
-    submissions were obtained; a down critical source makes the orchestrator emit nothing (design §3.2)."""
+    action table. provider_health is NOT hand-written: fmp = ok iff >=_HEALTH_MIN_SUCCESS_COVERAGE of grades calls
+    succeeded, sec_edgar = ok iff the same fraction of SEC submissions succeeded (a success-COVERAGE threshold, NOT
+    any-single-success); a down critical source makes the orchestrator emit nothing (design §3.2)."""
     _write_provider_health(ctx)
     return _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
@@ -169,23 +170,39 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
 
 # --- honest provider_health derivation from the real Pass2 summary ---
 
+# A source reads "ok" only if at least this fraction of its ATTEMPTED endpoint calls came back success. This is a
+# coverage threshold, deliberately NOT "any single success" / "any call attempted": a run whose grades mostly 429'd
+# (or whose SEC submissions mostly failed) is NOT a healthy source, so it must NO-EMIT rather than emit a "healthy"
+# report on near-zero real coverage. 0.5 = a simple majority; tune here if the operational bar changes.
+_HEALTH_MIN_SUCCESS_COVERAGE = 0.5
+
+
 def _write_provider_health(ctx) -> None:
-    summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
-    budget = summary.get("endpoint_call_budget", {})
-    results = summary.get("endpoint_results", [])
+    # Fail closed on a malformed/unreadable summary: any read / parse / container-shape problem -> empty results ->
+    # both sources 'down' (no emit), NEVER a crash. This is the gate's OWN defense-in-depth, not a reliance on the
+    # orchestrator's blanket stage-exception handler.
+    try:
+        summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        summary = {}
+    results = summary.get("endpoint_results", []) if isinstance(summary, dict) else []
+    if not isinstance(results, list):
+        results = []
 
-    def _family_ok(provider: str, family: str) -> bool:
-        # ok iff at least one endpoint of this (provider, family) came back ok=True in the run.
-        return any(
-            r.get("provider_id") == provider and r.get("endpoint_family") == family and r.get("status") == "success"
-            for r in results
-        )
+    def _coverage_ok(provider: str, family: str) -> bool:
+        # success COVERAGE over the family's ATTEMPTED calls (obtained, not merely attempted): a mostly-failed source
+        # is down. Non-dict rows are ignored (fail-closed), so a hostile row can never inflate coverage or crash.
+        rows = [r for r in results
+                if isinstance(r, dict) and r.get("provider_id") == provider and r.get("endpoint_family") == family]
+        if not rows:
+            return False   # no attempted calls for this family -> not a usable source
+        successes = sum(1 for r in rows if r.get("status") == "success")
+        return successes / len(rows) >= _HEALTH_MIN_SUCCESS_COVERAGE
 
-    # Fallback to the family CALL counts if endpoint_results lacks per-row provider/family (draft-tolerant).
-    fmp_ok = _family_ok("financial_modeling_prep", "grades") or (
-        budget.get("fmp_grades_calls", 0) > 0 and budget.get("endpoint_error_count", 1) == 0)
-    sec_ok = _family_ok("sec_edgar", "submissions") or budget.get("sec_submissions_calls", 0) > 0
-    health = {"fmp": "ok" if fmp_ok else "down", "sec_edgar": "ok" if sec_ok else "down"}
+    health = {
+        "fmp": "ok" if _coverage_ok("financial_modeling_prep", "grades") else "down",
+        "sec_edgar": "ok" if _coverage_ok("sec_edgar", "submissions") else "down",
+    }
     ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
     ctx.provider_health_path.write_text(json.dumps(health, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

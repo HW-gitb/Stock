@@ -255,8 +255,8 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
     """_write_provider_health derives {fmp, sec_edgar} from the REAL Pass2 summary (endpoint_results rows carry
     provider_id/endpoint_family/status per _summarize_endpoint). This is the emit-critical unit the stopped 2026-07-09
     run never reached and the fake-chain tests structurally cannot cover (they inject the bridge RESULT, not the
-    derivation). These tests PIN the current behaviour; the two marked LENIENCY cases document quirks pending a design
-    decision (coverage threshold vs. downgrading FMP-grades from health-critical) and should be updated when it lands."""
+    derivation). A source reads 'ok' only if its success COVERAGE over attempted calls is >= _HEALTH_MIN_SUCCESS_COVERAGE
+    (item 2, option a) — this closed the earlier any-single-success (grades) / attempted-only (sec) leniencies."""
 
     def _derive(self, endpoint_results, budget):
         import json
@@ -293,14 +293,14 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         self.assertEqual(health["fmp"], "down")
         self.assertEqual(health["sec_edgar"], "ok")
 
-    def test_single_grades_success_reads_ok_LENIENCY(self):
-        # CHARACTERIZATION of the grades leniency: ONE success among 199 failures -> fmp='ok' (3.5%-style coverage
-        # would still emit). _family_ok is any-success. Update when the item-2 coverage/criticality decision lands.
+    def test_low_grades_coverage_is_down(self):
+        # item 2 (a): ONE success among 199 failures = 0.5% coverage < threshold -> fmp='down' (was 'ok' under the
+        # old any-single-success leniency). A near-zero-coverage grades run now correctly NO-EMITs.
         rows = ([self._row("financial_modeling_prep", "grades", True)]
                 + [self._row("financial_modeling_prep", "grades", False) for _ in range(199)]
                 + [self._row("sec_edgar", "submissions", True)])
         health = self._derive(rows, {"fmp_grades_calls": 200, "sec_submissions_calls": 1, "endpoint_error_count": 199})
-        self.assertEqual(health["fmp"], "ok")
+        self.assertEqual(health["fmp"], "down")
 
     def test_sec_no_calls_is_down(self):
         # sec_ok = any-sec-success OR sec_submissions_calls>0; zero sec calls and no success -> down.
@@ -308,13 +308,57 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 0, "endpoint_error_count": 0})
         self.assertEqual(health["sec_edgar"], "down")
 
-    def test_sec_all_failed_but_attempted_reads_ok_LENIENCY(self):
-        # CHARACTERIZATION of the sec leniency (worse than grades): sec_ok falls back to sec_submissions_calls>0, so
-        # ALL-FAILED submissions still read 'ok' if any call was ATTEMPTED -- contradicting the docstring's "obtained".
-        rows = ([self._row("financial_modeling_prep", "grades", True)]
+    def test_sec_all_failed_is_down(self):
+        # item 2 (a): ALL SEC submissions failed = 0% coverage -> sec_edgar='down' (was 'ok' under the old
+        # attempted-only fallback). Fixes attempted != obtained: a call being MADE is no longer enough.
+        rows = ([self._row("financial_modeling_prep", "grades", True) for _ in range(5)]
                 + [self._row("sec_edgar", "submissions", False) for _ in range(5)])
-        health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 5, "endpoint_error_count": 5})
-        self.assertEqual(health["sec_edgar"], "ok")
+        health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 5})
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_coverage_exactly_at_threshold_is_ok(self):
+        # boundary: successes/attempted == threshold (0.5) is INCLUSIVE (>=) -> ok, for both legs.
+        rows = ([self._row("financial_modeling_prep", "grades", i < 5) for i in range(10)]
+                + [self._row("sec_edgar", "submissions", i < 5) for i in range(10)])
+        health = self._derive(rows, {"fmp_grades_calls": 10, "sec_submissions_calls": 10, "endpoint_error_count": 10})
+        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "ok"})
+
+    def test_coverage_just_below_threshold_is_down(self):
+        # boundary: 4/10 = 0.4 < 0.5 -> down.
+        rows = ([self._row("financial_modeling_prep", "grades", i < 4) for i in range(10)]
+                + [self._row("sec_edgar", "submissions", True) for _ in range(10)])
+        health = self._derive(rows, {"fmp_grades_calls": 10, "sec_submissions_calls": 10, "endpoint_error_count": 6})
+        self.assertEqual(health["fmp"], "down")
+
+    def _run_on_raw(self, raw_text):
+        import json
+        from types import SimpleNamespace
+
+        from runners import us_short_weekly_capstone_stages as st
+        tmp = Path(tempfile.mkdtemp(prefix="cap_health_raw_"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ctx = SimpleNamespace(sample_root=tmp, decision_date="20260710",
+                              provider_health_path=tmp / "provider_health.json")
+        summ = st._stage_summary_targets(ctx)["pass2"]
+        summ.parent.mkdir(parents=True, exist_ok=True)
+        summ.write_text(raw_text, encoding="utf-8")
+        st._write_provider_health(ctx)   # must NOT raise
+        return json.loads(ctx.provider_health_path.read_text(encoding="utf-8"))
+
+    def test_malformed_summary_fails_closed_no_crash(self):
+        # §6a P3 fix: container-level-malformed summaries must fail closed to {down, down}, never crash (the gate's
+        # own defense-in-depth + honouring its fail-closed contract). Covers top-level non-dict, non-list/null
+        # endpoint_results, and a missing results key.
+        import json
+        for bad in ("[]", "null", "42", '"hello"', "true",
+                    json.dumps({"endpoint_results": None}), json.dumps({"endpoint_results": 5}),
+                    json.dumps({"no_results_key": 1})):
+            self.assertEqual(self._run_on_raw(bad), {"fmp": "down", "sec_edgar": "down"}, f"input={bad!r}")
+
+    def test_unreadable_or_invalid_json_fails_closed(self):
+        # invalid JSON and an empty/0-byte file -> fail closed to down, no crash.
+        self.assertEqual(self._run_on_raw("{not valid json"), {"fmp": "down", "sec_edgar": "down"})
+        self.assertEqual(self._run_on_raw(""), {"fmp": "down", "sec_edgar": "down"})
 
 
 if __name__ == "__main__":

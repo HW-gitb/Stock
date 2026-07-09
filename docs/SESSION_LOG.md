@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short item 2(a)：capstone health gate 改 success-coverage 阈值 [修 grades+sec 两处宽松]；§6a 独立对抗 agent 三不变式 HELD + 1 P3 fail-closed 已修)
+
+**Commits**: 本提交（`runners/us_short_weekly_capstone_stages.py` `_write_provider_health` coverage 阈值 + P3 fail-closed 硬化 + `_HEALTH_MIN_SUCCESS_COVERAGE=0.5` + 9 测试[7 coverage + 2 malformed] + register capstone-skeleton 更新 + 本 entry + CURRENT §0）。
+
+**Relationship to prior session(s)**:
+- item 1（`4ae6ef9`）揪出两处 health-gate 宽松 + 摆出 (a)覆盖率阈值 / (b)grades 降级 → 用户「a」→ 本轮实现 (a)。
+
+**Worked on**:
+1. **coverage 阈值替换双宽松**：`_write_provider_health` 改成「source ok 当且仅当 `successes/attempted ≥ _HEALTH_MIN_SUCCESS_COVERAGE`(0.5) for (provider,family)」——替掉 grades「任一 success 即 ok」+ sec「有调用即 ok」，并修 sec attempted≠obtained（发起过 ≠ 拿到）。近零覆盖的 grades 跑现在端到端 NO-EMIT。0.5 是可调 module const。行为=更严 emit 门（只去掉过松 emit、不新增假 emit）。
+2. **§6a 独立对抗 agent**（offline blackbox；非 worktree 因需审未提交改动）：SAFETY/THRESHOLD-CORRECTNESS/NO-GAMING 三不变式 HELD（1/200→down 端到端验、只认精确 "success"、本族分母、边界 inclusive）；揪 1 P3——函数对 CONTAINER-malformed summary（顶层非 dict / results 非 list / 非法 JSON）崩而非写 "down"，违反我自己注释的 fail-closed 承诺（orchestrator 的 blanket try/except 已让系统层 fail-closed=abort 不 emit、故非假 emit 风险）。
+3. **修 P3**：gate 现在函数内 fail-closed（summary/results `isinstance` 守 + read 包 `OSError`/`ValueError` → down、绝不崩）+ 2 回归测试。
+4. **Verify**：capstone 22 测试绿（13 既有 + 7 coverage + 2 malformed）；**reviewer full pack** 亲跑 `discover test_us_short*.py` = **4025 OK、0 traceback、零回归**。
+
+**Key decisions**:
+- **阈值 0.5**（技术类 option 自选、可调 const）：简单多数=「源真在工作」；明天满 grades 干净跑→高覆盖→ok→emit，坏跑→低覆盖→down→no-emit。
+- **P3 就地修而非只改注释**：emit gate + 我注释 overclaim「never crash」；函数内 fail-closed = defense-in-depth（不依赖远处 orchestrator try/except、防其未来 refactor 移除）+ 整类修（所有 malformed→down），合 [[feedback_whole_class_input_validation_sweep]]。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「(b) grades 降级 non-critical」— 用户选 (a)。
+- 「只改注释不修 P3 崩」— 否决：emit gate 该在函数内 fail-closed，靠系统层 blanket except 太脆。
+- 「per-family 不同阈值」— 本轮不做（simplicity；单一 0.5 够）。
+
+**Pre-Codex self-review**: coverage 逻辑未动（7 well-formed 测试证正常路径不变）+ P3 守只加在 malformed 前（不碰正常路径）；边界 inclusive（5/10→ok、4/10→down 证）；只认精确 "success"（agent 证）；full pack 4025 OK；§6a 三不变式 HELD、P3 已修+回归。
+
+**Open questions handed off**:
+- **threshold 0.5 可调**：运营门槛要变改 `_HEALTH_MIN_SUCCESS_COVERAGE`。
+- bridge stage 9 完整 live 验仍待明天 20260710 干净跑。
+- Codex 恢复从 `ef3c43f4` re-review（含本 gate 改 + §6a agent 结论）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short capstone provider_health→emit 路离线补验 [item 1]：+5 测试 pin 派生 + 揪 2 处 health-gate 宽松 + 20260710 dry-run/config 预建)
 
 **Commits**: 本提交（`tests/provider/test_us_short_weekly_capstone.py` +`CapstoneProviderHealthDerivationTest`(5) + register capstone-skeleton 更新 + 本 entry + CURRENT §0）。20260710 run config 是 gitignored、不提交。
