@@ -8,6 +8,27 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审 (US-short 发现 capstone 无法 emit 的双层架构 blocker：bridge `run_mode="live"` 必崩 + offline_test 会给真数据盖 fixture 假章；设计决策留用户)
+
+**Commits**: 本提交（register capstone-skeleton +blocker 条目 + 本 entry + CURRENT §0；**纯 finding 记录、无代码改**——修法是留用户定的设计决策）。
+
+**Relationship to prior session(s)**:
+- 用户「1」= 补全 emit 路验证 → 我先做可行性核查 → 发现 emit 路根本走不通（比写个能过的测试有价值得多）。
+
+**Worked on**:
+1. **实证 capstone emit 双层 blocker**（probe）：(1) `run_weekly_bridge` 硬写 `run_mode="live"`，`engine/us_short_weekend_orchestrator._assert_calendar` 对 live **无条件 raise**（batch4 不做 live、authoritative NYSE 日历留批5/SR-PROVIDER-001、没建）→ weekly_bridge stage 每跑必崩 → capstone stage 9 abort、**永不 emit**。**明天 grades 全过+health clean 也会崩在 bridge**。latent 因 bridge 从没跑到（07-08 health 前 no-emit、今天停 Pass2）。(2) batch4 唯一支持的 `offline_test` 盖不可变 `run_origin`={offline_test/caller_supplied_fixture/not_authorized}+§11「所有 provider 事实非真实」（`engine/us_short_run_origin.py`）→ 真数据上是 **false-provenance 谎**（P1 若只换模式了事）。根：batch4 e2e bridge 是 **fixture-only 渲染器**、从没设计真数据诚实报告；真/权威路（live）卡在没建的批5 权威日历后。
+2. **记 register**（P2 blocker）+ 三设计选项。
+
+**Key decisions**:
+- **不擅自改 run_mode**：换 offline_test 会在真数据上盖 fixture 假章（P1 false-provenance）；真设计决策、surface。
+- **明天照跑**：freshday 核心（grades 新配额通不通）在 Pass2 完成、不依赖 bridge；emit 真 Top15 另需设计 cut。
+
+**Open questions handed off**:
+- **用户定 emit 架构方向**：(a) batch4 加「真数据·预权威·研究」模式+诚实 sentinel（我倾向）/ (b) 日历做批5权威+解 live / (c) 批5 专属渲染绕 batch4。
+- Codex 恢复从 `ef3c43f4` re-review（含本 blocker）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short item 2(a)：capstone health gate 改 success-coverage 阈值 [修 grades+sec 两处宽松]；§6a 独立对抗 agent 三不变式 HELD + 1 P3 fail-closed 已修)
 
 **Commits**: 本提交（`runners/us_short_weekly_capstone_stages.py` `_write_provider_health` coverage 阈值 + P3 fail-closed 硬化 + `_HEALTH_MIN_SUCCESS_COVERAGE=0.5` + 9 测试[7 coverage + 2 malformed] + register capstone-skeleton 更新 + 本 entry + CURRENT §0）。
