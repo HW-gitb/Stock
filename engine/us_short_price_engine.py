@@ -124,6 +124,13 @@ def tick_down(x, tick_size):
 
 
 # ── indicators (pure; bars oldest→newest, each {high, low, close}) ────────────────────────
+def _finite_positive(x):
+    """True iff x is a finite, strictly-positive real number (a valid price / ATR). Rejects None / bool / non-numeric
+    / NaN / inf / <=0 — so a hostile non-positive or non-finite price/ATR can never slip a bare `is None` guard and
+    fabricate a signal (D8 P3 defense-in-depth; the real pipeline already cleans these upstream)."""
+    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x > 0
+
+
 def atr(bars, n=ATR_WINDOW):
     if len(bars) < n + 1:
         return None
@@ -131,7 +138,8 @@ def atr(bars, n=ATR_WINDOW):
     for i in range(len(bars) - n, len(bars)):
         h, l, pc = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
         trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-    return sum(trs) / n
+    result = sum(trs) / n
+    return result if math.isfinite(result) else None   # non-finite ATR (hostile NaN/inf bar) → None, not a value that slips `a<=0`
 
 
 def effective_support(bars, atr_val):
@@ -237,7 +245,7 @@ def support_atr_engine(inp, regime, sub_mode="pullback", raise_rr_gate=False):
     def observe(reason):
         return _result(False, "support_atr_engine", f, reason, tick, regime)
 
-    if close is None or a is None or a <= 0:
+    if not _finite_positive(close) or not _finite_positive(a):
         return observe("缺价/ATR,无法精算入场结构")
 
     # sub-mode geometry: stop basis + entry band (raw, pre-tick)
@@ -347,7 +355,7 @@ def holding_exit_engine(inp, regime, event_reference_price=None):
     def observe(reason):
         return _result(False, "holding_exit_engine", f, reason, tick, regime)
 
-    if close is None or a is None or a <= 0 or recent_high is None:
+    if not _finite_positive(close) or not _finite_positive(a) or not _finite_positive(recent_high):
         return observe("缺价/ATR/有效压力,无法精算跟踪止损")
 
     stop = tick_up(recent_high - ATR_MULT.get(regime, _NEUTRAL_ATR_MULT) * a, tick)

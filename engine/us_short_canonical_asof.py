@@ -118,8 +118,8 @@ def resolve_canonical_asof(now_et, sessions):
               (price-decision) session or no settled (price-basis) session.
     session_scope is always "RTH" (SESSION_SCOPE, hardcoded — not a caller parameter, §2.1).
     """
-    if not isinstance(now_et, datetime):
-        raise ValueError("now_et 须为 datetime（ET 墙钟）")
+    if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
+        raise ValueError("now_et 须为无时区 datetime（ET 墙钟；tz-aware 拒收，防跨端 PIT 时钟混淆）")
     run_date = now_et.strftime("%Y%m%d")
     now_t = now_et.time()
 

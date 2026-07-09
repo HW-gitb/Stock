@@ -74,7 +74,7 @@ SUMMARY_PATH = ROOT / "docs" / "us_short_batch5_full_universe_theme_summary_2026
 SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_theme_20260707")
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
-DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260706.json"
+DEFAULT_CANDIDATE_ARTIFACT_PATH = STATE_US_SHORT_DIR / "candidate_universe_20260702.json"
 DEFAULT_SERIES_PACKET_PATH = (
     STATE_US_SHORT_DIR / "us_short_batch5_full_universe_momentum_series_20260702_packet.json"
 )

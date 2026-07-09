@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short cc_r1 D8 一把 P3 fail-closed 守卫硬化)
+
+**Commits**: 本提交（`us_short_canonical_asof` tz 自守 + `us_short_price_engine` atr 非有限→None + `_finite_positive` 价格门（两引擎）+ 3 producer 默认日期对齐 + 6 D8 守卫测试 + SESSION_LOG/CURRENT）。**提交后 push**（用户明确指令 + 确认私密库 + 隐私审计）。
+
+**Worked on**（cc_r1 D8 一把 P3、都 fail-closed 不影响真数据、defense-in-depth）:
+1. **canonical 纯函数自守 tz-aware now_et**：`resolve_canonical_asof` 现拒 tz-aware / 非 datetime now_et（原静默收、靠 caller 守）——函数自身契约 fail-closed、动 sessions 前先拦。真 caller 都传 naive、无回归。
+2. **price_engine atr 非有限→None**（单源修、护所有 consumer）：`atr()` 结果非有限（hostile NaN/inf bar）→ None，不再是滑过下游 `a is None or a <= 0` 的 NaN（effective_support/resistance + 两引擎都吃 `atr()`）。
+3. **非正/非有限价格门**（两引擎）：加 `_finite_positive(x)`（拒 None/bool/非数/NaN/inf/≤0）→ support_atr_engine + holding_exit_engine 的 close/atr/recent_high 都过它，堵「负价报假止损 / 假入场几何」。
+4. **全宇宙 producer 默认日期对齐**：momentum/overext/theme 的 `DEFAULT_*` 数据路径默认日期原漂移（candidate 06 vs series/output 07/09/02）→ 各 producer 内对齐（07/09/02）+ 一致性测试防再漂。**stale CLI 便利默认、pipeline 不用（capstone 传显式路径）**。
+5. **guard 4（multiweek 浅拷贝）判为非 bug**：cc_r1 flag 的 `dict(_BOUNDARY)` 是 flat dict（str/bool 标量）、无嵌套可别名 → 安全、无需改（cc_r1 旧注 over-flag）。
+
+**Key decisions**:
+- **atr 单源修**（返 None）而非逐 consumer 加 isfinite：一处护全部。
+- **producer 日期对齐 = candidate→series**（series/output 已一致、candidate 是 outlier）；stale 非 pipeline 默认、具体日期无所谓、内部一致即可、加测试钉。
+- **guard 4/5 不 fabricate**：4 是真非 bug；5 是 stale 默认、对齐+测试即可，不瞎猜"pipeline 正确日期"（语义上 candidate=decision / series=price-basis 本就不同，且现值 stale 不可考）。
+
+**Pre-Codex self-review**: 6 D8 测试过（tz-reject / atr-inf→None / `_finite_positive` 全类 / producer 日期一致）；full us_short pack **4051 OK 零回归**。
+
+**Open questions handed off**:
+- Codex 恢复从 `ef3c43f4` re-review（含本 D8 守卫 + 本轮全部 solo commit）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short VIX 抓取脚本 [cc_r1 B4 半] + housekeeping + cc_r1 清单更新)
 
 **Commits**: 本提交（`runners/us_short_vix_regime_fetch.py` + 8 离线测试 + 本 entry + CURRENT §0）。housekeeping（删 untracked aborted-run artifact）无需 commit（从未 tracked）；`cc_r1.md` 在桌面、非 repo 文件。
