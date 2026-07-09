@@ -197,6 +197,66 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
             self.assertNotIn("AAPL", blob)
 
+    def test_research_live_run_emits_real_data_report_not_fixture(self) -> None:
+        # option a: run_mode="research_live" EMITS an honest real-data research report — the report carries the
+        # research sentinel (研究运行 / 真实 provider 数据), NOT the offline_test fixture lie, and the machine record
+        # carries the research run_origin. This is the capstone's real emit path (run_weekly_bridge passes
+        # run_mode="research_live"), which previously CRASHED under the (hard-gated) run_mode="live".
+        from engine.us_short_run_origin import RESEARCH_LIVE_RUN_ORIGIN
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            funnel.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            funnel_summary = funnel.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+        source_packet_path = ROOT / funnel_summary["source_packet"]["path"]
+
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+
+            summary = e2e.run_e2e(
+                source_packet_path=source_packet_path,
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                run_mode="research_live",
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+
+            self.assertTrue(summary["batch4_run"]["emitted"])   # emits (did NOT crash as run_mode="live" would)
+            report_path = private_root / "weekly_private" / _DECISION_DATE / "weekly_report.md"
+            self.assertTrue(report_path.exists())
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("研究运行", report_text)                 # honest real-data research provenance
+            self.assertIn("真实 provider", report_text)
+            self.assertNotIn("调用方注入 fixture", report_text)     # NOT the offline_test fixture lie
+            machine_record = json.loads(
+                (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8"))
+            self.assertEqual(machine_record["run_origin"], RESEARCH_LIVE_RUN_ORIGIN)
+            blob = json.dumps(summary, ensure_ascii=False)
+            self.assertNotIn("UNIT_TEST_FMP_SECRET", blob)
+            self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
+
 
 if __name__ == "__main__":
     unittest.main()

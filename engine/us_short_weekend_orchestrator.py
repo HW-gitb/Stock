@@ -70,7 +70,7 @@ _PIPELINE_CONTEXT_KEYS = frozenset({
 # §2.1/§3.5: a live/forward run must run off an AUTHORITATIVE-cross-checked calendar (the official NYSE cross-check
 # is batch5 / SR-PROVIDER-001). batch4 cannot trust an OFFLINE-injected calendar's self-reported status, so live
 # mode is gated entirely here; offline_test runs on the injected fixture sessions (deterministic, calendar-bound).
-RUN_MODES = frozenset({"offline_test", "live"})
+RUN_MODES = frozenset({"offline_test", "research_live", "live"})
 
 
 class WeekendOrchestratorError(Exception):
@@ -254,10 +254,11 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"])
     ranked = apply_action_rank(cash)
 
-    # batch4 honesty provenance: the immutable offline_test / caller_supplied_fixture / not_authorized fact,
-    # threaded through K (machine record) + m2 (report) + N (private write) so a synthetic fixture run can never
-    # be mistaken for operational weekly advice (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP). live is
-    # hard-gated above, so run_origin_for_mode only ever returns the offline fact here.
+    # batch4 honesty provenance: the immutable run-origin fact (offline_test fixture OR research_live real-data; BOTH
+    # operational_use=not_authorized), threaded through K (machine record) + m2 (report) + N (private write) so neither
+    # a synthetic fixture nor a pre-authoritative research run can be mistaken for operational weekly advice
+    # (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP). live (operationally authoritative) stays hard-gated above
+    # (→ batch5), so run_origin_for_mode only ever returns the offline_test or research_live fact here.
     run_origin = run_origin_for_mode(run_mode)
     machine_record = assemble_machine_record(ranked, as_of=decision_date, run_origin=run_origin)   # decision_date → K as_of
     lifecycle_result = run_lifecycle_eval_stage(                                  # §13: L BEFORE the m2 render

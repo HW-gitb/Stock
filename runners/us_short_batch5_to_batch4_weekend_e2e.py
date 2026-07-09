@@ -416,7 +416,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--context-out", type=Path, default=None)
     parser.add_argument("--calendar", type=Path, default=DEFAULT_CALENDAR_PATH)
     parser.add_argument("--governance", type=Path, default=DEFAULT_GOVERNANCE_PATH)
-    parser.add_argument("--run-mode", choices=("offline_test", "live"), default="offline_test")
+    parser.add_argument("--run-mode", choices=("offline_test", "research_live", "live"), default="offline_test")
     parser.add_argument("--bootstrap-lifecycle", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--generated-at", default=None)

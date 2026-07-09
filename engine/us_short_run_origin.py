@@ -26,10 +26,23 @@ OFFLINE_TEST_RUN_ORIGIN = {
 }
 _REQUIRED_KEYS = frozenset(OFFLINE_TEST_RUN_ORIGIN)
 
+# the SECOND immutable batch4 honesty fact (2026-07-09, option a): a RESEARCH run over REAL provider data on a
+# still-pre-authoritative calendar. data_origin=real_provider_pre_authoritative (真实 provider 调用，但日历/源未经
+# 批5 SR-PROVIDER-001 权威核对); operational_use=not_authorized (仍非可执行运营建议). This lets the capstone emit an
+# HONEST real-data research report WITHOUT the offline_test "fixture/unreal" lie AND without claiming operational
+# authority (live stays hard-gated in the orchestrator → batch5). See project_us_short_live_mode_authoritative_upgrade.
+RESEARCH_LIVE_RUN_ORIGIN = {
+    "run_mode": "research_live",
+    "data_origin": "real_provider_pre_authoritative",
+    "operational_use": "not_authorized",
+}
+_VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN)
+
 # the stable always-visible offline disclosure sentinel — rendered into the weekly report (§11.2) and
 # reconciled at the §18.0 private-write boundary so an offline machine record can never be written beside a
 # report that omits the disclosure (machine/report mode mismatch fails closed).
 OFFLINE_DISCLOSURE_SENTINEL = "⚠ 离线工程运行（OFFLINE_TEST·调用方注入 fixture·非真实数据·不可执行）"
+RESEARCH_DISCLOSURE_SENTINEL = "⚠ 研究运行（RESEARCH_LIVE·真实 provider 数据·非 ship-gate 权威·research-only·不可执行）"
 
 # the STRUCTURED offline report invariants the §18.0 private-write boundary enforces on report_data (NOT a
 # markdown substring): §11 provider health must carry the offline disclaimer and must NOT restore the
@@ -46,6 +59,27 @@ OFFLINE_LIMITATION_LINE = (
     "本周不 clean 项 ①: 离线工程运行（offline_test·调用方注入 fixture），所有 provider/市场事实非真实、"
     "不可作运营周报（operational_use=not_authorized）"
 )
+RESEARCH_PROVIDER_DISCLAIMER = "research_live 不认定运营级权威 clean"   # §11 MUST contain (research mode)
+RESEARCH_LIMITATION_LINE = (
+    "本周不 clean 项 ①: 研究运行（research_live·真实 provider 数据·预权威），"
+    "未经 ship-gate 运营核准、不可作运营周报（operational_use=not_authorized）"
+)
+# per-run_mode text so the SAME closed-world validators render/enforce EITHER honesty track (offline_test fixture OR
+# research_live real-data) without duplicating the structure. The offline_test entries are byte-identical to the
+# original inline strings (existing tests pin them).
+_MODE_SENTINEL = {"offline_test": OFFLINE_DISCLOSURE_SENTINEL, "research_live": RESEARCH_DISCLOSURE_SENTINEL}
+_MODE_PROVIDER_DISCLAIMER = {"offline_test": OFFLINE_PROVIDER_DISCLAIMER, "research_live": RESEARCH_PROVIDER_DISCLAIMER}
+_MODE_LIMITATION_LINE = {"offline_test": OFFLINE_LIMITATION_LINE, "research_live": RESEARCH_LIMITATION_LINE}
+_MODE_S11_TEMPLATE = {
+    "offline_test": "数据源健康: provider_health=%s（离线 fixture 自报；%s，非真实 provider 调用）",
+    "research_live": "数据源健康: provider_health=%s（真实 provider 调用；%s，research/预权威、未经 ship-gate 运营核准）",
+}
+_MODE_DISCLOSURE_FACT = {
+    "offline_test": ("本表所有市场/provider 事实均为调用方注入的 fixture（run_mode=%s, data_origin=%s, "
+                     "operational_use=%s）；非真实数据、非真实 provider 调用，不构成可执行的周度选股/建议"),
+    "research_live": ("本表所有市场/provider 事实来自真实 provider 调用（run_mode=%s, data_origin=%s, "
+                      "operational_use=%s）；research/预权威、未经 ship-gate 运营核准，不构成可执行的周度选股/建议"),
+}
 
 # the EDITORIAL (caller free-text) sections an offline report carries — §4 core_conclusion, §10
 # risk_downgrade_note. The report's OWN structured-authority vocabulary must not be reintroducible here, so the
@@ -75,8 +109,11 @@ def build_offline_honesty(provider_health_state, coverage_non_full_count):
     }
 
 
-def canonical_offline_sections(honesty):
-    """Recompute the only permitted §11/§13 section bodies from typed honesty facts."""
+def canonical_offline_sections(honesty, origin):
+    """Recompute the only permitted §11/§13 section bodies from typed honesty facts + the run_origin (the run_mode
+    picks offline_test-fixture vs research_live-real-data disclosure text; the honesty booleans are identical — both
+    NOT operationally authoritative, NOT authorized)."""
+    mode = validate_run_origin(origin)["run_mode"]
     if not isinstance(honesty, dict) or set(honesty) != _HONESTY_KEYS:
         raise RunOriginError("offline_honesty 须为 closed-world typed object")
     expected = build_offline_honesty(
@@ -84,9 +121,9 @@ def canonical_offline_sections(honesty):
     if honesty != expected:
         raise RunOriginError("offline_honesty 不得授权运营权威或运营使用")
     count = honesty["coverage_non_full_count"]
-    s11 = ["数据源健康: provider_health=%s（离线 fixture 自报；%s，非真实 provider 调用）"
-           % (honesty["provider_health_state"], OFFLINE_PROVIDER_DISCLAIMER)]
-    s13 = [OFFLINE_LIMITATION_LINE]
+    s11 = [_MODE_S11_TEMPLATE[mode]
+           % (honesty["provider_health_state"], _MODE_PROVIDER_DISCLAIMER[mode])]
+    s13 = [_MODE_LIMITATION_LINE[mode]]
     if count:
         s13.append("② 本周 %d 行覆盖非 full（partial/restricted/blocked），明细见 §6 持仓覆盖诚实度节" % count)
     return s11, s13
@@ -164,13 +201,21 @@ def assert_offline_report_invariants(report_data, origin):
     sections = report_data.get("sections")
     if not isinstance(sections, dict):
         raise RunOriginError("report_data.sections 须为 dict")
+    # A section carrying BOTH its int and str key lets the validator (int-first getter) and the renderer (str-first
+    # getter) read DIFFERENT bodies, so a forged body could ride the alternate key past the canonical §1/§11/§13
+    # checks. Reject any int/str collision (a pre-existing latent gap hardened here in the honesty boundary; the wired
+    # builder emits int-only keys, so this never fires on a real report — only a hand-crafted mixed-key one).
+    for _k in [k for k in sections if isinstance(k, int)]:
+        if str(_k) in sections:
+            raise RunOriginError(
+                f"§{_k} 同时携带 int 与 str 键（validator/renderer 键序不一致→读到不同体）；fail-closed")
     # §1 is system-owned: it must be EXACTLY the canonical disclosure lines + one typed run-status line, not merely
     # "contains the sentinel" — else an operational-authority line can be appended after the retained sentinel.
     expected_s1 = canonical_section_1(origin, report_data.get("run_status"))
     actual_s1 = sections.get(1, sections.get("1"))
     if actual_s1 != expected_s1:
         raise RunOriginError("§1 必须完全由 run_origin + typed run_status canonical 渲染（禁额外运营/权威声明行）")
-    expected_s11, expected_s13 = canonical_offline_sections(report_data.get("offline_honesty"))
+    expected_s11, expected_s13 = canonical_offline_sections(report_data.get("offline_honesty"), origin)
     actual_s11 = sections.get(11, sections.get("11"))
     actual_s13 = sections.get(13, sections.get("13"))
     if actual_s11 != expected_s11:
@@ -195,29 +240,32 @@ def validate_run_origin(origin):
     if set(origin) != _REQUIRED_KEYS:
         raise RunOriginError(
             f"run_origin 顶层键须恰为 {sorted(_REQUIRED_KEYS)}（closed-world）: {sorted(origin)}")
-    if origin != OFFLINE_TEST_RUN_ORIGIN:
+    if origin not in _VALID_RUN_ORIGINS:
         raise RunOriginError(
-            "run_origin 须为不可变 offline_test 事实 "
-            f"{OFFLINE_TEST_RUN_ORIGIN}（batch4 离线·调用方 fixture·非运营）")
+            "run_origin 须为不可变 offline_test 或 research_live 事实 "
+            f"{OFFLINE_TEST_RUN_ORIGIN} / {RESEARCH_LIVE_RUN_ORIGIN}（batch4·非运营权威·operational_use=not_authorized）")
     return origin
 
 
 def run_origin_for_mode(run_mode):
-    """The data-origin fact for a batch4 run. batch4 only ever reaches the official chain in `offline_test`
-    (live is hard-gated upstream); any other mode here is a wiring bug and fails closed."""
-    if run_mode != "offline_test":
-        raise RunOriginError(
-            f"batch4 官方链只在 offline_test 产出 artifact（live 由 orchestrator 硬阻断）: run_mode={run_mode!r}")
-    return dict(OFFLINE_TEST_RUN_ORIGIN)
+    """The data-origin fact for a batch4 run. batch4 reaches the official chain in `offline_test` (fixture) or
+    `research_live` (real provider data, pre-authoritative); `live` (operational-authoritative) is hard-gated
+    upstream in the orchestrator, and any other mode here is a wiring bug — both fail closed."""
+    if run_mode == "offline_test":
+        return dict(OFFLINE_TEST_RUN_ORIGIN)
+    if run_mode == "research_live":
+        return dict(RESEARCH_LIVE_RUN_ORIGIN)
+    raise RunOriginError(
+        f"batch4 官方链只在 offline_test / research_live 产出 artifact（live 由 orchestrator 硬阻断）: run_mode={run_mode!r}")
 
 
 def offline_disclosure_lines(origin):
-    """The always-visible offline/fixture disclosure lines for the weekly report (§11.2). The first line is the
-    stable sentinel the private-write boundary checks; the second spells out the immutable fact."""
-    validate_run_origin(origin)
+    """The always-visible disclosure lines for the weekly report (§11.2), per run_mode (offline_test fixture OR
+    research_live real-data). The first line is the stable sentinel the private-write boundary checks; the second
+    spells out the immutable fact."""
+    mode = validate_run_origin(origin)["run_mode"]
     return [
-        OFFLINE_DISCLOSURE_SENTINEL,
-        "本表所有市场/provider 事实均为调用方注入的 fixture（run_mode=%s, data_origin=%s, operational_use=%s）；"
-        "非真实数据、非真实 provider 调用，不构成可执行的周度选股/建议" % (
+        _MODE_SENTINEL[mode],
+        _MODE_DISCLOSURE_FACT[mode] % (
             origin["run_mode"], origin["data_origin"], origin["operational_use"]),
     ]

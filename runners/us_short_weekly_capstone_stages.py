@@ -162,7 +162,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         private_root=ctx.private_root,
         now_et=ctx.now_et,
         context_components_path=ctx.context_components_path,
-        run_mode="live",
+        run_mode="research_live",   # real provider data, pre-authoritative research report (NOT operational; live→batch5)
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
     )

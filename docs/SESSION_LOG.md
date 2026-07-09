@@ -8,6 +8,39 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short option (a)：research_live 诚实 provenance 模式 → capstone 能诚实 emit 真数据周报；§6a 五不变式 HELD + 1 pre-existing P3 硬化；解 emit blocker)
+
+**Commits**: 本提交（`engine/us_short_run_origin.py` research 轨 + P3 硬化 + orchestrator/batch4/e2e/capstone run_mode 接线 + machine-record schema oneOf + 3 测试文件[research-mode 11 + capstone e2e research emit + private_write helper 补 origin] + register/SESSION_LOG/CURRENT）。
+
+**Relationship to prior session(s)**:
+- 上一刀发现 capstone emit 双层 blocker（bridge `run_mode="live"` 必崩 / offline_test 给真数据盖 fixture 假章）→ 用户「行」批准 option (a) 诚实标签措辞 + 「b 做成提醒」→ 本轮建 (a) + 存 (b) 提醒 memory。
+
+**Worked on**:
+1. **research_live 第二条诚实 provenance 轨**（`us_short_run_origin.py`）：`RESEARCH_LIVE_RUN_ORIGIN`={research_live / real_provider_pre_authoritative / not_authorized}，与 offline_test 并存；per-run_mode text（sentinel/§11/§13/disclosure），`validate_run_origin` 认两 fact、`run_origin_for_mode` 映射两 mode、live/unknown 仍 fail-closed；**offline_test 文本 byte-identical**（per-mode dict 引旧常量）。报告诚实说「真实 provider 数据·非 ship-gate 权威·research-only·不可执行」——非 fixture 谎、非运营权威。
+2. **接线**：orchestrator `RUN_MODES`+research_live、`_assert_calendar` 仍只对 live raise（research_live 走 fixture-calendar 同路）；batch4 runner bootstrap 分支纳 research_live；e2e/batch4 CLI choices；capstone `run_weekly_bridge` run_mode `live`→`research_live`；machine-record schema run_origin 改 `oneOf`（两 fact、enforce run_mode↔data_origin 配对 + not_authorized）。
+3. **§6a 独立对抗 agent**（offline blackbox）：五不变式全 HELD（无假运营权威 / provenance 不可换 / forged+mismatch fail-closed[validator+schema oneOf] / offline byte-identical vs git HEAD / live 仍 gated）、0 P1/P2；揪 1 **PRE-EXISTING** P3（validator int-first vs renderer str-first getter → hand-crafted mixed-key report 可分歧、wired builder int-only 不可达）→ 就地硬化（拒 int/str section-key 冲突）+ 回归。
+4. **capstone emit 证明**（`test_research_live_run_emits_real_data_report_not_fixture`）：run_mode=research_live 真 emit 一份报告、带 research sentinel（研究运行/真实 provider）、非 fixture 谎、machine record 带 research run_origin——即之前 live 必崩那条路。
+5. **(b) 存提醒 memory**（`project_us_short_live_mode_authoritative_upgrade`）：ship-gate 后做日历批5权威+解 live→升运营级权威。
+
+**Key decisions**:
+- **诚实标签措辞用户已批**（真实数据·非 ship-gate 权威·research-only·不可执行）；焊进锁死校验器前先 confirm。
+- **P3 就地硬化**：pre-existing（vs git HEAD 证）+ 正在硬化该 honesty boundary + 小 + agent 建议；拒 mixed key 关分歧、wired 不受影响（builder int-only）。
+- **live 仍硬 gated**（option b 留 ship-gate）：research_live 只 emit 真数据、绝不 emit 运营权威。提交不 push。
+
+**Alternatives considered and rejected**:
+- 「只改注释 / 把 run_mode 换 offline_test」— 否决（上一刀已证=对真数据盖 fixture 假章 P1）。
+- 「per-mode 完全复制 run_origin 函数」— 否决；参数化 per-mode text dict（offline 引旧常量 byte-identical）省重复。
+- 「不修 pre-existing P3」— 否决；正在硬化该 boundary、小、agent 建议、关真 latent 分歧。
+
+**Pre-Codex self-review**: offline byte-identical（§6a vs git HEAD + smoke sentinel 相等）；两 fact validate、四 forged/mismatch + live 全 fail-closed（validator + schema oneOf）；research §11/§13 无 PROVIDER_AUTHORITATIVE/NO_UNCLEAN mark；mode-swap/origin-mismatch/mixed-key 全拒（测试证）；capstone research emit 端到端证；**full pack 4037 OK**；§6a 五不变式 HELD、P3 硬化+回归。
+
+**Open questions handed off**:
+- **明天 20260710 干净跑现在可真出报告**：cap fix（配额）+ coverage health gate + research emit 三件全通 → grades 成功即 emit 真 Top15（研究标签）。
+- **option b**（升运营权威）留 ship-gate、见 memory。
+- Codex 恢复从 `ef3c43f4` re-review（含本 honesty 分叉 + §6a 结论）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审 (US-short 发现 capstone 无法 emit 的双层架构 blocker：bridge `run_mode="live"` 必崩 + offline_test 会给真数据盖 fixture 假章；设计决策留用户)
 
 **Commits**: 本提交（register capstone-skeleton +blocker 条目 + 本 entry + CURRENT §0；**纯 finding 记录、无代码改**——修法是留用户定的设计决策）。

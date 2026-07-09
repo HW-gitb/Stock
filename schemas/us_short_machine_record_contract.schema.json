@@ -13,13 +13,17 @@
     "run_origin": {
       "type": "object",
       "additionalProperties": false,
-      "description": "batch4 honesty provenance (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP): the immutable execution/data-origin fact for a batch4 weekend run. Const-pinned to the offline_test / caller_supplied_fixture / not_authorized fact because batch4 only ever produces an official record in offline_test (live is hard-gated upstream → batch5). Optional at the schema level only to keep pre-existing hand-built test records valid; assemble_machine_record always populates and validates it.",
+      "description": "batch4 honesty provenance (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP): the immutable execution/data-origin fact for a batch4 weekend run. Pinned by oneOf to EXACTLY one of the two honesty facts batch4 can produce — offline_test/caller_supplied_fixture (injected fixture) OR research_live/real_provider_pre_authoritative (real provider data, pre-authoritative research) — BOTH operational_use=not_authorized (live/operational-authoritative is hard-gated upstream → batch5). The oneOf enforces the run_mode↔data_origin pairing so a mismatched combo is rejected. Optional at the schema level only to keep pre-existing hand-built test records valid; assemble_machine_record always populates and validates it.",
       "required": ["run_mode", "data_origin", "operational_use"],
       "properties": {
-        "run_mode": {"const": "offline_test"},
-        "data_origin": {"const": "caller_supplied_fixture"},
+        "run_mode": {"enum": ["offline_test", "research_live"]},
+        "data_origin": {"enum": ["caller_supplied_fixture", "real_provider_pre_authoritative"]},
         "operational_use": {"const": "not_authorized"}
-      }
+      },
+      "oneOf": [
+        {"properties": {"run_mode": {"const": "offline_test"}, "data_origin": {"const": "caller_supplied_fixture"}}},
+        {"properties": {"run_mode": {"const": "research_live"}, "data_origin": {"const": "real_provider_pre_authoritative"}}}
+      ]
     },
     "rows": {"type": "array", "items": {"$ref": "#/definitions/row"}}
   },

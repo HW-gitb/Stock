@@ -146,7 +146,7 @@ def _forged_honesty_report(**honesty_over):
     oh = dict(rd["offline_honesty"]); oh.update(honesty_over)
     rd["offline_honesty"] = oh
     rd["sections"] = dict(rd["sections"])
-    s11, s13 = canonical_offline_sections(oh)
+    s11, s13 = canonical_offline_sections(oh, OFFLINE_TEST_RUN_ORIGIN)
     rd["sections"]["11"] = s11
     rd["sections"]["13"] = s13
     return rd, render_weekly_report(rd)

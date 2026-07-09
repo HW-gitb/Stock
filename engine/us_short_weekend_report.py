@@ -362,7 +362,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
 
     offline_honesty = build_offline_honesty(
         stage_status["provider_health"]["overall_run_state"], len(not_clean))
-    offline_s11, offline_s13 = canonical_offline_sections(offline_honesty)
+    offline_s11, offline_s13 = canonical_offline_sections(offline_honesty, run_origin)
     # §1 is the system-owned authoritative run-status section: build it from the immutable run_origin + a typed
     # closed-world run_status, so the consumer can recompute it canonically (no extra operational line after the
     # sentinel) — R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP §1 canonical repair.

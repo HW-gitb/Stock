@@ -196,7 +196,7 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", bootst
     packet, base = _load_packet(packet_path)
     pc, account = _assemble_context(packet, base)
 
-    if run_mode == "offline_test":
+    if run_mode in ("offline_test", "research_live"):
         decision_date = _decision_date_for_bootstrap(now_et, pc["calendar"])
         if decision_date is not None:
             try:
@@ -232,7 +232,7 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Run the offline US-short batch4 weekend pipeline")
     parser.add_argument("--context", required=True, type=Path, help="local closed-world context packet JSON")
     parser.add_argument("--now-et", required=True, type=_parse_now_et, help="ET wall clock YYYY-MM-DDTHH:MM:SS")
-    parser.add_argument("--run-mode", choices=("offline_test", "live"), default="offline_test")
+    parser.add_argument("--run-mode", choices=("offline_test", "research_live", "live"), default="offline_test")
     parser.add_argument("--bootstrap-lifecycle", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)
