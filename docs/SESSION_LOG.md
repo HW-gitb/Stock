@@ -8,6 +8,43 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 2b-ii-B：full-universe overextension 离线 producer runner；§6a 独立对抗 agent 全 HELD)
+
+**Commits**: 本提交（`runners/us_short_batch5_full_universe_overextension_producer.py` + 16 provider 测试 + §6a agent PASS + register cut 2b-ii-B 闭环）
+
+**Relationship to prior session(s)**:
+- Builds on 本日 Slice B（选股剥分，`82c0840`）。用户问「选项1 消耗 FMP 吗？不消耗就选 1」→ 确认 2b-ii-B 离线 runner 零 provider/零 FMP（今日 freshday FMP 测试额度不受影响）→ 建 cut 2b-ii-B（overextension live 数据管道的**离线半**）。
+
+**Worked on**:
+1. **cut 2b-ii-B = full-universe overextension 离线 producer runner**（镜像已 §6a 审的 momentum producer）：消费 candidate artifact + 本地 OHLCV series packet（2b-ii-A packet schema）→ **委托** `build_overextension_projection` 做 envelope+PIT（单源：引擎持 envelope、runner 不复述——与 momentum runner 不同，后者 per-ticker 引擎需 runner 自建 envelope）→ gitignored projection + counts-only tracked summary（2b-ii-A summary schema）带诚实 disposition + none/warning/chasing_extreme state tally。**无 benchmark**（overextension 是 per-ticker 绝对信号、非相对强度）。**零 provider fetch**（纯离线、零 FMP/Massive）。
+2. 继承姊妹 runner 全部硬化（secret scan / provider_id slug / gitignore+path 守卫 / atomic write+orphan-cleanup / clock coherence / hostile session-adjustment charset bound）——照 [[feedback_new_runner_recheck_recent_fixed_class]] 逐条核继承。
+3. **§6a 独立对抗 agent（read-only/blackbox/自派不变式）攻 fail-closed tracked-summary gate**：A tracked-summary-hygiene / B path-safety / C partial-state-all-or-nothing / D fail-closed-envelope / E graceful-disposition-not-crash（huge-int/NaN/inf-ATR）/ F count-integrity / G sibling-inheritance-no-new-hole —— **全 HELD**，0 P1/P2；1 flagged probe 是**误报**（session="AAPL" 是 charset-合法 session token、无 pool ticker 泄漏）；7 P3 test-gap **补 3 个**（runner-level clock mismatch / non-canonical summary path / input-outside-state——都是 runner 自有 gate）。
+4. Verify：16 focused OK、full offline `*us_short*` 3994 OK（零回归）。
+
+**Key decisions**:
+- **委托 envelope 给引擎**（不在 runner 复述）——`build_overextension_projection` 已是 envelope 单源+已 §6a 攻过；momentum runner 自建 envelope 仅因其 per-ticker 引擎无 envelope。单源 > 复制（避 B2 双写漂移）。
+- **无 benchmark**——overextension 是 per-ticker 绝对信号；故 series_count==eligible_with_series_count==len(packet series)（引擎保证 packet 键 1:1 ⊆ eligible）。
+- state_counts 从 projection map 诚实 tally（非手设）——周报可见多少 chasing/warning。
+- 补 3/7 P3：只补 runner 自有 gate（clock/summary-path/input-path）；引擎级（NaN/inf-ATR/future-spike）跳过（engine 测已覆盖、runner 冗余）+ orphan-cleanup 跳过（难无 mock 确定触发；agent 已验 try/except）。
+- 提交不 push；2b-iii gated fetch（真 Massive、非 FMP）留用户单独授权。
+
+**Alternatives considered and rejected**:
+- 「runner 自建 envelope 校验（照 momentum）」— 否决。overextension 引擎已持 envelope 单源；复制=双写漂移（反 B2 单源）。
+- 「补全 7 个 P3」— 部分采纳（补 3 runner-gate）；引擎级 4 个跳过（引擎测已覆盖）。
+- 「同刀做 2b-iii gated fetch」— 否决。2b-iii=live provider 调用（SR-PROVIDER-001、最高危 fetch）+ 用户要保 freshday FMP 额度；离线半先独立闭环。
+
+**Pre-Codex self-review (A-F)**: A summary-hygiene 全类（hostile session/adjustment/provider_id → schema charset 拒 before write）+ envelope 全类（stray/dup/look-ahead/clock-mismatch 委托引擎 raise）+ graceful（huge-int→insufficient 不崩）；B grep 新 runner 符号=仅 runner+test（叶 producer、无下游消费者需改）；C 反向=absent/thin→insufficient、hostile→raise no-write、preflight 不写；D N-A；E 无 route-doc 改（README 路由行待 2b-iii live 半落地再加）；F `git diff --check` clean、2 文件 no-BOM/no-FFFD、gitignore 覆盖新 state/provider_samples 路径、canonical docs summary tracked（未写）、git status 仅 2 新文件（无 test-artifact 泄漏）。Verify：16 focused + 3994 full OK + §6a agent 全 HELD(A-G)。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- **cut 2b-iii（唯一剩的 live piece）**：grouped-window fetch（`us_short_batch5_full_universe_momentum_fetch.py:244`）保留 high/low → 真 OHLCV packet 喂 2b-ii-B runner；SR-PROVIDER-001 gated、Massive grouped-daily（非 FMP）；起 §6a agent（live fetch=最高危）；用户单独授权。
+- §8 warning sizing（reduce_size/raise_rr_gate）follow-on 子刀（§8 4d-ii-b 阶段）。
+- orchestrator 把 producer map 铺到 compose 调用 + 分析行（batch5 live 半）。
+- Codex 额度恢复后：cut 2b-ii-B + 前序需从 `ef3c43f4` 独立复审。
+
+**Next natural step from my view**:
+1. cut 2b-iii gated OHLCV fetch（用户授权后；真数据管道最后一截）。
+2. §8 warning sizing 子刀；orchestrator map 铺行。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 Slice B：compose_score_inputs chasing→theme_off 剥赛道分 + reconciliation 承重接缝；§6a 独立对抗 agent 全 HELD)
 
 **Commits**: 本提交（`compose_score_inputs` overextension_by_ticker 剥赛道分 + theme_off per-ticker profile reconciliation + binding const 更新 + 17 测试 + §6a agent PASS + register 闭环）
