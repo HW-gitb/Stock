@@ -14,6 +14,13 @@ The two are mutually exclusive (chasing_extreme precedence) so a stock is penali
 stage). Thresholds (k1 / m / volume-climax / far-MA distance / min condition count K) are §13.1 #36
 forward priors, NOT frozen const. Missing key metrics → 'none' (honest, never fabricated). Pure; no
 provider, no A-share crossing.
+
+`compute_overextension_metrics(closes, volumes)` builds the pattern metrics this classifier consumes
+(ma5 / ma10 / ma20 / vol_ratio / daily_change / vertical_run / weak_retrace) from a clean oldest→newest
+close (+ aligned volume) series — the same volume-bearing daily series the §4.2 momentum engine already
+parses; the caller merges the §6 price-indicator `close` + `atr` in before classifying. Each metric is an
+honest None / False when its window is missing / short / bad (never fabricated); its windows / thresholds
+are §13.1 #36 forward priors too.
 """
 import math
 
@@ -29,10 +36,18 @@ OVEREXTENSION_STATES = ("none", "warning", "chasing_extreme")
 
 def _finite(x):
     # strict: a real finite int/float only — NOT a bool, NOT a numeric string ("5" must fail closed, not
-    # parse). A metric that isn't a clean number must not parse into a parabolic condition.
+    # parse). A metric that isn't a clean number must not parse into a parabolic condition. A legitimate huge
+    # int (abs ≳ 1.8e308) that overflows float() is CONTAINED to None (never a raw OverflowError) — the metrics
+    # layer below is RAW-FACING (raw closes/volumes), so a forged/corrupt huge value must disposition like any
+    # other bad value, not bare-crash a caller (mirrors engine/us_short_momentum.py::_finite, this session's
+    # whole-class huge-int hardening).
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return float(x) if math.isfinite(x) else None
+    try:
+        xf = float(x)
+    except OverflowError:
+        return None
+    return xf if math.isfinite(xf) else None
 
 
 def classify_overextension(metrics):
@@ -77,3 +92,113 @@ def classify_overextension(metrics):
     # early none_out above keeps met=0 only because conditions were never computed on missing close/ATR)
     return {"overextension_state": "none", "strips_theme_score": False,
             "execution_flags": {}, "conditions_met": len(met), "condition_names": met}
+
+
+# ── §4.3 pattern-metrics layer (§13.1 #36 forward priors, NOT frozen const) ────────────────
+# The classifier above consumes {close, ma5, ma10, ma20, atr, vol_ratio, daily_change, vertical_run,
+# weak_retrace}. close + atr come from the §6 price indicators; this layer computes the REST from a clean
+# oldest→newest close (+ aligned volume) series (the momentum engine's parsed shape). Windows/thresholds
+# are §13.1 #36 priors, calibrated forward like the classifier's k1/m/K — nothing here is frozen const.
+VOL_CLIMAX_BASELINE = 20      # vol_ratio = today volume / mean(prior VOL_CLIMAX_BASELINE volumes) — "量能高潮"
+                              #   (a today-vs-baseline CLIMAX ratio; deliberately NOT the momentum vol_surge 10/63,
+                              #   which is an elevated-10d-vs-63d SURGE — different window + semantics)
+VERTICAL_RUN_DAYS = 4         # vertical_run = this many consecutive strictly-up closes ("连续垂直"); the AND-of-K
+                              #   gate in the classifier supplies specificity, so a moderate run signal is fine
+WEAK_RETRACE_WINDOW = 10      # window for the retracement-structure check ("回撤结构差")
+WEAK_RETRACE_MIN_RUNUP = 0.10 # only a REAL run-up qualifies: net window gain must be >= this
+WEAK_RETRACE_MAX_DRAWDOWN = 0.05  # ...AND the deepest pullback from any running peak stayed < this (shallow retrace)
+
+
+def _sma(closes, n):
+    """Simple moving average of the last n closes (each strictly-positive finite), else None (honest)."""
+    if len(closes) < n:
+        return None
+    vals = [_finite(c) for c in closes[-n:]]
+    if any(v is None or v <= 0.0 for v in vals):
+        return None
+    return sum(vals) / n
+
+
+def _daily_change(closes):
+    """Signed close-to-close change (today − prior) — "当日涨幅"; the classifier compares it to m×ATR, so an
+    UP move (positive) can trip the parabolic daily-move condition while a down day (negative) cannot. Needs
+    two strictly-positive finite closes, else None."""
+    if len(closes) < 2:
+        return None
+    prev, last = _finite(closes[-2]), _finite(closes[-1])
+    if prev is None or last is None or prev <= 0.0 or last <= 0.0:
+        return None
+    return last - prev
+
+
+def _vol_ratio(volumes):
+    """Volume climax ratio = today's volume / mean(prior VOL_CLIMAX_BASELINE volumes). Needs the last
+    VOL_CLIMAX_BASELINE+1 volumes all finite non-negative and a positive baseline average, else None (a
+    single missing/None recent volume → unavailable, never fabricated)."""
+    w = VOL_CLIMAX_BASELINE
+    if len(volumes) < w + 1:
+        return None
+    today = _finite(volumes[-1])
+    base = [_finite(v) for v in volumes[-1 - w:-1]]
+    if today is None or today < 0.0 or any(v is None or v < 0.0 for v in base):
+        return None
+    avg = sum(base) / w
+    if avg <= 0.0:
+        return None
+    return today / avg
+
+
+def _vertical_run(closes):
+    """True iff the last VERTICAL_RUN_DAYS transitions are all strictly up (a continuous vertical run). Needs
+    VERTICAL_RUN_DAYS+1 strictly-positive finite closes; a missing/bad/non-up value → False (never fabricated)."""
+    n = VERTICAL_RUN_DAYS
+    if len(closes) < n + 1:
+        return False
+    window = [_finite(c) for c in closes[-(n + 1):]]
+    if any(v is None or v <= 0.0 for v in window):
+        return False
+    return all(window[i] > window[i - 1] for i in range(1, len(window)))
+
+
+def _weak_retrace(closes):
+    """True iff over the last WEAK_RETRACE_WINDOW closes the stock ran up (net gain >= WEAK_RETRACE_MIN_RUNUP)
+    AND the deepest pullback from any running peak stayed shallow (< WEAK_RETRACE_MAX_DRAWDOWN) — a weak
+    retracement structure (parabolic exhaustion risk). A flat/quiet window (no run-up) is NOT weak_retrace, so a
+    non-extended name never trips it. Needs WEAK_RETRACE_WINDOW strictly-positive finite closes, else False."""
+    w = WEAK_RETRACE_WINDOW
+    if len(closes) < w:
+        return False
+    window = [_finite(c) for c in closes[-w:]]
+    if any(v is None or v <= 0.0 for v in window):
+        return False
+    if window[-1] / window[0] - 1.0 < WEAK_RETRACE_MIN_RUNUP:   # only a real run-up can be "weak retrace"
+        return False
+    peak, max_dd = window[0], 0.0
+    for c in window:
+        if c > peak:
+            peak = c
+        dd = (peak - c) / peak                                  # drawdown from the running peak (peak > 0)
+        if dd > max_dd:
+            max_dd = dd
+    return max_dd < WEAK_RETRACE_MAX_DRAWDOWN
+
+
+def compute_overextension_metrics(closes, volumes):
+    """Build the §4.3 pattern metrics `classify_overextension` consumes — {ma5, ma10, ma20, vol_ratio,
+    daily_change, vertical_run, weak_retrace} — from a clean oldest→newest close (+ aligned volume) series
+    (the §4.2 momentum engine's parsed `closes` / `volumes`). `close` + `atr` come from the §6 price
+    indicators (NOT here); the caller merges them in before classifying. Each metric is an honest None /
+    False when its window is missing / short / bad — never fabricated. Pure; strict finite (bool /
+    numeric-string / NaN / Inf / overflowing huge-int are treated as unavailable, never a raw crash — this
+    layer is raw-facing)."""
+    closes = list(closes) if isinstance(closes, (list, tuple)) else []
+    volumes = list(volumes) if isinstance(volumes, (list, tuple)) else []
+    return {
+        "ma5": _sma(closes, 5),
+        "ma10": _sma(closes, 10),
+        "ma20": _sma(closes, 20),
+        "vol_ratio": _vol_ratio(volumes),
+        "daily_change": _daily_change(closes),
+        "vertical_run": _vertical_run(closes),
+        "weak_retrace": _weak_retrace(closes),
+    }

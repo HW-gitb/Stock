@@ -113,5 +113,113 @@ class ContractConformanceTests(unittest.TestCase):
             self.assertIn(ox.classify_overextension(m)["overextension_state"], ox.OVEREXTENSION_STATES)
 
 
+class HugeIntHardeningTests(unittest.TestCase):
+    def test_huge_int_metric_does_not_crash_classify(self):
+        # The metrics layer makes this module RAW-FACING, so a forged/corrupt huge int (overflows float()) in
+        # ANY numeric field must be CONTAINED to None (fail-closed), never a raw OverflowError — this session's
+        # whole-class huge-int hardening (mirrors momentum/theme siblings).
+        huge = 10 ** 400
+        for field in ("close", "atr", "ma5", "ma10", "ma20", "daily_change", "vol_ratio"):
+            m = dict(_CHASING)
+            m[field] = huge
+            out = ox.classify_overextension(m)   # must not raise
+            self.assertIn(out["overextension_state"], ox.OVEREXTENSION_STATES, field)
+
+
+class OverextensionMetricsTests(unittest.TestCase):
+    def test_moving_averages(self):
+        closes = [float(x) for x in range(1, 21)]   # 1..20
+        m = ox.compute_overextension_metrics(closes, [])
+        self.assertAlmostEqual(m["ma5"], sum(range(16, 21)) / 5)    # 18.0
+        self.assertAlmostEqual(m["ma10"], sum(range(11, 21)) / 10)  # 15.5
+        self.assertAlmostEqual(m["ma20"], sum(range(1, 21)) / 20)   # 10.5
+
+    def test_moving_average_too_short_is_none(self):
+        m = ox.compute_overextension_metrics([1.0, 2.0, 3.0], [])   # < 5
+        self.assertIsNone(m["ma5"])
+        self.assertIsNone(m["ma10"])
+        self.assertIsNone(m["ma20"])
+
+    def test_ma_bad_value_in_window_is_none(self):
+        closes = [float(x) for x in range(1, 20)] + [float("nan")]  # bad tail value
+        self.assertIsNone(ox.compute_overextension_metrics(closes, [])["ma5"])
+
+    def test_daily_change_is_signed_close_to_close(self):
+        self.assertEqual(ox.compute_overextension_metrics([100.0, 106.0], [])["daily_change"], 6.0)
+        self.assertEqual(ox.compute_overextension_metrics([100.0, 97.0], [])["daily_change"], -3.0)  # down = negative
+
+    def test_daily_change_too_short_is_none(self):
+        self.assertIsNone(ox.compute_overextension_metrics([100.0], [])["daily_change"])
+
+    def test_vol_ratio_climax(self):
+        vols = [1_000_000.0] * 20 + [3_000_000.0]   # 21: baseline-20 avg 1e6, today 3e6
+        self.assertAlmostEqual(ox.compute_overextension_metrics([100.0] * 21, vols)["vol_ratio"], 3.0)
+
+    def test_vol_ratio_too_short_is_none(self):
+        self.assertIsNone(ox.compute_overextension_metrics([100.0] * 21, [1_000_000.0] * 20)["vol_ratio"])  # < 21
+
+    def test_vol_ratio_missing_recent_volume_is_none(self):
+        vols = [None] + [1_000_000.0] * 19 + [2_000_000.0]   # a None inside the recent baseline
+        self.assertIsNone(ox.compute_overextension_metrics([100.0] * 21, vols)["vol_ratio"])
+
+    def test_vol_ratio_zero_baseline_is_none(self):
+        vols = [0.0] * 20 + [3_000_000.0]
+        self.assertIsNone(ox.compute_overextension_metrics([100.0] * 21, vols)["vol_ratio"])
+
+    def test_vertical_run_true_broken_and_short(self):
+        self.assertTrue(ox.compute_overextension_metrics([1.0, 2.0, 3.0, 4.0, 5.0], [])["vertical_run"])   # 4 up-days
+        self.assertFalse(ox.compute_overextension_metrics([1.0, 2.0, 3.0, 2.0, 5.0], [])["vertical_run"])  # a down day
+        self.assertFalse(ox.compute_overextension_metrics([1.0, 2.0, 3.0, 4.0], [])["vertical_run"])       # < 5 closes
+
+    def test_weak_retrace_true_when_runup_and_shallow(self):
+        closes = [100.0, 101.0, 102.0, 103.0, 104.0, 105.0, 106.0, 107.0, 108.0, 111.0]  # +11%, monotonic
+        self.assertTrue(ox.compute_overextension_metrics(closes, [])["weak_retrace"])
+
+    def test_weak_retrace_false_on_deep_pullback(self):
+        # ran up (+30% net) but a ~9% peak-to-trough pullback => NOT a weak/shallow retrace
+        closes = [100.0, 105.0, 110.0, 100.0, 105.0, 110.0, 115.0, 120.0, 125.0, 130.0]
+        self.assertFalse(ox.compute_overextension_metrics(closes, [])["weak_retrace"])
+
+    def test_weak_retrace_false_when_no_runup(self):
+        # REVERSE control: a flat/quiet window (no run-up) must NOT count as weak_retrace
+        closes = [100.0, 100.5] * 5
+        self.assertFalse(ox.compute_overextension_metrics(closes, [])["weak_retrace"])
+
+    def test_strict_finite_inputs_never_crash(self):
+        # bool / numeric-string / NaN / Inf / overflowing huge-int in the series must not crash, never fabricate
+        for bad in (True, "5", float("nan"), float("inf"), 10 ** 400):
+            closes = [float(x) for x in range(1, 20)] + [bad]
+            m = ox.compute_overextension_metrics(closes, [])   # must not raise
+            self.assertIsNone(m["ma5"], repr(bad))             # bad tail value → MA window unavailable
+            self.assertIsNone(m["daily_change"], repr(bad))    # bad last close → None
+
+    def test_non_list_inputs_are_honest_empty(self):
+        empty = {"ma5": None, "ma10": None, "ma20": None, "vol_ratio": None,
+                 "daily_change": None, "vertical_run": False, "weak_retrace": False}
+        for bad in (None, "bad", 123, {"x": 1}):
+            self.assertEqual(ox.compute_overextension_metrics(bad, bad), empty, repr(bad))   # must not crash
+
+
+class OverextensionMetricsIntegrationTests(unittest.TestCase):
+    """Prove the cut-1 metrics layer plugs straight into classify_overextension (the whole point)."""
+
+    def test_parabolic_series_metrics_feed_chasing_extreme(self):
+        closes = [float(106 + i) for i in range(24)] + [135.0]   # 106..129 then a jump to 135
+        volumes = [1_000_000.0] * 24 + [3_000_000.0]             # 3x volume climax on the last day
+        metrics = ox.compute_overextension_metrics(closes, volumes)
+        out = ox.classify_overextension({**metrics, "close": 135.0, "atr": 2.0})
+        self.assertEqual(out["overextension_state"], "chasing_extreme")
+        self.assertTrue(out["strips_theme_score"])
+        self.assertGreaterEqual(out["conditions_met"], ox.CHASING_MIN_CONDITIONS)
+
+    def test_benign_series_metrics_feed_none(self):
+        closes = [100.0, 101.0] * 13
+        volumes = [1_000_000.0] * 26
+        metrics = ox.compute_overextension_metrics(closes, volumes)
+        out = ox.classify_overextension({**metrics, "close": 101.0, "atr": 2.0})
+        self.assertEqual(out["overextension_state"], "none")
+        self.assertFalse(out["strips_theme_score"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,40 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short overextension 接线 cut 1/3：§4.3 过热分档 pattern-metrics 层 + 模块 `_finite` huge-int 硬化；纯离线、零 pipeline 接线)
+
+**Commits**: 本提交（overextension metrics 层 + `_finite` huge-int 硬化 + 18 回归测试 + register 三刀追踪）
+
+**Relationship to prior session(s)**:
+- Builds on 2026-07-09 huge-int/cost_floor fix（cc_r1 C6 = overextension 需先建价格指标/形态层，本轮开建）。
+- 用户「overextension 接线 开始做」。
+
+**Worked on**:
+1. 亲读全消费链定位接缝：`classify_overextension`（引擎已建、正确、消费 `{close,ma5,ma10,ma20,atr,vol_ratio,daily_change,vertical_run,weak_retrace}`）**零消费**（只自测）；`compute_price_indicators` 只出 close/atr/effective_*，那 7 个 metric 一个没算；volume-bearing 序列在 momentum packet（价格引擎 bars 是 OHLC 无量）。设计权威 §4.3 + §14 #17。
+2. **Cut 1 = 纯 metrics 层** `engine/us_short_overextension.py::compute_overextension_metrics(closes, volumes)`：ma5/10/20 SMA + 量比（今量/前20均，量能高潮，区别 momentum vol_surge 10/63）+ 有符号当日涨幅（close-to-close）+ 连续垂直（4连涨）+ 弱回撤（窗内涨够且最深回撤<5%）。窗口/阈值全 §13.1 #36 prior（非 frozen const）。喂法：caller 合 close+atr 再 classify。
+3. **模块 `_finite` huge-int 硬化**：metrics 层 raw-facing → 加 `try/except OverflowError→None`（对齐本会话 momentum/theme 整类硬化）；classify 因此对任意字段 huge-int 也不再裸崩。
+4. 18 测试：per-metric 矩阵（可算/太短/坏值/缺量/零基线）+ strict finite（bool/字符串/NaN/Inf/10**400 不崩不造假）+ 非 list honest-empty + 反向控制（深回撤→False、无涨幅→False）+ 集成（抛物线→chasing_extreme、平缓→none，证明层直插 classify）。
+
+**Key decisions**:
+- 拆 3 刀、先建纯 metrics 层（前评：接线必先建价格指标/形态层）：cut1 纯层（本轮）→ cut2 analyze 接线（force-pullback + strip-theme core_score 重算，**带强制 §6a agent**）→ cut3 sizing 压仓/抬RR + action_table 列 + no-dangling registry。
+- vol_ratio 用「今量/前20均」量能高潮口径，显式区别 momentum 10/63 vol_surge（不同窗+语义）。
+- 阈值/窗口保持 §13 #36 forward prior（非 schema const-pin）——对齐设计「阈值=prior」、不冻结。
+- 提交但不 push（push 须显式命令）。
+
+**Alternatives considered and rejected**:
+- 「一刀接完（metrics+analyze+core_score strip+sizing+列）」— 否决。跨 3 stage、含 selection/core_score 路径改动、难审、违「一刀清晰独立」。
+- 「metrics 层复用 momentum `_parse_dated_series` 私有解析」— 否决。cut1 取 clean lists（momentum parser 输出契约）、保持纯 metric-only 无 PIT；PIT 留 cut2 接线时单源在 momentum。
+
+**Pre-Codex self-review (A-F)**: A 枚举全 7 metric×{可算/太短/坏值}矩阵一次覆盖 + huge-int 整类硬化落共享 `_finite`；B 全仓 grep `compute_overextension_metrics`=仅 engine+test 零残留、`weekend_action_table.py:18`「overextension_state 无源留空」cut1 未接列故**仍准确**（cut3 ripple 目标）、无 doc drift；C 反向控制（深回撤/无涨幅→False、benign→none）；E 无 route-doc 改动（纯层延后到 cut3 端到端再上 CURRENT §0、不写在建 gate）；F `git diff --check` clean、两文件 no-BOM/no-FFFD、strict finite 全覆盖。Verify：focused 30 OK、full offline `*us_short*` 3895 OK。Tests passing ≠ design closure。
+
+**Open questions handed off**:
+- Cut 2 core_score theme-strip 口径：`chasing_extreme` 退回「动量+催化 base」的精确实现（置零 theme 块重算 vs 重归一化权重）——建 cut2 时定 + 交 §6a agent。
+- Codex 额度恢复后：本 cut（`ef3c43f4` 起）需独立复审。
+
+**Next natural step from my view**:
+1. Cut 2：analyze 接线 + 两档效应（force-pullback / strip-theme core_score 重算），起 §6a 强制对抗 agent。
+2. Cut 3：sizing 压仓/抬 RR + action_table 列 + no-dangling registry。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short 还 cc_r1 两个工程债:huge-int 整类硬化[真吃 raw provider 的 6 引擎]+cost_floor 毛利→净利;overextension 查明需价格指标层、非快修保留)
 
 **Commits**: 本提交（huge-int 6 引擎硬化 + cost_floor 净利口径 + 回归测试）
