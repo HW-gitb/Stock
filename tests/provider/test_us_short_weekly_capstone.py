@@ -251,5 +251,71 @@ class CapstoneStageSummaryPathTest(unittest.TestCase):
         self.assertIn("existing file", str(cm.exception))
 
 
+class CapstoneProviderHealthDerivationTest(unittest.TestCase):
+    """_write_provider_health derives {fmp, sec_edgar} from the REAL Pass2 summary (endpoint_results rows carry
+    provider_id/endpoint_family/status per _summarize_endpoint). This is the emit-critical unit the stopped 2026-07-09
+    run never reached and the fake-chain tests structurally cannot cover (they inject the bridge RESULT, not the
+    derivation). These tests PIN the current behaviour; the two marked LENIENCY cases document quirks pending a design
+    decision (coverage threshold vs. downgrading FMP-grades from health-critical) and should be updated when it lands."""
+
+    def _derive(self, endpoint_results, budget):
+        import json
+        from types import SimpleNamespace
+
+        from runners import us_short_weekly_capstone_stages as st
+        tmp = Path(tempfile.mkdtemp(prefix="cap_health_"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ctx = SimpleNamespace(sample_root=tmp, decision_date="20260710",
+                              provider_health_path=tmp / "provider_health.json")
+        summ = st._stage_summary_targets(ctx)["pass2"]
+        summ.parent.mkdir(parents=True, exist_ok=True)
+        summ.write_text(json.dumps({"endpoint_call_budget": budget, "endpoint_results": endpoint_results}),
+                        encoding="utf-8")
+        st._write_provider_health(ctx)
+        return json.loads(ctx.provider_health_path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _row(provider, family, ok):
+        return {"provider_id": provider, "endpoint_family": family, "status": "success" if ok else "error"}
+
+    def test_full_grades_and_sec_success_is_ok(self):
+        rows = ([self._row("financial_modeling_prep", "grades", True) for _ in range(5)]
+                + [self._row("sec_edgar", "submissions", True) for _ in range(5)])
+        health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 0})
+        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "ok"})
+
+    def test_zero_grades_success_is_down(self):
+        # every grades call errored -> no success row -> _family_ok False -> budget fallback also False
+        # (endpoint_error_count>0) -> fmp down. This is the honest 2026-07-08/09 free-tier-429 outcome.
+        rows = ([self._row("financial_modeling_prep", "grades", False) for _ in range(5)]
+                + [self._row("sec_edgar", "submissions", True) for _ in range(5)])
+        health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 5})
+        self.assertEqual(health["fmp"], "down")
+        self.assertEqual(health["sec_edgar"], "ok")
+
+    def test_single_grades_success_reads_ok_LENIENCY(self):
+        # CHARACTERIZATION of the grades leniency: ONE success among 199 failures -> fmp='ok' (3.5%-style coverage
+        # would still emit). _family_ok is any-success. Update when the item-2 coverage/criticality decision lands.
+        rows = ([self._row("financial_modeling_prep", "grades", True)]
+                + [self._row("financial_modeling_prep", "grades", False) for _ in range(199)]
+                + [self._row("sec_edgar", "submissions", True)])
+        health = self._derive(rows, {"fmp_grades_calls": 200, "sec_submissions_calls": 1, "endpoint_error_count": 199})
+        self.assertEqual(health["fmp"], "ok")
+
+    def test_sec_no_calls_is_down(self):
+        # sec_ok = any-sec-success OR sec_submissions_calls>0; zero sec calls and no success -> down.
+        rows = [self._row("financial_modeling_prep", "grades", True)]
+        health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 0, "endpoint_error_count": 0})
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_sec_all_failed_but_attempted_reads_ok_LENIENCY(self):
+        # CHARACTERIZATION of the sec leniency (worse than grades): sec_ok falls back to sec_submissions_calls>0, so
+        # ALL-FAILED submissions still read 'ok' if any call was ATTEMPTED -- contradicting the docstring's "obtained".
+        rows = ([self._row("financial_modeling_prep", "grades", True)]
+                + [self._row("sec_edgar", "submissions", False) for _ in range(5)])
+        health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 5, "endpoint_error_count": 5})
+        self.assertEqual(health["sec_edgar"], "ok")
+
+
 if __name__ == "__main__":
     unittest.main()

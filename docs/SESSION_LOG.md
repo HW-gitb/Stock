@@ -8,6 +8,38 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short capstone provider_health→emit 路离线补验 [item 1]：+5 测试 pin 派生 + 揪 2 处 health-gate 宽松 + 20260710 dry-run/config 预建)
+
+**Commits**: 本提交（`tests/provider/test_us_short_weekly_capstone.py` +`CapstoneProviderHealthDerivationTest`(5) + register capstone-skeleton 更新 + 本 entry + CURRENT §0）。20260710 run config 是 gitignored、不提交。
+
+**Relationship to prior session(s)**:
+- 停掉 freshday 全量（confound 已修 `9035a91`）后，用户问「工程层面还能做什么」→ 我提 item 1（补验 capstone 的 provider_health→bridge→emit 路，今天停在 Pass2 没跑到）→ 用户「做1」。
+
+**Worked on**:
+1. **先验真实 Pass2 summary 形状定 health 走哪条路**：`_summarize_endpoint` 每行带 `provider_id`/`endpoint_family`/`status`(success/error)，所以 `_write_provider_health` 的 `_family_ok`（非 budget fallback）是操作路径 → grades「任一 success 即 ok」宽松属实（读代码+测试双证、非臆测）。
+2. **+5 离线测试 pin `_write_provider_health` 派生**（今天停在 Pass2 从没跑到；fake-chain 结构上覆盖不到——它注入 bridge 的 RESULT 而非派生）：full→{ok,ok} / zero-grades→fmp down / 1-of-200 grades→fmp ok[宽松] / sec 零调用→down / sec 全失败但有调用→ok[宽松]。18 capstone 测试全绿。
+3. **揪出 2 处 health-gate 宽松**（喂 item 2 决策）：(a) grades ≥1 success 即 fmp=ok（3.5% 覆盖也 emit）；(b) sec `sec_submissions_calls>0` 即 sec=ok 哪怕全失败——与 docstring「obtained」矛盾（attempted≠obtained，sec 比 grades 更松）。
+4. **20260710 dry-run + run config 预建**：Friday 盘前 07:00 ET → decision 20260710 / price_basis 20260709（confirmed）；空 paper account + no-build template 建在 gitignored `state/us_short/weekly_private/20260710/`。
+5. **VIX 探针无 runner**：`grep runners/ VIX`=0；按 memory 是运行时手动 FMP `/stable/quote ^VIX` 直调。
+
+**Key decisions**:
+- **只 pin 现状、不改行为**：宽松性修法是 item 2（用户在 (a)覆盖率阈值 / (b)grades 降级 间未定）；本轮只加 characterization 测试 + 记 finding，behavior 零改；两个 LENIENCY 测试标注「行为变时更新」。
+- **清今天 aborted 跑的 gitignored 遗留**（`..._pass2_preflight_20260709_summary.json`）：它让 pre-existing 的 preflight-path 测试失败（该测试假设文件不存在、今天真跑写了它）——非我代码引入，删遗留即恢复（file gitignored 已证）。
+- 提交不 push。
+
+**Alternatives considered and rejected**:
+- 「全 `run_weekly_bridge` 集成测试（真 health 派生→真 run_e2e→emit/no-emit）」— 本轮不做：需组装真 source packet fixture；offline-e2e 已覆盖 happy-path emit、fake-chain 已覆盖 no-emit 编排处理；`_write_provider_health` 单元测试已封住真正的 gap。记为可选后续。
+- 「就地修宽松性」— 否决：是 item 2 的设计决策（a/b 未定）、不在 item 1 scope。
+
+**Pre-Codex self-review**: 5 测试期望逐条对 `_write_provider_health` 代码核（fmp=any-grades-success or (calls>0 and errors==0)；sec=any-success or calls>0）→ 跑绿即证；18 capstone 全绿（含 13 既有）；删的遗留 gitignored 已证非 tracked；dry-run 20260710 canonical 正确。
+
+**Open questions handed off**:
+- **item 2 设计岔口待用户定**：health-gate 宽松 (a)加覆盖率阈值 / (b)grades 降级 non-critical（P2 option b）。
+- **bridge stage 9 + Pass2 完整 summary 写仍未 live 验**（今天停在 Pass2 fetch 中途）；明天 20260710 干净跑会真跑到。
+- Codex 恢复后从 `ef3c43f4` re-review（含本测试 + `9035a91` cap fix）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short freshday FMP 全量真跑 [Pass2 进行中] + 修根因 universe FMP market-cap fallback 抢占 Pass2 grades 配额 → cap 240→40)
 
 **Commits**: 本提交（`us_short_universe_fetch.py` `FMP_FREE_DAILY_CAP`→`UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET=40` + 3 code refs + test 历史 pin + register 新条目 + P2 refinement + 本 entry + CURRENT §0）。freshday 真跑的证据 artifact（universe summary 等）跑完后单独提交。
