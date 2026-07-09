@@ -8,6 +8,27 @@
 
 ---
 
+## 2026-07-09 — Claude 执行+自审+提交 (US-short VIX 抓取脚本 [cc_r1 B4 半] + housekeeping + cc_r1 清单更新)
+
+**Commits**: 本提交（`runners/us_short_vix_regime_fetch.py` + 8 离线测试 + 本 entry + CURRENT §0）。housekeeping（删 untracked aborted-run artifact）无需 commit（从未 tracked）；`cc_r1.md` 在桌面、非 repo 文件。
+
+**Worked on**:
+1. **VIX 抓取脚本**（`us_short_vix_regime_fetch.py`）：gated（SR-PROVIDER-001）单次 FMP `stable/quote ^VIX` → `classify_vix`（§7 frozen 18/25/35 ladder）→ regime；no-secret（key/URL 绝不落 summary、写前 secret-scan）；`quote_fetcher` 可注入离线测试；403/畸形 payload/非 finite → unknown 不崩；`--dry-run-env` / `--confirm-user-authorization` / `--summary-path`。**只喂 §7 风控轴**（仓位上限/开新仓许可），不碰选股/价位/hard-veto。**没做真 live fetch**（gated、留明天）。8 测试过。**剩 = 接进 pipeline `market_axis_regimes["vix"]`**（现恒 unknown；cc_r1 B4 残项）。
+2. **housekeeping**：删今天中断跑遗留的 untracked `docs/us_short_universe_fetch_summary_20260709.json`（confound 数字已在 register、明天产新版）。
+3. **cc_r1.md（桌面）清单更新**：按今天 6 commit 重写成干净的「仅未解决」清单——A1 emit 三拦路虎已清（配额/health 门/provenance）剩明天真跑 + Codex 复审；B4 VIX fetch 脚本已建剩接线；C6 overextension 剩 capstone 集成；D8 移除已修的 `sec_ok` 不对称 + mixed-key 项。
+
+**Key decisions**:
+- **VIX 脚本 = fetch+classify、不自动接 pipeline**：用户要的是「脚本化手动调用」；full B4 接线（喂 `market_axis_regimes`）是单独一步、cc_r1 记为残项。
+- **summary 默认不落盘**（`--summary-path` 才写）：VIX 值公开非密、避免加 tracked artifact + schema 负担；写时仍 secret-scan。提交不 push。
+
+**Pre-Codex self-review**: auth gate（无 `--confirm` 拒）；secret-scan（key/URL 绝不入 summary，测试证 `SECRET_FMP_ZZZ`/domain/`apikey=` 均不在写出文件）；403/None/畸形/非 finite → unknown 不崩（`classify_vix` 已 huge-int 硬化）；ladder 值对（16.9进攻/20震荡/30防御/40极度防御）；8 测试过。
+
+**Open questions handed off**:
+- **VIX full 接线（B4 残）**：把 regime 喂进 `market_axis_regimes["vix"]`（orchestrator 现读固定 config）；按需排期。
+- Codex 恢复从 `ef3c43f4` re-review（含本脚本）。
+
+---
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short option (a)：research_live 诚实 provenance 模式 → capstone 能诚实 emit 真数据周报；§6a 五不变式 HELD + 1 pre-existing P3 硬化；解 emit blocker)
 
 **Commits**: 本提交（`engine/us_short_run_origin.py` research 轨 + P3 硬化 + orchestrator/batch4/e2e/capstone run_mode 接线 + machine-record schema oneOf + 3 测试文件[research-mode 11 + capstone e2e research emit + private_write helper 补 origin] + register/SESSION_LOG/CURRENT）。
