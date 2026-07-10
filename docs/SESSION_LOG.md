@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-10 — Claude 修复+自审 (US-short R-USSHORT-REVIEWQ-CAT1 A/B/C 收口：research_live 四层能力门 + B 授权传播 + C 原子 supersede；3 轮独立对抗)
+
+- **Verdict/Action**: 修复（Claude solo，Codex FAIL 类别1 A/B/C 整类闭）。A=research_live 改 capstone 进程内能力对象（identity 校验、非可伪造 bool——初版 bool 被独立 agent 攻破故改）+ 四层门（CLI 移除 choice / 入口 run_e2e·run_packet / orchestrator run_weekend_pipeline / 消费者 assemble_machine_record·build_weekly_report·write_run_private）；B=5 个 gated adapter 全消费 ctx 授权、fail-closed 先于 runner；C=非发射（no-emit/stage 异常/缺输出）原子 supersede 旧同日报告到 `_superseded/`。完整细节见 `docs/system_risk_register.md` 单一来源 Repair。
+- **Required**: `R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` → fixed pending Codex（register 单源，本处不复述细节）。
+- **Verify**: focused 142 + full offline `test_us_short*` 4065 OK（1 skipped）+ doc-route guard 60 OK；`git diff --check` 净；A/B/C reviewer 探针均复现为 fail-closed（fixture→banner 拒 / 未授权 adapter 先于 runner 拒 / no-emit 后旧报告 superseded）。
+- **Pre-Codex self-review**: A–F checked。独立对抗 pass：已跑（3 轮 agent——worktree-HEAD 复证原缺陷；两轮工作树逐层加固 bool→能力→orchestrator→消费者，每轮揪更深 A 面即修+回归）。整类证据：A 用 grep 枚举「取 run_origin 产制品的函数」= 恰 3 消费者全门；`RESEARCH_LIVE_RUN_ORIGIN` 非测试仅 `run_origin_for_mode` 铸、其唯一非测试 caller=已门 orchestrator。B 5 腿闭合矩阵。C 三非发射出口 + 2 反控（无 prior no-op / success 不 supersede）。B-ripple：0 `research_live_authorized` 残留；run_origin/orchestrator 陈述 docstring 已更。
+- **Next**: Codex 从 `ef3c43f4` re-review 本 A/B/C 收口（四层能力门 + 消费者层 + 3 轮对抗结论）；通过后再论类别 2（勿当类别1 已过而并行）。
+
+## 2026-07-10 — Codex 审查 FAIL (R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS)
+- **Verdict/Action**: FAIL；待审队列第 1 类设计方向可保留，但 source-origin、provider 授权传播、同日 no-emit 输出 currentness 三个 P0 出口未闭合。最高危 honesty/authorization gate；独立 agent 未取得可用结论，FAIL 依据为 reviewer 亲自整读与可复现探针。
+- **Required**: `R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` — 完整 Required / 风险 / 修复边界 / closure 见 `docs/system_risk_register.md`（单一来源，本处不复述）。
+- **Verify**: `review-evidence:not_available`; focused 175 OK；full offline `test_us_short*.py` 4051 OK（1 skipped）；无网络探针复现 fixture→research banner、false ctx→adapter 传 True、success→no-emit 后旧报告仍存在；worktree 初始 clean。
+- **Next**: Codex 仅修复类别 1 的 A-C；修复复审前不把类别 1 标为通过。
+
 ## 2026-07-09 — Claude 执行+自审+提交 (US-short cc_r1 D8 一把 P3 fail-closed 守卫硬化)
 
 **Commits**: 本提交（`us_short_canonical_asof` tz 自守 + `us_short_price_engine` atr 非有限→None + `_finite_positive` 价格门（两引擎）+ 3 producer 默认日期对齐 + 6 D8 守卫测试 + SESSION_LOG/CURRENT）。**提交后 push**（用户明确指令 + 确认私密库 + 隐私审计）。

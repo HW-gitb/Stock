@@ -22,6 +22,7 @@ from engine.us_short_cli_redaction import closed_world_counts, safe_schema_locat
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
+from engine.us_short_run_origin import is_capstone_research_live_capability
 from runners.us_short_account_state_from_manual_tables import ConvertError, validate_account_state
 
 _CALIBRATION_PATH = ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json"
@@ -184,10 +185,18 @@ def _summary(result: dict, *, dry_run: bool) -> dict:
     return summary
 
 
-def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", bootstrap_lifecycle=False,
-               dry_run=False) -> dict:
+def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _research_live_capability=None,
+               bootstrap_lifecycle=False, dry_run=False) -> dict:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch4RunnerError("now_et 须为无时区 datetime，按 America/New_York 本地墙钟解释")
+    # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL: a generic batch4 caller must not stamp a
+    # context packet with the "真实 provider 数据" research banner. It is minted only when the caller holds the
+    # process-internal capstone capability (identity-checked, not a caller-settable flag), which the e2e bridge
+    # forwards after its own check. A direct batch4 caller selecting research_live without it fails closed.
+    if run_mode == "research_live" and not is_capstone_research_live_capability(_research_live_capability):
+        raise Batch4RunnerError(
+            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，经 e2e 桥转发）；batch4 通用调用方"
+            "不可直接选择")
     try:
         import jsonschema  # noqa: F401 - required by the official lifecycle/machine/report validators
     except ImportError as exc:
@@ -216,8 +225,10 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", bootst
             dry_pc = {**pc, "runs_private_root": Path(tmp) / "runs_private",
                       "weekly_private_root": Path(tmp) / "weekly_private",
                       "lifecycle_readiness_out_path": None}
-            return _summary(run_weekend_pipeline(now_et, dry_pc, run_mode=run_mode), dry_run=True)
-    return _summary(run_weekend_pipeline(now_et, pc, run_mode=run_mode), dry_run=False)
+            return _summary(run_weekend_pipeline(now_et, dry_pc, run_mode=run_mode,
+                                                 research_live_capability=_research_live_capability), dry_run=True)
+    return _summary(run_weekend_pipeline(now_et, pc, run_mode=run_mode,
+                                         research_live_capability=_research_live_capability), dry_run=False)
 
 
 def _parse_now_et(value: str) -> datetime:
@@ -232,7 +243,9 @@ def parse_args(argv=None):
     parser = argparse.ArgumentParser(description="Run the offline US-short batch4 weekend pipeline")
     parser.add_argument("--context", required=True, type=Path, help="local closed-world context packet JSON")
     parser.add_argument("--now-et", required=True, type=_parse_now_et, help="ET wall clock YYYY-MM-DDTHH:MM:SS")
-    parser.add_argument("--run-mode", choices=("offline_test", "research_live", "live"), default="offline_test")
+    # research_live is capstone-INTERNAL (source-bound to the authorized one-click capstone live fetch), NOT
+    # operator-selectable here — R-USSHORT-REVIEWQ-CAT1 Required A; a generic batch4 caller only gets offline_test/live.
+    parser.add_argument("--run-mode", choices=("offline_test", "live"), default="offline_test")
     parser.add_argument("--bootstrap-lifecycle", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     return parser.parse_args(argv)

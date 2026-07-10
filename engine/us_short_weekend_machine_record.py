@@ -44,7 +44,11 @@ from engine.us_short_overextension import OVEREXTENSION_STATES as _OVEREXTENSION
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
-from engine.us_short_run_origin import OFFLINE_TEST_RUN_ORIGIN, validate_run_origin
+from engine.us_short_run_origin import (
+    OFFLINE_TEST_RUN_ORIGIN,
+    require_research_live_capability,
+    validate_run_origin,
+)
 from engine.us_short_theme_probe import RISK_TAG as _PROBE_RISK_TAG
 from engine.us_short_weekend_cost_floor import (
     _ENTRY_MODE_CONSTRAINTS,
@@ -335,7 +339,8 @@ def _validate_ranked_row(row):
             f"overextension 非法（须含合法 overextension_state ∈ {list(_OVEREXTENSION_STATES)} + dict execution_flags 或缺省）: {ox!r}")
 
 
-def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN):
+def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN,
+                            research_live_capability=None):
     """4d-ii-k §10 machine-record assembly. Assembles the 4d-ii-j `apply_action_rank` result into the §10
     machine record and validates it with `validate_official_machine_record`, failing closed if it is not §10-clean.
 
@@ -353,6 +358,7 @@ def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN
     Raises WeekendMachineRecordError on a malformed result / row, an invalid market_risk_regime, an unknown
     final_action, an observe_reason_type inconsistent with final_action, a non-canonical / duplicate ticker, a
     theme_probe that is not a §8 forced-min build, or an assembled record the §10 validator does not mark clean."""
+    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
     if not (isinstance(ranked_result, dict) and isinstance(ranked_result.get("regime"), dict)
             and isinstance(ranked_result.get("rows"), list)):
         raise WeekendMachineRecordError("ranked_result 须为含 regime(dict) + rows(list) 的 4d-ii-j 输出")

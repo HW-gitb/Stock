@@ -32,6 +32,7 @@ provider call, production, DataHub, ship-gate, broker path, or A-share crossing 
 from __future__ import annotations
 
 import argparse
+import shutil
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -255,6 +256,33 @@ def _rel(p: Path) -> str:
         return str(p)
 
 
+def _safe_tag(generated_at: str) -> str:
+    """A filesystem-safe historical tag from the RFC3339 generated_at (non-alphanumerics → '-')."""
+    return "".join(c if c.isalnum() else "-" for c in generated_at) or "run"
+
+
+def _supersede_stale_current_outputs(ctx: CapstoneContext, *, reason: str) -> dict[str, Any]:
+    """C (R-USSHORT-REVIEWQ-CAT1 Required C) — the atomic current-run protocol for a NON-emitting outcome. A no-emit
+    or a stage failure must NOT leave a PRIOR same-decision-date official output (weekly_report.md / action_table.csv
+    / machine_record.json) discoverable as THIS week's CURRENT advice. Move any pre-existing same-decision-date
+    weekly_private/<dd> and runs_private/<dd> directory aside to an EXPLICITLY historical
+    private_root/_superseded/<surface>/<dd>__<tag>/ location (history preserved, never deleted; the current slot is
+    emptied). Idempotent no-op when no prior same-date output exists (e.g. a first-ever run that no-emits)."""
+    tag = _safe_tag(ctx.generated_at)
+    moved: list[str] = []
+    for surface in ("weekly_private", "runs_private"):
+        current = ctx.private_root / surface / ctx.decision_date
+        if not current.exists():
+            continue
+        dest = ctx.private_root / "_superseded" / surface / f"{ctx.decision_date}__{tag}"
+        while dest.exists():   # never clobber earlier history if the same generated_at tag recurs
+            dest = dest.with_name(dest.name + "_x")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.move(str(current), str(dest))
+        moved.append(_rel(dest))
+    return {"reason": reason, "moved": moved}
+
+
 def run_weekly_capstone(
     *,
     now_et: datetime,
@@ -294,29 +322,41 @@ def run_weekly_capstone(
             "the plan first")
 
     results: list[dict[str, Any]] = []
-    for stage in pipeline:
-        try:
-            result = stage.run(ctx)
-        except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
-            raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
-        # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
-        # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
-        # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
-        if stage.name == "weekly_bridge" and _bridge_emitted(result) is False:
+    try:
+        for stage in pipeline:
+            try:
+                result = stage.run(ctx)
+            except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
+                raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+            # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
+            # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
+            # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
+            if stage.name == "weekly_bridge" and _bridge_emitted(result) is False:
+                # C (Required C): an HONEST no-emit must not leave a PRIOR same-decision-date report discoverable as
+                # THIS week's current advice — supersede it to an explicitly historical identity before returning.
+                superseded = _supersede_stale_current_outputs(ctx, reason="no_emit")
+                results.append({"name": stage.name, "gated": stage.gated, "result": result})
+                return {
+                    "mode": "live",
+                    "decision_date": ctx.decision_date,
+                    "price_basis_date": ctx.price_basis_date,
+                    "emitted": False,
+                    "no_emit_reason": _bridge_no_emit_reason(result),
+                    "superseded_prior_outputs": superseded,
+                    "stages": results,
+                }
+            missing = [p for p in stage.outputs(ctx) if not Path(p).exists()]
+            if missing:
+                raise WeeklyCapstoneError(
+                    f"stage '{stage.name}' completed but did not produce: {[_rel(p) for p in missing]}")
             results.append({"name": stage.name, "gated": stage.gated, "result": result})
-            return {
-                "mode": "live",
-                "decision_date": ctx.decision_date,
-                "price_basis_date": ctx.price_basis_date,
-                "emitted": False,
-                "no_emit_reason": _bridge_no_emit_reason(result),
-                "stages": results,
-            }
-        missing = [p for p in stage.outputs(ctx) if not Path(p).exists()]
-        if missing:
-            raise WeeklyCapstoneError(
-                f"stage '{stage.name}' completed but did not produce: {[_rel(p) for p in missing]}")
-        results.append({"name": stage.name, "gated": stage.gated, "result": result})
+    except WeeklyCapstoneError:
+        # C (Required C): a stage failure (exception or missing output) likewise must not leave a prior
+        # same-decision-date report discoverable as the current run — supersede before propagating. This wraps ONLY
+        # the pipeline loop, so the pre-run out-of-window / unauthorized refusals above (which ran nothing and wrote
+        # nothing) never supersede a prior report.
+        _supersede_stale_current_outputs(ctx, reason="stage_failure")
+        raise
 
     return {
         "mode": "live",

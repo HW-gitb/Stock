@@ -39,7 +39,7 @@ from __future__ import annotations
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_provider_health import classify_provider_health
-from engine.us_short_run_origin import run_origin_for_mode
+from engine.us_short_run_origin import is_capstone_research_live_capability, run_origin_for_mode
 from engine.us_short_run_provenance import reconcile_run_provenance
 from engine.us_short_weekend_action_rank import apply_action_rank
 from engine.us_short_weekend_analysis import analyze_rows
@@ -175,7 +175,7 @@ def _build_analysis_rows(selection, per_ticker_analysis):
     return [{**canon_map[ct], "selection_record": sel_records.get(ct)} for ct in union_order]
 
 
-def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
+def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", research_live_capability=None):
     """4d-ii-o end-to-end weekend pipeline. Resolves the canonical decision_date, runs selection + the full
     4d-ii decision chain + machine-record assembly + lifecycle eval + weekly-report render + private write,
     threading the one decision_date throughout. Three run gates precede analysis (closes
@@ -188,7 +188,8 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
 
     now_et = the §2.1 resolver ET wall clock; the NYSE sessions are derived from `pipeline_context["calendar"]`.
     pipeline_context = the closed-world injected run context (see _PIPELINE_CONTEXT_KEYS).
-    run_mode = 'offline_test' (default; sessions derived from the calendar) | 'live' (gated in batch4 → batch5).
+    run_mode = 'offline_test' (default) | 'research_live' (real provider data; CAPSTONE-INTERNAL — a research_live run
+    requires the process-internal capstone capability, R-USSHORT-REVIEWQ-CAT1 A) | 'live' (gated in batch4 → batch5).
 
     Returns a NO-EMIT result {"out_of_window"/"emitted", "no_emit_reason", "decision_date", "run_date",
     "selection", ["provider_health"]} on the intraday dead zone OR non-clean provider health (NO machine record /
@@ -199,6 +200,15 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
     error on its contract."""
     if run_mode not in RUN_MODES:
         raise WeekendOrchestratorError(f"run_mode 须 ∈ {sorted(RUN_MODES)}: {run_mode!r}")
+    # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL at EVERY layer, including this PUBLISHED
+    # orchestrator entry (docs/README + CURRENT publish this signature). The research_live run_origin is minted below
+    # via run_origin_for_mode, so a DIRECT run_weekend_pipeline caller must ALSO hold the process-internal capstone
+    # capability (the batch4/e2e wrappers thread it down here). A generic caller passing run_mode="research_live"
+    # without it fails closed — no false "真实 provider 数据" banner from the deepest public surface.
+    if run_mode == "research_live" and not is_capstone_research_live_capability(research_live_capability):
+        raise WeekendOrchestratorError(
+            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，由 batch4/e2e 网关下传）；"
+            "run_weekend_pipeline 通用调用方不可直接选择")
     if not (isinstance(pipeline_context, dict) and set(pipeline_context) == _PIPELINE_CONTEXT_KEYS):
         raise WeekendOrchestratorError(
             "pipeline_context 顶层键须恰为 %s（closed-world）: %s"
@@ -260,12 +270,14 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
     # (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP). live (operationally authoritative) stays hard-gated above
     # (→ batch5), so run_origin_for_mode only ever returns the offline_test or research_live fact here.
     run_origin = run_origin_for_mode(run_mode)
-    machine_record = assemble_machine_record(ranked, as_of=decision_date, run_origin=run_origin)   # decision_date → K as_of
+    machine_record = assemble_machine_record(ranked, as_of=decision_date, run_origin=run_origin,   # decision_date → K as_of
+                                             research_live_capability=research_live_capability)
     lifecycle_result = run_lifecycle_eval_stage(                                  # §13: L BEFORE the m2 render
         decision_date=decision_date, register_path=pc["lifecycle_register_path"],
         readiness_out_path=pc["lifecycle_readiness_out_path"])
     report = build_weekly_report(
         machine_record, lifecycle_result, report_context=pc["report_context"], run_origin=run_origin,
+        research_live_capability=research_live_capability,
         run_context={"decision_date": decision_date, "price_basis_date": selection["price_basis_date"],
                      "run_date": selection["run_date"]},
         # §11.2 BINDS its boundary facts to the structured stage outputs (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-
@@ -285,7 +297,8 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test"):
         provider_health=provider_health, coverage_inputs=pc["report_context"]["coverage_inputs"],
         lifecycle_result=lifecycle_result,
         runs_private_root=pc["runs_private_root"],
-        weekly_private_root=pc["weekly_private_root"], run_origin=run_origin)
+        weekly_private_root=pc["weekly_private_root"], run_origin=run_origin,
+        research_live_capability=research_live_capability)
 
     return {"out_of_window": False, "emitted": True, "decision_date": decision_date,
             "run_date": selection["run_date"], "selection": selection, "machine_record": machine_record,

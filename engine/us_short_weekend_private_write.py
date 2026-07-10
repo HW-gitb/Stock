@@ -40,6 +40,7 @@ from engine.us_short_provider_health import validate_provider_health_result
 from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     assert_offline_report_invariants,
+    require_research_live_capability,
     validate_run_origin,
 )
 from engine.us_short_weekend_action_table import flatten_machine_record
@@ -188,7 +189,7 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
 def write_run_private(*, decision_date, machine_record, weekly_report_md, report_data,
                       provider_health, coverage_inputs, lifecycle_result,
                       runs_private_root=None, weekly_private_root=None,
-                      run_origin=OFFLINE_TEST_RUN_ORIGIN) -> dict:
+                      run_origin=OFFLINE_TEST_RUN_ORIGIN, research_live_capability=None) -> dict:
     """4d-ii-n idempotent private write. Persists the run's machine layer + §11.1 weekly_private surface to the
     gitignored private dirs, fail-closed behind the §18.0 P0 private-path guard, keyed (idempotent) by decision_date.
 
@@ -213,6 +214,7 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     WeekendPrivateWriteError on a blank weekly_report, a decision_date that disagrees with machine_record.as_of
     or the weekly_report's rendered price-clock banner (§2.1 same-run reconciliation), or — via the §18.0 guard /
     `WeekendActionTableError` — a non-private destination / malformed machine record."""
+    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
     if not (isinstance(weekly_report_md, str) and weekly_report_md.strip()):
         raise WeekendPrivateWriteError("weekly_report_md 须为非空 str")
     _validate_weekly_report_surface(weekly_report_md)

@@ -17,6 +17,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
 from runners import us_short_batch5_full_candidate_projection_inputs as _proj
@@ -50,38 +51,55 @@ def _stage_summary_targets(ctx) -> dict[str, Path]:
     }
 
 
+# --- authorization propagation (R-USSHORT-REVIEWQ-CAT1 Required B) ---
+
+def _require_ctx_authorization(ctx) -> None:
+    """Fail-closed per-execution authorization propagation: a gated capstone adapter must CONSUME the run context's
+    authorization and refuse BEFORE invoking its wrapped provider runner when it is false — never self-assert
+    ``confirm_user_authorization=True``. The top-level capstone gate protects only the orchestrated path; a direct
+    adapter call with an unauthorized ctx must not silently self-authorize the underlying SR-PROVIDER-001 fetch."""
+    if getattr(ctx, "confirm_user_authorization", False) is not True:   # strict: a truthy non-True must not authorize
+        raise PermissionError(
+            "capstone gated stage requires ctx.confirm_user_authorization=True (per-execution SR-PROVIDER-001 "
+            "authorization); refusing before any provider fetch")
+
+
 # --- GATED stages (live provider fetch; SR-PROVIDER-001) ---
 
 def run_universe(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
     return _universe.run_fetch(
         now_et=ctx.now_et,
         candidate_list_path=ctx.candidate_path,
         generated_at=ctx.generated_at,
-        confirm_user_authorization=True,
+        confirm_user_authorization=ctx.confirm_user_authorization,
     )
 
 
 def run_momentum_fetch(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
     return _mom_fetch.run_fetch(
         candidate_artifact_path=ctx.candidate_path,
         series_packet_path=ctx.series_packet_path,
         summary_path=_stage_summary_targets(ctx)["momentum_fetch"],
         generated_at=ctx.generated_at,
-        confirm_user_authorization=True,
+        confirm_user_authorization=ctx.confirm_user_authorization,
     )
 
 
 def run_sic_fetch(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
     return _sic.run_fetch(
         candidate_artifact_path=ctx.candidate_path,
         classification_packet_path=ctx.classification_packet_path,
         summary_path=_stage_summary_targets(ctx)["sic_classification"],
         generated_at=ctx.generated_at,
-        confirm_user_authorization=True,
+        confirm_user_authorization=ctx.confirm_user_authorization,
     )
 
 
 def run_pass2_fetch(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
     summary = _pass2.run_full_candidate_live_source_packet(
         preflight_summary_path=ctx.preflight_summary_path,
         expected_total_call_budget=_preflight_call_budget(ctx),
@@ -89,7 +107,7 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
         summary_path=_stage_summary_targets(ctx)["pass2"],
-        confirm_user_authorization=True,
+        confirm_user_authorization=ctx.confirm_user_authorization,
         run_data_context=True,
         generated_at=ctx.generated_at,
         observed_at=ctx.observed_at,
@@ -137,13 +155,14 @@ def run_projection_inputs(ctx) -> dict[str, Any]:
 
 
 def run_pass2_preflight(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
     return _preflight.run_preflight(
         candidate_artifact_path=ctx.candidate_path,
         expected_decision_date=ctx.decision_date,
         momentum_projection_path=ctx.merged_momentum_path,
         theme_projection_path=ctx.merged_theme_path,
         summary_path=ctx.preflight_summary_path,
-        confirm_user_authorization=True,
+        confirm_user_authorization=ctx.confirm_user_authorization,
         generated_at=ctx.generated_at,
     )
 
@@ -163,6 +182,12 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         now_et=ctx.now_et,
         context_components_path=ctx.context_components_path,
         run_mode="research_live",   # real provider data, pre-authoritative research report (NOT operational; live→batch5)
+        # research_live is CAPSTONE-INTERNAL (R-USSHORT-REVIEWQ-CAT1 Required A): the capstone mints the process-internal
+        # capability ONLY on an authorized run (it refuses before any stage unless ctx.confirm_user_authorization, so
+        # reaching this bridge attests the gated universe/momentum/SIC/Pass2 fetch ran under per-execution authorization).
+        # run_e2e refuses research_live for any caller lacking this exact object, so a standalone/fixture bridge call (or
+        # a forged True) fails closed. Unauthorized ctx → None → fail closed.
+        _research_live_capability=(_CAPSTONE_RESEARCH_LIVE_CAPABILITY if ctx.confirm_user_authorization is True else None),
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
     )

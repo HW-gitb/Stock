@@ -2,13 +2,15 @@
 """US-short weekend-pipeline execution / data-origin fact — batch4 honesty provenance (single source).
 
 Design authority: docs/us_short_system_design.md §11 (诚实) / §18.0 / §18.2 batch4. Closes
-R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: a batch4 weekend run is ALWAYS an offline
-engineering run over a CALLER-SUPPLIED fixture (live is hard-gated upstream in the orchestrator and never
-reaches the official machine-record / weekly-report chain). The official artifacts must carry this fact so a
-synthetic fixture run can never be mistaken for an operational, real-data weekly selection/advice artifact.
+R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: a batch4 weekend run carries an IMMUTABLE run-origin
+fact — either `offline_test` (a CALLER-SUPPLIED fixture) or `research_live` (REAL provider data from the
+authorized one-click capstone live fetch, still pre-authoritative / research-only). Operational `live` stays
+hard-gated upstream in the orchestrator. The official artifacts carry this fact so neither a synthetic fixture
+nor a pre-authoritative research run can be mistaken for an operational, ship-gate-authoritative weekly artifact.
 
-This module is the ONE immutable source of that fact + its validator + the always-visible offline disclosure
-text the report renders and the private-write boundary reconciles. No provider/live/network; offline only.
+This module is the ONE immutable source of those facts + their validator + the always-visible disclosure text the
+report renders and the private-write boundary reconciles. `research_live` is CAPSTONE-INTERNAL — minted only via the
+process-internal capability below (R-USSHORT-REVIEWQ-CAT1 Required A); no operational/ship-gate claim.
 """
 from __future__ import annotations
 
@@ -37,6 +39,42 @@ RESEARCH_LIVE_RUN_ORIGIN = {
     "operational_use": "not_authorized",
 }
 _VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN)
+
+# R-USSHORT-REVIEWQ-CAT1 Required A — research_live is a CAPSTONE-INTERNAL run_origin, NOT a public run_mode a generic
+# Batch4/E2E caller can select. The batch4 / e2e entry points AND the run_weekend_pipeline orchestrator (the deepest
+# PUBLISHED surface that mints the fact) gate research_live on THIS exact process-internal capability object, which the
+# one-click capstone (runners/us_short_weekly_capstone*) passes after its gated, per-execution-authorized live fetch.
+# A GENERIC caller — the CLI (research_live is not an argparse
+# choice) or a direct public-function caller — cannot select research_live: passing True / a look-alike object fails
+# the identity check. (In-process Python cannot be cryptographically sandboxed; this closes the DOCUMENTED public
+# surface — the CLI and the run_mode argument — so a fixture / local source packet can never stamp the real-provider
+# banner. The earlier caller-settable boolean did NOT achieve this. Importing this private capability to forge
+# provenance is a deliberate contract violation, out of the generic-caller threat model.)
+class _CapstoneResearchLiveCapability:
+    __slots__ = ()
+
+
+_CAPSTONE_RESEARCH_LIVE_CAPABILITY = _CapstoneResearchLiveCapability()
+
+
+def is_capstone_research_live_capability(candidate) -> bool:
+    """True iff candidate IS the one process-internal capstone research_live capability (identity, NOT truthiness), so
+    a generic caller cannot fabricate it with True / a look-alike. batch4 / e2e / the orchestrator gate the
+    research_live run_origin on this (R-USSHORT-REVIEWQ-CAT1 Required A)."""
+    return candidate is _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+
+
+def require_research_live_capability(run_origin, capability):
+    """CONSUMER-LAYER gate (R-USSHORT-REVIEWQ-CAT1 Required A, 4th surface): the run_origin fact is a dict of PUBLIC
+    strings that `validate_run_origin` accepts by shape, so the three official-artifact producers
+    (`assemble_machine_record` / `build_weekly_report` / `write_run_private`) — public, importable functions — could
+    be driven DIRECTLY with a hand-built research_live origin, bypassing the entry-point gates. Every such producer
+    calls this: turning a research_live fact into an official artifact requires the capstone capability. A no-op for
+    offline_test / any non-research_live origin (they need no capability). Raises RunOriginError otherwise."""
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live" \
+            and not is_capstone_research_live_capability(capability):
+        raise RunOriginError(
+            "research_live 官方制品须由 capstone 进程内能力对象授权（consumer 层门；防绕过入口网关直接驱动装配/渲染/落盘）")
 
 # the stable always-visible offline disclosure sentinel — rendered into the weekly report (§11.2) and
 # reconciled at the §18.0 private-write boundary so an offline machine record can never be written beside a
@@ -250,7 +288,9 @@ def validate_run_origin(origin):
 def run_origin_for_mode(run_mode):
     """The data-origin fact for a batch4 run. batch4 reaches the official chain in `offline_test` (fixture) or
     `research_live` (real provider data, pre-authoritative); `live` (operational-authoritative) is hard-gated
-    upstream in the orchestrator, and any other mode here is a wiring bug — both fail closed."""
+    upstream in the orchestrator, and any other mode here is a wiring bug — both fail closed. NOTE: `research_live`
+    reaching here means the batch4/e2e ENTRY gate already validated the capstone capability (R-USSHORT-REVIEWQ-CAT1
+    Required A) — a generic caller cannot reach this with run_mode=research_live."""
     if run_mode == "offline_test":
         return dict(OFFLINE_TEST_RUN_ORIGIN)
     if run_mode == "research_live":

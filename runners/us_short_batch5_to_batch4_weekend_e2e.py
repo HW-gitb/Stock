@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_provider_health import ProviderHealthError, classify_provider_health  # noqa: E402
+from engine.us_short_run_origin import is_capstone_research_live_capability  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 from runners import us_short_weekend_batch4 as batch4_runner  # noqa: E402
 
@@ -233,12 +234,14 @@ def _assemble_batch4_packet(
     }
 
 
-def _safe_batch4_run(packet_path: Path, *, now_et: datetime, run_mode: str, bootstrap_lifecycle: bool, dry_run: bool):
+def _safe_batch4_run(packet_path: Path, *, now_et: datetime, run_mode: str, research_live_capability,
+                     bootstrap_lifecycle: bool, dry_run: bool):
     try:
         return batch4_runner.run_packet(
             packet_path,
             now_et=now_et,
             run_mode=run_mode,
+            _research_live_capability=research_live_capability,
             bootstrap_lifecycle=bootstrap_lifecycle,
             dry_run=dry_run,
         )
@@ -279,12 +282,23 @@ def run_e2e(
     calendar_path: Path | str = DEFAULT_CALENDAR_PATH,
     governance_path: Path | str = DEFAULT_GOVERNANCE_PATH,
     run_mode: str = "offline_test",
+    _research_live_capability=None,
     bootstrap_lifecycle: bool = False,
     dry_run: bool = False,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch5ToBatch4E2EError("now_et must be a naive ET datetime")
+    # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL: minted ONLY when the caller holds the
+    # process-internal capstone capability (identity-checked, NOT a caller-settable boolean — the earlier bool was
+    # forgeable by any generic caller passing True). A generic batch5->batch4 caller feeding an arbitrary/fixture
+    # source packet cannot obtain it, so the report can never falsely banner "真实 provider 数据". Only the capstone's
+    # run_weekly_bridge passes it, after its per-execution SR-PROVIDER-001 authorization + gated live fetch; the CLI
+    # cannot (research_live is not an argparse choice).
+    if run_mode == "research_live" and not is_capstone_research_live_capability(_research_live_capability):
+        raise Batch5ToBatch4E2EError(
+            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，源自授权的一键 capstone live 取数"
+            "执行）；通用 batch5->batch4 调用方不可对任意/fixture source packet 选择——请走 weekly capstone")
 
     source_packet = _resolve_existing_path(source_packet_path, label="source_packet_path")
     template_path = _resolve_existing_path(batch4_template_path, label="batch4_template_path")
@@ -353,6 +367,7 @@ def run_e2e(
             context_path,
             now_et=now_et,
             run_mode=run_mode,
+            research_live_capability=_research_live_capability,
             bootstrap_lifecycle=bootstrap_lifecycle,
             dry_run=dry_run,
         )
@@ -416,7 +431,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--context-out", type=Path, default=None)
     parser.add_argument("--calendar", type=Path, default=DEFAULT_CALENDAR_PATH)
     parser.add_argument("--governance", type=Path, default=DEFAULT_GOVERNANCE_PATH)
-    parser.add_argument("--run-mode", choices=("offline_test", "research_live", "live"), default="offline_test")
+    # research_live is capstone-INTERNAL (source-bound to the authorized one-click capstone live fetch), NOT
+    # operator-selectable here — R-USSHORT-REVIEWQ-CAT1 Required A; a generic bridge caller only gets offline_test/live.
+    parser.add_argument("--run-mode", choices=("offline_test", "live"), default="offline_test")
     parser.add_argument("--bootstrap-lifecycle", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--generated-at", default=None)

@@ -50,6 +50,7 @@ from engine.us_short_run_origin import (
     build_run_status,
     canonical_offline_sections,
     canonical_section_1,
+    require_research_live_capability,
     validate_run_origin,
 )
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
@@ -278,7 +279,7 @@ def _rows_section(rows, label):
 
 
 def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context, stage_status, selection,
-                        run_origin=OFFLINE_TEST_RUN_ORIGIN):
+                        run_origin=OFFLINE_TEST_RUN_ORIGIN, research_live_capability=None):
     """4d-ii-m2 §11.2 weekly_report assembly + render.
 
     machine_record = the 4d-ii-k `assemble_machine_record` output (flattened here via slice m1 for the §11.3 rows).
@@ -295,6 +296,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     WeekendReportError on a malformed machine record / lifecycle result / report_context (and the formatters /
     renderer raise their own typed errors on a malformed formatter input / a §11.2 render-invariant violation —
     incomplete price_clock, lifecycle-count mismatch, a section without content)."""
+    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
     _validate_report_context(report_context)
     _validate_run_context(run_context)
     _validate_stage_status(stage_status)

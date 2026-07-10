@@ -198,11 +198,13 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertNotIn("AAPL", blob)
 
     def test_research_live_run_emits_real_data_report_not_fixture(self) -> None:
-        # option a: run_mode="research_live" EMITS an honest real-data research report — the report carries the
-        # research sentinel (研究运行 / 真实 provider 数据), NOT the offline_test fixture lie, and the machine record
-        # carries the research run_origin. This is the capstone's real emit path (run_weekly_bridge passes
-        # run_mode="research_live"), which previously CRASHED under the (hard-gated) run_mode="live".
-        from engine.us_short_run_origin import RESEARCH_LIVE_RUN_ORIGIN
+        # option a + R-USSHORT-REVIEWQ-CAT1 Required A: run_mode="research_live" is CAPSTONE-INTERNAL — it emits the
+        # honest real-data research report ONLY when handed the process-internal capstone capability object (which
+        # run_weekly_bridge mints from its per-execution authorization). The report carries the research
+        # sentinel (研究运行 / 真实 provider 数据), NOT the offline_test fixture lie, and the machine record carries the
+        # research run_origin. (The negative sibling below proves the SAME fixture packet WITHOUT the capability
+        # cannot get the real-provider banner.)
+        from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY, RESEARCH_LIVE_RUN_ORIGIN
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
             funnel.sample_validation, "_read_windows_environment_value", return_value=None
@@ -239,6 +241,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 now_et=datetime(2026, 6, 15, 9, 0, 0),
                 context_components_path=self.paths["components"],
                 run_mode="research_live",
+                _research_live_capability=_CAPSTONE_RESEARCH_LIVE_CAPABILITY,   # the capstone-only capability (run_weekly_bridge mints it from auth)
                 bootstrap_lifecycle=True,
                 generated_at="2026-06-15T13:01:00Z",
             )
@@ -256,6 +259,37 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             blob = json.dumps(summary, ensure_ascii=False)
             self.assertNotIn("UNIT_TEST_FMP_SECRET", blob)
             self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
+
+    def test_research_live_standalone_fixture_cannot_get_real_provider_banner(self) -> None:
+        # R-USSHORT-REVIEWQ-CAT1 Required A (the exact reviewer probe): a generic batch5->batch4 caller feeding a
+        # local/fixture source packet must NOT be able to stamp the "真实 provider 数据" research banner. Neither an
+        # ABSENT capability, nor a FORGED one (True / a look-alike object), can obtain research_live — run_e2e fails
+        # closed BEFORE any report/action/record write. (The capstone-only capability is identity-checked.)
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            fixture_packet = _write_json(private_root / "fixture_source_packet.json", {"note": "local fixture"})
+
+            for forged in (None, True, object(), "yes"):   # absent + forged attestations all fail closed
+                kwargs = {} if forged is None else {"_research_live_capability": forged}
+                with self.assertRaises(e2e.Batch5ToBatch4E2EError):
+                    e2e.run_e2e(
+                        source_packet_path=fixture_packet,
+                        batch4_template_path=template,
+                        account_state_path=account,
+                        provider_health_path=health,
+                        private_root=private_root,
+                        now_et=datetime(2026, 6, 15, 9, 0, 0),
+                        run_mode="research_live",   # capstone-internal mode refused without the exact capability object
+                        bootstrap_lifecycle=True,
+                        generated_at="2026-06-15T13:01:00Z",
+                        **kwargs,
+                    )
+            # fail-closed: the refused runs wrote NO official output (no real-provider banner anywhere).
+            self.assertFalse((private_root / "weekly_private").exists())
+            self.assertFalse((private_root / "runs_private").exists())
 
 
 if __name__ == "__main__":

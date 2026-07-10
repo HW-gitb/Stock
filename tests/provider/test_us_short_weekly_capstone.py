@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -177,6 +178,231 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 order, skip_output_stage="weekly_bridge", bridge_batch4={"emitted": True}))
         self.assertIn("weekly_bridge", str(cm.exception))
 
+    # --- C (R-USSHORT-REVIEWQ-CAT1 Required C): a NON-emitting outcome (no-emit / stage exception / missing output)
+    #     must not leave a PRIOR same-decision-date report discoverable as THIS week's current advice; history is
+    #     preserved under an explicit _superseded identity. ---
+    _OFFICIAL_SIBLINGS = {"weekly_report.md", "action_table.csv", "machine_record.json"}
+
+    def _seed_prior_official_outputs(self, decision_date="20260709"):
+        """Simulate a PRIOR emitted run's 3 official output siblings under the private root."""
+        wk = self.private_root / "weekly_private" / decision_date
+        rn = self.private_root / "runs_private" / decision_date
+        wk.mkdir(parents=True, exist_ok=True)
+        rn.mkdir(parents=True, exist_ok=True)
+        (wk / "weekly_report.md").write_text("PRIOR REPORT", encoding="utf-8")
+        (wk / "action_table.csv").write_text("prior,row\n", encoding="utf-8")
+        (rn / "machine_record.json").write_text("{}", encoding="utf-8")
+        return wk, rn
+
+    def _superseded_files(self):
+        sup = self.private_root / "_superseded"
+        return {p.name for p in sup.rglob("*") if p.is_file()} if sup.exists() else set()
+
+    def test_no_emit_supersedes_prior_same_date_current_outputs(self):
+        wk, rn = self._seed_prior_official_outputs()
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(
+            order, skip_output_stage="weekly_bridge",
+            bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
+        self.assertFalse(summary["emitted"])
+        self.assertFalse(wk.exists())                                       # current slot emptied ...
+        self.assertFalse(rn.exists())
+        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)  # ... history preserved (all 3 siblings)
+        self.assertTrue(summary["superseded_prior_outputs"]["moved"])
+
+    def test_stage_exception_supersedes_prior_same_date_current_outputs(self):
+        wk, rn = self._seed_prior_official_outputs()
+        order: list[str] = []
+        with self.assertRaises(WeeklyCapstoneError):
+            self._run(order, stages=self._fake_stages(order, break_stage="momentum_fetch"))
+        self.assertFalse(wk.exists())
+        self.assertFalse(rn.exists())
+        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+
+    def test_missing_output_failure_supersedes_prior_same_date_current_outputs(self):
+        # the third non-emitting outcome (a stage completes but does not produce its declared output) closes the class.
+        wk, rn = self._seed_prior_official_outputs()
+        order: list[str] = []
+        with self.assertRaises(WeeklyCapstoneError):
+            self._run(order, stages=self._fake_stages(order, skip_output_stage="pass2_fetch"))
+        self.assertFalse(wk.exists())
+        self.assertFalse(rn.exists())
+        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+
+    def test_no_emit_without_prior_outputs_is_noop(self):
+        # reverse control: a no-emit with NO prior same-date report supersedes nothing (no crash, no _superseded dir).
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(
+            order, skip_output_stage="weekly_bridge",
+            bridge_batch4={"emitted": False, "no_emit_reason": "provider_health_blocked"}))
+        self.assertFalse(summary["emitted"])
+        self.assertEqual(summary["superseded_prior_outputs"]["moved"], [])
+        self.assertFalse((self.private_root / "_superseded").exists())
+
+    def test_successful_emit_does_not_supersede(self):
+        # reverse control: a normal emit must NOT archive to _superseded (only non-emitting outcomes do).
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(order))
+        self.assertTrue(summary["emitted"])
+        self.assertFalse((self.private_root / "_superseded").exists())
+
+
+class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
+    """R-USSHORT-REVIEWQ-CAT1 Required B (authorization propagation) + Required A (research_live source-binding). The
+    gated adapters must CONSUME ctx.confirm_user_authorization and fail closed BEFORE the wrapped runner when it is
+    false (never self-assert True); the bridge binds research_live to that per-execution authorization; and the generic
+    batch4 / e2e entry points (CLI + function) cannot select research_live for an arbitrary fixture packet."""
+
+    # the 4 gated + 1 preflight adapters that previously hardcoded confirm_user_authorization=True
+    _WRAPPED = {
+        "run_universe": ("_universe", "run_fetch"),
+        "run_momentum_fetch": ("_mom_fetch", "run_fetch"),
+        "run_sic_fetch": ("_sic", "run_fetch"),
+        "run_pass2_fetch": ("_pass2", "run_full_candidate_live_source_packet"),
+        "run_pass2_preflight": ("_preflight", "run_preflight"),
+    }
+
+    def _ctx(self, *, authorized):
+        from runners.us_short_weekly_capstone import resolve_capstone_context
+        tmp = Path(tempfile.mkdtemp(prefix="cap_auth_"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        return resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=tmp / "priv",
+            batch4_template_path=tmp / "template.json",
+            account_state_path=tmp / "account.json",
+            confirm_user_authorization=authorized,
+            state_dir=tmp / "state",
+            sample_root=tmp,
+        )
+
+    def test_gated_adapter_refuses_unauthorized_ctx_before_calling_runner(self):
+        # Required B: a direct adapter call with an UNAUTHORIZED ctx must raise BEFORE invoking the wrapped provider
+        # runner — closed-world over ALL 5 adapters (no silent self-authorization on any).
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = self._ctx(authorized=False)
+        for adapter, (mod_attr, fn) in self._WRAPPED.items():
+            with mock.patch.object(getattr(st, mod_attr), fn) as m:
+                with self.assertRaises(PermissionError, msg=adapter):
+                    getattr(st, adapter)(ctx)
+                m.assert_not_called()
+
+    def test_gated_adapter_forwards_ctx_authorization_when_authorized(self):
+        # Required B (reverse): with an AUTHORIZED ctx each adapter forwards ctx.confirm_user_authorization (True) to
+        # its runner — the value is CONSUMED from the context, not hardcoded.
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = self._ctx(authorized=True)
+        with mock.patch.object(st, "_preflight_call_budget", return_value=16):
+            for adapter, (mod_attr, fn) in self._WRAPPED.items():
+                with mock.patch.object(getattr(st, mod_attr), fn, return_value={"ok": True}) as m:
+                    getattr(st, adapter)(ctx)
+                    m.assert_called_once()
+                    self.assertIs(m.call_args.kwargs.get("confirm_user_authorization"), True, adapter)
+
+    def test_bridge_mints_research_live_capability_only_when_authorized(self):
+        # Required A: the capstone bridge passes the process-internal research_live capability ONLY on an authorized
+        # run; an unauthorized ctx passes None → run_e2e would refuse the real-provider banner. The capability is the
+        # exact capstone singleton (identity), never a forgeable flag.
+        from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+        from runners import us_short_weekly_capstone_stages as st
+        for authorized in (True, False):
+            ctx = self._ctx(authorized=authorized)
+            with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
+                st.run_weekly_bridge(ctx)
+                self.assertEqual(m.call_args.kwargs.get("run_mode"), "research_live")
+                expected = _CAPSTONE_RESEARCH_LIVE_CAPABILITY if authorized else None
+                self.assertIs(m.call_args.kwargs.get("_research_live_capability"), expected)
+
+    def test_e2e_function_refuses_research_live_without_or_with_forged_capability(self):
+        # Required A at the e2e function boundary: research_live without the EXACT capstone capability fails closed —
+        # an ABSENT capability AND a FORGED one (True / a look-alike object) are both refused before any packet
+        # read/output (the identity check defeats the earlier forgeable-boolean bypass).
+        from runners import us_short_batch5_to_batch4_weekend_e2e as e2e
+        for forged in (None, True, object()):
+            kwargs = {} if forged is None else {"_research_live_capability": forged}
+            with self.assertRaises(e2e.Batch5ToBatch4E2EError):
+                e2e.run_e2e(
+                    source_packet_path=Path("fixture.json"), batch4_template_path=Path("t.json"),
+                    account_state_path=Path("a.json"), provider_health_path=Path("h.json"), private_root=Path("p"),
+                    now_et=datetime(2026, 6, 15, 9, 0, 0), run_mode="research_live", **kwargs)
+
+    def test_batch4_function_refuses_research_live_without_or_with_forged_capability(self):
+        # Required A at the batch4 function boundary (the other entry point): absent + forged capability both fail
+        # closed before the packet is read.
+        from runners import us_short_weekend_batch4 as b4
+        for forged in (None, True, object()):
+            kwargs = {} if forged is None else {"_research_live_capability": forged}
+            with self.assertRaises(b4.Batch4RunnerError):
+                b4.run_packet(Path("nonexistent.json"), now_et=datetime(2026, 6, 15, 9, 0, 0),
+                              run_mode="research_live", **kwargs)
+
+    def test_cli_rejects_research_live_run_mode(self):
+        # Required A: research_live is removed from BOTH generic CLIs' choices (operator-unselectable).
+        from runners import us_short_batch5_to_batch4_weekend_e2e as e2e
+        from runners import us_short_weekend_batch4 as b4
+        with self.assertRaises(SystemExit):
+            e2e.parse_args([
+                "--source-packet", "s.json", "--batch4-template", "t.json", "--account", "a.json",
+                "--provider-health", "h.json", "--private-root", "p", "--now-et", "2026-06-15T09:00:00",
+                "--run-mode", "research_live"])
+        with self.assertRaises(SystemExit):
+            b4.parse_args(["--context", "c.json", "--now-et", "2026-06-15T09:00:00", "--run-mode", "research_live"])
+
+    def test_orchestrator_refuses_research_live_without_capability(self):
+        # Required A at the DEEPEST published surface: run_weekend_pipeline (signature published in README/CURRENT)
+        # mints the research_live run_origin, so a DIRECT caller must ALSO hold the capstone capability. Absent/forged
+        # capabilities fail closed at the gate (before any pipeline work); the EXACT capability passes the gate (then
+        # errors later on the trivial context — proving only the gate rejected the forgeries, not the run_mode itself).
+        from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+        from engine.us_short_weekend_orchestrator import WeekendOrchestratorError, run_weekend_pipeline
+        now = datetime(2026, 6, 15, 9, 0, 0)
+        for forged in (None, True, object()):
+            kwargs = {} if forged is None else {"research_live_capability": forged}
+            with self.assertRaises(WeekendOrchestratorError) as cm:
+                run_weekend_pipeline(now, {}, run_mode="research_live", **kwargs)
+            self.assertIn("capstone", str(cm.exception))     # the capability gate fired (not the pipeline_context check)
+        with self.assertRaises(WeekendOrchestratorError) as cm:
+            run_weekend_pipeline(now, {}, run_mode="research_live",
+                                 research_live_capability=_CAPSTONE_RESEARCH_LIVE_CAPABILITY)
+        self.assertIn("pipeline_context", str(cm.exception))  # capability accepted → next error is the context check
+
+    def test_consumer_producers_refuse_hand_built_research_live_without_capability(self):
+        # Required A (4th surface): the run_origin is a dict of PUBLIC strings, so a generic caller could hand-type a
+        # research_live origin and drive the PUBLIC engine producers DIRECTLY (assemble_machine_record /
+        # build_weekly_report / write_run_private), bypassing the entry+orchestrator gates. Each producer now
+        # fail-closes at a consumer-layer guard (its FIRST statement) unless handed the capstone capability.
+        from engine.us_short_run_origin import (
+            _CAPSTONE_RESEARCH_LIVE_CAPABILITY, RunOriginError, require_research_live_capability)
+        from engine.us_short_weekend_machine_record import WeekendMachineRecordError, assemble_machine_record
+        from engine.us_short_weekend_private_write import write_run_private
+        from engine.us_short_weekend_report import build_weekly_report
+        FORGED = {"run_mode": "research_live", "data_origin": "real_provider_pre_authoritative",
+                  "operational_use": "not_authorized"}
+        # the shared guard: research_live needs the EXACT capability; offline_test / non-research_live is a no-op
+        for bad in (None, True, object()):
+            with self.assertRaises(RunOriginError):
+                require_research_live_capability(FORGED, bad)
+        require_research_live_capability(FORGED, _CAPSTONE_RESEARCH_LIVE_CAPABILITY)   # ok — no raise
+        require_research_live_capability({"run_mode": "offline_test"}, None)           # offline_test no-op
+        # each producer fail-closes FIRST on a hand-built research_live origin with an absent/forged capability
+        # (the guard precedes all other processing, so the garbage positional args are never reached)
+        for forged in (None, True, object()):
+            cap = {} if forged is None else {"research_live_capability": forged}
+            with self.assertRaises(RunOriginError):
+                assemble_machine_record(object(), as_of="20260615", run_origin=FORGED, **cap)
+            with self.assertRaises(RunOriginError):
+                build_weekly_report(object(), object(), report_context={}, run_context={}, stage_status={},
+                                    selection={}, run_origin=FORGED, **cap)
+            with self.assertRaises(RunOriginError):
+                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
+                                  provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED, **cap)
+        # positive control: WITH the exact capability the guard PASSES (the producer then fails on the garbage args
+        # with its OWN typed error, NOT RunOriginError — proving the guard never blocks a legit research_live run)
+        with self.assertRaises(WeekendMachineRecordError):
+            assemble_machine_record({"regime": {}, "rows": []}, as_of="20260615", run_origin=FORGED,
+                                    research_live_capability=_CAPSTONE_RESEARCH_LIVE_CAPABILITY)
+
 
 class CapstoneAdapterSignatureTest(unittest.TestCase):
     """Regression guard: every kwarg each thin adapter passes must be a real parameter of the runner it wraps, so a
@@ -197,7 +423,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._proj.run_packet, ["candidate_artifact_path", "expected_decision_date", "source_momentum_projection_path", "source_theme_projection_path", "output_momentum_projection_path", "output_theme_projection_path", "summary_path", "generated_at"]),
             (st._preflight.run_preflight, ["candidate_artifact_path", "expected_decision_date", "momentum_projection_path", "theme_projection_path", "summary_path", "confirm_user_authorization", "generated_at"]),
-            (st._bridge.run_e2e, ["source_packet_path", "batch4_template_path", "account_state_path", "provider_health_path", "private_root", "now_et", "context_components_path", "run_mode", "bootstrap_lifecycle", "generated_at"]),
+            (st._bridge.run_e2e, ["source_packet_path", "batch4_template_path", "account_state_path", "provider_health_path", "private_root", "now_et", "context_components_path", "run_mode", "_research_live_capability", "bootstrap_lifecycle", "generated_at"]),
         ]
         for fn, kwargs in checks:
             params = set(inspect.signature(fn).parameters)
