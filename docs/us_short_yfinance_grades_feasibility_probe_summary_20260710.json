@@ -1,0 +1,86 @@
+{
+  "coverage": {
+    "fmp_200_control": {
+      "attempted_count": 2,
+      "recent90_coverage_pct": 100.0,
+      "recent90_usable_count": 2
+    },
+    "fmp_402_small_cap": {
+      "attempted_count": 12,
+      "recent90_coverage_pct": 91.6667,
+      "recent90_usable_count": 11
+    },
+    "momentum_top200": {
+      "attempted_count": 30,
+      "recent90_coverage_pct": 86.6667,
+      "recent90_usable_count": 26
+    }
+  },
+  "decision": {
+    "pass_criterion": "small_cap_recent90_coverage_pct_gte_50_and_no_rate_limit_or_crumb_failure",
+    "reason_codes": [],
+    "verdict": "worth_building"
+  },
+  "execution": {
+    "attempted_symbol_count": 44,
+    "pace_seconds": 1.0,
+    "stopped_early": false,
+    "successful_symbol_count": 44
+  },
+  "field_shape": {
+    "recommendations_nonempty_symbol_count": 44,
+    "upgrades_downgrades_field_presence_count": {
+      "Action": 44,
+      "Firm": 44,
+      "GradeDate": 44,
+      "ToGrade": 44
+    }
+  },
+  "fmp_cross_check": {
+    "fmp_200_control_symbol_count": 2,
+    "yfinance_recent90_control_count": 2
+  },
+  "freshness_and_pit": {
+    "as_of": "2026-07-10",
+    "future_grade_date_count": 0,
+    "grade_date_parseable_count": 3366,
+    "recent_window_days": 90,
+    "stale_grade_date_count": 3119
+  },
+  "input_artifacts": {
+    "candidate_subset_path": "state/us_short/us_short_batch5_capstone_20260710_candidate_subset.json",
+    "fmp_200_success_control_count": 2,
+    "fmp_grade_actions_path": "state/us_short/us_short_batch5_capstone_20260710_analyst_grade_actions.json",
+    "momentum_projection_path": "state/us_short/us_short_batch5_capstone_20260710_momentum_projection.json"
+  },
+  "rate_limit": {
+    "first_failure_symbol_index": null,
+    "pacing_controlled": true,
+    "rate_limit_or_crumb_failure_count": 0
+  },
+  "sample": {
+    "fmp_200_control_planned": 2,
+    "fmp_402_small_cap_planned": 12,
+    "momentum_top200_planned": 30,
+    "planned_total": 44,
+    "ticker_names_in_summary": false
+  },
+  "schema_name": "us_short_yfinance_grades_feasibility_probe_summary",
+  "schema_version": "1.0.0",
+  "scope": {
+    "datahub_consumption_performed": false,
+    "decision_date": "20260710",
+    "price_basis_date": "20260709",
+    "production_storage_performed": false,
+    "provider_selected": false,
+    "ship_gate_evidence_claimed": false,
+    "status": "completed",
+    "yfinance_low_trust_feasibility_only": true
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_yfinance_grades_feasibility_20260710/raw",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_tickers": false,
+    "tracked_summary_path": "docs/us_short_yfinance_grades_feasibility_probe_summary_20260710.json"
+  }
+}

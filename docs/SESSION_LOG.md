@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-10 — Claude 执行+提交 (US-short yfinance grades 探针 live 跑：worth_building)
+
+- **Verdict/Action**: 执行+提交（用户直接授权「直接跑我授权」→ Claude 装 yfinance 1.4.1 + live 跑刀2 探针 44 只 + 提交 counts-only 证据、未 push）。首次 yfinance live 抓取（SR-PROVIDER-001 per-execution，ToS-灰/低信任）。
+- **Required**: 无。`R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION` 更新为 worth_building（单源见 register：live 结果 + 下一步=建源）。
+- **Verify**: verdict `worth_building`；小盘 91.67%(11/12) / momentum 86.67% / HOOD·MRNA 100%（交叉核对一致）；44/44 成功、0 限流/crumb、四字段齐全、0 未来日期；tracked summary counts-only（无 ticker/raw/URL/secret，探针自校 + schema 过）；raw gitignored；无 push。
+- **Next**: Codex：建 yfinance-grades 源（~3 刀）+ 接入 §4.2 non-critical。
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short 刀2：yfinance grades 可行性探针)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交刀2、未 push）。纯新增（probe+schema+test 三新文件 + docs，未动既有引擎/门）→ 低风险档：整读 probe——dry-run 默认（零 import/fetch/write）、live 仅 `--confirm-user-authorization`（触 client 前先拒）、绝不自动装 yfinance、lazy import、样本源绑 20260710 cohort（严格校验）、tracked summary 仅计数（regex+schema+test 三重 hygiene、无 ticker/raw/URL/secret）、raw gitignored、原子写、路径门、决策规则带正反控（worth/not-worth·50% 含界·429/crumb halt·future/stale 排除）。live 未执行 → §6a agent 按设计留 live 半、本轮不起。
