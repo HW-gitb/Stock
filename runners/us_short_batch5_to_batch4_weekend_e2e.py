@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import copy
+import hashlib
 import json
 import os
 import shutil
@@ -17,7 +18,12 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_provider_health import ProviderHealthError, classify_provider_health  # noqa: E402
-from engine.us_short_run_origin import is_capstone_research_live_capability  # noqa: E402
+from engine.us_short_run_origin import (  # noqa: E402
+    RunOriginError,
+    is_capstone_research_live_capability,
+    require_research_live_provider_health,
+    require_research_live_receipt_binding,
+)
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 from runners import us_short_weekend_batch4 as batch4_runner  # noqa: E402
 
@@ -199,6 +205,7 @@ def _assemble_batch4_packet(
     calendar_path: Path,
     governance_path: Path,
     private_root: Path,
+    official_output_root: Path | None,
     now_et: datetime,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
@@ -229,8 +236,8 @@ def _assemble_batch4_packet(
         "account_state_path": str(account_state_path.resolve()),
         "lifecycle_register_path": str((private_root / "lifecycle" / "lifecycle_register.json").resolve()),
         "lifecycle_readiness_out_path": None,
-        "runs_private_root": str((private_root / "runs_private").resolve()),
-        "weekly_private_root": str((private_root / "weekly_private").resolve()),
+        "runs_private_root": str(((official_output_root or private_root) / "runs_private").resolve()),
+        "weekly_private_root": str(((official_output_root or private_root) / "weekly_private").resolve()),
     }
 
 
@@ -276,6 +283,7 @@ def run_e2e(
     account_state_path: Path | str,
     provider_health_path: Path | str,
     private_root: Path | str,
+    official_output_root: Path | str | None = None,
     now_et: datetime,
     context_components_path: Path | str | None = None,
     context_packet_path: Path | str | None = None,
@@ -290,17 +298,34 @@ def run_e2e(
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch5ToBatch4E2EError("now_et must be a naive ET datetime")
     # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL: minted ONLY when the caller holds the
-    # process-internal capstone capability (identity-checked, NOT a caller-settable boolean — the earlier bool was
-    # forgeable by any generic caller passing True). A generic batch5->batch4 caller feeding an arbitrary/fixture
+    # run-specific capstone receipt (bound to source path/digest + provider evidence, NOT a caller-settable boolean).
+    # A generic batch5->batch4 caller feeding an arbitrary/fixture
     # source packet cannot obtain it, so the report can never falsely banner "真实 provider 数据". Only the capstone's
     # run_weekly_bridge passes it, after its per-execution SR-PROVIDER-001 authorization + gated live fetch; the CLI
     # cannot (research_live is not an argparse choice).
     if run_mode == "research_live" and not is_capstone_research_live_capability(_research_live_capability):
         raise Batch5ToBatch4E2EError(
-            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，源自授权的一键 capstone live 取数"
+            "research_live 为 capstone 内部 run_origin（须持 source-bound execution receipt，源自授权的一键 capstone live 取数"
             "执行）；通用 batch5->batch4 调用方不可对任意/fixture source packet 选择——请走 weekly capstone")
 
     source_packet = _resolve_existing_path(source_packet_path, label="source_packet_path")
+    if run_mode == "research_live":
+        if not isinstance(generated_at, str) or not generated_at:
+            raise Batch5ToBatch4E2EError("research_live requires the receipt-bound generated_at")
+        source_digest = hashlib.sha256(source_packet.read_bytes()).hexdigest()
+        try:
+            source_manifest = source_packet_runner.source_packet_input_manifest(source_packet)
+            require_research_live_receipt_binding(
+                _research_live_capability,
+                generated_at=generated_at,
+                source_packet_path=source_packet,
+                source_packet_sha256=source_digest,
+                source_artifact_manifest=source_manifest,
+            )
+        except (RunOriginError, source_packet_runner.SourcePacketError, OSError) as exc:
+            raise Batch5ToBatch4E2EError(
+                "research_live receipt does not bind the consumed source packet and source artifacts"
+            ) from exc
     template_path = _resolve_existing_path(batch4_template_path, label="batch4_template_path")
     account_path = _private_path(account_state_path, label="account_state_path")
     if not account_path.is_file():
@@ -308,7 +333,18 @@ def run_e2e(
     provider_health = _load_provider_health(
         _resolve_existing_path(provider_health_path, label="provider_health_path")
     )
+    if run_mode == "research_live":
+        try:
+            require_research_live_provider_health(_research_live_capability, provider_health)
+        except RunOriginError as exc:
+            raise Batch5ToBatch4E2EError(
+                "research_live provider health does not match the receipt-bound provider outcome"
+            ) from exc
     private_root_path = _private_path(private_root, label="private_root")
+    official_output_root_path = (
+        _private_path(official_output_root, label="official_output_root")
+        if official_output_root is not None else private_root_path
+    )
     calendar = _resolve_existing_path(calendar_path, label="calendar_path")
     governance = _resolve_existing_path(governance_path, label="governance_path")
     components_path = _state_json_path(
@@ -332,8 +368,8 @@ def run_e2e(
     _remember_path(context_path, cleanup_paths=cleanup_paths, existed_before=existed_before)
     for private_output_root in (
         private_root_path / "lifecycle",
-        private_root_path / "runs_private",
-        private_root_path / "weekly_private",
+        official_output_root_path / "runs_private",
+        official_output_root_path / "weekly_private",
     ):
         _remember_root(private_output_root, cleanup_roots=cleanup_roots, existed_before=existed_before)
 
@@ -343,6 +379,19 @@ def run_e2e(
             generated_at=generated_at,
             context_components_path=components_path,
         )
+        if run_mode == "research_live":
+            try:
+                require_research_live_receipt_binding(
+                    _research_live_capability,
+                    generated_at=generated_at,
+                    source_packet_path=source_packet,
+                    source_packet_sha256=hashlib.sha256(source_packet.read_bytes()).hexdigest(),
+                    source_artifact_manifest=source_packet_runner.source_packet_input_manifest(source_packet),
+                )
+            except (RunOriginError, source_packet_runner.SourcePacketError, OSError) as exc:
+                raise Batch5ToBatch4E2EError(
+                    "research_live source packet or source artifacts changed during consumption"
+                ) from exc
         components = _read_json(components_path, "context components")
         if not (
             isinstance(components, dict)
@@ -351,6 +400,17 @@ def run_e2e(
             raise Batch5ToBatch4E2EError(
                 "context components must contain data_context/per_ticker_analysis/run_provenance"
             )
+        if run_mode == "research_live":
+            try:
+                require_research_live_receipt_binding(
+                    _research_live_capability,
+                    decision_date=components["run_provenance"].get("as_of"),
+                    generated_at=generated_at,
+                )
+            except (AttributeError, RunOriginError) as exc:
+                raise Batch5ToBatch4E2EError(
+                    "research_live receipt does not bind the assembled run identity"
+                ) from exc
 
         packet = _assemble_batch4_packet(
             components=components,
@@ -360,6 +420,7 @@ def run_e2e(
             calendar_path=calendar,
             governance_path=governance,
             private_root=private_root_path,
+            official_output_root=official_output_root_path,
             now_et=now_et,
         )
         _write_private_json(context_path, packet)

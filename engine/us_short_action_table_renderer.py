@@ -22,7 +22,7 @@ from pathlib import Path
 
 from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_private_paths import reject_nonprivate_output_path
-from engine.us_short_run_origin import validate_run_origin
+from engine.us_short_run_origin import require_research_live_capability, validate_run_origin
 
 ROOT = Path(__file__).resolve().parent.parent
 _ACTION_TABLE_PRESET = ROOT / "presets" / "us_short_action_table_contract_20260620.json"
@@ -78,7 +78,7 @@ def render_action_table(machine_record) -> dict:
     return {"columns": columns, "rows": out_rows}
 
 
-def write_action_table(machine_record, out_path):
+def write_action_table(machine_record, out_path, *, research_live_capability=None):
     """Render + write action_table.csv to ``out_path``.
 
     FIRST batch-3 persister: the §18.0 P0 fail-closed private-path guard runs BEFORE any rendering/writing,
@@ -93,7 +93,15 @@ def write_action_table(machine_record, out_path):
     validator stays origin-agnostic for internal/hand-built test records; only this output boundary requires it).
     """
     reject_nonprivate_output_path(out_path)        # §18.0 P0 guard — before validate / render / write
-    validate_run_origin(machine_record.get("run_origin") if isinstance(machine_record, dict) else None)  # before render/write
+    _origin = machine_record.get("run_origin") if isinstance(machine_record, dict) else None
+    validate_run_origin(_origin)  # before render/write
+    # A2 (R-USSHORT-REVIEWQ-CAT1) — this standalone OFFICIAL persister must ALSO gate research_live on the capstone
+    # capability (mirrors machine_record / report / private_write), else a hand-built research_live record could be
+    # materialized into an official CSV here, bypassing the other consumer gates.
+    require_research_live_capability(
+        _origin, research_live_capability,
+        decision_date=(machine_record.get("as_of") if isinstance(machine_record, dict) else None),
+    )
     table = render_action_table(machine_record)    # validates; refuses a not-clean record (before any dir/file side effect)
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)  # the <决策日> private dir may not exist yet (only after render passes)

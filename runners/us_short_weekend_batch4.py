@@ -22,7 +22,11 @@ from engine.us_short_cli_redaction import closed_world_counts, safe_schema_locat
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
-from engine.us_short_run_origin import is_capstone_research_live_capability
+from engine.us_short_run_origin import (
+    RunOriginError,
+    is_capstone_research_live_capability,
+    require_research_live_provider_health,
+)
 from runners.us_short_account_state_from_manual_tables import ConvertError, validate_account_state
 
 _CALIBRATION_PATH = ROOT / "presets" / "us_short_lifecycle_calibration_governance_20260620.json"
@@ -191,11 +195,11 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _resea
         raise Batch4RunnerError("now_et 须为无时区 datetime，按 America/New_York 本地墙钟解释")
     # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL: a generic batch4 caller must not stamp a
     # context packet with the "真实 provider 数据" research banner. It is minted only when the caller holds the
-    # process-internal capstone capability (identity-checked, not a caller-settable flag), which the e2e bridge
-    # forwards after its own check. A direct batch4 caller selecting research_live without it fails closed.
+    # source-bound capstone execution receipt (not a caller-settable flag), which the e2e bridge forwards only after
+    # checking the consumed source path/digest. A direct batch4 caller selecting research_live without it fails closed.
     if run_mode == "research_live" and not is_capstone_research_live_capability(_research_live_capability):
         raise Batch4RunnerError(
-            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，经 e2e 桥转发）；batch4 通用调用方"
+            "research_live 为 capstone 内部 run_origin（须持 source-bound capstone execution receipt，经 e2e 桥转发）；batch4 通用调用方"
             "不可直接选择")
     try:
         import jsonschema  # noqa: F401 - required by the official lifecycle/machine/report validators
@@ -204,6 +208,13 @@ def run_packet(packet_path, *, now_et: datetime, run_mode="offline_test", _resea
     from engine.us_short_weekend_orchestrator import run_weekend_pipeline
     packet, base = _load_packet(packet_path)
     pc, account = _assemble_context(packet, base)
+    if run_mode == "research_live":
+        try:
+            require_research_live_provider_health(_research_live_capability, pc["provider_health"])
+        except RunOriginError as exc:
+            raise Batch4RunnerError(
+                "research_live provider health does not match the receipt-bound provider outcome"
+            ) from exc
 
     if run_mode in ("offline_test", "research_live"):
         decision_date = _decision_date_for_bootstrap(now_et, pc["calendar"])

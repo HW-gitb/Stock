@@ -663,9 +663,11 @@ class TestFetchFmpMarketCaps(unittest.TestCase):
         def fake(req, timeout=20):
             raise urllib.error.HTTPError(None, 429, "rate", {}, None)
 
+        stats = {}
         with patch("urllib.request.urlopen", side_effect=fake), patch.object(_mod.time, "sleep"):
-            out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=10)
+            out = _mod.fetch_fmp_market_caps(["A", "B"], "key", budget=10, stats_out=stats)
         self.assertEqual(out, {})
+        self.assertEqual(stats["actual_request_count"], 1)
 
 
 class TestGuards(unittest.TestCase):
@@ -766,6 +768,16 @@ class TestRunFetchE2E(unittest.TestCase):
             self.assertFalse(summary["storage"]["tracked_summary_contains_prices"])
             self.assertTrue(summary["storage"]["candidate_artifact_gitignored"])   # real True on a completed run
             self.assertEqual(summary["provider_health"]["overall_run_state"], "clean")
+            calls = summary["provider_call_evidence"]
+            self.assertTrue(calls["network_access_performed"])
+            self.assertTrue(calls["provider_calls_performed"])
+            self.assertEqual(calls["massive_grouped_daily_calls"], _mod.ADV_WINDOW_TRADING_DAYS)
+            self.assertEqual(
+                calls["actual_total_calls"],
+                calls["sec_ticker_reference_calls"] + calls["nasdaq_halt_feed_calls"]
+                + calls["massive_grouped_daily_calls"] + calls["sec_share_frame_calls"]
+                + calls["fmp_profile_calls"],
+            )
 
             artifact = json.loads(cand.read_text(encoding="utf-8"))
         self.assertEqual(artifact["decision_date"], "20260629")

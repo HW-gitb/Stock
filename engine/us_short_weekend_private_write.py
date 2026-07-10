@@ -41,6 +41,7 @@ from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     assert_offline_report_invariants,
     require_research_live_capability,
+    require_research_live_provider_health_result,
     validate_run_origin,
 )
 from engine.us_short_weekend_action_table import flatten_machine_record
@@ -214,7 +215,11 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     WeekendPrivateWriteError on a blank weekly_report, a decision_date that disagrees with machine_record.as_of
     or the weekly_report's rendered price-clock banner (§2.1 same-run reconciliation), or — via the §18.0 guard /
     `WeekendActionTableError` — a non-private destination / malformed machine record."""
-    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
+    require_research_live_capability(
+        run_origin, research_live_capability, decision_date=decision_date,
+    )   # consumer-layer honesty gate (Required A) — first
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live":
+        require_research_live_provider_health_result(research_live_capability, provider_health)
     if not (isinstance(weekly_report_md, str) and weekly_report_md.strip()):
         raise WeekendPrivateWriteError("weekly_report_md 须为非空 str")
     _validate_weekly_report_surface(weekly_report_md)
@@ -286,6 +291,6 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     # all gates passed → write. machine layer → runs_private; the two official files → weekly_private. Each write
     # re-runs the §18.0 guard (single source) as belt; the preflight above is the atomicity guarantee.
     _write_text_private(machine_path, json.dumps(flat, ensure_ascii=False, indent=2, sort_keys=True))
-    write_action_table(flat, action_path)   # renders the flattened record + §18.0 guard
+    write_action_table(flat, action_path, research_live_capability=research_live_capability)   # renders the flattened record + §18.0 guard + A2 research_live gate
     _write_text_private(report_path, weekly_report_md)
     return {"machine_record_path": machine_path, "action_table_path": action_path, "weekly_report_path": report_path}

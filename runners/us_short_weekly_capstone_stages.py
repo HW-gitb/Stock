@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+from engine.us_short_run_origin import require_research_live_provider_summary
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
 from runners import us_short_batch5_full_candidate_projection_inputs as _proj
@@ -179,15 +179,16 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         account_state_path=ctx.account_state_path,
         provider_health_path=ctx.provider_health_path,
         private_root=ctx.private_root,
+        official_output_root=getattr(ctx, "official_output_root", None),
         now_et=ctx.now_et,
         context_components_path=ctx.context_components_path,
         run_mode="research_live",   # real provider data, pre-authoritative research report (NOT operational; live→batch5)
-        # research_live is CAPSTONE-INTERNAL (R-USSHORT-REVIEWQ-CAT1 Required A): the capstone mints the process-internal
-        # capability ONLY on an authorized run (it refuses before any stage unless ctx.confirm_user_authorization, so
-        # reaching this bridge attests the gated universe/momentum/SIC/Pass2 fetch ran under per-execution authorization).
-        # run_e2e refuses research_live for any caller lacking this exact object, so a standalone/fixture bridge call (or
-        # a forged True) fails closed. Unauthorized ctx → None → fail closed.
-        _research_live_capability=(_CAPSTONE_RESEARCH_LIVE_CAPABILITY if ctx.confirm_user_authorization is True else None),
+        # research_live is CAPSTONE-INTERNAL and bound to REAL EXECUTION (R-USSHORT-REVIEWQ-CAT1 Required A1): the
+        # receipt is NOT self-minted from a flag here — run_weekly_capstone injects it only after the exact provider
+        # stages complete and binds their summaries plus the source packet and every referenced source artifact.
+        # A direct bridge call, an injected test pipeline, or a dry run carries None here →
+        # run_e2e refuses research_live → fail closed (no false real-provider banner).
+        _research_live_capability=getattr(ctx, "research_live_capability", None),
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
     )
@@ -202,14 +203,8 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
 _HEALTH_MIN_SUCCESS_COVERAGE = 0.5
 
 
-def _write_provider_health(ctx) -> None:
-    # Fail closed on a malformed/unreadable summary: any read / parse / container-shape problem -> empty results ->
-    # both sources 'down' (no emit), NEVER a crash. This is the gate's OWN defense-in-depth, not a reliance on the
-    # orchestrator's blanket stage-exception handler.
-    try:
-        summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        summary = {}
+def derive_provider_health(summary) -> dict[str, str]:
+    """Pure canonical provider-health projection from the receipt-bound Pass2 summary."""
     results = summary.get("endpoint_results", []) if isinstance(summary, dict) else []
     if not isinstance(results, list):
         results = []
@@ -224,10 +219,24 @@ def _write_provider_health(ctx) -> None:
         successes = sum(1 for r in rows if r.get("status") == "success")
         return successes / len(rows) >= _HEALTH_MIN_SUCCESS_COVERAGE
 
-    health = {
+    return {
         "fmp": "ok" if _coverage_ok("financial_modeling_prep", "grades") else "down",
         "sec_edgar": "ok" if _coverage_ok("sec_edgar", "submissions") else "down",
     }
+
+
+def _write_provider_health(ctx) -> None:
+    # Fail closed on a malformed/unreadable summary: any read / parse / container-shape problem -> empty results ->
+    # both sources 'down' (no emit), NEVER a crash. This is the gate's OWN defense-in-depth, not a reliance on the
+    # orchestrator's blanket stage-exception handler.
+    try:
+        summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        summary = {}
+    receipt = getattr(ctx, "research_live_capability", None)
+    if receipt is not None:
+        require_research_live_provider_summary(receipt, "pass2_fetch", summary)
+    health = derive_provider_health(summary)
     ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
     ctx.provider_health_path.write_text(json.dumps(health, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 

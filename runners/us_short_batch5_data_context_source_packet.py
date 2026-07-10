@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import subprocess
 import sys
@@ -237,6 +238,17 @@ def _source_json(path: Path, *, field: str) -> Any:
         return _read_json(path)
     except Exception as exc:
         raise SourcePacketError(f"paths.{field} could not be read as JSON: {_display_path(path)}") from exc
+
+
+def source_packet_input_manifest(packet_path: Path | str) -> tuple[tuple[str, str, str], ...]:
+    """Return the exact source files consumed by a packet, with absolute paths and content digests."""
+    _, paths = _load_and_validate_packet(packet_path)
+    rows = []
+    for field in SOURCE_PATH_FIELDS:
+        path = paths[field].resolve()
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        rows.append((field, str(path), digest))
+    return tuple(rows)
 
 
 def run_preflight(

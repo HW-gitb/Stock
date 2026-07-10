@@ -6,6 +6,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -105,6 +106,8 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.assertEqual(summary["classification"]["classification_source"], "sec_sic_major_group")
         self.assertEqual(summary["classification"]["sic_resolved_count"], 5)
         self.assertEqual(summary["classification"]["sector_group_count"], 3)  # 35, 60, 59
+        self.assertEqual(summary["provider_call_evidence"]["actual_total_calls"], 0)
+        self.assertFalse(summary["provider_call_evidence"]["provider_calls_performed"])
 
         packet = _read_json(self.packet)
         self.assertEqual(packet["schema_name"], "us_short_batch5_full_universe_sector_classification_packet")
@@ -135,6 +138,26 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
             self._run(confirm_user_authorization=False)
         self.assertFalse(self.packet.exists())
         self.assertFalse(self.summary.exists())
+
+    def test_real_source_counts_attempted_ticker_and_submission_calls(self):
+        mod = _fetch()
+        stats = {}
+        ticker_map = {ticker: {"cik": index + 1, "exchange": "NASDAQ"}
+                      for index, ticker in enumerate(_ALL_ELIGIBLE)}
+
+        def submission(url, sec_ua):
+            if url.endswith("0000000003.json"):
+                raise OSError("provider failure still counts as an attempted call")
+            return {"sic": "3571"}
+
+        with patch.object(mod.universe_fetch, "fetch_sec_tickers", return_value=ticker_map), \
+             patch.object(mod.universe_fetch, "_sec_get", side_effect=submission):
+            source = mod._real_sic_source("ua@test", interval_seconds=0, stats_out=stats)
+            out = source(list(_ALL_ELIGIBLE))
+        self.assertEqual(stats["ticker_reference_calls"], 1)
+        self.assertEqual(stats["submissions_calls"], len(_ALL_ELIGIBLE))
+        self.assertEqual(stats["actual_total_calls"], 1 + len(_ALL_ELIGIBLE))
+        self.assertEqual(len(out), len(_ALL_ELIGIBLE) - 1)
 
     def test_zero_classified_fails_closed(self):
         with self.assertRaises(_fetch().FullUniverseSecSicClassificationFetchError):

@@ -39,7 +39,12 @@ from __future__ import annotations
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_provider_health import classify_provider_health
-from engine.us_short_run_origin import is_capstone_research_live_capability, run_origin_for_mode
+from engine.us_short_run_origin import (
+    RunOriginError,
+    is_capstone_research_live_capability,
+    require_research_live_provider_health,
+    run_origin_for_mode,
+)
 from engine.us_short_run_provenance import reconcile_run_provenance
 from engine.us_short_weekend_action_rank import apply_action_rank
 from engine.us_short_weekend_analysis import analyze_rows
@@ -207,13 +212,20 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     # without it fails closed — no false "真实 provider 数据" banner from the deepest public surface.
     if run_mode == "research_live" and not is_capstone_research_live_capability(research_live_capability):
         raise WeekendOrchestratorError(
-            "research_live 为 capstone 内部 run_origin（须持 capstone 进程内能力对象，由 batch4/e2e 网关下传）；"
+            "research_live 为 capstone 内部 run_origin（须持 source-bound capstone execution receipt，由 batch4/e2e 网关下传）；"
             "run_weekend_pipeline 通用调用方不可直接选择")
     if not (isinstance(pipeline_context, dict) and set(pipeline_context) == _PIPELINE_CONTEXT_KEYS):
         raise WeekendOrchestratorError(
             "pipeline_context 顶层键须恰为 %s（closed-world）: %s"
             % (sorted(_PIPELINE_CONTEXT_KEYS), sorted(pipeline_context) if isinstance(pipeline_context, dict) else pipeline_context))
     pc = pipeline_context
+    if run_mode == "research_live":
+        try:
+            require_research_live_provider_health(research_live_capability, pc["provider_health"])
+        except RunOriginError as exc:
+            raise WeekendOrchestratorError(
+                "research_live provider health does not match the receipt-bound provider outcome"
+            ) from exc
 
     # (1c) §2.1/§3.5 run-mode / calendar gate + session DERIVATION: validate the calendar artifact, hard-gate live
     # mode (batch5), and DERIVE the §2.1 sessions from the calendar via build_sessions (normalize, not a caller

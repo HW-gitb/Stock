@@ -520,6 +520,7 @@ def fetch_massive_window(
     *,
     window: int = ADV_WINDOW_TRADING_DAYS,
     min_days: int = ADV_MIN_DAYS_REQUIRED,
+    stats_out: dict[str, int] | None = None,
 ) -> tuple[str, list[str], dict[str, dict[str, Any]]]:
     """Fetch the ADV window. `session_dates_desc` = candidate trading days (YYYY-MM-DD) newest-first.
 
@@ -566,6 +567,8 @@ def fetch_massive_window(
     observed_dates = [d for d, _ in collected]
     market_data = _aggregate_window(collected)
     _finalize_adv(market_data, min_days=min_days)
+    if stats_out is not None:
+        stats_out.update({"actual_request_count": request_count})
     return used_date, observed_dates, market_data
 
 
@@ -573,7 +576,10 @@ def fetch_massive_window(
 # FMP fallback: market cap only for SEC-missing-shares survivors (bounded, free tier)
 # ---------------------------------------------------------------------------
 
-def fetch_fmp_market_caps(tickers: list[str], fmp_key: str, *, budget: int = UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET) -> dict[str, float]:
+def fetch_fmp_market_caps(
+    tickers: list[str], fmp_key: str, *, budget: int = UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET,
+    stats_out: dict[str, int] | None = None,
+) -> dict[str, float]:
     """Fetch marketCap from FMP stable/profile for a BOUNDED set (SEC-missing-shares survivors). Stops at
     `budget` calls or HTTP 429/403. Returns {ticker: market_cap}."""
     out: dict[str, float] = {}
@@ -583,6 +589,7 @@ def fetch_fmp_market_caps(tickers: list[str], fmp_key: str, *, budget: int = UNI
             break
         time.sleep(FMP_FALLBACK_SLEEP)
         url = FMP_PROFILE_URL.format(sym=urllib.parse.quote(sym), key=fmp_key)
+        calls += 1  # count the attempted HTTP request, including a terminal 403/429 response
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "StockSystem/0.1 us-short-universe-mktcap"})
             with urllib.request.urlopen(req, timeout=20) as resp:
@@ -590,17 +597,16 @@ def fetch_fmp_market_caps(tickers: list[str], fmp_key: str, *, budget: int = UNI
         except urllib.error.HTTPError as exc:
             if exc.code in (403, 429):
                 break
-            calls += 1
             continue
         except Exception:
-            calls += 1
             continue
-        calls += 1
         row = payload[0] if isinstance(payload, list) and payload else (payload if isinstance(payload, dict) else None)
         if isinstance(row, dict):
             mc = row.get("marketCap")
             if _is_finite(mc) and mc > 0:
                 out[sym] = float(mc)
+    if stats_out is not None:
+        stats_out.update({"actual_request_count": calls})
     return out
 
 
@@ -1144,7 +1150,10 @@ def run_fetch(
     )
     print(f"[3/5] Massive grouped daily ADV 窗口 ({ADV_WINDOW_TRADING_DAYS} 交易日均额, "
           f"price_basis={price_basis_date})...", flush=True)
-    used_date, observed_window_dates, market_data = fetch_massive_window(massive_key, window_dates)
+    massive_call_stats: dict[str, int] = {}
+    used_date, observed_window_dates, market_data = fetch_massive_window(
+        massive_key, window_dates, stats_out=massive_call_stats,
+    )
     print(f"      used_date={used_date}  observed_days={len(observed_window_dates)}  "
           f"{len(market_data)} symbols with data", flush=True)
 
@@ -1171,13 +1180,14 @@ def run_fetch(
 
     # FMP market-cap fallback for SEC-missing-shares survivors (bounded; pure HTTP, no broker)
     fmp_caps: dict[str, float] = {}
+    fmp_call_stats: dict[str, int] = {"actual_request_count": 0}
     fmp_key = os.environ.get("FMP_API_KEY", "")
     fallback_targets = summary_counts["needs_market_cap"]
     fmp_attempted = 0
     if fallback_targets and fmp_key:
         fmp_attempted = min(len(fallback_targets), UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
         print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_attempted}...", flush=True)
-        fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key)
+        fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key, stats_out=fmp_call_stats)
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,
                            as_of=used_date, observed_at=generated_at, status_records=status_records)
         summary_counts = summarize_rows(rows)
@@ -1238,6 +1248,19 @@ def run_fetch(
         fmp_attempted=fmp_attempted,
         fmp_rescued=len(fmp_caps),
     )
+    provider_call_evidence = {
+        "network_access_performed": True,
+        "provider_calls_performed": True,
+        "sec_ticker_reference_calls": 1,
+        "nasdaq_halt_feed_calls": 1,
+        "massive_grouped_daily_calls": massive_call_stats.get("actual_request_count", 0),
+        "sec_share_frame_calls": len(SEC_SHARE_FRAMES),
+        "fmp_profile_calls": fmp_call_stats.get("actual_request_count", 0),
+    }
+    provider_call_evidence["actual_total_calls"] = sum(
+        value for key, value in provider_call_evidence.items()
+        if key.endswith("_calls") and type(value) is int
+    )
 
     # Per-run candidate artifact: schema + semantic validate BEFORE the atomic write (carries prices →
     # gitignored state/ root). Validation re-derives the summary and rejects any drifted/forged content.
@@ -1294,6 +1317,7 @@ def run_fetch(
             "fmp_mktcap_fallback_rescued": len(fmp_caps),
         },
         "provider_health": provider_health,
+        "provider_call_evidence": provider_call_evidence,
         "pass1_result": {**summary_counts, "eligible_tickers": eligible_tickers_from_rows(rows)},
         "status_screening": {
             "status_flags_sourced": True,

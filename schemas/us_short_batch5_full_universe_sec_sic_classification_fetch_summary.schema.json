@@ -101,6 +101,24 @@
         "sector_group_count": { "type": "integer", "minimum": 0 }
       }
     },
+    "provider_call_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "network_access_performed",
+        "provider_calls_performed",
+        "ticker_reference_calls",
+        "submissions_calls",
+        "actual_total_calls"
+      ],
+      "properties": {
+        "network_access_performed": { "type": "boolean" },
+        "provider_calls_performed": { "type": "boolean" },
+        "ticker_reference_calls": { "type": "integer", "minimum": 0 },
+        "submissions_calls": { "type": "integer", "minimum": 0 },
+        "actual_total_calls": { "type": "integer", "minimum": 0 }
+      }
+    },
     "paths": {
       "type": "object",
       "additionalProperties": false,

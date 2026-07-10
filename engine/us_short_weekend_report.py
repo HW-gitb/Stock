@@ -51,6 +51,7 @@ from engine.us_short_run_origin import (
     canonical_offline_sections,
     canonical_section_1,
     require_research_live_capability,
+    require_research_live_provider_health_result,
     validate_run_origin,
 )
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
@@ -296,10 +297,17 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     WeekendReportError on a malformed machine record / lifecycle result / report_context (and the formatters /
     renderer raise their own typed errors on a malformed formatter input / a §11.2 render-invariant violation —
     incomplete price_clock, lifecycle-count mismatch, a section without content)."""
-    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
+    require_research_live_capability(
+        run_origin, research_live_capability,
+        decision_date=(run_context.get("decision_date") if isinstance(run_context, dict) else None),
+    )   # consumer-layer honesty gate (Required A) — first
     _validate_report_context(report_context)
     _validate_run_context(run_context)
     _validate_stage_status(stage_status)
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live":
+        require_research_live_provider_health_result(
+            research_live_capability, stage_status["provider_health"]
+        )
     _validate_lifecycle_result(lifecycle_result)
     validate_run_origin(run_origin)   # batch4 honesty provenance (offline_test / caller_supplied_fixture)
     # flatten through the m1 §10/§6 gate (re-validates the machine record + projects the §11.3 columns).

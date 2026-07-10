@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import shutil
 import sys
 import tempfile
@@ -26,6 +28,40 @@ _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
     "projection_inputs", "pass2_preflight", "pass2_fetch", "weekly_bridge",
 ]
+
+
+def _research_receipt(*, decision_date="20260709", source_path=None, generated_at="2026-07-09T08:00:00-04:00",
+                      source_manifest=None, provider_summaries=None,
+                      provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok"))):
+    from engine.us_short_run_origin import _issue_capstone_research_live_receipt
+    source = Path(source_path or (ROOT / "state" / "us_short" / "receipt_test_source.json")).resolve()
+    source_digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "1" * 64
+    evidence_digest = "2" * 64
+    source_manifest = source_manifest or (("test_source", str(source), source_digest),)
+    provider_summaries = provider_summaries or {
+        stage: {"stage": stage} for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+    }
+    provider_summary_digests = tuple(
+        (stage, hashlib.sha256(json.dumps(provider_summaries[stage], ensure_ascii=False, sort_keys=True,
+                                           separators=(",", ":")).encode("utf-8")).hexdigest())
+        for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+    )
+    run_id = hashlib.sha256(
+        f"{decision_date}|{generated_at}|{source}|{source_digest}|{evidence_digest}".encode("utf-8")
+    ).hexdigest()
+    return _issue_capstone_research_live_receipt(
+        run_id=run_id,
+        decision_date=decision_date,
+        generated_at=generated_at,
+        completed_stages=tuple(_STAGE_NAMES[:-1]),
+        source_packet_path=source,
+        source_packet_sha256=source_digest,
+        source_artifact_manifest=source_manifest,
+        provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1), ("pass2_fetch", 1)),
+        provider_summary_digests=provider_summary_digests,
+        provider_health_facts=provider_health_facts,
+        provider_evidence_sha256=evidence_digest,
+    )
 
 
 class CapstoneDryRunTest(unittest.TestCase):
@@ -98,7 +134,11 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
                 "pass2_fetch": lambda c: [c.source_packet_path, c.context_components_path],
-                "weekly_bridge": lambda c: [c.private_root / "weekly_private" / c.decision_date / "weekly_report.md"],
+                "weekly_bridge": lambda c: [
+                    (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
+                    (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
+                    (c.official_output_root or c.private_root) / "runs_private" / c.decision_date / "machine_record.json",
+                ],
             }[name]
 
         stages = []
@@ -115,8 +155,20 @@ class CapstoneFakeChainTest(unittest.TestCase):
                         for p in outfn(ctx):
                             Path(p).parent.mkdir(parents=True, exist_ok=True)
                             Path(p).write_text("{}", encoding="utf-8")
-                    if nm == "weekly_bridge" and bridge_batch4 is not None:
-                        return {"batch4_run": bridge_batch4}   # exercise the real bridge return shape (emitted/no_emit_reason)
+                    if nm == "weekly_bridge":
+                        if bridge_batch4 is not None:
+                            return {"batch4_run": bridge_batch4}
+                        outputs = outfn(ctx)
+                        return {
+                            "batch4_run": {
+                                "emitted": True,
+                                "output_paths": {
+                                    "weekly_report_path": str(outputs[0]),
+                                    "action_table_path": str(outputs[1]),
+                                    "machine_record_path": str(outputs[2]),
+                                },
+                            }
+                        }
                     return {"stage": nm}
                 return run
 
@@ -178,6 +230,36 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 order, skip_output_stage="weekly_bridge", bridge_batch4={"emitted": True}))
         self.assertIn("weekly_bridge", str(cm.exception))
 
+    def test_bridge_missing_explicit_emitted_status_fails_closed(self):
+        order: list[str] = []
+        stages = self._fake_stages(order)
+        bridge = next(stage for stage in stages if stage.name == "weekly_bridge")
+        original = bridge.run
+        bridge.run = lambda ctx: (original(ctx), {"batch4_run": {}})[1]
+        with self.assertRaises(WeeklyCapstoneError) as cm:
+            self._run(order, stages=stages)
+        self.assertIn("explicitly report", str(cm.exception))
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+
+    def test_bridge_commit_manifest_requires_exact_output_keys(self):
+        order: list[str] = []
+        stages = self._fake_stages(order)
+        bridge = next(stage for stage in stages if stage.name == "weekly_bridge")
+        original = bridge.run
+
+        def wrong_keys(ctx):
+            result = original(ctx)
+            values = list(result["batch4_run"]["output_paths"].values())
+            result["batch4_run"]["output_paths"] = dict(zip(("report", "action", "machine"), values))
+            return result
+
+        bridge.run = wrong_keys
+        with self.assertRaises(WeeklyCapstoneError):
+            self._run(order, stages=stages)
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+
     # --- C (R-USSHORT-REVIEWQ-CAT1 Required C): a NON-emitting outcome (no-emit / stage exception / missing output)
     #     must not leave a PRIOR same-decision-date report discoverable as THIS week's current advice; history is
     #     preserved under an explicit _superseded identity. ---
@@ -195,8 +277,13 @@ class CapstoneFakeChainTest(unittest.TestCase):
         return wk, rn
 
     def _superseded_files(self):
-        sup = self.private_root / "_superseded"
-        return {p.name for p in sup.rglob("*") if p.is_file()} if sup.exists() else set()
+        # C2: superseded history now lives UNDER each already-gitignored surface (weekly_private/runs_private).
+        files = set()
+        for surface in ("weekly_private", "runs_private"):
+            sup = self.private_root / surface / "_superseded"
+            if sup.exists():
+                files |= {p.name for p in sup.rglob("*") if p.is_file()}
+        return files
 
     def test_no_emit_supersedes_prior_same_date_current_outputs(self):
         wk, rn = self._seed_prior_official_outputs()
@@ -244,7 +331,321 @@ class CapstoneFakeChainTest(unittest.TestCase):
         order: list[str] = []
         summary = self._run(order, stages=self._fake_stages(order))
         self.assertTrue(summary["emitted"])
-        self.assertFalse((self.private_root / "_superseded").exists())
+        self.assertEqual(self._superseded_files(), set())
+
+    def test_injected_pipeline_never_mints_research_live_capability(self):
+        # A1: an injected (test) pipeline is NOT a production run (stages is not None), so run_weekly_capstone never
+        # injects the capability — the bridge stage's ctx carries research_live_capability=None (research_live refused).
+        order: list[str] = []
+        stages = self._fake_stages(order)
+        bridge = next(s for s in stages if s.name == "weekly_bridge")
+        inner, captured = bridge.run, {}
+        bridge.run = lambda ctx: (captured.__setitem__("cap", getattr(ctx, "research_live_capability", "MISSING")),
+                                  inner(ctx))[1]
+        self._run(order, stages=stages)
+        self.assertIsNone(captured["cap"])
+
+    def test_emitted_true_but_stale_report_fails_freshness_and_supersedes(self):
+        # C1: a prior same-date report exists; a bridge that reports emitted=True but writes NOTHING must NOT be
+        # accepted (the stale file satisfies Path.exists but is not FRESH this run) — it fails + supersedes the prior.
+        wk, rn = self._seed_prior_official_outputs()
+        order: list[str] = []
+        with self.assertRaises(WeeklyCapstoneError):
+            self._run(order, stages=self._fake_stages(
+                order, skip_output_stage="weekly_bridge", bridge_batch4={"emitted": True}))
+        self.assertFalse(wk.exists())
+        self.assertEqual(self._superseded_files(), self._OFFICIAL_SIBLINGS)
+
+    def test_fresh_report_without_action_and_machine_cannot_commit(self):
+        # C1: the bridge commit contract is all three siblings. Producing only a fresh report in staging cannot publish
+        # while action_table.csv / machine_record.json are absent.
+        order: list[str] = []
+        stages = self._fake_stages(order, skip_output_stage="weekly_bridge")
+        bridge = next(stage for stage in stages if stage.name == "weekly_bridge")
+
+        def report_only(ctx):
+            order.append("weekly_bridge")
+            outputs = bridge.outputs(ctx)
+            outputs[0].parent.mkdir(parents=True, exist_ok=True)
+            outputs[0].write_text("fresh report", encoding="utf-8")
+            return {
+                "batch4_run": {
+                    "emitted": True,
+                    "output_paths": {
+                        "weekly_report_path": str(outputs[0]),
+                        "action_table_path": str(outputs[1]),
+                        "machine_record_path": str(outputs[2]),
+                    },
+                }
+            }
+
+        bridge.run = report_only
+        with self.assertRaises(WeeklyCapstoneError):
+            self._run(order, stages=stages)
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+
+    def test_superseded_destination_is_gitignored(self):
+        # C2: the supersede destination lives UNDER the already-gitignored weekly_private/runs_private trees, so real
+        # ticker/holding history is never moved to a tracked-eligible path — verified with the ACTUAL repo ignore rules.
+        import subprocess
+        from runners.us_short_weekly_capstone import ROOT
+        for surface in ("weekly_private", "runs_private"):
+            p = ROOT / "state" / "us_short" / surface / "_superseded" / "20260709__tag" / "weekly_report.md"
+            r = subprocess.run(["git", "check-ignore", "-q", "--", str(p)], cwd=str(ROOT),
+                               stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            self.assertEqual(r.returncode, 0, f"{surface}/_superseded must be gitignored: {p}")
+
+    def test_supersede_applies_private_path_guard(self):
+        # C2: the supersede routes source + destination through the fail-closed private-path guard; if it rejects (a
+        # non-private path), the cleanup fails closed rather than leaking real history to a tracked-eligible path.
+        from engine.us_short_private_paths import PrivatePathError
+        from runners import us_short_weekly_capstone as cap
+        self._seed_prior_official_outputs()
+        order: list[str] = []
+        with mock.patch.object(cap, "reject_nonprivate_output_path", side_effect=PrivatePathError("nonprivate")):
+            with self.assertRaises(PrivatePathError):
+                self._run(order, stages=self._fake_stages(
+                    order, skip_output_stage="weekly_bridge",
+                    bridge_batch4={"emitted": False, "no_emit_reason": "x"}))
+
+    def test_pre_run_archive_failure_restores_prior_before_any_stage(self):
+        # C3: prior outputs are archived BEFORE provider execution. A second-move fault rolls back while the prior run
+        # is still legitimately current, and no stage of the new run starts.
+        from runners import us_short_weekly_capstone as cap
+        wk, rn = self._seed_prior_official_outputs()
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+
+        def flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("boom on the second move")
+            return real_move(src, dst)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=flaky_move):
+            with self.assertRaises(WeeklyCapstoneError):
+                self._run(order, stages=self._fake_stages(
+                    order, skip_output_stage="weekly_bridge",
+                    bridge_batch4={"emitted": False, "no_emit_reason": "x"}))
+        self.assertEqual(order, [])
+        # rollback happened before a new run outcome: both prior-current slots are restored and no history is split.
+        self.assertTrue((wk / "weekly_report.md").exists())
+        self.assertTrue((rn / "machine_record.json").exists())
+        self.assertEqual(self._superseded_files(), set())
+
+    def test_pre_run_archive_and_rollback_errors_are_both_preserved(self):
+        from runners import us_short_weekly_capstone as cap
+
+        self._seed_prior_official_outputs()
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+
+        def doubly_flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("archive primary failure")
+            if calls["n"] == 3:
+                raise OSError("archive rollback failure")
+            return real_move(src, dst)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=doubly_flaky_move):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
+                self._run(order, stages=self._fake_stages(order))
+        self.assertIsInstance(cm.exception.__cause__, ExceptionGroup)
+        self.assertEqual(
+            [str(exc) for exc in cm.exception.__cause__.exceptions],
+            ["archive primary failure", "archive rollback failure"],
+        )
+        self.assertEqual(order, [])
+
+    def test_archive_recovery_journal_error_preserves_all_three_failures(self):
+        from runners import us_short_weekly_capstone as cap
+
+        self._seed_prior_official_outputs()
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+        original_journal = cap._write_transaction_journal
+
+        def doubly_flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("archive primary failure")
+            if calls["n"] == 3:
+                raise OSError("archive rollback failure")
+            return real_move(src, dst)
+
+        def flaky_journal(path, *, tag, phase):
+            if phase == "archive_recovery_required":
+                raise OSError("archive recovery journal failure")
+            return original_journal(path, tag=tag, phase=phase)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=doubly_flaky_move), \
+             mock.patch.object(cap, "_write_transaction_journal", side_effect=flaky_journal):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
+                self._run(order, stages=self._fake_stages(order))
+        self.assertIn("journal write also failed", str(cm.exception))
+        self.assertEqual(
+            [str(exc) for exc in cm.exception.__cause__.exceptions],
+            ["archive primary failure", "archive rollback failure", "archive recovery journal failure"],
+        )
+
+    def test_publish_second_move_failure_leaves_current_empty(self):
+        # C3: official outputs are staged. If publishing the report/action surface fails after the machine move, the
+        # machine move is rolled back to staging and the failed run leaves no current output.
+        from runners import us_short_weekly_capstone as cap
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+
+        def flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("publish weekly surface failed")
+            return real_move(src, dst)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=flaky_move):
+            with self.assertRaises(WeeklyCapstoneError):
+                self._run(order, stages=self._fake_stages(order))
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+
+    def test_published_marker_failure_rolls_back_all_current_outputs(self):
+        from runners import us_short_weekly_capstone as cap
+
+        order: list[str] = []
+        original = cap._write_transaction_journal
+
+        def fail_published(path, *, tag, phase):
+            if phase == "published":
+                raise OSError("published marker failed")
+            return original(path, tag=tag, phase=phase)
+
+        with mock.patch.object(cap, "_write_transaction_journal", side_effect=fail_published):
+            with self.assertRaises(WeeklyCapstoneError):
+                self._run(order, stages=self._fake_stages(order))
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+        self.assertFalse(
+            (self.private_root / "weekly_private" / "_transaction_state" / "20260709.json").exists()
+        )
+
+    def test_post_commit_cleanup_failure_remains_success_and_recovers(self):
+        from runners import us_short_weekly_capstone as cap
+
+        order: list[str] = []
+        with mock.patch.object(cap.shutil, "rmtree", side_effect=OSError("cleanup failed")):
+            summary = self._run(order, stages=self._fake_stages(order))
+        self.assertTrue(summary["emitted"])
+        self.assertTrue((self.private_root / "weekly_private" / "20260709" / "weekly_report.md").exists())
+        self.assertTrue((self.private_root / "runs_private" / "20260709" / "machine_record.json").exists())
+        journal = self.private_root / "weekly_private" / "_transaction_state" / "20260709.json"
+        self.assertEqual(json.loads(journal.read_text(encoding="utf-8"))["phase"], "published")
+        ctx = cap.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=self.private_root,
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            state_dir=self.state_dir,
+            sample_root=self.state_dir,
+        )
+        lock = cap._acquire_decision_lock(ctx)
+        try:
+            cap._recover_current_output_transaction(ctx)
+        finally:
+            cap._release_decision_lock(lock)
+        self.assertFalse(journal.exists())
+        self.assertTrue((self.private_root / "weekly_private" / "20260709" / "weekly_report.md").exists())
+
+    def test_publish_rollback_failure_is_journaled_and_recoverable(self):
+        # C3: do not swallow rollback failure. Keep the journal, then the next startup recovery removes the
+        # uncommitted partial current surface.
+        from runners import us_short_weekly_capstone as cap
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+
+        def doubly_flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] in {2, 3}:
+                raise OSError(f"fault {calls['n']}")
+            return real_move(src, dst)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=doubly_flaky_move):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
+                self._run(order, stages=self._fake_stages(order))
+        self.assertIn("rollback also failed", str(cm.exception))
+        self.assertIsInstance(cm.exception.__cause__, ExceptionGroup)
+        self.assertEqual([str(exc) for exc in cm.exception.__cause__.exceptions], ["fault 2", "fault 3"])
+        journal = self.private_root / "weekly_private" / "_transaction_state" / "20260709.json"
+        self.assertTrue(journal.exists())
+        ctx = cap.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0), private_root=self.private_root,
+            batch4_template_path=Path("template.json"), account_state_path=Path("account.json"),
+            confirm_user_authorization=True, state_dir=self.state_dir, sample_root=self.state_dir,
+        )
+        cap._recover_current_output_transaction(ctx)
+        self.assertFalse(journal.exists())
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
+        self.assertFalse((self.private_root / "runs_private" / "20260709").exists())
+
+    def test_publish_recovery_journal_error_preserves_all_three_failures(self):
+        from runners import us_short_weekly_capstone as cap
+
+        order: list[str] = []
+        real_move, calls = cap.shutil.move, {"n": 0}
+        original_journal = cap._write_transaction_journal
+
+        def doubly_flaky_move(src, dst):
+            calls["n"] += 1
+            if calls["n"] == 2:
+                raise OSError("publish primary failure")
+            if calls["n"] == 3:
+                raise OSError("publish rollback failure")
+            return real_move(src, dst)
+
+        def flaky_journal(path, *, tag, phase):
+            if phase == "publish_recovery_required":
+                raise OSError("publish recovery journal failure")
+            return original_journal(path, tag=tag, phase=phase)
+
+        with mock.patch.object(cap.shutil, "move", side_effect=doubly_flaky_move), \
+             mock.patch.object(cap, "_write_transaction_journal", side_effect=flaky_journal):
+            with self.assertRaises(WeeklyCapstoneError) as cm:
+                self._run(order, stages=self._fake_stages(order))
+        self.assertIn("journal write also failed", str(cm.exception))
+        self.assertEqual(
+            [str(exc) for exc in cm.exception.__cause__.exceptions],
+            ["publish primary failure", "publish rollback failure", "publish recovery journal failure"],
+        )
+
+    def test_same_decision_date_second_transaction_is_locked_out(self):
+        from runners import us_short_weekly_capstone as cap
+
+        ctx = cap.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=self.private_root,
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            state_dir=self.state_dir,
+            sample_root=self.state_dir,
+        )
+        other_private_root = Path(tempfile.mkdtemp(prefix="cap_priv_parallel_"))
+        self.addCleanup(shutil.rmtree, other_private_root, ignore_errors=True)
+        other_ctx = cap.resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=other_private_root,
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            state_dir=self.state_dir,
+            sample_root=self.state_dir,
+        )
+        first = cap._begin_current_output_transaction(ctx)
+        try:
+            with self.assertRaises(WeeklyCapstoneError) as cm:
+                cap._begin_current_output_transaction(other_ctx)
+            self.assertIn("already owns decision_date", str(cm.exception))
+            self.assertTrue(first.journal_path.exists())
+        finally:
+            cap._abort_current_output_transaction(first)
 
 
 class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
@@ -299,20 +700,106 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                     m.assert_called_once()
                     self.assertIs(m.call_args.kwargs.get("confirm_user_authorization"), True, adapter)
 
-    def test_bridge_mints_research_live_capability_only_when_authorized(self):
-        # Required A: the capstone bridge passes the process-internal research_live capability ONLY on an authorized
-        # run; an unauthorized ctx passes None → run_e2e would refuse the real-provider banner. The capability is the
-        # exact capstone singleton (identity), never a forgeable flag.
-        from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+    def test_bridge_forwards_ctx_research_live_capability_not_self_mint(self):
+        # A1: the bridge NO LONGER self-mints from ctx.confirm_user_authorization — it forwards ctx.research_live_capability
+        # VERBATIM (run_weekly_capstone injects it ONLY for a genuine production run). An authorized ctx that lacks the
+        # injected capability (the default from resolve_capstone_context) forwards None → run_e2e refuses research_live.
+        from dataclasses import replace
         from runners import us_short_weekly_capstone_stages as st
-        for authorized in (True, False):
-            ctx = self._ctx(authorized=authorized)
+        receipt = _research_receipt()
+        for cap in (receipt, None):
+            ctx = replace(self._ctx(authorized=True), research_live_capability=cap)
             with mock.patch.object(st, "_write_provider_health"), \
                  mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
                 st.run_weekly_bridge(ctx)
                 self.assertEqual(m.call_args.kwargs.get("run_mode"), "research_live")
-                expected = _CAPSTONE_RESEARCH_LIVE_CAPABILITY if authorized else None
-                self.assertIs(m.call_args.kwargs.get("_research_live_capability"), expected)
+                self.assertIs(m.call_args.kwargs.get("_research_live_capability"), cap)
+        # authorized BUT capability not injected (the default) → None forwarded (the auth flag alone does not mint it)
+        with mock.patch.object(st, "_write_provider_health"), \
+             mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
+            st.run_weekly_bridge(self._ctx(authorized=True))
+            self.assertIsNone(m.call_args.kwargs.get("_research_live_capability"))
+
+    def test_receipt_binds_exact_stages_calls_decision_and_source_digest(self):
+        # A1: receipt issuance consumes the exact completed stage sequence plus positive provider-call evidence and
+        # binds the source packet path/digest. A changed packet cannot reuse the receipt.
+        from engine.us_short_run_origin import RunOriginError, require_research_live_receipt_binding
+        from runners import us_short_weekly_capstone as cap
+        ctx = self._ctx(authorized=True)
+        ctx.source_packet_path.parent.mkdir(parents=True, exist_ok=True)
+        ctx.source_packet_path.write_text('{"packet":"one"}', encoding="utf-8")
+        provider_results = {
+            "universe_fetch": {
+                "generated_at": ctx.generated_at,
+                "decision_clock": {"decision_date": ctx.decision_date},
+                "provider_call_evidence": {
+                    "network_access_performed": True,
+                    "provider_calls_performed": True,
+                    "actual_total_calls": 23,
+                },
+            },
+            "momentum_fetch": {
+                "generated_at": ctx.generated_at,
+                "scope": {"network_access_performed": True, "provider_calls_performed": True},
+                "decision_clock": {"expected_decision_date": ctx.decision_date},
+                "fetch_stats": {"grouped_calls_made": 70},
+            },
+            "sic_fetch": {
+                "generated_at": ctx.generated_at,
+                "scope": {"network_access_performed": True, "provider_calls_performed": True},
+                "decision_clock": {"expected_decision_date": ctx.decision_date},
+                "classification": {"sic_resolved_count": 100},
+                "provider_call_evidence": {
+                    "network_access_performed": True,
+                    "provider_calls_performed": True,
+                    "actual_total_calls": 101,
+                },
+            },
+            "pass2_fetch": {
+                "generated_at": ctx.generated_at,
+                "scope": {"network_access_performed": True, "provider_calls_performed": True},
+                "decision_clock": {"expected_decision_date": ctx.decision_date},
+                "endpoint_call_budget": {"actual_total_endpoint_calls": 1},
+                "endpoint_results": [{"provider_id": "sec_edgar", "endpoint_family": "submissions", "status": "success"}],
+            },
+        }
+        results = [
+            {"name": name, "gated": False, "result": provider_results.get(name, {})}
+            for name in _STAGE_NAMES[:-1]
+        ]
+        manifest = (("candidate_artifact_path", str(ctx.source_packet_path.resolve()),
+                     hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest()),)
+        with mock.patch.object(cap.source_packet_runner, "source_packet_input_manifest", return_value=manifest):
+            receipt = cap._provider_execution_receipt(ctx, results)
+        require_research_live_receipt_binding(
+            receipt,
+            decision_date=ctx.decision_date,
+            source_packet_path=ctx.source_packet_path,
+            source_packet_sha256=hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest(),
+            source_artifact_manifest=manifest,
+        )
+        ctx.source_packet_path.write_text('{"packet":"changed"}', encoding="utf-8")
+        with self.assertRaises(RunOriginError):
+            require_research_live_receipt_binding(
+                receipt,
+                decision_date=ctx.decision_date,
+                source_packet_path=ctx.source_packet_path,
+                source_packet_sha256=hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest(),
+            )
+        from dataclasses import replace
+        tampered = replace(receipt, source_packet_sha256="3" * 64)
+        with self.assertRaises(RunOriginError):
+            require_research_live_receipt_binding(tampered)
+        tampered_manifest = replace(
+            receipt,
+            source_artifact_manifest=((manifest[0][0], manifest[0][1], "4" * 64),),
+        )
+        with self.assertRaises(RunOriginError):
+            require_research_live_receipt_binding(tampered_manifest)
+        provider_results["pass2_fetch"]["endpoint_call_budget"]["actual_total_endpoint_calls"] = 0
+        with self.assertRaises(WeeklyCapstoneError):
+            with mock.patch.object(cap.source_packet_runner, "source_packet_input_manifest", return_value=manifest):
+                cap._provider_execution_receipt(ctx, results)
 
     def test_e2e_function_refuses_research_live_without_or_with_forged_capability(self):
         # Required A at the e2e function boundary: research_live without the EXACT capstone capability fails closed —
@@ -354,7 +841,6 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         # mints the research_live run_origin, so a DIRECT caller must ALSO hold the capstone capability. Absent/forged
         # capabilities fail closed at the gate (before any pipeline work); the EXACT capability passes the gate (then
         # errors later on the trivial context — proving only the gate rejected the forgeries, not the run_mode itself).
-        from engine.us_short_run_origin import _CAPSTONE_RESEARCH_LIVE_CAPABILITY
         from engine.us_short_weekend_orchestrator import WeekendOrchestratorError, run_weekend_pipeline
         now = datetime(2026, 6, 15, 9, 0, 0)
         for forged in (None, True, object()):
@@ -364,7 +850,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             self.assertIn("capstone", str(cm.exception))     # the capability gate fired (not the pipeline_context check)
         with self.assertRaises(WeekendOrchestratorError) as cm:
             run_weekend_pipeline(now, {}, run_mode="research_live",
-                                 research_live_capability=_CAPSTONE_RESEARCH_LIVE_CAPABILITY)
+                                 research_live_capability=_research_receipt(decision_date="20260615"))
         self.assertIn("pipeline_context", str(cm.exception))  # capability accepted → next error is the context check
 
     def test_consumer_producers_refuse_hand_built_research_live_without_capability(self):
@@ -372,8 +858,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         # research_live origin and drive the PUBLIC engine producers DIRECTLY (assemble_machine_record /
         # build_weekly_report / write_run_private), bypassing the entry+orchestrator gates. Each producer now
         # fail-closes at a consumer-layer guard (its FIRST statement) unless handed the capstone capability.
-        from engine.us_short_run_origin import (
-            _CAPSTONE_RESEARCH_LIVE_CAPABILITY, RunOriginError, require_research_live_capability)
+        from engine.us_short_run_origin import RunOriginError, require_research_live_capability
         from engine.us_short_weekend_machine_record import WeekendMachineRecordError, assemble_machine_record
         from engine.us_short_weekend_private_write import write_run_private
         from engine.us_short_weekend_report import build_weekly_report
@@ -383,7 +868,8 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         for bad in (None, True, object()):
             with self.assertRaises(RunOriginError):
                 require_research_live_capability(FORGED, bad)
-        require_research_live_capability(FORGED, _CAPSTONE_RESEARCH_LIVE_CAPABILITY)   # ok — no raise
+        receipt = _research_receipt(decision_date="20260615")
+        require_research_live_capability(FORGED, receipt, decision_date="20260615")   # ok — no raise
         require_research_live_capability({"run_mode": "offline_test"}, None)           # offline_test no-op
         # each producer fail-closes FIRST on a hand-built research_live origin with an absent/forged capability
         # (the guard precedes all other processing, so the garbage positional args are never reached)
@@ -397,11 +883,37 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             with self.assertRaises(RunOriginError):
                 write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
                                   provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED, **cap)
+        # A2: the STANDALONE official action-table persister is ALSO gated (the earlier "3 producers" grep MISSED it —
+        # it takes the flattened record, not run_origin directly). A private out_path reaches the research_live gate.
+        from engine.us_short_action_table_renderer import write_action_table
+        with tempfile.TemporaryDirectory() as _td:
+            _out = Path(_td) / "action_table.csv"
+            for forged in (None, True, object()):
+                cap = {} if forged is None else {"research_live_capability": forged}
+                with self.assertRaises(RunOriginError):
+                    write_action_table({"run_origin": FORGED, "rows": []}, _out, **cap)
+            down_receipt = _research_receipt(
+                decision_date="20260615",
+                provider_health_facts=(("fmp", "down"), ("sec_edgar", "down")),
+            )
+            with self.assertRaises(RunOriginError):
+                assemble_machine_record(object(), as_of="20260615", run_origin=FORGED,
+                                        research_live_capability=down_receipt)
+            with self.assertRaises(RunOriginError):
+                build_weekly_report(object(), object(), report_context={}, run_context={}, stage_status={},
+                                    selection={}, run_origin=FORGED, research_live_capability=down_receipt)
+            with self.assertRaises(RunOriginError):
+                write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
+                                  provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED,
+                                  research_live_capability=down_receipt)
+            with self.assertRaises(RunOriginError):
+                write_action_table({"run_origin": FORGED, "rows": []}, _out,
+                                   research_live_capability=down_receipt)
         # positive control: WITH the exact capability the guard PASSES (the producer then fails on the garbage args
         # with its OWN typed error, NOT RunOriginError — proving the guard never blocks a legit research_live run)
         with self.assertRaises(WeekendMachineRecordError):
             assemble_machine_record({"regime": {}, "rows": []}, as_of="20260615", run_origin=FORGED,
-                                    research_live_capability=_CAPSTONE_RESEARCH_LIVE_CAPABILITY)
+                                    research_live_capability=receipt)
 
 
 class CapstoneAdapterSignatureTest(unittest.TestCase):
@@ -423,7 +935,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._proj.run_packet, ["candidate_artifact_path", "expected_decision_date", "source_momentum_projection_path", "source_theme_projection_path", "output_momentum_projection_path", "output_theme_projection_path", "summary_path", "generated_at"]),
             (st._preflight.run_preflight, ["candidate_artifact_path", "expected_decision_date", "momentum_projection_path", "theme_projection_path", "summary_path", "confirm_user_authorization", "generated_at"]),
-            (st._bridge.run_e2e, ["source_packet_path", "batch4_template_path", "account_state_path", "provider_health_path", "private_root", "now_et", "context_components_path", "run_mode", "_research_live_capability", "bootstrap_lifecycle", "generated_at"]),
+            (st._bridge.run_e2e, ["source_packet_path", "batch4_template_path", "account_state_path", "provider_health_path", "private_root", "official_output_root", "now_et", "context_components_path", "run_mode", "_research_live_capability", "bootstrap_lifecycle", "generated_at"]),
         ]
         for fn, kwargs in checks:
             params = set(inspect.signature(fn).parameters)
@@ -503,6 +1015,46 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
     @staticmethod
     def _row(provider, family, ok):
         return {"provider_id": provider, "endpoint_family": family, "status": "success" if ok else "error"}
+
+    def test_provider_health_rejects_summary_changed_after_receipt(self):
+        from types import SimpleNamespace
+
+        from engine.us_short_run_origin import RunOriginError
+        from runners import us_short_weekly_capstone_stages as st
+
+        signed = {
+            "endpoint_call_budget": {"actual_total_endpoint_calls": 2},
+            "endpoint_results": [
+                self._row("financial_modeling_prep", "grades", False),
+                self._row("sec_edgar", "submissions", False),
+            ],
+        }
+        provider_summaries = {
+            stage: ({"stage": stage} if stage != "pass2_fetch" else signed)
+            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+        }
+        receipt = _research_receipt(provider_summaries=provider_summaries)
+        tmp = Path(tempfile.mkdtemp(prefix="cap_health_receipt_"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        ctx = SimpleNamespace(
+            sample_root=tmp,
+            decision_date="20260709",
+            provider_health_path=tmp / "provider_health.json",
+            research_live_capability=receipt,
+        )
+        summary_path = st._stage_summary_targets(ctx)["pass2"]
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        tampered = {
+            "endpoint_call_budget": {"actual_total_endpoint_calls": 2},
+            "endpoint_results": [
+                self._row("financial_modeling_prep", "grades", True),
+                self._row("sec_edgar", "submissions", True),
+            ],
+        }
+        summary_path.write_text(json.dumps(tampered), encoding="utf-8")
+        with self.assertRaises(RunOriginError):
+            st._write_provider_health(ctx)
+        self.assertFalse(ctx.provider_health_path.exists())
 
     def test_full_grades_and_sec_success_is_ok(self):
         rows = ([self._row("financial_modeling_prep", "grades", True) for _ in range(5)]

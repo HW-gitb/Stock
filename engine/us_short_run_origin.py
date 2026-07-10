@@ -9,12 +9,18 @@ hard-gated upstream in the orchestrator. The official artifacts carry this fact 
 nor a pre-authoritative research run can be mistaken for an operational, ship-gate-authoritative weekly artifact.
 
 This module is the ONE immutable source of those facts + their validator + the always-visible disclosure text the
-report renders and the private-write boundary reconciles. `research_live` is CAPSTONE-INTERNAL — minted only via the
-process-internal capability below (R-USSHORT-REVIEWQ-CAT1 Required A); no operational/ship-gate claim.
+report renders and the private-write boundary reconciles. `research_live` is CAPSTONE-INTERNAL and requires the
+run-specific source/provider execution receipt below (R-USSHORT-REVIEWQ-CAT1 Required A); no operational/ship-gate claim.
 """
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from datetime import datetime
+import hashlib
+import hmac
+import json
+import os
+from pathlib import Path
 
 from engine.us_short_provider_health import RUN_STATES
 
@@ -42,39 +48,283 @@ _VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN)
 
 # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is a CAPSTONE-INTERNAL run_origin, NOT a public run_mode a generic
 # Batch4/E2E caller can select. The batch4 / e2e entry points AND the run_weekend_pipeline orchestrator (the deepest
-# PUBLISHED surface that mints the fact) gate research_live on THIS exact process-internal capability object, which the
-# one-click capstone (runners/us_short_weekly_capstone*) passes after its gated, per-execution-authorized live fetch.
+# PUBLISHED surface that mints the fact) gate research_live on a frozen receipt bound to the exact run, source digest,
+# completed stage set, and provider-call evidence. The one-click capstone issues it after the gated live fetch.
 # A GENERIC caller — the CLI (research_live is not an argparse
 # choice) or a direct public-function caller — cannot select research_live: passing True / a look-alike object fails
-# the identity check. (In-process Python cannot be cryptographically sandboxed; this closes the DOCUMENTED public
-# surface — the CLI and the run_mode argument — so a fixture / local source packet can never stamp the real-provider
-# banner. The earlier caller-settable boolean did NOT achieve this. Importing this private capability to forge
-# provenance is a deliberate contract violation, out of the generic-caller threat model.)
-class _CapstoneResearchLiveCapability:
-    __slots__ = ()
+# receipt validation. In-process Python cannot be cryptographically sandboxed; deliberately calling the private
+# receipt issuer remains outside the generic-caller threat model.
+_RECEIPT_ISSUER = object()
+_RECEIPT_SIGNING_KEY = os.urandom(32)
+_REQUIRED_PRE_BRIDGE_STAGES = (
+    "universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
+    "projection_inputs", "pass2_preflight", "pass2_fetch",
+)
+_REQUIRED_PROVIDER_STAGES = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+_REQUIRED_PROVIDER_HEALTH_KEYS = ("fmp", "sec_edgar")
 
 
-_CAPSTONE_RESEARCH_LIVE_CAPABILITY = _CapstoneResearchLiveCapability()
+@dataclass(frozen=True)
+class _CapstoneResearchLiveReceipt:
+    """Run-specific evidence receipt carried through every research-live consumer boundary."""
+
+    run_id: str
+    decision_date: str
+    generated_at: str
+    completed_stages: tuple[str, ...]
+    source_packet_path: str
+    source_packet_sha256: str
+    source_artifact_manifest: tuple[tuple[str, str, str], ...]
+    provider_call_counts: tuple[tuple[str, int], ...]
+    provider_summary_digests: tuple[tuple[str, str], ...]
+    provider_health_facts: tuple[tuple[str, str], ...]
+    provider_evidence_sha256: str
+    _signature: str = field(repr=False, compare=False)
+    _issuer: object = field(repr=False, compare=False)
+
+
+def _is_sha256(value) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(c in "0123456789abcdef" for c in value)
+
+
+def _valid_source_manifest(value) -> bool:
+    if not isinstance(value, tuple) or not value:
+        return False
+    try:
+        fields = [field for field, _, _ in value]
+        return len(set(fields)) == len(fields) and all(
+            isinstance(field, str) and bool(field) and Path(path).is_absolute() and _is_sha256(digest)
+            for field, path, digest in value
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _valid_provider_summary_digests(value) -> bool:
+    if not isinstance(value, tuple):
+        return False
+    try:
+        return tuple(stage for stage, _ in value) == _REQUIRED_PROVIDER_STAGES \
+            and all(_is_sha256(digest) for _, digest in value)
+    except (TypeError, ValueError):
+        return False
+
+
+def _valid_provider_calls(value) -> bool:
+    if not isinstance(value, tuple):
+        return False
+    try:
+        return tuple(stage for stage, _ in value) == _REQUIRED_PROVIDER_STAGES \
+            and all(type(count) is int and count > 0 for _, count in value)
+    except (TypeError, ValueError):
+        return False
+
+
+def _valid_provider_health_facts(value) -> bool:
+    if not isinstance(value, tuple):
+        return False
+    try:
+        return tuple(key for key, _ in value) == _REQUIRED_PROVIDER_HEALTH_KEYS \
+            and all(state in {"ok", "down"} for _, state in value)
+    except (TypeError, ValueError):
+        return False
+
+
+def _receipt_signature_payload(
+    *, run_id, decision_date, generated_at, completed_stages, source_packet_path, source_packet_sha256,
+    source_artifact_manifest, provider_call_counts, provider_summary_digests, provider_health_facts,
+    provider_evidence_sha256,
+) -> bytes:
+    return json.dumps(
+        {
+            "run_id": run_id,
+            "decision_date": decision_date,
+            "generated_at": generated_at,
+            "completed_stages": list(completed_stages),
+            "source_packet_path": source_packet_path,
+            "source_packet_sha256": source_packet_sha256,
+            "source_artifact_manifest": [list(row) for row in source_artifact_manifest],
+            "provider_call_counts": [list(row) for row in provider_call_counts],
+            "provider_summary_digests": [list(row) for row in provider_summary_digests],
+            "provider_health_facts": [list(row) for row in provider_health_facts],
+            "provider_evidence_sha256": provider_evidence_sha256,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode("utf-8")
+
+
+def _issue_capstone_research_live_receipt(
+    *, run_id: str, decision_date: str, generated_at: str, completed_stages,
+    source_packet_path, source_packet_sha256: str, source_artifact_manifest,
+    provider_call_counts, provider_summary_digests, provider_health_facts, provider_evidence_sha256: str,
+):
+    """Issue an immutable receipt from a complete, source-bound capstone provider execution."""
+    stages = tuple(completed_stages)
+    calls = tuple((stage, count) for stage, count in provider_call_counts)
+    source_manifest = tuple((field, path, digest) for field, path, digest in source_artifact_manifest)
+    summary_digests = tuple((stage, digest) for stage, digest in provider_summary_digests)
+    health_facts = tuple((key, state) for key, state in provider_health_facts)
+    if stages != _REQUIRED_PRE_BRIDGE_STAGES:
+        raise RunOriginError("research_live receipt missing or reordering required pre-bridge stages")
+    if tuple(stage for stage, _ in calls) != _REQUIRED_PROVIDER_STAGES:
+        raise RunOriginError("research_live receipt provider-call evidence must cover the exact required stages")
+    if any(type(count) is not int or count < 1 for _, count in calls):
+        raise RunOriginError("research_live receipt requires positive provider-call evidence for every provider stage")
+    if not _valid_source_manifest(source_manifest):
+        raise RunOriginError("research_live receipt source-artifact manifest is malformed")
+    if not _valid_provider_summary_digests(summary_digests):
+        raise RunOriginError("research_live receipt requires exact provider-stage summary digests")
+    if not _valid_provider_health_facts(health_facts):
+        raise RunOriginError("research_live receipt requires exact provider-health facts")
+    if not (isinstance(run_id, str) and _is_sha256(run_id)):
+        raise RunOriginError("research_live receipt run_id must be a sha256 identity")
+    if not (isinstance(decision_date, str) and len(decision_date) == 8 and decision_date.isascii()
+            and decision_date.isdigit()):
+        raise RunOriginError("research_live receipt decision_date must be YYYYMMDD")
+    if not (isinstance(generated_at, str) and generated_at):
+        raise RunOriginError("research_live receipt generated_at is required")
+    source_path = Path(source_packet_path)
+    if not source_path.is_absolute():
+        raise RunOriginError("research_live receipt source_packet_path must be absolute")
+    if not _is_sha256(source_packet_sha256) or not _is_sha256(provider_evidence_sha256):
+        raise RunOriginError("research_live receipt requires sha256 source and provider-evidence digests")
+    resolved_source_path = str(source_path.resolve())
+    signature = hmac.new(
+        _RECEIPT_SIGNING_KEY,
+        _receipt_signature_payload(
+            run_id=run_id,
+            decision_date=decision_date,
+            generated_at=generated_at,
+            completed_stages=stages,
+            source_packet_path=resolved_source_path,
+            source_packet_sha256=source_packet_sha256,
+            source_artifact_manifest=source_manifest,
+            provider_call_counts=calls,
+            provider_summary_digests=summary_digests,
+            provider_health_facts=health_facts,
+            provider_evidence_sha256=provider_evidence_sha256,
+        ),
+        hashlib.sha256,
+    ).hexdigest()
+    return _CapstoneResearchLiveReceipt(
+        run_id=run_id,
+        decision_date=decision_date,
+        generated_at=generated_at,
+        completed_stages=stages,
+        source_packet_path=resolved_source_path,
+        source_packet_sha256=source_packet_sha256,
+        source_artifact_manifest=source_manifest,
+        provider_call_counts=calls,
+        provider_summary_digests=summary_digests,
+        provider_health_facts=health_facts,
+        provider_evidence_sha256=provider_evidence_sha256,
+        _signature=signature,
+        _issuer=_RECEIPT_ISSUER,
+    )
 
 
 def is_capstone_research_live_capability(candidate) -> bool:
-    """True iff candidate IS the one process-internal capstone research_live capability (identity, NOT truthiness), so
-    a generic caller cannot fabricate it with True / a look-alike. batch4 / e2e / the orchestrator gate the
-    research_live run_origin on this (R-USSHORT-REVIEWQ-CAT1 Required A)."""
-    return candidate is _CAPSTONE_RESEARCH_LIVE_CAPABILITY
+    """Return whether candidate is a complete receipt issued by this module, not a truthy caller flag."""
+    structurally_valid = (
+        isinstance(candidate, _CapstoneResearchLiveReceipt)
+        and candidate._issuer is _RECEIPT_ISSUER
+        and candidate.completed_stages == _REQUIRED_PRE_BRIDGE_STAGES
+        and _valid_provider_calls(candidate.provider_call_counts)
+        and _is_sha256(candidate.run_id)
+        and _is_sha256(candidate.source_packet_sha256)
+        and _valid_source_manifest(candidate.source_artifact_manifest)
+        and _valid_provider_summary_digests(candidate.provider_summary_digests)
+        and _valid_provider_health_facts(candidate.provider_health_facts)
+        and _is_sha256(candidate.provider_evidence_sha256)
+        and _is_sha256(candidate._signature)
+    )
+    if not structurally_valid:
+        return False
+    expected_signature = hmac.new(
+        _RECEIPT_SIGNING_KEY,
+        _receipt_signature_payload(
+            run_id=candidate.run_id,
+            decision_date=candidate.decision_date,
+            generated_at=candidate.generated_at,
+            completed_stages=candidate.completed_stages,
+            source_packet_path=candidate.source_packet_path,
+            source_packet_sha256=candidate.source_packet_sha256,
+            source_artifact_manifest=candidate.source_artifact_manifest,
+            provider_call_counts=candidate.provider_call_counts,
+            provider_summary_digests=candidate.provider_summary_digests,
+            provider_health_facts=candidate.provider_health_facts,
+            provider_evidence_sha256=candidate.provider_evidence_sha256,
+        ),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(candidate._signature, expected_signature)
 
 
-def require_research_live_capability(run_origin, capability):
+def require_research_live_receipt_binding(
+    capability, *, decision_date=None, generated_at=None, source_packet_path=None, source_packet_sha256=None,
+    source_artifact_manifest=None,
+):
+    """Validate a receipt and any source/run identity known at the current boundary."""
+    if not is_capstone_research_live_capability(capability):
+        raise RunOriginError("research_live requires a valid source-bound capstone execution receipt")
+    if decision_date is not None and capability.decision_date != decision_date:
+        raise RunOriginError("research_live receipt decision_date does not match the consumed run")
+    if generated_at is not None and capability.generated_at != generated_at:
+        raise RunOriginError("research_live receipt generated_at does not match the consumed run")
+    if source_packet_path is not None and capability.source_packet_path != str(Path(source_packet_path).resolve()):
+        raise RunOriginError("research_live receipt source_packet_path does not match the consumed packet")
+    if source_packet_sha256 is not None and capability.source_packet_sha256 != source_packet_sha256:
+        raise RunOriginError("research_live receipt source packet digest mismatch")
+    if source_artifact_manifest is not None and capability.source_artifact_manifest != tuple(source_artifact_manifest):
+        raise RunOriginError("research_live receipt source artifact manifest mismatch")
+    return capability
+
+
+def require_research_live_provider_summary(capability, stage: str, summary) -> None:
+    """Bind a provider summary read at a later gate to the exact in-memory summary signed by the receipt."""
+    require_research_live_receipt_binding(capability)
+    expected = dict(capability.provider_summary_digests).get(stage)
+    if expected is None:
+        raise RunOriginError(f"research_live receipt does not bind provider stage {stage!r}")
+    actual = hashlib.sha256(
+        json.dumps(summary, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if not hmac.compare_digest(actual, expected):
+        raise RunOriginError(f"research_live provider summary changed after receipt issuance: {stage}")
+
+
+def require_research_live_provider_health(capability, provider_health) -> None:
+    """Bind the provider-health file consumed by E2E to the facts derived when the receipt was issued."""
+    require_research_live_receipt_binding(capability)
+    expected = dict(capability.provider_health_facts)
+    if not isinstance(provider_health, dict) or provider_health != expected:
+        raise RunOriginError("research_live provider health does not match the receipt-bound provider outcome")
+
+
+def require_research_live_provider_health_result(capability, provider_health_result) -> None:
+    """Bind a classified provider-health result used by report/persistence consumers to the receipt facts."""
+    from engine.us_short_provider_health import classify_provider_health
+
+    require_research_live_receipt_binding(capability)
+    expected = classify_provider_health(dict(capability.provider_health_facts))
+    if provider_health_result != expected:
+        raise RunOriginError("research_live classified provider health does not match the receipt-bound outcome")
+
+
+def require_research_live_capability(run_origin, capability, *, decision_date=None):
     """CONSUMER-LAYER gate (R-USSHORT-REVIEWQ-CAT1 Required A, 4th surface): the run_origin fact is a dict of PUBLIC
-    strings that `validate_run_origin` accepts by shape, so the three official-artifact producers
-    (`assemble_machine_record` / `build_weekly_report` / `write_run_private`) — public, importable functions — could
+    strings that `validate_run_origin` accepts by shape, so the four official-artifact producers
+    (`assemble_machine_record` / `build_weekly_report` / `write_run_private` / `write_action_table`) could
     be driven DIRECTLY with a hand-built research_live origin, bypassing the entry-point gates. Every such producer
-    calls this: turning a research_live fact into an official artifact requires the capstone capability. A no-op for
+    calls this: turning a research_live fact into an official artifact requires the capstone receipt. A no-op for
     offline_test / any non-research_live origin (they need no capability). Raises RunOriginError otherwise."""
-    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live" \
-            and not is_capstone_research_live_capability(capability):
-        raise RunOriginError(
-            "research_live 官方制品须由 capstone 进程内能力对象授权（consumer 层门；防绕过入口网关直接驱动装配/渲染/落盘）")
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live":
+        receipt = require_research_live_receipt_binding(capability, decision_date=decision_date)
+        if any(state != "ok" for _, state in receipt.provider_health_facts):
+            raise RunOriginError(
+                "research_live official artifacts require receipt-bound clean provider health"
+            )
 
 # the stable always-visible offline disclosure sentinel — rendered into the weekly report (§11.2) and
 # reconciled at the §18.0 private-write boundary so an offline machine record can never be written beside a

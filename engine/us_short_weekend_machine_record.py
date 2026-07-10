@@ -358,7 +358,9 @@ def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN
     Raises WeekendMachineRecordError on a malformed result / row, an invalid market_risk_regime, an unknown
     final_action, an observe_reason_type inconsistent with final_action, a non-canonical / duplicate ticker, a
     theme_probe that is not a §8 forced-min build, or an assembled record the §10 validator does not mark clean."""
-    require_research_live_capability(run_origin, research_live_capability)   # consumer-layer honesty gate (Required A) — first
+    require_research_live_capability(
+        run_origin, research_live_capability, decision_date=as_of,
+    )   # consumer-layer honesty gate (Required A) — first
     if not (isinstance(ranked_result, dict) and isinstance(ranked_result.get("regime"), dict)
             and isinstance(ranked_result.get("rows"), list)):
         raise WeekendMachineRecordError("ranked_result 须为含 regime(dict) + rows(list) 的 4d-ii-j 输出")

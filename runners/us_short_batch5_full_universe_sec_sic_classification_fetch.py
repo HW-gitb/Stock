@@ -152,12 +152,16 @@ def _load_candidate(*, candidate_artifact_path: Path) -> dict[str, Any]:
     return validated
 
 
-def _real_sic_source(sec_ua: str, *, interval_seconds: float) -> Callable[[list[str]], dict[str, str]]:
+def _real_sic_source(
+    sec_ua: str, *, interval_seconds: float, stats_out: dict[str, int] | None = None,
+) -> Callable[[list[str]], dict[str, str]]:
     if not sec_ua:
         raise FullUniverseSecSicClassificationFetchError("SEC_USER_AGENT not set (a live SEC fetch requires it)")
 
     def source(eligible: list[str]) -> dict[str, str]:
         ticker_cik = universe_fetch.fetch_sec_tickers(sec_ua)  # {canonical_ticker: {cik, exchange}} (1 call)
+        ticker_reference_calls = 1
+        submissions_calls = 0
         out: dict[str, str] = {}
         first = True
         for ticker in eligible:
@@ -167,6 +171,7 @@ def _real_sic_source(sec_ua: str, *, interval_seconds: float) -> Callable[[list[
             if not first and interval_seconds > 0:
                 time.sleep(interval_seconds)
             first = False
+            submissions_calls += 1  # attempted call, including provider errors
             try:
                 payload = universe_fetch._sec_get(SEC_SUBMISSIONS_URL.format(cik=int(rec["cik"])), sec_ua)
             except Exception:
@@ -174,6 +179,12 @@ def _real_sic_source(sec_ua: str, *, interval_seconds: float) -> Callable[[list[
             sic = payload.get("sic") if isinstance(payload, dict) else None
             if isinstance(sic, str) and sic:
                 out[ticker] = sic
+        if stats_out is not None:
+            stats_out.update({
+                "ticker_reference_calls": ticker_reference_calls,
+                "submissions_calls": submissions_calls,
+                "actual_total_calls": ticker_reference_calls + submissions_calls,
+            })
         return out
 
     return source
@@ -228,7 +239,7 @@ def _build_packet(*, generated_at: str, artifact: dict[str, Any], price_basis_ym
 
 def _build_summary(*, generated_at: str, artifact: dict[str, Any], price_basis_ymd: str, eligible_count: int,
                    sic_resolved_count: int, sector_by_ticker: dict[str, str], candidate_path: Path,
-                   packet_path: Path, summary_path: Path) -> dict[str, Any]:
+                   packet_path: Path, summary_path: Path, provider_call_evidence: dict[str, Any]) -> dict[str, Any]:
     return {
         "schema_name": "us_short_batch5_full_universe_sec_sic_classification_fetch_summary",
         "schema_version": "1.0.0",
@@ -267,6 +278,7 @@ def _build_summary(*, generated_at: str, artifact: dict[str, Any], price_basis_y
             "sic_missing_count": eligible_count - sic_resolved_count,
             "sector_group_count": len(set(sector_by_ticker.values())),
         },
+        "provider_call_evidence": provider_call_evidence,
         "paths": {
             "candidate_artifact_path": _repo_rel(candidate_path),
             "classification_packet_path": _repo_rel(packet_path),
@@ -341,7 +353,12 @@ def run_fetch(
     eligible = [t for t in (canonical_us_ticker(raw) for raw in artifact["eligible_tickers"]) if t is not None]
 
     sec_ua = os.environ.get("SEC_USER_AGENT", "")
-    source = sic_source if sic_source is not None else _real_sic_source(sec_ua, interval_seconds=interval_seconds)
+    provider_call_stats: dict[str, int] = {}
+    source = (
+        sic_source
+        if sic_source is not None
+        else _real_sic_source(sec_ua, interval_seconds=interval_seconds, stats_out=provider_call_stats)
+    )
 
     raw_sic_by_ticker = source(eligible)
     eligible_set = set(eligible)
@@ -370,6 +387,13 @@ def run_fetch(
         eligible_count=len(eligible), sic_resolved_count=len(sector_by_ticker),
         sector_by_ticker=sector_by_ticker, candidate_path=candidate_path, packet_path=packet_path,
         summary_path=summary_resolved,
+        provider_call_evidence={
+            "network_access_performed": sic_source is None,
+            "provider_calls_performed": sic_source is None and provider_call_stats.get("actual_total_calls", 0) > 0,
+            "ticker_reference_calls": provider_call_stats.get("ticker_reference_calls", 0),
+            "submissions_calls": provider_call_stats.get("submissions_calls", 0),
+            "actual_total_calls": provider_call_stats.get("actual_total_calls", 0),
+        },
     )
     _validate_schema(summary, SUMMARY_SCHEMA_PATH, label="full-universe SEC SIC classification fetch summary")
     # Secret-scan the tracked summary (SEC User-Agent + provider domains) BEFORE writing either artifact.

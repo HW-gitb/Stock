@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-10 — Codex 自修复后最终重审 PASS (US-short queue 类别1)
+
+- **Verdict/Action**: PASS；类别1设计方向合理，A1/A2/B/C1/C2/C3 已按 source-bound receipt、完整官方 consumer 门、三 sibling commit manifest、私密历史与可恢复事务协议闭环；当前 reviewer 自动提交本次审查树。
+- **Required**: 无；`R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` 已 resolved，完整修复与对抗证据见 `docs/system_risk_register.md`。
+- **Verify**: focused capstone 53 OK；repo wrapper full offline `test_us_short*.py` 4085 OK（1 skipped）；独立只读对抗复审 PASS；`py_compile` / `git diff --check` / doc-route guards 作为提交前门执行；无 provider/network/live 调用或私密 raw 读取。
+- **Pre-Codex self-review**: A-F checked；receipt/consumer/三 sibling/事务及三重故障反向测试均复核，独立对抗最终 PASS；完整证据见 register。
+- **Next**: Codex：审查类别2。
+
+## 2026-07-10 — Codex 重审 round 2 FAIL (US-short queue 类别1；A1/C1/C3 仍 P0)
+
+- **Verdict/Action**: FAIL；round 2 的 A2、B、C2 held，但 A1 未实现既定 source-bound execution receipt，C1 只证明报告新鲜而未绑定 action/machine 两个官方 sibling，C3 在 supersede 故障后把旧建议恢复为 current 且吞掉 rollback 故障。独立对抗 reviewer 同判 FAIL。
+- **Required**: `R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` 保持 open；A1/C1/C3a/C3b 完整证据与 closure 单源见 `docs/system_risk_register.md`。
+- **Verify**: reviewer focused 126 OK；repo wrapper full offline `test_us_short*.py` 4070 OK（1 skipped）；两个新 `_superseded` 目的地实际 gitignored；独立 agent 离线复核 FAIL；无 provider/network/live 调用。
+- **Next**: Claude Code 仅修复类别1 A1/C1/C3a/C3b，保留 A2/B/C2；修复后交 Codex 重审，FAIL 不提交。
+
+## 2026-07-10 — Claude 修复+自审 (US-short R-USSHORT-REVIEWQ-CAT1 round2：A1/A2/C1/C2/C3 收口；无自审 agent 快修交 Codex)
+
+- **Verdict/Action**: 修复（Claude solo round2，无自审 agent 按用户指令、交 Codex 复审）。A1=能力对象改由 run_weekly_capstone 仅对真生产跑注入 ctx、bridge 不再从 auth flag 自铸（直接调/注入 pipeline/dry 拿不到）；A2=补漏第4个官方持久器 write_action_table 加能力门；C1=预跑 mtime 证输出本轮新产（stale emitted-true 失败+supersede）；C2=supersede dest 移到 weekly_private/runs_private 下 _superseded（已 gitignore）+过私密门；C3=两次 move 全或无+回滚。B held。细节见 register 单源 Repair round 2。
+- **Required**: `R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` → fixed pending Codex re-review round2（register 单源，未提交、待 Codex PASS 后由 Codex 提交）。
+- **Verify**: focused 157 + full offline `test_us_short*` 4070 OK（1 skipped）；新测=注入 pipeline 不铸能力 / stale-emitted-true 失败+supersede / dest 真 git check-ignore 已忽略 / 私密门拒非私密 / 2nd-move 失败回滚。A1 真生产铸为 real-run-only。
+- **Pre-Codex self-review**: A–F checked。独立对抗 pass：不适用（用户 2026-07-10 指令：本对话 Codex 未审段修复不跑我自己的对抗 agent、交 Codex 复审兜底）。整类：A2 producer 集补齐到 4 个全门；C1/C2/C3 各带正+反测。judge-before-execute：A1 全密码学级进程内 provenance 不可达（run_origin 是公开串）已如实标 accepted residual 交 Codex 判。
+- **Next**: Codex 重审 round2（A1/A2/C1/C2/C3 + 是否接受 A1 accepted residual）；PASS 后由 Codex 提交；仍 FAIL 不提交。
+
+## 2026-07-10 — Codex 重审 FAIL (US-short queue 类别1；A/C 仍有 P0，B held)
+
+- **Verdict/Action**: FAIL；类别1高层设计可保留，但 `3556326f` 未把 research provenance 与真实 capstone 全链执行绑定，official action-table persister 仍可绕过；same-date current/history 协议仍可误认旧输出、把私密历史移到未 gitignore 路径，并可在第二次 move 失败后留下混合态。独立对抗 reviewer 同判 FAIL。
+- **Required**: `R-USSHORT-REVIEWQ-CAT1-CAPSTONE-HONESTY-AUTH-CURRENTNESS-GAPS` 保持 open；A1/A2/C1/C2/C3 完整证据、风险与 closure 单源见 `docs/system_risk_register.md`。B 的 5 个 adapter 授权传播本轮 held。
+- **Verify**: focused changed modules 38 OK；repo wrapper full offline `test_us_short*.py` 4065 OK（1 skipped）；`_superseded` 实际 `git check-ignore`=not ignored；独立 agent 离线复现 A1/A2/C1/C3；无 provider/network/live 调用。
+- **Next**: Claude Code 仅修复类别1 A1/A2/C1/C2/C3，保留 B；修复后交 Codex 重审，FAIL 不提交。
+
 ## 2026-07-10 — Claude 修复+自审 (US-short R-USSHORT-REVIEWQ-CAT1 A/B/C 收口：research_live 四层能力门 + B 授权传播 + C 原子 supersede；3 轮独立对抗)
 
 - **Verdict/Action**: 修复（Claude solo，Codex FAIL 类别1 A/B/C 整类闭）。A=research_live 改 capstone 进程内能力对象（identity 校验、非可伪造 bool——初版 bool 被独立 agent 攻破故改）+ 四层门（CLI 移除 choice / 入口 run_e2e·run_packet / orchestrator run_weekend_pipeline / 消费者 assemble_machine_record·build_weekly_report·write_run_private）；B=5 个 gated adapter 全消费 ctx 授权、fail-closed 先于 runner；C=非发射（no-emit/stage 异常/缺输出）原子 supersede 旧同日报告到 `_superseded/`。完整细节见 `docs/system_risk_register.md` 单一来源 Repair。

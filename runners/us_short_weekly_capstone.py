@@ -32,9 +32,12 @@ provider call, production, DataHub, ship-gate, broker path, or A-share crossing 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
+import os
 import shutil
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
@@ -46,6 +49,9 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
+from engine.us_short_private_paths import reject_nonprivate_output_path  # noqa: E402
+from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
+from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 
 CALENDAR_PRESET = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 STATE_DIR = ROOT / "state" / "us_short"
@@ -83,6 +89,8 @@ class CapstoneContext:
     retry_backoff_seconds: float = 0.0
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
+    research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
+    official_output_root: Path | None = None  # C3: run-scoped staging root; lifecycle remains under private_root
 
     # --- derived artifact paths (all gitignored under state/us_short/, keyed by the canonical dates) ---
     def _s(self, name: str) -> Path:
@@ -224,7 +232,17 @@ def default_pipeline() -> list[Stage]:
         Stage("projection_inputs", False, lambda c: [c.momentum_projection_path, c.theme_projection_path], lambda c: [c.merged_momentum_path, c.merged_theme_path], st.run_projection_inputs),
         Stage("pass2_preflight", False, lambda c: [c.merged_momentum_path, c.merged_theme_path], lambda c: [c.preflight_summary_path], st.run_pass2_preflight),
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path], lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
-        Stage("weekly_bridge", False, lambda c: [c.source_packet_path], lambda c: [c.private_root / "weekly_private" / c.decision_date / "weekly_report.md"], st.run_weekly_bridge),
+        Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
+    ]
+
+
+def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
+    """All three official siblings for one run; the report alone is not a commit marker."""
+    root = ctx.official_output_root or ctx.private_root
+    return [
+        root / "weekly_private" / ctx.decision_date / "weekly_report.md",
+        root / "weekly_private" / ctx.decision_date / "action_table.csv",
+        root / "runs_private" / ctx.decision_date / "machine_record.json",
     ]
 
 
@@ -261,26 +279,389 @@ def _safe_tag(generated_at: str) -> str:
     return "".join(c if c.isalnum() else "-" for c in generated_at) or "run"
 
 
-def _supersede_stale_current_outputs(ctx: CapstoneContext, *, reason: str) -> dict[str, Any]:
-    """C (R-USSHORT-REVIEWQ-CAT1 Required C) — the atomic current-run protocol for a NON-emitting outcome. A no-emit
-    or a stage failure must NOT leave a PRIOR same-decision-date official output (weekly_report.md / action_table.csv
-    / machine_record.json) discoverable as THIS week's CURRENT advice. Move any pre-existing same-decision-date
-    weekly_private/<dd> and runs_private/<dd> directory aside to an EXPLICITLY historical
-    private_root/_superseded/<surface>/<dd>__<tag>/ location (history preserved, never deleted; the current slot is
-    emptied). Idempotent no-op when no prior same-date output exists (e.g. a first-ever run that no-emits)."""
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _output_fingerprint(path: Path):
+    try:
+        stat = Path(path).stat()
+        return (stat.st_size, stat.st_mtime_ns, _sha256_file(Path(path)))
+    except OSError:
+        return None
+
+
+def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, Any]]):
+    """Build the A1 receipt from exact completed stages and their provider-call evidence."""
+    completed = tuple(item.get("name") for item in results)
+    expected = tuple(stage.name for stage in default_pipeline()[:-1])
+    if completed != expected:
+        raise WeeklyCapstoneError("research_live receipt requires the exact completed pre-bridge stage sequence")
+    by_name = {item["name"]: item.get("result") for item in results}
+
+    def _result(name):
+        value = by_name.get(name)
+        if not isinstance(value, dict) or value.get("generated_at") != ctx.generated_at:
+            raise WeeklyCapstoneError(f"{name} lacks same-run generated_at provider evidence")
+        return value
+
+    universe = _result("universe_fetch")
+    if universe.get("decision_clock", {}).get("decision_date") != ctx.decision_date:
+        raise WeeklyCapstoneError("universe provider evidence decision_date mismatch")
+    universe_evidence = universe.get("provider_call_evidence", {})
+    if universe_evidence.get("network_access_performed") is not True \
+            or universe_evidence.get("provider_calls_performed") is not True:
+        raise WeeklyCapstoneError("universe fetch lacks explicit provider-call evidence")
+    universe_calls = universe_evidence.get("actual_total_calls")
+
+    momentum = _result("momentum_fetch")
+    momentum_scope = momentum.get("scope", {})
+    if momentum_scope.get("network_access_performed") is not True \
+            or momentum_scope.get("provider_calls_performed") is not True \
+            or momentum.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
+        raise WeeklyCapstoneError("momentum fetch lacks same-run provider-call evidence")
+    momentum_calls = momentum.get("fetch_stats", {}).get("grouped_calls_made")
+
+    sic = _result("sic_fetch")
+    sic_scope = sic.get("scope", {})
+    if sic_scope.get("network_access_performed") is not True \
+            or sic_scope.get("provider_calls_performed") is not True \
+            or sic.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
+        raise WeeklyCapstoneError("SIC fetch lacks same-run provider-call evidence")
+    sic_evidence = sic.get("provider_call_evidence", {})
+    if sic_evidence.get("network_access_performed") is not True \
+            or sic_evidence.get("provider_calls_performed") is not True:
+        raise WeeklyCapstoneError("SIC fetch lacks explicit provider-call evidence")
+    sic_calls = sic_evidence.get("actual_total_calls")
+
+    pass2 = _result("pass2_fetch")
+    pass2_scope = pass2.get("scope", {})
+    budget = pass2.get("endpoint_call_budget", {})
+    endpoint_results = pass2.get("endpoint_results")
+    pass2_calls = budget.get("actual_total_endpoint_calls")
+    if pass2_scope.get("network_access_performed") is not True \
+            or pass2_scope.get("provider_calls_performed") is not True \
+            or pass2.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date \
+            or type(pass2_calls) is not int or pass2_calls < 1 \
+            or not isinstance(endpoint_results, list) or len(endpoint_results) != pass2_calls \
+            or any(not isinstance(row, dict) or not isinstance(row.get("provider_id"), str)
+                   or not isinstance(row.get("endpoint_family"), str) or row.get("status") not in {"success", "error"}
+                   for row in endpoint_results):
+        raise WeeklyCapstoneError("Pass2 lacks complete same-run endpoint-call evidence")
+
+    call_counts = (
+        ("universe_fetch", universe_calls), ("momentum_fetch", momentum_calls),
+        ("sic_fetch", sic_calls), ("pass2_fetch", pass2_calls),
+    )
+    if any(type(count) is not int or count < 1 for _, count in call_counts):
+        raise WeeklyCapstoneError("every required provider stage must prove at least one call")
+    evidence = {
+        name: {"call_count": count, "summary_sha256": hashlib.sha256(
+            json.dumps(by_name[name], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()}
+        for name, count in call_counts
+    }
+    evidence_sha256 = hashlib.sha256(
+        json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    source_path = ctx.source_packet_path.resolve()
+    source_sha256 = _sha256_file(source_path)
+    source_manifest = source_packet_runner.source_packet_input_manifest(source_path)
+    source_manifest_sha256 = hashlib.sha256(
+        json.dumps(source_manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    provider_summary_digests = tuple(
+        (name, evidence[name]["summary_sha256"]) for name, _ in call_counts
+    )
+    from runners import us_short_weekly_capstone_stages as stage_adapters
+    provider_health = stage_adapters.derive_provider_health(pass2)
+    provider_health_facts = tuple((key, provider_health[key]) for key in ("fmp", "sec_edgar"))
+    run_id = hashlib.sha256(
+        f"{ctx.decision_date}|{ctx.generated_at}|{source_path}|{source_sha256}|"
+        f"{source_manifest_sha256}|{evidence_sha256}".encode("utf-8")
+    ).hexdigest()
+    return _issue_capstone_research_live_receipt(
+        run_id=run_id,
+        decision_date=ctx.decision_date,
+        generated_at=ctx.generated_at,
+        completed_stages=completed,
+        source_packet_path=source_path,
+        source_packet_sha256=source_sha256,
+        source_artifact_manifest=source_manifest,
+        provider_call_counts=call_counts,
+        provider_summary_digests=provider_summary_digests,
+        provider_health_facts=provider_health_facts,
+        provider_evidence_sha256=evidence_sha256,
+    )
+
+
+@dataclass(frozen=True)
+class _DecisionDateLock:
+    path: Path
+    handle: Any
+
+
+def _decision_lock_path(ctx: CapstoneContext) -> Path:
+    # One repo-wide lock per decision date: stage artifacts live under shared state_dir/sample_root even when callers
+    # choose different private output roots, so locking by private_root would still permit cross-run source mixing.
+    return (
+        ROOT / "provider_samples" / "us_short_weekly_capstone" / "_transaction_locks"
+        / f"{ctx.decision_date}.lock"
+    ).resolve()
+
+
+def _acquire_decision_lock(ctx: CapstoneContext) -> _DecisionDateLock:
+    """Take a kernel-owned non-blocking lock; the OS releases it automatically after crash/process exit."""
+    path = _decision_lock_path(ctx)
+    reject_nonprivate_output_path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = path.open("a+b")
+    try:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_NBLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        handle.close()
+        raise WeeklyCapstoneError(
+            f"another capstone process already owns decision_date {ctx.decision_date}"
+        ) from exc
+    return _DecisionDateLock(path=path, handle=handle)
+
+
+def _release_decision_lock(lock: _DecisionDateLock) -> None:
+    handle = lock.handle
+    if handle is None:
+        return
+    try:
+        handle.seek(0)
+        if os.name == "nt":
+            import msvcrt
+            msvcrt.locking(handle.fileno(), msvcrt.LK_UNLCK, 1)
+        else:
+            import fcntl
+            fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
+    finally:
+        handle.close()
+        object.__setattr__(lock, "handle", None)
+
+
+@dataclass(frozen=True)
+class _CurrentOutputTransaction:
+    tag: str
+    journal_path: Path
+    staging_root: Path
+    archived_paths: tuple[Path, ...]
+    decision_lock: _DecisionDateLock
+
+
+def _transaction_paths(ctx: CapstoneContext, tag: str, surface: str) -> tuple[Path, Path, Path]:
+    current = (ctx.private_root / surface / ctx.decision_date).resolve()
+    history = (ctx.private_root / surface / "_superseded" / f"{ctx.decision_date}__{tag}").resolve()
+    staging_root = (ctx.private_root / "weekly_private" / "_transactions" / tag).resolve()
+    staged = staging_root / surface / ctx.decision_date
+    return current, history, staged
+
+
+def _transaction_journal_path(ctx: CapstoneContext) -> Path:
+    return (ctx.private_root / "weekly_private" / "_transaction_state" / f"{ctx.decision_date}.json").resolve()
+
+
+def _write_transaction_journal(path: Path, *, tag: str, phase: str) -> None:
+    reject_nonprivate_output_path(path)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    reject_nonprivate_output_path(tmp)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp.write_text(json.dumps({"version": 1, "tag": tag, "phase": phase}, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+def _read_transaction_journal(path: Path) -> dict[str, str]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise WeeklyCapstoneError("cannot recover malformed current-output transaction journal") from exc
+    if not isinstance(value, dict) or set(value) != {"version", "tag", "phase"} or value.get("version") != 1:
+        raise WeeklyCapstoneError("invalid current-output transaction journal shape")
+    tag, phase = value.get("tag"), value.get("phase")
+    if not isinstance(tag, str) or _safe_tag(tag) != tag or not isinstance(phase, str):
+        raise WeeklyCapstoneError("invalid current-output transaction journal values")
+    return {"tag": tag, "phase": phase}
+
+
+def _recover_current_output_transaction(ctx: CapstoneContext) -> None:
+    journal = _transaction_journal_path(ctx)
+    if not journal.exists():
+        return
+    state = _read_transaction_journal(journal)
+    tag, phase = state["tag"], state["phase"]
+    paths = [_transaction_paths(ctx, tag, surface) for surface in ("weekly_private", "runs_private")]
+    try:
+        if phase in {"archiving_prior", "archive_recovery_required"}:
+            for current, history, _ in reversed(paths):
+                if history.exists():
+                    if current.exists():
+                        raise WeeklyCapstoneError("archive recovery found both current and history copies")
+                    current.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(history), str(current))
+        elif phase in {"running", "publishing", "publish_recovery_required"}:
+            # The previous run never committed. Remove any partially published current outputs via staging, then
+            # discard staging. Prior outputs remain safely under _superseded.
+            for current, _, staged in reversed(paths):
+                if current.exists():
+                    if staged.exists():
+                        raise WeeklyCapstoneError("publish recovery found both current and staged copies")
+                    staged.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(current), str(staged))
+        elif phase == "published":
+            if any(not current.exists() for current, _, _ in paths):
+                raise WeeklyCapstoneError("published transaction is missing an official current surface")
+        else:
+            raise WeeklyCapstoneError(f"unknown current-output transaction phase {phase!r}")
+        staging_root = paths[0][2].parents[1]
+        if staging_root.exists():
+            shutil.rmtree(staging_root)
+        journal.unlink(missing_ok=True)
+    except Exception as exc:
+        raise WeeklyCapstoneError(f"current-output transaction recovery failed in phase {phase}") from exc
+
+
+def _begin_current_output_transaction(ctx: CapstoneContext) -> _CurrentOutputTransaction:
+    decision_lock = _acquire_decision_lock(ctx)
+    try:
+        return _begin_current_output_transaction_locked(ctx, decision_lock)
+    except Exception:
+        _release_decision_lock(decision_lock)
+        raise
+
+
+def _begin_current_output_transaction_locked(
+    ctx: CapstoneContext, decision_lock: _DecisionDateLock,
+) -> _CurrentOutputTransaction:
+    _recover_current_output_transaction(ctx)
     tag = _safe_tag(ctx.generated_at)
-    moved: list[str] = []
-    for surface in ("weekly_private", "runs_private"):
-        current = ctx.private_root / surface / ctx.decision_date
-        if not current.exists():
-            continue
-        dest = ctx.private_root / "_superseded" / surface / f"{ctx.decision_date}__{tag}"
-        while dest.exists():   # never clobber earlier history if the same generated_at tag recurs
-            dest = dest.with_name(dest.name + "_x")
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(str(current), str(dest))
-        moved.append(_rel(dest))
-    return {"reason": reason, "moved": moved}
+    while any(_transaction_paths(ctx, tag, surface)[1].exists()
+              for surface in ("weekly_private", "runs_private")):
+        tag += "_x"
+    journal = _transaction_journal_path(ctx)
+    _write_transaction_journal(journal, tag=tag, phase="archiving_prior")
+    moved: list[tuple[Path, Path]] = []
+    try:
+        for surface in ("weekly_private", "runs_private"):
+            current, history, _ = _transaction_paths(ctx, tag, surface)
+            if not current.exists():
+                continue
+            reject_nonprivate_output_path(current)
+            reject_nonprivate_output_path(history)
+            history.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(current), str(history))
+            moved.append((current, history))
+    except Exception as primary:
+        rollback_errors = []
+        for current, history in reversed(moved):
+            try:
+                current.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(history), str(current))
+            except Exception as rollback:
+                rollback_errors.append(rollback)
+        if rollback_errors:
+            journal_errors = []
+            try:
+                _write_transaction_journal(journal, tag=tag, phase="archive_recovery_required")
+            except Exception as journal_error:
+                journal_errors.append(journal_error)
+            causes = ExceptionGroup(
+                "pre-run archive primary, rollback, and recovery-journal failures",
+                [primary, *rollback_errors, *journal_errors],
+            )
+            recovery_state = "recovery journal retained" if not journal_errors else "recovery journal write also failed"
+            raise WeeklyCapstoneError(
+                f"pre-run archive failed and rollback also failed ({len(rollback_errors)} error(s)); {recovery_state}"
+            ) from causes
+        journal.unlink(missing_ok=True)
+        raise WeeklyCapstoneError("pre-run archive failed before any provider stage; prior current outputs restored") from primary
+    _write_transaction_journal(journal, tag=tag, phase="running")
+    staging_root = _transaction_paths(ctx, tag, "weekly_private")[2].parents[1]
+    return _CurrentOutputTransaction(
+        tag=tag,
+        journal_path=journal,
+        staging_root=staging_root,
+        archived_paths=tuple(history for _, history in moved),
+        decision_lock=decision_lock,
+    )
+
+
+def _abort_current_output_transaction(txn: _CurrentOutputTransaction) -> None:
+    try:
+        if txn.staging_root.exists():
+            shutil.rmtree(txn.staging_root)
+        txn.journal_path.unlink(missing_ok=True)
+    finally:
+        _release_decision_lock(txn.decision_lock)
+
+
+def _publish_current_output_transaction(ctx: CapstoneContext, txn: _CurrentOutputTransaction) -> None:
+    paths = [_transaction_paths(ctx, txn.tag, surface) for surface in ("runs_private", "weekly_private")]
+    for current, _, staged in paths:
+        reject_nonprivate_output_path(current)
+        reject_nonprivate_output_path(staged)
+        if current.exists() or not staged.exists():
+            raise WeeklyCapstoneError("cannot publish official outputs: current must be empty and staging complete")
+    _write_transaction_journal(txn.journal_path, tag=txn.tag, phase="publishing")
+    published: list[tuple[Path, Path]] = []
+    try:
+        for current, _, staged in paths:  # machine first, report/action surface last
+            current.parent.mkdir(parents=True, exist_ok=True)
+            shutil.move(str(staged), str(current))
+            published.append((current, staged))
+        # The current surfaces are committed only when the published marker is durable. Marker failure is part of
+        # the publish transaction and rolls every moved surface back to staging.
+        _write_transaction_journal(txn.journal_path, tag=txn.tag, phase="published")
+    except Exception as primary:
+        rollback_errors = []
+        for current, staged in reversed(published):
+            try:
+                staged.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(current), str(staged))
+            except Exception as rollback:
+                rollback_errors.append(rollback)
+        if rollback_errors:
+            journal_errors = []
+            try:
+                _write_transaction_journal(txn.journal_path, tag=txn.tag, phase="publish_recovery_required")
+            except Exception as journal_error:
+                journal_errors.append(journal_error)
+            causes = ExceptionGroup(
+                "official-output publish primary, rollback, and recovery-journal failures",
+                [primary, *rollback_errors, *journal_errors],
+            )
+            recovery_state = "recovery journal retained" if not journal_errors else "recovery journal write also failed"
+            raise WeeklyCapstoneError(
+                f"official-output publish failed and rollback also failed ({len(rollback_errors)} error(s)); {recovery_state}"
+            ) from causes
+        _abort_current_output_transaction(txn)
+        raise WeeklyCapstoneError("official-output publish failed; current remains empty") from primary
+    try:
+        if txn.staging_root.exists():
+            shutil.rmtree(txn.staging_root)
+        txn.journal_path.unlink(missing_ok=True)
+    except OSError:
+        # The durable published marker is the commit point. Cleanup is recoverable on the next locked startup and
+        # must not turn a committed run into a reported failure while its complete current surfaces are visible.
+        pass
+    finally:
+        _release_decision_lock(txn.decision_lock)
 
 
 def run_weekly_capstone(
@@ -321,41 +702,86 @@ def run_weekly_capstone(
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
             "the plan first")
 
+    production_run = (stages is None) and (ctx.confirm_user_authorization is True)
+    # C3: archive any prior current outputs BEFORE provider execution. A failure here rolls back before this run
+    # starts; once it succeeds, every later no-emit/failure has an empty current slot. Official outputs are written
+    # under a private run-scoped staging root and published only after all three siblings validate.
+    transaction = _begin_current_output_transaction(ctx)
     results: list[dict[str, Any]] = []
     try:
         for stage in pipeline:
+            stage_ctx = ctx
+            if stage.name == "weekly_bridge":
+                receipt = _provider_execution_receipt(ctx, results) if production_run else None
+                stage_ctx = replace(
+                    ctx,
+                    research_live_capability=receipt,
+                    official_output_root=transaction.staging_root,
+                )
+            expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
+            before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:
-                result = stage.run(ctx)
+                result = stage.run(stage_ctx)
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
                 raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
             # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
             # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
             # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
-            if stage.name == "weekly_bridge" and _bridge_emitted(result) is False:
-                # C (Required C): an HONEST no-emit must not leave a PRIOR same-decision-date report discoverable as
-                # THIS week's current advice — supersede it to an explicitly historical identity before returning.
-                superseded = _supersede_stale_current_outputs(ctx, reason="no_emit")
+            bridge_emitted = _bridge_emitted(result) if stage.name == "weekly_bridge" else None
+            if stage.name == "weekly_bridge" and bridge_emitted is False:
                 results.append({"name": stage.name, "gated": stage.gated, "result": result})
+                _abort_current_output_transaction(transaction)
                 return {
                     "mode": "live",
                     "decision_date": ctx.decision_date,
                     "price_basis_date": ctx.price_basis_date,
                     "emitted": False,
                     "no_emit_reason": _bridge_no_emit_reason(result),
-                    "superseded_prior_outputs": superseded,
+                    "superseded_prior_outputs": {
+                        "reason": "pre_run_archive",
+                        "moved": [_rel(path) for path in transaction.archived_paths],
+                    },
                     "stages": results,
                 }
-            missing = [p for p in stage.outputs(ctx) if not Path(p).exists()]
+            if stage.name == "weekly_bridge" and bridge_emitted is not True:
+                raise WeeklyCapstoneError(
+                    "weekly_bridge result must explicitly report batch4_run.emitted as a boolean"
+                )
+            if stage.name == "weekly_bridge":
+                batch4 = result.get("batch4_run") if isinstance(result, dict) else None
+                output_paths = batch4.get("output_paths") if isinstance(batch4, dict) else None
+                expected_manifest = {
+                    "weekly_report_path": str(expected_outputs[0].resolve()),
+                    "action_table_path": str(expected_outputs[1].resolve()),
+                    "machine_record_path": str(expected_outputs[2].resolve()),
+                }
+                reported_manifest = {
+                    key: str(Path(value).resolve()) for key, value in output_paths.items()
+                } if isinstance(output_paths, dict) and all(
+                    isinstance(key, str) and isinstance(value, str) for key, value in output_paths.items()
+                ) else {}
+                if reported_manifest != expected_manifest:
+                    raise WeeklyCapstoneError(
+                        "weekly_bridge emitted=True but its commit evidence does not bind all three official outputs"
+                    )
+            missing = [
+                path for path in expected_outputs
+                if _output_fingerprint(path) is None
+                or _output_fingerprint(path) == before[str(path.resolve())]
+            ]
             if missing:
                 raise WeeklyCapstoneError(
-                    f"stage '{stage.name}' completed but did not produce: {[_rel(p) for p in missing]}")
+                    f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}")
             results.append({"name": stage.name, "gated": stage.gated, "result": result})
-    except WeeklyCapstoneError:
-        # C (Required C): a stage failure (exception or missing output) likewise must not leave a prior
-        # same-decision-date report discoverable as the current run — supersede before propagating. This wraps ONLY
-        # the pipeline loop, so the pre-run out-of-window / unauthorized refusals above (which ran nothing and wrote
-        # nothing) never supersede a prior report.
-        _supersede_stale_current_outputs(ctx, reason="stage_failure")
+        _publish_current_output_transaction(ctx, transaction)
+    except Exception:
+        try:
+            if transaction.journal_path.exists():
+                state = _read_transaction_journal(transaction.journal_path)
+                if state["phase"] == "running":
+                    _abort_current_output_transaction(transaction)
+        finally:
+            _release_decision_lock(transaction.decision_lock)
         raise
 
     return {
