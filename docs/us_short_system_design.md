@@ -6,6 +6,7 @@
 > **系统只有 v1 线**：不另起架构 v2/v3，延后项一律走 `candidate_active` / lifecycle 候选，不开 v1.1 版本线。
 > **三道写 repo 硬闸（gate ①②③）落地状态**：① 旧 `us_short_spec.md` 已降级归档指针；② §18.0 的 7 道 P0 已登记进 `docs/system_risk_register.md`（`R-USSHORT-V1-P0-IMPLEMENTATION-GATES`，open / binding）作**硬规则**、非普通 TODO；③ 本 landing 已实跑 `git check-ignore` 核验全部 private 路径，并补齐 `.gitignore`（runs_private / model_paper_private / lifecycle / shadow_compare_private 四行，weekly_private / account_state_csv 早已覆盖），fail-closed 护栏测试列为实现期 P0 Required（§18.0 / §18.1 #1）。
 
+> **2026-07-10 update**: `runners/us_short_yfinance_grades_fetch.py` + `engine/us_short_yfinance_analyst_grades.py` implement the formerly probe-only yfinance analyst-grades sub-signal as a low-trust / non-official / ToS-gray, default-dry-run, per-execution-authorized optional source. Missing/down yfinance grades are neutral non-critical inputs and never gate emit, provider health, DataHub, production, or ship-gate.
 ---
 
 ## 0. 定位与总原则

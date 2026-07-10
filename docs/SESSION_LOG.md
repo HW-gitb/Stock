@@ -8,6 +8,50 @@
 
 ---
 
+## 2026-07-10 — Claude 审查 PASS + 提交 (US-short overextension capstone 集成 + yfinance-grades 源 A/B/C non-critical)
+
+- **Verdict/Action**: PASS + 提交（合并两刀、未 push）。overextension 接线（capstone 加 overextension_producer 阶段 + 复用 OHLCV sidecar + map 穿进选股/data_context、no-map 反控）+ yfinance A 引擎（FMP-兼容 resolved actions、look-ahead/类型 fail-closed）+ B live-fetch + C 接线（yfinance 替 FMP 当 §4.2 评级源、non-critical：缺/down/dep-missing/429/dup 全→中性、绝不 gate emit、不碰 provider_health）。上轮 §6a FAIL 的 dup-row-gate-emit 已修（runner 去重身份 = resolver `_DUPLICATE_IDENTITY` 精确对齐 + import catch 放宽 ImportError + 反控测），复核确认。§6a：yfinance-B 新 live-fetch 起独立 agent（dup 外全 PASS）。committer 附带修我 d1aea386 遗留的探针 dry-run 测试回归（改断 summary mtime 未变）+ 修正 Codex 误插 intro 之上的 SESSION_LOG 结构。
+- **Required**: 无。`R-USSHORT-BATCH5-OVEREXTENSION-WIRING-INCOMPLETE` resolved。Optional（非阻塞）：pass2 仍照抓 FMP grades（~200 多为 402）却被 yfinance 盖过=白抓，后续 slice 可停抓。
+- **Verify**: `review-evidence:not_available`。整读 yfinance A/B/C + overextension diff + §6a agent；亲跑 full offline `test_us_short*` = **Ran 4138 OK**（含 dup→中性不崩 / broken-import→中性 / no-map 反控 / 探针 dry-run no-write mtime）；`git diff --check` 净；无 provider/network 调用（B live 未跑、留你另行授权）。freshday summary 排除。
+- **Next**: Codex：待命（yfinance-B live 抓取需你另行授权才真跑）。
+
+## 2026-07-10 - Codex repair complete, awaiting Claude re-review (US-short yfinance grades non-critical runner)
+
+- **Verdict/Action**: Repaired the latest yfinance-B Required without live fetch: duplicate yfinance rows are deduplicated before resolver identity validation, and broken `yfinance` installs (`ImportError`) now resolve dependency-down/neutral rather than aborting the capstone. `requirements.txt` now declares the optional deployment dependency; the runner still never self-installs it.
+- **Required**: Claude re-review the yfinance A/B/C slice, including the duplicate-row non-gating regression. No score, provider-health, or emit policy changed.
+- **Verify**: Focused yfinance/capstone pack 71 OK; `git diff --check` OK (only LF/CRLF working-copy warnings); no provider/network/install call.
+- **Pre-Codex self-review**: A-F checked; resolver and runner duplicate identities aligned; broken-install and duplicate-row-to-downstream-risk reverse controls added; no stale single-exception path found in the yfinance fetch runner.
+- **Next**: Claude Code: re-review yfinance A/B/C, then commit only the ordered yfinance slice if PASS.
+
+## 2026-07-10 — Claude 审查 FAIL (US-short 合并审 overextension + yfinance A/B/C：yfinance dup-row 崩溃 gate emit)
+
+- **Verdict/Action**: FAIL（未提交）。overextension 接线整读 clean（stage/OHLCV sidecar/map 穿进选股、no-map 反控在）；yfinance A 引擎 + C 接线整读 clean（provider_health 只读 fmp/sec 不碰 yfinance、consumer 缺→中性、yfinance 替 FMP 不双计、look-ahead/类型 fail-closed）。**但 yfinance-B fetch runner 有 Required 缺陷**：Yahoo 常见重复评级行（同 date/firm/action/to/from）→ runner `_normalized_source_rows` 不去重、coverage=full/ok → 引擎 `resolve_yfinance_grade_actions` dup-identity 检查 raise（engine:313）→ runner:602 re-raise `YFinanceGradesFetchError`（在 `_fetch_one` try 之外、未中性化）→ capstone stage 异常 → **整跑崩、no emit**。违反「yfinance 非关键、malformed→中性、绝不 gate emit」。
+- **Required**: 修 yfinance-B——单票重复行不得崩整跑：① runner `_normalized_source_rows` 去重（对齐 resolver `_DUPLICATE_IDENTITY`）；或 ② resolve 调用点 catch `YFinanceGradesError` → 该票降级中性/excluded、stage 仍写两输出、绝不 raise。加复现测试（dup 行→emit 不崩、该票中性）。次要并入：`_load_client` 只 catch `ModuleNotFoundError`，broken install 其它 `ImportError` 会漏出崩→放宽到 `ImportError`。overextension 部分无 Required。
+- **Verify**: `review-evidence:not_available`。整读 yfinance A/B/C + overextension diff；§6a 独立对抗 agent 复核确认 dup-row-gate-emit（engine:313 raise→runner:602 re-raise→capstone 崩），其余不变式（授权无自铸/无自动装/dry-run 默认、secret+raw hygiene、provider_health 隔离、look-ahead）PASS。未跑 full pack（FAIL on §6a 缺陷先于全量；dup 路径无测试覆盖、pack 绿不反映）；无 provider/network 调用。
+- **Next**: Codex：修 yfinance-B（dup-row→中性、别 gate emit）+ import-catch 放宽；修后交 Claude 合并复审+提交。
+
+## 2026-07-10 - Codex complete, awaiting Claude review (US-short: yfinance grades source + §4.2 non-critical integration)
+
+- **Verdict/Action**: Complete and uncommitted. Knife A built `resolve_yfinance_grade_actions` with machine-frozen binding; Knife B built the gated yfinance grades fetch runner; Knife C wired optional yfinance resolved actions into source-packet/data_context and capstone as a non-critical grades source. No live yfinance fetch, install, or network call was run.
+- **Required**: None known inside the yfinance A/B/C implementation after self-review. yfinance grades remain low-trust/non-official: missing/down/dependency-missing/429/crumb => neutral/down and never gate emit or provider_health. Commit sequencing must respect the adjacent Claude overextension scope FAIL below: keep freshday summary out, and preserve independent review/commit slices by resolving/staging the overextension base before yfinance A->B->C as needed.
+- **Verify**: Focused A/B/C pack 111 OK; route/doc guards 25 OK; py_compile OK; `git diff --check` OK except Git LF->CRLF working-copy warnings. §6a adversarial review first found `run_default(dry_run=False)` self-authorized; Codex fixed it with an explicit authorization parameter + regression test; §6a recheck PASS.
+- **Next**: Claude Code: review yfinance-grades A/B/C after the overextension split order is made coherent; PASS then commit the yfinance slice in order.
+
+## 2026-07-10 — Claude 审查 FAIL (US-short overextension capstone 集成：与 yfinance 建源纠缠、不可分提交)
+
+- **Verdict/Action**: FAIL（scope，未提交、未做正确性深审——scope 先破）。working tree 把 overextension capstone 接线 + 完整 yfinance 建源 A/B/C 纠缠进共享文件（capstone/stages/run_origin/data_context/pass2）+ 8 个未跟踪 yfinance 文件。Codex「只提交 overextension、排除未跟踪 yfinance」**不可行**：tracked `stages.py` 顶层 eager-import 未跟踪的 `us_short_yfinance_grades_fetch`、`default_pipeline` 含 `yfinance_grades_fetch` 阶段、`run_origin._REQUIRED_PRE_BRIDGE_STAGES` 含该阶段 → overext-only 提交必 ImportError。
+- **Required**: 拆成**顺序**刀（非并轮零重叠——两条接线都碰 capstone/data_context、天生顺序）：① 只 overextension 接线（从共享文件剥掉 yfinance 阶段/import/ctx-path/pass2 穿线）→审→提交；② yfinance-A 引擎+binding+schema+tests；③ yfinance-B live-fetch runner（**§6a 必起**、新 gated provider fetch）；④ yfinance-C 接线（在已提交 overext 之上）。各刀各自 register+SESSION_LOG block。`R-USSHORT-BATCH5-OVEREXTENSION-WIRING-INCOMPLETE` 保持 OPEN（未提交、勿标 resolved）。
+- **Verify**: `review-evidence:not_available`。冻结 scope manifest + 整读 capstone/stages/run_origin/data_context 关键 diff；实证 overext-only 提交必崩（`stages.py` 顶层 import 未跟踪 yfinance runner + pipeline/受体链引用）。未跑 full pack（FAIL on scope 先于正确性验证）；无 provider/network 调用。
+- **Next**: Codex：拆分顺序刀（先 overextension、再 yfinance A→B→C），勿混提交。
+
+## 2026-07-10 — Codex complete, awaiting Claude review (US-short: overextension capstone wiring)
+
+- **Verdict/Action**: Complete and uncommitted; capstone reuses the momentum grouped-window OHLCV sidecar, runs the offline producer, and source-binds its map into official data-context components.
+- **Required**: None; `R-USSHORT-BATCH5-OVEREXTENSION-WIRING-INCOMPLETE` is resolved. Grades emit availability remains a separate item.
+- **Verify**: Focused 70 OK; related 263 OK; tracked US-short pack 4095 OK (1 skipped) after excluding the committed yfinance probe's self-isolation test, whose expected-absent summary conflicts with its current live-run artifact; doc guard 60 OK. Fake-provider funnel to bridge covers chasing theme strip plus warning state in action_table and machine_record; no real provider/network call.
+- **Pre-Codex self-review**: A-F checked; stage/receipt/source-manifest/data-context/official-output chain reviewed; default no-OHLCV momentum no-op remains under its fetch regression; no-map reverse control covered. Lightweight agent timed out once, was restarted once, then PASS; final diff/encoding checks clean.
+- **Next**: Claude Code: review this knife; PASS then commit only this knife and exclude the freshday summary plus current untracked yfinance binding/fetch work.
+
 ## 2026-07-10 — Claude 执行+提交 (US-short yfinance grades 探针 live 跑：worth_building)
 
 - **Verdict/Action**: 执行+提交（用户直接授权「直接跑我授权」→ Claude 装 yfinance 1.4.1 + live 跑刀2 探针 44 只 + 提交 counts-only 证据、未 push）。首次 yfinance live 抓取（SR-PROVIDER-001 per-execution，ToS-灰/低信任）。

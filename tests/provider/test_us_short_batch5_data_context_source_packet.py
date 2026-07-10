@@ -16,10 +16,12 @@ from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import resolve_news_events  # noqa: E402
 from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
+from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     SourcePacketError,
     run_packet,
     run_preflight,
+    source_packet_input_manifest,
 )
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
@@ -59,8 +61,10 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "candidate": STATE_DIR / f"{self.slug}_candidate.json",
             "momentum": STATE_DIR / f"{self.slug}_momentum.json",
             "theme": STATE_DIR / f"{self.slug}_theme.json",
+            "overextension": STATE_DIR / f"{self.slug}_overextension.json",
             "offering": STATE_DIR / f"{self.slug}_offering.json",
             "analyst": STATE_DIR / f"{self.slug}_analyst.json",
+            "yfinance": STATE_DIR / f"{self.slug}_yfinance_analyst.json",
             "news": STATE_DIR / f"{self.slug}_news.json",
             "output": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
@@ -175,6 +179,39 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         }
         return _write_json(self.paths["packet"], packet)
 
+    def _yfinance_source(self, records, *, ticker="AAPL", coverage="full", parser="ok"):
+        return {
+            "records": list(records),
+            "provenance": {
+                "provider_id": "yfinance",
+                "endpoint_or_filing_type": "upgrades_downgrades",
+                "source_as_of": _GRADE_AS_OF,
+                "observed_at": "2026-06-15T08:00:00-04:00",
+                "coverage_status": coverage,
+                "parser_status": parser,
+                "lineage_ref": f"yfinance:upgrades_downgrades:{_GRADE_AS_OF}#{ticker.lower()}",
+            },
+        }
+
+    def _yfinance_row(
+        self,
+        *,
+        ticker="AAPL",
+        date="2026-06-10",
+        action="down",
+        firm="BankA",
+        to_grade="Sell",
+        from_grade="Hold",
+    ):
+        return {
+            "symbol": ticker,
+            "GradeDate": date,
+            "Action": action,
+            "Firm": firm,
+            "ToGrade": to_grade,
+            "FromGrade": from_grade,
+        }
+
     def _packet_payload(self):
         return json.loads(self.paths["packet"].read_text(encoding="utf-8"))
 
@@ -224,6 +261,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         self.assertEqual(set(components), {"data_context", "per_ticker_analysis", "run_provenance"})
         self.assertEqual(set(components["per_ticker_analysis"]), {"AAPL", "MSFT"})
+        self.assertNotIn("overextension", components["per_ticker_analysis"]["AAPL"])
         self.assertEqual(
             components["per_ticker_analysis"]["AAPL"]["row_source"],
             "top15_candidate",
@@ -232,6 +270,114 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertIn(
             {"role": "offering_audit_source", "path": _rel(self.paths["offering"])},
             source_refs,
+        )
+
+    def test_optional_overextension_projection_reaches_selection_analysis_and_source_binding(self):
+        _write_json(
+            self.paths["offering"],
+            resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    "AAPL": _offering_record([]),
+                    "MSFT": _offering_record([]),
+                    "JPM": _offering_record([], coverage="partial"),
+                },
+            ),
+        )
+        _write_json(
+            self.paths["overextension"],
+            {
+                "overextension_by_ticker": {
+                    "AAPL": {
+                        "overextension_state": "chasing_extreme",
+                        "strips_theme_score": True,
+                        "execution_flags": {},
+                    },
+                    "MSFT": {
+                        "overextension_state": "warning",
+                        "strips_theme_score": False,
+                        "execution_flags": {
+                            "force_pullback": True,
+                            "reduce_size": True,
+                            "raise_rr_gate": True,
+                        },
+                    },
+                    "JPM": {
+                        "overextension_state": "none",
+                        "strips_theme_score": False,
+                        "execution_flags": {},
+                    },
+                },
+                "disposition_counts": {"scored": 3, "insufficient_data": 0},
+                "scored_count": 3,
+                "target_count": 3,
+            },
+        )
+        packet = self._packet_payload()
+        packet["paths"]["overextension_projection_path"] = _rel(self.paths["overextension"])
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.paths["packet"], packet)
+
+        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 9)
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        selection = components["data_context"]["selection_inputs"]["per_ticker"]
+        rows = components["per_ticker_analysis"]
+        self.assertEqual(selection["AAPL"]["theme_momentum_score"], 0.0)
+        self.assertEqual(rows["AAPL"]["scoring_profile"], "theme_off")
+        self.assertEqual(rows["AAPL"]["overextension"]["overextension_state"], "chasing_extreme")
+        self.assertEqual(rows["MSFT"]["overextension"]["overextension_state"], "warning")
+        self.assertTrue(rows["MSFT"]["overextension"]["execution_flags"]["raise_rr_gate"])
+        source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
+        self.assertIn(
+            {"role": "overextension_projection", "path": _rel(self.paths["overextension"])},
+            source_refs,
+        )
+        self.assertIn(
+            "overextension_projection_path",
+            {field for field, _, _ in source_packet_input_manifest(self.packet)},
+        )
+
+    def test_optional_yfinance_grade_actions_prefer_yfinance_and_keep_missing_neutral(self):
+        _write_json(
+            self.paths["offering"],
+            resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    "AAPL": _offering_record([]),
+                    "MSFT": _offering_record([]),
+                    "JPM": _offering_record([], coverage="partial"),
+                },
+            ),
+        )
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={
+                    "AAPL": self._yfinance_source([], coverage="missing", parser="failed"),
+                    "MSFT": self._yfinance_source([], ticker="MSFT"),
+                },
+            ),
+        )
+        packet = self._packet_payload()
+        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        _write_json(self.paths["packet"], packet)
+
+        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 9)
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        selection = components["data_context"]["selection_inputs"]["per_ticker"]
+        self.assertAlmostEqual(selection["AAPL"]["core_score"], 51.5)
+        source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
+        self.assertIn({"role": "yfinance_grade_actions", "path": _rel(self.paths["yfinance"])}, source_refs)
+        self.assertNotIn({"role": "analyst_grade_actions", "path": _rel(self.paths["analyst"])}, source_refs)
+        self.assertIn(
+            "yfinance_grade_actions_path",
+            {field for field, _, _ in source_packet_input_manifest(self.packet)},
         )
 
     def test_output_path_must_be_gitignored_state_file(self):

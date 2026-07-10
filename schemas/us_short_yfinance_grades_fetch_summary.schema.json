@@ -1,0 +1,212 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_yfinance_grades_fetch_summary.schema.json",
+  "title": "US-short yfinance grades gated fetch summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "authorization_ref",
+    "generated_at",
+    "scope",
+    "decision_clock",
+    "preflight_gate",
+    "execution",
+    "source_artifacts",
+    "storage",
+    "prohibited_claims",
+    "limitations"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_yfinance_grades_fetch_summary" },
+    "schema_version": { "const": "1.0.0" },
+    "authorization_ref": { "const": "user_chat_20260710_us_short_yfinance_grades_fetch" },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "market",
+        "route",
+        "batch",
+        "purpose",
+        "status",
+        "provider_status",
+        "network_access_performed",
+        "yfinance_import_attempted",
+        "provider_calls_performed",
+        "raw_payload_storage_performed",
+        "source_package_written",
+        "resolved_actions_written",
+        "summary_written",
+        "datahub_consumption_performed",
+        "production_storage_performed",
+        "emit_gate_or_provider_health_criticality_claimed",
+        "ship_gate_or_live_normalized_evidence_claimed",
+        "broker_or_order_execution_performed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "market": { "const": "US" },
+        "route": { "const": "US-short" },
+        "batch": { "const": "batch5" },
+        "purpose": { "const": "yfinance_grades_noncritical_fetch" },
+        "status": {
+          "enum": [
+            "completed",
+            "completed_with_fetch_errors",
+            "halted_rate_limit_or_crumb_failure",
+            "dependency_missing"
+          ]
+        },
+        "provider_status": { "enum": ["ok", "down"] },
+        "network_access_performed": { "type": "boolean" },
+        "yfinance_import_attempted": { "const": true },
+        "provider_calls_performed": { "type": "boolean" },
+        "raw_payload_storage_performed": { "type": "boolean" },
+        "source_package_written": { "const": true },
+        "resolved_actions_written": { "const": true },
+        "summary_written": { "const": true },
+        "datahub_consumption_performed": { "const": false },
+        "production_storage_performed": { "const": false },
+        "emit_gate_or_provider_health_criticality_claimed": { "const": false },
+        "ship_gate_or_live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "decision_clock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_decision_date", "source_as_of", "observed_at"],
+      "properties": {
+        "expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "observed_at": { "type": "string", "minLength": 1 }
+      }
+    },
+    "preflight_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preflight_summary_path", "preflight_status", "target_count", "target_symbols_in_summary"],
+      "properties": {
+        "preflight_summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_batch5_full_candidate_pass2_preflight_summary_20260706\\.json|provider_samples/us_short_batch5_full_candidate_pass2_preflight_20260706/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "preflight_status": { "const": "ready_for_reviewed_live_execution" },
+        "target_count": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "target_symbols_in_summary": { "const": false }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "attempted_symbol_count",
+        "successful_symbol_count",
+        "parser_failed_symbol_count",
+        "fetch_error_count",
+        "rate_limit_or_crumb_failure_count",
+        "dependency_missing",
+        "first_failure_symbol_index",
+        "pace_seconds"
+      ],
+      "properties": {
+        "attempted_symbol_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "successful_symbol_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "parser_failed_symbol_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "fetch_error_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "rate_limit_or_crumb_failure_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
+        "dependency_missing": { "type": "boolean" },
+        "first_failure_symbol_index": { "type": ["integer", "null"], "minimum": 1, "maximum": 20000 },
+        "pace_seconds": { "type": "number", "minimum": 0, "maximum": 60 }
+      }
+    },
+    "source_artifacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_package_path",
+        "resolved_actions_path",
+        "source_package_gitignored",
+        "resolved_actions_gitignored",
+        "package_ticker_names_tracked",
+        "resolved_shape"
+      ],
+      "properties": {
+        "source_package_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$", "not": { "pattern": "\\.\\." } },
+        "resolved_actions_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$", "not": { "pattern": "\\.\\." } },
+        "source_package_gitignored": { "const": true },
+        "resolved_actions_gitignored": { "const": true },
+        "package_ticker_names_tracked": { "const": false },
+        "resolved_shape": { "const": "fmp_compatible_resolved_grade_actions" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "raw_payload_root",
+        "raw_payload_root_gitignored",
+        "tracked_summary_path",
+        "tracked_summary_contains_tickers",
+        "tracked_summary_contains_raw_rows",
+        "tracked_summary_contains_raw_payload",
+        "tracked_summary_contains_request_urls",
+        "tracked_summary_contains_secrets"
+      ],
+      "properties": {
+        "raw_payload_root": {
+          "type": "string",
+          "pattern": "^provider_samples/us_short_yfinance_grades_fetch_20260710/.+",
+          "not": { "pattern": "\\.\\." }
+        },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_path": {
+          "type": "string",
+          "pattern": "^(docs/us_short_yfinance_grades_fetch_summary_20260710\\.json|provider_samples/us_short_yfinance_grades_fetch_20260710/.+\\.json)$",
+          "not": { "pattern": "\\.\\." }
+        },
+        "tracked_summary_contains_tickers": { "const": false },
+        "tracked_summary_contains_raw_rows": { "const": false },
+        "tracked_summary_contains_raw_payload": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_secrets": { "const": false }
+      }
+    },
+    "prohibited_claims": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_selected",
+        "critical_provider_health_source",
+        "emit_gate_source",
+        "datahub_consumed",
+        "production_readiness_claimed",
+        "ship_gate_evidence_claimed",
+        "live_normalized_evidence_claimed",
+        "broker_or_order_execution_performed",
+        "a_share_crossing_performed"
+      ],
+      "properties": {
+        "provider_selected": { "const": false },
+        "critical_provider_health_source": { "const": false },
+        "emit_gate_source": { "const": false },
+        "datahub_consumed": { "const": false },
+        "production_readiness_claimed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "live_normalized_evidence_claimed": { "const": false },
+        "broker_or_order_execution_performed": { "const": false },
+        "a_share_crossing_performed": { "const": false }
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

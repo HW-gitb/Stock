@@ -1,0 +1,63 @@
+{
+  "binding_name": "us_short_yfinance_analyst_grades_binding",
+  "binding_version": "1.0.0",
+  "design_authority": "docs/us_short_system_design.md §4.2 analyst-revision component / §5.2 collective-downgrade basis / §3 low-trust source boundary / §18.2 schema-first consumption",
+  "authorization_note": "OFFLINE contract shape only. Live yfinance fetch is separately gated and low-trust. yfinance analyst grades may only feed the advisory analyst-grades component; it never gates weekly emit, provider-health criticality, production readiness, DataHub, or ship-gate evidence.",
+  "provider_id": "yfinance",
+  "endpoint_or_filing_type": "upgrades_downgrades",
+  "decision_timezone": "America/New_York",
+  "recency_window_days": 90,
+  "recency_window_basis": "calendar days before as_of. This is the same reviewed recent-analyst-sentiment prior used by the FMP grades resolver and is not validated alpha.",
+  "direction_map": {
+    "up": "up",
+    "down": "down",
+    "_default": "neutral"
+  },
+  "direction_note": "Use yfinance's own Action field only: up -> up, down -> down, every other action including init/main/reit/unknown -> neutral. Do not rank ToGrade/FromGrade strings.",
+  "record_fields_required": ["GradeDate", "Action", "Firm", "ToGrade", "FromGrade"],
+  "summary_contract": {
+    "over": "the recent-window fit records only",
+    "fields": ["upgrades", "downgrades", "neutrals", "net", "distinct_firms", "distinct_downgrading_firms", "window_days"],
+    "net": "upgrades - downgrades",
+    "note": "The output shape is byte-compatible with engine.us_short_fmp_analyst_grades.resolve_analyst_grade_actions: analyst_actions_recent drives §4.2 and distinct_downgrading_firms drives §5.2."
+  },
+  "pit_rule": "Each GradeDate must be a real YYYY-MM-DD <= observed_at ET date <= source_as_of <= as_of. A future-dated row is excluded and counted; an older-than-window row is counted out-of-window; malformed dates fail closed.",
+  "provenance_fields": ["provider_id", "endpoint_or_filing_type", "source_as_of", "observed_at", "coverage_status", "parser_status", "lineage_ref"],
+  "coverage_status_allowed": ["full", "partial", "missing"],
+  "parser_status_allowed": ["ok", "degraded", "failed"],
+  "emission_fitness": {
+    "coverage_status": "full",
+    "parser_status": "ok",
+    "note": "Only a full-coverage clean-parse ticker emits a scored analyst signal. Missing/partial/failed/degraded rows become neutral excluded coverage and must not block emit."
+  },
+  "date_format": "as_of / GradeDate = YYYY-MM-DD (ASCII, real calendar); observed_at = tz-aware RFC3339 date-time",
+  "consumer_note": "Produces the same resolved grade actions shape as the FMP resolver. Downstream consumers stay provider-agnostic and must not combine yfinance and FMP rows for the same ticker.",
+  "pit_clock_contract": {
+    "observed_at_cutoff_operator": "strictly_before",
+    "observed_at_cutoff_reference": "decision_session_open",
+    "chronology_order": ["record_date", "observed_at", "source_as_of", "as_of"],
+    "chronology_relation": "non_decreasing"
+  },
+  "duplicate_policy": {
+    "source_row_identity": ["record_date", "firm", "action", "to_grade", "from_grade"],
+    "firm_identity_normalization": "strip_and_casefold",
+    "on_duplicate": "reject",
+    "note": "Firm whitespace and case variants are one firm; a repeated composite row fails closed instead of inflating net or distinct-firm counts."
+  },
+  "checked_empty_disposition": "checked_no_recent_activity",
+  "checked_empty_note": "A full/ok ticker with zero in-window rows emits checked_no_recent_activity so checked-neutral is distinct from never queried.",
+  "lineage_ref_format": {
+    "structure": "provider_id:endpoint_or_filing_type:source_as_of#record_id",
+    "record_id_rule": "nonempty_ascii_no_colon_hash_whitespace"
+  },
+  "authorization_boundary": {
+    "live_fetch": false,
+    "network": false,
+    "raw_capture": false,
+    "datahub": false,
+    "production": false,
+    "ship_gate": false,
+    "emit_gate": false,
+    "critical_provider_health": false
+  }
+}

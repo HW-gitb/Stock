@@ -25,8 +25,8 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 )
 
 _STAGE_NAMES = [
-    "universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
-    "projection_inputs", "pass2_preflight", "pass2_fetch", "weekly_bridge",
+    "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "weekly_bridge",
 ]
 
 
@@ -81,7 +81,7 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertEqual(plan["price_basis_date"], "20260708")   # latest settled session
         self.assertEqual([s["name"] for s in plan["stages"]], _STAGE_NAMES)
         self.assertEqual(plan["gated_stages_need_authorization"],
-                         ["universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch"])
+                         ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch"])
 
     def test_intraday_now_et_fails_closed(self):
         # 07-09 11:00 ET is inside the RTH session [09:30, 16:00) -> §2.1 dead zone -> no canonical, no run.
@@ -127,12 +127,14 @@ class CapstoneFakeChainTest(unittest.TestCase):
         def outs_for(name):
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
-                "momentum_fetch": lambda c: [c.series_packet_path],
+                "momentum_fetch": lambda c: [c.series_packet_path, c.ohlcv_series_packet_path],
+                "overextension_producer": lambda c: [c.overextension_projection_path],
                 "momentum_producer": lambda c: [c.momentum_projection_path],
                 "sic_fetch": lambda c: [c.classification_packet_path],
                 "theme_producer": lambda c: [c.theme_projection_path],
                 "projection_inputs": lambda c: [c.merged_momentum_path, c.merged_theme_path],
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
+                "yfinance_grades_fetch": lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
                 "pass2_fetch": lambda c: [c.source_packet_path, c.context_components_path],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
@@ -144,7 +146,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         stages = []
         for name in _STAGE_NAMES:
             outs = outs_for(name)
-            gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+            gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch")
 
             def make_run(nm, outfn):
                 def run(ctx):
@@ -654,11 +656,12 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
     false (never self-assert True); the bridge binds research_live to that per-execution authorization; and the generic
     batch4 / e2e entry points (CLI + function) cannot select research_live for an arbitrary fixture packet."""
 
-    # the 4 gated + 1 preflight adapters that previously hardcoded confirm_user_authorization=True
+    # gated adapters plus preflight that previously hardcoded confirm_user_authorization=True
     _WRAPPED = {
         "run_universe": ("_universe", "run_fetch"),
         "run_momentum_fetch": ("_mom_fetch", "run_fetch"),
         "run_sic_fetch": ("_sic", "run_fetch"),
+        "run_yfinance_grades_fetch": ("_yfinance_grades", "run_yfinance_grades_fetch"),
         "run_pass2_fetch": ("_pass2", "run_full_candidate_live_source_packet"),
         "run_pass2_preflight": ("_preflight", "run_preflight"),
     }
@@ -936,10 +939,12 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
 
         checks = [
             (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization"]),
-            (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
+            (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds"]),
+            (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
+            (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._proj.run_packet, ["candidate_artifact_path", "expected_decision_date", "source_momentum_projection_path", "source_theme_projection_path", "output_momentum_projection_path", "output_theme_projection_path", "summary_path", "generated_at"]),
             (st._preflight.run_preflight, ["candidate_artifact_path", "expected_decision_date", "momentum_projection_path", "theme_projection_path", "summary_path", "confirm_user_authorization", "generated_at"]),
@@ -949,6 +954,39 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             params = set(inspect.signature(fn).parameters)
             bad = [k for k in kwargs if k not in params]
             self.assertEqual(bad, [], f"{fn.__module__}.{fn.__name__} rejects kwargs {bad}")
+
+    def test_capstone_adapters_thread_same_window_ohlcv_to_projection_and_pass2(self):
+        from runners import us_short_weekly_capstone_stages as st
+        from runners.us_short_weekly_capstone import resolve_capstone_context
+
+        with tempfile.TemporaryDirectory() as root:
+            root_path = Path(root)
+            ctx = resolve_capstone_context(
+                now_et=datetime(2026, 7, 9, 8, 0, 0),
+                private_root=root_path / "private",
+                batch4_template_path=root_path / "template.json",
+                account_state_path=root_path / "account.json",
+                confirm_user_authorization=True,
+                state_dir=root_path / "state",
+                sample_root=root_path,
+            )
+            ctx.preflight_summary_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.preflight_summary_path.write_text(
+                json.dumps({"endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 16}}),
+                encoding="utf-8",
+            )
+            with mock.patch.object(st._mom_fetch, "run_fetch", return_value={}) as momentum_fetch, \
+                 mock.patch.object(st._overextension, "run_packet", return_value={}) as overextension, \
+                 mock.patch.object(st._pass2, "run_full_candidate_live_source_packet", return_value={}) as pass2:
+                st.run_momentum_fetch(ctx)
+                st.run_overextension_producer(ctx)
+                st.run_pass2_fetch(ctx)
+
+            self.assertEqual(momentum_fetch.call_args.kwargs["ohlcv_series_packet_path"], ctx.ohlcv_series_packet_path)
+            self.assertEqual(overextension.call_args.kwargs["series_packet_path"], ctx.ohlcv_series_packet_path)
+            self.assertEqual(overextension.call_args.kwargs["output_projection_path"], ctx.overextension_projection_path)
+            self.assertEqual(pass2.call_args.kwargs["overextension_projection_path"], ctx.overextension_projection_path)
+            self.assertEqual(pass2.call_args.kwargs["yfinance_grade_actions_path"], ctx.yfinance_grade_actions_path)
 
 
 class CapstoneStageSummaryPathTest(unittest.TestCase):
@@ -974,9 +1012,11 @@ class CapstoneStageSummaryPathTest(unittest.TestCase):
         validators = {
             "momentum_fetch": st._mom_fetch._validate_summary_path,
             "momentum_producer": st._mom_prod._validate_summary_path,
+            "overextension_producer": st._overextension._validate_summary_path,
             "sic_classification": st._sic._validate_summary_path,
             "theme_producer": st._theme._validate_summary_path,
             "projection_inputs": st._proj._validate_summary_path,
+            "yfinance_grades_fetch": st._yfinance_grades._validate_summary_path,
             "pass2": st._pass2._validate_summary_path,
         }
         self.assertEqual(set(targets), set(validators))   # every routed summary has a validator checked

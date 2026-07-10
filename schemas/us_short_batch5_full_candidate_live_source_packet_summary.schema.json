@@ -299,6 +299,15 @@
         "candidate_subset_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "offering_audit_source_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "analyst_grade_actions_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "yfinance_grade_actions_path": {
+          "anyOf": [
+            { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+            { "type": "null" }
+          ]
+        },
+        "analyst_grade_actions_consumed_from": {
+          "enum": ["fmp_analyst_grade_actions", "yfinance_grade_actions"]
+        },
         "massive_news_events_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "corporate_action_capture_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
         "momentum_projection_path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
@@ -354,7 +363,7 @@
       "properties": {
         "provider_selected": { "const": false },
         "full_market_download_performed": { "const": false },
-        "yfinance_used": { "const": false },
+        "yfinance_used": { "type": "boolean" },
         "paid_access_used": { "const": false },
         "datahub_consumed": { "const": false },
         "production_readiness_claimed": { "const": false },

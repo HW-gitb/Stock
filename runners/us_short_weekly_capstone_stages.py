@@ -23,10 +23,12 @@ from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
 from runners import us_short_batch5_full_candidate_projection_inputs as _proj
 from runners import us_short_batch5_full_universe_momentum_fetch as _mom_fetch
 from runners import us_short_batch5_full_universe_momentum_producer as _mom_prod
+from runners import us_short_batch5_full_universe_overextension_producer as _overextension
 from runners import us_short_batch5_full_universe_sec_sic_classification_fetch as _sic
 from runners import us_short_batch5_full_universe_theme_producer as _theme
 from runners import us_short_batch5_to_batch4_weekend_e2e as _bridge
 from runners import us_short_universe_fetch as _universe
+from runners import us_short_yfinance_grades_fetch as _yfinance_grades
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -44,9 +46,11 @@ def _stage_summary_targets(ctx) -> dict[str, Path]:
     return {
         "momentum_fetch": _p(_mom_fetch.SUMMARY_SAMPLE_REL_ROOT, "momentum_fetch"),
         "momentum_producer": _p(_mom_prod.SAMPLE_REL_ROOT, "momentum_producer"),
+        "overextension_producer": _p(_overextension.SAMPLE_REL_ROOT, "overextension_producer"),
         "sic_classification": _p(_sic.SUMMARY_SAMPLE_REL_ROOT, "sic_classification"),
         "theme_producer": _p(_theme.SAMPLE_REL_ROOT, "theme_producer"),
         "projection_inputs": _p(_proj.SAMPLE_REL_ROOT, "projection_inputs"),
+        "yfinance_grades_fetch": _p(_yfinance_grades.RAW_REL_ROOT, "yfinance_grades_fetch"),
         "pass2": _p(_pass2.RAW_SAMPLE_REL_ROOT, "pass2"),
     }
 
@@ -81,6 +85,7 @@ def run_momentum_fetch(ctx) -> dict[str, Any]:
     return _mom_fetch.run_fetch(
         candidate_artifact_path=ctx.candidate_path,
         series_packet_path=ctx.series_packet_path,
+        ohlcv_series_packet_path=ctx.ohlcv_series_packet_path,
         summary_path=_stage_summary_targets(ctx)["momentum_fetch"],
         generated_at=ctx.generated_at,
         confirm_user_authorization=ctx.confirm_user_authorization,
@@ -106,6 +111,8 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         source_artifact_prefix=ctx.source_artifact_prefix,
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
+        overextension_projection_path=ctx.overextension_projection_path,
+        yfinance_grade_actions_path=ctx.yfinance_grade_actions_path,
         summary_path=_stage_summary_targets(ctx)["pass2"],
         confirm_user_authorization=ctx.confirm_user_authorization,
         run_data_context=True,
@@ -118,6 +125,21 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
     return summary
 
 
+def run_yfinance_grades_fetch(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
+    return _yfinance_grades.run_yfinance_grades_fetch(
+        preflight_summary_path=ctx.preflight_summary_path,
+        output_source_package_path=ctx.yfinance_grade_source_package_path,
+        output_resolved_actions_path=ctx.yfinance_grade_actions_path,
+        summary_path=_stage_summary_targets(ctx)["yfinance_grades_fetch"],
+        raw_root=ctx.sample_root / _yfinance_grades.RAW_REL_ROOT / f"us_short_batch5_capstone_{ctx.decision_date}_raw",
+        confirm_user_authorization=ctx.confirm_user_authorization,
+        generated_at=ctx.generated_at,
+        observed_at=ctx.observed_at,
+        pace_seconds=ctx.provider_pace_seconds,
+    )
+
+
 # --- OFFLINE stages (pure / local; no network) ---
 
 def run_momentum_producer(ctx) -> dict[str, Any]:
@@ -126,6 +148,16 @@ def run_momentum_producer(ctx) -> dict[str, Any]:
         series_packet_path=ctx.series_packet_path,
         output_projection_path=ctx.momentum_projection_path,
         summary_path=_stage_summary_targets(ctx)["momentum_producer"],
+        generated_at=ctx.generated_at,
+    )
+
+
+def run_overextension_producer(ctx) -> dict[str, Any]:
+    return _overextension.run_packet(
+        candidate_artifact_path=ctx.candidate_path,
+        series_packet_path=ctx.ohlcv_series_packet_path,
+        output_projection_path=ctx.overextension_projection_path,
+        summary_path=_stage_summary_targets(ctx)["overextension_producer"],
         generated_at=ctx.generated_at,
     )
 

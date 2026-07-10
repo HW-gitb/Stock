@@ -105,8 +105,16 @@ class CapstoneContext:
         return self._s(f"us_short_batch5_full_universe_momentum_series_{self.price_basis_date}_packet.json")
 
     @property
+    def ohlcv_series_packet_path(self) -> Path:
+        return self._s(f"us_short_batch5_full_universe_ohlcv_series_{self.price_basis_date}_packet.json")
+
+    @property
     def momentum_projection_path(self) -> Path:
         return self._s(f"us_short_batch5_full_universe_momentum_{self.price_basis_date}_momentum.json")
+
+    @property
+    def overextension_projection_path(self) -> Path:
+        return self._s(f"us_short_batch5_full_universe_overextension_{self.price_basis_date}_overextension.json")
 
     @property
     def classification_packet_path(self) -> Path:
@@ -130,6 +138,14 @@ class CapstoneContext:
         # provider_samples/ root (both runners' allowlists accept it), NOT under state/us_short/ (which the runners
         # reject). Gitignored per-run sidecar, decision-date-keyed.
         return self.sample_root / _PREFLIGHT_SAMPLE_REL_ROOT / f"us_short_batch5_capstone_pass2_preflight_{self.decision_date}_summary.json"
+
+    @property
+    def yfinance_grade_source_package_path(self) -> Path:
+        return self._s(f"us_short_batch5_capstone_{self.decision_date}_yfinance_grade_source_package.json")
+
+    @property
+    def yfinance_grade_actions_path(self) -> Path:
+        return self._s(f"us_short_batch5_capstone_{self.decision_date}_yfinance_grade_actions.json")
 
     @property
     def source_artifact_prefix(self) -> Path:
@@ -219,19 +235,26 @@ class Stage:
 
 
 def default_pipeline() -> list[Stage]:
-    """The 9-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
+    """The 11-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
     return [
         Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe),
-        Stage("momentum_fetch", True, lambda c: [c.candidate_path], lambda c: [c.series_packet_path], st.run_momentum_fetch),
+        Stage("momentum_fetch", True, lambda c: [c.candidate_path],
+              lambda c: [c.series_packet_path, c.ohlcv_series_packet_path], st.run_momentum_fetch),
+        Stage("overextension_producer", False, lambda c: [c.candidate_path, c.ohlcv_series_packet_path],
+              lambda c: [c.overextension_projection_path], st.run_overextension_producer),
         Stage("momentum_producer", False, lambda c: [c.candidate_path, c.series_packet_path], lambda c: [c.momentum_projection_path], st.run_momentum_producer),
         Stage("sic_fetch", True, lambda c: [c.candidate_path], lambda c: [c.classification_packet_path], st.run_sic_fetch),
         Stage("theme_producer", False, lambda c: [c.candidate_path, c.series_packet_path, c.classification_packet_path], lambda c: [c.theme_projection_path], st.run_theme_producer),
         Stage("projection_inputs", False, lambda c: [c.momentum_projection_path, c.theme_projection_path], lambda c: [c.merged_momentum_path, c.merged_theme_path], st.run_projection_inputs),
         Stage("pass2_preflight", False, lambda c: [c.merged_momentum_path, c.merged_theme_path], lambda c: [c.preflight_summary_path], st.run_pass2_preflight),
-        Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path], lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
+        Stage("yfinance_grades_fetch", True, lambda c: [c.preflight_summary_path],
+              lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
+              st.run_yfinance_grades_fetch),
+        Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
+              lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
     ]
 

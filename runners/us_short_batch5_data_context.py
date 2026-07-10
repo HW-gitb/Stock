@@ -64,9 +64,10 @@ SOURCE_REF_PATH_KEYS = (
     "massive_news_events_path",
     "catalyst_governance_path",
 )
+OPTIONAL_SOURCE_REF_PATH_KEYS = ("overextension_projection_path", "yfinance_grade_actions_path")
 _SOURCE_REF_ROLE_BY_PATH_KEY = {
     key: key[:-5] if key.endswith("_path") else key
-    for key in SOURCE_REF_PATH_KEYS
+    for key in (*SOURCE_REF_PATH_KEYS, *OPTIONAL_SOURCE_REF_PATH_KEYS)
 }
 _FAMILY_SOURCE_REF_ROLES = {
     "universe": ("candidate_artifact", "eligibility_governance"),
@@ -131,10 +132,16 @@ def _finite_score(value: Any, *, where: str) -> float:
 def _validated_source_ref_paths(value: Any) -> dict[str, str]:
     if type(value) is not dict:
         _fail("source_ref_paths must be an exact dict")
-    if set(value) != set(SOURCE_REF_PATH_KEYS):
-        _fail(f"source_ref_paths must contain exactly {sorted(SOURCE_REF_PATH_KEYS)}")
+    allowed = set(SOURCE_REF_PATH_KEYS) | set(OPTIONAL_SOURCE_REF_PATH_KEYS)
+    if not set(SOURCE_REF_PATH_KEYS) <= set(value) or not set(value) <= allowed:
+        _fail(
+            "source_ref_paths must contain all required keys and only optional supported keys: "
+            f"required={sorted(SOURCE_REF_PATH_KEYS)} optional={sorted(OPTIONAL_SOURCE_REF_PATH_KEYS)}"
+        )
     out: dict[str, str] = {}
-    for path_key in SOURCE_REF_PATH_KEYS:
+    for path_key in (*SOURCE_REF_PATH_KEYS, *OPTIONAL_SOURCE_REF_PATH_KEYS):
+        if path_key not in value:
+            continue
         raw = value[path_key]
         if type(raw) is not str or not raw.strip():
             _fail(f"source_ref_paths.{path_key} must be a non-empty repo-relative path")
@@ -148,9 +155,17 @@ def _validated_source_ref_paths(value: Any) -> dict[str, str]:
 
 
 def _source_refs_for_family(source_refs_by_role: dict[str, str], family: str) -> list[dict[str, str]]:
+    roles = list(_FAMILY_SOURCE_REF_ROLES[family])
+    if family in {"selection_inputs", "per_ticker_analysis"} and "yfinance_grade_actions" in source_refs_by_role:
+        roles = [
+            "yfinance_grade_actions" if role == "analyst_grade_actions" else role
+            for role in roles
+        ]
+    if family in {"selection_inputs", "per_ticker_analysis"} and "overextension_projection" in source_refs_by_role:
+        roles.append("overextension_projection")
     return [
         {"role": role, "path": source_refs_by_role[role]}
-        for role in _FAMILY_SOURCE_REF_ROLES[family]
+        for role in roles
     ]
 
 

@@ -131,6 +131,14 @@
           "type": "string",
           "minLength": 1
         },
+        "overextension_projection_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "yfinance_grade_actions_path": {
+          "type": "string",
+          "minLength": 1
+        },
         "offering_audit_source_path": {
           "type": "string",
           "minLength": 1

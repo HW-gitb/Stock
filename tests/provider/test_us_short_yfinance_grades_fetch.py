@@ -1,0 +1,306 @@
+from __future__ import annotations
+
+import json
+import os
+import sys
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+PYTHON_LIBS = ROOT / ".tools" / "python_libs"
+if PYTHON_LIBS.exists() and str(PYTHON_LIBS) not in sys.path:
+    sys.path.insert(0, str(PYTHON_LIBS))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.us_short_analyst_grade_risk import project_analyst_grade_risk_downgrade  # noqa: E402
+from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
+from runners import us_short_yfinance_grades_fetch as runner  # noqa: E402
+from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
+    _DECISION_DATE,
+    _candidate_artifact,
+    _constant_projection,
+)
+
+
+STATE_DIR = ROOT / "state" / "us_short"
+SAMPLE_DIR = ROOT / "provider_samples" / "us_short_yfinance_grades_fetch_20260710"
+PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+
+
+def _read_json(path: Path):
+    return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _write_json(path: Path, payload) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return path
+
+
+def _grade_row(
+    *,
+    grade_date: str = "2026-06-10",
+    action: str = "down",
+    firm: str = "BankA",
+    to_grade: str = "Sell",
+    from_grade: str = "Hold",
+):
+    return {
+        "GradeDate": grade_date,
+        "Action": action,
+        "Firm": firm,
+        "ToGrade": to_grade,
+        "FromGrade": from_grade,
+    }
+
+
+class _FakeTicker:
+    def __init__(self, table):
+        self._table = table
+
+    @property
+    def upgrades_downgrades(self):
+        if isinstance(self._table, Exception):
+            raise self._table
+        return self._table
+
+
+class _FakeYFinanceClient:
+    def __init__(self, tables):
+        self._tables = dict(tables)
+        self.calls: list[str] = []
+
+    def ticker(self, symbol: str):
+        self.calls.append(symbol)
+        return _FakeTicker(self._tables.get(symbol, []))
+
+
+class UsShortYFinanceGradesFetchTest(unittest.TestCase):
+    def setUp(self):
+        self.slug = f"yf_grades_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
+        self.paths = {
+            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
+            "momentum": STATE_DIR / f"{self.slug}_momentum.json",
+            "theme": STATE_DIR / f"{self.slug}_theme.json",
+            "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
+            "source": STATE_DIR / f"{self.slug}_source_package.json",
+            "resolved": STATE_DIR / f"{self.slug}_resolved_grade_actions.json",
+            "summary": SAMPLE_DIR / self.slug / "summary.json",
+            "raw_root": SAMPLE_DIR / self.slug / "raw",
+        }
+        for path in self.paths.values():
+            self._remove(path)
+        _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
+        )
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            confirm_user_authorization=True,
+            generated_at="2026-07-10T12:00:00+00:00",
+        )
+
+    def tearDown(self):
+        for path in self.paths.values():
+            self._remove(path)
+        self._remove(PREFLIGHT_SAMPLE_DIR / self.slug)
+        self._remove(SAMPLE_DIR / self.slug)
+
+    def _remove(self, path: Path) -> None:
+        if path.is_dir():
+            for item in sorted(path.rglob("*"), reverse=True):
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    item.rmdir()
+            path.rmdir()
+        elif path.exists():
+            path.unlink()
+
+    def _run(self, **kwargs):
+        return runner.run_yfinance_grades_fetch(
+            preflight_summary_path=self.paths["preflight"],
+            output_source_package_path=self.paths["source"],
+            output_resolved_actions_path=self.paths["resolved"],
+            summary_path=self.paths["summary"],
+            raw_root=self.paths["raw_root"],
+            generated_at="2026-07-10T12:00:00+00:00",
+            observed_at="2026-06-15T08:00:00-04:00",
+            pace_seconds=0,
+            **kwargs,
+        )
+
+    def test_missing_authorization_aborts_before_import_client_or_writes(self):
+        imports = []
+        client = _FakeYFinanceClient({"AAPL": [_grade_row()]})
+        with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "explicit user authorization"):
+            self._run(
+                client=client,
+                importer=lambda name: imports.append(name),
+                confirm_user_authorization=False,
+            )
+        self.assertEqual(imports, [])
+        self.assertEqual(client.calls, [])
+        self.assertFalse(self.paths["summary"].exists())
+        self.assertFalse(self.paths["source"].exists())
+        self.assertFalse(self.paths["resolved"].exists())
+
+    def test_default_dry_run_neither_imports_nor_writes(self):
+        imports = []
+        result = runner.run_default(
+            dry_run=True,
+            preflight_summary_path=self.paths["preflight"],
+            importer=lambda name: imports.append(name),
+        )
+        self.assertEqual(result["scope"]["status"], "dry_run_only")
+        self.assertFalse(result["scope"]["network_access_performed"])
+        self.assertEqual(imports, [])
+        self.assertFalse(self.paths["summary"].exists())
+
+    def test_default_run_mode_still_requires_explicit_authorization(self):
+        imports = []
+        with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "explicit user authorization"):
+            runner.run_default(
+                dry_run=False,
+                preflight_summary_path=self.paths["preflight"],
+                importer=lambda name: imports.append(name),
+            )
+        self.assertEqual(imports, [])
+        self.assertFalse(self.paths["summary"].exists())
+        self.assertFalse(self.paths["source"].exists())
+        self.assertFalse(self.paths["resolved"].exists())
+
+    def test_authorized_fetch_writes_source_resolved_and_hygienic_counts_summary(self):
+        client = _FakeYFinanceClient(
+            {
+                "AAPL": [
+                    _grade_row(firm="BankA"),
+                    _grade_row(grade_date="2026-06-11", firm="BankB"),
+                ],
+                "MSFT": [],
+                "JPM": [_grade_row(action="up", firm="BankC", to_grade="Buy", from_grade="Hold")],
+            }
+        )
+        summary = self._run(client=client, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "completed")
+        self.assertEqual(summary["scope"]["provider_status"], "ok")
+        self.assertEqual(summary["execution"]["attempted_symbol_count"], 3)
+        self.assertEqual(summary["execution"]["successful_symbol_count"], 3)
+        self.assertTrue(self.paths["source"].exists())
+        self.assertTrue(self.paths["resolved"].exists())
+        self.assertEqual(len(list(self.paths["raw_root"].glob("*.json"))), 3)
+
+        summary_text = self.paths["summary"].read_text(encoding="utf-8")
+        for forbidden in ("AAPL", "MSFT", "JPM", "BankA", "http", "UNIT_TEST", '"request_url"'):
+            self.assertNotIn(forbidden, summary_text)
+
+        resolved = _read_json(self.paths["resolved"])
+        projected = project_analyst_grade_risk_downgrade(
+            target_tickers=["AAPL", "MSFT", "JPM"],
+            analyst_grade_actions=resolved,
+        )
+        self.assertTrue(projected["analyst_collective_downgrade_by_ticker"]["AAPL"])
+        self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["MSFT"])
+        self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["JPM"])
+
+    def test_dependency_missing_writes_down_neutral_without_raw_payloads(self):
+        def _missing(_name):
+            raise ModuleNotFoundError("No module named yfinance")
+
+        summary = self._run(importer=_missing, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "dependency_missing")
+        self.assertEqual(summary["scope"]["provider_status"], "down")
+        self.assertFalse(summary["scope"]["network_access_performed"])
+        self.assertFalse(summary["scope"]["raw_payload_storage_performed"])
+        self.assertFalse(self.paths["raw_root"].exists())
+        resolved = _read_json(self.paths["resolved"])
+        self.assertEqual(resolved["signals"], {})
+        self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+
+    def test_broken_yfinance_import_writes_down_neutral_without_raw_payloads(self):
+        def _broken(_name):
+            raise ImportError("yfinance binary dependency is broken")
+
+        summary = self._run(importer=_broken, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "dependency_missing")
+        self.assertEqual(summary["scope"]["provider_status"], "down")
+        self.assertFalse(self.paths["raw_root"].exists())
+        resolved = _read_json(self.paths["resolved"])
+        self.assertEqual(resolved["signals"], {})
+        self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+
+    def test_duplicate_yfinance_row_is_deduplicated_and_does_not_block_downstream_grade_risk(self):
+        row = _grade_row(action="down", firm="  BankA  ")
+        client = _FakeYFinanceClient(
+            {
+                "AAPL": [
+                    row,
+                    {**row, "Action": " DOWN ", "Firm": "banka"},
+                    _grade_row(action="down", firm="BankB"),
+                ],
+                "MSFT": [],
+                "JPM": [],
+            }
+        )
+        summary = self._run(client=client, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "completed")
+        self.assertTrue(self.paths["source"].exists())
+        self.assertTrue(self.paths["resolved"].exists())
+        source = _read_json(self.paths["source"])
+        self.assertEqual(len(source["grades_by_ticker"]["AAPL"]["records"]), 2)
+        resolved = _read_json(self.paths["resolved"])
+        projected = project_analyst_grade_risk_downgrade(
+            target_tickers=["AAPL", "MSFT", "JPM"],
+            analyst_grade_actions=resolved,
+        )
+        self.assertTrue(projected["analyst_collective_downgrade_by_ticker"]["AAPL"])
+
+    def test_rate_limit_or_crumb_halts_and_writes_neutral_for_every_target(self):
+        client = _FakeYFinanceClient({"AAPL": RuntimeError("invalid crumb 429")})
+        summary = self._run(client=client, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "halted_rate_limit_or_crumb_failure")
+        self.assertEqual(summary["scope"]["provider_status"], "down")
+        self.assertEqual(summary["execution"]["attempted_symbol_count"], 1)
+        self.assertEqual(summary["execution"]["rate_limit_or_crumb_failure_count"], 1)
+        resolved = _read_json(self.paths["resolved"])
+        self.assertEqual(resolved["signals"], {})
+        self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+
+    def test_parser_failed_source_is_neutral_for_that_ticker_only(self):
+        client = _FakeYFinanceClient(
+            {
+                "AAPL": [{"GradeDate": "2026-06-10", "Action": "down", "Firm": "BankA", "ToGrade": "Sell"}],
+                "MSFT": [_grade_row(action="up", firm="BankB")],
+                "JPM": [],
+            }
+        )
+        summary = self._run(client=client, confirm_user_authorization=True)
+        self.assertEqual(summary["scope"]["status"], "completed_with_fetch_errors")
+        self.assertEqual(summary["execution"]["parser_failed_symbol_count"], 1)
+        resolved = _read_json(self.paths["resolved"])
+        self.assertNotIn("AAPL", resolved["signals"])
+        self.assertIn("AAPL", resolved["excluded"])
+        self.assertIn("MSFT", resolved["signals"])
+        self.assertIn("JPM", resolved["checked"])
+
+    def test_summary_schema_rejects_emit_gate_or_scope_drift(self):
+        client = _FakeYFinanceClient({"AAPL": [], "MSFT": [], "JPM": []})
+        summary = self._run(client=client, confirm_user_authorization=True)
+        summary["prohibited_claims"]["emit_gate_source"] = True
+        with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "schema validation"):
+            runner._validate_json_schema(summary, runner.SUMMARY_SCHEMA_PATH, label="mutated summary")
+
+
+if __name__ == "__main__":
+    unittest.main()

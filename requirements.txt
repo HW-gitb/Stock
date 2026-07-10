@@ -4,3 +4,7 @@
 # (pandas, tushare, numpy, tqdm, etc.). This file records packages that are
 # required by production code paths because schema validation is mandatory.
 jsonschema>=4.0
+
+# Optional live-fetch dependency for runners/us_short_yfinance_grades_fetch.py.
+# The runner remains lazy-imported and fail-closed; it never installs packages itself.
+yfinance

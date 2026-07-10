@@ -39,6 +39,7 @@ SOURCE_PATH_FIELDS = (
     "massive_news_events_path",
     "catalyst_governance_path",
 )
+OPTIONAL_SOURCE_PATH_FIELDS = ("overextension_projection_path", "yfinance_grade_actions_path")
 SCOPE_FALSE_FIELDS = (
     "network_access_performed",
     "provider_calls_performed",
@@ -220,6 +221,9 @@ def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], 
         field: _existing_repo_path(packet["paths"][field], field=field)
         for field in SOURCE_PATH_FIELDS
     }
+    for field in OPTIONAL_SOURCE_PATH_FIELDS:
+        if field in packet["paths"]:
+            paths[field] = _existing_repo_path(packet["paths"][field], field=field)
     paths["output_data_context_path"] = _validate_output_path(
         packet["paths"]["output_data_context_path"],
         field="output_data_context_path",
@@ -244,7 +248,9 @@ def source_packet_input_manifest(packet_path: Path | str) -> tuple[tuple[str, st
     """Return the exact source files consumed by a packet, with absolute paths and content digests."""
     _, paths = _load_and_validate_packet(packet_path)
     rows = []
-    for field in SOURCE_PATH_FIELDS:
+    for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS):
+        if field not in paths:
+            continue
         path = paths[field].resolve()
         digest = hashlib.sha256(path.read_bytes()).hexdigest()
         rows.append((field, str(path), digest))
@@ -286,7 +292,7 @@ def run_preflight(
         },
         "paths": {
             "output_data_context_path": _repo_rel(paths["output_data_context_path"]),
-            "source_artifact_count": len(SOURCE_PATH_FIELDS),
+            "source_artifact_count": sum(field in paths for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)),
         },
     }
 
@@ -317,6 +323,18 @@ def run_packet(
                 "massive_news_events_path",
             )
         }
+        if "overextension_projection_path" in paths:
+            source_payloads["overextension_projection_path"] = _source_json(
+                paths["overextension_projection_path"], field="overextension_projection_path"
+            )
+        if "yfinance_grade_actions_path" in paths:
+            source_payloads["yfinance_grade_actions_path"] = _source_json(
+                paths["yfinance_grade_actions_path"], field="yfinance_grade_actions_path"
+            )
+        analyst_grade_actions = source_payloads.get(
+            "yfinance_grade_actions_path",
+            source_payloads["analyst_grade_actions_path"],
+        )
         common_kwargs = {
             "candidate_artifact": source_payloads["candidate_artifact_path"],
             "expected_decision_date": packet["decision_clock"]["expected_decision_date"],
@@ -324,18 +342,29 @@ def run_packet(
             "momentum_projection": source_payloads["momentum_projection_path"],
             "theme_projection": source_payloads["theme_projection_path"],
             "offering_audit_source": source_payloads["offering_audit_source_path"],
-            "analyst_grade_actions": source_payloads["analyst_grade_actions_path"],
+            "analyst_grade_actions": analyst_grade_actions,
             "massive_news_events": source_payloads["massive_news_events_path"],
             "catalyst_governance": catalyst_governance,
             "theme_opportunity_state": packet["decision_clock"]["theme_opportunity_state"],
             "holdings": packet["optional_inputs"]["holdings"],
             "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
         }
+        if "overextension_projection_path" in source_payloads:
+            projection = source_payloads["overextension_projection_path"]
+            if type(projection) is not dict or type(projection.get("overextension_by_ticker")) is not dict:
+                raise SourcePacketError(
+                    "paths.overextension_projection_path must contain an overextension_by_ticker object"
+                )
+            common_kwargs["overextension_by_ticker"] = projection["overextension_by_ticker"]
         context_components = None
         if "output_context_components_path" in paths:
             context_components = assemble_official_context_components_from_resolved_pass2_sources(
                 **common_kwargs,
-                source_ref_paths={field: _repo_rel(paths[field]) for field in SOURCE_PATH_FIELDS},
+                source_ref_paths={
+                    field: _repo_rel(paths[field])
+                    for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)
+                    if field in paths
+                },
             )
             data_context = context_components["data_context"]
         else:
@@ -393,7 +422,9 @@ def run_packet(
             ),
         },
         "source_artifacts": {
-            "local_source_artifacts_read": len(SOURCE_PATH_FIELDS),
+            "local_source_artifacts_read": sum(
+                field in paths for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)
+            ),
             "source_artifacts_gitignored_required_for_raw_payloads": True,
         },
         "prohibited_claims": packet["prohibited_claims"],

@@ -108,12 +108,16 @@ class SamplePlanTests(ProbeTestBase):
 
     def test_default_dry_run_neither_imports_yfinance_nor_writes(self):
         called = []
+        # The tracked live-run summary may legitimately exist as committed evidence; a dry-run must not CREATE or
+        # MODIFY it. Capture its pre-state and assert the dry-run leaves it byte-for-byte untouched.
+        summary_before = probe.SUMMARY_PATH.stat().st_mtime_ns if probe.SUMMARY_PATH.exists() else None
         out = probe.run_default(dry_run=True, importer=lambda _: called.append("import"),
                                 plan_loader=lambda: self.plan)
         self.assertEqual(called, [])
         self.assertEqual(out["scope"]["status"], "dry_run_only")
         self.assertEqual(out["sample"]["planned_total"], probe.TOTAL_PLANNED_SYMBOLS)
-        self.assertFalse(probe.SUMMARY_PATH.exists())
+        summary_after = probe.SUMMARY_PATH.stat().st_mtime_ns if probe.SUMMARY_PATH.exists() else None
+        self.assertEqual(summary_before, summary_after)
 
 
 class ProbeExecutionTests(ProbeTestBase):

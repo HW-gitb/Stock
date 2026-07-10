@@ -6,6 +6,7 @@ import os
 import sys
 import tempfile
 import unittest
+from csv import DictReader
 from datetime import datetime
 from pathlib import Path
 from unittest import mock
@@ -21,6 +22,7 @@ if str(ROOT) not in sys.path:
 from runners import us_short_batch5_full_candidate_live_source_packet as funnel  # noqa: E402
 from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
 from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
+from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _OFFERING_OBSERVED_AT,
@@ -57,6 +59,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             "candidate": STATE_DIR / f"{self.slug}_candidate.json",
             "momentum": STATE_DIR / f"{self.slug}_momentum.json",
             "theme": STATE_DIR / f"{self.slug}_theme.json",
+            "overextension": STATE_DIR / f"{self.slug}_overextension.json",
+            "yfinance": STATE_DIR / f"{self.slug}_yfinance_grade_actions.json",
             "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
             "summary": SAMPLE_DIR / self.slug / "summary.json",
             "prefix": STATE_DIR / self.slug,
@@ -104,6 +108,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.paths["candidate"],
             self.paths["momentum"],
             self.paths["theme"],
+            self.paths["overextension"],
+            self.paths["yfinance"],
             self.paths["output"],
             self.paths["components"],
         ] + self._source_artifact_paths()
@@ -132,6 +138,30 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             },
             clear=False,
         )
+
+    def _yfinance_source(self, records, *, ticker="AAPL", coverage="full", parser="ok"):
+        return {
+            "records": list(records),
+            "provenance": {
+                "provider_id": "yfinance",
+                "endpoint_or_filing_type": "upgrades_downgrades",
+                "source_as_of": "2026-06-15",
+                "observed_at": "2026-06-15T08:00:00-04:00",
+                "coverage_status": coverage,
+                "parser_status": parser,
+                "lineage_ref": f"yfinance:upgrades_downgrades:2026-06-15#{ticker.lower()}",
+            },
+        }
+
+    def _yfinance_row(self, *, ticker="AAPL", date="2026-06-10", firm="BankA"):
+        return {
+            "symbol": ticker,
+            "GradeDate": date,
+            "Action": "down",
+            "Firm": firm,
+            "ToGrade": "Sell",
+            "FromGrade": "Hold",
+        }
 
     def test_funnel_output_flows_through_bridge_to_private_paper_weekly_report(self) -> None:
         client = FullCandidateFakeClient()
@@ -198,6 +228,243 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
             self.assertNotIn("AAPL", blob)
 
+    def test_overextension_projection_flows_to_action_table_and_machine_record(self) -> None:
+        _write_json(
+            self.paths["overextension"],
+            {
+                "overextension_by_ticker": {
+                    "AAPL": {
+                        "overextension_state": "chasing_extreme",
+                        "strips_theme_score": True,
+                        "execution_flags": {},
+                    },
+                    "MSFT": {
+                        "overextension_state": "warning",
+                        "strips_theme_score": False,
+                        "execution_flags": {
+                            "force_pullback": True,
+                            "reduce_size": True,
+                            "raise_rr_gate": True,
+                        },
+                    },
+                    "JPM": {
+                        "overextension_state": "none",
+                        "strips_theme_score": False,
+                        "execution_flags": {},
+                    },
+                },
+                "disposition_counts": {"scored": 3, "insufficient_data": 0},
+                "scored_count": 3,
+                "target_count": 3,
+            },
+        )
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            funnel.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            funnel_summary = funnel.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                overextension_projection_path=self.paths["overextension"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        source_packet_path = ROOT / funnel_summary["source_packet"]["path"]
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            summary = e2e.run_e2e(
+                source_packet_path=source_packet_path,
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+
+            components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+            selection = components["data_context"]["selection_inputs"]["per_ticker"]
+            self.assertEqual(selection["AAPL"]["theme_momentum_score"], 0.0)
+            self.assertEqual(components["per_ticker_analysis"]["MSFT"]["overextension"]["overextension_state"], "warning")
+            self.assertTrue(summary["batch4_run"]["emitted"])
+
+            action_path = private_root / "weekly_private" / _DECISION_DATE / "action_table.csv"
+            with action_path.open(encoding="utf-8", newline="") as handle:
+                action_rows = {row["ticker"]: row for row in DictReader(handle)}
+            machine_record = json.loads(
+                (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
+            )
+            machine_rows = {row["ticker"]: row for row in machine_record["rows"]}
+            self.assertEqual(action_rows["AAPL"]["overextension_state"], "chasing_extreme")
+            self.assertEqual(action_rows["MSFT"]["overextension_state"], "warning")
+            self.assertEqual(machine_rows["AAPL"]["overextension"]["overextension_state"], "chasing_extreme")
+            self.assertEqual(machine_rows["MSFT"]["overextension"]["overextension_state"], "warning")
+
+    def test_yfinance_grade_actions_flow_to_components_action_table_and_machine_record(self) -> None:
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of="2026-06-15",
+                grades_by_ticker={
+                    "AAPL": self._yfinance_source(
+                        [
+                            self._yfinance_row(firm="BankA"),
+                            self._yfinance_row(date="2026-06-11", firm="BankB"),
+                        ]
+                    ),
+                    "MSFT": self._yfinance_source([], ticker="MSFT"),
+                    "JPM": self._yfinance_source([], ticker="JPM"),
+                },
+            ),
+        )
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            funnel.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            funnel_summary = funnel.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                yfinance_grade_actions_path=self.paths["yfinance"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertTrue(funnel_summary["prohibited_claims"]["yfinance_used"])
+        self.assertEqual(
+            funnel_summary["source_artifacts"]["analyst_grade_actions_consumed_from"],
+            "yfinance_grade_actions",
+        )
+        source_packet_path = ROOT / funnel_summary["source_packet"]["path"]
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            summary = e2e.run_e2e(
+                source_packet_path=source_packet_path,
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+
+            self.assertTrue(summary["batch4_run"]["emitted"])
+            components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+            source_refs = components["run_provenance"]["families"]["selection_inputs"]["source_refs"]
+            self.assertIn(
+                {"role": "yfinance_grade_actions", "path": self.paths["yfinance"].relative_to(ROOT).as_posix()},
+                source_refs,
+            )
+            self.assertNotIn(
+                {
+                    "role": "analyst_grade_actions",
+                    "path": self.paths["prefix"].with_name(
+                        self.paths["prefix"].name + "_analyst_grade_actions.json"
+                    ).relative_to(ROOT).as_posix(),
+                },
+                source_refs,
+            )
+            self.assertEqual(
+                components["per_ticker_analysis"]["AAPL"]["risk_downgrade"]["components"]["analyst"],
+                8.0,
+            )
+
+            action_path = private_root / "weekly_private" / _DECISION_DATE / "action_table.csv"
+            with action_path.open(encoding="utf-8", newline="") as handle:
+                action_rows = {row["ticker"]: row for row in DictReader(handle)}
+            machine_record = json.loads(
+                (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
+            )
+            machine_rows = {row["ticker"]: row for row in machine_record["rows"]}
+            self.assertIn("AAPL", action_rows)
+            self.assertEqual(machine_rows["AAPL"]["risk_downgrade"]["components"]["analyst"], 8.0)
+
+    def test_yfinance_missing_and_fmp_grades_down_still_emit_with_neutral_grades(self) -> None:
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of="2026-06-15",
+                grades_by_ticker={
+                    "AAPL": self._yfinance_source([], coverage="missing", parser="failed"),
+                    "MSFT": self._yfinance_source([], ticker="MSFT", coverage="missing", parser="failed"),
+                    "JPM": self._yfinance_source([], ticker="JPM", coverage="missing", parser="failed"),
+                },
+            ),
+        )
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            funnel.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            funnel_summary = funnel.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                yfinance_grade_actions_path=self.paths["yfinance"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=False,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        source_packet_path = ROOT / funnel_summary["source_packet"]["path"]
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "down", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            summary = e2e.run_e2e(
+                source_packet_path=source_packet_path,
+                batch4_template_path=template,
+                account_state_path=account,
+                provider_health_path=health,
+                private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                context_components_path=self.paths["components"],
+                bootstrap_lifecycle=True,
+                generated_at="2026-06-15T13:01:00Z",
+            )
+
+            self.assertTrue(summary["batch4_run"]["emitted"])
+            components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+            self.assertEqual(
+                components["per_ticker_analysis"]["AAPL"]["risk_downgrade"]["components"]["analyst"],
+                0.0,
+            )
+
     def test_research_live_run_emits_real_data_report_not_fixture(self) -> None:
         # option a + R-USSHORT-REVIEWQ-CAT1 Required A: run_mode="research_live" is CAPSTONE-INTERNAL — it emits the
         # honest real-data research report ONLY when handed a source-bound capstone execution receipt. The report carries the research
@@ -239,8 +506,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             ).hexdigest(),
             decision_date=_DECISION_DATE,
             generated_at="2026-06-15T13:01:00Z",
-            completed_stages=("universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "pass2_fetch"),
+            completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
             source_packet_path=source_packet_path.resolve(),
             source_packet_sha256=source_digest,
             source_artifact_manifest=source_manifest,
@@ -339,8 +606,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             run_id=hashlib.sha256(b"source-artifact-tamper-test").hexdigest(),
             decision_date=_DECISION_DATE,
             generated_at="2026-06-15T13:01:00Z",
-            completed_stages=("universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "pass2_fetch"),
+            completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
             source_packet_path=source_packet_path.resolve(),
             source_packet_sha256=source_digest,
             source_artifact_manifest=source_manifest,
@@ -414,8 +681,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 run_id=hashlib.sha256(b"missing-generated-at-test").hexdigest(),
                 decision_date=_DECISION_DATE,
                 generated_at="2026-06-15T13:01:00Z",
-                completed_stages=("universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch",
-                                  "theme_producer", "projection_inputs", "pass2_preflight", "pass2_fetch"),
+                completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
+                                  "theme_producer", "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
                 source_packet_path=fixture_packet.resolve(),
                 source_packet_sha256=fixture_digest,
                 source_artifact_manifest=(("fixture", str(fixture_packet.resolve()), fixture_digest),),

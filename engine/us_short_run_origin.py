@@ -57,8 +57,8 @@ _VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN)
 _RECEIPT_ISSUER = object()
 _RECEIPT_SIGNING_KEY = os.urandom(32)
 _REQUIRED_PRE_BRIDGE_STAGES = (
-    "universe_fetch", "momentum_fetch", "momentum_producer", "sic_fetch", "theme_producer",
-    "projection_inputs", "pass2_preflight", "pass2_fetch",
+    "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch",
 )
 _REQUIRED_PROVIDER_STAGES = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
 _REQUIRED_PROVIDER_HEALTH_KEYS = ("fmp", "sec_edgar")

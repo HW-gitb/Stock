@@ -793,6 +793,8 @@ def _build_local_source_packet(
     paths: dict[str, Path],
     momentum_projection_path: Path,
     theme_projection_path: Path,
+    overextension_projection_path: Path | None,
+    yfinance_grade_actions_path: Path | None,
     output_data_context_path: Path,
     context_components_output_path: Path | None,
 ) -> dict[str, Any]:
@@ -807,6 +809,10 @@ def _build_local_source_packet(
         "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
         "output_data_context_path": _repo_rel(output_data_context_path),
     }
+    if overextension_projection_path is not None:
+        packet_paths["overextension_projection_path"] = _repo_rel(overextension_projection_path)
+    if yfinance_grade_actions_path is not None:
+        packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
         packet_paths["output_context_components_path"] = _repo_rel(context_components_output_path)
     return {
@@ -881,6 +887,7 @@ def _build_summary(
     source_packet_run: dict[str, Any] | None,
     run_data_context: bool,
     context_components_output_path: Path | None,
+    yfinance_grade_actions_path: Path | None,
 ) -> dict[str, Any]:
     endpoint_errors = sum(1 for record in endpoint_records if not record.ok)
     eligible = list(candidate_artifact["eligible_tickers"])
@@ -986,6 +993,12 @@ def _build_summary(
             "candidate_subset_path": _repo_rel(source_paths["candidate_subset"]),
             "offering_audit_source_path": _repo_rel(source_paths["offering_audit_source"]),
             "analyst_grade_actions_path": _repo_rel(source_paths["analyst_grade_actions"]),
+            "yfinance_grade_actions_path": (
+                _repo_rel(yfinance_grade_actions_path) if yfinance_grade_actions_path is not None else None
+            ),
+            "analyst_grade_actions_consumed_from": (
+                "yfinance_grade_actions" if yfinance_grade_actions_path is not None else "fmp_analyst_grade_actions"
+            ),
             "massive_news_events_path": _repo_rel(source_paths["massive_news_events"]),
             "corporate_action_capture_path": _repo_rel(source_paths["corporate_action_capture"]),
             "momentum_projection_path": _repo_rel(source_paths["momentum_projection"]),
@@ -1012,7 +1025,7 @@ def _build_summary(
         "prohibited_claims": {
             "provider_selected": False,
             "full_market_download_performed": False,
-            "yfinance_used": False,
+            "yfinance_used": yfinance_grade_actions_path is not None,
             "paid_access_used": False,
             "datahub_consumed": False,
             "production_readiness_claimed": False,
@@ -1184,6 +1197,8 @@ def run_full_candidate_live_source_packet(
     expected_total_call_budget: int,
     output_data_context_path: Path = DEFAULT_OUTPUT_DATA_CONTEXT_PATH,
     context_components_output_path: Path | None = DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH,
+    overextension_projection_path: Path | None = None,
+    yfinance_grade_actions_path: Path | None = None,
     source_artifact_prefix: Path = SOURCE_ARTIFACT_PREFIX,
     summary_path: Path = SUMMARY_PATH,
     raw_root: Path = RAW_SAMPLE_ROOT,
@@ -1236,6 +1251,16 @@ def run_full_candidate_live_source_packet(
     theme_path = _existing_state_json(
         preflight["local_input_coverage"]["theme_projection"]["path"],
         field="preflight.theme_projection.path",
+    )
+    overextension_path = (
+        _existing_state_json(overextension_projection_path, field="overextension_projection_path")
+        if overextension_projection_path is not None
+        else None
+    )
+    yfinance_actions_path = (
+        _existing_state_json(yfinance_grade_actions_path, field="yfinance_grade_actions_path")
+        if yfinance_grade_actions_path is not None
+        else None
     )
     output_path = _validate_state_json_path(output_data_context_path, field="output_data_context_path")
     components_path = (
@@ -1350,6 +1375,8 @@ def run_full_candidate_live_source_packet(
         paths=paths,
         momentum_projection_path=paths["momentum_projection"],
         theme_projection_path=paths["theme_projection"],
+        overextension_projection_path=overextension_path,
+        yfinance_grade_actions_path=yfinance_actions_path,
         output_data_context_path=output_path,
         context_components_output_path=components_path,
     )
@@ -1388,6 +1415,7 @@ def run_full_candidate_live_source_packet(
         source_packet_run=packet_run,
         run_data_context=run_data_context,
         context_components_output_path=components_path,
+        yfinance_grade_actions_path=yfinance_actions_path,
     )
     _write_summary_validated(summary, summary_resolved, [fmp_env.value, sec_env.value, massive_env.value])
     return summary
@@ -1405,6 +1433,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--expected-total-call-budget", type=int, required=True)
     parser.add_argument("--output-data-context-path", type=Path, default=DEFAULT_OUTPUT_DATA_CONTEXT_PATH)
     parser.add_argument("--context-components-out", type=Path, default=DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH)
+    parser.add_argument("--yfinance-grade-actions-path", type=Path)
     parser.add_argument("--source-artifact-prefix", type=Path, default=SOURCE_ARTIFACT_PREFIX)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
     parser.add_argument("--raw-root", type=Path, default=RAW_SAMPLE_ROOT)
@@ -1431,6 +1460,7 @@ def main(argv: list[str] | None = None) -> int:
             expected_total_call_budget=args.expected_total_call_budget,
             output_data_context_path=args.output_data_context_path,
             context_components_output_path=args.context_components_out,
+            yfinance_grade_actions_path=args.yfinance_grade_actions_path,
             source_artifact_prefix=args.source_artifact_prefix,
             summary_path=args.summary_path,
             raw_root=args.raw_root,
