@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。
+- **Required**: 无。register `R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION` 记本缺陷+修复。
+- **Verify**: `review-evidence:not_available`。整读 runner/schema/测试 diff + 反控（runner：resolver-reject→down/neutral/无泄漏；capstone e2e：resolver-reject→**仍 emit**）；亲跑 full offline `test_us_short*` = **Ran 4139 OK**；`git diff --check` 净；无 provider/network 调用。yfinance-B non-critical 不变式现全覆盖（缺/down/dep-missing/429/dup/resolver-reject 全→中性不崩）。freshday summary 排除。
+- **Next**: Codex：待命（yfinance 干净 live 复验用当日 preflight、真一键 capstone 跑时顺带验）。
+
+## 2026-07-10 - Codex repair complete, awaiting Claude review (US-short yfinance-B resolver rejection)
+
+- **Verdict/Action**: Repaired the non-critical runner boundary: every `YFinanceGradesError` from the strict resolver now writes a full neutral/excluded actions artifact plus a provider-down, counts-only rejection record instead of aborting the run. Resolver PIT and duplicate validation remain unchanged.
+- **Required**: None known. Claude should re-review this runner-only repair before commit.
+- **Verify**: Focused yfinance runner plus capstone E2E tests 18 OK; stale-preflight resolver rejection reaches the final offline EMIT path; no provider/network call.
+- **Pre-Codex self-review**: A-F checked main-thread; all resolver-rejection variants share one catch-and-neutralize boundary; fixed summary reason is generic and ticker/raw-free; duplicate, dependency-missing, and 429 paths remain in the focused pack.
+- **Next**: Claude Code: review and commit this runner-only repair if PASS.
+
+## 2026-07-10 — Claude 执行 (US-short yfinance-B live 首验：fetch 通过、揪出 resolver-rejection 硬中断残留缺陷)
+
+- **Verdict/Action**: 执行（用户授权 yfinance-B live 首验；未提交、runner 在 resolve 步 abort、无 tracked 产物落库）。用 stale 的 `_20260706` preflight（我的选择）在 07-10 跑：yfinance FETCH 路径**通过**（191/200 抓通、~1/秒、200 只**无限流**、死票 ITIC/NHC 404→中性优雅处理）；但 runner 在 `resolve_yfinance_grade_actions` abort：`[AAL].provenance observed_at must be before decision-session open`——observed(07-10) ≥ decision-cutoff(07-06 09:30)、resolver PIT 门正确拒。**真·当日 capstone 跑不触发**（observed≈decision）；此 abort 是 stale-preflight 产物。
+- **Required**: 但揪出真·残留缺陷（我上轮 review 漏的）：runner 对**任何** resolver rejection 硬 abort（`run_yfinance_grades_fetch` resolve 调用点 re-raise），不只上轮修的 dup——违反「yfinance 非关键·绝不 gate emit」的**一般**情形。上轮 dedup 只堵 dup（§6a agent option-1）、未做 option-2 的通用 catch-and-neutralize。Codex 修：resolve 调用点 catch `YFinanceGradesError` → 全票降级中性/excluded（summary 标 provider down + 记 reason、绝不 re-raise），使 runner 对 low-trust 包**永不 abort**；加复现测试（stale-preflight/坏 provenance → 中性不崩）。单源记 register `R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION`。
+- **Verify**: yfinance live fetch 实证通过（191/200、无限流、404→中性）；abort 复现于 resolve PIT 门（stale preflight）；无 tracked 产物（abort 在写 summary 前、raw gitignored）、无 secret 泄漏。真·同日 preflight 的干净复验待 Codex 修 + 当日 preflight。
+- **Next**: Codex：yfinance-B resolve 调用点通用 catch-and-neutralize（非只 dup）+ 复现测试 + register。
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short Optional：Pass2 yfinance 在场时跳过冗余 FMP grades)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。上轮 Optional 收口：`_fetch_live_records` 加 `fetch_fmp_grades` 门、`run_full_candidate_live_source_packet` 传 `yfinance_actions_path is None`——yfinance 在场→跳过 FMP grades 抓取（省那 ~200 个多为 402 的白抓），yfinance 缺席→照抓 FMP grades（fallback 不变）。整读确认逻辑正确、无 scoring/health/emit/frozen 改动。低风险（既有 fetch 的条件跳过、非新 gate/fetch）→ 无 §6a agent。

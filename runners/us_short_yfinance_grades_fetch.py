@@ -384,7 +384,16 @@ def _package_from_attempts(
     }
 
 
-def _summary_status(*, dependency_missing: bool, rate_failures: int, fetch_errors: int, parser_failures: int) -> tuple[str, str]:
+def _summary_status(
+    *,
+    dependency_missing: bool,
+    rate_failures: int,
+    fetch_errors: int,
+    parser_failures: int,
+    resolver_rejection: dict[str, str] | None,
+) -> tuple[str, str]:
+    if resolver_rejection is not None:
+        return "resolver_rejected_neutralized", "down"
     if dependency_missing:
         return "dependency_missing", "down"
     if rate_failures:
@@ -392,6 +401,24 @@ def _summary_status(*, dependency_missing: bool, rate_failures: int, fetch_error
     if fetch_errors or parser_failures:
         return "completed_with_fetch_errors", "ok"
     return "completed", "ok"
+
+
+def _neutral_resolved_actions(target_symbols: list[str]) -> dict[str, Any]:
+    return {
+        "signals": {},
+        "records": {},
+        "provenance": {},
+        "excluded": {symbol: "resolver_rejected_neutralized" for symbol in target_symbols},
+        "checked": {},
+    }
+
+
+def _safe_resolver_rejection(exc: YFinanceGradesError) -> dict[str, str]:
+    # Resolver messages can contain ticker-bearing validation context; the tracked summary must not.
+    return {
+        "error_class": type(exc).__name__,
+        "message": "resolver rejected yfinance package; neutralized",
+    }
 
 
 def _build_summary(
@@ -404,6 +431,7 @@ def _build_summary(
     target_count: int,
     attempts: list[dict[str, Any]],
     dependency_missing: bool,
+    resolver_rejection: dict[str, str] | None,
     pace_seconds: float,
     raw_root: Path,
     summary_path: Path,
@@ -424,6 +452,7 @@ def _build_summary(
         rate_failures=rate_failures,
         fetch_errors=fetch_errors,
         parser_failures=parser_failures,
+        resolver_rejection=resolver_rejection,
     )
     raw_written = successful > 0
     return {
@@ -470,6 +499,7 @@ def _build_summary(
             "fetch_error_count": fetch_errors,
             "rate_limit_or_crumb_failure_count": rate_failures,
             "dependency_missing": dependency_missing,
+            "resolver_rejection": resolver_rejection,
             "first_failure_symbol_index": first_failure,
             "pace_seconds": pace_seconds,
         },
@@ -505,6 +535,7 @@ def _build_summary(
         "limitations": [
             "yfinance is unofficial and low-trust; these grades are advisory only.",
             "Missing, dependency-down, rate-limited, or parser-failed yfinance grades resolve to neutral and must not block emit.",
+            "Resolver-rejected yfinance packages resolve to neutral and must not block emit.",
             "Tracked summary is aggregate only; raw rows and ticker-bearing packages stay gitignored.",
         ],
     }
@@ -605,13 +636,15 @@ def run_yfinance_grades_fetch(
         attempts_by_symbol=attempts_by_symbol,
         force_down=force_down,
     )
+    resolver_rejection: dict[str, str] | None = None
     try:
         resolved_actions = resolve_yfinance_grade_actions(
             as_of=source_as_of,
             grades_by_ticker=package["grades_by_ticker"],
         )
     except YFinanceGradesError as exc:
-        raise YFinanceGradesFetchError(f"resolved yfinance grade actions rejected generated package: {exc}") from exc
+        resolver_rejection = _safe_resolver_rejection(exc)
+        resolved_actions = _neutral_resolved_actions(target_symbols)
 
     _write_json_atomic(package, source_package_path)
     _write_json_atomic(resolved_actions, resolved_actions_path)
@@ -624,6 +657,7 @@ def run_yfinance_grades_fetch(
         target_count=len(target_symbols),
         attempts=attempts,
         dependency_missing=dependency_missing,
+        resolver_rejection=resolver_rejection,
         pace_seconds=float(pace_seconds),
         raw_root=raw_root_resolved,
         summary_path=summary_resolved,

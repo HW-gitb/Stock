@@ -22,6 +22,7 @@ if str(ROOT) not in sys.path:
 from runners import us_short_batch5_full_candidate_live_source_packet as funnel  # noqa: E402
 from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
 from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
+from runners import us_short_yfinance_grades_fetch as yfinance_fetch  # noqa: E402
 from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
@@ -38,12 +39,22 @@ from tests.provider.test_us_short_batch5_to_batch4_e2e import _empty_account, _n
 STATE_DIR = ROOT / "state" / "us_short"
 SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_live_source_packet_20260706"
 PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candidate_pass2_preflight_20260706"
+YFINANCE_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_yfinance_grades_fetch_20260710"
 
 
 def _write_json(path: Path, payload) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+class _EmptyYFinanceTicker:
+    upgrades_downgrades = []
+
+
+class _EmptyYFinanceClient:
+    def ticker(self, _symbol):
+        return _EmptyYFinanceTicker()
 
 
 class CapstoneOfflineE2ETest(unittest.TestCase):
@@ -61,8 +72,10 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             "theme": STATE_DIR / f"{self.slug}_theme.json",
             "overextension": STATE_DIR / f"{self.slug}_overextension.json",
             "yfinance": STATE_DIR / f"{self.slug}_yfinance_grade_actions.json",
+            "yfinance_source": STATE_DIR / f"{self.slug}_yfinance_grade_source.json",
             "preflight": PREFLIGHT_SAMPLE_DIR / self.slug / "preflight.json",
             "summary": SAMPLE_DIR / self.slug / "summary.json",
+            "yfinance_summary": YFINANCE_SAMPLE_DIR / self.slug / "summary.json",
             "prefix": STATE_DIR / self.slug,
             "output": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
@@ -110,13 +123,14 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.paths["theme"],
             self.paths["overextension"],
             self.paths["yfinance"],
+            self.paths["yfinance_source"],
             self.paths["output"],
             self.paths["components"],
         ] + self._source_artifact_paths()
         for path in state_files:
             if path.is_file():
                 path.unlink()
-        for root in (SAMPLE_DIR / self.slug, PREFLIGHT_SAMPLE_DIR / self.slug):
+        for root in (SAMPLE_DIR / self.slug, PREFLIGHT_SAMPLE_DIR / self.slug, YFINANCE_SAMPLE_DIR / self.slug):
             if root.exists():
                 for item in sorted(root.rglob("*"), reverse=True):
                     if item.is_file():
@@ -410,18 +424,21 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertIn("AAPL", action_rows)
             self.assertEqual(machine_rows["AAPL"]["risk_downgrade"]["components"]["analyst"], 8.0)
 
-    def test_yfinance_missing_and_fmp_grades_down_still_emit_with_neutral_grades(self) -> None:
-        _write_json(
-            self.paths["yfinance"],
-            resolve_yfinance_grade_actions(
-                as_of="2026-06-15",
-                grades_by_ticker={
-                    "AAPL": self._yfinance_source([], coverage="missing", parser="failed"),
-                    "MSFT": self._yfinance_source([], ticker="MSFT", coverage="missing", parser="failed"),
-                    "JPM": self._yfinance_source([], ticker="JPM", coverage="missing", parser="failed"),
-                },
-            ),
+    def test_yfinance_resolver_rejection_and_fmp_grades_down_still_emit_with_neutral_grades(self) -> None:
+        yfinance_summary = yfinance_fetch.run_yfinance_grades_fetch(
+            preflight_summary_path=self.paths["preflight"],
+            output_source_package_path=self.paths["yfinance_source"],
+            output_resolved_actions_path=self.paths["yfinance"],
+            summary_path=self.paths["yfinance_summary"],
+            raw_root=YFINANCE_SAMPLE_DIR / self.slug / "raw",
+            client=_EmptyYFinanceClient(),
+            confirm_user_authorization=True,
+            generated_at="2026-07-10T12:00:00+00:00",
+            observed_at="2026-07-10T12:00:00+00:00",
+            pace_seconds=0,
         )
+        self.assertEqual(yfinance_summary["scope"]["provider_status"], "down")
+        self.assertEqual(yfinance_summary["scope"]["status"], "resolver_rejected_neutralized")
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
             funnel.sample_validation, "_read_windows_environment_value", return_value=None

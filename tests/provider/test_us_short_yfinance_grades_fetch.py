@@ -129,17 +129,18 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             path.unlink()
 
     def _run(self, **kwargs):
-        return runner.run_yfinance_grades_fetch(
-            preflight_summary_path=self.paths["preflight"],
-            output_source_package_path=self.paths["source"],
-            output_resolved_actions_path=self.paths["resolved"],
-            summary_path=self.paths["summary"],
-            raw_root=self.paths["raw_root"],
-            generated_at="2026-07-10T12:00:00+00:00",
-            observed_at="2026-06-15T08:00:00-04:00",
-            pace_seconds=0,
-            **kwargs,
-        )
+        options = {
+            "preflight_summary_path": self.paths["preflight"],
+            "output_source_package_path": self.paths["source"],
+            "output_resolved_actions_path": self.paths["resolved"],
+            "summary_path": self.paths["summary"],
+            "raw_root": self.paths["raw_root"],
+            "generated_at": "2026-07-10T12:00:00+00:00",
+            "observed_at": "2026-06-15T08:00:00-04:00",
+            "pace_seconds": 0,
+        }
+        options.update(kwargs)
+        return runner.run_yfinance_grades_fetch(**options)
 
     def test_missing_authorization_aborts_before_import_client_or_writes(self):
         imports = []
@@ -239,6 +240,35 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         resolved = _read_json(self.paths["resolved"])
         self.assertEqual(resolved["signals"], {})
         self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+
+    def test_resolver_rejection_writes_down_neutral_actions_and_hygienic_reason(self):
+        summary = self._run(
+            client=_FakeYFinanceClient({"AAPL": [_grade_row()], "MSFT": [], "JPM": []}),
+            confirm_user_authorization=True,
+            observed_at="2026-07-10T12:00:00+00:00",
+        )
+        self.assertEqual(summary["scope"]["status"], "resolver_rejected_neutralized")
+        self.assertEqual(summary["scope"]["provider_status"], "down")
+        self.assertEqual(
+            summary["execution"]["resolver_rejection"],
+            {
+                "error_class": "YFinanceGradesError",
+                "message": "resolver rejected yfinance package; neutralized",
+            },
+        )
+        self.assertTrue(self.paths["source"].exists())
+        self.assertTrue(self.paths["resolved"].exists())
+        resolved = _read_json(self.paths["resolved"])
+        self.assertEqual(resolved["signals"], {})
+        self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+        projected = project_analyst_grade_risk_downgrade(
+            target_tickers=["AAPL", "MSFT", "JPM"],
+            analyst_grade_actions=resolved,
+        )
+        self.assertFalse(any(projected["analyst_collective_downgrade_by_ticker"].values()))
+        summary_text = self.paths["summary"].read_text(encoding="utf-8")
+        for forbidden in ("AAPL", "MSFT", "JPM", "BankA", "observed_at must be before"):
+            self.assertNotIn(forbidden, summary_text)
 
     def test_duplicate_yfinance_row_is_deduplicated_and_does_not_block_downstream_grade_risk(self):
         row = _grade_row(action="down", firm="  BankA  ")
