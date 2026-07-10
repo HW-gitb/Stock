@@ -109,6 +109,8 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 ### 3.7 数据源分层健康检查（跑前必做）
 每周跑前分层探活：FMP 接口 / SEC EDGAR parser / 价格·状态·财报·事件字段够不够，并按 endpoint family 分别判 criticality，不能把同一 provider 的所有接口绑成一个硬门。当前 capstone 中 `FMP grades` 按 §3.2 为 advisory，异常时透明降级为 `usable_with_fallback`；SEC submissions 仍 critical，异常时 `restricted / blocked` 并 NO-EMIT。**未单独批准的源（yfinance / Web / X，§3 边界）：健康检查只记 `disabled_unapproved`——不探活、不调用、不参与 clean 判定**（防"健康检查"被当成调用未授权源的后门）。只查真实 weekly 会用的、已授权的接口、不打印 token、不假 OK。关键源异常 → **不许输出 clean 建仓**，只能 `restricted / observe / data_degraded`。
 
+`runners/us_short_yfinance_grades_feasibility_probe.py` 是唯一例外：它是 20260710 固定样本的独立、低信任、default-dry-run 可行性实验，不属于 provider health 或 weekly runner。只有单独 per-execution 用户授权才可 fetch；即使探针通过，也不能接入 §4.2 打分、emit 门、DataHub、生产或 ship-gate，仍须新的 schema-first 设计与审查。
+
 ---
 
 # 选股子系统（§4）

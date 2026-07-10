@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short yfinance grades feasibility probe summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "scope", "input_artifacts", "sample", "execution", "coverage", "field_shape", "freshness_and_pit", "rate_limit", "fmp_cross_check", "decision", "storage"],
+  "properties": {
+    "schema_name": {"const": "us_short_yfinance_grades_feasibility_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "decision_date", "price_basis_date", "yfinance_low_trust_feasibility_only", "provider_selected", "datahub_consumption_performed", "production_storage_performed", "ship_gate_evidence_claimed"],
+      "properties": {
+        "status": {"enum": ["completed", "completed_with_fetch_errors", "halted_rate_limit_or_crumb_failure"]},
+        "decision_date": {"const": "20260710"}, "price_basis_date": {"const": "20260709"},
+        "yfinance_low_trust_feasibility_only": {"const": true}, "provider_selected": {"const": false},
+        "datahub_consumption_performed": {"const": false}, "production_storage_performed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false}
+      }
+    },
+    "input_artifacts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidate_subset_path", "momentum_projection_path", "fmp_grade_actions_path", "fmp_200_success_control_count"],
+      "properties": {
+        "candidate_subset_path": {"const": "state/us_short/us_short_batch5_capstone_20260710_candidate_subset.json"},
+        "momentum_projection_path": {"const": "state/us_short/us_short_batch5_capstone_20260710_momentum_projection.json"},
+        "fmp_grade_actions_path": {"const": "state/us_short/us_short_batch5_capstone_20260710_analyst_grade_actions.json"},
+        "fmp_200_success_control_count": {"const": 2}
+      }
+    },
+    "sample": {
+      "type": "object", "additionalProperties": false,
+      "required": ["planned_total", "fmp_402_small_cap_planned", "momentum_top200_planned", "fmp_200_control_planned", "ticker_names_in_summary"],
+      "properties": {
+        "planned_total": {"const": 44}, "fmp_402_small_cap_planned": {"const": 12},
+        "momentum_top200_planned": {"const": 30}, "fmp_200_control_planned": {"const": 2},
+        "ticker_names_in_summary": {"const": false}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attempted_symbol_count", "successful_symbol_count", "pace_seconds", "stopped_early"],
+      "properties": {
+        "attempted_symbol_count": {"type": "integer", "minimum": 1, "maximum": 44},
+        "successful_symbol_count": {"type": "integer", "minimum": 0, "maximum": 44},
+        "pace_seconds": {"type": "number", "minimum": 0, "maximum": 60}, "stopped_early": {"type": "boolean"}
+      }
+    },
+    "coverage": {"$ref": "#/definitions/coverage_groups"},
+    "field_shape": {
+      "type": "object", "additionalProperties": false,
+      "required": ["upgrades_downgrades_field_presence_count", "recommendations_nonempty_symbol_count"],
+      "properties": {
+        "upgrades_downgrades_field_presence_count": {
+          "type": "object", "additionalProperties": false, "required": ["Action", "Firm", "ToGrade", "GradeDate"],
+          "properties": {"Action": {"type": "integer", "minimum": 0, "maximum": 44}, "Firm": {"type": "integer", "minimum": 0, "maximum": 44}, "ToGrade": {"type": "integer", "minimum": 0, "maximum": 44}, "GradeDate": {"type": "integer", "minimum": 0, "maximum": 44}}
+        },
+        "recommendations_nonempty_symbol_count": {"type": "integer", "minimum": 0, "maximum": 44}
+      }
+    },
+    "freshness_and_pit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["as_of", "recent_window_days", "grade_date_parseable_count", "future_grade_date_count", "stale_grade_date_count"],
+      "properties": {"as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"}, "recent_window_days": {"const": 90}, "grade_date_parseable_count": {"type": "integer", "minimum": 0}, "future_grade_date_count": {"type": "integer", "minimum": 0}, "stale_grade_date_count": {"type": "integer", "minimum": 0}}
+    },
+    "rate_limit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rate_limit_or_crumb_failure_count", "first_failure_symbol_index", "pacing_controlled"],
+      "properties": {"rate_limit_or_crumb_failure_count": {"type": "integer", "minimum": 0, "maximum": 44}, "first_failure_symbol_index": {"type": ["integer", "null"], "minimum": 1, "maximum": 44}, "pacing_controlled": {"type": "boolean"}}
+    },
+    "fmp_cross_check": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fmp_200_control_symbol_count", "yfinance_recent90_control_count"],
+      "properties": {"fmp_200_control_symbol_count": {"const": 2}, "yfinance_recent90_control_count": {"type": "integer", "minimum": 0, "maximum": 2}}
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pass_criterion", "verdict", "reason_codes"],
+      "properties": {"pass_criterion": {"const": "small_cap_recent90_coverage_pct_gte_50_and_no_rate_limit_or_crumb_failure"}, "verdict": {"enum": ["worth_building", "not_worth_building"]}, "reason_codes": {"type": "array", "items": {"type": "string"}, "uniqueItems": true}}
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_payload_root", "raw_payload_root_gitignored", "tracked_summary_path", "tracked_summary_contains_tickers"],
+      "properties": {"raw_payload_root": {"const": "provider_samples/us_short_yfinance_grades_feasibility_20260710/raw"}, "raw_payload_root_gitignored": {"const": true}, "tracked_summary_path": {"const": "docs/us_short_yfinance_grades_feasibility_probe_summary_20260710.json"}, "tracked_summary_contains_tickers": {"const": false}}
+    }
+  },
+  "definitions": {
+    "coverage_group": {
+      "type": "object", "additionalProperties": false, "required": ["attempted_count", "recent90_usable_count", "recent90_coverage_pct"],
+      "properties": {"attempted_count": {"type": "integer", "minimum": 0, "maximum": 44}, "recent90_usable_count": {"type": "integer", "minimum": 0, "maximum": 44}, "recent90_coverage_pct": {"type": "number", "minimum": 0, "maximum": 100}}
+    },
+    "coverage_groups": {
+      "type": "object", "additionalProperties": false, "required": ["fmp_402_small_cap", "momentum_top200", "fmp_200_control"],
+      "properties": {"fmp_402_small_cap": {"$ref": "#/definitions/coverage_group"}, "momentum_top200": {"$ref": "#/definitions/coverage_group"}, "fmp_200_control": {"$ref": "#/definitions/coverage_group"}}
+    }
+  }
+}

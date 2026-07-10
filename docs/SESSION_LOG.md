@@ -8,12 +8,27 @@
 
 ---
 
+## 2026-07-10 — Claude 审查 PASS + 提交 (US-short 刀2：yfinance grades 可行性探针)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交刀2、未 push）。纯新增（probe+schema+test 三新文件 + docs，未动既有引擎/门）→ 低风险档：整读 probe——dry-run 默认（零 import/fetch/write）、live 仅 `--confirm-user-authorization`（触 client 前先拒）、绝不自动装 yfinance、lazy import、样本源绑 20260710 cohort（严格校验）、tracked summary 仅计数（regex+schema+test 三重 hygiene、无 ticker/raw/URL/secret）、raw gitignored、原子写、路径门、决策规则带正反控（worth/not-worth·50% 含界·429/crumb halt·future/stale 排除）。live 未执行 → §6a agent 按设计留 live 半、本轮不起。
+- **Required**: 无。`R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION` 保持 OPEN（单源见 register：offline 契约 + 决策规则 + 边界；live 跑需另行 per-execution 授权）。
+- **Verify**: `review-evidence:not_available`（证据=实际工具结果、非转述）。亲跑 full offline `test_us_short*` = Ran 4104 OK（117s，含 dry-run 零导入 / 无授权触 client 前拒 / hygiene 无泄漏 / 50% 含界 / rate-limit halt / schema drift 拒）；无真实 yfinance import/install/provider/network（纯离线 fake-client）。未跟踪 freshday summary 仍排除出 commit。
+- **Next**: Codex：执行 overextension capstone 集成刀。
+
+## 2026-07-10 — Codex 修复完成待 Claude 审查（US-short 刀2：yfinance grades feasibility probe）
+
+- **Verdict/Action**: 完成、未提交；新增 20260710 固定 44-symbol yfinance grades 可行性探针和 schema，默认 dry-run 零导入/零 fetch/零写入；live 仍只允许 `--confirm-user-authorization`。
+- **Required**: 无 executor 已知遗留；`R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION` 保持 OPEN，完整边界与待授权 live 条件单源见 register。
+- **Verify**: red-green 专项 12 OK；实际 `--dry-run` 仅打印 12 FMP-402 小盘 + 30 top-200 momentum + HOOD/MRNA 计划；full offline `*us_short*` 4104 OK（1 skipped）、doc guards 60 OK、`py_compile` / BOM+U+FFFD / `git diff --check` 净；无真实 yfinance import/install/provider/network/live，fake raw 仅测试 ignored 路径且已清理。
+- **Pre-Codex self-review**: A-F checked；样本/确认门/raw+summary path/schema/429-crumb/summary hygiene 全类与反控覆盖。轻量自审首轮 timeout 后重启；第二轮抓 canonical summary-path blocker，修复+正反测后最终复审 PASS；固定包最后集中复跑。
+- **Next**: Claude Code：审查刀2；PASS 后只提交刀2，勿执行 live probe 或混入 freshday summary。
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short 刀1：FMP grades → advisory)
 
-- **Verdict/Action**: PASS + 提交（reviewer 自动提交刀1、未 push）。整读被消费数据流全一致：`us_short_provider_health`（`CRITICAL_SOURCES={sec_edgar}`、`_source_state`/`_SOURCE_RUN_STATES`/validate/worst-of、`EMIT_ALLOWED`）+ orchestrator emit 门 + 3 个 research_live 收据函数（capability critical-only；两个 identity-bind 不受影响）+ report/private-write + design §3.2·§3.7·§4.2 + register 同边界。风险分级=最高危 emit/honesty 门 → §6a 独立对抗 agent 已跑 PASS（无可复现 bypass：SEC 坏经 worst-of 恒不可 emit、classify 路径 fmp 恒=grades、universe-fetch 市值 fmp 是异形 dict 进不来、validate 净收紧）。未跨刀2/overextension。
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交刀1、未 push）。classifier/validator/emit 门/research-live consumers/report/private-write 与设计和 register 同边界；§6a 对抗 PASS，SEC 坏仍不可 emit，`fmp` 仅 grades-scoped；未跨后续刀。
 - **Required**: 无。`R-USSHORT-BATCH5-FREE-TIER-PROVIDER-ACCESS-BLOCKS-OFFICIAL-EMIT` → resolved（单源见 register：freshday 定论=付费墙非配额 + 刀1 grades advisory + 正反控 + latent fmp-键 Optional 残留）。
 - **Verify**: `review-evidence:not_available`（未见 hook token；证据=实际工具结果、非转述）。亲跑 full offline `test_us_short*` = Ran 4092 OK（111s，含 fmp-down→emit / sec-down→no-emit / validate 拒非法 criticality / const-pin 反正控）；§6a agent PASS；`git diff --check` 净（仅 CRLF 归一化告警）；无 provider/network/live 调用。未跟踪 `us_short_universe_fetch_summary_20260710.json`=freshday 残留、排除出 commit。
-- **Next**: Codex：执行刀2（overextension capstone 集成）。
+- **Next**: Codex：执行用户定义的刀2（yfinance grades 可行性探针）。
 
 ## 2026-07-10 — Codex 修复完成待 Claude 审查（US-short 刀1：FMP grades advisory）
 
