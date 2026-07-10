@@ -22,7 +22,7 @@ import json
 import os
 from pathlib import Path
 
-from engine.us_short_provider_health import RUN_STATES
+from engine.us_short_provider_health import CRITICAL_SOURCES, RUN_STATES
 
 # the immutable batch4 execution / data-origin fact. run_mode=offline_test (live gated → batch5);
 # data_origin=caller_supplied_fixture (no provider call produced any market/provider fact);
@@ -321,9 +321,10 @@ def require_research_live_capability(run_origin, capability, *, decision_date=No
     offline_test / any non-research_live origin (they need no capability). Raises RunOriginError otherwise."""
     if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live":
         receipt = require_research_live_receipt_binding(capability, decision_date=decision_date)
-        if any(state != "ok" for _, state in receipt.provider_health_facts):
+        provider_health_facts = dict(receipt.provider_health_facts)
+        if any(provider_health_facts.get(source) != "ok" for source in CRITICAL_SOURCES):
             raise RunOriginError(
-                "research_live official artifacts require receipt-bound clean provider health"
+                "research_live official artifacts require receipt-bound healthy critical providers"
             )
 
 # the stable always-visible offline disclosure sentinel — rendered into the weekly report (§11.2) and

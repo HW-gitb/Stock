@@ -321,17 +321,25 @@ class ProvenanceFailClosed(unittest.TestCase):
 
 class RunGateHealthAndMode(unittest.TestCase):
     """R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP (health + mode halves): the §3.7 provider-health
-    gate NO-EMITs on non-clean CRITICAL health; the §2.1 run-mode gate fails a live run closed on a
-    non-authoritative calendar; offline_test runs on the pending fixture calendar."""
+    gate permits advisory FMP-grades fallback but NO-EMITs on non-clean critical SEC health; the §2.1 run-mode
+    gate fails a live run closed on a non-authoritative calendar; offline_test runs on the pending fixture calendar."""
 
     def _ctx(self, d, rr, wr, **over):
         reg = Path(d) / "reg.json"
         reg.write_text(json.dumps(_register()), encoding="utf-8")
         return _pipeline_context(reg, rr, wr, **over)
 
-    def test_degraded_critical_health_no_emit(self):
+    def test_down_advisory_fmp_health_emits_with_fallback(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            pc = self._ctx(d, rr, wr, provider_health={"fmp": "degraded", "sec_edgar": "ok"})
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "down", "sec_edgar": "ok"})
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            self.assertTrue(out["emitted"])
+            self.assertEqual(out["provider_health"]["overall_run_state"], "usable_with_fallback")
+            self.assertEqual(out["provider_health"]["sources"]["fmp"], "usable_with_fallback")
+
+    def test_degraded_critical_sec_health_no_emit(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            pc = self._ctx(d, rr, wr, provider_health={"fmp": "ok", "sec_edgar": "degraded"})
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertFalse(out["emitted"])
             self.assertEqual(out["no_emit_reason"], "provider_health_restricted")

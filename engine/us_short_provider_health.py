@@ -21,17 +21,24 @@ Pure / offline: no provider/live/DataHub/network import; no A-share crossing.
 """
 from __future__ import annotations
 
-# Current $0 small-sample authorization (§3.1 / §18.0 P0, SR-PROVIDER-001). FMP (existing key, small sample) +
-# public SEC EDGAR only; both are CRITICAL (price/score/veto + audit/veto), so either degraded/down ⇒ not clean.
+# Current $0 small-sample authorization (§3.1 / §18.0 P0, SR-PROVIDER-001).
 AUTHORIZED_SOURCES = frozenset({"fmp", "sec_edgar"})
-CRITICAL_SOURCES = frozenset({"fmp", "sec_edgar"})
+# In this capstone projection, `fmp` is the analyst-grades catalyst leg: advisory and neutral on absence.
+# SEC submissions remains critical for audit/veto fields. Other FMP field families are classified separately.
+CRITICAL_SOURCES = frozenset({"sec_edgar"})
 # Explicitly NOT authorized → always disabled_unapproved, never probed (full-market FMP / yfinance / Web·X /
 # paid feeds all need a separate reviewed approval, §18.0 P0).
 UNAUTHORIZED_SOURCES = frozenset({"fmp_full_market", "yfinance", "web_x", "sec_parser", "paid_borrow_options", "dark_pool"})
 
 _INPUT_STATES = frozenset({"ok", "degraded", "down", "missing"})
 RUN_STATES = frozenset({"clean", "usable_with_fallback", "restricted", "blocked", "disabled_unapproved"})
+EMIT_ALLOWED_RUN_STATES = frozenset({"clean", "usable_with_fallback"})
 _SEVERITY = {"clean": 0, "usable_with_fallback": 1, "restricted": 2, "blocked": 3}  # worst-of ordering
+_SOURCE_RUN_STATES = {
+    source: (frozenset({"clean", "restricted", "blocked"})
+             if source in CRITICAL_SOURCES else frozenset({"clean", "usable_with_fallback"}))
+    for source in AUTHORIZED_SOURCES
+}
 
 
 class ProviderHealthError(ValueError):
@@ -56,7 +63,7 @@ def classify_provider_health(authorized_statuses) -> dict:
     ``authorized_statuses`` maps an AUTHORIZED source id → one of {ok, degraded, down, missing}. Passing ANY
     non-authorized source id raises ``ProviderHealthError`` — the health check structurally cannot probe /
     consider an unauthorized source (§18.1 #3 「绝不触达未授权源」). A missing AUTHORIZED source (absent from the
-    map) is treated as `missing` → blocked (a critical source we could not check is not clean). Returns
+    map) is treated as `missing` and classified by that source's criticality. Returns
     ``{sources: {id: state}, overall_run_state, disabled_unapproved: [...sorted unauthorized...]}``; the overall
     is the worst-of the authorized states, and the always-`disabled_unapproved` unauthorized sources never
     participate in it.
@@ -73,7 +80,7 @@ def classify_provider_health(authorized_statuses) -> dict:
         if status not in _INPUT_STATES:
             raise ProviderHealthError("source %r has an invalid status %r (expected %s)" % (src, status, sorted(_INPUT_STATES)))
         sources[src] = _source_state(src, status)
-    # every authorized source must be accounted for — a critical source we did not check is `missing` → blocked
+    # Every authorized source must be accounted for; missing is classified by source criticality.
     for src in AUTHORIZED_SOURCES:
         if src not in sources:
             sources[src] = _source_state(src, "missing")
@@ -95,7 +102,7 @@ def validate_provider_health_result(result) -> bool:
         return False
     sources = result["sources"]
     if not (isinstance(sources, dict) and set(sources) == set(AUTHORIZED_SOURCES)
-            and all(st in _SEVERITY for st in sources.values())):
+            and all(st in _SOURCE_RUN_STATES[src] for src, st in sources.items())):
         return False
     overall = result["overall_run_state"]
     if overall not in _SEVERITY or overall != max(sources.values(), key=lambda st: _SEVERITY[st]):

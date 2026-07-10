@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-10 — Claude 审查 PASS + 提交 (US-short 刀1：FMP grades → advisory)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交刀1、未 push）。整读被消费数据流全一致：`us_short_provider_health`（`CRITICAL_SOURCES={sec_edgar}`、`_source_state`/`_SOURCE_RUN_STATES`/validate/worst-of、`EMIT_ALLOWED`）+ orchestrator emit 门 + 3 个 research_live 收据函数（capability critical-only；两个 identity-bind 不受影响）+ report/private-write + design §3.2·§3.7·§4.2 + register 同边界。风险分级=最高危 emit/honesty 门 → §6a 独立对抗 agent 已跑 PASS（无可复现 bypass：SEC 坏经 worst-of 恒不可 emit、classify 路径 fmp 恒=grades、universe-fetch 市值 fmp 是异形 dict 进不来、validate 净收紧）。未跨刀2/overextension。
+- **Required**: 无。`R-USSHORT-BATCH5-FREE-TIER-PROVIDER-ACCESS-BLOCKS-OFFICIAL-EMIT` → resolved（单源见 register：freshday 定论=付费墙非配额 + 刀1 grades advisory + 正反控 + latent fmp-键 Optional 残留）。
+- **Verify**: `review-evidence:not_available`（未见 hook token；证据=实际工具结果、非转述）。亲跑 full offline `test_us_short*` = Ran 4092 OK（111s，含 fmp-down→emit / sec-down→no-emit / validate 拒非法 criticality / const-pin 反正控）；§6a agent PASS；`git diff --check` 净（仅 CRLF 归一化告警）；无 provider/network/live 调用。未跟踪 `us_short_universe_fetch_summary_20260710.json`=freshday 残留、排除出 commit。
+- **Next**: Codex：执行刀2（overextension capstone 集成）。
+
+## 2026-07-10 — Codex 修复完成待 Claude 审查（US-short 刀1：FMP grades advisory）
+
+- **Verdict/Action**: 修复完成、未提交；仅把 capstone `FMP grades` 从 critical 降为 advisory，raw `fmp=down` 继续透明，`fmp down + SEC ok` 以 `usable_with_fallback` emit；SEC submissions 保持 critical。刀2未开始。
+- **Required**: 无 executor 已知遗留；classifier / validator / orchestrator / research-live 四官方 consumer gate / report / design / register / CURRENT 已同边界，细节见 `R-USSHORT-BATCH5-FREE-TIER-PROVIDER-ACCESS-BLOCKS-OFFICIAL-EMIT`。
+- **Verify**: 红绿 focused；最终 focused 53 OK、integration 207 OK、full offline `*us_short*` 4092 OK（1 skipped）、doc guards 60 OK、`py_compile` / BOM+U+FFFD / `git diff --check` 净；无 provider/network/live 调用，未读改未跟踪 freshday summary。
+- **Pre-Codex self-review**: A-F checked；整类矩阵覆盖 raw derive→source criticality→validator→emit→report→receipt consumers，SEC degraded/down/missing 反控 held；active-code 旧 critical-FMP 陈述 0。轻量自审首轮到时关闭并按规重启一次，第二轮 PASS；最终固定包集中复跑。
+- **Next**: Claude Code：审查刀1；PASS 后提交刀1，勿混入刀2或未跟踪 summary。
+
 ## 2026-07-10 — Codex 自修复后最终重审 PASS (US-short queue 类别1)
 
 - **Verdict/Action**: PASS；类别1设计方向合理，A1/A2/B/C1/C2/C3 已按 source-bound receipt、完整官方 consumer 门、三 sibling commit manifest、私密历史与可恢复事务协议闭环；当前 reviewer 自动提交本次审查树。

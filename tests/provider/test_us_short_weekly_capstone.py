@@ -870,6 +870,11 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 require_research_live_capability(FORGED, bad)
         receipt = _research_receipt(decision_date="20260615")
         require_research_live_capability(FORGED, receipt, decision_date="20260615")   # ok — no raise
+        advisory_receipt = _research_receipt(
+            decision_date="20260615",
+            provider_health_facts=(("fmp", "down"), ("sec_edgar", "ok")),
+        )
+        require_research_live_capability(FORGED, advisory_receipt, decision_date="20260615")
         require_research_live_capability({"run_mode": "offline_test"}, None)           # offline_test no-op
         # each producer fail-closes FIRST on a hand-built research_live origin with an absent/forged capability
         # (the guard precedes all other processing, so the garbage positional args are never reached)
@@ -892,28 +897,31 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 cap = {} if forged is None else {"research_live_capability": forged}
                 with self.assertRaises(RunOriginError):
                     write_action_table({"run_origin": FORGED, "rows": []}, _out, **cap)
-            down_receipt = _research_receipt(
+            critical_down_receipt = _research_receipt(
                 decision_date="20260615",
-                provider_health_facts=(("fmp", "down"), ("sec_edgar", "down")),
+                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "down")),
             )
             with self.assertRaises(RunOriginError):
                 assemble_machine_record(object(), as_of="20260615", run_origin=FORGED,
-                                        research_live_capability=down_receipt)
+                                        research_live_capability=critical_down_receipt)
             with self.assertRaises(RunOriginError):
                 build_weekly_report(object(), object(), report_context={}, run_context={}, stage_status={},
-                                    selection={}, run_origin=FORGED, research_live_capability=down_receipt)
+                                    selection={}, run_origin=FORGED, research_live_capability=critical_down_receipt)
             with self.assertRaises(RunOriginError):
                 write_run_private(decision_date="20260615", machine_record={}, weekly_report_md="x", report_data={},
                                   provider_health={}, coverage_inputs={}, lifecycle_result={}, run_origin=FORGED,
-                                  research_live_capability=down_receipt)
+                                  research_live_capability=critical_down_receipt)
             with self.assertRaises(RunOriginError):
                 write_action_table({"run_origin": FORGED, "rows": []}, _out,
-                                   research_live_capability=down_receipt)
+                                   research_live_capability=critical_down_receipt)
         # positive control: WITH the exact capability the guard PASSES (the producer then fails on the garbage args
         # with its OWN typed error, NOT RunOriginError — proving the guard never blocks a legit research_live run)
         with self.assertRaises(WeekendMachineRecordError):
             assemble_machine_record({"regime": {}, "rows": []}, as_of="20260615", run_origin=FORGED,
                                     research_live_capability=receipt)
+        with self.assertRaises(WeekendMachineRecordError):
+            assemble_machine_record({"regime": {}, "rows": []}, as_of="20260615", run_origin=FORGED,
+                                    research_live_capability=advisory_receipt)
 
 
 class CapstoneAdapterSignatureTest(unittest.TestCase):
@@ -1073,7 +1081,8 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
 
     def test_low_grades_coverage_is_down(self):
         # item 2 (a): ONE success among 199 failures = 0.5% coverage < threshold -> fmp='down' (was 'ok' under the
-        # old any-single-success leniency). A near-zero-coverage grades run now correctly NO-EMITs.
+        # old any-single-success leniency). The raw health remains transparent; the classifier treats this advisory
+        # grades leg as usable_with_fallback while critical SEC remains ok.
         rows = ([self._row("financial_modeling_prep", "grades", True)]
                 + [self._row("financial_modeling_prep", "grades", False) for _ in range(199)]
                 + [self._row("sec_edgar", "submissions", True)])

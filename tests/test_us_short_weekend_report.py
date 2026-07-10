@@ -20,7 +20,7 @@ if str(ROOT) not in sys.path:
 import engine.us_short_weekend_report as wr  # noqa: E402
 import engine.us_short_weekend_machine_record as mr  # noqa: E402
 from engine.us_short_action_rank import action_group as _ag  # noqa: E402
-from engine.us_short_provider_health import classify_provider_health  # noqa: E402
+from engine.us_short_provider_health import UNAUTHORIZED_SOURCES, classify_provider_health  # noqa: E402
 
 _AS_OF = "20260112"
 # a valid executable support_atr build action_fields (carries every m1 _BUILD_REQUIRED field with valid values)
@@ -150,15 +150,19 @@ class StageStatusBinding(unittest.TestCase):
         self.assertIn("portfolio_guard=cooldown", str(self._sections(portfolio_guard_status="cooldown")[2]))
 
     def test_provider_health_rendered_from_stage_not_note(self):
-        ph = classify_provider_health({"fmp": "degraded", "sec_edgar": "ok"})   # real classifier output → restricted
+        ph = classify_provider_health({"fmp": "down", "sec_edgar": "ok"})
+        self.assertIn("provider_health=usable_with_fallback", str(self._sections(provider_health=ph)[11]))
+
+    def test_critical_sec_restriction_rendered_from_stage(self):
+        ph = classify_provider_health({"fmp": "ok", "sec_edgar": "degraded"})
         self.assertIn("provider_health=restricted", str(self._sections(provider_health=ph)[11]))
 
     def test_forged_classifier_result_rejected(self):
         # a fabricated health dict (legal overall_run_state but NOT a real classify_provider_health output) fails
         for forged in ({"overall_run_state": "clean"},                                            # missing keys
                        {"overall_run_state": "clean", "sources": {}, "disabled_unapproved": []},   # empty sources
-                       {"overall_run_state": "clean", "sources": {"fmp": "blocked", "sec_edgar": "clean"},
-                        "disabled_unapproved": []}):                                               # overall ≠ worst-of
+                       {"overall_run_state": "blocked", "sources": {"fmp": "blocked", "sec_edgar": "clean"},
+                        "disabled_unapproved": sorted(UNAUTHORIZED_SOURCES)}):                      # impossible FMP state
             with self.assertRaises(wr.WeekendReportError):
                 _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context(),
                               stage_status=_stage_status(provider_health=forged))

@@ -85,6 +85,8 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 ### 3.2 Fallback 与运行状态
 非关键字段自动 fallback 标源；关键字段 fallback 必降级保守；硬否决审计字段必须权威源。运行状态 `clean / usable_with_fallback / restricted / blocked`；高频 fallback 进 §13。
 
+**FMP analyst grades 关键性裁决（2026-07-10）**：周末 capstone 的 `FMP grades` 仅是 §4.2 催化剂里的小分量信号，定位为 **advisory / non-critical**。grades 覆盖不足或不可用时，provider health 仍如实显示 `fmp=down`，整体进入 `usable_with_fallback`，该分量按中性 + `data_quality` 标签处理，但**不阻断 weekly emit**。本裁决只适用于 grades endpoint，不代表其他 FMP 价格、状态或审计字段自动变成非关键。SEC submissions 仍是 audit/veto 的 critical source：覆盖不足继续进入 `restricted / blocked` 并 NO-EMIT。原因是 2026-07-10 freshday 小盘候选实跑确认 grades 198/200 返回 HTTP 402 subscription wall，而 HOOD/MRNA 与 VIX 的 200 仅证明新配额及大盘可用，不能代表真实小盘覆盖。
+
 ### 3.3 数据口径与 Unknown 分层（避免过度保守）
 - 关键价格字段（`current_price/OHLCV/ATR/volume/support/resistance`）须同源·同 as-of·同复权·同 session；记 `adjustment_mode / session_scope / timezone`；混源 → `data_degraded`。
 - **关键 unknown → 禁新建/加仓**（持仓只给风控/减/清/重评）：结构化审计/状态字段——SEC filing 存在性 / delisting / halt / bankruptcy / major active offering(S-1/S-3/424B/ATM) / critical stock status。
@@ -105,7 +107,7 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 - **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / decision_as_of`；trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。CSV canonical 防 Excel 强转。
 
 ### 3.7 数据源分层健康检查（跑前必做）
-每周跑前分层探活：FMP 关键接口 / SEC EDGAR parser / 价格·状态·财报·事件字段够不够。**未单独批准的源（yfinance / Web / X，§3 边界）：健康检查只记 `disabled_unapproved`——不探活、不调用、不参与 clean 判定**（防"健康检查"被当成调用未授权源的后门）。只查真实 weekly 会用的、已授权的接口、不打印 token、不假 OK。关键源异常 → **不许输出 clean 建仓**，只能 `restricted / observe / data_degraded`。
+每周跑前分层探活：FMP 接口 / SEC EDGAR parser / 价格·状态·财报·事件字段够不够，并按 endpoint family 分别判 criticality，不能把同一 provider 的所有接口绑成一个硬门。当前 capstone 中 `FMP grades` 按 §3.2 为 advisory，异常时透明降级为 `usable_with_fallback`；SEC submissions 仍 critical，异常时 `restricted / blocked` 并 NO-EMIT。**未单独批准的源（yfinance / Web / X，§3 边界）：健康检查只记 `disabled_unapproved`——不探活、不调用、不参与 clean 判定**（防"健康检查"被当成调用未授权源的后门）。只查真实 weekly 会用的、已授权的接口、不打印 token、不假 OK。关键源异常 → **不许输出 clean 建仓**，只能 `restricted / observe / data_degraded`。
 
 ---
 
@@ -132,7 +134,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **权重 = initial prior**（美股 active-only 回测证明不了 alpha）→ forward + lifecycle 校准（§13 #1）。
 - **`scoring_profile`（命名权重档 + 一键回滚）**：`balanced`（40/35/25，**v1 唯一主建议档 / 唯一 `model_paper` 主轨**；系统不自动交易——只有用户真实手动成交 + 完成 reconciliation 后才进 `manual_actual`/`live_normalized` 并计 ship-gate，§12）、`theme_plus`（加重赛道，仅 shadow 比较）、`theme_aggressive`（更激进赛道，仅 shadow 比较）、`theme_off`（赛道权重归 0、重分配给动量+催化，仅 shadow——归因基准 + 回滚锚，§12.2）。回滚/调权重 = 改配置不改码；比较档只 shadow、不交易、不计入 ship-gate（§12.2）。
 - **标准化（v1 锁定默认）**：三块都映射 0–100——动量 = 全池分位、赛道 = GICS/主题池内分位（确认门内再按 `heat × persistence × fit` 连续合成，§4.3；行业热与跨行业主题热正交去重，§4.3）、催化剂 = 规则映射分（非分位）；z-score 挂 lifecycle。
-- **缺分量**：某块算不出（小票无分析师→催化剂缺）→ 该块按中性 + `data_quality` 降级 + 标签；不偷偷重新归一放大权重。
+- **缺分量**：某块算不出（小票无分析师、`FMP grades` 覆盖不足/付费墙 → 催化剂中的 analyst-grades 分量缺）→ 该分量按中性 + `data_quality` 降级 + 标签；不偷偷重新归一放大权重，也不因这个 advisory 分量单独阻断 emit（§3.2）。
 - **三块细分**：动量（1月/3月趋势、5-10日动量、相对 SPY/QQQ、相对 sector、放量）；赛道（§4.3）；催化剂（财报实际vs预期、分析师修正、8-K/订单/产品/监管/LLM 语义——**仅已实现/当前**，未来事件不进选股分、归 §8.1）。
 - **`risk_downgrade`** = 只含"让票作为'选股'不那么吸引人"的软旗标：`earnings_reaction_history_score`（财报坏反应习惯，跨季、慢变） + `current_good_data_bad_reaction_event`（本期事件，瞬时、soft、带 SPY/QQQ 相对豁免，§5.2） + 分析师集体下调；不含数据质量/主题拥挤/临近财报（各归 §4.4/§4.5/§8）。
 - **财报质量趋势（可选 advisory、非门，默认不启用）**：毛利率压缩 / 应收增速>营收 / 存货堆积等财报趋势恶化（借 A 股 `financial_trends` type-agnostic 框架，可得自 FMP 财务）——**若启用，最多作 `risk_downgrade` 软标签，绝不设门/硬否决**。短线动量系统对深度财报趋势优先级低、易增保守，**v1 默认不开**，挂 §13 候选（#39）。

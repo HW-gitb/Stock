@@ -38,7 +38,7 @@ from __future__ import annotations
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
-from engine.us_short_provider_health import classify_provider_health
+from engine.us_short_provider_health import EMIT_ALLOWED_RUN_STATES, classify_provider_health
 from engine.us_short_run_origin import (
     RunOriginError,
     is_capstone_research_live_capability,
@@ -187,9 +187,9 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     R-USSHORT-BATCH4-PIPELINE-PIT-HEALTH-CALENDAR-GATE-GAP): (1c) the run-mode / calendar-authority gate — a
     `live` run is GATED in batch4 (the authoritative cross-checked calendar is batch5 / SR-PROVIDER-001); the
     sessions are DERIVED from the validated injected calendar via `build_sessions`, so a missing / extra / wrong-
-    open-close session is impossible by construction; (1b) the §3.7 provider-health gate — non-clean CRITICAL
-    source health (degraded/down/missing FMP or SEC) NO-EMITs (a clean official build can never ride unhealthy
-    critical sources, §3.2); (1a) the §2.1 PIT provenance reconcile.
+    open-close session is impossible by construction; (1b) the §3.7 provider-health gate — degraded/down/missing
+    critical SEC health NO-EMITs, while advisory FMP-grades may continue as `usable_with_fallback` (§3.2);
+    (1a) the §2.1 PIT provenance reconcile.
 
     now_et = the §2.1 resolver ET wall clock; the NYSE sessions are derived from `pipeline_context["calendar"]`.
     pipeline_context = the closed-world injected run context (see _PIPELINE_CONTEXT_KEYS).
@@ -197,8 +197,8 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     requires the process-internal capstone capability, R-USSHORT-REVIEWQ-CAT1 A) | 'live' (gated in batch4 → batch5).
 
     Returns a NO-EMIT result {"out_of_window"/"emitted", "no_emit_reason", "decision_date", "run_date",
-    "selection", ["provider_health"]} on the intraday dead zone OR non-clean provider health (NO machine record /
-    report / private artifact produced). On a clean in-window run {"out_of_window": False, "emitted": True,
+    "selection", ["provider_health"]} on the intraday dead zone OR restricted/blocked provider health (NO machine
+    record / report / private artifact produced). On an emit-allowed in-window run {"out_of_window": False, "emitted": True,
     "decision_date", "run_date", "selection", "machine_record", "lifecycle_result", "report_data", "written",
     "run_provenance", "provider_health"}. Raises WeekendOrchestratorError on a malformed pipeline_context /
     run_mode / non-authoritative live calendar / selection→analysis seam; each wired stage raises its own typed
@@ -241,12 +241,11 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
                 "decision_date": None, "run_date": selection["run_date"], "selection": selection}
     decision_date = selection["decision_date"]   # §2.1 the ONE canonical anchor threaded below
 
-    # (1b) §3.7 provider-health gate: classify the INJECTED authorized-source health; non-clean CRITICAL health
-    # (degraded/down/missing FMP or SEC EDGAR) NO-EMITs — an official build can never ride unhealthy critical
-    # sources (§3.2 不健康→restricted/blocked). The single-source classifier structurally refuses unauthorized
-    # sources. (Graduated restricted-mode reporting is the report-binding slice; here non-clean fails closed.)
+    # (1b) §3.7 provider-health gate: critical SEC health degraded/down/missing NO-EMITs. Advisory FMP grades stays
+    # visible as usable_with_fallback and may emit with its §4.2 catalyst contribution neutral-filled. The classifier
+    # structurally refuses unauthorized sources; restricted/blocked still fail closed.
     provider_health = classify_provider_health(pc["provider_health"])
-    if provider_health["overall_run_state"] != "clean":
+    if provider_health["overall_run_state"] not in EMIT_ALLOWED_RUN_STATES:
         return {"out_of_window": False, "emitted": False,
                 "no_emit_reason": "provider_health_" + provider_health["overall_run_state"],
                 "decision_date": decision_date, "run_date": selection["run_date"],

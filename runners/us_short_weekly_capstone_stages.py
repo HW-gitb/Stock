@@ -198,8 +198,9 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
 
 # A source reads "ok" only if at least this fraction of its ATTEMPTED endpoint calls came back success. This is a
 # coverage threshold, deliberately NOT "any single success" / "any call attempted": a run whose grades mostly 429'd
-# (or whose SEC submissions mostly failed) is NOT a healthy source, so it must NO-EMIT rather than emit a "healthy"
-# report on near-zero real coverage. 0.5 = a simple majority; tune here if the operational bar changes.
+# (or whose SEC submissions mostly failed) reports that source as down instead of pretending coverage is healthy.
+# Downstream criticality is separate: FMP grades is advisory/fallback; SEC submissions remains emit-critical.
+# 0.5 = a simple majority; tune here if the operational bar changes.
 _HEALTH_MIN_SUCCESS_COVERAGE = 0.5
 
 
@@ -227,8 +228,8 @@ def derive_provider_health(summary) -> dict[str, str]:
 
 def _write_provider_health(ctx) -> None:
     # Fail closed on a malformed/unreadable summary: any read / parse / container-shape problem -> empty results ->
-    # both sources 'down' (no emit), NEVER a crash. This is the gate's OWN defense-in-depth, not a reliance on the
-    # orchestrator's blanket stage-exception handler.
+    # both sources 'down', NEVER a crash. Downstream permits advisory FMP fallback but still blocks on critical SEC.
+    # This is the gate's OWN defense-in-depth, not reliance on the orchestrator's blanket stage-exception handler.
     try:
         summary = json.loads(_stage_summary_targets(ctx)["pass2"].read_text(encoding="utf-8"))
     except (OSError, ValueError):
