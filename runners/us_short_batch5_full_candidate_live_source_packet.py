@@ -408,6 +408,7 @@ def _fetch_live_records(
     provider_pace_seconds: float,
     max_retries_per_call: int,
     retry_backoff_seconds: float,
+    fetch_fmp_grades: bool,
 ) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int]:
     records: list[sample_validation.FetchRecord] = []
     retry_stats = {"used": 0}
@@ -428,22 +429,23 @@ def _fetch_live_records(
     sec_headers = {"User-Agent": sec_env.value, "Host": "data.sec.gov"}
     massive_headers = {"User-Agent": "StockSystem/0.1 us-short-batch5-full-candidate-live-source-packet"}
     for symbol in selected_symbols:
-        _assert_endpoint_budget(records, max_total_endpoint_calls)
-        records.append(
-            _fetch_with_retry(
-                client,
-                url=_fmp_stable_url("grades", symbol, fmp_env.value),
-                provider_id="financial_modeling_prep",
-                endpoint_family="grades",
-                symbol=symbol,
-                raw_root=raw_root,
-                headers=fmp_headers,
-                pace_seconds=provider_pace_seconds,
-                max_retries=max_retries_per_call,
-                retry_backoff_seconds=retry_backoff_seconds,
-                retry_stats=retry_stats,
+        if fetch_fmp_grades:
+            _assert_endpoint_budget(records, max_total_endpoint_calls)
+            records.append(
+                _fetch_with_retry(
+                    client,
+                    url=_fmp_stable_url("grades", symbol, fmp_env.value),
+                    provider_id="financial_modeling_prep",
+                    endpoint_family="grades",
+                    symbol=symbol,
+                    raw_root=raw_root,
+                    headers=fmp_headers,
+                    pace_seconds=provider_pace_seconds,
+                    max_retries=max_retries_per_call,
+                    retry_backoff_seconds=retry_backoff_seconds,
+                    retry_stats=retry_stats,
+                )
             )
-        )
 
         cik10 = cik_by_symbol.get(symbol)
         if cik10:
@@ -1335,6 +1337,7 @@ def run_full_candidate_live_source_packet(
         provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
+        fetch_fmp_grades=yfinance_actions_path is None,
     )
     resolved_sources = _resolved_source_artifacts(
         selected_symbols=selected_symbols,

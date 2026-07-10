@@ -354,6 +354,9 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             )
 
         self.assertTrue(funnel_summary["prohibited_claims"]["yfinance_used"])
+        self.assertEqual(funnel_summary["endpoint_call_budget"]["fmp_grades_calls"], 0)
+        self.assertEqual(funnel_summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 13)
+        self.assertFalse(any("financialmodelingprep.com" in url for url in client.urls))
         self.assertEqual(
             funnel_summary["source_artifacts"]["analyst_grade_actions_consumed_from"],
             "yfinance_grade_actions",

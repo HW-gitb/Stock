@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-10 — Claude 审查 PASS + 提交 (US-short Optional：Pass2 yfinance 在场时跳过冗余 FMP grades)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。上轮 Optional 收口：`_fetch_live_records` 加 `fetch_fmp_grades` 门、`run_full_candidate_live_source_packet` 传 `yfinance_actions_path is None`——yfinance 在场→跳过 FMP grades 抓取（省那 ~200 个多为 402 的白抓），yfinance 缺席→照抓 FMP grades（fallback 不变）。整读确认逻辑正确、无 scoring/health/emit/frozen 改动。低风险（既有 fetch 的条件跳过、非新 gate/fetch）→ 无 §6a agent。
+- **Required**: 无。`R-USSHORT-YFINANCE-GRADES-FEASIBILITY-PROBE-PENDING-LIVE-AUTHORIZATION` knife-C note 更新（Pass2 跳冗余 FMP grades、FMP 留 no-yfinance fallback，单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读 Pass2 diff + schema（`fmp_grades_calls` min 1→0 允许在场时 0）+ 正控（capstone e2e：yfinance 在场→fmp_grades_calls=0、总调 13、零 FMP URL）+ 反控（yfinance 缺席→FMP 照抓、既有测试守）；亲跑 full offline `test_us_short*` = **Ran 4138 OK**；`git diff --check` 净；无 provider/network 调用。freshday summary 仍排除。
+- **Next**: Codex：待命（yfinance live 抓取需你另行授权才真跑）。
+
+## 2026-07-10 - Codex optional repair complete, awaiting Claude review (US-short yfinance grades fetch economy)
+
+- **Verdict/Action**: Resolved the post-PASS Optional: when the yfinance resolved-actions artifact is present, Pass2 skips redundant FMP grades requests while retaining FMP grades as the no-yfinance fallback. The authorized budget remains an upper bound; no provider, scoring, health, or emit policy changed.
+- **Required**: None known. Claude may review and commit this narrow Optional/housekeeping slice.
+- **Verify**: Focused Pass2/capstone pack 73 OK; `git diff --check` OK; no provider/network call.
+- **Pre-Codex self-review**: A-F checked; yfinance path proves zero FMP grade calls and 13 actual calls under the existing 16-call cap; no-yfinance FMP fallback regression remains covered.
+- **Next**: Claude Code: review and commit this Optional/housekeeping slice if PASS.
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short overextension capstone 集成 + yfinance-grades 源 A/B/C non-critical)
 
 - **Verdict/Action**: PASS + 提交（合并两刀、未 push）。overextension 接线（capstone 加 overextension_producer 阶段 + 复用 OHLCV sidecar + map 穿进选股/data_context、no-map 反控）+ yfinance A 引擎（FMP-兼容 resolved actions、look-ahead/类型 fail-closed）+ B live-fetch + C 接线（yfinance 替 FMP 当 §4.2 评级源、non-critical：缺/down/dep-missing/429/dup 全→中性、绝不 gate emit、不碰 provider_health）。上轮 §6a FAIL 的 dup-row-gate-emit 已修（runner 去重身份 = resolver `_DUPLICATE_IDENTITY` 精确对齐 + import catch 放宽 ImportError + 反控测），复核确认。§6a：yfinance-B 新 live-fetch 起独立 agent（dup 外全 PASS）。committer 附带修我 d1aea386 遗留的探针 dry-run 测试回归（改断 summary mtime 未变）+ 修正 Codex 误插 intro 之上的 SESSION_LOG 结构。

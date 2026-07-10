@@ -235,7 +235,7 @@
         "max_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
         "actual_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
         "sec_ticker_reference_calls": { "const": 1 },
-        "fmp_grades_calls": { "type": "integer", "minimum": 1 },
+        "fmp_grades_calls": { "type": "integer", "minimum": 0 },
         "sec_submissions_calls": { "type": "integer", "minimum": 0 },
         "massive_reference_news_calls": { "type": "integer", "minimum": 1 },
         "massive_stock_split_calls": { "type": "integer", "minimum": 1 },
