@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any
 
 from engine.us_short_run_origin import require_research_live_provider_summary
+from engine.us_short_regime import REGIMES, UNKNOWN
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
 from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
 from runners import us_short_batch5_full_candidate_projection_inputs as _proj
@@ -29,6 +30,7 @@ from runners import us_short_batch5_full_universe_theme_producer as _theme
 from runners import us_short_batch5_to_batch4_weekend_e2e as _bridge
 from runners import us_short_universe_fetch as _universe
 from runners import us_short_yfinance_grades_fetch as _yfinance_grades
+from runners import us_short_vix_regime_fetch as _vix
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -141,6 +143,15 @@ def run_yfinance_grades_fetch(ctx) -> dict[str, Any]:
     )
 
 
+def run_vix_regime(ctx) -> dict[str, Any]:
+    _require_ctx_authorization(ctx)
+    return _vix.run_fetch(
+        confirm_user_authorization=ctx.confirm_user_authorization,
+        summary_path=ctx.vix_regime_summary_path,
+        generated_at=ctx.generated_at,
+    )
+
+
 # --- OFFLINE stages (pure / local; no network) ---
 
 def run_momentum_producer(ctx) -> dict[str, Any]:
@@ -206,6 +217,17 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
     succeeded, sec_edgar = ok iff the same fraction of SEC submissions succeeded (a success-COVERAGE threshold, NOT
     any-single-success); a down critical source makes the orchestrator emit nothing (design §3.2)."""
     _write_provider_health(ctx)
+    try:
+        vix_summary = json.loads(ctx.vix_regime_summary_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        vix_summary = {}
+    receipt = getattr(ctx, "research_live_capability", None)
+    if receipt is not None:
+        require_research_live_provider_summary(receipt, "vix_regime", vix_summary)
+    vix_regime = vix_summary.get("vix_regime") if isinstance(vix_summary, dict) else None
+    if vix_regime not in (*REGIMES, UNKNOWN) \
+            or vix_summary.get("vix_regime_is_unknown") is not (vix_regime == UNKNOWN):
+        vix_regime = UNKNOWN
     return _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
@@ -224,6 +246,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         _research_live_capability=getattr(ctx, "research_live_capability", None),
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
+        vix_regime=vix_regime,
     )
 
 

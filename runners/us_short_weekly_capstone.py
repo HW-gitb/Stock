@@ -6,14 +6,15 @@ Design authority: docs/us_short_system_design.md §2.1 (canonical decision_date 
 inputs to produce an honest weekly report and action table"). This module ONLY orchestrates the already-built
 per-stage runners into ONE ordered path; it restates no selection/PIT semantics (single authority = the stages).
 
-WHAT THIS IS. The nine v1 stages already exist as separate runners (universe fetch → momentum fetch/producer →
+WHAT THIS IS. The v1 stages already exist as separate runners (universe fetch → momentum fetch/producer →
 SEC-SIC fetch/theme producer → projection-inputs → Pass2 preflight → Pass2 live source packet → batch5→batch4
 bridge). Today a weekly run means invoking ~7 commands by hand. This capstone chains them behind one entry with:
   * CANONICAL anchoring (§2.1): resolve decision_date + price_basis_date ONCE from the frozen NYSE calendar and
     thread the SAME dates through every stage; an intraday `now_et` fails closed (OutOfWindowError → no run).
   * A working offline DRY-RUN: print the full plan (every stage, gated-vs-offline, the exact input/output artifact
     paths, and which stages will hit a provider) WITHOUT any fetch — so the operator sees the gated boundary first.
-  * GATED-stage authorization: the 4 provider stages (universe / momentum-fetch / SIC-fetch / Pass2) run live ONLY
+  * GATED-stage authorization: provider stages (universe / momentum-fetch / SIC-fetch / yfinance / Pass2 / VIX)
+    run live ONLY
     with an explicit per-execution `confirm_user_authorization` (the one-click run's single SR-PROVIDER-001 auth);
     they run SEQUENTIALLY (§18.3 Batch II "do not parallelize provider/live execution"). This is the RUN-TIME
     closure of the one-click goal, distinct from the BUILD-TIME per-cut review discipline.
@@ -168,6 +169,12 @@ class CapstoneContext:
     def provider_health_path(self) -> Path:
         return self._s(f"us_short_batch5_capstone_{self.decision_date}_provider_health.json")
 
+    @property
+    def vix_regime_summary_path(self) -> Path:
+        from runners.us_short_vix_regime_fetch import SUMMARY_SAMPLE_REL_ROOT
+        return self.sample_root / SUMMARY_SAMPLE_REL_ROOT / \
+            f"us_short_batch5_capstone_{self.decision_date}_vix_regime_summary.json"
+
 
 def resolve_capstone_context(
     *,
@@ -238,7 +245,7 @@ class Stage:
 
 
 def default_pipeline() -> list[Stage]:
-    """The 11-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
+    """The 12-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
@@ -258,6 +265,7 @@ def default_pipeline() -> list[Stage]:
               st.run_yfinance_grades_fetch),
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
+        Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
     ]
 
@@ -387,6 +395,14 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
                    for row in endpoint_results):
         raise WeeklyCapstoneError("Pass2 lacks complete same-run endpoint-call evidence")
 
+    vix = _result("vix_regime")
+    if vix.get("provider") != "financial_modeling_prep" \
+            or vix.get("source_endpoint") != "stable/quote" \
+            or vix.get("symbol") != "^VIX" \
+            or type(vix.get("http_status")) is not int \
+            or vix.get("observed_at") != ctx.generated_at:
+        raise WeeklyCapstoneError("VIX stage lacks complete same-run provider observation evidence")
+
     call_counts = (
         ("universe_fetch", universe_calls), ("momentum_fetch", momentum_calls),
         ("sic_fetch", sic_calls), ("pass2_fetch", pass2_calls),
@@ -394,10 +410,13 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     if any(type(count) is not int or count < 1 for _, count in call_counts):
         raise WeeklyCapstoneError("every required provider stage must prove at least one call")
     evidence = {
-        name: {"call_count": count, "summary_sha256": hashlib.sha256(
-            json.dumps(by_name[name], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()}
-        for name, count in call_counts
+        name: {
+            "call_count": dict(call_counts).get(name, 0),
+            "summary_sha256": hashlib.sha256(
+                json.dumps(by_name[name], ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+            ).hexdigest(),
+        }
+        for name in (*dict(call_counts), "vix_regime")
     }
     evidence_sha256 = hashlib.sha256(
         json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -409,7 +428,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
         json.dumps(source_manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
     provider_summary_digests = tuple(
-        (name, evidence[name]["summary_sha256"]) for name, _ in call_counts
+        (name, evidence[name]["summary_sha256"]) for name in (*dict(call_counts), "vix_regime")
     )
     from runners import us_short_weekly_capstone_stages as stage_adapters
     provider_health = stage_adapters.derive_provider_health(pass2)
@@ -738,7 +757,7 @@ def run_weekly_capstone(
 
     if not ctx.confirm_user_authorization:
         raise WeeklyCapstoneError(
-            "a live weekly run performs gated provider fetches (universe / momentum / SIC / Pass2) and requires "
+            "a live weekly run performs gated provider fetches (universe / momentum / SIC / Pass2 / VIX) and requires "
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
             "the plan first")
 

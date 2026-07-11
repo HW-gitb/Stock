@@ -26,7 +26,7 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "weekly_bridge",
+    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "weekly_bridge",
 ]
 
 
@@ -38,13 +38,14 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
     source_digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "1" * 64
     evidence_digest = "2" * 64
     source_manifest = source_manifest or (("test_source", str(source), source_digest),)
-    provider_summaries = provider_summaries or {
-        stage: {"stage": stage} for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
-    }
+    provider_stages = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
+    summaries = {stage: {"stage": stage} for stage in provider_stages}
+    summaries.update(provider_summaries or {})
+    provider_summaries = summaries
     provider_summary_digests = tuple(
         (stage, hashlib.sha256(json.dumps(provider_summaries[stage], ensure_ascii=False, sort_keys=True,
                                            separators=(",", ":")).encode("utf-8")).hexdigest())
-        for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+        for stage in provider_stages
     )
     run_id = hashlib.sha256(
         f"{decision_date}|{generated_at}|{source}|{source_digest}|{evidence_digest}".encode("utf-8")
@@ -57,7 +58,8 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
         source_packet_path=source,
         source_packet_sha256=source_digest,
         source_artifact_manifest=source_manifest,
-        provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1), ("pass2_fetch", 1)),
+        provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
+                              ("pass2_fetch", 1)),
         provider_summary_digests=provider_summary_digests,
         provider_health_facts=provider_health_facts,
         provider_evidence_sha256=evidence_digest,
@@ -81,7 +83,8 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertEqual(plan["price_basis_date"], "20260708")   # latest settled session
         self.assertEqual([s["name"] for s in plan["stages"]], _STAGE_NAMES)
         self.assertEqual(plan["gated_stages_need_authorization"],
-                         ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch"])
+                         ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
+                          "vix_regime"])
 
     def test_intraday_now_et_fails_closed(self):
         # 07-09 11:00 ET is inside the RTH session [09:30, 16:00) -> §2.1 dead zone -> no canonical, no run.
@@ -155,6 +158,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
                 "yfinance_grades_fetch": lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
                 "pass2_fetch": lambda c: [c.source_packet_path, c.context_components_path],
+                "vix_regime": lambda c: [c.vix_regime_summary_path],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
@@ -165,7 +169,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
         stages = []
         for name in _STAGE_NAMES:
             outs = outs_for(name)
-            gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch")
+            gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
+                             "vix_regime")
 
             def make_run(nm, outfn):
                 def run(ctx):
@@ -682,6 +687,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         "run_sic_fetch": ("_sic", "run_fetch"),
         "run_yfinance_grades_fetch": ("_yfinance_grades", "run_yfinance_grades_fetch"),
         "run_pass2_fetch": ("_pass2", "run_full_candidate_live_source_packet"),
+        "run_vix_regime": ("_vix", "run_fetch"),
         "run_pass2_preflight": ("_preflight", "run_preflight"),
     }
 
@@ -701,7 +707,8 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
 
     def test_gated_adapter_refuses_unauthorized_ctx_before_calling_runner(self):
         # Required B: a direct adapter call with an UNAUTHORIZED ctx must raise BEFORE invoking the wrapped provider
-        # runner — closed-world over ALL 5 adapters (no silent self-authorization on any).
+        # runner — closed-world over every gated adapter plus the authorization-bound preflight
+        # (no silent self-authorization on any).
         from runners import us_short_weekly_capstone_stages as st
         ctx = self._ctx(authorized=False)
         for adapter, (mod_attr, fn) in self._WRAPPED.items():
@@ -731,6 +738,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         receipt = _research_receipt()
         for cap in (receipt, None):
             ctx = replace(self._ctx(authorized=True), research_live_capability=cap)
+            vix_summary = {"stage": "vix_regime"}
+            ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.vix_regime_summary_path.write_text(json.dumps(vix_summary), encoding="utf-8")
             with mock.patch.object(st, "_write_provider_health"), \
                  mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
                 st.run_weekly_bridge(ctx)
@@ -741,6 +751,49 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
              mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
             st.run_weekly_bridge(self._ctx(authorized=True))
             self.assertIsNone(m.call_args.kwargs.get("_research_live_capability"))
+
+    def test_bridge_binds_and_injects_vix_regime_without_gating_emit(self):
+        from dataclasses import replace
+        from runners import us_short_weekly_capstone_stages as st
+
+        for regime in ("防御", "unknown"):
+            ctx = self._ctx(authorized=True)
+            summary = {
+                "schema_name": "us_short_vix_regime_fetch_summary",
+                "schema_version": "1.0.0",
+                "authorization_ref": "user_chat_20260709_vix_regime_fetch",
+                "generated_at": ctx.generated_at,
+                "observed_at": ctx.generated_at,
+                "provider": "financial_modeling_prep",
+                "source_endpoint": "stable/quote",
+                "symbol": "^VIX",
+                "http_status": 200 if regime != "unknown" else 429,
+                "vix_regime": regime,
+                "vix_regime_is_unknown": regime == "unknown",
+            }
+            provider_summaries = {
+                stage: ({"stage": stage} if stage != "vix_regime" else summary)
+                for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
+            }
+            receipt = _research_receipt(provider_summaries=provider_summaries)
+            ctx = replace(ctx, research_live_capability=receipt)
+            ctx.vix_regime_summary_path.parent.mkdir(parents=True, exist_ok=True)
+            ctx.vix_regime_summary_path.write_text(json.dumps(summary), encoding="utf-8")
+            with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
+                out = st.run_weekly_bridge(ctx)
+            self.assertTrue(out["batch4_run"]["emitted"])
+            self.assertEqual(m.call_args.kwargs["vix_regime"], regime)
+
+            ctx.vix_regime_summary_path.write_text(
+                json.dumps({**summary, "vix_regime": "进攻", "vix_regime_is_unknown": False}),
+                encoding="utf-8",
+            )
+            from engine.us_short_run_origin import RunOriginError
+            with mock.patch.object(st, "_write_provider_health"), \
+                 mock.patch.object(st._bridge, "run_e2e"):
+                with self.assertRaises(RunOriginError):
+                    st.run_weekly_bridge(ctx)
 
     def test_receipt_binds_exact_stages_calls_decision_and_source_digest(self):
         # A1: receipt issuance consumes the exact completed stage sequence plus positive provider-call evidence and
@@ -789,6 +842,18 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                     "within_budget": True,
                 },
                 "endpoint_results": [{"provider_id": "sec_edgar", "endpoint_family": "submissions", "status": "success"}],
+            },
+            "vix_regime": {
+                "schema_name": "us_short_vix_regime_fetch_summary",
+                "schema_version": "1.0.0",
+                "generated_at": ctx.generated_at,
+                "observed_at": ctx.generated_at,
+                "provider": "financial_modeling_prep",
+                "source_endpoint": "stable/quote",
+                "symbol": "^VIX",
+                "http_status": 200,
+                "vix_regime": "进攻",
+                "vix_regime_is_unknown": False,
             },
         }
         results = [

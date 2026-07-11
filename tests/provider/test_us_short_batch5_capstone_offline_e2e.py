@@ -491,7 +491,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         provider_summary_digests = tuple(
             (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
-            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
         )
         receipt = _issue_capstone_research_live_receipt(
             run_id=hashlib.sha256(
@@ -500,11 +500,12 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             decision_date=_DECISION_DATE,
             generated_at="2026-06-15T13:01:00Z",
             completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
+                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
             source_packet_path=source_packet_path.resolve(),
             source_packet_sha256=source_digest,
             source_artifact_manifest=source_manifest,
-            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1), ("pass2_fetch", 16)),
+            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
+                                  ("pass2_fetch", 16)),
             provider_summary_digests=provider_summary_digests,
             provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
             provider_evidence_sha256=evidence_digest,
@@ -593,18 +594,19 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         provider_summary_digests = tuple(
             (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
-            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+            for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
         )
         receipt = _issue_capstone_research_live_receipt(
             run_id=hashlib.sha256(b"source-artifact-tamper-test").hexdigest(),
             decision_date=_DECISION_DATE,
             generated_at="2026-06-15T13:01:00Z",
             completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
+                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
             source_packet_path=source_packet_path.resolve(),
             source_packet_sha256=source_digest,
             source_artifact_manifest=source_manifest,
-            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1), ("pass2_fetch", 16)),
+            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
+                                  ("pass2_fetch", 16)),
             provider_summary_digests=provider_summary_digests,
             provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
             provider_evidence_sha256=evidence_digest,
@@ -668,14 +670,15 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             provider_summary_digests = tuple(
                 (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
                                                    separators=(",", ":")).encode("utf-8")).hexdigest())
-                for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
+                for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
             )
             valid_receipt = _issue_capstone_research_live_receipt(
                 run_id=hashlib.sha256(b"missing-generated-at-test").hexdigest(),
                 decision_date=_DECISION_DATE,
                 generated_at="2026-06-15T13:01:00Z",
                 completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
-                                  "theme_producer", "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch"),
+                                  "theme_producer", "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch",
+                                  "vix_regime"),
                 source_packet_path=fixture_packet.resolve(),
                 source_packet_sha256=fixture_digest,
                 source_artifact_manifest=(("fixture", str(fixture_packet.resolve()), fixture_digest),),

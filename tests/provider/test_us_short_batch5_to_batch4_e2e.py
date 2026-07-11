@@ -95,6 +95,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.paths["momentum"],
             _constant_projection("momentum_by_ticker", targets, "scored", score=50.0),
         )
+
         _write_json(
             self.paths["theme"],
             _constant_projection("theme_block_by_ticker", targets, "scored_theme_base", score=50.0),
@@ -163,6 +164,30 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                 },
             },
         )
+
+    def test_vix_regime_override_changes_only_vix_axis(self) -> None:
+        template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+        original_axes = dict(template["market_axis_regimes"])
+        components = {
+            "data_context": {"selection_inputs": {"theme_opportunity_state": "no_strong_theme"}},
+            "per_ticker_analysis": {},
+            "run_provenance": {"as_of": _DECISION_DATE, "price_basis_date": "20260612"},
+        }
+        packet = e2e._assemble_batch4_packet(
+            components=components,
+            template=template,
+            provider_health={"fmp": "ok", "sec_edgar": "ok"},
+            account_state_path=Path("account.json"),
+            calendar_path=Path("calendar.json"),
+            governance_path=Path("governance.json"),
+            private_root=Path("private"),
+            official_output_root=None,
+            now_et=datetime(2026, 6, 15, 9, 0, 0),
+            vix_regime="防御",
+        )
+        self.assertEqual(packet["market_axis_regimes"]["vix"], "防御")
+        self.assertEqual(packet["market_axis_regimes"]["market_trend"], original_axes["market_trend"])
+        self.assertEqual(packet["market_axis_regimes"]["breadth"], original_axes["breadth"])
 
     def test_local_source_packet_to_private_weekly_report_and_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as private_dir:

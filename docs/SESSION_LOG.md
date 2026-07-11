@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (full_reivew2_nopush D1：VIX capstone 接线)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。VIX 接线正确且全程 fail-closed：新增 gated `vix_regime` stage（`weekly_bridge` 前、auth 从 ctx 透传、summary digest 纳入 research_live receipt），bridge 只覆盖 `market_axis_regimes["vix"]`（deepcopy 不动 template、独立复校 `regime∈REGIMES∪UNKNOWN` + `is_unknown` 一致否则 UNKNOWN）；缺 key/403/429/网络/畸形 payload 全 → UNKNOWN 不 raise、不阻 emit（summary 恒带 provider/endpoint/symbol/`http_status:int`/`observed_at=generated_at` 过 receipt 门）；只喂 §7 sizing、不碰选股/价位/veto。
+- **Required**: 无。register `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-ONECLICK-SKELETON` 更新为 12-stage 含 VIX gated（Codex 写、复核准确）。
+- **Verify**: `review-evidence:not_available`。整读 stage/bridge/receipt/fetch 全出口 + e2e 注入面；自撰探针 12 条全 HELD（fetch 5 类 fail-closed→unknown / provenance 恒全 / auth 门 / 无 secret·URL）；tests 反控齐（emit 不被 unknown 阻 / 篡改 summary→`RunOriginError` / 只改 vix 轴 / adapter auth / E2E）；focused 4 模块 `79 OK`；亲跑全包 `4174 ran, 15 error` 全 = MAX_PATH 环境类（非 reviewed、主树短路径过、零 VIX 逻辑失败）。VIX 非选股面 → 未起 §6a agent。
+- **Next**: Codex：待命（真 VIX live 全跑随 A1 一次授权跑）。
+
+## 2026-07-11 — Codex 执行完成，待 Claude 独立审查（full_reivew2_nopush D1：VIX capstone 接线）
+
+- **Verdict/Action**: D1 最小实现完成、未提交/未 push：VIX 成为 default capstone 最后一个 gated pre-bridge stage；授权从 ctx 透传，summary digest 纳入 `research_live` receipt，bridge 只覆盖 `market_axis_regimes.vix`。缺 key/403/429/畸形均写 `unknown`，不阻 emit；未改选股/价位/veto。
+- **Required**: 当前无已知残留 Required。A1 真 live 全跑仍需单独 per-execution 授权，本轮未联网、未调用 provider。
+- **Verify**: prescribed wrapper focused `51 OK`；offline capstone E2E `7 OK`；doc/route guards `60 OK`；full offline US-short `4174` ran，15 errors 均既有 Windows MAX_PATH、2 failures 均 vendored-rpds 子进程环境，零 D1 逻辑失败；`py_compile` / `git diff --check` clean（仅 CRLF notice）。
+- **Pre-Codex self-review**: A-F checked；A 覆盖 4 个合法 regime + unknown、plan/auth/fetch/receipt/bridge/E2E 全出口；B active code 旧 4-stage/9-stage/auto-wiring 措辞 `0 hits`；C 反向查出并修复“缺 key 会 abort / 假报 1 call”，现 no-fetch→unknown 且 receipt 只绑 summary digest；E `CURRENT` 未写 transient、register current mechanism 已压实；UTF-8 no BOM。轻量独立 current-diff review 首轮 PASS，missing-key refinement 后复核 PASS；固定包集中运行。
+- **Next**: Claude Code：仅审查 full_reivew2_nopush D1；PASS 后只提交本刀，不 push。
+
 ## 2026-07-11 — Claude 规划 handoff (VIX regime 接线 → Codex 执行；不依赖 A1)
 
 - **Verdict/Action**: 规划（非审查/非修复）。确认 VIX 接线**不需先跑 A1**、反而**先接线更好**——A1 那次 real capstone 会把 VIX live fetch 作为一个 stage 顺带端到端验（否则首份报告 VIX 恒 unknown、还得再单跑验）。VIX 只喂 §7 sizing（仓位帽/开新仓）、**不碰选股/价位/veto**，fail-closed（缺/403/429/畸形→unknown，绝不 进攻、不阻 emit、不崩）。当前状态：VIX fetch runner + `classify_vix` 已建、CAT6 已硬化取值/观察绑定，但被任何 pipeline stage 调用=0，`market_axis_regimes["vix"]` 现来自静态 batch4 `template[...]` 恒 unknown。

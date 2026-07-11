@@ -34,11 +34,14 @@ class VixRegimeFetch(unittest.TestCase):
                 vix.run_fetch(confirm_user_authorization=False,
                               quote_fetcher=_fetcher([{"symbol": "^VIX", "price": 16.9}], 200))
 
-    def test_missing_key_raises(self):
+    def test_missing_key_is_unknown_without_fetch(self):
         with mock.patch.dict(os.environ, {"FMP_API_KEY": ""}, clear=False):
-            with self.assertRaises(vix.VixRegimeFetchError):
-                vix.run_fetch(confirm_user_authorization=True,
-                              quote_fetcher=_fetcher([{"symbol": "^VIX", "price": 16.9}], 200))
+            fetcher = mock.Mock(side_effect=AssertionError("must not fetch without a key"))
+            result = vix.run_fetch(confirm_user_authorization=True, quote_fetcher=fetcher)
+        fetcher.assert_not_called()
+        self.assertEqual(result["vix_regime"], vix.UNKNOWN)
+        self.assertTrue(result["vix_regime_is_unknown"])
+        self.assertEqual(result["fetch_error"], "missing_fmp_api_key")
 
     def test_classifies_fetched_value_across_ladder(self):
         for val, regime in ((16.9, "进攻"), (20.0, "震荡"), (30.0, "防御"), (40.0, "极度防御")):
@@ -56,6 +59,14 @@ class VixRegimeFetch(unittest.TestCase):
         self.assertEqual(r["vix_regime"], vix.UNKNOWN)
         self.assertTrue(r["vix_regime_is_unknown"])
         self.assertEqual(r["http_status"], 403)
+
+    def test_http_429_is_unknown_not_crash(self):
+        with mock.patch.dict(os.environ, {"FMP_API_KEY": "K"}, clear=False):
+            r = vix.run_fetch(confirm_user_authorization=True, quote_fetcher=_fetcher(None, 429, "http_error"))
+        self.assertIsNone(r["vix_value"])
+        self.assertEqual(r["vix_regime"], vix.UNKNOWN)
+        self.assertTrue(r["vix_regime_is_unknown"])
+        self.assertEqual(r["http_status"], 429)
 
     def test_malformed_payloads_are_unknown(self):
         with mock.patch.dict(os.environ, {"FMP_API_KEY": "K"}, clear=False):

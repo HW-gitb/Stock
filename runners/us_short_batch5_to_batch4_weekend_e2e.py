@@ -207,6 +207,7 @@ def _assemble_batch4_packet(
     private_root: Path,
     official_output_root: Path | None,
     now_et: datetime,
+    vix_regime: str | None = None,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
     run_provenance = components["run_provenance"]
@@ -215,12 +216,17 @@ def _assemble_batch4_packet(
     if not isinstance(basket_context, dict):
         raise Batch5ToBatch4E2EError("batch4 template basket_context must be an object")
     basket_context["theme_opportunity_state"] = theme_state
+    market_axis_regimes = copy.deepcopy(template["market_axis_regimes"])
+    if not isinstance(market_axis_regimes, dict):
+        raise Batch5ToBatch4E2EError("batch4 template market_axis_regimes must be an object")
+    if vix_regime is not None:
+        market_axis_regimes["vix"] = vix_regime
     return {
         "data_context": data_context,
         "per_ticker_analysis": components["per_ticker_analysis"],
         "run_provenance": run_provenance,
         "provider_health": provider_health,
-        "market_axis_regimes": template["market_axis_regimes"],
+        "market_axis_regimes": market_axis_regimes,
         "prior_regime": template["prior_regime"],
         "prior_upgrade_count": template["prior_upgrade_count"],
         "sizing_per_ticker": template["sizing_per_ticker"],
@@ -294,6 +300,7 @@ def run_e2e(
     bootstrap_lifecycle: bool = False,
     dry_run: bool = False,
     generated_at: str | None = None,
+    vix_regime: str | None = None,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch5ToBatch4E2EError("now_et must be a naive ET datetime")
@@ -422,6 +429,7 @@ def run_e2e(
             private_root=private_root_path,
             official_output_root=official_output_root_path,
             now_et=now_et,
+            vix_regime=vix_regime,
         )
         _write_private_json(context_path, packet)
         batch4_summary = _safe_batch4_run(

@@ -8,15 +8,16 @@ result (value + regime; NEVER the apikey or the request URL).
 
 Scope: it feeds ONLY the §7 RISK axis — `market_axis_regimes["vix"]` → position cap / new-entry permission — NEVER
 selection, prices, or a hard veto; a missing/unavailable VIX is just `unknown` (the regime degrades via trend+breadth,
-it never passes as 进攻). Auto-wiring this regime into the pipeline's `market_axis_regimes` slot is a SEPARATE step
-(cc_r1 B4); this runner is the fetch+classify script. Selects no provider, writes no private state, claims no
+it never passes as 进攻). The weekly capstone consumes this runner as its final gated pre-bridge stage and injects
+the result into `market_axis_regimes["vix"]`; this module remains the single fetch+classify authority. Selects no
+provider, writes no private state, claims no
 production/ship-gate; SR-PROVIDER-001 stays open.
 
 Usage:
   python runners/us_short_vix_regime_fetch.py --dry-run-env
   python runners/us_short_vix_regime_fetch.py --confirm-user-authorization
   python runners/us_short_vix_regime_fetch.py --confirm-user-authorization --summary-path docs/…json
-Requires env: FMP_API_KEY (NEVER written to any output).
+Uses env: FMP_API_KEY (NEVER written to any output); when absent, the gated stage records `unknown` without fetching.
 """
 from __future__ import annotations
 
@@ -44,6 +45,7 @@ from engine.us_short_regime import UNKNOWN, classify_vix  # noqa: E402
 AUTHORIZATION_REF = "user_chat_20260709_vix_regime_fetch"
 FMP_QUOTE_URL = "https://financialmodelingprep.com/stable/quote?symbol={sym}&apikey={key}"
 VIX_SYMBOL = "^VIX"
+SUMMARY_SAMPLE_REL_ROOT = Path("provider_samples") / "us_short_vix_regime_fetch"
 
 
 class VixRegimeFetchError(RuntimeError):
@@ -94,11 +96,11 @@ def run_fetch(*, confirm_user_authorization: bool, quote_fetcher: Callable[[str]
     if not confirm_user_authorization:
         raise VixRegimeFetchError(
             "VIX regime fetch requires explicit per-execution user authorization (SR-PROVIDER-001)")
-    if not fmp_key:
-        raise VixRegimeFetchError("FMP_API_KEY not set")
-
     observed_at = _observation_time(generated_at)
-    payload, status, err = (quote_fetcher or _default_quote_fetcher)(fmp_key)
+    if not fmp_key:
+        payload, status, err = None, 0, "missing_fmp_api_key"
+    else:
+        payload, status, err = (quote_fetcher or _default_quote_fetcher)(fmp_key)
     value = _vix_value_from_payload(payload) if status == 200 else None
     regime = classify_vix(value) if value is not None else UNKNOWN
     summary = {
