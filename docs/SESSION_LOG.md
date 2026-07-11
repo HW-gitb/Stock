@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 — Claude merge (US-short A1 Path A → master) + strip_theme_score 漂移发现
+
+- **Verdict/Action**: 按用户 `merge`，把 9479 的 `296a2fab`（A1 Path A、已审 PASS）合入 master（merge `0a6201b`；先提交 D:\ 遗留 A1 planning SESSION_LOG=`bf0ab88`）。SESSION_LOG union、design 自动合并；仅 register 冲突，无损解（保留 master 3 条 R3 + A1 块）。未 push；heads 仍未接线。
+- **Required**: 新建 `R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT`（P2 latent，Codex 修复）：A1 heads 对 chasing 票用 `theme_off`（重分配）剥赛道，与 master `5e3e00b` 后真实 balanced 轨的 `strip_theme_score`（不重分配）分歧 ~20 分；heads 未接线=当前零效果，但接线前须改用 strip_theme_score。单源见 register。
+- **Verify**: merged master 亲跑全 `test_us_short*` = **`4221 OK`**（0 fail/0 err/0 rpds/0 MAX_PATH，D:\ 干净 env）；heads `8 OK`、grid schema 系统 jsonschema 全过、lifecycle 三角 0 error；design §4.3 自动合并且与 heads 语义相容（strip_theme_score 为新增可选参、theme_off profile 未变→heads 测试值不变）；register 无损合并、无残留 marker。
+- **Next**: Codex：修复（`R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT`；heads 接线前）
+
 ## 2026-07-12 — Claude 收口 (US-short R3 三刀 register/SESSION_LOG drift 对账，doc-only)
 - **Verdict/Action**: 按用户指令视三处 R3 修复为已定并清理账面 drift（本会话无重审、无代码改动）。`900e5c6`(env/action 来源绑定)、`5e3e00b`(chasing 反向加分) 两条 register 翻 resolved；`0b5b6f9`(bankruptcy 候选门) 标为候选刀已闭、其名下 4 个 remaining 子项仍 OPEN。
 - **Required**: `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP` / `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION` resolved；`R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍 open（SEC 目标覆盖率健康 / 消费边界 envelope+digest 复核 / 真实 adjustment label / holding 侧 = codex_r3 issue 1+3）——完整详情单源见 `docs/system_risk_register.md`。
