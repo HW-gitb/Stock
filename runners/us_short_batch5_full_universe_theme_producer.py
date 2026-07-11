@@ -42,9 +42,10 @@ import re
 import subprocess
 import sys
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import datetime, time as datetime_time, timezone
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -55,6 +56,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_projection_binding import build_projection_binding  # noqa: E402
 from engine.us_short_industry_heat import IndustryHeatError, industry_heat_block  # noqa: E402
 from engine.us_short_seam_theme import (  # noqa: E402
     COVERAGE_DISPOSITIONS,
@@ -211,6 +213,24 @@ def _valid_observed_at(value: str) -> bool:
     return dt.tzinfo is not None
 
 
+def _validate_classification_observation(
+    *, observed_at: str, source_as_of: str, expected_decision_date: str
+) -> None:
+    try:
+        observed_et = datetime.fromisoformat(
+            observed_at[:-1] + "+00:00" if observed_at.endswith("Z") else observed_at
+        ).astimezone(ZoneInfo("America/New_York"))
+        decision_et_date = datetime.strptime(expected_decision_date, "%Y%m%d").date()
+    except (TypeError, ValueError) as exc:
+        raise FullUniverseThemeProducerError("classification observation clock is invalid") from exc
+    if observed_et.date() != decision_et_date or observed_et.time() >= datetime_time(9, 30):
+        raise FullUniverseThemeProducerError(
+            "current classification snapshot must be observed on the decision date before the 09:30 ET open"
+        )
+    if source_as_of != observed_et.date().isoformat():
+        raise FullUniverseThemeProducerError("classification source_as_of must equal the ET observation date")
+
+
 def _compact_to_ymd(value: Any, *, field: str) -> str:
     if type(value) is not str or len(value) != 8 or not value.isascii() or not value.isdigit():
         raise FullUniverseThemeProducerError(f"{field} must be ASCII YYYYMMDD")
@@ -334,8 +354,11 @@ def _load_context(
         raise FullUniverseThemeProducerError("series and classification packets must share one price_basis_date")
     if series_packet["series_contract"]["as_of"] != price_basis_date:
         raise FullUniverseThemeProducerError("series_contract.as_of must equal the price_basis_date")
-    if classification["classification_contract"]["as_of"] != price_basis_date:
-        raise FullUniverseThemeProducerError("classification_contract.as_of must equal the price_basis_date")
+    class_source_as_of = class_clock["source_as_of"]
+    if classification["classification_contract"]["as_of"] != class_source_as_of:
+        raise FullUniverseThemeProducerError("classification_contract.as_of must equal decision_clock.source_as_of")
+    if classification["provenance"]["source_as_of"] != class_source_as_of:
+        raise FullUniverseThemeProducerError("classification provenance.source_as_of must equal decision_clock.source_as_of")
     series_provider_id = _safe_provider_id(series_packet["provenance"]["provider_id"], field="series provenance.provider_id")
     class_provider_id = _safe_provider_id(classification["provenance"]["provider_id"], field="classification provenance.provider_id")
     classification_source = classification["classification_contract"]["classification_source"]
@@ -344,10 +367,19 @@ def _load_context(
         candidate_artifact_path=candidate_artifact_path,
         expected_decision_date=series_clock["expected_decision_date"],
     )
-    if _compact_to_ymd(artifact["price_basis_date"], field="candidate.price_basis_date") != price_basis_date:
-        raise FullUniverseThemeProducerError("candidate artifact price_basis_date must match the packet price_basis_date")
+    if series_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
+        raise FullUniverseThemeProducerError("series candidate_price_basis_date must match the candidate artifact")
+    if class_clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
+        raise FullUniverseThemeProducerError("classification candidate_price_basis_date must match the candidate artifact")
+    if artifact["used_date"] != price_basis_date:
+        raise FullUniverseThemeProducerError("candidate used_date must match the packet price_basis_date")
     if class_clock["expected_decision_date"] != series_clock["expected_decision_date"]:
         raise FullUniverseThemeProducerError("series and classification packets must share one expected_decision_date")
+    _validate_classification_observation(
+        observed_at=classification["provenance"]["observed_at"],
+        source_as_of=class_source_as_of,
+        expected_decision_date=series_clock["expected_decision_date"],
+    )
     eligible = [_canonical_ticker(t, field="candidate.eligible_tickers") for t in artifact["eligible_tickers"]]
     benchmarks = tuple(_canonical_ticker(sym, field="benchmark") for sym in BENCHMARK_SYMBOLS)
 
@@ -435,6 +467,19 @@ def _build_projection(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         provisional_theme_result=_EMPTY_PROVISIONAL_THEME_RESULT,
         theme_members_by_id={},
         target_tickers=eligible,
+    )
+    projection["source_binding"] = build_projection_binding(
+        component="theme",
+        generated_at=context["generated_at"],
+        expected_decision_date=context["series_packet"]["decision_clock"]["expected_decision_date"],
+        candidate_price_basis_date=context["artifact"]["price_basis_date"],
+        source_as_of=context["artifact"]["used_date"],
+        target_tickers=eligible,
+        source_artifact_paths={
+            "candidate_artifact": context["candidate_artifact_path"],
+            "momentum_series_packet": context["series_packet_path"],
+            "sector_classification_packet": context["classification_packet_path"],
+        },
     )
     details = {
         "members_with_sector_and_series_count": len(members_by_ticker),

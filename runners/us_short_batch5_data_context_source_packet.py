@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
+from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context_from_resolved_pass2_sources,
     assemble_official_context_components_from_resolved_pass2_sources,
@@ -336,6 +337,26 @@ def run_packet(
             "yfinance_grade_actions_path",
             source_payloads["analyst_grade_actions_path"],
         )
+        candidate = source_payloads["candidate_artifact_path"]
+        try:
+            validate_projection_binding(
+                source_payloads["momentum_projection_path"],
+                component="momentum",
+                expected_decision_date=packet["decision_clock"]["expected_decision_date"],
+                candidate_price_basis_date=candidate["price_basis_date"],
+                source_as_of=candidate["used_date"],
+                target_tickers=None,
+            )
+            validate_projection_binding(
+                source_payloads["theme_projection_path"],
+                component="theme",
+                expected_decision_date=packet["decision_clock"]["expected_decision_date"],
+                candidate_price_basis_date=candidate["price_basis_date"],
+                source_as_of=candidate["used_date"],
+                target_tickers=None,
+            )
+        except (KeyError, TypeError, ValueError) as exc:
+            raise SourcePacketError(f"score projection source binding rejected: {exc}") from exc
         common_kwargs = {
             "candidate_artifact": source_payloads["candidate_artifact_path"],
             "expected_decision_date": packet["decision_clock"]["expected_decision_date"],

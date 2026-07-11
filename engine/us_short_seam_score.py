@@ -197,7 +197,8 @@ def _validate_projection(component, projection, targets):
     value_key = spec["value_key"]
     expected_keys = {value_key, "neutral_fill_tickers", "coverage", "target_count", "scored_count"}
     _require_exact_dict(projection, name=f"{component}_projection")
-    if _key_set(projection, name=f"{component}_projection") != expected_keys:
+    actual_keys = _key_set(projection, name=f"{component}_projection")
+    if actual_keys not in (expected_keys, expected_keys | {"source_binding"}):
         raise ScoreSeamError(f"{component}_projection keys drifted from the Cut 6-d contract")
 
     values = _canonical_score_map(projection[value_key], name=value_key)

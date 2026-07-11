@@ -18,6 +18,10 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_projection_binding import (  # noqa: E402
+    build_projection_binding,
+    validate_projection_binding,
+)
 from engine.us_short_seam_momentum import (  # noqa: E402
     COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
     DISPOSITION_ABSENT,
@@ -265,7 +269,9 @@ def _source_projection_partition(
 ) -> dict[str, Any]:
     if type(projection) is not dict:
         raise FullCandidateProjectionInputsError(f"{component}_projection must be an exact dict")
-    expected_keys = {value_key, "neutral_fill_tickers", "coverage", "target_count", "scored_count"}
+    expected_keys = {
+        value_key, "neutral_fill_tickers", "coverage", "target_count", "scored_count", "source_binding"
+    }
     if set(projection) != expected_keys:
         raise FullCandidateProjectionInputsError(f"{component}_projection keys drifted from composer contract")
     values = _canonical_score_map(projection[value_key], field=f"{component}.{value_key}")
@@ -297,6 +303,9 @@ def _merge_projection(
     value_key: str,
     allowed_dispositions: set[str] | frozenset[str] | tuple[str, ...],
     missing_disposition: str,
+    expected_decision_date: str,
+    candidate_price_basis_date: str,
+    source_as_of: str,
 ) -> tuple[dict[str, Any], dict[str, int]]:
     parsed = _source_projection_partition(
         source_projection,
@@ -304,6 +313,17 @@ def _merge_projection(
         value_key=value_key,
         allowed_dispositions=allowed_dispositions,
     )
+    try:
+        validate_projection_binding(
+            source_projection,
+            component=component,
+            expected_decision_date=expected_decision_date,
+            candidate_price_basis_date=candidate_price_basis_date,
+            source_as_of=source_as_of,
+            target_tickers=parsed["partition"],
+        )
+    except ValueError as exc:
+        raise FullCandidateProjectionInputsError(f"{component} projection source binding rejected: {exc}") from exc
     expected_set = set(expected_tickers)
     stale = sorted(parsed["partition"] - expected_set)
     if stale:
@@ -529,6 +549,9 @@ def run_packet(
         value_key="momentum_by_ticker",
         allowed_dispositions=MOMENTUM_COVERAGE_DISPOSITIONS,
         missing_disposition=DISPOSITION_ABSENT,
+        expected_decision_date=expected_decision_date,
+        candidate_price_basis_date=artifact["price_basis_date"],
+        source_as_of=artifact["used_date"],
     )
     theme_projection, theme_source_stats = _merge_projection(
         expected_tickers=eligible,
@@ -537,6 +560,33 @@ def run_packet(
         value_key="theme_block_by_ticker",
         allowed_dispositions=THEME_COVERAGE_DISPOSITIONS,
         missing_disposition=DISPOSITION_NEUTRAL_MISSING_THEME_AND_INDUSTRY_BASE,
+        expected_decision_date=expected_decision_date,
+        candidate_price_basis_date=artifact["price_basis_date"],
+        source_as_of=artifact["used_date"],
+    )
+    momentum_projection["source_binding"] = build_projection_binding(
+        component="momentum",
+        generated_at=generated_at,
+        expected_decision_date=expected_decision_date,
+        candidate_price_basis_date=artifact["price_basis_date"],
+        source_as_of=artifact["used_date"],
+        target_tickers=eligible,
+        source_artifact_paths={
+            "candidate_artifact": candidate_path,
+            "source_momentum_projection": source_momentum_path,
+        },
+    )
+    theme_projection["source_binding"] = build_projection_binding(
+        component="theme",
+        generated_at=generated_at,
+        expected_decision_date=expected_decision_date,
+        candidate_price_basis_date=artifact["price_basis_date"],
+        source_as_of=artifact["used_date"],
+        target_tickers=eligible,
+        source_artifact_paths={
+            "candidate_artifact": candidate_path,
+            "source_theme_projection": source_theme_path,
+        },
     )
     summary = _build_summary(
         generated_at=generated_at,

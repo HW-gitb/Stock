@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_pass2_funnel import select_pass2_targets  # noqa: E402
+from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 
@@ -530,15 +531,37 @@ def run_preflight(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,
     )
+    _format_price_basis_date(artifact["price_basis_date"])
     eligible = list(artifact["eligible_tickers"])
+    momentum_projection = _read_json(momentum_path)
+    theme_projection = _read_json(theme_path)
+    try:
+        validate_projection_binding(
+            momentum_projection,
+            component="momentum",
+            expected_decision_date=expected_decision_date,
+            candidate_price_basis_date=artifact["price_basis_date"],
+            source_as_of=artifact["used_date"],
+            target_tickers=None,
+        )
+        validate_projection_binding(
+            theme_projection,
+            component="theme",
+            expected_decision_date=expected_decision_date,
+            candidate_price_basis_date=artifact["price_basis_date"],
+            source_as_of=artifact["used_date"],
+            target_tickers=None,
+        )
+    except ValueError as exc:
+        raise FullCandidatePass2PreflightError(f"score projection source binding rejected: {exc}") from exc
     momentum_coverage = _projection_coverage(
-        projection=_read_json(momentum_path),
+        projection=momentum_projection,
         projection_name="momentum_projection",
         value_key="momentum_by_ticker",
         expected_tickers=eligible,
     )
     theme_coverage = _projection_coverage(
-        projection=_read_json(theme_path),
+        projection=theme_projection,
         projection_name="theme_projection",
         value_key="theme_block_by_ticker",
         expected_tickers=eligible,

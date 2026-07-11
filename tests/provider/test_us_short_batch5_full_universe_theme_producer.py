@@ -66,7 +66,7 @@ def _classification_packet(sector_by_ticker: dict, *, classification_source: str
     return {
         "schema_name": "us_short_batch5_full_universe_sector_classification_packet",
         "schema_version": "1.0.0",
-        "generated_at": "2026-06-13T10:00:00+00:00",
+        "generated_at": "2026-06-15T12:00:00+00:00",
         "scope": {
             "market": "US",
             "lane": "us_short",
@@ -85,14 +85,14 @@ def _classification_packet(sector_by_ticker: dict, *, classification_source: str
             "expected_decision_date": _DECISION_DATE,
             "candidate_price_basis_date": _PRICE_BASIS_DATE,
             "price_basis_date": as_of,
-            "source_as_of": as_of,
+            "source_as_of": "2026-06-15",
         },
-        "classification_contract": {"classification_source": classification_source, "as_of": as_of},
+        "classification_contract": {"classification_source": classification_source, "as_of": "2026-06-15"},
         "provenance": {
             "provider_id": "sec_edgar",
             "endpoint_or_family": "submissions_sic",
-            "source_as_of": as_of,
-            "observed_at": "2026-06-13T10:00:00+00:00",
+            "source_as_of": "2026-06-15",
+            "observed_at": "2026-06-15T12:00:00+00:00",
             "coverage_status": "full",
             "parser_status": "ok",
         },
@@ -212,6 +212,17 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
             self._run_packet()
         self.assertFalse(self.paths["projection"].exists())
         self.assertFalse(self.paths["summary"].exists())
+
+    def test_post_open_classification_observation_fails_closed(self):
+        # Reverse control for the theme producer's INDEPENDENT _validate_classification_observation gate:
+        # a classification snapshot observed AFTER the 09:30 ET decision-day open must be rejected (a
+        # post-decision current SIC snapshot cannot be relabelled as pre-decision theme evidence).
+        classification = _classification_packet(dict(_SECTORS))
+        classification["provenance"]["observed_at"] = "2026-06-15T15:00:00+00:00"  # 11:00 ET, after the 09:30 open
+        _write_json(self.paths["classification"], classification)
+        with self.assertRaisesRegex(_runner().FullUniverseThemeProducerError, "09:30 ET"):
+            self._run_packet()
+        self.assertFalse(self.paths["projection"].exists())
 
     def test_ticker_without_sector_is_neutral(self):
         sectors = {k: v for k, v in _SECTORS.items() if k != "JPM"}  # JPM has no sector at all

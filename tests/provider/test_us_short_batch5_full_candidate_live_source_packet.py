@@ -309,31 +309,53 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_stale_clock_source_projection_binding_is_rejected_before_fetch(self):
+        # Reverse control (Required B, expensive-fetch boundary): the live re-derivation validates the
+        # momentum source binding against the CANDIDATE clock before any provider call; a stale clock
+        # aborts with zero fetches.
+        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0)
+        momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
+        _write_json(self.paths["momentum"], momentum)
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "source binding"):
+                runner.run_full_candidate_live_source_packet(
+                    preflight_summary_path=self.paths["preflight"],
+                    expected_total_call_budget=16,
+                    output_data_context_path=self.paths["output"],
+                    context_components_output_path=self.paths["components"],
+                    source_artifact_prefix=self.paths["prefix"],
+                    summary_path=self.paths["summary"],
+                    raw_root=self.raw_root,
+                    client=client,
+                    confirm_user_authorization=True,
+                    run_data_context=True,
+                    generated_at="2026-07-06T12:00:00+00:00",
+                    observed_at=_OFFERING_OBSERVED_AT,
+                    sec_sleep_seconds=0,
+                )
+        self.assertEqual(client.urls, [])
+
     def test_live_packet_uses_preflight_pass2_targets_not_neutral_full_candidate_fill(self):
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 75.0, "MSFT": 70.0},
-                "neutral_fill_tickers": ["JPM"],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "absent_from_pool"},
-                "target_count": 3,
-                "scored_count": 2,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
-        _write_json(
-            self.paths["theme"],
-            {
-                "theme_block_by_ticker": {"AAPL": 65.0},
-                "neutral_fill_tickers": ["MSFT", "JPM"],
-                "coverage": {
-                    "AAPL": "scored_theme_base",
-                    "MSFT": "neutral_missing_theme_and_industry_base",
-                    "JPM": "neutral_missing_theme_and_industry_base",
-                },
-                "target_count": 3,
-                "scored_count": 1,
-            },
+        momentum["momentum_by_ticker"] = {"AAPL": 75.0, "MSFT": 70.0}
+        momentum["neutral_fill_tickers"] = ["JPM"]
+        momentum["coverage"]["JPM"] = "absent_from_pool"
+        momentum["scored_count"] = 2
+        _write_json(self.paths["momentum"], momentum)
+        theme = _constant_projection(
+            "theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0
         )
+        theme["theme_block_by_ticker"] = {"AAPL": 65.0}
+        theme["neutral_fill_tickers"] = ["MSFT", "JPM"]
+        theme["coverage"]["MSFT"] = "neutral_missing_theme_and_industry_base"
+        theme["coverage"]["JPM"] = "neutral_missing_theme_and_industry_base"
+        theme["scored_count"] = 1
+        _write_json(self.paths["theme"], theme)
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -517,16 +539,14 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # funnel target from the momentum projection (scored∩eligible ∪ forced-holdings), not trust the preflight.
         # Momentum scores only AAPL/MSFT; JPM is a neutral-fill eligible ticker. A forged preflight injecting JPM
         # into target_symbols must be rejected before any provider fetch or summary write.
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 50.0, "MSFT": 50.0},
-                "neutral_fill_tickers": ["JPM"],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "neutral_fill"},
-                "target_count": 3,
-                "scored_count": 2,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
+        momentum["momentum_by_ticker"] = {"AAPL": 50.0, "MSFT": 50.0}
+        momentum["neutral_fill_tickers"] = ["JPM"]
+        momentum["coverage"]["JPM"] = "neutral_fill"
+        momentum["scored_count"] = 2
+        _write_json(self.paths["momentum"], momentum)
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -593,16 +613,11 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING: the runner reads momentum_top_k from the reviewed
         # preflight and re-derives the SAME top-K funnel via select_pass2_targets, so with 3 scored + top_k=2 it
         # fetches only the top-2 momentum tickers (11 calls) and never JPM (below the top-2).
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
-                "neutral_fill_tickers": [],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
-                "target_count": 3,
-                "scored_count": 3,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
+        momentum["momentum_by_ticker"] = {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0}
+        _write_json(self.paths["momentum"], momentum)
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -656,16 +671,11 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # momentum_top_k + target_symbols to the full scored set but KEEPS the honest narrow forecast/budget (so an
         # operator passing the reviewed budget sails past _load_ready_preflight) must be rejected BEFORE any provider
         # call — the runner re-anchors the spend budget to the re-derived target count, not the attested forecast/K.
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
-                "neutral_fill_tickers": [],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
-                "target_count": 3,
-                "scored_count": 3,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
+        momentum["momentum_by_ticker"] = {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0}
+        _write_json(self.paths["momentum"], momentum)
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,

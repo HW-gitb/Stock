@@ -33,9 +33,10 @@ import os
 import re
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import datetime, time as datetime_time, timezone
 from pathlib import Path
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -58,6 +59,7 @@ SUMMARY_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_s
 _CANONICAL_SUMMARY_RE = re.compile(r"^us_short_batch5_full_universe_sec_sic_classification_fetch_summary_[0-9]{8}\.json$")
 
 CLASSIFICATION_SOURCE = "sec_sic_major_group"
+NEW_YORK = ZoneInfo("America/New_York")
 SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 SEC_FAIR_ACCESS_SLEEP = universe_fetch.SEC_FAIR_ACCESS_SLEEP
 
@@ -198,7 +200,29 @@ def _sector_major_group(sic: Any) -> str | None:
     return sic[:2]
 
 
+def _validated_observation_date(generated_at: str, decision_date: str) -> str:
+    try:
+        observed = datetime.fromisoformat(generated_at[:-1] + "+00:00" if generated_at.endswith("Z") else generated_at)
+    except (AttributeError, TypeError, ValueError) as exc:
+        raise FullUniverseSecSicClassificationFetchError(
+            "generated_at must be a timezone-aware RFC3339 instant"
+        ) from exc
+    if observed.tzinfo is None or observed.utcoffset() is None:
+        raise FullUniverseSecSicClassificationFetchError("generated_at must be a timezone-aware RFC3339 instant")
+    observed_et = observed.astimezone(NEW_YORK)
+    try:
+        decision_et_date = datetime.strptime(decision_date, "%Y%m%d").date()
+    except (TypeError, ValueError) as exc:
+        raise FullUniverseSecSicClassificationFetchError("candidate decision_date must be YYYYMMDD") from exc
+    if observed_et.date() != decision_et_date or observed_et.time() >= datetime_time(9, 30):
+        raise FullUniverseSecSicClassificationFetchError(
+            "current SEC SIC snapshot is allowed only on the decision date before the 09:30 America/New_York open"
+        )
+    return observed_et.date().isoformat()
+
+
 def _build_packet(*, generated_at: str, artifact: dict[str, Any], price_basis_ymd: str,
+                  classification_source_as_of: str,
                   sector_by_ticker: dict[str, str]) -> dict[str, Any]:
     return {
         "schema_name": "us_short_batch5_full_universe_sector_classification_packet",
@@ -222,13 +246,16 @@ def _build_packet(*, generated_at: str, artifact: dict[str, Any], price_basis_ym
             "expected_decision_date": artifact["decision_date"],
             "candidate_price_basis_date": artifact["price_basis_date"],
             "price_basis_date": price_basis_ymd,
-            "source_as_of": price_basis_ymd,
+            "source_as_of": classification_source_as_of,
         },
-        "classification_contract": {"classification_source": CLASSIFICATION_SOURCE, "as_of": price_basis_ymd},
+        "classification_contract": {
+            "classification_source": CLASSIFICATION_SOURCE,
+            "as_of": classification_source_as_of,
+        },
         "provenance": {
             "provider_id": "sec_edgar",
             "endpoint_or_family": "submissions_sic",
-            "source_as_of": price_basis_ymd,
+            "source_as_of": classification_source_as_of,
             "observed_at": generated_at,
             "coverage_status": "full" if len(sector_by_ticker) == len(artifact["eligible_tickers"]) else "partial",
             "parser_status": "ok",
@@ -237,7 +264,8 @@ def _build_packet(*, generated_at: str, artifact: dict[str, Any], price_basis_ym
     }
 
 
-def _build_summary(*, generated_at: str, artifact: dict[str, Any], price_basis_ymd: str, eligible_count: int,
+def _build_summary(*, generated_at: str, artifact: dict[str, Any], price_basis_ymd: str,
+                   classification_source_as_of: str, eligible_count: int,
                    sic_resolved_count: int, sector_by_ticker: dict[str, str], candidate_path: Path,
                    packet_path: Path, summary_path: Path, provider_call_evidence: dict[str, Any]) -> dict[str, Any]:
     return {
@@ -267,7 +295,7 @@ def _build_summary(*, generated_at: str, artifact: dict[str, Any], price_basis_y
             "expected_decision_date": artifact["decision_date"],
             "candidate_price_basis_date": artifact["price_basis_date"],
             "price_basis_date": price_basis_ymd,
-            "source_as_of": price_basis_ymd,
+            "source_as_of": classification_source_as_of,
         },
         "classification": {
             "classification_source": CLASSIFICATION_SOURCE,
@@ -337,7 +365,8 @@ def run_fetch(
         raise FullUniverseSecSicClassificationFetchError(f"candidate_artifact_path must be an existing file: {_repo_rel(candidate_path)}")
     artifact = _load_candidate(candidate_artifact_path=candidate_path)
     price_basis_compact = artifact["price_basis_date"]
-    price_basis_ymd = _compact_to_ymd(price_basis_compact, field="candidate.price_basis_date")
+    price_basis_ymd = artifact["used_date"]
+    classification_source_as_of = _validated_observation_date(generated_at, artifact["decision_date"])
 
     packet_path = _validate_packet_path(
         classification_packet_path if classification_packet_path is not None
@@ -378,12 +407,14 @@ def run_fetch(
 
     packet = _build_packet(
         generated_at=generated_at, artifact=artifact, price_basis_ymd=price_basis_ymd,
+        classification_source_as_of=classification_source_as_of,
         sector_by_ticker=sector_by_ticker,
     )
     _validate_schema(packet, PACKET_SCHEMA_PATH, label="full-universe sector classification packet")
 
     summary = _build_summary(
         generated_at=generated_at, artifact=artifact, price_basis_ymd=price_basis_ymd,
+        classification_source_as_of=classification_source_as_of,
         eligible_count=len(eligible), sic_resolved_count=len(sector_by_ticker),
         sector_by_ticker=sector_by_ticker, candidate_path=candidate_path, packet_path=packet_path,
         summary_path=summary_resolved,

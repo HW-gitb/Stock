@@ -137,7 +137,7 @@ class ScalarPayloadPass2Client(FakePass2Client):
 
 class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
     def setUp(self):
-        self.slug = f"test_live_source_packet_{os.getpid()}_{self._testMethodName}"
+        self.slug = f"test_live_packet_{os.getpid()}_{self._testMethodName[:24]}"
         self.raw_root = (
             ROOT / "provider_samples" / "us_short_batch5_live_source_packet_20260704" / self.slug / "raw"
         )
