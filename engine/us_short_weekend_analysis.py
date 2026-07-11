@@ -102,8 +102,9 @@ def _analyze_one(row, regime):
 
     # §4.3 overextension (computed at the scoring/producer stage, injected onto the row): the `warning` tier's
     # execution_flags carry force_pullback — a candidate execution lever applied here; chasing_extreme carries NO
-    # execution_flags (its SELECTION theme-strip is the separate Slice B; the two tiers are mutually exclusive).
-    # A PRESENT-but-malformed record fails CLOSED; absent → no signal (no-op).
+    # execution_flags. A chasing_extreme record also makes score recomputation remove only the selected profile's
+    # theme contribution; the two tiers are mutually exclusive. A PRESENT-but-malformed record fails CLOSED;
+    # absent → no signal (no-op).
     overext = _validate_overextension(row.get("overextension"))
 
     if context == "holding":
@@ -155,7 +156,12 @@ def _analyze_one(row, regime):
         except ValueError as e:
             raise WeekendAnalysisError(f"{ticker}: {e}")
         try:
-            score = core_score(sb, profile, risk_downgrade_points=risk_dg["points"])
+            score = core_score(
+                sb,
+                profile,
+                risk_downgrade_points=risk_dg["points"],
+                strip_theme_score=(overext is not None and overext["strips_theme_score"] is True),
+            )
         except KeyError:
             raise WeekendAnalysisError(f"score_blocks 的 scoring_profile 非法（fail-closed）: {profile!r}")
 

@@ -71,17 +71,10 @@ class ScoreSeamError(ValueError):
     """Malformed component projection, risk map, or target identity for Cut 6-d."""
 
 
-# §4.3 过热分档: a chasing_extreme ticker's theme-heat score is stripped back to the momentum+catalyst base by
-# recomputing its core_score under the `theme_off` named profile (theme weight → 0, reallocated to momentum/
-# catalyst; §4.2/§12.2) AND zeroing its theme_momentum_score (so it cannot hold a §4.5 theme seat). This is a
-# PER-TICKER override applied ONLY to a run's chasing tickers, on TOP of the run's track scoring_profile — a
-# DIFFERENT mechanism from a §12.2 WHOLE-TRACK theme_off shadow (scoring_profile="theme_off" for ALL tickers, an
-# attribution comparison). The two are NOT conflated: the strip is opt-in per compose call (overextension_by_ticker)
-# and leaves non-chasing tickers on the track profile. The SAME effective profile is recorded on the analysis row
-# so the §4.2 one-core_score-per-run reconciliation (us_short_weekend_analysis._analyze_one) still holds.
-_THEME_STRIP_PROFILE = "theme_off"
-if _THEME_STRIP_PROFILE not in PROFILE_NAMES:   # fail fast at import if the scoring governance renames the profile
-    raise ScoreSeamError(f"theme_off strip profile missing from scoring governance: {PROFILE_NAMES}")
+# §4.3 过热分档: a chasing_extreme ticker keeps the run's scoring profile, but strips only that profile's theme
+# contribution and zeros theme_momentum_score (so it cannot hold a §4.5 theme seat). This is a PER-TICKER penalty,
+# distinct from the §12.2 WHOLE-TRACK `theme_off` shadow profile, which deliberately reallocates theme weight for
+# attribution. Keeping them separate prevents a selection penalty from raising a low-theme/high-momentum score.
 
 
 def load_binding():
@@ -291,17 +284,16 @@ def compose_score_inputs(
     when present, else 0.0, so neutral/missing theme evidence cannot occupy
     theme-momentum seats.
 
-    `overextension_by_ticker` (optional §4.3 injected map) strips theme for chasing_extreme
-    tickers: such a ticker's core_score is recomputed under the `theme_off` profile (theme
-    weight → 0) and its theme_momentum_score is zeroed (no §4.5 theme seat). The SAME effective
-    profile is recorded on its analysis row, so the one-core_score-per-run reconciliation in
-    us_short_weekend_analysis._analyze_one holds. Absent map / non-chasing ticker → unchanged
-    behavior. A per-ticker strip is distinct from a §12.2 whole-track theme_off shadow
-    (scoring_profile="theme_off" for ALL tickers) — see _THEME_STRIP_PROFILE.
+    `overextension_by_ticker` (optional §4.3 injected map) strips only the selected profile's
+    theme contribution for chasing_extreme tickers, then zeroes theme_momentum_score (no §4.5
+    theme seat). The original profile rides on the analysis row; the attached overextension record
+    makes the analysis recomputation apply the same strip. Absent map / non-chasing ticker leaves
+    behavior unchanged. This per-ticker penalty is distinct from a §12.2 whole-track theme_off
+    shadow (scoring_profile="theme_off" for ALL tickers), which remains an attribution baseline.
     """
     if type(scoring_profile) is not str:
         raise ScoreSeamError(f"scoring_profile must be exact str: {type(scoring_profile).__name__}")
-    if scoring_profile not in PROFILE_NAMES:   # fail closed up front — a per-ticker theme_off strip must not let
+    if scoring_profile not in PROFILE_NAMES:   # fail closed up front — a per-ticker strip must not let
         raise ScoreSeamError(f"unknown scoring_profile: {scoring_profile!r}")   # an all-chasing run silently bypass
     _require_exact_str(theme_opportunity_state, name="theme_opportunity_state")
     targets = _canonical_targets(target_tickers)
@@ -322,15 +314,19 @@ def compose_score_inputs(
             value = projections[component]["values"].get(ticker)
             if value is not None:
                 blocks[component] = value
-        # §4.3 chasing_extreme strip: recompute under theme_off (theme weight → 0) and zero theme_momentum_score.
-        # The SAME effective profile rides onto the analysis row below, so the §4.2 one-core_score-per-run
-        # reconciliation still holds; a non-chasing ticker keeps the run's track profile.
+        # §4.3 chasing_extreme strip: retain the run profile but remove only its theme contribution, so the
+        # penalty can never add score; zero theme_momentum_score to remove the §4.5 theme seat. The official
+        # analysis row receives the same validated overextension record and recomputes identically.
         stripped = ticker in theme_strip_targets
-        effective_profile = _THEME_STRIP_PROFILE if stripped else scoring_profile
         try:
-            score = core_score(blocks, effective_profile, risk_downgrade_points=risks[ticker]["points"])
+            score = core_score(
+                blocks,
+                scoring_profile,
+                risk_downgrade_points=risks[ticker]["points"],
+                strip_theme_score=stripped,
+            )
         except KeyError as exc:
-            raise ScoreSeamError(f"unknown scoring_profile: {effective_profile!r}") from exc
+            raise ScoreSeamError(f"unknown scoring_profile: {scoring_profile!r}") from exc
 
         selection_per_ticker[ticker] = {
             "core_score": score["core_score"],
@@ -340,7 +336,7 @@ def compose_score_inputs(
         analysis_by_ticker[ticker] = {
             "score_blocks": blocks,
             "risk_downgrade": risks[ticker],
-            "scoring_profile": effective_profile,
+            "scoring_profile": scoring_profile,
         }
         coverage_by_ticker[ticker] = {
             component: projections[component]["coverage"][ticker]

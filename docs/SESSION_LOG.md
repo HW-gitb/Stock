@@ -29,6 +29,12 @@
 - **Required**: 无已知残留；完整事实、风险和未接线生产者边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`。
 - **Verify**: 新增红测后 focused provenance/receipt/bridge **17 OK**，两 source-packet runner 的 caller-`strong` 反向探针均 fail-closed，`py_compile`/`git diff --check`/BOM 通过；完整 `test_us_short*.py` wrapper 因本工作树 `jsonschema/rpds` 缺失在 discovery 前阻塞。
 - **Pre-Codex self-review**: A-F — A 覆盖 run-origin/receipt/Batch4/orchestrator/schema/CLI 两 source-packet runner；B grep 确认无 `run_mode="research_live"` producer 和无 `default="strong"`；C 覆盖 legacy research_live 拒绝、模板 digest 替换、caller-strong；E 未改 CURRENT/README。独立 current-diff 审查先 FAIL 两项（legacy research_live + template TOCTOU）均已红绿修复；一次超时重启后 PASS；固定包集中运行一次。
+## 2026-07-11 — Codex repair complete, awaiting Claude review (US-short R3 issue 5: chasing penalty score amplification)
+
+- **Verdict/Action**: repaired only `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION`: `chasing_extreme` now preserves the active profile and removes only its theme contribution; `theme_off` remains the shadow-only attribution profile. Selection and analysis derive the same strip from the validated overextension record.
+- **Required**: no known code residual; independent Claude review is required before any commit. Full-suite revalidation remains blocked in this worktree by missing vendored `rpds.rpds` / resulting pre-existing account-CLI failures.
+- **Verify**: red reverse control reproduced `100.0 > 68.5`; focused core/seam/weekend analysis `111 OK`; binding JSON parse and `py_compile` OK; doc/route pack `58 OK`, with two vendored-`rpds` schema-runtime failures. Attempted data-context `87` and full US-short `3007` runs are likewise environment-invalid, not passing evidence.
+- **Pre-Codex self-review**: A-F checked. A: all four frozen profiles plus selection/analysis reconciliation covered; B: active code/binding/design/test surfaces updated, historical SESSION_LOG retained, and `CURRENT` remains untouched because it may contain settled facts only; C: low-theme/high-momentum reverse control and non-bool flag rejection; E: no `CURRENT` transient update; F: `py_compile`, JSON parse, and `git diff --check` clean (CRLF notices only). Lightweight self-review timed out once; retry had no diff evidence, so this is the documented main-thread checklist fallback.
 - **Next**: Claude Code：审查
 
 ## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)

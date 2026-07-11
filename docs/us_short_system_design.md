@@ -163,7 +163,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **纯软信号**（无市场确认的网络/X/LLM/人工 watchlist）：只标签/封顶小加分（≤ `manual_watchlist_boost` 5 分），不单独变硬分。
 - **过热分档（防追喷出的票，但不误杀强趋势）**：两档**互斥**，同一风险只罚一次（§4.2 单舞台），字段 `overextension_state ∈ {none, warning, chasing_extreme}` 入 action_table。
 - `overextension_warning`（温和：`close ≥ MA10 + k1×ATR` 且**趋势完好梯** `close > MA5 > MA10 > MA20`、未喷出；任一 MA 非有限则不判 warning）：**保留全额赛道分、不踢出选股**；只在执行侧罚——强制 `pullback_mode` 入场（不追突破）+ 压到试探/最小仓 + 抬 RR 门（复用 §6/§8 既有杠杆，不新增惩罚 stage）。
-- `chasing_extreme`（抛物线，`close ≥ MA10 + k2×ATR` **且**多条件同时（AND）成立才触发——绝不因单条件如"仅涨幅大"误判：连续垂直 + 当日涨幅 ≥ m×ATR + 量能高潮 + 远离全部均线 + 回撤结构差，需 ≥K 项共现）：**才**从 core_score 剥掉赛道热度分 → 退回动量+催化 base；仅 ≥K 但未过 k2 的票按 warning/none 继续判定，不得剥赛道分。
+- `chasing_extreme`（抛物线，`close ≥ MA10 + k2×ATR` **且**多条件同时（AND）成立才触发——绝不因单条件如"仅涨幅大"误判：连续垂直 + 当日涨幅 ≥ m×ATR + 量能高潮 + 远离全部均线 + 回撤结构差，需 ≥K 项共现）：**才**从 core_score 剥掉当前 profile 的赛道热度贡献（不重分配给其它块，惩罚后分数不得高于原分）并清空 theme 席位分；`theme_off` 的重分配只用于 §12.2 shadow 归因。仅 ≥K 但未过 k2 的票按 warning/none 继续判定，不得剥赛道分。
 - 分档用 MA5/MA10/MA20 + ATR + 量比判定；`k1=1.75`、`k2=2.50`、m/K/量能/均线距离均为 §13.1 #36 **forward prior**（非冻结）。强趋势票"高了还能更高"默认落 `warning`、不被误杀，仅真喷出才降权。
 
 ### 4.4 三个移出打分、各有去处的因子
