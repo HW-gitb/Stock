@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-11 — Claude 规划 handoff (VIX regime 接线 → Codex 执行；不依赖 A1)
+
+- **Verdict/Action**: 规划（非审查/非修复）。确认 VIX 接线**不需先跑 A1**、反而**先接线更好**——A1 那次 real capstone 会把 VIX live fetch 作为一个 stage 顺带端到端验（否则首份报告 VIX 恒 unknown、还得再单跑验）。VIX 只喂 §7 sizing（仓位帽/开新仓）、**不碰选股/价位/veto**，fail-closed（缺/403/429/畸形→unknown，绝不 进攻、不阻 emit、不崩）。当前状态：VIX fetch runner + `classify_vix` 已建、CAT6 已硬化取值/观察绑定，但被任何 pipeline stage 调用=0，`market_axis_regimes["vix"]` 现来自静态 batch4 `template[...]` 恒 unknown。
+- **Required**: 无（规划、非 finding）。**Build scope（Codex 执行 offline 半）**：① `us_short_weekly_capstone_stages.py` 加 `run_vix_regime` 适配器包 `us_short_vix_regime_fetch.run_fetch`（gated，`confirm_user_authorization` 从 ctx 穿、镜像其它 gated stage）；② `us_short_weekly_capstone.py::default_pipeline()` 在 `weekly_bridge` 前插 VIX stage；③ 把 fetch 得到的 regime 注入 batch4 context 的 `market_axis_regimes["vix"]`（找/建注入 seam、覆盖 template 的 unknown）；④ 五类 fail-closed 反控（normal/403/429/malformed/unknown → vix 轴得正确 regime 或 unknown、unknown 令 §7 降档非 进攻、emit 不被阻、不崩）。设计决策请 surface：注入 seam 选址 + VIX 作为 default-pipeline gated stage 还是 optional。
+- **Verify**: 规划 handoff、无验证。边界：live VIX 调用 gated（SR-PROVIDER-001）、跟 A1 跑、现在不单独 live 调用；治理 preset `us_short_regime_governance` 的「unavailable→unknown」不得漂移；schema/consumer（`us_short_weekend_analysis`）已认 vix/unknown。
+- **Next**: Codex：执行
+
 ## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别2：§4.3 overextension 消费契约/PIT)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push；主树已被重整为净 CAT2、类6/类7 已移出）。A/B/C/D 修复正确：源绑定 envelope（`validate_overextension_projection` 用候选时钟/源合约/eligible-digest 校验 + 每行 PIT 绑定 + 恰覆盖全集 + count 对账 + provenance 纳入 generated_at）、`validate_overextension_result` 闭世界校验器接 7 边界、OHLC `hi>=cl>=lo>0`、非 dict producer 拒。CAT2 register 条目（重整时丢失）已据代码+SESSION_LOG 重建。
