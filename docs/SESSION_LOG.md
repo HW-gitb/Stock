@@ -8,6 +8,12 @@
 
 ---
 
+## 2026-07-12 — Claude 收口 (US-short R3 三刀 register/SESSION_LOG drift 对账，doc-only)
+- **Verdict/Action**: 按用户指令视三处 R3 修复为已定并清理账面 drift（本会话无重审、无代码改动）。`900e5c6`(env/action 来源绑定)、`5e3e00b`(chasing 反向加分) 两条 register 翻 resolved；`0b5b6f9`(bankruptcy 候选门) 标为候选刀已闭、其名下 4 个 remaining 子项仍 OPEN。
+- **Required**: `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP` / `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION` resolved；`R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍 open（SEC 目标覆盖率健康 / 消费边界 envelope+digest 复核 / 真实 adjustment label / holding 侧 = codex_r3 issue 1+3）——完整详情单源见 `docs/system_risk_register.md`。
+- **Verify**: doc-only 对账；三 commit 均在 master（`5e3e00b`/`900e5c6`/`0b5b6f9`，merge `64929278`/`e266f1a6`）；SESSION_LOG working-tree==HEAD（`git diff` 空、M 为 autocrlf/stat）；本会话未跑测试包、未做独立审查，review-evidence:not_available。
+- **Next**: Codex：修复（codex_r3 issue 1：SEC 按唯一目标 ticker 算覆盖 + 消费边界复核 envelope/digest + 真实 adjustment label）
+
 ## 2026-07-11 — Codex repair, self-review complete (US-short R3 issue 2: Pass2 candidate bankruptcy coverage)
 
 - **Verdict/Action**: Implemented the smallest candidate-only Pass2 gate: `unscreened` / `not_in_screen_set` / stale / unsourced SEC Item 1.03 bankruptcy provenance cannot enter score composition or Top15; current `screened_no_filing` only.
@@ -29,6 +35,8 @@
 - **Required**: 无已知残留；完整事实、风险和未接线生产者边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`。
 - **Verify**: 新增红测后 focused provenance/receipt/bridge **17 OK**，两 source-packet runner 的 caller-`strong` 反向探针均 fail-closed，`py_compile`/`git diff --check`/BOM 通过；完整 `test_us_short*.py` wrapper 因本工作树 `jsonschema/rpds` 缺失在 discovery 前阻塞。
 - **Pre-Codex self-review**: A-F — A 覆盖 run-origin/receipt/Batch4/orchestrator/schema/CLI 两 source-packet runner；B grep 确认无 `run_mode="research_live"` producer 和无 `default="strong"`；C 覆盖 legacy research_live 拒绝、模板 digest 替换、caller-strong；E 未改 CURRENT/README。独立 current-diff 审查先 FAIL 两项（legacy research_live + template TOCTOU）均已红绿修复；一次超时重启后 PASS；固定包集中运行一次。
+- **Next**: Claude Code：审查
+
 ## 2026-07-11 — Codex repair complete, awaiting Claude review (US-short R3 issue 5: chasing penalty score amplification)
 
 - **Verdict/Action**: repaired only `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION`: `chasing_extreme` now preserves the active profile and removes only its theme contribution; `theme_off` remains the shadow-only attribution profile. Selection and analysis derive the same strip from the validated overextension record.
