@@ -1,0 +1,7 @@
+# Append-only cross-LLM log: every branch prepends a new entry at the top, so two
+# branches collide at the same spot on every merge. `merge=union` keeps BOTH sides'
+# added lines (no conflict markers) instead of failing. Safe here because entries are
+# added as new blocks, never by editing existing lines.
+# Do NOT extend this to docs/system_risk_register.md — it has in-place Status edits
+# that a union merge would silently corrupt; leave it on the normal 3-way merge.
+docs/SESSION_LOG.md merge=union
