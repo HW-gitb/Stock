@@ -22,14 +22,22 @@ OBSERVE_REASON_COST = "cost_inefficient_min_size"   # frozen §9 observe_reason_
 def _finite_number(x):
     if isinstance(x, bool) or not isinstance(x, (int, float)):
         return None
-    return float(x) if math.isfinite(x) else None
+    try:
+        return float(x) if math.isfinite(x) else None
+    except OverflowError:
+        return None
 
 
 def _count(x):
     """A proposed position is a positive integer share count (≥ 1). Fractional / bool / string / ≤ 0 → None."""
     if isinstance(x, bool) or not isinstance(x, int):
         return None
-    return x if x >= 1 else None
+    if x < 1:
+        return None
+    try:
+        return x if math.isfinite(x) else None
+    except OverflowError:
+        return None
 
 
 def round_trip_cost(commission_round_trip, slippage_dollars, spread_dollars):

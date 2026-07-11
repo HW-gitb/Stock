@@ -84,6 +84,16 @@ class CostFloorGateTests(unittest.TestCase):
         self.assertEqual(out["status"], "observe")
         self.assertEqual(out["shares"], 0)
 
+    def test_huge_integer_inputs_block_not_bare_crash(self):
+        big = 10 ** 400
+        for args in ((big, 10.0, 20.0, 1.0, 1.0, 1.0),
+                     (1, big, 20.0, 1.0, 1.0, 1.0),
+                     (1, 10.0, big, 1.0, 1.0, 1.0),
+                     (1, 10.0, 20.0, big, 1.0, 1.0)):
+            out = cf.apply_cost_floor(*args)
+            self.assertEqual(out["status"], "observe")
+            self.assertEqual(out["reason"], "unverifiable_cost_inputs")
+
 
 class ContractTests(unittest.TestCase):
     def test_observe_reason_in_frozen_vocab(self):

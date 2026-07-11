@@ -24,6 +24,7 @@ from engine import us_short_massive_financials as mf
 from engine import us_short_massive_news_catalyst as mnc
 from engine import us_short_numeric_catalyst_entitlement as nce
 from engine import us_short_regime as rg
+from runners import us_short_universe_fetch as uf
 
 BIG = 10 ** 400   # a legit Python int; float()/math.isfinite() reject it with OverflowError
 
@@ -55,6 +56,9 @@ class HugeIntContainment(unittest.TestCase):
 
     def test_regime_classify_vix_unknown_not_crash(self):
         self.assertEqual(rg.classify_vix(BIG), rg.UNKNOWN)
+
+    def test_universe_fetch_contains_raw_provider_numeric(self):
+        self.assertIs(uf._is_finite(BIG), False)
 
 
 if __name__ == "__main__":
