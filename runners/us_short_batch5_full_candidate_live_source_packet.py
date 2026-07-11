@@ -21,6 +21,10 @@ if str(ROOT) not in sys.path:
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_pass2_funnel import Pass2FunnelError, select_pass2_targets  # noqa: E402
+from engine.us_short_projection_binding import (  # noqa: E402
+    build_projection_binding,
+    validate_projection_binding,
+)
 from engine.us_short_fmp_analyst_grades import FmpGradesError, resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_massive_news import MassiveNewsError, resolve_news_events  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
@@ -523,8 +527,11 @@ def _record_map(records: list[sample_validation.FetchRecord]) -> dict[tuple[str,
 def _target_scoped_projection(
     *,
     projection_path: Path,
+    component: str,
     value_key: str,
     selected_symbols: list[str],
+    generated_at: str,
+    candidate_artifact: dict[str, Any],
 ) -> dict[str, Any]:
     raw = _read_json(projection_path)
     if type(raw) is not dict:
@@ -556,13 +563,23 @@ def _target_scoped_projection(
         else:
             raise FullCandidateLiveSourcePacketError(f"{value_key} projection partition misses a selected target")
         scoped_coverage[symbol] = coverage[symbol]
-    return {
+    scoped = {
         value_key: scoped_values,
         "neutral_fill_tickers": scoped_neutral,
         "coverage": scoped_coverage,
         "target_count": len(selected_symbols),
         "scored_count": len(scoped_values),
     }
+    scoped["source_binding"] = build_projection_binding(
+        component=component,
+        generated_at=generated_at,
+        expected_decision_date=candidate_artifact["decision_date"],
+        candidate_price_basis_date=candidate_artifact["price_basis_date"],
+        source_as_of=candidate_artifact["used_date"],
+        target_tickers=selected_symbols,
+        source_artifact_paths={f"parent_{component}_projection": projection_path},
+    )
+    return scoped
 
 
 def _empty_provenance(
@@ -1129,6 +1146,7 @@ def _rederive_and_verify_pass2_targets(
     expected_decision_date: str,
     eligibility_governance: dict[str, Any],
     momentum_projection_path: Path,
+    theme_projection_path: Path,
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     reviewed_target_symbols: list[str],
     preflight_within_cap: Any,
@@ -1155,6 +1173,26 @@ def _rederive_and_verify_pass2_targets(
     raw = _read_json(momentum_projection_path)
     if type(raw) is not dict or type(raw.get("momentum_by_ticker")) is not dict:
         raise FullCandidateLiveSourcePacketError("momentum projection has an invalid shape for target re-derivation")
+    theme_raw = _read_json(theme_projection_path)
+    try:
+        validate_projection_binding(
+            raw,
+            component="momentum",
+            expected_decision_date=expected_decision_date,
+            candidate_price_basis_date=artifact["price_basis_date"],
+            source_as_of=artifact["used_date"],
+            target_tickers=list(artifact["eligible_tickers"]),
+        )
+        validate_projection_binding(
+            theme_raw,
+            component="theme",
+            expected_decision_date=expected_decision_date,
+            candidate_price_basis_date=artifact["price_basis_date"],
+            source_as_of=artifact["used_date"],
+            target_tickers=list(artifact["eligible_tickers"]),
+        )
+    except ValueError as exc:
+        raise FullCandidateLiveSourcePacketError(f"score projection source binding rejected: {exc}") from exc
     forced = _canonical_forced_holdings(forced_holding_tickers, eligible=eligible)
     # SINGLE-SOURCE funnel selection: the SAME select_pass2_targets the preflight used (top-K by momentum score +
     # forced holdings), with the SAME K read from the reviewed preflight, so the runner re-derivation is provably
@@ -1284,6 +1322,7 @@ def run_full_candidate_live_source_packet(
         expected_decision_date=expected_decision_date,
         eligibility_governance=eligibility_governance,
         momentum_projection_path=momentum_path,
+        theme_projection_path=theme_path,
         forced_holding_tickers=forced_holding_tickers,
         reviewed_target_symbols=reviewed_target_symbols,
         preflight_within_cap=preflight_targets.get("fmp_grade_calls_within_free_daily_cap"),
@@ -1355,13 +1394,19 @@ def run_full_candidate_live_source_packet(
     )
     target_momentum_projection = _target_scoped_projection(
         projection_path=momentum_path,
+        component="momentum",
         value_key="momentum_by_ticker",
         selected_symbols=selected_symbols,
+        generated_at=generated_at,
+        candidate_artifact=candidate_subset,
     )
     target_theme_projection = _target_scoped_projection(
         projection_path=theme_path,
+        component="theme",
         value_key="theme_block_by_ticker",
         selected_symbols=selected_symbols,
+        generated_at=generated_at,
+        candidate_artifact=candidate_subset,
     )
 
     _write_json_atomic(candidate_subset, paths["candidate_subset"])

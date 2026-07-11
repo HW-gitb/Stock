@@ -14,6 +14,7 @@ from engine.us_short_eligibility_gate import load_eligibility_governance, pass2_
 from engine.us_short_fmp_analyst_grades import resolve_analyst_grade_actions  # noqa: E402
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_massive_news import resolve_news_events  # noqa: E402
+from engine.us_short_projection_binding import build_projection_binding  # noqa: E402
 from engine.us_short_risk_downgrade import ANALYST_DOWNGRADE_PENALTY, risk_downgrade  # noqa: E402
 from engine.us_short_run_provenance import reconcile_run_provenance  # noqa: E402
 from engine.us_short_sec_offering_audit import (  # noqa: E402
@@ -167,13 +168,28 @@ def _score_composition(targets):
 
 
 def _constant_projection(value_key, targets, disposition, *, score=50.0):
-    return {
+    projection = {
         value_key: {ticker: score for ticker in targets},
         "neutral_fill_tickers": [],
         "coverage": {ticker: disposition for ticker in targets},
         "target_count": len(targets),
         "scored_count": len(targets),
     }
+    component = {
+        "momentum_by_ticker": "momentum",
+        "theme_block_by_ticker": "theme",
+    }.get(value_key)
+    if component is not None:
+        projection["source_binding"] = build_projection_binding(
+            component=component,
+            generated_at=_GENERATED_AT,
+            expected_decision_date=_DECISION_DATE,
+            candidate_price_basis_date=_PRICE_BASIS_DATE,
+            source_as_of=_USED_DATE,
+            target_tickers=list(targets),
+            source_artifact_paths={"test_fixture": Path(__file__)},
+        )
+    return projection
 
 
 def _offering_source(*, signals=None, checked=None, excluded=None):

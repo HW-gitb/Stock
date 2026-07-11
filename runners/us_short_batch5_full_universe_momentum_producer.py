@@ -47,6 +47,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_projection_binding import build_projection_binding  # noqa: E402
 from engine.us_short_momentum import compute_momentum_features, momentum_block  # noqa: E402
 from engine.us_short_seam_momentum import (  # noqa: E402
     DISPOSITION_ABSENT,
@@ -297,16 +298,16 @@ def _load_context(
         raise FullUniverseMomentumProducerError("series_contract.as_of must equal the price_basis_date")
     if provenance["source_as_of"] != price_basis_date:
         raise FullUniverseMomentumProducerError("provenance.source_as_of must equal the price_basis_date")
-    if _compact_to_ymd(clock["candidate_price_basis_date"], field="decision_clock.candidate_price_basis_date") != price_basis_date:
-        raise FullUniverseMomentumProducerError("candidate_price_basis_date must normalize to price_basis_date")
     provider_id = _safe_provider_id(provenance["provider_id"])
 
     artifact = _load_candidate_artifact(
         candidate_artifact_path=candidate_artifact_path,
         expected_decision_date=clock["expected_decision_date"],
     )
-    if _compact_to_ymd(artifact["price_basis_date"], field="candidate.price_basis_date") != price_basis_date:
-        raise FullUniverseMomentumProducerError("candidate artifact price_basis_date must match the packet price_basis_date")
+    if clock["candidate_price_basis_date"] != artifact["price_basis_date"]:
+        raise FullUniverseMomentumProducerError("candidate_price_basis_date must match the candidate artifact")
+    if artifact["used_date"] != price_basis_date:
+        raise FullUniverseMomentumProducerError("candidate used_date must match the packet price_basis_date")
     eligible = [_canonical_ticker(ticker, field="candidate.eligible_tickers") for ticker in artifact["eligible_tickers"]]
 
     session = contract["session"]
@@ -369,6 +370,18 @@ def _build_projection(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str
 
     producer_result = momentum_block(features_by_ticker)
     projection = project_momentum_block(producer_result, eligible)
+    projection["source_binding"] = build_projection_binding(
+        component="momentum",
+        generated_at=context["generated_at"],
+        expected_decision_date=context["packet"]["decision_clock"]["expected_decision_date"],
+        candidate_price_basis_date=context["artifact"]["price_basis_date"],
+        source_as_of=context["artifact"]["used_date"],
+        target_tickers=eligible,
+        source_artifact_paths={
+            "candidate_artifact": context["candidate_artifact_path"],
+            "momentum_series_packet": context["series_packet_path"],
+        },
+    )
     details = {
         "eligible_with_series_count": len(features_by_ticker),
         "disposition_counts": _disposition_counts(projection["coverage"]),

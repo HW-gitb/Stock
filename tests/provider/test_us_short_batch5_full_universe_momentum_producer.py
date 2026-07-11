@@ -240,7 +240,10 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
         self.assertEqual(projection["coverage"]["JPM"], "absent_from_pool")
         self.assertEqual(
             set(projection),
-            {"momentum_by_ticker", "neutral_fill_tickers", "coverage", "target_count", "scored_count"},
+            {
+                "momentum_by_ticker", "neutral_fill_tickers", "coverage", "target_count", "scored_count",
+                "source_binding",
+            },
         )
 
     def test_output_projection_feeds_full_candidate_projection_inputs(self):

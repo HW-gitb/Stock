@@ -228,6 +228,80 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
             self._run(grouped_fetch=hostile)
         self.assertFalse(self.packet.exists())
 
+    def test_transient_provider_http_error_fails_closed(self):
+        base = _fake_grouped()
+
+        def hostile(date_iso: str):
+            if date_iso == "2026-06-12":
+                raise urllib.error.HTTPError(url="x", code=503, msg="Unavailable", hdrs=None, fp=None)
+            return base(date_iso)
+
+        with self.assertRaises(_fetch().FullUniverseMomentumFetchError):
+            self._run(grouped_fetch=hostile)
+        self.assertFalse(self.packet.exists())
+
+    def test_missing_candidate_used_date_fails_closed(self):
+        base = _fake_grouped()
+
+        def missing_used_date(date_iso: str):
+            return [] if date_iso == "2026-06-12" else base(date_iso)
+
+        with self.assertRaises(_fetch().FullUniverseMomentumFetchError):
+            self._run(grouped_fetch=missing_used_date)
+        self.assertFalse(self.packet.exists())
+
+    def test_valid_delayed_candidate_uses_actual_used_date_not_nominal_price_basis(self):
+        artifact = _candidate_artifact(_ALL_ELIGIBLE)
+        actual_used_date = "2026-06-11"
+        artifact["used_date"] = actual_used_date
+        artifact["adv_window"]["latest_date"] = actual_used_date
+        artifact["adv_window"]["observed_window_dates"] = [actual_used_date, "2026-06-10"]
+        for row in artifact["rows"]:
+            row["price_as_of"] = actual_used_date
+            row["as_of"] = actual_used_date
+        _write_json(self.candidate, artifact)
+
+        self._run()
+        packet = _read_json(self.packet)
+        self.assertEqual(packet["decision_clock"]["candidate_price_basis_date"], "20260612")
+        self.assertEqual(packet["decision_clock"]["price_basis_date"], actual_used_date)
+        self.assertEqual(packet["decision_clock"]["source_as_of"], actual_used_date)
+        self.assertEqual(packet["series_by_ticker"]["AAPL"]["points"][-1]["date"], actual_used_date)
+
+    def test_valid_delayed_candidate_uses_actual_used_date_not_nominal_price_basis(self):
+        artifact = _candidate_artifact(_ALL_ELIGIBLE)
+        actual_used_date = "2026-06-11"
+        artifact["used_date"] = actual_used_date
+        artifact["adv_window"]["latest_date"] = actual_used_date
+        artifact["adv_window"]["observed_window_dates"] = [actual_used_date, "2026-06-10"]
+        for row in artifact["rows"]:
+            row["price_as_of"] = actual_used_date
+            row["as_of"] = actual_used_date
+        _write_json(self.candidate, artifact)
+
+        self._run()
+        packet = _read_json(self.packet)
+        self.assertEqual(packet["decision_clock"]["candidate_price_basis_date"], "20260612")
+        self.assertEqual(packet["decision_clock"]["price_basis_date"], actual_used_date)
+        self.assertEqual(packet["decision_clock"]["source_as_of"], actual_used_date)
+        self.assertEqual(packet["series_by_ticker"]["AAPL"]["points"][-1]["date"], actual_used_date)
+
+    def test_duplicate_huge_integer_volume_is_contained_and_primary_row_wins(self):
+        base = _fake_grouped()
+        for huge_first in (False, True):
+            with self.subTest(huge_first=huge_first):
+                def huge_duplicate(date_iso: str):
+                    rows = base(date_iso)
+                    if not rows:
+                        return rows
+                    huge = [{"T": "AAPL", "c": 1.0, "v": 10**10000}]
+                    return huge + rows if huge_first else rows + huge
+
+                summary = self._run(grouped_fetch=huge_duplicate)
+                packet = _read_json(self.packet)
+                self.assertGreater(summary["fetch_stats"]["duplicate_ticker_rows_collapsed"], 0)
+                self.assertNotEqual(packet["series_by_ticker"]["AAPL"]["points"][-1]["close"], 1.0)
+
     def test_real_path_requires_massive_key(self):
         with mock.patch.dict(os.environ, {"MASSIVE_API_KEY": ""}):
             with self.assertRaises(_fetch().FullUniverseMomentumFetchError):

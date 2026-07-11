@@ -118,16 +118,11 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING: with all 3 candidates momentum-scored (full coverage
         # -> ready), momentum_top_k=2 must narrow the expensive Pass2 target to the 2 highest-momentum tickers.
         runner = self._module()
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
-                "neutral_fill_tickers": [],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
-                "target_count": 3,
-                "scored_count": 3,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
+        momentum["momentum_by_ticker"] = {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0}
+        _write_json(self.paths["momentum"], momentum)
         _write_json(
             self.paths["theme"],
             _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
@@ -184,30 +179,23 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
 
     def test_neutral_fill_local_coverage_is_not_used_as_expensive_pass2_target(self):
         runner = self._module()
-        _write_json(
-            self.paths["momentum"],
-            {
-                "momentum_by_ticker": {"AAPL": 75.0, "MSFT": 70.0},
-                "neutral_fill_tickers": ["JPM"],
-                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "absent_from_pool"},
-                "target_count": 3,
-                "scored_count": 2,
-            },
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
         )
-        _write_json(
-            self.paths["theme"],
-            {
-                "theme_block_by_ticker": {"AAPL": 65.0},
-                "neutral_fill_tickers": ["MSFT", "JPM"],
-                "coverage": {
-                    "AAPL": "scored_theme_base",
-                    "MSFT": "neutral_missing_theme_and_industry_base",
-                    "JPM": "neutral_missing_theme_and_industry_base",
-                },
-                "target_count": 3,
-                "scored_count": 1,
-            },
+        momentum["momentum_by_ticker"] = {"AAPL": 75.0, "MSFT": 70.0}
+        momentum["neutral_fill_tickers"] = ["JPM"]
+        momentum["coverage"]["JPM"] = "absent_from_pool"
+        momentum["scored_count"] = 2
+        _write_json(self.paths["momentum"], momentum)
+        theme = _constant_projection(
+            "theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0
         )
+        theme["theme_block_by_ticker"] = {"AAPL": 65.0}
+        theme["neutral_fill_tickers"] = ["MSFT", "JPM"]
+        theme["coverage"]["MSFT"] = "neutral_missing_theme_and_industry_base"
+        theme["coverage"]["JPM"] = "neutral_missing_theme_and_industry_base"
+        theme["scored_count"] = 1
+        _write_json(self.paths["theme"], theme)
 
         summary = runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],

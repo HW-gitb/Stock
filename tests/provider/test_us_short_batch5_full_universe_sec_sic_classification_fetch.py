@@ -90,7 +90,7 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
             "candidate_artifact_path": self.candidate,
             "classification_packet_path": self.packet,
             "summary_path": self.summary,
-            "generated_at": "2026-06-13T10:00:00+00:00",
+            "generated_at": "2026-06-15T12:00:00+00:00",
             "confirm_user_authorization": True,
             "sic_source": _fake_source(),
             "interval_seconds": 0,
@@ -112,6 +112,9 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         packet = _read_json(self.packet)
         self.assertEqual(packet["schema_name"], "us_short_batch5_full_universe_sector_classification_packet")
         self.assertEqual(packet["classification_contract"]["classification_source"], "sec_sic_major_group")
+        self.assertEqual(packet["decision_clock"]["source_as_of"], "2026-06-15")
+        self.assertEqual(packet["classification_contract"]["as_of"], "2026-06-15")
+        self.assertEqual(packet["decision_clock"]["price_basis_date"], "2026-06-12")
         self.assertEqual(packet["sector_by_ticker"],
                          {"AAPL": "35", "MSFT": "35", "GOOG": "35", "JPM": "60", "AMZN": "59"})
 
@@ -136,6 +139,19 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
     def test_requires_user_authorization(self):
         with self.assertRaises(_fetch().FullUniverseSecSicClassificationFetchError):
             self._run(confirm_user_authorization=False)
+        self.assertFalse(self.packet.exists())
+        self.assertFalse(self.summary.exists())
+
+    def test_post_decision_observation_is_rejected_before_source_call(self):
+        calls = []
+
+        def source(eligible):
+            calls.append(tuple(eligible))
+            return dict(_SIC)
+
+        with self.assertRaises(_fetch().FullUniverseSecSicClassificationFetchError):
+            self._run(generated_at="2026-06-15T14:00:00+00:00", sic_source=source)
+        self.assertEqual(calls, [])
         self.assertFalse(self.packet.exists())
         self.assertFalse(self.summary.exists())
 

@@ -53,7 +53,7 @@ def _constant_catalyst_projection(targets, *, score=50.0):
 
 class FullCandidateProjectionInputsTest(unittest.TestCase):
     def setUp(self):
-        self.slug = f"test_full_candidate_projection_inputs_{os.getpid()}_{self._testMethodName}"
+        self.slug = f"test_projection_inputs_{os.getpid()}_{self._testMethodName[:24]}"
         self.paths = {
             "candidate": STATE_DIR / f"{self.slug}_candidate.json",
             "source_momentum": STATE_DIR / f"{self.slug}_source_momentum.json",
@@ -63,6 +63,8 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
             "summary": SUMMARY_DIR / self.slug / "summary.json",
             "preflight_summary": PREFLIGHT_SUMMARY_DIR / self.slug / "preflight_summary.json",
         }
+        self.paths["summary"].parent.mkdir(parents=True, exist_ok=True)
+        self.paths["preflight_summary"].parent.mkdir(parents=True, exist_ok=True)
         for path in self.paths.values():
             path.unlink(missing_ok=True)
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
@@ -138,6 +140,63 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         self.assertEqual(set(composed["selection_inputs"]["per_ticker"]), {"AAPL", "MSFT", "JPM"})
         self.assertEqual(composed["scored_component_counts"]["momentum"], 2)
         self.assertEqual(composed["scored_component_counts"]["theme"], 2)
+
+    def test_clockless_source_projection_is_rejected_before_outputs(self):
+        runner = importlib.import_module(MODULE)
+        source = _read_json(self.paths["source_momentum"])
+        source.pop("source_binding")
+        _write_json(self.paths["source_momentum"], source)
+        with self.assertRaises(runner.FullCandidateProjectionInputsError):
+            runner.run_packet(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                source_momentum_projection_path=self.paths["source_momentum"],
+                source_theme_projection_path=self.paths["source_theme"],
+                output_momentum_projection_path=self.paths["output_momentum"],
+                output_theme_projection_path=self.paths["output_theme"],
+                summary_path=self.paths["summary"],
+                generated_at="2026-07-06T12:00:00+00:00",
+            )
+        self.assertFalse(self.paths["output_momentum"].exists())
+        self.assertFalse(self.paths["output_theme"].exists())
+
+    def test_same_tickers_stale_decision_clock_is_rejected_before_outputs(self):
+        runner = importlib.import_module(MODULE)
+        source = _read_json(self.paths["source_momentum"])
+        source["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
+        _write_json(self.paths["source_momentum"], source)
+        with self.assertRaisesRegex(runner.FullCandidateProjectionInputsError, "decision clock"):
+            runner.run_packet(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                source_momentum_projection_path=self.paths["source_momentum"],
+                source_theme_projection_path=self.paths["source_theme"],
+                output_momentum_projection_path=self.paths["output_momentum"],
+                output_theme_projection_path=self.paths["output_theme"],
+                summary_path=self.paths["summary"],
+                generated_at="2026-07-06T12:00:00+00:00",
+            )
+        self.assertFalse(self.paths["output_momentum"].exists())
+        self.assertFalse(self.paths["output_theme"].exists())
+
+    def test_source_artifact_hash_mismatch_is_rejected_before_outputs(self):
+        runner = importlib.import_module(MODULE)
+        source = _read_json(self.paths["source_theme"])
+        source["source_binding"]["source_artifacts"][0]["sha256"] = "0" * 64
+        _write_json(self.paths["source_theme"], source)
+        with self.assertRaisesRegex(runner.FullCandidateProjectionInputsError, "hash mismatch"):
+            runner.run_packet(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                source_momentum_projection_path=self.paths["source_momentum"],
+                source_theme_projection_path=self.paths["source_theme"],
+                output_momentum_projection_path=self.paths["output_momentum"],
+                output_theme_projection_path=self.paths["output_theme"],
+                summary_path=self.paths["summary"],
+                generated_at="2026-07-06T12:00:00+00:00",
+            )
+        self.assertFalse(self.paths["output_momentum"].exists())
+        self.assertFalse(self.paths["output_theme"].exists())
 
     def test_preflight_treats_scored_plus_neutral_partition_as_full_local_coverage(self):
         runner = importlib.import_module(MODULE)

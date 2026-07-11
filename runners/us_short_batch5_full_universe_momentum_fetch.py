@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import re
 import sys
@@ -172,7 +173,13 @@ def _load_candidate(*, candidate_artifact_path: Path) -> dict[str, Any]:
 def _vol_dedup_key(volume: Any) -> float:
     """Sort key for choosing among duplicate rows: the finite volume, or -inf if it has none (so a row WITH
     volume always beats one without)."""
-    return float(volume) if universe_fetch._is_finite(volume) else float("-inf")
+    if not isinstance(volume, (int, float)) or isinstance(volume, bool):
+        return float("-inf")
+    try:
+        converted = float(volume)
+    except (OverflowError, TypeError, ValueError):
+        return float("-inf")
+    return converted if math.isfinite(converted) else float("-inf")
 
 
 def _real_grouped_fetch(key: str) -> Callable[[str], list[dict[str, Any]]]:
@@ -194,6 +201,7 @@ def _fetch_grouped_series_window(
     window: int,
     min_sessions: int,
     interval_seconds: float,
+    required_latest_date: str,
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Step newest-first through candidate sessions, fetch the whole-market grouped daily for each, KEEP ONLY the
     wanted (eligible+benchmark) rows, and collect up to `window` sessions that returned market data. Mirrors the
@@ -225,13 +233,11 @@ def _fetch_grouped_series_window(
                         continue
                     raise
         except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403, 429):
-                code = exc.code  # extract ONLY the code; do NOT chain `exc` — HTTPError.url embeds the apiKey,
-                raise FullUniverseMomentumFetchError(  # so `from None` keeps the secret-bearing cause unreachable
-                    f"Massive grouped daily HTTP {code} (auth/quota/rate-limit after {retry_count} retry "
-                    "attempt(s)); fail-closed rather than emit a silently-truncated momentum window"
-                ) from None
-            continue  # a non-auth HTTP error -> treat as a missing/unpublished day and move on
+            code = exc.code  # never chain the HTTPError because its URL can embed the API key
+            raise FullUniverseMomentumFetchError(
+                f"Massive grouped daily HTTP {code} after {retry_count} retry attempt(s); fail-closed rather than "
+                "emit a silently-truncated momentum window"
+            ) from None
         if not isinstance(results, list) or not results:
             continue  # market not published for this day (delayed-data lag) -> skip, do not count
         # Dedup per session by canonical ticker: the whole-market grouped feed can carry >1 row for one symbol
@@ -261,6 +267,12 @@ def _fetch_grouped_series_window(
         raise FullUniverseMomentumFetchError(
             f"Massive returned only {len(collected)} sessions with data (< min {min_sessions} for momentum ret_3m); "
             "fail-closed rather than write a too-short window"
+        )
+    latest_collected_date = max(date_iso for date_iso, _ in collected)
+    if latest_collected_date != required_latest_date:
+        raise FullUniverseMomentumFetchError(
+            f"latest grouped session {latest_collected_date} does not equal candidate used_date "
+            f"{required_latest_date}; fail-closed rather than backfill a stale window"
         )
     collected_ascending = sorted(collected, key=lambda item: item[0])
     grouped_sessions = [{"date": date_iso, "rows": rows} for date_iso, rows in collected_ascending]
@@ -524,7 +536,8 @@ def run_fetch(
         raise FullUniverseMomentumFetchError(f"candidate_artifact_path must be an existing file: {_repo_rel(candidate_path)}")
     artifact = _load_candidate(candidate_artifact_path=candidate_path)
     price_basis_compact = artifact["price_basis_date"]
-    price_basis_ymd = _compact_to_ymd(price_basis_compact, field="candidate.price_basis_date")
+    price_basis_ymd = artifact["used_date"]
+    used_date_compact = price_basis_ymd.replace("-", "")
 
     packet_path = _validate_packet_path(
         series_packet_path if series_packet_path is not None
@@ -554,11 +567,12 @@ def run_fetch(
 
     calendar = universe_fetch.load_market_calendar(calendar_path)
     session_dates_desc = universe_fetch.adv_window_session_dates(
-        price_basis_compact, calendar, count=session_window + SESSION_FETCH_BUFFER
+        used_date_compact, calendar, count=session_window + SESSION_FETCH_BUFFER
     )
     grouped_sessions, stats = _fetch_grouped_series_window(
         fetch_seam, session_dates_desc, wanted,
         window=session_window, min_sessions=min_sessions, interval_seconds=interval_seconds,
+        required_latest_date=price_basis_ymd,
     )
 
     series_by_ticker = reconstruct_series_from_grouped(

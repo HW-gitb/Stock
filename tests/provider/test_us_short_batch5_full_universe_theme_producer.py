@@ -66,7 +66,7 @@ def _classification_packet(sector_by_ticker: dict, *, classification_source: str
     return {
         "schema_name": "us_short_batch5_full_universe_sector_classification_packet",
         "schema_version": "1.0.0",
-        "generated_at": "2026-06-13T10:00:00+00:00",
+        "generated_at": "2026-06-15T12:00:00+00:00",
         "scope": {
             "market": "US",
             "lane": "us_short",
@@ -85,14 +85,14 @@ def _classification_packet(sector_by_ticker: dict, *, classification_source: str
             "expected_decision_date": _DECISION_DATE,
             "candidate_price_basis_date": _PRICE_BASIS_DATE,
             "price_basis_date": as_of,
-            "source_as_of": as_of,
+            "source_as_of": "2026-06-15",
         },
-        "classification_contract": {"classification_source": classification_source, "as_of": as_of},
+        "classification_contract": {"classification_source": classification_source, "as_of": "2026-06-15"},
         "provenance": {
             "provider_id": "sec_edgar",
             "endpoint_or_family": "submissions_sic",
-            "source_as_of": as_of,
-            "observed_at": "2026-06-13T10:00:00+00:00",
+            "source_as_of": "2026-06-15",
+            "observed_at": "2026-06-15T12:00:00+00:00",
             "coverage_status": "full",
             "parser_status": "ok",
         },

@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-11 — Claude 审查 PASS (US-short queue 类别3 A-D：全宇宙 momentum/theme/SIC PIT·source-binding·numeric)
+
+- **Verdict/Action**: PASS。A/B/C/D 修复正确：SIC 强制决策日 09:30 ET 前观察 + `source_as_of`=真实观察日（sic_fetch 与 theme_producer 双门）；projection source-binding 非循环（消费全链用候选 artifact 时钟 + `verify_source_artifacts=True`，seam 无绕过、live 边界重校验+重derive+重锚预算）；Massive 所有 HTTP 错误 fail-closed + latest==used_date；`_vol_dedup_key` strict + OverflowError 兜 huge-int。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT3-PIT-SOURCE-BINDING-NUMERIC-GAPS` → resolved（完整独立复审证据 + 4 条低危 Optional 单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读 4 source 修复 + `us_short_projection_binding` 模块 + merge/preflight/live/data_context 全消费链；自跑 binding 对抗探针（stale-clock/wrong-basis/wrong-source-as-of/component/swapped-partition/overwritten-source 全 rejected）；§6a 独立对抗 agent A-D 全 HELD；亲跑 6757 全包 4147 ran，15 error 全 = worktree 长基址 Windows MAX_PATH 溢出（含 WinError 206、均非 reviewed 文件、主树短路径 17 OK），零 reviewed-slice 失败。
+- **Next**: Codex：待命（4 Optional 可后续一并收）。
+
+## 2026-07-10 — Codex 修复完成，待 Claude 独立复审 (US-short queue 类别3 A-D)
+
+- **Verdict/Action**: 已按授权完成类别3 A-D 最小红绿修复，未提交、未 push；SEC 当前 SIC 只允许决策日开盘前快照且保留真实观察日，Massive 窗口绑定 candidate `used_date` 并对所有 HTTP 错误 fail-closed，momentum/theme projection 贯穿 producer→merge→preflight→live→data-context 携带并校验决策时钟、目标集哈希和源文件 SHA-256，超大整数 volume 不再裸崩。
+- **Required**: 当前未发现残留 Required；register `docs/system_risk_register.md` 的 `R-USSHORT-REVIEWQ-CAT3-PIT-SOURCE-BINDING-NUMERIC-GAPS` 保持 `in_progress P0`，仅待 Claude Code 对本未提交 diff 独立复审后决定 closure/commit。
+- **Verify**: A/C/D focused 56 OK；B producer/merge/preflight 38 OK、live/data-context 52 OK；整类 293 OK + 新增 delayed-day 控制 1 OK；反控覆盖 after-open SIC、503、缺/合法延迟 used_date、huge-int、旧决策日与源哈希错配；本 entry 通过 review-entry guard，仍有旧 Claude entry baseline 1 + clean-worktree 缺 ignored rpds 2；`git diff --check` OK；无 provider/network/live 调用。
+- **Pre-Codex self-review**: A-F checked（主线程 fallback；平台规则未授权子 agent，未启动独立 agent）；整类 producer/消费者 grep 已追到 merge、preflight、live、data-context 与 seam；反向合法 pre-open/current map、真实 max-volume、完整下游输出在 293 项固定包 + delayed-day focused 控制通过；`CURRENT`/README 未写 transient 状态、未改 A 股/frozen spec。
+- **Next**: Claude Code：在同一 worktree 独立复审类别3 A-D，PASS 后只提交本刀。
+
+## 2026-07-10 — Codex 审查 FAIL (US-short queue 类别3：全宇宙 momentum/theme/SIC producer)
+
+- **Verdict/Action**: FAIL；类别3的 grouped-daily 全宇宙价格重建、复用既有 momentum/industry 引擎、SEC SIC 明示为非 GICS 代理及逐票 disposition 方向合理，但 PIT/source-binding、Massive 缺口真实性和 raw huge-int 边界仍会污染 Top-K/core-score/官方来源事实。
+- **Required**: `R-USSHORT-REVIEWQ-CAT3-PIT-SOURCE-BINDING-NUMERIC-GAPS` — A-D 完整 Required、影响、边界与 closure 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: focused 类别3 187 OK；下游 88 OK；无网络探针复现 A-D；raw/state 路径 gitignored、tracked summary 无 secret/URL/raw 行；doc/route guard 60 中 3 个 baseline/worktree 失败（旧 Claude entry 模板 1 + clean worktree 缺 ignored rpds 2），本 entry 非 offender；无 provider/live 调用。
+- **Next**: Codex：仅修复类别3 A-D，修复后交 Claude Code 独立审查。
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。
