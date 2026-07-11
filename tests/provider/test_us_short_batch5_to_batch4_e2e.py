@@ -93,12 +93,18 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "LOWADV")))
         _write_json(
             self.paths["momentum"],
-            _constant_projection("momentum_by_ticker", targets, "scored", score=50.0),
+            _constant_projection(
+                "momentum_by_ticker", targets, "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+            ),
         )
 
         _write_json(
             self.paths["theme"],
-            _constant_projection("theme_block_by_ticker", targets, "scored_theme_base", score=50.0),
+            _constant_projection(
+                "theme_block_by_ticker", targets, "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+            ),
         )
         _write_json(
             self.paths["offering"],
@@ -221,6 +227,45 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertTrue((private_root / "runs_private" / _DECISION_DATE / "machine_record.json").exists())
             self.assertTrue(self.paths["components"].exists())
             self.assertNotIn("AAPL", json.dumps(summary, ensure_ascii=False))
+
+    def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
+        targets = ("AAPL",)
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection(
+                "momentum_by_ticker", targets, "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+                producer_id="us_short_batch5_full_candidate_live_source_packet",
+                source_roles=("parent_momentum_projection",),
+            ),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection(
+                "theme_block_by_ticker", targets, "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+                producer_id="us_short_batch5_full_candidate_live_source_packet",
+                source_roles=("parent_theme_projection",),
+            ),
+        )
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "source packet runner failed"):
+                e2e.run_e2e(
+                    source_packet_path=self.paths["packet"],
+                    batch4_template_path=template,
+                    account_state_path=account,
+                    provider_health_path=health,
+                    private_root=private_root,
+                    now_et=datetime(2026, 6, 15, 9, 0, 0),
+                    context_components_path=self.paths["components"],
+                    bootstrap_lifecycle=True,
+                )
+            self.assertFalse((private_root / "weekly_private").exists())
+            self.assertFalse((private_root / "runs_private").exists())
 
     def test_provider_health_is_required_before_any_batch4_output(self) -> None:
         with tempfile.TemporaryDirectory() as private_dir:

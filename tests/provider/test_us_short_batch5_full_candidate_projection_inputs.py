@@ -23,6 +23,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _candidate_artifact,
     _constant_projection,
 )
+from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -32,6 +33,22 @@ MODULE = "runners.us_short_batch5_full_candidate_projection_inputs"
 
 
 def _write_json(path: Path, payload) -> Path:
+    binding = payload.get("source_binding") if type(payload) is dict else None
+    if type(payload) is dict and "_source_" in path.stem and (
+        type(binding) is not dict or binding.get("producer_id") == "us_short_test_fixture"
+    ):
+        component = "momentum" if "momentum_by_ticker" in payload else "theme" if "theme_block_by_ticker" in payload else None
+        candidate_path = path.with_name(path.stem.split("_source_", 1)[0] + "_candidate.json")
+        if component is not None and candidate_path.is_file():
+            payload = bound_projection(
+                candidate_path=candidate_path, component=component, projection=payload,
+                producer_id=f"us_short_batch5_full_universe_{component}_producer",
+                source_roles=(
+                    ("candidate_artifact", "momentum_series_packet")
+                    if component == "momentum"
+                    else ("candidate_artifact", "momentum_series_packet", "sector_classification_packet")
+                ),
+            )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
@@ -70,11 +87,21 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
         _write_json(
             self.paths["source_momentum"],
-            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=65.0),
+            _constant_projection(
+                "momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=65.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+                producer_id="us_short_batch5_full_universe_momentum_producer",
+                source_roles=("candidate_artifact", "momentum_series_packet"),
+            ),
         )
         _write_json(
             self.paths["source_theme"],
-            _constant_projection("theme_block_by_ticker", ("AAPL", "JPM"), "scored_theme_base", score=60.0),
+            _constant_projection(
+                "theme_block_by_ticker", ("AAPL", "JPM"), "scored_theme_base", score=60.0,
+                candidate_path=self.paths["candidate"], component="theme",
+                producer_id="us_short_batch5_full_universe_theme_producer",
+                source_roles=("candidate_artifact", "momentum_series_packet", "sector_classification_packet"),
+            ),
         )
 
     def tearDown(self):
@@ -108,7 +135,7 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
             output_momentum_projection_path=self.paths["output_momentum"],
             output_theme_projection_path=self.paths["output_theme"],
             summary_path=self.paths["summary"],
-            generated_at="2026-07-06T12:00:00+00:00",
+            generated_at="2026-06-15T12:00:00+00:00",
         )
 
         self.assertEqual(summary["scope"]["status"], "full_candidate_projection_inputs_written")
@@ -209,7 +236,7 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
             output_momentum_projection_path=self.paths["output_momentum"],
             output_theme_projection_path=self.paths["output_theme"],
             summary_path=self.paths["summary"],
-            generated_at="2026-07-06T12:00:00+00:00",
+            generated_at="2026-06-15T12:00:00+00:00",
         )
 
         summary = preflight.run_preflight(
@@ -218,6 +245,7 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
             momentum_projection_path=self.paths["output_momentum"],
             theme_projection_path=self.paths["output_theme"],
             summary_path=self.paths["preflight_summary"],
+            authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:05:00+00:00",
         )
@@ -226,9 +254,9 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
         self.assertTrue(summary["local_input_coverage"]["all_required_local_inputs_cover_candidates"])
         self.assertEqual(summary["local_input_coverage"]["momentum_projection"]["missing_count"], 0)
         self.assertEqual(summary["local_input_coverage"]["theme_projection"]["missing_count"], 0)
-        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
-        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "MSFT"])
-        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 3)
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["AAPL", "JPM", "MSFT"])
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 16)
         self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
         self.assertFalse(summary["scope"]["network_access_performed"])
 
@@ -252,7 +280,7 @@ class FullCandidateProjectionInputsTest(unittest.TestCase):
                         output_momentum_projection_path=self.paths["output_momentum"],
                         output_theme_projection_path=self.paths["output_theme"],
                         summary_path=self.paths["summary"],
-                        generated_at="2026-07-06T12:00:00+00:00",
+                        generated_at="2026-06-15T12:00:00+00:00",
                     )
 
                 self.assertFalse(self.paths["output_momentum"].exists())

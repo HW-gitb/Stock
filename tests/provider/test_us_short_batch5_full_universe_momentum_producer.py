@@ -26,6 +26,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _USED_DATE,
     _constant_projection,
 )
+from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -97,7 +98,7 @@ def _dates(n: int, *, as_of: str = _PRICE_BASIS_YMD) -> list[str]:
 
 
 def _series(*, start: float, step: float, n: int = 72, as_of: str = _PRICE_BASIS_YMD,
-            session: str = "RTH", adjustment_mode: str = "split_div_adjusted") -> dict:
+            session: str = "RTH", adjustment_mode: str = "massive_grouped_daily") -> dict:
     return {
         "as_of": as_of,
         "session": session,
@@ -122,7 +123,7 @@ def _base_series_map() -> dict:
     }
 
 
-def _series_packet(series_map, *, session: str = "RTH", adjustment_mode: str = "split_div_adjusted",
+def _series_packet(series_map, *, session: str = "RTH", adjustment_mode: str = "massive_grouped_daily",
                    grouped_session_count: int = 90, provider_id: str = "massive",
                    as_of: str = _PRICE_BASIS_YMD) -> dict:
     return {
@@ -231,6 +232,12 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
         self.assertTrue(summary["projection_contract"]["real_momentum_price_source_consumed"])
 
         projection = _read_json(self.paths["projection"])
+        binding = projection["source_binding"]
+        self.assertEqual(binding["schema_name"], "us_short_score_projection_binding")
+        self.assertEqual(binding["decision_clock"]["source_as_of"], _PRICE_BASIS_YMD)
+        self.assertEqual(binding["source_contract"]["session"], "RTH")
+        self.assertEqual(binding["source_contract"]["adjustment_mode"], "massive_grouped_daily")
+        self.assertEqual([row["role"] for row in binding["source_artifacts"]], ["candidate_artifact", "momentum_series_packet"])
         self.assertEqual(projection["target_count"], 5)
         self.assertEqual(projection["scored_count"], 2)
         self.assertEqual(set(projection["momentum_by_ticker"]), {"AAPL", "MSFT"})
@@ -253,7 +260,15 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
         projection_inputs = importlib.import_module("runners.us_short_batch5_full_candidate_projection_inputs")
 
         theme_source = STATE_DIR / f"{self.slug}_theme.json"
-        _write_json(theme_source, _constant_projection("theme_block_by_ticker", _ALL_ELIGIBLE, "scored_theme_base", score=60.0))
+        _write_json(
+            theme_source,
+            bound_projection(
+                candidate_path=self.paths["candidate"], component="theme",
+                projection=_constant_projection("theme_block_by_ticker", _ALL_ELIGIBLE, "scored_theme_base", score=60.0),
+                producer_id="us_short_batch5_full_universe_theme_producer",
+                source_roles=("candidate_artifact", "momentum_series_packet", "sector_classification_packet"),
+            ),
+        )
         out_summary = projection_inputs.run_packet(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -262,7 +277,7 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
             output_momentum_projection_path=STATE_DIR / f"{self.slug}_out_momentum.json",
             output_theme_projection_path=STATE_DIR / f"{self.slug}_out_theme.json",
             summary_path=PROJECTION_INPUTS_SAMPLE_ROOT / self.slug / "summary.json",
-            generated_at="2026-07-06T12:00:00+00:00",
+            generated_at="2026-06-15T12:00:00+00:00",
         )
 
         self.assertEqual(out_summary["output_projection_contract"]["target_count"], 5)

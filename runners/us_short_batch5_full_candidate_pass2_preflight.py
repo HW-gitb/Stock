@@ -18,7 +18,20 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_pass2_funnel import select_pass2_targets  # noqa: E402
-from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
+from engine.us_short_projection_binding import (  # noqa: E402
+    file_sha256,
+    ticker_partition_sha256,
+    validate_projection_binding,
+)
+from engine.us_short_seam_momentum import (  # noqa: E402
+    COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
+    DISPOSITION_SCORED as MOMENTUM_SCORED_DISPOSITION,
+)
+from engine.us_short_seam_theme import (  # noqa: E402
+    COVERAGE_DISPOSITIONS as THEME_COVERAGE_DISPOSITIONS,
+    DISPOSITION_SCORED_INDUSTRY_BASE,
+    DISPOSITION_SCORED_THEME_BASE,
+)
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
 
@@ -37,7 +50,7 @@ DEFAULT_THEME_PROJECTION_PATH = (
 )
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
 FMP_FREE_DAILY_GRADE_CALL_CAP = 250
-PASS2_TARGET_SELECTION_MODE = "momentum_scored_candidates_plus_forced_holdings"
+PASS2_TARGET_SELECTION_MODE = "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings"
 MOMENTUM_TOP_K_DEFAULT = 200
 
 
@@ -199,6 +212,8 @@ def _projection_coverage(
     projection_name: str,
     value_key: str,
     expected_tickers: list[str],
+    allowed_dispositions: set[str] | frozenset[str] | tuple[str, ...],
+    scored_dispositions: set[str] | frozenset[str] | tuple[str, ...],
 ) -> dict[str, Any]:
     if type(projection) is not dict:
         raise FullCandidatePass2PreflightError(f"{projection_name} must be an exact dict")
@@ -210,6 +225,14 @@ def _projection_coverage(
     if value_keys & neutral_keys:
         raise FullCandidatePass2PreflightError(f"{projection_name} has scored/neutral overlap")
     coverage_keys = _canonical_keys(projection.get("coverage"), field=f"{projection_name}.coverage")
+    allowed = set(allowed_dispositions)
+    if any(type(value) is not str or value not in allowed for value in projection["coverage"].values()):
+        raise FullCandidatePass2PreflightError(f"{projection_name}.coverage contains an invalid disposition")
+    scored_allowed = set(scored_dispositions)
+    if any(projection["coverage"][ticker] not in scored_allowed for ticker in value_keys):
+        raise FullCandidatePass2PreflightError(f"{projection_name} scored ticker has a neutral disposition")
+    if any(projection["coverage"][ticker] in scored_allowed for ticker in neutral_keys):
+        raise FullCandidatePass2PreflightError(f"{projection_name} neutral ticker has a scored disposition")
     partition_keys = value_keys | neutral_keys
     expected = set(expected_tickers)
     covered = expected & partition_keys & coverage_keys
@@ -261,6 +284,8 @@ def _pass2_target_universe(
     *,
     eligible_tickers: list[str],
     momentum_coverage: dict[str, Any],
+    theme_coverage: dict[str, Any],
+    catalyst_recall_tickers: list[str] | tuple[str, ...] | None,
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     momentum_top_k: int,
 ) -> dict[str, Any]:
@@ -274,16 +299,18 @@ def _pass2_target_universe(
     else:
         raise FullCandidatePass2PreflightError("forced_holding_tickers must be an exact list/tuple or None")
     forced = _canonical_list_keys(forced_raw, field="forced_holding_tickers")
-    missing_forced = sorted(ticker for ticker in forced if ticker not in eligible)
-    if missing_forced:
-        raise FullCandidatePass2PreflightError(
-            "forced_holding_tickers must be present in the reviewed Pass1-eligible candidate set"
-        )
-    # SINGLE-SOURCE funnel selection: top-K by momentum score plus forced holdings. The live runner re-derives
-    # via the SAME select_pass2_targets so the two are provably identical (funnel-not-rederived hardening).
+    if catalyst_recall_tickers is None:
+        recall_raw: list[str] = []
+    elif type(catalyst_recall_tickers) in (list, tuple):
+        recall_raw = list(catalyst_recall_tickers)
+    else:
+        raise FullCandidatePass2PreflightError("catalyst_recall_tickers must be an exact list/tuple or None")
+    recall = _canonical_list_keys(recall_raw, field="catalyst_recall_tickers")
     targets = select_pass2_targets(
         momentum_scores=momentum_scores,
+        theme_scores=theme_coverage["_scored_score_map"],
         eligible=eligible,
+        catalyst_recall=recall,
         forced_holdings=forced,
         top_k=momentum_top_k,
     )
@@ -294,8 +321,12 @@ def _pass2_target_universe(
         "selection_mode": PASS2_TARGET_SELECTION_MODE,
         "eligible_count": len(eligible_tickers),
         "momentum_scored_candidate_count": momentum_scored_candidate_count,
+        "theme_scored_candidate_count": len([ticker for ticker in theme_coverage["_scored_score_map"] if ticker in eligible]),
         "momentum_top_k": momentum_top_k,
+        "catalyst_recall_count": len(recall),
+        "catalyst_recall_tickers_sha256": ticker_partition_sha256(recall),
         "forced_holding_count": len(forced),
+        "forced_holding_tickers_sha256": ticker_partition_sha256(forced),
         "target_count": target_count,
         "target_symbols": targets,
         "target_symbol_sample": targets[:10],
@@ -352,14 +383,18 @@ def _build_summary(
     artifact: dict[str, Any],
     momentum_coverage: dict[str, Any],
     theme_coverage: dict[str, Any],
+    catalyst_recall_tickers: list[str] | tuple[str, ...] | None,
     forced_holding_tickers: list[str] | tuple[str, ...] | None,
     momentum_top_k: int,
+    authorized_total_call_budget: int | None,
 ) -> dict[str, Any]:
     eligible = list(artifact["eligible_tickers"])
     candidate_count = len(eligible)
     pass2_targets = _pass2_target_universe(
         eligible_tickers=eligible,
         momentum_coverage=momentum_coverage,
+        theme_coverage=theme_coverage,
+        catalyst_recall_tickers=catalyst_recall_tickers,
         forced_holding_tickers=forced_holding_tickers,
         momentum_top_k=momentum_top_k,
     )
@@ -368,8 +403,19 @@ def _build_summary(
         and theme_coverage["status"] == "full_coverage"
     )
     pass2_targets_ready = pass2_targets["target_count"] > 0 and pass2_targets["fmp_grade_calls_within_free_daily_cap"]
-    ready = local_ready and pass2_targets_ready
-    status = "ready_for_reviewed_live_execution" if ready else "blocked_missing_local_inputs"
+    forecast = _forecast_calls(pass2_targets["target_count"], candidate_count)
+    budget_ready = (
+        authorized_total_call_budget is None
+        or authorized_total_call_budget == forecast["total_calls_for_pass2_target_cut"]
+    )
+    ready = local_ready and pass2_targets_ready and budget_ready
+    status = (
+        "ready_for_reviewed_live_execution"
+        if ready
+        else "blocked_missing_local_inputs"
+        if not local_ready
+        else "blocked_execution_constraints"
+    )
     block_reasons: list[str] = []
     if not local_ready:
         block_reasons.append("missing_or_stale_local_score_projection_inputs")
@@ -377,6 +423,8 @@ def _build_summary(
         block_reasons.append("no_momentum_scored_or_forced_holding_pass2_targets")
     if not pass2_targets["fmp_grade_calls_within_free_daily_cap"]:
         block_reasons.append("pass2_target_count_exceeds_fmp_free_daily_grade_call_cap")
+    if not budget_ready:
+        block_reasons.append("authorized_call_budget_does_not_match_rederived_target_forecast")
     momentum_coverage = _public_projection_coverage(momentum_coverage, path=momentum_path)
     theme_coverage = _public_projection_coverage(theme_coverage, path=theme_path)
     return {
@@ -425,8 +473,8 @@ def _build_summary(
             "all_required_local_inputs_cover_candidates": local_ready,
         },
         "pass2_target_universe": pass2_targets,
-        "endpoint_call_forecast": _forecast_calls(pass2_targets["target_count"], candidate_count),
-        "execution_gate": {
+        "endpoint_call_forecast": forecast,
+        "execution_gate": dict({
             "ready_to_run_full_candidate_live_packet": ready,
             "block_reasons": block_reasons,
             "requires_separate_network_tool_approval": True,
@@ -435,7 +483,11 @@ def _build_summary(
             "corporate_action_reconciliation_claimed": False,
             "datahub_or_production_allowed": False,
             "ship_gate_evidence_allowed": False,
-        },
+        }, **({
+            "authorized_momentum_top_k": momentum_top_k,
+            "authorized_total_call_budget": authorized_total_call_budget,
+            "authorized_budget_matches_rederived_forecast": budget_ready,
+        } if authorized_total_call_budget is not None else {})),
         "storage": {
             "tracked_summary_path": _repo_rel(summary_path),
             "tracked_summary_contains_raw_rows": False,
@@ -514,12 +566,20 @@ def run_preflight(
     theme_projection_path: Path = DEFAULT_THEME_PROJECTION_PATH,
     summary_path: Path = SUMMARY_PATH,
     forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
+    catalyst_recall_tickers: list[str] | tuple[str, ...] | None = None,
     momentum_top_k: int = MOMENTUM_TOP_K_DEFAULT,
+    authorized_total_call_budget: int | None = None,
     confirm_user_authorization: bool = False,
     generated_at: str | None = None,
 ) -> dict[str, Any]:
     if not confirm_user_authorization:
         raise FullCandidatePass2PreflightError("full-candidate Pass2 preflight requires explicit user authorization")
+    if authorized_total_call_budget is not None and (
+        type(authorized_total_call_budget) is not int
+        or isinstance(authorized_total_call_budget, bool)
+        or authorized_total_call_budget < 1
+    ):
+        raise FullCandidatePass2PreflightError("authorized_total_call_budget must be a positive exact int")
     generated_at = generated_at or iso_now()
     if not _valid_observed_at(generated_at):
         raise FullCandidatePass2PreflightError("generated_at must be a timezone-aware RFC3339 instant")
@@ -543,6 +603,10 @@ def run_preflight(
             candidate_price_basis_date=artifact["price_basis_date"],
             source_as_of=artifact["used_date"],
             target_tickers=None,
+            expected_producer_id="us_short_batch5_full_candidate_projection_inputs",
+            expected_source_roles=("candidate_artifact", "source_momentum_projection"),
+            allowed_dispositions=MOMENTUM_COVERAGE_DISPOSITIONS,
+            scored_dispositions={MOMENTUM_SCORED_DISPOSITION},
         )
         validate_projection_binding(
             theme_projection,
@@ -551,6 +615,10 @@ def run_preflight(
             candidate_price_basis_date=artifact["price_basis_date"],
             source_as_of=artifact["used_date"],
             target_tickers=None,
+            expected_producer_id="us_short_batch5_full_candidate_projection_inputs",
+            expected_source_roles=("candidate_artifact", "source_theme_projection"),
+            allowed_dispositions=THEME_COVERAGE_DISPOSITIONS,
+            scored_dispositions={DISPOSITION_SCORED_THEME_BASE, DISPOSITION_SCORED_INDUSTRY_BASE},
         )
     except ValueError as exc:
         raise FullCandidatePass2PreflightError(f"score projection source binding rejected: {exc}") from exc
@@ -559,13 +627,21 @@ def run_preflight(
         projection_name="momentum_projection",
         value_key="momentum_by_ticker",
         expected_tickers=eligible,
+        allowed_dispositions=MOMENTUM_COVERAGE_DISPOSITIONS,
+        scored_dispositions=(MOMENTUM_SCORED_DISPOSITION,),
     )
     theme_coverage = _projection_coverage(
         projection=theme_projection,
         projection_name="theme_projection",
         value_key="theme_block_by_ticker",
         expected_tickers=eligible,
+        allowed_dispositions=THEME_COVERAGE_DISPOSITIONS,
+        scored_dispositions=(DISPOSITION_SCORED_THEME_BASE, DISPOSITION_SCORED_INDUSTRY_BASE),
     )
+    momentum_coverage["artifact_sha256"] = file_sha256(momentum_path)
+    momentum_coverage["producer_id"] = momentum_projection["source_binding"]["producer_id"]
+    theme_coverage["artifact_sha256"] = file_sha256(theme_path)
+    theme_coverage["producer_id"] = theme_projection["source_binding"]["producer_id"]
     summary = _build_summary(
         generated_at=generated_at,
         candidate_path=candidate_path,
@@ -575,8 +651,10 @@ def run_preflight(
         artifact=artifact,
         momentum_coverage=momentum_coverage,
         theme_coverage=theme_coverage,
+        catalyst_recall_tickers=catalyst_recall_tickers,
         forced_holding_tickers=forced_holding_tickers,
         momentum_top_k=momentum_top_k,
+        authorized_total_call_budget=authorized_total_call_budget,
     )
     _write_summary_validated(summary, summary_resolved)
     return summary
@@ -595,7 +673,9 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--theme-projection-path", type=Path, default=DEFAULT_THEME_PROJECTION_PATH)
     parser.add_argument("--summary-path", type=Path, default=SUMMARY_PATH)
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
+    parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--momentum-top-k", type=int, default=MOMENTUM_TOP_K_DEFAULT)
+    parser.add_argument("--authorized-total-call-budget", type=int, required=True)
     parser.add_argument("--generated-at")
     parser.add_argument("--confirm-user-authorization", action="store_true")
     return parser.parse_args(argv)
@@ -611,7 +691,9 @@ def main(argv: list[str] | None = None) -> int:
             theme_projection_path=args.theme_projection_path,
             summary_path=args.summary_path,
             forced_holding_tickers=args.forced_holding_ticker,
+            catalyst_recall_tickers=args.catalyst_recall_ticker,
             momentum_top_k=args.momentum_top_k,
+            authorized_total_call_budget=args.authorized_total_call_budget,
             confirm_user_authorization=args.confirm_user_authorization,
             generated_at=args.generated_at,
         )

@@ -321,6 +321,22 @@ def _merge_projection(
             candidate_price_basis_date=candidate_price_basis_date,
             source_as_of=source_as_of,
             target_tickers=parsed["partition"],
+            expected_producer_id=(
+                "us_short_batch5_full_universe_momentum_producer"
+                if component == "momentum"
+                else "us_short_batch5_full_universe_theme_producer"
+            ),
+            expected_source_roles=(
+                ("candidate_artifact", "momentum_series_packet")
+                if component == "momentum"
+                else ("candidate_artifact", "momentum_series_packet", "sector_classification_packet")
+            ),
+            allowed_dispositions=set(allowed_dispositions),
+            scored_dispositions=(
+                {"scored"}
+                if component == "momentum"
+                else {"scored_theme_base", "scored_industry_base"}
+            ),
         )
     except ValueError as exc:
         raise FullCandidateProjectionInputsError(f"{component} projection source binding rejected: {exc}") from exc
@@ -542,9 +558,11 @@ def run_packet(
         expected_decision_date=expected_decision_date,
     )
     eligible = list(artifact["eligible_tickers"])
+    source_momentum_projection = _read_json(source_momentum_path)
+    source_theme_projection = _read_json(source_theme_path)
     momentum_projection, momentum_source_stats = _merge_projection(
         expected_tickers=eligible,
-        source_projection=_read_json(source_momentum_path),
+        source_projection=source_momentum_projection,
         component="momentum",
         value_key="momentum_by_ticker",
         allowed_dispositions=MOMENTUM_COVERAGE_DISPOSITIONS,
@@ -555,7 +573,7 @@ def run_packet(
     )
     theme_projection, theme_source_stats = _merge_projection(
         expected_tickers=eligible,
-        source_projection=_read_json(source_theme_path),
+        source_projection=source_theme_projection,
         component="theme",
         value_key="theme_block_by_ticker",
         allowed_dispositions=THEME_COVERAGE_DISPOSITIONS,
@@ -566,11 +584,13 @@ def run_packet(
     )
     momentum_projection["source_binding"] = build_projection_binding(
         component="momentum",
+        producer_id="us_short_batch5_full_candidate_projection_inputs",
         generated_at=generated_at,
         expected_decision_date=expected_decision_date,
         candidate_price_basis_date=artifact["price_basis_date"],
         source_as_of=artifact["used_date"],
         target_tickers=eligible,
+        projection=momentum_projection,
         source_artifact_paths={
             "candidate_artifact": candidate_path,
             "source_momentum_projection": source_momentum_path,
@@ -578,11 +598,13 @@ def run_packet(
     )
     theme_projection["source_binding"] = build_projection_binding(
         component="theme",
+        producer_id="us_short_batch5_full_candidate_projection_inputs",
         generated_at=generated_at,
         expected_decision_date=expected_decision_date,
         candidate_price_basis_date=artifact["price_basis_date"],
         source_as_of=artifact["used_date"],
         target_tickers=eligible,
+        projection=theme_projection,
         source_artifact_paths={
             "candidate_artifact": candidate_path,
             "source_theme_projection": source_theme_path,

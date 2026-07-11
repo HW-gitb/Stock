@@ -57,6 +57,7 @@
         "status": {
           "enum": [
             "blocked_missing_local_inputs",
+            "blocked_execution_constraints",
             "ready_for_reviewed_live_execution"
           ]
         },
@@ -148,11 +149,19 @@
         "expensive_pass2_targets_full_eligible_set"
       ],
       "properties": {
-        "selection_mode": { "const": "momentum_scored_candidates_plus_forced_holdings" },
+        "selection_mode": {
+          "enum": [
+            "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings"
+          ]
+        },
         "eligible_count": { "type": "integer", "minimum": 1 },
         "momentum_scored_candidate_count": { "type": "integer", "minimum": 0 },
+        "theme_scored_candidate_count": { "type": "integer", "minimum": 0 },
         "momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "catalyst_recall_count": { "type": "integer", "minimum": 0 },
+        "catalyst_recall_tickers_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "forced_holding_count": { "type": "integer", "minimum": 0 },
+        "forced_holding_tickers_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "target_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
         "target_symbols": {
           "type": "array",
@@ -272,6 +281,9 @@
         },
         "requires_separate_network_tool_approval": { "const": true },
         "requires_explicit_call_budget": { "const": true },
+        "authorized_momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "authorized_total_call_budget": { "type": "integer", "minimum": 1 },
+        "authorized_budget_matches_rederived_forecast": { "type": "boolean" },
         "provider_selection_claimed": { "const": false },
         "corporate_action_reconciliation_claimed": { "const": false },
         "datahub_or_production_allowed": { "const": false },
@@ -361,6 +373,8 @@
         "missing_count": { "type": "integer", "minimum": 0 },
         "stale_count": { "type": "integer", "minimum": 0 },
         "neutral_fill_count": { "type": "integer", "minimum": 0 },
+        "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "producer_id": { "type": "string", "minLength": 1 },
         "missing_sample": {
           "type": "array",
           "maxItems": 10,

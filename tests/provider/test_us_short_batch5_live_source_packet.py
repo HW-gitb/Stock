@@ -162,11 +162,17 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
         _write_json(
             self.paths["momentum"],
-            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0),
+            _constant_projection(
+                "momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+            ),
         )
         _write_json(
             self.paths["theme"],
-            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT"), "scored_theme_base", score=50.0),
+            _constant_projection(
+                "theme_block_by_ticker", ("AAPL", "MSFT"), "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+            ),
         )
 
     def tearDown(self):

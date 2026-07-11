@@ -31,6 +31,7 @@ from runners import us_short_batch5_to_batch4_weekend_e2e as _bridge
 from runners import us_short_universe_fetch as _universe
 from runners import us_short_yfinance_grades_fetch as _yfinance_grades
 from runners import us_short_vix_regime_fetch as _vix
+from runners.us_short_account_state_from_manual_tables import validate_account_state
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -70,6 +71,27 @@ def _require_ctx_authorization(ctx) -> None:
             "authorization); refusing before any provider fetch")
 
 
+def _account_holding_tickers(ctx) -> list[str]:
+    frozen = getattr(ctx, "frozen_holding_tickers", None)
+    if frozen is not None:
+        return list(frozen)
+    state = json.loads(Path(ctx.account_state_path).read_text(encoding="utf-8"))
+    validate_account_state(state, ctx.decision_date)
+    return sorted(position["ticker"] for position in state["positions"])
+
+
+def _require_frozen_funnel_authorization(ctx) -> None:
+    if (
+        type(getattr(ctx, "authorized_momentum_top_k", None)) is not int
+        or isinstance(ctx.authorized_momentum_top_k, bool)
+        or not 1 <= ctx.authorized_momentum_top_k <= 250
+        or type(getattr(ctx, "authorized_pass2_call_budget", None)) is not int
+        or isinstance(ctx.authorized_pass2_call_budget, bool)
+        or ctx.authorized_pass2_call_budget < 1
+    ):
+        raise PermissionError("Pass2 stages require a frozen K and positive exact call budget in the run context")
+
+
 # --- GATED stages (live provider fetch; SR-PROVIDER-001) ---
 
 def run_universe(ctx) -> dict[str, Any]:
@@ -107,9 +129,11 @@ def run_sic_fetch(ctx) -> dict[str, Any]:
 
 def run_pass2_fetch(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
+    _require_frozen_funnel_authorization(ctx)
     summary = _pass2.run_full_candidate_live_source_packet(
         preflight_summary_path=ctx.preflight_summary_path,
-        expected_total_call_budget=_preflight_call_budget(ctx),
+        expected_total_call_budget=ctx.authorized_pass2_call_budget,
+        authorized_momentum_top_k=ctx.authorized_momentum_top_k,
         source_artifact_prefix=ctx.source_artifact_prefix,
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
@@ -124,6 +148,8 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         max_retries_per_call=ctx.max_retries_per_call,
         retry_backoff_seconds=ctx.retry_backoff_seconds,
         max_total_http_attempts=ctx.max_total_http_attempts,
+        forced_holding_tickers=_account_holding_tickers(ctx),
+        catalyst_recall_tickers=list(ctx.catalyst_recall_tickers),
     )
     return summary
 
@@ -200,12 +226,17 @@ def run_projection_inputs(ctx) -> dict[str, Any]:
 
 def run_pass2_preflight(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
+    _require_frozen_funnel_authorization(ctx)
     return _preflight.run_preflight(
         candidate_artifact_path=ctx.candidate_path,
         expected_decision_date=ctx.decision_date,
         momentum_projection_path=ctx.merged_momentum_path,
         theme_projection_path=ctx.merged_theme_path,
         summary_path=ctx.preflight_summary_path,
+        forced_holding_tickers=_account_holding_tickers(ctx),
+        catalyst_recall_tickers=list(ctx.catalyst_recall_tickers),
+        momentum_top_k=ctx.authorized_momentum_top_k,
+        authorized_total_call_budget=ctx.authorized_pass2_call_budget,
         confirm_user_authorization=ctx.confirm_user_authorization,
         generated_at=ctx.generated_at,
     )
@@ -247,6 +278,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
         vix_regime=vix_regime,
+        projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
 
 
@@ -300,14 +332,3 @@ def _write_provider_health(ctx) -> None:
     tmp = ctx.provider_health_path.with_name(ctx.provider_health_path.name + ".tmp")
     tmp.write_text(text, encoding="utf-8")
     tmp.replace(ctx.provider_health_path)
-
-
-def _preflight_call_budget(ctx) -> int:
-    """The Pass2 authorized call budget = the forecast recomputed from the reviewed preflight (1 SEC mapping +
-    target_count × 5 endpoints). Read it from the preflight summary the orchestrator just produced."""
-    summary = json.loads(ctx.preflight_summary_path.read_text(encoding="utf-8"))
-    forecast = summary.get("endpoint_call_forecast", {})
-    total = forecast.get("total_calls_for_pass2_target_cut")
-    if not isinstance(total, int) or total < 1:
-        raise ValueError("preflight summary missing a valid total_calls_for_pass2_target_cut")
-    return total

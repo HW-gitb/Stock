@@ -85,11 +85,17 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
         _write_json(
             self.paths["momentum"],
-            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0),
+            _constant_projection(
+                "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+            ),
         )
         _write_json(
             self.paths["theme"],
-            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
+            _constant_projection(
+                "theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+            ),
         )
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
@@ -97,6 +103,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
+            momentum_top_k=200,
+            authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -211,6 +219,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
 
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
+                projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                 batch4_template_path=template,
                 account_state_path=account,
                 provider_health_path=health,
@@ -274,6 +283,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
+                projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                 batch4_template_path=template,
                 account_state_path=account,
                 provider_health_path=health,
@@ -356,6 +366,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
+                projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                 batch4_template_path=template,
                 account_state_path=account,
                 provider_health_path=health,
@@ -441,6 +452,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             template = _no_build_template(private_root / "batch4_template.json")
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
+                projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                 batch4_template_path=template,
                 account_state_path=account,
                 provider_health_path=health,
@@ -523,6 +535,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             with self.assertRaises(e2e.Batch5ToBatch4E2EError):
                 e2e.run_e2e(
                     source_packet_path=source_packet_path,
+                    projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                     batch4_template_path=template,
                     account_state_path=account,
                     provider_health_path=mismatched_health,
@@ -539,6 +552,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
 
             summary = e2e.run_e2e(
                 source_packet_path=source_packet_path,
+                projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                 batch4_template_path=template,
                 account_state_path=account,
                 provider_health_path=health,
@@ -623,6 +637,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             with self.assertRaises(e2e.Batch5ToBatch4E2EError):
                 e2e.run_e2e(
                     source_packet_path=source_packet_path,
+                    projection_binding_expectations=e2e.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
                     batch4_template_path=template,
                     account_state_path=account,
                     provider_health_path=health,

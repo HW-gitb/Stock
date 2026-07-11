@@ -84,6 +84,10 @@ class CapstoneContext:
     private_root: Path          # provably-private root for weekly_report.md / action_table.csv
     batch4_template_path: Path
     account_state_path: Path
+    authorized_momentum_top_k: int = 200
+    authorized_pass2_call_budget: int | None = None
+    catalyst_recall_tickers: tuple[str, ...] = ()
+    frozen_holding_tickers: tuple[str, ...] | None = None
     confirm_user_authorization: bool = False
     provider_pace_seconds: float = 0.0
     max_retries_per_call: int = 0
@@ -200,6 +204,9 @@ def resolve_capstone_context(
     private_root: Path,
     batch4_template_path: Path,
     account_state_path: Path,
+    authorized_momentum_top_k: int = 200,
+    authorized_pass2_call_budget: int | None = None,
+    catalyst_recall_tickers: tuple[str, ...] = (),
     calendar_path: Path = CALENDAR_PRESET,
     confirm_user_authorization: bool = False,
     provider_pace_seconds: float = 0.0,
@@ -235,6 +242,9 @@ def resolve_capstone_context(
         private_root=Path(private_root),
         batch4_template_path=Path(batch4_template_path),
         account_state_path=Path(account_state_path),
+        authorized_momentum_top_k=authorized_momentum_top_k,
+        authorized_pass2_call_budget=authorized_pass2_call_budget,
+        catalyst_recall_tickers=tuple(catalyst_recall_tickers),
         confirm_user_authorization=confirm_user_authorization,
         provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call,
@@ -741,6 +751,9 @@ def run_weekly_capstone(
     private_root: Path,
     batch4_template_path: Path,
     account_state_path: Path,
+    authorized_momentum_top_k: int = 200,
+    authorized_pass2_call_budget: int | None = None,
+    catalyst_recall_tickers: tuple[str, ...] = (),
     calendar_path: Path = CALENDAR_PRESET,
     confirm_user_authorization: bool = False,
     dry_run: bool = True,
@@ -763,6 +776,9 @@ def run_weekly_capstone(
     ctx = resolve_capstone_context(
         now_et=now_et, private_root=private_root, batch4_template_path=batch4_template_path,
         account_state_path=account_state_path, calendar_path=calendar_path,
+        authorized_momentum_top_k=authorized_momentum_top_k,
+        authorized_pass2_call_budget=authorized_pass2_call_budget,
+        catalyst_recall_tickers=catalyst_recall_tickers,
         confirm_user_authorization=confirm_user_authorization, provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds,
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
@@ -780,6 +796,26 @@ def run_weekly_capstone(
             "the plan first")
 
     production_run = (stages is None) and (ctx.confirm_user_authorization is True)
+    if production_run and (
+        type(ctx.authorized_momentum_top_k) is not int
+        or isinstance(ctx.authorized_momentum_top_k, bool)
+        or not 1 <= ctx.authorized_momentum_top_k <= 250
+        or type(ctx.authorized_pass2_call_budget) is not int
+        or isinstance(ctx.authorized_pass2_call_budget, bool)
+        or ctx.authorized_pass2_call_budget < 1
+    ):
+        raise WeeklyCapstoneError(
+            "live default pipeline requires independently authorized momentum_top_k (1..250) and positive exact Pass2 call budget"
+        )
+    if production_run:
+        from runners.us_short_account_state_from_manual_tables import validate_account_state
+
+        account_state = json.loads(ctx.account_state_path.read_text(encoding="utf-8"))
+        validate_account_state(account_state, ctx.decision_date)
+        ctx = replace(
+            ctx,
+            frozen_holding_tickers=tuple(sorted(position["ticker"] for position in account_state["positions"])),
+        )
     # C3: archive any prior current outputs BEFORE provider execution. A failure here rolls back before this run
     # starts; once it succeeds, every later no-emit/failure has an empty current slot. Official outputs are written
     # under a private run-scoped staging root and published only after all three siblings validate.
@@ -902,6 +938,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--private-root", required=True, type=Path)
     parser.add_argument("--batch4-template-path", required=True, type=Path)
     parser.add_argument("--account-state-path", required=True, type=Path)
+    parser.add_argument("--momentum-top-k", type=int, default=200)
+    parser.add_argument("--pass2-call-budget", type=int)
+    parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--calendar-path", type=Path, default=CALENDAR_PRESET)
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--live", action="store_true", help="execute (default is a dry-run plan only)")
@@ -915,6 +954,9 @@ def main(argv: list[str] | None = None) -> int:
         summary = run_weekly_capstone(
             now_et=args.now_et, private_root=args.private_root,
             batch4_template_path=args.batch4_template_path, account_state_path=args.account_state_path,
+            authorized_momentum_top_k=args.momentum_top_k,
+            authorized_pass2_call_budget=args.pass2_call_budget,
+            catalyst_recall_tickers=tuple(args.catalyst_recall_ticker),
             calendar_path=args.calendar_path, confirm_user_authorization=args.confirm_user_authorization,
             dry_run=not args.live, provider_pace_seconds=args.provider_pace_seconds,
             max_retries_per_call=args.max_retries_per_call, retry_backoff_seconds=args.retry_backoff_seconds,

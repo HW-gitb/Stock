@@ -372,11 +372,15 @@ def _build_projection(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     projection = project_momentum_block(producer_result, eligible)
     projection["source_binding"] = build_projection_binding(
         component="momentum",
+        producer_id="us_short_batch5_full_universe_momentum_producer",
         generated_at=context["generated_at"],
         expected_decision_date=context["packet"]["decision_clock"]["expected_decision_date"],
         candidate_price_basis_date=context["artifact"]["price_basis_date"],
         source_as_of=context["artifact"]["used_date"],
         target_tickers=eligible,
+        projection=projection,
+        session=context["session"],
+        adjustment_mode=context["adjustment_mode"],
         source_artifact_paths={
             "candidate_artifact": context["candidate_artifact_path"],
             "momentum_series_packet": context["series_packet_path"],

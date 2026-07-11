@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-11 — Claude 审查 PASS + 提交 + merge (US-short queue 类别4：Pass2 漏斗 selection/PIT/budget)
+
+- **Verdict/Action**: PASS + 提交（detached）+ merge 入 master。Codex P2 修复正确：共享 `data_context_source_packet.run_packet` 参数化为 frozen `ProjectionBindingExpectations`（默认 `FULL_CANDIDATE_LIVE` 严格；legacy sibling + CLI 传 `PROJECTION_INPUTS_BINDING`）；两常量 frozen 模块级、无 CLI/env 注入面、默认 fail-closed。A/B/C/D §6a-HELD 保持，P2 legacy-sibling 回归已闭。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` → resolved（单源见 register）。
+- **Verify**: 全新亲验（不凭记忆）：前红 legacy `test_authorized_probe` 转绿（6/6 OK）；reviewer 探针 13 条全 HELD；CAT4 caller `124 OK`；全包 4172 过 + 15 error 全 MAX_PATH env（0 `AssertionError`，涉及 2 模块短路径主树 `17 OK`）；§6a 独立 agent 自推不变量 + 20+ 运行时攻击 = 零 selection bypass（producer/role/disposition/clock/digest 全 fail-closed、漏斗限 eligible、holdings 外 eligible=法定审计道下游再门）；无 provider/network 调用。
+- **Next**: push 入 origin（须先核私密 remote + 隐私审计）。
+
 ## 2026-07-11 — Claude 修复 + 提交 (full_reivew2_nopush F 工程卫生：F1/F3/F6 修，F2/F4/F5 surface)
 
 - **Verdict/Action**: 应用户 `修复` 收 Section F（Claude solo 修+自审+提交，低危工程卫生）。修 3 项安全项：**F3** `_write_provider_health` 改原子写（tmp + `os.replace`，防进程中断留半截 JSON）；**F1** requirements 钉 `jsonschema>=4.0,<5` + `yfinance>=0.2` + 注明市场数据栈留 user-local、非全 lockfile 的理由；**F6** 抽 `_tz_aware_et_or_fail` 助手，DST spring-forward 缺口 / fall-back 折叠 wall-clock → fail-closed（正常盘前时刻不受影响）。**F2/F4/F5 未改**、见 Required（surface 给用户定）。
@@ -30,6 +37,29 @@
 - **Verify**: prescribed wrapper focused `51 OK`；offline capstone E2E `7 OK`；doc/route guards `60 OK`；full offline US-short `4174` ran，15 errors 均既有 Windows MAX_PATH、2 failures 均 vendored-rpds 子进程环境，零 D1 逻辑失败；`py_compile` / `git diff --check` clean（仅 CRLF notice）。
 - **Pre-Codex self-review**: A-F checked；A 覆盖 4 个合法 regime + unknown、plan/auth/fetch/receipt/bridge/E2E 全出口；B active code 旧 4-stage/9-stage/auto-wiring 措辞 `0 hits`；C 反向查出并修复“缺 key 会 abort / 假报 1 call”，现 no-fetch→unknown 且 receipt 只绑 summary digest；E `CURRENT` 未写 transient、register current mechanism 已压实；UTF-8 no BOM。轻量独立 current-diff review 首轮 PASS，missing-key refinement 后复核 PASS；固定包集中运行。
 - **Next**: Claude Code：仅审查 full_reivew2_nopush D1；PASS 后只提交本刀，不 push。
+
+## 2026-07-11 — Codex CAT4 reviewer-P2 regression repaired, awaiting Claude re-review
+
+- **Verdict/Action**: Repaired only the shared data-context producer/role regression: each official caller now supplies its own frozen projection-binding expectation; no CAT4 A/B/C/D, CAT3 binding, CAT5 attempt-budget, provider/live, commit, or push crossing.
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` reviewer P2 legacy-sibling regression repaired; awaiting Claude re-review.
+- **Verify**: red legacy `6 ran / 1 error`; final CLI/E2E/live-caller pack `109 OK`, CAT4/CAT5+legacy `250 OK`; full offline US-short `4187` ran with `15` MAX_PATH-only errors and zero real regression/assertion failures.
+- **Pre-Codex self-review**: full-candidate, legacy live, default CLI and generic E2E callers all pass explicit trusted producer/role expectations while sharing strict disposition semantics; foreign-profile CLI/E2E controls reject before official output. Independent current-diff-only agent final verdict PASS. The historical tracked preflight P3 cannot be honestly regenerated because its gitignored source bytes are absent and remains non-blocking/fail-closed.
+- **Next**: Claude Code: re-review only this P2 propagation fix, then commit the complete CAT4 slice only if PASS.
+
+## 2026-07-11 — Claude 审查 FAIL (US-short 类别4 rebased consolidation：A-D 对 + §6a HELD，但破了 legacy sibling runner)
+
+- **Verdict/Action**: FAIL（未提交、未 merge）。rebase+consolidation **正确**：scoring_projection 删、单一 `projection_binding` v2.0.0（CAT4 校验并入、未削 CAT3），A/B/D 全验，**§6a 独立 agent A/B/C/D 全 HELD、零选股 bypass**。**但**有 1 个 **P2 引入回归**：新校验硬编码进**共享** `data_context_source_packet.run_packet` 的 producer/role allowlist，破了 legacy sibling `us_short_batch5_live_source_packet.py` happy-path（测试 FAIL）。详见 register。
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` — P2 回归：把 `data_context_source_packet.run_packet` 的 expected producer_id/source_roles/dispositions 改成**参数**（各 caller 自供，full-candidate 已透传），或改/退役 legacy sibling；sibling 测试 + 全包须转绿。完整证据 + 2 条 P3 单源见 register。
+- **Verify**: `review-evidence:not_available`。整读 funnel/preflight/live/capstone/projection_binding 全链 + 自撰探针 13 条全 HELD + focused CAT4 `122 OK` + §6a agent HELD；**亲跑全包 4184 ran, 16 error = 15 MAX_PATH 环境 + 1 真回归**（`test_us_short_batch5_live_source_packet` 的 `producer is not authorized`；我首轮误归 env、§6a agent 抓出，已单跑复现 `FAILED errors=1`）；无 provider/network 调用。
+- **Next**: Codex：修复
+
+## 2026-07-11 — Codex CAT4 rebased consolidation repair complete, awaiting Claude review
+
+- **Verdict/Action**: Rebased CAT4 onto current master `c8833590`; consolidated C/E into the already-merged CAT3 `us_short_projection_binding` only, preserved CAT4 A/B/D and CAT5 physical-attempt accounting; no commit/push/provider/live call.
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` A/B/C/D/E repaired on the current base; awaiting independent Claude review.
+- **Verify**: CAT4/CAT5 focused `230 + 11 OK`; full offline US-short `4184` ran with `16` bdf6 MAX_PATH-only errors and zero assertion/logic failures; single-binding/legacy-selection greps clean.
+- **Pre-Codex self-review**: producer→merge→preflight→live→data-context consumers traced; foreign producer/role and stale-clock reverse controls fail closed; K/logical budget remains independent from CAT5 physical attempts; no duplicate envelope module; independent current-diff-only agent final verdict PASS.
+- **Next**: Claude Code: independently review only this rebased CAT4 diff and commit only if PASS.
 
 ## 2026-07-11 — Claude 规划 handoff (VIX regime 接线 → Codex 执行；不依赖 A1)
 
@@ -163,6 +193,42 @@
 - **Verify**: `py_compile` passed; focused replay/retry/capstone and Pass2/data-context/news pack **154 OK**; final independent read-only re-review **PASS**; `git diff --check` clean. No provider/network/live call, raw private-payload read, install, A-share, DataHub, broker, or ship-gate action. The prescribed wrapper was run with fixed `STOCK_TEST_PYTHON` but is blocked by this worktree's missing vendored `rpds` binary; the same fixed Python ran the offline pack with the existing local dependency copy and no install.
 - **Pre-Codex self-review**: A-F completed; whole-class grep/consumer trace and reverse controls cover byte mutation, stale-date replay, arbitrary offline client, direct replay clock/preflight mismatch, hidden retry expansion, and capstone pre-stage rejection. Independent reviewer first found and then rechecked schema declaration, byte/PIT binding, offline entry boundary, clock lock, and early-cap enforcement; final verdict PASS.
 - **Next**: Claude Code: review R-ID A/B only; if PASS, commit only this scoped repair and exclude unrelated files.
+## 2026-07-11 — Claude 审查 FAIL (US-short 类别4：A-E 旧地基上正确、但与已合并 CAT3 撞车不可 merge)
+
+- **Verdict/Action**: FAIL（未提交）。A/B/C/D/E 在 bdf6 旧地基 `7b2f9d42` 上**各自正确**（A/B/C/D 上轮 §6a HELD；E 的 envelope 传播本轮亲验修好）。**但**该修复建在 CAT3 合并前的旧地基，其 C/E 投影源绑定（新模块 `us_short_scoring_projection` envelope）与**已合并的 CAT3** `us_short_projection_binding` 在同 5 个 producer/consumer 文件里是**两套竞争机制** → 不可直接 merge 进当前 master。非 Codex 逻辑错、是并行开发地基冲突。
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` — rebase 到当前 master + 把投影绑定**合并成一套**（复用已合并已审的 CAT3 `validate_projection_binding`、把 CAT4 额外校验并入，别出两套 module/schema）、保留 CAT4 独有 A/B/D（D 与 CAT5 物理预算调和）；完整证据+边界单源见 register。
+- **Verify**: `review-evidence:not_available`。grep 证同 5 文件用两套绑定（bdf6=scoring_projection 无 projection_binding；master=projection_binding 无 scoring_projection、schema 名各异）+ 两模块 header 对照确认功能重叠；亲跑 bdf6 全包 `4150 ran, 18 error` 全 = MAX_PATH 环境类（非 reviewed、主树短路径过）、零 `ScoringProjectionError`/`KeyError`（E 已修）。
+- **Next**: Codex：修复
+
+## 2026-07-11 - Codex Required E repair complete, awaiting Claude review (US-short queue category 4)
+
+- **Verdict/Action**: Repaired only CAT4 Required E propagation: the shared constant-projection fixture can emit the required scoring envelope, stale preflight/live E2E callers now forward the frozen K+budget, and producer-output assertions consume the envelope payload explicitly. A/B/C/D business logic was not changed; no commit/push/provider/live/A-share crossing.
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` A/B/C/D/E repaired; awaiting Claude independent review.
+- **Verify**: named stale-consumer/data-context pack `72 OK`; CAT4 core six-module pack `123 OK`; full offline `test_us_short*.py` ran `4150` with `18` known bdf6 MAX_PATH-only errors (sampled failing paths length `260/265`), and zero envelope/KeyError/K/budget failures; `git diff --check` clean. No network/provider/live call.
+- **Pre-Codex self-review**: A-F checked; ripple grep found zero stale direct producer-envelope payload reads in the named consumers, bare projection remains only for legacy data-context composition, reverse control is the unchanged no-binding fixture path, CURRENT/README unchanged, BOM/conflict-marker checks clean; independent current-diff-only reviewer PASS; no timeout/restart.
+- **Next**: Claude Code: independently review category-4 A/B/C/D/E and, if PASS, commit only this category-4 scope without category-2/yfinance/freshday files.
+
+## 2026-07-11 — Claude 审查 FAIL (US-short queue 类别4：Pass2 funnel envelope 契约未传播到下游消费者)
+
+- **Verdict/Action**: FAIL（未提交）。A/B/C/D 代码逻辑正确 + §6a 独立 agent 全 HELD（两轴 momentum+theme funnel / 强制持仓单独 lane 绝不 new-buy / envelope 12+ 维篡改全拒·候选绑定非循环 / 独立 K+budget、循环 helper 已删），**但** envelope 契约（裸 5-key→10-key）没传播到下游消费者 + 共享 `_constant_projection` fixture → 全 lane pack 红 ~14-16 真失败。
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` — Required E（契约传播）+ A/B/C/D HELD 完整证据单源见 register。
+- **Verify**: 亲跑 bdf6 全包 `4150 ran, 38 errors` = ~14-16 真 `ScoringProjectionError: envelope keys drifted`/`KeyError`（在 `test_capstone_offline_e2e`/`test_us_short_yfinance_grades_fetch`/`test_full_universe_momentum_fetch`/`test_...sec_sic...`，根在 `_constant_projection` 仍发裸 projection）+ ~19-20 个 worktree 长路径 MAX_PATH `FileNotFoundError`（WinError 206、非 reviewed）；§6a HELD；真实 producer→merge→preflight→live 链 envelope 一致（非逻辑 bug）；无 provider/网络调用。
+- **Next**: Codex：待用户 `修复`——把 envelope 契约传播到所有消费者 + 共享 fixture、全包转绿，再交独立复审。
+
+## 2026-07-11 - Codex repair complete, awaiting Claude review (US-short queue category 4 A/B/C/D)
+
+- **Verdict/Action**: Repaired the Pass2 funnel only: momentum+theme top-K, bounded catalyst recall, frozen mandatory holdings, source/PIT-bound projections, and independent K/budget anchors. No commit/push/provider/live/A-share crossing; concurrent category-2/yfinance/freshday files protected.
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` A/B/C/D repaired; awaiting Claude independent review.
+- **Verify**: red `25`; final focused pack `126 OK`; schema/route/doc-governance pack `65 OK`; `git diff --check` clean; no network. Reverse tests cover all four lanes, PIT/source/role/disposition/digest mutations, overlapping lane omission, and independent budget rejection.
+- **Pre-Codex self-review**: A-F checked; current-diff-only agent found three residuals (producer/role+time binding, disposition semantics, exact lane binding), all fixed; second review PASS; no timeout/restart; fixed pack run centrally by main thread.
+- **Next**: Claude Code: review category-4 A/B/C/D only; commit only this scope if PASS, excluding category-2/yfinance/freshday dirty and untracked files.
+
+## 2026-07-10 - Codex review FAIL (US-short review queue category 4: Top-K Pass2 funnel)
+
+- **Verdict/Action**: FAIL; read-only review. The bounded K-cut is reasonable, but the funnel is momentum-only, the one-click path omits forced holdings, score inputs are not PIT/source-bound, and capstone copies its budget from the preflight it should constrain. No code fix, commit, push, provider call, or unrelated dirty-scope inclusion.
+- **Required**: `R-USSHORT-REVIEWQ-CAT4-PASS2-FUNNEL-SELECTION-PIT-BUDGET-GAPS` A/B/C/D (full detail + scope manifest in register). Optional: none.
+- **Verify**: focused funnel/preflight/live `32 OK`; reverse probes proved theme cannot affect K, outside-eligible holdings reject, future-clock projection is accepted, capstone forwards no holdings, and its budget helper accepts preflight `1251`. Full offline attempted `4143` tests with `19` unrelated shared-path/Windows-lock errors, so not claimed green; no network/live/raw access.
+- **Next**: Codex: wait for explicit user `修复`; then repair only this Required ID with minimal red-green tests and no overextension/yfinance/freshday/provider-live crossing.
 
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 

@@ -24,6 +24,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _candidate_artifact,
     _constant_projection,
 )
+from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -32,6 +33,14 @@ PREFLIGHT_SAMPLE_DIR = ROOT / "provider_samples" / "us_short_batch5_full_candida
 
 
 def _write_json(path: Path, payload) -> Path:
+    binding = payload.get("source_binding") if type(payload) is dict else None
+    if type(payload) is dict and (
+        type(binding) is not dict or binding.get("producer_id") == "us_short_test_fixture"
+    ):
+        component = "momentum" if "momentum_by_ticker" in payload else "theme" if "theme_block_by_ticker" in payload else None
+        candidate_path = path.with_name(path.stem.rsplit("_", 1)[0] + "_candidate.json")
+        if component is not None and candidate_path.is_file():
+            payload = bound_projection(candidate_path=candidate_path, component=component, projection=payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
@@ -205,6 +214,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
+            authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -316,14 +326,17 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # Reverse control (Required B, expensive-fetch boundary): the live re-derivation validates the
         # momentum source binding against the CANDIDATE clock before any provider call; a stale clock
         # aborts with zero fetches.
-        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0)
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0,
+            candidate_path=self.paths["candidate"], component="momentum",
+        )
         momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
         _write_json(self.paths["momentum"], momentum)
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
             runner.sample_validation, "_read_windows_environment_value", return_value=None
         ):
-            with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "source binding"):
+            with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "changed after reviewed preflight"):
                 runner.run_full_candidate_live_source_packet(
                     preflight_summary_path=self.paths["preflight"],
                     expected_total_call_budget=16,
@@ -365,6 +378,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -544,19 +558,36 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         # Momentum scores only AAPL/MSFT; JPM is a neutral-fill eligible ticker. A forged preflight injecting JPM
         # into target_symbols must be rejected before any provider fetch or summary write.
         momentum = _constant_projection(
-            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0,
+            candidate_path=self.paths["candidate"], component="momentum",
         )
         momentum["momentum_by_ticker"] = {"AAPL": 50.0, "MSFT": 50.0}
         momentum["neutral_fill_tickers"] = ["JPM"]
-        momentum["coverage"]["JPM"] = "neutral_fill"
+        momentum["coverage"]["JPM"] = "absent_from_pool"
         momentum["scored_count"] = 2
+        momentum = bound_projection(
+            candidate_path=self.paths["candidate"], component="momentum", projection=momentum,
+        )
         _write_json(self.paths["momentum"], momentum)
+        theme = _constant_projection(
+            "theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0,
+            candidate_path=self.paths["candidate"], component="theme",
+        )
+        theme["theme_block_by_ticker"] = {"AAPL": 50.0, "MSFT": 50.0}
+        theme["neutral_fill_tickers"] = ["JPM"]
+        theme["coverage"]["JPM"] = "neutral_missing_theme_and_industry_base"
+        theme["scored_count"] = 2
+        theme = bound_projection(
+            candidate_path=self.paths["candidate"], component="theme", projection=theme,
+        )
+        _write_json(self.paths["theme"], theme)
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -629,6 +660,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=2,
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -640,6 +672,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             summary = runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
                 expected_total_call_budget=11,  # 1 SEC mapping + 2 targets * 5
+                authorized_momentum_top_k=2,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
                 source_artifact_prefix=self.paths["prefix"],
@@ -670,6 +703,77 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             actual = runner._SEC_TICKER_MAPPING_CALLS + n * runner._PASS2_ENDPOINT_CALLS_PER_TARGET
             self.assertEqual(actual, expected, f"per-target call-count drift at n={n}")
 
+    def test_holding_outside_pass1_is_fetched_and_forwarded_as_mandatory_holding_lane(self):
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"], forced_holding_tickers=["HOLD"],
+            authorized_total_call_budget=21, confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=21,
+                forced_holding_tickers=["HOLD"], output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"], source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"], raw_root=self.raw_root, client=client,
+                confirm_user_authorization=True, run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00", observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+        self.assertIn("HOLD", summary["pass2_target_universe"]["target_symbols"])
+        source_packet = json.loads(
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_source_packet.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(source_packet["optional_inputs"]["holdings"], [{"ticker": "HOLD", "signals": {"critical_data_missing": True}}])
+        self.assertTrue(any("HOLD" in url for url in client.urls))
+
+    def test_projection_artifact_changed_after_preflight_is_rejected_before_fetch(self):
+        envelope = json.loads(self.paths["momentum"].read_text(encoding="utf-8"))
+        envelope["generated_at"] = "2026-06-15T12:01:00+00:00"
+        self.paths["momentum"].write_text(json.dumps(envelope), encoding="utf-8")
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "changed after reviewed preflight"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
+                client=client, confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT, sec_sleep_seconds=0,
+            )
+        self.assertEqual(client.urls, [])
+
+    def test_overlapping_holding_and_recall_lane_cannot_be_dropped_from_union_target(self):
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"], forced_holding_tickers=["AAPL"],
+            catalyst_recall_tickers=["MSFT"], authorized_total_call_budget=16,
+            confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+        )
+        for holdings, recall, message in (
+            ([], ["MSFT"], "holding lane changed"),
+            (["AAPL"], [], "recall lane changed"),
+        ):
+            client = FullCandidateFakeClient()
+            with self._env(), mock.patch.object(
+                runner.sample_validation, "_read_windows_environment_value", return_value=None
+            ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, message):
+                runner.run_full_candidate_live_source_packet(
+                    preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                    forced_holding_tickers=holdings, catalyst_recall_tickers=recall,
+                    output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
+                    source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
+                    client=client, confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+                    observed_at=_OFFERING_OBSERVED_AT, sec_sleep_seconds=0,
+                )
+            self.assertEqual(client.urls, [])
+
     def test_forged_wider_top_k_with_honest_forecast_is_rejected_before_any_fetch(self):
         # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING (circular-K seam): a forged preflight that widens
         # momentum_top_k + target_symbols to the full scored set but KEEPS the honest narrow forecast/budget (so an
@@ -687,6 +791,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
             momentum_top_k=1,  # honest reviewed run: single richest target AAPL, forecast 6
+            authorized_total_call_budget=6,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -719,7 +824,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                     observed_at=_OFFERING_OBSERVED_AT,
                     sec_sleep_seconds=0,
                 )
-        self.assertIn("re-derived Pass2 target count", str(ctx.exception))
+        self.assertIn("independently authorized K", str(ctx.exception))
         self.assertEqual(client.urls, [])  # zero provider calls spent
         self.assertFalse(self.paths["summary"].exists())
 

@@ -172,6 +172,7 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         self.assertEqual(producer_summary["projection_contract"]["target_count"], len(_ALL_ELIGIBLE))
         self.assertGreater(producer_summary["projection_contract"]["momentum_scored_count"], 0)
         projection = _read_json(self.projection)
+        self.assertEqual(projection["source_binding"]["schema_name"], "us_short_score_projection_binding")
         self.assertTrue(set(projection["momentum_by_ticker"]).issubset(set(_ALL_ELIGIBLE)))
 
     def test_duplicate_ticker_rows_deduped_by_max_volume(self):

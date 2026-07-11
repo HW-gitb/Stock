@@ -77,7 +77,7 @@
     "all_required_local_inputs_cover_candidates": true
   },
   "pass2_target_universe": {
-    "selection_mode": "momentum_scored_candidates_plus_forced_holdings",
+    "selection_mode": "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings",
     "eligible_count": 2404,
     "momentum_scored_candidate_count": 2400,
     "momentum_top_k": 200,

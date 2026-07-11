@@ -134,6 +134,7 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.assertEqual(theme_summary["theme_source"]["classification_source"], "sec_sic_major_group")
         self.assertGreaterEqual(theme_summary["projection_contract"]["theme_scored_count"], 3)
         projection = _read_json(self.theme_projection)
+        self.assertEqual(projection["source_binding"]["schema_name"], "us_short_score_projection_binding")
         self.assertTrue({"AAPL", "MSFT", "GOOG"}.issubset(set(projection["theme_block_by_ticker"])))
 
     def test_requires_user_authorization(self):
