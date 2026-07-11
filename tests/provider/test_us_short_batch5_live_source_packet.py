@@ -364,6 +364,28 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
         self.assertFalse(self.paths["summary"].exists())
         self.assertFalse(self.paths["output"].exists())
 
+    def test_caller_selected_strong_theme_state_is_rejected_before_authorization_or_network(self):
+        client = FakePass2Client()
+
+        with self.assertRaisesRegex(runner.LiveSourcePacketError, "must remain no_strong_theme"):
+            runner.run_live_source_packet(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                selected_symbols=["AAPL", "MSFT"],
+                momentum_projection_path=self.paths["momentum"],
+                theme_projection_path=self.paths["theme"],
+                output_data_context_path=self.paths["output"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                theme_opportunity_state="strong",
+            )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
+        self.assertFalse(self.paths["output"].exists())
+
     def test_missing_score_projection_rejected_before_network(self):
         client = FakePass2Client()
 

@@ -738,9 +738,13 @@ def run_live_source_packet(
     run_data_context: bool = False,
     generated_at: str | None = None,
     observed_at: str | None = None,
-    theme_opportunity_state: str = "strong",
+    theme_opportunity_state: str = "no_strong_theme",
     sec_sleep_seconds: float = sample_validation.SEC_FAIR_ACCESS_SLEEP_SECONDS,
 ) -> dict[str, Any]:
+    if theme_opportunity_state != "no_strong_theme":
+        raise LiveSourcePacketError(
+            "theme_opportunity_state must remain no_strong_theme until a source-bound theme confirmation producer exists"
+        )
     if not confirm_user_authorization:
         raise LiveSourcePacketError("live provider source-packet execution requires explicit user authorization")
     generated_at = generated_at or iso_now()
@@ -877,7 +881,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--raw-root", type=Path, default=RAW_SAMPLE_ROOT)
     parser.add_argument("--generated-at")
     parser.add_argument("--observed-at")
-    parser.add_argument("--theme-opportunity-state", default="strong")
+    parser.add_argument("--theme-opportunity-state", default="no_strong_theme")
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--run-data-context", action="store_true")
     return parser.parse_args(argv)

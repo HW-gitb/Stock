@@ -452,6 +452,10 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     source_path = ctx.source_packet_path.resolve()
     source_sha256 = _sha256_file(source_path)
     source_manifest = source_packet_runner.source_packet_input_manifest(source_path)
+    action_template_path = ctx.batch4_template_path.resolve()
+    if not action_template_path.is_file():
+        raise WeeklyCapstoneError("mixed-source receipt requires an existing Batch4 action template")
+    action_input_manifest = (("batch4_action_template", str(action_template_path), _sha256_file(action_template_path)),)
     source_manifest_sha256 = hashlib.sha256(
         json.dumps(source_manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
@@ -463,7 +467,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     provider_health_facts = tuple((key, provider_health[key]) for key in ("fmp", "sec_edgar"))
     run_id = hashlib.sha256(
         f"{ctx.decision_date}|{ctx.generated_at}|{source_path}|{source_sha256}|"
-        f"{source_manifest_sha256}|{evidence_sha256}".encode("utf-8")
+        f"{source_manifest_sha256}|{action_input_manifest[0][2]}|{evidence_sha256}".encode("utf-8")
     ).hexdigest()
     return _issue_capstone_research_live_receipt(
         run_id=run_id,
@@ -473,6 +477,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
         source_packet_path=source_path,
         source_packet_sha256=source_sha256,
         source_artifact_manifest=source_manifest,
+        action_input_manifest=action_input_manifest,
         provider_call_counts=call_counts,
         provider_summary_digests=provider_summary_digests,
         provider_health_facts=provider_health_facts,
@@ -846,6 +851,9 @@ def run_weekly_capstone(
                 _abort_current_output_transaction(transaction)
                 return {
                     "mode": "live",
+                    "execution_mode": "live_provider_fetch" if production_run else "injected_pipeline",
+                    "report_mode": "mixed_source" if production_run else "offline_test",
+                    "operational_use": "not_authorized",
                     "decision_date": ctx.decision_date,
                     "price_basis_date": ctx.price_basis_date,
                     "emitted": False,
@@ -899,6 +907,9 @@ def run_weekly_capstone(
 
     return {
         "mode": "live",
+        "execution_mode": "live_provider_fetch" if production_run else "injected_pipeline",
+        "report_mode": "mixed_source" if production_run else "offline_test",
+        "operational_use": "not_authorized",
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
         "emitted": True,

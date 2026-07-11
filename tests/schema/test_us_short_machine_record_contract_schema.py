@@ -77,6 +77,18 @@ class MachineRecordContractSchema(unittest.TestCase):
     def test_valid_record_validates(self):
         jsonschema.validate(_record(), self.schema)
 
+    def test_mixed_source_run_origin_is_exact_and_pairing_bound(self):
+        record = _record()
+        record["run_origin"] = {
+            "run_mode": "mixed_source",
+            "data_origin": "real_provider_plus_caller_template",
+            "operational_use": "not_authorized",
+        }
+        jsonschema.validate(record, self.schema)
+        record["run_origin"]["data_origin"] = "real_provider_pre_authoritative"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(record, self.schema)
+
     def _reject(self, mutate):
         bad = _record()
         mutate(bad)

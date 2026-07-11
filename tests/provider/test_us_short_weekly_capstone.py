@@ -230,6 +230,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
         summary = self._run(order, stages=self._fake_stages(order))
         self.assertEqual(order, _STAGE_NAMES)                 # every stage ran, in dependency order
         self.assertEqual(summary["mode"], "live")
+        self.assertEqual(summary["execution_mode"], "injected_pipeline")
+        self.assertEqual(summary["report_mode"], "offline_test")
+        self.assertEqual(summary["operational_use"], "not_authorized")
         self.assertEqual(summary["decision_date"], "20260709")
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
 
@@ -778,7 +781,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                     adapter(ctx)
                 call.assert_not_called()
 
-    def test_bridge_forwards_ctx_research_live_capability_not_self_mint(self):
+    def test_bridge_forwards_ctx_mixed_source_capability_not_self_mint(self):
         # A1: the bridge NO LONGER self-mints from ctx.confirm_user_authorization — it forwards ctx.research_live_capability
         # VERBATIM (run_weekly_capstone injects it ONLY for a genuine production run). An authorized ctx that lacks the
         # injected capability (the default from resolve_capstone_context) forwards None → run_e2e refuses research_live.
@@ -793,7 +796,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             with mock.patch.object(st, "_write_provider_health"), \
                  mock.patch.object(st._bridge, "run_e2e", return_value={"batch4_run": {"emitted": True}}) as m:
                 st.run_weekly_bridge(ctx)
-                self.assertEqual(m.call_args.kwargs.get("run_mode"), "research_live")
+                self.assertEqual(m.call_args.kwargs.get("run_mode"), "mixed_source")
                 self.assertIs(m.call_args.kwargs.get("_research_live_capability"), cap)
         # authorized BUT capability not injected (the default) → None forwarded (the auth flag alone does not mint it)
         with mock.patch.object(st, "_write_provider_health"), \
@@ -852,6 +855,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         ctx = self._ctx(authorized=True)
         ctx.source_packet_path.parent.mkdir(parents=True, exist_ok=True)
         ctx.source_packet_path.write_text('{"packet":"one"}', encoding="utf-8")
+        ctx.batch4_template_path.write_text('{"template":"one"}', encoding="utf-8")
         provider_results = {
             "universe_fetch": {
                 "generated_at": ctx.generated_at,
@@ -911,6 +915,8 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         ]
         manifest = (("candidate_artifact_path", str(ctx.source_packet_path.resolve()),
                      hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest()),)
+        action_manifest = (("batch4_action_template", str(ctx.batch4_template_path.resolve()),
+                            hashlib.sha256(ctx.batch4_template_path.read_bytes()).hexdigest()),)
         with mock.patch.object(cap.source_packet_runner, "source_packet_input_manifest", return_value=manifest):
             receipt = cap._provider_execution_receipt(ctx, results)
         require_research_live_receipt_binding(
@@ -919,6 +925,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             source_packet_path=ctx.source_packet_path,
             source_packet_sha256=hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest(),
             source_artifact_manifest=manifest,
+            action_input_manifest=action_manifest,
         )
         ctx.source_packet_path.write_text('{"packet":"changed"}', encoding="utf-8")
         with self.assertRaises(RunOriginError):
@@ -927,6 +934,15 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 decision_date=ctx.decision_date,
                 source_packet_path=ctx.source_packet_path,
                 source_packet_sha256=hashlib.sha256(ctx.source_packet_path.read_bytes()).hexdigest(),
+            )
+        ctx.batch4_template_path.write_text('{"template":"changed"}', encoding="utf-8")
+        with self.assertRaises(RunOriginError):
+            require_research_live_receipt_binding(
+                receipt,
+                action_input_manifest=((
+                    "batch4_action_template", str(ctx.batch4_template_path.resolve()),
+                    hashlib.sha256(ctx.batch4_template_path.read_bytes()).hexdigest(),
+                ),),
             )
         from dataclasses import replace
         tampered = replace(receipt, source_packet_sha256="3" * 64)

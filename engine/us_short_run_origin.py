@@ -3,13 +3,13 @@
 
 Design authority: docs/us_short_system_design.md §11 (诚实) / §18.0 / §18.2 batch4. Closes
 R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP: a batch4 weekend run carries an IMMUTABLE run-origin
-fact — either `offline_test` (a CALLER-SUPPLIED fixture) or `research_live` (REAL provider data from the
-authorized one-click capstone live fetch, still pre-authoritative / research-only). Operational `live` stays
+fact — either `offline_test` (a caller-supplied fixture), `research_live` (fully provider-derived, pre-authoritative
+research), or `mixed_source` (real provider facts plus a receipt-bound caller action template). Operational `live` stays
 hard-gated upstream in the orchestrator. The official artifacts carry this fact so neither a synthetic fixture
 nor a pre-authoritative research run can be mistaken for an operational, ship-gate-authoritative weekly artifact.
 
 This module is the ONE immutable source of those facts + their validator + the always-visible disclosure text the
-report renders and the private-write boundary reconciles. `research_live` is CAPSTONE-INTERNAL and requires the
+report renders and the private-write boundary reconciles. Provider-backed modes are CAPSTONE-INTERNAL and require the
 run-specific source/provider execution receipt below (R-USSHORT-REVIEWQ-CAT1 Required A); no operational/ship-gate claim.
 """
 from __future__ import annotations
@@ -44,14 +44,25 @@ RESEARCH_LIVE_RUN_ORIGIN = {
     "data_origin": "real_provider_pre_authoritative",
     "operational_use": "not_authorized",
 }
-_VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN)
 
-# R-USSHORT-REVIEWQ-CAT1 Required A — research_live is a CAPSTONE-INTERNAL run_origin, NOT a public run_mode a generic
+# A real provider fetch may still require caller-supplied Batch4 action inputs (market trend/breadth,
+# prior regime, sizing, basket and cost).  That is neither a pure fixture nor a wholly provider-derived
+# research report.  It must be disclosed as mixed source and receives the same capstone receipt gate as
+# research_live, with the exact action-template identity bound into that receipt.
+MIXED_SOURCE_RUN_ORIGIN = {
+    "run_mode": "mixed_source",
+    "data_origin": "real_provider_plus_caller_template",
+    "operational_use": "not_authorized",
+}
+_VALID_RUN_ORIGINS = (OFFLINE_TEST_RUN_ORIGIN, RESEARCH_LIVE_RUN_ORIGIN, MIXED_SOURCE_RUN_ORIGIN)
+_RECEIPT_REQUIRED_RUN_MODES = frozenset({"research_live", "mixed_source"})
+
+# R-USSHORT-REVIEWQ-CAT1 Required A — provider-backed modes are CAPSTONE-INTERNAL run_origins, NOT public run_modes a generic
 # Batch4/E2E caller can select. The batch4 / e2e entry points AND the run_weekend_pipeline orchestrator (the deepest
 # PUBLISHED surface that mints the fact) gate research_live on a frozen receipt bound to the exact run, source digest,
 # completed stage set, and provider-call evidence. The one-click capstone issues it after the gated live fetch.
 # A GENERIC caller — the CLI (research_live is not an argparse
-# choice) or a direct public-function caller — cannot select research_live: passing True / a look-alike object fails
+# choice) or a direct public-function caller — cannot select either mode: passing True / a look-alike object fails
 # receipt validation. In-process Python cannot be cryptographically sandboxed; deliberately calling the private
 # receipt issuer remains outside the generic-caller threat model.
 _RECEIPT_ISSUER = object()
@@ -76,6 +87,7 @@ class _CapstoneResearchLiveReceipt:
     source_packet_path: str
     source_packet_sha256: str
     source_artifact_manifest: tuple[tuple[str, str, str], ...]
+    action_input_manifest: tuple[tuple[str, str, str], ...]
     provider_call_counts: tuple[tuple[str, int], ...]
     provider_summary_digests: tuple[tuple[str, str], ...]
     provider_health_facts: tuple[tuple[str, str], ...]
@@ -96,6 +108,20 @@ def _valid_source_manifest(value) -> bool:
         return len(set(fields)) == len(fields) and all(
             isinstance(field, str) and bool(field) and Path(path).is_absolute() and _is_sha256(digest)
             for field, path, digest in value
+        )
+    except (TypeError, ValueError):
+        return False
+
+
+def _valid_action_input_manifest(value) -> bool:
+    """A mixed-source run has one complete Batch4 action template, bound by identity and digest."""
+    if value == ():
+        return True
+    try:
+        return (
+            isinstance(value, tuple)
+            and tuple(role for role, _, _ in value) == ("batch4_action_template",)
+            and all(Path(path).is_absolute() and _is_sha256(digest) for _, path, digest in value)
         )
     except (TypeError, ValueError):
         return False
@@ -133,7 +159,7 @@ def _valid_provider_health_facts(value) -> bool:
 
 def _receipt_signature_payload(
     *, run_id, decision_date, generated_at, completed_stages, source_packet_path, source_packet_sha256,
-    source_artifact_manifest, provider_call_counts, provider_summary_digests, provider_health_facts,
+    source_artifact_manifest, action_input_manifest, provider_call_counts, provider_summary_digests, provider_health_facts,
     provider_evidence_sha256,
 ) -> bytes:
     return json.dumps(
@@ -145,6 +171,7 @@ def _receipt_signature_payload(
             "source_packet_path": source_packet_path,
             "source_packet_sha256": source_packet_sha256,
             "source_artifact_manifest": [list(row) for row in source_artifact_manifest],
+            "action_input_manifest": [list(row) for row in action_input_manifest],
             "provider_call_counts": [list(row) for row in provider_call_counts],
             "provider_summary_digests": [list(row) for row in provider_summary_digests],
             "provider_health_facts": [list(row) for row in provider_health_facts],
@@ -159,11 +186,13 @@ def _issue_capstone_research_live_receipt(
     *, run_id: str, decision_date: str, generated_at: str, completed_stages,
     source_packet_path, source_packet_sha256: str, source_artifact_manifest,
     provider_call_counts, provider_summary_digests, provider_health_facts, provider_evidence_sha256: str,
+    action_input_manifest=(),
 ):
     """Issue an immutable receipt from a complete, source-bound capstone provider execution."""
     stages = tuple(completed_stages)
     calls = tuple((stage, count) for stage, count in provider_call_counts)
     source_manifest = tuple((field, path, digest) for field, path, digest in source_artifact_manifest)
+    action_manifest = tuple((field, path, digest) for field, path, digest in action_input_manifest)
     summary_digests = tuple((stage, digest) for stage, digest in provider_summary_digests)
     health_facts = tuple((key, state) for key, state in provider_health_facts)
     if stages != _REQUIRED_PRE_BRIDGE_STAGES:
@@ -174,6 +203,8 @@ def _issue_capstone_research_live_receipt(
         raise RunOriginError("research_live receipt requires positive provider-call evidence for every provider stage")
     if not _valid_source_manifest(source_manifest):
         raise RunOriginError("research_live receipt source-artifact manifest is malformed")
+    if not _valid_action_input_manifest(action_manifest):
+        raise RunOriginError("research_live receipt action-input manifest is malformed")
     if not _valid_provider_summary_digests(summary_digests):
         raise RunOriginError("research_live receipt requires exact provider-stage summary digests")
     if not _valid_provider_health_facts(health_facts):
@@ -201,6 +232,7 @@ def _issue_capstone_research_live_receipt(
             source_packet_path=resolved_source_path,
             source_packet_sha256=source_packet_sha256,
             source_artifact_manifest=source_manifest,
+            action_input_manifest=action_manifest,
             provider_call_counts=calls,
             provider_summary_digests=summary_digests,
             provider_health_facts=health_facts,
@@ -216,6 +248,7 @@ def _issue_capstone_research_live_receipt(
         source_packet_path=resolved_source_path,
         source_packet_sha256=source_packet_sha256,
         source_artifact_manifest=source_manifest,
+        action_input_manifest=action_manifest,
         provider_call_counts=calls,
         provider_summary_digests=summary_digests,
         provider_health_facts=health_facts,
@@ -235,6 +268,7 @@ def is_capstone_research_live_capability(candidate) -> bool:
         and _is_sha256(candidate.run_id)
         and _is_sha256(candidate.source_packet_sha256)
         and _valid_source_manifest(candidate.source_artifact_manifest)
+        and _valid_action_input_manifest(candidate.action_input_manifest)
         and _valid_provider_summary_digests(candidate.provider_summary_digests)
         and _valid_provider_health_facts(candidate.provider_health_facts)
         and _is_sha256(candidate.provider_evidence_sha256)
@@ -252,6 +286,7 @@ def is_capstone_research_live_capability(candidate) -> bool:
             source_packet_path=candidate.source_packet_path,
             source_packet_sha256=candidate.source_packet_sha256,
             source_artifact_manifest=candidate.source_artifact_manifest,
+            action_input_manifest=candidate.action_input_manifest,
             provider_call_counts=candidate.provider_call_counts,
             provider_summary_digests=candidate.provider_summary_digests,
             provider_health_facts=candidate.provider_health_facts,
@@ -264,7 +299,7 @@ def is_capstone_research_live_capability(candidate) -> bool:
 
 def require_research_live_receipt_binding(
     capability, *, decision_date=None, generated_at=None, source_packet_path=None, source_packet_sha256=None,
-    source_artifact_manifest=None,
+    source_artifact_manifest=None, action_input_manifest=None,
 ):
     """Validate a receipt and any source/run identity known at the current boundary."""
     if not is_capstone_research_live_capability(capability):
@@ -279,6 +314,8 @@ def require_research_live_receipt_binding(
         raise RunOriginError("research_live receipt source packet digest mismatch")
     if source_artifact_manifest is not None and capability.source_artifact_manifest != tuple(source_artifact_manifest):
         raise RunOriginError("research_live receipt source artifact manifest mismatch")
+    if action_input_manifest is not None and capability.action_input_manifest != tuple(action_input_manifest):
+        raise RunOriginError("research_live receipt action-input manifest mismatch")
     return capability
 
 
@@ -317,15 +354,17 @@ def require_research_live_capability(run_origin, capability, *, decision_date=No
     """CONSUMER-LAYER gate (R-USSHORT-REVIEWQ-CAT1 Required A, 4th surface): the run_origin fact is a dict of PUBLIC
     strings that `validate_run_origin` accepts by shape, so the four official-artifact producers
     (`assemble_machine_record` / `build_weekly_report` / `write_run_private` / `write_action_table`) could
-    be driven DIRECTLY with a hand-built research_live origin, bypassing the entry-point gates. Every such producer
-    calls this: turning a research_live fact into an official artifact requires the capstone receipt. A no-op for
-    offline_test / any non-research_live origin (they need no capability). Raises RunOriginError otherwise."""
-    if isinstance(run_origin, dict) and run_origin.get("run_mode") == "research_live":
+    be driven DIRECTLY with a hand-built provider-backed origin, bypassing the entry-point gates. Every such producer
+    calls this: turning a provider-backed fact into an official artifact requires the capstone receipt. A no-op for
+    offline_test / any non-provider-backed origin (they need no capability). Raises RunOriginError otherwise."""
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") in _RECEIPT_REQUIRED_RUN_MODES:
         receipt = require_research_live_receipt_binding(capability, decision_date=decision_date)
+        if run_origin["run_mode"] == "mixed_source" and not receipt.action_input_manifest:
+            raise RunOriginError("mixed_source official artifacts require a receipt-bound action-input template")
         provider_health_facts = dict(receipt.provider_health_facts)
         if any(provider_health_facts.get(source) != "ok" for source in CRITICAL_SOURCES):
             raise RunOriginError(
-                "research_live official artifacts require receipt-bound healthy critical providers"
+    "provider-backed official artifacts require receipt-bound healthy critical providers"
             )
 
 # the stable always-visible offline disclosure sentinel — rendered into the weekly report (§11.2) and
@@ -333,6 +372,7 @@ def require_research_live_capability(run_origin, capability, *, decision_date=No
 # report that omits the disclosure (machine/report mode mismatch fails closed).
 OFFLINE_DISCLOSURE_SENTINEL = "⚠ 离线工程运行（OFFLINE_TEST·调用方注入 fixture·非真实数据·不可执行）"
 RESEARCH_DISCLOSURE_SENTINEL = "⚠ 研究运行（RESEARCH_LIVE·真实 provider 数据·非 ship-gate 权威·research-only·不可执行）"
+MIXED_SOURCE_DISCLOSURE_SENTINEL = "⚠ 混合来源运行（MIXED_SOURCE·真实 provider 数据 + 调用方动作模板·不可执行）"
 
 # the STRUCTURED offline report invariants the §18.0 private-write boundary enforces on report_data (NOT a
 # markdown substring): §11 provider health must carry the offline disclaimer and must NOT restore the
@@ -354,21 +394,32 @@ RESEARCH_LIMITATION_LINE = (
     "本周不 clean 项 ①: 研究运行（research_live·真实 provider 数据·预权威），"
     "未经 ship-gate 运营核准、不可作运营周报（operational_use=not_authorized）"
 )
-# per-run_mode text so the SAME closed-world validators render/enforce EITHER honesty track (offline_test fixture OR
-# research_live real-data) without duplicating the structure. The offline_test entries are byte-identical to the
+MIXED_SOURCE_PROVIDER_DISCLAIMER = "mixed_source 不认定运营级权威 clean"
+MIXED_SOURCE_LIMITATION_LINE = (
+    "本周不 clean 项 ①: 混合来源运行（mixed_source·真实 provider 数据 + 调用方动作模板），"
+    "模板输入已收据绑定但非本轮 provider 来源，未经 ship-gate 运营核准、不可作运营周报（operational_use=not_authorized）"
+)
+# per-run_mode text so the SAME closed-world validators render/enforce every honesty track without duplicating the
+# structure. The offline_test entries are byte-identical to the
 # original inline strings (existing tests pin them).
-_MODE_SENTINEL = {"offline_test": OFFLINE_DISCLOSURE_SENTINEL, "research_live": RESEARCH_DISCLOSURE_SENTINEL}
-_MODE_PROVIDER_DISCLAIMER = {"offline_test": OFFLINE_PROVIDER_DISCLAIMER, "research_live": RESEARCH_PROVIDER_DISCLAIMER}
-_MODE_LIMITATION_LINE = {"offline_test": OFFLINE_LIMITATION_LINE, "research_live": RESEARCH_LIMITATION_LINE}
+_MODE_SENTINEL = {"offline_test": OFFLINE_DISCLOSURE_SENTINEL, "research_live": RESEARCH_DISCLOSURE_SENTINEL,
+                  "mixed_source": MIXED_SOURCE_DISCLOSURE_SENTINEL}
+_MODE_PROVIDER_DISCLAIMER = {"offline_test": OFFLINE_PROVIDER_DISCLAIMER, "research_live": RESEARCH_PROVIDER_DISCLAIMER,
+                             "mixed_source": MIXED_SOURCE_PROVIDER_DISCLAIMER}
+_MODE_LIMITATION_LINE = {"offline_test": OFFLINE_LIMITATION_LINE, "research_live": RESEARCH_LIMITATION_LINE,
+                         "mixed_source": MIXED_SOURCE_LIMITATION_LINE}
 _MODE_S11_TEMPLATE = {
     "offline_test": "数据源健康: provider_health=%s（离线 fixture 自报；%s，非真实 provider 调用）",
     "research_live": "数据源健康: provider_health=%s（真实 provider 调用；%s，research/预权威、未经 ship-gate 运营核准）",
+    "mixed_source": "数据源健康: provider_health=%s（真实 provider 调用；%s，动作输入含 caller template）",
 }
 _MODE_DISCLOSURE_FACT = {
     "offline_test": ("本表所有市场/provider 事实均为调用方注入的 fixture（run_mode=%s, data_origin=%s, "
                      "operational_use=%s）；非真实数据、非真实 provider 调用，不构成可执行的周度选股/建议"),
     "research_live": ("本表所有市场/provider 事实来自真实 provider 调用（run_mode=%s, data_origin=%s, "
                       "operational_use=%s）；research/预权威、未经 ship-gate 运营核准，不构成可执行的周度选股/建议"),
+    "mixed_source": ("本表 provider 事实来自真实 provider 调用，但市场/仓位/组合/成本动作输入含调用方模板（run_mode=%s, "
+                     "data_origin=%s, operational_use=%s）；模板已收据绑定但并非本轮 provider 来源，不构成可执行的周度选股/建议"),
 }
 
 # the EDITORIAL (caller free-text) sections an offline report carries — §4 core_conclusion, §10
@@ -381,7 +432,7 @@ _EDITORIAL_SECTIONS = (4, 10)
 
 
 class RunOriginError(ValueError):
-    """The execution/data-origin fact is missing or is not the immutable offline_test fact (fail-closed)."""
+    """The execution/data-origin fact is missing or not one immutable permitted fact (fail-closed)."""
 
 
 def build_offline_honesty(provider_health_state, coverage_non_full_count):
@@ -401,7 +452,7 @@ def build_offline_honesty(provider_health_state, coverage_non_full_count):
 
 def canonical_offline_sections(honesty, origin):
     """Recompute the only permitted §11/§13 section bodies from typed honesty facts + the run_origin (the run_mode
-    picks offline_test-fixture vs research_live-real-data disclosure text; the honesty booleans are identical — both
+    picks the matching disclosure text; the honesty booleans are identical — all modes remain
     NOT operationally authoritative, NOT authorized)."""
     mode = validate_run_origin(origin)["run_mode"]
     if not isinstance(honesty, dict) or set(honesty) != _HONESTY_KEYS:
@@ -523,8 +574,7 @@ def assert_offline_report_invariants(report_data, origin):
 
 
 def validate_run_origin(origin):
-    """Fail-closed: the run_origin MUST be exactly the immutable offline_test / caller_supplied_fixture /
-    not_authorized fact (closed-world keys + exact values). Returns the validated dict; raises otherwise."""
+    """Fail-closed: run_origin MUST equal one immutable permitted not-authorized fact (closed-world exact values)."""
     if not isinstance(origin, dict):
         raise RunOriginError("run_origin 须为 dict")
     if set(origin) != _REQUIRED_KEYS:
@@ -532,29 +582,28 @@ def validate_run_origin(origin):
             f"run_origin 顶层键须恰为 {sorted(_REQUIRED_KEYS)}（closed-world）: {sorted(origin)}")
     if origin not in _VALID_RUN_ORIGINS:
         raise RunOriginError(
-            "run_origin 须为不可变 offline_test 或 research_live 事实 "
-            f"{OFFLINE_TEST_RUN_ORIGIN} / {RESEARCH_LIVE_RUN_ORIGIN}（batch4·非运营权威·operational_use=not_authorized）")
+            "run_origin 须为不可变 offline_test / research_live / mixed_source 事实 "
+            f"{OFFLINE_TEST_RUN_ORIGIN} / {RESEARCH_LIVE_RUN_ORIGIN} / {MIXED_SOURCE_RUN_ORIGIN}"
+            "（batch4·非运营权威·operational_use=not_authorized）")
     return origin
 
 
 def run_origin_for_mode(run_mode):
-    """The data-origin fact for a batch4 run. batch4 reaches the official chain in `offline_test` (fixture) or
-    `research_live` (real provider data, pre-authoritative); `live` (operational-authoritative) is hard-gated
-    upstream in the orchestrator, and any other mode here is a wiring bug — both fail closed. NOTE: `research_live`
-    reaching here means the batch4/e2e ENTRY gate already validated the capstone capability (R-USSHORT-REVIEWQ-CAT1
-    Required A) — a generic caller cannot reach this with run_mode=research_live."""
+    """The data-origin fact for a batch4 run. The official chain accepts offline_test, research_live, or mixed_source;
+    operational live is hard-gated upstream. Provider-backed modes already passed the capstone receipt gate, so a
+    generic caller cannot reach this with either provider-backed run_mode."""
     if run_mode == "offline_test":
         return dict(OFFLINE_TEST_RUN_ORIGIN)
     if run_mode == "research_live":
         return dict(RESEARCH_LIVE_RUN_ORIGIN)
+    if run_mode == "mixed_source":
+        return dict(MIXED_SOURCE_RUN_ORIGIN)
     raise RunOriginError(
-        f"batch4 官方链只在 offline_test / research_live 产出 artifact（live 由 orchestrator 硬阻断）: run_mode={run_mode!r}")
+        f"batch4 官方链只在 offline_test / research_live / mixed_source 产出 artifact（live 由 orchestrator 硬阻断）: run_mode={run_mode!r}")
 
 
 def offline_disclosure_lines(origin):
-    """The always-visible disclosure lines for the weekly report (§11.2), per run_mode (offline_test fixture OR
-    research_live real-data). The first line is the stable sentinel the private-write boundary checks; the second
-    spells out the immutable fact."""
+    """The always-visible disclosure lines for the weekly report (§11.2), per permitted run_mode."""
     mode = validate_run_origin(origin)["run_mode"]
     return [
         _MODE_SENTINEL[mode],
