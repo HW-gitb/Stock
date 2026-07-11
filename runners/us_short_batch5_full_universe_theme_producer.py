@@ -470,11 +470,15 @@ def _build_projection(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str
     )
     projection["source_binding"] = build_projection_binding(
         component="theme",
+        producer_id="us_short_batch5_full_universe_theme_producer",
         generated_at=context["generated_at"],
         expected_decision_date=context["series_packet"]["decision_clock"]["expected_decision_date"],
         candidate_price_basis_date=context["artifact"]["price_basis_date"],
         source_as_of=context["artifact"]["used_date"],
         target_tickers=eligible,
+        projection=projection,
+        session=context["series_packet"]["series_contract"]["session"],
+        adjustment_mode=context["series_packet"]["series_contract"]["adjustment_mode"],
         source_artifact_paths={
             "candidate_artifact": context["candidate_artifact_path"],
             "momentum_series_packet": context["series_packet_path"],

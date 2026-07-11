@@ -17,11 +17,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from jsonschema import Draft7Validator  # noqa: E402
+from engine.us_short_projection_binding import projection_payload_sha256  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _candidate_artifact,
     _constant_projection,
 )
+from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -30,6 +32,14 @@ MODULE = "runners.us_short_batch5_full_candidate_pass2_preflight"
 
 
 def _write_json(path: Path, payload) -> Path:
+    binding = payload.get("source_binding") if type(payload) is dict else None
+    if type(payload) is dict and (
+        type(binding) is not dict or binding.get("producer_id") == "us_short_test_fixture"
+    ):
+        component = "momentum" if "momentum_by_ticker" in payload else "theme" if "theme_block_by_ticker" in payload else None
+        candidate_path = path.with_name(path.stem.rsplit("_", 1)[0] + "_candidate.json")
+        if component is not None and candidate_path.is_file():
+            payload = bound_projection(candidate_path=candidate_path, component=component, projection=payload)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
@@ -80,6 +90,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -119,7 +130,10 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         # source_binding decision clock is stale is rejected against the CANDIDATE clock before any
         # coverage / Pass2-target computation, and no summary is written.
         runner = self._module()
-        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0)
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0,
+            candidate_path=self.paths["candidate"], component="momentum",
+        )
         momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
         _write_json(self.paths["momentum"], momentum)
         with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, "source binding"):
@@ -155,6 +169,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
             momentum_top_k=2,
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -185,6 +200,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
+            authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -223,6 +239,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -230,7 +247,10 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["scope"]["status"], "ready_for_reviewed_live_execution")
         self.assertTrue(summary["local_input_coverage"]["all_required_local_inputs_cover_candidates"])
         self.assertEqual(summary["candidate_universe"]["eligible_count"], 3)
-        self.assertEqual(summary["pass2_target_universe"]["selection_mode"], "momentum_scored_candidates_plus_forced_holdings")
+        self.assertEqual(
+            summary["pass2_target_universe"]["selection_mode"],
+            "momentum_theme_top_k_plus_catalyst_recall_plus_forced_holdings",
+        )
         self.assertEqual(summary["pass2_target_universe"]["momentum_scored_candidate_count"], 2)
         self.assertEqual(summary["pass2_target_universe"]["forced_holding_count"], 0)
         self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
@@ -250,6 +270,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
                 momentum_projection_path=self.paths["momentum"],
                 theme_projection_path=self.paths["theme"],
                 summary_path=self.paths["summary"],
+                authorized_total_call_budget=11,
                 confirm_user_authorization=False,
                 generated_at="2026-07-06T12:00:00+00:00",
             )
@@ -273,6 +294,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
                         momentum_projection_path=self.paths["momentum"],
                         theme_projection_path=self.paths["theme"],
                         summary_path=self.paths["summary"],
+                        authorized_total_call_budget=11,
                         confirm_user_authorization=True,
                         generated_at="2026-07-06T12:00:00+00:00",
                     )
@@ -287,6 +309,7 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["summary"],
+            authorized_total_call_budget=11,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
@@ -310,6 +333,107 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
                 cursor = cursor[key]
             cursor[path[-1]] = value
             self.assertFalse(validator.is_valid(mutated), path)
+
+    def test_two_axis_rank_catalyst_recall_and_external_holding_are_all_preserved(self):
+        runner = self._module()
+        _write_json(
+            self.paths["momentum"],
+            {
+                "momentum_by_ticker": {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0},
+                "neutral_fill_tickers": [],
+                "coverage": {"AAPL": "scored", "MSFT": "scored", "JPM": "scored"},
+                "target_count": 3, "scored_count": 3,
+            },
+        )
+        _write_json(
+            self.paths["theme"],
+            {
+                "theme_block_by_ticker": {"AAPL": 0.0, "MSFT": 0.0, "JPM": 100.0},
+                "neutral_fill_tickers": [],
+                "coverage": {"AAPL": "scored_theme_base", "MSFT": "scored_theme_base", "JPM": "scored_theme_base"},
+                "target_count": 3, "scored_count": 3,
+            },
+        )
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"], momentum_top_k=1,
+            catalyst_recall_tickers=["MSFT"], forced_holding_tickers=["HOLD"],
+            authorized_total_call_budget=16, confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        self.assertEqual(summary["pass2_target_universe"]["target_symbols"], ["HOLD", "JPM", "MSFT"])
+        self.assertEqual(summary["pass2_target_universe"]["theme_scored_candidate_count"], 3)
+        self.assertEqual(summary["pass2_target_universe"]["catalyst_recall_count"], 1)
+        self.assertEqual(summary["pass2_target_universe"]["forced_holding_count"], 1)
+        self.assertTrue(summary["execution_gate"]["authorized_budget_matches_rederived_forecast"])
+
+    def test_projection_clock_or_payload_hash_drift_is_rejected(self):
+        runner = self._module()
+        projection = json.loads(self.paths["momentum"].read_text(encoding="utf-8"))
+        projection["source_binding"]["decision_clock"]["source_as_of"] = "2026-07-07"
+        self.paths["momentum"].write_text(json.dumps(projection), encoding="utf-8")
+        with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, "decision clock"):
+            runner.run_preflight(
+                candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+                momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+                summary_path=self.paths["summary"], authorized_total_call_budget=11,
+                confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+            )
+        projection["source_binding"]["decision_clock"]["source_as_of"] = "2026-06-12"
+        projection["source_binding"]["generated_at"] = "2026-07-01T12:00:00+00:00"
+        self.paths["momentum"].write_text(json.dumps(projection), encoding="utf-8")
+        with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, "before decision-session open"):
+            runner.run_preflight(
+                candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+                momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+                summary_path=self.paths["summary"], authorized_total_call_budget=11,
+                confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+            )
+
+    def test_mismatched_independent_budget_blocks_ready_gate(self):
+        runner = self._module()
+        _write_json(self.paths["momentum"], _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored"))
+        _write_json(self.paths["theme"], _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base"))
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"], authorized_total_call_budget=999,
+            confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+        )
+        self.assertEqual(summary["scope"]["status"], "blocked_execution_constraints")
+        self.assertFalse(summary["execution_gate"]["authorized_budget_matches_rederived_forecast"])
+        self.assertIn("authorized_call_budget_does_not_match_rederived_target_forecast", summary["execution_gate"]["block_reasons"])
+
+    def test_producer_role_time_and_disposition_semantics_are_closed_world(self):
+        runner = self._module()
+        original = json.loads(self.paths["momentum"].read_text(encoding="utf-8"))
+        mutations = []
+        bad_producer = copy.deepcopy(original)
+        bad_producer["source_binding"]["producer_id"] = "foreign_projection_writer"
+        mutations.append((bad_producer, "producer"))
+        bad_role = copy.deepcopy(original)
+        bad_role["source_binding"]["source_artifacts"][0]["role"] = "unrelated_file"
+        mutations.append((bad_role, "artifact roles"))
+        early = copy.deepcopy(original)
+        early["source_binding"]["generated_at"] = "2026-06-01T12:00:00+00:00"
+        mutations.append((early, "precedes source_as_of"))
+        disposition = copy.deepcopy(original)
+        ticker = next(iter(disposition["momentum_by_ticker"]))
+        disposition["coverage"][ticker] = "absent_from_pool"
+        disposition["source_binding"]["projection_sha256"] = projection_payload_sha256(disposition)
+        mutations.append((disposition, "scored row has a non-scored disposition"))
+        for mutated, message in mutations:
+            with self.subTest(message=message):
+                self.paths["momentum"].write_text(json.dumps(mutated), encoding="utf-8")
+                with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, message):
+                    runner.run_preflight(
+                        candidate_artifact_path=self.paths["candidate"], expected_decision_date=_DECISION_DATE,
+                        momentum_projection_path=self.paths["momentum"], theme_projection_path=self.paths["theme"],
+                        summary_path=self.paths["summary"], authorized_total_call_budget=11,
+                        confirm_user_authorization=True, generated_at="2026-07-06T12:00:00+00:00",
+                    )
+                self.paths["momentum"].write_text(json.dumps(original), encoding="utf-8")
 
 
 if __name__ == "__main__":

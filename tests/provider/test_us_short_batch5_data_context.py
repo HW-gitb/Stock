@@ -167,7 +167,17 @@ def _score_composition(targets):
     )
 
 
-def _constant_projection(value_key, targets, disposition, *, score=50.0):
+def _constant_projection(
+    value_key,
+    targets,
+    disposition,
+    *,
+    score=50.0,
+    candidate_path: Path | None = None,
+    component: str | None = None,
+    producer_id: str | None = None,
+    source_roles: tuple[str, ...] | None = None,
+):
     projection = {
         value_key: {ticker: score for ticker in targets},
         "neutral_fill_tickers": [],
@@ -175,19 +185,32 @@ def _constant_projection(value_key, targets, disposition, *, score=50.0):
         "target_count": len(targets),
         "scored_count": len(targets),
     }
-    component = {
+    inferred_component = {
         "momentum_by_ticker": "momentum",
         "theme_block_by_ticker": "theme",
     }.get(value_key)
+    component = component or inferred_component
     if component is not None:
+        source_path = candidate_path or Path(__file__)
+        roles = source_roles or (
+            ("candidate_artifact", f"source_{component}_projection")
+            if candidate_path is not None
+            else ("test_fixture",)
+        )
         projection["source_binding"] = build_projection_binding(
             component=component,
+            producer_id=producer_id or (
+                "us_short_batch5_full_candidate_projection_inputs"
+                if candidate_path is not None
+                else "us_short_test_fixture"
+            ),
             generated_at=_GENERATED_AT,
             expected_decision_date=_DECISION_DATE,
             candidate_price_basis_date=_PRICE_BASIS_DATE,
             source_as_of=_USED_DATE,
             target_tickers=list(targets),
-            source_artifact_paths={"test_fixture": Path(__file__)},
+            projection=projection,
+            source_artifact_paths={role: source_path for role in roles},
         )
     return projection
 

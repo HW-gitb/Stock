@@ -31,6 +31,8 @@ from runners import us_short_weekend_batch4 as batch4_runner  # noqa: E402
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 DEFAULT_CALENDAR_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 DEFAULT_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+FULL_CANDIDATE_LIVE_PROJECTION_BINDING = source_packet_runner.FULL_CANDIDATE_LIVE_PROJECTION_BINDING
+PROJECTION_INPUTS_BINDING = source_packet_runner.PROJECTION_INPUTS_BINDING
 
 _TEMPLATE_KEYS = frozenset(
     {
@@ -263,12 +265,14 @@ def _safe_source_packet_run(
     *,
     generated_at: str | None,
     context_components_path: Path,
+    projection_binding_expectations: source_packet_runner.ProjectionBindingExpectations,
 ) -> dict[str, Any]:
     try:
         return source_packet_runner.run_packet(
             source_packet,
             generated_at=generated_at,
             context_components_output_path=_repo_rel(context_components_path),
+            projection_binding_expectations=projection_binding_expectations,
         )
     except source_packet_runner.SourcePacketError as exc:
         raise Batch5ToBatch4E2EError("source packet runner failed") from exc
@@ -294,6 +298,7 @@ def run_e2e(
     bootstrap_lifecycle: bool = False,
     dry_run: bool = False,
     generated_at: str | None = None,
+    projection_binding_expectations: source_packet_runner.ProjectionBindingExpectations = PROJECTION_INPUTS_BINDING,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch5ToBatch4E2EError("now_et must be a naive ET datetime")
@@ -378,6 +383,7 @@ def run_e2e(
             source_packet,
             generated_at=generated_at,
             context_components_path=components_path,
+            projection_binding_expectations=projection_binding_expectations,
         )
         if run_mode == "research_live":
             try:

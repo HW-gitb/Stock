@@ -28,6 +28,7 @@ from engine.us_short_sec_offering_audit import (  # noqa: E402
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
+    PROJECTION_INPUTS_BINDING,
     SourcePacketError,
     run_packet as run_local_source_packet,
     run_preflight as run_local_source_packet_preflight,
@@ -824,7 +825,11 @@ def run_live_source_packet(
     try:
         packet_preflight = run_local_source_packet_preflight(paths["source_packet"], generated_at=generated_at)
         packet_run = (
-            run_local_source_packet(paths["source_packet"], generated_at=generated_at)
+            run_local_source_packet(
+                paths["source_packet"],
+                generated_at=generated_at,
+                projection_binding_expectations=PROJECTION_INPUTS_BINDING,
+            )
             if run_data_context
             else None
         )

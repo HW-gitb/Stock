@@ -5,6 +5,7 @@ import hashlib
 import json
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,15 @@ if str(ROOT) not in sys.path:
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
 from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
+from engine.us_short_seam_momentum import (  # noqa: E402
+    COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
+    DISPOSITION_SCORED as MOMENTUM_SCORED_DISPOSITION,
+)
+from engine.us_short_seam_theme import (  # noqa: E402
+    COVERAGE_DISPOSITIONS as THEME_COVERAGE_DISPOSITIONS,
+    DISPOSITION_SCORED_INDUSTRY_BASE,
+    DISPOSITION_SCORED_THEME_BASE,
+)
 from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context_from_resolved_pass2_sources,
     assemble_official_context_components_from_resolved_pass2_sources,
@@ -70,6 +80,38 @@ PROHIBITED_FALSE_FIELDS = (
 
 class SourcePacketError(ValueError):
     """The local US-short Batch5 source packet cannot be consumed safely."""
+
+
+@dataclass(frozen=True)
+class ProjectionBindingExpectations:
+    producer_id: str
+    momentum_source_roles: tuple[str, ...]
+    theme_source_roles: tuple[str, ...]
+    momentum_allowed_dispositions: tuple[str, ...]
+    momentum_scored_dispositions: tuple[str, ...]
+    theme_allowed_dispositions: tuple[str, ...]
+    theme_scored_dispositions: tuple[str, ...]
+
+
+FULL_CANDIDATE_LIVE_PROJECTION_BINDING = ProjectionBindingExpectations(
+    producer_id="us_short_batch5_full_candidate_live_source_packet",
+    momentum_source_roles=("parent_momentum_projection",),
+    theme_source_roles=("parent_theme_projection",),
+    momentum_allowed_dispositions=tuple(sorted(MOMENTUM_COVERAGE_DISPOSITIONS)),
+    momentum_scored_dispositions=(MOMENTUM_SCORED_DISPOSITION,),
+    theme_allowed_dispositions=tuple(sorted(THEME_COVERAGE_DISPOSITIONS)),
+    theme_scored_dispositions=(DISPOSITION_SCORED_THEME_BASE, DISPOSITION_SCORED_INDUSTRY_BASE),
+)
+
+PROJECTION_INPUTS_BINDING = ProjectionBindingExpectations(
+    producer_id="us_short_batch5_full_candidate_projection_inputs",
+    momentum_source_roles=("candidate_artifact", "source_momentum_projection"),
+    theme_source_roles=("candidate_artifact", "source_theme_projection"),
+    momentum_allowed_dispositions=tuple(sorted(MOMENTUM_COVERAGE_DISPOSITIONS)),
+    momentum_scored_dispositions=(MOMENTUM_SCORED_DISPOSITION,),
+    theme_allowed_dispositions=tuple(sorted(THEME_COVERAGE_DISPOSITIONS)),
+    theme_scored_dispositions=(DISPOSITION_SCORED_THEME_BASE, DISPOSITION_SCORED_INDUSTRY_BASE),
+)
 
 
 def iso_now() -> str:
@@ -304,6 +346,7 @@ def run_packet(
     *,
     generated_at: str | None = None,
     context_components_output_path: Path | str | None = None,
+    projection_binding_expectations: ProjectionBindingExpectations = FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
 ) -> dict[str, Any]:
     packet, paths = _load_and_validate_packet(packet_path)
     if context_components_output_path is not None:
@@ -346,6 +389,10 @@ def run_packet(
                 candidate_price_basis_date=candidate["price_basis_date"],
                 source_as_of=candidate["used_date"],
                 target_tickers=None,
+                expected_producer_id=projection_binding_expectations.producer_id,
+                expected_source_roles=projection_binding_expectations.momentum_source_roles,
+                allowed_dispositions=set(projection_binding_expectations.momentum_allowed_dispositions),
+                scored_dispositions=set(projection_binding_expectations.momentum_scored_dispositions),
             )
             validate_projection_binding(
                 source_payloads["theme_projection_path"],
@@ -354,6 +401,10 @@ def run_packet(
                 candidate_price_basis_date=candidate["price_basis_date"],
                 source_as_of=candidate["used_date"],
                 target_tickers=None,
+                expected_producer_id=projection_binding_expectations.producer_id,
+                expected_source_roles=projection_binding_expectations.theme_source_roles,
+                allowed_dispositions=set(projection_binding_expectations.theme_allowed_dispositions),
+                scored_dispositions=set(projection_binding_expectations.theme_scored_dispositions),
             )
         except (KeyError, TypeError, ValueError) as exc:
             raise SourcePacketError(f"score projection source binding rejected: {exc}") from exc
@@ -485,6 +536,7 @@ def main(argv: list[str] | None = None) -> int:
             args.packet_path,
             generated_at=args.generated_at,
             context_components_output_path=args.context_components_out,
+            projection_binding_expectations=PROJECTION_INPUTS_BINDING,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

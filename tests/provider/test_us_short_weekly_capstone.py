@@ -694,6 +694,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             private_root=tmp / "priv",
             batch4_template_path=tmp / "template.json",
             account_state_path=tmp / "account.json",
+            authorized_momentum_top_k=200,
+            authorized_pass2_call_budget=16,
+            catalyst_recall_tickers=("CAT",),
             confirm_user_authorization=authorized,
             state_dir=tmp / "state",
             sample_root=tmp,
@@ -715,12 +718,47 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         # its runner — the value is CONSUMED from the context, not hardcoded.
         from runners import us_short_weekly_capstone_stages as st
         ctx = self._ctx(authorized=True)
-        with mock.patch.object(st, "_preflight_call_budget", return_value=16):
+        with mock.patch.object(st, "_account_holding_tickers", return_value=["HOLD"]):
             for adapter, (mod_attr, fn) in self._WRAPPED.items():
                 with mock.patch.object(getattr(st, mod_attr), fn, return_value={"ok": True}) as m:
                     getattr(st, adapter)(ctx)
                     m.assert_called_once()
                     self.assertIs(m.call_args.kwargs.get("confirm_user_authorization"), True, adapter)
+                    if adapter in {"run_pass2_fetch", "run_pass2_preflight"}:
+                        self.assertEqual(m.call_args.kwargs["forced_holding_tickers"], ["HOLD"])
+                        self.assertEqual(m.call_args.kwargs["catalyst_recall_tickers"], ["CAT"])
+                        self.assertEqual(m.call_args.kwargs["momentum_top_k" if adapter == "run_pass2_preflight" else "authorized_momentum_top_k"], 200)
+                    if adapter == "run_pass2_fetch":
+                        self.assertEqual(m.call_args.kwargs["expected_total_call_budget"], 16)
+                    if adapter == "run_pass2_preflight":
+                        self.assertEqual(m.call_args.kwargs["authorized_total_call_budget"], 16)
+
+    def test_account_positions_are_the_authoritative_forced_holding_source(self):
+        from runners import us_short_weekly_capstone_stages as st
+        from tests.test_us_short_account_state_from_manual_tables import _build
+        ctx = self._ctx(authorized=True)
+        state, _ = _build(
+            positions=[
+                {"ticker": "MSFT", "shares": "2", "avg_cost_usd": "100", "entry_date": ctx.decision_date},
+                {"ticker": "AAPL", "shares": "1", "avg_cost_usd": "90", "entry_date": ctx.decision_date},
+            ],
+            as_of=ctx.decision_date,
+        )
+        ctx.account_state_path.write_text(json.dumps(state), encoding="utf-8")
+        self.assertEqual(st._account_holding_tickers(ctx), ["AAPL", "MSFT"])
+
+    def test_pass2_adapters_reject_missing_frozen_budget_before_wrapped_runner(self):
+        from dataclasses import replace
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = replace(self._ctx(authorized=True), authorized_pass2_call_budget=None)
+        for adapter in (st.run_pass2_preflight, st.run_pass2_fetch):
+            with mock.patch.object(
+                st._preflight if adapter is st.run_pass2_preflight else st._pass2,
+                "run_preflight" if adapter is st.run_pass2_preflight else "run_full_candidate_live_source_packet",
+            ) as call:
+                with self.assertRaisesRegex(PermissionError, "frozen K"):
+                    adapter(ctx)
+                call.assert_not_called()
 
     def test_bridge_forwards_ctx_research_live_capability_not_self_mint(self):
         # A1: the bridge NO LONGER self-mints from ctx.confirm_user_authorization — it forwards ctx.research_live_capability
@@ -972,12 +1010,12 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "authorized_momentum_top_k", "forced_holding_tickers", "catalyst_recall_tickers", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._proj.run_packet, ["candidate_artifact_path", "expected_decision_date", "source_momentum_projection_path", "source_theme_projection_path", "output_momentum_projection_path", "output_theme_projection_path", "summary_path", "generated_at"]),
-            (st._preflight.run_preflight, ["candidate_artifact_path", "expected_decision_date", "momentum_projection_path", "theme_projection_path", "summary_path", "confirm_user_authorization", "generated_at"]),
+            (st._preflight.run_preflight, ["candidate_artifact_path", "expected_decision_date", "momentum_projection_path", "theme_projection_path", "summary_path", "forced_holding_tickers", "catalyst_recall_tickers", "momentum_top_k", "authorized_total_call_budget", "confirm_user_authorization", "generated_at"]),
             (st._bridge.run_e2e, ["source_packet_path", "batch4_template_path", "account_state_path", "provider_health_path", "private_root", "official_output_root", "now_et", "context_components_path", "run_mode", "_research_live_capability", "bootstrap_lifecycle", "generated_at"]),
         ]
         for fn, kwargs in checks:
@@ -996,6 +1034,8 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
                 private_root=root_path / "private",
                 batch4_template_path=root_path / "template.json",
                 account_state_path=root_path / "account.json",
+                authorized_momentum_top_k=200,
+                authorized_pass2_call_budget=16,
                 confirm_user_authorization=True,
                 state_dir=root_path / "state",
                 sample_root=root_path,
@@ -1007,7 +1047,8 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             )
             with mock.patch.object(st._mom_fetch, "run_fetch", return_value={}) as momentum_fetch, \
                  mock.patch.object(st._overextension, "run_packet", return_value={}) as overextension, \
-                 mock.patch.object(st._pass2, "run_full_candidate_live_source_packet", return_value={}) as pass2:
+                 mock.patch.object(st._pass2, "run_full_candidate_live_source_packet", return_value={}) as pass2, \
+                 mock.patch.object(st, "_account_holding_tickers", return_value=[]):
                 st.run_momentum_fetch(ctx)
                 st.run_overextension_producer(ctx)
                 st.run_pass2_fetch(ctx)

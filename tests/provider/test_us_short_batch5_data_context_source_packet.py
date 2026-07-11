@@ -7,6 +7,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -20,6 +21,7 @@ from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E
 from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     SourcePacketError,
+    main,
     run_packet,
     run_preflight,
     source_packet_input_manifest,
@@ -133,11 +135,21 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         _write_json(self.paths["candidate"], _candidate_artifact(("AAPL", "MSFT", "JPM")))
         _write_json(
             self.paths["momentum"],
-            _constant_projection("momentum_by_ticker", targets, "scored", score=50.0),
+            _constant_projection(
+                "momentum_by_ticker", targets, "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+                producer_id="us_short_batch5_full_candidate_live_source_packet",
+                source_roles=("parent_momentum_projection",),
+            ),
         )
         _write_json(
             self.paths["theme"],
-            _constant_projection("theme_block_by_ticker", targets, "scored_theme_base", score=50.0),
+            _constant_projection(
+                "theme_block_by_ticker", targets, "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+                producer_id="us_short_batch5_full_candidate_live_source_packet",
+                source_roles=("parent_theme_projection",),
+            ),
         )
         _write_json(
             self.paths["offering"],
@@ -288,13 +300,59 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 43.5)
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
 
+    def test_cli_default_accepts_legacy_projection_inputs_profile(self):
+        targets = ("AAPL", "MSFT")
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection(
+                "momentum_by_ticker", targets, "scored", score=50.0,
+                candidate_path=self.paths["candidate"], component="momentum",
+            ),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection(
+                "theme_block_by_ticker", targets, "scored_theme_base", score=50.0,
+                candidate_path=self.paths["candidate"], component="theme",
+            ),
+        )
+        with mock.patch("builtins.print"):
+            self.assertEqual(main(["--packet-path", str(self.packet)]), 0)
+        self.assertTrue(self.paths["output"].exists())
+
+    def test_cli_default_rejects_full_candidate_live_profile(self):
+        with mock.patch("builtins.print"), self.assertRaisesRegex(SourcePacketError, "producer is not authorized"):
+            main(["--packet-path", str(self.packet)])
+        self.assertFalse(self.paths["output"].exists())
+
     def test_stale_clock_source_projection_binding_is_rejected(self):
         # Reverse control (Required B, core-score/official-output consumer): a stale-clock momentum
         # source binding is rejected before any official data-context component is written.
-        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0)
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0,
+            candidate_path=self.paths["candidate"], component="momentum",
+            producer_id="us_short_batch5_full_candidate_live_source_packet",
+            source_roles=("parent_momentum_projection",),
+        )
         momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
         _write_json(self.paths["momentum"], momentum)
         with self.assertRaisesRegex(SourcePacketError, "source binding"):
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertFalse(self.paths["output"].exists())
+
+    def test_wrong_projection_producer_is_rejected(self):
+        momentum = json.loads(self.paths["momentum"].read_text(encoding="utf-8"))
+        momentum["source_binding"]["producer_id"] = "unreviewed_projection_producer"
+        _write_json(self.paths["momentum"], momentum)
+        with self.assertRaisesRegex(SourcePacketError, "producer is not authorized"):
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertFalse(self.paths["output"].exists())
+
+    def test_wrong_projection_source_role_is_rejected(self):
+        theme = json.loads(self.paths["theme"].read_text(encoding="utf-8"))
+        theme["source_binding"]["source_artifacts"][0]["role"] = "unreviewed_theme_source"
+        _write_json(self.paths["theme"], theme)
+        with self.assertRaisesRegex(SourcePacketError, "source artifact roles"):
             run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
         self.assertFalse(self.paths["output"].exists())
 

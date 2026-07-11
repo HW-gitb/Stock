@@ -26,6 +26,7 @@ from tests.provider.test_us_short_batch5_full_universe_momentum_producer import 
     _series_packet,
 )
 from tests.provider.test_us_short_batch5_data_context import _constant_projection  # noqa: E402
+from tests.provider.us_short_projection_binding_test_helpers import bound_projection  # noqa: E402
 
 
 STATE_DIR = ROOT / "state" / "us_short"
@@ -169,6 +170,13 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
         )
 
         projection = _read_json(self.paths["projection"])
+        binding = projection["source_binding"]
+        self.assertEqual(binding["schema_name"], "us_short_score_projection_binding")
+        self.assertEqual(binding["decision_clock"]["source_as_of"], _PRICE_BASIS_YMD)
+        self.assertEqual(
+            [row["role"] for row in binding["source_artifacts"]],
+            ["candidate_artifact", "momentum_series_packet", "sector_classification_packet"],
+        )
         self.assertEqual(set(projection["theme_block_by_ticker"]), {"AAPL", "MSFT", "GOOG"})
         self.assertEqual(set(projection["neutral_fill_tickers"]), {"AMZN", "JPM"})
         self.assertEqual(projection["coverage"]["AMZN"], "neutral_missing_theme_and_industry_base")  # thin history
@@ -180,7 +188,15 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
         self._run_packet()
         projection_inputs = importlib.import_module("runners.us_short_batch5_full_candidate_projection_inputs")
         momentum_src = STATE_DIR / f"{self.slug}_momentum_src.json"
-        _write_json(momentum_src, _constant_projection("momentum_by_ticker", _ALL_ELIGIBLE, "scored", score=65.0))
+        _write_json(
+            momentum_src,
+            bound_projection(
+                candidate_path=self.paths["candidate"], component="momentum",
+                projection=_constant_projection("momentum_by_ticker", _ALL_ELIGIBLE, "scored", score=65.0),
+                producer_id="us_short_batch5_full_universe_momentum_producer",
+                source_roles=("candidate_artifact", "momentum_series_packet"),
+            ),
+        )
 
         out_summary = projection_inputs.run_packet(
             candidate_artifact_path=self.paths["candidate"],
@@ -190,7 +206,7 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
             output_momentum_projection_path=STATE_DIR / f"{self.slug}_out_momentum.json",
             output_theme_projection_path=STATE_DIR / f"{self.slug}_out_theme.json",
             summary_path=PROJECTION_INPUTS_SAMPLE_ROOT / self.slug / "summary.json",
-            generated_at="2026-07-06T12:00:00+00:00",
+            generated_at="2026-06-15T12:00:00+00:00",
         )
         self.assertEqual(out_summary["output_projection_contract"]["target_count"], 5)
         self.assertEqual(out_summary["output_projection_contract"]["theme_scored_count"], 3)

@@ -5,7 +5,7 @@ from typing import Any
 
 
 class Pass2FunnelError(ValueError):
-    """The Pass 2 funnel target cannot be derived safely (bad momentum-score / eligible / holdings / top_k input)."""
+    """The Pass 2 funnel target cannot be derived safely."""
 
 
 def _canonical_str_set(value: Any, *, field: str) -> set[str]:
@@ -19,54 +19,50 @@ def _canonical_str_set(value: Any, *, field: str) -> set[str]:
     return out
 
 
+def _score_map(value: Any, *, field: str) -> dict[str, float]:
+    if type(value) is not dict:
+        raise Pass2FunnelError(f"{field} must be an exact dict")
+    out: dict[str, float] = {}
+    for ticker, score in value.items():
+        if type(ticker) is not str:
+            raise Pass2FunnelError(f"{field} keys must be exact str")
+        if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
+            raise Pass2FunnelError(f"{field}[{ticker}] must be a finite number")
+        out[ticker] = float(score)
+    return out
+
+
 def select_pass2_targets(
     *,
     momentum_scores: Any,
+    theme_scores: Any,
     eligible: Any,
+    catalyst_recall: Any,
     forced_holdings: Any,
     top_k: int,
 ) -> list[str]:
-    """Derive the Pass 2 funnel target =
-        sorted( top-K( momentum-scored ∩ eligible, ranked by score DESC then canonical ticker ASC ) ∪ forced_holdings ).
+    """Return cheap two-axis top-K plus bounded catalyst recall and mandatory holdings.
 
-    This is the SINGLE source of the funnel selection, imported by BOTH the Pass2 preflight
-    (`_pass2_target_universe`) and the live source-packet runner (`_rederive_and_verify_pass2_targets`) so the two
-    are PROVABLY identical — preserving the R-USSHORT-BATCH5-LIVE-RUNNER-TRUSTS-PREFLIGHT-FUNNEL-NOT-REDERIVED
-    hardening (the runner still independently re-derives and must equal the preflight target). Pure / offline /
-    deterministic; fails closed (typed `Pass2FunnelError`) on any bad-shaped input.
-
-    momentum_scores: {ticker: score} — the momentum-scored map (exact dict; exact-str canonical keys; finite
-        numeric scores; the tickers are assumed already canonicalized by the caller, matching `eligible`).
-    eligible / forced_holdings: iterables of canonical tickers (exact-str); forced_holdings must be a subset of
-        eligible (they are re-evaluated every week and are always kept even if below the top-K).
-    top_k: positive int cap on the momentum-selected count. Forced holdings are added ON TOP of the top-K and are
-        always kept, so the returned count can exceed top_k by the number of holdings not already in the top-K.
+    The ranked lane averages available momentum/theme scores, using 50 as the neutral value when only one cheap
+    component is present. Catalyst recall must remain inside the reviewed Pass1-eligible universe. Holdings are a
+    separate mandatory risk lane and may be outside today's eligible set. Both callers import this pure selector.
     """
     if type(top_k) is not int or isinstance(top_k, bool) or top_k <= 0:
         raise Pass2FunnelError("top_k must be a positive int")
-    if type(momentum_scores) is not dict:
-        raise Pass2FunnelError("momentum_scores must be an exact dict")
     eligible_set = _canonical_str_set(eligible, field="eligible")
+    recall_set = _canonical_str_set(catalyst_recall, field="catalyst_recall")
     holdings_set = _canonical_str_set(forced_holdings, field="forced_holdings")
-    missing_holdings = sorted(holdings_set - eligible_set)
-    if missing_holdings:
-        raise Pass2FunnelError(f"forced_holdings must be within the eligible set: {missing_holdings[:10]}")
+    stale_recall = sorted(recall_set - eligible_set)
+    if stale_recall:
+        raise Pass2FunnelError(f"catalyst_recall must be within the eligible set: {stale_recall[:10]}")
 
+    momentum = _score_map(momentum_scores, field="momentum_scores")
+    theme = _score_map(theme_scores, field="theme_scores")
     scored_eligible: list[tuple[str, float]] = []
-    seen: set[str] = set()
-    for ticker, score in momentum_scores.items():
-        if type(ticker) is not str:
-            raise Pass2FunnelError("momentum_scores keys must be exact str")
-        if ticker in seen:
-            raise Pass2FunnelError(f"momentum_scores contains a duplicate ticker: {ticker}")
-        seen.add(ticker)
-        if isinstance(score, bool) or not isinstance(score, (int, float)) or not math.isfinite(score):
-            raise Pass2FunnelError(f"momentum_scores[{ticker}] must be a finite number")
-        if ticker in eligible_set:
-            scored_eligible.append((ticker, float(score)))
+    for ticker in sorted((set(momentum) | set(theme)) & eligible_set):
+        cheap_score = (momentum.get(ticker, 50.0) + theme.get(ticker, 50.0)) / 2.0
+        scored_eligible.append((ticker, cheap_score))
 
-    # Deterministic across weeks: score DESC, then canonical ticker ASC as the tie-break.
     scored_eligible.sort(key=lambda item: (-item[1], item[0]))
     selected = {ticker for ticker, _ in scored_eligible[:top_k]}
-    target = selected | holdings_set
-    return sorted(target)
+    return sorted(selected | recall_set | holdings_set)
