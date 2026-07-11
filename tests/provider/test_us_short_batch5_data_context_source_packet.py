@@ -453,9 +453,12 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "missing_pit": lambda p: p["overextension_by_ticker"]["AAPL"].pop("pit"),
             "future_row_pit": lambda p: p["overextension_by_ticker"]["AAPL"]["pit"].__setitem__(
                 "as_of", "2099-01-01"),
-            "warning_with_chasing_count": lambda p: p["overextension_by_ticker"]["MSFT"].update({
-                "conditions_met": 3,
-                "condition_names": ["vertical_run", "volume_climax", "weak_retrace"],
+            "chasing_below_min_condition_count": lambda p: p["overextension_by_ticker"]["MSFT"].update({
+                "overextension_state": "chasing_extreme",
+                "strips_theme_score": True,
+                "execution_flags": {},
+                "conditions_met": 2,
+                "condition_names": ["vertical_run", "volume_climax"],
             }),
             "bool_disposition_count": lambda p: p["disposition_counts"].__setitem__(
                 "insufficient_data", False),

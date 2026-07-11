@@ -162,9 +162,9 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **来源诚实**：每主题带 `theme_source`（`gics_established` / `provisional_discovered`）+ `theme_lifecycle_state`；provisional 席位行带 `provisional_theme` 标（advisory——新发现、未经周期验证、人工给信心打折），喂 §13 累加器。
 - **纯软信号**（无市场确认的网络/X/LLM/人工 watchlist）：只标签/封顶小加分（≤ `manual_watchlist_boost` 5 分），不单独变硬分。
 - **过热分档（防追喷出的票，但不误杀强趋势）**：两档**互斥**，同一风险只罚一次（§4.2 单舞台），字段 `overextension_state ∈ {none, warning, chasing_extreme}` 入 action_table。
-  - `overextension_warning`（温和：现价高于 MA10 + k1×ATR、趋势完好未喷出）：**保留全额赛道分、不踢出选股**；只在执行侧罚——强制 `pullback_mode` 入场（不追突破）+ 压到试探/最小仓 + 抬 RR 门（复用 §6/§8 既有杠杆，不新增惩罚 stage）。
-  - `chasing_extreme`（抛物线，**多条件同时（AND）成立才触发——绝不因单条件如"仅涨幅大"误判**：连续垂直 + 当日涨幅 ≥ m×ATR + 量能高潮 + 远离全部均线 + 回撤结构差，需 ≥K 项共现）：**才**从 core_score 剥掉赛道热度分 → 退回动量+催化 base。
-  - 分档用 MA5/MA10/MA20 + ATR + 量比判定；阈值 k1/k2/m = prior（§13 #36）。强趋势票"高了还能更高"默认落 `warning`、不被误杀，仅真喷出才降权。
+- `overextension_warning`（温和：`close ≥ MA10 + k1×ATR` 且**趋势完好梯** `close > MA5 > MA10 > MA20`、未喷出；任一 MA 非有限则不判 warning）：**保留全额赛道分、不踢出选股**；只在执行侧罚——强制 `pullback_mode` 入场（不追突破）+ 压到试探/最小仓 + 抬 RR 门（复用 §6/§8 既有杠杆，不新增惩罚 stage）。
+- `chasing_extreme`（抛物线，`close ≥ MA10 + k2×ATR` **且**多条件同时（AND）成立才触发——绝不因单条件如"仅涨幅大"误判：连续垂直 + 当日涨幅 ≥ m×ATR + 量能高潮 + 远离全部均线 + 回撤结构差，需 ≥K 项共现）：**才**从 core_score 剥掉赛道热度分 → 退回动量+催化 base；仅 ≥K 但未过 k2 的票按 warning/none 继续判定，不得剥赛道分。
+- 分档用 MA5/MA10/MA20 + ATR + 量比判定；`k1=1.75`、`k2=2.50`、m/K/量能/均线距离均为 §13.1 #36 **forward prior**（非冻结）。强趋势票"高了还能更高"默认落 `warning`、不被误杀，仅真喷出才降权。
 
 ### 4.4 三个移出打分、各有去处的因子
 | 因子 | 去处 |
@@ -375,7 +375,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 33. `breakout_mode` 参数（突破失效线、追价上限）
 34. `active_scale_out_candidate`（主动减仓/移保本/ratchet 持仓管理；攒持仓管理数据再决定启用）
 35. `multi_day_order_expiry_candidate`（多日 GTC 订单有效期；靠纸面成交数据决定启用）
-36. 过热分档阈值（`overextension_warning` 的 k1；`chasing_extreme` 的 k2/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）
+36. 过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）
 37. 强赛道周 Top6–15 额外完整分析名额数（1–2，按 `theme_leader_rs`；确认优先，严格筛选下可含 `provisional_active`、仅最小/试探仓的纳入门）
 38. 赛道热度正交残差合成系数 + `macro_cluster` 重复热度检查口径（方向已固定为规则：跨界主题→theme 基、纯 GICS→industry 基；macro_cluster 不硬扣、只去重+横幅）
 39. `financial_trends` 财报质量趋势（候选、默认不启用；启用仅 advisory `risk_downgrade`、绝不设门/否决；指标口径借 A 股框架）

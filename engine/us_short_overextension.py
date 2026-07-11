@@ -4,14 +4,14 @@
 Design authority: docs/us_short_system_design.md §4.3 (过热分档) + §0 总原则.
 
 `overextension_state` ∈ {none, warning, chasing_extreme} (frozen action_table vocab):
-  * warning — mild (close above MA10 + k1×ATR, trend intact / not parabolic): EXECUTION-side only
+  * warning — mild (close >= MA10 + k1×ATR AND close > MA5 > MA10 > MA20, not parabolic): EXECUTION-side only
     (force pullback entry + reduce size + raise the RR gate); KEEPS the full theme score, never drops
     the stock from selection.
-  * chasing_extreme — parabolic, only when >= K co-occurring conditions hold (vertical run / daily
-    move ≥ m×ATR / volume climax / far above ALL MAs / weak retracement structure); a single big move
+  * chasing_extreme — parabolic, only when close >= MA10 + k2×ATR AND >= K co-occurring conditions hold
+    (vertical run / daily move ≥ m×ATR / volume climax / far above ALL MAs / weak retracement structure); a single big move
     ALONE never triggers it. SELECTION-side: strips the theme-heat score back to momentum+catalyst base.
 The two are mutually exclusive (chasing_extreme precedence) so a stock is penalised once (§4.2 single
-stage). Thresholds (k1 / m / volume-climax / far-MA distance / min condition count K) are §13.1 #36
+stage). Thresholds (k1 / k2 / m / volume-climax / far-MA distance / min condition count K) are §13.1 #36
 forward priors, NOT frozen const. Missing key metrics → 'none' (honest, never fabricated). Pure; no
 provider, no A-share crossing.
 
@@ -33,8 +33,9 @@ from datetime import datetime
 
 from engine.us_short_price_engine import atr as price_engine_atr
 
-# §13.1 #36 forward priors (NOT frozen const): the warning band + the multi-condition parabolic gate.
-WARNING_MA10_ATR = 1.0        # warning: close > MA10 + this×ATR
+# §13.1 #36 forward priors (NOT frozen const): warning band/trend ladder + multi-condition parabolic k2 gate.
+WARNING_MA10_ATR = 1.75       # warning: close >= MA10 + this×ATR AND close > MA5 > MA10 > MA20
+CHASING_MA10_ATR = 2.50       # chasing: close >= MA10 + this×ATR AND >=K parabolic conditions
 DAILY_MOVE_ATR = 2.0          # parabolic condition: daily_change >= this×ATR
 VOL_CLIMAX_RATIO = 2.5        # parabolic condition: volume ratio >= this
 FAR_MA_ATR = 3.0             # parabolic condition: close - MA20 >= this×ATR (far above all MAs)
@@ -98,8 +99,8 @@ def validate_overextension_result(value, *, require_producer_metadata=False, exp
             raise ValueError("conditions_met must equal the unique condition_names count")
         if state == "chasing_extreme" and count < CHASING_MIN_CONDITIONS:
             raise ValueError("chasing_extreme must meet the multi-condition threshold")
-        if state != "chasing_extreme" and count >= CHASING_MIN_CONDITIONS:
-            raise ValueError("non-chasing state cannot carry a chasing-condition count")
+        # A non-chasing result may honestly carry >=K conditions when it misses the separate k2 MA10/ATR
+        # gate. This validator receives a tier result, not the raw metrics; classify_overextension owns k2.
 
     if "disposition" in value or "pit" in value or require_producer_metadata:
         disposition, pit = value.get("disposition"), value.get("pit")
@@ -144,10 +145,11 @@ def classify_overextension(metrics):
     """metrics = {close, ma5, ma10, ma20, atr, vol_ratio, daily_change, vertical_run, weak_retrace}.
     Returns {overextension_state, strips_theme_score, execution_flags, conditions_met, condition_names}.
 
-    chasing_extreme fires ONLY when >= CHASING_MIN_CONDITIONS parabolic conditions co-occur — a single
-    condition (even a huge daily move) never reaches it. warning is the mild execution-side tier that
-    KEEPS the theme score. The tiers are mutually exclusive (chasing_extreme precedence). Missing
-    close/ATR → 'none' (no fabrication)."""
+    chasing_extreme fires ONLY when its k2 MA10/ATR gate AND >= CHASING_MIN_CONDITIONS parabolic conditions
+    co-occur; a single condition (even a huge daily move) never reaches it. warning requires the k1 MA10/ATR
+    band AND the full MA5>MA10>MA20 trend ladder, and K-without-k2 may therefore honestly remain warning/none.
+    The tiers are mutually exclusive (chasing_extreme precedence). Missing required metrics return 'none'
+    (no fabrication)."""
     m = metrics if isinstance(metrics, dict) else {}
     close, atr = _finite(m.get("close")), _finite(m.get("atr"))
     ma5, ma10, ma20 = _finite(m.get("ma5")), _finite(m.get("ma10")), _finite(m.get("ma20"))
@@ -168,12 +170,16 @@ def classify_overextension(metrics):
     }
     met = [k for k, v in conds.items() if v]
 
-    if len(met) >= CHASING_MIN_CONDITIONS:           # parabolic → strip theme score (selection side)
+    chasing_k2 = ma10 is not None and close >= ma10 + CHASING_MA10_ATR * atr
+    if len(met) >= CHASING_MIN_CONDITIONS and chasing_k2:  # parabolic + k2 → strip theme score
         return {"overextension_state": "chasing_extreme", "strips_theme_score": True,
                 "execution_flags": {}, "conditions_met": len(met), "condition_names": met}
 
-    # warning (precedence: only if NOT chasing) — mild over-MA10, execution side only, KEEPS theme score
-    if ma10 is not None and close > ma10 + WARNING_MA10_ATR * atr:
+    # warning (precedence: only if NOT chasing) — k1 stretch plus the design-required intact MA trend ladder.
+    # Any missing/non-finite MA fails closed to no warning.
+    warning_ladder = (ma5 is not None and ma10 is not None and ma20 is not None
+                      and close > ma5 > ma10 > ma20)
+    if warning_ladder and close >= ma10 + WARNING_MA10_ATR * atr:
         return {"overextension_state": "warning", "strips_theme_score": False,
                 "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True},
                 "conditions_met": len(met), "condition_names": met}

@@ -2,7 +2,7 @@
   "schema_name": "us_short_batch5_full_universe_overextension_summary",
   "schema_version": "1.0.0",
   "schema_ref": "schemas/us_short_batch5_full_universe_overextension_summary.schema.json",
-  "generated_at": "2026-07-09T08:45:44+00:00",
+  "generated_at": "2026-07-11T00:00:00+00:00",
   "scope": {
     "market": "US",
     "route": "US-short",
@@ -52,9 +52,9 @@
       "insufficient_data": 4
     },
     "state_counts": {
-      "none": 1600,
-      "warning": 738,
-      "chasing_extreme": 66
+      "none": 2100,
+      "warning": 259,
+      "chasing_extreme": 45
     },
     "coverage_exactly_matches_full_candidate_set": true,
     "real_ohlcv_source_consumed": true

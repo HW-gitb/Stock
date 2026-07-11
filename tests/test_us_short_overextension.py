@@ -24,8 +24,8 @@ _ACT = ROOT / "presets" / "us_short_action_table_contract_20260620.json"
 # >=3 parabolic conditions (vertical_run + daily_move + volume_climax + far_above_all_mas)
 _CHASING = {"close": 120.0, "ma5": 110.0, "ma10": 105.0, "ma20": 100.0, "atr": 2.0,
             "daily_change": 6.0, "vol_ratio": 3.0, "vertical_run": True, "weak_retrace": False}
-# mild over-MA10, trend intact, no parabolic conditions met
-_WARNING = {"close": 104.0, "ma5": 101.0, "ma10": 101.0, "ma20": 100.0, "atr": 2.0,
+# mild over-MA10 at the k1 boundary, trend intact, no parabolic conditions met
+_WARNING = {"close": 104.5, "ma5": 103.0, "ma10": 101.0, "ma20": 100.0, "atr": 2.0,
             "daily_change": 1.0, "vol_ratio": 1.0, "vertical_run": False, "weak_retrace": False}
 
 
@@ -52,6 +52,23 @@ class ChasingExtremeTests(unittest.TestCase):
         self.assertEqual(out["conditions_met"], ox.CHASING_MIN_CONDITIONS - 1)
         self.assertNotEqual(out["overextension_state"], "chasing_extreme")
 
+    def test_three_conditions_below_k2_falls_to_warning_not_chasing(self):
+        # REVERSE-FAILURE: K conditions alone are no longer enough.  This is exactly at the warning k1
+        # boundary but only 1.75 ATR above MA10, below the new 2.50-ATR selection-side k2 gate.
+        m = {**_WARNING, "daily_change": 4.0, "vol_ratio": 2.5, "vertical_run": True}
+        out = ox.classify_overextension(m)
+        self.assertEqual(out["conditions_met"], ox.CHASING_MIN_CONDITIONS)
+        self.assertEqual(out["overextension_state"], "warning")
+        self.assertFalse(out["strips_theme_score"])
+
+    def test_chasing_k2_boundary_is_inclusive(self):
+        # z10 == k2 exactly, with >=K conditions, is chasing: both k1/k2 use >= semantics.
+        m = {"close": 106.0, "ma5": 105.0, "ma10": 101.0, "ma20": 100.0, "atr": 2.0,
+             "daily_change": 4.0, "vol_ratio": 2.5, "vertical_run": True, "weak_retrace": False}
+        out = ox.classify_overextension(m)
+        self.assertEqual((m["close"] - m["ma10"]) / m["atr"], ox.CHASING_MA10_ATR)
+        self.assertEqual(out["overextension_state"], "chasing_extreme")
+
 
 class WarningTests(unittest.TestCase):
     def test_warning_is_execution_side_and_keeps_theme_score(self):
@@ -61,6 +78,29 @@ class WarningTests(unittest.TestCase):
         self.assertTrue(out["execution_flags"]["force_pullback"])
         self.assertTrue(out["execution_flags"]["reduce_size"])
         self.assertTrue(out["execution_flags"]["raise_rr_gate"])
+
+    def test_warning_k1_boundary_is_inclusive(self):
+        out = ox.classify_overextension(_WARNING)
+        self.assertEqual((_WARNING["close"] - _WARNING["ma10"]) / _WARNING["atr"], ox.WARNING_MA10_ATR)
+        self.assertEqual(out["overextension_state"], "warning")
+
+    def test_old_one_atr_band_is_no_longer_warning(self):
+        # z10=1.50 sits in the retired [1.0, 1.75) warning band and must now stay unflagged.
+        m = {**_WARNING, "close": 104.0}
+        self.assertEqual((m["close"] - m["ma10"]) / m["atr"], 1.5)
+        self.assertEqual(ox.classify_overextension(m)["overextension_state"], "none")
+
+    def test_stretched_but_non_ladder_is_not_warning(self):
+        # A MA10 stretch without the design-required MA5>MA10>MA20 trend ladder is not a mild warning.
+        m = {**_WARNING, "ma5": 105.0}
+        self.assertEqual(ox.classify_overextension(m)["overextension_state"], "none")
+
+    def test_nonfinite_trend_ma_blocks_warning(self):
+        # Any unavailable trend-ladder member must fail closed to no warning, never be treated as a safe ladder.
+        for field, bad in (("ma5", None), ("ma10", float("nan")), ("ma20", float("inf"))):
+            with self.subTest(field=field):
+                m = {**_WARNING, field: bad}
+                self.assertEqual(ox.classify_overextension(m)["overextension_state"], "none")
 
     def test_none_when_not_extended(self):
         m = {"close": 100.0, "ma5": 100.0, "ma10": 100.0, "ma20": 100.0, "atr": 2.0,
@@ -112,6 +152,15 @@ class ContractConformanceTests(unittest.TestCase):
     def test_all_outputs_are_frozen_vocab(self):
         for m in (_CHASING, _WARNING, {"close": 100.0, "ma10": 100.0, "atr": 2.0}):
             self.assertIn(ox.classify_overextension(m)["overextension_state"], ox.OVEREXTENSION_STATES)
+
+    def test_warning_with_k_conditions_is_a_valid_closed_world_result(self):
+        # k2, not the raw condition count, now distinguishes warning from chasing; downstream validators must
+        # accept the honest warning result that a sub-k2 three-condition ticker produces.
+        out = ox.classify_overextension({**_WARNING, "daily_change": 4.0, "vol_ratio": 2.5,
+                                         "vertical_run": True})
+        self.assertEqual(out["overextension_state"], "warning")
+        self.assertEqual(out["conditions_met"], ox.CHASING_MIN_CONDITIONS)
+        self.assertIs(ox.validate_overextension_result(out), out)
 
 
 class HugeIntHardeningTests(unittest.TestCase):

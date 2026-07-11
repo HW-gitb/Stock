@@ -177,7 +177,7 @@
         },
         {
           "number": 36,
-          "title": "过热分档阈值（`overextension_warning` 的 k1；`chasing_extreme` 的 k2/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）"
+          "title": "过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）"
         },
         {
           "number": 37,

@@ -49,7 +49,7 @@ _ALL_ELIGIBLE = ("AAPL", "MSFT", "JPM", "GOOG", "AMZN")
 _PARA_CLOSES = [106 + i for i in range(24)] + [135]
 _PARA_VOLS = [1_000_000.0] * 24 + [3_000_000.0]
 _ALT_CLOSES = [100, 101] * 13
-_WARN_CLOSES = [100.0] * 16 + [101.0, 100.8, 101.5, 102.0, 102.6]
+_WARN_CLOSES = [100.0] * 16 + [101.0, 100.8, 101.5, 102.0, 103.5]
 _THIN_CLOSES = [100.0, 101.0, 102.0]
 
 

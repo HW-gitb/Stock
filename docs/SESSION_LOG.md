@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)
+
+- **Verdict/Action**: PASS（未提交、留主树待 `提交`）。亲验非信 Codex：classify 的 k2 门（`len(met)>=3 AND close>=ma10+k2*atr`）+ warning 趋势梯（`close>ma5>ma10>ma20 AND close>=ma10+k1*atr`）+ `>=` 边界 + 缺 MA fail-closed 全正确；闭世界 validator 旧「非 chasing 不得携 ≥K 条件」不变式已正确放开（带理由、保留 chasing⟹≥K 方向）。**顶下那条「Independent review PASS」系 Codex 自审的 current-diff agent（只读 diff、引 Codex 自身测数），非 role-split 独立审查；本条为权威独立审查。**
+- **Required**: 无。§13.1 #36 forward-prior 校准；design §4.3 + register 单源 + lifecycle governance 2 行注册均改；regime-adaptive 变体显式推迟另开 slice。
+- **Verify**: 亲跑 3 改动 test 模块 `86 OK` + 全离线 `test_us_short*.py` **exit 0 / 0 FAIL**（非信 Codex 4198）；消费端 ripple grep=0（无人据 conditions_met 判定、剥赛道只认 strips_theme_score bool → 放开不变式安全）；反向控齐（sub-k2 ≥K→warning/none、非梯→非 warning、缺 MA fail-closed、k1/k2 `>=` 边界、warning 携 ≥K 过 validator）；count 位移 259/45 = 我先前预测；design 把「趋势完好」正确落成梯。纯选股逻辑校准 + 证据基础我已独立核实（P85=1.756）→ 未另起 §6a agent。
+- **Next**: 待用户 `提交`。
+
+## 2026-07-11 — Independent review PASS (US-short §4.3 overextension §13.1 #36 prior)
+
+- **Verdict/Action**: PASS. Current-diff-only selection-level review found the calibrated `k1=1.75` warning ladder, `k2=2.50` + ≥K chasing gate, inclusive boundaries, and the resulting ≥K-but-sub-k2 warning/none validator behavior internally consistent. No regime-adaptive behavior entered this slice.
+- **Required**: 无。
+- **Verify**: Reviewer read only the scoped diff and requirement; no file edit, provider/live/network path, or large test pack. Main-thread evidence remains focused 139 OK, full `test_us_short*.py` 4198 OK (1 skipped), doc process 60 OK, and regenerated local-packet tally `none=2100 / warning=259 / chasing_extreme=45`.
+- **Next**: Codex：待命。
+
+## 2026-07-11 — Codex self-review complete, awaiting independent review (US-short §4.3 overextension §13.1 #36 prior)
+
+- **Verdict/Action**: Implemented fixed forward-prior calibration only; no regime-adaptive variant. `k1=1.75` now requires the MA5>MA10>MA20 intact-trend ladder; `k2=2.50` now combines with the existing ≥3 parabolic conditions before a selection-side theme strip. A ≥K but sub-k2 result can remain warning/none and is accepted by the shared closed-world result validator.
+- **Required**: Independent selection-level review of the current diff, especially k2-before-strip, warning ladder/non-finite fail-closed behavior, ≥ boundaries, and the producer/consumer validator consequence. No provider/live/network/DataHub/A-share/broker path was added.
+- **Verify**: red 8 focused assertions before implementation; focused 139 OK; offline full-universe summary regenerated from the existing 2026-07-02 local OHLCV packet (`none=2100`, `warning=259`, `chasing_extreme=45`); `reviewer_probes/overext_z10_verify.local.py` recomputed P85=1.756 and the gross threshold distribution; full `test_us_short*.py` 4198 OK (1 skipped); doc process 60 OK.
+- **Pre-Codex self-review**: A-F checked. A: classifier plus shared validator/producer/consumer contract and #36 schema-preset-design triangle covered; B: old behavior grep limited to explicit historical evidence, no live authority drift; C: added sub-k2 ≥K, non-ladder, non-finite-MA, and exact-≥ boundary reverse controls; E: no CURRENT/route-doc transient state added; F: `git diff --check` clean (CRLF notices only). Lightweight independent review requested after this entry; full test pack run once after the schema/preset correction.
+- **Next**: Independent reviewer: current-diff-only selection-level review; do not modify files or run provider/live paths.
+
 ## 2026-07-11 — Claude 审查 PASS + 提交 + merge (US-short queue 类别4：Pass2 漏斗 selection/PIT/budget)
 
 - **Verdict/Action**: PASS + 提交（detached）+ merge 入 master。Codex P2 修复正确：共享 `data_context_source_packet.run_packet` 参数化为 frozen `ProjectionBindingExpectations`（默认 `FULL_CANDIDATE_LIVE` 严格；legacy sibling + CLI 传 `PROJECTION_INPUTS_BINDING`）；两常量 frozen 模块级、无 CLI/env 注入面、默认 fail-closed。A/B/C/D §6a-HELD 保持，P2 legacy-sibling 回归已闭。
