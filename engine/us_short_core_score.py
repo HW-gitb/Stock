@@ -47,14 +47,26 @@ def profile_weights(profile=PRIMARY_PROFILE):
     return dict(_PROFILES[profile]["weights"])
 
 
-def core_score(blocks, profile=PRIMARY_PROFILE, risk_downgrade_points=0.0, neutral_block=NEUTRAL_BLOCK):
+def core_score(
+    blocks,
+    profile=PRIMARY_PROFILE,
+    risk_downgrade_points=0.0,
+    neutral_block=NEUTRAL_BLOCK,
+    *,
+    strip_theme_score=False,
+):
     """§4.2 core_score = Σ weight[c] × block[c] − risk_downgrade, over momentum / theme / catalyst.
 
     `blocks` = {component: 0-100 value}; a missing or malformed (non-number / bool / NaN) block scores
     `neutral_block` and is listed in `missing_blocks` — the present blocks' weights are NOT
     re-normalised. A real block is clamped to 0-100. A malformed `risk_downgrade_points` fails closed
-    to 0; the final score is clamped >= 0 (never negative). Returns {core_score, profile, weights,
-    blocks_used, missing_blocks, risk_downgrade}. Raises KeyError on an unknown profile (fail closed)."""
+    to 0; the final score is clamped >= 0 (never negative). `strip_theme_score=True` retains the
+    selected profile's weights but removes only its theme contribution, so a §4.3 chasing penalty can
+    never raise the score by reallocating theme weight. Returns {core_score, profile, weights,
+    blocks_used, missing_blocks, risk_downgrade}. Raises KeyError on an unknown profile and ValueError
+    on a non-bool strip flag (fail closed)."""
+    if type(strip_theme_score) is not bool:
+        raise ValueError("strip_theme_score must be exact bool")
     w = profile_weights(profile)                          # raises on an unknown profile
     nb = _finite_number(neutral_block)                    # the neutral fallback is a public input too:
     if nb is None or not (_BLOCK_MIN <= nb <= _BLOCK_MAX):  # malformed / NaN / Inf / out-of-domain override
@@ -71,5 +83,7 @@ def core_score(blocks, profile=PRIMARY_PROFILE, risk_downgrade_points=0.0, neutr
     rdv = _finite_number(risk_downgrade_points)
     rd = max(0.0, rdv) if rdv is not None else 0.0        # malformed / negative risk_downgrade → 0
     raw = sum(w[c] * used[c] for c in CORE_COMPONENTS)
+    if strip_theme_score:
+        raw -= w["theme"] * used["theme"]
     return {"core_score": max(0.0, raw - rd), "profile": profile, "weights": w,
             "blocks_used": used, "missing_blocks": missing, "risk_downgrade": rd}

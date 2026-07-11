@@ -383,7 +383,8 @@ def _overext_map(*, chasing=(), warning=(), targets=("AAPL", "MSFT", "JPM")):
 
 def _official_kwargs():
     # 3 eligible; JPM is Pass2-excluded (partial offering coverage) → pass2_clean = {AAPL, MSFT}. theme=90 (>momentum
-    # 50) so the theme_off strip visibly lowers a chasing ticker's core_score; empty grades/news keep risk/catalyst clean.
+    # 50) so removing only its theme contribution visibly lowers a chasing ticker's core_score; empty grades/news
+    # keep risk/catalyst clean.
     return dict(
         candidate_artifact=_candidate_artifact(("AAPL", "MSFT", "JPM")),
         expected_decision_date=_DECISION_DATE,
@@ -1179,13 +1180,15 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         rows = comps["per_ticker_analysis"]
         base_per = base["data_context"]["selection_inputs"]["per_ticker"]
 
-        # AAPL chasing: core_score recomputed under theme_off (strictly LOWER than the un-stripped run since theme was
-        # boosting it), theme_momentum zeroed, analysis row carries theme_off + the chasing tier.
-        self.assertAlmostEqual(per["AAPL"]["core_score"],
-                               core_score(rows["AAPL"]["score_blocks"], "theme_off")["core_score"])
+        # AAPL chasing: its balanced profile remains intact while only the theme contribution is removed; the
+        # overextension tier rides to analysis so the selection/analysis scores can reconcile.
+        self.assertAlmostEqual(
+            per["AAPL"]["core_score"],
+            core_score(rows["AAPL"]["score_blocks"], "balanced", strip_theme_score=True)["core_score"],
+        )
         self.assertLess(per["AAPL"]["core_score"], base_per["AAPL"]["core_score"])
         self.assertEqual(per["AAPL"]["theme_momentum_score"], 0.0)
-        self.assertEqual(rows["AAPL"]["scoring_profile"], "theme_off")
+        self.assertEqual(rows["AAPL"]["scoring_profile"], "balanced")
         self.assertEqual(rows["AAPL"]["overextension"]["overextension_state"], "chasing_extreme")
 
         # MSFT warning: does NOT strip — core/theme_momentum/profile unchanged vs base; its analysis row carries the
@@ -1197,7 +1200,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         self.assertIs(rows["MSFT"]["overextension"]["execution_flags"]["force_pullback"], True)
 
     def test_overextension_reconciliation_holds_through_analyze_rows(self):
-        # the 承重接缝 end-to-end through the REAL data_context: the chasing analysis row (theme_off) + its selection
+        # the 承重接缝 end-to-end through the REAL data_context: the chasing analysis row (run profile retained, theme contribution stripped) + its selection
         # record (the stripped selection score) run through analyze_rows WITHOUT the 1e-6 same-run-fork raise.
         comps = assemble_official_context_components_from_resolved_pass2_sources(
             **_official_kwargs(), overextension_by_ticker=_overext_map(chasing=["AAPL"]))
@@ -1209,7 +1212,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
         }
         analyzed = analyze_rows(
             [row], market_axis_regimes={"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"})["rows"][0]
-        self.assertEqual(analyzed["score"]["profile"], "theme_off")
+        self.assertEqual(analyzed["score"]["profile"], "balanced")
         self.assertAlmostEqual(analyzed["score"]["core_score"], per["core_score"])
 
     def test_no_overextension_map_leaves_rows_without_overextension_field(self):

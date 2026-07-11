@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-11 — Codex repair complete, awaiting Claude review (US-short R3 issue 5: chasing penalty score amplification)
+
+- **Verdict/Action**: repaired only `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION`: `chasing_extreme` now preserves the active profile and removes only its theme contribution; `theme_off` remains the shadow-only attribution profile. Selection and analysis derive the same strip from the validated overextension record.
+- **Required**: no known code residual; independent Claude review is required before any commit. Full-suite revalidation remains blocked in this worktree by missing vendored `rpds.rpds` / resulting pre-existing account-CLI failures.
+- **Verify**: red reverse control reproduced `100.0 > 68.5`; focused core/seam/weekend analysis `111 OK`; binding JSON parse and `py_compile` OK; doc/route pack `58 OK`, with two vendored-`rpds` schema-runtime failures. Attempted data-context `87` and full US-short `3007` runs are likewise environment-invalid, not passing evidence.
+- **Pre-Codex self-review**: A-F checked. A: all four frozen profiles plus selection/analysis reconciliation covered; B: active code/binding/design/test surfaces updated, historical SESSION_LOG retained, and `CURRENT` remains untouched because it may contain settled facts only; C: low-theme/high-momentum reverse control and non-bool flag rejection; E: no `CURRENT` transient update; F: `py_compile`, JSON parse, and `git diff --check` clean (CRLF notices only). Lightweight self-review timed out once; retry had no diff evidence, so this is the documented main-thread checklist fallback.
+- **Next**: Claude Code：审查
+
 ## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)
 
 - **Verdict/Action**: PASS（未提交、留主树待 `提交`）。亲验非信 Codex：classify 的 k2 门（`len(met)>=3 AND close>=ma10+k2*atr`）+ warning 趋势梯（`close>ma5>ma10>ma20 AND close>=ma10+k1*atr`）+ `>=` 边界 + 缺 MA fail-closed 全正确；闭世界 validator 旧「非 chasing 不得携 ≥K 条件」不变式已正确放开（带理由、保留 chasing⟹≥K 方向）。**顶下那条「Independent review PASS」系 Codex 自审的 current-diff agent（只读 diff、引 Codex 自身测数），非 role-split 独立审查；本条为权威独立审查。**

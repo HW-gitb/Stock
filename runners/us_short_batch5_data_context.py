@@ -918,8 +918,8 @@ def _official_per_ticker_analysis(
         if scoped_overextension is not None:
             # §4.3 (cut 2c): the per-ticker overextension tier rides onto the analysis row so _analyze_one applies a
             # `warning` force-pullback. A `chasing_extreme` tier is inert HERE (empty execution_flags) — its effect
-            # was the SELECTION theme-strip already applied in compose (Slice B), and this row already carries the
-            # theme_off scoring_profile that reconciles the stripped selection score.
+            # was the SELECTION theme-strip already applied in compose (Slice B). This same validated record makes
+            # _analyze_one remove only the theme contribution when it recomputes the selection score.
             official_row["overextension"] = scoped_overextension[ticker]
         out[ticker] = official_row
     return out

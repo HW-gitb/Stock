@@ -415,7 +415,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         rows = components["per_ticker_analysis"]
         self.assertEqual(selection["AAPL"]["theme_momentum_score"], 0.0)
-        self.assertEqual(rows["AAPL"]["scoring_profile"], "theme_off")
+        self.assertEqual(rows["AAPL"]["scoring_profile"], "balanced")
         self.assertEqual(rows["AAPL"]["overextension"]["overextension_state"], "chasing_extreme")
         self.assertEqual(rows["MSFT"]["overextension"]["overextension_state"], "warning")
         self.assertTrue(rows["MSFT"]["overextension"]["execution_flags"]["raise_rr_gate"])

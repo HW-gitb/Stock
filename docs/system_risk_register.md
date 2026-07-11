@@ -33,6 +33,13 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION - a `chasing_extreme` selection penalty could raise the core score
+
+- **Status / severity**: **in_progress — repaired pending independent Claude Code review; P1**. This is a selection-ranking correction only; it neither authorizes provider/live/network activity nor changes the manual-only or broker boundary.
+- **Finding / materiality**: the per-ticker chasing path reused shadow-only `theme_off` (61.54/0/38.46), which reallocates the removed 35% theme weight to momentum and catalyst. A low-theme/high-momentum-catalyst candidate therefore rose from `68.5` under balanced to `100.0` after the supposed penalty, changing rank/Top15 eligibility in the wrong direction.
+- **Repair / boundary**: `core_score(..., strip_theme_score=True)` retains the active profile and removes only its theme contribution; `compose_score_inputs` applies it only after the validated `chasing_extreme` flag and still zeros `theme_momentum_score`. The same validated record reaches analysis, which recomputes with the identical strip and preserves the no-fork assertion. Whole-track `theme_off` remains the §12.2 shadow attribution baseline. No weights, provider, runner behavior, emit mode, order path, or other R3 queue item changed.
+- **Evidence / closure**: red reverse test reproduced `100.0 > 68.5`; green seam `35 OK`, weekend analysis `58 OK`, and core score `16 OK`. The attempted data-context (`87`) and complete US-short (`3007`) packs are invalid in this worktree because tracked vendored `jsonschema` cannot import `rpds.rpds`; the latter also has pre-existing account/CLI failures. Closure requires an independent Claude Code review and a complete pack under a working repository Python runtime.
+
 ### R-USSHORT-REVIEWQ-CAT2-OVEREXTENSION-CONTRACT-PIT-GAPS - queue category 2 review found the §4.3 overextension projection loses its clock/source binding at consumption, accepts contradictory state/effect combinations, and accepts impossible kept OHLC bars as scored
 
 - **Status**: **resolved — Claude independent review PASS + committed** (2026-07-11). NOTE: the earlier detailed register entry for this item was LOST when the main tree docs were reorganized to separate the concurrent category-6/7 work; this entry is re-authored from the reviewed code + the SESSION_LOG repair/review entries. Severity **P1** (selection-ranking core_score/Top15 + PIT/source-binding + execution/output integrity); research-only, not a full-size/live authorization finding.
