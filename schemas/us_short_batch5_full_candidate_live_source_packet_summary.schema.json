@@ -18,9 +18,11 @@
     "pass2_target_universe",
     "endpoint_call_budget",
     "endpoint_results",
+    "raw_capture_manifest",
     "storage",
     "source_artifacts",
     "source_packet",
+    "replay_source_capture",
     "prohibited_claims",
     "limitations"
   ],
@@ -28,7 +30,12 @@
     "schema_name": { "const": "us_short_batch5_full_candidate_live_source_packet_summary" },
     "schema_version": { "const": "1.0.0" },
     "schema_ref": { "const": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json" },
-    "authorization_ref": { "const": "user_chat_20260706_us_short_full_candidate_live_source_packet" },
+    "authorization_ref": {
+      "enum": [
+        "user_chat_20260706_us_short_full_candidate_live_source_packet",
+        "offline_replay_from_bound_source_capture"
+      ]
+    },
     "generated_at": { "type": "string", "minLength": 1 },
     "scope": {
       "type": "object",
@@ -37,11 +44,13 @@
         "market",
         "route",
         "batch",
+        "execution_mode",
         "purpose",
         "status",
         "network_access_performed",
         "provider_calls_performed",
         "raw_payload_storage_performed",
+        "offline_replay_non_emittable",
         "resolved_source_artifacts_written",
         "corporate_action_capture_written",
         "source_packet_written",
@@ -61,16 +70,24 @@
         "market": { "const": "US" },
         "route": { "const": "US-short" },
         "batch": { "const": "batch5" },
-        "purpose": { "const": "full_candidate_live_pass2_resolved_source_packet" },
+        "execution_mode": { "enum": ["live_provider_fetch", "offline_replay"] },
+        "purpose": {
+          "enum": [
+            "full_candidate_live_pass2_resolved_source_packet",
+            "full_candidate_offline_replay_source_packet"
+          ]
+        },
         "status": {
           "enum": [
             "source_packet_built_preflight_only",
-            "source_packet_built_and_data_context_written"
+            "source_packet_built_and_data_context_written",
+            "offline_replay_source_packet_built_preflight_only"
           ]
         },
-        "network_access_performed": { "const": true },
-        "provider_calls_performed": { "const": true },
+        "network_access_performed": { "type": "boolean" },
+        "provider_calls_performed": { "type": "boolean" },
         "raw_payload_storage_performed": { "const": true },
+        "offline_replay_non_emittable": { "type": "boolean" },
         "resolved_source_artifacts_written": { "const": true },
         "corporate_action_capture_written": { "const": true },
         "source_packet_written": { "const": true },
@@ -219,6 +236,8 @@
       "required": [
         "max_total_endpoint_calls",
         "actual_total_endpoint_calls",
+        "max_total_http_attempts",
+        "actual_total_http_attempts",
         "sec_ticker_reference_calls",
         "fmp_grades_calls",
         "sec_submissions_calls",
@@ -234,6 +253,8 @@
       "properties": {
         "max_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
         "actual_total_endpoint_calls": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "max_total_http_attempts": { "type": "integer", "minimum": 1, "maximum": 20000 },
+        "actual_total_http_attempts": { "type": "integer", "minimum": 1, "maximum": 20000 },
         "sec_ticker_reference_calls": { "const": 1 },
         "fmp_grades_calls": { "type": "integer", "minimum": 0 },
         "sec_submissions_calls": { "type": "integer", "minimum": 0 },
@@ -341,6 +362,68 @@
             { "type": "null" }
           ]
         }
+      }
+    },
+    "replay_source_capture": {
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "source_summary_path",
+            "source_summary_sha256",
+            "source_raw_root",
+            "source_observed_at",
+            "source_expected_decision_date",
+            "source_as_of",
+            "raw_wrapper_count",
+            "source_capture_manifest_sha256",
+            "non_emittable"
+          ],
+          "properties": {
+            "source_summary_path": { "type": "string", "minLength": 1, "not": { "pattern": "\\.\\." } },
+            "source_summary_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "source_raw_root": { "type": "string", "pattern": "^provider_samples/", "not": { "pattern": "\\.\\." } },
+            "source_observed_at": { "type": "string", "minLength": 1 },
+            "source_expected_decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+            "source_as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+            "raw_wrapper_count": { "type": "integer", "minimum": 1, "maximum": 20000 },
+            "source_capture_manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "non_emittable": { "const": true }
+          }
+        }
+      ]
+    },
+    "raw_capture_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["endpoint_wrapper_sha256", "manifest_sha256"],
+      "properties": {
+        "endpoint_wrapper_sha256": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["provider_id", "endpoint_family", "symbol", "sha256"],
+            "properties": {
+              "provider_id": { "enum": ["sec_edgar", "financial_modeling_prep", "massive"] },
+              "endpoint_family": {
+                "enum": ["company_tickers_mapping", "submissions", "grades", "reference_news", "stock_splits", "dividends"]
+              },
+              "symbol": {
+                "anyOf": [
+                  { "type": "string", "pattern": "^[A-Z][A-Z0-9.:-]*$" },
+                  { "type": "null" }
+                ]
+              },
+              "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+            }
+          }
+        },
+        "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
       }
     },
     "prohibited_claims": {
@@ -453,5 +536,48 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "scope": { "properties": { "execution_mode": { "const": "live_provider_fetch" } } } }
+      },
+      "then": {
+        "properties": {
+          "authorization_ref": { "const": "user_chat_20260706_us_short_full_candidate_live_source_packet" },
+          "scope": {
+            "properties": {
+              "purpose": { "const": "full_candidate_live_pass2_resolved_source_packet" },
+              "network_access_performed": { "const": true },
+              "provider_calls_performed": { "const": true },
+              "offline_replay_non_emittable": { "const": false }
+            }
+          },
+          "replay_source_capture": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "scope": { "properties": { "execution_mode": { "const": "offline_replay" } } } }
+      },
+      "then": {
+        "properties": {
+          "authorization_ref": { "const": "offline_replay_from_bound_source_capture" },
+          "scope": {
+            "properties": {
+              "purpose": { "const": "full_candidate_offline_replay_source_packet" },
+              "status": { "const": "offline_replay_source_packet_built_preflight_only" },
+              "network_access_performed": { "const": false },
+              "provider_calls_performed": { "const": false },
+              "offline_replay_non_emittable": { "const": true },
+              "data_context_written": { "const": false },
+              "context_components_written": { "const": false }
+            }
+          },
+          "replay_source_capture": { "type": "object" }
+        }
+      }
+    }
+  ]
 }

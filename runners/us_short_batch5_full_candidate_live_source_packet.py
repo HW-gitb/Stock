@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -67,10 +69,36 @@ FMP_FREE_DAILY_GRADE_CALL_CAP = 250   # mirror the preflight; the funnel target 
 # authorizing the matching budget. Cross-checked against the preflight formula by test.
 _SEC_TICKER_MAPPING_CALLS = 1
 _PASS2_ENDPOINT_CALLS_PER_TARGET = 5
+_EXECUTION_MODE_LIVE_PROVIDER_FETCH = "live_provider_fetch"
+_EXECUTION_MODE_OFFLINE_REPLAY = "offline_replay"
 
 
 class FullCandidateLiveSourcePacketError(ValueError):
     """The full-candidate live Pass2 source packet cannot be fetched or assembled safely."""
+
+
+@dataclass
+class HttpAttemptBudget:
+    """Physical HTTP-attempt cap, distinct from the one-record-per-endpoint logical budget.
+
+    A retry is allowed only when it leaves capacity for every still-reserved logical endpoint. This keeps a 429 from
+    silently consuming the final planned call slot; more retries require an explicitly wider physical-attempt cap.
+    """
+
+    max_total_http_attempts: int
+    used: int = 0
+
+    def consume_required_attempt(self) -> None:
+        if self.used >= self.max_total_http_attempts:
+            raise FullCandidateLiveSourcePacketError(
+                "physical HTTP-attempt budget would be exceeded before required endpoint fetch")
+        self.used += 1
+
+    def consume_retry_if_available(self, *, reserved_required_attempts: int) -> bool:
+        if self.used + 1 + reserved_required_attempts > self.max_total_http_attempts:
+            return False
+        self.used += 1
+        return True
 
 
 def iso_now() -> str:
@@ -368,21 +396,28 @@ def _fetch_with_retry(
     max_retries: int,
     retry_backoff_seconds: float,
     retry_stats: dict[str, int],
+    attempt_budget: HttpAttemptBudget,
+    reserved_required_attempts: int,
 ) -> sample_validation.FetchRecord:
     """Fetch one endpoint with bounded retry ONLY on HTTP 429 (rate-limit). A 402 paywall / 404 / any non-429
     outcome is returned as-is and NOT retried — retrying a paywall is pointless, and it makes a rate-limit
     (recoverable by waiting) observably distinct from a paywall/quota (not). Retries happen INSIDE this call (each
     physical attempt overwrites the same raw path); only the FINAL FetchRecord is returned, so the caller's LOGICAL
-    endpoint-record count — and the authorized `max_total_endpoint_calls` budget — is UNCHANGED (retries are a
-    bounded multiplier on the SAME authorized targets, never a widening of the target set). `pace_seconds` spaces
-    consecutive endpoints AFTER the final attempt to stay under the free-tier rate. `retry_stats["used"]` accumulates
-    total physical retries for honest reporting."""
+    endpoint-record count stays unchanged. Every initial call and retry consumes the separately explicit physical
+    HTTP-attempt budget; a retry is skipped when it would steal capacity reserved for the remaining logical calls.
+    `pace_seconds` spaces consecutive endpoints AFTER the final attempt to stay under the free-tier rate.
+    `retry_stats["used"]` accumulates actual physical retries for reporting."""
+    attempt_budget.consume_required_attempt()
     record = sample_validation.fetch_and_store(
         client, url=url, provider_id=provider_id, endpoint_family=endpoint_family,
         symbol=symbol, raw_root=raw_root, headers=headers,
     )
     attempt = 0
     while (not record.ok) and record.http_status == 429 and attempt < max_retries:
+        if not attempt_budget.consume_retry_if_available(
+            reserved_required_attempts=reserved_required_attempts,
+        ):
+            break
         time.sleep(retry_backoff_seconds * (2 ** attempt))   # exponential backoff on rate-limit
         retry_stats["used"] += 1
         attempt += 1
@@ -405,16 +440,27 @@ def _fetch_live_records(
     massive_env: sample_validation.EnvValue,
     sec_sleep_seconds: float,
     max_total_endpoint_calls: int,
+    max_total_http_attempts: int,
     provider_pace_seconds: float,
     max_retries_per_call: int,
     retry_backoff_seconds: float,
     fetch_fmp_grades: bool,
-) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int]:
+) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int, int]:
     records: list[sample_validation.FetchRecord] = []
     retry_stats = {"used": 0}
+    attempt_budget = HttpAttemptBudget(max_total_http_attempts=max_total_http_attempts)
+
+    def _fetch_required(**kwargs: Any) -> sample_validation.FetchRecord:
+        attempt_budget.consume_required_attempt()
+        return sample_validation.fetch_and_store(client, **kwargs)
+
+    def _reserved_after_current() -> int:
+        # The forecast is deliberately conservative when a CIK is missing: preserving all planned endpoints is safer
+        # than spending an unapproved retry merely because a later SEC submission might be skipped.
+        return max_total_endpoint_calls - (len(records) + 1)
+
     _assert_endpoint_budget(records, max_total_endpoint_calls)
-    mapping = sample_validation.fetch_and_store(
-        client,
+    mapping = _fetch_required(
         url=sample_validation.sec_url("company_tickers_mapping"),
         provider_id="sec_edgar",
         endpoint_family="company_tickers_mapping",
@@ -444,6 +490,8 @@ def _fetch_live_records(
                     max_retries=max_retries_per_call,
                     retry_backoff_seconds=retry_backoff_seconds,
                     retry_stats=retry_stats,
+                    attempt_budget=attempt_budget,
+                    reserved_required_attempts=_reserved_after_current(),
                 )
             )
 
@@ -452,8 +500,7 @@ def _fetch_live_records(
             _assert_endpoint_budget(records, max_total_endpoint_calls)
             time.sleep(sec_sleep_seconds)
             records.append(
-                sample_validation.fetch_and_store(
-                    client,
+                _fetch_required(
                     url=sample_validation.sec_url("submissions", cik10),
                     provider_id="sec_edgar",
                     endpoint_family="submissions",
@@ -477,6 +524,8 @@ def _fetch_live_records(
                 max_retries=max_retries_per_call,
                 retry_backoff_seconds=retry_backoff_seconds,
                 retry_stats=retry_stats,
+                attempt_budget=attempt_budget,
+                reserved_required_attempts=_reserved_after_current(),
             )
         )
 
@@ -494,6 +543,8 @@ def _fetch_live_records(
                 max_retries=max_retries_per_call,
                 retry_backoff_seconds=retry_backoff_seconds,
                 retry_stats=retry_stats,
+                attempt_budget=attempt_budget,
+                reserved_required_attempts=_reserved_after_current(),
             )
         )
 
@@ -511,9 +562,14 @@ def _fetch_live_records(
                 max_retries=max_retries_per_call,
                 retry_backoff_seconds=retry_backoff_seconds,
                 retry_stats=retry_stats,
+                attempt_budget=attempt_budget,
+                reserved_required_attempts=_reserved_after_current(),
             )
         )
-    return records, cik_by_symbol, retry_stats["used"]
+    validator = getattr(client, "assert_all_loaded_consumed", None)
+    if callable(validator):
+        validator()
+    return records, cik_by_symbol, retry_stats["used"], attempt_budget.used
 
 
 def _record_map(records: list[sample_validation.FetchRecord]) -> dict[tuple[str, str, str | None], sample_validation.FetchRecord]:
@@ -865,6 +921,48 @@ def _endpoint_count(records: list[sample_validation.FetchRecord], provider: str,
     return sum(1 for record in records if record.provider_id == provider and record.endpoint_family == family)
 
 
+def _raw_capture_manifest(records: list[sample_validation.FetchRecord]) -> dict[str, Any]:
+    """Bind a live summary to the exact wrapper bytes that the provider fetch wrote.
+
+    The tracked summary carries only identities and SHA-256 values, never payload text or request URLs. Offline replay
+    validates every wrapper against this immutable capture manifest before it is allowed to re-enter assembly.
+    """
+    rows: list[dict[str, Any]] = []
+    for record in records:
+        raw_path = (ROOT / record.raw_sample_ref).resolve()
+        if not raw_path.is_file():
+            raise FullCandidateLiveSourcePacketError("captured raw wrapper disappeared before summary binding")
+        rows.append({
+            "provider_id": record.provider_id,
+            "endpoint_family": record.endpoint_family,
+            "symbol": record.symbol,
+            "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
+        })
+    rows.sort(key=lambda row: (row["provider_id"], row["endpoint_family"], row["symbol"] or ""))
+    identities = [(row["provider_id"], row["endpoint_family"], row["symbol"]) for row in rows]
+    if len(set(identities)) != len(identities):
+        raise FullCandidateLiveSourcePacketError("captured endpoint identities are not unique")
+    manifest_sha256 = hashlib.sha256(
+        json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {"endpoint_wrapper_sha256": rows, "manifest_sha256": manifest_sha256}
+
+
+def _require_bound_offline_replay_client(client: Any, replay_source_capture: dict[str, Any] | None) -> None:
+    """Keep the offline label reachable only through the manifest-verifying replay entry point.
+
+    ``run_full_candidate_live_source_packet`` remains the shared assembly engine, but its offline branch must not
+    accept an arbitrary HTTP-like client or caller-made provenance object.  Importing here avoids the replay module's
+    normal import cycle while making the executable boundary require the concrete, bound client.
+    """
+    from runners.us_short_batch5_replay_pass2_source_packet_from_raw import ReplayClient
+
+    if not isinstance(client, ReplayClient) or not client.is_bound_to_capture(replay_source_capture):
+        raise FullCandidateLiveSourcePacketError(
+            "offline replay requires the manifest-bound ReplayClient created by the replay entry point"
+        )
+
+
 def _build_summary(
     *,
     generated_at: str,
@@ -881,6 +979,10 @@ def _build_summary(
     endpoint_records: list[sample_validation.FetchRecord],
     retry_count_allowed: int,
     retry_count_used: int,
+    max_total_http_attempts: int,
+    actual_total_http_attempts: int,
+    execution_mode: str,
+    replay_source_capture: dict[str, Any] | None,
     cik_by_symbol: dict[str, str],
     raw_root: Path,
     summary_path: Path,
@@ -893,25 +995,35 @@ def _build_summary(
 ) -> dict[str, Any]:
     endpoint_errors = sum(1 for record in endpoint_records if not record.ok)
     eligible = list(candidate_artifact["eligible_tickers"])
+    offline_replay = execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY
     return {
         "schema_name": "us_short_batch5_full_candidate_live_source_packet_summary",
         "schema_version": "1.0.0",
         "schema_ref": "schemas/us_short_batch5_full_candidate_live_source_packet_summary.schema.json",
-        "authorization_ref": AUTHORIZATION_REF,
+        "authorization_ref": (
+            "offline_replay_from_bound_source_capture" if offline_replay else AUTHORIZATION_REF
+        ),
         "generated_at": generated_at,
         "scope": {
             "market": "US",
             "route": "US-short",
             "batch": "batch5",
-            "purpose": "full_candidate_live_pass2_resolved_source_packet",
+            "execution_mode": execution_mode,
+            "purpose": (
+                "full_candidate_offline_replay_source_packet"
+                if offline_replay else "full_candidate_live_pass2_resolved_source_packet"
+            ),
             "status": (
-                "source_packet_built_and_data_context_written"
+                "offline_replay_source_packet_built_preflight_only"
+                if offline_replay
+                else "source_packet_built_and_data_context_written"
                 if source_packet_run is not None
                 else "source_packet_built_preflight_only"
             ),
-            "network_access_performed": True,
-            "provider_calls_performed": True,
+            "network_access_performed": not offline_replay,
+            "provider_calls_performed": not offline_replay,
             "raw_payload_storage_performed": True,
+            "offline_replay_non_emittable": offline_replay,
             "resolved_source_artifacts_written": True,
             "corporate_action_capture_written": True,
             "source_packet_written": True,
@@ -969,6 +1081,8 @@ def _build_summary(
         "endpoint_call_budget": {
             "max_total_endpoint_calls": expected_total_call_budget,
             "actual_total_endpoint_calls": len(endpoint_records),
+            "max_total_http_attempts": max_total_http_attempts,
+            "actual_total_http_attempts": actual_total_http_attempts,
             "sec_ticker_reference_calls": _endpoint_count(endpoint_records, "sec_edgar", "company_tickers_mapping"),
             "fmp_grades_calls": _endpoint_count(endpoint_records, "financial_modeling_prep", "grades"),
             "sec_submissions_calls": _endpoint_count(endpoint_records, "sec_edgar", "submissions"),
@@ -979,9 +1093,10 @@ def _build_summary(
             "sec_cik_missing_count": len([symbol for symbol in eligible if symbol not in cik_by_symbol]),
             "retry_count_allowed": retry_count_allowed,
             "retry_count_used": retry_count_used,
-            "within_budget": len(endpoint_records) <= expected_total_call_budget,
+            "within_budget": actual_total_http_attempts <= max_total_http_attempts,
         },
         "endpoint_results": [_summarize_endpoint(record) for record in endpoint_records],
+        "raw_capture_manifest": _raw_capture_manifest(endpoint_records),
         "storage": {
             "raw_payload_root": _repo_rel(raw_root),
             "raw_payload_root_gitignored": True,
@@ -1024,6 +1139,7 @@ def _build_summary(
                 _repo_rel(context_components_output_path) if context_components_output_path is not None else None
             ),
         },
+        "replay_source_capture": replay_source_capture,
         "prohibited_claims": {
             "provider_selected": False,
             "full_market_download_performed": False,
@@ -1089,6 +1205,34 @@ def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
         raise FullCandidateLiveSourcePacketError("summary endpoint family counts do not equal actual calls")
     if budget["actual_total_endpoint_calls"] != len(summary["endpoint_results"]):
         raise FullCandidateLiveSourcePacketError("summary endpoint_results length does not equal actual calls")
+    if budget["actual_total_http_attempts"] != budget["actual_total_endpoint_calls"] + budget["retry_count_used"]:
+        raise FullCandidateLiveSourcePacketError("summary physical HTTP attempts do not equal logical calls plus retries")
+    if budget["actual_total_http_attempts"] > budget["max_total_http_attempts"]:
+        raise FullCandidateLiveSourcePacketError("summary physical HTTP-attempt budget exceeded")
+    manifest = summary["raw_capture_manifest"]
+    rows = manifest["endpoint_wrapper_sha256"]
+    manifest_identities = {(row["provider_id"], row["endpoint_family"], row["symbol"]) for row in rows}
+    endpoint_identities = {
+        (row["provider_id"], row["endpoint_family"], row["symbol"])
+        for row in summary["endpoint_results"]
+    }
+    if len(rows) != len(manifest_identities) or manifest_identities != endpoint_identities:
+        raise FullCandidateLiveSourcePacketError("raw capture manifest identities drift from endpoint results")
+    expected_manifest_sha256 = hashlib.sha256(
+        json.dumps(rows, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    if manifest["manifest_sha256"] != expected_manifest_sha256:
+        raise FullCandidateLiveSourcePacketError("raw capture manifest digest is inconsistent")
+    if summary["scope"]["execution_mode"] == _EXECUTION_MODE_OFFLINE_REPLAY:
+        capture = summary["replay_source_capture"]
+        clock = summary["decision_clock"]
+        if not isinstance(capture, dict) \
+                or capture.get("source_observed_at") != clock["observed_at"] \
+                or capture.get("source_expected_decision_date") != clock["expected_decision_date"] \
+                or capture.get("source_as_of") != clock["source_as_of"]:
+            raise FullCandidateLiveSourcePacketError(
+                "offline replay summary decision clock is not bound to the source capture"
+            )
 
 
 def _write_summary_validated(summary: dict[str, Any], summary_path: Path, sensitive_values: list[str]) -> None:
@@ -1215,13 +1359,26 @@ def run_full_candidate_live_source_packet(
     provider_pace_seconds: float = 0.0,
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
+    max_total_http_attempts: int | None = None,
+    execution_mode: str = _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
+    replay_source_capture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    if not confirm_user_authorization:
-        raise FullCandidateLiveSourcePacketError("full-candidate live provider execution requires explicit user authorization")
     if not (isinstance(max_retries_per_call, int) and not isinstance(max_retries_per_call, bool)
             and 0 <= max_retries_per_call <= _MAX_RETRIES_PER_CALL_CAP):
         raise FullCandidateLiveSourcePacketError(
             f"max_retries_per_call must be an int in [0, {_MAX_RETRIES_PER_CALL_CAP}]")
+    if execution_mode not in {_EXECUTION_MODE_LIVE_PROVIDER_FETCH, _EXECUTION_MODE_OFFLINE_REPLAY}:
+        raise FullCandidateLiveSourcePacketError("execution_mode must be live_provider_fetch or offline_replay")
+    if execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH and not confirm_user_authorization:
+        raise FullCandidateLiveSourcePacketError("full-candidate live provider execution requires explicit user authorization")
+    if execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY:
+        if run_data_context:
+            raise FullCandidateLiveSourcePacketError("offline replay must not write data_context or context components")
+        if not isinstance(replay_source_capture, dict):
+            raise FullCandidateLiveSourcePacketError("offline replay requires bound source-capture provenance")
+        _require_bound_offline_replay_client(client, replay_source_capture)
+    elif replay_source_capture is not None:
+        raise FullCandidateLiveSourcePacketError("live provider fetch must not accept replay source-capture provenance")
     def _finite_pace(x: Any) -> bool:
         # strict-finite, NOT just >= 0: inf passes `>= 0` and then time.sleep(inf) hangs/crashes (bare OverflowError
         # outside the runner's error contract); an absurd-but-finite value would sleep for days. Bound to [0, 60]s.
@@ -1230,13 +1387,39 @@ def run_full_candidate_live_source_packet(
         raise FullCandidateLiveSourcePacketError(
             "provider_pace_seconds and retry_backoff_seconds must be finite numbers in [0, 60] seconds")
     generated_at = generated_at or iso_now()
-    observed_at = observed_at or generated_at
+    if execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY:
+        # This is deliberately duplicated from the replay CLI boundary.  The shared assembly function is callable
+        # directly, so it must neither accept a caller-selected PIT clock nor wait until after artifact assembly to
+        # discover a cross-date source capture.
+        capture_observed_at = replay_source_capture.get("source_observed_at")  # type: ignore[union-attr]
+        if not isinstance(capture_observed_at, str) or not _valid_observed_at(capture_observed_at):
+            raise FullCandidateLiveSourcePacketError("offline replay source capture lacks a valid observation clock")
+        if observed_at is not None and observed_at != capture_observed_at:
+            raise FullCandidateLiveSourcePacketError("offline replay observed_at must match the source capture")
+        observed_at = capture_observed_at
+    else:
+        observed_at = observed_at or generated_at
     if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
         raise FullCandidateLiveSourcePacketError("generated_at and observed_at must be timezone-aware RFC3339 instants")
     preflight_path = _validate_preflight_path(preflight_summary_path)
     preflight = _load_ready_preflight(preflight_path, expected_total_call_budget)
+    if max_total_http_attempts is None:
+        if max_retries_per_call:
+            raise FullCandidateLiveSourcePacketError(
+                "max_total_http_attempts must be explicit whenever 429 retries are enabled")
+        max_total_http_attempts = expected_total_call_budget
+    if not (type(max_total_http_attempts) is int
+            and expected_total_call_budget <= max_total_http_attempts <= 20000):
+        raise FullCandidateLiveSourcePacketError(
+            "max_total_http_attempts must be an int from the logical call budget through 20000")
     expected_decision_date = preflight["decision_clock"]["expected_decision_date"]
     source_as_of = _date8_to_ymd(expected_decision_date)
+    if execution_mode == _EXECUTION_MODE_OFFLINE_REPLAY:
+        if replay_source_capture.get("source_expected_decision_date") != expected_decision_date \
+                or replay_source_capture.get("source_as_of") != source_as_of:
+            raise FullCandidateLiveSourcePacketError(
+                "offline replay preflight decision clock must match the source capture"
+            )
 
     if not _provider_samples_gitignored():
         raise FullCandidateLiveSourcePacketError("provider_samples/ is not confirmed in .gitignore")
@@ -1325,7 +1508,7 @@ def run_full_candidate_live_source_packet(
     }
 
     client = client or sample_validation.JsonHttpClient()
-    records, cik_by_symbol, retry_count_used = _fetch_live_records(
+    records, cik_by_symbol, retry_count_used, actual_total_http_attempts = _fetch_live_records(
         selected_symbols=selected_symbols,
         raw_root=raw_root_resolved,
         client=client,
@@ -1334,6 +1517,7 @@ def run_full_candidate_live_source_packet(
         massive_env=massive_env,
         sec_sleep_seconds=sec_sleep_seconds,
         max_total_endpoint_calls=expected_total_call_budget,
+        max_total_http_attempts=max_total_http_attempts,
         provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
@@ -1410,6 +1594,10 @@ def run_full_candidate_live_source_packet(
         endpoint_records=records,
         retry_count_allowed=max_retries_per_call,
         retry_count_used=retry_count_used,
+        max_total_http_attempts=max_total_http_attempts,
+        actual_total_http_attempts=actual_total_http_attempts,
+        execution_mode=execution_mode,
+        replay_source_capture=replay_source_capture,
         cik_by_symbol=cik_by_symbol,
         raw_root=raw_root_resolved,
         summary_path=summary_resolved,
@@ -1452,6 +1640,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="bounded retries on HTTP 429 (rate-limit) per FMP/Massive call; a 402 paywall is NOT retried")
     parser.add_argument("--retry-backoff-seconds", type=float, default=0.0,
                         help="base for exponential backoff (backoff*2^attempt) between 429 retries")
+    parser.add_argument("--max-total-http-attempts", type=int,
+                        help="explicit physical HTTP-attempt cap; required when 429 retries are enabled")
     return parser.parse_args(argv)
 
 
@@ -1476,6 +1666,7 @@ def main(argv: list[str] | None = None) -> int:
             provider_pace_seconds=args.provider_pace_seconds,
             max_retries_per_call=args.max_retries_per_call,
             retry_backoff_seconds=args.retry_backoff_seconds,
+            max_total_http_attempts=args.max_total_http_attempts,
         )
     except FullCandidateLiveSourcePacketError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

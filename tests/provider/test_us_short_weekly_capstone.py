@@ -92,6 +92,25 @@ class CapstoneDryRunTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(datetime(2026, 7, 9, 8, 0, 0), dry_run=False, confirm_user_authorization=False)
 
+    def test_retry_without_physical_cap_fails_before_any_pipeline_stage(self):
+        entered: list[str] = []
+        stage = Stage(
+            "must_not_run",
+            False,
+            lambda _ctx: [],
+            lambda _ctx: [],
+            lambda _ctx: entered.append("stage") or {},
+        )
+        with self.assertRaisesRegex(WeeklyCapstoneError, "max_total_http_attempts"):
+            self._run(
+                datetime(2026, 7, 9, 8, 0, 0),
+                dry_run=False,
+                confirm_user_authorization=True,
+                max_retries_per_call=1,
+                stages=[stage],
+            )
+        self.assertEqual(entered, [])
+
     def test_tz_aware_now_et_rejected(self):
         from datetime import timezone
         with self.assertRaises(WeeklyCapstoneError):
@@ -762,7 +781,13 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 "generated_at": ctx.generated_at,
                 "scope": {"network_access_performed": True, "provider_calls_performed": True},
                 "decision_clock": {"expected_decision_date": ctx.decision_date},
-                "endpoint_call_budget": {"actual_total_endpoint_calls": 1},
+                "endpoint_call_budget": {
+                    "actual_total_endpoint_calls": 1,
+                    "max_total_http_attempts": 2,
+                    "actual_total_http_attempts": 2,
+                    "retry_count_used": 1,
+                    "within_budget": True,
+                },
                 "endpoint_results": [{"provider_id": "sec_edgar", "endpoint_family": "submissions", "status": "success"}],
             },
         }
@@ -799,6 +824,11 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
         )
         with self.assertRaises(RunOriginError):
             require_research_live_receipt_binding(tampered_manifest)
+        provider_results["pass2_fetch"]["endpoint_call_budget"]["actual_total_http_attempts"] = 3
+        with self.assertRaises(WeeklyCapstoneError):
+            with mock.patch.object(cap.source_packet_runner, "source_packet_input_manifest", return_value=manifest):
+                cap._provider_execution_receipt(ctx, results)
+        provider_results["pass2_fetch"]["endpoint_call_budget"]["actual_total_http_attempts"] = 2
         provider_results["pass2_fetch"]["endpoint_call_budget"]["actual_total_endpoint_calls"] = 0
         with self.assertRaises(WeeklyCapstoneError):
             with mock.patch.object(cap.source_packet_runner, "source_packet_input_manifest", return_value=manifest):
@@ -942,7 +972,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
-            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds"]),
+            (st._pass2.run_full_candidate_live_source_packet, ["preflight_summary_path", "expected_total_call_budget", "source_artifact_prefix", "context_components_output_path", "output_data_context_path", "overextension_projection_path", "yfinance_grade_actions_path", "summary_path", "confirm_user_authorization", "run_data_context", "generated_at", "observed_at", "provider_pace_seconds", "max_retries_per_call", "retry_backoff_seconds", "max_total_http_attempts"]),
             (st._mom_prod.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._overextension.run_packet, ["candidate_artifact_path", "series_packet_path", "output_projection_path", "summary_path", "generated_at"]),
             (st._theme.run_packet, ["candidate_artifact_path", "series_packet_path", "classification_packet_path", "output_projection_path", "summary_path", "generated_at"]),
