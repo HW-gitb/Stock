@@ -39,13 +39,16 @@ class Pass2FetchRetryPacingTest(unittest.TestCase):
     def setUp(self):
         # fetch_and_store writes raw under a repo-relative path (as_repo_relative -> relative_to(ROOT)), so the
         # raw_root MUST live inside the repo; provider_samples/ is gitignored.
-        self.raw_root = Path(tempfile.mkdtemp(prefix="test_retry_", dir=str(ROOT / "provider_samples")))
+        provider_samples = ROOT / "provider_samples"
+        provider_samples.mkdir(parents=True, exist_ok=True)
+        self.raw_root = Path(tempfile.mkdtemp(prefix="test_retry_", dir=str(provider_samples)))
 
     def tearDown(self):
         shutil.rmtree(self.raw_root, ignore_errors=True)
 
     def _fetch(self, client, *, max_retries):
         stats = {"used": 0}
+        budget = runner.HttpAttemptBudget(max_total_http_attempts=1 + max_retries)
         record = runner._fetch_with_retry(
             client,
             url="https://api.massive.com/v2/reference/news?ticker=AAPL&apiKey=K",
@@ -58,6 +61,8 @@ class Pass2FetchRetryPacingTest(unittest.TestCase):
             max_retries=max_retries,
             retry_backoff_seconds=0.0,
             retry_stats=stats,
+            attempt_budget=budget,
+            reserved_required_attempts=0,
         )
         return record, stats
 
@@ -98,6 +103,43 @@ class Pass2FetchRetryPacingTest(unittest.TestCase):
         self.assertFalse(record.ok)
         self.assertEqual(stats["used"], 0)
         self.assertEqual(client.calls, 1)
+
+    def test_429_without_explicit_physical_slack_is_not_retried(self):
+        client = ScriptedClient([(None, 429, False, "http_error"), ({"results": []}, 200, True, None)])
+        stats = {"used": 0}
+        record = runner._fetch_with_retry(
+            client,
+            url="https://api.massive.com/v2/reference/news?ticker=AAPL&apiKey=K",
+            provider_id="massive",
+            endpoint_family="reference_news",
+            symbol="AAPL",
+            raw_root=self.raw_root,
+            headers={},
+            pace_seconds=0.0,
+            max_retries=3,
+            retry_backoff_seconds=0.0,
+            retry_stats=stats,
+            attempt_budget=runner.HttpAttemptBudget(max_total_http_attempts=1),
+            reserved_required_attempts=0,
+        )
+        self.assertFalse(record.ok)
+        self.assertEqual(record.http_status, 429)
+        self.assertEqual(stats["used"], 0)
+        self.assertEqual(client.calls, 1)
+
+
+class PhysicalAttemptBudgetTests(unittest.TestCase):
+    def test_retry_cannot_steal_a_reserved_logical_attempt(self):
+        budget = runner.HttpAttemptBudget(max_total_http_attempts=3)
+        budget.consume_required_attempt()
+        self.assertFalse(budget.consume_retry_if_available(reserved_required_attempts=2))
+        self.assertEqual(budget.used, 1)
+
+    def test_explicit_extra_physical_budget_allows_one_retry(self):
+        budget = runner.HttpAttemptBudget(max_total_http_attempts=4)
+        budget.consume_required_attempt()
+        self.assertTrue(budget.consume_retry_if_available(reserved_required_attempts=2))
+        self.assertEqual(budget.used, 2)
 
 
 class Pass2RetryParamValidationTest(unittest.TestCase):

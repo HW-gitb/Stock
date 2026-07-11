@@ -119,6 +119,21 @@
 - **Pre-Codex self-review**: A-F checked；fallback 正控、无兼容依赖反控、术语整类 grep 与做空报告合法反控均覆盖；未碰 provider/A 股/frozen spec。
 - **Next**: Claude Code：审查第八类与本修复；PASS 后只提交本刀。
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别5 A/B：replay provenance + 429 物理预算)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、detached HEAD、未 push）。A/B 修复正确且 schema 级钉死：offline replay 绑 raw-manifest + 源时钟、强制 `non_emittable`/`network=False`/禁 data_context（→ 过不了 capstone provider-receipt，永不冒充 provider evidence 进选股）、仅认 manifest-bound ReplayClient；物理 HTTP 预算含 429 重试、retry 不得偷 reserved logical 槽、capstone 无显式物理 cap 时 retry 前置拒；summary/receipt/schema 三处绑物理次数。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT5-REPLAY-PROVENANCE-AND-PHYSICAL-ATTEMPT-BUDGET` → resolved（完整独立复审证据 + 1 条非阻塞 P3 单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读 4 改动体 + 复用 helper 未削弱；自撰探针 11 条全 HELD（B 预算 fail-close/reserved 拒/slack 放行；A offline 非 emittable/非 ReplayClient 拒/live 拒 capture/receipt 需 network True）；§6a 独立对抗 agent A1-A4·B1-B3 全 HELD 无 bypass；focused 87 OK；亲跑全包 4149 ran、18 error 全 = worktree 长基址 MAX_PATH（WinError 206、非 reviewed 文件、主树短路径过），零 reviewed-slice 失败；无 provider/network 调用。
+- **Next**: Codex：待命。
+
+## 2026-07-11 - Codex repair complete, awaiting Claude review (US-short R-USSHORT-REVIEWQ-CAT5-REPLAY-PROVENANCE-AND-PHYSICAL-ATTEMPT-BUDGET A/B)
+
+- **Verdict/Action**: Repaired A/B in one bounded US-short slice. Replay is now manifest- and decision-clock-bound, explicitly offline/non-emittable, and cannot accept an arbitrary client; physical HTTP attempts include 429 retries and capstone rejects retry-enabled execution without an explicit physical cap before any stage runs.
+- **Required**: No known remaining Required after the current self-review; independent Claude review remains required before commit. Full durable detail: `R-USSHORT-REVIEWQ-CAT5-REPLAY-PROVENANCE-AND-PHYSICAL-ATTEMPT-BUDGET` in `docs/system_risk_register.md`.
+- **Verify**: `py_compile` passed; focused replay/retry/capstone and Pass2/data-context/news pack **154 OK**; final independent read-only re-review **PASS**; `git diff --check` clean. No provider/network/live call, raw private-payload read, install, A-share, DataHub, broker, or ship-gate action. The prescribed wrapper was run with fixed `STOCK_TEST_PYTHON` but is blocked by this worktree's missing vendored `rpds` binary; the same fixed Python ran the offline pack with the existing local dependency copy and no install.
+- **Pre-Codex self-review**: A-F completed; whole-class grep/consumer trace and reverse controls cover byte mutation, stale-date replay, arbitrary offline client, direct replay clock/preflight mismatch, hidden retry expansion, and capstone pre-stage rejection. Independent reviewer first found and then rechecked schema declaration, byte/PIT binding, offline entry boundary, clock lock, and early-cap enforcement; final verdict PASS.
+- **Next**: Claude Code: review R-ID A/B only; if PASS, commit only this scoped repair and exclude unrelated files.
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。

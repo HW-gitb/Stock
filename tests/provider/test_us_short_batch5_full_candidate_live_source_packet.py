@@ -281,6 +281,9 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
 
         self.assertEqual(len(client.urls), 16)
         self.assertEqual(summary["endpoint_call_budget"]["actual_total_endpoint_calls"], 16)
+        self.assertEqual(summary["endpoint_call_budget"]["max_total_http_attempts"], 16)
+        self.assertEqual(summary["endpoint_call_budget"]["actual_total_http_attempts"], 16)
+        self.assertEqual(summary["endpoint_call_budget"]["retry_count_used"], 0)
         self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 3)
         self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 3)
         self.assertTrue(summary["scope"]["provider_calls_performed"])
@@ -523,6 +526,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             (("scope", "corporate_action_reconciliation_performed"), True),
             (("prohibited_claims", "ship_gate_evidence_claimed"), True),
             (("endpoint_call_budget", "max_total_endpoint_calls"), 15),
+            (("endpoint_call_budget", "actual_total_http_attempts"), 17),
             (("source_packet", "preflight_status"), "not_run"),
         ):
             mutated = json.loads(json.dumps(summary))

@@ -121,6 +121,7 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         provider_pace_seconds=ctx.provider_pace_seconds,
         max_retries_per_call=ctx.max_retries_per_call,
         retry_backoff_seconds=ctx.retry_backoff_seconds,
+        max_total_http_attempts=ctx.max_total_http_attempts,
     )
     return summary
 

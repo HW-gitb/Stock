@@ -87,6 +87,7 @@ class CapstoneContext:
     provider_pace_seconds: float = 0.0
     max_retries_per_call: int = 0
     retry_backoff_seconds: float = 0.0
+    max_total_http_attempts: int | None = None
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -179,6 +180,7 @@ def resolve_capstone_context(
     provider_pace_seconds: float = 0.0,
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
+    max_total_http_attempts: int | None = None,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
 ) -> CapstoneContext:
@@ -212,6 +214,7 @@ def resolve_capstone_context(
         provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
+        max_total_http_attempts=max_total_http_attempts,
         state_dir=Path(state_dir),
         sample_root=Path(sample_root),
     )
@@ -365,12 +368,20 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     pass2_scope = pass2.get("scope", {})
     budget = pass2.get("endpoint_call_budget", {})
     endpoint_results = pass2.get("endpoint_results")
-    pass2_calls = budget.get("actual_total_endpoint_calls")
+    logical_pass2_calls = budget.get("actual_total_endpoint_calls")
+    pass2_calls = budget.get("actual_total_http_attempts")
+    max_http_attempts = budget.get("max_total_http_attempts")
+    retry_count_used = budget.get("retry_count_used")
     if pass2_scope.get("network_access_performed") is not True \
             or pass2_scope.get("provider_calls_performed") is not True \
             or pass2.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date \
-            or type(pass2_calls) is not int or pass2_calls < 1 \
-            or not isinstance(endpoint_results, list) or len(endpoint_results) != pass2_calls \
+            or type(logical_pass2_calls) is not int or logical_pass2_calls < 1 \
+            or type(pass2_calls) is not int or pass2_calls < logical_pass2_calls \
+            or type(max_http_attempts) is not int or pass2_calls > max_http_attempts \
+            or type(retry_count_used) is not int or retry_count_used < 0 \
+            or pass2_calls != logical_pass2_calls + retry_count_used \
+            or budget.get("within_budget") is not True \
+            or not isinstance(endpoint_results, list) or len(endpoint_results) != logical_pass2_calls \
             or any(not isinstance(row, dict) or not isinstance(row.get("provider_id"), str)
                    or not isinstance(row.get("endpoint_family"), str) or row.get("status") not in {"success", "error"}
                    for row in endpoint_results):
@@ -699,6 +710,7 @@ def run_weekly_capstone(
     provider_pace_seconds: float = 0.0,
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
+    max_total_http_attempts: int | None = None,
     stages: list[Stage] | None = None,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
@@ -707,11 +719,16 @@ def run_weekly_capstone(
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
     before touching a provider), then runs each stage in order, validating each stage's declared outputs exist and
     aborting fast (with the stage name) on the first failure. `stages` is injectable for offline testing."""
+    if max_retries_per_call and max_total_http_attempts is None:
+        raise WeeklyCapstoneError(
+            "max_total_http_attempts must be explicit whenever live 429 retries are enabled"
+        )
     ctx = resolve_capstone_context(
         now_et=now_et, private_root=private_root, batch4_template_path=batch4_template_path,
         account_state_path=account_state_path, calendar_path=calendar_path,
         confirm_user_authorization=confirm_user_authorization, provider_pace_seconds=provider_pace_seconds,
-        max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds, state_dir=state_dir,
+        max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds,
+        max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
         sample_root=sample_root,
     )
     pipeline = stages if stages is not None else default_pipeline()
@@ -852,8 +869,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--live", action="store_true", help="execute (default is a dry-run plan only)")
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
-    parser.add_argument("--max-retries-per-call", type=int, default=2)
+    parser.add_argument("--max-retries-per-call", type=int, default=0)
     parser.add_argument("--retry-backoff-seconds", type=float, default=2.0)
+    parser.add_argument("--max-total-http-attempts", type=int,
+                        help="explicit physical HTTP-attempt cap required for live 429 retries")
     args = parser.parse_args(argv)
     try:
         summary = run_weekly_capstone(
@@ -862,6 +881,7 @@ def main(argv: list[str] | None = None) -> int:
             calendar_path=args.calendar_path, confirm_user_authorization=args.confirm_user_authorization,
             dry_run=not args.live, provider_pace_seconds=args.provider_pace_seconds,
             max_retries_per_call=args.max_retries_per_call, retry_backoff_seconds=args.retry_backoff_seconds,
+            max_total_http_attempts=args.max_total_http_attempts,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
