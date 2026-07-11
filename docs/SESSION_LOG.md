@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-11 — Codex repair, self-review complete (US-short R3 issue 2: Pass2 candidate bankruptcy coverage)
+
+- **Verdict/Action**: Implemented the smallest candidate-only Pass2 gate: `unscreened` / `not_in_screen_set` / stale / unsourced SEC Item 1.03 bankruptcy provenance cannot enter score composition or Top15; current `screened_no_filing` only.
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` remains in progress: holding coverage, SEC target-completeness health, source-envelope/digest binding, and price-adjustment semantics are not in this slice.
+- **Verify**: Red mutant admitted the unscreened candidate only when the new gate was disabled in memory; repaired gate rejected it. Data-context module 31 OK under an in-memory `jsonschema` shim; wrapper/full offline pack NOT_VERIFIED because this worktree has no Python with importable `jsonschema` (`rpds.rpds` missing). `py_compile` / `git diff --check` pass.
+- **Pre-Codex self-review**: A-F checked via main-thread checklist fallback (subagent delegation not permitted): all 4 `_prepare_context_inputs` callers share the gate; Pass1 best-effort behavior remains unchanged; reverse controls cover unscreened and stale records; no route/CURRENT drift; no provider/live path.
+- **Next**: Claude Code：仅独立审查本候选 bankruptcy Pass2 gate；PASS 后自动提交此审查范围，不 push。
+
 ## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)
 
 - **Verdict/Action**: PASS（未提交、留主树待 `提交`）。亲验非信 Codex：classify 的 k2 门（`len(met)>=3 AND close>=ma10+k2*atr`）+ warning 趋势梯（`close>ma5>ma10>ma20 AND close>=ma10+k1*atr`）+ `>=` 边界 + 缺 MA fail-closed 全正确；闭世界 validator 旧「非 chasing 不得携 ≥K 条件」不变式已正确放开（带理由、保留 chasing⟹≥K 方向）。**顶下那条「Independent review PASS」系 Codex 自审的 current-diff agent（只读 diff、引 Codex 自身测数），非 role-split 独立审查；本条为权威独立审查。**

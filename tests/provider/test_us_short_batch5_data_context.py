@@ -25,6 +25,7 @@ from engine.us_short_core_score import core_score  # noqa: E402
 from engine.us_short_seam_score import compose_score_inputs  # noqa: E402
 from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
 from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
+from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
     DataContextAssemblyError,
@@ -48,6 +49,8 @@ _GRADE_AS_OF = "2026-06-15"
 _GRADE_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
 _NEWS_AS_OF = "2026-06-15"
 _NEWS_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
+_STATUS_AS_OF = "2026-06-15"
+_STATUS_OBSERVED_AT = "2026-06-15T08:00:00-04:00"
 _NOW_ET = datetime(2026, 6, 13, 10, 0, 0)
 _SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]
 _DATA_CONTEXT_KEYS = {
@@ -84,7 +87,41 @@ def _market_data(price, adv_usd):
     }
 
 
-def _candidate_artifact(tickers=("AAPL", "LOWADV")):
+def _status_record(ticker, *, exchange, bankruptcy_screen_status, as_of, observed_at):
+    return status_source.resolve_status_record(
+        ticker,
+        as_of=as_of,
+        observed_at=observed_at,
+        ticker_reference={
+            "observed": True,
+            "observed_at": observed_at,
+            "coverage": "full",
+            "active_listings": {ticker: {"active": True, "primary_exchange": exchange}},
+        },
+        halt_feed={
+            "observed": True,
+            "observed_at": observed_at,
+            "halted_symbols": [],
+        },
+        bankruptcy_screen={
+            "observed": True,
+            "observed_at": observed_at,
+            "lookback_window": "P90D",
+            "by_ticker": (
+                {} if bankruptcy_screen_status == "unscreened"
+                else {ticker: {"screen_status": bankruptcy_screen_status}}
+            ),
+        },
+    )
+
+
+def _candidate_artifact(
+    tickers=("AAPL", "LOWADV"),
+    *,
+    bankruptcy_screen_status_by_ticker=None,
+    status_as_of=_STATUS_AS_OF,
+    status_observed_at=_STATUS_OBSERVED_AT,
+):
     specs = {
         "AAPL": {
             "cik": 320193,
@@ -127,6 +164,17 @@ def _candidate_artifact(tickers=("AAPL", "LOWADV")):
         ticker: _market_data(specs[ticker]["price"], specs[ticker]["adv_usd"])
         for ticker in tickers
     }
+    bankruptcy_screen_status_by_ticker = bankruptcy_screen_status_by_ticker or {}
+    status_records = {
+        ticker: _status_record(
+            ticker,
+            exchange=specs[ticker]["exchange"],
+            bankruptcy_screen_status=bankruptcy_screen_status_by_ticker.get(ticker, "screened_no_filing"),
+            as_of=status_as_of,
+            observed_at=status_observed_at,
+        )
+        for ticker in tickers
+    }
     rows = universe_fetch.apply_pass1(
         sec_tickers,
         sec_shares,
@@ -134,6 +182,7 @@ def _candidate_artifact(tickers=("AAPL", "LOWADV")):
         governance=_gov(),
         as_of=_USED_DATE,
         observed_at=_GENERATED_AT,
+        status_records=status_records,
     )
     return universe_fetch.build_candidate_artifact(
         rows=rows,
@@ -416,6 +465,25 @@ def _official_kwargs():
 
 
 class Batch5DataContextAssemblyTest(unittest.TestCase):
+    def test_pass2_rejects_unscreened_bankruptcy_candidate(self):
+        artifact = _candidate_artifact(
+            ("AAPL",),
+            bankruptcy_screen_status_by_ticker={"AAPL": "unscreened"},
+        )
+
+        with self.assertRaisesRegex(DataContextAssemblyError, "bankruptcy.*screened"):
+            _assemble(artifact)
+
+    def test_pass2_rejects_stale_bankruptcy_screening(self):
+        artifact = _candidate_artifact(
+            ("AAPL",),
+            status_as_of="2026-06-12",
+            status_observed_at="2026-06-12T08:00:00-04:00",
+        )
+
+        with self.assertRaisesRegex(DataContextAssemblyError, "bankruptcy screening.*current decision date"):
+            _assemble(artifact)
+
     def test_assembles_batch4_data_context_from_candidate_artifact_and_score_seam(self):
         artifact = _candidate_artifact()
         composed = _score_composition(["AAPL"])

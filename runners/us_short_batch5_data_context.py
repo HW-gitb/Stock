@@ -411,6 +411,46 @@ def _canonical_recall_feed(value: Any, universe_eligibility: dict[str, bool]) ->
     return out
 
 
+def _require_current_bankruptcy_coverage(
+    artifact: dict[str, Any],
+    *,
+    candidate_tickers: list[str],
+    expected_decision_date: str,
+) -> None:
+    """Require a current SEC Item 1.03 screened-no-filing record before a Pass2 candidate can enter Top15.
+
+    Pass1 deliberately treats the bankruptcy 8-K screen as positive-detection-only: an `unscreened` ticker remains
+    eligible rather than being fabricated as bankrupt. That best-effort Pass1 policy is not sufficient for the
+    official Pass2 safety gate. A candidate here must carry current, ticker-bound SEC screening provenance that
+    explicitly says `screened_no_filing`; otherwise source uncertainty prevents this official context assembly
+    before score composition and therefore cannot emit a Top15 candidate.
+    """
+    try:
+        expected_as_of = datetime.strptime(expected_decision_date, "%Y%m%d").date().isoformat()
+    except (TypeError, ValueError) as exc:  # defensive: the artifact validator normally already rejects this.
+        raise DataContextAssemblyError("expected_decision_date is not canonical YYYYMMDD") from exc
+    rows_by_ticker = {row["ticker"]: row for row in artifact["rows"]}
+    for ticker in candidate_tickers:
+        row = rows_by_ticker.get(ticker)
+        status = row.get("status_provenance") if type(row) is dict else None
+        if row is None or row.get("status_flags_sourced") is not True or type(status) is not dict:
+            _fail(f"{ticker}: Pass2 requires current bankruptcy screening provenance")
+        if status.get("ticker") != ticker or status.get("as_of") != expected_as_of:
+            _fail(f"{ticker}: bankruptcy screening is not bound to the current decision date")
+        flags = status.get("flags")
+        bankruptcy = flags.get("bankruptcy") if type(flags) is dict else None
+        if not (
+            type(bankruptcy) is dict
+            and bankruptcy.get("value") is False
+            and bankruptcy.get("source_id") == "sec_8k_item_103"
+            and bankruptcy.get("as_of") == expected_as_of
+            and bankruptcy.get("coverage") == "observed"
+            and bankruptcy.get("screen_status") == "screened_no_filing"
+            and bankruptcy.get("filing_accession_if_found") is None
+        ):
+            _fail(f"{ticker}: Pass2 requires a current bankruptcy screened_no_filing record")
+
+
 def _validate_score_composition(
     score_composition: Any,
     *,
@@ -501,6 +541,11 @@ def _prepare_context_inputs(
     except Exception as exc:
         raise DataContextAssemblyError(f"catalyst recall candidate set rejected: {exc}") from exc
     candidates = recalled["candidates"]
+    _require_current_bankruptcy_coverage(
+        artifact,
+        candidate_tickers=candidates,
+        expected_decision_date=expected_decision_date,
+    )
     if (candidate_pass2_signals is None) == (pass2_sources is None):
         _fail("provide exactly one of candidate_pass2_signals or pass2_sources")
     if pass2_sources is not None:
