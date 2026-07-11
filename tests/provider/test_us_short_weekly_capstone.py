@@ -119,6 +119,17 @@ class CapstoneDryRunTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(datetime(2026, 7, 9, 8, 0, 0, tzinfo=timezone.utc), dry_run=True)
 
+    def test_dst_transition_now_et_fails_closed(self):
+        # F6: a DST-transition wall-clock is nonexistent (spring-forward GAP) or ambiguous (fall-back FOLD) — the
+        # tz-aware conversion must fail closed rather than silently pick one UTC offset; a normal pre-open time passes.
+        from runners.us_short_weekly_capstone import _tz_aware_et_or_fail
+        with self.assertRaises(WeeklyCapstoneError):
+            _tz_aware_et_or_fail(datetime(2026, 3, 8, 2, 30, 0))     # spring-forward gap (02:00->03:00)
+        with self.assertRaises(WeeklyCapstoneError):
+            _tz_aware_et_or_fail(datetime(2026, 11, 1, 1, 30, 0))    # fall-back fold (02:00->01:00)
+        aware = _tz_aware_et_or_fail(datetime(2026, 7, 9, 8, 0, 0))  # normal pre-open EDT
+        self.assertEqual(aware.utcoffset().total_seconds(), -4 * 3600)
+
     def test_observed_at_is_tz_aware(self):
         # regression: the first real run failed because a NAIVE observed_at was rejected by the status source
         # (and the Cut5 engines) which require a tz-aware PIT clock. resolve_capstone_context must localize the

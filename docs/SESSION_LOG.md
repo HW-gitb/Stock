@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-11 — Claude 修复 + 提交 (full_reivew2_nopush F 工程卫生：F1/F3/F6 修，F2/F4/F5 surface)
+
+- **Verdict/Action**: 应用户 `修复` 收 Section F（Claude solo 修+自审+提交，低危工程卫生）。修 3 项安全项：**F3** `_write_provider_health` 改原子写（tmp + `os.replace`，防进程中断留半截 JSON）；**F1** requirements 钉 `jsonschema>=4.0,<5` + `yfinance>=0.2` + 注明市场数据栈留 user-local、非全 lockfile 的理由；**F6** 抽 `_tz_aware_et_or_fail` 助手，DST spring-forward 缺口 / fall-back 折叠 wall-clock → fail-closed（正常盘前时刻不受影响）。**F2/F4/F5 未改**、见 Required（surface 给用户定）。
+- **Required**: 无 register R-ID（F 是 doc-item 工程卫生、非 Codex-review finding）。保留在清单待用户决定：**F2**（CI 需 remote、no-push 政策下无法闭环）/ **F4**（`_20260706` 与 2026-07-06 冻结执行 provenance + 路径 conformance 纠缠、纯 cosmetic、rename 风险>值）/ **F5**（必填参是审计性刻意设计、config-file 是 feature 非 hygiene bug）。
+- **Verify**: focused capstone+e2e `64 OK`（含新 `test_dst_transition_now_et_fails_closed`：gap/fold→raise、正常 EDT→-4h 过）；DST 测试单跑 `1 OK`；`py_compile` 3 文件 clean；ripple grep：stages.py 无其它非原子 write、`replace(tzinfo` 仅剩 data_context 的既有安全 strip-tz（非 now_et 本地化、不动）；全离线全包收口前一次跑。
+- **Pre-Codex self-review**: A-F checked（solo）；F3/F6 各配反向+正控测试、F1 纯 deps 无测试；连带 grep 旧形态零残留；反向失败核（DST guard 只拒真 gap/fold、不误拒正常盘前，既有 tz-aware/intraday 测试仍绿）；独立对抗 pass 不适用（单轮非选股/非授权/非 PIT 边界的工程卫生小改）；无 CURRENT/route-doc 改动、无 BOM。
+- **Next**: Codex：待命。
+
 ## 2026-07-11 — Claude 审查 PASS + 提交 (full_reivew2_nopush D1：VIX capstone 接线)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。VIX 接线正确且全程 fail-closed：新增 gated `vix_regime` stage（`weekly_bridge` 前、auth 从 ctx 透传、summary digest 纳入 research_live receipt），bridge 只覆盖 `market_axis_regimes["vix"]`（deepcopy 不动 template、独立复校 `regime∈REGIMES∪UNKNOWN` + `is_unknown` 一致否则 UNKNOWN）；缺 key/403/429/网络/畸形 payload 全 → UNKNOWN 不 raise、不阻 emit（summary 恒带 provider/endpoint/symbol/`http_status:int`/`observed_at=generated_at` 过 receipt 门）；只喂 §7 sizing、不碰选股/价位/veto。

@@ -39,7 +39,7 @@ import os
 import shutil
 import sys
 from dataclasses import dataclass, field, replace
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 from zoneinfo import ZoneInfo
@@ -176,6 +176,24 @@ class CapstoneContext:
             f"us_short_batch5_capstone_{self.decision_date}_vix_regime_summary.json"
 
 
+def _tz_aware_et_or_fail(now_et: datetime) -> datetime:
+    """Attach America/New_York to a naive ET wall-clock, failing closed on a DST transition (F6 completeness).
+
+    A weekly pre-open/post-close run never legitimately lands in a DST transition, so a spring-forward GAP (a
+    nonexistent wall-clock) or a fall-back FOLD (an ambiguous wall-clock) is a bad `now_et` — reject it rather than
+    silently pick one UTC offset. A normal time is neither and passes through DST-correctly.
+    """
+    et = ZoneInfo("America/New_York")
+    aware = now_et.replace(tzinfo=et)
+    in_gap = aware.astimezone(timezone.utc).astimezone(et).replace(tzinfo=None) != now_et
+    is_ambiguous = aware.utcoffset() != aware.replace(fold=1).utcoffset()
+    if in_gap or is_ambiguous:
+        raise WeeklyCapstoneError(
+            "now_et is inside a DST transition (nonexistent spring-forward or ambiguous fall-back wall-clock); "
+            "supply an unambiguous pre-open/post-close ET time")
+    return aware
+
+
 def resolve_capstone_context(
     *,
     now_et: datetime,
@@ -207,7 +225,7 @@ def resolve_capstone_context(
         raise WeeklyCapstoneError(f"canonical decision_date resolution failed: {exc}") from exc
     # PIT observation instant = the ET run wall-clock made TZ-AWARE. The status source + Cut5 engines REQUIRE a
     # tz-aware observed_at (a naive string is rejected as a non-PIT clock); America/New_York is DST-correct.
-    generated_at = now_et.replace(tzinfo=ZoneInfo("America/New_York")).isoformat(timespec="seconds")
+    generated_at = _tz_aware_et_or_fail(now_et).isoformat(timespec="seconds")
     return CapstoneContext(
         decision_date=resolved["decision_date"],
         price_basis_date=resolved["price_basis_date"],

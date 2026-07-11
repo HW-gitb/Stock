@@ -295,7 +295,11 @@ def _write_provider_health(ctx) -> None:
         require_research_live_provider_summary(receipt, "pass2_fetch", summary)
     health = derive_provider_health(summary)
     ctx.provider_health_path.parent.mkdir(parents=True, exist_ok=True)
-    ctx.provider_health_path.write_text(json.dumps(health, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    # F3: atomic write (tmp + os.replace) so a crash mid-write never leaves a half-written provider_health JSON.
+    text = json.dumps(health, ensure_ascii=False, indent=2) + "\n"
+    tmp = ctx.provider_health_path.with_name(ctx.provider_health_path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    tmp.replace(ctx.provider_health_path)
 
 
 def _preflight_call_budget(ctx) -> int:

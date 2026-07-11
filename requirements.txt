@@ -3,8 +3,11 @@
 # The user's local Python environment still owns the market-data stack
 # (pandas, tushare, numpy, tqdm, etc.). This file records packages that are
 # required by production code paths because schema validation is mandatory.
-jsonschema>=4.0
+# Pinned <5 so a fresh `pip install -r` stays on the 4.x line the schema code + the vendored .tools/python_libs copy
+# target (jsonschema 5.x would be a breaking major). The market-data stack (pandas/tushare/numpy/tqdm) is
+# deliberately NOT recorded here — it stays owned by the user's local env — so this is not a full lockfile (F1).
+jsonschema>=4.0,<5
 
 # Optional live-fetch dependency for runners/us_short_yfinance_grades_fetch.py.
 # The runner remains lazy-imported and fail-closed; it never installs packages itself.
-yfinance
+yfinance>=0.2
