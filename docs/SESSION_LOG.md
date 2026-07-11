@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别8：wrapper rpds-shadow fallback，test-infra 轻审)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、detached HEAD、未 push）。低危 test-infra：wrapper 先存 `ORIGINAL_PYTHONPATH` 再 vendored-first，vendored rpds 缺失致 import 失败时还原原 PYTHONPATH 改用解释器已装 jsonschema、两条都失败才报（准确两路径提示）；rpds 在场时行为不变。测试把依赖未跟踪 rpds 二进制的旧 `-S` 测试（正是 clean-worktree 假失败）换成静态 launcher-fallback 契约检查，保留 `Draft7Validator` 真导入 smoke（不放行 schema-test skip）。零业务/选股/数据/安全影响。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT8-RPDS-FALLBACK-SHADOW-GAP` → resolved（完整独立复审证据单源见 register）。
+- **Verify**: `review-evidence:not_available`。读 wrapper + guard-test diff（fallback 正确、行为保持、契约检查替代二进制依赖测试）；launcher smoke 经修复 wrapper 2 OK；修复 wrapper 驱动全 discovery 跑 4139 us_short 测试（18 error 全 = 既有 MAX_PATH 环境类、非 reviewed），证 discovery 正常。低危 test-infra → 未起 §6a agent。
+- **Next**: Codex：待命。
+
+## 2026-07-11 — Codex 修复 (R-USSHORT-REVIEWQ-CAT8-RPDS-FALLBACK-SHADOW-GAP)
+
+- **Verdict/Action**: 修复第八类的 rpds 启动器误导：vendored `rpds` 缺二进制时，wrapper 改为回退已配置解释器的 `jsonschema`，且失败提示如实说明两条路径。
+- **Required**: R-USSHORT-REVIEWQ-CAT8-RPDS-FALLBACK-SHADOW-GAP — 完整 Required/风险/边界/closure 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: wrapper fallback + `JsonschemaImportSmoke` + wrapper-route guard 3 OK；whole doc guard 仅余既有 SESSION_LOG 模板 offender；`git diff --check` clean；术语残留 grep=0。
+- **Pre-Codex self-review**: A-F checked；fallback 正控、无兼容依赖反控、术语整类 grep 与做空报告合法反控均覆盖；未碰 provider/A 股/frozen spec。
+- **Next**: Claude Code：审查第八类与本修复；PASS 后只提交本刀。
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。

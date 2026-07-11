@@ -1233,21 +1233,13 @@ class JsonschemaImportSmoke(unittest.TestCase):
         self.assertTrue(hasattr(jsonschema, "Draft7Validator"),
                         "jsonschema import must expose Draft7Validator")
 
-    def test_repo_pythonpath_fallback_imports_without_site_packages(self):
-        repo_libs = str((ROOT / ".tools" / "python_libs").resolve())
-        env = os.environ.copy()
-        env["PYTHONPATH"] = repo_libs
-        result = subprocess.run(
-            [sys.executable, "-S", "-c", "import jsonschema; print(jsonschema.__file__)"],
-            cwd=str(ROOT),
-            env=env,
-            text=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            timeout=30,
+    def test_launcher_fallback_contract_handles_missing_vendored_rpds(self):
+        launcher = (ROOT / ".tools" / "run_unittest_with_repo_pythonpath.cmd").read_text(
+            encoding="utf-8"
         )
-        self.assertEqual(result.returncode, 0, result.stdout)
-        self.assertIn(str(Path(repo_libs)).casefold(), result.stdout.casefold())
+        self.assertIn("ORIGINAL_PYTHONPATH", launcher)
+        self.assertIn("The repository copy needs its matching rpds compiled extension.", launcher)
+        self.assertIn("this launcher will use that copy.", launcher)
 
 
 if __name__ == "__main__":
