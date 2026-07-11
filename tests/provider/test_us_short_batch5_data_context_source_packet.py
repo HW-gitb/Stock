@@ -238,6 +238,16 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 43.5)
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
 
+    def test_stale_clock_source_projection_binding_is_rejected(self):
+        # Reverse control (Required B, core-score/official-output consumer): a stale-clock momentum
+        # source binding is rejected before any official data-context component is written.
+        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0)
+        momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
+        _write_json(self.paths["momentum"], momentum)
+        with self.assertRaisesRegex(SourcePacketError, "source binding"):
+            run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertFalse(self.paths["output"].exists())
+
     def test_run_packet_optionally_writes_official_context_components(self):
         _write_json(
             self.paths["offering"],

@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-11 — Claude 修复 (US-short 类别3 4 条 Optional：doc/test hygiene)
+
+- **Verdict/Action**: 应用户 `修复` 指令收类别3 复审的 4 条 Optional（doc/test-only、零业务逻辑）：① `_fetch_grouped_series_window` docstring 改为「所有 HTTP 错误 fail-closed + latest==used_date」；② 删 momentum-fetch 测试重复定义的 `test_valid_delayed_candidate...`；③ theme-producer 加后开盘分类观察反控测试；④ preflight/live/data_context 各加 stale-clock binding 反控测试。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT3-PIT-SOURCE-BINDING-NUMERIC-GAPS` Optional 收口（单源见 register）。
+- **Verify**: 5 个受影响测试模块 `68 OK`（3 新 binding 反控 + 1 新分类观察反控 + dedup）；无 provider/network 调用。
+- **Pre-Codex self-review**: 4 条均 doc/test-only、零业务逻辑；新反控复用共享 `_constant_projection` fixture 改 decision_clock、断言各消费端在候选时钟不符时 fail-closed（preflight/live 抓取前拒[live 断言 0 fetch]、data_context 写官方产物前拒）；docstring↔代码行为已对齐。Tests passing ≠ design closure.
+- **Next**: Codex：待命。
+
 ## 2026-07-11 — Claude 审查 PASS (US-short queue 类别3 A-D：全宇宙 momentum/theme/SIC PIT·source-binding·numeric)
 
 - **Verdict/Action**: PASS。A/B/C/D 修复正确：SIC 强制决策日 09:30 ET 前观察 + `source_as_of`=真实观察日（sic_fetch 与 theme_producer 双门）；projection source-binding 非循环（消费全链用候选 artifact 时钟 + `verify_source_artifacts=True`，seam 无绕过、live 边界重校验+重derive+重锚预算）；Massive 所有 HTTP 错误 fail-closed + latest==used_date；`_vol_dedup_key` strict + OverflowError 兜 huge-int。

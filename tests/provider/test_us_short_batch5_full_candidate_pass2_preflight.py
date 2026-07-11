@@ -114,6 +114,26 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_stale_clock_source_projection_binding_is_rejected(self):
+        # Reverse control (Required B, Top-K consumer): a same-ticker momentum projection whose
+        # source_binding decision clock is stale is rejected against the CANDIDATE clock before any
+        # coverage / Pass2-target computation, and no summary is written.
+        runner = self._module()
+        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT"), "scored", score=50.0)
+        momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
+        _write_json(self.paths["momentum"], momentum)
+        with self.assertRaisesRegex(runner.FullCandidatePass2PreflightError, "source binding"):
+            runner.run_preflight(
+                candidate_artifact_path=self.paths["candidate"],
+                expected_decision_date=_DECISION_DATE,
+                momentum_projection_path=self.paths["momentum"],
+                theme_projection_path=self.paths["theme"],
+                summary_path=self.paths["summary"],
+                confirm_user_authorization=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+            )
+        self.assertFalse(self.paths["summary"].exists())
+
     def test_top_k_narrows_ready_preflight_to_top_k_by_momentum_score(self):
         # R-USSHORT-BATCH5-MOMENTUM-TOPK-NARROWING-MISSING: with all 3 candidates momentum-scored (full coverage
         # -> ready), momentum_top_k=2 must narrow the expensive Pass2 target to the 2 highest-momentum tickers.

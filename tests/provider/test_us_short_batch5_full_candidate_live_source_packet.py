@@ -309,6 +309,35 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_stale_clock_source_projection_binding_is_rejected_before_fetch(self):
+        # Reverse control (Required B, expensive-fetch boundary): the live re-derivation validates the
+        # momentum source binding against the CANDIDATE clock before any provider call; a stale clock
+        # aborts with zero fetches.
+        momentum = _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0)
+        momentum["source_binding"]["decision_clock"]["expected_decision_date"] = "20260614"
+        _write_json(self.paths["momentum"], momentum)
+        client = FullCandidateFakeClient()
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "source binding"):
+                runner.run_full_candidate_live_source_packet(
+                    preflight_summary_path=self.paths["preflight"],
+                    expected_total_call_budget=16,
+                    output_data_context_path=self.paths["output"],
+                    context_components_output_path=self.paths["components"],
+                    source_artifact_prefix=self.paths["prefix"],
+                    summary_path=self.paths["summary"],
+                    raw_root=self.raw_root,
+                    client=client,
+                    confirm_user_authorization=True,
+                    run_data_context=True,
+                    generated_at="2026-07-06T12:00:00+00:00",
+                    observed_at=_OFFERING_OBSERVED_AT,
+                    sec_sleep_seconds=0,
+                )
+        self.assertEqual(client.urls, [])
+
     def test_live_packet_uses_preflight_pass2_targets_not_neutral_full_candidate_fill(self):
         momentum = _constant_projection(
             "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0

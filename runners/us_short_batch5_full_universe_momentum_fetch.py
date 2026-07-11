@@ -205,8 +205,9 @@ def _fetch_grouped_series_window(
 ) -> tuple[list[dict[str, Any]], dict[str, int]]:
     """Step newest-first through candidate sessions, fetch the whole-market grouped daily for each, KEEP ONLY the
     wanted (eligible+benchmark) rows, and collect up to `window` sessions that returned market data. Mirrors the
-    proven universe-fetch pacing/retry: pace between requests, retry HTTP 429, and RAISE on auth/quota (401/403/429
-    after retries) — never mask it as a missing day. Returns (grouped_sessions ASCENDING, stats)."""
+    proven universe-fetch pacing/retry: pace between requests, retry HTTP 429, then FAIL CLOSED on EVERY HTTP error
+    (auth/quota/5xx/other after retries) — never mask a transport/server failure as a missing day. Also requires the
+    latest collected session to equal the candidate used_date. Returns (grouped_sessions ASCENDING, stats)."""
     import urllib.error
 
     collected: list[tuple[str, list[dict[str, Any]]]] = []

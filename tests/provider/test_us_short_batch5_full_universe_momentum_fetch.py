@@ -268,24 +268,6 @@ class FullUniverseMomentumFetchTest(unittest.TestCase):
         self.assertEqual(packet["decision_clock"]["source_as_of"], actual_used_date)
         self.assertEqual(packet["series_by_ticker"]["AAPL"]["points"][-1]["date"], actual_used_date)
 
-    def test_valid_delayed_candidate_uses_actual_used_date_not_nominal_price_basis(self):
-        artifact = _candidate_artifact(_ALL_ELIGIBLE)
-        actual_used_date = "2026-06-11"
-        artifact["used_date"] = actual_used_date
-        artifact["adv_window"]["latest_date"] = actual_used_date
-        artifact["adv_window"]["observed_window_dates"] = [actual_used_date, "2026-06-10"]
-        for row in artifact["rows"]:
-            row["price_as_of"] = actual_used_date
-            row["as_of"] = actual_used_date
-        _write_json(self.candidate, artifact)
-
-        self._run()
-        packet = _read_json(self.packet)
-        self.assertEqual(packet["decision_clock"]["candidate_price_basis_date"], "20260612")
-        self.assertEqual(packet["decision_clock"]["price_basis_date"], actual_used_date)
-        self.assertEqual(packet["decision_clock"]["source_as_of"], actual_used_date)
-        self.assertEqual(packet["series_by_ticker"]["AAPL"]["points"][-1]["date"], actual_used_date)
-
     def test_duplicate_huge_integer_volume_is_contained_and_primary_row_wins(self):
         base = _fake_grouped()
         for huge_first in (False, True):

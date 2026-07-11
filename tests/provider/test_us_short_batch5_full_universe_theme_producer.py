@@ -213,6 +213,17 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
         self.assertFalse(self.paths["projection"].exists())
         self.assertFalse(self.paths["summary"].exists())
 
+    def test_post_open_classification_observation_fails_closed(self):
+        # Reverse control for the theme producer's INDEPENDENT _validate_classification_observation gate:
+        # a classification snapshot observed AFTER the 09:30 ET decision-day open must be rejected (a
+        # post-decision current SIC snapshot cannot be relabelled as pre-decision theme evidence).
+        classification = _classification_packet(dict(_SECTORS))
+        classification["provenance"]["observed_at"] = "2026-06-15T15:00:00+00:00"  # 11:00 ET, after the 09:30 open
+        _write_json(self.paths["classification"], classification)
+        with self.assertRaisesRegex(_runner().FullUniverseThemeProducerError, "09:30 ET"):
+            self._run_packet()
+        self.assertFalse(self.paths["projection"].exists())
+
     def test_ticker_without_sector_is_neutral(self):
         sectors = {k: v for k, v in _SECTORS.items() if k != "JPM"}  # JPM has no sector at all
         _write_json(self.paths["classification"], _classification_packet(sectors))
