@@ -1183,16 +1183,18 @@ def run_fetch(
     fmp_call_stats: dict[str, int] = {"actual_request_count": 0}
     fmp_key = os.environ.get("FMP_API_KEY", "")
     fallback_targets = summary_counts["needs_market_cap"]
-    fmp_attempted = 0
+    fmp_planned = 0
     if fallback_targets and fmp_key:
-        fmp_attempted = min(len(fallback_targets), UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
-        print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_attempted}...", flush=True)
+        fmp_planned = min(len(fallback_targets), UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
+        print(f"      FMP 市值兜底: {len(fallback_targets)} 缺市值 → 取前 {fmp_planned}...", flush=True)
         fmp_caps = fetch_fmp_market_caps(fallback_targets, fmp_key, stats_out=fmp_call_stats)
         rows = apply_pass1(sec_map, sec_shares, market_data, governance=governance, fmp_caps=fmp_caps,
                            as_of=used_date, observed_at=generated_at, status_records=status_records)
         summary_counts = summarize_rows(rows)
     elif fallback_targets and not fmp_key:
         print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fallback_targets)} 缺市值未救回", flush=True)
+
+    fmp_attempted = fmp_call_stats.get("actual_request_count", 0)
 
     print(f"      eligible={summary_counts['eligible_count']}  "
           f"ineligible={summary_counts['ineligible_count']}  "

@@ -1013,6 +1013,7 @@ class TestRunFetchE2E(unittest.TestCase):
         sec_map = {
             "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
             "GOOGL": {"cik": 1652044, "exchange": "NASDAQ"},
+            "MSFT": {"cik": 789019, "exchange": "NASDAQ"},
         }
         shares = {320193: {"shares": 15_000_000_000, "end": "2026-03-31"}}
 
@@ -1020,7 +1021,15 @@ class TestRunFetchE2E(unittest.TestCase):
             return [
                 {"T": "AAPL", "c": 200.0, "v": 50_000_000},
                 {"T": "GOOGL", "c": 340.0, "v": 50_000_000},
+                {"T": "MSFT", "c": 450.0, "v": 50_000_000},
             ]
+
+        def stopped_fmp_fetch(tickers, key, *, budget=_mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET, stats_out=None):
+            self.assertEqual(tickers, ["GOOGL", "MSFT"])
+            self.assertEqual(budget, _mod.UNIVERSE_FMP_MKTCAP_FALLBACK_BUDGET)
+            if stats_out is not None:
+                stats_out["actual_request_count"] = 1
+            return {}
 
         cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
         cand.unlink(missing_ok=True)
@@ -1033,7 +1042,7 @@ class TestRunFetchE2E(unittest.TestCase):
                  patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
                  patch.object(_mod, "fetch_sec_shares", return_value=shares), \
                  patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
-                 patch.object(_mod, "fetch_fmp_market_caps", return_value={}), \
+                 patch.object(_mod, "fetch_fmp_market_caps", side_effect=stopped_fmp_fetch), \
                  patch.object(_mod, "fetch_nasdaq_trade_halt_feed",
                               return_value={"observed": True, "observed_at": "2026-06-29T12:00:00+00:00",
                                             "halted_symbols": []}), \
@@ -1054,7 +1063,9 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertEqual(fallback["state"], "usable_with_fallback")
         self.assertEqual(fallback["attempted_count"], 1)
         self.assertEqual(fallback["rescued_count"], 0)
-        self.assertEqual(fallback["unresolved_count"], 1)
+        self.assertEqual(fallback["unresolved_count"], 2)
+        self.assertEqual(summary["universe"]["fmp_mktcap_fallback_attempted"], 1)
+        self.assertEqual(summary["provider_call_evidence"]["fmp_profile_calls"], 1)
         self.assertFalse(fallback["provider_readiness_evidence"])
         self.assertTrue(health["critical_failure_no_emit_policy"])
         self.assertFalse(health["provider_selection_or_production_claimed"])
