@@ -1488,7 +1488,7 @@ def run_full_candidate_live_source_packet(
     run_data_context: bool = False,
     generated_at: str | None = None,
     observed_at: str | None = None,
-    theme_opportunity_state: str = "strong",
+    theme_opportunity_state: str = "no_strong_theme",
     forced_holding_tickers: list[str] | tuple[str, ...] | None = None,
     catalyst_recall_tickers: list[str] | tuple[str, ...] | None = None,
     sec_sleep_seconds: float = sample_validation.SEC_FAIR_ACCESS_SLEEP_SECONDS,
@@ -1499,6 +1499,13 @@ def run_full_candidate_live_source_packet(
     execution_mode: str = _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
     replay_source_capture: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    # This runner has no source-bound §4.3 theme-confirmation pool.  It must not accept a caller-selected strong
+    # state that changes Top15 seats; the conservative state preserves the no-strong seat split until that producer
+    # is explicitly wired and bound.
+    if theme_opportunity_state != "no_strong_theme":
+        raise FullCandidateLiveSourcePacketError(
+            "theme_opportunity_state must remain no_strong_theme until a source-bound theme confirmation producer exists"
+        )
     if not (isinstance(max_retries_per_call, int) and not isinstance(max_retries_per_call, bool)
             and 0 <= max_retries_per_call <= _MAX_RETRIES_PER_CALL_CAP):
         raise FullCandidateLiveSourcePacketError(
@@ -1797,7 +1804,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--raw-root", type=Path, default=RAW_SAMPLE_ROOT)
     parser.add_argument("--generated-at")
     parser.add_argument("--observed-at")
-    parser.add_argument("--theme-opportunity-state", default="strong")
+    parser.add_argument("--theme-opportunity-state", default="no_strong_theme")
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--confirm-user-authorization", action="store_true")

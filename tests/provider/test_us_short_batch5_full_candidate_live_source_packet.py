@@ -437,6 +437,26 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertFalse(self.paths["summary"].exists())
         self.assertFalse(self.paths["output"].exists())
 
+    def test_caller_selected_strong_theme_state_is_rejected_before_authorization_or_network(self):
+        client = FullCandidateFakeClient()
+
+        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "must remain no_strong_theme"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                theme_opportunity_state="strong",
+            )
+
+        self.assertEqual(client.urls, [])
+        self.assertFalse(self.paths["summary"].exists())
+        self.assertFalse(self.paths["output"].exists())
+
     def test_budget_mismatch_aborts_before_network(self):
         client = FullCandidateFakeClient()
 

@@ -268,12 +268,9 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         official_output_root=getattr(ctx, "official_output_root", None),
         now_et=ctx.now_et,
         context_components_path=ctx.context_components_path,
-        run_mode="research_live",   # real provider data, pre-authoritative research report (NOT operational; live→batch5)
-        # research_live is CAPSTONE-INTERNAL and bound to REAL EXECUTION (R-USSHORT-REVIEWQ-CAT1 Required A1): the
-        # receipt is NOT self-minted from a flag here — run_weekly_capstone injects it only after the exact provider
-        # stages complete and binds their summaries plus the source packet and every referenced source artifact.
-        # A direct bridge call, an injected test pipeline, or a dry run carries None here →
-        # run_e2e refuses research_live → fail closed (no false real-provider banner).
+        run_mode="mixed_source",   # real provider facts + receipt-bound caller action template; never research_live
+        # mixed_source is CAPSTONE-INTERNAL and bound to REAL EXECUTION plus the exact Batch4 action-template digest.
+        # A direct bridge call, an injected test pipeline, or a dry run carries None here → run_e2e refuses the mode.
         _research_live_capability=getattr(ctx, "research_live_capability", None),
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -194,6 +195,29 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
         self.assertEqual(packet["market_axis_regimes"]["vix"], "防御")
         self.assertEqual(packet["market_axis_regimes"]["market_trend"], original_axes["market_trend"])
         self.assertEqual(packet["market_axis_regimes"]["breadth"], original_axes["breadth"])
+
+    def test_provider_bridge_rejects_research_live_when_it_consumes_action_template(self) -> None:
+        """This bridge always consumes a caller template, so it cannot emit the fully-provider-derived label."""
+        with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "must use mixed_source"):
+            e2e.run_e2e(
+                source_packet_path=Path("missing-source.json"),
+                batch4_template_path=Path("missing-template.json"),
+                account_state_path=Path("missing-account.json"),
+                provider_health_path=Path("missing-health.json"),
+                private_root=Path("missing-private"),
+                now_et=datetime(2026, 6, 15, 9, 0, 0),
+                run_mode="research_live",
+            )
+
+    def test_template_bytes_must_match_receipt_digest_at_parse(self) -> None:
+        """A post-receipt replacement must fail before its action inputs can be consumed."""
+        with tempfile.TemporaryDirectory() as directory:
+            template = Path(directory) / "batch4_template.json"
+            template.write_bytes(TEMPLATE.read_bytes())
+            expected = hashlib.sha256(template.read_bytes()).hexdigest()
+            template.write_text('{"replaced": true}', encoding="utf-8")
+            with self.assertRaises(e2e.Batch5ToBatch4E2EError):
+                e2e._load_template(template, expected_sha256=expected)
 
     def test_local_source_packet_to_private_weekly_report_and_action_table(self) -> None:
         with tempfile.TemporaryDirectory() as private_dir:

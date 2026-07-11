@@ -470,13 +470,15 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 0.0,
             )
 
-    def test_research_live_run_emits_real_data_report_not_fixture(self) -> None:
-        # option a + R-USSHORT-REVIEWQ-CAT1 Required A: run_mode="research_live" is CAPSTONE-INTERNAL — it emits the
-        # honest real-data research report ONLY when handed a source-bound capstone execution receipt. The report carries the research
-        # sentinel (研究运行 / 真实 provider 数据), NOT the offline_test fixture lie, and the machine record carries the
-        # research run_origin. (The negative sibling below proves the SAME fixture packet WITHOUT the capability
-        # cannot get the real-provider banner.)
-        from engine.us_short_run_origin import RESEARCH_LIVE_RUN_ORIGIN, _issue_capstone_research_live_receipt
+    def test_mixed_source_run_emits_receipt_bound_provider_template_report_not_fixture(self) -> None:
+        # The bridge necessarily consumes a caller Batch4 action template, so a provider-backed bridge output is
+        # receipt-bound mixed_source, never research_live. Its report must disclose both origins and remain
+        # non-operational.
+        from engine.us_short_run_origin import (
+            MIXED_SOURCE_DISCLOSURE_SENTINEL,
+            MIXED_SOURCE_RUN_ORIGIN,
+            _issue_capstone_research_live_receipt,
+        )
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
             funnel.sample_validation, "_read_windows_environment_value", return_value=None
@@ -505,24 +507,6 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
             for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
         )
-        receipt = _issue_capstone_research_live_receipt(
-            run_id=hashlib.sha256(
-                f"{_DECISION_DATE}|2026-06-15T13:01:00Z|{source_packet_path.resolve()}|{source_digest}|{evidence_digest}".encode("utf-8")
-            ).hexdigest(),
-            decision_date=_DECISION_DATE,
-            generated_at="2026-06-15T13:01:00Z",
-            completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
-            source_packet_path=source_packet_path.resolve(),
-            source_packet_sha256=source_digest,
-            source_artifact_manifest=source_manifest,
-            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
-                                  ("pass2_fetch", 16)),
-            provider_summary_digests=provider_summary_digests,
-            provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
-            provider_evidence_sha256=evidence_digest,
-        )
-
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
@@ -531,6 +515,25 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 private_root / "provider_health_mismatch.json", {"fmp": "down", "sec_edgar": "down"}
             )
             template = _no_build_template(private_root / "batch4_template.json")
+            template_digest = hashlib.sha256(template.read_bytes()).hexdigest()
+            receipt = _issue_capstone_research_live_receipt(
+                run_id=hashlib.sha256(
+                    f"{_DECISION_DATE}|2026-06-15T13:01:00Z|{source_packet_path.resolve()}|{source_digest}|{evidence_digest}|{template_digest}".encode("utf-8")
+                ).hexdigest(),
+                decision_date=_DECISION_DATE,
+                generated_at="2026-06-15T13:01:00Z",
+                completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+                                  "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
+                source_packet_path=source_packet_path.resolve(),
+                source_packet_sha256=source_digest,
+                source_artifact_manifest=source_manifest,
+                action_input_manifest=(("batch4_action_template", str(template.resolve()), template_digest),),
+                provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
+                                      ("pass2_fetch", 16)),
+                provider_summary_digests=provider_summary_digests,
+                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
+                provider_evidence_sha256=evidence_digest,
+            )
 
             with self.assertRaises(e2e.Batch5ToBatch4E2EError):
                 e2e.run_e2e(
@@ -542,7 +545,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                     private_root=private_root,
                     now_et=datetime(2026, 6, 15, 9, 0, 0),
                     context_components_path=self.paths["components"],
-                    run_mode="research_live",
+                    run_mode="mixed_source",
                     _research_live_capability=receipt,
                     bootstrap_lifecycle=True,
                     generated_at="2026-06-15T13:01:00Z",
@@ -559,7 +562,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                 private_root=private_root,
                 now_et=datetime(2026, 6, 15, 9, 0, 0),
                 context_components_path=self.paths["components"],
-                run_mode="research_live",
+                run_mode="mixed_source",
                 _research_live_capability=receipt,
                 bootstrap_lifecycle=True,
                 generated_at="2026-06-15T13:01:00Z",
@@ -569,17 +572,20 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             report_path = private_root / "weekly_private" / _DECISION_DATE / "weekly_report.md"
             self.assertTrue(report_path.exists())
             report_text = report_path.read_text(encoding="utf-8")
-            self.assertIn("研究运行", report_text)                 # honest real-data research provenance
-            self.assertIn("真实 provider", report_text)
-            self.assertNotIn("调用方注入 fixture", report_text)     # NOT the offline_test fixture lie
+            self.assertIn(MIXED_SOURCE_DISCLOSURE_SENTINEL, report_text)
+            self.assertIn("caller template", report_text)
+            self.assertNotIn("OFFLINE_TEST", report_text)
             machine_record = json.loads(
                 (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8"))
-            self.assertEqual(machine_record["run_origin"], RESEARCH_LIVE_RUN_ORIGIN)
+            self.assertEqual(machine_record["run_origin"], MIXED_SOURCE_RUN_ORIGIN)
+            self.assertEqual(summary["scope"]["execution_mode"], "live_provider_fetch")
+            self.assertEqual(summary["scope"]["report_mode"], "mixed_source")
+            self.assertEqual(summary["scope"]["operational_use"], "not_authorized")
             blob = json.dumps(summary, ensure_ascii=False)
             self.assertNotIn("UNIT_TEST_FMP_SECRET", blob)
             self.assertNotIn("UNIT_TEST_MASSIVE_SECRET", blob)
 
-    def test_research_live_receipt_rejects_changed_referenced_source_artifact(self) -> None:
+    def test_mixed_source_receipt_rejects_changed_referenced_source_artifact(self) -> None:
         from engine.us_short_run_origin import _issue_capstone_research_live_receipt
 
         client = FullCandidateFakeClient()
@@ -610,30 +616,31 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                                                separators=(",", ":")).encode("utf-8")).hexdigest())
             for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
         )
-        receipt = _issue_capstone_research_live_receipt(
-            run_id=hashlib.sha256(b"source-artifact-tamper-test").hexdigest(),
-            decision_date=_DECISION_DATE,
-            generated_at="2026-06-15T13:01:00Z",
-            completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-                              "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
-            source_packet_path=source_packet_path.resolve(),
-            source_packet_sha256=source_digest,
-            source_artifact_manifest=source_manifest,
-            provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
-                                  ("pass2_fetch", 16)),
-            provider_summary_digests=provider_summary_digests,
-            provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
-            provider_evidence_sha256=evidence_digest,
-        )
-        packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
-        changed_path = ROOT / packet["paths"]["candidate_artifact_path"]
-        changed_path.write_text(changed_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
-
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
             health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
             template = _no_build_template(private_root / "batch4_template.json")
+            template_digest = hashlib.sha256(template.read_bytes()).hexdigest()
+            receipt = _issue_capstone_research_live_receipt(
+                run_id=hashlib.sha256(b"source-artifact-tamper-test").hexdigest(),
+                decision_date=_DECISION_DATE,
+                generated_at="2026-06-15T13:01:00Z",
+                completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
+                                  "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime"),
+                source_packet_path=source_packet_path.resolve(),
+                source_packet_sha256=source_digest,
+                source_artifact_manifest=source_manifest,
+                action_input_manifest=(("batch4_action_template", str(template.resolve()), template_digest),),
+                provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1), ("sic_fetch", 1),
+                                      ("pass2_fetch", 16)),
+                provider_summary_digests=provider_summary_digests,
+                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
+                provider_evidence_sha256=evidence_digest,
+            )
+            packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
+            changed_path = ROOT / packet["paths"]["candidate_artifact_path"]
+            changed_path.write_text(changed_path.read_text(encoding="utf-8") + "\n", encoding="utf-8")
             with self.assertRaises(e2e.Batch5ToBatch4E2EError):
                 e2e.run_e2e(
                     source_packet_path=source_packet_path,
@@ -644,7 +651,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                     private_root=private_root,
                     now_et=datetime(2026, 6, 15, 9, 0, 0),
                     context_components_path=self.paths["components"],
-                    run_mode="research_live",
+                    run_mode="mixed_source",
                     _research_live_capability=receipt,
                     bootstrap_lifecycle=True,
                     generated_at="2026-06-15T13:01:00Z",
@@ -652,12 +659,9 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertFalse((private_root / "weekly_private").exists())
             self.assertFalse((private_root / "runs_private").exists())
 
-    def test_research_live_standalone_fixture_cannot_get_real_provider_banner(self) -> None:
-        # R-USSHORT-REVIEWQ-CAT1 Required A (the exact reviewer probe): a generic batch5->batch4 caller feeding a
-        # local/fixture source packet must NOT be able to stamp the "真实 provider 数据" research banner. Neither an
-        # ABSENT capability, nor a FORGED one (True / a look-alike object), can obtain research_live — run_e2e fails
-        # closed BEFORE any report/action/record write. (The capstone receipt is source-bound.)
-        from engine.us_short_run_origin import _issue_capstone_research_live_receipt
+    def test_research_live_bridge_is_refused_before_fixture_consumption(self) -> None:
+        # A template-consuming bridge may never select research_live, even before it reads a fixture packet or a
+        # purported receipt. It must direct callers to the honest mixed_source contract.
 
         with tempfile.TemporaryDirectory() as private_dir:
             private_root = Path(private_dir)
@@ -668,7 +672,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
 
             for forged in (None, True, object(), "yes"):   # absent + forged attestations all fail closed
                 kwargs = {} if forged is None else {"_research_live_capability": forged}
-                with self.assertRaises(e2e.Batch5ToBatch4E2EError):
+                with self.assertRaisesRegex(e2e.Batch5ToBatch4E2EError, "must use mixed_source"):
                     e2e.run_e2e(
                         source_packet_path=fixture_packet,
                         batch4_template_path=template,
@@ -676,47 +680,12 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
                         provider_health_path=health,
                         private_root=private_root,
                         now_et=datetime(2026, 6, 15, 9, 0, 0),
-                        run_mode="research_live",   # capstone-internal mode refused without a valid source-bound receipt
+                        run_mode="research_live",
                         bootstrap_lifecycle=True,
                         generated_at="2026-06-15T13:01:00Z",
                         **kwargs,
                     )
-            fixture_digest = hashlib.sha256(fixture_packet.read_bytes()).hexdigest()
-            provider_summary_digests = tuple(
-                (stage, hashlib.sha256(json.dumps({"stage": stage}, sort_keys=True,
-                                                   separators=(",", ":")).encode("utf-8")).hexdigest())
-                for stage in ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch", "vix_regime")
-            )
-            valid_receipt = _issue_capstone_research_live_receipt(
-                run_id=hashlib.sha256(b"missing-generated-at-test").hexdigest(),
-                decision_date=_DECISION_DATE,
-                generated_at="2026-06-15T13:01:00Z",
-                completed_stages=("universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch",
-                                  "theme_producer", "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch",
-                                  "vix_regime"),
-                source_packet_path=fixture_packet.resolve(),
-                source_packet_sha256=fixture_digest,
-                source_artifact_manifest=(("fixture", str(fixture_packet.resolve()), fixture_digest),),
-                provider_call_counts=(("universe_fetch", 1), ("momentum_fetch", 1),
-                                      ("sic_fetch", 1), ("pass2_fetch", 1)),
-                provider_summary_digests=provider_summary_digests,
-                provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")),
-                provider_evidence_sha256="2" * 64,
-            )
-            with self.assertRaises(e2e.Batch5ToBatch4E2EError) as cm:
-                e2e.run_e2e(
-                    source_packet_path=fixture_packet,
-                    batch4_template_path=template,
-                    account_state_path=account,
-                    provider_health_path=health,
-                    private_root=private_root,
-                    now_et=datetime(2026, 6, 15, 9, 0, 0),
-                    run_mode="research_live",
-                    _research_live_capability=valid_receipt,
-                    bootstrap_lifecycle=True,
-                )
-            self.assertIn("generated_at", str(cm.exception))
-            # fail-closed: the refused runs wrote NO official output (no real-provider banner anywhere).
+            # Fail-closed: the refused runs wrote no official output.
             self.assertFalse((private_root / "weekly_private").exists())
             self.assertFalse((private_root / "runs_private").exists())
 

@@ -33,6 +33,7 @@ DEFAULT_CALENDAR_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.j
 DEFAULT_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 FULL_CANDIDATE_LIVE_PROJECTION_BINDING = source_packet_runner.FULL_CANDIDATE_LIVE_PROJECTION_BINDING
 PROJECTION_INPUTS_BINDING = source_packet_runner.PROJECTION_INPUTS_BINDING
+_PROVIDER_RECEIPT_RUN_MODES = frozenset({"research_live", "mixed_source"})
 
 _TEMPLATE_KEYS = frozenset(
     {
@@ -165,8 +166,18 @@ def _remember_root(path: Path, *, cleanup_roots: list[Path], existed_before: dic
     cleanup_roots.append(resolved)
 
 
-def _load_template(path: Path) -> dict[str, Any]:
-    template = _read_json(path, "batch4 template")
+def _load_template(path: Path, *, expected_sha256: str | None = None) -> dict[str, Any]:
+    try:
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise Batch5ToBatch4E2EError("batch4 template could not be read") from exc
+    actual_sha256 = hashlib.sha256(raw).hexdigest()
+    if expected_sha256 is not None and actual_sha256 != expected_sha256:
+        raise Batch5ToBatch4E2EError("batch4 template changed after receipt binding")
+    try:
+        template = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as exc:
+        raise Batch5ToBatch4E2EError("batch4 template could not be read as UTF-8 JSON") from exc
     if not isinstance(template, dict):
         raise Batch5ToBatch4E2EError("batch4 template must be a JSON object")
     missing = _TEMPLATE_KEYS - set(template)
@@ -309,21 +320,27 @@ def run_e2e(
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
         raise Batch5ToBatch4E2EError("now_et must be a naive ET datetime")
-    # R-USSHORT-REVIEWQ-CAT1 Required A — research_live is CAPSTONE-INTERNAL: minted ONLY when the caller holds the
+    # This bridge always consumes a caller-provided Batch4 action template.  A fully provider-derived research_live
+    # label is therefore impossible here; a future no-template bridge must be a separately implemented path.
+    if run_mode == "research_live":
+        raise Batch5ToBatch4E2EError(
+            "batch5-to-batch4 bridge consumes caller action inputs and must use mixed_source, never research_live"
+        )
+    # Provider-backed report modes are CAPSTONE-INTERNAL: minted ONLY when the caller holds the
     # run-specific capstone receipt (bound to source path/digest + provider evidence, NOT a caller-settable boolean).
     # A generic batch5->batch4 caller feeding an arbitrary/fixture
     # source packet cannot obtain it, so the report can never falsely banner "真实 provider 数据". Only the capstone's
     # run_weekly_bridge passes it, after its per-execution SR-PROVIDER-001 authorization + gated live fetch; the CLI
-    # cannot (research_live is not an argparse choice).
-    if run_mode == "research_live" and not is_capstone_research_live_capability(_research_live_capability):
+    # cannot select either provider-backed mode.
+    if run_mode in _PROVIDER_RECEIPT_RUN_MODES and not is_capstone_research_live_capability(_research_live_capability):
         raise Batch5ToBatch4E2EError(
-            "research_live 为 capstone 内部 run_origin（须持 source-bound execution receipt，源自授权的一键 capstone live 取数"
+            "provider-backed run_mode 为 capstone 内部 run_origin（须持 source-bound execution receipt，源自授权的一键 capstone live 取数"
             "执行）；通用 batch5->batch4 调用方不可对任意/fixture source packet 选择——请走 weekly capstone")
 
     source_packet = _resolve_existing_path(source_packet_path, label="source_packet_path")
-    if run_mode == "research_live":
+    if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
         if not isinstance(generated_at, str) or not generated_at:
-            raise Batch5ToBatch4E2EError("research_live requires the receipt-bound generated_at")
+            raise Batch5ToBatch4E2EError("provider-backed run_mode requires the receipt-bound generated_at")
         source_digest = hashlib.sha256(source_packet.read_bytes()).hexdigest()
         try:
             source_manifest = source_packet_runner.source_packet_input_manifest(source_packet)
@@ -336,21 +353,34 @@ def run_e2e(
             )
         except (RunOriginError, source_packet_runner.SourcePacketError, OSError) as exc:
             raise Batch5ToBatch4E2EError(
-                "research_live receipt does not bind the consumed source packet and source artifacts"
+                "provider-backed receipt does not bind the consumed source packet and source artifacts"
             ) from exc
     template_path = _resolve_existing_path(batch4_template_path, label="batch4_template_path")
+    action_input_manifest = ((
+        "batch4_action_template", str(template_path), hashlib.sha256(template_path.read_bytes()).hexdigest(),
+    ),)
+    if run_mode == "mixed_source":
+        try:
+            require_research_live_receipt_binding(
+                _research_live_capability,
+                action_input_manifest=action_input_manifest,
+            )
+        except (RunOriginError, OSError) as exc:
+            raise Batch5ToBatch4E2EError(
+                "mixed_source receipt does not bind the consumed Batch4 action template"
+            ) from exc
     account_path = _private_path(account_state_path, label="account_state_path")
     if not account_path.is_file():
         raise Batch5ToBatch4E2EError("account_state_path must be an existing private file")
     provider_health = _load_provider_health(
         _resolve_existing_path(provider_health_path, label="provider_health_path")
     )
-    if run_mode == "research_live":
+    if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
         try:
             require_research_live_provider_health(_research_live_capability, provider_health)
         except RunOriginError as exc:
             raise Batch5ToBatch4E2EError(
-                "research_live provider health does not match the receipt-bound provider outcome"
+                "provider-backed provider health does not match the receipt-bound provider outcome"
             ) from exc
     private_root_path = _private_path(private_root, label="private_root")
     official_output_root_path = (
@@ -392,7 +422,7 @@ def run_e2e(
             context_components_path=components_path,
             projection_binding_expectations=projection_binding_expectations,
         )
-        if run_mode == "research_live":
+        if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
             try:
                 require_research_live_receipt_binding(
                     _research_live_capability,
@@ -403,7 +433,7 @@ def run_e2e(
                 )
             except (RunOriginError, source_packet_runner.SourcePacketError, OSError) as exc:
                 raise Batch5ToBatch4E2EError(
-                    "research_live source packet or source artifacts changed during consumption"
+                    "provider-backed source packet or source artifacts changed during consumption"
                 ) from exc
         components = _read_json(components_path, "context components")
         if not (
@@ -413,7 +443,7 @@ def run_e2e(
             raise Batch5ToBatch4E2EError(
                 "context components must contain data_context/per_ticker_analysis/run_provenance"
             )
-        if run_mode == "research_live":
+        if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
             try:
                 require_research_live_receipt_binding(
                     _research_live_capability,
@@ -422,12 +452,12 @@ def run_e2e(
                 )
             except (AttributeError, RunOriginError) as exc:
                 raise Batch5ToBatch4E2EError(
-                    "research_live receipt does not bind the assembled run identity"
+                    "provider-backed receipt does not bind the assembled run identity"
                 ) from exc
 
         packet = _assemble_batch4_packet(
             components=components,
-            template=_load_template(template_path),
+            template=_load_template(template_path, expected_sha256=action_input_manifest[0][2]),
             provider_health=provider_health,
             account_state_path=account_path,
             calendar_path=calendar,
@@ -459,6 +489,9 @@ def run_e2e(
             "lane": "us_short",
             "batch": "batch5_to_batch4_weekend_e2e",
             "status": "batch5_source_packet_to_batch4_outputs_completed",
+            "execution_mode": "live_provider_fetch" if run_mode == "mixed_source" else "offline_local_assembly",
+            "report_mode": run_mode,
+            "operational_use": "not_authorized",
             "network_access_required": False,
             "provider_calls_performed": False,
             "raw_payloads_read": False,

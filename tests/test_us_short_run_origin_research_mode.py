@@ -16,6 +16,8 @@ from engine.us_short_run_origin import (  # noqa: E402
     OFFLINE_DISCLOSURE_SENTINEL,
     OFFLINE_TEST_RUN_ORIGIN,
     PROVIDER_AUTHORITATIVE_CLEAN_MARK,
+    MIXED_SOURCE_DISCLOSURE_SENTINEL,
+    MIXED_SOURCE_RUN_ORIGIN,
     RESEARCH_DISCLOSURE_SENTINEL,
     RESEARCH_LIVE_RUN_ORIGIN,
     RunOriginError,
@@ -51,6 +53,14 @@ class ResearchLiveHonestyFact(unittest.TestCase):
         self.assertEqual(RESEARCH_LIVE_RUN_ORIGIN["run_mode"], "research_live")
         self.assertEqual(RESEARCH_LIVE_RUN_ORIGIN["data_origin"], "real_provider_pre_authoritative")
         self.assertEqual(RESEARCH_LIVE_RUN_ORIGIN["operational_use"], "not_authorized")
+
+    def test_mixed_source_fact_discloses_template_bound_action_inputs(self):
+        """A real provider fetch with caller template action inputs is never labelled research_live."""
+        self.assertEqual(MIXED_SOURCE_RUN_ORIGIN["run_mode"], "mixed_source")
+        self.assertEqual(MIXED_SOURCE_RUN_ORIGIN["data_origin"], "real_provider_plus_caller_template")
+        self.assertEqual(MIXED_SOURCE_RUN_ORIGIN["operational_use"], "not_authorized")
+        self.assertEqual(offline_disclosure_lines(MIXED_SOURCE_RUN_ORIGIN)[0], MIXED_SOURCE_DISCLOSURE_SENTINEL)
+        self.assertEqual(run_origin_for_mode("mixed_source"), MIXED_SOURCE_RUN_ORIGIN)
 
     def test_both_facts_validate_and_for_mode_maps_them(self):
         self.assertEqual(validate_run_origin(OFFLINE_TEST_RUN_ORIGIN), OFFLINE_TEST_RUN_ORIGIN)

@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-07-11 — Codex 修复（US-short R3 第二项审查 Required：桥接旧测试契约）
+
+- **Verdict/Action**: 已修复审查指出的两条旧 `research_live` bridge 测试；正向与 source-artifact-tamper 路径改为 template-digest-bound `mixed_source`，负向路径只断言 bridge 直接拒绝 `research_live`。
+- **Required**: 无已知业务逻辑残留；独立 Claude 审查仍必需。完整风险、第三条同类旧路径和环境验证边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`。
+- **Verify**: 源码编译、`research_live`/caller-`strong` 两条 fail-closed 直接探针、注入式 capstone summary **1 OK**、第二 source-packet runner 反向单测 **1 OK**；`weekly_capstone` + `run_origin` 71 条中 68 条通过、3 条均被缺失 `rpds.rpds` / `jsonschema` 阻断；三个 fixture-backed 后续测试及完整 `test_us_short*.py` 也在断言前被同一环境阻断；`git diff --check` 仅既有 CRLF notice。
+- **Pre-Codex self-review**: 同类 grep 后仅保留明确的 `research_live` 入口拒绝负测；正向和篡改消费均 receipt-bound `mixed_source`；两 source-packet runner 均有 `no_strong_theme` 反向断言，且 capstone 三模式字段已直接断言；未改 `CURRENT` / README / 业务实现。
+- **Next**: Claude Code：审查
+
+## 2026-07-11 — Codex 修复（US-short R3 第二项：环境/动作模板来源绑定）
+
+- **Verdict/Action**: 已修复 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`；模板驱动的真实 provider 桥接不再标为 `research_live`，改为 receipt-bound `mixed_source` / `not_authorized`；未提交。
+- **Required**: 无已知残留；完整事实、风险和未接线生产者边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`。
+- **Verify**: 新增红测后 focused provenance/receipt/bridge **17 OK**，两 source-packet runner 的 caller-`strong` 反向探针均 fail-closed，`py_compile`/`git diff --check`/BOM 通过；完整 `test_us_short*.py` wrapper 因本工作树 `jsonschema/rpds` 缺失在 discovery 前阻塞。
+- **Pre-Codex self-review**: A-F — A 覆盖 run-origin/receipt/Batch4/orchestrator/schema/CLI 两 source-packet runner；B grep 确认无 `run_mode="research_live"` producer 和无 `default="strong"`；C 覆盖 legacy research_live 拒绝、模板 digest 替换、caller-strong；E 未改 CURRENT/README。独立 current-diff 审查先 FAIL 两项（legacy research_live + template TOCTOU）均已红绿修复；一次超时重启后 PASS；固定包集中运行一次。
+- **Next**: Claude Code：审查
+
 ## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)
 
 - **Verdict/Action**: PASS（未提交、留主树待 `提交`）。亲验非信 Codex：classify 的 k2 门（`len(met)>=3 AND close>=ma10+k2*atr`）+ warning 趋势梯（`close>ma5>ma10>ma20 AND close>=ma10+k1*atr`）+ `>=` 边界 + 缺 MA fail-closed 全正确；闭世界 validator 旧「非 chasing 不得携 ≥K 条件」不变式已正确放开（带理由、保留 chasing⟹≥K 方向）。**顶下那条「Independent review PASS」系 Codex 自审的 current-diff agent（只读 diff、引 Codex 自身测数），非 role-split 独立审查；本条为权威独立审查。**
