@@ -56,6 +56,42 @@
 - **Required**: 无（规划、非 finding）。**Build scope（Codex 执行，逐独立刀 + 各自 register/SESSION_LOG block、全 offline）**：先 ①**三点只读扫描**（RR base 可否 neutral / 等权·等风险 sizing 是否现成 / `paper_ledger` 是否只单档持久化 → 收窄刀数；主要定第二波，不挡首日核心），落 SESSION_LOG 报结果。再建**首日核心**：② capstone 接线选股层比较（`shadow_compare` 4档 + `catalyst_off` 入 frozen preset 第5档 + `scorecard_comparison` + 私密落盘 §11.6 + 脱敏汇总）③ 多周 + `lifecycle_eval` stage ④ overext-off 变体（注入置空、**不改 shipped overext 引擎**）⑤ 每票精确决策差分日志 ⑥ manifest + policy 网格 + 统计计划预注册。执行层头（RR/仓位/进场）+ 经济 veto 稀疏物化 = **第二波、可缓**。
 - **Verify**: 规划 handoff、无验证。**审查重点（Claude 复审每刀）**：接线纯 additive（不破 12-stage / canonical 锚 / gated 边界）；**影子头永不计 ship-gate**（§12.2 隔离，comparators 已 enforce、wiring 须保住）；**决策时零新增 provider 调用**（头共享冻结快照、前向价复用 grouped-daily）；含票名 shadow 选股 private/gitignored；硬门（数据/PIT/停牌）永不 shadow-off、仅经济 veto。**边界**：不改 §12.2 设计文档（框架待建成审过再谈落 repo）、不碰 frozen spec、不 push、不跨 A 股/真钱/ship-gate。
 - **Next**: Codex：执行（先三点扫描）
+## 2026-07-11 — Claude 独立审查 PASS（US-short A1 Path A revert：Path B 已除、六头 fail-closed、已提交）
+
+- **Verdict/Action**: PASS + 提交（9479 detached，未 push）。Path A 正确落地：六个 live shadow 选择头对同一 PIT 冻结快照即时重打分并 live 物化，无延迟物化、无 §2.1/§12.2 例外；Path B（store/manifest/contract/其测试/`forward_policy_private`）全缺席（仅存历史+register+移除断言）；grid/schema const-pin Path A；heads 仅被自身测试导入（未接线、零选股影响）。细节见 register。
+- **Required**: 无。`R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` → resolved（单源见 register）。
+- **Verify**: 亲验非信 diff：整读 heads+grid/schema+§2.1/§12.2（恢复「事后重构不算数」）、catalyst_off 8/15·7/15 核对 raw `blocks_used`、系统 jsonschema 独立复验两 schema、#28/#36 三角一致、§6a 独立 agent 两问 CLEAN；亲跑 focused heads `8 OK`、doc guards `60 OK`、全 `test_us_short*` `3018 ran/306 err/20 fail` 全为 9479 树 rpds env 影子（CAT8、与 Codex 同环境吻合）、零 reviewed-slice 回归、未伪称全包通过。
+- **Next**: merge 9479→master + CURRENT §0 settled delta + push 为后续人工步（push 先核私密 remote）。
+
+## 2026-07-11 — Codex 修复完成，待 Claude 独立审查（US-short A1 Path A revert）
+
+- **Verdict/Action**: 已按 `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 撤回被拒的 Path B：删除 delayed-materialization manifest/capture 层，恢复 §2.1/§12.2 的无事后重构规则；六个 selection heads 保留为同一 PIT 快照的 live shadow，`overextension_execution_off` 改为以后账本接通才开始的 second-wave-live 槽。未接账本、未改主轨/provider/ship-gate、未提交或 push。
+- **Required**: 此 R-ID 仍为 open P1，须 Claude 独立核对 Path B 已完全移除、heads/grid/schema/design 三角一致；完整边界与 closure criteria 见 `docs/system_risk_register.md`。
+- **Verify**: 红测 `heads` 8 例中 1 failure + 1 error 复现旧 grid/Path-B surfaces；修后 focused heads/shadow/PIT/selection/route guards `176 OK`、review-cycle template guard `1 OK`，静态 grid+lifecycle 三角与 `py_compile` OK。完整离线 `test_us_short*.py` 尝试为 `3018 ran / 26 failures / 306 errors / 266 skipped`，仍由既有 `jsonschema/rpds` 缺失及其 fail-closed 连锁阻断；未安装依赖、未伪称全包通过。
+- **Pre-Codex self-review**: A：六即时头 + 唯一 second-wave-live 执行头；B：活动面 Path-B grep 除测试 guard 外为 0；C：新增 guard 同时拒旧 grid 键、Path-B 文件与 active design 例外；E：`CURRENT` 未改；F：JSON 静态三角/编译已过。未启用独立 agent；固定包集中运行一次。
+- **Next**: Claude Code：仅独立审查 `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 当前未提交 scope；PASS 后仅提交该 scope，不 push。
+
+## 2026-07-11 — Claude 独立复审 FAIL (US-short A1：Codex 修反方向、建成更多 Path B、须 revert 到 Path A)
+
+- **Verdict/Action**: FAIL（未提交）。用户已选 **Path A**（live shadow 重打分、无延迟物化、不改 §2.1/§12.2）。本轮「修复」却**继续建 Path B**：新增 `engine/us_short_forward_policy_store.py`（docstring 自认「precommitted_delayed_materialization 的 decision-time 半」）、§2.1/§12.2 例外 + contract 文档 + forward_policy_private 全**原封未撤且扩了一圈**。选股头那半仍正确、没碰坏。设计意图反向 = FAIL。
+- **Required**: 照本 register `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 的 Path A 版执行：**留** heads/grid/3 测试/§13.1 文字；**删** contract 文档、`us_short_forward_policy_store.py`+测试、manifest replay 证据类；**撤** §2.1/§12.2 例外段 + §11.1/§11.6/.gitignore 的 forward_policy_private；manifest 若留=纯预注册+审计（无 replay）；`overextension_execution_off`=second-wave-live 延后槽（不 replay、下一刀建账本后 live 跑）。**禁** §2.1/§12.2 契约改 / replay 证据类 / delayed-materialization contract；deferred 头需别机制 → STOP+surface。
+- **Verify**: 独立复审整读 worktree diff：`store.py` docstring + §2.1/§12.2 例外 + contract 文档 present（全 Path B、未撤）；heads/grid 未坏；未跑全包（方向 FAIL、测 Path B 无意义）。根因：Claude 的 Path A verdict 先前写在 D:\ 树、未进本 worktree，Codex 照本树 Path B register 修 → 已把 Path A 指令写进本 worktree register + 本条。
+- **Next**: Codex：修复（重读 register R-USSHORT-A1 的 Path A 版、revert Path B、留选股头）
+
+## 2026-07-11 — Codex 修复完成，待 Claude 独立审查（US-short A1 manifest/capture persistence）
+
+- **Verdict/Action**: 按用户 `修复` 完成 `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 的即时 capture：私密原子 artifact 写 manifest + 6 头 + 6 选择结果；load 重算 8 refs 和 manifest/head/decision digest。只收前一收盘至目标 RTH open 窗口；未接 capstone receipt/未做 deferred ledger，未改主轨、ship-gate 或 provider。
+- **Required**: `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 仍 open，详见 register：下一刀只可把 capture digest 绑到 canonical capstone receipt/publish，再按序实现 deferred ledger；未 receipt 的 direct capture 仍 research-only。
+- **Verify**: focused privacy/heads/selection/canonical/doc-route `186 OK`；`py_compile`、静态 JSON 三角、`git check-ignore`、`git diff --check` 通过。三项 jsonschema schema tests 仍被既有 bundled Python 缺匹配 `rpds` 扩展阻断，未伪称通过。
+- **Pre-Codex self-review**: A：8 refs/6 头/3 digest；B：`rg -n "does not yet write a private manifest|Implementation starts with the manifest" docs/us_short_system_design.md docs/us_short_forward_policy_materialization_contract.md docs/system_risk_register.md engine tests .gitignore` = 0；C：pre-close/post-open/later-now 与输入/头/决策/manifest 篡改均拒；E：`CURRENT` 未改；F：UTF-8/compile/diff clean。轻量独立复审抓 3 个时间窗缺口，补测后 PASS。
+- **Next**: Claude Code：独立审查本 A1 persistence repair scope；PASS 后仅提交本 scope，不 push。
+
+## 2026-07-11 — Codex 执行完成，待 Claude 独立审查（US-short A1 manifest contract + 选择层 policy heads）
+
+- **Verdict/Action**: 已新增私密 `precommitted_delayed_materialization` contract/schema、冻结 A1 grid，及纯本地六个即时选择头（含 `catalyst_off`、`overextension_selection_off`）；`overextension_execution_off` 只预注册为顺序延后，`sizing_neutral` 未臆定公式。未接 capstone 持久化/纸面分支账本、未改主轨、未提交/未 push/未联网。
+- **Required**: `R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` 保持 open，详见 register：Claude 需独立核对 manifest 的时间/哈希边界、catalyst 8/15+7/15 重分配、过热选择/执行拆分，以及六头仅复用权威 `run_selection`；后续持久化/顺序账本另刀。
+- **Verify**: pure focused `129 OK`；score-seam/shadow/paper 回归 `137 OK`；静态 JSON contract check、`py_compile`、README/route guards、`git diff --check` 均通过。完整 `test_us_short*.py` 尝试为 `3023 ran / 26 failures / 312 errors / 266 skipped`，因现有 bundled Python 缺匹配 `rpds` 扩展而出现大量 schema import/fail-closed 连锁，不能当全包 green；三个新增 jsonschema tests 同样未伪称通过。
+- **Next**: Claude Code：独立审查本 A1 contract/head scope；PASS 后仅提交本 scope，不 push。
 
 ## 2026-07-11 — Claude 独立审查 PASS (US-short §4.3 overextension k1=1.75/k2=2.50 §13.1 #36 prior)
 

@@ -136,6 +136,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 ```
 - **权重 = initial prior**（美股 active-only 回测证明不了 alpha）→ forward + lifecycle 校准（§13 #1）。
 - **`scoring_profile`（命名权重档 + 一键回滚）**：`balanced`（40/35/25，**v1 唯一主建议档 / 唯一 `model_paper` 主轨**；系统不自动交易——只有用户真实手动成交 + 完成 reconciliation 后才进 `manual_actual`/`live_normalized` 并计 ship-gate，§12）、`theme_plus`（加重赛道，仅 shadow 比较）、`theme_aggressive`（更激进赛道，仅 shadow 比较）、`theme_off`（赛道权重归 0、重分配给动量+催化，仅 shadow——归因基准 + 回滚锚，§12.2）。回滚/调权重 = 改配置不改码；比较档只 shadow、不交易、不计入 ship-gate（§12.2）。
+- **A1 live shadow policy heads（只作 shadow）**：除命名权重档外，`catalyst_off` 只关催化剂权重并按原 40:35 比例重分给动量/赛道；`overextension_selection_off` 只恢复 `chasing_extreme` 的赛道分/赛道席位，不改观测到的过热状态或执行旗标。两者和命名权重档都在同一决策时点 PIT 快照即时分叉并 live 物化；`overextension_execution_off` 只关 warning 的执行旗标，待后续影子分支账本接通后才从该时点起 second-wave-live 跑，账本前周数不算该头的 forward 证据。所有头不改 `balanced` 主轨、不计 ship-gate。
 - **标准化（v1 锁定默认）**：三块都映射 0–100——动量 = 全池分位、赛道 = GICS/主题池内分位（确认门内再按 `heat × persistence × fit` 连续合成，§4.3；行业热与跨行业主题热正交去重，§4.3）、催化剂 = 规则映射分（非分位）；z-score 挂 lifecycle。
 - **缺分量**：某块算不出（小票无分析师、`FMP grades` 覆盖不足/付费墙 → 催化剂中的 analyst-grades 分量缺）→ 该分量按中性 + `data_quality` 降级 + 标签；不偷偷重新归一放大权重，也不因这个 advisory 分量单独阻断 emit（§3.2）。
 - **三块细分**：动量（1月/3月趋势、5-10日动量、相对 SPY/QQQ、相对 sector、放量）；赛道（§4.3）；催化剂（财报实际vs预期、分析师修正、8-K/订单/产品/监管/LLM 语义——**仅已实现/当前**，未来事件不进选股分、归 §8.1）。
@@ -327,6 +328,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **禁止挑样本展示**：shadow 报告必须按固定 TopN + 固定成交规则全量输出，不许只展示上涨票/热门票/事后表现好的票。
 - **ship-gate 隔离**：只有 `balanced`（实际运行主轨）**经其 `live_normalized` 证据**计入 ship-gate（§12）；`theme_plus / theme_aggressive` 永远 shadow（paper-only、不交易）——只能证明"是否值得升级主系统"，绝不能直接算毕业、不能绕过正式验证。
 - **`theme_off` 归因基准**：除 `theme_plus`/`theme_aggressive` 外再跑一档 **`theme_off`（赛道权重归 0、重分配给动量+催化）** 的 shadow——量"35% 赛道权重到底贡献多少 alpha"（`balanced − theme_off` = 赛道边际贡献），兼作一键回滚锚。同样 PIT 冻结 + 双向全口径 + **永不计 ship-gate**（§13 #28）。
+- **A1 选择层网格**：`catalyst_off`（催化剂 25% 按原 40:35 比例改为动量 8/15、赛道 7/15）与 `overextension_selection_off`（只撤销 `chasing_extreme` 的赛道 strip/seat）同命名权重档一起从同一 PIT 快照即时分叉并 live 物化；后者保留过热观测与执行旗标，不能冒充执行层 A/B。`overextension_execution_off` 是后续影子分支账本接通后的 second-wave-live 槽，只从账本接通后开始攒自身的 forward 证据，绝不补算此前周数。所有这些 shadow 仍按固定 TopN/成交规则和双向成绩单报告，均不改变 `balanced` 主建议或 ship-gate（§13 #28/#36）。
 - **顺带量"进场偏晚"**：确认门槛天然滞后 → 系统偏晚进场；`theme_aggressive`（更早进）shadow 若长期更差，说明滞后在保护你、更好则说明太晚。结果挂 §13 复审。
 - **存储隐私**：比较轨含票名的 shadow 选股/成绩 → `state/us_short/shadow_compare_private/`（gitignored，§11.6）；tracked 只出脱敏归一化指标（无票名/无 $）。
 - **升级闸防自欺机制（借 A 股 `a_short_overlay_eval.py`）**：① 只数 **live forward** 观测（决策当日 PIT、无 look-ahead）入升级时钟；② **胜出 margin 必须先冻**（governance 填死数值阈值后才允许触发升级复审，防"先看数据再定胜出线"）；③ 陈旧/错位 artifact **fail-closed** 不计入（桶名≠as_of 即弃）；④ 每周运行时**醒目横幅**（见 §13 `us_short_lifecycle_eval`）。升级仍需用户决定、绝不自动切生产。
@@ -367,7 +369,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 25. 全局现金分配排序权重
 26. provider 健康检查阈值
 27. `theme_opportunity` 强赛道试探仓封顶（防御1 / 进攻+极强2）+ 试探仓最小仓成本地板（安全倍数）
-28. `scoring_profile` 比较档权重（theme_plus / theme_aggressive / theme_off 归因基准）+ 最低比较周数
+28. `scoring_profile` + `catalyst_off` 选择层影子网格（theme_plus / theme_aggressive / theme_off / catalyst_off）+ 最低比较周数
 29. 动态席位比例（强赛道 8+7 / 无强赛道 12+3 的触发与配比）
 30. 赛道退场/衰减阈值（breadth / leader_rs 跌破线、persistence 重置）+ 状态转移防抖（降快升慢）
 31. `macro_cluster` 定义 + `warning_level` 分档 + 集群暴露硬上限
@@ -375,7 +377,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 33. `breakout_mode` 参数（突破失效线、追价上限）
 34. `active_scale_out_candidate`（主动减仓/移保本/ratchet 持仓管理；攒持仓管理数据再决定启用）
 35. `multi_day_order_expiry_candidate`（多日 GTC 订单有效期；靠纸面成交数据决定启用）
-36. 过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）
+36. 过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）+ 选择/执行拆分影子对照（`overextension_selection_off` / 影子分支账本接通后才 second-wave-live 的 `overextension_execution_off`）
 37. 强赛道周 Top6–15 额外完整分析名额数（1–2，按 `theme_leader_rs`；确认优先，严格筛选下可含 `provisional_active`、仅最小/试探仓的纳入门）
 38. 赛道热度正交残差合成系数 + `macro_cluster` 重复热度检查口径（方向已固定为规则：跨界主题→theme 基、纯 GICS→industry 基；macro_cluster 不硬扣、只去重+横幅）
 39. `financial_trends` 财报质量趋势（候选、默认不启用；启用仅 advisory `risk_downgrade`、绝不设门/否决；指标口径借 A 股框架）
@@ -422,7 +424,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **复权/公司行动门**（§12.1，SR-PROVIDER-001）：未确认 `adjustment_mode` + split/dividend + 除权价位一致前，`paper_performance = not_evaluable/data_degraded`，不进 ship-gate / alpha。
 
 ### 18.1 逐条验真
-1. `.gitignore` 私密路径覆盖：`weekly_private` / `account_state_csv` / `runs_private` / `model_paper_private` / `lifecycle` / `shadow_compare_private` 各行（**本 docs-only landing 已补齐缺的 4 行并以 `git check-ignore` 核验**，§11.6）+ fail-closed 护栏测试（覆盖所有 private 路径；**= 实现期代码，随首个实现 slice schema-first + tests + review**）。
+1. `.gitignore` 私密路径覆盖：`weekly_private` / `account_state_csv` / `runs_private` / `model_paper_private` / `lifecycle` / `shadow_compare_private` 各行（§11.6）+ fail-closed 护栏测试（覆盖所有 private 路径）。
 2. 两遍打分可行性：先验 FMP 基础档速率限内每周跑完 Pass 1（全 universe）+ Pass 2（候选集+持仓）；定 universe 上限/候选集大小为可跑值。**前置：全 universe FMP 调用须先过 §18.0 provider 授权门（SR-PROVIDER-001），未授权只在已批准小样本上跑。**
 3. provider 分层健康检查（FMP/SEC）：关键源坏 → restricted/blocked/data_degraded、不输出 clean；**未授权源（yfinance/Web/X）只记 `disabled_unapproved`、不探活/不调用/不参与 clean**（单测：健康检查绝不触达未授权源）。
 4. 手动状态输入层（§3.6）：CSV(ASCII 列名) + 转换器 + lineage(sha256/row_count/as_of) + trades↔positions 对账。
