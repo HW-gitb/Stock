@@ -10,6 +10,8 @@ if not exist "%REPO_PYTHON_LIBS%\jsonschema" (
     exit /b 1
 )
 
+set "ORIGINAL_PYTHONPATH=%PYTHONPATH%"
+
 if defined PYTHONPATH (
     echo ;%PYTHONPATH%; | find /I ";%REPO_PYTHON_LIBS%;" >nul
     if errorlevel 1 set "PYTHONPATH=%REPO_PYTHON_LIBS%;%PYTHONPATH%"
@@ -55,13 +57,21 @@ if not defined PYTHON_EXE (
     exit /b 1
 )
 
-"%PYTHON_EXE%" -c "import jsonschema"
+"%PYTHON_EXE%" -c "import jsonschema" >nul 2>&1
 if errorlevel 1 (
-    echo jsonschema is not importable after prepending "%REPO_PYTHON_LIBS%" to PYTHONPATH. 1>&2
-    echo The vendored jsonschema needs rpds, a COMPILED extension pinned to Windows + CPython 3.12/3.13 1>&2
-    echo [rpds.cp312/cp313-win_amd64.pyd]. On another OS or Python version it will NOT import; in that 1>&2
-    echo runtime install deps directly via 'pip install jsonschema', or set STOCK_TEST_PYTHON to a Python that has it. 1>&2
-    exit /b 1
+    rem The repository copy can shadow an otherwise usable interpreter package when its rpds binary is absent.
+    if defined ORIGINAL_PYTHONPATH (
+        set "PYTHONPATH=%ORIGINAL_PYTHONPATH%"
+    ) else (
+        set "PYTHONPATH="
+    )
+    "%PYTHON_EXE%" -c "import jsonschema" >nul 2>&1
+    if errorlevel 1 (
+        echo jsonschema is not importable from either "%REPO_PYTHON_LIBS%" or STOCK_TEST_PYTHON. 1>&2
+        echo The repository copy needs its matching rpds compiled extension. Install jsonschema for STOCK_TEST_PYTHON 1>&2
+        echo ^(for example, "%PYTHON_EXE%" -m pip install jsonschema^) and rerun; this launcher will use that copy. 1>&2
+        exit /b 1
+    )
 )
 
 pushd "%REPO_ROOT%" >nul
