@@ -1,0 +1,33 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "us_short_forward_policy_grid",
+  "description": "The reviewed A1 US-short forward policy grid. It const-pins the selection policies that must be materialized live at decision time and the sole second-wave-live policy that starts only after a later shadow branch ledger exists. It is a paper-only calibration contract, not a provider, broker, production, or ship-gate authorization.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "primary_policy", "selection_policies", "second_wave_live_policies", "policies", "evaluation_plan", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_grid"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"const": "20260711"},
+    "status": {"const": "initial_live_shadow_policy_grid"},
+    "primary_policy": {"const": "balanced"},
+    "selection_policies": {"const": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]},
+    "second_wave_live_policies": {"const": ["overextension_execution_off"]},
+    "policies": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off", "overextension_execution_off"],
+      "properties": {
+        "balanced": {"const": {"kind": "scoring_profile", "materialization": "selection_immediate", "score_profile": "balanced", "theme_momentum_seat": "retain", "overextension_selection_strip": "retain"}},
+        "theme_plus": {"const": {"kind": "scoring_profile", "materialization": "selection_immediate", "score_profile": "theme_plus", "theme_momentum_seat": "retain", "overextension_selection_strip": "retain"}},
+        "theme_aggressive": {"const": {"kind": "scoring_profile", "materialization": "selection_immediate", "score_profile": "theme_aggressive", "theme_momentum_seat": "retain", "overextension_selection_strip": "retain"}},
+        "theme_off": {"const": {"kind": "scoring_profile", "materialization": "selection_immediate", "score_profile": "theme_off", "theme_momentum_seat": "zero", "overextension_selection_strip": "irrelevant"}},
+        "catalyst_off": {"const": {"kind": "component_ablation", "materialization": "selection_immediate", "score_weights": {"momentum": 0.5333333333333333, "theme": 0.4666666666666667, "catalyst": 0.0}, "theme_momentum_seat": "retain", "overextension_selection_strip": "retain", "reallocation": "catalyst_weight_to_momentum_theme_pro_rata"}},
+        "overextension_selection_off": {"const": {"kind": "effect_ablation", "materialization": "selection_immediate", "score_profile": "balanced", "theme_momentum_seat": "retain", "overextension_selection_strip": "disable", "preserves": ["overextension_state_observation", "overextension_execution_effects"]}},
+        "overextension_execution_off": {"const": {"kind": "effect_ablation", "materialization": "second_wave_live", "preserves": ["overextension_state_observation", "overextension_selection_strip"], "disables": ["warning_force_pullback", "warning_raise_rr_gate", "warning_size_reduction"]}}
+      }
+    },
+    "evaluation_plan": {"const": {"primary_metric": "net_benchmark_excess", "paired_metrics": ["max_drawdown", "bad_pick_rate", "total_cost_fraction", "unfilled_cash_count"], "minimum_forward_weeks_before_promotion_review": 12, "promotion_before_minimum_allowed": false, "early_action": "futility_or_harm_only", "unit_of_independence": "decision_week"}},
+    "boundary": {"const": {"shadow_only": true, "changes_primary_selection": false, "ship_gate_evidence_allowed": false, "broker_or_order_automation_allowed": false, "provider_calls_added": false, "a_share_crossing_allowed": false}}
+  }
+}

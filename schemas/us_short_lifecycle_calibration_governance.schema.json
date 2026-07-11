@@ -145,7 +145,7 @@
         },
         {
           "number": 28,
-          "title": "`scoring_profile` 比较档权重（theme_plus / theme_aggressive / theme_off 归因基准）+ 最低比较周数"
+          "title": "`scoring_profile` + `catalyst_off` 选择层影子网格（theme_plus / theme_aggressive / theme_off / catalyst_off）+ 最低比较周数"
         },
         {
           "number": 29,
@@ -177,7 +177,7 @@
         },
         {
           "number": 36,
-          "title": "过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）"
+          "title": "过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）+ 选择/执行拆分影子对照（`overextension_selection_off` / 影子分支账本接通后才 second-wave-live 的 `overextension_execution_off`）"
         },
         {
           "number": 37,
