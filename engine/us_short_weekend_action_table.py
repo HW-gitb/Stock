@@ -41,7 +41,7 @@ from engine.us_short_action_table_renderer import action_table_columns, render_a
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import row_source_to_context
 from engine.us_short_no_dangling_validator import validate_official_machine_record
-from engine.us_short_overextension import OVEREXTENSION_STATES
+from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_weekend_decision import action_price_error, action_reason_error
@@ -166,7 +166,11 @@ def _flatten_row(row, ct):
     # (validated at the machine-record boundary; the flattened record's design-locked-enum re-check also gates
     # the value). Absent / malformed → the column stays empty (honest, never fabricated).
     ox = row.get("overextension")
-    if isinstance(ox, dict) and ox.get("overextension_state") in OVEREXTENSION_STATES:
+    if ox is not None:
+        try:
+            validate_overextension_result(ox)
+        except ValueError as exc:
+            raise WeekendActionTableError(f"{ct}: overextension 违反 §4.3 状态/效果闭集契约") from exc
         flat["overextension_state"] = ox["overextension_state"]
     return flat
 

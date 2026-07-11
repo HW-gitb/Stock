@@ -22,6 +22,7 @@ from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa
 from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context_from_resolved_pass2_sources,
     assemble_official_context_components_from_resolved_pass2_sources,
+    validate_overextension_projection,
 )
 
 
@@ -349,17 +350,22 @@ def run_packet(
             "holdings": packet["optional_inputs"]["holdings"],
             "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
         }
+        overextension_generated_at = None
         if "overextension_projection_path" in source_payloads:
             projection = source_payloads["overextension_projection_path"]
-            if type(projection) is not dict or type(projection.get("overextension_by_ticker")) is not dict:
-                raise SourcePacketError(
-                    "paths.overextension_projection_path must contain an overextension_by_ticker object"
-                )
-            common_kwargs["overextension_by_ticker"] = projection["overextension_by_ticker"]
+            validated_overextension = validate_overextension_projection(
+                projection,
+                candidate_artifact=source_payloads["candidate_artifact_path"],
+                expected_decision_date=packet["decision_clock"]["expected_decision_date"],
+                eligibility_governance=eligibility_governance,
+            )
+            common_kwargs["overextension_by_ticker"] = validated_overextension["overextension_by_ticker"]
+            overextension_generated_at = validated_overextension["generated_at"]
         context_components = None
         if "output_context_components_path" in paths:
             context_components = assemble_official_context_components_from_resolved_pass2_sources(
                 **common_kwargs,
+                overextension_generated_at=overextension_generated_at,
                 source_ref_paths={
                     field: _repo_rel(paths[field])
                     for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)

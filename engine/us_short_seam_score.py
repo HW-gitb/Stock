@@ -15,7 +15,7 @@ from pathlib import Path
 
 from engine.us_short_core_score import CORE_COMPONENTS, PRIMARY_PROFILE, PROFILE_NAMES, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
-from engine.us_short_overextension import OVEREXTENSION_STATES
+from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_seam_catalyst import (
     COVERAGE_DISPOSITIONS as CATALYST_COVERAGE_DISPOSITIONS,
@@ -248,10 +248,8 @@ def _validated_theme_strip_targets(overextension_by_ticker, targets):
     None → no strip (the map is OPTIONAL; a §12.2 whole-track theme_off shadow or any non-overextension compose
     omits it, so the whole-track shadow is NOT conflated with this per-ticker strip). A PRESENT map must
     canonically cover the targets EXACTLY, each value a well-formed classify_overextension result (legal
-    overextension_state + exact-bool strips_theme_score + dict execution_flags) — else fail closed (缺数据≠安全: a
-    malformed injected record must not silently skip the strip). The strip decision keys on the explicit
-    `strips_theme_score` intent flag (True ⟺ chasing_extreme in the classify contract), mirroring cut 2c's keying
-    on execution_flags.force_pullback (shape-validated, not re-deriving the tier from the state enum)."""
+    overextension_state + the exact state-bound strips/flags effect contract) — else fail closed (缺数据≠安全: a
+    malformed or contradictory injected record must not silently skip/add an effect)."""
     if overextension_by_ticker is None:
         return set()
     _require_exact_dict(overextension_by_ticker, name="overextension_by_ticker")
@@ -262,15 +260,11 @@ def _validated_theme_strip_targets(overextension_by_ticker, targets):
             raise ScoreSeamError(f"overextension_by_ticker contains duplicate canonical ticker: {ticker}")
         seen.add(ticker)
         _require_exact_dict(record, name=f"overextension_by_ticker[{ticker}]")
-        if record.get("overextension_state") not in OVEREXTENSION_STATES:
-            raise ScoreSeamError(
-                f"overextension_by_ticker[{ticker}].overextension_state drifted from the §4.3 vocab: "
-                f"{record.get('overextension_state')!r}")
-        strips = record.get("strips_theme_score")
-        if type(strips) is not bool:
-            raise ScoreSeamError(
-                f"overextension_by_ticker[{ticker}].strips_theme_score must be exact bool: {strips!r}")
-        _require_exact_dict(record.get("execution_flags"), name=f"overextension_by_ticker[{ticker}].execution_flags")
+        try:
+            validate_overextension_result(record)
+        except ValueError as exc:
+            raise ScoreSeamError(f"overextension_by_ticker[{ticker}] violated the §4.3 tier contract") from exc
+        strips = record["strips_theme_score"]
         if strips is True:
             strip.add(ticker)
     if seen != set(targets):

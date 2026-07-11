@@ -9,8 +9,9 @@ warning lever [cut 2c] consume), computed at the SCORING stage (before ranking).
 WHAT THIS IS: consume a full-universe per-ticker OHLCV series packet (written by the GATED grouped-window fetch,
 cut 2b-iii, which retains high/low — ATR needs them) plus the validated candidate artifact, then call the PROVEN
 pure pool producer engine/us_short_overextension_producer.py::build_overextension_projection VERBATIM over ALL
-eligible, and emit its projection ({overextension_by_ticker: {ticker: tier}, disposition_counts, scored_count,
-target_count}) plus a counts-only no-secret tracked summary (disposition tally + the honest §4.3 state tally
+eligible, and emit a source-bound projection envelope (decision/price clock + source contract + candidate-universe
+digest + {overextension_by_ticker: {ticker: tier}, disposition_counts, scored_count, target_count}) plus a
+counts-only no-secret tracked summary (disposition tally + the honest §4.3 state tally
 none / warning / chasing_extreme). No benchmarks are involved — overextension is a per-ticker ABSOLUTE signal
 (not relative strength), unlike the momentum producer's SPY/QQQ-gated features.
 
@@ -49,6 +50,7 @@ from engine.us_short_overextension import OVEREXTENSION_STATES  # noqa: E402
 from engine.us_short_overextension_producer import (  # noqa: E402
     OverextensionProducerError,
     build_overextension_projection,
+    eligible_tickers_sha256,
 )
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 
@@ -315,6 +317,18 @@ def _build_projection(context: dict[str, Any]) -> tuple[dict[str, Any], dict[str
         raise FullUniverseOverextensionProducerError(f"overextension projection failed closed: {exc}") from exc
 
     projection = {
+        "schema_name": "us_short_full_universe_overextension_projection",
+        "schema_version": "1.0.0",
+        "generated_at": context["generated_at"],
+        "decision_clock": dict(packet["decision_clock"]),
+        "source_contract": {
+            "session": context["session"],
+            "adjustment_mode": context["adjustment_mode"],
+        },
+        "candidate_binding": {
+            "eligible_count": len(context["eligible"]),
+            "eligible_tickers_sha256": eligible_tickers_sha256(context["eligible"]),
+        },
         "overextension_by_ticker": result["overextension_by_ticker"],
         "disposition_counts": result["disposition_counts"],
         "scored_count": result["scored_count"],

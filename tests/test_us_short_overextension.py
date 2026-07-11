@@ -323,6 +323,18 @@ class OverextensionFeaturesTests(unittest.TestCase):
         s["points"][5]["close"] = 0.0   # non-positive close = malformed price
         self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
 
+    def test_close_outside_kept_bar_range_fails_closed(self):
+        for close in (98.0, 102.0):
+            with self.subTest(close=close):
+                s = _ohlcv(_PARABOLIC_CLOSES, _PARABOLIC_VOLUMES)
+                s["points"][5].update({"high": 101.0, "low": 99.0, "close": close})
+                self.assertEqual(ox.compute_overextension_features(s)["disposition"], "insufficient_data")
+
+    def test_equal_high_low_close_is_valid_reverse_control(self):
+        s = _ohlcv(_PARABOLIC_CLOSES, _PARABOLIC_VOLUMES)
+        s["points"][5].update({"high": 111.0, "low": 111.0, "close": 111.0})
+        self.assertEqual(ox.compute_overextension_features(s)["disposition"], "scored")
+
     def test_non_ascending_axis_fails_closed(self):
         s = _ohlcv([100, 101, 102, 103, 104, 105], [1e6] * 6)
         s["points"][3]["date"] = s["points"][2]["date"]   # duplicate date → not strictly ascending

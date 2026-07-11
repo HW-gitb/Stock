@@ -393,8 +393,16 @@ class OverextensionColumn(unittest.TestCase):
         self.assertEqual(self._flat_row(_OX_WARNING)["overextension_state"], "warning")
 
     def test_all_three_states_lift(self):
-        for st in ("none", "warning", "chasing_extreme"):
-            self.assertEqual(self._flat_row({**_OX_WARNING, "overextension_state": st})["overextension_state"], st)
+        records = {
+            "none": {"overextension_state": "none", "strips_theme_score": False,
+                     "execution_flags": {}, "conditions_met": 0, "condition_names": []},
+            "warning": _OX_WARNING,
+            "chasing_extreme": {"overextension_state": "chasing_extreme", "strips_theme_score": True,
+                                "execution_flags": {}, "conditions_met": 3,
+                                "condition_names": ["vertical_run", "volume_climax", "weak_retrace"]},
+        }
+        for st, tier in records.items():
+            self.assertEqual(self._flat_row(tier)["overextension_state"], st)
 
     def test_column_empty_when_absent(self):
         self.assertIsNone(self._flat_row().get("overextension_state"))
@@ -407,10 +415,12 @@ class OverextensionColumn(unittest.TestCase):
         self.assertEqual(table["rows"][0][col_idx], "warning")
 
     def test_malformed_tier_fails_closed_at_machine_boundary(self):
-        row = _candidate()
-        row["overextension"] = {"overextension_state": "bogus", "execution_flags": {}}
-        with self.assertRaises(mr.WeekendMachineRecordError):
-            _machine_record([row])   # rejected at assembly, before the flatten ever runs
+        for bad in ({"overextension_state": "bogus", "execution_flags": {}},
+                    {**_OX_WARNING, "strips_theme_score": True}):
+            row = _candidate()
+            row["overextension"] = bad
+            with self.assertRaises(mr.WeekendMachineRecordError):
+                _machine_record([row])   # rejected at assembly, before the flatten ever runs
 
 
 if __name__ == "__main__":

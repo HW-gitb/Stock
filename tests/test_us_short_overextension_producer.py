@@ -101,9 +101,11 @@ class OverextensionProducerTests(unittest.TestCase):
         self.assertEqual(out["overextension_by_ticker"], {})
         self.assertEqual(out["disposition_counts"], {"scored": 0, "insufficient_data": 0})
 
-    def test_non_dict_series_by_ticker_all_absent(self):
-        out = self._proj(None, ["AAPL", "MSFT"])   # no packet → every eligible dispositions insufficient_data
-        self.assertEqual(out["disposition_counts"], {"scored": 0, "insufficient_data": 2})
+    def test_non_dict_series_by_ticker_rejected(self):
+        for bad in (None, [], "bad"):
+            with self.subTest(value=bad):
+                with self.assertRaises(op.OverextensionProducerError):
+                    self._proj(bad, ["AAPL", "MSFT"])
 
 
 if __name__ == "__main__":

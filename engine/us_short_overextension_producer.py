@@ -18,14 +18,32 @@ an eligible ticker ABSENT from the packet, or one whose series is thin / short /
 classify authority, which never raises on per-ticker data). Pure/offline; no provider/live/network; no
 DataHub/production/ship-gate; no A-share crossing.
 """
+import hashlib
+import json
+
 from engine.us_short_eligibility_gate import canonical_us_ticker
-from engine.us_short_overextension import compute_overextension_features
+from engine.us_short_overextension import compute_overextension_features, validate_overextension_result
 
 DISPOSITIONS = ("scored", "insufficient_data")
 
 
 class OverextensionProducerError(ValueError):
     """An OHLCV series packet cannot be consumed into an overextension projection safely (corrupt envelope)."""
+
+
+def eligible_tickers_sha256(tickers):
+    """Stable candidate-universe binding used by the producer and the source-packet consumer."""
+    if not isinstance(tickers, (list, tuple)):
+        raise OverextensionProducerError("eligible tickers must be a list/tuple")
+    canonical, seen = [], set()
+    for raw in tickers:
+        ct = _canonical(raw, field="eligible ticker digest")
+        if ct in seen:
+            raise OverextensionProducerError(f"eligible ticker digest contains duplicate canonical ticker: {ct}")
+        seen.add(ct)
+        canonical.append(ct)
+    payload = json.dumps(sorted(canonical), ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _canonical(raw, *, field):
@@ -60,7 +78,8 @@ def build_overextension_projection(series_by_ticker, eligible, *, price_basis_da
         eligible_canon.append(ct)
     allowed = set(eligible_canon)
 
-    series_by_ticker = series_by_ticker if isinstance(series_by_ticker, dict) else {}
+    if type(series_by_ticker) is not dict:
+        raise OverextensionProducerError("series_by_ticker must be an exact dict")
     canonical_series = {}
     for raw_key, series in series_by_ticker.items():
         ct = _canonical(raw_key, field="series_by_ticker key")
@@ -82,6 +101,10 @@ def build_overextension_projection(series_by_ticker, eligible, *, price_basis_da
     overextension_by_ticker, counts = {}, {d: 0 for d in DISPOSITIONS}
     for ct in eligible_canon:
         result = compute_overextension_features(canonical_series.get(ct))
+        try:
+            validate_overextension_result(result, require_producer_metadata=True)
+        except ValueError as exc:
+            raise OverextensionProducerError(f"{ct} overextension result violated the producer contract") from exc
         overextension_by_ticker[ct] = result
         counts[result["disposition"]] = counts.get(result["disposition"], 0) + 1
     return {

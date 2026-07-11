@@ -41,6 +41,87 @@ FAR_MA_ATR = 3.0             # parabolic condition: close - MA20 >= this×ATR (f
 CHASING_MIN_CONDITIONS = 3    # chasing_extreme needs >= this many co-occurring conditions (never a single one)
 
 OVEREXTENSION_STATES = ("none", "warning", "chasing_extreme")
+_WARNING_FLAGS = {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True}
+_EFFECT_CONTRACT = {
+    "none": {"strips_theme_score": False, "execution_flags": {}},
+    "warning": {"strips_theme_score": False, "execution_flags": _WARNING_FLAGS},
+    "chasing_extreme": {"strips_theme_score": True, "execution_flags": {}},
+}
+_RESULT_ALLOWED_KEYS = {
+    "overextension_state", "strips_theme_score", "execution_flags", "conditions_met", "condition_names",
+    "disposition", "pit",
+}
+_CONDITION_NAMES = {
+    "vertical_run", "daily_move_ge_m_atr", "volume_climax", "far_above_all_mas", "weak_retrace",
+}
+
+
+def validate_overextension_result(value, *, require_producer_metadata=False, expected_pit=None):
+    """Validate one §4.3 tier result as a closed-world state/effect contract.
+
+    Every consumer shares this gate so the visible state can never disagree with selection/execution effects:
+    ``none`` has no effects, ``warning`` has exactly the three execution flags, and ``chasing_extreme`` strips
+    theme with no execution flags. Producer/source-packet boundaries additionally require disposition + PIT
+    metadata and may bind PIT to an expected ``{as_of, session, adjustment_mode}`` clock.
+    """
+    if type(value) is not dict:
+        raise ValueError("overextension result must be an exact dict")
+    if not set(value) <= _RESULT_ALLOWED_KEYS:
+        raise ValueError("overextension result contains unknown keys")
+    required = {"overextension_state", "strips_theme_score", "execution_flags"}
+    if require_producer_metadata:
+        required |= {"conditions_met", "condition_names", "disposition", "pit"}
+    if not required <= set(value):
+        raise ValueError("overextension result is missing required keys")
+
+    state = value["overextension_state"]
+    if state not in OVEREXTENSION_STATES:
+        raise ValueError(f"overextension_state must be one of {list(OVEREXTENSION_STATES)}")
+    strips = value["strips_theme_score"]
+    flags = value["execution_flags"]
+    if type(strips) is not bool or type(flags) is not dict:
+        raise ValueError("strips_theme_score must be exact bool and execution_flags an exact dict")
+    expected_effect = _EFFECT_CONTRACT[state]
+    expected_flags = expected_effect["execution_flags"]
+    flags_exact = (set(flags) == set(expected_flags)
+                   and all(type(flags[key]) is bool and flags[key] is expected_flags[key] for key in expected_flags))
+    if strips is not expected_effect["strips_theme_score"] or not flags_exact:
+        raise ValueError(f"{state} overextension effects drifted from the closed-world contract")
+
+    if "conditions_met" in value or "condition_names" in value:
+        count, names = value.get("conditions_met"), value.get("condition_names")
+        if type(count) is not int or count < 0 or type(names) is not list:
+            raise ValueError("conditions_met/condition_names must be a non-negative int and list")
+        if any(type(name) is not str or name not in _CONDITION_NAMES for name in names):
+            raise ValueError("condition_names contains an unknown condition")
+        if len(names) != len(set(names)) or count != len(names):
+            raise ValueError("conditions_met must equal the unique condition_names count")
+        if state == "chasing_extreme" and count < CHASING_MIN_CONDITIONS:
+            raise ValueError("chasing_extreme must meet the multi-condition threshold")
+        if state != "chasing_extreme" and count >= CHASING_MIN_CONDITIONS:
+            raise ValueError("non-chasing state cannot carry a chasing-condition count")
+
+    if "disposition" in value or "pit" in value or require_producer_metadata:
+        disposition, pit = value.get("disposition"), value.get("pit")
+        if disposition not in {"scored", "insufficient_data"}:
+            raise ValueError("overextension disposition must be scored/insufficient_data")
+        if state != "none" and disposition != "scored":
+            raise ValueError("warning/chasing_extreme must carry a scored disposition")
+        if pit is not None:
+            if type(pit) is not dict or set(pit) != {"as_of", "session", "adjustment_mode", "n_points"}:
+                raise ValueError("overextension pit must use the exact producer clock shape")
+            if (_valid_date(pit["as_of"]) is None or type(pit["session"]) is not str or not pit["session"]
+                    or type(pit["adjustment_mode"]) is not str or not pit["adjustment_mode"]
+                    or type(pit["n_points"]) is not int or pit["n_points"] <= 0):
+                raise ValueError("overextension pit contains invalid clock/count values")
+        elif disposition == "scored":
+            raise ValueError("scored overextension result must carry PIT metadata")
+        if expected_pit is not None and pit is not None:
+            if type(expected_pit) is not dict or set(expected_pit) != {"as_of", "session", "adjustment_mode"}:
+                raise ValueError("expected_pit must use the exact comparison shape")
+            if any(pit[key] != expected_pit[key] for key in expected_pit):
+                raise ValueError("overextension PIT clock mismatches the consumed projection")
+    return value
 
 
 def _finite(x):
@@ -273,7 +354,7 @@ def _parse_ohlcv_series(series):
         prev = d
         if d <= as_of:                        # PIT cut: future points BLOCKED (values not even validated)
             hi, lo, cl = _finite(p["high"]), _finite(p["low"]), _finite(p["close"])
-            if hi is None or lo is None or cl is None or not (hi >= lo > 0.0 and cl > 0.0):
+            if hi is None or lo is None or cl is None or not (hi >= cl >= lo > 0.0):
                 return None                   # a malformed kept bar corrupts ATR/pattern math → fail closed
             dates.append(d)
             highs.append(hi)

@@ -34,7 +34,7 @@ from engine.us_short_core_score import PRIMARY_PROFILE, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_forward_events import event_data_gap_status, forward_event_effect
 from engine.us_short_hard_veto import classify_hard_veto, row_source_to_context
-from engine.us_short_overextension import OVEREXTENSION_STATES
+from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_price_engine import PRICE_SUB_MODES, holding_exit_engine, support_atr_engine
 from engine.us_short_regime import compute_market_risk_regime
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
@@ -72,18 +72,15 @@ def _resolve_candidate_sub_mode(requested, regime, defensive_breakout_probe_allo
 def _validate_overextension(value):
     """Validate an injected §4.3 overextension result (from the scoring-stage `build_overextension_projection`
     map, threaded onto the row). None (absent — the ticker had insufficient data or wasn't scored) → None (no
-    signal, no-op). A PRESENT record must be a well-formed classify_overextension result — a legal
-    `overextension_state` + a dict `execution_flags` — else it fails CLOSED (缺数据≠安全; a malformed injected
-    record must not silently skip the execution lever). Returns the record or None."""
+    signal, no-op). A PRESENT record must satisfy the shared closed-world state/strip/flags contract — else it
+    fails CLOSED (缺数据≠安全; a malformed or contradictory record must not silently skip/add an execution lever).
+    Returns the record or None."""
     if value is None:
         return None
-    if not isinstance(value, dict):
-        raise WeekendAnalysisError(f"overextension 须为 dict 或缺省: {value!r}")
-    if value.get("overextension_state") not in OVEREXTENSION_STATES:
-        raise WeekendAnalysisError(
-            f"overextension.overextension_state 非法（须 ∈ {list(OVEREXTENSION_STATES)}）: {value.get('overextension_state')!r}")
-    if not isinstance(value.get("execution_flags"), dict):
-        raise WeekendAnalysisError(f"overextension.execution_flags 须为 dict: {value.get('execution_flags')!r}")
+    try:
+        validate_overextension_result(value)
+    except ValueError as exc:
+        raise WeekendAnalysisError(f"overextension 违反 §4.3 状态/效果闭集契约: {value!r}") from exc
     return value
 
 

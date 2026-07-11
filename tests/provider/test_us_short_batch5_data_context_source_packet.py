@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import sys
@@ -51,6 +52,55 @@ def _write_json(path: Path, payload) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _eligible_digest(tickers) -> str:
+    payload = json.dumps(sorted(tickers), ensure_ascii=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _tier(state: str) -> dict:
+    flags = ({"force_pullback": True, "reduce_size": True, "raise_rr_gate": True}
+             if state == "warning" else {})
+    return {
+        "overextension_state": state,
+        "strips_theme_score": state == "chasing_extreme",
+        "execution_flags": flags,
+        "conditions_met": 3 if state == "chasing_extreme" else 0,
+        "condition_names": (["vertical_run", "volume_climax", "weak_retrace"]
+                            if state == "chasing_extreme" else []),
+        "disposition": "scored",
+        "pit": {"as_of": "2026-06-12", "session": "RTH",
+                "adjustment_mode": "massive_grouped_daily", "n_points": 70},
+    }
+
+
+def _overextension_projection() -> dict:
+    tickers = ("AAPL", "MSFT", "JPM")
+    return {
+        "schema_name": "us_short_full_universe_overextension_projection",
+        "schema_version": "1.0.0",
+        "generated_at": "2026-06-15T08:30:00-04:00",
+        "decision_clock": {
+            "expected_decision_date": "20260615",
+            "candidate_price_basis_date": "20260612",
+            "price_basis_date": "2026-06-12",
+            "source_as_of": "2026-06-12",
+        },
+        "source_contract": {"session": "RTH", "adjustment_mode": "massive_grouped_daily"},
+        "candidate_binding": {
+            "eligible_count": 3,
+            "eligible_tickers_sha256": _eligible_digest(tickers),
+        },
+        "overextension_by_ticker": {
+            "AAPL": _tier("chasing_extreme"),
+            "MSFT": _tier("warning"),
+            "JPM": _tier("none"),
+        },
+        "disposition_counts": {"scored": 3, "insufficient_data": 0},
+        "scored_count": 3,
+        "target_count": 3,
+    }
 
 
 class Batch5DataContextSourcePacketTest(unittest.TestCase):
@@ -284,35 +334,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 },
             ),
         )
-        _write_json(
-            self.paths["overextension"],
-            {
-                "overextension_by_ticker": {
-                    "AAPL": {
-                        "overextension_state": "chasing_extreme",
-                        "strips_theme_score": True,
-                        "execution_flags": {},
-                    },
-                    "MSFT": {
-                        "overextension_state": "warning",
-                        "strips_theme_score": False,
-                        "execution_flags": {
-                            "force_pullback": True,
-                            "reduce_size": True,
-                            "raise_rr_gate": True,
-                        },
-                    },
-                    "JPM": {
-                        "overextension_state": "none",
-                        "strips_theme_score": False,
-                        "execution_flags": {},
-                    },
-                },
-                "disposition_counts": {"scored": 3, "insufficient_data": 0},
-                "scored_count": 3,
-                "target_count": 3,
-            },
-        )
+        _write_json(self.paths["overextension"], _overextension_projection())
         packet = self._packet_payload()
         packet["paths"]["overextension_projection_path"] = _rel(self.paths["overextension"])
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
@@ -334,10 +356,50 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             {"role": "overextension_projection", "path": _rel(self.paths["overextension"])},
             source_refs,
         )
+        self.assertEqual(
+            components["run_provenance"]["families"]["selection_inputs"]["observed_at"],
+            "2026-06-15T08:30:00",
+        )
         self.assertIn(
             "overextension_projection_path",
             {field for field, _, _ in source_packet_input_manifest(self.packet)},
         )
+
+    def test_overextension_projection_clock_and_candidate_binding_fail_closed(self):
+        packet = self._packet_payload()
+        packet["paths"]["overextension_projection_path"] = _rel(self.paths["overextension"])
+        _write_json(self.paths["packet"], packet)
+        def forge_contract_and_rows(projection):
+            projection["source_contract"]["session"] = "EXT"
+            for tier in projection["overextension_by_ticker"].values():
+                tier["pit"]["session"] = "EXT"
+
+        mutations = {
+            "future_price_basis": lambda p: p["decision_clock"].__setitem__("price_basis_date", "2099-01-01"),
+            "wrong_decision": lambda p: p["decision_clock"].__setitem__("expected_decision_date", "20260616"),
+            "wrong_session": lambda p: p["source_contract"].__setitem__("session", "EXT"),
+            "wrong_adjustment": lambda p: p["source_contract"].__setitem__("adjustment_mode", "raw"),
+            "self_consistent_but_untrusted_session": forge_contract_and_rows,
+            "wrong_candidate_digest": lambda p: p["candidate_binding"].__setitem__(
+                "eligible_tickers_sha256", "0" * 64),
+            "missing_pit": lambda p: p["overextension_by_ticker"]["AAPL"].pop("pit"),
+            "future_row_pit": lambda p: p["overextension_by_ticker"]["AAPL"]["pit"].__setitem__(
+                "as_of", "2099-01-01"),
+            "warning_with_chasing_count": lambda p: p["overextension_by_ticker"]["MSFT"].update({
+                "conditions_met": 3,
+                "condition_names": ["vertical_run", "volume_climax", "weak_retrace"],
+            }),
+            "bool_disposition_count": lambda p: p["disposition_counts"].__setitem__(
+                "insufficient_data", False),
+        }
+        for label, mutate in mutations.items():
+            with self.subTest(case=label):
+                projection = _overextension_projection()
+                mutate(projection)
+                _write_json(self.paths["overextension"], projection)
+                with self.assertRaises(SourcePacketError):
+                    run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+                self.assertFalse(self.paths["output"].exists())
 
     def test_optional_yfinance_grade_actions_prefer_yfinance_and_keep_missing_neutral(self):
         _write_json(

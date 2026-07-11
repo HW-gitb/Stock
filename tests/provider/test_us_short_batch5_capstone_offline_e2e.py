@@ -33,6 +33,7 @@ from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
 from tests.provider.test_us_short_batch5_full_candidate_live_source_packet import (  # noqa: E402
     FullCandidateFakeClient,
 )
+from tests.provider.test_us_short_batch5_data_context_source_packet import _overextension_projection  # noqa: E402
 from tests.provider.test_us_short_batch5_to_batch4_e2e import _empty_account, _no_build_template  # noqa: E402
 
 
@@ -243,35 +244,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             self.assertNotIn("AAPL", blob)
 
     def test_overextension_projection_flows_to_action_table_and_machine_record(self) -> None:
-        _write_json(
-            self.paths["overextension"],
-            {
-                "overextension_by_ticker": {
-                    "AAPL": {
-                        "overextension_state": "chasing_extreme",
-                        "strips_theme_score": True,
-                        "execution_flags": {},
-                    },
-                    "MSFT": {
-                        "overextension_state": "warning",
-                        "strips_theme_score": False,
-                        "execution_flags": {
-                            "force_pullback": True,
-                            "reduce_size": True,
-                            "raise_rr_gate": True,
-                        },
-                    },
-                    "JPM": {
-                        "overextension_state": "none",
-                        "strips_theme_score": False,
-                        "execution_flags": {},
-                    },
-                },
-                "disposition_counts": {"scored": 3, "insufficient_data": 0},
-                "scored_count": 3,
-                "target_count": 3,
-            },
-        )
+        _write_json(self.paths["overextension"], _overextension_projection())
         client = FullCandidateFakeClient()
         with self._env(), mock.patch.object(
             funnel.sample_validation, "_read_windows_environment_value", return_value=None

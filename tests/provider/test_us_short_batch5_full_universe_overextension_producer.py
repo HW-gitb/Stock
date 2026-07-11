@@ -237,8 +237,12 @@ class FullUniverseOverextensionProducerTest(unittest.TestCase):
         self.assertEqual(projection["overextension_by_ticker"]["JPM"]["disposition"], "insufficient_data")
         self.assertEqual(
             set(projection),
-            {"overextension_by_ticker", "disposition_counts", "scored_count", "target_count"},
+            {"schema_name", "schema_version", "generated_at", "decision_clock", "source_contract",
+             "candidate_binding", "overextension_by_ticker", "disposition_counts", "scored_count", "target_count"},
         )
+        self.assertEqual(projection["schema_name"], "us_short_full_universe_overextension_projection")
+        self.assertEqual(projection["candidate_binding"]["eligible_count"], 5)
+        self.assertRegex(projection["candidate_binding"]["eligible_tickers_sha256"], r"^[0-9a-f]{64}$")
 
     def test_chasing_row_carries_slice_b_strip_flag_and_warning_carries_execution_flags(self):
         # the producer output is the map Slice B (compose_score_inputs) + cut 2c (_analyze_one) consume: a

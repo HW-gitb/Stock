@@ -680,6 +680,29 @@ class ScoreComposerOverextensionFailClosedTest(unittest.TestCase):
         with self.assertRaises(ScoreSeamError):
             _compose(overextension_by_ticker=mp)
 
+    def test_state_effect_mismatches_rejected_closed_world(self):
+        mutations = (
+            ("warning_strips", {"overextension_state": "warning", "strips_theme_score": True,
+                                "execution_flags": dict(_warning_record()["execution_flags"])}),
+            ("chasing_does_not_strip", {"overextension_state": "chasing_extreme", "strips_theme_score": False,
+                                        "execution_flags": {}}),
+            ("none_carries_warning_flags", {"overextension_state": "none", "strips_theme_score": False,
+                                             "execution_flags": dict(_warning_record()["execution_flags"])}),
+            ("warning_missing_flag", {"overextension_state": "warning", "strips_theme_score": False,
+                                      "execution_flags": {"force_pullback": True, "reduce_size": True}}),
+            ("warning_extra_flag", {"overextension_state": "warning", "strips_theme_score": False,
+                                    "execution_flags": {**_warning_record()["execution_flags"], "extra": True}}),
+            ("warning_non_bool_flag", {"overextension_state": "warning", "strips_theme_score": False,
+                                       "execution_flags": {**_warning_record()["execution_flags"],
+                                                           "reduce_size": 1}}),
+        )
+        for label, bad in mutations:
+            with self.subTest(case=label):
+                mp = _overext_map()
+                mp["AAPL"] = bad
+                with self.assertRaises(ScoreSeamError):
+                    _compose(overextension_by_ticker=mp)
+
     def test_duplicate_canonical_ticker_rejected(self):
         mp = _overext_map()
         mp["aapl"] = _none_record()   # canonicalizes to AAPL → duplicate identity

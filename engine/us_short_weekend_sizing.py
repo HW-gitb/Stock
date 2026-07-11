@@ -33,7 +33,7 @@ from __future__ import annotations
 import math
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
-from engine.us_short_overextension import OVEREXTENSION_STATES
+from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES, reduction_stack, risk_based_base_shares
 from engine.us_short_weekend_decision import action_reason_error
 
@@ -111,10 +111,11 @@ def _size_build(row, *, bucket, position_cap, ticker, per_ticker):
     # tier rode onto the row via analysis (cut 2c); a PRESENT-but-malformed overextension fails closed (缺数据≠安全,
     # mirrors machine_record); a chasing tier carries NO reduce_size flag (its effect is the SELECTION strip, not sizing).
     ox = row.get("overextension")
-    if ox is not None and not (isinstance(ox, dict) and ox.get("overextension_state") in OVEREXTENSION_STATES
-                               and isinstance(ox.get("execution_flags"), dict)):
-        raise WeekendSizingError(
-            f"overextension 非法（须含合法 overextension_state ∈ {list(OVEREXTENSION_STATES)} + dict execution_flags 或缺省）: {ox!r}")
+    if ox is not None:
+        try:
+            validate_overextension_result(ox)
+        except ValueError as exc:
+            raise WeekendSizingError(f"overextension 违反 §4.3 状态/效果闭集契约: {ox!r}") from exc
     if isinstance(ox, dict) and ox["execution_flags"].get("reduce_size") is True:
         discount_mults = discount_mults + [WARNING_REDUCE_MULT]
 

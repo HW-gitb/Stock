@@ -8,6 +8,35 @@
 
 ---
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别2：§4.3 overextension 消费契约/PIT)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push；主树已被重整为净 CAT2、类6/类7 已移出）。A/B/C/D 修复正确：源绑定 envelope（`validate_overextension_projection` 用候选时钟/源合约/eligible-digest 校验 + 每行 PIT 绑定 + 恰覆盖全集 + count 对账 + provenance 纳入 generated_at）、`validate_overextension_result` 闭世界校验器接 7 边界、OHLC `hi>=cl>=lo>0`、非 dict producer 拒。CAT2 register 条目（重整时丢失）已据代码+SESSION_LOG 重建。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT2-OVEREXTENSION-CONTRACT-PIT-GAPS` → resolved（完整 finding/repair/closure 单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读校验器 + envelope + 全 7 消费边界 + OHLC/PIT parse；自跑闭世界探针（8 种 state/effect 不一致全 rejected）；§6a 独立 agent A/B/C/D 全 HELD（自洽 2099 未来时钟被候选绑定拒 / `1`-非-bool flag 拒 / 无绕过 / 324 focused 测试 0 fail）；全包绿（主树 exit 0）；无 provider/network 调用。
+- **Next**: Codex：待命。
+
+## 2026-07-11 - Codex review FAIL (US-short review queue category 5: real-data full-chain proof and provider mapping)
+
+- **Verdict/Action**: FAIL; read-only category-5 review. Massive Step3 mapping / `insights` optionality / capture non-consumption hold, but replay provenance and physical-attempt budget accounting do not.
+- **Required**: `R-USSHORT-REVIEWQ-CAT5-REPLAY-PROVENANCE-AND-PHYSICAL-ATTEMPT-BUDGET` A/B open; full detail and repair boundary are in the register.
+- **Verify**: static producer-to-consumer trace + offline reverse probes reproduced duplicate replay last-wins and 429 `2` physical attempts for `1` logical record; focused Massive-news + replay tests `58 OK`; the combined shape-probe test could not create its gitignored `D:\cnhea\Stock\state\us_short` fixture under this sandbox. No provider/network call or existing raw-payload read occurred.
+- **Next**: Codex: wait for explicit repair authorization for the two Required items only.
+
+## 2026-07-10 - Codex repair complete, awaiting Claude review (US-short queue category 2 A/B/C/D)
+
+- **Verdict/Action**: Repaired A/B/C and Optional D only: source-bound projection envelope/provenance, shared state-effect validator, OHLC range guard, and exact-dict producer input. No commit/push/provider/live/yfinance/freshday crossing.
+- **Required**: `R-USSHORT-REVIEWQ-CAT2-OVEREXTENSION-CONTRACT-PIT-GAPS` A/B/C repaired; Optional D also repaired. Awaiting Claude independent review.
+- **Verify**: red `17`; final affected pack `478 OK`; earlier full US-short `4143 OK` (1 skipped); later full retries hit unrelated Windows lock/file contention, isolated capstone `54 OK` and cut5 `81 OK`; `git diff --check` clean. Existing unrelated doc-governance failure remains excluded.
+- **Pre-Codex self-review**: A-F checked; grep traced all consumers to one validator, reverse tests cover two-sided source forgery/bool counts/state-effect/OHLC/future PIT, no BOM/route-doc drift; independent reviewer found two residuals, both fixed, final PASS.
+- **Next**: Claude Code: review category-2 A/B/C/D only; protect the freshday untracked file and unrelated yfinance work, then commit only this repaired scope if PASS.
+
+## 2026-07-10 - Codex review FAIL (US-short review queue category 2: §4.3 overextension)
+
+- **Verdict/Action**: FAIL; read-only business-code review. The design and normal proof-of-use chain hold, but the consumed projection is not PIT/source-bound, state/effect combinations are not closed-world, and impossible kept OHLC bars can be scored. Only mandatory review records were written; no code fix, commit, push, provider call, or unrelated yfinance/freshday inclusion.
+- **Required**: `R-USSHORT-REVIEWQ-CAT2-OVEREXTENSION-CONTRACT-PIT-GAPS` A/B/C (full detail + scope manifest in register). Optional D is non-blocking.
+- **Verify**: focused category/consumer pack `455 OK`; full offline `*us_short*.py` `4139 OK` (1 skipped); reverse probes accepted future PIT, warning+strip, chasing-no-strip, none+warning-flags, and close-above-high as `scored`; `git diff --check` clean. `tests.test_doc_governance_guard` has 1 pre-existing failure in the already-committed mixed overextension/yfinance capstone review entry (bullet length/register pointer), excluded from this category-2 knife.
+- **Next**: Codex: wait for explicit user `修复`; then repair only this Required ID with minimal red-green tests and no yfinance/freshday/provider/live crossing.
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。
@@ -47,8 +76,8 @@
 
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short overextension capstone 集成 + yfinance-grades 源 A/B/C non-critical)
 
-- **Verdict/Action**: PASS + 提交（合并两刀、未 push）。overextension 接线（capstone 加 overextension_producer 阶段 + 复用 OHLCV sidecar + map 穿进选股/data_context、no-map 反控）+ yfinance A 引擎（FMP-兼容 resolved actions、look-ahead/类型 fail-closed）+ B live-fetch + C 接线（yfinance 替 FMP 当 §4.2 评级源、non-critical：缺/down/dep-missing/429/dup 全→中性、绝不 gate emit、不碰 provider_health）。上轮 §6a FAIL 的 dup-row-gate-emit 已修（runner 去重身份 = resolver `_DUPLICATE_IDENTITY` 精确对齐 + import catch 放宽 ImportError + 反控测），复核确认。§6a：yfinance-B 新 live-fetch 起独立 agent（dup 外全 PASS）。committer 附带修我 d1aea386 遗留的探针 dry-run 测试回归（改断 summary mtime 未变）+ 修正 Codex 误插 intro 之上的 SESSION_LOG 结构。
-- **Required**: 无。`R-USSHORT-BATCH5-OVEREXTENSION-WIRING-INCOMPLETE` resolved。Optional（非阻塞）：pass2 仍照抓 FMP grades（~200 多为 402）却被 yfinance 盖过=白抓，后续 slice 可停抓。
+- **Verdict/Action**: PASS + 提交（合并两刀、未 push）。overextension capstone 接线（producer 阶段 + 复用 OHLCV sidecar + map 穿进选股/data_context、no-map 反控）+ yfinance A/B/C（替 FMP 当 §4.2 评级源、non-critical：缺/down/dep-missing/429/dup 全→中性、绝不 gate emit、不碰 provider_health）。上轮 §6a FAIL 的 dup-row-gate-emit 已修（runner 去重身份对齐 resolver `_DUPLICATE_IDENTITY` + import catch 放宽 ImportError）复核确认；§6a yfinance-B live-fetch 独立 agent（dup 外全 PASS）。committer 附带修 d1aea386 探针 dry-run 回归 + SESSION_LOG 结构。
+- **Required**: 无。`R-USSHORT-BATCH5-OVEREXTENSION-WIRING-INCOMPLETE` resolved（单源见 register）。Optional（非阻塞）：pass2 仍照抓 FMP grades（~200 多为 402）却被 yfinance 盖过=白抓，后续 slice 可停抓。
 - **Verify**: `review-evidence:not_available`。整读 yfinance A/B/C + overextension diff + §6a agent；亲跑 full offline `test_us_short*` = **Ran 4138 OK**（含 dup→中性不崩 / broken-import→中性 / no-map 反控 / 探针 dry-run no-write mtime）；`git diff --check` 净；无 provider/network 调用（B live 未跑、留你另行授权）。freshday summary 排除。
 - **Next**: Codex：待命（yfinance-B live 抓取需你另行授权才真跑）。
 

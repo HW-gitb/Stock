@@ -586,8 +586,16 @@ class OverextensionFieldRecord(unittest.TestCase):
         self.assertTrue(validate_official_machine_record(rec)["clean"])
 
     def test_all_three_states_emit_clean(self):
-        for st in ("none", "warning", "chasing_extreme"):
-            rec = self._with_ox({**_OX_WARNING, "overextension_state": st})
+        records = {
+            "none": {"overextension_state": "none", "strips_theme_score": False,
+                     "execution_flags": {}, "conditions_met": 0, "condition_names": []},
+            "warning": _OX_WARNING,
+            "chasing_extreme": {"overextension_state": "chasing_extreme", "strips_theme_score": True,
+                                "execution_flags": {}, "conditions_met": 3,
+                                "condition_names": ["vertical_run", "volume_climax", "weak_retrace"]},
+        }
+        for st, tier in records.items():
+            rec = self._with_ox(tier)
             self.assertIn("overextension_state", _ids(rec))
 
     def test_no_field_record_when_absent(self):
@@ -602,7 +610,8 @@ class OverextensionFieldRecord(unittest.TestCase):
 
     def test_malformed_overextension_fails_closed(self):
         for bad in ("not-a-dict", 42, {"overextension_state": "bogus", "execution_flags": {}},
-                    {"overextension_state": "warning", "execution_flags": "nope"}, {"execution_flags": {}}):
+                    {"overextension_state": "warning", "execution_flags": "nope"}, {"execution_flags": {}},
+                    {**_OX_WARNING, "strips_theme_score": True}):
             r = _row()
             r["overextension"] = bad
             with self.assertRaises(mr.WeekendMachineRecordError):

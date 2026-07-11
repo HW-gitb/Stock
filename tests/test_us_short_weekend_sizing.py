@@ -254,7 +254,9 @@ class SizeRowsOverextensionWarningTests(unittest.TestCase):
 
     def test_malformed_present_overextension_fails_closed(self):
         for bad in ("warning", {"overextension_state": "bogus", "execution_flags": {}},
-                    {"overextension_state": "warning", "execution_flags": "x"}):
+                    {"overextension_state": "warning", "execution_flags": "x"},
+                    {"overextension_state": "warning", "strips_theme_score": True,
+                     "execution_flags": {"force_pullback": True, "reduce_size": True, "raise_rr_gate": True}}):
             row = _build_row(entry=101.5, stop=90.0)
             row["overextension"] = bad
             with self.assertRaises(ws.WeekendSizingError):

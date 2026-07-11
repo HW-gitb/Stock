@@ -397,7 +397,9 @@ class OverextensionWiring(unittest.TestCase):
         for bad in ("not-a-dict", 42,
                     {"overextension_state": "bogus", "execution_flags": {}},          # illegal state
                     {"overextension_state": "warning", "execution_flags": "nope"},    # execution_flags not a dict
-                    {"execution_flags": {}}):                                          # missing state
+                    {"execution_flags": {}},                                           # missing state
+                    {**_OX_WARNING, "strips_theme_score": True},                       # warning must never strip
+                    {**_OX_NONE, "execution_flags": dict(_OX_WARNING["execution_flags"])}):  # none must be inert
             with self.assertRaises(wa.WeekendAnalysisError):
                 _run([_cand_row(overextension=bad)])
 

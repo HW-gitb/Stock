@@ -40,7 +40,7 @@ from engine.us_short_action_rank import ACTION_RANK_SKELETON, action_group as _e
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import VETO_TIERS
 from engine.us_short_no_dangling_validator import validate_official_machine_record
-from engine.us_short_overextension import OVEREXTENSION_STATES as _OVEREXTENSION_STATES
+from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
@@ -219,7 +219,7 @@ def _field_records(row):
     # here the STATE lands on its own §11.3 overextension_state column as an advisory tag (仅标签). Emitted only
     # when the row carries a valid tier result (a malformed one was rejected by `_validate_ranked_row`).
     ox = row.get("overextension")
-    if isinstance(ox, dict) and ox.get("overextension_state") in _OVEREXTENSION_STATES:
+    if isinstance(ox, dict):
         frs.append(_fr("overextension_state", op="仅标签", terminal="overextension_state",
                        disposition=_LANDED, impact_target=None))
 
@@ -333,10 +333,11 @@ def _validate_ranked_row(row):
     # overextension_state §10 field_record + the flatten lifts the §11.3 column, so a malformed PRESENT record
     # must fail closed here (缺数据≠安全); a legitimately ABSENT overextension is left to the emitter's skip.
     ox = row.get("overextension")
-    if ox is not None and not (isinstance(ox, dict) and ox.get("overextension_state") in _OVEREXTENSION_STATES
-                               and isinstance(ox.get("execution_flags"), dict)):
-        raise WeekendMachineRecordError(
-            f"overextension 非法（须含合法 overextension_state ∈ {list(_OVEREXTENSION_STATES)} + dict execution_flags 或缺省）: {ox!r}")
+    if ox is not None:
+        try:
+            validate_overextension_result(ox)
+        except ValueError as exc:
+            raise WeekendMachineRecordError(f"overextension 违反 §4.3 状态/效果闭集契约: {ox!r}") from exc
 
 
 def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN,

@@ -20,6 +20,8 @@ from engine.us_short_massive_news_catalyst import (
     MassiveNewsCatalystSeamError,
     project_massive_news_catalyst,
 )
+from engine.us_short_overextension import validate_overextension_result
+from engine.us_short_overextension_producer import eligible_tickers_sha256
 from engine.us_short_risk_downgrade import risk_downgrade
 from engine.us_short_sec_offering_audit import (
     OfferingAuditError,
@@ -29,6 +31,10 @@ from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_scor
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
     validate_candidate_artifact,
+)
+from runners.us_short_batch5_full_universe_momentum_fetch import (
+    ADJUSTMENT_MODE as OVEREXTENSION_SOURCE_ADJUSTMENT_MODE,
+    SESSION_LABEL as OVEREXTENSION_SOURCE_SESSION,
 )
 
 
@@ -575,7 +581,7 @@ def _scope_overextension(
     EXACTLY, so `compose_score_inputs` receives exact-coverage (its `_validated_theme_strip_targets` requires it).
     None → None (no strip; backward-compatible default). A non-dict map, or a Pass2-clean target missing from the
     map, fails closed — pass2_clean ⊆ eligible ⊆ the producer map keys, so a miss is a wiring bug, not a data gap.
-    The per-ticker record's shape is validated downstream by compose (state / bool strips / dict execution_flags)."""
+    The per-ticker record's state/effect closed-world shape is validated downstream by the shared §4.3 validator."""
     if overextension_by_ticker is None:
         return None
     if type(overextension_by_ticker) is not dict:
@@ -586,6 +592,107 @@ def _scope_overextension(
             _fail(f"overextension_by_ticker is missing Pass2-clean target {ticker!r} (must cover every eligible)")
         scoped[ticker] = overextension_by_ticker[ticker]
     return scoped
+
+
+_OVEREXTENSION_PROJECTION_KEYS = {
+    "schema_name", "schema_version", "generated_at", "decision_clock", "source_contract",
+    "candidate_binding", "overextension_by_ticker", "disposition_counts", "scored_count", "target_count",
+}
+
+
+def validate_overextension_projection(
+    projection: Any,
+    *,
+    candidate_artifact: dict[str, Any],
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+) -> dict[str, Any]:
+    """Bind a local §4.3 projection to the current candidate clock/universe before any score consumer sees it."""
+    if type(projection) is not dict or set(projection) != _OVEREXTENSION_PROJECTION_KEYS:
+        _fail("overextension projection must use the exact source-bound envelope")
+    if (projection["schema_name"] != "us_short_full_universe_overextension_projection"
+            or projection["schema_version"] != "1.0.0"):
+        _fail("overextension projection schema identity drifted")
+    _observed_at_to_naive_et(projection["generated_at"], where="overextension_projection.generated_at")
+
+    artifact = _validated_candidate_artifact(
+        candidate_artifact,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+    )
+    eligible = eligible_tickers_from_rows(artifact["rows"])
+    price_basis_compact = artifact["price_basis_date"]
+    try:
+        price_basis_iso = datetime.strptime(price_basis_compact, "%Y%m%d").date().isoformat()
+    except (TypeError, ValueError) as exc:
+        raise DataContextAssemblyError("candidate price_basis_date is not canonical YYYYMMDD") from exc
+
+    expected_clock = {
+        "expected_decision_date": expected_decision_date,
+        "candidate_price_basis_date": price_basis_compact,
+        "price_basis_date": price_basis_iso,
+        "source_as_of": price_basis_iso,
+    }
+    if type(projection["decision_clock"]) is not dict or projection["decision_clock"] != expected_clock:
+        _fail("overextension projection decision/price clock mismatches the current candidate artifact")
+    source_contract = projection["source_contract"]
+    expected_source_contract = {
+        "session": OVEREXTENSION_SOURCE_SESSION,
+        "adjustment_mode": OVEREXTENSION_SOURCE_ADJUSTMENT_MODE,
+    }
+    if type(source_contract) is not dict or source_contract != expected_source_contract:
+        _fail("overextension projection source_contract drifted from the reviewed grouped-window source")
+    binding = projection["candidate_binding"]
+    expected_binding = {
+        "eligible_count": len(eligible),
+        "eligible_tickers_sha256": eligible_tickers_sha256(eligible),
+    }
+    if (type(binding) is not dict or set(binding) != set(expected_binding)
+            or type(binding.get("eligible_count")) is not int or binding["eligible_count"] < 0
+            or type(binding.get("eligible_tickers_sha256")) is not str
+            or binding != expected_binding):
+        _fail("overextension projection candidate-universe binding mismatches the current artifact")
+
+    rows = projection["overextension_by_ticker"]
+    if type(rows) is not dict:
+        _fail("overextension_by_ticker must be an exact dict")
+    canonical_rows: dict[str, dict[str, Any]] = {}
+    expected_pit = {
+        "as_of": price_basis_iso,
+        "session": source_contract["session"],
+        "adjustment_mode": source_contract["adjustment_mode"],
+    }
+    for raw_ticker, record in rows.items():
+        ticker = _canonical_ticker(raw_ticker, where="overextension_by_ticker key")
+        if ticker in canonical_rows:
+            _fail(f"overextension_by_ticker contains duplicate canonical ticker: {ticker}")
+        try:
+            validate_overextension_result(
+                record,
+                require_producer_metadata=True,
+                expected_pit=expected_pit,
+            )
+        except ValueError as exc:
+            raise DataContextAssemblyError(f"overextension_by_ticker[{ticker}] rejected: {exc}") from exc
+        canonical_rows[ticker] = record
+    if set(canonical_rows) != set(eligible):
+        _fail("overextension projection must exactly cover the current Pass1-eligible universe")
+
+    counts = {"scored": 0, "insufficient_data": 0}
+    for record in canonical_rows.values():
+        counts[record["disposition"]] += 1
+    disposition_counts = projection["disposition_counts"]
+    counts_are_exact_ints = (type(disposition_counts) is dict and set(disposition_counts) == set(counts)
+                             and all(type(disposition_counts[key]) is int and disposition_counts[key] >= 0
+                                     for key in counts))
+    if (type(projection["target_count"]) is not int or projection["target_count"] != len(eligible)
+            or type(projection["scored_count"]) is not int or projection["scored_count"] != counts["scored"]
+            or not counts_are_exact_ints or disposition_counts != counts):
+        _fail("overextension projection counts do not reconcile to the bound tier rows")
+    return {
+        "overextension_by_ticker": canonical_rows,
+        "generated_at": projection["generated_at"],
+    }
 
 
 def assemble_data_context_with_analyst_grade_risk(
@@ -834,6 +941,7 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
+    overextension_generated_at: str | None = None,
 ) -> dict[str, Any]:
     """Assemble official Batch4 data/provenance components from resolved local source artifacts.
 
@@ -842,6 +950,11 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     data_context seam; the later batch5->batch4 E2E cut supplies the remaining analysis inputs.
     """
     source_refs_by_role = _validated_source_ref_paths(source_ref_paths)
+    has_overextension_ref = "overextension_projection" in source_refs_by_role
+    if has_overextension_ref and overextension_by_ticker is None:
+        _fail("overextension projection source ref requires a consumed map")
+    if has_overextension_ref != (overextension_generated_at is not None):
+        _fail("source-bound overextension projection must carry its validated generated_at")
     data_context, score_composition, scoped_overextension = _assemble_resolved_pass2_source_context(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -865,7 +978,12 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     offering_observed = _collect_observed_at_instants(offering_audit_source, where="offering_audit_source")
     analyst_observed = _collect_observed_at_instants(analyst_grade_actions, where="analyst_grade_actions")
     news_observed = _collect_observed_at_instants(massive_news_events, where="massive_news_events")
-    score_family_observed = [candidate_observed, *offering_observed, *analyst_observed, *news_observed]
+    overextension_observed = (
+        [_observed_at_to_naive_et(overextension_generated_at, where="overextension_projection.generated_at")]
+        if overextension_generated_at is not None else []
+    )
+    score_family_observed = [candidate_observed, *offering_observed, *analyst_observed, *news_observed,
+                             *overextension_observed]
     price_basis_date = candidate_artifact["price_basis_date"]
     families = {
         "universe": _provenance_family(
