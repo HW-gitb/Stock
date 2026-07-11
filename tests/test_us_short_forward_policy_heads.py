@@ -116,19 +116,33 @@ class ForwardPolicyHeadTests(unittest.TestCase):
         self.assertAlmostEqual(out["catalyst_off"]["per_ticker"]["DELT"]["core_score"], 65.0)
         self.assertEqual(out["catalyst_off"]["per_ticker"]["CATA"]["theme_momentum_score"], 50.0)
 
-    def test_catalyst_off_keeps_chasing_strip_and_becomes_momentum_only(self):
+    def test_catalyst_off_chasing_strips_theme_without_realloc(self):
+        # catalyst_off weights {mom 0.5333, theme 0.4667, cat 0}; a chasing strip removes the theme
+        # contribution with NO reallocation (strip_theme_score), NOT momentum-only: ALFA -> 0.5333*60 = 32.
         out = heads.build_selection_policy_heads(_composition(), overextension_by_ticker=_overextension_map())
         alfa = out["catalyst_off"]["per_ticker"]["ALFA"]
-        self.assertEqual(alfa, {"core_score": 60.0, "theme_momentum_score": 0.0})
+        self.assertAlmostEqual(alfa["core_score"], 32.0)
+        self.assertEqual(alfa["theme_momentum_score"], 0.0)
 
     def test_overextension_selection_off_restores_only_selection_effect(self):
         out = heads.build_selection_policy_heads(_composition(), overextension_by_ticker=_overextension_map())
         baseline = out["balanced"]["per_ticker"]["ALFA"]
         ablated = out["overextension_selection_off"]["per_ticker"]["ALFA"]
-        self.assertAlmostEqual(baseline["core_score"], 56.154)
+        # chasing ALFA in the balanced head: strip_theme_score on balanced (0.40*60 + 0.25*50 = 36.5),
+        # a real penalty (< the 71.5 unstripped balanced), NOT the old theme_off realloc 56.15.
+        self.assertAlmostEqual(baseline["core_score"], 36.5)
         self.assertEqual(baseline["theme_momentum_score"], 0.0)
         self.assertAlmostEqual(ablated["core_score"], 71.5)
         self.assertEqual(ablated["theme_momentum_score"], 100.0)
+
+    def test_balanced_head_chasing_matches_real_strip_theme_score(self):
+        # The balanced head is the A/B control: on a chasing ticker it must equal the real balanced
+        # track (core_score strip_theme_score=True), NOT the theme_off reallocation.
+        from engine.us_short_core_score import core_score
+        out = heads.build_selection_policy_heads(_composition(), overextension_by_ticker=_overextension_map())
+        blocks = _composition()["analysis_by_ticker"]["ALFA"]["score_blocks"]
+        expected = core_score(blocks, profile="balanced", strip_theme_score=True)["core_score"]
+        self.assertAlmostEqual(out["balanced"]["per_ticker"]["ALFA"]["core_score"], expected)
 
     def test_theme_off_zeros_theme_seat_for_all_rows(self):
         out = heads.build_selection_policy_heads(_composition(), overextension_by_ticker=_overextension_map())

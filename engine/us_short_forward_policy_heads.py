@@ -32,7 +32,6 @@ SELECTION_POLICY_IDS = tuple(_GRID["selection_policies"])
 SECOND_WAVE_LIVE_POLICY_IDS = tuple(_GRID["second_wave_live_policies"])
 _POLICIES = _GRID["policies"]
 _CATALYST_OFF_WEIGHTS = _POLICIES["catalyst_off"]["score_weights"]
-_MOMENTUM_ONLY_WEIGHTS = {"momentum": 1.0, "theme": 0.0, "catalyst": 0.0}
 _EXPECTED_SELECTION_POLICY_IDS = (
     "balanced", "theme_plus", "theme_aggressive", "theme_off",
     "catalyst_off", "overextension_selection_off",
@@ -145,9 +144,12 @@ def _validated_stripped_targets(overextension_by_ticker, targets: tuple[str, ...
     return out
 
 
-def _normalized_score_inputs(analysis_row: dict, *, profile: str):
+def _normalized_score_inputs(analysis_row: dict, *, profile: str, strip_theme_score: bool = False):
     risk = validate_risk_downgrade_input(analysis_row["risk_downgrade"])
-    score = core_score(analysis_row["score_blocks"], profile=profile, risk_downgrade_points=risk["points"])
+    score = core_score(
+        analysis_row["score_blocks"], profile=profile,
+        risk_downgrade_points=risk["points"], strip_theme_score=strip_theme_score,
+    )
     return score, risk
 
 
@@ -165,15 +167,20 @@ def _score_for_policy(policy_id: str, analysis_row: dict, *, stripped: bool) -> 
     if policy_id == "overextension_selection_off":
         strip = False
     if policy_id == "catalyst_off":
+        # catalyst_off keeps its 40:35 pro-rata weights; a chasing strip removes ONLY the theme
+        # contribution with NO reallocation — mirroring core_score(strip_theme_score=True) / §4.3:
+        # a penalty must never raise the score by moving theme weight onto momentum.
         base_score, _ = _normalized_score_inputs(analysis_row, profile=PRIMARY_PROFILE)
-        weights = _MOMENTUM_ONLY_WEIGHTS if strip else _CATALYST_OFF_WEIGHTS
-        raw = sum(weights[name] * base_score["blocks_used"][name] for name in CORE_COMPONENTS)
+        used = base_score["blocks_used"]
+        raw = sum(_CATALYST_OFF_WEIGHTS[name] * used[name] for name in CORE_COMPONENTS)
+        if strip:
+            raw -= _CATALYST_OFF_WEIGHTS["theme"] * used["theme"]
         core = max(0.0, raw - base_score["risk_downgrade"])
         return core, _theme_seat_score(base_score, strip=strip, policy_id=policy_id)
-    profile = policy["score_profile"]
-    if strip:
-        profile = "theme_off"
-    score, _ = _normalized_score_inputs(analysis_row, profile=profile)
+    # Scoring-profile heads strip a chasing ticker's theme via strip_theme_score on THIS profile
+    # (no reallocation), matching the real balanced selection track; theme_off's reallocation is
+    # reserved for the dedicated theme_off shadow-attribution head only (§12.2).
+    score, _ = _normalized_score_inputs(analysis_row, profile=policy["score_profile"], strip_theme_score=strip)
     return score["core_score"], _theme_seat_score(score, strip=strip, policy_id=policy_id)
 
 

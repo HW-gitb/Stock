@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 — Claude solo A1 heads chasing-strip 收口 + 自审 PASS (→ strip_theme_score)
+
+- **Verdict/Action**: 按用户「自修自审、pass 后提交」修 `R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT`。判定 master(`strip_theme_score`) 对、heads(`theme_off`/momentum-only) 陈旧（据设计 §4.3「剥当前 profile 赛道贡献·不重分配·罚后≤原分」+ 罚分原则 + `5e3e00b` 已 resolved）。`_score_for_policy`：retain-strip 头（balanced/theme_plus/theme_aggressive）改 `core_score(own profile, strip_theme_score=True)`；catalyst_off×chasing 改减自身 theme 贡献（非 momentum-only）；删 `_MOMENTUM_ONLY_WEIGHTS` 孤儿；theme_off 头保留重分配（§12.2 归因）、overext_selection_off 仍 strip=False。
+- **Required**: 无。`R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT` → resolved（单源见 register）；heads 仍未接线。
+- **Verify**: 亲验非信测试：独立算 chasing ALFA balanced=36.5 / catalyst_off=32.0（均 < 未剥、无重分配）== 代码；heads 测试更新 + 新增控制 `test_balanced_head_chasing_matches_real_strip_theme_score`（balanced 头==`core_score(strip_theme_score=True)`）`9 OK`；全 `test_us_short*` `4222 OK`（干净 env、0 fail/0 err）；grid schema + doc guards green；整类修两条 strip 腿、B-grep 残留=0、反向控齐、design 无需改（§4.3 已定）；shadow-only·未接线→未起独立 agent。
+- **Next**: 待用户 push（先核私密 remote）。
+
 ## 2026-07-12 — Claude merge (US-short A1 Path A → master) + strip_theme_score 漂移发现
 
 - **Verdict/Action**: 按用户 `merge`，把 9479 的 `296a2fab`（A1 Path A、已审 PASS）合入 master（merge `0a6201b`；先提交 D:\ 遗留 A1 planning SESSION_LOG=`bf0ab88`）。SESSION_LOG union、design 自动合并；仅 register 冲突，无损解（保留 master 3 条 R3 + A1 块）。未 push；heads 仍未接线。
