@@ -21,7 +21,9 @@ Requires env: FMP_API_KEY (NEVER written to any output).
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import json
+import math
 import os
 import sys
 import urllib.error
@@ -62,13 +64,25 @@ def _default_quote_fetcher(fmp_key: str) -> tuple[Any, int, str]:
 
 
 def _vix_value_from_payload(payload: Any) -> float | None:
-    row = payload[0] if isinstance(payload, list) and payload else (payload if isinstance(payload, dict) else None)
-    if not isinstance(row, dict):
+    if isinstance(payload, list):
+        if len(payload) != 1:
+            return None
+        row = payload[0]
+    else:
+        row = payload if isinstance(payload, dict) else None
+    if not isinstance(row, dict) or row.get("symbol") != VIX_SYMBOL:
         return None
     try:
-        return float(row.get("price"))
-    except (TypeError, ValueError):
+        value = float(row.get("price"))
+    except (TypeError, ValueError, OverflowError):
         return None
+    return value if math.isfinite(value) and value > 0 else None
+
+
+def _observation_time(generated_at: str | None) -> str:
+    if isinstance(generated_at, str) and generated_at.strip():
+        return generated_at
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
 def run_fetch(*, confirm_user_authorization: bool, quote_fetcher: Callable[[str], tuple] | None = None,
@@ -83,6 +97,7 @@ def run_fetch(*, confirm_user_authorization: bool, quote_fetcher: Callable[[str]
     if not fmp_key:
         raise VixRegimeFetchError("FMP_API_KEY not set")
 
+    observed_at = _observation_time(generated_at)
     payload, status, err = (quote_fetcher or _default_quote_fetcher)(fmp_key)
     value = _vix_value_from_payload(payload) if status == 200 else None
     regime = classify_vix(value) if value is not None else UNKNOWN
@@ -90,7 +105,8 @@ def run_fetch(*, confirm_user_authorization: bool, quote_fetcher: Callable[[str]
         "schema_name": "us_short_vix_regime_fetch_summary",
         "schema_version": "1.0.0",
         "authorization_ref": AUTHORIZATION_REF,
-        "generated_at": generated_at or "",
+        "generated_at": observed_at,
+        "observed_at": observed_at,
         "scope": {
             "market": "US", "lane": "us_short", "purpose": "vix_risk_axis_fetch",
             "feeds": "market_axis_regimes.vix (§7 position cap / new-entry only; NOT selection/prices/hard-veto)",

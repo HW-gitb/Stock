@@ -63,6 +63,36 @@ class VixRegimeFetch(unittest.TestCase):
                 r = vix.run_fetch(confirm_user_authorization=True, quote_fetcher=_fetcher(bad, 200))
                 self.assertEqual(r["vix_regime"], vix.UNKNOWN)
 
+    def test_wrong_symbol_or_semantically_invalid_quote_is_unknown(self):
+        bad_payloads = (
+            [{"symbol": "SPY", "price": 16.9}],
+            [{"symbol": "^VIX", "price": 0}],
+            [{"symbol": "^VIX", "price": -1}],
+            [{"symbol": "^VIX", "price": 16.9}, {"symbol": "^VIX", "price": 17.0}],
+        )
+        with mock.patch.dict(os.environ, {"FMP_API_KEY": "K"}, clear=False):
+            for payload in bad_payloads:
+                r = vix.run_fetch(confirm_user_authorization=True, quote_fetcher=_fetcher(payload, 200))
+                self.assertIsNone(r["vix_value"])
+                self.assertEqual(r["vix_regime"], vix.UNKNOWN)
+                self.assertTrue(r["vix_regime_is_unknown"])
+
+    def test_observation_time_is_recorded_and_supplied_time_is_preserved(self):
+        with mock.patch.dict(os.environ, {"FMP_API_KEY": "K"}, clear=False):
+            supplied = vix.run_fetch(
+                confirm_user_authorization=True,
+                quote_fetcher=_fetcher([{"symbol": "^VIX", "price": 16.9}], 200),
+                generated_at="2026-07-11T00:00:00+00:00",
+            )
+            defaulted = vix.run_fetch(
+                confirm_user_authorization=True,
+                quote_fetcher=_fetcher([{"symbol": "^VIX", "price": 16.9}], 200),
+            )
+        self.assertEqual(supplied["observed_at"], "2026-07-11T00:00:00+00:00")
+        self.assertEqual(supplied["generated_at"], supplied["observed_at"])
+        self.assertIsInstance(defaulted["observed_at"], str)
+        self.assertTrue(defaulted["observed_at"])
+
     def test_written_summary_has_no_secret_or_url(self):
         with mock.patch.dict(os.environ, {"FMP_API_KEY": "SECRET_FMP_ZZZ"}, clear=False):
             with tempfile.TemporaryDirectory() as tmp:

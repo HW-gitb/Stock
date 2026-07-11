@@ -67,6 +67,28 @@
 - **Verify**: focused 类别3 187 OK；下游 88 OK；无网络探针复现 A-D；raw/state 路径 gitignored、tracked summary 无 secret/URL/raw 行；doc/route guard 60 中 3 个 baseline/worktree 失败（旧 Claude entry 模板 1 + clean worktree 缺 ignored rpds 2），本 entry 非 offender；无 provider/live 调用。
 - **Next**: Codex：仅修复类别3 A-D，修复后交 Claude Code 独立审查。
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别6 A/B：VIX 观察绑定 + FMP fallback 实际调用计数)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、branch `codex/us-short-category6`、未 push）。A/B 修复正确：VIX 只认单行 `symbol=^VIX` + finite `price>0`（含 OverflowError）否则 → UNKNOWN、观察时间恒非空（不再把错符号/0/负/多行/非有限 VIX 当"进攻"regime）；FMP 兜底 `fmp_attempted` 改由抓取后的 `actual_request_count` 派生（planned 仅打印），健康/摘要/调用证据三处均读实际数、health-state 只依赖 needed_count 故行为中性。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT6-PROVIDER-OBSERVATION-TRUTH-GAPS` → resolved（完整独立复审证据单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读两处修复体 + `_build_run_fetch_provider_health`（fmp_state 只依赖 needed_count，计数改动行为中性）+ grep 确认无 planned-count 残留；自撰 VIX 探针 16 条全 HELD（错符号/0/负/多行/inf/nan/溢出/巨整/缺键/空/非dict/None → 全 None；观察钟 supplied/default 正确）；focused `universe_fetch`+`vix` 99 OK；亲跑全包 4141 ran、18 error 全 = worktree 长基址 MAX_PATH（WinError 206、非 reviewed 文件），零 reviewed-slice 失败。VIX 不碰选股/价位/veto，非选股面 → 未起 §6a agent。
+- **Next**: Codex：待命。
+
+## 2026-07-11 — Codex 修复 (R-USSHORT-REVIEWQ-CAT6-PROVIDER-OBSERVATION-TRUTH-GAPS)
+
+- **Verdict/Action**: Repaired only VIX source/value/time binding and FMP fallback actual-call accounting; no provider/live call, category-2/category-5/freshday crossing, commit, or push.
+- **Required**: `R-USSHORT-REVIEWQ-CAT6-PROVIDER-OBSERVATION-TRUTH-GAPS` — full repair detail and closure boundary remain in `docs/system_risk_register.md`.
+- **Verify**: red `11`; final universe/VIX/regime `115 OK`; `py_compile` OK; no network/raw read.
+- **Pre-Codex self-review**: A all VIX payload exits cover exact/wrong/zero/negative/multirow plus supplied/default time; B actual count reaches health/universe/call evidence; C valid ladder and frozen-240 history stay covered; E no CURRENT/route-doc change.
+- **Next**: Claude Code: independently review this R-ID only, then commit only this repair scope if PASS.
+
+## 2026-07-11 — Codex 审查 FAIL (US-short review queue category 6)
+
+- **Verdict/Action**: FAIL; category-6 design is otherwise sound, but VIX observation source/value/time binding and FMP fallback actual-call truth are not closed. No code/provider/live action; category-2 and freshday diffs excluded.
+- **Required**: `R-USSHORT-REVIEWQ-CAT6-PROVIDER-OBSERVATION-TRUTH-GAPS` — complete material detail, repair boundary, and scope manifest are in the register.
+- **Verify**: universe-fetch `89 OK`; VIX/regime `24 OK`; injected offline probes reproduce wrong-symbol/zero/negative→aggressive and forecast-vs-actual count divergence; no network/raw read.
+- **Next**: Codex: wait for explicit user `修复` for this R-ID only.
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。
