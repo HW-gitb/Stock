@@ -89,6 +89,21 @@
 - **Verify**: universe-fetch `89 OK`; VIX/regime `24 OK`; injected offline probes reproduce wrong-symbol/zero/negative→aggressive and forecast-vs-actual count divergence; no network/raw read.
 - **Next**: Codex: wait for explicit user `修复` for this R-ID only.
 
+## 2026-07-11 — Claude 审查 PASS + 提交 (US-short queue 类别7：raw universe/price/cost-floor 数值 OverflowError 整类 fail-closed)
+
+- **Verdict/Action**: PASS + 提交（reviewer 自动提交、branch `codex/us-short-category7`、未 push）。整类硬化正确：universe `_is_finite` 是所有 raw `float()` 的唯一 choke-point（每个 `float()` 前都有 `_is_finite` 门），改它 catch OverflowError→False 即覆盖全部 SEC 股本/Massive 收盘量/FMP 市值 raw 入口；price engine `tick_size_for`/`_tick`/`_finite_positive`/`atr` 与 cost `_finite_number`/`_count` 各自 catch OverflowError 回既有保守 sentinel。全部 fail-closed 到 reject/sentinel、不接受敌意值也不伪造信号（huge close→两引擎 executable=False、huge cost→零股 observe）。
+- **Required**: 无。`R-USSHORT-REVIEWQ-CAT7-RAW-NUMERIC-OVERFLOW-GAPS` → resolved（完整独立复审证据单源见 register）。
+- **Verify**: `review-evidence:not_available`。整读三处修复 + grep 证 universe 全部 raw `float()` 皆 `_is_finite` 门后（无漏网 raw ingress）+ 反向失败核（全 fail-closed、不伪造信号）；自撰探针 32 条全 HELD（3 入口 + 无裸崩 + 正控 + 引擎/成本端到端降级）；focused 152 OK；亲跑全包 4143 ran、18 error 全 = worktree 长基址 MAX_PATH（WinError 206、非 reviewed 文件），零 reviewed-slice 失败。极端输入 fail-closed 硬化、非新选股/live/secret 门 → 未起 §6a agent。
+- **Next**: Codex：待命。
+
+## 2026-07-11 — Codex 修复 (US-short review queue category 7)
+
+- **Verdict/Action**: Repaired category-7 raw numeric overflow guards only; no provider/live call, commit, push, or category-2/category-5/yfinance/freshday change.
+- **Required**: `R-USSHORT-REVIEWQ-CAT7-RAW-NUMERIC-OVERFLOW-GAPS` — full finding, exact scope, and closure rule are in `docs/system_risk_register.md`.
+- **Verify**: direct red reproduced three bare overflows; final focused consumer pack `473 OK`; `git diff --check` has CRLF-only warnings; no network/raw read.
+- **Pre-Codex self-review**: A raw universe + §6 price/tick/ATR + §8 cost inputs all covered while upstream-clamped 0-100 paths stay untouched; B consumer/finite-helper grep completed; C normal price/cost regressions stay green; E no CURRENT/route-doc drift; F category-6 is isolated in a sibling worktree.
+- **Next**: Claude Code: independently review R-USSHORT-REVIEWQ-CAT7-RAW-NUMERIC-OVERFLOW-GAPS and commit only this worktree's scope if PASS.
+
 ## 2026-07-10 — Claude 审查 PASS + 提交 (US-short yfinance-B resolver-rejection 通用 catch-and-neutralize)
 
 - **Verdict/Action**: PASS + 提交（reviewer 自动提交、未 push）。修上轮 live 首验揪出的残留缺陷：`run_yfinance_grades_fetch` resolve 调用点由 re-raise 改为 catch `YFinanceGradesError` → `_neutral_resolved_actions`（全票 excluded）+ `resolver_rejection` reason + summary status `resolver_rejected_neutralized`/provider down、**绝不 abort**。整读确认：通用（非只 dup）、resolver 引擎 PIT/dup 严格性未动（拒得对）、hygiene 关键（reason 用通用 const 消息非 str(exc)、schema 钉 const、测试证 summary 无 ticker/firm/exc 上下文泄漏）、neutral 下游走中性。低风险 fail-closed 硬化 → 无 §6a agent。

@@ -89,7 +89,7 @@ def tick_size_for(price):
     """US tick: $0.01 normally; $0.0001 sub-penny for 0 < price < $1.00 (§3.4)."""
     try:
         pf = float(price)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return _TICK_PENNY
     if math.isfinite(pf) and 0 < pf < _SUBPENNY_PRICE:
         return _TICK_SUBPENNY
@@ -101,7 +101,7 @@ def _tick(x, rounding, tick_size):
         return None
     try:
         xf = float(x)
-    except (TypeError, ValueError):
+    except (TypeError, ValueError, OverflowError):
         return None
     if not math.isfinite(xf):
         return None
@@ -128,17 +128,25 @@ def _finite_positive(x):
     """True iff x is a finite, strictly-positive real number (a valid price / ATR). Rejects None / bool / non-numeric
     / NaN / inf / <=0 — so a hostile non-positive or non-finite price/ATR can never slip a bare `is None` guard and
     fabricate a signal (D8 P3 defense-in-depth; the real pipeline already cleans these upstream)."""
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x) and x > 0
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x) and x > 0
+    except OverflowError:
+        return False
 
 
 def atr(bars, n=ATR_WINDOW):
     if len(bars) < n + 1:
         return None
-    trs = []
-    for i in range(len(bars) - n, len(bars)):
-        h, l, pc = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
-        trs.append(max(h - l, abs(h - pc), abs(l - pc)))
-    result = sum(trs) / n
+    try:
+        trs = []
+        for i in range(len(bars) - n, len(bars)):
+            h, l, pc = bars[i]["high"], bars[i]["low"], bars[i - 1]["close"]
+            trs.append(max(h - l, abs(h - pc), abs(l - pc)))
+        result = sum(trs) / n
+    except OverflowError:
+        return None
     return result if math.isfinite(result) else None   # non-finite ATR (hostile NaN/inf bar) → None, not a value that slips `a<=0`
 
 

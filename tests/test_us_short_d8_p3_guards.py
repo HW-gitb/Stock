@@ -41,6 +41,9 @@ class AtrNonFiniteGuard(unittest.TestCase):
         self.assertIsNone(pe.atr(self._bars(float("inf"), 1.0, 1.0)))
         self.assertIsNone(pe.atr(self._bars(1.0, float("-inf"), 1.0)))
 
+    def test_atr_none_on_huge_integer_bar(self):
+        self.assertIsNone(pe.atr(self._bars(10 ** 400, 1, 1)))
+
     def test_atr_finite_on_normal_bars(self):
         a = pe.atr(self._bars(2.0, 1.0, 1.5))
         self.assertIsNotNone(a)
@@ -54,8 +57,15 @@ class FinitePositivePriceGuard(unittest.TestCase):
     def test_accepts_only_finite_positive(self):
         self.assertTrue(pe._finite_positive(1.0))
         self.assertTrue(pe._finite_positive(0.01))
-        for bad in (None, 0, 0.0, -1.0, float("nan"), float("inf"), float("-inf"), True, False, "1", [], {}):
+        for bad in (None, 0, 0.0, -1.0, 10 ** 400, float("nan"), float("inf"), float("-inf"), True, False, "1", [], {}):
             self.assertFalse(pe._finite_positive(bad), repr(bad))
+
+    def test_huge_close_degrades_both_price_engines_to_observe(self):
+        indicators = {"effective_support": 98.0, "support_quality": "strong",
+                      "effective_resistance": 110.0, "resistance_quality": "strong", "atr": 2.0}
+        for engine in (pe.support_atr_engine, pe.holding_exit_engine):
+            result = engine({"close": 10 ** 400, "indicators": indicators}, "震荡")
+            self.assertFalse(result["executable"])
 
 
 class ProducerDefaultDateConsistency(unittest.TestCase):
