@@ -17,6 +17,7 @@ from engine import us_short_paper_multiweek_comparison as multi_cmp  # noqa: E40
 from engine import us_short_paper_multiweek_scorecard as multi_score  # noqa: E402
 from engine import us_short_paper_scorecard as scorecard  # noqa: E402
 from engine import us_short_paper_scorecard_comparison as score_cmp  # noqa: E402
+from engine import us_short_forward_policy_decision_diff as decision_diff  # noqa: E402
 from engine import us_short_shadow_compare as selection_cmp  # noqa: E402
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS  # noqa: E402
 
@@ -163,6 +164,57 @@ class SelectionComparison(unittest.TestCase):
         nested_extra["selection_decisions"]["balanced"]["smuggled"] = True
         with self.assertRaises(selection_cmp.ShadowCompareError):
             selection_cmp.build_policy_shadow_comparison(nested_extra)
+
+
+class DecisionDiffLog(unittest.TestCase):
+    def test_builds_private_per_ticker_diff_and_deidentified_summary(self):
+        result = decision_diff.build_forward_policy_decision_diff_log(_capture())
+        self.assertEqual(result["private"]["schema_name"], "us_short_forward_policy_decision_diff_log")
+        self.assertEqual(tuple(result["private"]["diffs_vs_balanced"]), POLICIES[1:])
+        rows = {
+            row["ticker"]: row
+            for row in result["private"]["diffs_vs_balanced"]["theme_plus"]["ticker_diffs"]
+        }
+        self.assertEqual(rows["BBB"]["top15_membership_change"], "balanced_only")
+        self.assertEqual(rows["BBB"]["selection_gate_pass_change"], "dropped_from_top15")
+        self.assertIsNone(rows["BBB"]["policy_rank"])
+        self.assertEqual(rows["CCC"]["top15_membership_change"], "policy_only")
+        self.assertEqual(rows["CCC"]["selection_gate_pass_change"], "added_to_top15")
+        self.assertEqual(rows["AAA"]["rank_delta"], 0)
+        self.assertEqual(rows["AAA"]["action_change"], "not_available_in_cut_a_capture")
+        self.assertEqual(rows["AAA"]["size_change"], "not_available_in_cut_a_capture")
+
+        summary_text = repr(result["summary"])
+        self.assertEqual(result["summary"]["schema_name"], "us_short_forward_policy_decision_diff_summary")
+        self.assertEqual(result["summary"]["diff_counts_vs_balanced"]["theme_plus"]["top15_membership_changed_count"], 2)
+        self.assertNotIn("AAA", summary_text)
+        self.assertNotIn("BBB", summary_text)
+        self.assertNotIn("CCC", summary_text)
+        self.assertFalse(result["summary"]["boundary"]["shadow_counts_ship_gate"])
+
+    def test_rejects_second_wave_boundary_and_non_selection_gate_drift(self):
+        for mutate in (
+            lambda value: value["selection_decisions"].__setitem__(
+                "overextension_execution_off", value["selection_decisions"]["balanced"]
+            ),
+            lambda value: value["boundary"].__setitem__("shadow_counts_ship_gate", True),
+            lambda value: value["selection_decisions"]["theme_plus"].__setitem__("candidates", ["AAA"]),
+        ):
+            bad = copy.deepcopy(_capture())
+            mutate(bad)
+            with self.assertRaises(decision_diff.ForwardPolicyDecisionDiffError):
+                decision_diff.build_forward_policy_decision_diff_log(bad)
+
+    def test_validator_rederives_counts_and_refuses_action_or_size_fabrication(self):
+        result = decision_diff.build_forward_policy_decision_diff_log(_capture())
+        result["private"]["diffs_vs_balanced"]["theme_plus"]["counts"]["rank_changed_count"] = 99
+        with self.assertRaises(decision_diff.ForwardPolicyDecisionDiffError):
+            decision_diff.validate_forward_policy_decision_diff_log(result["private"])
+
+        fabricated = decision_diff.build_forward_policy_decision_diff_log(_capture())["private"]
+        fabricated["diffs_vs_balanced"]["theme_plus"]["ticker_diffs"][0]["action_change"] = "changed"
+        with self.assertRaises(decision_diff.ForwardPolicyDecisionDiffError):
+            decision_diff.validate_forward_policy_decision_diff_log(fabricated)
 
 
 class ScorecardComparison(unittest.TestCase):

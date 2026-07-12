@@ -88,12 +88,49 @@ register + code are the source of truth.
   and the grid-governed >=12-week aligned window with embedded validated weekly comparisons and re-derived lineage. Lifecycle contributes only item #28;
   item #36 remains untouched because its governed unit is source-bound overextension triggers, absent from Cut A.
   Its own reviewed cut (a contract change to already-reviewed engines).
-- **[ ] Cut C** — per-ticker **decision-diff log**: turning a head off, does it change gate-pass / rank /
-  Top15 membership / action / size — a deterministic counterfactual diff (not post-hoc correlation),
-  private + de-identified.
-- **[ ] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
+- **[BUILT] Cut C** — per-ticker **decision-diff log**: consumes the reviewed Cut-A capture and emits a private
+  ticker-bearing balanced-vs-policy diff plus a schema-pinned de-identified counts summary. It re-derives
+  non-selection gate stability, rank delta, selection bucket delta, and Top15 membership changes for the five
+  shadow policies. Action / size diffs are explicitly marked `not_available_in_cut_a_capture` because Cut A
+  does not run downstream analysis/sizing per policy; fabricating those claims is rejected.
+- **[SPEC-FROZEN — build on `执行`] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
   `net_benchmark_excess`; divergence definition; minimum weeks; comparison margin; placebo seed + match
   frequency; paired basis; elimination rule). The plan must be pre-registered day-1; the analysis code may lag.
+  **All four open parameters are FROZEN below (user-ratified 2026-07-12). Build the schema/preset/manifest + tests to
+  these EXACT values — do not re-open or invent. Do NOT touch Cut E; do NOT commit until Claude review.**
+
+  **Frozen pre-registration statistical plan v1** (the const-pinned Cut-D manifest must encode exactly this):
+  - **Primary metric**: `net_benchmark_excess`, paired same-week vs `balanced` (already in grid `evaluation_plan`).
+  - **Independence unit**: `decision_week` (1 week = 1 block; frozen). **≥12 DIVERGENCE weeks** (not calendar weeks)
+    before any promotion review (`minimum_forward_weeks_before_promotion_review=12`).
+  - **Divergence definition** (settled): a week counts as a divergence/effect week **iff the head's Top15 membership
+    symmetric difference vs `balanced` ≥ 1 ticker**. Rank + `selection_bucket` differences under IDENTICAL membership
+    are SECONDARY diagnostics only and do NOT count toward the primary divergence tally — the Cut-A capture excludes
+    sizing/action (Cut C marks `size_change`/`action_change` `not_available_in_cut_a_capture`), so a bucket→outcome
+    claim is unsupported. Revisit only if a future capture carries sizing.
+  - **comparison_win_margin** (user-ratified): promotion-eligibility requires ALL of —
+    (a) mean paired `net_benchmark_excess` advantage vs `balanced` **≥ +0.10%/week** over the ≥12 divergence weeks;
+    (b) paired-win consistency **≥ 2/3** of divergence weeks (head ≥ balanced that week);
+    (c) the advantage **exceeds the 95th percentile of the head's placebo null** (below). Costs are already inside the
+    paired metrics — no separate cost gate.
+  - **Placebo** (§12.2 mechanical-vs-real check): `placebo_replicates = 1000`, `placebo_seeds = 0..999` (deterministic,
+    pre-registered — NOT drawn at analysis time). Each replicate perturbs `balanced`'s Top15 by the SAME number of
+    names the head diverged that week (random in/out swaps from the same eligible candidate pool), forming the null
+    for gate (c). Match frequency is thus DATA-BOUND to each head's realized weekly divergence count, not a constant.
+  - **early_action = `futility_or_harm_only`** (grid), **口径 = OUTCOME-BLIND** (user-ratified — returns are examined
+    ONLY at ≥12 weeks; no early outcome peeking, preserving pre-registration integrity):
+    - **futility** (structural): **< 2 divergence weeks in the first 8 decision-weeks** → futility flag (cannot accrue
+      ≥12 divergence samples in a reasonable horizon).
+    - **harm** (structural): mean weekly Top15 turnover **> 2× `balanced`** sustained ≥4 weeks, OR Top15 fill **< 50%
+      of `balanced`'s seat count** sustained → harm flag.
+    - A flag SURFACES the head for human review — never a silent auto-drop. (The 2-in-8 / 2× / 50% concrete cutoffs are
+      Claude's concretization of the ratified outcome-blind basis; adjustable on review, frozen for v1.)
+  - **Paired basis**: head vs `balanced` on the identical PIT snapshot, same week, same benchmark + cost model.
+  - **Elimination rule**: a futility/harm flag → surface for review; an un-flagged head runs to ≥12 divergence weeks,
+    then faces the (a)+(b)+(c) gate. No promotion before the minimum (`promotion_before_minimum_allowed=false`).
+  - **Boundary**: comparison/calibration only — `shadow_counts_ship_gate=false`, `changes_primary_selection=false`,
+    zero new provider, no §2.1/§12.2 exception, private ticker artifacts gitignored, tracked manifest de-identified.
+    The manifest METHOD must land before the first authorized LIVE capture run.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 

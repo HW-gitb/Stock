@@ -88,6 +88,29 @@
 - **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
 - **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
 - **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+## 2026-07-12 - Claude Code 决策（US-short A1 Cut D 预注册统计计划已冻结·交 Codex 执行）
+
+- **决策**: Cut D 四项开放参数已定、冻结进 `docs/us_short_forward_ab_execution_plan.md` §4（[SPEC-FROZEN]）。Divergence=Top15 成员对称差≥1（rank/bucket 仅次级、因 Cut A capture 无 sizing/action）；placebo=1000 replicates·seed 0..999·匹配频率=各头当周实际分歧只数、gate=真头超额>placebo 95 分位；early_action=outcome-blind（futility<2 分歧周@前8周、harm=换手>2× 或 fill<50% 持续、只 flag 复审不自动淘汰）。
+- **用户批准（2026-07-12）**: comparison_win_margin=+0.10%/周（更松档）+ ≥⅔ 分歧周 paired-win 一致性；early_action 口径=纯 outcome-blind。gate(c) placebo 分位 + 具体 futility/harm 数值断点=Claude 对已批准口径的 concretization（可复审调、v1 冻结）。
+- **边界**: never ship-gate、changes_primary_selection=false、零 provider、无 §2.1/§12.2 例外、私有票据 gitignored、tracked manifest 脱敏；method 须落在首次授权 LIVE capture 之前。
+- **Next**: Codex：`执行` Cut D（按 §4 [SPEC-FROZEN] EXACT 值建 schema/preset/manifest+测试；不碰 Cut E；不提交、待 Claude 审查）。
+
+## 2026-07-12 - Claude Code 审查（US-short A1 Cut C policy decision-diff）PASS
+
+- **Verdict/Action**: PASS + 已提交（ecf2）。Cut C 纯派生引擎：消费已审 Cut A 私有 capture → 私有逐票 balanced-vs-policy diff（rank / Top15 成员 / gate-pass / bucket）+ 脱敏 counts summary。零 provider、本刀零持久化、never ship-gate、无 §2.1/§12.2 洗白。核验无 bypass：capture-bound（绑 source digest + 决策/价基时钟）；rank 由 validator 保证的唯一有序 admitted 派生；non-selection-gate 恒定断言 SOUND（candidates/cheap_eligible/recall/holdings 经 run_selection 证 score-independent、仅 _select_top15 吃分→只揪真扰动、不误伤合法 capture）；ship-gate 隔离 + 脱敏（summary schema additionalProperties:false 拒 ticker）+ action/size 三重拒伪造均成立。
+- **Required**: 无。
+- **Optional**: `selection_bucket_changed_count` 把成员变动票（policy 侧 bucket=None）也计入 bucket 变更、与纯 Top15 内 bucket 迁移混算；raw ticker_diffs 保留可拆字段供下游区分；shadow 研究指标、不碰真选股，暂不改。
+- **Verify**: 亲跑 clean full pack（neutralize 追踪的 cp312 .tools→py3.13 + restore）`4254 OK`(1 skipped)；整读引擎体 + summary schema + Cut B capture 契约（admitted 唯一有序）+ run_selection 输出契约；对抗测试 7 Cut C + 3 schema 覆盖 fail-closed / de-id / ship-gate 隔离 / action-size 拒伪造。
+- **Next**: 待用户 `merge` → ecf2 合入 master（base 414441a 已在 master 史内、同前几刀同法）。
+
+## 2026-07-12 - Codex 执行（US-short A1 Cut C policy decision-diff）
+
+- **Verdict/Action**: Cut C 已构建；当前顶部 Claude PASS 后无 pending Optional 可修，按 plan 进入下一部件。新增 Cut-A capture-bound 逐票 decision-diff：私有 ticker-bearing log + 脱敏 counts summary schema；只覆盖 Cut A 真实包含的非选择 gate 稳定、Top15 membership、rank、selection bucket，action/size 明确不可用且禁止伪造；未提交。
+- **Required**: 无 Codex 遗留；material 边界见 `R-USSHORT-A1-CUT-C-POLICY-DECISION-DIFF`。
+- **Verify**: focused Cut-A/B/C + schema `192 OK`；doc/route/schema guards `67 OK`；完整离线 `test_us_short*.py` `4254 OK`（1 skipped）；py_compile OK；diff-check clean（仅 CRLF warning）；active-surface grep 无 Path-B runtime、新 engine/schema 无 second-wave/sizing consumer。
+- **Pre-Codex self-review**: A-F main-thread（无 delegation）；B ripple grep 确认 Cut C 只新增离线 engine/schema/test/doc 路由，未接 provider/live/ship-gate/second-wave；C 反控覆盖二波、boundary、non-selection gate drift、action/size 伪造；E 未改 CURRENT；固定包集中跑完一次。
+- **Next**: Claude Code：审查
+
 ## 2026-07-12 — Claude 独立审查 PASS + 提交（US-short A1 Cut B 六-policy comparator/lifecycle）
 
 - **Verdict/Action**: PASS + 提交（ecf2 detached）。Cut B 正确：扩 shadow_compare/scorecard/multiweek 到 6-policy（保留 4-profile API）+ lifecycle #28；全程 capture-bound、ship-gate 隔离结构性、无洗证据、fixed-TopN、second-wave 仍拒、**#36 不伪造**、不冻 margin。整读三承重体确认 fail-closed（详见 register）；comparators 纯函数无落盘（含票名 set-diff 不进 tracked）；heads/shadow_stage 增量/加强；SELECTION_DECISION_KEYS 与 run_selection 14 键吻合（Cut A 无回归）。
