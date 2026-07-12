@@ -1,0 +1,200 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_massive_corporate_action_reconciliation_evidence/1.0.0/schema.json",
+  "title": "US-short Massive Corporate-Action Event-to-Price Evidence",
+  "description": "Value-free, offline evidence assembly for section 12.1 corporate-action reconciliation. It binds caller-normalized split/dividend events to prior/effective sessions in adjusted and unadjusted price modes. Complete windows remain pending assessment: this schema never records a reconciliation success, return calculation, paper evaluability, provider call, production authorization, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "symbol",
+    "source_binding",
+    "event_price_windows",
+    "coverage",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_massive_corporate_action_reconciliation_evidence" },
+    "schema_version": { "const": "1.0.0" },
+    "decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+    "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+    "source_binding": { "$ref": "#/$defs/sourceBinding" },
+    "event_price_windows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/eventPriceWindow" }
+    },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "boundary": { "$ref": "#/$defs/boundary" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_id", "capture_packet_schema_name", "endpoint_families", "source_ref_sha256"],
+      "properties": {
+        "provider_id": { "const": "massive" },
+        "capture_packet_schema_name": { "const": "us_short_massive_corporate_action_validation_packet" },
+        "endpoint_families": { "const": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"] },
+        "source_ref_sha256": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"],
+          "properties": {
+            "splits": { "$ref": "#/$defs/sha256" },
+            "dividends": { "$ref": "#/$defs/sha256" },
+            "daily_adjusted": { "$ref": "#/$defs/sha256" },
+            "daily_unadjusted": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      }
+    },
+    "priceWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["prior_session", "event_session", "window_status"],
+      "properties": {
+        "prior_session": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "event_session": { "type": ["string", "null"], "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "window_status": {
+          "enum": ["complete", "missing_prior_session", "missing_event_session", "missing_prior_and_event_session"]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "window_status": { "const": "complete" } } },
+          "then": {
+            "properties": {
+              "prior_session": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              "event_session": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "window_status": { "const": "missing_prior_session" } } },
+          "then": {
+            "properties": {
+              "prior_session": { "type": "null" },
+              "event_session": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "window_status": { "const": "missing_event_session" } } },
+          "then": {
+            "properties": {
+              "prior_session": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+              "event_session": { "type": "null" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "window_status": { "const": "missing_prior_and_event_session" } } },
+          "then": {
+            "properties": {
+              "prior_session": { "type": "null" },
+              "event_session": { "type": "null" }
+            }
+          }
+        }
+      ]
+    },
+    "eventPriceWindow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "event_id",
+        "event_type",
+        "event_date",
+        "source_family",
+        "adjusted",
+        "unadjusted",
+        "assessment_status"
+      ],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$" },
+        "event_type": { "enum": ["split", "dividend"] },
+        "event_date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "source_family": { "enum": ["splits", "dividends"] },
+        "adjusted": { "$ref": "#/$defs/priceWindow" },
+        "unadjusted": { "$ref": "#/$defs/priceWindow" },
+        "assessment_status": { "enum": ["pending_price_reconciliation", "insufficient_price_window"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "event_type": { "const": "split" } } },
+          "then": { "properties": { "source_family": { "const": "splits" } } }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "dividend" } } },
+          "then": { "properties": { "source_family": { "const": "dividends" } } }
+        },
+        {
+          "if": {
+            "properties": {
+              "adjusted": { "properties": { "window_status": { "const": "complete" } } },
+              "unadjusted": { "properties": { "window_status": { "const": "complete" } } }
+            }
+          },
+          "then": { "properties": { "assessment_status": { "const": "pending_price_reconciliation" } } }
+        },
+        {
+          "if": {
+            "anyOf": [
+              {
+                "properties": {
+                  "adjusted": {
+                    "properties": {
+                      "window_status": { "not": { "const": "complete" } }
+                    }
+                  }
+                }
+              },
+              {
+                "properties": {
+                  "unadjusted": {
+                    "properties": {
+                      "window_status": { "not": { "const": "complete" } }
+                    }
+                  }
+                }
+              }
+            ]
+          },
+          "then": { "properties": { "assessment_status": { "const": "insufficient_price_window" } } }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["split_event_count", "dividend_event_count", "complete_two_mode_window_count", "insufficient_price_window_count"],
+      "properties": {
+        "split_event_count": { "type": "integer", "minimum": 0 },
+        "dividend_event_count": { "type": "integer", "minimum": 0 },
+        "complete_two_mode_window_count": { "type": "integer", "minimum": 0 },
+        "insufficient_price_window_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "provider_call_performed_during_derivation",
+        "corporate_action_reconciliation_performed",
+        "return_calculation_performed",
+        "paper_gate_evaluable_claimed",
+        "ship_gate_or_production_authorized"
+      ],
+      "properties": {
+        "provider_call_performed_during_derivation": { "const": false },
+        "corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "paper_gate_evaluable_claimed": { "const": false },
+        "ship_gate_or_production_authorized": { "const": false }
+      }
+    }
+  }
+}

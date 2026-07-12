@@ -1,0 +1,60 @@
+{
+  "schema_name": "us_short_massive_corporate_action_validation_packet",
+  "schema_version": "1.0.0",
+  "as_of": "20260712",
+  "authorization_ref": "user_chat_20260712_massive_corporate_action_first_cut",
+  "scope": {
+    "purpose": "bounded_corporate_action_and_price_shape_capture_only",
+    "provider_id": "massive",
+    "endpoint_families": [
+      "splits",
+      "dividends",
+      "daily_adjusted",
+      "daily_unadjusted"
+    ],
+    "price_window": {
+      "from": "2019-01-01",
+      "to": "2026-07-10"
+    }
+  },
+  "sample": [
+    {
+      "symbol": "AAPL",
+      "required_event_families": ["splits", "dividends"]
+    },
+    {
+      "symbol": "MSFT",
+      "required_event_families": ["dividends"]
+    },
+    {
+      "symbol": "TSLA",
+      "required_event_families": ["splits"]
+    }
+  ],
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_massive_corporate_action_validation_20260712/raw",
+    "tracked_summary_path": "docs/us_short_massive_corporate_action_validation_summary_20260712.json",
+    "raw_must_be_gitignored": true,
+    "tracked_summary_must_exclude": [
+      "secrets",
+      "request_urls",
+      "raw_payload_rows",
+      "price_values",
+      "event_values"
+    ]
+  },
+  "execution": {
+    "max_total_endpoint_calls": 12,
+    "retry_count_allowed": 0,
+    "pace_seconds": 13,
+    "requires_explicit_confirmation": true
+  },
+  "boundary": {
+    "provider_selected": false,
+    "corporate_action_reconciliation_performed": false,
+    "return_calculation_performed": false,
+    "paper_gate_evaluable_claimed": false,
+    "ship_gate_or_production_authorized": false,
+    "datahub_or_runner_consumption_authorized": false
+  }
+}

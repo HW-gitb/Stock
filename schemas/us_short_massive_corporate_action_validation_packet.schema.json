@@ -1,0 +1,116 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Massive corporate-action validation execution packet",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "authorization_ref", "scope", "sample", "storage", "execution", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_massive_corporate_action_validation_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "as_of": { "const": "20260712" },
+    "authorization_ref": { "const": "user_chat_20260712_massive_corporate_action_first_cut" },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "provider_id", "endpoint_families", "price_window"],
+      "properties": {
+        "purpose": { "const": "bounded_corporate_action_and_price_shape_capture_only" },
+        "provider_id": { "const": "massive" },
+        "endpoint_families": {
+          "const": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"]
+        },
+        "price_window": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["from", "to"],
+          "properties": {
+            "from": { "const": "2019-01-01" },
+            "to": { "const": "2026-07-10" }
+          }
+        }
+      }
+    },
+    "sample": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": { "$ref": "#/definitions/sample_symbol" },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "symbol": { "const": "AAPL" } },
+            "required": ["symbol"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "symbol": { "const": "MSFT" } },
+            "required": ["symbol"]
+          }
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": { "symbol": { "const": "TSLA" } },
+            "required": ["symbol"]
+          }
+        }
+      ]
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_payload_root", "tracked_summary_path", "raw_must_be_gitignored", "tracked_summary_must_exclude"],
+      "properties": {
+        "raw_payload_root": { "const": "provider_samples/us_short_massive_corporate_action_validation_20260712/raw" },
+        "tracked_summary_path": { "const": "docs/us_short_massive_corporate_action_validation_summary_20260712.json" },
+        "raw_must_be_gitignored": { "const": true },
+        "tracked_summary_must_exclude": {
+          "const": ["secrets", "request_urls", "raw_payload_rows", "price_values", "event_values"]
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["max_total_endpoint_calls", "retry_count_allowed", "pace_seconds", "requires_explicit_confirmation"],
+      "properties": {
+        "max_total_endpoint_calls": { "const": 12 },
+        "retry_count_allowed": { "const": 0 },
+        "pace_seconds": { "const": 13 },
+        "requires_explicit_confirmation": { "const": true }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_selected", "corporate_action_reconciliation_performed", "return_calculation_performed", "paper_gate_evaluable_claimed", "ship_gate_or_production_authorized", "datahub_or_runner_consumption_authorized"],
+      "properties": {
+        "provider_selected": { "const": false },
+        "corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "paper_gate_evaluable_claimed": { "const": false },
+        "ship_gate_or_production_authorized": { "const": false },
+        "datahub_or_runner_consumption_authorized": { "const": false }
+      }
+    }
+  },
+  "definitions": {
+    "sample_symbol": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "required_event_families"],
+      "properties": {
+        "symbol": { "enum": ["AAPL", "MSFT", "TSLA"] },
+        "required_event_families": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "enum": ["splits", "dividends"] }
+        }
+      }
+    }
+  }
+}

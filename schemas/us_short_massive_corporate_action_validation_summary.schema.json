@@ -1,0 +1,83 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short Massive corporate-action validation capture summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["scope", "endpoint_results", "storage", "boundary"],
+  "properties": {
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["authorization_ref", "provider_id", "sample_symbols", "endpoint_families", "max_total_endpoint_calls", "actual_total_endpoint_calls", "pace_seconds", "purpose"],
+      "properties": {
+        "authorization_ref": { "const": "user_chat_20260712_massive_corporate_action_first_cut" },
+        "provider_id": { "const": "massive" },
+        "sample_symbols": { "type": "array", "minItems": 3, "maxItems": 3, "items": { "enum": ["AAPL", "MSFT", "TSLA"] } },
+        "endpoint_families": { "const": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"] },
+        "max_total_endpoint_calls": { "const": 12 },
+        "actual_total_endpoint_calls": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "pace_seconds": { "const": 13 },
+        "purpose": { "const": "bounded_corporate_action_and_price_shape_capture_only" }
+      }
+    },
+    "endpoint_results": {
+      "type": "array",
+      "maxItems": 12,
+      "items": { "$ref": "#/definitions/endpoint_result" }
+    },
+    "storage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["raw_payload_root", "raw_payload_root_gitignored", "tracked_summary_contains_secrets", "tracked_summary_contains_request_urls", "tracked_summary_contains_raw_payload_rows", "tracked_summary_contains_price_values", "tracked_summary_contains_event_values"],
+      "properties": {
+        "raw_payload_root": { "const": "provider_samples/us_short_massive_corporate_action_validation_20260712/raw" },
+        "raw_payload_root_gitignored": { "const": true },
+        "tracked_summary_contains_secrets": { "const": false },
+        "tracked_summary_contains_request_urls": { "const": false },
+        "tracked_summary_contains_raw_payload_rows": { "const": false },
+        "tracked_summary_contains_price_values": { "const": false },
+        "tracked_summary_contains_event_values": { "const": false }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_selected", "corporate_action_reconciliation_performed", "return_calculation_performed", "paper_gate_evaluable_claimed", "ship_gate_or_production_authorized", "datahub_or_runner_consumption_authorized", "sr_provider_001_closed"],
+      "properties": {
+        "provider_selected": { "const": false },
+        "corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "paper_gate_evaluable_claimed": { "const": false },
+        "ship_gate_or_production_authorized": { "const": false },
+        "datahub_or_runner_consumption_authorized": { "const": false },
+        "sr_provider_001_closed": { "const": false }
+      }
+    }
+  },
+  "definitions": {
+    "endpoint_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "endpoint_family", "http_status", "ok", "error_type", "response_shape"],
+      "properties": {
+        "symbol": { "enum": ["AAPL", "MSFT", "TSLA"] },
+        "endpoint_family": { "enum": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"] },
+        "http_status": { "type": ["integer", "null"] },
+        "ok": { "type": "boolean" },
+        "error_type": { "type": ["string", "null"] },
+        "response_shape": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["payload_type", "top_level_key_names", "result_container_key", "result_count", "result_item_key_names"],
+          "properties": {
+            "payload_type": { "type": "string" },
+            "top_level_key_names": { "type": "array", "items": { "type": "string" } },
+            "result_container_key": { "type": ["string", "null"] },
+            "result_count": { "type": "integer", "minimum": 0 },
+            "result_item_key_names": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  }
+}

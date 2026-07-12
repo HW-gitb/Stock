@@ -8,12 +8,37 @@
 
 ---
 
+## 2026-07-12 — Claude Code 审查（US-short Massive 公司行动第一+二刀：验证捕获 + 离线证据绑定）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。公司行动线两刀一并审：cut1=gated 12-call 验证捕获 runner + no-access packet；cut2=纯离线 evidence builder engine（事件↔两模式价格窗口绑定）。两刀 offline、**未发起真 fetch**、不碰选股/core_score/veto/sizing/Top15、boundary 全 const-false、SR-PROVIDER-001 保持 open。cut2 原标「暂不送审」，因与 cut1 同一路由行+同线+均 clean+用户下达 `审查`，一并纳入（欲 hold 可 revert）。
+- **Required**: 无 material finding（Register: non-material；单源规则见 `docs/system_risk_register.md`）。刀外并发产物 `us_short_universe_fetch_summary_20260713.json`（真 universe fetch 66 calls）未纳入本提交。
+- **Verify**: review-evidence:not_available（真实工具输出）。§6a 独立对抗 agent（只读未提交树）CLEAN：六不变式全 HELD（tracked 零 secret/url/raw、12-call 授权前 fail-closed、无对账/paper-eval/ship-gate、raw 仅 gitignored、无 look-ahead、输入 fail-closed）+ 无真 fetch；1 P3 nil-impact（close 值丢弃不进输出）。亲读 engine+runner；schema `additionalProperties:false`+boundary const-false。**亲跑全包 `Ran 4328 / OK / 0 fail`**（174s）。附修 `f5b7a362` 误删的 0c94 标题（doc-gov→绿）。
+- **Next**: 无 Codex 命令；12-call capture 与 cut3 对账数学待用户显式授权。
+
+## 2026-07-12 — Codex 执行（US-short Massive 公司行动第二刀：事件—价格证据绑定）
+
+- **Verdict/Action**: 已新增纯离线、无落盘的 evidence builder：将调用方标准化的 split/dividend 事件与 adjusted/unadjusted 两种价格的前一交易日/事件日窗口、四个 Massive source digest 严格绑定；输出不带价格或事件数值。窗口齐全也只能是 `pending_price_reconciliation`，绝不自动判定对账成功。
+- **Required**: `SR-PROVIDER-001` 与 §12.1 公司行动硬闸仍 open；未发起 12-call capture、未读 raw、未实现 raw adapter / 经济口径对账 / return calculation / paper-evaluable / provider selection / DataHub / ship-gate。按用户指令，本轮暂不送审。
+- **Verify**: 先 red（新模块/schema 缺失）；再以「不完整窗口却声称 pending」反向测试复现 schema 漏洞并修复。Massive/paper/schema/route focused `73 OK`；完整离线 `*us_short*.py` `4328 OK (1 skipped)`；`py_compile`、`git diff --check` OK。doc-governance `34/35` 的唯一失败是紧随的既有 Claude 收口条目含两组 `Verdict/Action`，不属于本刀；本刀 engine 不读 env/raw，既有 shape dry-run 测试仅输出 key 存在布尔值、未输出 secret。
+- **Pre-Codex self-review**: A-F checked。A：split 与 dividend、两种 price mode、完整与缺口窗口均覆盖；B：新 evidence 仅一处纯函数、无调用方/落盘路径；C：错 symbol、source-binding 漏项、重复 bar、未知字段、非正价格及不完整窗口伪装均 fail-closed；E：README 只作薄路由，CURRENT/register 未写瞬态 gate。
+- **Next**: 保持 no-review，等待用户授权下一刀或 12-call capture。
+
+## 2026-07-12 — Codex 执行（US-short Massive 公司行动第一刀：有界验证捕获）
+
+- **Verdict/Action**: 已完成离线实现，未发起 provider 请求：冻结 Massive `AAPL/MSFT/TSLA` × splits/dividends/调整日线/未调整日线的 12-call、零重试、13 秒节流验证包；raw 只入 gitignored `provider_samples/`，tracked summary 只保留状态/计数/字段名。
+- **Required**: 独立 Claude 审查本验证包；审查通过前不得执行 12-call 捕获。该包不做公司行动对账、收益计算、paper-evaluable、provider selection、DataHub 或 ship-gate。
+- **Verify**: `81 OK`（新验证包、既有 Massive shape/full-candidate runner、paper gate、schema、route guards）+ `py_compile` + `git diff --check`；doc-governance `59/60`，唯一失败是紧随的既有 Claude 收口条目含两组 `Verdict/Action`，不属于本刀；`--dry-run-env` 仅确认 key 存在、raw root gitignored、计划 12 calls。
+- **Pre-Codex self-review**: A-F checked；A=3 symbols × 4 endpoint families 全覆盖；B=`rg -n -i 'massive_corporate_action_validation|corporate_action_reconciliation_performed.*true|paper_gate_evaluable_claimed.*true|ship_gate_or_production_authorized.*true' docs schemas runners tests`：7 个新面齐全，其他 `true` 命中仅既有负向测试；C=缺确认/非 gitignored raw 均在 fetch 前拒绝；独立 current-diff-only self-review PASS；无 API 调用。
+- **Next**: Claude：审查
+
 ## 2026-07-12 — Claude Code 收口对齐（R3 PORTFOLIO cap register 翻正 resolved；ecf2 清理被权限拦）
 
 - **Verdict/Action**: 已提交（master、未 push）。纯登记收口、无代码改动：`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` `in_progress→resolved`。cap 收口（§8 总仓60%/同主题30% 容量链 `us_short_weekend_cash.py`）早在 issue-5 专项审 PASS + 0c94 集成审 PASS 时已闭环入 master `7df1e080`，register 状态行仅滞后→本次翻正+补 closure 证据段。ecf2 worktree（HEAD `5ab702de` 已并入 master、干净无未提交活）确认可安全删，但 `git worktree remove` 被权限分类器拦（删 Codex 他窗口=破坏性共享资源）→未绕过、交用户定。
 - **Required**: 无。`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` → resolved（closure 证据单源见 `docs/system_risk_register.md`）。
 - **Verify**: review-evidence:not_available（真实工具输出）。亲跑 focused `tests.test_us_short_weekend_cash` `18 OK`（master 第一手）+ git 确认 cap 引擎在 `7df1e080`；无代码改动、非审查轮，未起 §6a。
 - **Next**: 用户决定是否授权 `git worktree remove` 清 ecf2。
+
+## 2026-07-12 — Claude Code 审查（US-short 0c94 集成 + A1 三键 forward_policy_heads）PASS
 
 - **Verdict/Action**: PASS + 提交（master 集成批次）。0c94 issue 1/5/6 引擎（`theme_selection`/`weekend_cash` caps/sec）与已审 0c94(10cd543) **逐字节 IDENTICAL**、只确认未变；集成缝正确：forward_policy_heads 六头全穿同一 source-bound 契约→3 键、无 per-head 特判，`_source_theme_selection_contract` 绑 score-composition state+rows 拒漂移，theme_off 自动零 theme 席、retain 头正常席；data_context 官方 Top15 用已校验 3 键 `data_context["selection_inputs"]`+显式 decision_date（两调用点一致、latent 漂移修）。
 - **Required**: 无。`R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION` → resolved；三个 R3 R-ID 随集成落 master，单源见 register。
