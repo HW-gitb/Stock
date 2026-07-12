@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_massive_corporate_action_normalized_packet/1.0.0/schema.json",
+  "title": "US-short Massive Corporate-Action Normalized Packet",
+  "description": "Private, source-bound normalization of the frozen Massive capture wrappers. This packet is not a reconciliation, return calculation, paper-evaluation input, provider selection, production authorization, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "capture_binding", "symbol", "normalized_events", "normalized_price_rows", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_massive_corporate_action_normalized_packet" },
+    "schema_version": { "const": "1.0.0" },
+    "capture_binding": { "$ref": "#/$defs/captureBinding" },
+    "symbol": { "$ref": "#/$defs/symbol" },
+    "normalized_events": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/normalizedEvent" }
+    },
+    "normalized_price_rows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/normalizedPriceRow" }
+    },
+    "boundary": { "$ref": "#/$defs/boundary" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+    "date": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+    "positiveFiniteNumber": { "type": "number", "exclusiveMinimum": 0 },
+    "captureBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["capture_packet_schema_name", "capture_packet_sha256", "provider_id", "session_timezone", "day_timestamp_semantics", "raw_wrapper_sha256"],
+      "properties": {
+        "capture_packet_schema_name": { "const": "us_short_massive_corporate_action_validation_packet" },
+        "capture_packet_sha256": { "$ref": "#/$defs/sha256" },
+        "provider_id": { "const": "massive" },
+        "session_timezone": { "const": "America/New_York" },
+        "day_timestamp_semantics": { "const": "new_york_midnight_timestamp" },
+        "raw_wrapper_sha256": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["splits", "dividends", "daily_adjusted", "daily_unadjusted"],
+          "properties": {
+            "splits": { "$ref": "#/$defs/sha256" },
+            "dividends": { "$ref": "#/$defs/sha256" },
+            "daily_adjusted": { "$ref": "#/$defs/sha256" },
+            "daily_unadjusted": { "$ref": "#/$defs/sha256" }
+          }
+        }
+      }
+    },
+    "normalizedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_type", "event_date", "source_family", "source_ref_sha256"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$" },
+        "event_type": { "enum": ["split", "dividend"] },
+        "event_date": { "$ref": "#/$defs/date" },
+        "source_family": { "enum": ["splits", "dividends"] },
+        "source_ref_sha256": { "$ref": "#/$defs/sha256" },
+        "split_from": { "$ref": "#/$defs/positiveFiniteNumber" },
+        "split_to": { "$ref": "#/$defs/positiveFiniteNumber" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "event_type": { "const": "split" } } },
+          "then": {
+            "required": ["split_from", "split_to"],
+            "properties": { "source_family": { "const": "splits" } }
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "dividend" } } },
+          "then": {
+            "not": { "anyOf": [{ "required": ["split_from"] }, { "required": ["split_to"] }] },
+            "properties": { "source_family": { "const": "dividends" } }
+          }
+        }
+      ]
+    },
+    "normalizedPriceRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["symbol", "session_date", "adjustment_mode", "source_family", "source_ref_sha256", "close"],
+      "properties": {
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "session_date": { "$ref": "#/$defs/date" },
+        "adjustment_mode": { "enum": ["adjusted", "unadjusted"] },
+        "source_family": { "enum": ["daily_adjusted", "daily_unadjusted"] },
+        "source_ref_sha256": { "$ref": "#/$defs/sha256" },
+        "close": { "$ref": "#/$defs/positiveFiniteNumber" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "adjustment_mode": { "const": "adjusted" } } },
+          "then": { "properties": { "source_family": { "const": "daily_adjusted" } } }
+        },
+        {
+          "if": { "properties": { "adjustment_mode": { "const": "unadjusted" } } },
+          "then": { "properties": { "source_family": { "const": "daily_unadjusted" } } }
+        }
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_call_performed_during_normalization", "raw_payload_read_and_normalized", "corporate_action_reconciliation_performed", "return_calculation_performed", "paper_gate_evaluable_claimed", "ship_gate_or_production_authorized"],
+      "properties": {
+        "provider_call_performed_during_normalization": { "const": false },
+        "raw_payload_read_and_normalized": { "const": true },
+        "corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "paper_gate_evaluable_claimed": { "const": false },
+        "ship_gate_or_production_authorized": { "const": false }
+      }
+    }
+  }
+}

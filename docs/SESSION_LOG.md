@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short Massive 公司行动第四刀：私有 raw 规范化）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。cut4 = 离线 raw adapter：读已捕获的 12 个 gitignored raw wrapper → 每票产 1 个**仅落 gitignored `provider_samples/.../normalized/`** 的 source-bound 规范化包（绑 capture packet sha + 4 wrapper sha、日线锁 NY 午夜、最小事件/两价模式字段）。**未联网、未写任何 tracked 值/secret、未接 consumer**、boundary 六旗全 false 只 `raw_payload_read_and_normalized:true`、SR-PROVIDER-001 保持 open。universe summary 仍未纳入。
+- **Required**: 无 material finding（Register: non-material；单源规则见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（六不变式全 HELD·零 P1/P2/P3：tracked 零真值/secret[fixture 合成假值]、output 强制 gitignored+无 clobber+路径逃逸拒、malformed raw 全 fail-closed、`_positive_number` 拒 bool+数字串、event_id 确定性源绑、boundary const-pin、零真 fetch）。整读 runner+schema 一致；**首手** `git check-ignore` 真 normalized 包=ignored、git status 无真包泄（grep 命中仅 schema/test 文件名）。design §12.1 硬门保留、README 薄指针；focused+guards 54 OK；**亲跑全包 `Ran 4346 / OK / 0 fail`**（186s）。读 raw 落盘→起 §6a。
+- **Next**: 无 Codex 命令；normalized 包形状≠cut2/3 契约（symbol/source_ref_sha256 差异）→ 端到端 wiring 仍缺一刀，待用户授权。
+
+## 2026-07-13 — Codex 执行（US-short Massive 公司行动第四刀：私有 raw 规范化）
+
+- **Verdict/Action**: 已将冻结的 `AAPL/MSFT/TSLA` × splits/dividends/adjusted daily/unadjusted daily 共 12 个实际捕获 wrapper 做离线、fail-closed 规范化，产出 3 个仅在 gitignored `provider_samples/.../normalized/` 内的 source-bound 本地包；每包绑定 capture packet 与 4 个 wrapper SHA-256、将日线时间戳锁为 `America/New_York` 午夜，并只带最小事件/两种价格模式字段。未联网、未写 tracked raw/value、未接任何 consumer。
+- **Required**: `SR-PROVIDER-001` 与 §12.1 硬闸仍 open；这只完成原始响应到可审计私有输入的格式转换，未证明 `adjustment_mode`、split/dividend 经济语义或完整公司行动对账，未做 return/paper-evaluable/选股/DataHub/provider selection/ship-gate。
+- **Verify**: 先 red（缺 runner/schema），后新增规范化器/schema 的 focused 8 tests `OK`；实跑仅打印 `3` 个 normalized packets / `12` 个 raw wrappers；raw 与 normalized 根目录均由 `git check-ignore` 确认。未提交/push。
+- **Pre-Codex self-review**: A-F checked；A=3×4 矩阵、NY 午夜/重复 session/正有限 close/event 字段全 fail-closed；B=不读 env、不发请求、不输出 raw provider `id`/payload；C=确认、gitignore、exact wrapper identity、全包 schema 校验均在落盘前，既有 raw/捕获 summary 与用户的 universe 摘要未改；E=README 薄指针和 §12.1 硬门同步，`CURRENT`/register 未写瞬态 gate。
+- **Next**: Claude Code 独立审查第四刀；PASS 后仅提交当前 scope。
+
+## 2026-07-13 — Codex 执行（US-short Massive 公司行动：已审 12-call 实际捕获）
+
+- **Verdict/Action**: 用户授权后执行已审冻结包。沙箱内首轮 12 次均为网络层 `url_error`、无 HTTP 响应/无可用数据；按受控网络重跑同一包后，`AAPL/MSFT/TSLA` × splits/dividends/adjusted daily/unadjusted daily 共 12/12 HTTP 200、零自动重试、13 秒节流。raw 仅在 gitignored `provider_samples/`；tracked summary 只含端点状态/计数/字段名。
+- **Required**: `SR-PROVIDER-001` 与 §12.1 硬闸仍 open；该结果只证明有界端点可达/响应形状，未读 raw、未建 raw adapter、未证明 adjustment/dividend 语义或公司行动完整对账，未做 return/paper-evaluable/selection/DataHub/ship-gate/provider selection。
+- **Verify**: 预检显示 key 存在、raw root gitignored、计划 12 calls。受控网络摘要：12/12 `HTTP 200`、error=0、raw wrapper=12、privacy flags 全 false、raw root 仍 gitignored；runner 写前 schema + no-secret/URL/raw-row/value scan 已执行。未改业务代码，未提交/push。
+- **Pre-Codex self-review**: A-F execution boundary checked；A=3 symbols × 4 endpoint families 全覆盖；B=仅已审 capture runner 落盘、Cut 3 提交与用户 untracked universe summary 未碰；C=先验证 raw ignore/key/budget，summary 仅读取净化产物并复核 privacy flags；E=设计文档只移除已失真的“当前调用数为 0”，不放开任何 gate。
+- **Next**: 用户授权后，Codex 可执行 raw adapter 独立切片。
+
 ## 2026-07-13 — Claude Code 审查（US-short Massive 公司行动第三刀：split 因子精确诊断）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。cut3 = 纯离线 split-factor 诊断（在 cut2 引擎上**纯 additive**，cut2 代码逐行未动）：对 cut2 已绑定的完整 split 窗口做 `Fraction` **零容忍**因子比对，exact 才 match、mismatch/rounding/dividend 全 unresolved。offline、**未 fetch**、无 consumer、不碰选股/仓位、boundary 六旗全 false 只 `split_factor_assessment_performed:true`（exact match **绝不置 §12.1 三确认**）、SR-PROVIDER-001 保持 open。刀外 `us_short_universe_fetch_summary_20260713.json` 仍未纳入。
