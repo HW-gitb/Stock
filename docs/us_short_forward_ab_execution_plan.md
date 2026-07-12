@@ -66,16 +66,24 @@ resolved) + the code (which files/stages exist)** before picking — the marks a
 register + code are the source of truth.
 
 - **[DONE]** grid frozen; 6 selection heads built + strip_theme_score fix; evaluators pre-built.
-- **[NEXT] Cut A — wire the heads into the weekly capstone as a shadow stage.**
-  Add a stage in `runners/us_short_weekly_capstone.py::default_pipeline()` (after the composition/overext
-  stages, before/around the bridge) that at decision time runs `build_selection_policy_decisions` over the
-  frozen score composition + overextension map → records the 6 heads' shadow selections to a **private,
-  gitignored** path (§11.6 `shadow_compare_private`) → emits a **de-identified tracked summary** (counts
-  only; no ticker / no $, reuse `us_short_shadow_compare_summary`) → feeds `paper_scorecard_comparison`
-  (single-week) and `lifecycle_eval`. **Additive** to the 12-stage pipeline; must not break the canonical
-  anchor or the gated boundaries; **ZERO new provider calls at decision time**; never ship-gate.
-- **[ ] Cut B** — multi-week accumulation + `us_short_paper_multiweek_comparison` + `lifecycle_eval` stage
-  (needs ≥12 forward weeks to mature; wire the accumulator now).
+- **[NEXT] Cut A — wire + privately CAPTURE the 6 heads' live selections (NO comparison yet).**
+  Add an additive stage in `runners/us_short_weekly_capstone.py::default_pipeline()` (after the composition/
+  overext stages) that at decision time: (i) obtains the frozen `score_composition` + `overextension` map the
+  heads consume — **the capstone must persist/pass these from the existing stages** (it does not today);
+  (ii) runs `build_selection_policy_decisions` → the 6 heads' selection decisions; (iii) writes them to a
+  **private, gitignored** path (§11.6 `shadow_compare_private`); (iv) emits a **de-identified tracked summary**
+  (counts only; no ticker / no $). **Do NOT feed the comparators or `lifecycle_eval` yet** — that is Cut B:
+  the built `us_short_shadow_compare` / `us_short_paper_scorecard_comparison` accept only the 4 frozen
+  `scoring_profile`s, whereas `catalyst_off` + `overextension_selection_off` are ablations (not profiles), so
+  the 6-head comparison is a contract change that gets its own reviewed cut. **Additive**; must not break the
+  canonical anchor / gated boundaries; **ZERO new provider at decision time**; never ship-gate. Offline-buildable
+  + testable; the actual live capture run stays gated (per-execution auth).
+- **[ ] Cut B — extend the comparators + lifecycle to the 6-head policy namespace + compute the comparison.**
+  Extend `us_short_shadow_compare` / `us_short_paper_scorecard_comparison` (single-week) /
+  `us_short_paper_multiweek_comparison` (≥12-week) + `lifecycle_eval` from the 4-`scoring_profile` namespace
+  to the 6-policy-head namespace, consume Cut A's captured selections, compute the comparison, and **preserve
+  the ship-gate isolation** the comparators already enforce. Its own reviewed cut (a contract change to
+  already-reviewed engines).
 - **[ ] Cut C** — per-ticker **decision-diff log**: turning a head off, does it change gate-pass / rank /
   Top15 membership / action / size — a deterministic counterfactual diff (not post-hoc correlation),
   private + de-identified.
@@ -84,6 +92,11 @@ register + code are the source of truth.
   frequency; paired basis; elimination rule). The plan must be pre-registered day-1; the analysis code may lag.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
+
+> **Pre-registration timing**: Cut A captures raw selections — clean as long as the comparison METHOD is fixed
+> before the data is analyzed. So the Cut D statistical-plan manifest (metric / margin / min-weeks / placebo)
+> must land **before the first authorized LIVE capture run** ("代码可缓、计划不能缓"); Cut B then applies that
+> pre-registered method to Cut A's captures.
 
 ## 5. Per-cut discipline (every cut)
 
