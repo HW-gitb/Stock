@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 - Claude Code 决策（US-short A1 Cut D 预注册统计计划已冻结·交 Codex 执行）
+
+- **决策**: Cut D 四项开放参数已定、冻结进 `docs/us_short_forward_ab_execution_plan.md` §4（[SPEC-FROZEN]）。Divergence=Top15 成员对称差≥1（rank/bucket 仅次级、因 Cut A capture 无 sizing/action）；placebo=1000 replicates·seed 0..999·匹配频率=各头当周实际分歧只数、gate=真头超额>placebo 95 分位；early_action=outcome-blind（futility<2 分歧周@前8周、harm=换手>2× 或 fill<50% 持续、只 flag 复审不自动淘汰）。
+- **用户批准（2026-07-12）**: comparison_win_margin=+0.10%/周（更松档）+ ≥⅔ 分歧周 paired-win 一致性；early_action 口径=纯 outcome-blind。gate(c) placebo 分位 + 具体 futility/harm 数值断点=Claude 对已批准口径的 concretization（可复审调、v1 冻结）。
+- **边界**: never ship-gate、changes_primary_selection=false、零 provider、无 §2.1/§12.2 例外、私有票据 gitignored、tracked manifest 脱敏；method 须落在首次授权 LIVE capture 之前。
+- **Next**: Codex：`执行` Cut D（按 §4 [SPEC-FROZEN] EXACT 值建 schema/preset/manifest+测试；不碰 Cut E；不提交、待 Claude 审查）。
+
 ## 2026-07-12 - Claude Code 审查（US-short A1 Cut C policy decision-diff）PASS
 
 - **Verdict/Action**: PASS + 已提交（ecf2）。Cut C 纯派生引擎：消费已审 Cut A 私有 capture → 私有逐票 balanced-vs-policy diff（rank / Top15 成员 / gate-pass / bucket）+ 脱敏 counts summary。零 provider、本刀零持久化、never ship-gate、无 §2.1/§12.2 洗白。核验无 bypass：capture-bound（绑 source digest + 决策/价基时钟）；rank 由 validator 保证的唯一有序 admitted 派生；non-selection-gate 恒定断言 SOUND（candidates/cheap_eligible/recall/holdings 经 run_selection 证 score-independent、仅 _select_top15 吃分→只揪真扰动、不误伤合法 capture）；ship-gate 隔离 + 脱敏（summary schema additionalProperties:false 拒 ticker）+ action/size 三重拒伪造均成立。
