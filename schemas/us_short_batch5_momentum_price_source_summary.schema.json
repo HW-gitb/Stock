@@ -169,7 +169,7 @@
           }
         },
         "session": { "const": "RTH" },
-        "adjustment_mode": { "const": "split_div_adjusted" },
+        "adjustment_mode": { "const": "split_adjusted" },
         "min_points_per_series": { "type": "integer", "minimum": 64, "maximum": 3000 },
         "feature_counts_by_ticker": {
           "type": "object",

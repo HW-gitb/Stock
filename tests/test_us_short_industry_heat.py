@@ -56,7 +56,7 @@ def _dates(n, as_of=_AS_OF):
     return [(end - timedelta(days=(n - 1 - i))).isoformat() for i in range(n)]
 
 
-def _dseries(closes, *, as_of=_AS_OF, session="RTH", adjustment_mode="split_div_adjusted", dates=None):
+def _dseries(closes, *, as_of=_AS_OF, session="RTH", adjustment_mode="split_adjusted", dates=None):
     """Wrap a bare close list into a PIT-bearing dated series."""
     n = len(closes)
     ds = dates if dates is not None else _dates(n, as_of)
@@ -117,7 +117,7 @@ class TestDatedSeriesParse(unittest.TestCase):
     def test_parse_valid(self):
         p = _parse_dated_series(_dseries(_rising()))
         self.assertEqual(len(p["closes"]), N)
-        self.assertEqual((p["session"], p["adjustment_mode"]), ("RTH", "split_div_adjusted"))
+        self.assertEqual((p["session"], p["adjustment_mode"]), ("RTH", "split_adjusted"))
 
     def test_parse_rejects_bad_shape(self):
         self.assertIsNone(_parse_dated_series([1, 2, 3]))

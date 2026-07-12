@@ -66,7 +66,7 @@
       "massive"
     ],
     "session": "RTH",
-    "adjustment_mode": "split_div_adjusted",
+    "adjustment_mode": "split_adjusted",
     "min_points_per_series": 64,
     "feature_counts_by_ticker": {
       "AAPL": 7,

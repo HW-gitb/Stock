@@ -208,6 +208,24 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["theme"],
             _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
         )
+        _write_json(
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json"),
+            {
+                "as_of": _DECISION_DATE,
+                "mode": "industry_heat_v1_cross_industry_disabled",
+                "cross_industry_provisional_enabled": False,
+                "theme_opportunity_state": "no_strong_theme",
+                "per_ticker": {
+                    ticker: {
+                        "theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                        "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                        "membership_origin": "automatic_discovery", "market_confirmed": True,
+                        "individual_theme_gate_passed": True, "overextension_state": "none",
+                    }
+                    for ticker in ("AAPL", "MSFT", "JPM")
+                },
+            },
+        )
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -235,6 +253,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_corporate_action_capture.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_momentum_projection.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_projection.json"),
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_source_packet.json"),
         ]
         for path in cleanup:
@@ -382,6 +401,10 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
+        contract_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json")
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        del contract["per_ticker"]["JPM"]
+        _write_json(contract_path, contract)
         client = FullCandidateFakeClient()
 
         with self._env(), mock.patch.object(
@@ -433,6 +456,20 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 sec_sleep_seconds=0,
             )
 
+        self.assertEqual(client.urls, [])
+
+    def test_missing_theme_selection_contract_aborts_before_environment_or_network(self):
+        contract_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json")
+        contract_path.unlink()
+        client = FullCandidateFakeClient()
+        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "theme_selection_contract"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"], summary_path=self.paths["summary"], raw_root=self.raw_root,
+                client=client, confirm_user_authorization=True, run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00", observed_at=_OFFERING_OBSERVED_AT, sec_sleep_seconds=0,
+            )
         self.assertEqual(client.urls, [])
         self.assertFalse(self.paths["summary"].exists())
         self.assertFalse(self.paths["output"].exists())

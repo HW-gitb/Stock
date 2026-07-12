@@ -34,7 +34,7 @@ from engine.us_short_provisional_theme_heat import (  # noqa: E402
 N = _MIN_HISTORY
 AS_OF = "2026-06-30"
 SESSION = "RTH"
-ADJ = "split_div_adjusted"
+ADJ = "split_adjusted"
 
 
 def _rising(start=100.0, step=1.0):
@@ -386,7 +386,7 @@ class TestIdentityAndClockValidation(unittest.TestCase):
         self.assertNotIn("WS", out["theme_heat"])
 
     def test_clock_whitespace_drift_excluded(self):
-        for kw in ({"session": " RTH "}, {"adj": " split_div_adjusted "}):    # leading/trailing drift
+        for kw in ({"session": " RTH "}, {"adj": " split_adjusted "}):    # leading/trailing drift
             members = {t: _hot_member(**kw) for t in ("AAPL", "MSFT", "JPM")}
             out = provisional_theme_heat_block({"DR": {"members": members}, "P": _theme(_cold_member, 3)},
                                                spy_series=_BENCH)

@@ -78,6 +78,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             "offering": STATE_DIR / f"{self.slug}_offering.json",
             "analyst": STATE_DIR / f"{self.slug}_analyst.json",
             "news": STATE_DIR / f"{self.slug}_news.json",
+            "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
             "data_context": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
         }
@@ -120,10 +121,19 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             resolve_news_events(as_of=_NEWS_AS_OF, news_by_ticker={"AAPL": _news_source("AAPL", [])}),
         )
         _write_json(
+            self.paths["theme_contract"],
+            {"as_of": _DECISION_DATE, "mode": "industry_heat_v1_cross_industry_disabled",
+             "cross_industry_provisional_enabled": False, "theme_opportunity_state": "no_strong_theme",
+             "per_ticker": {"AAPL": {"theme_id": "industry:aapl", "theme_source": "industry_heat_v1",
+                                       "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                                       "membership_origin": "automatic_discovery", "market_confirmed": True,
+                                       "individual_theme_gate_passed": True, "overextension_state": "none"}}},
+        )
+        _write_json(
             self.paths["packet"],
             {
                 "schema_name": "us_short_batch5_data_context_source_packet",
-                "schema_version": "1.0.0",
+                "schema_version": "1.2.0",
                 "generated_at": "2026-06-15T08:05:00-04:00",
                 "scope": {
                     "market": "US",
@@ -143,6 +153,12 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                     "expected_decision_date": _DECISION_DATE,
                     "theme_opportunity_state": "no_strong_theme",
                 },
+                "source_artifact_sha256": {
+                    "offering_audit_source_path": hashlib.sha256(self.paths["offering"].read_bytes()).hexdigest(),
+                    "analyst_grade_actions_path": hashlib.sha256(self.paths["analyst"].read_bytes()).hexdigest(),
+                    "massive_news_events_path": hashlib.sha256(self.paths["news"].read_bytes()).hexdigest(),
+                    "theme_selection_contract_path": hashlib.sha256(self.paths["theme_contract"].read_bytes()).hexdigest(),
+                },
                 "paths": {
                     "candidate_artifact_path": _rel(self.paths["candidate"]),
                     "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
@@ -152,6 +168,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                     "analyst_grade_actions_path": _rel(self.paths["analyst"]),
                     "massive_news_events_path": _rel(self.paths["news"]),
                     "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+                    "theme_selection_contract_path": _rel(self.paths["theme_contract"]),
                     "output_data_context_path": _rel(self.paths["data_context"]),
                 },
                 "optional_inputs": {"holdings": [], "catalyst_recall_feed": None},

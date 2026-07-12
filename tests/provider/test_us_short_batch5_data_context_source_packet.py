@@ -73,7 +73,7 @@ def _tier(state: str) -> dict:
                             if state == "chasing_extreme" else []),
         "disposition": "scored",
         "pit": {"as_of": "2026-06-12", "session": "RTH",
-                "adjustment_mode": "massive_grouped_daily", "n_points": 70},
+                "adjustment_mode": "split_adjusted", "n_points": 70},
     }
 
 
@@ -89,7 +89,7 @@ def _overextension_projection() -> dict:
             "price_basis_date": "2026-06-12",
             "source_as_of": "2026-06-12",
         },
-        "source_contract": {"session": "RTH", "adjustment_mode": "massive_grouped_daily"},
+        "source_contract": {"session": "RTH", "adjustment_mode": "split_adjusted"},
         "candidate_binding": {
             "eligible_count": 3,
             "eligible_tickers_sha256": _eligible_digest(tickers),
@@ -118,6 +118,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             "analyst": STATE_DIR / f"{self.slug}_analyst.json",
             "yfinance": STATE_DIR / f"{self.slug}_yfinance_analyst.json",
             "news": STATE_DIR / f"{self.slug}_news.json",
+            "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
             "output": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
             "raw_payload": ROOT / "provider_samples" / f"{self.slug}_raw_payload.json",
@@ -153,12 +154,13 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         )
         _write_json(
             self.paths["offering"],
-            _offering_source(
-                checked={
-                    "AAPL": {"active_offering": _checked_offering()},
-                    "MSFT": {"active_offering": _checked_offering()},
+            resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    "AAPL": _offering_record([]),
+                    "MSFT": _offering_record([]),
+                    "JPM": _offering_record([], coverage="partial"),
                 },
-                excluded={"JPM": {"active_offering": "coverage=partial/parser=ok"}},
             ),
         )
         _write_json(
@@ -187,9 +189,27 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 },
             ),
         )
+        _write_json(
+            self.paths["theme_contract"],
+            {
+                "as_of": _DECISION_DATE,
+                "mode": "industry_heat_v1_cross_industry_disabled",
+                "cross_industry_provisional_enabled": False,
+                "theme_opportunity_state": "strong",
+                "per_ticker": {
+                    ticker: {
+                        "theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                        "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                        "membership_origin": "automatic_discovery", "market_confirmed": True,
+                        "individual_theme_gate_passed": True, "overextension_state": "none",
+                    }
+                    for ticker in targets
+                },
+            },
+        )
         packet = {
             "schema_name": "us_short_batch5_data_context_source_packet",
-            "schema_version": "1.0.0",
+            "schema_version": "1.2.0",
             "generated_at": "2026-07-04T00:00:00Z",
             "scope": {
                 "market": "US",
@@ -209,6 +229,12 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 "expected_decision_date": _DECISION_DATE,
                 "theme_opportunity_state": "strong",
             },
+            "source_artifact_sha256": {
+                "offering_audit_source_path": hashlib.sha256(self.paths["offering"].read_bytes()).hexdigest(),
+                "analyst_grade_actions_path": hashlib.sha256(self.paths["analyst"].read_bytes()).hexdigest(),
+                "massive_news_events_path": hashlib.sha256(self.paths["news"].read_bytes()).hexdigest(),
+                "theme_selection_contract_path": hashlib.sha256(self.paths["theme_contract"].read_bytes()).hexdigest(),
+            },
             "paths": {
                 "candidate_artifact_path": _rel(self.paths["candidate"]),
                 "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
@@ -218,6 +244,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
                 "analyst_grade_actions_path": _rel(self.paths["analyst"]),
                 "massive_news_events_path": _rel(self.paths["news"]),
                 "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+                "theme_selection_contract_path": _rel(self.paths["theme_contract"]),
                 "output_data_context_path": _rel(self.paths["output"]),
             },
             "optional_inputs": {
@@ -299,6 +326,133 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertEqual(set(written["selection_inputs"]["per_ticker"]), {"AAPL", "MSFT"})
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 43.5)
         self.assertAlmostEqual(written["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 50.0)
+
+    def test_provider_envelope_digests_are_required_before_consumption(self):
+        packet = self._packet_payload()
+        packet.pop("source_artifact_sha256")
+        _write_json(self.packet, packet)
+        with (
+            mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"),
+            mock.patch(
+                "runners.us_short_batch5_data_context_source_packet.assemble_data_context_from_resolved_pass2_sources",
+                return_value={"universe": [], "selection_inputs": {"per_ticker": {}}},
+            ),
+        ):
+            with self.assertRaisesRegex(SourcePacketError, "source_artifact_sha256"):
+                run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertFalse(self.paths["output"].exists())
+
+    def test_theme_selection_contract_digest_is_required_before_consumption(self):
+        # The lifecycle/seat facts are a first-class local source, not a mutable sidecar added after packet review.
+        contract = json.loads(self.paths["theme_contract"].read_text(encoding="utf-8"))
+        contract["per_ticker"]["AAPL"]["theme_lifecycle_state"] = "decayed"
+        _write_json(self.paths["theme_contract"], contract)
+        with self.assertRaises(SourcePacketError):
+            run_packet(self.packet)
+        self.assertFalse(self.paths["output"].exists())
+
+    def test_provider_envelopes_remain_semantically_bound_after_digest_refresh(self):
+        cases = {
+            "offering_provenance": (
+                "offering_audit_source_path",
+                self.paths["offering"],
+                lambda payload: payload["provenance"]["AAPL"]["active_offering"].__setitem__("provider_id", "fmp"),
+            ),
+            "analyst_records": (
+                "analyst_grade_actions_path",
+                self.paths["analyst"],
+                lambda payload: payload["records"].__setitem__("AAPL", []),
+            ),
+            "news_tally": (
+                "massive_news_events_path",
+                self.paths["news"],
+                lambda payload: payload["signals"]["AAPL"]["news_recent"].update({
+                    "positive": 0,
+                    "neutral": 1,
+                    "net_sentiment": 0,
+                }),
+            ),
+            "news_post_observation": (
+                "massive_news_events_path",
+                self.paths["news"],
+                lambda payload: payload["records"]["AAPL"][0].__setitem__(
+                    "published_utc", "2026-06-15T08:01:00-04:00"
+                ),
+            ),
+        }
+        for label, (field, path, mutate) in cases.items():
+            with self.subTest(case=label):
+                self._write_sources_and_packet()
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                mutate(payload)
+                _write_json(path, payload)
+                packet = self._packet_payload()
+                packet["source_artifact_sha256"][field] = hashlib.sha256(path.read_bytes()).hexdigest()
+                _write_json(self.packet, packet)
+                with (
+                    mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"),
+                    mock.patch(
+                        "runners.us_short_batch5_data_context_source_packet.assemble_data_context_from_resolved_pass2_sources",
+                        return_value={"universe": [], "selection_inputs": {"per_ticker": {}}},
+                    ),
+                ):
+                    with self.assertRaisesRegex(SourcePacketError, "provider envelope"):
+                        run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+                self.assertFalse(self.paths["output"].exists())
+
+    def test_bound_provider_envelopes_reach_assembly(self):
+        with (
+            mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"),
+            mock.patch(
+                "runners.us_short_batch5_data_context_source_packet.assemble_data_context_from_resolved_pass2_sources",
+                return_value={"universe": [], "selection_inputs": {"per_ticker": {}}},
+            ),
+        ):
+            result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertEqual(result["scope"]["assembly_status"], "data_context_assembled_from_resolved_sources")
+
+    def test_provider_envelope_digest_rejects_each_replaced_artifact(self):
+        for field, path in (
+            ("offering_audit_source_path", self.paths["offering"]),
+            ("analyst_grade_actions_path", self.paths["analyst"]),
+            ("massive_news_events_path", self.paths["news"]),
+        ):
+            with self.subTest(field=field):
+                self._write_sources_and_packet()
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                payload["replacement_probe"] = field
+                _write_json(path, payload)
+                with mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"):
+                    with self.assertRaisesRegex(SourcePacketError, "does not bind"):
+                        run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+                self.assertFalse(self.paths["output"].exists())
+
+    def test_yfinance_grade_envelope_is_bound_when_selected(self):
+        _write_json(
+            self.paths["yfinance"],
+            resolve_yfinance_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={
+                    "AAPL": self._yfinance_source([self._yfinance_row()]),
+                    "MSFT": self._yfinance_source([], ticker="MSFT"),
+                },
+            ),
+        )
+        packet = self._packet_payload()
+        packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+            self.paths["yfinance"].read_bytes()
+        ).hexdigest()
+        _write_json(self.packet, packet)
+        with (
+            mock.patch("runners.us_short_batch5_data_context_source_packet._validate_schema"),
+            mock.patch(
+                "runners.us_short_batch5_data_context_source_packet.assemble_data_context_from_resolved_pass2_sources",
+                return_value={"universe": [], "selection_inputs": {"per_ticker": {}}},
+            ),
+        ):
+            result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+        self.assertEqual(result["scope"]["assembly_status"], "data_context_assembled_from_resolved_sources")
 
     def test_cli_default_accepts_legacy_projection_inputs_profile(self):
         targets = ("AAPL", "MSFT")
@@ -451,7 +605,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
 
         result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
 
-        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 9)
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 10)
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         rows = components["per_ticker_analysis"]
@@ -537,12 +691,15 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         )
         packet = self._packet_payload()
         packet["paths"]["yfinance_grade_actions_path"] = _rel(self.paths["yfinance"])
+        packet["source_artifact_sha256"]["yfinance_grade_actions_path"] = hashlib.sha256(
+            self.paths["yfinance"].read_bytes()
+        ).hexdigest()
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
         _write_json(self.paths["packet"], packet)
 
         result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
 
-        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 9)
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 10)
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         self.assertAlmostEqual(selection["AAPL"]["core_score"], 51.5)

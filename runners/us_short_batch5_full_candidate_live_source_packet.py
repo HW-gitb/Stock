@@ -220,6 +220,7 @@ def _source_paths(prefix: Path) -> dict[str, Path]:
         "offering_audit_source": prefix.with_name(prefix.name + "_offering_audit_source.json"),
         "analyst_grade_actions": prefix.with_name(prefix.name + "_analyst_grade_actions.json"),
         "massive_news_events": prefix.with_name(prefix.name + "_massive_news_events.json"),
+        "theme_selection_contract": prefix.with_name(prefix.name + "_theme_selection_contract.json"),
         "corporate_action_capture": prefix.with_name(prefix.name + "_corporate_action_capture.json"),
         "momentum_projection": prefix.with_name(prefix.name + "_momentum_projection.json"),
         "theme_projection": prefix.with_name(prefix.name + "_theme_projection.json"),
@@ -941,6 +942,7 @@ def _build_local_source_packet(
         "analyst_grade_actions_path": _repo_rel(paths["analyst_grade_actions"]),
         "massive_news_events_path": _repo_rel(paths["massive_news_events"]),
         "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+        "theme_selection_contract_path": _repo_rel(paths["theme_selection_contract"]),
         "output_data_context_path": _repo_rel(output_data_context_path),
     }
     if overextension_projection_path is not None:
@@ -949,9 +951,22 @@ def _build_local_source_packet(
         packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
         packet_paths["output_context_components_path"] = _repo_rel(context_components_output_path)
+    source_artifact_sha256 = {
+        field: hashlib.sha256(path.read_bytes()).hexdigest()
+        for field, path in (
+            ("offering_audit_source_path", paths["offering_audit_source"]),
+            ("analyst_grade_actions_path", paths["analyst_grade_actions"]),
+            ("massive_news_events_path", paths["massive_news_events"]),
+            ("theme_selection_contract_path", paths["theme_selection_contract"]),
+        )
+    }
+    if yfinance_grade_actions_path is not None:
+        source_artifact_sha256["yfinance_grade_actions_path"] = hashlib.sha256(
+            yfinance_grade_actions_path.read_bytes()
+        ).hexdigest()
     return {
         "schema_name": "us_short_batch5_data_context_source_packet",
-        "schema_version": "1.0.0",
+        "schema_version": "1.2.0",
         "generated_at": generated_at,
         "scope": {
             "market": "US",
@@ -971,6 +986,7 @@ def _build_local_source_packet(
             "expected_decision_date": expected_decision_date,
             "theme_opportunity_state": theme_opportunity_state,
         },
+        "source_artifact_sha256": source_artifact_sha256,
         "paths": packet_paths,
         "optional_inputs": {
             "holdings": holdings,
@@ -1605,6 +1621,7 @@ def run_full_candidate_live_source_packet(
     paths = _source_paths(prefix)
     for field, path in paths.items():
         _validate_state_json_path(path, field=f"source_artifact.{field}")
+    _existing_state_json(paths["theme_selection_contract"], field="source_artifact.theme_selection_contract")
     raw_root_resolved = _validate_raw_root(raw_root)
     summary_resolved = _validate_summary_path(summary_path)
 

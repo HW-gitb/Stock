@@ -1331,21 +1331,36 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
     """_write_provider_health derives {fmp, sec_edgar} from the REAL Pass2 summary (endpoint_results rows carry
     provider_id/endpoint_family/status per _summarize_endpoint). This is the emit-critical unit the stopped 2026-07-09
     run never reached and the fake-chain tests structurally cannot cover (they inject the bridge RESULT, not the
-    derivation). A source reads 'ok' only if its success COVERAGE over attempted calls is >= _HEALTH_MIN_SUCCESS_COVERAGE
-    (item 2, option a) — this closed the earlier any-single-success (grades) / attempted-only (sec) leniencies."""
+    derivation). FMP grades reads 'ok' only at its success-coverage threshold; emit-critical SEC instead requires
+    exactly one successful submissions record for every unique Pass2 target identity."""
 
     def _derive(self, endpoint_results, budget):
         import json
         from types import SimpleNamespace
 
         from runners import us_short_weekly_capstone_stages as st
+        endpoint_results = [dict(row) if isinstance(row, dict) else row for row in endpoint_results]
+        sec_target_symbols = []
+        for index, row in enumerate(endpoint_results):
+            if isinstance(row, dict) and row.get("provider_id") == "sec_edgar" \
+                    and row.get("endpoint_family") == "submissions":
+                symbol = f"S{index:04d}"
+                row.setdefault("symbol", symbol)
+                sec_target_symbols.append(row["symbol"])
         tmp = Path(tempfile.mkdtemp(prefix="cap_health_"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
         ctx = SimpleNamespace(sample_root=tmp, decision_date="20260710",
                               provider_health_path=tmp / "provider_health.json")
         summ = st._stage_summary_targets(ctx)["pass2"]
         summ.parent.mkdir(parents=True, exist_ok=True)
-        summ.write_text(json.dumps({"endpoint_call_budget": budget, "endpoint_results": endpoint_results}),
+        summ.write_text(json.dumps({
+            "endpoint_call_budget": budget,
+            "endpoint_results": endpoint_results,
+            "pass2_target_universe": {
+                "target_count": len(sec_target_symbols),
+                "target_symbols": sec_target_symbols,
+            },
+        }),
                         encoding="utf-8")
         st._write_provider_health(ctx)
         return json.loads(ctx.provider_health_path.read_text(encoding="utf-8"))
@@ -1420,7 +1435,7 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         self.assertEqual(health["fmp"], "down")
 
     def test_sec_no_calls_is_down(self):
-        # sec_ok = any-sec-success OR sec_submissions_calls>0; zero sec calls and no success -> down.
+        # No exact target SEC submission coverage -> down.
         rows = [self._row("financial_modeling_prep", "grades", True)]
         health = self._derive(rows, {"fmp_grades_calls": 1, "sec_submissions_calls": 0, "endpoint_error_count": 0})
         self.assertEqual(health["sec_edgar"], "down")
@@ -1433,12 +1448,88 @@ class CapstoneProviderHealthDerivationTest(unittest.TestCase):
         health = self._derive(rows, {"fmp_grades_calls": 5, "sec_submissions_calls": 5, "endpoint_error_count": 5})
         self.assertEqual(health["sec_edgar"], "down")
 
-    def test_coverage_exactly_at_threshold_is_ok(self):
-        # boundary: successes/attempted == threshold (0.5) is INCLUSIVE (>=) -> ok, for both legs.
+    def test_sec_partial_target_coverage_is_down_even_when_every_attempt_succeeds(self):
+        # R3: endpoint-success coverage is not target-identity coverage. Two successful SEC calls cannot make a
+        # three-ticker Pass2 target look clean when the third ticker was never covered.
+        from runners import us_short_weekly_capstone_stages as st
+
+        health = st.derive_provider_health({
+            "pass2_target_universe": {"target_count": 3, "target_symbols": ["AAPL", "MSFT", "NVDA"]},
+            "endpoint_results": [
+                {"provider_id": "financial_modeling_prep", "endpoint_family": "grades", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "MSFT", "status": "success"},
+            ],
+        })
+
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_sec_error_for_any_required_target_is_down(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        health = st.derive_provider_health({
+            "pass2_target_universe": {"target_count": 2, "target_symbols": ["AAPL", "MSFT"]},
+            "endpoint_results": [
+                {"provider_id": "financial_modeling_prep", "endpoint_family": "grades", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "MSFT", "status": "error"},
+            ],
+        })
+
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_sec_coverage_rejects_target_count_drift(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        health = st.derive_provider_health({
+            "pass2_target_universe": {"target_count": 3, "target_symbols": ["AAPL", "MSFT"]},
+            "endpoint_results": [
+                {"provider_id": "financial_modeling_prep", "endpoint_family": "grades", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "MSFT", "status": "success"},
+            ],
+        })
+
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_sec_coverage_rejects_noninteger_target_count(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        health = st.derive_provider_health({
+            "pass2_target_universe": {"target_count": True, "target_symbols": ["AAPL"]},
+            "endpoint_results": [
+                {"provider_id": "financial_modeling_prep", "endpoint_family": "grades", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+            ],
+        })
+
+        self.assertEqual(health["sec_edgar"], "down")
+
+    def test_sec_coverage_rejects_duplicate_or_foreign_submission_identity(self):
+        from runners import us_short_weekly_capstone_stages as st
+
+        base = {
+            "pass2_target_universe": {"target_count": 2, "target_symbols": ["AAPL", "MSFT"]},
+            "endpoint_results": [
+                {"provider_id": "financial_modeling_prep", "endpoint_family": "grades", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+                {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "MSFT", "status": "success"},
+            ],
+        }
+        for extra in (
+            {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "AAPL", "status": "success"},
+            {"provider_id": "sec_edgar", "endpoint_family": "submissions", "symbol": "NVDA", "status": "success"},
+        ):
+            with self.subTest(extra=extra["symbol"]):
+                summary = {**base, "endpoint_results": [*base["endpoint_results"], extra]}
+                self.assertEqual(st.derive_provider_health(summary)["sec_edgar"], "down")
+
+    def test_fmp_coverage_exactly_at_threshold_is_ok_but_partial_sec_target_coverage_is_down(self):
+        # The FMP threshold remains inclusive; SEC's emit-critical contract instead requires every target identity.
         rows = ([self._row("financial_modeling_prep", "grades", i < 5) for i in range(10)]
                 + [self._row("sec_edgar", "submissions", i < 5) for i in range(10)])
         health = self._derive(rows, {"fmp_grades_calls": 10, "sec_submissions_calls": 10, "endpoint_error_count": 10})
-        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "ok"})
+        self.assertEqual(health, {"fmp": "ok", "sec_edgar": "down"})
 
     def test_coverage_just_below_threshold_is_down(self):
         # boundary: 4/10 = 0.4 < 0.5 -> down.

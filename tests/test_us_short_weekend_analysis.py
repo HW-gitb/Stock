@@ -284,10 +284,17 @@ class RiskDowngradeWiring(unittest.TestCase):
         clean = _run([_cand_row(ticker="AAA", risk_downgrade=self._rd(0.0))])["rows"][0]["score"]["core_score"]
         pen = _run([_cand_row(ticker="BBB", risk_downgrade=self._rd(15.0, history=15.0))])["rows"][0]["score"]["core_score"]
         self.assertLess(pen, clean)   # 46.5 < 61.5: the penalty lowered the action_rank-driving value
+        per = {"AAA": {"core_score": clean, "theme_momentum_score": 0.0},
+               "BBB": {"core_score": pen, "theme_momentum_score": 0.0}}
         si = {"theme_opportunity_state": "no_strong_theme",
-              "per_ticker": {"AAA": {"core_score": clean, "theme_momentum_score": 0.0},
-                             "BBB": {"core_score": pen, "theme_momentum_score": 0.0}}}
-        ranks = {d["ticker"]: d["selection_rank"] for d in _select_top15(["AAA", "BBB"], si)["selection_details"]}
+              "theme_selection_contract": {"as_of": "20260615", "mode": "industry_heat_v1_cross_industry_disabled",
+                  "cross_industry_provisional_enabled": False, "theme_opportunity_state": "no_strong_theme",
+                  "per_ticker": {ticker: {"theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                      "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                      "membership_origin": "automatic_discovery", "market_confirmed": True,
+                      "individual_theme_gate_passed": True, "overextension_state": "none"} for ticker in per}},
+              "per_ticker": per}
+        ranks = {d["ticker"]: d["selection_rank"] for d in _select_top15(["AAA", "BBB"], si, decision_date="20260615")["selection_details"]}
         self.assertLess(ranks["AAA"], ranks["BBB"])   # the penalized BBB ranks AFTER the clean AAA
 
     def test_nonzero_penalty_subtracted_from_core_score(self):

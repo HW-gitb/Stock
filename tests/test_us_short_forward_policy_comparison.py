@@ -57,6 +57,8 @@ def _capture(decision_date="20260713", *, source_digest="a" * 64) -> dict:
                 "exclusion_records": [],
                 "admitted": tickers,
                 "selection_seats": {},
+                "theme_selection_mode": "industry_heat_v1_cross_industry_disabled",
+                "full_analysis_leader_upgrades": [],
                 "selection_details": [],
                 "holdings": [],
             }

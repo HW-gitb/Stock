@@ -20,6 +20,24 @@
     },
     "selection_inputs": {
       "theme_opportunity_state": "no_strong_theme",
+      "theme_selection_contract": {
+        "as_of": "20260615",
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": false,
+        "theme_opportunity_state": "no_strong_theme",
+        "per_ticker": {
+          "AAPL": {
+            "theme_id": "industry:technology_hardware",
+            "theme_source": "industry_heat_v1",
+            "theme_lifecycle_state": "confirmed_active",
+            "theme_leader_rs": 0.0,
+            "membership_origin": "automatic_discovery",
+            "market_confirmed": true,
+            "individual_theme_gate_passed": true,
+            "overextension_state": "none"
+          }
+        }
+      },
       "per_ticker": {
         "AAPL": {
           "core_score": 50.0,
@@ -173,7 +191,7 @@
         "observed_at": "2026-06-13T08:00:00",
         "price_basis_date": "20260612",
         "session": "RTH",
-        "adjustment": "split_div_adjusted",
+        "adjustment": "split_adjusted",
         "row_count": 1,
         "source_refs": [
           {
@@ -187,7 +205,7 @@
         "observed_at": "2026-06-13T08:00:00",
         "price_basis_date": "20260612",
         "session": "RTH",
-        "adjustment": "split_div_adjusted",
+        "adjustment": "split_adjusted",
         "row_count": 1,
         "source_refs": [
           {
@@ -259,6 +277,7 @@
         }
       }
     },
+    "holding_themes": {},
     "portfolio_guard_status": "normal",
     "theme_opportunity_state": "no_strong_theme"
   },

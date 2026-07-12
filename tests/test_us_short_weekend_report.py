@@ -124,7 +124,12 @@ def _stage_status(**ov):
 
 
 def _selection(as_of=_AS_OF, records=None):
-    return {"decision_date": as_of, "exclusion_records": [] if records is None else records}
+    return {
+        "decision_date": as_of,
+        "exclusion_records": [] if records is None else records,
+        "theme_selection_mode": "industry_heat_v1_cross_industry_disabled",
+        "full_analysis_leader_upgrades": [],
+    }
 
 
 def _build_report(machine_record, lifecycle_result, *, report_context, run_context=None, stage_status=None,
@@ -176,6 +181,11 @@ class StageStatusBinding(unittest.TestCase):
 
     def test_theme_rendered_from_stage(self):
         self.assertIn("theme_opportunity_state=strong", str(self._sections(theme_opportunity_state="strong")[3]))
+
+    def test_theme_selection_mode_discloses_industry_only_cross_industry_disabled(self):
+        section = self._sections()[3]
+        self.assertIn("industry_heat_v1_cross_industry_disabled", str(section))
+        self.assertIn("cross-industry path disabled", str(section))
 
     def test_clean_positive_control(self):
         s = self._sections()

@@ -299,8 +299,8 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
 def run_weekly_bridge(ctx) -> dict[str, Any]:
     """Derive HONEST provider_health from the actual Pass2 outcome, then bridge the source packet → weekly report /
     action table. provider_health is NOT hand-written: fmp = ok iff >=_HEALTH_MIN_SUCCESS_COVERAGE of grades calls
-    succeeded, sec_edgar = ok iff the same fraction of SEC submissions succeeded (a success-COVERAGE threshold, NOT
-    any-single-success); a down critical source makes the orchestrator emit nothing (design §3.2)."""
+    succeeded; sec_edgar = ok iff every unique Pass2 target has exactly one successful SEC submissions record. A
+    down critical source makes the orchestrator emit nothing (design §3.2)."""
     _write_provider_health(ctx)
     try:
         vix_summary = json.loads(ctx.vix_regime_summary_path.read_text(encoding="utf-8"))
@@ -335,9 +335,10 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
 
 # --- honest provider_health derivation from the real Pass2 summary ---
 
-# A source reads "ok" only if at least this fraction of its ATTEMPTED endpoint calls came back success. This is a
+# FMP grades reads "ok" only if at least this fraction of its ATTEMPTED endpoint calls came back success. This is a
 # coverage threshold, deliberately NOT "any single success" / "any call attempted": a run whose grades mostly 429'd
-# (or whose SEC submissions mostly failed) reports that source as down instead of pretending coverage is healthy.
+# reports that source as down instead of pretending coverage is healthy. SEC submissions is different: as the
+# emit-critical audit source, every unique Pass2 target ticker needs exactly one successful submissions record.
 # Downstream criticality is separate: FMP grades is advisory/fallback; SEC submissions remains emit-critical.
 # 0.5 = a simple majority; tune here if the operational bar changes.
 _HEALTH_MIN_SUCCESS_COVERAGE = 0.5
@@ -359,9 +360,35 @@ def derive_provider_health(summary) -> dict[str, str]:
         successes = sum(1 for r in rows if r.get("status") == "success")
         return successes / len(rows) >= _HEALTH_MIN_SUCCESS_COVERAGE
 
+    def _sec_target_coverage_ok() -> bool:
+        target_universe = summary.get("pass2_target_universe") if isinstance(summary, dict) else None
+        targets = target_universe.get("target_symbols") if isinstance(target_universe, dict) else None
+        if type(targets) is not list or not targets or any(type(symbol) is not str or not symbol for symbol in targets):
+            return False
+        target_set = set(targets)
+        target_count = target_universe.get("target_count")
+        if len(target_set) != len(targets) or type(target_count) is not int or target_count != len(targets):
+            return False
+
+        sec_status_by_symbol: dict[str, Any] = {}
+        for row in results:
+            if not isinstance(row, dict) \
+                    or row.get("provider_id") != "sec_edgar" \
+                    or row.get("endpoint_family") != "submissions":
+                continue
+            symbol = row.get("symbol")
+            if type(symbol) is not str or symbol not in target_set or symbol in sec_status_by_symbol:
+                return False
+            sec_status_by_symbol[symbol] = row.get("status")
+
+        return (
+            set(sec_status_by_symbol) == target_set
+            and all(status == "success" for status in sec_status_by_symbol.values())
+        )
+
     return {
         "fmp": "ok" if _coverage_ok("financial_modeling_prep", "grades") else "down",
-        "sec_edgar": "ok" if _coverage_ok("sec_edgar", "submissions") else "down",
+        "sec_edgar": "ok" if _sec_target_coverage_ok() else "down",
     }
 
 

@@ -38,7 +38,7 @@ PRIVATE_RECORD_KEYS = frozenset({
 SELECTION_DECISION_KEYS = frozenset({
     "out_of_window", "decision_date", "price_basis_date", "run_date", "cheap_eligible", "candidates",
     "recall_available", "recall_added", "recall_excluded", "exclusion_records", "admitted",
-    "selection_seats", "selection_details", "holdings",
+    "selection_seats", "theme_selection_mode", "full_analysis_leader_upgrades", "selection_details", "holdings",
 })
 BOUNDARY = {
     "track": "comparison_non_production",

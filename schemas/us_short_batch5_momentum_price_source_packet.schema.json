@@ -91,7 +91,7 @@
         },
         "benchmark_symbols": { "const": ["SPY", "QQQ"] },
         "session": { "const": "RTH" },
-        "adjustment_mode": { "const": "split_div_adjusted" },
+        "adjustment_mode": { "const": "split_adjusted" },
         "min_points_per_series": { "type": "integer", "minimum": 64, "maximum": 3000 },
         "full_market_sample": { "const": false }
       }
@@ -159,7 +159,7 @@
       "properties": {
         "as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
         "session": { "const": "RTH" },
-        "adjustment_mode": { "const": "split_div_adjusted" },
+        "adjustment_mode": { "const": "split_adjusted" },
         "points": {
           "type": "array",
           "minItems": 64,

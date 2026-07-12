@@ -36,6 +36,8 @@ Pure/offline beyond the N private writes; no provider/live/network/DataHub; no b
 """
 from __future__ import annotations
 
+import math
+
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_provider_health import EMIT_ALLOWED_RUN_STATES, classify_provider_health
@@ -66,7 +68,7 @@ _PIPELINE_CONTEXT_KEYS = frozenset({
     "run_provenance",                                  # §2.1 PIT 来源对账（消费输入族 as_of/observed_at/price-basis/session/adjustment）
     "provider_health", "calendar",                     # §3.7 跑前健康门 + §2.1/§3.5 live 须 authoritative 日历 artifact
     "market_axis_regimes", "prior_regime", "prior_upgrade_count",   # 4d-ii-a regime
-    "sizing_context", "basket_context", "cost_inputs", "available_cash",   # 4d-ii-c..i
+    "sizing_context", "basket_context", "cost_inputs", "available_cash", "account_state",   # 4d-ii-c..i
     "report_context",                                  # m2
     "lifecycle_register_path", "lifecycle_readiness_out_path",   # L
     "runs_private_root", "weekly_private_root",        # N
@@ -180,6 +182,69 @@ def _build_analysis_rows(selection, per_ticker_analysis):
     return [{**canon_map[ct], "selection_record": sel_records.get(ct)} for ct in union_order]
 
 
+def _portfolio_capacity_context(selection, analysis_rows, *, account_state, basket_context, sizing_context, available_cash,
+                                decision_date):
+    """Bind §8 dollar-cap inputs to the same account, holding rows, prices, and themes this run consumes.
+
+    Account identity/date/bucket/cash disagreements are structural errors. A holding with a missing current mark
+    or theme is represented as unavailable and is handled by the cash stage as a conservative all-new-build
+    deferral; it is never valued at average cost or silently assigned a fallback theme.
+    """
+    if not isinstance(account_state, dict) or not isinstance(account_state.get("positions"), list):
+        raise WeekendOrchestratorError("account_state 须为含 positions(list) 的私密账户对象")
+    if account_state.get("as_of") != decision_date:
+        raise WeekendOrchestratorError("account_state.as_of 必须等于本次 decision_date（容量不得跨期复用）")
+    bucket = account_state.get("us_short_bucket_capital")
+    sizing_bucket = sizing_context.get("short_bucket_dollars") if isinstance(sizing_context, dict) else None
+    cash = account_state.get("us_short_available_cash")
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or value <= 0.0
+           for value in (bucket, sizing_bucket)):
+        raise WeekendOrchestratorError("账户/定仓 short bucket 须为正有限数")
+    if not isinstance(cash, (int, float)) or isinstance(cash, bool) or not math.isfinite(cash) or cash < 0.0:
+        raise WeekendOrchestratorError("account_state.us_short_available_cash 须为非负有限数")
+    if abs(float(bucket) - float(sizing_bucket)) > 1e-9 or available_cash != cash:
+        raise WeekendOrchestratorError("账户 bucket/cash 与本次 sizing/cash 输入不一致（容量不得分叉）")
+    if not isinstance(basket_context, dict):
+        raise WeekendOrchestratorError("basket_context 须为 dict")
+    holding_themes = basket_context.get("holding_themes")
+
+    account_positions, account_tickers = {}, set()
+    for position in account_state["positions"]:
+        ticker = canonical_us_ticker(position.get("ticker")) if isinstance(position, dict) else None
+        shares = position.get("shares") if isinstance(position, dict) else None
+        if ticker is None or ticker in account_tickers or not (isinstance(shares, int) and not isinstance(shares, bool) and shares >= 1):
+            raise WeekendOrchestratorError("account_state.positions 含非法/重复 ticker 或 shares")
+        account_tickers.add(ticker)
+        account_positions[ticker] = position
+    selection_holdings = {canonical_us_ticker(h.get("ticker")) for h in selection["holdings"] if isinstance(h, dict)}
+    if None in selection_holdings or selection_holdings != account_tickers:
+        raise WeekendOrchestratorError("selection holdings 与 account_state.positions 须一一对应（容量覆盖不得漏持仓）")
+
+    rows_by_ticker = {row["ticker"]: row for row in analysis_rows}
+    if not isinstance(holding_themes, dict):
+        theme_by_ticker = {}
+    else:
+        theme_by_ticker = {}
+        for key, value in holding_themes.items():
+            ticker = canonical_us_ticker(key)
+            if ticker is None or ticker in theme_by_ticker:
+                theme_by_ticker = {}
+                break
+            theme_by_ticker[ticker] = value.strip().casefold() if isinstance(value, str) and value.strip() else None
+        if set(theme_by_ticker) != account_tickers:
+            theme_by_ticker = {}
+
+    existing_positions = []
+    for ticker in sorted(account_tickers):
+        row = rows_by_ticker.get(ticker)
+        price_input = row.get("price_input") if isinstance(row, dict) else None
+        close = price_input.get("close") if isinstance(price_input, dict) else None
+        mark = float(close) if isinstance(close, (int, float)) and not isinstance(close, bool) and math.isfinite(close) and close > 0.0 else None
+        existing_positions.append({"ticker": ticker, "shares": account_positions[ticker]["shares"],
+                                   "mark_price": mark, "theme": theme_by_ticker.get(ticker)})
+    return {"short_bucket_dollars": float(bucket), "existing_positions": existing_positions}
+
+
 def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", research_live_capability=None):
     """4d-ii-o end-to-end weekend pipeline. Resolves the canonical decision_date, runs selection + the full
     4d-ii decision chain + machine-record assembly + lifecycle eval + weekly-report render + private write,
@@ -266,13 +331,17 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
                   "per_ticker_analysis": pc["per_ticker_analysis"]})
 
     rows = _build_analysis_rows(selection, pc["per_ticker_analysis"])
+    portfolio_capacity = _portfolio_capacity_context(
+        selection, rows, account_state=pc["account_state"], basket_context=pc["basket_context"],
+        sizing_context=pc["sizing_context"], available_cash=pc["available_cash"], decision_date=decision_date)
     analysis = analyze_rows(rows, market_axis_regimes=pc["market_axis_regimes"],
                             prior_regime=pc["prior_regime"], prior_upgrade_count=pc["prior_upgrade_count"])
     decided = decide_actions(analysis)
     sized = size_rows(decided, sizing_context=pc["sizing_context"])
     basket = resolve_build_capacity(sized, basket_context=pc["basket_context"])
     cost_floored = apply_probe_cost_floor(basket, cost_inputs=pc["cost_inputs"])
-    cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"])
+    cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"],
+                                 portfolio_capacity=portfolio_capacity)
     ranked = apply_action_rank(cash)
 
     # batch4 honesty provenance: the immutable run-origin fact (offline fixture, fully provider-derived research, or

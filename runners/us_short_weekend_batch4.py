@@ -156,6 +156,7 @@ def _assemble_context(packet: dict, base: Path) -> tuple[dict, dict]:
         "basket_context": packet["basket_context"],
         "cost_inputs": packet["cost_inputs"],
         "available_cash": account["us_short_available_cash"],
+        "account_state": account,
         "report_context": packet["report_context"],
         "lifecycle_register_path": _resolve_path(packet["lifecycle_register_path"], base=base,
                                                    label="lifecycle_register_path"),

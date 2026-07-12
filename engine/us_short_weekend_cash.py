@@ -35,23 +35,147 @@ from engine.us_short_weekend_decision import OBSERVE_REASONS, action_reason_erro
 _BUILD = "建仓"
 _OBSERVE = "观察"
 _R_CASH = "cash_or_account_missing"   # §9 — funded build squeezed out when the global cash runs out (sizing artifact, not a system reject)
+_R_CAPACITY = "capacity_or_budget_deferred"  # §9 — total/theme dollar capacity is exhausted or cannot be verified
 _NONE_CASH_FIELDS = {f: None for f in CASH_ALLOCATION_FIELDS}   # non-建仓 row: cash allocation N/A
 
+# §8 / §13.1 #4 forward priors. They are enforced here at the final cross-row cash stage, after the
+# weekly-count/theme-count gates and before cash is allocated, so an existing holding cannot be ignored by a
+# new-build-only allocation path.
+TOTAL_POSITION_CAP_FRAC = 0.60
+SAME_THEME_DOLLAR_CAP_FRAC = 0.30
+
 assert _R_CASH in OBSERVE_REASONS, "cash observe reason drifted from §9 vocab"
+assert _R_CAPACITY in OBSERVE_REASONS, "capacity observe reason drifted from §9 vocab"
 
 
 class WeekendCashError(Exception):
     """The injected cost-floored result / available_cash is malformed (fail-closed before allocation)."""
 
 
-def apply_cash_allocation(cost_floored_result, *, available_cash):
+def _finite_number(x):
+    if isinstance(x, bool) or not isinstance(x, (int, float)):
+        return None
+    return float(x) if math.isfinite(x) else None
+
+
+def _positive_int(x):
+    return x if isinstance(x, int) and not isinstance(x, bool) and x >= 1 else None
+
+
+def _capacity_state(portfolio_capacity):
+    """Validate and value existing holdings for the §8 dollar-cap gate.
+
+    A structurally malformed context raises before allocation. A well-shaped context with an unavailable current
+    mark or theme returns ``unavailable``: all new builds will be downgraded, while existing holding advice can
+    still render. This is fail-closed and never substitutes average cost or a stale/default theme for the current
+    exposure required by the cap.
+    """
+    if not (isinstance(portfolio_capacity, dict)
+            and set(portfolio_capacity) == {"short_bucket_dollars", "existing_positions"}
+            and isinstance(portfolio_capacity["existing_positions"], list)):
+        raise WeekendCashError(
+            "portfolio_capacity 顶层键须恰为 {'short_bucket_dollars','existing_positions'}，且 existing_positions 为 list")
+    bucket = _finite_number(portfolio_capacity["short_bucket_dollars"])
+    if bucket is None or bucket <= 0.0:
+        raise WeekendCashError("portfolio_capacity.short_bucket_dollars 须为正有限数")
+    total_cap = bucket * TOTAL_POSITION_CAP_FRAC
+    theme_cap = bucket * SAME_THEME_DOLLAR_CAP_FRAC
+    if not math.isfinite(total_cap) or not math.isfinite(theme_cap):
+        raise WeekendCashError("portfolio capacity dollar caps 非有限")
+
+    seen, total, by_theme = set(), 0.0, {}
+    for position in portfolio_capacity["existing_positions"]:
+        if not (isinstance(position, dict)
+                and set(position) == {"ticker", "shares", "mark_price", "theme"}):
+            raise WeekendCashError(
+                "portfolio_capacity.existing_positions[] 须恰为 {'ticker','shares','mark_price','theme'}")
+        ticker = canonical_us_ticker(position["ticker"])
+        if ticker is None or ticker in seen:
+            raise WeekendCashError("portfolio_capacity.existing_positions 含非法或重复 canonical ticker")
+        seen.add(ticker)
+        shares = _positive_int(position["shares"])
+        mark = _finite_number(position["mark_price"])
+        theme = position["theme"]
+        if shares is None or mark is None or mark <= 0.0 or not isinstance(theme, str) or not theme.strip():
+            return {
+                "status": "unavailable_existing_exposure",
+                "total_cap_dollars": total_cap,
+                "theme_cap_dollars": theme_cap,
+                "existing_total_dollars": None,
+                "existing_theme_dollars": {},
+            }
+        try:
+            amount = float(shares) * mark
+        except OverflowError:
+            amount = float("inf")
+        if not math.isfinite(amount) or amount < 0.0:
+            return {
+                "status": "unavailable_existing_exposure",
+                "total_cap_dollars": total_cap,
+                "theme_cap_dollars": theme_cap,
+                "existing_total_dollars": None,
+                "existing_theme_dollars": {},
+            }
+        total += amount
+        cleaned_theme = theme.strip().casefold()
+        by_theme[cleaned_theme] = by_theme.get(cleaned_theme, 0.0) + amount
+    return {
+        "status": "ready",
+        "total_cap_dollars": total_cap,
+        "theme_cap_dollars": theme_cap,
+        "existing_total_dollars": total,
+        "existing_theme_dollars": by_theme,
+    }
+
+
+def _apply_portfolio_capacity(cash_inputs, portfolio_capacity):
+    """Apply total- and same-theme-dollar caps in canonical rank order before cash allocation.
+
+    New positions are all-or-observe: a row that does not fit the remaining dollar capacity is not partially
+    resized, so lower-ranked names cannot silently crowd through an already-full portfolio/theme bucket.
+    """
+    state = _capacity_state(portfolio_capacity)
+    decisions = {}
+    if state["status"] != "ready":
+        for index in range(len(cash_inputs)):
+            decisions[index] = "deferred_unavailable_existing_exposure"
+        return decisions, state
+
+    total = state["existing_total_dollars"]
+    by_theme = dict(state["existing_theme_dollars"])
+    for index, row in sorted(enumerate(cash_inputs), key=lambda item: (item[1]["rank"], item[1]["ticker"])):
+        theme = row["portfolio_theme"]
+        try:
+            amount = float(row["desired_model_shares"]) * float(row["valid_entry_high"])
+        except (TypeError, ValueError, OverflowError):
+            amount = float("inf")
+        if not math.isfinite(amount) or amount <= 0.0:
+            raise WeekendCashError("validated build 的 portfolio capacity amount 非法")
+        if total + amount > state["total_cap_dollars"]:
+            decisions[index] = "deferred_total_cap"
+            continue
+        if by_theme.get(theme, 0.0) + amount > state["theme_cap_dollars"]:
+            decisions[index] = "deferred_theme_cap"
+            continue
+        decisions[index] = "within_limits"
+        total += amount
+        by_theme[theme] = by_theme.get(theme, 0.0) + amount
+    return decisions, {**state, "reserved_total_dollars": total, "reserved_theme_dollars": by_theme}
+
+
+def apply_cash_allocation(cost_floored_result, *, available_cash, portfolio_capacity):
     """4d-ii-i global cash allocation. Funds the finalized 建仓 set of the 4d-ii-h `apply_probe_cost_floor`
-    result against `available_cash` in 排名(selection_rank)-primary order at `valid_entry_high`; a build the
-    remaining cash cannot cover is downgraded 建仓 → 观察(`cash_or_account_missing`). Every row gets the 5
-    `cash_allocation_fields` (None on a non-建仓 row); `build_count` is recomputed.
+    result first against the §8 total-position (60%) and same-theme (30%) dollar capacities in
+    排名(selection_rank)-primary order at `valid_entry_high`, including every existing holding at its current
+    mark; a build that does not fit is downgraded 建仓 → 观察(`capacity_or_budget_deferred`). The remaining
+    in-capacity rows are then funded against `available_cash`; a build the remaining cash cannot cover is
+    downgraded 建仓 → 观察(`cash_or_account_missing`). Every row gets the 5 `cash_allocation_fields` (None when
+    capacity rejects it or it is non-建仓); `build_count` is recomputed.
 
     cost_floored_result = the `apply_probe_cost_floor` output {regime, rows, weekly_build_limit, build_count}.
     available_cash = the short bucket's deployable cash (float; an offline fixture / account_state value).
+    portfolio_capacity = {short_bucket_dollars, existing_positions:[{ticker, shares, mark_price, theme}]}; the
+      existing positions must be current-marked and themed, otherwise new builds fail closed to observe.
 
     Returns the result with the same shape (rows funded / downgraded, build_count recomputed, every row's
     ticker canonical UPPERCASE). Raises WeekendCashError on a malformed result / row, an unknown final_action,
@@ -91,29 +215,52 @@ def apply_cash_allocation(cost_floored_result, *, available_cash):
                 raise WeekendCashError(f"建仓 行 valid_entry_high 须为正有限数: {ct!r} → {entry!r}")
             if not (isinstance(rank, int) and not isinstance(rank, bool) and rank >= 1):
                 raise WeekendCashError(f"建仓 行 selection_rank 须为正 int（供现金分配排序）: {ct!r} → {rank!r}")
+            theme = row.get("portfolio_theme")
+            if not isinstance(theme, str) or not theme.strip():
+                raise WeekendCashError(f"建仓 行 portfolio_theme 须为非空 str（同主题美元上限）: {ct!r}")
             build_indices.append(i)
             cash_inputs.append({
                 "final_action": _BUILD, "desired_model_shares": shares, "valid_entry_high": entry,
-                "rank": rank, "rr": af.get("risk_reward_ratio"),
+                "rank": rank, "rr": af.get("risk_reward_ratio"), "ticker": ct,
+                "portfolio_theme": theme.strip().casefold(),
             })
 
-    allocations = allocate_cash(cash_inputs, available_cash)   # aligned with cash_inputs / build_indices
+    capacity_by_input, capacity_summary = _apply_portfolio_capacity(cash_inputs, portfolio_capacity)
+    fundable_input_indices = [idx for idx in range(len(cash_inputs)) if capacity_by_input[idx] == "within_limits"]
+    allocations = allocate_cash([cash_inputs[idx] for idx in fundable_input_indices], available_cash)
+    alloc_by_index = {
+        build_indices[input_idx]: allocation
+        for input_idx, allocation in zip(fundable_input_indices, allocations)
+    }
+    capacity_by_row_index = {
+        build_indices[input_idx]: capacity_by_input[input_idx]
+        for input_idx in range(len(cash_inputs))
+    }
 
     # Pass 2 — attach the cash_allocation_fields; an insufficient-cash 建仓 → 观察(cash_or_account_missing).
     # build_count recomputed; every row emits the canonical UPPERCASE ticker. Non-建仓 rows: cash fields None.
-    alloc_by_index = dict(zip(build_indices, allocations))
     out_rows, build_count = [], 0
     for i, row in enumerate(cost_floored_result["rows"]):
         ct = ct_by_index[i]
         if i not in alloc_by_index:
-            out_rows.append({**row, "ticker": ct, **_NONE_CASH_FIELDS})
+            capacity_status = capacity_by_row_index.get(i)
+            if capacity_status is None:
+                out_rows.append({**row, "ticker": ct, **_NONE_CASH_FIELDS,
+                                 "portfolio_capacity_status": None})
+            else:
+                out_rows.append({**row, "ticker": ct, **_NONE_CASH_FIELDS,
+                                 "portfolio_capacity_status": capacity_status,
+                                 "final_action": _OBSERVE, "observe_reason_type": _R_CAPACITY})
             continue
         alloc = alloc_by_index[i]
         cash_fields = {f: alloc[f] for f in CASH_ALLOCATION_FIELDS}
         if alloc["cash_allocation_status"] == "allocated":
             build_count += 1
-            out_rows.append({**row, "ticker": ct, **cash_fields})              # funded — stays 建仓
+            out_rows.append({**row, "ticker": ct, **cash_fields,
+                             "portfolio_capacity_status": "within_limits"})   # funded — stays 建仓
         else:
             out_rows.append({**row, "ticker": ct, **cash_fields,
+                             "portfolio_capacity_status": "within_limits",
                              "final_action": _OBSERVE, "observe_reason_type": _R_CASH})   # 现金不够 → 观察
-    return {**cost_floored_result, "rows": out_rows, "build_count": build_count}
+    return {**cost_floored_result, "rows": out_rows, "build_count": build_count,
+            "portfolio_capacity": capacity_summary}

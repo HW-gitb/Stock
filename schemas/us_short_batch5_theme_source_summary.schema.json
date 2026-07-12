@@ -167,7 +167,7 @@
         "theme_member_count": { "type": "integer", "minimum": 0, "maximum": 20000 },
         "benchmark_symbols": { "const": ["SPY", "QQQ"] },
         "session": { "const": "RTH" },
-        "adjustment_mode": { "const": "split_div_adjusted" },
+        "adjustment_mode": { "const": "split_adjusted" },
         "min_points_per_series": { "type": "integer", "minimum": 64, "maximum": 3000 },
         "full_gics_peer_pool_consumed": { "const": true },
         "provisional_theme_membership_consumed": { "const": true },

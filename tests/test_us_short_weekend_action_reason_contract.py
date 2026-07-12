@@ -114,7 +114,7 @@ class StageRejectsBadPairTests(unittest.TestCase):
         with self.assertRaises(basket.WeekendBasketError):
             basket.resolve_build_capacity(
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [bad]},
-                basket_context={"per_ticker": {}, "portfolio_guard_status": "normal",
+                basket_context={"per_ticker": {}, "holding_themes": {}, "portfolio_guard_status": "normal",
                                 "theme_opportunity_state": "no_strong_theme"})
 
     def test_cost_floor_rejects_bad_pair(self):
@@ -129,7 +129,8 @@ class StageRejectsBadPairTests(unittest.TestCase):
         with self.assertRaises(cash.WeekendCashError):
             cash.apply_cash_allocation(
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [bad],
-                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0)
+                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0,
+                portfolio_capacity={"short_bucket_dollars": 10000.0, "existing_positions": []})
 
     def test_action_rank_rejects_bad_pair(self):
         bad = {"ticker": "AAA", "final_action": "观察", "observe_reason_type": "BANANA", "selection_rank": 9}
@@ -162,7 +163,7 @@ class StageRejectsBadPairTests(unittest.TestCase):
         with self.assertRaises(basket.WeekendBasketError):
             basket.resolve_build_capacity(
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [basket_bad]},
-                basket_context={"per_ticker": {}, "portfolio_guard_status": "normal",
+                basket_context={"per_ticker": {}, "holding_themes": {}, "portfolio_guard_status": "normal",
                                 "theme_opportunity_state": "no_strong_theme"})
         cf_bad = {"ticker": "AAA", "final_action": "持有", "observe_reason_type": "data_restricted",
                   "selection_rank": 9}
@@ -175,7 +176,8 @@ class StageRejectsBadPairTests(unittest.TestCase):
         with self.assertRaises(cash.WeekendCashError):
             cash.apply_cash_allocation(
                 {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [cash_bad],
-                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0)
+                 "weekly_build_limit": 1, "build_count": 0}, available_cash=5000.0,
+                portfolio_capacity={"short_bucket_dollars": 10000.0, "existing_positions": []})
         ar_bad = {"ticker": "AAA", "final_action": "持有", "observe_reason_type": "data_restricted",
                   "selection_rank": 9}
         with self.assertRaises(action_rank.WeekendActionRankError):

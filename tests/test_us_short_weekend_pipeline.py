@@ -35,13 +35,49 @@ def _univ_row(ticker, exchange="NASDAQ", price=150.0, adv=1.0e10, mcap=2.5e12, *
     return r
 
 
-def _selection_inputs(tickers, *, state="no_strong_theme", core_scores=None, theme_scores=None):
+def _selection_inputs(tickers, *, state="no_strong_theme", core_scores=None, theme_scores=None,
+                      theme_selection_contract=None):
     core_scores = core_scores or {}
     theme_scores = theme_scores or {}
     return {"theme_opportunity_state": state,
+            "theme_selection_contract": theme_selection_contract or _theme_selection_contract(tickers, state=state),
             "per_ticker": {t: {"core_score": core_scores.get(t, 50.0),
                                "theme_momentum_score": theme_scores.get(t, 0.0)}
                            for t in tickers}}
+
+
+def _theme_selection_contract(tickers, *, lifecycle_by_ticker=None, origin_by_ticker=None,
+                              source_by_ticker=None, leader_rs_by_ticker=None, theme_id_by_ticker=None,
+                              market_confirmed_by_ticker=None, individual_gate_by_ticker=None,
+                              overextension_by_ticker=None,
+                              mode="industry_heat_v1_cross_industry_disabled", state="no_strong_theme"):
+    lifecycle_by_ticker = lifecycle_by_ticker or {}
+    origin_by_ticker = origin_by_ticker or {}
+    source_by_ticker = source_by_ticker or {}
+    leader_rs_by_ticker = leader_rs_by_ticker or {}
+    theme_id_by_ticker = theme_id_by_ticker or {}
+    market_confirmed_by_ticker = market_confirmed_by_ticker or {}
+    individual_gate_by_ticker = individual_gate_by_ticker or {}
+    overextension_by_ticker = overextension_by_ticker or {}
+    return {
+        "as_of": "20260615",
+        "mode": mode,
+        "cross_industry_provisional_enabled": mode != "industry_heat_v1_cross_industry_disabled",
+        "theme_opportunity_state": state,
+        "per_ticker": {
+            ticker: {
+                "theme_id": theme_id_by_ticker.get(ticker, "industry:" + ticker),
+                "theme_source": source_by_ticker.get(ticker, "industry_heat_v1"),
+                "theme_lifecycle_state": lifecycle_by_ticker.get(ticker, "confirmed_active"),
+                "theme_leader_rs": leader_rs_by_ticker.get(ticker, 0.0),
+                "membership_origin": origin_by_ticker.get(ticker, "automatic_discovery"),
+                "market_confirmed": market_confirmed_by_ticker.get(ticker, True),
+                "individual_theme_gate_passed": individual_gate_by_ticker.get(ticker, True),
+                "overextension_state": overextension_by_ticker.get(ticker, "none"),
+            }
+            for ticker in tickers
+        },
+    }
 
 
 def _dc(universe, *, recall=None, holdings=None, pass2=None, selection_inputs=None):
@@ -166,6 +202,108 @@ class RunSelectionTests(unittest.TestCase):
         self.assertNotIn("T03", out["admitted"])
         self.assertEqual({d["ticker"]: d["selection_bucket"] for d in out["selection_details"] if d["ticker"] in theme[:3]},
                          {t: "theme_momentum" for t in theme[:3]})
+
+    def test_decayed_theme_cannot_take_theme_seat_and_contract_is_reported(self):
+        core = ["C%02d" % i for i in range(13)]
+        theme = ["T%02d" % i for i in range(4)]
+        tickers = core + theme
+        core_scores = {ticker: 100.0 - i for i, ticker in enumerate(core)}
+        core_scores.update({ticker: 10.0 - i for i, ticker in enumerate(theme)})
+        theme_scores = {ticker: 1.0 for ticker in core}
+        theme_scores.update({ticker: 100.0 - i for i, ticker in enumerate(theme)})
+        selection_inputs = _selection_inputs(
+            tickers, state="no_strong_theme", core_scores=core_scores, theme_scores=theme_scores)
+        selection_inputs["theme_selection_contract"] = _theme_selection_contract(
+            tickers, lifecycle_by_ticker={"T00": "decayed"})
+        out = self._run(_dc([_univ_row(ticker) for ticker in tickers],
+                            pass2={ticker: {} for ticker in tickers}, selection_inputs=selection_inputs))
+        self.assertNotIn("T00", out["admitted"])
+        self.assertEqual(out["theme_selection_mode"], "industry_heat_v1_cross_industry_disabled")
+
+    def test_cooling_theme_has_halved_theme_seat_capacity(self):
+        core = ["C%02d" % i for i in range(13)]
+        theme = ["T%02d" % i for i in range(4)]
+        tickers = core + theme
+        core_scores = {ticker: 100.0 - i for i, ticker in enumerate(core)}
+        core_scores.update({ticker: 10.0 - i for i, ticker in enumerate(theme)})
+        theme_scores = {ticker: 1.0 for ticker in core}
+        theme_scores.update({ticker: 100.0 - i for i, ticker in enumerate(theme)})
+        selection_inputs = _selection_inputs(
+            tickers, state="no_strong_theme", core_scores=core_scores, theme_scores=theme_scores)
+        selection_inputs["theme_selection_contract"] = _theme_selection_contract(
+            tickers, lifecycle_by_ticker={ticker: "cooling" for ticker in theme},
+            theme_id_by_ticker={ticker: "industry:cooling" for ticker in theme})
+        out = self._run(_dc([_univ_row(ticker) for ticker in tickers],
+                            pass2={ticker: {} for ticker in tickers}, selection_inputs=selection_inputs))
+        by_ticker = {row["ticker"]: row for row in out["selection_details"]}
+        cooled_theme_seats = [ticker for ticker in theme if by_ticker.get(ticker, {}).get("selection_bucket") == "theme_momentum"]
+        self.assertEqual(cooled_theme_seats, ["T00"])  # floor(3 × 0.5) = one theme seat
+
+    def test_theme_seats_reserve_automatic_discovery_and_cap_manual_watchlist(self):
+        core = ["C%02d" % i for i in range(8)]
+        auto = ["A%02d" % i for i in range(4)]
+        manual = ["M%02d" % i for i in range(4)]
+        tickers = core + auto + manual
+        core_scores = {ticker: 100.0 - i for i, ticker in enumerate(core)}
+        core_scores.update({ticker: 10.0 for ticker in auto + manual})
+        theme_scores = {ticker: 1.0 for ticker in core}
+        theme_scores.update({ticker: 60.0 - i for i, ticker in enumerate(auto)})
+        theme_scores.update({ticker: 100.0 - i for i, ticker in enumerate(manual)})
+        selection_inputs = _selection_inputs(
+            tickers, state="strong", core_scores=core_scores, theme_scores=theme_scores)
+        selection_inputs["theme_selection_contract"] = _theme_selection_contract(
+            tickers, state="strong",
+            origin_by_ticker={ticker: "manual_watchlist" for ticker in manual})
+        out = self._run(_dc([_univ_row(ticker) for ticker in tickers],
+                            pass2={ticker: {} for ticker in tickers}, selection_inputs=selection_inputs))
+        theme_rows = [row for row in out["selection_details"] if row["selection_bucket"] == "theme_momentum"]
+        origins = [row["theme_selection"]["membership_origin"] for row in theme_rows]
+        self.assertGreaterEqual(origins.count("automatic_discovery"), 2)
+        self.assertLessEqual(origins.count("manual_watchlist"), 2)
+
+    def test_same_theme_crowding_cap_and_leader_upgrade_are_applied_before_analysis(self):
+        core = ["C%02d" % i for i in range(8)]
+        crowded = ["T%02d" % i for i in range(4)]
+        other = ["O%02d" % i for i in range(3)]
+        tickers = core + crowded + other
+        core_scores = {ticker: 100.0 - i for i, ticker in enumerate(core)}
+        core_scores.update({ticker: 10.0 for ticker in crowded + other})
+        theme_scores = {ticker: 1.0 for ticker in core}
+        theme_scores.update({ticker: 100.0 - i for i, ticker in enumerate(crowded + other)})
+        selection_inputs = _selection_inputs(
+            tickers, state="strong", core_scores=core_scores, theme_scores=theme_scores)
+        selection_inputs["theme_selection_contract"] = _theme_selection_contract(
+            tickers, state="strong",
+            theme_id_by_ticker={ticker: "industry:crowded" for ticker in crowded},
+            leader_rs_by_ticker={"T00": 10.0, "T01": 30.0, "T02": 20.0, "T03": 40.0,
+                                 "O00": 5.0, "O01": 4.0, "O02": 3.0},
+            overextension_by_ticker={"T03": "chasing_extreme"})
+        out = self._run(_dc([_univ_row(ticker) for ticker in tickers],
+                            pass2={ticker: {} for ticker in tickers}, selection_inputs=selection_inputs))
+        theme_rows = [row for row in out["selection_details"] if row["selection_bucket"] == "theme_momentum"]
+        self.assertLessEqual(sum(row["theme_selection"]["theme_id"] == "industry:crowded" for row in theme_rows), 3)
+        self.assertEqual(out["full_analysis_leader_upgrades"], ["T01", "T02"])
+
+    def test_provisional_theme_requires_enabled_mode_market_confirmation_and_individual_gate(self):
+        core = ["C%02d" % i for i in range(8)]
+        theme = ["BAD", "GOOD"]
+        tickers = core + theme
+        core_scores = {ticker: 100.0 - i for i, ticker in enumerate(core)}
+        core_scores.update({ticker: 10.0 for ticker in theme})
+        theme_scores = {ticker: 1.0 for ticker in core}
+        theme_scores.update({"BAD": 100.0, "GOOD": 99.0})
+        selection_inputs = _selection_inputs(
+            tickers, state="strong", core_scores=core_scores, theme_scores=theme_scores)
+        selection_inputs["theme_selection_contract"] = _theme_selection_contract(
+            tickers, state="strong", mode="provisional_cross_industry_enabled",
+            source_by_ticker={"BAD": "provisional_discovered", "GOOD": "provisional_discovered"},
+            market_confirmed_by_ticker={"BAD": False, "GOOD": True},
+            individual_gate_by_ticker={"BAD": False, "GOOD": True})
+        out = self._run(_dc([_univ_row(ticker) for ticker in tickers],
+                            pass2={ticker: {} for ticker in tickers}, selection_inputs=selection_inputs))
+        buckets = {row["ticker"]: row["selection_bucket"] for row in out["selection_details"]}
+        self.assertNotEqual(buckets.get("BAD"), "theme_momentum")
+        self.assertEqual(buckets.get("GOOD"), "theme_momentum")
 
     def test_missing_selection_input_for_pass2_clean_candidate_raises(self):
         with self.assertRaises(wp.WeekendPipelineError):

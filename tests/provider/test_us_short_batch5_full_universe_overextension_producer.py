@@ -33,7 +33,7 @@ RUNNER_MODULE = "runners.us_short_batch5_full_universe_overextension_producer"
 _GOV_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 _PRICE_BASIS_YMD = _USED_DATE  # "2026-06-12" — the OHLCV series as_of (== packet price_basis_date)
 _SESSION = "RTH"
-_ADJ = "split_div_adjusted"
+_ADJ = "split_adjusted"
 
 _SPECS = {
     "AAPL": {"cik": 320193, "exchange": "NASDAQ", "shares": 15_000_000_000, "price": 200.0, "adv_usd": 50_000_000.0},

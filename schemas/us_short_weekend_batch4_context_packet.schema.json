@@ -27,11 +27,41 @@
         "selection_inputs": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["theme_opportunity_state", "per_ticker"],
+          "required": ["theme_opportunity_state", "theme_selection_contract", "per_ticker"],
           "properties": {
             "theme_opportunity_state": {"type": "string"},
             "per_ticker": {"type": "object", "additionalProperties": {"type": "object"},
-                           "description": "Per-ticker selection-time scores keyed by ticker (e.g. core_score, theme_momentum_score)."}
+                           "description": "Per-ticker selection-time scores keyed by ticker (e.g. core_score, theme_momentum_score)."},
+            "theme_selection_contract": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["as_of", "mode", "cross_industry_provisional_enabled", "theme_opportunity_state", "per_ticker"],
+              "properties": {
+                "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                "mode": {"enum": ["industry_heat_v1_cross_industry_disabled", "provisional_cross_industry_enabled"]},
+                "cross_industry_provisional_enabled": {"type": "boolean"},
+                "theme_opportunity_state": {"type": "string"},
+                "per_ticker": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["theme_id", "theme_source", "theme_lifecycle_state", "theme_leader_rs", "membership_origin", "market_confirmed", "individual_theme_gate_passed", "overextension_state"],
+                    "properties": {
+                      "theme_id": {"type": "string", "minLength": 1},
+                      "theme_source": {"enum": ["industry_heat_v1", "provisional_discovered"]},
+                      "theme_lifecycle_state": {"enum": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
+                      "theme_leader_rs": {"type": "number"},
+                      "membership_origin": {"enum": ["automatic_discovery", "manual_watchlist"]},
+                      "market_confirmed": {"type": "boolean"},
+                      "individual_theme_gate_passed": {"type": "boolean"},
+                      "overextension_state": {"enum": ["none", "warning", "chasing_extreme"]}
+                    }
+                  },
+                  "description": "Decision-date, source-bound theme identity/lifecycle/seat-composition facts consumed before Top15. The default industry_heat_v1 mode explicitly leaves cross-industry discovery disabled."
+                }
+              }
+            }
           }
         }
       }
@@ -84,9 +114,11 @@
     "basket_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["per_ticker", "portfolio_guard_status", "theme_opportunity_state"],
+      "required": ["per_ticker", "holding_themes", "portfolio_guard_status", "theme_opportunity_state"],
       "properties": {
         "per_ticker": {"type": "object", "additionalProperties": {"type": "object"}},
+        "holding_themes": {"type": "object", "additionalProperties": {"type": "string"},
+          "description": "Current holding ticker-to-theme map for the final §8 total/same-theme dollar-cap gate; runtime reconciles it to account_state.positions."},
         "portfolio_guard_status": {"type": "string"},
         "theme_opportunity_state": {"type": "string"}
       }

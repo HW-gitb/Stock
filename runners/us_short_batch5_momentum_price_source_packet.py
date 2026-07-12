@@ -384,7 +384,7 @@ def _series_from_record(
     return {
         "as_of": source_as_of,
         "session": "RTH",
-        "adjustment_mode": "split_div_adjusted",
+        "adjustment_mode": "split_adjusted",
         "points": points,
     }
 
@@ -464,7 +464,7 @@ def _build_packet(
             "selected_symbols": selected_symbols,
             "benchmark_symbols": list(BENCHMARK_SYMBOLS),
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": min_points_per_series,
             "full_market_sample": False,
         },
@@ -621,7 +621,7 @@ def _build_summary(
             "selected_series_count": len(selected_symbols),
             "benchmark_symbols": list(BENCHMARK_SYMBOLS),
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": min_points_per_series,
             "lookback_calendar_days": lookback_calendar_days,
             "bar_counts_by_ticker": bar_counts_by_ticker,

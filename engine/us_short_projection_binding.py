@@ -57,7 +57,7 @@ def build_projection_binding(
     projection: Mapping[str, Any],
     source_artifact_paths: Mapping[str, Path],
     session: str = "RTH",
-    adjustment_mode: str = "massive_grouped_daily",
+    adjustment_mode: str = "split_adjusted",
 ) -> dict[str, Any]:
     if component not in _COMPONENTS:
         raise ValueError("projection binding component must be momentum or theme")
@@ -198,7 +198,7 @@ def validate_projection_binding(
     expected_producer_id: str | None = None,
     expected_source_roles: tuple[str, ...] | None = None,
     expected_session: str = "RTH",
-    expected_adjustment_mode: str = "massive_grouped_daily",
+    expected_adjustment_mode: str = "split_adjusted",
     allowed_dispositions: set[str] | frozenset[str] | None = None,
     scored_dispositions: set[str] | frozenset[str] | None = None,
 ) -> dict[str, Any]:

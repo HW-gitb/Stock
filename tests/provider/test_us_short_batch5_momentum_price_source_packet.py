@@ -169,7 +169,7 @@ class MomentumPriceSourcePacketProducerTest(unittest.TestCase):
         self.assertEqual(packet["schema_name"], "us_short_batch5_momentum_price_source_packet")
         self.assertTrue(packet["scope"]["network_access_performed_by_packet_producer"])
         self.assertEqual(set(packet["series_by_ticker"]), {"AAPL", "MSFT", "SPY", "QQQ"})
-        self.assertEqual(packet["series_contract"]["adjustment_mode"], "split_div_adjusted")
+        self.assertEqual(packet["series_contract"]["adjustment_mode"], "split_adjusted")
         self.assertEqual(packet["provenance_by_ticker"]["AAPL"]["provider_id"], "massive")
         self.assertEqual(len(packet["series_by_ticker"]["AAPL"]["points"]), 72)
 

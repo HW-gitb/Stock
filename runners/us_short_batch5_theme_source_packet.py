@@ -508,7 +508,7 @@ def _series_from_record(record: sample_validation.FetchRecord, *, min_points_per
     return {
         "as_of": deduped[-1]["date"],
         "session": "RTH",
-        "adjustment_mode": "split_div_adjusted",
+        "adjustment_mode": "split_adjusted",
         "points": deduped,
     }
 
@@ -617,7 +617,7 @@ def _build_packet(
             "selected_symbols": plan_context["selected_symbols"],
             "benchmark_symbols": list(BENCHMARK_SYMBOLS),
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": min_points,
             "membership_pool_basis": "full_gics_peer_pool_and_provisional_theme_members",
             "full_gics_peer_pool": True,
@@ -807,7 +807,7 @@ def _build_summary(
             "theme_member_count": theme_member_count,
             "benchmark_symbols": list(BENCHMARK_SYMBOLS),
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": plan_context["min_points_per_series"],
             "lookback_calendar_days": plan_context["lookback_calendar_days"],
             "corporate_action_reconciliation_performed": False,

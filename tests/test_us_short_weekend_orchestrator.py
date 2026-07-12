@@ -57,9 +57,35 @@ def _report_context():
     }
 
 
+def _theme_selection_contract(tickers, *, state="no_strong_theme"):
+    return {
+        "as_of": _DD,
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": False,
+        "theme_opportunity_state": state,
+        "per_ticker": {
+            t: {
+                "theme_id": f"industry:{t.lower()}", "theme_source": "industry_heat_v1",
+                "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                "membership_origin": "automatic_discovery", "market_confirmed": True,
+                "individual_theme_gate_passed": True, "overextension_state": "none",
+            }
+            for t in tickers
+        },
+    }
+
+
 def _selection_inputs(tickers):
     return {"theme_opportunity_state": "no_strong_theme",
+            "theme_selection_contract": _theme_selection_contract(tickers),
             "per_ticker": {t: {"core_score": 50.0, "theme_momentum_score": 0.0} for t in tickers}}
+
+
+def _account(positions=()):
+    return {"schema_name": "us_short_account_state", "schema_version": "1.0.0", "as_of": _DD,
+            "us_market_equity": 30000.0, "us_short_bucket_capital": 10000.0,
+            "us_short_available_cash": 4000.0, "positions": list(positions),
+            "manual_order_only": True, "broker_connection_allowed": False}
 
 
 _FAMS = ("universe", "per_ticker_analysis", "candidate_pass2_signals", "selection_inputs")
@@ -74,7 +100,7 @@ def _run_provenance(counts=None, observed="2026-06-13T08:00:00", *, as_of=_DD, p
         return [{"role": "test_fixture", "path": f"tests/fixtures/us_short/{n}.json"}]
     def price_fam(n):
         return {"as_of": as_of, "observed_at": observed, "price_basis_date": price_basis,
-                "session": "RTH", "adjustment": "split_div_adjusted", "row_count": counts[n],
+                "session": "RTH", "adjustment": "split_adjusted", "row_count": counts[n],
                 "source_refs": source_refs(n)}
     def nonprice_fam(n):
         return {"as_of": as_of, "observed_at": observed, "price_basis_date": None,
@@ -114,8 +140,9 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
         "prior_regime": None, "prior_upgrade_count": 0,
         "sizing_context": {"short_bucket_dollars": 10000.0, "per_ticker": {}},
-        "basket_context": {"per_ticker": {}, "portfolio_guard_status": "normal",
+        "basket_context": {"per_ticker": {}, "holding_themes": {}, "portfolio_guard_status": "normal",
                            "theme_opportunity_state": "no_strong_theme"},
+        "account_state": _account(),
         "cost_inputs": {}, "available_cash": 4000.0, "report_context": _report_context(),
         "lifecycle_register_path": reg_path, "lifecycle_readiness_out_path": None,
         "runs_private_root": runs_root, "weekly_private_root": weekly_root,
@@ -199,6 +226,62 @@ class EmptyRunEndToEnd(unittest.TestCase):
             self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
             self.assertIn("AAPL", action_csv)
 
+    def test_existing_holding_current_mark_reduces_total_cap_end_to_end(self):
+        # The final capacity stage must use the held name's same-run price_input.close, not avg_cost, before
+        # funding a new build.  50 × 110.5 plus the candidate's $1k single-name size exceeds the $6k total cap.
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(
+                reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                per_ticker_analysis={"AAPL": _analysis_row("AAPL"),
+                                     "HLD": _analysis_row("HLD", "holding_account_only")})
+            pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
+            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 50,
+                                               "avg_cost_usd": 1.0, "entry_date": "20260601"}])
+            pc["sizing_context"]["per_ticker"] = {
+                "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+            pc["basket_context"]["per_ticker"] = {
+                "AAPL": {"theme": "new_theme", "symbol_cooldown_status": "none",
+                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                                         "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+            pc["basket_context"]["holding_themes"] = {"HLD": "held_theme"}
+            pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
+                "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            by_ticker = {row["ticker"]: row for row in out["machine_record"]["rows"]}
+            self.assertEqual(by_ticker["AAPL"]["final_action"], "观察")
+            self.assertEqual(by_ticker["AAPL"]["observe_reason_type"], "capacity_or_budget_deferred")
+            self.assertEqual(by_ticker["AAPL"]["portfolio_capacity_status"], "deferred_total_cap")
+
+    def test_existing_holding_theme_reduces_theme_cap_end_to_end(self):
+        # The same account/price/theme chain is independently binding for the 30% theme cap: 20 × 110.5 plus
+        # the candidate's $1k size stays below total but exceeds the $3k canonical theme bucket.
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            pc = _pipeline_context(
+                reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                per_ticker_analysis={"AAPL": _analysis_row("AAPL"),
+                                     "HLD": _analysis_row("HLD", "holding_account_only")})
+            pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
+            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 20,
+                                               "avg_cost_usd": 1.0, "entry_date": "20260601"}])
+            pc["sizing_context"]["per_ticker"] = {
+                "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+            pc["basket_context"]["per_ticker"] = {
+                "AAPL": {"theme": " Software ", "symbol_cooldown_status": "none",
+                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                                         "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+            pc["basket_context"]["holding_themes"] = {"HLD": "software"}
+            pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
+                "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            by_ticker = {row["ticker"]: row for row in out["machine_record"]["rows"]}
+            self.assertEqual(by_ticker["AAPL"]["final_action"], "观察")
+            self.assertEqual(by_ticker["AAPL"]["observe_reason_type"], "capacity_or_budget_deferred")
+            self.assertEqual(by_ticker["AAPL"]["portfolio_capacity_status"], "deferred_theme_cap")
+
     def test_real_pass1_reject_drives_report_exclusion_count(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
             reg = Path(d) / "reg.json"
@@ -215,6 +298,9 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL", "holding_in_top15")})
             pc["data_context"]["holdings"] = [{"ticker": "AAPL", "signals": {}}]
+            pc["account_state"] = _account([{"ticker": "AAPL", "direction": "long", "shares": 1,
+                                               "avg_cost_usd": 100.0, "entry_date": "20260601"}])
+            pc["basket_context"]["holding_themes"] = {"AAPL": "software"}
             pc["report_context"]["coverage_inputs"] = [{"ticker": "AAPL", "row_source": "holding_in_top15",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
@@ -429,7 +515,9 @@ class SelectionRecordThreaded(unittest.TestCase):
 
     def test_selection_record_reaches_machine_record(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
-            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), self._build_ctx(d, rr, wr))
+            pc = self._build_ctx(d, rr, wr)
+            pc["data_context"]["selection_inputs"]["per_ticker"]["AAPL"]["theme_momentum_score"] = 1.0
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             rec = out["machine_record"]["rows"][0]["selection_record"]   # carried, not dropped
             self.assertEqual(rec["selection_rank"], 1)                   # AAPL is the top (only) Top15 name
             self.assertEqual(rec["selection_bucket"], "overlap")        # top in both core + theme rank → overlap
@@ -450,6 +538,9 @@ class SelectionRecordThreaded(unittest.TestCase):
             reg.write_text(json.dumps(_register()), encoding="utf-8")
             pc = _pipeline_context(reg, rr, wr, per_ticker_analysis={"HLD": _analysis_row("HLD", "holding_account_only")})
             pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
+            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 1,
+                                               "avg_cost_usd": 100.0, "entry_date": "20260601"}])
+            pc["basket_context"]["holding_themes"] = {"HLD": "software"}
             pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)

@@ -65,7 +65,7 @@
       "QQQ"
     ],
     "session": "RTH",
-    "adjustment_mode": "split_div_adjusted",
+    "adjustment_mode": "split_adjusted",
     "min_points_per_series": 64,
     "full_gics_peer_pool_consumed": true,
     "provisional_theme_membership_consumed": true,

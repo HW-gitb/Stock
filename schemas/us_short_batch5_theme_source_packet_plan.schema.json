@@ -113,7 +113,7 @@
         "price_provider_id": { "const": "massive" },
         "benchmark_symbols": { "const": ["SPY", "QQQ"] },
         "session": { "const": "RTH" },
-        "adjustment_mode": { "const": "split_div_adjusted" },
+        "adjustment_mode": { "const": "split_adjusted" },
         "min_points_per_series": { "type": "integer", "minimum": 64, "maximum": 3000 },
         "lookback_calendar_days": { "type": "integer", "minimum": 90, "maximum": 730 },
         "max_selected_symbols": { "const": 3 },

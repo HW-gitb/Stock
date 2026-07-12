@@ -164,6 +164,7 @@ def resolve_build_capacity(sized_result, *, basket_context):
                                                           "theme_probe": {"theme_lifecycle_state": str|None,
                                                               "high_confidence": bool, "coverage_status": str,
                                                               "no_gap_week": bool, "entry_in_band": bool}}},  # one per 建仓
+                      "holding_themes": {<canonical current holding ticker>: <non-blank str>},
                       "portfolio_guard_status": <frozen portfolio_guard state>,                                # account-level
                       "theme_opportunity_state": <frozen theme-opportunity state>}                             # account-level
 
@@ -182,10 +183,11 @@ def resolve_build_capacity(sized_result, *, basket_context):
         raise WeekendBasketError(f"market_risk_regime 非法（须 ∈ {sorted(WEEKLY_BUILD_LIMIT)}）: {regime!r}")
     weekly_limit = WEEKLY_BUILD_LIMIT[regime]
     if not (isinstance(basket_context, dict)
-            and set(basket_context) == {"per_ticker", "portfolio_guard_status", "theme_opportunity_state"}
-            and isinstance(basket_context["per_ticker"], dict)):
+            and set(basket_context) == {"per_ticker", "holding_themes", "portfolio_guard_status", "theme_opportunity_state"}
+            and isinstance(basket_context["per_ticker"], dict)
+            and isinstance(basket_context["holding_themes"], dict)):
         raise WeekendBasketError(
-            "basket_context 顶层键须恰为 {'per_ticker','portfolio_guard_status','theme_opportunity_state'} 且 per_ticker 为 dict（closed-world）")
+            "basket_context 顶层键须恰为 {'per_ticker','holding_themes','portfolio_guard_status','theme_opportunity_state'} 且两 map 为 dict（closed-world）")
     per_ticker = basket_context["per_ticker"]
     guard_blocks_new = _guard_blocks_new_entry(basket_context["portfolio_guard_status"])
     theme_opportunity_state = basket_context["theme_opportunity_state"]
@@ -198,7 +200,7 @@ def resolve_build_capacity(sized_result, *, basket_context):
     # must EXACTLY cover the canonical 建仓 set. A 建仓 blocked by the account portfolio_guard cooldown OR its
     # own per-symbol cooldown is recorded for a risk_cooldown downgrade and is NOT collected into the rankable
     # set (a cooled-down symbol must not consume a weekly / 同主题 slot).
-    ct_by_index, seen = {}, set()
+    ct_by_index, theme_by_index, seen = {}, {}, set()
     builds, build_tickers, blocked_indices = [], set(), set()
     for i, row in enumerate(sized_result["rows"]):
         if not (isinstance(row, dict) and isinstance(row.get("final_action"), str)):
@@ -240,10 +242,11 @@ def resolve_build_capacity(sized_result, *, basket_context):
                 f"per_ticker[{ct!r}].symbol_cooldown_status 非法（须 ∈ {list(SYMBOL_COOLDOWN_STATUSES)}）: {scs!r}")
         _validate_theme_probe_inputs(tinfo, ct)
         build_tickers.add(ct)
+        theme_by_index[i] = tinfo["theme"].strip().casefold()
         if guard_blocks_new or scs in _SYMBOL_COOLDOWN_BLOCKS_NEW:
             blocked_indices.add(i)            # §8 新建阻断 → risk_cooldown, removed before ranking
         else:
-            builds.append((i, ct, sr, tinfo["theme"].strip()))   # sr = preserved Top15 rank; STRIPPED theme — whitespace variants can't dodge the cap
+            builds.append((i, ct, sr, theme_by_index[i]))   # sr = preserved Top15 rank; strip+casefolded theme — spelling variants cannot dodge the cap
     if set(per_ticker) != build_tickers:
         raise WeekendBasketError(
             f"basket_context.per_ticker 须恰覆盖 建仓 ticker 集（无缺/无陈旧、canonical 键）: per_ticker={sorted(per_ticker)} builds={sorted(build_tickers)}")
@@ -284,8 +287,9 @@ def resolve_build_capacity(sized_result, *, basket_context):
         if row["final_action"] != _BUILD:
             out_rows.append({**row, "ticker": ct, "selection_rank": None})
             continue
+        capacity_row = {**row, "ticker": ct, "portfolio_theme": theme_by_index[i]}
         if i in blocked_indices:
-            out_rows.append({**row, "ticker": ct, "selection_rank": None,
+            out_rows.append({**capacity_row, "selection_rank": None,
                              "final_action": _OBSERVE, "observe_reason_type": _R_RISK_COOLDOWN})
         elif i in promoted:
             build_count += 1
@@ -296,13 +300,13 @@ def resolve_build_capacity(sized_result, *, basket_context):
             probe_sizing = {**orig_sizing, "desired_model_shares": MIN_EXECUTABLE_SHARES,
                             "reason": "theme_probe_forced_min",
                             "pre_probe_risk_shares": orig_sizing["desired_model_shares"]}
-            out_rows.append({**row, "ticker": ct, "selection_rank": rank_by_index[i],
+            out_rows.append({**capacity_row, "selection_rank": rank_by_index[i],
                              "sizing": probe_sizing, "theme_probe": promoted[i]})
         elif capped_by_index[i]:
-            out_rows.append({**row, "ticker": ct, "selection_rank": rank_by_index[i],
+            out_rows.append({**capacity_row, "selection_rank": rank_by_index[i],
                              "final_action": _OBSERVE, "observe_reason_type": _R_CAPACITY})
         else:
             build_count += 1
-            out_rows.append({**row, "ticker": ct, "selection_rank": rank_by_index[i]})
+            out_rows.append({**capacity_row, "selection_rank": rank_by_index[i]})
     return {"regime": sized_result["regime"], "rows": out_rows,
             "weekly_build_limit": weekly_limit, "build_count": build_count}

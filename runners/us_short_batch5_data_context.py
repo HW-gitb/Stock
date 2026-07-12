@@ -28,6 +28,7 @@ from engine.us_short_sec_offering_audit import (
     build_offering_audit_from_sec_submissions,
 )
 from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_score_inputs
+from engine.us_short_theme_selection import ThemeSelectionError, validate_theme_selection_contract
 from engine.us_short_weekend_pipeline import _select_top15
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
@@ -57,7 +58,7 @@ UNIVERSE_ROW_KEYS = (
     "bankruptcy",
     "otc",
 )
-SELECTION_INPUT_KEYS = {"theme_opportunity_state", "per_ticker"}
+SELECTION_INPUT_KEYS = {"theme_opportunity_state", "theme_selection_contract", "per_ticker"}
 SELECTION_ROW_KEYS = {"core_score", "theme_momentum_score"}
 PASS2_SOURCE_KEYS = {"offering_audit"}
 PASS2_SOURCE_DISPOSITIONS = ("signals", "checked", "excluded")
@@ -70,6 +71,7 @@ SOURCE_REF_PATH_KEYS = (
     "analyst_grade_actions_path",
     "massive_news_events_path",
     "catalyst_governance_path",
+    "theme_selection_contract_path",
 )
 OPTIONAL_SOURCE_REF_PATH_KEYS = ("overextension_projection_path", "yfinance_grade_actions_path")
 _SOURCE_REF_ROLE_BY_PATH_KEY = {
@@ -86,6 +88,7 @@ _FAMILY_SOURCE_REF_ROLES = {
         "analyst_grade_actions",
         "massive_news_events",
         "catalyst_governance",
+        "theme_selection_contract",
     ),
     "per_ticker_analysis": (
         "candidate_artifact",
@@ -230,7 +233,7 @@ def _provenance_family(
         "observed_at": observed_at,
         "price_basis_date": price_basis_date,
         "session": "RTH" if price_bearing else None,
-        "adjustment": "split_div_adjusted" if price_bearing else None,
+        "adjustment": "split_adjusted" if price_bearing else None,
         "row_count": row_count,
         "source_refs": source_refs,
     }
@@ -456,6 +459,8 @@ def _validate_score_composition(
     score_composition: Any,
     *,
     expected_pass2_clean: list[str],
+    expected_decision_date: str | None = None,
+    theme_selection_contract: Any = None,
 ) -> dict[str, Any]:
     if type(score_composition) is not dict:
         _fail("score_composition must be an exact dict")
@@ -484,12 +489,17 @@ def _validate_score_composition(
         if keys != expected:
             _fail(f"score_composition.{family} must exactly cover target_tickers")
 
-    return _validated_selection_inputs(score_composition["selection_inputs"], expected_tickers=expected)
+    return _validated_selection_inputs(
+        score_composition["selection_inputs"], expected_tickers=expected,
+        expected_decision_date=expected_decision_date, theme_selection_contract=theme_selection_contract)
 
 
-def _validated_selection_inputs(value: Any, *, expected_tickers: set[str]) -> dict[str, Any]:
-    if type(value) is not dict or set(value) != SELECTION_INPUT_KEYS:
-        _fail("score_composition.selection_inputs must use the Batch4 closed-world shape")
+def _validated_selection_inputs(
+    value: Any, *, expected_tickers: set[str], expected_decision_date: str | None = None,
+    theme_selection_contract: Any = None,
+) -> dict[str, Any]:
+    if type(value) is not dict or set(value) != {"theme_opportunity_state", "per_ticker"}:
+        _fail("score_composition.selection_inputs must use the score-only closed-world shape")
     state = value["theme_opportunity_state"]
     if type(state) is not str:
         _fail("selection_inputs.theme_opportunity_state must be exact str")
@@ -512,7 +522,28 @@ def _validated_selection_inputs(value: Any, *, expected_tickers: set[str]) -> di
         }
     if set(out_per) != expected_tickers:
         _fail("selection_inputs.per_ticker must exactly cover score target_tickers")
-    return {"theme_opportunity_state": state, "per_ticker": out_per}
+    if theme_selection_contract is None:
+        return {"theme_opportunity_state": state, "per_ticker": out_per}
+    if expected_decision_date is None:
+        _fail("theme selection contract requires expected_decision_date")
+    try:
+        theme_contract = validate_theme_selection_contract(
+            theme_selection_contract, expected_tickers=expected_tickers,
+            decision_date=expected_decision_date, theme_opportunity_state=state)
+    except ThemeSelectionError as exc:
+        _fail(f"theme selection contract rejected: {exc}")
+    return {
+        "theme_opportunity_state": state,
+        "theme_selection_contract": {
+            "as_of": expected_decision_date,
+            "mode": theme_contract["mode"],
+            "cross_industry_provisional_enabled": (
+                theme_contract["mode"] == "provisional_cross_industry_enabled"),
+            "theme_opportunity_state": state,
+            "per_ticker": theme_contract["per_ticker"],
+        },
+        "per_ticker": out_per,
+    }
 
 
 def _prepare_context_inputs(
@@ -591,6 +622,7 @@ def assemble_data_context(
     score_composition: dict[str, Any],
     candidate_pass2_signals: dict[str, Any] | None,
     pass2_sources: dict[str, Any] | None = None,
+    theme_selection_contract: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
 ) -> dict[str, Any]:
@@ -616,6 +648,8 @@ def assemble_data_context(
     selection_inputs = _validate_score_composition(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],
+        expected_decision_date=expected_decision_date,
+        theme_selection_contract=theme_selection_contract,
     )
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
@@ -753,6 +787,7 @@ def assemble_data_context_with_analyst_grade_risk(
     theme_opportunity_state: str,
     candidate_pass2_signals: dict[str, Any] | None,
     pass2_sources: dict[str, Any] | None = None,
+    theme_selection_contract: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
@@ -790,6 +825,8 @@ def assemble_data_context_with_analyst_grade_risk(
     selection_inputs = _validate_score_composition(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],
+        expected_decision_date=expected_decision_date,
+        theme_selection_contract=theme_selection_contract,
     )
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
@@ -806,6 +843,7 @@ def assemble_data_context_with_massive_news_catalyst(
     theme_opportunity_state: str,
     candidate_pass2_signals: dict[str, Any] | None,
     pass2_sources: dict[str, Any] | None = None,
+    theme_selection_contract: dict[str, Any] | None = None,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
@@ -845,6 +883,8 @@ def assemble_data_context_with_massive_news_catalyst(
     selection_inputs = _validate_score_composition(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],
+        expected_decision_date=expected_decision_date,
+        theme_selection_contract=theme_selection_contract,
     )
     return _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings)
 
@@ -861,6 +901,7 @@ def _assemble_resolved_pass2_source_context(
     massive_news_events: dict[str, Any],
     catalyst_governance: dict[str, Any],
     theme_opportunity_state: str,
+    theme_selection_contract: dict[str, Any],
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
@@ -899,6 +940,8 @@ def _assemble_resolved_pass2_source_context(
     selection_inputs = _validate_score_composition(
         score_composition,
         expected_pass2_clean=prepared["pass2_clean"],
+        expected_decision_date=expected_decision_date,
+        theme_selection_contract=theme_selection_contract,
     )
     return (
         _assembled_context_from_prepared(prepared, selection_inputs=selection_inputs, holdings=holdings),
@@ -919,6 +962,7 @@ def assemble_data_context_from_resolved_pass2_sources(
     massive_news_events: dict[str, Any],
     catalyst_governance: dict[str, Any],
     theme_opportunity_state: str,
+    theme_selection_contract: dict[str, Any],
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
@@ -939,6 +983,7 @@ def assemble_data_context_from_resolved_pass2_sources(
         massive_news_events=massive_news_events,
         catalyst_governance=catalyst_governance,
         theme_opportunity_state=theme_opportunity_state,
+        theme_selection_contract=theme_selection_contract,
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
         overextension_by_ticker=overextension_by_ticker,
@@ -946,8 +991,14 @@ def assemble_data_context_from_resolved_pass2_sources(
     return data_context
 
 
-def _official_top15_tickers(selection_inputs: dict[str, Any]) -> list[str]:
-    return list(_select_top15(list(selection_inputs["per_ticker"]), selection_inputs)["admitted"])
+def _official_top15_tickers(selection_inputs: dict[str, Any], *, decision_date: str) -> list[str]:
+    return list(
+        _select_top15(
+            list(selection_inputs["per_ticker"]),
+            selection_inputs,
+            decision_date=decision_date,
+        )["admitted"]
+    )
 
 
 def _holding_signal_row(holding: dict[str, Any], candidate_pass2_signals: dict[str, dict[str, Any]]) -> dict[str, Any]:
@@ -964,12 +1015,14 @@ def _holding_signal_row(holding: dict[str, Any], candidate_pass2_signals: dict[s
 
 def _official_per_ticker_analysis(
     score_composition: dict[str, Any],
+    selection_inputs: dict[str, Any],
+    decision_date: str,
     holdings: list[dict[str, Any]],
     candidate_pass2_signals: dict[str, dict[str, Any]],
     scoped_overextension: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    selected = _official_top15_tickers(score_composition["selection_inputs"])
+    selected = _official_top15_tickers(selection_inputs, decision_date=decision_date)
     holding_by_ticker = {row["ticker"]: row for row in holdings}
     analysis_by_ticker = score_composition["analysis_by_ticker"]
     for ticker in selected:
@@ -1027,6 +1080,7 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     massive_news_events: dict[str, Any],
     catalyst_governance: dict[str, Any],
     theme_opportunity_state: str,
+    theme_selection_contract: dict[str, Any],
     source_ref_paths: dict[str, Any],
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
@@ -1056,17 +1110,24 @@ def assemble_official_context_components_from_resolved_pass2_sources(
         massive_news_events=massive_news_events,
         catalyst_governance=catalyst_governance,
         theme_opportunity_state=theme_opportunity_state,
+        theme_selection_contract=theme_selection_contract,
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
         overextension_by_ticker=overextension_by_ticker,
     )
     per_ticker_analysis = _official_per_ticker_analysis(
         score_composition,
+        data_context["selection_inputs"],
+        expected_decision_date,
         data_context["holdings"],
         data_context["candidate_pass2_signals"],
         scoped_overextension,
     )
-    expected_analysis_tickers = set(_official_top15_tickers(data_context["selection_inputs"])) | {
+    expected_analysis_tickers = set(
+        _official_top15_tickers(
+            data_context["selection_inputs"], decision_date=expected_decision_date,
+        )
+    ) | {
         row["ticker"] for row in data_context["holdings"]
     }
     if set(per_ticker_analysis) != expected_analysis_tickers:
@@ -1140,6 +1201,7 @@ def assemble_data_context_from_sec_offering_submissions(
     offering_submissions_by_ticker: Any,
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
+    theme_selection_contract: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Assemble Batch4 data_context directly from injected SEC company-submissions payloads.
 
@@ -1163,4 +1225,5 @@ def assemble_data_context_from_sec_offering_submissions(
         pass2_sources={"offering_audit": offering_source},
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
+        theme_selection_contract=theme_selection_contract,
     )

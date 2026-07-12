@@ -36,11 +36,12 @@ PRICE_BEARING_FAMILIES = frozenset({"universe", "per_ticker_analysis"})
 NON_PRICE_FAMILIES = frozenset({"candidate_pass2_signals", "selection_inputs"})
 EXPECTED_FAMILIES = PRICE_BEARING_FAMILIES | NON_PRICE_FAMILIES
 
-# §2.1 fixes the official price clock to RTH; price lineage must declare a CONFIRMED adjustment mode — a
-# price-family declaring an equal-but-illegal session/adjustment (e.g. ETH / unknown_raw) is rejected, not
-# accepted just because both price families agree (R-USSHORT-BATCH4-PIPELINE-...: approved-vocab guard).
+# §2.1 fixes the official price clock to RTH. Current Massive `adjusted=true` evidence confirms split adjustment
+# only; dividend reconciliation remains separately unconfirmed, so `split_div_adjusted` must never be fabricated.
+# A price family declaring an equal-but-illegal session/adjustment is rejected, not accepted just because both
+# price families agree (R-USSHORT-BATCH4-PIPELINE-...: approved-vocab guard).
 APPROVED_SESSIONS = frozenset({"RTH"})
-APPROVED_ADJUSTMENTS = frozenset({"split_div_adjusted"})
+APPROVED_ADJUSTMENTS = frozenset({"split_adjusted"})
 
 _FAMILY_COMMON_KEYS = frozenset({"as_of", "observed_at", "price_basis_date", "session", "adjustment", "row_count", "source_refs"})
 _PRICE_FAMILY_KEYS = _FAMILY_COMMON_KEYS

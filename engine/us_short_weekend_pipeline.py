@@ -35,10 +35,18 @@ from engine.us_short_eligibility_gate import (
     validate_eligibility_governance,
 )
 from engine.us_short_selection_exclusions import pass1_category, pass2_category
+from engine.us_short_dynamic_seats import strong_theme_leader_upgrade_max
+from engine.us_short_theme_selection import (
+    MANUAL_WATCHLIST_MAX,
+    ThemeSelectionError,
+    strong_theme_leader_upgrades,
+    theme_seat_plan,
+    validate_theme_selection_contract,
+)
 
 _REQUIRED_DATA_CONTEXT_KEYS = {
     "universe", "catalyst_recall_feed", "holdings", "candidate_pass2_signals", "selection_inputs"}
-_SELECTION_INPUT_KEYS = {"theme_opportunity_state", "per_ticker"}
+_SELECTION_INPUT_KEYS = {"theme_opportunity_state", "theme_selection_contract", "per_ticker"}
 _SELECTION_ROW_KEYS = {"core_score", "theme_momentum_score"}
 
 
@@ -78,7 +86,7 @@ def _score_0_100(value, where):
     return score
 
 
-def _select_top15(admitted_candidates, selection_inputs):
+def _select_top15(admitted_candidates, selection_inputs, *, decision_date):
     """Apply §4.5 dynamic Top15 seats to the Pass2-clean candidate set.
 
     The injected `selection_inputs` must canonically cover Pass2-clean admitted candidates exactly. This keeps
@@ -116,6 +124,12 @@ def _select_top15(admitted_candidates, selection_inputs):
         raise WeekendPipelineError(
             f"selection_inputs.theme_opportunity_state 须为 exact str: {type(state).__name__}")
     seats = selection_seats(state)
+    try:
+        theme_contract = validate_theme_selection_contract(
+            selection_inputs["theme_selection_contract"], expected_tickers=admitted_candidates,
+            decision_date=decision_date, theme_opportunity_state=state)
+    except ThemeSelectionError as exc:
+        raise WeekendPipelineError(f"theme selection contract rejected: {exc}") from exc
     target_total = min(SELECTION_SEAT_TOTAL, len(admitted_candidates))
     core_rank = sorted(admitted_candidates, key=lambda t: (-scores[t]["core_score"], t))
     theme_rank = sorted(admitted_candidates,
@@ -127,22 +141,59 @@ def _select_top15(admitted_candidates, selection_inputs):
             selected.append(ticker)
             details[ticker] = {"ticker": ticker, "selection_bucket": bucket,
                                "core_score": scores[ticker]["core_score"],
-                               "theme_momentum_score": scores[ticker]["theme_momentum_score"]}
+                               "theme_momentum_score": scores[ticker]["theme_momentum_score"],
+                               "theme_selection": dict(theme_contract["per_ticker"][ticker]),
+                               "full_analysis_leader_upgrade": False}
         elif bucket == "overlap":
             details[ticker]["selection_bucket"] = "overlap"
 
     for ticker in core_rank[:seats["core_top"]]:
         add(ticker, "core_top")
 
-    theme_added = 0
-    for ticker in theme_rank:
+    try:
+        theme_plan = theme_seat_plan(
+            metadata_by_ticker=theme_contract["per_ticker"], scores_by_ticker=scores,
+            theme_seat_budget=seats["theme_momentum"])
+    except ThemeSelectionError as exc:
+        raise WeekendPipelineError(f"theme selection actions rejected: {exc}") from exc
+    theme_added, automatic_added, manual_added = 0, 0, 0
+    theme_counts = {}
+
+    def add_theme(ticker):
+        nonlocal theme_added, automatic_added, manual_added
+        meta = theme_contract["per_ticker"][ticker]
         if ticker in details:
-            add(ticker, "overlap")  # same row, theme seat rolls forward to the next theme-ranked name
-            continue
+            # A core-selected name is an overlap and rolls the theme seat forward. A name already accepted by
+            # the automatic-reserve pass is a real theme seat, not a later overlap merely because the general
+            # pass sees it again.
+            if details[ticker]["selection_bucket"] == "core_top":
+                add(ticker, "overlap")
+            return False
+        if meta["membership_origin"] == "manual_watchlist" and manual_added >= MANUAL_WATCHLIST_MAX:
+            return False
+        theme_id = meta["theme_id"]
+        if theme_counts.get(theme_id, 0) >= theme_plan["theme_limits"][theme_id]:
+            return False
         add(ticker, "theme_momentum")
+        theme_counts[theme_id] = theme_counts.get(theme_id, 0) + 1
         theme_added += 1
+        if meta["membership_origin"] == "automatic_discovery":
+            automatic_added += 1
+        else:
+            manual_added += 1
+        return True
+
+    # §4.5 composition: reserve up to two actual theme seats for automatic discovery before manual watchlist
+    # rows compete. If fewer than two eligible automatic names exist, the later general pass backfills normally.
+    automatic_target = min(2, seats["theme_momentum"])
+    for ticker in theme_plan["automatic"]:
+        if theme_added >= seats["theme_momentum"] or automatic_added >= automatic_target:
+            break
+        add_theme(ticker)
+    for ticker in theme_plan["ranked"]:
         if theme_added >= seats["theme_momentum"]:
             break
+        add_theme(ticker)
 
     for ticker in core_rank:
         if len(selected) >= target_total:
@@ -151,7 +202,19 @@ def _select_top15(admitted_candidates, selection_inputs):
             add(ticker, "core_backfill")
 
     selected = selected[:target_total]
+    selection_ranks = {ticker: i for i, ticker in enumerate(selected, start=1)}
+    try:
+        leader_upgrades = strong_theme_leader_upgrades(
+            selected_tickers=selected, metadata_by_ticker=theme_contract["per_ticker"],
+            selection_ranks=selection_ranks, theme_opportunity_state=state,
+            maximum=strong_theme_leader_upgrade_max(state))
+    except ThemeSelectionError as exc:
+        raise WeekendPipelineError(f"theme leader-upgrade action rejected: {exc}") from exc
+    for ticker in leader_upgrades:
+        details[ticker]["full_analysis_leader_upgrade"] = True
     return {"admitted": selected, "selection_seats": seats,
+            "theme_selection_mode": theme_contract["mode"],
+            "full_analysis_leader_upgrades": leader_upgrades,
             "selection_details": [{**details[t], "selection_rank": i}
                                   for i, t in enumerate(selected, start=1)]}
 
@@ -191,7 +254,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
             "cheap_eligible": [], "candidates": [], "recall_available": False, "recall_added": [],
             "recall_excluded": [],
             "exclusion_records": [],
-            "admitted": [], "selection_seats": None, "selection_details": [], "holdings": [],
+            "admitted": [], "selection_seats": None, "theme_selection_mode": None,
+            "full_analysis_leader_upgrades": [], "selection_details": [], "holdings": [],
         }
 
     gov = validate_eligibility_governance(eligibility_governance)
@@ -257,7 +321,7 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
                 "stage": "pass2_audit_gate", "ticker": ticker,
                 "category": pass2_category(verdict["reasons"]), "reasons": list(verdict["reasons"]),
             })
-    top15 = _select_top15(pass2_admitted, dc["selection_inputs"])
+    top15 = _select_top15(pass2_admitted, dc["selection_inputs"], decision_date=canon["decision_date"])
     selected_set = set(top15["admitted"])
     for ticker in pass2_admitted:
         if ticker not in selected_set:
@@ -293,6 +357,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
         "exclusion_records": exclusion_records,
         "admitted": top15["admitted"],
         "selection_seats": top15["selection_seats"],
+        "theme_selection_mode": top15["theme_selection_mode"],
+        "full_analysis_leader_upgrades": top15["full_analysis_leader_upgrades"],
         "selection_details": top15["selection_details"],
         "holdings": holdings,
     }

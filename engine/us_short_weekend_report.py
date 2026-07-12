@@ -57,6 +57,7 @@ from engine.us_short_run_origin import (
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
+from engine.us_short_theme_selection import THEME_SELECTION_MODES
 from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekly_report_renderer import render_weekly_report
 
@@ -279,6 +280,26 @@ def _rows_section(rows, label):
     return rows if rows else ["%s：无" % label]
 
 
+def _theme_selection_status(selection):
+    """Render the source-bound Top15 theme mode; never infer cross-industry discovery from a theme score."""
+    if not isinstance(selection, dict):
+        raise WeekendReportError("selection must be a dict")
+    mode = selection.get("theme_selection_mode")
+    upgrades = selection.get("full_analysis_leader_upgrades")
+    if mode not in THEME_SELECTION_MODES:
+        raise WeekendReportError("selection.theme_selection_mode is missing or invalid")
+    if not isinstance(upgrades, list) or any(
+        not isinstance(ticker, str) or canonical_us_ticker(ticker) != ticker for ticker in upgrades
+    ) or len(set(upgrades)) != len(upgrades):
+        raise WeekendReportError("selection.full_analysis_leader_upgrades must be unique canonical tickers")
+    if mode == "industry_heat_v1_cross_industry_disabled":
+        mode_line = "industry heat v1；cross-industry path disabled"
+    else:
+        mode_line = "source-bound provisional cross-industry gate enabled"
+    return "主题选择=%s（%s）；Top6-15 龙头完整分析升级=%s" % (
+        mode, mode_line, ",".join(upgrades) if upgrades else "无")
+
+
 def build_weekly_report(machine_record, lifecycle_result, *, report_context, run_context, stage_status, selection,
                         run_origin=OFFLINE_TEST_RUN_ORIGIN, research_live_capability=None):
     """4d-ii-m2 §11.2 weekly_report assembly + render.
@@ -315,6 +336,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     rows = flat["rows"]
     # §2.1 / §11: reconcile ONE canonical decision_date across every official-report artifact before rendering,
     # so the report can never stitch rows / lifecycle / price clock / exclusions from different weeks.
+    theme_selection_status = _theme_selection_status(selection)
     exclusion_data = build_selection_exclusion_data(selection)
     _reconcile_decision_date(flat.get("as_of"), report_context["price_clock"], lifecycle_result, exclusion_data)
     _reconcile_price_clock(flat.get("as_of"), report_context["price_clock"], run_context)
@@ -389,7 +411,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
         # carries NO contradicting prose (R-USSHORT-BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP).
         2: ["账户组合风险闸: portfolio_guard=%s（结构化、权威，无自由文本状态）" % stage_status["portfolio_guard_status"]],
         3: ["市场环境 两轴: market_risk_regime=%s / theme_opportunity_state=%s"
-            % (regime_value or "·", stage_status["theme_opportunity_state"])],
+            % (regime_value or "·", stage_status["theme_opportunity_state"]), theme_selection_status],
         4: _as_lines(report_context["core_conclusion"], "core_conclusion"),
         5: _rows_section([_one_glance(r) for r in actionable], "最终操作表"),
         6: _rows_section([_one_glance(r) for r in holdings], "当前持仓复核") + coverage_lines,

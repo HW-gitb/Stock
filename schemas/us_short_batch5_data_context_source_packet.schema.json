@@ -10,6 +10,7 @@
     "generated_at",
     "scope",
     "decision_clock",
+    "source_artifact_sha256",
     "paths",
     "optional_inputs",
     "preflight_gates",
@@ -20,7 +21,7 @@
       "const": "us_short_batch5_data_context_source_packet"
     },
     "schema_version": {
-      "const": "1.0.0"
+      "const": "1.2.0"
     },
     "generated_at": {
       "type": "string",
@@ -100,6 +101,38 @@
         }
       }
     },
+    "source_artifact_sha256": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offering_audit_source_path",
+        "analyst_grade_actions_path",
+        "massive_news_events_path"
+        ,"theme_selection_contract_path"
+      ],
+      "properties": {
+        "offering_audit_source_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "analyst_grade_actions_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "massive_news_events_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "theme_selection_contract_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "yfinance_grade_actions_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
     "paths": {
       "type": "object",
       "additionalProperties": false,
@@ -112,6 +145,7 @@
         "analyst_grade_actions_path",
         "massive_news_events_path",
         "catalyst_governance_path",
+        "theme_selection_contract_path",
         "output_data_context_path"
       ],
       "properties": {
@@ -152,6 +186,10 @@
           "minLength": 1
         },
         "catalyst_governance_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "theme_selection_contract_path": {
           "type": "string",
           "minLength": 1
         },

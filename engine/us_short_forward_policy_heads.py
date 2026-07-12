@@ -133,6 +133,25 @@ def _validated_composition(score_composition):
     return comp, targets, analysis, selection
 
 
+def _source_theme_selection_contract(data_context, *, primary_selection: dict) -> dict:
+    """Return the source-bound theme contract after rejecting a mismatched shadow base."""
+    context = _exact_dict(data_context, where="data_context")
+    if "selection_inputs" not in context:
+        raise ForwardPolicyHeadError("data_context must carry selection_inputs")
+    source_selection = _exact_dict(context["selection_inputs"], where="data_context.selection_inputs")
+    expected = {"theme_opportunity_state", "theme_selection_contract", "per_ticker"}
+    if set(source_selection) != expected:
+        raise ForwardPolicyHeadError("data_context selection_inputs must use the canonical three-key shape")
+    if source_selection["theme_opportunity_state"] != primary_selection["theme_opportunity_state"]:
+        raise ForwardPolicyHeadError("data_context theme opportunity state drifted from score composition")
+    if source_selection["per_ticker"] != primary_selection["per_ticker"]:
+        raise ForwardPolicyHeadError("data_context selection rows drifted from score composition")
+    return _exact_dict(
+        source_selection["theme_selection_contract"],
+        where="data_context.selection_inputs.theme_selection_contract",
+    )
+
+
 def _validated_stripped_targets(overextension_by_ticker, targets: tuple[str, ...]) -> set[str]:
     rows = _exact_dict(overextension_by_ticker, where="overextension_by_ticker")
     if set(rows) != set(targets):
@@ -189,7 +208,7 @@ def _score_for_policy(policy_id: str, analysis_row: dict, *, stripped: bool) -> 
     return score["core_score"], _theme_seat_score(score, strip=strip, policy_id=policy_id)
 
 
-def build_selection_policy_heads(score_composition, *, overextension_by_ticker) -> dict:
+def build_selection_policy_heads(score_composition, *, overextension_by_ticker, theme_selection_contract) -> dict:
     """Return every A1 immediate selection head from one frozen primary composition.
 
     The output maps policy id to the exact ``selection_inputs`` shape consumed by
@@ -197,6 +216,7 @@ def build_selection_policy_heads(score_composition, *, overextension_by_ticker) 
     the live caller must record it as its shadow output at the decision time.
     """
     _, targets, analysis, selection = _validated_composition(score_composition)
+    source_contract = _exact_dict(theme_selection_contract, where="theme_selection_contract")
     stripped_targets = _validated_stripped_targets(overextension_by_ticker, targets)
     heads: dict[str, dict] = {}
     for policy_id in SELECTION_POLICY_IDS:
@@ -206,6 +226,7 @@ def build_selection_policy_heads(score_composition, *, overextension_by_ticker) 
             per_ticker[ticker] = {"core_score": core, "theme_momentum_score": theme}
         heads[policy_id] = {
             "theme_opportunity_state": selection["theme_opportunity_state"],
+            "theme_selection_contract": copy.deepcopy(source_contract),
             "per_ticker": per_ticker,
         }
     return heads
@@ -220,7 +241,15 @@ def build_selection_policy_decisions(*, now_et, sessions, data_context, eligibil
     eligibility, Pass2 veto, dynamic-seat, and tie-break semantics to the single
     authoritative ``run_selection`` engine.
     """
-    heads = build_selection_policy_heads(score_composition, overextension_by_ticker=overextension_by_ticker)
+    _, _, _, primary_selection = _validated_composition(score_composition)
+    source_contract = _source_theme_selection_contract(
+        data_context, primary_selection=primary_selection,
+    )
+    heads = build_selection_policy_heads(
+        score_composition,
+        overextension_by_ticker=overextension_by_ticker,
+        theme_selection_contract=source_contract,
+    )
     decisions: dict[str, dict] = {}
     for policy_id, selection_inputs in heads.items():
         context = copy.deepcopy(data_context)

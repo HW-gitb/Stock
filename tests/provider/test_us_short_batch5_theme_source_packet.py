@@ -99,7 +99,7 @@ def _plan(*, selected=("AAPL", "JPM")) -> dict:
             "price_provider_id": "massive",
             "benchmark_symbols": ["SPY", "QQQ"],
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": 64,
             "lookback_calendar_days": 140,
             "max_selected_symbols": 3,

@@ -98,7 +98,7 @@ def _dates(n: int, *, as_of: str = _PRICE_BASIS_YMD) -> list[str]:
 
 
 def _series(*, start: float, step: float, n: int = 72, as_of: str = _PRICE_BASIS_YMD,
-            session: str = "RTH", adjustment_mode: str = "massive_grouped_daily") -> dict:
+            session: str = "RTH", adjustment_mode: str = "split_adjusted") -> dict:
     return {
         "as_of": as_of,
         "session": session,
@@ -123,7 +123,7 @@ def _base_series_map() -> dict:
     }
 
 
-def _series_packet(series_map, *, session: str = "RTH", adjustment_mode: str = "massive_grouped_daily",
+def _series_packet(series_map, *, session: str = "RTH", adjustment_mode: str = "split_adjusted",
                    grouped_session_count: int = 90, provider_id: str = "massive",
                    as_of: str = _PRICE_BASIS_YMD) -> dict:
     return {
@@ -236,7 +236,7 @@ class FullUniverseMomentumProducerTest(unittest.TestCase):
         self.assertEqual(binding["schema_name"], "us_short_score_projection_binding")
         self.assertEqual(binding["decision_clock"]["source_as_of"], _PRICE_BASIS_YMD)
         self.assertEqual(binding["source_contract"]["session"], "RTH")
-        self.assertEqual(binding["source_contract"]["adjustment_mode"], "massive_grouped_daily")
+        self.assertEqual(binding["source_contract"]["adjustment_mode"], "split_adjusted")
         self.assertEqual([row["role"] for row in binding["source_artifacts"]], ["candidate_artifact", "momentum_series_packet"])
         self.assertEqual(projection["target_count"], 5)
         self.assertEqual(projection["scored_count"], 2)

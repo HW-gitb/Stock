@@ -56,7 +56,7 @@ def _series(*, start: float, step: float, volume_start: float, volume_step: floa
     return {
         "as_of": as_of,
         "session": "RTH",
-        "adjustment_mode": "split_div_adjusted",
+        "adjustment_mode": "split_adjusted",
         "points": [
             {"date": date, "close": start + (idx * step), "volume": volume_start + (idx * volume_step)}
             for idx, date in enumerate(_dates(72, as_of=as_of))
@@ -130,7 +130,7 @@ def _source_packet(*, selected=("AAPL", "JPM"), selected_only: bool = False) -> 
             "selected_symbols": list(selected),
             "benchmark_symbols": ["SPY", "QQQ"],
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": 64,
             "membership_pool_basis": "full_gics_peer_pool_and_provisional_theme_members",
             "full_gics_peer_pool": not selected_only,

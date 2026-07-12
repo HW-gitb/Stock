@@ -174,6 +174,24 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
                 candidate_path=self.paths["candidate"], component="theme",
             ),
         )
+        _write_json(
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json"),
+            {
+                "as_of": _DECISION_DATE,
+                "mode": "industry_heat_v1_cross_industry_disabled",
+                "cross_industry_provisional_enabled": False,
+                "theme_opportunity_state": "no_strong_theme",
+                "per_ticker": {
+                    ticker: {
+                        "theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                        "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                        "membership_origin": "automatic_discovery", "market_confirmed": True,
+                        "individual_theme_gate_passed": True, "overextension_state": "none",
+                    }
+                    for ticker in ("AAPL", "MSFT")
+                },
+            },
+        )
 
     def tearDown(self):
         cleanup = [
@@ -185,6 +203,7 @@ class UsShortBatch5LiveSourcePacketTest(unittest.TestCase):
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_offering_audit_source.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_analyst_grade_actions.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_massive_news_events.json"),
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_source_packet.json"),
             self.paths["summary"],
         ]

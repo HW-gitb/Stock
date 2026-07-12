@@ -42,7 +42,7 @@ def _dates(n, as_of=_AS_OF):
     return [(end - timedelta(days=(n - 1 - i))).isoformat() for i in range(n)]
 
 
-def _series(closes, *, as_of=_AS_OF, session="RTH", adjustment_mode="split_div_adjusted",
+def _series(closes, *, as_of=_AS_OF, session="RTH", adjustment_mode="split_adjusted",
             volumes=None, dates=None):
     """Build a PIT-bearing dated series from a closes list (+ optional volumes / explicit dates)."""
     n = len(closes)
@@ -267,7 +267,7 @@ class TestPitAlignment(unittest.TestCase):
 
     def test_adjustment_mismatch_omits_rel(self):
         out = compute_momentum_features(
-            _series(_rising(30), adjustment_mode="split_div_adjusted"),
+            _series(_rising(30), adjustment_mode="split_adjusted"),
             spy_series=_series(_rising(30), adjustment_mode="raw"))
         self.assertEqual(out["alignment"]["rel_spy_1m"], "adjustment_mismatch")
         self.assertNotIn("rel_spy_1m", out["features"])

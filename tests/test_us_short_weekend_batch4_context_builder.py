@@ -229,6 +229,7 @@ class FailClosedAndRedaction(unittest.TestCase):
                 p["data_context"]["universe"] = []
                 p["data_context"]["candidate_pass2_signals"] = {}
                 p["data_context"]["selection_inputs"]["per_ticker"] = {}
+                p["data_context"]["selection_inputs"]["theme_selection_contract"]["per_ticker"] = {}
                 p["per_ticker_analysis"] = {"LEAKTICKER": "not-an-object"}
             fixture = self._fixture_from(base, bad_dynamic_row)
             built, out, _ = _build(base, fixture=fixture, positions=[])

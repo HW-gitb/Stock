@@ -214,7 +214,13 @@ def _validate_summary(raw, *, ticker):
         raise MassiveNewsCatalystSeamError("news_recent distinct_publishers must be within 1..news_count")
     return {
         "news_count": news_count,
+        "distinct_publishers": distinct_publishers,
+        "positive": positive,
+        "negative": negative,
+        "neutral": neutral,
+        "unknown": unknown,
         "net_sentiment": net,
+        "window_days": window_days,
     }
 
 
@@ -233,13 +239,7 @@ def _validate_signals(raw_signals):
 
 
 def _parse_record_date_yyyymmdd(ts, *, ticker):
-    _require_exact_str(ts, name=f"records[{ticker}].published_utc")
-    try:
-        dt = datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
-    except ValueError as exc:
-        raise MassiveNewsCatalystSeamError(f"records[{ticker}].published_utc must be RFC3339") from exc
-    if dt.tzinfo is None:
-        raise MassiveNewsCatalystSeamError(f"records[{ticker}].published_utc must be tz-aware")
+    dt = _parse_rfc3339_instant(ts, name=f"records[{ticker}].published_utc")
     try:
         from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
     except ImportError as exc:
@@ -251,7 +251,18 @@ def _parse_record_date_yyyymmdd(ts, *, ticker):
     return et.strftime("%Y%m%d")
 
 
-def _validate_records(raw_records, signal_tickers):
+def _parse_rfc3339_instant(ts, *, name):
+    _require_exact_str(ts, name=name)
+    try:
+        dt = datetime.fromisoformat(ts[:-1] + "+00:00" if ts.endswith("Z") else ts)
+    except ValueError as exc:
+        raise MassiveNewsCatalystSeamError(f"{name} must be RFC3339") from exc
+    if dt.tzinfo is None:
+        raise MassiveNewsCatalystSeamError(f"{name} must be tz-aware")
+    return dt
+
+
+def _validate_records(raw_records, signals, provenance):
     _require_exact_dict(raw_records, name="news_events.records")
     records = {}
     for raw_ticker, raw_rows in raw_records.items():
@@ -263,6 +274,12 @@ def _validate_records(raw_records, signal_tickers):
             raise MassiveNewsCatalystSeamError("records row must be non-empty for emitted news signal")
         latest_date = None
         seen_ids = set()
+        sentiments = {"positive": 0, "negative": 0, "neutral": 0, "unknown": 0}
+        publishers = set()
+        source_row = provenance[ticker]
+        observed_at = _parse_rfc3339_instant(source_row["observed_at"], name=f"provenance[{ticker}].observed_at")
+        source_date = datetime.strptime(source_row["source_as_of"], "%Y-%m-%d").date()
+        last_sort_key = None
         for raw_row in rows:
             _require_exact_dict(raw_row, name=f"records[{ticker}] row")
             if _key_set(raw_row, name=f"records[{ticker}] row") != RECORD_KEYS:
@@ -284,10 +301,33 @@ def _validate_records(raw_records, signal_tickers):
                 raise MassiveNewsCatalystSeamError("records sentiment drifted from Massive news source contract")
             if raw_row["sentiment_reasoning"] is not None:
                 _require_exact_str(raw_row["sentiment_reasoning"], name=f"records[{ticker}].sentiment_reasoning")
+            published_at = _parse_rfc3339_instant(raw_row["published_utc"], name=f"records[{ticker}].published_utc")
+            if published_at > observed_at:
+                raise MassiveNewsCatalystSeamError("records article was published after source observation")
             date_key = _parse_record_date_yyyymmdd(raw_row["published_utc"], ticker=ticker)
+            if (source_date - datetime.strptime(date_key, "%Y%m%d").date()).days > _RECENCY_WINDOW_DAYS:
+                raise MassiveNewsCatalystSeamError("records article is outside the source recency window")
+            sort_key = (raw_row["published_utc"], record_id)
+            if last_sort_key is not None and sort_key < last_sort_key:
+                raise MassiveNewsCatalystSeamError("records must stay in canonical published-time order")
+            last_sort_key = sort_key
             latest_date = date_key if latest_date is None or date_key > latest_date else latest_date
+            sentiments[sentiment] += 1
+            publishers.add(raw_row["publisher_name"].casefold())
+        expected_summary = {
+            "news_count": len(rows),
+            "distinct_publishers": len(publishers),
+            **sentiments,
+            "net_sentiment": sentiments["positive"] - sentiments["negative"],
+            "window_days": _RECENCY_WINDOW_DAYS,
+        }
+        if signals[ticker] != expected_summary:
+            raise MassiveNewsCatalystSeamError("news_recent summary must be bound to emitted records")
+        counts = {key: source_row[key] for key in PROVENANCE_COUNT_KEYS}
+        if counts["total_record_count"] != len(rows) + counts["out_of_window_count"] + counts["future_excluded_count"]:
+            raise MassiveNewsCatalystSeamError("provenance counts must reconcile to emitted records")
         records[ticker] = latest_date
-    if set(records) != set(signal_tickers):
+    if set(records) != set(signals):
         raise MassiveNewsCatalystSeamError("records identities must exactly equal signal identities")
     return records
 
@@ -349,6 +389,18 @@ def _validate_provenance(raw_provenance, signal_tickers, checked_tickers, *, exp
         observed_at = raw_row.get("observed_at")
         if not _valid_rfc3339(observed_at):
             raise MassiveNewsCatalystSeamError("provenance observed_at must be tz-aware RFC3339")
+        observed_et = _parse_rfc3339_instant(observed_at, name=f"provenance[{ticker}].observed_at")
+        try:
+            from zoneinfo import ZoneInfo
+
+            observed_et = observed_et.astimezone(ZoneInfo("America/New_York"))
+        except Exception as exc:
+            raise MassiveNewsCatalystSeamError("cannot normalize provenance observed_at to America/New_York") from exc
+        source_date = datetime.strptime(source_as_of, "%Y-%m-%d").date()
+        if observed_et.date() > source_date or observed_et >= datetime(
+            source_date.year, source_date.month, source_date.day, 9, 30, tzinfo=observed_et.tzinfo
+        ):
+            raise MassiveNewsCatalystSeamError("provenance observed_at violates the pre-open PIT cutoff")
         coverage = _require_exact_str(raw_row.get("coverage_status"), name=f"provenance[{ticker}].coverage_status")
         parser = _require_exact_str(raw_row.get("parser_status"), name=f"provenance[{ticker}].parser_status")
         if coverage != MASSIVE_NEWS_COVERAGE_EMIT or parser != MASSIVE_NEWS_PARSER_EMIT:
@@ -369,19 +421,30 @@ def _validate_news_events(news_events, *, expected_source_as_of):
     if _key_set(news_events, name="news_events") != SOURCE_RESULT_KEYS:
         raise MassiveNewsCatalystSeamError("news_events keys drifted from the Massive news source contract")
     signals = _validate_signals(news_events["signals"])
-    records = _validate_records(news_events["records"], signals)
     excluded = _validate_excluded(news_events["excluded"])
     checked = _validate_checked(news_events["checked"])
-    _validate_provenance(
+    provenance = _validate_provenance(
         news_events["provenance"],
         signals,
         checked,
         expected_source_as_of=expected_source_as_of,
     )
+    records = _validate_records(news_events["records"], signals, provenance)
     overlap = (set(signals) & set(excluded)) | (set(signals) & set(checked)) | (set(checked) & set(excluded))
     if overlap:
         raise MassiveNewsCatalystSeamError("news_events signal/checked/excluded identities must be disjoint")
+    for ticker, row in checked.items():
+        if any(row[key] != provenance[ticker][key] for key in PROVENANCE_COUNT_KEYS):
+            raise MassiveNewsCatalystSeamError("checked counts must reconcile to provenance")
+        if row["total_record_count"] != row["out_of_window_count"] + row["future_excluded_count"]:
+            raise MassiveNewsCatalystSeamError("checked counts must have no emitted records")
     return signals, records, checked, excluded
+
+
+def validate_resolved_news_events(*, news_events, as_of):
+    """Validate the complete resolved Massive-news envelope before any consumer uses its tally."""
+    expected_source_as_of = _source_date_for_catalyst_as_of(as_of)
+    return _validate_news_events(news_events, expected_source_as_of=expected_source_as_of)
 
 
 def _finite_block_value(value, *, name):
@@ -439,12 +502,8 @@ def project_massive_news_catalyst(*, news_events, governance, as_of, target_tick
     controls its maximum point impact. Checked-empty, excluded, and missing
     targets are neutral-omitted for the score composer.
     """
-    expected_source_as_of = _source_date_for_catalyst_as_of(as_of)
     targets = _canonical_targets(target_tickers)
-    signals, records, checked, excluded = _validate_news_events(
-        news_events,
-        expected_source_as_of=expected_source_as_of,
-    )
+    signals, records, checked, excluded = validate_resolved_news_events(news_events=news_events, as_of=as_of)
     catalyst_inputs = _news_tally_to_catalyst_signals(signals, records)
     raw_result = catalyst_block(catalyst_inputs, governance, as_of=as_of)
     block, neutral = _validate_catalyst_result(raw_result, as_of=as_of)

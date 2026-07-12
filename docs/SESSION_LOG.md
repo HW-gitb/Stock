@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-12 — Claude Code 审查（US-short 0c94 集成 + A1 三键 forward_policy_heads）PASS
+
+- **Verdict/Action**: PASS + 提交（master 集成批次）。0c94 issue 1/5/6 引擎（`theme_selection`/`weekend_cash` caps/sec）与已审 0c94(10cd543) **逐字节 IDENTICAL**、只确认未变；集成缝正确：forward_policy_heads 六头全穿同一 source-bound 契约→3 键、无 per-head 特判，`_source_theme_selection_contract` 绑 score-composition state+rows 拒漂移，theme_off 自动零 theme 席、retain 头正常席；data_context 官方 Top15 用已校验 3 键 `data_context["selection_inputs"]`+显式 decision_date（两调用点一致、latent 漂移修）。
+- **Required**: 无。`R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION` → resolved；三个 R3 R-ID 随集成落 master，单源见 register。
+- **Verify**: review-evidence:not_available。整读 heads 适配+data_context 三键接线；确认 `theme_seat_plan:165` 仅 `theme_score>0` 给席（theme_off 零席根基）；0c94 引擎 diff==10cd543 IDENTICAL；caller 传 `data_context["selection_inputs"]`。**亲跑主树全包 `4300 ran / OK / 0 fail`**（cp313 rpds、py3.13 直跑）。§6a 未起：选股引擎=已审 IDENTICAL、集成缝小且忠实 settled 设计、data_context 接线=我早先已审修复重做、heads shadow-only，按 proportional-review。
+- **Next**: 集成入 master；0c94 worktree 已被取代、可删。
+
+## 2026-07-12 — Codex 执行（US-short 0c94 集成 + A1 三键 `forward_policy_heads`）
+
+- **Action**: 在当前 `master` 集成树（未触碰 `0c94` worktree）合入 0c94 的 issue 1/5/6 变更，并同步 A1 heads：每个 head 原样携带同一份 source-bound `theme_selection_contract`；`theme_off` 因 theme score 全零没有 theme-momentum 席位，retain heads 仍按同契约获得正常 theme 席位。官方 Top15 helper 现在使用三键 data-context 输入并显式传入 `decision_date`；Cut B/C capture fixtures 同步到 `run_selection` 的 16 键 decision 形状。
+- **Boundary**: shadow-only / offline；不新增 provider、网络、raw read、DataHub、broker/order、ship-gate 或主选股轨授权。
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback（无独立 agent）。A：六个 immediate heads 全覆盖；B：`rg -n "_select_top15\\(" engine runners` 仅余定义、主 pipeline 的 canonical-date 调用、以及 data-context helper 的 explicit-date 调用，`build_selection_policy_heads` 全部调用均带 contract；C：旧两键 head 与旧 14-key capture fixture 均先 red 再绿；D：source selection state/rows 与 frozen composition 不一致即拒绝；E：register 保持单一 live risk 状态、周期 gate 仅写本 entry；F：`py_compile`、route guards、diff checks 已跑。
+- **Verify**: heads/shadow/data-context focused `46 OK`; heads + Cut A-D/capstone bridge focused `175 OK`; route guards `25 OK`; full offline `test_us_short*.py` `4300 OK / 1 skipped`; `git diff --check` + cached diff check clean (仅 CRLF warnings).
+- **Next**: Claude：审查并提交当前集成批次。
+
 ## 2026-07-12 - Claude Code 决策（US-short A1 0c94 三键集成·forward_policy_heads 适配 + theme_off 拍板）
 
 - **决策**: 用户准备 merge 0c94（把 `_select_top15` 契约 2→3 键、加 source-bound `theme_selection_contract` + 必填 `decision_date`）。核实 master 的 `forward_policy_heads` 仍产 2 键（`:114`/`:208`）→ 裸 merge 0c94 会 red ~22 A1 forward 测试。**A1 设计拍板**：六头全穿同一份 source contract、**无需 per-head 特判**；`theme_off` 无需空契约——它 `theme_momentum_seat=zero`→theme 分全 0，而 `theme_seat_plan:165` 只在 `theme_score>0` 才给席位→theme_off 自动零 theme 席位（合其 rollback-anchor 本意、保持现有纯 core 行为）。早先担心的「无脑穿让 theme_off 拿席位」＝不成立。
@@ -248,6 +263,83 @@
 - **Required**: `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP` / `R-USSHORT-R3-CHASING-PENALTY-SCORE-AMPLIFICATION` resolved；`R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍 open（SEC 目标覆盖率健康 / 消费边界 envelope+digest 复核 / 真实 adjustment label / holding 侧 = codex_r3 issue 1+3）——完整详情单源见 `docs/system_risk_register.md`。
 - **Verify**: doc-only 对账；三 commit 均在 master（`5e3e00b`/`900e5c6`/`0b5b6f9`，merge `64929278`/`e266f1a6`）；SESSION_LOG working-tree==HEAD（`git diff` 空、M 为 autocrlf/stat）；本会话未跑测试包、未做独立审查，review-evidence:not_available。
 - **Next**: Codex：修复（codex_r3 issue 1：SEC 按唯一目标 ticker 算覆盖 + 消费边界复核 envelope/digest + 真实 adjustment label）
+## 2026-07-12 — Claude 自修自审 (US-short issue-6 Optional：provisional 门 OR-收紧)
+- **Verdict/Action**: 按用户指令自修 issue-6 那条 P2 Optional + 自审。`theme_seat_plan` 与 `strong_theme_leader_upgrades` 的更严 provisional 门改为 `theme_source=="provisional_discovered"` **OR** `theme_lifecycle_state=="provisional_active"` 触发——补上 `industry_heat_v1 + provisional_active + market_confirmed=False` 靠 source 标签跳门拿 theme 席/leader 升级的洞。**用 OR 纯收紧、非用户初提的 source→lifecycle 替换**（替换会松掉 `provisional_discovered + cooling` 这条、让它拿席；判断后择更优解并说明）。新建 `tests/test_us_short_theme_selection.py`（引擎首个直接单测）锁定。
+- **Required**: 无。`R-USSHORT-R3-THEME-LIFECYCLE-SEAT-COMPOSITION-TOP15-CLOSURE` 的 Optional 已 resolved（完整证据/边界单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。自审探针 4 面 HELD（gap 补/无 loosening[provisional_discovered+cooling 仍挡]/正控[confirmed_active industry-heat 仍放行]/leader gap 补）；新测+`_select_top15` pipeline focused **39 OK**；lesson#1 全包后台起→**4239 ran / OK / 0 fail**（+5 新测、零回归）；新测为真红控（旧 source-keyed 代码会让 provisional_active 行 eligible→`assertNotIn` 失败）。
+- **Next**: 待用户 merge 0c94 入 master。
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 6：赛道生命周期/席位组成进入 Top15)
+- **Verdict/Action**: PASS + 提交（0c94、未 push）。新引擎 `us_short_theme_selection` 校验 source-bound 契约（SHA-256/provenance/官方 require/fail-closed），`_select_top15` 在分析前应用生命周期席位：cooling 减半 / decayed·retired 零席 / 自动预留≤2 先于手工 / manual≤2+确认 / 同主题 cap 3 / provisional 门 / 追高龙头不给 Top6-15 升级；报告诚实标「industry heat v1；cross-industry disabled」，默认 mode 结构性拒 provisional 跨行业——industry-heat 无法冒充确认/跨行业主题。
+- **Required**: 无（Optional 非阻断、P2 设计收紧、honesty intact、source-bound:更严 provisional 门 keys on `theme_source` 而非 `theme_lifecycle_state=="provisional_active"`→industry_heat_v1+provisional_active+mc=False 可跳门拿 theme 席;不伪造/leader-upgrade live 不可达/真 producer 不太可能出该矛盾组合;建议改按 lifecycle keying。详见 register）。`R-USSHORT-R3-THEME-LIFECYCLE-SEAT-COMPOSITION-TOP15-CLOSURE` → resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读；全包 `4234 ran / OK / 0 fail`；整读新引擎+`_select_top15`+report+契约 binding；自撰探针 HELD（industry-v1 拒 provisional / cooling→2·retired→0·cap3 / 追高排除升级）；诚实 grep 0 `gics_confirmed`/无 overclaim；§6a 独立 agent PASS 无 P1（三属性 source-binding/honesty/机制全 HELD+复现）。
+- **Next**: 待用户 merge 0c94 入 master。
+
+## 2026-07-12 — Codex 修复（US-short R3 第六类：赛道生命周期/席位组成进入 Top15）
+
+- **Verdict/Action**: 已把来源绑定的主题身份/生命周期/席位组成在 Top15 前消费；cooling/decayed/retired、自动/手工配额、同主题拥挤、provisional 闸及强赛道 Top6–15 龙头完整分析升级均实际生效。默认明确为 `industry_heat_v1_cross_industry_disabled`。
+- **Required**: `R-USSHORT-R3-THEME-LIFECYCLE-SEAT-COMPOSITION-TOP15-CLOSURE` 实现完成但仍待独立 Claude 审查；完整风险边界见 `docs/system_risk_register.md`。跨行业 discovery 未启用，仍须另行授权的来源绑定生产者。
+- **Verify**: focused/ripple **334 OK**；完整离线 `*us_short*.py` **4234 OK（1 skipped）**；文档守卫待本条写入后复跑。
+- **Proof-of-use**: Batch5 source packet 以 SHA-256 绑定主题契约；legacy/full-candidate 缺契约在读凭证/网络前拒绝；周报披露 industry heat v1 与 cross-industry disabled。
+- **Next**: Claude Code：独立审查本工作树第六类；PASS 后仅提交已审范围，不 push。
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 5：总仓/同主题美元上限闭环 + 价格 Optional fixture)
+- **Verdict/Action**: PASS + 提交（0c94、未 push）。§8 60% 总仓 / 30% 同主题美元 cap 接入 runner→orchestrator→cash；现有持仓按**当轮真实 `price_input.close`**（非 avg_cost/stale）估值先占额度、超 cap→`观察(capacity_or_budget_deferred)` 不部分建仓；持仓/候选 theme 两侧 strip+casefold 不能绕；缺 mark/theme 或 account.as_of≠decision / bucket-cash 分叉 / holdings≠positions 全 fail-closed。与 288f issue-4 FAIL 无关（只用真实 close、不碰被伪造的 ATR/几何）。
+- **Required**: 无（我上次 0c94 Optional 已处置:3 引擎 fixture split_adjusted、负测保留旧词证拒绝、0 active 残留）。`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` → resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读；全包 `4226 ran / OK / 0 fail`（长路径修复后 worktree 全绿）；整读 `_capacity_state`/`_apply_portfolio_capacity`/`_portfolio_capacity_context`；自撰 cap 探针 HELD（theme-cap 大小写变体聚合 defer / total-cap 含持仓 defer / 缺 mark 全 defer / 小建仓 within）。确定性 fail-closed 数学、非最高危 → 未起 §6a。
+- **Next**: 待用户 merge 0c94 入 master。
+
+## 2026-07-12 — Codex 修复（US-short：总仓 / 同主题美元上限闭环）
+
+- **Verdict/Action**: 已把 §8 的总仓 60% 与同主题 30% 美元容量接入 `account_state → same-run price_input.close / holding_themes → basket portfolio_theme → final cash`；超限或持仓暴露不完整的新建仓均转观察，不部分建仓。
+- **Required**: 无新增已知 Required；本刀与同工作树的价格 provenance Optional 均待 Claude Code 独立审查，完整风险/边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE`。
+- **Verify**: 红测先证明旧 cash API 无容量输入、同主题大小写/空白可绕过；修后 focused chain **212 OK**，完整本地离线 `*us_short*` **4226 OK（1 skip）**，含总仓/同主题持仓端到端与 runner/schema 回归。
+- **Proof-of-use**: 端到端 fixture 证明持仓当轮价先占总仓，规范化同主题先占主题额度；未知持仓 mark/theme 使全部新建仓 fail-closed 为观察。
+- **Next**: Claude Code：独立审查本工作树的 Optional fixture 对齐与总仓/同主题容量闭环；PASS 后仅提交已审范围，不 push。
+
+## 2026-07-12 — Codex 修复（US-short 价格 provenance Optional：纯引擎 fixture 对齐）
+
+- **Verdict/Action**: 三份纯引擎测试 fixture 的默认/正向 adjustment label 已对齐为 `split_adjusted`；`split_div_adjusted` 只留在 provenance 的负向拒绝测试。
+- **Required**: 无新增 Required；此 Optional 待 Claude Code 独立审查，现有 R3 其余事项仍以 `docs/system_risk_register.md` 为准。
+- **Verify**: 红测先复现 industry-heat fixture 输出旧标签；修后 momentum / industry-heat / provisional-theme-heat **124 OK**。
+- **Proof-of-use**: 三份 fixture 的活跃 `split_div_adjusted` 搜索为 0；不改运行时业务实现、provider、live 或价格证据边界。
+- **Next**: Claude Code：仅独立审查此 Optional fixture 对齐；PASS 后只提交本刀，不 push。
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 第一类：价格 provenance 语义 split_adjusted)
+- **Verdict/Action**: PASS + 提交（0c94、未 push）。生产迁移完整且诚实：`run_provenance.APPROVED_ADJUSTMENTS` 与 `projection_binding` 默认统一为 `split_adjusted`（Massive `adjusted=true` 只 split、dividend 未确认），validator fail-closed 拒旧 `split_div_adjusted`。整类 grep：0 active 非测试旧标签，残留 `massive_grouped_daily` 是 provider 身份字段非 adjustment。
+- **Required**: 无（Optional 非阻断、低危:3 引擎单测 fixture[momentum/industry_heat/provisional_theme_heat]仍用 stale 不透明 `split_div_adjusted`,建议对齐 `split_adjusted`,run_provenance 负测正确保留旧词——详见 register）。`R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 价格子项 resolved；余 real-holding 子项另树 `R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN`（288f）——单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结清单即后台起→并行整读；0c94 全离线 `test_us_short*` 4220 ran / 15 error / 0 fail，15 全 WinError 206 MAX_PATH（AssertionError=0）在未改 momentum/theme 文件，Codex 见的 6 example-builder 失败=其子进程缺 jsonschema、我 env 不复现。
+- **Next**: 待用户 merge 0c94 入 master。
+
+## 2026-07-12 — Codex 修复（US-short R3 第一类：价格 provenance 语义）
+
+- **Verdict/Action**: 已把真实 Massive `adjusted=true` 价格证据的正式语义从 `split_div_adjusted` 收紧为 `split_adjusted`；生产者、官方 schema/summary、projection/data-context provenance、示例和现有 tracked source records 一致，旧 dividend-adjusted 声明在 provenance validator fail-closed。
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍有 real-holding bankruptcy official-chain；本价格修复待 Claude Code 独立审查，完整事实见 `docs/system_risk_register.md`。
+- **Verify**: 红测先证明旧标签会被接受；修后 changed-path focused **108 OK**、两 packet series 纯内存 fake-record **2 OK**、`py_compile` / 7 schema JSON parse / `git diff --check` 通过。完整离线 `*us_short*` **4220 ran / 6 failures / 15 errors / 1 skipped**：6 = builder subprocess 缺 `jsonschema` 后的脱敏 `ACCOUNT_INVALID`，15 = Windows MAX_PATH 写 gitignored `provider_samples/`；未宣称全绿。
+- **Proof-of-use**: 活跃 runtime/schema/source-record 扫描仅余两个禁止旧标签的注释；纯算法历史 fixture 不作为真实价格 provenance，未改。
+- **Next**: Claude Code：仅独立审查本价格 provenance 语义切刀；PASS 后只提交本刀，不 push。
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 第一类：SEC target-identity health + provider envelope/digest 消费绑定)
+- **Verdict/Action**: PASS + 提交（0c94 worktree、未 push）。两子项正确且全程 fail-closed：SEC `sec_edgar=ok` 收紧为每唯一 Pass2 目标恰一条成功 submissions（缺/失败/重复/外来/bool count/漂移→down）；官方 source-packet 消费端强制 SHA-256 精确绑当前字节 + 消费前重校（TOCTOU），offering 经 `resolve_offering_audit` 重放、grades/news 从 records 重算 summary + PIT pre-open/窗口/去重/canonical-order/计数对账；伪造重签信封仍拒；官方装配仅在 run_packet 内 validators 之后（无绕过）。
+- **Required**: 无新增。`R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 两子项（SEC health + envelope/digest）本刀闭；余 holding official-chain + `split_div_adjusted` 语义仍 open——完整证据/边界单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（均真实工具输出）。0c94 全离线 `test_us_short*` 4219 ran / 15 error / 0 fail，15 error 全 = 未改文件 momentum/theme 的 Windows MAX_PATH（WinError 206、短主树过）；reviewed focused 110 OK；自撰 offering 伪造探针 3 例全 rejected；§6a 独立对抗 agent 七面 HELD、无 P1P2。
+- **Next**: 待用户 merge 0c94 入 master。
+
+## 2026-07-12 — Codex 修复（US-short R3 第一类：provider source-envelope / digest 消费绑定）
+
+- **Verdict/Action**: official local source-packet 现要求并在读入时复核 SEC offering、FMP grades、Massive news（及选用时 yfinance grades）的 SHA-256；SEC 回放 provenance/filings，grades 核对 records/summary/PIT/counts/dispositions，news 从 records 重算 summary 并核 article≤observation/pre-open/window/counts；伪造信封即使重签摘要也拒绝。
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍未关闭：real-holding bankruptcy official-chain 与 corporate-action / `split_div_adjusted` 语义仍待独立切刀；完整事实见 `docs/system_risk_register.md`。
+- **Verify**: 红测先证未签名信封会到达装配；修后 focused 30 OK、`py_compile` / schema JSON parse / `git diff --check` 通过。完整离线 `*us_short*` 3026 条因缺 `rpds.rpds` 等环境/既存例件问题 28 failures / 303 errors / 266 skipped，未宣称全绿。
+- **Proof-of-use**: 三份 artifact 替换均被摘要拒绝；重签后的 SEC provenance、FMP records、Massive tally 与 post-observation article 均 fail-closed；selected-yfinance 与有效信封正向路径均覆盖。
+- **Next**: Claude Code：仅独立审查 R3 第一类当前总 diff；PASS 后只提交本类，不 push。
+
+## 2026-07-11 — Codex 修复（US-short R3：SEC 目标身份健康门）
+
+- **Verdict/Action**: `sec_edgar=ok` 已从端点成功率收紧为每个 Pass2 目标 ticker 恰有一条成功 SEC submissions 记录；缺失、失败、重复、外来身份、目标计数漂移均为 `down`。
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 仍 in progress；holding bankruptcy coverage、来源 envelope/digest 消费绑定、公司行动复权语义未在本刀处理，完整边界见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: 红测复现 partial 2/3 target 与 bool target_count 误标 `ok`；修后 health focused 15 OK、`py_compile`/`git diff --check` 通过。完整离线发现运行 3019 条但因缺失 `rpds.rpds` 出现 28 failures / 303 errors，未声称全绿。
+- **Proof-of-use**: A 覆盖目标集合、计数、缺失/失败/重复/外来身份与 FMP 不回归；B 旧 SEC 阈值文字 grep 0 hits；C 各反向控制均 `down`；E 未改 CURRENT/README；轻量独立自审先 FAIL（缺 mixed-target error 测与旧文字）后修复复核 PASS。
+- **Next**: Claude Code：仅独立审查此 SEC target-identity health gate；PASS 后只提交本刀，不 push。
 
 ## 2026-07-11 — Codex repair, self-review complete (US-short R3 issue 2: Pass2 candidate bankruptcy coverage)
 
@@ -271,6 +363,7 @@
 - **Verify**: 新增红测后 focused provenance/receipt/bridge **17 OK**，两 source-packet runner 的 caller-`strong` 反向探针均 fail-closed，`py_compile`/`git diff --check`/BOM 通过；完整 `test_us_short*.py` wrapper 因本工作树 `jsonschema/rpds` 缺失在 discovery 前阻塞。
 - **Pre-Codex self-review**: A-F — A 覆盖 run-origin/receipt/Batch4/orchestrator/schema/CLI 两 source-packet runner；B grep 确认无 `run_mode="research_live"` producer 和无 `default="strong"`；C 覆盖 legacy research_live 拒绝、模板 digest 替换、caller-strong；E 未改 CURRENT/README。独立 current-diff 审查先 FAIL 两项（legacy research_live + template TOCTOU）均已红绿修复；一次超时重启后 PASS；固定包集中运行一次。
 - **Next**: Claude Code：审查
+- **Next**: Claude Code：独立审查该环境/动作模板来源绑定修复；PASS 后仅提交已审范围，不 push。
 
 ## 2026-07-11 — Codex repair complete, awaiting Claude review (US-short R3 issue 5: chasing penalty score amplification)
 

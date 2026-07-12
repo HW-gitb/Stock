@@ -418,7 +418,7 @@ def _family(*, row_count, price_bearing):
         "observed_at": "2026-06-13T10:00:00",
         "price_basis_date": _PRICE_BASIS_DATE if price_bearing else None,
         "session": "RTH" if price_bearing else None,
-        "adjustment": "split_div_adjusted" if price_bearing else None,
+        "adjustment": "split_adjusted" if price_bearing else None,
         "row_count": row_count,
         "source_refs": [{"role": "test_fixture", "path": "tests/provider/test_us_short_batch5_data_context.py"}],
     }
@@ -439,6 +439,24 @@ def _overext_map(*, chasing=(), warning=(), targets=("AAPL", "MSFT", "JPM")):
     chasing, warning = set(chasing), set(warning)
     return {t: _overext_record("chasing_extreme" if t in chasing else "warning" if t in warning else "none")
             for t in targets}
+
+
+def _theme_selection_contract(tickers, *, state="strong"):
+    return {
+        "as_of": _DECISION_DATE,
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": False,
+        "theme_opportunity_state": state,
+        "per_ticker": {
+            ticker: {
+                "theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                "membership_origin": "automatic_discovery", "market_confirmed": True,
+                "individual_theme_gate_passed": True, "overextension_state": "none",
+            }
+            for ticker in tickers
+        },
+    }
 
 
 def _official_kwargs():
@@ -463,6 +481,7 @@ def _official_kwargs():
             news_by_ticker={"AAPL": _news_source("AAPL", []), "MSFT": _news_source("MSFT", [])}),
         catalyst_governance=load_catalyst_governance(),
         theme_opportunity_state="strong",
+        theme_selection_contract=_theme_selection_contract(("AAPL", "MSFT")),
         source_ref_paths={
             "candidate_artifact_path": "state/us_short/test_candidate.json",
             "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
@@ -472,6 +491,7 @@ def _official_kwargs():
             "analyst_grade_actions_path": "state/us_short/test_analyst.json",
             "massive_news_events_path": "state/us_short/test_news.json",
             "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+            "theme_selection_contract_path": "state/us_short/test_theme_selection_contract.json",
         },
     )
 
@@ -506,6 +526,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             eligibility_governance=_gov(),
             score_composition=composed,
             candidate_pass2_signals={"AAPL": {}},
+            theme_selection_contract=_theme_selection_contract(("AAPL",)),
         )
 
         self.assertEqual(set(data_context), _DATA_CONTEXT_KEYS)
@@ -515,7 +536,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             for provider_only_key in ("as_of", "observed_at", "provider_id", "lineage", "eligible", "reasons"):
                 self.assertNotIn(provider_only_key, row)
         self.assertEqual(data_context["candidate_pass2_signals"], {"AAPL": {}})
-        self.assertEqual(data_context["selection_inputs"], composed["selection_inputs"])
+        self.assertEqual(data_context["selection_inputs"]["per_ticker"], composed["selection_inputs"]["per_ticker"])
 
         selected = run_selection(_NOW_ET, _SESSIONS, data_context, eligibility_governance=_gov())
         self.assertEqual(selected["decision_date"], _DECISION_DATE)
@@ -867,6 +888,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             massive_news_events=news_events,
             catalyst_governance=load_catalyst_governance(),
             theme_opportunity_state="strong",
+            theme_selection_contract=_theme_selection_contract(("AAPL", "MSFT")),
             candidate_pass2_signals={"AAPL": {}, "MSFT": {}},
         )
 
@@ -990,6 +1012,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             massive_news_events=news_events,
             catalyst_governance=load_catalyst_governance(),
             theme_opportunity_state="strong",
+            theme_selection_contract=_theme_selection_contract(("AAPL", "MSFT")),
         )
 
         pass2 = data_context["candidate_pass2_signals"]
@@ -1039,6 +1062,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             "analyst_grade_actions_path": "state/us_short/test_analyst.json",
             "massive_news_events_path": "state/us_short/test_news.json",
             "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+            "theme_selection_contract_path": "state/us_short/test_theme_selection_contract.json",
         }
 
         components = assemble_official_context_components_from_resolved_pass2_sources(
@@ -1052,6 +1076,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             massive_news_events=news_events,
             catalyst_governance=load_catalyst_governance(),
             theme_opportunity_state="strong",
+            theme_selection_contract=_theme_selection_contract(("AAPL", "MSFT")),
             source_ref_paths=source_ref_paths,
         )
 
@@ -1117,6 +1142,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             "analyst_grade_actions_path": "state/us_short/test_analyst.json",
             "massive_news_events_path": "state/us_short/test_news.json",
             "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+            "theme_selection_contract_path": "state/us_short/test_theme_selection_contract.json",
         }
 
         components = assemble_official_context_components_from_resolved_pass2_sources(
@@ -1142,6 +1168,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             ),
             catalyst_governance=load_catalyst_governance(),
             theme_opportunity_state="strong",
+            theme_selection_contract=_theme_selection_contract(pass2_clean),
             holdings=[
                 {"ticker": "AAPL", "signals": {}},
                 {"ticker": "ZZZ", "signals": {}},
@@ -1176,6 +1203,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             "analyst_grade_actions_path": "state/us_short/test_analyst.json",
             "massive_news_events_path": "state/us_short/test_news.json",
             "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+            "theme_selection_contract_path": "state/us_short/test_theme_selection_contract.json",
         }
 
         for observed_at in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
@@ -1208,6 +1236,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
                         massive_news_events=news_events,
                         catalyst_governance=load_catalyst_governance(),
                         theme_opportunity_state="strong",
+                        theme_selection_contract=_theme_selection_contract(("AAPL",)),
                         source_ref_paths=source_ref_paths,
                     )
 
@@ -1238,6 +1267,7 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
                 massive_news_events=news_events,
                 catalyst_governance={"broken": True},
                 theme_opportunity_state="strong",
+                theme_selection_contract=_theme_selection_contract(("AAPL",)),
             )
 
     def test_rejects_forged_candidate_artifact_instead_of_trusting_summary(self):

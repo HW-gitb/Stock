@@ -41,6 +41,22 @@ _SRC_PROV = {
 }
 
 
+def _top15_inputs(per_ticker, state="strong"):
+    return {
+        "theme_opportunity_state": state,
+        "theme_selection_contract": {
+            "as_of": "20260630", "mode": "industry_heat_v1_cross_industry_disabled",
+            "cross_industry_provisional_enabled": False, "theme_opportunity_state": state,
+            "per_ticker": {ticker: {"theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
+                                      "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
+                                      "membership_origin": "automatic_discovery", "market_confirmed": True,
+                                      "individual_theme_gate_passed": True, "overextension_state": "none"}
+                           for ticker in per_ticker},
+        },
+        "per_ticker": per_ticker,
+    }
+
+
 def _zero_rd():
     return risk_downgrade()
 
@@ -660,7 +676,9 @@ class ScoreComposerOverextensionReconciliationTest(unittest.TestCase):
 
     def test_selection_details_carry_stripped_score_and_zeroed_theme_seat(self):
         composed = _compose(overextension_by_ticker=_overext_map(chasing=["AAPL"]))
-        top = _select_top15(["AAPL", "MSFT", "TSLA"], composed["selection_inputs"])
+        top = _select_top15(
+            ["AAPL", "MSFT", "TSLA"], _top15_inputs(composed["selection_inputs"]["per_ticker"]),
+            decision_date="20260630")
         details = {d["ticker"]: d for d in top["selection_details"]}
         self.assertAlmostEqual(
             details["AAPL"]["core_score"],
@@ -670,15 +688,13 @@ class ScoreComposerOverextensionReconciliationTest(unittest.TestCase):
 
     def test_strip_reorders_top15_ranking(self):
         # the exact per_ticker values compose emits for a chasing AAPL whose theme was ranking it above MSFT
-        base = _select_top15(["AAPL", "MSFT"], {
-            "theme_opportunity_state": "strong",
-            "per_ticker": {"AAPL": {"core_score": 67.5, "theme_momentum_score": 100.0},
-                           "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}})
+        base = _select_top15(["AAPL", "MSFT"], _top15_inputs(
+            {"AAPL": {"core_score": 67.5, "theme_momentum_score": 100.0},
+             "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}), decision_date="20260630")
         self.assertEqual([d["ticker"] for d in base["selection_details"]], ["AAPL", "MSFT"])
-        stripped = _select_top15(["AAPL", "MSFT"], {
-            "theme_opportunity_state": "strong",
-            "per_ticker": {"AAPL": {"core_score": 50.0, "theme_momentum_score": 0.0},
-                           "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}})
+        stripped = _select_top15(["AAPL", "MSFT"], _top15_inputs(
+            {"AAPL": {"core_score": 50.0, "theme_momentum_score": 0.0},
+             "MSFT": {"core_score": 64.0, "theme_momentum_score": 60.0}}), decision_date="20260630")
         # stripped AAPL core 50.0 < MSFT 64.0 → MSFT now ranks first: the strip changed Top15 order
         self.assertEqual([d["ticker"] for d in stripped["selection_details"]], ["MSFT", "AAPL"])
 
@@ -696,10 +712,10 @@ class ScoreComposerOverextensionReconciliationTest(unittest.TestCase):
             for t in contenders:
                 per[t] = {"core_score": 50.0,
                           "theme_momentum_score": (nflx_theme if t == "NFLX" else theme_mom[t])}
-            return {"theme_opportunity_state": "strong", "per_ticker": per}
+            return _top15_inputs(per)
 
-        unstripped = set(_select_top15(all_names, inputs(55.0))["admitted"])
-        stripped = set(_select_top15(all_names, inputs(0.0))["admitted"])
+        unstripped = set(_select_top15(all_names, inputs(55.0), decision_date="20260630")["admitted"])
+        stripped = set(_select_top15(all_names, inputs(0.0), decision_date="20260630")["admitted"])
         self.assertIn("NFLX", unstripped)        # wins a theme seat on its 55 theme_momentum
         self.assertNotIn("ORCL", unstripped)     # 53 is the odd-one-out (16th)
         self.assertNotIn("NFLX", stripped)       # zeroed theme_momentum → drops out of the 7 theme seats

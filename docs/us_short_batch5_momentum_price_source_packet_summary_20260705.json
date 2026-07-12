@@ -153,7 +153,7 @@
       "QQQ"
     ],
     "session": "RTH",
-    "adjustment_mode": "split_div_adjusted",
+    "adjustment_mode": "split_adjusted",
     "min_points_per_series": 64,
     "lookback_calendar_days": 140,
     "bar_counts_by_ticker": {

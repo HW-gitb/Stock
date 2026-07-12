@@ -19,7 +19,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
-from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
+from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_massive_news_catalyst import validate_resolved_news_events  # noqa: E402
 from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
 from engine.us_short_seam_momentum import (  # noqa: E402
     COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
@@ -30,6 +31,7 @@ from engine.us_short_seam_theme import (  # noqa: E402
     DISPOSITION_SCORED_INDUSTRY_BASE,
     DISPOSITION_SCORED_THEME_BASE,
 )
+from engine.us_short_sec_offering_audit import resolve_offering_audit  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
     assemble_data_context_from_resolved_pass2_sources,
     assemble_official_context_components_from_resolved_pass2_sources,
@@ -50,8 +52,49 @@ SOURCE_PATH_FIELDS = (
     "analyst_grade_actions_path",
     "massive_news_events_path",
     "catalyst_governance_path",
+    "theme_selection_contract_path",
 )
 OPTIONAL_SOURCE_PATH_FIELDS = ("overextension_projection_path", "yfinance_grade_actions_path")
+PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS = (
+    "offering_audit_source_path",
+    "analyst_grade_actions_path",
+    "massive_news_events_path",
+    "theme_selection_contract_path",
+)
+_SHA256_HEX_LENGTH = 64
+_PROVIDER_ENVELOPE_RESULT_KEYS = frozenset({"signals", "records", "provenance", "checked", "excluded"})
+_SEC_OFFERING_RESULT_KEYS = frozenset({"signals", "provenance", "checked", "excluded"})
+_SOURCE_PROVENANCE_FIELDS = frozenset({
+    "provider_id",
+    "endpoint_or_filing_type",
+    "source_as_of",
+    "observed_at",
+    "coverage_status",
+    "parser_status",
+    "lineage_ref",
+})
+_SOURCE_PROVENANCE_COUNT_FIELDS = frozenset({
+    "total_record_count",
+    "out_of_window_count",
+    "future_excluded_count",
+})
+_ANALYST_RECORD_KEYS = frozenset({
+    "date",
+    "grading_company",
+    "new_grade",
+    "previous_grade",
+    "action",
+    "direction",
+})
+_ANALYST_SUMMARY_KEYS = frozenset({
+    "upgrades",
+    "downgrades",
+    "neutrals",
+    "net",
+    "distinct_firms",
+    "distinct_downgrading_firms",
+    "window_days",
+})
 SCOPE_FALSE_FIELDS = (
     "network_access_performed",
     "provider_calls_performed",
@@ -236,6 +279,38 @@ def _validate_yyyymmdd(value: Any, *, field: str) -> str:
     return value
 
 
+def _validated_provider_envelope_digests(packet: dict[str, Any], paths: dict[str, Path]) -> dict[str, str]:
+    """Require the provider envelopes selected by this packet to be content-bound before consumption."""
+    digests = packet.get("source_artifact_sha256")
+    if type(digests) is not dict:
+        raise SourcePacketError("source_artifact_sha256 must be an exact dict")
+    expected_fields = set(PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS)
+    if "yfinance_grade_actions_path" in paths:
+        expected_fields.add("yfinance_grade_actions_path")
+    if set(digests) != expected_fields:
+        raise SourcePacketError(
+            "source_artifact_sha256 must exactly cover the provider envelope paths selected by this packet"
+        )
+    out: dict[str, str] = {}
+    for field in expected_fields:
+        digest = digests[field]
+        if not (
+            type(digest) is str
+            and len(digest) == _SHA256_HEX_LENGTH
+            and digest.isascii()
+            and all(character in "0123456789abcdef" for character in digest)
+        ):
+            raise SourcePacketError(f"source_artifact_sha256.{field} must be lowercase SHA-256 hex")
+        try:
+            actual = hashlib.sha256(paths[field].read_bytes()).hexdigest()
+        except OSError as exc:
+            raise SourcePacketError(f"source_artifact_sha256.{field} source artifact could not be read") from exc
+        if actual != digest:
+            raise SourcePacketError(f"source_artifact_sha256.{field} does not bind the current source artifact")
+        out[field] = digest
+    return out
+
+
 def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], dict[str, Path]]:
     resolved_packet_path = _resolve_invocation_path(packet_path)
     _validate_source_packet_path(resolved_packet_path)
@@ -278,14 +353,256 @@ def _load_and_validate_packet(packet_path: Path | str) -> tuple[dict[str, Any], 
             field="output_context_components_path",
         )
     paths["packet_path"] = resolved_packet_path
+    _validated_provider_envelope_digests(packet, paths)
     return packet, paths
 
 
-def _source_json(path: Path, *, field: str) -> Any:
+def _source_json(path: Path, *, field: str, expected_sha256: str | None = None) -> Any:
     try:
-        return _read_json(path)
+        raw = path.read_bytes()
+        if expected_sha256 is not None and hashlib.sha256(raw).hexdigest() != expected_sha256:
+            raise SourcePacketError(f"source_artifact_sha256.{field} changed before consumption")
+        return json.loads(raw.decode("utf-8"))
+    except SourcePacketError:
+        raise
     except Exception as exc:
         raise SourcePacketError(f"paths.{field} could not be read as JSON: {_display_path(path)}") from exc
+
+
+def _canonical_provider_envelope_map(value: Any, *, name: str) -> dict[str, Any]:
+    if type(value) is not dict:
+        raise SourcePacketError(f"provider envelope {name} must be an exact dict")
+    out: dict[str, Any] = {}
+    for raw_ticker, row in value.items():
+        if type(raw_ticker) is not str:
+            raise SourcePacketError(f"provider envelope {name} ticker must be exact str")
+        ticker = canonical_us_ticker(raw_ticker)
+        if ticker is None or ticker != raw_ticker:
+            raise SourcePacketError(f"provider envelope {name} ticker must be canonical US identity")
+        if ticker in out:
+            raise SourcePacketError(f"provider envelope {name} contains duplicate canonical ticker")
+        out[ticker] = row
+    return out
+
+
+def _provider_envelope_as_of(expected_decision_date: str) -> str:
+    return datetime.strptime(expected_decision_date, "%Y%m%d").date().isoformat()
+
+
+def _validated_source_provenance(
+    value: Any,
+    *,
+    ticker: str,
+    as_of: str,
+    provider_id: str,
+    endpoint: str,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    if type(value) is not dict or set(value) != (_SOURCE_PROVENANCE_FIELDS | _SOURCE_PROVENANCE_COUNT_FIELDS):
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] keys drifted")
+    if (
+        type(value["provider_id"]) is not str
+        or type(value["endpoint_or_filing_type"]) is not str
+        or type(value["coverage_status"]) is not str
+        or type(value["parser_status"]) is not str
+        or value["provider_id"] != provider_id
+        or value["endpoint_or_filing_type"] != endpoint
+        or value["coverage_status"] != "full"
+        or value["parser_status"] != "ok"
+    ):
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] provider/endpoint drifted")
+    source_as_of = value["source_as_of"]
+    try:
+        source_date = datetime.strptime(source_as_of, "%Y-%m-%d").date()
+        decision_date = datetime.strptime(as_of, "%Y-%m-%d").date()
+    except (TypeError, ValueError) as exc:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] source_as_of is not a real date") from exc
+    if source_date > decision_date:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] source_as_of is look-ahead")
+    observed_at = value["observed_at"]
+    if type(observed_at) is not str or "T" not in observed_at:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] observed_at must be timezone-aware")
+    try:
+        observed = datetime.fromisoformat(observed_at[:-1] + "+00:00" if observed_at.endswith("Z") else observed_at)
+    except ValueError as exc:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] observed_at is malformed") from exc
+    if observed.tzinfo is None:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] observed_at must be timezone-aware")
+    try:
+        from zoneinfo import ZoneInfo
+
+        observed_et = observed.astimezone(ZoneInfo("America/New_York"))
+    except Exception as exc:
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] observed_at cannot bind the decision clock") from exc
+    if observed_et.date() > source_date or observed_et >= datetime(
+        source_date.year, source_date.month, source_date.day, 9, 30, tzinfo=observed_et.tzinfo
+    ):
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] observed_at violates PIT cutoff")
+    lineage_ref = value["lineage_ref"]
+    prefix, separator, record_id = lineage_ref.rpartition("#") if type(lineage_ref) is str else ("", "", "")
+    if (
+        type(lineage_ref) is not str
+        or not lineage_ref.isascii()
+        or separator != "#"
+        or prefix != f"{provider_id}:{endpoint}:{source_as_of}"
+        or not record_id
+        or any(character.isspace() for character in record_id)
+        or ":" in record_id
+        or "#" in record_id
+    ):
+        raise SourcePacketError(f"provider envelope provenance[{ticker}] lineage_ref drifted")
+    counts: dict[str, int] = {}
+    for field in _SOURCE_PROVENANCE_COUNT_FIELDS:
+        count = value[field]
+        if type(count) is not int or count < 0:
+            raise SourcePacketError(f"provider envelope provenance[{ticker}].{field} must be non-negative int")
+        counts[field] = count
+    return ({field: value[field] for field in _SOURCE_PROVENANCE_FIELDS}, counts)
+
+
+def _validate_resolved_analyst_grade_envelope(
+    result: Any,
+    *,
+    as_of: str,
+    provider_id: str,
+    endpoint: str,
+    direction_map: dict[str, str],
+) -> None:
+    if type(result) is not dict or set(result) != _PROVIDER_ENVELOPE_RESULT_KEYS:
+        raise SourcePacketError("provider envelope analyst-grade result keys drifted")
+    signals = _canonical_provider_envelope_map(result["signals"], name="analyst.signals")
+    records = _canonical_provider_envelope_map(result["records"], name="analyst.records")
+    provenance = _canonical_provider_envelope_map(result["provenance"], name="analyst.provenance")
+    checked = _canonical_provider_envelope_map(result["checked"], name="analyst.checked")
+    excluded = _canonical_provider_envelope_map(result["excluded"], name="analyst.excluded")
+    identities = (set(signals), set(checked), set(excluded))
+    if any(left & right for index, left in enumerate(identities) for right in identities[index + 1:]):
+        raise SourcePacketError("provider envelope analyst-grade dispositions overlap")
+    if set(records) != set(signals) or set(provenance) != (set(signals) | set(checked)):
+        raise SourcePacketError("provider envelope analyst-grade records/provenance identities drifted")
+    for ticker, row in signals.items():
+        if type(row) is not dict or set(row) != {"analyst_actions_recent"}:
+            raise SourcePacketError(f"provider envelope analyst signal[{ticker}] keys drifted")
+        summary = row["analyst_actions_recent"]
+        if type(summary) is not dict or set(summary) != _ANALYST_SUMMARY_KEYS:
+            raise SourcePacketError(f"provider envelope analyst summary[{ticker}] keys drifted")
+        if any(type(summary[field]) is not int for field in _ANALYST_SUMMARY_KEYS):
+            raise SourcePacketError(f"provider envelope analyst summary[{ticker}] values must be exact int")
+        normalized_records = records[ticker]
+        if type(normalized_records) is not list:
+            raise SourcePacketError(f"provider envelope analyst records[{ticker}] must be a list")
+        source_provenance, counts = _validated_source_provenance(
+            provenance[ticker], ticker=ticker, as_of=as_of, provider_id=provider_id, endpoint=endpoint
+        )
+        from zoneinfo import ZoneInfo
+
+        observed_date = datetime.fromisoformat(source_provenance["observed_at"].replace("Z", "+00:00")).astimezone(
+            ZoneInfo("America/New_York")
+        ).date()
+        seen: set[tuple[str, str, str, str, str]] = set()
+        actions = {"up": 0, "down": 0, "neutral": 0}
+        firms: set[str] = set()
+        downgrading_firms: set[str] = set()
+        for record in normalized_records:
+            if type(record) is not dict or set(record) != _ANALYST_RECORD_KEYS:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] keys drifted")
+            date = record["date"]
+            try:
+                record_date = datetime.strptime(date, "%Y-%m-%d").date()
+            except (TypeError, ValueError) as exc:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] date is malformed") from exc
+            if record_date > observed_date:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] is look-ahead")
+            if (datetime.strptime(as_of, "%Y-%m-%d").date() - record_date).days > 90:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] is out of the source window")
+            for field in ("grading_company", "new_grade", "action"):
+                if type(record[field]) is not str or not record[field].strip():
+                    raise SourcePacketError(f"provider envelope analyst record[{ticker}].{field} is malformed")
+            if type(record["previous_grade"]) is not str or type(record["direction"]) is not str:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] grade/direction types drifted")
+            expected_direction = direction_map.get(record["action"], "neutral")
+            if record["direction"] != expected_direction:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] direction drifted")
+            normalized_firm = " ".join(record["grading_company"].split()).casefold()
+            identity = (date, normalized_firm, record["action"], record["new_grade"], record["previous_grade"])
+            if identity in seen:
+                raise SourcePacketError(f"provider envelope analyst record[{ticker}] duplicates source identity")
+            seen.add(identity)
+            actions[record["direction"]] += 1
+            firms.add(normalized_firm)
+            if record["direction"] == "down":
+                downgrading_firms.add(normalized_firm)
+        if normalized_records != sorted(
+            normalized_records, key=lambda record: (record["date"], " ".join(record["grading_company"].split()).casefold())
+        ):
+            raise SourcePacketError(f"provider envelope analyst records[{ticker}] are not canonical order")
+        expected_summary = {
+            "upgrades": actions["up"],
+            "downgrades": actions["down"],
+            "neutrals": actions["neutral"],
+            "net": actions["up"] - actions["down"],
+            "distinct_firms": len(firms),
+            "distinct_downgrading_firms": len(downgrading_firms),
+            "window_days": 90,
+        }
+        if summary != expected_summary:
+            raise SourcePacketError(f"provider envelope analyst summary[{ticker}] is not bound to records")
+        if counts["total_record_count"] != len(normalized_records) + counts["out_of_window_count"] + counts["future_excluded_count"]:
+            raise SourcePacketError(f"provider envelope analyst provenance[{ticker}] counts drifted")
+    for ticker, row in checked.items():
+        source_provenance, counts = _validated_source_provenance(
+            provenance[ticker], ticker=ticker, as_of=as_of, provider_id=provider_id, endpoint=endpoint
+        )
+        del source_provenance
+        if (
+            type(row) is not dict
+            or set(row) != ({"disposition", "coverage_status", "parser_status"} | _SOURCE_PROVENANCE_COUNT_FIELDS)
+            or row["disposition"] != "checked_no_recent_activity"
+            or row["coverage_status"] != "full"
+            or row["parser_status"] != "ok"
+            or any(row[field] != counts[field] for field in _SOURCE_PROVENANCE_COUNT_FIELDS)
+            or counts["total_record_count"] != counts["out_of_window_count"] + counts["future_excluded_count"]
+        ):
+            raise SourcePacketError(f"provider envelope analyst checked[{ticker}] is not source-bound")
+    if any(type(reason) is not str for reason in excluded.values()):
+        raise SourcePacketError("provider envelope analyst excluded dispositions must be exact str")
+
+
+def _validate_resolved_offering_envelope(result: Any, *, as_of: str) -> None:
+    if type(result) is not dict or set(result) != _SEC_OFFERING_RESULT_KEYS:
+        raise SourcePacketError("provider envelope SEC offering result keys drifted")
+    signals = _canonical_provider_envelope_map(result["signals"], name="offering.signals")
+    provenance = _canonical_provider_envelope_map(result["provenance"], name="offering.provenance")
+    checked = _canonical_provider_envelope_map(result["checked"], name="offering.checked")
+    excluded = _canonical_provider_envelope_map(result["excluded"], name="offering.excluded")
+    identities = (set(signals), set(checked), set(excluded))
+    if any(left & right for index, left in enumerate(identities) for right in identities[index + 1:]):
+        raise SourcePacketError("provider envelope SEC offering dispositions overlap")
+    if set(provenance) != (set(signals) | set(checked)):
+        raise SourcePacketError("provider envelope SEC offering provenance identities drifted")
+    reconstructed: dict[str, dict[str, Any]] = {}
+    for ticker in (*signals, *checked):
+        row = provenance[ticker]
+        if type(row) is not dict or set(row) != {"active_offering"} or type(row["active_offering"]) is not dict:
+            raise SourcePacketError(f"provider envelope SEC offering provenance[{ticker}] keys drifted")
+        source_row = row["active_offering"]
+        if set(source_row) != (_SOURCE_PROVENANCE_FIELDS | {"contributing_filings"}):
+            raise SourcePacketError(f"provider envelope SEC offering provenance[{ticker}] source fields drifted")
+        if source_row["provider_id"] != "sec_edgar" or source_row["endpoint_or_filing_type"] != "submissions":
+            raise SourcePacketError(f"provider envelope SEC offering provenance[{ticker}] provider/endpoint drifted")
+        reconstructed[ticker] = {
+            "filings": source_row["contributing_filings"],
+            "provenance": {field: source_row[field] for field in _SOURCE_PROVENANCE_FIELDS},
+        }
+    for ticker, row in excluded.items():
+        if type(row) is not dict or set(row) != {"active_offering"} or type(row["active_offering"]) is not str:
+            raise SourcePacketError(f"provider envelope SEC offering excluded[{ticker}] is malformed")
+    try:
+        replayed = resolve_offering_audit(as_of=as_of, filings_by_ticker=reconstructed)
+    except Exception as exc:
+        raise SourcePacketError(f"provider envelope SEC offering cannot replay its source facts: {exc}") from exc
+    for field in ("signals", "provenance", "checked"):
+        if replayed[field] != result[field]:
+            raise SourcePacketError(f"provider envelope SEC offering {field} is not bound to provenance/filings")
 
 
 def source_packet_input_manifest(packet_path: Path | str) -> tuple[tuple[str, str, str], ...]:
@@ -349,6 +666,7 @@ def run_packet(
     projection_binding_expectations: ProjectionBindingExpectations = FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
 ) -> dict[str, Any]:
     packet, paths = _load_and_validate_packet(packet_path)
+    provider_envelope_digests = _validated_provider_envelope_digests(packet, paths)
     if context_components_output_path is not None:
         paths["output_context_components_path"] = _validate_output_path(
             context_components_output_path,
@@ -358,7 +676,11 @@ def run_packet(
         eligibility_governance = load_eligibility_governance(paths["eligibility_governance_path"])
         catalyst_governance = load_catalyst_governance(paths["catalyst_governance_path"])
         source_payloads = {
-            field: _source_json(paths[field], field=field)
+                field: _source_json(
+                    paths[field],
+                    field=field,
+                    expected_sha256=provider_envelope_digests.get(field),
+                )
             for field in (
                 "candidate_artifact_path",
                 "momentum_projection_path",
@@ -366,6 +688,7 @@ def run_packet(
                 "offering_audit_source_path",
                 "analyst_grade_actions_path",
                 "massive_news_events_path",
+                "theme_selection_contract_path",
             )
         }
         if "overextension_projection_path" in paths:
@@ -374,7 +697,35 @@ def run_packet(
             )
         if "yfinance_grade_actions_path" in paths:
             source_payloads["yfinance_grade_actions_path"] = _source_json(
-                paths["yfinance_grade_actions_path"], field="yfinance_grade_actions_path"
+                paths["yfinance_grade_actions_path"],
+                field="yfinance_grade_actions_path",
+                expected_sha256=provider_envelope_digests["yfinance_grade_actions_path"],
+            )
+        provider_envelope_as_of = _provider_envelope_as_of(packet["decision_clock"]["expected_decision_date"])
+        _validate_resolved_offering_envelope(
+            source_payloads["offering_audit_source_path"], as_of=provider_envelope_as_of
+        )
+        _validate_resolved_analyst_grade_envelope(
+            source_payloads["analyst_grade_actions_path"],
+            as_of=provider_envelope_as_of,
+            provider_id="fmp",
+            endpoint="grades",
+            direction_map={"upgrade": "up", "downgrade": "down"},
+        )
+        try:
+            validate_resolved_news_events(
+                news_events=source_payloads["massive_news_events_path"],
+                as_of=packet["decision_clock"]["expected_decision_date"],
+            )
+        except Exception as exc:
+            raise SourcePacketError(f"provider envelope Massive news rejected: {exc}") from exc
+        if "yfinance_grade_actions_path" in source_payloads:
+            _validate_resolved_analyst_grade_envelope(
+                source_payloads["yfinance_grade_actions_path"],
+                as_of=provider_envelope_as_of,
+                provider_id="yfinance",
+                endpoint="upgrades_downgrades",
+                direction_map={"up": "up", "down": "down"},
             )
         analyst_grade_actions = source_payloads.get(
             "yfinance_grade_actions_path",
@@ -419,6 +770,7 @@ def run_packet(
             "massive_news_events": source_payloads["massive_news_events_path"],
             "catalyst_governance": catalyst_governance,
             "theme_opportunity_state": packet["decision_clock"]["theme_opportunity_state"],
+            "theme_selection_contract": source_payloads["theme_selection_contract_path"],
             "holdings": packet["optional_inputs"]["holdings"],
             "catalyst_recall_feed": packet["optional_inputs"]["catalyst_recall_feed"],
         }

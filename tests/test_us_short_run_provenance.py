@@ -36,7 +36,7 @@ _EMPTY_PAYLOADS = {"universe": [], "candidate_pass2_signals": {}, "per_ticker_an
 def _manifest(row_count=0, **over):
     refs = [{"role": "test_fixture", "path": "tests/fixtures/us_short/run_provenance.json"}]
     price = {"as_of": _DD, "observed_at": _OBS, "price_basis_date": _PB,
-             "session": "RTH", "adjustment": "split_div_adjusted", "row_count": row_count,
+             "session": "RTH", "adjustment": "split_adjusted", "row_count": row_count,
              "source_refs": list(refs)}
     nonprice = {"as_of": _DD, "observed_at": _OBS, "price_basis_date": None, "session": None,
                 "adjustment": None, "row_count": row_count, "source_refs": list(refs)}
@@ -61,7 +61,7 @@ class PositiveControl(unittest.TestCase):
         self.assertEqual(out["price_basis_date"], _PB)
         self.assertEqual(out["run_date"], _RUN)
         self.assertEqual(out["session"], "RTH")
-        self.assertEqual(out["adjustment"], "split_div_adjusted")
+        self.assertEqual(out["adjustment"], "split_adjusted")
         self.assertEqual(set(out["families"]), EXPECTED_FAMILIES)
 
     def test_observed_at_equal_to_now_is_allowed(self):   # boundary: observed_at == now_et is NOT future
@@ -179,6 +179,13 @@ class FutureAndStale(unittest.TestCase):
 
 
 class PriceLineage(unittest.TestCase):
+    def test_dividend_adjusted_claim_is_rejected_without_dividend_evidence(self):
+        manifest = _manifest()
+        for family in ("universe", "per_ticker_analysis"):
+            manifest["families"][family]["adjustment"] = "split_div_adjusted"
+        with self.assertRaises(RunProvenanceError):
+            _run(manifest)
+
     def test_price_family_missing_session_or_adjustment_rejected(self):
         for key in ("session", "adjustment"):
             for bad in (None, "", "   "):
@@ -187,7 +194,7 @@ class PriceLineage(unittest.TestCase):
                     _run(m)
 
     def test_non_price_family_must_not_declare_price_lineage(self):
-        for key, bad in (("price_basis_date", _PB), ("session", "RTH"), ("adjustment", "split_div_adjusted")):
+        for key, bad in (("price_basis_date", _PB), ("session", "RTH"), ("adjustment", "split_adjusted")):
             m = _manifest(); m["families"]["selection_inputs"][key] = bad
             with self.assertRaises(RunProvenanceError):
                 _run(m)

@@ -65,10 +65,10 @@ SUMMARY_SAMPLE_REL_ROOT = Path("provider_samples/us_short_batch5_full_universe_m
 _CANONICAL_SUMMARY_RE = re.compile(r"^us_short_batch5_full_universe_momentum_fetch_summary_[0-9]{8}\.json$")
 
 BENCHMARK_SYMBOLS = ("SPY", "QQQ")
-# The grouped-daily default adjustment (Massive mirrors Polygon; split/dividend reconciliation is a separate
-# SR-PROVIDER-001 track). All series share ONE feed -> one adjustment label -> rel-strength stays same-regime.
+# Massive grouped daily `adjusted=true` confirms split adjustment. Dividend/ex-date reconciliation remains a
+# separate SR-PROVIDER-001 track, so the source contract must not overclaim `split_div_adjusted`.
 SESSION_LABEL = "RTH"
-ADJUSTMENT_MODE = "massive_grouped_daily"
+ADJUSTMENT_MODE = "split_adjusted"
 # momentum ret_3m / vol_surge need ~64 sessions; collect up to WINDOW with data, over WINDOW+BUFFER candidates.
 SESSION_WINDOW_TARGET = 70
 SESSION_MIN_REQUIRED = 64

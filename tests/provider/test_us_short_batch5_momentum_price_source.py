@@ -58,7 +58,7 @@ def _series(symbol: str, *, start: float, step: float, as_of: str = _PRICE_BASIS
     return {
         "as_of": as_of,
         "session": "RTH",
-        "adjustment_mode": "split_div_adjusted",
+        "adjustment_mode": "split_adjusted",
         "points": [
             {"date": date, "close": start + (idx * step), "volume": 1_000_000.0 + idx}
             for idx, date in enumerate(dates)
@@ -114,7 +114,7 @@ def _source_packet(*, symbols=("AAPL", "MSFT"), price_basis_date: str = _PRICE_B
             "selected_symbols": list(symbols),
             "benchmark_symbols": ["SPY", "QQQ"],
             "session": "RTH",
-            "adjustment_mode": "split_div_adjusted",
+            "adjustment_mode": "split_adjusted",
             "min_points_per_series": 64,
             "full_market_sample": False,
         },

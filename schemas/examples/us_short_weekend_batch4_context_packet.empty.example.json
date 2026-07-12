@@ -6,6 +6,13 @@
     "candidate_pass2_signals": {},
     "selection_inputs": {
       "theme_opportunity_state": "no_strong_theme",
+      "theme_selection_contract": {
+        "as_of": "20260615",
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": false,
+        "theme_opportunity_state": "no_strong_theme",
+        "per_ticker": {}
+      },
       "per_ticker": {}
     }
   },
@@ -19,7 +26,7 @@
         "observed_at": "2026-06-13T08:00:00",
         "price_basis_date": "20260612",
         "session": "RTH",
-        "adjustment": "split_div_adjusted",
+        "adjustment": "split_adjusted",
         "row_count": 0,
         "source_refs": [
           {
@@ -33,7 +40,7 @@
         "observed_at": "2026-06-13T08:00:00",
         "price_basis_date": "20260612",
         "session": "RTH",
-        "adjustment": "split_div_adjusted",
+        "adjustment": "split_adjusted",
         "row_count": 0,
         "source_refs": [
           {
@@ -86,6 +93,7 @@
   "sizing_per_ticker": {},
   "basket_context": {
     "per_ticker": {},
+    "holding_themes": {},
     "portfolio_guard_status": "normal",
     "theme_opportunity_state": "no_strong_theme"
   },

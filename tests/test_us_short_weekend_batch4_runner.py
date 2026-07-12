@@ -24,6 +24,7 @@ def _packet(base: Path, *, with_register=True):
     pc = _pipeline_context(reg_path, runs_root, weekly_root)
     sizing_per_ticker = pc.pop("sizing_context")["per_ticker"]
     pc.pop("available_cash")
+    pc.pop("account_state")  # runner consumes the private account_state_path, then injects account_state internally
     pc.pop("eligibility_governance")
     pc.pop("calendar")
     account_path = base / "account_state.json"

@@ -39,6 +39,28 @@ def _overextension(state="none"):
     }
 
 
+def _theme_selection_contract(tickers):
+    return {
+        "as_of": "20260713",
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": False,
+        "theme_opportunity_state": "no_strong_theme",
+        "per_ticker": {
+            ticker: {
+                "theme_id": f"industry:{ticker.lower()}",
+                "theme_source": "industry_heat_v1",
+                "theme_lifecycle_state": "confirmed_active",
+                "theme_leader_rs": 0.0,
+                "membership_origin": "automatic_discovery",
+                "market_confirmed": True,
+                "individual_theme_gate_passed": True,
+                "overextension_state": "none",
+            }
+            for ticker in tickers
+        },
+    }
+
+
 def _inputs():
     blocks = {
         "ALFA": {"momentum": 60.0, "theme": 100.0, "catalyst": 50.0},
@@ -71,7 +93,10 @@ def _inputs():
         "catalyst_recall_feed": None,
         "holdings": [],
         "candidate_pass2_signals": {ticker: {} for ticker in blocks},
-        "selection_inputs": composition["selection_inputs"],
+        "selection_inputs": {
+            **composition["selection_inputs"],
+            "theme_selection_contract": _theme_selection_contract(blocks),
+        },
     }
     return data_context, composition, {"ALFA": _overextension("chasing_extreme"), "BETA": _overextension()}
 
@@ -162,7 +187,10 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
             self.assertTrue(Context.forward_policy_summary_path.exists())
 
             mismatched = dict(self.data_context)
-            mismatched["selection_inputs"] = {"theme_opportunity_state": "strong", "per_ticker": {}}
+            mismatched["selection_inputs"] = {
+                **mismatched["selection_inputs"],
+                "theme_opportunity_state": "strong",
+            }
             data_path.write_text(json.dumps(mismatched), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "mismatched"):
                 capstone_stages.run_forward_policy_shadow(Context())
