@@ -188,7 +188,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.state_dir, ignore_errors=True)
         shutil.rmtree(self.private_root, ignore_errors=True)
 
-    def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None):
+    def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None,
+                     missing_input_stage=None, present_input_stage=None):
         def outs_for(name):
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
@@ -241,7 +242,13 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     return {"stage": nm}
                 return run
 
-            stages.append(Stage(name, gated, lambda c: [], outs, make_run(name, outs)))
+            if name == missing_input_stage:
+                ins = lambda c: [Path(c.private_root) / "_run_inputs" / "absent_declared_input.json"]
+            elif name == present_input_stage:
+                ins = lambda c: [c.candidate_path]   # produced by universe_fetch (stage 0) → present at this turn
+            else:
+                ins = lambda c: []
+            stages.append(Stage(name, gated, ins, outs, make_run(name, outs)))
         return stages
 
     def _run(self, order_sink, **kw):
@@ -274,6 +281,26 @@ class CapstoneFakeChainTest(unittest.TestCase):
             self._run(order, stages=self._fake_stages(order, skip_output_stage="pass2_fetch"))
         self.assertIn("pass2_fetch", str(cm.exception))
         self.assertNotIn("weekly_bridge", order)             # aborted before the next stage
+
+    def test_stage_missing_input_fails_fast_before_stage_runs(self):
+        # symmetric to the missing-output guard: a stage whose declared input is absent this run aborts UP FRONT
+        # (with the stage name), before entering the stage body — not a deeper crash. pass2_fetch's declared input
+        # here is a path no prior fake stage produced.
+        order: list[str] = []
+        with self.assertRaises(WeeklyCapstoneError) as cm:
+            self._run(order, stages=self._fake_stages(order, missing_input_stage="pass2_fetch"))
+        self.assertIn("pass2_fetch", str(cm.exception))
+        self.assertIn("input", str(cm.exception).lower())
+        self.assertNotIn("pass2_fetch", order)               # aborted BEFORE the stage's run body
+        self.assertIn("yfinance_grades_fetch", order)        # earlier (empty-input) stages still ran
+
+    def test_stage_present_declared_input_passes_and_chain_completes(self):
+        # positive control: a stage whose declared input WAS produced by an earlier stage passes the pre-stage gate
+        # and the full chain still emits — the gate is not over-broad (does not false-fail present inputs).
+        order: list[str] = []
+        summary = self._run(order, stages=self._fake_stages(order, present_input_stage="momentum_fetch"))
+        self.assertEqual(order, _STAGE_NAMES)
+        self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
 
     def test_stage_exception_wrapped_with_stage_name(self):
         order: list[str] = []

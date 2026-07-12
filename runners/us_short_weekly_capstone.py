@@ -372,6 +372,18 @@ def _output_fingerprint(path: Path):
         return None
 
 
+def _input_readable(path: Path) -> bool:
+    """A declared stage input is usable this run iff it exists as a readable file. Existence + readability ONLY —
+    schema / date / identity / digest stay each business runner's job (design: the capstone does NOT duplicate a
+    second validation framework). Missing / unreadable / a directory in the input slot all fail closed."""
+    try:
+        with Path(path).open("rb") as handle:
+            handle.read(1)
+    except OSError:
+        return False
+    return True
+
+
 def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, Any]]):
     """Build the A1 receipt from exact completed stages and their provider-call evidence."""
     completed = tuple(item.get("name") for item in results)
@@ -787,8 +799,9 @@ def run_weekly_capstone(
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
-    before touching a provider), then runs each stage in order, validating each stage's declared outputs exist and
-    aborting fast (with the stage name) on the first failure. `stages` is injectable for offline testing."""
+    before touching a provider), then runs each stage in order, validating each stage's declared inputs are readable
+    before it starts and its declared outputs exist after, aborting fast (with the stage name) on the first failure.
+    `stages` is injectable for offline testing."""
     if max_retries_per_call and max_total_http_attempts is None:
         raise WeeklyCapstoneError(
             "max_total_http_attempts must be explicit whenever live 429 retries are enabled"
@@ -857,6 +870,15 @@ def run_weekly_capstone(
                     research_live_capability=receipt,
                     official_output_root=transaction.staging_root,
                 )
+            # Pre-stage input gate: a stage's declared inputs (prior stages' outputs, or pre-existing external files)
+            # must be readable BEFORE it starts — else fail fast with the stage name instead of letting the stage crash
+            # deeper on a stale/missing/cross-run input. Existence+readability only; each runner still owns its own
+            # schema/date/identity/digest checks. Empty input lists (e.g. universe_fetch, vix_regime) pass trivially.
+            unreadable_inputs = [Path(p) for p in stage.inputs(stage_ctx) if not _input_readable(Path(p))]
+            if unreadable_inputs:
+                raise WeeklyCapstoneError(
+                    f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
+                    f"{[_rel(p) for p in unreadable_inputs]}")
             expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:

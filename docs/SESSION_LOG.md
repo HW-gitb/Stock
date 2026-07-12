@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 — capstone stage 输入前置门（自修自审；codex_r3「编排韧性补充」）
+
+- **改动**：`runners/us_short_weekly_capstone.py` 编排循环在每个 stage 开跑前，先校验该 stage **已声明的 inputs** 存在且可读（新 helper `_input_readable`：缺失/不可读/目录一律 fail-closed），不满足则带 stage 名 `WeeklyCapstoneError("stage 'X' cannot start: declared input(s) missing or unreadable ...")` 快速中止——在 stage-run 的 try **之外**（是「cannot start」不是「stage failed」）、在 transaction try **之内**（触发回滚+释放锁）。只查存在+可读，schema/日期/身份/digest 仍归各 runner，不在 capstone 复制第二套验证框架（对齐该条最小处理意图）。
+- **范围/影响**：编排韧性、非选股正确性；把「跑进 stage 深处才崩、错误难定位」变成「入口早失败、指名哪个 stage 缺哪个输入」。各 runner 仍自校 receipt/binding/decision-date/digest。
+- **自审**：对抗读均 HELD——空 inputs（universe_fetch/vix_regime）trivial 过；真实 stage 的 inputs 皆上一 stage 产出、按序存在不误杀；`_rel` 对 repo 外路径回退 `str` 不崩；read(1) read-only 无副作用不污染上游产物；`inputs(stage_ctx)` 与既有 `outputs(stage_ctx)` 对称、无新风险类。
+- **验证**：新增负测（缺 input→带 stage 名快速中止、stage 体未进）+ 正控（present input→过、整链照常 emit）；capstone 63 通过；全 US-short 离线包 `4231 ran / OK / 0 fail`（较基线 +2 新测、零回归，真实非空 inputs 经 e2e 覆盖）。
+- **状态**：本改在主树、已提交、未 push（push 待用户显式指令）。
+
 ## 2026-07-12 — merge 状态：288f(issue 2/3/4)已入 master；0c94(issue 1/5/6)暂缓（forward_policy_heads 集成前置，A1）
 
 - **进度**：codex_r3 六项修复合并入 master。**288f 三项已干净合并**（`2e52976`，全离线 US-short `4229 ran / OK / 0 fail`）。**0c94 三项已在 worktree 审过并提交**（`10cd543`），但**合并入 master 暂缓**——不是文本冲突，是跨部件真实不兼容。
