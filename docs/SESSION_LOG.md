@@ -88,12 +88,35 @@
 - **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
 - **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
 - **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+## 2026-07-12 - Claude Code 决策（US-short A1 Cut-D 分析消费者 spec 已定·交 Codex 执行）
+
+- **决策**: 用户批准现在建 Cut-D 分析消费者（「代码可缓」的分析码，现在建=预注册最干净、零研究者自由度）。spec 已写进 `docs/us_short_forward_ab_execution_plan.md` §4（Cut D-analysis）。= 纯离线 verdict 引擎：吃 Cut A capture + Cut B ≥12 周成绩单 + Cut C decision-diff，套 const-pin 的 Cut D manifest，逐头出 divergence-week 计数 + (a)(b)(c) promotion 判定 + outcome-blind futility/harm flag。新码=placebo(1000×seed0..999)+三道门+futility/harm+逐头 verdict。
+- **护栏（审查重点）**: 纯离线只吃真周（<12 分歧周→accumulating、不出判定、绝不产/补/replay/伪造 forward 证据、零 provider、不写 outcome）；阈值全从 manifest 读、不 hardcode（防 §4-vs-manifest 漂移类）；绑真周拒 stale/乱序/重复/look-ahead；never ship-gate、含票名 gitignored、tracked 脱敏；placebo 确定性；fail-closed。不抓 forward 价/不产 outcome（独立 gated 后续）、不接 live auto-writer、不碰 Cut E。
+- **规模/边界**: ~1-2 刀（placebo 引擎 + 三门 + futility/harm + verdict/schema/fixtures）；纯判定逻辑，真跑还差独立的 outcome 生产（gated），但那不挡现在建。
+- **Next**: Codex：`执行` Cut-D 分析消费者（按 §4 spec 建、fixtures 测；不产 forward 证据、不碰 Cut E；不提交、待 Claude 审查）。
+
+## 2026-07-12 - Claude Code 审查（US-short A1 Cut D 预注册统计计划 manifest）PASS
+
+- **Verdict/Action**: PASS + 已提交（ecf2）。manifest/engine/schema/tests 忠实冻结我的 spec + 用户批准值（win_margin 0.001、⅔=[2,3]、placebo 95 分位、1000×seed0..999·data-bound、divergence=Top15 对称差≥1、outcome-blind、≥12 分歧周）；const-pin 全字段 + engine 跨 grid & lifecycle #28 三角校验 min-weeks；ship-gate 隔离（boundary block 校验）；无 backfill/replay-as-forward（same-run-only）；fail-closed；未接消费者（analysis code 按计划滞后）。
+- **Required（已自处理）**: §4 prose turnover harm「sustained ≥4 周」与 manifest 的 `2` 漂移 → 我改 §4 为 2（ratify Codex 的 harmonize：与 fill 一致、软 flag-for-review 早浮现无害；这些断点本是我标注「可复审调」的 concretization）。manifest 是 const-pin 单一权威、不动。
+- **Optional**: (1) §4 仍复述 manifest 全值（single-source 隐患）→ future doc pass 可 slim 成指向 manifest 的指针；(2) upgrade_gate/banner 测试 fixture margin 0.02→0.001 = 纯装饰（真 governance 仍无数字 margin、`test_real_preset_margin_not_frozen` 仍 assert False → anti-self-deception 不变、真 gate 零行为变化），略超 Cut D 核心 scope 但无害。
+- **Verify**: 亲跑 clean full pack（neutralize cp312→py3.13+restore）`4262 OK`(1 skipped)；整读 manifest+engine+schema + upgrade_gate engine/test；Cut D test 覆盖 second-wave/grid/backfill/replay/threshold/placebo drift 拒绝 + schema const-pin。
+- **Next**: 待用户 merge → ecf2 合入 master。
+
 ## 2026-07-12 - Claude Code 决策（US-short A1 Cut D 预注册统计计划已冻结·交 Codex 执行）
 
 - **决策**: Cut D 四项开放参数已定、冻结进 `docs/us_short_forward_ab_execution_plan.md` §4（[SPEC-FROZEN]）。Divergence=Top15 成员对称差≥1（rank/bucket 仅次级、因 Cut A capture 无 sizing/action）；placebo=1000 replicates·seed 0..999·匹配频率=各头当周实际分歧只数、gate=真头超额>placebo 95 分位；early_action=outcome-blind（futility<2 分歧周@前8周、harm=换手>2× 或 fill<50% 持续、只 flag 复审不自动淘汰）。
 - **用户批准（2026-07-12）**: comparison_win_margin=+0.10%/周（更松档）+ ≥⅔ 分歧周 paired-win 一致性；early_action 口径=纯 outcome-blind。gate(c) placebo 分位 + 具体 futility/harm 数值断点=Claude 对已批准口径的 concretization（可复审调、v1 冻结）。
 - **边界**: never ship-gate、changes_primary_selection=false、零 provider、无 §2.1/§12.2 例外、私有票据 gitignored、tracked manifest 脱敏；method 须落在首次授权 LIVE capture 之前。
 - **Next**: Codex：`执行` Cut D（按 §4 [SPEC-FROZEN] EXACT 值建 schema/preset/manifest+测试；不碰 Cut E；不提交、待 Claude 审查）。
+
+## 2026-07-12 - Codex 执行（US-short A1 Cut D statistical-plan manifest）
+
+- **Verdict/Action**: Cut D 已构建、未提交：静态 schema/preset + pure validator 冻结六头的同周 PIT 方法、12 个 divergence week、`+0.10%/week` margin、1000 个 data-bound placebo、outcome-blind futility/harm review；不接捕获写入、回放、Cut E、provider、主轨或 ship-gate。
+- **Required**: 无 Codex 遗留；material 边界见 `R-USSHORT-A1-CUT-D-STATISTICAL-PLAN-MANIFEST`。
+- **Verify**: red-first（缺失 contract）→ focused `129 OK`；完整离线 `test_us_short*.py` `4262 OK`（1 skipped）；doc/route/schema `68 OK`；py_compile/JSON parse/diff-check 通过（仅 CRLF warning）；Path-B active-surface grep=0。
+- **Pre-Codex self-review**: A-F main-thread（未启子 agent）；B 覆盖 grid/#28 lifecycle/design/preset/schema/upgrade-test 例值与 Path-B active surfaces；C 覆盖 second-wave、backfill/replay、margin/placebo/divergence/promotion-gate 篡改；E 未改 CURRENT；固定包集中跑完一次。
+- **Next**: Claude Code：审查
 
 ## 2026-07-12 - Claude Code 审查（US-short A1 Cut C policy decision-diff）PASS
 
