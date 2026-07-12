@@ -120,8 +120,11 @@ graduation lines are never edited to fix a failure.**
 - **Primary (economic)**: `R_B,t = g*_t · R_VTI-total,t + (1 − g*_t) · R_3M-Tbill,t`, where `g*_t` = the strategy's
   *rule-implied* target equity exposure that day (NOT the operator's actual post-skip exposure — so discretionary
   cash is not flattered by a zero benchmark; cash drag stays inside the portfolio return). **(v1.0 red-team patch,
-  hole H) `g*_t` is pinned as the sum of that day's rule-implied target position weights, capped at 1.0 — no
-  discretion.** If the eligible universe is in fact predominantly small-cap, replace VTI with a fixed investable
+  hole H) `g*_t` is pinned as the rule-implied target equity exposure — no discretion. (v1.0 external-red-team N9)
+  It is computed from the FULL target portfolio (existing cross-week holdings + new orders + cash constraint), not
+  just the week's new picks; long-only means it cannot exceed 1.0 — if the rule's total target exposure ever exceeds
+  1.0 that is a portfolio-construction error to surface and fix, NOT something the cap may silently hide.** If the
+  eligible universe is in fact predominantly small-cap, replace VTI with a fixed investable
   small-cap total-return benchmark **now**, not after seeing results.
 - **Auxiliary (attribution, does not replace primary)**: market/size/value/profitability/investment/**momentum**
   factor regression + a fixed investable momentum ETF + a sector/size-matched portfolio. Positive vs VTI but clearly
@@ -173,9 +176,16 @@ alpha; `not_assessed` if volume/spread/timing/real-size test missing (never a pa
 
 ## §9. Manual-execution compliance (ITT)
 
-Every rule-compliant recommendation is executed in the minimal-size validation account at uniform size. Subjective
-skip → cash for that planned allocation (not deleted). Re-price → real fill price + real cost. Early exit → real
-result. Unfilled → the frozen cancel/chase rule. No non-recommended names in the validation account. Required:
+Every rule-compliant recommendation is executed in the minimal-size validation account **at the frozen target
+weights scaled by ONE per-week factor `k_t` (NOT equal-dollar — the rule's relative weights, cash %, sector caps and
+existing-holding netting are preserved; v1.0 external-red-team N7)**. **(v1.0 external-red-team N1 — the killer hole
+both self-passes missed) For any DEVIATION (subjective skip, re-price, delayed entry, early exit), the
+strategy-measurement ledger records the deterministic frozen-RULE counterfactual (rule fill + rule stop/target/exit
+at rule prices) — NOT the operator's actual result and NOT cash. So skipping a pick the rule would have lost records
+the rule's loss; a deviation can only leave the strategy record unchanged or worse, never better.** Compliant
+executions are recorded at their real fills (real cost — this is what proves executability). Unfilled → the frozen
+cancel/chase rule, scored at the rule counterfactual. Every deviation also lives in the operator ledger. No
+non-recommended names in the validation account. Required:
 notional coverage ≥ **98%**, weekly compliance (dollar AND count) ≥ **95%** monthly and cumulatively at each formal
 check. Allowed exceptions are only pre-listed objective events (halt, no valid quote, regulatory restriction) — never
 "felt wrong". **(v1.0 red-team patch, hole A) Every claimed exception needs an objective evidence stamp captured at

@@ -37,3 +37,56 @@
 First-pass self-red-team closed 8 real holes (all patched) + flagged 1 minor pin (I) + 1 residual limitation. The
 protocol is materially tighter. **Still required before freeze**: an independent red-team (different LLM/person) +
 the §11.2 zero-alpha calibration + §11 items 1 & 3.
+
+---
+
+## Second red-team — external, independent (2026-07-12) — triage of 24 findings
+
+An independent LLM red-teamed the patched protocol. **It found the one genuinely-killer logical hole both prior
+passes missed (N1 = E-core): my ITT patch kept bad weeks in the series but did NOT stop a discretionary deviation
+(skip / re-price / early exit) from *improving* the strategy-measurement ledger** — skipping a pick the rule would
+have lost recorded cash, not the rule's loss. That alone justified the exercise. The rest is high-quality but written
+to an **institutional / adversarial** standard; triaged below for a **solo, manual, small-account** operator (the
+"not ready to freeze / 8 blocking" verdict is correct for an institutional bar — for a solo operator who *wants*
+honest results, group A is what matters). This is the freeze-checklist; the eventual freeze applies A + B.
+
+**Group A — real conceptual holes, cheap, fit solo scale (PATCH / apply):**
+- **N1 (PATCHED §9)** — deviations scored at the deterministic frozen-RULE counterfactual; a deviation can only leave
+  the strategy record unchanged or worse, never better. Compliant fills stay at real fills (executability).
+- **N7 (PATCHED §9)** — validation uses the frozen target weights scaled by one `k_t`, not equal-dollar.
+- **N9 (PATCHED §6)** — `g*_t` from the FULL target portfolio; long-only >100% target = construction error to fix,
+  not something the 1.0 cap hides.
+- **To apply at freeze (conceptual, one-liners):** N10 activate on the next scheduled run day (no timed start);
+  N14 adverse regime must occur *while actually deployed* (min exposure/orders during the stress); N15 drawdown on
+  DAILY (not weekly) marks; N16 implementation shortfall from arrival price over ALL intended orders incl. unfilled;
+  N19 count "scheduled weeks" not "valid weeks" — a system-failure week never auto-counts as favorable cash;
+  N21 any code change touching a potentially-triggerable branch restarts the clock even if historical replay is
+  identical; N22 FAIL vs INSUFFICIENT decision matrix (missing the bar at a fixed check = FAIL, not endless wait;
+  lifetime-DD breach = permanent fail); N23 full-size authorization has periodic maintenance checks + expiry (alpha/
+  capacity/risk decay → downgrade); N24 `C*`/ramp/capacity limits apply across ALL accounts of the same operator
+  running this strategy; N6 each rung validated by REAL deployment at that size (not micro-size extrapolation);
+  I zero-pick weeks — rule-zero = cash, but data-failure/late-run ≠ favorable cash, and existing holdings stay valued.
+
+**Group B — pin exact values/rules at freeze (specify, don't "build"):** N5 fixed check calendar for every rung;
+N8 numeric "predominantly small-cap" threshold + require both exposure-matched-VTI AND size/sector-matched benchmark
+(if claiming selection alpha, the 5% floor applies vs the matched benchmark); N11 clamp `1 ≤ n_eff ≤ n` + a
+non-negative long-run-variance estimator; N12 pin exact stat defs (annualization / HAC lag / bootstrap type+seeds /
+DSR version / rounding / both-halves split); N13 when the (small) calibration runs — freeze DGP+params+seeds BEFORE
+seeing results, require a one-sided 95% binomial upper bound ≤ 5% (not the raw pass rate), drop no seeds.
+
+**Group C — institutional-grade, DECLINED for a solo manual operator** (honor-system; mitigations = the operator
+*wants* honest results, + independent review, + the design's a-priori-weight / no-factor-mining discipline):
+- **N2** salted commitment-hash of `C*` held by an independent custodian → overkill. Mitigation: write `C*` down +
+  dated at freeze (local file); any change restarts the clock.
+- **N3** external timestamp authority / transparency log for weekly manifests → overkill. Mitigation: commit the
+  weekly decision packet to local git at decision time (PIT), before the outcome is known.
+- **N4** global family-wise error budget + holdout lock-box → overkill. Mitigation: weights are set a-priori (no
+  statistical factor-mining), which structurally keeps the version family small; log every compared config honestly.
+- **N18** modeled portfolio-level crowded-exit stress → note as a capacity CAVEAT at solo small size, not a modeled
+  gate (the per-name 2%/MDV + stress-exit already bounds it).
+- **N20** normative manifest binding all files with external signed timestamps → overkill. Mitigation: declare the
+  JSON twin the single authoritative spec (MD is the human companion), and the freeze records the git commit + hashes.
+
+**Net**: 1 killer + 2 conceptual fixes patched now; ~11 conceptual one-liners + 5 pin-items recorded for the freeze;
+5 institutional controls declined-with-reason. The protocol is a proposal and freezes only at go-live, so group A/B
+are applied AT freeze (with numbers pinned then) — recorded here so nothing is lost, without bloating the proposal.

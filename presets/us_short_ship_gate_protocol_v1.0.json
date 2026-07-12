@@ -112,7 +112,7 @@
 
   "pre_freeze_validations": {
     "computability_audit": {"required": true, "status": "pending"},
-    "zero_alpha_calibration": {"required": true, "status": "pending", "false_graduation_to_full_max": 0.05, "min_runs": 10000},
+    "zero_alpha_calibration": {"required": true, "status": "pending", "false_graduation_to_full_max": 0.05, "scope_cap": "SMALL offline throwaway research script (order 1k-10k simple runs), NOT a production evaluator; do NOT build weekly HAC/deflated-Sharpe/n_eff pipelines or a ship-gate runner without proven need + explicit user approval (evaluation at the 24/36mo checks is by hand/small script). Expanding this scope needs user sign-off.", "n13_rigor": "freeze DGP+params+seeds before seeing results; require one-sided 95% binomial upper bound <= 0.05 (not raw pass rate); drop no seeds; null covers multiple alpha<=0 regimes", "deferred_until": "strategy_version_locked_and_approaching_real_money"},
     "power_analysis": {"required": true, "status": "pending", "true_alpha_scenarios": [0.03, 0.06, 0.09]},
     "red_team_and_independent_recompute": {"required": true, "status": "pending", "first_pass_self_done": true, "first_pass_record": "docs/us_short_ship_gate_redteam_v1.0.md", "first_pass_holes_closed": 8, "independent_pass_still_required": true, "note": "author self-red-team is a first pass only; a different LLM/person must red-team before freeze (author has blind spots)"}
   },
@@ -121,7 +121,11 @@
     "_note": "surfaced by the v1.0 red-team; must carry exact values before status=active",
     "factor_model": {"set": "FamaFrench5_plus_momentum", "source": "Kenneth_French_Data_Library", "frequency": null, "construction": null, "_hole": "C"},
     "zero_pick_week_handling": {"counts_as": "valid_observation_cash_or_benchmark_not_skipped", "confirmed": false, "_hole": "I"},
-    "max_holding_weeks_H": null
+    "max_holding_weeks_H": null,
+    "rung_check_calendar": {"fixed_dates_all_rungs": null, "_hole": "N5"},
+    "benchmark_selection": {"predominantly_small_cap_numeric_threshold": null, "require_both_vti_and_size_sector_matched": true, "selection_alpha_floor_vs_matched_benchmark": true, "_hole": "N8"},
+    "n_eff_clamp": {"min": 1, "max": "n", "nonneg_longrun_variance_estimator": true, "_hole": "N11"},
+    "stat_definitions": {"alpha_annualization": null, "hac_lag_rule": null, "bootstrap_type_and_seeds": null, "dsr_version_and_inputs": null, "both_halves_split": null, "rounding_uses_unrounded_for_decisions": true, "_hole": "N12"}
   },
 
   "outcomes": {"values": ["PASS", "FAIL", "INSUFFICIENT_EVIDENCE"], "insufficient_is_pass": false},
