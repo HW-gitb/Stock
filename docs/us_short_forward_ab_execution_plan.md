@@ -88,9 +88,11 @@ register + code are the source of truth.
   and the grid-governed >=12-week aligned window with embedded validated weekly comparisons and re-derived lineage. Lifecycle contributes only item #28;
   item #36 remains untouched because its governed unit is source-bound overextension triggers, absent from Cut A.
   Its own reviewed cut (a contract change to already-reviewed engines).
-- **[ ] Cut C** — per-ticker **decision-diff log**: turning a head off, does it change gate-pass / rank /
-  Top15 membership / action / size — a deterministic counterfactual diff (not post-hoc correlation),
-  private + de-identified.
+- **[BUILT] Cut C** — per-ticker **decision-diff log**: consumes the reviewed Cut-A capture and emits a private
+  ticker-bearing balanced-vs-policy diff plus a schema-pinned de-identified counts summary. It re-derives
+  non-selection gate stability, rank delta, selection bucket delta, and Top15 membership changes for the five
+  shadow policies. Action / size diffs are explicitly marked `not_available_in_cut_a_capture` because Cut A
+  does not run downstream analysis/sizing per policy; fabricating those claims is rejected.
 - **[ ] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
   `net_benchmark_excess`; divergence definition; minimum weeks; comparison margin; placebo seed + match
   frequency; paired basis; elimination rule). The plan must be pre-registered day-1; the analysis code may lag.

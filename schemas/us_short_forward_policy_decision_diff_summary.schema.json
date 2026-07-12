@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short A1 forward-policy decision-diff summary",
+  "description": "De-identified counts-only summary of one Cut-C decision-diff run. It contains no tickers, prices, returns, provider rows, actions, sizes, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "decision_date", "price_basis_date", "source_context_sha256", "selection_policies", "primary_policy", "diff_counts_vs_balanced", "unavailable_surfaces", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_decision_diff_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "source_context_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection_policies": {"const": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]},
+    "primary_policy": {"const": "balanced"},
+    "diff_counts_vs_balanced": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"],
+      "properties": {
+        "theme_plus": {"$ref": "#/definitions/counts"},
+        "theme_aggressive": {"$ref": "#/definitions/counts"},
+        "theme_off": {"$ref": "#/definitions/counts"},
+        "catalyst_off": {"$ref": "#/definitions/counts"},
+        "overextension_selection_off": {"$ref": "#/definitions/counts"}
+      }
+    },
+    "unavailable_surfaces": {
+      "const": {
+        "action_change": "not_available_in_cut_a_capture",
+        "size_change": "not_available_in_cut_a_capture"
+      }
+    },
+    "boundary": {
+      "const": {
+        "track": "comparison_non_production",
+        "evidence_level": "shadow_decision_diff_only",
+        "shadow_counts_ship_gate": false,
+        "full_size_ship_gate_allowed": false,
+        "provider_calls_added": false,
+        "broker_or_order_automation_allowed": false,
+        "changes_primary_selection": false
+      }
+    }
+  },
+  "definitions": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced_only_count", "policy_only_count", "overlap_count", "top15_membership_changed_count", "rank_changed_count", "selection_bucket_changed_count", "action_changed_count", "size_changed_count"],
+      "properties": {
+        "balanced_only_count": {"type": "integer", "minimum": 0},
+        "policy_only_count": {"type": "integer", "minimum": 0},
+        "overlap_count": {"type": "integer", "minimum": 0},
+        "top15_membership_changed_count": {"type": "integer", "minimum": 0},
+        "rank_changed_count": {"type": "integer", "minimum": 0},
+        "selection_bucket_changed_count": {"type": "integer", "minimum": 0},
+        "action_changed_count": {"const": 0},
+        "size_changed_count": {"const": 0}
+      }
+    }
+  }
+}

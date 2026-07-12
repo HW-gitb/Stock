@@ -8,6 +8,22 @@
 
 ---
 
+## 2026-07-12 - Claude Code 审查（US-short A1 Cut C policy decision-diff）PASS
+
+- **Verdict/Action**: PASS + 已提交（ecf2）。Cut C 纯派生引擎：消费已审 Cut A 私有 capture → 私有逐票 balanced-vs-policy diff（rank / Top15 成员 / gate-pass / bucket）+ 脱敏 counts summary。零 provider、本刀零持久化、never ship-gate、无 §2.1/§12.2 洗白。核验无 bypass：capture-bound（绑 source digest + 决策/价基时钟）；rank 由 validator 保证的唯一有序 admitted 派生；non-selection-gate 恒定断言 SOUND（candidates/cheap_eligible/recall/holdings 经 run_selection 证 score-independent、仅 _select_top15 吃分→只揪真扰动、不误伤合法 capture）；ship-gate 隔离 + 脱敏（summary schema additionalProperties:false 拒 ticker）+ action/size 三重拒伪造均成立。
+- **Required**: 无。
+- **Optional**: `selection_bucket_changed_count` 把成员变动票（policy 侧 bucket=None）也计入 bucket 变更、与纯 Top15 内 bucket 迁移混算；raw ticker_diffs 保留可拆字段供下游区分；shadow 研究指标、不碰真选股，暂不改。
+- **Verify**: 亲跑 clean full pack（neutralize 追踪的 cp312 .tools→py3.13 + restore）`4254 OK`(1 skipped)；整读引擎体 + summary schema + Cut B capture 契约（admitted 唯一有序）+ run_selection 输出契约；对抗测试 7 Cut C + 3 schema 覆盖 fail-closed / de-id / ship-gate 隔离 / action-size 拒伪造。
+- **Next**: 待用户 `merge` → ecf2 合入 master（base 414441a 已在 master 史内、同前几刀同法）。
+
+## 2026-07-12 - Codex 执行（US-short A1 Cut C policy decision-diff）
+
+- **Verdict/Action**: Cut C 已构建；当前顶部 Claude PASS 后无 pending Optional 可修，按 plan 进入下一部件。新增 Cut-A capture-bound 逐票 decision-diff：私有 ticker-bearing log + 脱敏 counts summary schema；只覆盖 Cut A 真实包含的非选择 gate 稳定、Top15 membership、rank、selection bucket，action/size 明确不可用且禁止伪造；未提交。
+- **Required**: 无 Codex 遗留；material 边界见 `R-USSHORT-A1-CUT-C-POLICY-DECISION-DIFF`。
+- **Verify**: focused Cut-A/B/C + schema `192 OK`；doc/route/schema guards `67 OK`；完整离线 `test_us_short*.py` `4254 OK`（1 skipped）；py_compile OK；diff-check clean（仅 CRLF warning）；active-surface grep 无 Path-B runtime、新 engine/schema 无 second-wave/sizing consumer。
+- **Pre-Codex self-review**: A-F main-thread（无 delegation）；B ripple grep 确认 Cut C 只新增离线 engine/schema/test/doc 路由，未接 provider/live/ship-gate/second-wave；C 反控覆盖二波、boundary、non-selection gate drift、action/size 伪造；E 未改 CURRENT；固定包集中跑完一次。
+- **Next**: Claude Code：审查
+
 ## 2026-07-12 — Claude 独立审查 PASS + 提交（US-short A1 Cut B 六-policy comparator/lifecycle）
 
 - **Verdict/Action**: PASS + 提交（ecf2 detached）。Cut B 正确：扩 shadow_compare/scorecard/multiweek 到 6-policy（保留 4-profile API）+ lifecycle #28；全程 capture-bound、ship-gate 隔离结构性、无洗证据、fixed-TopN、second-wave 仍拒、**#36 不伪造**、不冻 margin。整读三承重体确认 fail-closed（详见 register）；comparators 纯函数无落盘（含票名 set-diff 不进 tracked）；heads/shadow_stage 增量/加强；SELECTION_DECISION_KEYS 与 run_selection 14 键吻合（Cut A 无回归）。
