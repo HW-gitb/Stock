@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
+
+- **Verdict/Action**: 用户「自修自审、pass 后提交、暂不跑全量」。封 `114edc4e`(2026-07-11) 引入的整类回归:`sec_sic_classification_fetch.py:217` + `theme_producer.py:226` 用 `observed.date()!=decision_date` 强制「run 日==决策日」,违背 §2.1「即将到来交易日/开盘前跑、观测窗口=运行时刻·自然含周末」(canonical resolver 只 fail-closed 盘中死区)+ 同族 5 个 Cut5 引擎的半开区间。两处同改为 `observed >= decision 09:30 ET open` 才拒。首周全量跑(桌面 firstweek_test.md)周六跑至 stage 5 崩(烧 ~26min Massive)暴露。
+- **Required**: 无遗留。整类=2 runner(grep 确认无第三处)、同族引擎本就正确未动。单源见 register `R-USSHORT-BATCH5-SIC-THEME-OBSERVATION-WINDOW-WEEKEND-REGRESSION`(resolved)。
+- **Verify**: 精确复现原崩溃探针(周六 2026-07-11→周一 20260713)两 guard 现返回观测日放行、post-open 10:00 ET + 09:30 边界仍 fail-closed(半开保 look-ahead);各加 1 条周末接受反向测试、原 post-open 拒测保留;focused SIC+theme 26 OK;全 test_us_short* 4224 OK(clean D:\ env、0 fail/0 err);py_compile + git diff --check 净。连带 grep:classification 包仅 theme_producer 消费(只要求 source_as_of==观测日)、schema source_as_of 无 const/跨字段、下游用 theme 投影(source_as_of=price_basis)→零 as_of realignment。
+- **Pre-Codex self-review**: A 整类量词化=2 site 全覆盖;B grep 无第三处 + 无旧符号/旧信息残留;C 反向=weekend 收·post-open+09:30 边界拒;E 无 route-doc 漂移(未动 CURRENT)。独立对抗 pass: 不适用—guard 放宽且保住 look-ahead(post-open 仍拒)、不碰选股评分,按 proportional-review 政策不起 agent,边界由红绿精确探针钉死。
+- **Next**: 无(已提交);周末一键全量已解锁,可择时真跑(用户「暂不跑全量」)。
+
 ## 2026-07-12 — Claude solo A1 heads chasing-strip 收口 + 自审 PASS (→ strip_theme_score)
 
 - **Verdict/Action**: 按用户「自修自审、pass 后提交」修 `R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT`。判定 master(`strip_theme_score`) 对、heads(`theme_off`/momentum-only) 陈旧（据设计 §4.3「剥当前 profile 赛道贡献·不重分配·罚后≤原分」+ 罚分原则 + `5e3e00b` 已 resolved）。`_score_for_policy`：retain-strip 头（balanced/theme_plus/theme_aggressive）改 `core_score(own profile, strip_theme_score=True)`；catalyst_off×chasing 改减自身 theme 贡献（非 momentum-only）；删 `_MOMENTUM_ONLY_WEIGHTS` 孤儿；theme_off 头保留重分配（§12.2 归因）、overext_selection_off 仍 strip=False。

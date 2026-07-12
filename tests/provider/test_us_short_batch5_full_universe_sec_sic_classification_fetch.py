@@ -156,6 +156,18 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.assertFalse(self.packet.exists())
         self.assertFalse(self.summary.exists())
 
+    def test_weekend_preopen_observation_is_accepted(self):
+        # §2.1: a weekend / pre-open observation (strictly before the decision session's 09:30 ET open) is VALID —
+        # the design's normal weekend prep run. Regression guard for the old (2026-07-11) same-calendar-day rule.
+        # Sat 2026-06-13 12:00 ET (= 16:00 UTC), strictly before Mon 2026-06-15 09:30 ET; decision 20260615 unchanged.
+        summary = self._run(generated_at="2026-06-13T16:00:00+00:00")
+        self.assertEqual(summary["scope"]["status"], "classification_packet_written")
+        packet = _read_json(self.packet)
+        # source_as_of tracks the ET observation date (Saturday); price basis + decision come from the candidate.
+        self.assertEqual(packet["decision_clock"]["source_as_of"], "2026-06-13")
+        self.assertEqual(packet["decision_clock"]["price_basis_date"], "2026-06-12")
+        self.assertEqual(packet["classification_contract"]["as_of"], "2026-06-13")
+
     def test_real_source_counts_attempted_ticker_and_submission_calls(self):
         mod = _fetch()
         stats = {}

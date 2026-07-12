@@ -240,6 +240,21 @@ class FullUniverseThemeProducerTest(unittest.TestCase):
             self._run_packet()
         self.assertFalse(self.paths["projection"].exists())
 
+    def test_weekend_preopen_classification_observation_is_accepted(self):
+        # §2.1 (mirrors the sibling Cut5 provider engines): a weekend / pre-open classification observation
+        # (strictly before the decision session's 09:30 ET open) is VALID. Regression guard for the old
+        # (2026-07-11) same-calendar-day requirement that broke the design's normal weekend prep run.
+        classification = _classification_packet(dict(_SECTORS))
+        # Sat 2026-06-13 12:00 ET, strictly before Mon 2026-06-15 09:30 ET; source_as_of tracks the ET obs date.
+        classification["provenance"]["observed_at"] = "2026-06-13T16:00:00+00:00"
+        classification["decision_clock"]["source_as_of"] = "2026-06-13"
+        classification["classification_contract"]["as_of"] = "2026-06-13"
+        classification["provenance"]["source_as_of"] = "2026-06-13"
+        _write_json(self.paths["classification"], classification)
+        summary = self._run_packet(generated_at="2026-06-13T16:00:00+00:00")
+        self.assertEqual(summary["scope"]["status"], "full_universe_theme_projection_written")
+        self.assertTrue(self.paths["projection"].exists())
+
     def test_ticker_without_sector_is_neutral(self):
         sectors = {k: v for k, v in _SECTORS.items() if k != "JPM"}  # JPM has no sector at all
         _write_json(self.paths["classification"], _classification_packet(sectors))

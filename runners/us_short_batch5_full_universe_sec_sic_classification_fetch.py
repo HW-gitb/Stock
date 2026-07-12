@@ -214,9 +214,12 @@ def _validated_observation_date(generated_at: str, decision_date: str) -> str:
         decision_et_date = datetime.strptime(decision_date, "%Y%m%d").date()
     except (TypeError, ValueError) as exc:
         raise FullUniverseSecSicClassificationFetchError("candidate decision_date must be YYYYMMDD") from exc
-    if observed_et.date() != decision_et_date or observed_et.time() >= datetime_time(9, 30):
+    # §2.1 half-open window: the observation must be STRICTLY before the decision session's 09:30 ET open. A
+    # weekend / pre-open run is VALID (canonical anchor already floors observed at the settled price basis) — this
+    # is NOT a same-calendar-day requirement (that wrongly rejects the design's normal weekend prep run).
+    if observed_et >= datetime.combine(decision_et_date, datetime_time(9, 30), NEW_YORK):
         raise FullUniverseSecSicClassificationFetchError(
-            "current SEC SIC snapshot is allowed only on the decision date before the 09:30 America/New_York open"
+            "current SEC SIC snapshot must be observed strictly before the decision date's 09:30 America/New_York open"
         )
     return observed_et.date().isoformat()
 

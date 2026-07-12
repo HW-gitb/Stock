@@ -223,9 +223,12 @@ def _validate_classification_observation(
         decision_et_date = datetime.strptime(expected_decision_date, "%Y%m%d").date()
     except (TypeError, ValueError) as exc:
         raise FullUniverseThemeProducerError("classification observation clock is invalid") from exc
-    if observed_et.date() != decision_et_date or observed_et.time() >= datetime_time(9, 30):
+    # §2.1 half-open window: the classification snapshot must be observed STRICTLY before the decision session's
+    # 09:30 ET open. A weekend / pre-open observation is VALID (mirrors the sibling Cut5 provider engines) — this
+    # is NOT a same-calendar-day requirement (that wrongly rejects the design's normal weekend prep run).
+    if observed_et >= datetime.combine(decision_et_date, datetime_time(9, 30), ZoneInfo("America/New_York")):
         raise FullUniverseThemeProducerError(
-            "current classification snapshot must be observed on the decision date before the 09:30 ET open"
+            "current classification snapshot must be observed strictly before the decision date's 09:30 ET open"
         )
     if source_as_of != observed_et.date().isoformat():
         raise FullUniverseThemeProducerError("classification source_as_of must equal the ET observation date")
