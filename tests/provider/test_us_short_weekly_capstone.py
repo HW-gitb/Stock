@@ -119,6 +119,38 @@ class CapstoneDryRunTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(datetime(2026, 7, 9, 8, 0, 0, tzinfo=timezone.utc), dry_run=True)
 
+    def test_input_colocated_under_archived_output_dir_is_rejected(self):
+        # C3 footgun guard: an operator input inside the per-decision output dir a live run archives must be rejected
+        # up front (dry-run too), before any provider fetch — else it is moved to _superseded/ mid-run and the bridge
+        # fails only after a full fetch. decision_date for 2026-07-09 08:00 ET = 20260709.
+        priv = Path(tempfile.gettempdir()) / "cap_priv"
+        with self.assertRaisesRegex(WeeklyCapstoneError, "weekly_private/20260709"):
+            run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0), private_root=priv,
+                batch4_template_path=Path("template.json"),
+                account_state_path=priv / "weekly_private" / "20260709" / "account.json",
+                dry_run=True,
+            )
+        with self.assertRaisesRegex(WeeklyCapstoneError, "runs_private/20260709"):
+            run_weekly_capstone(
+                now_et=datetime(2026, 7, 9, 8, 0, 0), private_root=priv,
+                batch4_template_path=priv / "runs_private" / "20260709" / "template.json",
+                account_state_path=Path("account.json"),
+                dry_run=True,
+            )
+
+    def test_input_under_run_inputs_sibling_is_accepted(self):
+        # positive control: inputs under weekly_private/_run_inputs/<date>/ (NOT the archived <date> dir) pass — the
+        # documented relocation. Ensures the guard is not over-broad.
+        priv = Path(tempfile.gettempdir()) / "cap_priv"
+        plan = run_weekly_capstone(
+            now_et=datetime(2026, 7, 9, 8, 0, 0), private_root=priv,
+            batch4_template_path=priv / "weekly_private" / "_run_inputs" / "20260709" / "template.json",
+            account_state_path=priv / "weekly_private" / "_run_inputs" / "20260709" / "account.json",
+            dry_run=True,
+        )
+        self.assertEqual(plan["decision_date"], "20260709")
+
     def test_dst_transition_now_et_fails_closed(self):
         # F6: a DST-transition wall-clock is nonexistent (spring-forward GAP) or ambiguous (fall-back FOLD) — the
         # tz-aware conversion must fail closed rather than silently pick one UTC offset; a normal pre-open time passes.

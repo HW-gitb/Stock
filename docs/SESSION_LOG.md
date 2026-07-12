@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
+
+- **Verdict/Action**: 用户「修 P2」。修 capstone C3 事务把整个 `weekly_private/<decision_date>/` + `runs_private/<decision_date>/` 在跑任何 stage 前归档(move 到 _superseded/) → colocated 的 `--account-state-path`/`--batch4-template-path`(既有 20260709/10 目录同款)被移走、stage 1-11 不读、live 跑 ~1h 后 stage 12 bridge 读模板才崩。加 `_assert_input_outside_archived_outputs`:两个操作输入若落在两归档 surface 的 <decision_date> 下 → 抓取前(dry-run 也)fail-fast、清晰指向 `_run_inputs/`。
+- **Required**: 无遗留。整类=2 操作输入 × 2 归档 surface 全覆盖;不改归档/事务本身、不碰官方输出 staging→publish。单源见 register `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-COLOCATED-INPUT-ARCHIVED`(resolved)。
+- **Verify**: 复现原场景(20260713 colocated 路径现 dry-run 即拒、relocated `_run_inputs/` 放行);capstone suite 61 OK(含两 surface 拒测 + `_run_inputs/` 正控防过宽);全 test_us_short* 4226 OK(0 fail/0 err);py_compile 净。guard 前置于 dry_run 分支 → plan 预览即暴露、不再烧 ~26min 才崩。
+- **Pre-Codex self-review**: A 整类=account+template × weekly_private+runs_private 全覆盖;B 新增函数无旧符号残留、guard 不碰 stage 输出/官方发布(走 staging→publish、非归档);C 反向=colocated 拒·`_run_inputs/` 正控收;E 无 route-doc 漂移(未动 CURRENT)。独立对抗 pass: 不适用—平凡 path-containment 门、无选股/PIT/secret 面,红绿+正控钉死,按 proportional-review 不起 agent。
+- **Next**: 无(已提交)。
+
 ## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
 
 - **Verdict/Action**: 用户「自修自审、pass 后提交、暂不跑全量」。封 `114edc4e`(2026-07-11) 引入的整类回归:`sec_sic_classification_fetch.py:217` + `theme_producer.py:226` 用 `observed.date()!=decision_date` 强制「run 日==决策日」,违背 §2.1「即将到来交易日/开盘前跑、观测窗口=运行时刻·自然含周末」(canonical resolver 只 fail-closed 盘中死区)+ 同族 5 个 Cut5 引擎的半开区间。两处同改为 `observed >= decision 09:30 ET open` 才拒。首周全量跑(桌面 firstweek_test.md)周六跑至 stage 5 崩(烧 ~26min Massive)暴露。

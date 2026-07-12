@@ -336,6 +336,21 @@ def _rel(p: Path) -> str:
         return str(p)
 
 
+def _assert_input_outside_archived_outputs(ctx: CapstoneContext, path: Path, label: str) -> None:
+    """C3 footgun guard. A live run ARCHIVES the whole weekly_private/<decision_date>/ and runs_private/<decision_date>/
+    trees (moves them under _superseded/) BEFORE any stage runs, so an operator input colocated there would be moved
+    mid-run and the terminal bridge would fail reading it only AFTER a full provider fetch. Reject such a path up front
+    (checked for dry-run too, so the plan preview surfaces it) — before touching a provider."""
+    resolved = Path(path).resolve()
+    for surface in ("weekly_private", "runs_private"):
+        archived = (ctx.private_root / surface / ctx.decision_date).resolve()
+        if resolved == archived or archived in resolved.parents:
+            raise WeeklyCapstoneError(
+                f"{label} ({_rel(resolved)}) is inside {surface}/{ctx.decision_date}/, which a live run archives "
+                f"before fetching (C3) — place run inputs OUTSIDE the per-decision output dir "
+                f"(e.g. under weekly_private/_run_inputs/)")
+
+
 def _safe_tag(generated_at: str) -> str:
     """A filesystem-safe historical tag from the RFC3339 generated_at (non-alphanumerics → '-')."""
     return "".join(c if c.isalnum() else "-" for c in generated_at) or "run"
@@ -790,6 +805,12 @@ def run_weekly_capstone(
         sample_root=sample_root,
     )
     pipeline = stages if stages is not None else default_pipeline()
+
+    # C3 footgun guard: reject an operator input colocated under the per-decision output dir a live run archives,
+    # before any fetch (dry-run too, so the plan preview catches it). See _assert_input_outside_archived_outputs.
+    for _input_path, _input_label in ((account_state_path, "--account-state-path"),
+                                      (batch4_template_path, "--batch4-template-path")):
+        _assert_input_outside_archived_outputs(ctx, Path(_input_path), _input_label)
 
     if dry_run:
         return _plan(ctx, pipeline)
