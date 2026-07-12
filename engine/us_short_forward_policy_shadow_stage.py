@@ -35,6 +35,11 @@ PRIVATE_RECORD_KEYS = frozenset({
     "schema_name", "schema_version", "decision_date", "price_basis_date", "generated_at",
     "source_context_sha256", "selection_policies", "selection_decisions", "boundary",
 })
+SELECTION_DECISION_KEYS = frozenset({
+    "out_of_window", "decision_date", "price_basis_date", "run_date", "cheap_eligible", "candidates",
+    "recall_available", "recall_added", "recall_excluded", "exclusion_records", "admitted",
+    "selection_seats", "selection_details", "holdings",
+})
 BOUNDARY = {
     "track": "comparison_non_production",
     "evidence_level": "shadow_selection_only",
@@ -125,6 +130,8 @@ def _validate_decisions(decisions: object, *, decision_date: str, price_basis_da
     for policy_id, decision in decisions.items():
         if not isinstance(decision, dict):
             raise ForwardPolicyShadowStageError(f"{policy_id} selection decision must be a dict")
+        if set(decision) != SELECTION_DECISION_KEYS:
+            raise ForwardPolicyShadowStageError(f"{policy_id} selection decision shape drifted")
         if decision.get("out_of_window") is not False:
             raise ForwardPolicyShadowStageError(f"{policy_id} did not materialize in the live decision window")
         if decision.get("decision_date") != decision_date or decision.get("price_basis_date") != price_basis_date:
@@ -135,6 +142,30 @@ def _validate_decisions(decisions: object, *, decision_date: str, price_basis_da
         ):
             raise ForwardPolicyShadowStageError(f"{policy_id} admitted selection is not a unique ticker list")
     return decisions
+
+
+def validate_forward_shadow_selection_record(record: object) -> dict:
+    """Closed-world consumer gate for the persisted Cut-A ticker-bearing record."""
+    if not isinstance(record, dict) or set(record) != PRIVATE_RECORD_KEYS:
+        raise ForwardPolicyShadowStageError("private A1 record key set drifted")
+    if record.get("schema_name") != "us_short_forward_policy_shadow_selection" \
+            or record.get("schema_version") != "1.0.0" \
+            or not isinstance(record.get("generated_at"), str) or not record["generated_at"]:
+        raise ForwardPolicyShadowStageError("private A1 record identity/generated_at is invalid")
+    decision_date, price_basis_date = record.get("decision_date"), record.get("price_basis_date")
+    if not _strict_yyyymmdd(decision_date) or not _strict_yyyymmdd(price_basis_date) \
+            or price_basis_date >= decision_date:
+        raise ForwardPolicyShadowStageError("private A1 record decision/price-basis clock is invalid")
+    digest = record.get("source_context_sha256")
+    if not isinstance(digest, str) or len(digest) != 64 \
+            or any(char not in "0123456789abcdef" for char in digest):
+        raise ForwardPolicyShadowStageError("private A1 record source_context_sha256 is invalid")
+    if record.get("selection_policies") != list(SELECTION_POLICY_IDS) or record.get("boundary") != BOUNDARY:
+        raise ForwardPolicyShadowStageError("private A1 record policy set/boundary drifted")
+    _validate_decisions(
+        record.get("selection_decisions"), decision_date=decision_date, price_basis_date=price_basis_date,
+    )
+    return record
 
 
 def _build_summary(*, decision_date: str, price_basis_date: str, source_context_sha256: str, decisions: dict) -> dict:
@@ -224,6 +255,7 @@ def materialize_forward_policy_shadow(
     }
     if set(private_record) != PRIVATE_RECORD_KEYS:
         raise ForwardPolicyShadowStageError("private A1 record shape drifted")
+    validate_forward_shadow_selection_record(private_record)
     _atomic_json_write(private_output_path, private_record)
     _atomic_json_write(summary_output_path, summary)
     return {

@@ -54,7 +54,7 @@ Authority = `presets/us_short_forward_policy_grid_20260711.json` (+ schema). Do 
 - `engine/us_short_forward_policy_heads.py` — the 6 immediate heads (`build_selection_policy_heads` /
   `build_selection_policy_decisions`, delegating to the authoritative `run_selection`) + tests — committed
   (master), with the strip_theme_score fix. The Cut-A capstone stage consumes it for same-decision capture;
-  no comparator or lifecycle consumer exists until Cut B.
+  Cut B consumes that capture through the six-policy comparison APIs below.
 - Outcome evaluators (pre-built, offline, ship-gate-isolated): `engine/us_short_shadow_compare.py`,
   `engine/us_short_paper_scorecard_comparison.py` (single-week 4-lane), `engine/us_short_paper_multiweek_comparison.py`
   (≥12-week), `engine/us_short_paper_ledger.py`.
@@ -79,12 +79,15 @@ register + code are the source of truth.
   the 6-head comparison is a contract change that gets its own reviewed cut. **Additive**; must not break the
   canonical anchor / gated boundaries; **ZERO new provider at decision time**; never ship-gate. Offline-buildable
   + testable; the actual live capture run stays gated (per-execution auth).
-- **[ ] Cut B — extend the comparators + lifecycle to the 6-head policy namespace + compute the comparison.**
+- **[BUILT] Cut B — extend the comparators + lifecycle to the 6-head policy namespace + compute the comparison.**
   Extend `us_short_shadow_compare` / `us_short_paper_scorecard_comparison` (single-week) /
   `us_short_paper_multiweek_comparison` (≥12-week) + `lifecycle_eval` from the 4-`scoring_profile` namespace
   to the 6-policy-head namespace, consume Cut A's captured selections, compute the comparison, and **preserve
-  the ship-gate isolation** the comparators already enforce. Its own reviewed cut (a contract change to
-  already-reviewed engines).
+  the ship-gate isolation** the comparators already enforce. The built contract preserves legacy four-profile APIs;
+  the six-policy path binds Cut A's capture/source digests, exact fixed-TopN coverage, de-identified full-caliber scorecards,
+  and the grid-governed >=12-week aligned window with embedded validated weekly comparisons and re-derived lineage. Lifecycle contributes only item #28;
+  item #36 remains untouched because its governed unit is source-bound overextension triggers, absent from Cut A.
+  Its own reviewed cut (a contract change to already-reviewed engines).
 - **[ ] Cut C** — per-ticker **decision-diff log**: turning a head off, does it change gate-pass / rank /
   Top15 membership / action / size — a deterministic counterfactual diff (not post-hoc correlation),
   private + de-identified.

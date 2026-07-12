@@ -35,10 +35,12 @@ malformed input fails closed (``ScorecardComparisonError``).
 from __future__ import annotations
 
 import datetime
+import hashlib
+import json
 import math
 
 from engine.us_short_core_score import PROFILE_NAMES, PRIMARY_PROFILE
-from engine.us_short_paper_scorecard import validate_paper_scorecard
+from engine.us_short_paper_scorecard import build_paper_scorecard, validate_paper_scorecard
 
 # the §12.2 honest-caliber metrics compared shadow-vs-balanced (per-profile cross-week drawdown is
 # engine.us_short_paper_nav_drawdown; wiring its delta here needs a multi-week comparison — a later cut)
@@ -133,6 +135,138 @@ def build_scorecard_comparison(scorecards_by_profile, *, as_of) -> dict:
     }
     validate_scorecard_comparison(result)
     return result
+
+
+_POLICY_COMPARISON_KEYS = frozenset({
+    "as_of", "source_context_sha256", "primary_policy", "policies", "vs_balanced",
+    "theme_weight_marginal_net", "capture_binding", "boundary",
+})
+_CAPTURE_BINDING_KEYS = frozenset({"decision_date", "source_context_sha256", "capture_sha256"})
+
+
+def _policy_ids() -> tuple[str, ...]:
+    from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
+    return tuple(SELECTION_POLICY_IDS)
+
+
+def _assert_policy_same_denominator(policies) -> None:
+    names = _policy_ids()
+    denominator = policies[names[0]]["selected_total"]
+    for name in names:
+        if policies[name]["selected_total"] != denominator:
+            raise ScorecardComparisonError("all policy scorecards must share the same fixed-TopN denominator")
+
+
+def _sha256(value) -> bool:
+    return isinstance(value, str) and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
+
+
+def build_policy_scorecard_comparison(scorecards_by_policy, *, as_of, source_context_sha256) -> dict:
+    """Build a full-caliber, never-ship-gate comparison for all six immediate policy heads."""
+    names = _policy_ids()
+    if not _strict_yyyymmdd(as_of):
+        raise ScorecardComparisonError("as_of must be a strict real YYYYMMDD, got %r" % (as_of,))
+    if not _sha256(source_context_sha256):
+        raise ScorecardComparisonError("source_context_sha256 must be a lowercase SHA256 digest")
+    if not isinstance(scorecards_by_policy, dict) or tuple(scorecards_by_policy) != names:
+        raise ScorecardComparisonError("scorecards_by_policy must cover the frozen immediate policies in grid order")
+    for name in names:
+        validate_paper_scorecard(scorecards_by_policy[name])
+    _assert_policy_same_denominator(scorecards_by_policy)
+    balanced = scorecards_by_policy[names[0]]
+    result = {
+        "as_of": as_of,
+        "source_context_sha256": source_context_sha256,
+        "primary_policy": names[0],
+        "policies": {name: scorecards_by_policy[name] for name in names},
+        "vs_balanced": {
+            name: {metric + "_delta": _delta(scorecards_by_policy[name][metric], balanced[metric])
+                   for metric in _DELTA_METRICS}
+            for name in names[1:]
+        },
+        "theme_weight_marginal_net": _delta(
+            balanced["net_basket"], scorecards_by_policy[_THEME_OFF]["net_basket"]
+        ),
+        "capture_binding": None,
+        "boundary": dict(_BOUNDARY),
+    }
+    validate_policy_scorecard_comparison(result)
+    return result
+
+
+def build_policy_scorecard_comparison_from_capture(capture, net_results_by_policy) -> dict:
+    """Build the six-policy scorecards directly from the exact ticker selections in one Cut-A capture."""
+    from engine.us_short_shadow_compare import build_policy_shadow_comparison
+
+    selection = build_policy_shadow_comparison(capture)
+    names = _policy_ids()
+    if not isinstance(net_results_by_policy, dict) or tuple(net_results_by_policy) != names:
+        raise ScorecardComparisonError("net_results_by_policy must cover the frozen immediate policies in grid order")
+    scorecards = {}
+    for name in names:
+        selected = [row["ticker"] for row in selection["policies"][name]["selection"]]
+        results = net_results_by_policy[name]
+        if not isinstance(results, dict) or set(results) != set(selected):
+            raise ScorecardComparisonError("policy %r net results must exactly match its Cut-A selection" % (name,))
+        scorecards[name] = build_paper_scorecard(results, selected_tickers=selected)
+    result = build_policy_scorecard_comparison(
+        scorecards,
+        as_of=selection["decision_date"],
+        source_context_sha256=selection["source_context_sha256"],
+    )
+    result["capture_binding"] = {
+        "decision_date": selection["decision_date"],
+        "source_context_sha256": selection["source_context_sha256"],
+        "capture_sha256": hashlib.sha256(
+            json.dumps(capture, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
+    }
+    validate_policy_scorecard_comparison(result)
+    return result
+
+
+def validate_policy_scorecard_comparison(comparison) -> None:
+    """Fail closed on six-policy coverage, deltas, denominator, or ship-gate boundary drift."""
+    names = _policy_ids()
+    if not isinstance(comparison, dict) or set(comparison) != _POLICY_COMPARISON_KEYS:
+        raise ScorecardComparisonError("policy scorecard comparison must carry its exact closed-world key set")
+    if comparison.get("boundary") != _BOUNDARY:
+        raise ScorecardComparisonError("policy comparison boundary must remain paper-only and never ship-gate")
+    if comparison.get("primary_policy") != names[0] or not _strict_yyyymmdd(comparison.get("as_of")) \
+            or not _sha256(comparison.get("source_context_sha256")):
+        raise ScorecardComparisonError("policy comparison primary/as_of is invalid")
+    policies = comparison.get("policies")
+    if not isinstance(policies, dict) or tuple(policies) != names:
+        raise ScorecardComparisonError("policies must cover the frozen immediate policy set in grid order")
+    for name in names:
+        validate_paper_scorecard(policies[name])
+    _assert_policy_same_denominator(policies)
+    binding = comparison.get("capture_binding")
+    if binding is not None:
+        if not isinstance(binding, dict) or set(binding) != _CAPTURE_BINDING_KEYS \
+                or binding.get("decision_date") != comparison["as_of"] \
+                or binding.get("source_context_sha256") != comparison["source_context_sha256"] \
+                or not _sha256(binding.get("capture_sha256")):
+            raise ScorecardComparisonError("capture_binding is inconsistent with the policy comparison")
+    balanced = policies[names[0]]
+    vs = comparison.get("vs_balanced")
+    if not isinstance(vs, dict) or tuple(vs) != names[1:]:
+        raise ScorecardComparisonError("vs_balanced must cover exactly the five shadow policies")
+    for name in names[1:]:
+        delta = vs[name]
+        if not isinstance(delta, dict) or set(delta) != _DELTA_KEYS:
+            raise ScorecardComparisonError("policy delta block has drifted keys")
+        for metric in _DELTA_METRICS:
+            got = delta[metric + "_delta"]
+            if got is not None and not _finite(got):
+                raise ScorecardComparisonError("policy delta must be None or finite, with bool refused")
+            if got != _delta(policies[name][metric], balanced[metric]):
+                raise ScorecardComparisonError("policy delta is inconsistent with embedded scorecards")
+    marginal = comparison.get("theme_weight_marginal_net")
+    if marginal is not None and not _finite(marginal):
+        raise ScorecardComparisonError("theme_weight_marginal_net must be None or finite")
+    if marginal != _delta(balanced["net_basket"], policies[_THEME_OFF]["net_basket"]):
+        raise ScorecardComparisonError("theme_weight_marginal_net is inconsistent with balanced-theme_off")
 
 
 def validate_scorecard_comparison(comparison) -> None:

@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-12 — Claude 独立审查 PASS + 提交（US-short A1 Cut B 六-policy comparator/lifecycle）
+
+- **Verdict/Action**: PASS + 提交（ecf2 detached）。Cut B 正确：扩 shadow_compare/scorecard/multiweek 到 6-policy（保留 4-profile API）+ lifecycle #28；全程 capture-bound、ship-gate 隔离结构性、无洗证据、fixed-TopN、second-wave 仍拒、**#36 不伪造**、不冻 margin。整读三承重体确认 fail-closed（详见 register）；comparators 纯函数无落盘（含票名 set-diff 不进 tracked）；heads/shadow_stage 增量/加强；SELECTION_DECISION_KEYS 与 run_selection 14 键吻合（Cut A 无回归）。
+- **Required**: 无。`R-USSHORT-A1-CUT-B-POLICY-COMPARATOR-LIFECYCLE` → resolved（单源见 register）。
+- **Verify**: 亲验非信测试：整读承重体 + 对抗测试全覆盖（6-policy 含 catalyst_off/overext_selection_off、second-wave/tamper/free-form/doctored-delta/one-week/missing 全 raise、ship-gate 隔离、#28-only）；**独立全包 `test_us_short*` `4248 OK`（0 fail/err/rpds）**——system py3.13、临时挪开 wrong-ABI cp312 vendored `.tools` 后跑再复原（与 Codex 4248 一致）。未起 §6a agent（离线影子比较、隔离+无落盘+良测）。
+- **Next**: merge ecf2→master（Cut A `e135aa4` + 本刀）+ push 为人工步（push 先核私密 remote）。
+
+## 2026-07-12 — Codex 执行（US-short A1 Cut B 六-policy comparator/lifecycle）
+
+- **Verdict/Action**: Cut B 已构建：保留旧四-profile API，新增 Cut-A capture-bound 六-policy 选择/单周/≥12周比较与 lifecycle #28 观察；#36 触发数不伪造，未提交。
+- **Required**: 无 Codex 遗留；material 边界见 `R-USSHORT-A1-CUT-B-POLICY-COMPARATOR-LIFECYCLE`。
+- **Verify**: red-first 8 项先红；focused `184 OK`；完整离线 `test_us_short*.py` `4248 OK`（1 skipped）；doc/route/grid guards `64 OK`；py_compile / diff-check / active-surface grep clean；无 provider/live 抓取。
+- **Pre-Codex self-review**: A-F current-diff-only；独立 Codex 自审首轮 FAIL 3 项 provenance，全部最小修复后复审 PASS（无 timeout）；B 覆盖六-policy/second-wave/Path-B/ripple；C 覆盖 digest、boundary、nested-shape、free-form lifecycle 反测；E 未改 CURRENT；最终固定包集中运行一次。
+- **Next**: Claude Code：审查
+
 ## 2026-07-12 — Claude 复审 PASS + 提交（US-short A1 Cut A：R1 回归 + R2 best-effort 均已修验）
 
 - **Verdict/Action**: PASS + 提交（ecf2 detached）。R2 best-effort 正确且测试充分：`forward_policy_shadow` best_effort=True；loop 捕获其异常 → summary 记 `shadow_capture_failed`（emit/no-emit 两路）+ 响亮 stderr 横幅 + 续跑 bridge（真周报照出）；run_origin 移出必需序 + receipt/expected 排除 best-effort；`only forward_policy_shadow may be best_effort` 防误用守卫；shadow 引擎自身校验未弱化。R1（E2E 双形状）保持。Cut A 完整（capture-only / 私密 / 脱敏 / never ship-gate / 零 provider）。

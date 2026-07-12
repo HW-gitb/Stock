@@ -30,6 +30,9 @@ _GRID = json.loads(GRID_PATH.read_text(encoding="utf-8"))
 
 SELECTION_POLICY_IDS = tuple(_GRID["selection_policies"])
 SECOND_WAVE_LIVE_POLICY_IDS = tuple(_GRID["second_wave_live_policies"])
+MINIMUM_FORWARD_WEEKS_BEFORE_PROMOTION_REVIEW = _GRID["evaluation_plan"][
+    "minimum_forward_weeks_before_promotion_review"
+]
 _POLICIES = _GRID["policies"]
 _CATALYST_OFF_WEIGHTS = _POLICIES["catalyst_off"]["score_weights"]
 _EXPECTED_SELECTION_POLICY_IDS = (
@@ -47,6 +50,8 @@ def _assert_grid() -> None:
         raise ForwardPolicyHeadError("forward policy grid selection policy set/order drifted")
     if tuple(SECOND_WAVE_LIVE_POLICY_IDS) != ("overextension_execution_off",):
         raise ForwardPolicyHeadError("forward policy grid second-wave-live policy set/order drifted")
+    if MINIMUM_FORWARD_WEEKS_BEFORE_PROMOTION_REVIEW != 12:
+        raise ForwardPolicyHeadError("forward policy comparison minimum-week prior drifted")
     if _GRID.get("primary_policy") != PRIMARY_PROFILE:
         raise ForwardPolicyHeadError("forward policy grid primary must match core-score primary")
     if set(_CATALYST_OFF_WEIGHTS) != set(CORE_COMPONENTS):

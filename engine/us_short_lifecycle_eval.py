@@ -289,6 +289,50 @@ def evaluate_lifecycle(register, *, calibration=None, authority=None) -> dict:
     }
 
 
+def policy_comparison_lifecycle_observation(comparison, *, capture) -> dict:
+    """Translate one validated six-policy weekly scorecard into idempotent §13 items #28/#36 input.
+
+    This does not freeze a winning margin and does not enrol the deferred execution-off policy. It records item #28
+    because the complete immediate selection grid produced an honest full-caliber paper comparison for this week.
+    Item #36 is trigger-count governed and is deliberately NOT updated: the Cut-A capture has no source-bound
+    overextension trigger count, so treating an ordinary decision week as one trigger would forge evidence.
+    """
+    from engine.us_short_paper_scorecard_comparison import (
+        ScorecardComparisonError,
+        validate_policy_scorecard_comparison,
+    )
+    from engine.us_short_forward_policy_shadow_stage import (
+        ForwardPolicyShadowStageError,
+        validate_forward_shadow_selection_record,
+    )
+    import hashlib
+
+    try:
+        validate_policy_scorecard_comparison(comparison)
+    except ScorecardComparisonError as exc:
+        raise LifecycleObservationError("refusing lifecycle input from an invalid policy comparison: %s" % exc) from exc
+    try:
+        validate_forward_shadow_selection_record(capture)
+    except ForwardPolicyShadowStageError as exc:
+        raise LifecycleObservationError("refusing lifecycle input from an invalid Cut-A capture: %s" % exc) from exc
+    capture_sha256 = hashlib.sha256(
+        json.dumps(capture, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    expected_binding = {
+        "decision_date": capture["decision_date"],
+        "source_context_sha256": capture["source_context_sha256"],
+        "capture_sha256": capture_sha256,
+    }
+    if comparison.get("capture_binding") != expected_binding:
+        raise LifecycleObservationError("policy comparison is not bound to the supplied validated Cut-A capture")
+    return {
+        "decision_date": comparison["as_of"],
+        "observations": {
+            28: {"forward_contribution": 1},
+        },
+    }
+
+
 def accumulate_lifecycle_observation(register, *, decision_date, observations, calibration=None, authority=None) -> dict:
     """Apply ONE decision_date's live-forward observation to a §13-clean register → a NEW §13-clean register.
 
