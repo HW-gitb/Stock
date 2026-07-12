@@ -109,6 +109,12 @@ class ForwardPolicyHeadTests(unittest.TestCase):
         self.assertNotIn("forward_policy_private", design)
         self.assertNotIn("sequential materialization", design)
         self.assertNotIn("forward_policy_private", (ROOT / ".gitignore").read_text(encoding="utf-8"))
+        for relative_path in (
+            "runners/us_short_weekly_capstone.py",
+            "runners/us_short_weekly_capstone_stages.py",
+            "engine/us_short_forward_policy_shadow_stage.py",
+        ):
+            self.assertNotIn("forward_policy_private", (ROOT / relative_path).read_text(encoding="utf-8"))
 
     def test_catalyst_off_reallocates_only_catalyst_weight(self):
         out = heads.build_selection_policy_heads(_composition(), overextension_by_ticker=_overextension_map())

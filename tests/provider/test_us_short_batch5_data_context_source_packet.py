@@ -377,8 +377,12 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         self.assertTrue(result["scope"]["context_components_written"])
         self.assertEqual(result["context_components"]["output_path"], _rel(self.paths["components"]))
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
-        self.assertEqual(set(components), {"data_context", "per_ticker_analysis", "run_provenance"})
+        self.assertEqual(
+            set(components),
+            {"data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis", "run_provenance"},
+        )
         self.assertEqual(set(components["per_ticker_analysis"]), {"AAPL", "MSFT"})
+        self.assertIsNone(components["overextension_by_ticker"])
         self.assertNotIn("overextension", components["per_ticker_analysis"]["AAPL"])
         self.assertEqual(
             components["per_ticker_analysis"]["AAPL"]["row_source"],

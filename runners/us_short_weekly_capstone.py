@@ -174,6 +174,17 @@ class CapstoneContext:
         return self._s(f"us_short_batch5_capstone_{self.decision_date}_provider_health.json")
 
     @property
+    def forward_shadow_selection_private_path(self) -> Path:
+        return self._s("shadow_compare_private") / f"forward_policy_selection_{self.decision_date}.json"
+
+    @property
+    def forward_policy_summary_path(self) -> Path:
+        # Count-only and intentionally outside the private state tree: this is the §11.6 trackable companion to the
+        # ticker-bearing shadow record.  Tests inject sample_root, while production uses the repository root.
+        return self.sample_root / "research" / "results" / "us_short_forward_policy_shadow" / \
+            f"forward_policy_summary_{self.decision_date}.json"
+
+    @property
     def vix_regime_summary_path(self) -> Path:
         from runners.us_short_vix_regime_fetch import SUMMARY_SAMPLE_REL_ROOT
         return self.sample_root / SUMMARY_SAMPLE_REL_ROOT / \
@@ -270,10 +281,11 @@ class Stage:
     inputs: Callable[[CapstoneContext], list[Path]]
     outputs: Callable[[CapstoneContext], list[Path]]
     run: Callable[[CapstoneContext], dict[str, Any]]
+    best_effort: bool = False
 
 
 def default_pipeline() -> list[Stage]:
-    """The 12-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
+    """The 13-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
@@ -293,6 +305,9 @@ def default_pipeline() -> list[Stage]:
               st.run_yfinance_grades_fetch),
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
+        Stage("forward_policy_shadow", False, lambda c: [c.data_context_path, c.context_components_path],
+              lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path],
+              st.run_forward_policy_shadow, best_effort=True),
         Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
     ]
@@ -321,6 +336,7 @@ def _plan(ctx: CapstoneContext, stages: list[Stage]) -> dict[str, Any]:
             {
                 "name": s.name,
                 "kind": "gated_live_fetch" if s.gated else "offline",
+                "best_effort": s.best_effort,
                 "inputs": [_rel(p) for p in s.inputs(ctx)],
                 "outputs": [_rel(p) for p in s.outputs(ctx)],
             }
@@ -374,11 +390,12 @@ def _output_fingerprint(path: Path):
 
 def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, Any]]):
     """Build the A1 receipt from exact completed stages and their provider-call evidence."""
-    completed = tuple(item.get("name") for item in results)
-    expected = tuple(stage.name for stage in default_pipeline()[:-1])
+    required_results = tuple(item for item in results if not item.get("best_effort", False))
+    completed = tuple(item.get("name") for item in required_results)
+    expected = tuple(stage.name for stage in default_pipeline()[:-1] if not stage.best_effort)
     if completed != expected:
         raise WeeklyCapstoneError("research_live receipt requires the exact completed pre-bridge stage sequence")
-    by_name = {item["name"]: item.get("result") for item in results}
+    by_name = {item["name"]: item.get("result") for item in required_results}
 
     def _result(name):
         value = by_name.get(name)
@@ -805,6 +822,8 @@ def run_weekly_capstone(
         sample_root=sample_root,
     )
     pipeline = stages if stages is not None else default_pipeline()
+    if any(stage.best_effort and stage.name != "forward_policy_shadow" for stage in pipeline):
+        raise WeeklyCapstoneError("only forward_policy_shadow may be best_effort")
 
     # C3 footgun guard: reject an operator input colocated under the per-decision output dir a live run archives,
     # before any fetch (dry-run too, so the plan preview catches it). See _assert_input_outside_archived_outputs.
@@ -847,6 +866,27 @@ def run_weekly_capstone(
     # under a private run-scoped staging root and published only after all three siblings validate.
     transaction = _begin_current_output_transaction(ctx)
     results: list[dict[str, Any]] = []
+    shadow_capture_failure: dict[str, str] | None = None
+
+    def record_shadow_capture_failure(stage: Stage, exc: Exception) -> None:
+        nonlocal shadow_capture_failure
+        message = str(exc) or type(exc).__name__
+        shadow_capture_failure = {
+            "stage": stage.name,
+            "error_type": type(exc).__name__,
+            "error": message,
+        }
+        print(
+            f"[US-SHORT SHADOW CAPTURE FAILED] {stage.name}: {type(exc).__name__}: {message}",
+            file=sys.stderr,
+        )
+        results.append({
+            "name": stage.name,
+            "gated": stage.gated,
+            "best_effort": True,
+            "result": {"shadow_capture_failed": shadow_capture_failure},
+        })
+
     try:
         for stage in pipeline:
             stage_ctx = ctx
@@ -862,15 +902,23 @@ def run_weekly_capstone(
             try:
                 result = stage.run(stage_ctx)
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
+                if stage.best_effort:
+                    record_shadow_capture_failure(stage, exc)
+                    continue
                 raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
             # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
             # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
             # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
             bridge_emitted = _bridge_emitted(result) if stage.name == "weekly_bridge" else None
             if stage.name == "weekly_bridge" and bridge_emitted is False:
-                results.append({"name": stage.name, "gated": stage.gated, "result": result})
+                results.append({
+                    "name": stage.name,
+                    "gated": stage.gated,
+                    "best_effort": stage.best_effort,
+                    "result": result,
+                })
                 _abort_current_output_transaction(transaction)
-                return {
+                summary = {
                     "mode": "live",
                     "execution_mode": "live_provider_fetch" if production_run else "injected_pipeline",
                     "report_mode": "mixed_source" if production_run else "offline_test",
@@ -885,6 +933,9 @@ def run_weekly_capstone(
                     },
                     "stages": results,
                 }
+                if shadow_capture_failure is not None:
+                    summary["shadow_capture_failed"] = shadow_capture_failure
+                return summary
             if stage.name == "weekly_bridge" and bridge_emitted is not True:
                 raise WeeklyCapstoneError(
                     "weekly_bridge result must explicitly report batch4_run.emitted as a boolean"
@@ -912,9 +963,23 @@ def run_weekly_capstone(
                 or _output_fingerprint(path) == before[str(path.resolve())]
             ]
             if missing:
+                if stage.best_effort:
+                    record_shadow_capture_failure(
+                        stage,
+                        WeeklyCapstoneError(
+                            f"stage '{stage.name}' completed but did not produce a fresh output this run: "
+                            f"{[_rel(p) for p in missing]}"
+                        ),
+                    )
+                    continue
                 raise WeeklyCapstoneError(
                     f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}")
-            results.append({"name": stage.name, "gated": stage.gated, "result": result})
+            results.append({
+                "name": stage.name,
+                "gated": stage.gated,
+                "best_effort": stage.best_effort,
+                "result": result,
+            })
         _publish_current_output_transaction(ctx, transaction)
     except Exception:
         try:
@@ -926,7 +991,7 @@ def run_weekly_capstone(
             _release_decision_lock(transaction.decision_lock)
         raise
 
-    return {
+    summary = {
         "mode": "live",
         "execution_mode": "live_provider_fetch" if production_run else "injected_pipeline",
         "report_mode": "mixed_source" if production_run else "offline_test",
@@ -937,6 +1002,9 @@ def run_weekly_capstone(
         "emitted_report": _rel(ctx.private_root / "weekly_private" / ctx.decision_date / "weekly_report.md"),
         "stages": results,
     }
+    if shadow_capture_failure is not None:
+        summary["shadow_capture_failed"] = shadow_capture_failure
+    return summary
 
 
 def _bridge_emitted(result: Any) -> bool | None:

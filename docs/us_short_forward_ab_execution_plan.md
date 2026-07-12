@@ -53,7 +53,8 @@ Authority = `presets/us_short_forward_policy_grid_20260711.json` (+ schema). Do 
 - Grid + schema + tests — committed.
 - `engine/us_short_forward_policy_heads.py` — the 6 immediate heads (`build_selection_policy_heads` /
   `build_selection_policy_decisions`, delegating to the authoritative `run_selection`) + tests — committed
-  (master), with the strip_theme_score fix. **Currently imported only by its own test (unwired).**
+  (master), with the strip_theme_score fix. The Cut-A capstone stage consumes it for same-decision capture;
+  no comparator or lifecycle consumer exists until Cut B.
 - Outcome evaluators (pre-built, offline, ship-gate-isolated): `engine/us_short_shadow_compare.py`,
   `engine/us_short_paper_scorecard_comparison.py` (single-week 4-lane), `engine/us_short_paper_multiweek_comparison.py`
   (≥12-week), `engine/us_short_paper_ledger.py`.
@@ -66,7 +67,7 @@ resolved) + the code (which files/stages exist)** before picking — the marks a
 register + code are the source of truth.
 
 - **[DONE]** grid frozen; 6 selection heads built + strip_theme_score fix; evaluators pre-built.
-- **[NEXT] Cut A — wire + privately CAPTURE the 6 heads' live selections (NO comparison yet).**
+- **[BUILT] Cut A — wire + privately CAPTURE the 6 heads' live selections (NO comparison yet).**
   Add an additive stage in `runners/us_short_weekly_capstone.py::default_pipeline()` (after the composition/
   overext stages) that at decision time: (i) obtains the frozen `score_composition` + `overextension` map the
   heads consume — **the capstone must persist/pass these from the existing stages** (it does not today);
@@ -104,7 +105,7 @@ register + code are the source of truth.
   frozen snapshot; forward prices reuse the already-fetched grouped-daily path); ticker-bearing shadow
   selection/outcome → private/gitignored; tracked summaries → de-identified (counts only); **never ship-gate**;
   do NOT touch the §2.1/§12.2 contract or the frozen grid.
-- **Review focus** (Claude, on `审查`): (1) wiring is purely **additive** — the existing 12-stage pipeline /
+- **Review focus** (Claude, on `审查`): (1) wiring is purely **additive** — the canonical staged pipeline /
   canonical anchor / gated boundaries are intact; (2) shadow heads are **never** counted toward ship-gate
   (the comparators enforce this — the wiring must not leak a shadow head into the ship-gate path); (3) **zero
   new provider calls** at decision time; (4) ticker-bearing shadow artifacts stay private/gitignored, tracked

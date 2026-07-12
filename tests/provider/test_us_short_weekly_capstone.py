@@ -26,8 +26,11 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "weekly_bridge",
+    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "forward_policy_shadow", "vix_regime", "weekly_bridge",
 ]
+_RECEIPT_STAGE_NAMES = tuple(
+    name for name in _STAGE_NAMES if name not in {"forward_policy_shadow", "weekly_bridge"}
+)
 
 
 def _research_receipt(*, decision_date="20260709", source_path=None, generated_at="2026-07-09T08:00:00-04:00",
@@ -54,7 +57,7 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
         run_id=run_id,
         decision_date=decision_date,
         generated_at=generated_at,
-        completed_stages=tuple(_STAGE_NAMES[:-1]),
+        completed_stages=_RECEIPT_STAGE_NAMES,
         source_packet_path=source,
         source_packet_sha256=source_digest,
         source_artifact_manifest=source_manifest,
@@ -201,6 +204,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
                 "yfinance_grades_fetch": lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
                 "pass2_fetch": lambda c: [c.source_packet_path, c.context_components_path],
+                "forward_policy_shadow": lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path],
                 "vix_regime": lambda c: [c.vix_regime_summary_path],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
@@ -241,7 +245,10 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     return {"stage": nm}
                 return run
 
-            stages.append(Stage(name, gated, lambda c: [], outs, make_run(name, outs)))
+            stages.append(Stage(
+                name, gated, lambda c: [], outs, make_run(name, outs),
+                best_effort=(name == "forward_policy_shadow"),
+            ))
         return stages
 
     def _run(self, order_sink, **kw):
@@ -267,6 +274,39 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["operational_use"], "not_authorized")
         self.assertEqual(summary["decision_date"], "20260709")
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
+        self.assertNotIn("shadow_capture_failed", summary)
+
+    def test_shadow_failure_is_loud_nonblocking_and_bridge_emits(self):
+        order: list[str] = []
+        with mock.patch("builtins.print") as printed:
+            summary = self._run(
+                order,
+                stages=self._fake_stages(order, break_stage="forward_policy_shadow"),
+            )
+        self.assertEqual(order, _STAGE_NAMES)
+        self.assertTrue(summary["emitted"])
+        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_shadow")
+        self.assertEqual(summary["shadow_capture_failed"]["error_type"], "ValueError")
+        self.assertIn("boom in forward_policy_shadow", summary["shadow_capture_failed"]["error"])
+        shadow_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_shadow")
+        self.assertTrue(shadow_result["best_effort"])
+        self.assertEqual(shadow_result["result"]["shadow_capture_failed"], summary["shadow_capture_failed"])
+        self.assertTrue(any(
+            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            for call in printed.call_args_list
+        ))
+
+    def test_only_shadow_stage_may_be_best_effort(self):
+        order: list[str] = []
+        stages = self._fake_stages(order)
+        next(stage for stage in stages if stage.name == "vix_regime").best_effort = True
+        with self.assertRaisesRegex(WeeklyCapstoneError, "only forward_policy_shadow"):
+            self._run(order, stages=stages)
+        self.assertEqual(order, [])
+
+    def test_research_receipt_does_not_require_shadow_stage(self):
+        receipt = _research_receipt()
+        self.assertNotIn("forward_policy_shadow", receipt.completed_stages)
 
     def test_stage_missing_output_fails_fast_with_stage_name(self):
         order: list[str] = []
@@ -942,7 +982,12 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             },
         }
         results = [
-            {"name": name, "gated": False, "result": provider_results.get(name, {})}
+            {
+                "name": name,
+                "gated": False,
+                "best_effort": name == "forward_policy_shadow",
+                "result": provider_results.get(name, {}),
+            }
             for name in _STAGE_NAMES[:-1]
         ]
         manifest = (("candidate_artifact_path", str(ctx.source_packet_path.resolve()),
