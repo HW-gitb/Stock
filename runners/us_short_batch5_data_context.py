@@ -28,6 +28,7 @@ from engine.us_short_sec_offering_audit import (
     build_offering_audit_from_sec_submissions,
 )
 from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_score_inputs
+from engine.us_short_dynamic_seats import SELECTION_SEAT_TOTAL, selection_seats
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
     validate_candidate_artifact,
@@ -945,19 +946,70 @@ def assemble_data_context_from_resolved_pass2_sources(
     return data_context
 
 
+def _official_top15_tickers(selection_inputs: dict[str, Any]) -> list[str]:
+    per_ticker = selection_inputs["per_ticker"]
+    admitted = list(per_ticker)
+    seats = selection_seats(selection_inputs["theme_opportunity_state"])
+    target_total = min(SELECTION_SEAT_TOTAL, len(admitted))
+    core_rank = sorted(admitted, key=lambda t: (-per_ticker[t]["core_score"], t))
+    theme_rank = sorted(admitted, key=lambda t: (-per_ticker[t]["theme_momentum_score"], -per_ticker[t]["core_score"], t))
+    selected: list[str] = []
+    seen: set[str] = set()
+
+    def add(ticker: str) -> None:
+        if ticker not in seen:
+            selected.append(ticker)
+            seen.add(ticker)
+
+    for ticker in core_rank[:seats["core_top"]]:
+        add(ticker)
+    theme_added = 0
+    for ticker in theme_rank:
+        if ticker in seen:
+            continue
+        add(ticker)
+        theme_added += 1
+        if theme_added >= seats["theme_momentum"]:
+            break
+    for ticker in core_rank:
+        if len(selected) >= target_total:
+            break
+        add(ticker)
+    return selected[:target_total]
+
+
+def _holding_signal_row(holding: dict[str, Any], candidate_pass2_signals: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    ticker = holding["ticker"]
+    signals = dict(candidate_pass2_signals.get(ticker, {}))
+    signals.update(holding["signals"])
+    row_source = "holding_pass2_only" if ticker in candidate_pass2_signals else "holding_account_only"
+    return {
+        "ticker": ticker,
+        "row_source": row_source,
+        "signals": signals,
+    }
+
+
 def _official_per_ticker_analysis(
-    score_composition: dict[str, Any], scoped_overextension: dict[str, Any] | None = None
+    score_composition: dict[str, Any],
+    holdings: list[dict[str, Any]],
+    candidate_pass2_signals: dict[str, dict[str, Any]],
+    scoped_overextension: dict[str, Any] | None = None,
 ) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
-    for ticker, row in score_composition["analysis_by_ticker"].items():
+    selected = _official_top15_tickers(score_composition["selection_inputs"])
+    holding_by_ticker = {row["ticker"]: row for row in holdings}
+    analysis_by_ticker = score_composition["analysis_by_ticker"]
+    for ticker in selected:
+        row = analysis_by_ticker[ticker]
         if type(row) is not dict:
             _fail(f"score_composition.analysis_by_ticker[{ticker}] must be an exact dict")
         if set(row) & {"ticker", "row_source", "signals", "overextension"}:
             _fail(f"score_composition.analysis_by_ticker[{ticker}] must not pre-populate official row identity")
         official_row = {
             "ticker": ticker,
-            "row_source": "top15_candidate",
-            "signals": {},
+            "row_source": "holding_in_top15" if ticker in holding_by_ticker else "top15_candidate",
+            "signals": dict(holding_by_ticker[ticker]["signals"]) if ticker in holding_by_ticker else {},
             **row,
         }
         if scoped_overextension is not None:
@@ -967,6 +1019,27 @@ def _official_per_ticker_analysis(
             # _analyze_one remove only the theme contribution when it recomputes the selection score.
             official_row["overextension"] = scoped_overextension[ticker]
         out[ticker] = official_row
+    for holding in holdings:
+        ticker = holding["ticker"]
+        if ticker in out:
+            continue
+        if ticker in analysis_by_ticker:
+            row = analysis_by_ticker[ticker]
+            if type(row) is not dict:
+                _fail(f"score_composition.analysis_by_ticker[{ticker}] must be an exact dict")
+            if set(row) & {"ticker", "row_source", "signals", "overextension"}:
+                _fail(f"score_composition.analysis_by_ticker[{ticker}] must not pre-populate official row identity")
+            official_row = {
+                "ticker": ticker,
+                "row_source": "holding_pass2_only",
+                "signals": dict(holding["signals"]),
+                **row,
+            }
+            if scoped_overextension is not None:
+                official_row["overextension"] = scoped_overextension[ticker]
+            out[ticker] = official_row
+        else:
+            out[ticker] = _holding_signal_row(holding, candidate_pass2_signals)
     return out
 
 
@@ -1015,9 +1088,17 @@ def assemble_official_context_components_from_resolved_pass2_sources(
         catalyst_recall_feed=catalyst_recall_feed,
         overextension_by_ticker=overextension_by_ticker,
     )
-    per_ticker_analysis = _official_per_ticker_analysis(score_composition, scoped_overextension)
-    if set(per_ticker_analysis) != set(data_context["selection_inputs"]["per_ticker"]):
-        _fail("per_ticker_analysis must exactly cover selection_inputs.per_ticker")
+    per_ticker_analysis = _official_per_ticker_analysis(
+        score_composition,
+        data_context["holdings"],
+        data_context["candidate_pass2_signals"],
+        scoped_overextension,
+    )
+    expected_analysis_tickers = set(_official_top15_tickers(data_context["selection_inputs"])) | {
+        row["ticker"] for row in data_context["holdings"]
+    }
+    if set(per_ticker_analysis) != expected_analysis_tickers:
+        _fail("per_ticker_analysis must exactly cover official Top15 union holdings")
 
     candidate_observed = _observed_at_to_naive_et(candidate_artifact.get("generated_at"), where="candidate_artifact.generated_at")
     offering_observed = _collect_observed_at_instants(offering_audit_source, where="offering_audit_source")

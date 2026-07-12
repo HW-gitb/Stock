@@ -152,6 +152,17 @@ def _candidate_artifact(
             "adv_usd": 1_000.0,
         },
     }
+    for idx, ticker in enumerate(tickers, start=1):
+        specs.setdefault(
+            ticker,
+            {
+                "cik": 900000 + idx,
+                "exchange": "NYSE",
+                "shares": 1_000_000_000 + idx,
+                "price": 50.0 + idx,
+                "adv_usd": 30_000_000.0 + idx,
+            },
+        )
     sec_tickers = {
         ticker: {"cik": specs[ticker]["cik"], "exchange": specs[ticker]["exchange"]}
         for ticker in tickers
@@ -1087,6 +1098,70 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
             },
         )
         self.assertEqual(reconciled["as_of"], _DECISION_DATE)
+
+    def test_official_components_cover_top15_union_holdings_with_frozen_row_sources(self):
+        pass2_clean = [
+            "AAPL", "MSFT", "AAA", "BBB", "CCC", "DDD", "EEE", "FFF",
+            "GGG", "HHH", "III", "KKK", "LLL", "MMM", "NNN", "ZZZ",
+        ]
+        candidates = tuple(pass2_clean + ["JPM"])
+        source_ref_paths = {
+            "candidate_artifact_path": "state/us_short/test_candidate.json",
+            "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
+            "momentum_projection_path": "state/us_short/test_momentum.json",
+            "theme_projection_path": "state/us_short/test_theme.json",
+            "offering_audit_source_path": "state/us_short/test_offering.json",
+            "analyst_grade_actions_path": "state/us_short/test_analyst.json",
+            "massive_news_events_path": "state/us_short/test_news.json",
+            "catalyst_governance_path": "presets/us_short_catalyst_governance_20260630.json",
+        }
+
+        components = assemble_official_context_components_from_resolved_pass2_sources(
+            candidate_artifact=_candidate_artifact(candidates),
+            expected_decision_date=_DECISION_DATE,
+            eligibility_governance=_gov(),
+            momentum_projection=_constant_projection("momentum_by_ticker", pass2_clean, "scored"),
+            theme_projection=_constant_projection("theme_block_by_ticker", pass2_clean, "scored_theme_base"),
+            offering_audit_source=resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    **{ticker: _offering_record([]) for ticker in pass2_clean},
+                    "JPM": _offering_record([], coverage="partial"),
+                },
+            ),
+            analyst_grade_actions=resolve_analyst_grade_actions(
+                as_of=_GRADE_AS_OF,
+                grades_by_ticker={ticker: _grade_source(ticker, []) for ticker in pass2_clean},
+            ),
+            massive_news_events=resolve_news_events(
+                as_of=_NEWS_AS_OF,
+                news_by_ticker={ticker: _news_source(ticker, []) for ticker in pass2_clean},
+            ),
+            catalyst_governance=load_catalyst_governance(),
+            theme_opportunity_state="strong",
+            holdings=[
+                {"ticker": "AAPL", "signals": {}},
+                {"ticker": "ZZZ", "signals": {}},
+                {"ticker": "JPM", "signals": {"critical_data_missing": True}},
+                {"ticker": "TSLA", "signals": {"critical_data_missing": True}},
+            ],
+            source_ref_paths=source_ref_paths,
+        )
+
+        rows = components["per_ticker_analysis"]
+        self.assertEqual(len(rows), 18)
+        self.assertEqual(rows["AAPL"]["row_source"], "holding_in_top15")
+        self.assertEqual(rows["MSFT"]["row_source"], "top15_candidate")
+        self.assertEqual(rows["ZZZ"]["row_source"], "holding_pass2_only")
+        self.assertEqual(rows["JPM"]["row_source"], "holding_pass2_only")
+        self.assertEqual(rows["JPM"]["signals"], {"critical_data_missing": True})
+        self.assertEqual(rows["TSLA"]["row_source"], "holding_account_only")
+        self.assertEqual(rows["TSLA"]["signals"], {"critical_data_missing": True})
+        self.assertNotIn("score_blocks", rows["TSLA"])
+        self.assertEqual(
+            components["run_provenance"]["families"]["per_ticker_analysis"]["row_count"],
+            len(rows),
+        )
 
     def test_resolved_pass2_sources_wrap_boundary_tz_observed_at_overflow(self):
         source_ref_paths = {

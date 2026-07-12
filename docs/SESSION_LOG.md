@@ -8,6 +8,18 @@
 
 ---
 
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 3：Batch5→Batch4 holdings 正式链)
+- **Verdict/Action**: PASS + 提交（288f、未 push）。`_official_per_ticker_analysis` 现出 official Top15 ∪ holdings、closed-world row_source 四分（candidate/holding_in_top15/holding_pass2_only/holding_account_only），holding-only 不伪造 score_blocks，coverage 门=Top15∪holdings 不符 fail-closed；逐位核 `_official_top15_tickers` 与权威 `_select_top15` 等价，四分标记+coverage 与 Batch4 `weekend_orchestrator` 契约逐一吻合。
+- **Required**: 无（Optional 非阻断、latent 选股面漂移:`_official_top15_tickers` 内联**重复实现**权威 `_select_top15`——weekend_pipeline 不 import data_context 故无循环障碍、且无等价性测试钉住二者→权威若改会静默发散官方 Top15；建议直接调权威 fn 或加等价性测试。详见 register）。`R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN` → resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结清单即后台并行起；整读 data_context.py +95 + 权威 `_select_top15` 逐位对比 + 下游 orchestrator 契约核对；focused test 覆盖 4 类 row（18 行）；全离线 `test_us_short*` 288f 4229 ran / 15 error / 0 fail，15 全 WinError 206 MAX_PATH（AssertionError=0）未改文件。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 3: Batch5 -> Batch4 holdings official chain)
+- **Verdict/Action**: Repaired `R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN`: Batch5 official components now emit official Top15 union canonical holdings, with `top15_candidate` / `holding_in_top15` / `holding_pass2_only` / `holding_account_only` row_source split. Scope only `runners/us_short_batch5_data_context.py` plus focused tests.
+- **Required**: None known in this slice; Claude independent review still required before commit. Full facts, risk, boundary, and verification limits are in `docs/system_risk_register.md`.
+- **Verify**: Red test reproduced missing/mislabeled holdings; green focused files `tests.provider.test_us_short_batch5_data_context` 32 OK and `tests.provider.test_us_short_batch5_data_context_source_packet` 19 OK; `py_compile` clean. Batch4 seam/full broad US-short pack not fully verified here: current runtime lacks `jsonschema`, and broad `*us_short*.py` discover timed out after entering non-offline/provider-like tests.
+- **Next**: Claude Code: review.
+
 ## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 2：universe 行情 5xx fail-closed 不再静默回退旧价)
 - **Verdict/Action**: PASS + 提交（288f worktree、未 push）。`fetch_massive_window` 现对 429 重试后任意 HTTPError 都 fail-closed raise、只跳过真实空日，结构镜像兄弟 `momentum_fetch`；`from None` 顺手堵了旧 401/403/429 分支 `from exc` 会把带 apikey 的 Massive URL 链进 traceback 的洞；空日仍合法跳过、used_date 诚实返回。
 - **Required**: 无。`R-USSHORT-R3-UNIVERSE-MASSIVE-5XX-MISSING-DAY` → resolved（完整证据/边界单源见 `docs/system_risk_register.md`）。
