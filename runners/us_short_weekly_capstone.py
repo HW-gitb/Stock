@@ -914,11 +914,17 @@ def run_weekly_capstone(
             # must be readable BEFORE it starts — else fail fast with the stage name instead of letting the stage crash
             # deeper on a stale/missing/cross-run input. Existence+readability only; each runner still owns its own
             # schema/date/identity/digest checks. Empty input lists (e.g. universe_fetch, vix_regime) pass trivially.
+            # A best_effort (shadow) stage routes an unreadable input through the SAME shadow-capture-failure path as a
+            # run failure: a missing/partial shadow input must never abort the real weekly report (best_effort intent).
             unreadable_inputs = [Path(p) for p in stage.inputs(stage_ctx) if not _input_readable(Path(p))]
             if unreadable_inputs:
-                raise WeeklyCapstoneError(
+                unreadable = WeeklyCapstoneError(
                     f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
                     f"{[_rel(p) for p in unreadable_inputs]}")
+                if stage.best_effort:
+                    record_shadow_capture_failure(stage, unreadable)
+                    continue
+                raise unreadable
             expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:

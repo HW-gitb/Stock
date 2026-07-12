@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 - Claude Code 自修自审（US-short capstone best-effort 输入门·CUT-A R3 follow-on）PASS
+
+- **Verdict/Action**: PASS + 已提交（master、未 push）。补 codex_r3 新增的 pre-stage 输入可读性门与 R2 best-effort 的交互缺口：该门在 best-effort try/except **之外**、对所有 stage 无条件 raise → shadow 输入不可读会中止真周报（真实触发=pass2_fetch 部分写、data_context 缺而 source_packet 在），违背 R2「shadow 永不拖垮真报告」。改为 best_effort stage 的不可读输入走同一 `record_shadow_capture_failure`+`continue`；非 best_effort 逐字不变（同 raise、同文案），仅 forward_policy_shadow 可 best_effort（上游硬约束）。不碰选股数学/provider/secret/ship-gate。
+- **Required**: 无。
+- **Optional**: 无。
+- **Verify**: capstone 类 `67 OK`——新测 `test_shadow_unreadable_input_is_best_effort_and_bridge_emits`（marker+响铃+bridge emit+shadow 跳过）；回归护栏 `test_stage_missing_input_fails_fast_before_stage_runs`（pass2_fetch 非 best_effort 仍中止）+ present-input 正控均绿。亲跑全包 `test_us_short*` `4254 OK`（0 fail/0 err、py3.13）。register 挂 CUT-A 的 R3 follow-on。
+- **Next**: 无独立后续（Cut C 待用户 merge、与本收口独立）。
+
 ## 2026-07-12 — capstone stage 输入前置门（自修自审；codex_r3「编排韧性补充」）
 
 - **改动**：`runners/us_short_weekly_capstone.py` 编排循环在每个 stage 开跑前，先校验该 stage **已声明的 inputs** 存在且可读（新 helper `_input_readable`：缺失/不可读/目录一律 fail-closed），不满足则带 stage 名 `WeeklyCapstoneError("stage 'X' cannot start: declared input(s) missing or unreadable ...")` 快速中止——在 stage-run 的 try **之外**（是「cannot start」不是「stage failed」）、在 transaction try **之内**（触发回滚+释放锁）。只查存在+可读，schema/日期/身份/digest 仍归各 runner，不在 capstone 复制第二套验证框架（对齐该条最小处理意图）。

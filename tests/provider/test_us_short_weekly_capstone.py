@@ -303,6 +303,29 @@ class CapstoneFakeChainTest(unittest.TestCase):
             for call in printed.call_args_list
         ))
 
+    def test_shadow_unreadable_input_is_best_effort_and_bridge_emits(self):
+        # symmetric to the shadow RUN-failure case: an unreadable shadow INPUT (e.g. a pass2_fetch partial write that
+        # leaves data_context absent while source_packet is present) must ALSO route through the best-effort
+        # shadow-capture-failure path — loud marker + continue — never aborting the real weekly report.
+        order: list[str] = []
+        with mock.patch("builtins.print") as printed:
+            summary = self._run(
+                order,
+                stages=self._fake_stages(order, missing_input_stage="forward_policy_shadow"),
+            )
+        self.assertTrue(summary["emitted"])
+        self.assertNotIn("forward_policy_shadow", order)          # skipped at the input gate, before its run body
+        self.assertIn("weekly_bridge", order)                     # the real report still ran
+        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_shadow")
+        self.assertEqual(summary["shadow_capture_failed"]["error_type"], "WeeklyCapstoneError")
+        self.assertIn("input", summary["shadow_capture_failed"]["error"].lower())
+        shadow_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_shadow")
+        self.assertTrue(shadow_result["best_effort"])
+        self.assertTrue(any(
+            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            for call in printed.call_args_list
+        ))
+
     def test_only_shadow_stage_may_be_best_effort(self):
         order: list[str] = []
         stages = self._fake_stages(order)
