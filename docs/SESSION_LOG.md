@@ -8,7 +8,12 @@
 
 ---
 
-## 2026-07-12 — Claude Code 审查（US-short 0c94 集成 + A1 三键 forward_policy_heads）PASS
+## 2026-07-12 — Claude Code 收口对齐（R3 PORTFOLIO cap register 翻正 resolved；ecf2 清理被权限拦）
+
+- **Verdict/Action**: 已提交（master、未 push）。纯登记收口、无代码改动：`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` `in_progress→resolved`。cap 收口（§8 总仓60%/同主题30% 容量链 `us_short_weekend_cash.py`）早在 issue-5 专项审 PASS + 0c94 集成审 PASS 时已闭环入 master `7df1e080`，register 状态行仅滞后→本次翻正+补 closure 证据段。ecf2 worktree（HEAD `5ab702de` 已并入 master、干净无未提交活）确认可安全删，但 `git worktree remove` 被权限分类器拦（删 Codex 他窗口=破坏性共享资源）→未绕过、交用户定。
+- **Required**: 无。`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` → resolved（closure 证据单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。亲跑 focused `tests.test_us_short_weekend_cash` `18 OK`（master 第一手）+ git 确认 cap 引擎在 `7df1e080`；无代码改动、非审查轮，未起 §6a。
+- **Next**: 用户决定是否授权 `git worktree remove` 清 ecf2。
 
 - **Verdict/Action**: PASS + 提交（master 集成批次）。0c94 issue 1/5/6 引擎（`theme_selection`/`weekend_cash` caps/sec）与已审 0c94(10cd543) **逐字节 IDENTICAL**、只确认未变；集成缝正确：forward_policy_heads 六头全穿同一 source-bound 契约→3 键、无 per-head 特判，`_source_theme_selection_contract` 绑 score-composition state+rows 拒漂移，theme_off 自动零 theme 席、retain 头正常席；data_context 官方 Top15 用已校验 3 键 `data_context["selection_inputs"]`+显式 decision_date（两调用点一致、latent 漂移修）。
 - **Required**: 无。`R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION` → resolved；三个 R3 R-ID 随集成落 master，单源见 register。
