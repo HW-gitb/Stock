@@ -8,6 +8,56 @@
 
 ---
 
+## 2026-07-12 — Claude 复审 PASS (US-short R3 issue 4：合成价格几何已按 Option (a) 修)
+- **Verdict/Action**: PASS + 提交（288f、未 push）。上轮 FAIL 的 P1 合成几何已解决：Codex 选了我推荐的 Option (a)——删除 close-only 伪造 ATR/support/resistance helper，换成只 deepcopy、不加任何 indicator，缺 source-bound OHLCV/ATR 的行进 `support_atr_engine`→诚实 `观察(price_not_executable)`、官方表零合成 entry/stop/target/RR；`price/adv` 只用于已 build 行的 liquidity cap。已验正确的 preview 骨架 + `_select_top15` 委托原样保留。
+- **Required**: 无。`R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS` → resolved（含 issue-3 Optional 委托；单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读修复 diff；整类 grep `0.03`/`fallback_extreme`/`_price_input_from_universe_row`/`effective_support`/`5*atr` = **0 残留**；反向控制 e2e 测试断言 AAPL 无 `price_input`+空 sizing/basket/cost+machine row `观察/price_not_executable`、亲跑 `test_us_short_batch5_to_batch4_e2e` 8 OK；全包 288f `4229 ran / OK / 0 fail`。删缺陷代码+反向控制直证 → 未重起 §6a。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 4: synthetic price geometry)
+- **Verdict/Action**: Removed close-only synthetic ATR/support/resistance; official Batch5->Batch4 rows without source-bound OHLCV/ATR now remain `观察(price_not_executable)`.
+- **Required**: Independent Claude review before commit; real OHLCV/ATR source remains a later category.
+- **Verify**: Red/green E2E plus focused 40 OK, capstone 68 OK, full offline US-short 4,229 OK / 1 skipped, `py_compile` clean.
+- **Next**: Claude Code: review.
+
+## 2026-07-12 — Claude 审查 FAIL (US-short R3 issue 4：动态 action 输入 / 合成价格几何)
+- **Verdict/Action**: FAIL（未提交、留 288f 待 Codex 修复）。issue-3 Optional 委托修复（`_official_top15_tickers`→权威 `_select_top15`）+ issue-4 机械骨架（fail-closed 缺价→observe / preview==formal / sizing·basket·cost / `_short_bucket_dollars`）均**正确**；**但** issue-4 `_price_input_from_universe_row` 从 close 单独伪造 3% ATR + 固定 5:1 RR 几何，过 RR 风险门产出带伪造 stop/target 的自信 BUILD 进官方 action 表+周报，误用价格引擎「绝不伪造 structure」的 `fallback_extreme` 标签、且报告/action 表/machine record 零 synthetic 标注。
+- **Required**: `R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS` — P1 合成几何：EITHER (a) 缺 OHLCV 时不合成、honestly observe(`price_not_executable`)（推荐、合本条 placeholder 意图）OR (b) relabel（弃 `fallback_extreme`）+ surface synthetic + 不让其静默过 RR 门（三者全做）；保留已验正确的骨架/委托不动。完整 finding/端到端 repro/两选项单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读；全包 `4229 ran / OK / 0 fail`（长路径修复后 worktree 首次零环境错）；整读 weekend_e2e +214 + 权威 `support_atr_engine` RR 段（伪造 5×ATR→RR≥floor 全过）+ grep 确认 `fallback_extreme` 只写不读无门无 surface；§6a 独立 agent 端到端复现 P1（AAPL 建仓 rank1 entry200/stop183.5/tp230），fail-closed/preview-formal/sizing/委托全 HELD。
+- **Next**: Codex：修复
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 4: dynamic one-click action inputs)
+- **Verdict/Action**: Repaired `R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS`: Batch5->Batch4 bridge now derives current `price_input`, exact `sizing_per_ticker`, exact `basket_context.per_ticker`, and probe `cost_inputs` from the current selection path instead of static per-ticker template maps. Also disposed issue-3 Optional by delegating `_official_top15_tickers` to authoritative `_select_top15`.
+- **Required**: Claude independent review still required before commit. Residual OHLCV/ATR source completeness, total caps, and real theme membership are later `codex_r3.md` categories, not this slice.
+- **Verify**: Focused bridge/data-context 40 OK; capstone bridge focused 68 OK; full offline US-short module set 4,229 OK / 1 skipped; `py_compile` clean. Full facts and boundary are in `docs/system_risk_register.md`.
+- **Next**: Claude Code: review.
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 3：Batch5→Batch4 holdings 正式链)
+- **Verdict/Action**: PASS + 提交（288f、未 push）。`_official_per_ticker_analysis` 现出 official Top15 ∪ holdings、closed-world row_source 四分（candidate/holding_in_top15/holding_pass2_only/holding_account_only），holding-only 不伪造 score_blocks，coverage 门=Top15∪holdings 不符 fail-closed；逐位核 `_official_top15_tickers` 与权威 `_select_top15` 等价，四分标记+coverage 与 Batch4 `weekend_orchestrator` 契约逐一吻合。
+- **Required**: 无（Optional 非阻断、latent 选股面漂移:`_official_top15_tickers` 内联**重复实现**权威 `_select_top15`——weekend_pipeline 不 import data_context 故无循环障碍、且无等价性测试钉住二者→权威若改会静默发散官方 Top15；建议直接调权威 fn 或加等价性测试。详见 register）。`R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN` → resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结清单即后台并行起；整读 data_context.py +95 + 权威 `_select_top15` 逐位对比 + 下游 orchestrator 契约核对；focused test 覆盖 4 类 row（18 行）；全离线 `test_us_short*` 288f 4229 ran / 15 error / 0 fail，15 全 WinError 206 MAX_PATH（AssertionError=0）未改文件。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 3: Batch5 -> Batch4 holdings official chain)
+- **Verdict/Action**: Repaired `R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN`: Batch5 official components now emit official Top15 union canonical holdings, with `top15_candidate` / `holding_in_top15` / `holding_pass2_only` / `holding_account_only` row_source split. Scope only `runners/us_short_batch5_data_context.py` plus focused tests.
+- **Required**: None known in this slice; Claude independent review still required before commit. Full facts, risk, boundary, and verification limits are in `docs/system_risk_register.md`.
+- **Verify**: Red test reproduced missing/mislabeled holdings; green focused files `tests.provider.test_us_short_batch5_data_context` 32 OK and `tests.provider.test_us_short_batch5_data_context_source_packet` 19 OK; `py_compile` clean. Batch4 seam/full broad US-short pack not fully verified here: current runtime lacks `jsonschema`, and broad `*us_short*.py` discover timed out after entering non-offline/provider-like tests.
+- **Next**: Claude Code: review.
+
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 2：universe 行情 5xx fail-closed 不再静默回退旧价)
+- **Verdict/Action**: PASS + 提交（288f worktree、未 push）。`fetch_massive_window` 现对 429 重试后任意 HTTPError 都 fail-closed raise、只跳过真实空日，结构镜像兄弟 `momentum_fetch`；`from None` 顺手堵了旧 401/403/429 分支 `from exc` 会把带 apikey 的 Massive URL 链进 traceback 的洞；空日仍合法跳过、used_date 诚实返回。
+- **Required**: 无。`R-USSHORT-R3-UNIVERSE-MASSIVE-5XX-MISSING-DAY` → resolved（完整证据/边界单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（均真实工具输出）。整读+镜像核对；自撰 secret 探针 = 503 raise 无 url/key、`__cause__=None`/`suppress=True`、空日仍跳；focused `test_us_short_universe_fetch` 90 OK；全离线 `test_us_short*` 288f = 4227 ran / 15 error（全 = 未改文件 Windows MAX_PATH）/ 0 fail。低危错误处理改、未起 §6a agent。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 — Codex 修复完成，待 Claude 审查（US-short R3 issue 2：universe 行情 5xx 不再静默回退旧价）
+
+- **Verdict/Action**: 修复 `R-USSHORT-R3-UNIVERSE-MASSIVE-5XX-MISSING-DAY`：`fetch_massive_window` 现在对 429 重试后任意 HTTPError 都 fail-closed；只有真实空 list 才可当 delayed/unpublished day 跳过。范围仅 universe fetch + focused 测试。
+- **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
+- **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
+- **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+- **Next**: Claude Code：审查
+
 ## 2026-07-12 — Claude 建 forward A/B in-repo 执行路线图（供 Codex 在 ecf2 自导 `执行`）+ 同步 ecf2
 
 - **Verdict/Action**: 应用户「Codex 收 `执行` 能自行判断下一步」补上缺失的 in-repo 可执行文档：新建 `docs/us_short_forward_ab_execution_plan.md`（committed `a3cdd9c`；Codex-facing：Path A 设计思路 + 有序 cut 计划 [A capstone 接线→B 多周→C 决策差分→D manifest/统计计划；E overext-exec-off 账本延后] + 每刀边界 + 审查重点 + 「读 register/code 定下一刀」）+ README 路由行。register 开 `R-USSHORT-A1-FORWARD-AB-EXECUTION-ROADMAP`（standing 指针→plan doc、点名 next=Cut A）。桌面 `us_short_forward_ab_plan.md` 另更新为最终设计（我的总审查标准、不进 repo）。

@@ -390,6 +390,43 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             source_refs,
         )
 
+    def test_run_packet_context_components_preserve_holdings_union_row_sources(self):
+        _write_json(
+            self.paths["offering"],
+            resolve_offering_audit(
+                as_of=_OFFERING_AS_OF,
+                filings_by_ticker={
+                    "AAPL": _offering_record([]),
+                    "MSFT": _offering_record([]),
+                    "JPM": _offering_record([], coverage="partial"),
+                },
+            ),
+        )
+        packet = self._packet_payload()
+        packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
+        packet["optional_inputs"]["holdings"] = [
+            {"ticker": "AAPL", "signals": {}},
+            {"ticker": "JPM", "signals": {"critical_data_missing": True}},
+            {"ticker": "TSLA", "signals": {"critical_data_missing": True}},
+        ]
+        _write_json(self.paths["packet"], packet)
+
+        result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
+
+        self.assertTrue(result["scope"]["context_components_written"])
+        components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
+        rows = components["per_ticker_analysis"]
+        self.assertEqual(set(rows), {"AAPL", "MSFT", "JPM", "TSLA"})
+        self.assertEqual(rows["AAPL"]["row_source"], "holding_in_top15")
+        self.assertEqual(rows["MSFT"]["row_source"], "top15_candidate")
+        self.assertEqual(rows["JPM"]["row_source"], "holding_pass2_only")
+        self.assertEqual(rows["TSLA"]["row_source"], "holding_account_only")
+        self.assertEqual(rows["TSLA"]["signals"], {"critical_data_missing": True})
+        self.assertEqual(
+            components["run_provenance"]["families"]["per_ticker_analysis"]["row_count"],
+            4,
+        )
+
     def test_optional_overextension_projection_reaches_selection_analysis_and_source_binding(self):
         _write_json(
             self.paths["offering"],

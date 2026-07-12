@@ -225,6 +225,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             account = _write_json(private_root / "account_state.json", _empty_account())
             health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
             template = _no_build_template(private_root / "batch4_template.json")
+            context_out = private_root / "context_packet.json"
 
             summary = e2e.run_e2e(
                 source_packet_path=self.paths["packet"],
@@ -234,6 +235,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                 private_root=private_root,
                 now_et=datetime(2026, 6, 15, 9, 0, 0),
                 context_components_path=self.paths["components"],
+                context_packet_path=context_out,
                 bootstrap_lifecycle=True,
                 generated_at="2026-06-15T13:01:00Z",
             )
@@ -250,6 +252,16 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertTrue((private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").exists())
             self.assertTrue((private_root / "runs_private" / _DECISION_DATE / "machine_record.json").exists())
             self.assertTrue(self.paths["components"].exists())
+            context_packet = json.loads(context_out.read_text(encoding="utf-8"))
+            self.assertNotIn("price_input", context_packet["per_ticker_analysis"]["AAPL"])
+            self.assertEqual(context_packet["sizing_per_ticker"], {})
+            self.assertEqual(context_packet["basket_context"]["per_ticker"], {})
+            self.assertEqual(context_packet["cost_inputs"], {})
+            machine_record = json.loads(
+                (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(machine_record["rows"][0]["final_action"], "观察")
+            self.assertEqual(machine_record["rows"][0]["observe_reason_type"], "price_not_executable")
             self.assertNotIn("AAPL", json.dumps(summary, ensure_ascii=False))
 
     def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
@@ -364,6 +376,9 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             private_root = Path(private_dir)
             account = _write_json(private_root / "account_state.json", _empty_account())
             health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            bad_template_payload = json.loads(TEMPLATE.read_text(encoding="utf-8"))
+            bad_template_payload["market_axis_regimes"] = "bad"
+            bad_template = _write_json(private_root / "bad_template.json", bad_template_payload)
             context_out = private_root / "context_packet.json"
 
             result = subprocess.run(
@@ -373,7 +388,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
                     "--source-packet",
                     str(self.paths["packet"]),
                     "--batch4-template",
-                    str(TEMPLATE),
+                    str(bad_template),
                     "--account",
                     str(account),
                     "--provider-health",

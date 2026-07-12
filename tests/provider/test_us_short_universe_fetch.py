@@ -228,6 +228,20 @@ class TestFetchMassiveWindow(unittest.TestCase):
                 _mod.fetch_massive_window("k", ["2026-06-26", "2026-06-25"], window=20, min_days=1)
         self.assertIn("401", str(ctx.exception))
 
+    def test_server_5xx_raises_not_skipped_to_older_price_day(self):
+        import urllib.error
+
+        def fake(date, key):
+            if date == "2026-06-26":
+                raise urllib.error.HTTPError(None, 503, "service unavailable", {}, None)
+            return [{"T": "AAPL", "c": 10.0, "v": 600_000}]
+
+        with patch.object(_mod, "_massive_grouped_for_date", side_effect=fake):
+            with self.assertRaises(RuntimeError) as ctx:
+                _mod.fetch_massive_window("k", ["2026-06-26", "2026-06-25"], window=1, min_days=1)
+        self.assertIn("503", str(ctx.exception))
+        self.assertIn("not a missing trading day", str(ctx.exception))
+
     def test_rate_limit_429_retried_instead_of_failing(self):
         import urllib.error
 

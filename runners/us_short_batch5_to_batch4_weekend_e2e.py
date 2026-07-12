@@ -4,6 +4,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import os
 import shutil
 import sys
@@ -18,12 +19,21 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_provider_health import ProviderHealthError, classify_provider_health  # noqa: E402
+from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar  # noqa: E402
 from engine.us_short_run_origin import (  # noqa: E402
     RunOriginError,
     is_capstone_research_live_capability,
     require_research_live_provider_health,
     require_research_live_receipt_binding,
 )
+from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
+from engine.us_short_weekend_basket import resolve_build_capacity  # noqa: E402
+from engine.us_short_weekend_cost_floor import apply_probe_cost_floor  # noqa: E402
+from engine.us_short_weekend_decision import decide_actions  # noqa: E402
+from engine.us_short_weekend_orchestrator import _build_analysis_rows  # noqa: E402
+from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
+from engine.us_short_weekend_sizing import _BUILD as _BUILD_ACTION, size_rows  # noqa: E402
 from runners import us_short_batch5_data_context_source_packet as source_packet_runner  # noqa: E402
 from runners import us_short_weekend_batch4 as batch4_runner  # noqa: E402
 
@@ -50,6 +60,9 @@ _TEMPLATE_KEYS = frozenset(
 
 class Batch5ToBatch4E2EError(ValueError):
     """The local Batch5 source packet cannot be bridged into a Batch4 weekend run safely."""
+
+
+_PROBE_COST_KEYS = ("commission_round_trip", "slippage_dollars", "spread_dollars")
 
 
 def iso_now() -> str:
@@ -209,6 +222,169 @@ def _patched_report_context(template_report_context: dict[str, Any], *, run_prov
     return report_context
 
 
+def _finite_positive(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return number if math.isfinite(number) and number > 0.0 else None
+
+
+def _universe_by_ticker(data_context: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    out: dict[str, dict[str, Any]] = {}
+    for row in data_context.get("universe") or []:
+        if not isinstance(row, dict):
+            continue
+        ticker = canonical_us_ticker(row.get("ticker"))
+        if ticker is None:
+            raise Batch5ToBatch4E2EError("data_context universe contains a non-canonical US ticker")
+        if ticker in out:
+            raise Batch5ToBatch4E2EError("data_context universe contains duplicate canonical tickers")
+        out[ticker] = row
+    return out
+
+
+def _analysis_rows_without_synthetic_price_inputs(
+    per_ticker_analysis: dict[str, Any],
+) -> dict[str, dict[str, Any]]:
+    """Preserve only source-bound price input already present on official components.
+
+    Batch5 universe rows currently provide close/ADV, not the OHLCV/ATR structure required
+    by the Batch4 price engine. A close-only bridge must therefore remain non-executable
+    instead of fabricating support, resistance, or ATR geometry.
+    """
+    out: dict[str, dict[str, Any]] = {}
+    for key, row in per_ticker_analysis.items():
+        ticker = canonical_us_ticker(key)
+        if ticker is None or not isinstance(row, dict):
+            raise Batch5ToBatch4E2EError("per_ticker_analysis contains a non-canonical ticker or non-object row")
+        out[ticker] = copy.deepcopy(row)
+    return out
+
+
+def _short_bucket_dollars(account_state_path: Path, *, required: bool) -> float:
+    if not account_state_path.is_file():
+        if required:
+            raise Batch5ToBatch4E2EError("account_state_path is required to derive dynamic sizing inputs")
+        return 1.0
+    account = _read_json(account_state_path, "account state")
+    bucket = _finite_positive(account.get("us_short_bucket_capital")) if isinstance(account, dict) else None
+    if bucket is None:
+        raise Batch5ToBatch4E2EError("account_state.us_short_bucket_capital must be a positive finite number")
+    return bucket
+
+
+def _sizing_input_for_ticker(ticker: str, universe_by_ticker: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    row = universe_by_ticker.get(ticker) or {}
+    price = _finite_positive(row.get("price"))
+    adv_usd = _finite_positive(row.get("adv_usd"))
+    liquidity_cap = 0
+    if price is not None and adv_usd is not None:
+        liquidity_cap = max(0, int(math.floor((adv_usd / price) * 0.01)))
+    return {"discount_mults": [], "liquidity_cap_shares": liquidity_cap}
+
+
+def _basket_input_for_ticker() -> dict[str, Any]:
+    return {
+        "theme": "unclassified",
+        "symbol_cooldown_status": "none",
+        "theme_probe": {
+            "theme_lifecycle_state": None,
+            "high_confidence": False,
+            "coverage_status": "restricted",
+            "no_gap_week": False,
+            "entry_in_band": False,
+        },
+    }
+
+
+def _cost_inputs_for_promoted_probes(basket_result: dict[str, Any]) -> dict[str, dict[str, float]]:
+    out: dict[str, dict[str, float]] = {}
+    for row in basket_result.get("rows") or []:
+        if not isinstance(row, dict) or row.get("final_action") != _BUILD_ACTION or "theme_probe" not in row:
+            continue
+        ticker = canonical_us_ticker(row.get("ticker"))
+        if ticker is None:
+            raise Batch5ToBatch4E2EError("promoted probe row has a non-canonical ticker")
+        out[ticker] = {key: 0.0 for key in _PROBE_COST_KEYS}
+    return out
+
+
+def _derive_current_action_inputs(
+    *,
+    components: dict[str, Any],
+    template: dict[str, Any],
+    account_state_path: Path,
+    calendar_path: Path,
+    governance_path: Path,
+    now_et: datetime,
+    market_axis_regimes: dict[str, Any],
+    basket_context: dict[str, Any],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any], dict[str, dict[str, float]]]:
+    data_context = components["data_context"]
+    universe = _universe_by_ticker(data_context)
+    per_ticker_analysis = _analysis_rows_without_synthetic_price_inputs(components["per_ticker_analysis"])
+    if not per_ticker_analysis:
+        basket_empty = copy.deepcopy(basket_context)
+        basket_empty["per_ticker"] = {}
+        return per_ticker_analysis, {}, basket_empty, {}
+    calendar = validate_market_calendar(_read_json(calendar_path, "market calendar"))
+    selection = run_selection(
+        now_et,
+        sessions_for_window(now_et.strftime("%Y%m%d"), calendar=calendar),
+        data_context,
+        eligibility_governance=load_eligibility_governance(governance_path),
+    )
+    if selection["out_of_window"]:
+        basket_empty = copy.deepcopy(basket_context)
+        basket_empty["per_ticker"] = {}
+        return per_ticker_analysis, {}, basket_empty, {}
+    rows = _build_analysis_rows(selection, per_ticker_analysis)
+
+    analysis = analyze_rows(
+        rows,
+        market_axis_regimes=market_axis_regimes,
+        prior_regime=template["prior_regime"],
+        prior_upgrade_count=template["prior_upgrade_count"],
+    )
+    decided = decide_actions(analysis)
+    build_tickers = {
+        row["ticker"] for row in decided["rows"]
+        if isinstance(row, dict) and row.get("final_action") == _BUILD_ACTION
+    }
+    sizing_per_ticker = {
+        ticker: _sizing_input_for_ticker(ticker, universe)
+        for ticker in sorted(build_tickers)
+    }
+    if not sizing_per_ticker:
+        basket_empty = copy.deepcopy(basket_context)
+        basket_empty["per_ticker"] = {}
+        return per_ticker_analysis, {}, basket_empty, {}
+
+    sized = size_rows(
+        decided,
+        sizing_context={
+            "short_bucket_dollars": _short_bucket_dollars(account_state_path, required=True),
+            "per_ticker": sizing_per_ticker,
+        },
+    )
+    sized_build_tickers = {
+        row["ticker"] for row in sized["rows"]
+        if isinstance(row, dict) and row.get("final_action") == _BUILD_ACTION
+    }
+    dynamic_basket = copy.deepcopy(basket_context)
+    dynamic_basket["per_ticker"] = {
+        ticker: _basket_input_for_ticker()
+        for ticker in sorted(sized_build_tickers)
+    }
+    basket = resolve_build_capacity(sized, basket_context=dynamic_basket)
+    cost_inputs = _cost_inputs_for_promoted_probes(basket)
+    apply_probe_cost_floor(basket, cost_inputs=cost_inputs)
+    return per_ticker_analysis, sizing_per_ticker, dynamic_basket, cost_inputs
+
+
 def _assemble_batch4_packet(
     *,
     components: dict[str, Any],
@@ -234,17 +410,27 @@ def _assemble_batch4_packet(
         raise Batch5ToBatch4E2EError("batch4 template market_axis_regimes must be an object")
     if vix_regime is not None:
         market_axis_regimes["vix"] = vix_regime
+    per_ticker_analysis, sizing_per_ticker, basket_context, cost_inputs = _derive_current_action_inputs(
+        components=components,
+        template=template,
+        account_state_path=account_state_path,
+        calendar_path=calendar_path,
+        governance_path=governance_path,
+        now_et=now_et,
+        market_axis_regimes=market_axis_regimes,
+        basket_context=basket_context,
+    )
     return {
         "data_context": data_context,
-        "per_ticker_analysis": components["per_ticker_analysis"],
+        "per_ticker_analysis": per_ticker_analysis,
         "run_provenance": run_provenance,
         "provider_health": provider_health,
         "market_axis_regimes": market_axis_regimes,
         "prior_regime": template["prior_regime"],
         "prior_upgrade_count": template["prior_upgrade_count"],
-        "sizing_per_ticker": template["sizing_per_ticker"],
+        "sizing_per_ticker": sizing_per_ticker,
         "basket_context": basket_context,
-        "cost_inputs": template["cost_inputs"],
+        "cost_inputs": cost_inputs,
         "report_context": _patched_report_context(
             template["report_context"],
             run_provenance=run_provenance,

@@ -531,8 +531,9 @@ def fetch_massive_window(
 
     Steps through the candidates, fetching Massive grouped daily for each, SKIPPING empty days (Massive's
     delayed-data lag), and collects up to `window` days WITH data. Returns (used_date, observed_window_dates
-    newest-first, market_data). An auth/quota HTTP error (401/403/429) is RAISED (never masked as a missing
-    trading day, §3.7). If fewer than `min_days` days come back with data, raises (insufficient for ADV).
+    newest-first, market_data). Any HTTP error after retry is RAISED (never masked as a missing trading day,
+    §3.7); only a confirmed empty response can be skipped as delayed/not-yet-published. If fewer than
+    `min_days` days come back with data, raises (insufficient for ADV).
     """
     collected: list[tuple[str, list[dict[str, Any]]]] = []
     request_count = 0
@@ -555,12 +556,10 @@ def fetch_massive_window(
                         continue
                     raise
         except urllib.error.HTTPError as exc:
-            if exc.code in (401, 403, 429):
-                raise RuntimeError(
-                    f"Massive grouped daily HTTP {exc.code} (auth/quota/rate-limit after {retry_count} "
-                    "retry attempt(s)); not a missing trading day"
-                ) from exc
-            continue
+            raise RuntimeError(
+                f"Massive grouped daily HTTP {exc.code} after {retry_count} retry attempt(s); "
+                "not a missing trading day"
+            ) from None
         if results:
             collected.append((d, results))
     if len(collected) < min_days:
