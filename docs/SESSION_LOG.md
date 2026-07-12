@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 - Claude Code 决策（US-short A1 0c94 三键集成·forward_policy_heads 适配 + theme_off 拍板）
+
+- **决策**: 用户准备 merge 0c94（把 `_select_top15` 契约 2→3 键、加 source-bound `theme_selection_contract` + 必填 `decision_date`）。核实 master 的 `forward_policy_heads` 仍产 2 键（`:114`/`:208`）→ 裸 merge 0c94 会 red ~22 A1 forward 测试。**A1 设计拍板**：六头全穿同一份 source contract、**无需 per-head 特判**；`theme_off` 无需空契约——它 `theme_momentum_seat=zero`→theme 分全 0，而 `theme_seat_plan:165` 只在 `theme_score>0` 才给席位→theme_off 自动零 theme 席位（合其 rollback-anchor 本意、保持现有纯 core 行为）。早先担心的「无脑穿让 theme_off 拿席位」＝不成立。
+- **适配（随 0c94 集成落，需 3 键在场才能建+测）**: `_validated_composition` 收 contract；`build_selection_policy_heads` 把 contract 原样穿进每头（→3 键）；`build_selection_policy_decisions` 传 `decision_date`；测试断言 theme_off 零 theme 席位 + retain 头正常。
+- **顺序**: 别裸 merge 0c94。作为一批 2→3 键落：0c94 引擎 + 真实路径集成（score_composition/data_context 携带+喂 contract，并发方已 stage `/tmp` 补丁）+ 本 heads 适配 → Claude 审。详见 register `R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION`。
+- **Next**: Codex 对整合后的树 `执行` heads 适配（按 register spec）；Claude 审+提交。
+
 ## 2026-07-12 — ship-gate protocol v1.0 落成（proposed，未激活；三-LLM 融合）
 
 - **落成**：`docs/us_short_ship_gate_protocol_v1.0.md`（人读）+ `presets/us_short_ship_gate_protocol_v1.0.json`（机读参数），`status: proposed / 未激活 / 时钟未起`。是 §12/§13 + `evidence_capital_policy.md` 的 US-short 具体实例化：统计门×容量阶梯(25→50→75→100%)、经济 alpha 下限、因子调整 alpha≥0、Deflated Sharpe、必经不利环境、容量+压力退出、ITT 双账本、冻结前四验证(零-alpha 校准≤5% 等)、版本绑定重启时钟。
