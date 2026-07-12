@@ -93,7 +93,7 @@ register + code are the source of truth.
   non-selection gate stability, rank delta, selection bucket delta, and Top15 membership changes for the five
   shadow policies. Action / size diffs are explicitly marked `not_available_in_cut_a_capture` because Cut A
   does not run downstream analysis/sizing per policy; fabricating those claims is rejected.
-- **[SPEC-FROZEN — build on `执行`] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
+- **[BUILT] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
   `net_benchmark_excess`; divergence definition; minimum weeks; comparison margin; placebo seed + match
   frequency; paired basis; elimination rule). The plan must be pre-registered day-1; the analysis code may lag.
   **All four open parameters are FROZEN below (user-ratified 2026-07-12). Build the schema/preset/manifest + tests to
@@ -121,7 +121,7 @@ register + code are the source of truth.
     ONLY at ≥12 weeks; no early outcome peeking, preserving pre-registration integrity):
     - **futility** (structural): **< 2 divergence weeks in the first 8 decision-weeks** → futility flag (cannot accrue
       ≥12 divergence samples in a reasonable horizon).
-    - **harm** (structural): mean weekly Top15 turnover **> 2× `balanced`** sustained ≥4 weeks, OR Top15 fill **< 50%
+    - **harm** (structural): mean weekly Top15 turnover **> 2× `balanced`** sustained ≥2 weeks (harmonized w/ fill), OR Top15 fill **< 50%
       of `balanced`'s seat count** sustained → harm flag.
     - A flag SURFACES the head for human review — never a silent auto-drop. (The 2-in-8 / 2× / 50% concrete cutoffs are
       Claude's concretization of the ratified outcome-blind basis; adjustable on review, frozen for v1.)

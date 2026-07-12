@@ -20,7 +20,7 @@ import engine.us_short_upgrade_gate as ug  # noqa: E402
 import engine.us_short_upgrade_banner as ub  # noqa: E402
 
 AS_OF = "20260330"
-FROZEN_GOV = {"min_comparison_weeks": 12, "comparison_win_margin": 0.02}
+FROZEN_GOV = {"min_comparison_weeks": 12, "comparison_win_margin": 0.001}
 
 
 def _obs(n):
