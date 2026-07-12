@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 — merge 状态：288f(issue 2/3/4)已入 master；0c94(issue 1/5/6)暂缓（forward_policy_heads 集成前置，A1）
+
+- **进度**：codex_r3 六项修复合并入 master。**288f 三项已干净合并**（`2e52976`，全离线 US-short `4229 ran / OK / 0 fail`）。**0c94 三项已在 worktree 审过并提交**（`10cd543`），但**合并入 master 暂缓**——不是文本冲突，是跨部件真实不兼容。
+- **暂缓根因**：0c94 的 issue-6 把共享 `engine/us_short_weekend_pipeline.py::_select_top15` 的 `selection_inputs` 契约从 2 键升级为 3 键（新增 source-bound `theme_selection_contract` + 必填 keyword-only `decision_date`）。主树既有 `engine/us_short_forward_policy_heads.py`（A1 forward-testing，先于两 worktree 就在 master）`_validated_composition` 硬校验 2 键、且 `build_selection_policy_heads` 给 6 个 policy 变体各重造一份 2 键 `selection_inputs` 喂 `run_selection` → 合并后 22 个 provider/forward 测试报错。半合并已 `git merge --abort` 还原，主树干净停在 2e52976。
+- **A1 集成前置（合并 0c94 前必做，属 A1 设计决策）**：把 `forward_policy_heads` 改成 theme-契约感知——`_validated_composition` 接受 3 键；`build_selection_policy_heads` 把 source-bound `theme_selection_contract` 透传进每个 policy 的输出 `selection_inputs`；并**明确** theme_off / catalyst_off 这类零 theme 分变体如何与 theme 生命周期席位交互（同一契约无脑穿给 theme_off 可能让它照样拿 theme 席位，须确认是否符合该变体本意）。这一步不属 merge 机械集成、不该由合并方替 A1 拍板。
+- **merge 时另需（data_context 侧，已知机械集成）**：0c94 落地后 `runners/us_short_batch5_data_context.py::_official_top15_tickers`/`_official_per_ticker_analysis` 需穿 `decision_date` + 改用已校验的 `data_context["selection_inputs"]`（非原始 2 键 `score_composition["selection_inputs"]`）——正是本 log 下方 issue-3 审查条标记的「两调用点无等价性」latent 漂移的兑现。补丁存 `/tmp/claude_0c94_integration_fixes.patch`（含 `tests/provider/test_us_short_batch5_data_context.py` 与 `tests/test_us_short_forward_policy_heads.py` 的契约接线），届时秒复用。
+- **worktree**：0c94、288f 均**未删**（0c94 未合并；守「全部确认后再删」）。
+
 ## 2026-07-12 — Claude 复审 PASS (US-short R3 issue 4：合成价格几何已按 Option (a) 修)
 - **Verdict/Action**: PASS + 提交（288f、未 push）。上轮 FAIL 的 P1 合成几何已解决：Codex 选了我推荐的 Option (a)——删除 close-only 伪造 ATR/support/resistance helper，换成只 deepcopy、不加任何 indicator，缺 source-bound OHLCV/ATR 的行进 `support_atr_engine`→诚实 `观察(price_not_executable)`、官方表零合成 entry/stop/target/RR；`price/adv` 只用于已 build 行的 liquidity cap。已验正确的 preview 骨架 + `_select_top15` 委托原样保留。
 - **Required**: 无。`R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS` → resolved（含 issue-3 Optional 委托；单源见 `docs/system_risk_register.md`）。
