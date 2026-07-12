@@ -13,10 +13,14 @@ offline, so treat their exact kwargs/paths as draft until that run confirms them
 """
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
+from engine.us_short_eligibility_gate import load_eligibility_governance
+from engine.us_short_forward_policy_shadow_stage import materialize_forward_policy_shadow
+from engine.us_short_market_calendar import load_market_calendar, sessions_for_window
 from engine.us_short_run_origin import require_research_live_provider_summary
 from engine.us_short_regime import REGIMES, UNKNOWN
 from runners import us_short_batch5_full_candidate_live_source_packet as _pass2
@@ -32,6 +36,11 @@ from runners import us_short_universe_fetch as _universe
 from runners import us_short_yfinance_grades_fetch as _yfinance_grades
 from runners import us_short_vix_regime_fetch as _vix
 from runners.us_short_account_state_from_manual_tables import validate_account_state
+
+
+ROOT = Path(__file__).resolve().parents[1]
+_ELIGIBILITY_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+_CALENDAR_PATH = ROOT / "presets" / "us_short_market_calendar_2026_2027.json"
 
 
 def _stage_summary_targets(ctx) -> dict[str, Path]:
@@ -239,6 +248,51 @@ def run_pass2_preflight(ctx) -> dict[str, Any]:
         authorized_total_call_budget=ctx.authorized_pass2_call_budget,
         confirm_user_authorization=ctx.confirm_user_authorization,
         generated_at=ctx.generated_at,
+    )
+
+
+def run_forward_policy_shadow(ctx) -> dict[str, Any]:
+    """Materialize the six A1 Path-A selection heads from the exact, already-built decision snapshot.
+
+    This stage is deliberately local: it reads the same-run Batch5 context-components sidecar, re-runs only the
+    authoritative selection delegate with policy-specific selection inputs, and writes a private ticker-bearing
+    record plus a count-only companion.  It makes no provider call and does not fabricate a paper outcome or a
+    lifecycle observation before the forward week has actually resolved.
+    """
+    try:
+        data_context_bytes = ctx.data_context_path.read_bytes()
+        data_context = json.loads(data_context_bytes)
+        components_bytes = ctx.context_components_path.read_bytes()
+        components = json.loads(components_bytes)
+    except (OSError, ValueError) as exc:
+        raise ValueError("forward-policy shadow requires readable same-run data_context and context-components JSON") from exc
+    expected_component_keys = {
+        "data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis", "run_provenance"}
+    if not isinstance(components, dict) or set(components) != expected_component_keys:
+        raise ValueError("forward-policy shadow context-components shape is incomplete or stale")
+    if components["data_context"] != data_context:
+        raise ValueError("forward-policy shadow refuses mismatched data_context and context-components snapshots")
+    if components["overextension_by_ticker"] is None:
+        raise ValueError("forward-policy shadow requires the source-bound overextension map")
+    provenance = components["run_provenance"]
+    if not isinstance(provenance, dict) or provenance.get("as_of") != ctx.decision_date \
+            or provenance.get("price_basis_date") != ctx.price_basis_date:
+        raise ValueError("forward-policy shadow provenance clock differs from the capstone canonical clock")
+    calendar = load_market_calendar(_CALENDAR_PATH)
+    sessions = sessions_for_window(ctx.now_et.strftime("%Y%m%d"), calendar=calendar)
+    return materialize_forward_policy_shadow(
+        now_et=ctx.now_et,
+        sessions=sessions,
+        data_context=data_context,
+        eligibility_governance=load_eligibility_governance(_ELIGIBILITY_GOVERNANCE_PATH),
+        score_composition=components["score_composition"],
+        overextension_by_ticker=components["overextension_by_ticker"],
+        decision_date=ctx.decision_date,
+        price_basis_date=ctx.price_basis_date,
+        generated_at=ctx.generated_at,
+        source_context_sha256=hashlib.sha256(components_bytes).hexdigest(),
+        private_output_path=ctx.forward_shadow_selection_private_path,
+        summary_output_path=ctx.forward_policy_summary_path,
     )
 
 

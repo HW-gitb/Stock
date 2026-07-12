@@ -72,6 +72,71 @@
 - **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
 - **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
 - **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+## 2026-07-12 — Claude 独立审查 PASS + 提交（US-short A1 Cut B 六-policy comparator/lifecycle）
+
+- **Verdict/Action**: PASS + 提交（ecf2 detached）。Cut B 正确：扩 shadow_compare/scorecard/multiweek 到 6-policy（保留 4-profile API）+ lifecycle #28；全程 capture-bound、ship-gate 隔离结构性、无洗证据、fixed-TopN、second-wave 仍拒、**#36 不伪造**、不冻 margin。整读三承重体确认 fail-closed（详见 register）；comparators 纯函数无落盘（含票名 set-diff 不进 tracked）；heads/shadow_stage 增量/加强；SELECTION_DECISION_KEYS 与 run_selection 14 键吻合（Cut A 无回归）。
+- **Required**: 无。`R-USSHORT-A1-CUT-B-POLICY-COMPARATOR-LIFECYCLE` → resolved（单源见 register）。
+- **Verify**: 亲验非信测试：整读承重体 + 对抗测试全覆盖（6-policy 含 catalyst_off/overext_selection_off、second-wave/tamper/free-form/doctored-delta/one-week/missing 全 raise、ship-gate 隔离、#28-only）；**独立全包 `test_us_short*` `4248 OK`（0 fail/err/rpds）**——system py3.13、临时挪开 wrong-ABI cp312 vendored `.tools` 后跑再复原（与 Codex 4248 一致）。未起 §6a agent（离线影子比较、隔离+无落盘+良测）。
+- **Next**: merge ecf2→master（Cut A `e135aa4` + 本刀）+ push 为人工步（push 先核私密 remote）。
+
+## 2026-07-12 — Codex 执行（US-short A1 Cut B 六-policy comparator/lifecycle）
+
+- **Verdict/Action**: Cut B 已构建：保留旧四-profile API，新增 Cut-A capture-bound 六-policy 选择/单周/≥12周比较与 lifecycle #28 观察；#36 触发数不伪造，未提交。
+- **Required**: 无 Codex 遗留；material 边界见 `R-USSHORT-A1-CUT-B-POLICY-COMPARATOR-LIFECYCLE`。
+- **Verify**: red-first 8 项先红；focused `184 OK`；完整离线 `test_us_short*.py` `4248 OK`（1 skipped）；doc/route/grid guards `64 OK`；py_compile / diff-check / active-surface grep clean；无 provider/live 抓取。
+- **Pre-Codex self-review**: A-F current-diff-only；独立 Codex 自审首轮 FAIL 3 项 provenance，全部最小修复后复审 PASS（无 timeout）；B 覆盖六-policy/second-wave/Path-B/ripple；C 覆盖 digest、boundary、nested-shape、free-form lifecycle 反测；E 未改 CURRENT；最终固定包集中运行一次。
+- **Next**: Claude Code：审查
+
+## 2026-07-12 — Claude 复审 PASS + 提交（US-short A1 Cut A：R1 回归 + R2 best-effort 均已修验）
+
+- **Verdict/Action**: PASS + 提交（ecf2 detached）。R2 best-effort 正确且测试充分：`forward_policy_shadow` best_effort=True；loop 捕获其异常 → summary 记 `shadow_capture_failed`（emit/no-emit 两路）+ 响亮 stderr 横幅 + 续跑 bridge（真周报照出）；run_origin 移出必需序 + receipt/expected 排除 best-effort；`only forward_policy_shadow may be best_effort` 防误用守卫；shadow 引擎自身校验未弱化。R1（E2E 双形状）保持。Cut A 完整（capture-only / 私密 / 脱敏 / never ship-gate / 零 provider）。
+- **Required**: 无。`R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE` → resolved（单源见 register）。
+- **Verify**: 亲验非信测试：整读 loop best-effort 分支 + Stage best_effort 字段 + run_origin optional + summary 标记两路 + 守卫 + 三态测试（成功无标 / 失败标+横幅+bridge 出 / receipt optional）；**独立全包 `test_us_short*` `4234 OK`（0 fail/err）**——system py3.13、临时挪开 wrong-ABI cp312 vendored `.tools/python_libs` 后跑再复原（与 Codex py3.12 的 4234 一致）。R2 面局部（loop/Stage/run_origin/测试），engine/data_context/E2E 未动。
+- **Next**: merge ecf2→master + push 为人工步（push 先核私密 remote）。
+
+## 2026-07-12 — Codex 修复（US-short A1 Cut A R2 shadow best-effort）
+
+- **Verdict/Action**: 已落实用户选择的 best-effort：仅 `forward_policy_shadow` 失败会记录醒目 `shadow_capture_failed` 并继续 `weekly_bridge`；其他阶段仍失败即中止，未提交。
+- **Required**: 无；R2 的独立审查范围见 register `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE`。
+- **Verify**: 反向测试先红；focused Cut-A/bridge/E2E/schema/capstone `142 OK`；完整离线 `test_us_short*.py` `4234 OK`（1 skipped，无 provider/live 抓取）。
+- **Pre-Codex self-review**: A-F main-thread（无 delegation）；B ripple grep 覆盖 Stage、receipt、两处 fixture 与 Path-B 词；C 覆盖 shadow 失败继续+banner、成功无 marker、receipt optional；E 未改 CURRENT；固定包集中运行一次。
+- **Next**: Claude Code：审查
+
+## 2026-07-12 — Claude handoff：用户选 best-effort → Codex 执行 R2（US-short A1 Cut A shadow stage 改非阻断）
+
+- **Verdict/Action**: 规划/handoff。R1 已 Claude 复审 PASS（下条）；用户就 shadow-failure 设计决策拍板 **best-effort**——shadow 捕获失败不再中止真实周报。转 Codex 在 ecf2 执行 R2。未提交。
+- **Required**: `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE` R2（executable 详规见 register）：Stage 加 `best_effort` → 捕获失败记 `shadow_capture_failed` 横幅 + 继续 bridge；从 `_REQUIRED_PRE_BRIDGE_STAGES` 移除 + 回退 2 个 receipt fixture 的该 stage；shadow 自身 fail-closed 不变；测试三态（失败续跑+露出 / 成功产出 / receipt optional）。
+- **Verify**: 无（handoff、无验证）。边界：仍 capture-only / 私密 / 脱敏 / never ship-gate / 零新 provider；只改「失败不拦 emit + 响亮露出」，不弱化 shadow 自身校验。
+- **Next**: Codex（ecf2）：修复（R2 best-effort，详见 register）
+
+## 2026-07-12 — Claude 独立复审：R1 已修 PASS（US-short A1 Cut A；仅剩 shadow-failure emission 设计决策待用户定）
+
+- **Verdict/Action**: R1（E2E sibling 回归）已修、**PASS**。E2E 检查现纳 `frozenset(components)∈{legacy-3键, A1-5键}`（仍闭世界、整类覆盖 grep 无残留 3键消费者），集成回归测试 `test_us_short_batch5_capstone_offline_e2e` 断言 5键侧车过桥。**未提交**——唯一未决 = shadow 捕获失败是否阻断真实周报（设计决策，Codex 已 surface 给用户）。
+- **Required**: 无（R1 已闭）。待用户定设计决策：(a) best-effort（我建议：catch→记 shadow_failed 横幅→继续 bridge；桥自身校验 context，影子失败不该拦研究周报）→ 我转 Codex 小改 + 复审 + 提交；(b) loud-blocking → 我直接提交。
+- **Verify**: 亲验非信测试：整读 E2E 修（frozenset∈{LEGACY,A1}、静态确凿过 5键）+ grep 整类（仅一处消费者、已覆盖）+ Codex 加的集成回归测试；**独立全包 `test_us_short*` `4231 OK`（0 fail/0 err/0 rpds）**——system py3.13、临时挪开 wrong-ABI cp312 vendored `.tools/python_libs` 后跑再复原（先前 353 rpds 失败纯是该 ABI 影子、非回归；MAX_PATH 现 0）。其余 Cut A 面上轮已核正确、本轮未变。
+- **Next**: 用户：选 best-effort 或 loud-blocking（详见 register `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE`）。
+
+## 2026-07-12 — Codex 修复（US-short A1 Cut A Claude Required R1）
+
+- **Verdict/Action**: 已修复五字段 context sidecar 使 Batch4 bridge 拒绝的回归；保留 legacy/A1 两种严格闭集形状，receipt fixture 同步第 13 个 shadow stage。
+- **Required**: `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE` — R1 已修；shadow capture 失败是否阻断官方周报仍需用户设计决定，详见 register。
+- **Verify**: 实际 runtime focused A1/capstone/bridge 143 OK；doc/route guards 60 OK；完整 `test_us_short*.py` 跑完 4231，15 个未触及 provider fixture 的长路径环境错误；无 Cut-A 失败。
+- **Pre-Codex self-review**: A-F main-thread fallback（禁止 delegation）；B grep 覆盖 sidecar consumers 与 receipt fixtures；C E2E 断言五字段形状；E 未改 CURRENT；Path-B runtime 残留为零。
+- **Next**: 用户：选择
+
+## 2026-07-12 — Claude 独立审查 FAIL (US-short A1 Cut A capstone live shadow capture)
+
+- **Verdict/Action**: FAIL（未提交、在 ecf2）。Cut A 核心对——capture-only（无 comparator/lifecycle/exec-head）、私密票据落 gitignored `shadow_compare_private`、脱敏 counts-only tracked 汇总（`additionalProperties:false`、never ship-gate）、`source_context_sha256` 审计绑定无 replay 入口、`run_selection` 消费真 admitted/clock/out_of_window、决策时零新 provider、run-origin 增量注册、context-components 侧车仍 gitignored。**但一处真回归 + 一个设计决策要定**（详见 register `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE`）。
+- **Required**: R1（P1 回归）：`assemble_...` 现出 5 键（加 score_composition+overextension_by_ticker），但 `us_short_batch5_to_batch4_weekend_e2e.py:441` 仍闭世界 `set(components)=={3 键}` → 喂 5 键必 raise `Batch5ToBatch4E2EError`；E2E 测试 master `8 OK`、本改破之（直接 data_context 测试改了、sibling E2E 消费者+测试漏改+没跑=整类遗漏）。修=纳 2 新键 + grep 整类一次修 + 跑 E2E。设计决策：shadow stage 现为必需 pre-bridge + fail-fast → shadow 失败会中止真实周报 emit；建议 best-effort（catch→记 shadow_failed 横幅→继续 bridge）或确认要 loud-blocking（surface 给用户定）。
+- **Verify**: 亲验非信测试：整读 shadow 引擎 + 接线 + data_context 改 + run_origin + 消费链；`run_selection`(weekend_pipeline:283-294) 真出 admitted/clock（消费正确）；私密 gitignored + summary tracked+de-id（`git check-ignore` 双验）；**静态证 E2E 回归**（5≠3 闭世界必 raise）+ master E2E `8 OK` 基线（ecf2 该测试失败被 rpds env 掩→据静态+基线判、不靠 muddled 测试）。全 `test_us_short*` ecf2 `3033 ran/22 fail/333 err` ≈ 353 rpds env 影子（CAT8）+ E2E 回归；data_context/source_packet/projection 等 focused system-python 全过=env、非回归。回归静态确凿→未起 §6a agent。
+- **Next**: Codex（ecf2）：修复（R1 E2E 闭世界整类 + 设计决策按用户定夺）
+
+## 2026-07-12 — Codex 修复（US-short A1 Cut A capstone live shadow capture）
+
+- **Verdict/Action**: Cut A 将六个 Path-A 选择头接入同一决策时点的冻结 PIT 快照，私密保存选择结果并仅输出去标识计数；未接比较器、lifecycle 或 execution head。
+- **Required**: `R-USSHORT-A1-CUT-A-CAPSTONE-LIVE-SHADOW-CAPTURE` — 详细边界、风险与环境阻断见 `docs/system_risk_register.md`。
+- **Verify**: heads/run-origin 21 OK；capstone/context/shadow 113 OK（兼容 shim）；route/ledger 25 OK；py_compile、private ignore、diff-check 通过。真实 `jsonschema/rpds` 与完整 `test_us_short*.py` 仍被环境阻断；doc guard 另有两条已提交 Claude entry 的既有标签失败。
+- **Pre-Codex self-review**: A-F main-thread fallback（禁止 delegation）；B grep 无 Path-B 运行时代码残留，仅 removal guard/history/禁止规则；C 覆盖畸形冻结输入；E 未改 CURRENT；已修正禁用词根为 `forward_shadow_selection_private_path`。
 - **Next**: Claude Code：审查
 
 ## 2026-07-12 — Claude 建 forward A/B in-repo 执行路线图（供 Codex 在 ecf2 自导 `执行`）+ 同步 ecf2
@@ -81,14 +146,14 @@
 - **Verify**: readme-route + route-doc guards green（`a3cdd9c`）；plan doc 与最终 grid 一致（6 选股头 + overext-exec-off 延后槽；sizing_neutral/entry/rr 不入 v1；strip_theme_score），非桌面旧草稿（旧 §8 把 sizing_neutral 当今冻=作废）。纯 docs+路由无 code、未跑测试包。并发：另一会话正并行提交 capstone/firstweek 硬化（`55c70cd9` 等）、与本 forward-A/B 无 code 重叠。
 - **Next**: Codex（ecf2）：执行（Cut A：capstone 接线，详见 plan doc §4/§5）。
 
-## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
+## 2026-07-12 — Claude 修复、自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
 
 - **Verdict/Action**: 用户「修 P2」。修 capstone C3 事务把整个 `weekly_private/<decision_date>/` + `runs_private/<decision_date>/` 在跑任何 stage 前归档(move 到 _superseded/) → colocated 的 `--account-state-path`/`--batch4-template-path`(既有 20260709/10 目录同款)被移走、stage 1-11 不读、live 跑 ~1h 后 stage 12 bridge 读模板才崩。加 `_assert_input_outside_archived_outputs`:两个操作输入若落在两归档 surface 的 <decision_date> 下 → 抓取前(dry-run 也)fail-fast、清晰指向 `_run_inputs/`。
 - **Required**: 无遗留。整类=2 操作输入 × 2 归档 surface 全覆盖;不改归档/事务本身、不碰官方输出 staging→publish。单源见 register `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-COLOCATED-INPUT-ARCHIVED`(resolved)。
 - **Verify**: 复现原场景(20260713 colocated 路径现 dry-run 即拒、relocated `_run_inputs/` 放行);capstone suite 61 OK(含两 surface 拒测 + `_run_inputs/` 正控防过宽);全 test_us_short* 4226 OK(0 fail/0 err);py_compile 净;guard 前置于 dry_run 分支→plan 预览即暴露。自审:整类=account+template×weekly_private+runs_private 全覆盖、grep 无旧符号残留、反向 colocated 拒+`_run_inputs/` 正控、无 route-doc 漂移;平凡 path-containment 门(无选股/PIT/secret 面)按 proportional-review 未起对抗 agent。
 - **Next**: 无(已提交)。
 
-## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
+## 2026-07-12 — Claude 修复、自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
 
 - **Verdict/Action**: 用户「自修自审、pass 后提交、暂不跑全量」。封 `114edc4e`(2026-07-11) 引入的整类回归:`sec_sic_classification_fetch.py:217` + `theme_producer.py:226` 用 `observed.date()!=decision_date` 强制「run 日==决策日」,违背 §2.1「即将到来交易日/开盘前跑、观测窗口=运行时刻·自然含周末」(canonical resolver 只 fail-closed 盘中死区)+ 同族 5 个 Cut5 引擎的半开区间。两处同改为 `observed >= decision 09:30 ET open` 才拒。首周全量跑(桌面 firstweek_test.md)周六跑至 stage 5 崩(烧 ~26min Massive)暴露。
 - **Required**: 无遗留。整类=2 runner(grep 确认无第三处)、同族引擎本就正确未动。单源见 register `R-USSHORT-BATCH5-SIC-THEME-OBSERVATION-WINDOW-WEEKEND-REGRESSION`(resolved)。

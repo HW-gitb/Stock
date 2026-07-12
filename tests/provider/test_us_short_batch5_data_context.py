@@ -1057,7 +1057,10 @@ class Batch5DataContextAssemblyTest(unittest.TestCase):
 
         data_context = components["data_context"]
         per_ticker_analysis = components["per_ticker_analysis"]
-        self.assertEqual(set(components), {"data_context", "per_ticker_analysis", "run_provenance"})
+        self.assertEqual(
+            set(components),
+            {"data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis", "run_provenance"},
+        )
         self.assertEqual(set(per_ticker_analysis), set(data_context["selection_inputs"]["per_ticker"]))
         self.assertEqual(per_ticker_analysis["AAPL"]["ticker"], "AAPL")
         self.assertEqual(per_ticker_analysis["AAPL"]["row_source"], "top15_candidate")

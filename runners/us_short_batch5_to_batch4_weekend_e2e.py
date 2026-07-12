@@ -44,6 +44,10 @@ DEFAULT_GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20
 FULL_CANDIDATE_LIVE_PROJECTION_BINDING = source_packet_runner.FULL_CANDIDATE_LIVE_PROJECTION_BINDING
 PROJECTION_INPUTS_BINDING = source_packet_runner.PROJECTION_INPUTS_BINDING
 _PROVIDER_RECEIPT_RUN_MODES = frozenset({"research_live", "mixed_source"})
+_LEGACY_CONTEXT_COMPONENT_KEYS = frozenset({"data_context", "per_ticker_analysis", "run_provenance"})
+_A1_CONTEXT_COMPONENT_KEYS = _LEGACY_CONTEXT_COMPONENT_KEYS | frozenset(
+    {"score_composition", "overextension_by_ticker"}
+)
 
 _TEMPLATE_KEYS = frozenset(
     {
@@ -622,12 +626,11 @@ def run_e2e(
                     "provider-backed source packet or source artifacts changed during consumption"
                 ) from exc
         components = _read_json(components_path, "context components")
-        if not (
-            isinstance(components, dict)
-            and set(components) == {"data_context", "per_ticker_analysis", "run_provenance"}
-        ):
+        if not isinstance(components, dict) or frozenset(components) not in {
+            _LEGACY_CONTEXT_COMPONENT_KEYS, _A1_CONTEXT_COMPONENT_KEYS,
+        }:
             raise Batch5ToBatch4E2EError(
-                "context components must contain data_context/per_ticker_analysis/run_provenance"
+                "context components must use the legacy or A1 source-bound closed-world shape"
             )
         if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
             try:

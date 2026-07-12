@@ -1115,6 +1115,11 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     }
     return {
         "data_context": data_context,
+        # A1 forward-policy heads must re-score the exact decision-time composition, not reconstruct it from the
+        # lossy Batch4 per_ticker view.  These two values stay in the already-private context-components sidecar;
+        # they are the source-bound snapshot consumed by the later capstone shadow-selection stage.
+        "score_composition": score_composition,
+        "overextension_by_ticker": scoped_overextension,
         "per_ticker_analysis": per_ticker_analysis,
         "run_provenance": {
             "as_of": expected_decision_date,

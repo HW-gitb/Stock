@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short A1 forward-policy shadow selection summary",
+  "description": "De-identified counts-only summary of one immediate, same-decision-date A1 shadow-selection run. It contains no tickers, prices, returns, provider rows, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "decision_date", "price_basis_date", "source_context_sha256", "selection_policies", "selected_counts", "divergence_vs_balanced", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_shadow_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "source_context_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "selection_policies": {"const": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]},
+    "selected_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"],
+      "properties": {
+        "balanced": {"type": "integer", "minimum": 0},
+        "theme_plus": {"type": "integer", "minimum": 0},
+        "theme_aggressive": {"type": "integer", "minimum": 0},
+        "theme_off": {"type": "integer", "minimum": 0},
+        "catalyst_off": {"type": "integer", "minimum": 0},
+        "overextension_selection_off": {"type": "integer", "minimum": 0}
+      }
+    },
+    "divergence_vs_balanced": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"],
+      "properties": {
+        "theme_plus": {"$ref": "#/definitions/divergence"},
+        "theme_aggressive": {"$ref": "#/definitions/divergence"},
+        "theme_off": {"$ref": "#/definitions/divergence"},
+        "catalyst_off": {"$ref": "#/definitions/divergence"},
+        "overextension_selection_off": {"$ref": "#/definitions/divergence"}
+      }
+    },
+    "boundary": {"const": {"track": "comparison_non_production", "evidence_level": "shadow_selection_only", "shadow_counts_ship_gate": false, "full_size_ship_gate_allowed": false, "provider_calls_added": false, "broker_or_order_automation_allowed": false}}
+  },
+  "definitions": {
+    "divergence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["balanced_only_count", "policy_only_count", "overlap_count"],
+      "properties": {
+        "balanced_only_count": {"type": "integer", "minimum": 0},
+        "policy_only_count": {"type": "integer", "minimum": 0},
+        "overlap_count": {"type": "integer", "minimum": 0}
+      }
+    }
+  }
+}

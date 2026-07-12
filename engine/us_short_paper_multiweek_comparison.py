@@ -33,6 +33,9 @@ crossing; malformed input fails closed (``MultiweekComparisonError``).
 """
 from __future__ import annotations
 
+import copy
+import hashlib
+import json
 import math
 
 from engine.us_short_core_score import PROFILE_NAMES, PRIMARY_PROFILE
@@ -137,6 +140,161 @@ def build_multiweek_comparison(multiweek_by_profile) -> dict:
     }
     validate_multiweek_comparison(result)
     return result
+
+
+_POLICY_COMPARISON_KEYS = frozenset({
+    "primary_policy", "source_context_sha256_by_as_of", "weekly_comparison_sha256_by_as_of",
+    "weekly_comparisons", "policies", "vs_balanced", "theme_weight_marginal_net", "boundary",
+})
+
+
+def _policy_ids() -> tuple[str, ...]:
+    from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
+    return tuple(SELECTION_POLICY_IDS)
+
+
+def _assert_policy_aligned(policies) -> None:
+    from engine.us_short_forward_policy_heads import MINIMUM_FORWARD_WEEKS_BEFORE_PROMOTION_REVIEW
+
+    names = _policy_ids()
+    reference = _window(policies[names[0]])
+    if len(reference) < MINIMUM_FORWARD_WEEKS_BEFORE_PROMOTION_REVIEW:
+        raise MultiweekComparisonError(
+            "policy comparison requires at least %d forward decision weeks"
+            % MINIMUM_FORWARD_WEEKS_BEFORE_PROMOTION_REVIEW
+        )
+    for name in names:
+        if _window(policies[name]) != reference:
+            raise MultiweekComparisonError("all policy aggregates must share the same aligned weeks and fixed-TopN")
+
+
+def _validate_source_digests(value, *, weeks) -> None:
+    if not isinstance(value, dict) or list(value) != weeks or any(
+        not isinstance(digest, str) or len(digest) != 64
+        or any(char not in "0123456789abcdef" for char in digest)
+        for digest in value.values()
+    ):
+        raise MultiweekComparisonError("source-context digests must exactly bind every aligned decision week")
+
+
+def build_policy_multiweek_comparison(multiweek_by_policy, *, weekly_policy_comparisons) -> dict:
+    """Build the >=2-week full-caliber comparison for the six immediate policy heads."""
+    names = _policy_ids()
+    if not isinstance(multiweek_by_policy, dict) or tuple(multiweek_by_policy) != names:
+        raise MultiweekComparisonError("multiweek_by_policy must cover the frozen immediate policies in grid order")
+    for name in names:
+        validate_multiweek_scorecard(multiweek_by_policy[name])
+    _assert_policy_aligned(multiweek_by_policy)
+    balanced = multiweek_by_policy[names[0]]
+    weeks = [row[0] for row in _window(balanced)]
+    if not isinstance(weekly_policy_comparisons, list) or len(weekly_policy_comparisons) != len(weeks):
+        raise MultiweekComparisonError("weekly_policy_comparisons must cover every aligned decision week")
+    from engine.us_short_paper_scorecard_comparison import (
+        ScorecardComparisonError,
+        validate_policy_scorecard_comparison,
+    )
+    source_context_sha256_by_as_of = {}
+    weekly_comparison_sha256_by_as_of = {}
+    for index, (week, comparison) in enumerate(zip(weeks, weekly_policy_comparisons)):
+        try:
+            validate_policy_scorecard_comparison(comparison)
+        except ScorecardComparisonError as exc:
+            raise MultiweekComparisonError("invalid capture-bound weekly policy comparison: %s" % exc) from exc
+        if comparison.get("as_of") != week or not isinstance(comparison.get("capture_binding"), dict):
+            raise MultiweekComparisonError("weekly policy comparison is not capture-bound to its aligned week")
+        for name in names:
+            if comparison["policies"][name] != multiweek_by_policy[name]["period_source"][index]["scorecard"]:
+                raise MultiweekComparisonError("weekly policy scorecard does not match the multiweek aggregate source")
+        source_context_sha256_by_as_of[week] = comparison["source_context_sha256"]
+        weekly_comparison_sha256_by_as_of[week] = hashlib.sha256(
+            json.dumps(comparison, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    result = {
+        "primary_policy": names[0],
+        "source_context_sha256_by_as_of": dict(source_context_sha256_by_as_of),
+        "weekly_comparison_sha256_by_as_of": weekly_comparison_sha256_by_as_of,
+        "weekly_comparisons": copy.deepcopy(weekly_policy_comparisons),
+        "policies": {name: multiweek_by_policy[name] for name in names},
+        "vs_balanced": {
+            name: {
+                metric + "_delta": _delta(_metric(multiweek_by_policy[name], metric), _metric(balanced, metric))
+                for metric in _DELTA_METRICS
+            }
+            for name in names[1:]
+        },
+        "theme_weight_marginal_net": _delta(
+            _metric(balanced, "final_cumulative_net"),
+            _metric(multiweek_by_policy[_THEME_OFF], "final_cumulative_net"),
+        ),
+        "boundary": dict(_BOUNDARY),
+    }
+    validate_policy_multiweek_comparison(result)
+    return result
+
+
+def validate_policy_multiweek_comparison(comparison) -> None:
+    """Fail closed on six-policy coverage, >=2-week alignment, deltas, or boundary drift."""
+    names = _policy_ids()
+    if not isinstance(comparison, dict) or set(comparison) != _POLICY_COMPARISON_KEYS:
+        raise MultiweekComparisonError("policy multiweek comparison must carry its exact closed-world key set")
+    if comparison.get("boundary") != _BOUNDARY or comparison.get("primary_policy") != names[0]:
+        raise MultiweekComparisonError("policy multiweek primary/boundary drifted")
+    policies = comparison.get("policies")
+    if not isinstance(policies, dict) or tuple(policies) != names:
+        raise MultiweekComparisonError("policies must cover the frozen immediate policy set in grid order")
+    for name in names:
+        validate_multiweek_scorecard(policies[name])
+    _assert_policy_aligned(policies)
+    balanced = policies[names[0]]
+    weeks = [row[0] for row in _window(balanced)]
+    weekly = comparison.get("weekly_comparisons")
+    if not isinstance(weekly, list) or len(weekly) != len(weeks):
+        raise MultiweekComparisonError("embedded weekly comparisons must cover every aligned decision week")
+    from engine.us_short_paper_scorecard_comparison import (
+        ScorecardComparisonError,
+        validate_policy_scorecard_comparison,
+    )
+    derived_source = {}
+    derived_weekly = {}
+    for index, (week, item) in enumerate(zip(weeks, weekly)):
+        try:
+            validate_policy_scorecard_comparison(item)
+        except ScorecardComparisonError as exc:
+            raise MultiweekComparisonError("embedded weekly policy comparison is invalid: %s" % exc) from exc
+        if item.get("as_of") != week or not isinstance(item.get("capture_binding"), dict):
+            raise MultiweekComparisonError("embedded weekly comparison is not capture-bound to its aligned week")
+        for name in names:
+            if item["policies"][name] != policies[name]["period_source"][index]["scorecard"]:
+                raise MultiweekComparisonError("embedded weekly scorecard differs from the aggregate period source")
+        derived_source[week] = item["source_context_sha256"]
+        derived_weekly[week] = hashlib.sha256(
+            json.dumps(item, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+    _validate_source_digests(comparison.get("source_context_sha256_by_as_of"), weeks=weeks)
+    _validate_source_digests(comparison.get("weekly_comparison_sha256_by_as_of"), weeks=weeks)
+    if comparison["source_context_sha256_by_as_of"] != derived_source \
+            or comparison["weekly_comparison_sha256_by_as_of"] != derived_weekly:
+        raise MultiweekComparisonError("multiweek provenance digests are inconsistent with embedded weekly comparisons")
+    vs = comparison.get("vs_balanced")
+    if not isinstance(vs, dict) or tuple(vs) != names[1:]:
+        raise MultiweekComparisonError("vs_balanced must cover exactly the five shadow policies")
+    for name in names[1:]:
+        delta = vs[name]
+        if not isinstance(delta, dict) or set(delta) != _DELTA_KEYS:
+            raise MultiweekComparisonError("policy delta block has drifted keys")
+        for metric in _DELTA_METRICS:
+            got = delta[metric + "_delta"]
+            if got is not None and not _finite(got):
+                raise MultiweekComparisonError("policy delta must be None or finite, with bool refused")
+            if got != _delta(_metric(policies[name], metric), _metric(balanced, metric)):
+                raise MultiweekComparisonError("policy delta is inconsistent with embedded aggregates")
+    marginal = comparison.get("theme_weight_marginal_net")
+    if marginal is not None and not _finite(marginal):
+        raise MultiweekComparisonError("theme_weight_marginal_net must be None or finite")
+    if marginal != _delta(
+        _metric(balanced, "final_cumulative_net"), _metric(policies[_THEME_OFF], "final_cumulative_net")
+    ):
+        raise MultiweekComparisonError("theme_weight_marginal_net is inconsistent with balanced-theme_off")
 
 
 def validate_multiweek_comparison(comparison) -> None:

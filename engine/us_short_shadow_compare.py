@@ -293,3 +293,126 @@ def validate_shadow_comparison(result) -> None:
             raise ShadowCompareError("vs_balanced[%r].overlap_count must be an int (bool refused), got %r" % (name, oc))
         if oc != len(balanced_set & shadow_set):
             raise ShadowCompareError("vs_balanced[%r].overlap_count is inconsistent with the selections" % (name,))
+
+
+# Cut B policy-head namespace. The legacy four-profile API above remains unchanged for existing consumers.
+_POLICY_RESULT_KEYS = frozenset({
+    "track", "decision_date", "price_basis_date", "source_context_sha256", "primary_policy", "policies",
+    "vs_balanced", "boundary",
+})
+_POLICY_SELECTION_KEYS = frozenset({"ticker", "rank"})
+_POLICY_BOUNDARY = {
+    "production": False,
+    "is_buy_advice": False,
+    "shadow_counts_ship_gate": False,
+    "changes_primary_selection": False,
+}
+
+
+def build_policy_shadow_comparison(capture) -> dict:
+    """Consume one Cut-A private capture and compare its exact six immediate policy selections."""
+    from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
+    from engine.us_short_forward_policy_shadow_stage import (
+        ForwardPolicyShadowStageError,
+        validate_forward_shadow_selection_record,
+    )
+
+    try:
+        validate_forward_shadow_selection_record(capture)
+    except ForwardPolicyShadowStageError as exc:
+        raise ShadowCompareError("Cut-A private record rejected: %s" % exc) from exc
+    policies = tuple(SELECTION_POLICY_IDS)
+    if capture.get("selection_policies") != list(policies):
+        raise ShadowCompareError("Cut-A capture must declare the frozen immediate policy set in grid order")
+    decisions = capture.get("selection_decisions")
+    if not isinstance(decisions, dict) or tuple(decisions) != policies:
+        raise ShadowCompareError("Cut-A decisions must cover exactly the frozen immediate policy namespace")
+    built = {}
+    selected_count = None
+    for name in policies:
+        decision = decisions[name]
+        if not isinstance(decision, dict) or decision.get("out_of_window") is not False \
+                or decision.get("decision_date") != capture.get("decision_date") \
+                or decision.get("price_basis_date") != capture.get("price_basis_date"):
+            raise ShadowCompareError("policy %r is not bound to the Cut-A decision clock" % (name,))
+        admitted = decision.get("admitted")
+        if not isinstance(admitted, list) or len(admitted) != len(set(admitted)) \
+                or any(not isinstance(ticker, str) or not ticker for ticker in admitted):
+            raise ShadowCompareError("policy %r admitted selection must be a unique non-blank ticker list" % (name,))
+        if selected_count is None:
+            selected_count = len(admitted)
+        elif len(admitted) != selected_count:
+            raise ShadowCompareError("all policy selections must share the same fixed-TopN count")
+        built[name] = {"selection": [
+            {"ticker": ticker, "rank": rank} for rank, ticker in enumerate(admitted, start=1)
+        ]}
+    balanced = set(decisions[policies[0]]["admitted"])
+    vs_balanced = {}
+    for name in policies[1:]:
+        selected = set(decisions[name]["admitted"])
+        vs_balanced[name] = {
+            "balanced_only": sorted(balanced - selected),
+            "policy_only": sorted(selected - balanced),
+            "overlap_count": len(balanced & selected),
+        }
+    result = {
+        "track": "comparison_non_production",
+        "decision_date": capture["decision_date"],
+        "price_basis_date": capture["price_basis_date"],
+        "source_context_sha256": capture["source_context_sha256"],
+        "primary_policy": policies[0],
+        "policies": built,
+        "vs_balanced": vs_balanced,
+        "boundary": dict(_POLICY_BOUNDARY),
+    }
+    validate_policy_shadow_comparison(result)
+    return result
+
+
+def validate_policy_shadow_comparison(result) -> None:
+    """Fail closed on a tampered six-policy selection comparison."""
+    from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
+
+    policies = tuple(SELECTION_POLICY_IDS)
+    if not isinstance(result, dict) or set(result) != _POLICY_RESULT_KEYS:
+        raise ShadowCompareError("policy comparison must carry its exact closed-world key set")
+    if result.get("track") != "comparison_non_production" or result.get("boundary") != _POLICY_BOUNDARY:
+        raise ShadowCompareError("policy comparison must retain the frozen never-ship-gate boundary")
+    if result.get("primary_policy") != policies[0]:
+        raise ShadowCompareError("balanced must remain the sole primary policy")
+    policy_rows = result.get("policies")
+    if not isinstance(policy_rows, dict) or tuple(policy_rows) != policies:
+        raise ShadowCompareError("policy comparison must cover the frozen immediate policies in grid order")
+    selected = {}
+    expected_count = None
+    for name in policies:
+        block = policy_rows[name]
+        rows = block.get("selection") if isinstance(block, dict) and set(block) == {"selection"} else None
+        if not isinstance(rows, list):
+            raise ShadowCompareError("policy %r selection block is malformed" % (name,))
+        if expected_count is None:
+            expected_count = len(rows)
+        elif len(rows) != expected_count:
+            raise ShadowCompareError("policy comparison mixes fixed-TopN counts")
+        tickers = []
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict) or set(row) != _POLICY_SELECTION_KEYS \
+                    or row.get("rank") != index or isinstance(row.get("rank"), bool) \
+                    or not isinstance(row.get("ticker"), str) or not row["ticker"]:
+                raise ShadowCompareError("policy %r selection row %d is malformed" % (name, index))
+            tickers.append(row["ticker"])
+        if len(tickers) != len(set(tickers)):
+            raise ShadowCompareError("policy %r selection contains duplicate tickers" % (name,))
+        selected[name] = set(tickers)
+    vs = result.get("vs_balanced")
+    if not isinstance(vs, dict) or tuple(vs) != policies[1:]:
+        raise ShadowCompareError("vs_balanced must cover exactly the five shadow policies")
+    balanced = selected[policies[0]]
+    for name in policies[1:]:
+        expected = {
+            "balanced_only": sorted(balanced - selected[name]),
+            "policy_only": sorted(selected[name] - balanced),
+            "overlap_count": len(balanced & selected[name]),
+        }
+        if vs[name] != expected or isinstance(vs[name].get("overlap_count"), bool):
+            raise ShadowCompareError("vs_balanced[%r] is inconsistent with the policy selections" % (name,))
