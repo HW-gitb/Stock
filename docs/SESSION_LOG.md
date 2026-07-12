@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 2：universe 行情 5xx fail-closed 不再静默回退旧价)
+- **Verdict/Action**: PASS + 提交（288f worktree、未 push）。`fetch_massive_window` 现对 429 重试后任意 HTTPError 都 fail-closed raise、只跳过真实空日，结构镜像兄弟 `momentum_fetch`；`from None` 顺手堵了旧 401/403/429 分支 `from exc` 会把带 apikey 的 Massive URL 链进 traceback 的洞；空日仍合法跳过、used_date 诚实返回。
+- **Required**: 无。`R-USSHORT-R3-UNIVERSE-MASSIVE-5XX-MISSING-DAY` → resolved（完整证据/边界单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（均真实工具输出）。整读+镜像核对；自撰 secret 探针 = 503 raise 无 url/key、`__cause__=None`/`suppress=True`、空日仍跳；focused `test_us_short_universe_fetch` 90 OK；全离线 `test_us_short*` 288f = 4227 ran / 15 error（全 = 未改文件 Windows MAX_PATH）/ 0 fail。低危错误处理改、未起 §6a agent。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 — Codex 修复完成，待 Claude 审查（US-short R3 issue 2：universe 行情 5xx 不再静默回退旧价）
+
+- **Verdict/Action**: 修复 `R-USSHORT-R3-UNIVERSE-MASSIVE-5XX-MISSING-DAY`：`fetch_massive_window` 现在对 429 重试后任意 HTTPError 都 fail-closed；只有真实空 list 才可当 delayed/unpublished day 跳过。范围仅 universe fetch + focused 测试。
+- **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
+- **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
+- **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+- **Next**: Claude Code：审查
+
 ## 2026-07-12 — Claude 建 forward A/B in-repo 执行路线图（供 Codex 在 ecf2 自导 `执行`）+ 同步 ecf2
 
 - **Verdict/Action**: 应用户「Codex 收 `执行` 能自行判断下一步」补上缺失的 in-repo 可执行文档：新建 `docs/us_short_forward_ab_execution_plan.md`（committed `a3cdd9c`；Codex-facing：Path A 设计思路 + 有序 cut 计划 [A capstone 接线→B 多周→C 决策差分→D manifest/统计计划；E overext-exec-off 账本延后] + 每刀边界 + 审查重点 + 「读 register/code 定下一刀」）+ README 路由行。register 开 `R-USSHORT-A1-FORWARD-AB-EXECUTION-ROADMAP`（standing 指针→plan doc、点名 next=Cut A）。桌面 `us_short_forward_ab_plan.md` 另更新为最终设计（我的总审查标准、不进 repo）。
