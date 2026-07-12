@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_massive_corporate_action_assessment/1.0.0/schema.json",
+  "title": "US-short Massive Corporate-Action Split-Factor Assessment",
+  "description": "Offline-only, value-free assessment bound to prior event-price evidence. A split may be an exact dual-price-factor match or remain unresolved; dividend adjustment semantics always remain unresolved in this contract. No provider call, raw-payload adapter, full corporate-action reconciliation, return calculation, paper-evaluation permission, production authorization, or ship-gate evidence is recorded.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "evidence_binding", "event_assessments", "coverage", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_massive_corporate_action_assessment" },
+    "schema_version": { "const": "1.0.0" },
+    "evidence_binding": { "$ref": "#/$defs/evidenceBinding" },
+    "event_assessments": { "type": "array", "items": { "$ref": "#/$defs/eventAssessment" } },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "boundary": { "$ref": "#/$defs/boundary" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "evidenceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["evidence_schema_name", "decision_date", "symbol", "source_binding_sha256", "event_price_windows_sha256"],
+      "properties": {
+        "evidence_schema_name": { "const": "us_short_massive_corporate_action_reconciliation_evidence" },
+        "decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+        "source_binding_sha256": { "$ref": "#/$defs/sha256" },
+        "event_price_windows_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "eventAssessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_type", "status"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$" },
+        "event_type": { "enum": ["split", "dividend"] },
+        "status": {
+          "enum": [
+            "split_factor_exact_match",
+            "split_factor_mismatch_or_rounding_unresolved",
+            "dividend_adjustment_semantics_unresolved",
+            "insufficient_price_window"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "event_type": { "const": "split" } } },
+          "then": {
+            "properties": {
+              "status": {
+                "enum": [
+                  "split_factor_exact_match",
+                  "split_factor_mismatch_or_rounding_unresolved",
+                  "insufficient_price_window"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "dividend" } } },
+          "then": {
+            "properties": {
+              "status": { "enum": ["dividend_adjustment_semantics_unresolved", "insufficient_price_window"] }
+            }
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "split_exact_match_count",
+        "split_mismatch_or_rounding_unresolved_count",
+        "dividend_semantics_unresolved_count",
+        "insufficient_price_window_count"
+      ],
+      "properties": {
+        "split_exact_match_count": { "type": "integer", "minimum": 0 },
+        "split_mismatch_or_rounding_unresolved_count": { "type": "integer", "minimum": 0 },
+        "dividend_semantics_unresolved_count": { "type": "integer", "minimum": 0 },
+        "insufficient_price_window_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "split_factor_assessment_performed",
+        "provider_call_performed_during_derivation",
+        "raw_payload_adapter_performed",
+        "full_corporate_action_reconciliation_performed",
+        "return_calculation_performed",
+        "paper_gate_evaluable_claimed",
+        "ship_gate_or_production_authorized"
+      ],
+      "properties": {
+        "split_factor_assessment_performed": { "const": true },
+        "provider_call_performed_during_derivation": { "const": false },
+        "raw_payload_adapter_performed": { "const": false },
+        "full_corporate_action_reconciliation_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "paper_gate_evaluable_claimed": { "const": false },
+        "ship_gate_or_production_authorized": { "const": false }
+      }
+    }
+  }
+}

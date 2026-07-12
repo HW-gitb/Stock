@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short Massive 公司行动第三刀：split 因子精确诊断）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。cut3 = 纯离线 split-factor 诊断（在 cut2 引擎上**纯 additive**，cut2 代码逐行未动）：对 cut2 已绑定的完整 split 窗口做 `Fraction` **零容忍**因子比对，exact 才 match、mismatch/rounding/dividend 全 unresolved。offline、**未 fetch**、无 consumer、不碰选股/仓位、boundary 六旗全 false 只 `split_factor_assessment_performed:true`（exact match **绝不置 §12.1 三确认**）、SR-PROVIDER-001 保持 open。刀外 `us_short_universe_fetch_summary_20260713.json` 仍未纳入。
+- **Required**: 无 material finding（Register: non-material；单源规则见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 engine diff = 纯 additive、cut2 未削弱；**自撰对抗探针 12 项全 HELD**（exact→match+boundary 全 false、epsilon/错比例/篡改 digest·coverage/多缺 factor/1:1/bool 价/dividend 全按预期 unresolved 或拒）；`Fraction`+`Decimal(str())` 精确、measurement digest 绑 cut2 源。design §12.1 硬门原句保留、README 薄指针；focused 60 OK；**亲跑全包 `Ran 4338 / OK / 0 fail`**（186s）。offline 纯数学·未 wired → proportional-review 未起 §6a。
+- **Next**: 无 Codex 命令；12-call capture + dividend/full-reconciliation semantics 待用户显式授权。
+
+## 2026-07-12 — Codex 执行（US-short Massive 公司行动第三刀：split 因子精确诊断）
+
+- **Verdict/Action**: 在用户明确授权的 Cut 3 数学范围内，新增纯离线 split-factor assessment：只接受已由 Cut 2 绑定的完整 split 窗口与同源 digest；以精确分数比较 adjusted/unadjusted 因子变化和 `split_from/split_to`。精确相等才记 `split_factor_exact_match`；任何 mismatch/rounding 仍 unresolved。dividend 固定 `dividend_adjustment_semantics_unresolved`。
+- **Required**: `SR-PROVIDER-001` 与 §12.1 硬闸仍 open；未执行 12-call capture、未读 raw、未做 raw adapter / dividend semantics / full corporate-action reconciliation / return calculation / paper-evaluable / selection / DataHub / ship-gate。单个 split exact match 不得把三项确认任一置 true。
+- **Verify**: 先 red（assessment 函数/schema 缺失）；随后既有 Cut 2 的非正价格反向测试抓到新增 helper 引入的回归，已复位。轻量 current-diff self-review 首轮抓到 Decimal 50 位精度会误判极小差异；改为 `Fraction` 精确比较并补 >50 位差异反向测试后 PASS。Massive/paper/schema/route focused `83 OK`；完整离线 `*us_short*.py` `4338 OK (1 skipped)`；`py_compile`、`git diff --check` 通过；未发起 provider/live 调用。
+- **Pre-Codex self-review**: A-F checked；轻量 current-diff self-review = FAIL(精度)→修复→PASS，无 timeout、未跑大包。A：split exact/mismatch/subprecision/缺窗口与 dividend 全覆盖；B：`assess_split_factor_reconciliation` 仅 engine+tests，无 runner/consumer；C：缺/多 factor、digest 不一致、伪造 coverage、未知字段、NaN 与 1:1 split 均 fail-closed；E：design §12.1、README route 同步，CURRENT/register 未写瞬态 gate。
+- **Next**: Claude Code：审查 Cut 3；PASS 后仅提交当前 scope。
+
 ## 2026-07-12 — Claude Code 审查（US-short Massive 公司行动第一+二刀：验证捕获 + 离线证据绑定）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。公司行动线两刀一并审：cut1=gated 12-call 验证捕获 runner + no-access packet；cut2=纯离线 evidence builder engine（事件↔两模式价格窗口绑定）。两刀 offline、**未发起真 fetch**、不碰选股/core_score/veto/sizing/Top15、boundary 全 const-false、SR-PROVIDER-001 保持 open。cut2 原标「暂不送审」，因与 cut1 同一路由行+同线+均 clean+用户下达 `审查`，一并纳入（欲 hold 可 revert）。
