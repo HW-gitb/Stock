@@ -114,7 +114,14 @@
     "computability_audit": {"required": true, "status": "pending"},
     "zero_alpha_calibration": {"required": true, "status": "pending", "false_graduation_to_full_max": 0.05, "min_runs": 10000},
     "power_analysis": {"required": true, "status": "pending", "true_alpha_scenarios": [0.03, 0.06, 0.09]},
-    "red_team_and_independent_recompute": {"required": true, "status": "pending"}
+    "red_team_and_independent_recompute": {"required": true, "status": "pending", "first_pass_self_done": true, "first_pass_record": "docs/us_short_ship_gate_redteam_v1.0.md", "first_pass_holes_closed": 8, "independent_pass_still_required": true, "note": "author self-red-team is a first pass only; a different LLM/person must red-team before freeze (author has blind spots)"}
+  },
+
+  "to_pin_before_freeze": {
+    "_note": "surfaced by the v1.0 red-team; must carry exact values before status=active",
+    "factor_model": {"set": "FamaFrench5_plus_momentum", "source": "Kenneth_French_Data_Library", "frequency": null, "construction": null, "_hole": "C"},
+    "zero_pick_week_handling": {"counts_as": "valid_observation_cash_or_benchmark_not_skipped", "confirmed": false, "_hole": "I"},
+    "max_holding_weeks_H": null
   },
 
   "outcomes": {"values": ["PASS", "FAIL", "INSUFFICIENT_EVIDENCE"], "insufficient_is_pass": false},

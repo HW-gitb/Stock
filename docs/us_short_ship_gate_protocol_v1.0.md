@@ -85,7 +85,7 @@ end-to-end false-graduation rate (reaching 100% `C*`) is calibrated to ≤5% (§
 |---|---|---|---|
 | Minimal measurement | day 1 | none (accumulate) | coverage ≥ 98%, monthly compliance ≥ 95% (ITT) |
 | **25% `C*`** | ≥ 12 months **and** `n_eff` ≥ 52 | net economic alpha point est. > 0; `t ≥ 1.0`; **factor-adjusted alpha ≥ 0** | lifetime max DD ≤ tolerance; realized cost within frozen model; `scaling_mode ≠ not_valid` |
-| **50% `C*`** | + ≥ 8 weeks | net alpha ≥ ~2.5%; `t ≥ 1.5` | **an adverse regime (benchmark peak-to-trough ≥ 10%) must have occurred — else capped here until it does** |
+| **50% `C*`** | + ≥ 8 weeks | net alpha ≥ ~2.5%; `t ≥ 1.5` | **a *sustained* adverse regime must have occurred (benchmark ≥ 10% peak-to-trough that stayed below the prior peak ≥ 20 trading days / did not recover within 4 weeks — a flash dip-and-recover does NOT count) — else capped here until it does** |
 | **75% `C*`** | + ≥ 8 weeks | net alpha ≥ ~3.75%; `t ≥ 2.0` | capacity **stress-exit** test passes (§8) |
 | **100% (full)** | + ≥ 8 weeks; typically 24–36 months total | net economic alpha ≥ **`min_economic_alpha`**; `t ≥ 2.0`; **Deflated Sharpe P(true>0.5) ≥ 95%**; both-halves alpha > 0; cumulative net > VTI + cash | full-size capacity validated; adverse regime confirmed; independent recompute matches |
 
@@ -103,9 +103,12 @@ graduation lines are never edited to fix a failure.**
    weeks). Full size: `t ≥ 2.0`, `p ≤ 0.025`; two formal checks → Bonferroni `/2` (§7).
 3. **Sharpe** — annualized net **≥ 1.0 AND Deflated Sharpe P(true Sharpe > 0.5) ≥ 95%**, with the deflation trial
    count = every `balanced` config compared in research (§7).
-4. **Drawdown + environment** — lifetime (from first observation, non-resettable) max DD ≤ `max_drawdown_tolerance`;
-   **the window must contain ≥ 1 benchmark ≥ 10% drawdown** (else capped at 50%, §4); any single-name / sector /
-   portfolio risk-limit breach ⇒ no graduation.
+4. **Drawdown + environment** — lifetime (from first observation, non-resettable) max DD ≤ `max_drawdown_tolerance`.
+   **(v1.0 red-team patch, hole G) DD is measured on the `C*`-normalized strategy return % (as-if-full-size), NOT on
+   the currently-deployed ramp dollars — so a 15% strategy drawdown counts as 15% even at the 25% rung, and the
+   ramp cannot hide risk.** **The window must contain ≥ 1 *sustained* benchmark ≥ 10% drawdown (per §4 — a flash
+   dip-and-recover does not count)** (else capped at 50%, §4); any single-name / sector / portfolio risk-limit
+   breach ⇒ no graduation.
 5. **Capacity** — `C* ≤ 0.8 · C_cap`; per trade in/out ≤ 2% · `MDV20`; whole position exitable in 2 sessions at
    ≤ 5%/day of the 60-day 10th-percentile stress volume; full-size cost = `max(observed implementation shortfall,
    95% upper bound of a √-impact model)`; target participation > 4× the largest validated participation ⇒ `not_valid`.
@@ -116,13 +119,16 @@ graduation lines are never edited to fix a failure.**
 
 - **Primary (economic)**: `R_B,t = g*_t · R_VTI-total,t + (1 − g*_t) · R_3M-Tbill,t`, where `g*_t` = the strategy's
   *rule-implied* target equity exposure that day (NOT the operator's actual post-skip exposure — so discretionary
-  cash is not flattered by a zero benchmark; cash drag stays inside the portfolio return). If the eligible universe
-  is in fact predominantly small-cap, replace VTI with a fixed investable small-cap total-return benchmark **now**,
-  not after seeing results.
+  cash is not flattered by a zero benchmark; cash drag stays inside the portfolio return). **(v1.0 red-team patch,
+  hole H) `g*_t` is pinned as the sum of that day's rule-implied target position weights, capped at 1.0 — no
+  discretion.** If the eligible universe is in fact predominantly small-cap, replace VTI with a fixed investable
+  small-cap total-return benchmark **now**, not after seeing results.
 - **Auxiliary (attribution, does not replace primary)**: market/size/value/profitability/investment/**momentum**
-  factor regression (momentum factor fixed a-priori, e.g. Kenneth French `Mom`) + a fixed investable momentum ETF +
-  a sector/size-matched portfolio. Positive vs VTI but clearly negative vs momentum ⇒ conclusion is "captured
-  momentum exposure", not independent selection alpha.
+  factor regression + a fixed investable momentum ETF + a sector/size-matched portfolio. Positive vs VTI but clearly
+  negative vs momentum ⇒ conclusion is "captured momentum exposure", not independent selection alpha. **(v1.0
+  red-team patch, hole C) The EXACT factor set (Fama–French 5 + momentum), data source (Kenneth French Data Library),
+  frequency, and construction are pinned in the JSON twin before freeze — no post-hoc factor-set selection to make
+  the adjusted alpha look non-negative.**
 
 ---
 
@@ -137,7 +143,15 @@ graduation lines are never edited to fix a failure.**
   is allowed; graduation may only be *declared* on a formal-check date.
 - **Deflated-Sharpe trial count** = number of distinct `balanced` configs actually compared on any data during
   research (log in §11 trial list). Our design sets weights as an a-priori prior (no statistical factor-mining), so
-  this count should be *small* — an advantage — but every compared config must be logged honestly.
+  this count should be *small* — an advantage — but every compared config must be logged honestly. **(v1.0 red-team
+  patch, hole F) The trial log is honor-system / self-reported — it must be append-only + timestamped from research
+  start, and its completeness (no quietly-dropped failed configs) is itself an explicit independent-red-team target
+  (§11.4); a low trial count is only trustworthy if the log is verifiably complete.**
+- **(v1.0 red-team patch, hole D) The ramp rungs (25/50/75%) are themselves alpha-gated looks, not just the two
+  formal full-size checks.** The Bonferroni `/2` covers only the two full-size (100%) checks; the end-to-end
+  false-graduation control across ALL rungs + both formal checks is the §11.2 zero-alpha calibration (≤ 5% to full),
+  which must be run over the complete ladder. Each rung's bar is pre-committed here and never re-chosen after seeing
+  results.
 - Cross-version multiplicity is handled by the version-clock (§10): each version has its own independent clock;
   shadow variants (`theme_plus/aggressive/off`, `catalyst_off`, `overextension_selection_off`) NEVER count toward the
   gate (design §12.2).
@@ -164,8 +178,13 @@ skip → cash for that planned allocation (not deleted). Re-price → real fill 
 result. Unfilled → the frozen cancel/chase rule. No non-recommended names in the validation account. Required:
 notional coverage ≥ **98%**, weekly compliance (dollar AND count) ≥ **95%** monthly and cumulatively at each formal
 check. Allowed exceptions are only pre-listed objective events (halt, no valid quote, regulatory restriction) — never
-"felt wrong". Below threshold ⇒ the actual portfolio evaluates system+operator, but does NOT prove the scoring
-engine; counterfactual paper fills are diagnostic only.
+"felt wrong". **(v1.0 red-team patch, hole A) Every claimed exception needs an objective evidence stamp captured at
+the time (halt record / quote snapshot / regulatory notice); an unstamped exception counts as a discretionary skip
+(cash), so you cannot quietly re-label a losing pick as "no quote".** **(v1.0 red-team patch, hole E) A non-compliant
+week stays IN the strategy return series at what actually happened (or benchmark/cash per the frozen rule); it is
+NEVER dropped from the alpha computation — non-compliance lowers coverage, but must never become a lever to excise
+bad weeks.** Below threshold ⇒ the actual portfolio evaluates system+operator, but does NOT prove the scoring engine;
+counterfactual paper fills are diagnostic only.
 
 ---
 
