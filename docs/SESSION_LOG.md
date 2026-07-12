@@ -8,12 +8,29 @@
 
 ---
 
+## 2026-07-13 — Claude Code 独立审查 PASS（US-short full-candidate capstone theme-contract producer）
+
+- **Verdict/Action**: PASS + 提交于 branch `codex/us-short-capstone-theme-contract-preflight`（master 此间已被平行窗口推进+有另一窗口未提交活、暂不能 ff、待协调并入；未 push）。full-candidate Pass2 现按本轮 resolved 源自产 source-bound `theme_selection_contract`、不再要求 operator 预置；解一键 capstone Pass2 阻断（首个 full live run 实测崩点）。
+- **Required**: 无。`R-USSHORT-BATCH5-WEEKLY-CAPSTONE-THEME-SELECTION-CONTRACT-PRODUCER` → resolved。一个非阻断 Optional（latent，P3）：新 classified `theme_id` 分支在实际管线 dead（projection-inputs theme 绑定丢 `sector_classification_packet`→恒 `industry:unclassified:<ticker>` 单例），今天 inert（no_strong_theme→同主题帽 min(3,3) 非约束、Top15 不变），仅前向风险、建议后续单独轮修；closure+Optional 全文单源见 register。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 producer+消费引擎、字段对齐已审 0c94 fixture、market_confirmed 对非-provisional 行 inert、coverage 恰配、SHA 绑定真实、坏源 fail-closed；§6a 独立对抗 agent PASS（6 探针 HELD，SHA 篡改实测 raise）；亲跑 ecf2 全离线 `test_us_short*` 4310 OK / 1 skipped。
+- **Next**: 可 re-run 一键 capstone 验证闭环（另需用户 + 窗口/额度）。
+
+## 2026-07-12 — Codex repair complete, pending Claude review (US-short full-candidate capstone theme contract producer)
+
+- **Verdict/Action**: Repaired `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-THEME-SELECTION-CONTRACT-PRODUCER`: full-candidate Pass2 now materializes the source-bound `theme_selection_contract` from this run's resolved Pass2 sources immediately before source-packet assembly; it no longer requires an operator-precreated sidecar.
+- **Required**: Claude Code independent review is required before commit. No real provider rerun was performed; this slice remains fake-client/offline verified only.
+- **Verify**: Red reproduced the missing-file abort; focused full-candidate/capstone/data-context tests 115 OK; doc guards 60 OK; full offline `test_us_short*.py` 4,310 OK / 1 skipped; `py_compile` and `git diff --check` clean.
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback (no independent agent). A: full-candidate producer plus all source-packet consumers checked; B: stale `Both legacy and full-candidate...` and missing-contract guard wording 0 active hits, with legacy-builder requirement intentionally retained; C: stale sidecar replacement and Pass2-clean/no-neutral-fill reverse tests; D: no fabricated shared industry without a bound classification source; E: design/register single-source timing update and only this review gate in SESSION_LOG; F: fixed pack run once after code/docs, then only doc guard after this entry.
+- **Next**: Claude Code: review.
+
 ## 2026-07-12 — Claude Code 收口对齐（R3 PORTFOLIO cap register 翻正 resolved；ecf2 清理被权限拦）
 
 - **Verdict/Action**: 已提交（master、未 push）。纯登记收口、无代码改动：`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` `in_progress→resolved`。cap 收口（§8 总仓60%/同主题30% 容量链 `us_short_weekend_cash.py`）早在 issue-5 专项审 PASS + 0c94 集成审 PASS 时已闭环入 master `7df1e080`，register 状态行仅滞后→本次翻正+补 closure 证据段。ecf2 worktree（HEAD `5ab702de` 已并入 master、干净无未提交活）确认可安全删，但 `git worktree remove` 被权限分类器拦（删 Codex 他窗口=破坏性共享资源）→未绕过、交用户定。
 - **Required**: 无。`R-USSHORT-R3-PORTFOLIO-TOTAL-THEME-DOLLAR-CAP-CLOSURE` → resolved（closure 证据单源见 `docs/system_risk_register.md`）。
 - **Verify**: review-evidence:not_available（真实工具输出）。亲跑 focused `tests.test_us_short_weekend_cash` `18 OK`（master 第一手）+ git 确认 cap 引擎在 `7df1e080`；无代码改动、非审查轮，未起 §6a。
 - **Next**: 用户决定是否授权 `git worktree remove` 清 ecf2。
+
+## 2026-07-12 — Claude Code independent review PASS (US-short master integration + A1 three-key heads)
 
 - **Verdict/Action**: PASS + 提交（master 集成批次）。0c94 issue 1/5/6 引擎（`theme_selection`/`weekend_cash` caps/sec）与已审 0c94(10cd543) **逐字节 IDENTICAL**、只确认未变；集成缝正确：forward_policy_heads 六头全穿同一 source-bound 契约→3 键、无 per-head 特判，`_source_theme_selection_contract` 绑 score-composition state+rows 拒漂移，theme_off 自动零 theme 席、retain 头正常席；data_context 官方 Top15 用已校验 3 键 `data_context["selection_inputs"]`+显式 decision_date（两调用点一致、latent 漂移修）。
 - **Required**: 无。`R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION` → resolved；三个 R3 R-ID 随集成落 master，单源见 register。

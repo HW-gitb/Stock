@@ -45,6 +45,7 @@ from engine.us_short_sec_offering_audit import (  # noqa: E402
     build_offering_audit_from_sec_submissions,
 )
 from runners import us_egs_sample_validation as sample_validation  # noqa: E402
+from runners import us_short_batch5_data_context as data_context_assembly  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context_source_packet import (  # noqa: E402
     FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
@@ -918,6 +919,125 @@ def _build_corporate_action_capture(
     }
 
 
+def _theme_contract_industry_ids(*, parent_theme_projection_path: Path, tickers: list[str]) -> dict[str, str]:
+    """Return source-bound industry identities, falling back to isolated neutral identities only when unavailable."""
+    fallback = {ticker: f"industry:unclassified:{ticker.casefold()}" for ticker in tickers}
+    parent = _read_json(parent_theme_projection_path)
+    binding = parent.get("source_binding") if type(parent) is dict else None
+    artifacts = binding.get("source_artifacts") if type(binding) is dict else None
+    if type(artifacts) is not list:
+        return fallback
+    matches = [item for item in artifacts if type(item) is dict and item.get("role") == "sector_classification_packet"]
+    if not matches:
+        return fallback
+    if len(matches) != 1:
+        raise FullCandidateLiveSourcePacketError("theme projection has duplicate sector-classification bindings")
+    artifact = matches[0]
+    if set(artifact) != {"role", "path", "sha256"} or type(artifact["path"]) is not str \
+            or type(artifact["sha256"]) is not str:
+        raise FullCandidateLiveSourcePacketError("theme projection sector-classification binding is malformed")
+    classification_path = _existing_state_json(artifact["path"], field="theme_projection.sector_classification_packet")
+    if file_sha256(classification_path) != artifact["sha256"]:
+        raise FullCandidateLiveSourcePacketError("theme projection sector-classification binding changed")
+    classification = _read_json(classification_path)
+    sectors = classification.get("sector_by_ticker") if type(classification) is dict else None
+    if type(sectors) is not dict:
+        raise FullCandidateLiveSourcePacketError("bound sector-classification packet lacks sector_by_ticker")
+    identities = dict(fallback)
+    for ticker in tickers:
+        sector = sectors.get(ticker)
+        if type(sector) is str and sector.strip():
+            identities[ticker] = f"industry:{sector.strip().casefold()}"
+    return identities
+
+
+def _build_theme_selection_contract(
+    *,
+    candidate_subset: dict[str, Any],
+    candidate_artifact: dict[str, Any],
+    eligibility_governance: dict[str, Any],
+    expected_decision_date: str,
+    theme_opportunity_state: str,
+    parent_theme_projection_path: Path,
+    target_theme_projection: dict[str, Any],
+    resolved_sources: dict[str, Any],
+    catalyst_recall_tickers: list[str],
+    overextension_projection_path: Path | None,
+) -> dict[str, Any]:
+    """Materialize the current Pass2-clean theme contract from this run's bound inputs.
+
+    The final selection set is only knowable after the offering-audit source resolves, so this is deliberately
+    produced after the bounded fetch and before the local source packet is assembled.  It cannot be a stale
+    operator input or a pre-run sidecar.
+    """
+    try:
+        prepared = data_context_assembly._prepare_context_inputs(
+            candidate_artifact=candidate_subset,
+            expected_decision_date=expected_decision_date,
+            eligibility_governance=eligibility_governance,
+            candidate_pass2_signals=None,
+            pass2_sources={"offering_audit": resolved_sources["offering_audit_source"]},
+            catalyst_recall_feed=catalyst_recall_tickers or None,
+        )
+    except data_context_assembly.DataContextAssemblyError as exc:
+        raise FullCandidateLiveSourcePacketError(
+            f"cannot build theme selection contract from resolved Pass2 sources: {exc}"
+        ) from exc
+    pass2_clean = prepared["pass2_clean"]
+    theme_values = target_theme_projection.get("theme_block_by_ticker")
+    theme_coverage = target_theme_projection.get("coverage")
+    if type(theme_values) is not dict or type(theme_coverage) is not dict:
+        raise FullCandidateLiveSourcePacketError("target theme projection cannot build a selection contract")
+    identities = _theme_contract_industry_ids(
+        parent_theme_projection_path=parent_theme_projection_path,
+        tickers=pass2_clean,
+    )
+    overextension_states = {ticker: "none" for ticker in pass2_clean}
+    if overextension_projection_path is not None:
+        try:
+            validated = data_context_assembly.validate_overextension_projection(
+                _read_json(overextension_projection_path),
+                candidate_artifact=candidate_artifact,
+                expected_decision_date=expected_decision_date,
+                eligibility_governance=eligibility_governance,
+            )
+        except data_context_assembly.DataContextAssemblyError as exc:
+            raise FullCandidateLiveSourcePacketError(
+                f"cannot bind theme selection contract to overextension source: {exc}"
+            ) from exc
+        for ticker in pass2_clean:
+            try:
+                overextension_states[ticker] = validated["overextension_by_ticker"][ticker]["overextension_state"]
+            except (KeyError, TypeError) as exc:
+                raise FullCandidateLiveSourcePacketError(
+                    "overextension source is missing a Pass2-clean theme-contract ticker"
+                ) from exc
+    per_ticker: dict[str, dict[str, Any]] = {}
+    for ticker in pass2_clean:
+        score = theme_values.get(ticker, 0.0)
+        if type(score) not in (int, float) or isinstance(score, bool) or not math.isfinite(float(score)):
+            raise FullCandidateLiveSourcePacketError("target theme projection score is invalid for theme contract")
+        if ticker not in theme_coverage:
+            raise FullCandidateLiveSourcePacketError("target theme projection coverage is missing a Pass2-clean ticker")
+        per_ticker[ticker] = {
+            "theme_id": identities[ticker],
+            "theme_source": "industry_heat_v1",
+            "theme_lifecycle_state": "confirmed_active",
+            "theme_leader_rs": float(score),
+            "membership_origin": "automatic_discovery",
+            "market_confirmed": True,
+            "individual_theme_gate_passed": True,
+            "overextension_state": overextension_states[ticker],
+        }
+    return {
+        "as_of": expected_decision_date,
+        "mode": "industry_heat_v1_cross_industry_disabled",
+        "cross_industry_provisional_enabled": False,
+        "theme_opportunity_state": theme_opportunity_state,
+        "per_ticker": per_ticker,
+    }
+
+
 def _build_local_source_packet(
     *,
     generated_at: str,
@@ -1621,7 +1741,6 @@ def run_full_candidate_live_source_packet(
     paths = _source_paths(prefix)
     for field, path in paths.items():
         _validate_state_json_path(path, field=f"source_artifact.{field}")
-    _existing_state_json(paths["theme_selection_contract"], field="source_artifact.theme_selection_contract")
     raw_root_resolved = _validate_raw_root(raw_root)
     summary_resolved = _validate_summary_path(summary_path)
 
@@ -1731,6 +1850,18 @@ def run_full_candidate_live_source_packet(
         observed_at=observed_at,
         records=records,
     )
+    theme_selection_contract = _build_theme_selection_contract(
+        candidate_subset=candidate_subset,
+        candidate_artifact=_read_json(candidate_path),
+        eligibility_governance=eligibility_governance,
+        expected_decision_date=expected_decision_date,
+        theme_opportunity_state=theme_opportunity_state,
+        parent_theme_projection_path=theme_path,
+        target_theme_projection=target_theme_projection,
+        resolved_sources=resolved_sources,
+        catalyst_recall_tickers=verified_targets["_catalyst_recall_symbols"],
+        overextension_projection_path=overextension_path,
+    )
 
     _write_json_atomic(candidate_subset, paths["candidate_subset"])
     _write_json_atomic(resolved_sources["offering_audit_source"], paths["offering_audit_source"])
@@ -1739,6 +1870,7 @@ def run_full_candidate_live_source_packet(
     _write_json_atomic(corporate_action_capture, paths["corporate_action_capture"])
     _write_json_atomic(target_momentum_projection, paths["momentum_projection"])
     _write_json_atomic(target_theme_projection, paths["theme_projection"])
+    _write_json_atomic(theme_selection_contract, paths["theme_selection_contract"])
     packet = _build_local_source_packet(
         generated_at=generated_at,
         expected_decision_date=expected_decision_date,

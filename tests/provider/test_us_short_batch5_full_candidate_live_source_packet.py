@@ -208,24 +208,6 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["theme"],
             _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
         )
-        _write_json(
-            self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json"),
-            {
-                "as_of": _DECISION_DATE,
-                "mode": "industry_heat_v1_cross_industry_disabled",
-                "cross_industry_provisional_enabled": False,
-                "theme_opportunity_state": "no_strong_theme",
-                "per_ticker": {
-                    ticker: {
-                        "theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
-                        "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
-                        "membership_origin": "automatic_discovery", "market_confirmed": True,
-                        "individual_theme_gate_passed": True, "overextension_state": "none",
-                    }
-                    for ticker in ("AAPL", "MSFT", "JPM")
-                },
-            },
-        )
         preflight_runner.run_preflight(
             candidate_artifact_path=self.paths["candidate"],
             expected_decision_date=_DECISION_DATE,
@@ -330,6 +312,16 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(capture["aggregate_counts"]["split_endpoint_call_count"], 3)
         self.assertEqual(capture["aggregate_counts"]["dividend_endpoint_call_count"], 3)
         self.assertFalse(capture["scope"]["corporate_action_reconciliation_performed"])
+        contract_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_theme_selection_contract.json"
+        )
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        self.assertEqual(contract["as_of"], _DECISION_DATE)
+        self.assertEqual(set(contract["per_ticker"]), {"AAPL", "MSFT", "JPM"})
+        self.assertEqual(
+            {row["theme_id"] for row in contract["per_ticker"].values()},
+            {"industry:unclassified:aapl", "industry:unclassified:msft", "industry:unclassified:jpm"},
+        )
 
         text = self.paths["summary"].read_text(encoding="utf-8")
         self.assertNotIn("UNIT_TEST_FMP_SECRET", text)
@@ -401,10 +393,6 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
-        contract_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json")
-        contract = json.loads(contract_path.read_text(encoding="utf-8"))
-        del contract["per_ticker"]["JPM"]
-        _write_json(contract_path, contract)
         client = FullCandidateFakeClient()
 
         with self._env(), mock.patch.object(
@@ -435,6 +423,12 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_budget"]["fmp_grades_calls"], 2)
         self.assertEqual(summary["endpoint_call_budget"]["massive_stock_split_calls"], 2)
         self.assertEqual(summary["endpoint_call_budget"]["massive_dividend_calls"], 2)
+        contract_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_theme_selection_contract.json"
+        )
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        self.assertEqual(set(contract["per_ticker"]), {"AAPL", "MSFT"})
+        self.assertNotIn("JPM", contract["per_ticker"])
 
     def test_missing_authorization_aborts_before_network_or_writes(self):
         client = FullCandidateFakeClient()
@@ -458,11 +452,13 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
 
         self.assertEqual(client.urls, [])
 
-    def test_missing_theme_selection_contract_aborts_before_environment_or_network(self):
+    def test_stale_operator_theme_selection_contract_is_ignored_and_rebuilt_from_live_pass2_sources(self):
         contract_path = self.paths["prefix"].with_name(self.paths["prefix"].name + "_theme_selection_contract.json")
-        contract_path.unlink()
+        _write_json(contract_path, {"stale_operator_input": True})
         client = FullCandidateFakeClient()
-        with self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "theme_selection_contract"):
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
             runner.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"], expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"], context_components_output_path=self.paths["components"],
@@ -470,9 +466,10 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
                 client=client, confirm_user_authorization=True, run_data_context=True,
                 generated_at="2026-07-06T12:00:00+00:00", observed_at=_OFFERING_OBSERVED_AT, sec_sleep_seconds=0,
             )
-        self.assertEqual(client.urls, [])
-        self.assertFalse(self.paths["summary"].exists())
-        self.assertFalse(self.paths["output"].exists())
+        self.assertEqual(len(client.urls), 16)
+        contract = json.loads(contract_path.read_text(encoding="utf-8"))
+        self.assertEqual(set(contract["per_ticker"]), {"AAPL", "MSFT", "JPM"})
+        self.assertNotIn("stale_operator_input", contract)
 
     def test_caller_selected_strong_theme_state_is_rejected_before_authorization_or_network(self):
         client = FullCandidateFakeClient()
