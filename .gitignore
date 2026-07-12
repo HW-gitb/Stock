@@ -7,6 +7,11 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+# Exception: the vendored rpds native module completes the tracked .tools/python_libs
+# jsonschema/rpds bundle so schema tests import in a FRESH `git worktree` (which does not
+# copy gitignored files). Without these, every new worktree fails `import rpds.rpds`.
+!.tools/python_libs/rpds/rpds.cp312-win_amd64.pyd
+!.tools/python_libs/rpds/rpds.cp313-win_amd64.pyd
 *$py.class
 .pytest_cache/
 .mypy_cache/
