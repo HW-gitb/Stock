@@ -131,7 +131,7 @@ register + code are the source of truth.
   - **Boundary**: comparison/calibration only — `shadow_counts_ship_gate=false`, `changes_primary_selection=false`,
     zero new provider, no §2.1/§12.2 exception, private ticker artifacts gitignored, tracked manifest de-identified.
     The manifest METHOD must land before the first authorized LIVE capture run.
-- **[ ] Cut D-analysis — the offline VERDICT ENGINE that APPLIES the Cut-D manifest** (the "analysis code may lag"
+- **[BUILT] Cut D-analysis — the offline VERDICT ENGINE that APPLIES the Cut-D manifest** (the "analysis code may lag"
   piece; build it NOW, before any real data — freezing the analysis logic before results exist is the cleanest
   pre-registration, zero researcher freedom). Pure / offline / deterministic: consumes the ALREADY-DEFINED contracts
   (Cut A captures + Cut B ≥12-week outcome scorecards + the Cut C decision-diff) and applies the const-pinned Cut-D
@@ -161,6 +161,11 @@ register + code are the source of truth.
     of (a)/(b)/(c) failing alone → `not_eligible`; futility / harm each → flag; placebo determinism (same seed → identical
     null); manifest-as-single-source (mutate a manifest threshold → the verdict follows, proving no hardcode); fail-closed
     on bad shapes; a zero-real-week input yields NO forward evidence.
+  - **Delivered implementation**: `engine/us_short_forward_policy_statistical_evaluation.py` and
+    `schemas/us_short_forward_policy_statistical_evaluation_summary.schema.json` consume caller-supplied,
+    capture-bound future-week inputs only and return a de-identified in-memory summary. They create no input/output
+    writer, do not read a historical result directory, and leave the official selection, lifecycle ledger, and Cut E
+    untouched. The detailed material boundary is `R-USSHORT-A1-CUT-D-ANALYSIS-VERDICT-ENGINE`.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 
