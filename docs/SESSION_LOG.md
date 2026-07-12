@@ -19,16 +19,14 @@
 
 - **Verdict/Action**: 用户「修 P2」。修 capstone C3 事务把整个 `weekly_private/<decision_date>/` + `runs_private/<decision_date>/` 在跑任何 stage 前归档(move 到 _superseded/) → colocated 的 `--account-state-path`/`--batch4-template-path`(既有 20260709/10 目录同款)被移走、stage 1-11 不读、live 跑 ~1h 后 stage 12 bridge 读模板才崩。加 `_assert_input_outside_archived_outputs`:两个操作输入若落在两归档 surface 的 <decision_date> 下 → 抓取前(dry-run 也)fail-fast、清晰指向 `_run_inputs/`。
 - **Required**: 无遗留。整类=2 操作输入 × 2 归档 surface 全覆盖;不改归档/事务本身、不碰官方输出 staging→publish。单源见 register `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-COLOCATED-INPUT-ARCHIVED`(resolved)。
-- **Verify**: 复现原场景(20260713 colocated 路径现 dry-run 即拒、relocated `_run_inputs/` 放行);capstone suite 61 OK(含两 surface 拒测 + `_run_inputs/` 正控防过宽);全 test_us_short* 4226 OK(0 fail/0 err);py_compile 净。guard 前置于 dry_run 分支 → plan 预览即暴露、不再烧 ~26min 才崩。
-- **Pre-Codex self-review**: A 整类=account+template × weekly_private+runs_private 全覆盖;B 新增函数无旧符号残留、guard 不碰 stage 输出/官方发布(走 staging→publish、非归档);C 反向=colocated 拒·`_run_inputs/` 正控收;E 无 route-doc 漂移(未动 CURRENT)。独立对抗 pass: 不适用—平凡 path-containment 门、无选股/PIT/secret 面,红绿+正控钉死,按 proportional-review 不起 agent。
+- **Verify**: 复现原场景(20260713 colocated 路径现 dry-run 即拒、relocated `_run_inputs/` 放行);capstone suite 61 OK(含两 surface 拒测 + `_run_inputs/` 正控防过宽);全 test_us_short* 4226 OK(0 fail/0 err);py_compile 净;guard 前置于 dry_run 分支→plan 预览即暴露。自审:整类=account+template×weekly_private+runs_private 全覆盖、grep 无旧符号残留、反向 colocated 拒+`_run_inputs/` 正控、无 route-doc 漂移;平凡 path-containment 门(无选股/PIT/secret 面)按 proportional-review 未起对抗 agent。
 - **Next**: 无(已提交)。
 
 ## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
 
 - **Verdict/Action**: 用户「自修自审、pass 后提交、暂不跑全量」。封 `114edc4e`(2026-07-11) 引入的整类回归:`sec_sic_classification_fetch.py:217` + `theme_producer.py:226` 用 `observed.date()!=decision_date` 强制「run 日==决策日」,违背 §2.1「即将到来交易日/开盘前跑、观测窗口=运行时刻·自然含周末」(canonical resolver 只 fail-closed 盘中死区)+ 同族 5 个 Cut5 引擎的半开区间。两处同改为 `observed >= decision 09:30 ET open` 才拒。首周全量跑(桌面 firstweek_test.md)周六跑至 stage 5 崩(烧 ~26min Massive)暴露。
 - **Required**: 无遗留。整类=2 runner(grep 确认无第三处)、同族引擎本就正确未动。单源见 register `R-USSHORT-BATCH5-SIC-THEME-OBSERVATION-WINDOW-WEEKEND-REGRESSION`(resolved)。
-- **Verify**: 精确复现原崩溃探针(周六 2026-07-11→周一 20260713)两 guard 现返回观测日放行、post-open 10:00 ET + 09:30 边界仍 fail-closed(半开保 look-ahead);各加 1 条周末接受反向测试、原 post-open 拒测保留;focused SIC+theme 26 OK;全 test_us_short* 4224 OK(clean D:\ env、0 fail/0 err);py_compile + git diff --check 净。连带 grep:classification 包仅 theme_producer 消费(只要求 source_as_of==观测日)、schema source_as_of 无 const/跨字段、下游用 theme 投影(source_as_of=price_basis)→零 as_of realignment。
-- **Pre-Codex self-review**: A 整类量词化=2 site 全覆盖;B grep 无第三处 + 无旧符号/旧信息残留;C 反向=weekend 收·post-open+09:30 边界拒;E 无 route-doc 漂移(未动 CURRENT)。独立对抗 pass: 不适用—guard 放宽且保住 look-ahead(post-open 仍拒)、不碰选股评分,按 proportional-review 政策不起 agent,边界由红绿精确探针钉死。
+- **Verify**: 精确复现原崩溃探针(周六 2026-07-11→周一 20260713)两 guard 现返回观测日放行、post-open 10:00 ET + 09:30 边界仍 fail-closed(半开保 look-ahead);各加 1 条周末接受反向测试、原 post-open 拒测保留;focused SIC+theme 26 OK;全 test_us_short* 4224 OK(clean D:\ env、0 fail/0 err);py_compile + git diff --check 净。自审:整类 grep 确认仅 2 site(无第三处)、无旧符号/旧信息残留、连带 classification 仅 theme_producer 消费+下游零 as_of realignment、无 route-doc 漂移;guard 放宽仍保 look-ahead(post-open 拒)、不碰选股评分,按 proportional-review 未起对抗 agent。
 - **Next**: 无(已提交);周末一键全量已解锁,可择时真跑(用户「暂不跑全量」)。
 
 ## 2026-07-12 — Claude solo A1 heads chasing-strip 收口 + 自审 PASS (→ strip_theme_score)
