@@ -332,7 +332,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **A1 选择层网格**：`catalyst_off`（催化剂 25% 按原 40:35 比例改为动量 8/15、赛道 7/15）与 `overextension_selection_off`（只撤销 `chasing_extreme` 的赛道 strip/seat）同命名权重档一起从同一 PIT 快照即时分叉并 live 物化；后者保留过热观测与执行旗标，不能冒充执行层 A/B。`overextension_execution_off` 是后续影子分支账本接通后的 second-wave-live 槽，只从账本接通后开始攒自身的 forward 证据，绝不补算此前周数。所有这些 shadow 仍按固定 TopN/成交规则和双向成绩单报告，均不改变 `balanced` 主建议或 ship-gate（§13 #28/#36）。
 - **顺带量"进场偏晚"**：确认门槛天然滞后 → 系统偏晚进场；`theme_aggressive`（更早进）shadow 若长期更差，说明滞后在保护你、更好则说明太晚。结果挂 §13 复审。
 - **存储隐私**：比较轨含票名的 shadow 选股/成绩 → `state/us_short/shadow_compare_private/`（gitignored，§11.6）；tracked 只出脱敏归一化指标（无票名/无 $）。
-- **升级闸防自欺机制（借 A 股 `a_short_overlay_eval.py`）**：① 只数 **live forward** 观测（决策当日 PIT、无 look-ahead）入升级时钟；② **胜出 margin 必须先冻**（governance 填死数值阈值后才允许触发升级复审，防"先看数据再定胜出线"；A1 六头的具体预注册方法/数值唯一见 `presets/us_short_forward_policy_statistical_plan_20260712.json`）；③ 陈旧/错位 artifact **fail-closed** 不计入（桶名≠as_of 即弃）；④ 每周运行时**醒目横幅**（见 §13 `us_short_lifecycle_eval`）。升级仍需用户决定、绝不自动切生产。
+- **升级闸防自欺机制（借 A 股 `a_short_overlay_eval.py`）**：① 只数 **live forward** 观测（决策当日 PIT、无 look-ahead）入升级时钟；② **胜出 margin 必须先冻**（governance 填死数值阈值后才允许触发升级复审，防"先看数据再定胜出线"；A1 六头的具体预注册方法/数值唯一见 `presets/us_short_forward_policy_statistical_plan_20260712.json`，其纯离线、无写入消费者见 `engine/us_short_forward_policy_statistical_evaluation.py`）；③ 陈旧/错位 artifact **fail-closed** 不计入（桶名≠as_of 即弃）；④ 每周运行时**醒目横幅**（见 §13 `us_short_lifecycle_eval`）。升级仍需用户决定、绝不自动切生产。
 
 ## 13. 跨 LLM 提醒机制（硬规则）
 - 复用 `docs/system_risk_register.md` + standing reminder index；**不新造** `evidence_lifecycle_registry`。

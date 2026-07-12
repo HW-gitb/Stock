@@ -1,0 +1,78 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "US-short A1 Cut-D analysis summary",
+  "description": "De-identified in-memory summary emitted by the pure offline Cut-D verdict engine. It contains no tickers, prices, provider rows, raw outcome rows, action/size data, ship-gate evidence, or persistent forward evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "evaluated_decision_week_count", "selection_policies", "primary_policy", "policy_verdicts", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_statistical_evaluation_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "evaluated_decision_week_count": {"type": "integer", "minimum": 0},
+    "selection_policies": {"const": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]},
+    "primary_policy": {"const": "balanced"},
+    "policy_verdicts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"],
+      "properties": {
+        "theme_plus": {"$ref": "#/definitions/policyVerdict"},
+        "theme_aggressive": {"$ref": "#/definitions/policyVerdict"},
+        "theme_off": {"$ref": "#/definitions/policyVerdict"},
+        "catalyst_off": {"$ref": "#/definitions/policyVerdict"},
+        "overextension_selection_off": {"$ref": "#/definitions/policyVerdict"}
+      }
+    },
+    "boundary": {
+      "const": {
+        "track": "comparison_non_production",
+        "evidence_level": "forward_policy_statistical_calibration_only",
+        "shadow_counts_ship_gate": false,
+        "full_size_ship_gate_allowed": false,
+        "changes_primary_selection": false,
+        "provider_calls_added": false,
+        "broker_or_order_automation_allowed": false,
+        "historical_replay_is_forward": false,
+        "writes_outcome_data": false,
+        "produces_forward_evidence": false
+      }
+    }
+  },
+  "definitions": {
+    "policyVerdict": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["divergence_week_count", "review_flags", "outcome_gate", "verdict"],
+      "properties": {
+        "divergence_week_count": {"type": "integer", "minimum": 0},
+        "review_flags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["futility", "harm_turnover", "harm_fill"],
+          "properties": {
+            "futility": {"type": "boolean"},
+            "harm_turnover": {"type": "boolean"},
+            "harm_fill": {"type": "boolean"}
+          }
+        },
+        "outcome_gate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["evaluated", "mean_paired_advantage", "paired_win_count", "paired_win_fraction", "placebo_95th_percentile", "gate_a_mean_advantage", "gate_b_paired_wins", "gate_c_placebo"],
+          "properties": {
+            "evaluated": {"type": "boolean"},
+            "mean_paired_advantage": {"type": ["number", "null"]},
+            "paired_win_count": {"type": ["integer", "null"], "minimum": 0},
+            "paired_win_fraction": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+            "placebo_95th_percentile": {"type": ["number", "null"]},
+            "gate_a_mean_advantage": {"type": ["boolean", "null"]},
+            "gate_b_paired_wins": {"type": ["boolean", "null"]},
+            "gate_c_placebo": {"type": ["boolean", "null"]}
+          }
+        },
+        "verdict": {"enum": ["accumulating", "futility_flag", "harm_flag", "promotion_eligible", "not_eligible"]}
+      }
+    }
+  }
+}
