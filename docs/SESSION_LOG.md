@@ -8,6 +8,30 @@
 
 ---
 
+## 2026-07-12 — Claude 复审 PASS (US-short R3 issue 4：合成价格几何已按 Option (a) 修)
+- **Verdict/Action**: PASS + 提交（288f、未 push）。上轮 FAIL 的 P1 合成几何已解决：Codex 选了我推荐的 Option (a)——删除 close-only 伪造 ATR/support/resistance helper，换成只 deepcopy、不加任何 indicator，缺 source-bound OHLCV/ATR 的行进 `support_atr_engine`→诚实 `观察(price_not_executable)`、官方表零合成 entry/stop/target/RR；`price/adv` 只用于已 build 行的 liquidity cap。已验正确的 preview 骨架 + `_select_top15` 委托原样保留。
+- **Required**: 无。`R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS` → resolved（含 issue-3 Optional 委托；单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读修复 diff；整类 grep `0.03`/`fallback_extreme`/`_price_input_from_universe_row`/`effective_support`/`5*atr` = **0 残留**；反向控制 e2e 测试断言 AAPL 无 `price_input`+空 sizing/basket/cost+machine row `观察/price_not_executable`、亲跑 `test_us_short_batch5_to_batch4_e2e` 8 OK；全包 288f `4229 ran / OK / 0 fail`。删缺陷代码+反向控制直证 → 未重起 §6a。
+- **Next**: 待用户 merge 288f 入 master。
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 4: synthetic price geometry)
+- **Verdict/Action**: Removed close-only synthetic ATR/support/resistance; official Batch5->Batch4 rows without source-bound OHLCV/ATR now remain `观察(price_not_executable)`.
+- **Required**: Independent Claude review before commit; real OHLCV/ATR source remains a later category.
+- **Verify**: Red/green E2E plus focused 40 OK, capstone 68 OK, full offline US-short 4,229 OK / 1 skipped, `py_compile` clean.
+- **Next**: Claude Code: review.
+
+## 2026-07-12 — Claude 审查 FAIL (US-short R3 issue 4：动态 action 输入 / 合成价格几何)
+- **Verdict/Action**: FAIL（未提交、留 288f 待 Codex 修复）。issue-3 Optional 委托修复（`_official_top15_tickers`→权威 `_select_top15`）+ issue-4 机械骨架（fail-closed 缺价→observe / preview==formal / sizing·basket·cost / `_short_bucket_dollars`）均**正确**；**但** issue-4 `_price_input_from_universe_row` 从 close 单独伪造 3% ATR + 固定 5:1 RR 几何，过 RR 风险门产出带伪造 stop/target 的自信 BUILD 进官方 action 表+周报，误用价格引擎「绝不伪造 structure」的 `fallback_extreme` 标签、且报告/action 表/machine record 零 synthetic 标注。
+- **Required**: `R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS` — P1 合成几何：EITHER (a) 缺 OHLCV 时不合成、honestly observe(`price_not_executable`)（推荐、合本条 placeholder 意图）OR (b) relabel（弃 `fallback_extreme`）+ surface synthetic + 不让其静默过 RR 门（三者全做）；保留已验正确的骨架/委托不动。完整 finding/端到端 repro/两选项单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。lesson#1 全包一冻结即后台起→并行整读；全包 `4229 ran / OK / 0 fail`（长路径修复后 worktree 首次零环境错）；整读 weekend_e2e +214 + 权威 `support_atr_engine` RR 段（伪造 5×ATR→RR≥floor 全过）+ grep 确认 `fallback_extreme` 只写不读无门无 surface；§6a 独立 agent 端到端复现 P1（AAPL 建仓 rank1 entry200/stop183.5/tp230），fail-closed/preview-formal/sizing/委托全 HELD。
+- **Next**: Codex：修复
+
+## 2026-07-12 - Codex repair complete, pending Claude review (US-short R3 issue 4: dynamic one-click action inputs)
+- **Verdict/Action**: Repaired `R-USSHORT-R3-BATCH5-BATCH4-DYNAMIC-ACTION-INPUTS`: Batch5->Batch4 bridge now derives current `price_input`, exact `sizing_per_ticker`, exact `basket_context.per_ticker`, and probe `cost_inputs` from the current selection path instead of static per-ticker template maps. Also disposed issue-3 Optional by delegating `_official_top15_tickers` to authoritative `_select_top15`.
+- **Required**: Claude independent review still required before commit. Residual OHLCV/ATR source completeness, total caps, and real theme membership are later `codex_r3.md` categories, not this slice.
+- **Verify**: Focused bridge/data-context 40 OK; capstone bridge focused 68 OK; full offline US-short module set 4,229 OK / 1 skipped; `py_compile` clean. Full facts and boundary are in `docs/system_risk_register.md`.
+- **Next**: Claude Code: review.
+
 ## 2026-07-12 — Claude 审查 PASS (US-short R3 issue 3：Batch5→Batch4 holdings 正式链)
 - **Verdict/Action**: PASS + 提交（288f、未 push）。`_official_per_ticker_analysis` 现出 official Top15 ∪ holdings、closed-world row_source 四分（candidate/holding_in_top15/holding_pass2_only/holding_account_only），holding-only 不伪造 score_blocks，coverage 门=Top15∪holdings 不符 fail-closed；逐位核 `_official_top15_tickers` 与权威 `_select_top15` 等价，四分标记+coverage 与 Batch4 `weekend_orchestrator` 契约逐一吻合。
 - **Required**: 无（Optional 非阻断、latent 选股面漂移:`_official_top15_tickers` 内联**重复实现**权威 `_select_top15`——weekend_pipeline 不 import data_context 故无循环障碍、且无等价性测试钉住二者→权威若改会静默发散官方 Top15；建议直接调权威 fn 或加等价性测试。详见 register）。`R-USSHORT-R3-BATCH5-BATCH4-HOLDING-OFFICIAL-CHAIN` → resolved（单源见 `docs/system_risk_register.md`）。

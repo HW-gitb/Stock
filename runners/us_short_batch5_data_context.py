@@ -28,7 +28,7 @@ from engine.us_short_sec_offering_audit import (
     build_offering_audit_from_sec_submissions,
 )
 from engine.us_short_seam_score import OUTPUT_KEYS, ScoreSeamError, compose_score_inputs
-from engine.us_short_dynamic_seats import SELECTION_SEAT_TOTAL, selection_seats
+from engine.us_short_weekend_pipeline import _select_top15
 from runners.us_short_universe_fetch import (
     eligible_tickers_from_rows,
     validate_candidate_artifact,
@@ -947,35 +947,7 @@ def assemble_data_context_from_resolved_pass2_sources(
 
 
 def _official_top15_tickers(selection_inputs: dict[str, Any]) -> list[str]:
-    per_ticker = selection_inputs["per_ticker"]
-    admitted = list(per_ticker)
-    seats = selection_seats(selection_inputs["theme_opportunity_state"])
-    target_total = min(SELECTION_SEAT_TOTAL, len(admitted))
-    core_rank = sorted(admitted, key=lambda t: (-per_ticker[t]["core_score"], t))
-    theme_rank = sorted(admitted, key=lambda t: (-per_ticker[t]["theme_momentum_score"], -per_ticker[t]["core_score"], t))
-    selected: list[str] = []
-    seen: set[str] = set()
-
-    def add(ticker: str) -> None:
-        if ticker not in seen:
-            selected.append(ticker)
-            seen.add(ticker)
-
-    for ticker in core_rank[:seats["core_top"]]:
-        add(ticker)
-    theme_added = 0
-    for ticker in theme_rank:
-        if ticker in seen:
-            continue
-        add(ticker)
-        theme_added += 1
-        if theme_added >= seats["theme_momentum"]:
-            break
-    for ticker in core_rank:
-        if len(selected) >= target_total:
-            break
-        add(ticker)
-    return selected[:target_total]
+    return list(_select_top15(list(selection_inputs["per_ticker"]), selection_inputs)["admitted"])
 
 
 def _holding_signal_row(holding: dict[str, Any], candidate_pass2_signals: dict[str, dict[str, Any]]) -> dict[str, Any]:
