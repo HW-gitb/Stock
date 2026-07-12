@@ -101,8 +101,12 @@ graduation lines are never edited to fix a failure.**
    negative-vs-momentum result is only "momentum exposure", not selection alpha).
 2. **Statistical** — weekly HAC/Newey–West one-sided + weekly-block bootstrap (block = `max(4, H)`, `H` = max holding
    weeks). Full size: `t ≥ 2.0`, `p ≤ 0.025`; two formal checks → Bonferroni `/2` (§7).
-3. **Sharpe** — annualized net **≥ 1.0 AND Deflated Sharpe P(true Sharpe > 0.5) ≥ 95%**, with the deflation trial
-   count = every `balanced` config compared in research (§7).
+3. **Sharpe** — **(v1.0 external-red-team pass-2 N4 — Sharpe/DSR are computed on the ALPHA (active-return / IR)
+   series vs the §6 primary benchmark, NOT the raw return series — else a long-only book passes on pure market beta
+   in a bull market and this gate measures nothing.)** Require annualized **`IR ≥ 0.5` AND Deflated-Sharpe
+   `P(true IR > 0) ≥ 95%`** (exact DSR benchmark `SR*` and trial count `N` pinned at freeze; deflation `N` = every
+   `balanced` config compared in research + live shadow variants + every prior clock-started version, §7/N2). Gate 3's
+   incremental value over Gate 2 is the trial-deflation + skew/kurtosis correction, not a second beta test.
 4. **Drawdown + environment** — lifetime (from first observation, non-resettable) max DD ≤ `max_drawdown_tolerance`.
    **(v1.0 red-team patch, hole G) DD is measured on the `C*`-normalized strategy return % (as-if-full-size), NOT on
    the currently-deployed ramp dollars — so a 15% strategy drawdown counts as 15% even at the 25% rung, and the
@@ -208,6 +212,16 @@ report format; a fix proven by per-period replay to be bit-for-bit output-identi
 performance changes with identical output. Emergency risk-tightening may take effect immediately, but the new
 version does not graduate on the old version's record — safety over clock preservation.
 
+**(v1.0 external-red-team pass-2 N2 — re-version must not be a free re-roll; resolves the contradiction with §5·4's
+"non-resettable" DD.)** The following are **strategy-FAMILY-level** and do NOT reset when a version restarts: (a) the
+lifetime max-drawdown record — a breach of `max_drawdown_tolerance` by ANY version bars the whole family, a tightened
+version inherits it; (b) the multiple-testing / DSR trial count `N` (research configs + shadow variants + every
+clock-started version); (c) an append-only family version ledger (each version's start/stop, stop reason, and
+alpha/DD/weeks at stop). Non-safety re-versions are **capped (≤ 2)** and must be **outcome-blind** (proposed with a
+mechanistic reason BEFORE the period's returns are known, effective only at a pre-set version window); each restart
+**raises** the next clock's statistical bar; and §11.2 calibration must simulate a re-versioning operator. FAIL is
+therefore not a costless re-roll.
+
 *Power note (why the ladder, not a single 24-month bar):* with `t ≈ IR·√T`, a genuine but modest strategy
 (`IR ≈ 0.6`, e.g. 6% alpha / 10% TE) needs ~11 years to reach `t ≥ 2`. A single full-size `t ≥ 2` gate is therefore
 nearly unpassable for modest-but-real strategies; the graduated ladder (weak bar → small size, strong bar → full
@@ -236,11 +250,23 @@ size) plus the economic-alpha / Deflated-Sharpe / adverse-environment gates carr
 
 ## §12. Outcomes
 
-Each formal check yields exactly one of: **PASS** (rung's full bar met → authorize that rung's size, manual),
-**FAIL** (a hard gate breached, e.g. lifetime DD or a risk-limit → no graduation; a tightened version restarts the
-clock), **INSUFFICIENT_EVIDENCE** (`not_assessed` / `not_evaluable` / sample or `n_eff` short, or an adverse regime
-not yet observed → hold at current rung, keep accruing). "Insufficient" is never a pass. A 12-/24-month non-pass does
-NOT mean the strategy is invalid — only that evidence is not yet enough to risk a full-size error (an accepted
+Each formal check (on a FIXED pre-pinned date — a check not published, hashed+timestamped, within N days of its date
+defaults to **FAIL**; N15) yields exactly one of: **PASS** (rung's full bar met → authorize that rung's size, manual),
+**FAIL** (a hard gate breached, e.g. lifetime family DD or a risk-limit → no graduation), **INSUFFICIENT_EVIDENCE**
+(sample or `n_eff` short, or an adverse regime not yet observed → hold at current rung). **(pass-2 N8/N22) At a fixed
+check date, missing the alpha/IR/Sharpe bar with adequate sample is a FAIL, not INSUFFICIENT — you may not relabel a
+real miss as "keep waiting".** "Insufficient" is never a pass, and never an infinite re-roll.
+
+**(v1.0 external-red-team pass-2 N8 — kill switch / retire; pinned NOW to bind the future self.)** Check dates beyond
+month 36 are pinned at freeze (e.g. M48, M60), each counted in §11.2. **RETIRE**: at the M36 formal check, if net
+alpha point-estimate < 0, OR DSR `P < 50%`, OR cumulative net < 100% VTI total return → the strategy is retired **on
+this data**; it may not graduate under any new version or new protocol on the same evidence window.
+
+**(v1.0 external-red-team pass-2 N9 — pre-commit against the deepest failure mode: quietly loosening the bar ~36
+months in.)** If the ladder only reaches 50% or 75% with positive-but-insufficient alpha, **permanent operation at
+that rung is the CORRECT protocol output — NOT a reason to loosen a threshold or re-version.** The graduated ladder
+already deploys most capital at the lower rungs; a hard-to-reach 100% is by design. A 12-/24-month non-pass does NOT
+mean the strategy is invalid — only that evidence is not yet enough to risk a full-size error (an accepted
 false-negative).
 
 ---

@@ -90,3 +90,64 @@ seeing results, require a one-sided 95% binomial upper bound ≤ 5% (not the raw
 **Net**: 1 killer + 2 conceptual fixes patched now; ~11 conceptual one-liners + 5 pin-items recorded for the freeze;
 5 institutional controls declined-with-reason. The protocol is a proposal and freezes only at go-live, so group A/B
 are applied AT freeze (with numbers pinned then) — recorded here so nothing is lost, without bloating the proposal.
+
+---
+
+## Third red-team — external pass-2 (2026-07-12) — highest-quality pass; triage
+
+Best of the three. Key framing: its top holes are **on the "normal path"** — no dishonest data entry needed, just
+executing the protocol literally — which is a strictly higher-priority class than "don't cheat at data entry". It
+independently re-derived the N1 killer (it reviewed the post-first-pass version, not my N1 fix) and completed it
+better.
+
+**Patched now (genuine logical errors / self-contradictions in what I wrote):**
+- **N4 (PATCHED §5·3)** — Sharpe/DSR were on the RAW series → pass on pure beta in a bull market. Now on the ALPHA
+  (IR) series: `IR ≥ 0.5` + DSR `P(true IR>0) ≥ 95%`. High-value one-liner.
+- **N2 (PATCHED §10)** — re-version reset the "non-resettable" lifetime DD (§5·4 contradiction) and FAIL's only
+  consequence was "restart the clock" (fail node = re-roll node). Now: lifetime DD + trial count are FAMILY-level,
+  don't reset; non-safety restarts capped ≤2 + outcome-blind + raise the bar + counted in calibration.
+- **N8 (PATCHED §12)** — kill switch: RETIRE rule at M36 (alpha<0 / DSR P<50% / cumret<VTI → dead on this data) +
+  post-36mo checks pinned; a real miss at a check = FAIL, not endless INSUFFICIENT.
+- **N9 (PATCHED §12)** — pre-commit: reaching only 50/75% with positive-but-insufficient alpha → permanent stop
+  there is the CORRECT output, NOT a reason to loosen or re-version (blocks the deepest failure: quietly relaxing the
+  bar ~36 months in).
+
+**Apply at freeze — conceptual, cheap (one-liners):** N1-additions (worst-of `min(actual, rule)` for subjective
+deviations + objective exceptions → rule result + rolling-window coverage, not a cumulative budget + a differential-
+attrition test); N3-light (commit the weekly recommendation packet — names/prices/weights/code-SHA/input-hash — to
+git BEFORE US open; external timestamp optional; this is the ITT anchor, cheaper than I rated it last pass); N5 (lock
+rung eval dates); N7 (adverse regime needs PARTICIPATION during the drawdown + VTI-defined + no cross-version
+inherit + graduated: ≥20% or two events for 100%); N10 (`min_economic_alpha` base = C* + pre-agree expected avg g*
+range); N12 (freeze the execution window + score the strategy ledger at the archived-tape CONVENTION price not the
+operator's fill + force OCO bracket orders — highest-ROI integrity control for a solo manual system); N13-confbound
+(factor-adjusted alpha "≥0" as a point estimate is a coin-flip / near-toothless → use a one-sided confidence lower
+bound, esp. at 100%); N14 (leverage seam / g* timing of intraday stops / unfilled recs still counted in g*); N15
+(silence-defaults-to-adverse: every honor-rule needs a "not-published-by-date ⇒ FAIL" default); N17 (index the
+return series by CALENDAR weeks since clock start, not "weeks the system ran"; uptime ≥95% floor); N19 (elevate the
+"cumulative net ≥ 100% VTI total" hurdle to an explicit 6th gate — g*-matched benchmark answers "is there signal"
+but NOT "is this worth the capital vs just buying VTI").
+
+**Pin at freeze / §14 Frozen Rule Annex (N11):** the pile of "per the frozen rule" that isn't actually written —
+cancel/chase rule, benchmark-or-cash choice for non-compliant weeks (default: actual account return / cash), risk
+limits, cost-model coefficients, recompute tolerance, uniform-size $, entry execution convention, corporate actions
+(delist/bankruptcy/merger/tender), deposit/withdrawal TWR, `~2.5%`/`~3.75%`/"typically", both-halves split point,
+daily-vs-weekly NAV (→ daily), n_eff clamp `1≤n_eff≤n` + estimator on the alpha residual (N6), DSR `SR*` definition.
+Also N16: rewrite §11.2 null from a self-tuned parametric DGP to a **real-history permutation/placebo** (draw 15 from
+the real universe with matched exposure → real correlation/skew/regime, selection alpha structurally zeroed) + put a
+"cheating operator" strategy into the sim + report the worst-case over a hypothesis grid.
+
+**Meta (important — harmonize, don't build twice):** N16's placebo/permutation null + N2/N3's pre-registration +
+external timestamps are **converging with what the A1 forward work is already building** (its Cut D
+pre-registration statistical plan: frozen win-margin, outcome-blind early-action, placebo 1000×seed0..999). At
+freeze, the ship-gate should REUSE A1's forward statistical + pre-registration infrastructure, not build a parallel
+one. This is where the real efficiency is — and it keeps the whole thing from becoming the governance-heavier-than-
+the-strategy monster the user is right to avoid.
+
+**Declined-institutional (unchanged from pass-1, honor-system for a solo operator):** external timestamp *authorities*
+(git-commit-before-open is the light substitute), salted-hash custody of C*, full family-wise-error accounting infra.
+
+**Net (pass-2)**: 4 real logical-error fixes patched now; ~11 apply-at-freeze one-liners + a §14 annex + a calibration
+redesign recorded; harmonize with A1 at freeze. **Recommendation: stop iterating red-teams here** — three passes have
+hit diminishing returns, the value (a materially-corrected doc + a complete freeze-checklist) is captured, and NONE
+of the remainder needs resolving until go-live (years off). Further passes will keep finding holes (it's an
+adversarial artifact); that's not a reason to keep polishing a proposal that won't freeze for years.
