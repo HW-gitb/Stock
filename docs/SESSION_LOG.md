@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 — Claude 建 forward A/B in-repo 执行路线图（供 Codex 在 ecf2 自导 `执行`）+ 同步 ecf2
+
+- **Verdict/Action**: 应用户「Codex 收 `执行` 能自行判断下一步」补上缺失的 in-repo 可执行文档：新建 `docs/us_short_forward_ab_execution_plan.md`（committed `a3cdd9c`；Codex-facing：Path A 设计思路 + 有序 cut 计划 [A capstone 接线→B 多周→C 决策差分→D manifest/统计计划；E overext-exec-off 账本延后] + 每刀边界 + 审查重点 + 「读 register/code 定下一刀」）+ README 路由行。register 开 `R-USSHORT-A1-FORWARD-AB-EXECUTION-ROADMAP`（standing 指针→plan doc、点名 next=Cut A）。桌面 `us_short_forward_ab_plan.md` 另更新为最终设计（我的总审查标准、不进 repo）。
+- **Required**: 无（规划/handoff）。**ecf2 从 `bf0ab889` 同步到 master**（原无 heads、干净 detached → `reset --hard` 取 heads+plan doc；本轮收口执行）。Codex 在 ecf2 收 `执行` = 读 plan doc + register → 建 Cut A（capstone 接线）。
+- **Verify**: readme-route + route-doc guards green（`a3cdd9c`）；plan doc 与最终 grid 一致（6 选股头 + overext-exec-off 延后槽；sizing_neutral/entry/rr 不入 v1；strip_theme_score），非桌面旧草稿（旧 §8 把 sizing_neutral 当今冻=作废）。纯 docs+路由无 code、未跑测试包。并发：另一会话正并行提交 capstone/firstweek 硬化（`55c70cd9` 等）、与本 forward-A/B 无 code 重叠。
+- **Next**: Codex（ecf2）：执行（Cut A：capstone 接线，详见 plan doc §4/§5）。
+
 ## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
 
 - **Verdict/Action**: 用户「修 P2」。修 capstone C3 事务把整个 `weekly_private/<decision_date>/` + `runs_private/<decision_date>/` 在跑任何 stage 前归档(move 到 _superseded/) → colocated 的 `--account-state-path`/`--batch4-template-path`(既有 20260709/10 目录同款)被移走、stage 1-11 不读、live 跑 ~1h 后 stage 12 bridge 读模板才崩。加 `_assert_input_outside_archived_outputs`:两个操作输入若落在两归档 surface 的 <decision_date> 下 → 抓取前(dry-run 也)fail-fast、清晰指向 `_run_inputs/`。

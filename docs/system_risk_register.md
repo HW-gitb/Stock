@@ -33,6 +33,13 @@ Status:
 
 ## Hot Queue
 
+### R-USSHORT-A1-FORWARD-AB-EXECUTION-ROADMAP - forward A/B shadow-comparison build roadmap: grid + heads built + unwired; next = capstone wiring (Codex self-directs on `执行`)
+
+- **Status / severity**: **open — standing roadmap, not a defect** (P3/tracking, filed 2026-07-12). The forward A/B shadow-comparison work-stream (Path A) has its grid + 6 selection heads built (`R-USSHORT-A1-FORWARD-POLICY-MANIFEST-MATERIALIZATION` + `R-USSHORT-A1-HEADS-CHASING-STRIP-REALLOC-DRIFT`, both resolved) but the heads are UNWIRED (imported only by their own test). This entry exists so a `执行` command self-directs to the next cut.
+- **Executable plan (single source for the cut sequence)**: `docs/us_short_forward_ab_execution_plan.md` — Codex-facing roadmap: Path A design 思路 + ordered cut plan (A: wire heads into the capstone shadow stage → B: multi-week + `lifecycle_eval` → C: per-ticker decision-diff log → D: immutable manifest + pre-registered statistical plan → DEFERRED E: shadow-branch ledger for `overextension_execution_off`) + per-cut boundaries + review focus. Design authority = `docs/us_short_system_design.md` §12.2 / §4 / §13.1 + the frozen grid `presets/us_short_forward_policy_grid_20260711.json`.
+- **Next cut**: Cut A — wire `build_selection_policy_decisions` into `runners/us_short_weekly_capstone.py::default_pipeline()` as an additive shadow stage (private/gitignored ticker-bearing selections; de-identified tracked summary; feeds `paper_scorecard_comparison` + `lifecycle_eval`; zero new provider at decision time; never ship-gate). Full scope + review focus in the plan doc §4/§5.
+- **Boundary**: offline; shadow-only; never ship-gate; no §2.1/§12.2 contract change; no new provider at decision time. Each cut = its own register R-ID + SESSION_LOG block; Codex executes, Claude 审查+提交 (per role split). Closes when all non-deferred cuts (A–D) land + reviewed. The off-repo total-review acceptance spec is Claude's (`us_short_forward_ab_plan.md`, not in repo).
+
 ### R-USSHORT-BATCH5-WEEKLY-CAPSTONE-COLOCATED-INPUT-ARCHIVED - a live run archives the whole weekly_private/<decision_date>/ dir, silently moving a colocated operator input mid-run
 
 - **Status / severity**: **resolved — Claude solo fix + self-review PASS (2026-07-12), committed this round** (P2 — orchestration robustness / operator footgun; NOT selection-math, provider-authorization, secret, or ship-gate). Found during the first-week full-run QA (desktop `firstweek_test.md`); user directed "修 P2".
