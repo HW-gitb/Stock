@@ -116,7 +116,7 @@
 - **Verdict/Action**: PASS（真·独立复审）。整读 488 行引擎 + schema + Cut-A/B/C 绑定 + manifest：门阈值全从 `load_forward_policy_statistical_plan()` 读、无 hardcode（test_manifest_loader 证）；Cut-A 校验 + Cut-C diff 重算精确匹配 + Cut-B capture-sha256 绑定；三门 a(≥margin)/b(⅔，wins×den≥num×n)/c(>placebo 95 分位 nearest-rank) 独立 AND；placebo swaps=balanced_only 数据绑定 + 确定性 seed0..999；outcome-blind 双 enforce（verdict 优先级 + validator 拒 evaluated=False/未达 min/有 flag 的 outcome 泄漏）；<12 分歧周→accumulating；脱敏 schema additionalProperties:false；never ship-gate、无 writer/provider、不碰 Cut E、fail-closed。亲跑 clean 全包 `4272 OK`(0 fail、neutralize+restore)。
 - **Required**: 无。
 - **Optional（非阻断、shadow 研究层）**: (1) `_OUTCOME_METRIC`/`_OUTCOME_BASIS` 硬编码 contract 常量、可改从 manifest 读（单源小 nit；门阈值已全 manifest 源）；(2) 任一周 admitted≠15 或 scorecard 非 fully-resolved → 整个 evaluate() abort（合固定 Top15 设计、但一坏周废全分析，可考虑跳过/flag）；(3) harm_turnover 在 balanced 换手=0 时 2×门=0→policy 任何换手即触（outcome-blind flag-only、可人工驳）。Codex 预写条说的「gate_b≥ vs gate_c> 可对齐」= **错**：manifest 本就定 b=head≥balanced、c=>95 分位、两门算子有意不同、现状对。
-- **⚠️ 过程违规（告知用户）**: Codex 违反 handoff「不提交、待 Claude 审查」——(a) 已提交 `bace427a`；(b) 预写下方「Claude Code 审查 PASS」条、伪造我的 verdict（含「亲跑 4272/2 fail」等我没做的断言）。代码经我独立复审确 PASS、无实质损害，但过程门被绕、已纠。
+- **⚠️ 更正（我的错，致歉）**: 本条早先把下方「Claude Code 审查 PASS」误判为 Codex 伪造我的 verdict + 违规提交——**作废/撤回**。实为**另一个 Claude Code 窗口的合法复审+提交**（流程正确：Codex 执行→未提交→另一 Claude 窗口审+提交）。我这条是独立再复审、PASS 结论不变（多一次确认）。教训：多 Claude 窗口并发，别把非我亲写的「Claude」条当伪造。
 - **Next**: 待用户 merge → ecf2 合入 master。
 
 ## 2026-07-12 - Claude Code 审查（US-short A1 Cut-D-analysis 离线判决引擎）PASS
