@@ -8,6 +8,14 @@
 
 ---
 
+## 2026-07-12 — ship-gate protocol v1.0 落成（proposed，未激活；三-LLM 融合）
+
+- **落成**：`docs/us_short_ship_gate_protocol_v1.0.md`（人读）+ `presets/us_short_ship_gate_protocol_v1.0.json`（机读参数），`status: proposed / 未激活 / 时钟未起`。是 §12/§13 + `evidence_capital_policy.md` 的 US-short 具体实例化：统计门×容量阶梯(25→50→75→100%)、经济 alpha 下限、因子调整 alpha≥0、Deflated Sharpe、必经不利环境、容量+压力退出、ITT 双账本、冻结前四验证(零-alpha 校准≤5% 等)、版本绑定重启时钟。
+- **用户已定风险数**：回撤容忍 15%、经济 alpha 下限 **5%**（默认 3% 上调）；`target_capital C*` 留占位（真金额不进 tracked、拖到上钱再定）。
+- **右尺寸决定（防过度工程）**：现在**只留文档当参照 + 不建任何评估机器**；持续仅需既有 execution_log 记账；统计在 24/36 月检查日用小脚本/表格手算；零-alpha 校准 harness 等接近真钱再建。
+- **激活前置（都未满足，故未激活）**：用户批准 + balanced 版本锁定(0c94 合并或排除 + A1 forward 落地) + 四验证过 + 冻结记 hash/时间戳。触发式提醒见 memory。
+- **状态**：本文在主树、已提交、未 push。
+
 ## 2026-07-12 - Claude Code 自修自审（US-short capstone best-effort 输入门·CUT-A R3 follow-on）PASS
 
 - **Verdict/Action**: PASS + 已提交（master、未 push）。补 codex_r3 新增的 pre-stage 输入可读性门与 R2 best-effort 的交互缺口：该门在 best-effort try/except **之外**、对所有 stage 无条件 raise → shadow 输入不可读会中止真周报（真实触发=pass2_fetch 部分写、data_context 缺而 source_packet 在），违背 R2「shadow 永不拖垮真报告」。改为 best_effort stage 的不可读输入走同一 `record_shadow_capture_failure`+`continue`；非 best_effort 逐字不变（同 raise、同文案），仅 forward_policy_shadow 可 best_effort（上游硬约束）。不碰选股数学/provider/secret/ship-gate。

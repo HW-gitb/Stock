@@ -1,0 +1,126 @@
+{
+  "protocol": "us_short_ship_gate",
+  "version": "1.0",
+  "status": "proposed",
+  "active": false,
+  "clock_started": false,
+  "frozen_at": null,
+  "frozen_sha256": null,
+  "human_readable": "docs/us_short_ship_gate_protocol_v1.0.md",
+  "instantiates": ["docs/evidence_capital_policy.md", "docs/us_short_system_design.md#12", "docs/us_short_system_design.md#13"],
+  "lane": "us_short",
+  "side": "long_only",
+  "append_only": true,
+
+  "activation_preconditions": {
+    "user_approval": false,
+    "strategy_version_locked": false,
+    "strategy_version_lock_requires": "balanced engine+weights frozen (0c94 theme-lifecycle merged-or-excluded + A1 forward-policy settled)",
+    "pre_freeze_validations_passed": false,
+    "freeze_recorded": false
+  },
+
+  "user_risk_fields": {
+    "_note": "risk-preference decisions; set before activation; dollar amounts kept in a gitignored/local file, never committed",
+    "target_capital_usd": null,
+    "max_drawdown_tolerance_frac": 0.15,
+    "max_drawdown_tolerance_confirmed": true,
+    "min_economic_alpha_annual_frac": 0.05,
+    "min_economic_alpha_confirmed": true
+  },
+
+  "evidence_framework": {
+    "graduation_evidence_level": "live_normalized",
+    "paper_can_graduate": false,
+    "ledgers": ["strategy_measurement", "operator"],
+    "intention_to_treat": true,
+    "scaling_mode_enum": ["linear", "capped", "not_valid", "not_assessed"],
+    "not_assessed_is_pass": false
+  },
+
+  "graduation_ladder": [
+    {"rung": "minimal_measurement", "capital_frac": 0.0, "trigger": "day_1", "alpha_point_min": null, "hac_t_min": null, "factor_adjusted_alpha_min": null, "extra": {"coverage_min": 0.98, "monthly_compliance_min": 0.95}},
+    {"rung": "quarter", "capital_frac": 0.25, "trigger": "months_ge_12 AND n_eff_ge_52", "alpha_point_min": 0.0, "hac_t_min": 1.0, "factor_adjusted_alpha_min": 0.0, "extra": {"lifetime_dd_within_tolerance": true, "cost_within_frozen_model": true, "scaling_mode_not": "not_valid"}},
+    {"rung": "half", "capital_frac": 0.50, "trigger": "prev_plus_weeks_ge_8", "alpha_point_min": 0.025, "hac_t_min": 1.5, "factor_adjusted_alpha_min": 0.0, "extra": {"adverse_regime_required_or_cap_here": true}},
+    {"rung": "three_quarter", "capital_frac": 0.75, "trigger": "prev_plus_weeks_ge_8", "alpha_point_min": 0.0375, "hac_t_min": 2.0, "factor_adjusted_alpha_min": 0.0, "extra": {"capacity_stress_exit_pass": true}},
+    {"rung": "full", "capital_frac": 1.0, "trigger": "prev_plus_weeks_ge_8 (typically months 24-36)", "alpha_point_min": "user_risk_fields.min_economic_alpha_annual_frac", "hac_t_min": 2.0, "factor_adjusted_alpha_min": 0.0, "extra": {"deflated_sharpe_prob_true_gt_0p5_min": 0.95, "both_halves_alpha_positive": true, "cumulative_net_gt_vti_plus_cash": true, "capacity_full_validated": true, "adverse_regime_confirmed": true, "independent_recompute_matches": true}}
+  ],
+
+  "gates": {
+    "economic_alpha": {
+      "primary_benchmark": "target_exposure_matched_VTI_total_plus_3M_Tbill_cash",
+      "exposure_basis": "rule_implied_target_not_operator_actual",
+      "net_alpha_annual_min_full": "user_risk_fields.min_economic_alpha_annual_frac",
+      "factor_adjusted_alpha_min_full": 0.0
+    },
+    "statistical": {
+      "method": "weekly_HAC_Newey_West_one_sided",
+      "bootstrap": "weekly_block",
+      "block_len": "max(4, max_holding_weeks_H)",
+      "t_min_full": 2.0,
+      "p_max_full": 0.025,
+      "formal_checks_months": [24, 36],
+      "multiple_testing_bonferroni_div": 2
+    },
+    "sharpe": {
+      "annualized_net_min": 1.0,
+      "deflated_sharpe_prob_true_gt_0p5_min": 0.95,
+      "deflated_trial_count_source": "count_of_balanced_configs_compared_in_research (see trial_log)"
+    },
+    "drawdown_environment": {
+      "lifetime_max_dd_frac_max": "user_risk_fields.max_drawdown_tolerance_frac",
+      "lifetime_non_resettable": true,
+      "adverse_regime_benchmark_dd_min": 0.10,
+      "cap_at_frac_until_adverse_regime": 0.50,
+      "any_risk_limit_breach_blocks": true
+    },
+    "capacity": {
+      "c_cap_formula": "min_over_i_t( 0.02 * MDV20 / w_i )",
+      "c_star_le_frac_of_c_cap": 0.80,
+      "per_trade_pct_mdv20_max": 0.02,
+      "stress_exit_sessions": 2,
+      "stress_exit_daily_pct_of_p10_volume_max": 0.05,
+      "full_cost_rule": "max(observed_implementation_shortfall, sqrt_impact_model_95pct_upper_bound)",
+      "participation_over_validated_max_multiple_not_valid": 4,
+      "scaling_mode_thresholds": {"linear_max_pct_mdv20": 0.0010, "capped_max_pct_mdv20": 0.0050, "capped_max_pct_window_vol": 0.05, "capped_max_mult_validated": 2}
+    }
+  },
+
+  "sample_minimums": {
+    "min_calendar_months_full": 24,
+    "min_valid_weekly_batches": 96,
+    "min_closed_position_cycles": 300,
+    "min_n_eff_week_equivalents": 52,
+    "n_eff_formula": "n / (1 + 2*sum_{k=1..H} rho_k)",
+    "max_holding_weeks_H": null,
+    "max_holding_weeks_H_note": "PIN FROM DESIGN before freeze; sets bootstrap block length and n_eff correction"
+  },
+
+  "compliance": {
+    "notional_coverage_min": 0.98,
+    "weekly_dollar_compliance_min": 0.95,
+    "weekly_count_compliance_min": 0.95,
+    "allowed_exception_events": ["halt", "no_valid_quote", "regulatory_restriction"],
+    "subjective_skip_allowed": false
+  },
+
+  "version_binding": {
+    "restart_clock_on_change_to": ["weights_40_35_25", "data_fields_or_pit_semantics_or_sources", "universe_or_ranking_or_entry_or_exit_or_stop_or_target", "sizing_or_risk_rules", "manual_exception_rules", "any_fix_altering_historical_recommendation_price_or_position"],
+    "inherit_evidence_only_if": ["ui_wording_report_format", "fix_proven_bit_for_bit_output_identical_by_replay", "storage_or_performance_identical_output"],
+    "shadow_variants_never_count": ["theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]
+  },
+
+  "pre_freeze_validations": {
+    "computability_audit": {"required": true, "status": "pending"},
+    "zero_alpha_calibration": {"required": true, "status": "pending", "false_graduation_to_full_max": 0.05, "min_runs": 10000},
+    "power_analysis": {"required": true, "status": "pending", "true_alpha_scenarios": [0.03, 0.06, 0.09]},
+    "red_team_and_independent_recompute": {"required": true, "status": "pending"}
+  },
+
+  "outcomes": {"values": ["PASS", "FAIL", "INSUFFICIENT_EVIDENCE"], "insufficient_is_pass": false},
+
+  "trial_log": {
+    "_note": "every balanced config compared on any data during research, incl. failed ones; feeds Deflated-Sharpe trial count",
+    "balanced_configs_compared": []
+  }
+}
