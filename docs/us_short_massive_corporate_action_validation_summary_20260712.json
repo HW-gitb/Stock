@@ -1,0 +1,391 @@
+{
+  "scope": {
+    "authorization_ref": "user_chat_20260712_massive_corporate_action_first_cut",
+    "provider_id": "massive",
+    "sample_symbols": [
+      "AAPL",
+      "MSFT",
+      "TSLA"
+    ],
+    "endpoint_families": [
+      "splits",
+      "dividends",
+      "daily_adjusted",
+      "daily_unadjusted"
+    ],
+    "max_total_endpoint_calls": 12,
+    "actual_total_endpoint_calls": 12,
+    "pace_seconds": 13,
+    "purpose": "bounded_corporate_action_and_price_shape_capture_only"
+  },
+  "endpoint_results": [
+    {
+      "symbol": "AAPL",
+      "endpoint_family": "splits",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 5,
+        "result_item_key_names": [
+          "adjustment_type",
+          "execution_date",
+          "historical_adjustment_factor",
+          "id",
+          "split_from",
+          "split_to",
+          "ticker"
+        ]
+      }
+    },
+    {
+      "symbol": "AAPL",
+      "endpoint_family": "dividends",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 56,
+        "result_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ]
+      }
+    },
+    {
+      "symbol": "AAPL",
+      "endpoint_family": "daily_adjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    },
+    {
+      "symbol": "AAPL",
+      "endpoint_family": "daily_unadjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "endpoint_family": "splits",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 1,
+        "result_item_key_names": [
+          "adjustment_type",
+          "execution_date",
+          "historical_adjustment_factor",
+          "id",
+          "split_from",
+          "split_to",
+          "ticker"
+        ]
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "endpoint_family": "dividends",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 90,
+        "result_item_key_names": [
+          "cash_amount",
+          "currency",
+          "declaration_date",
+          "distribution_type",
+          "ex_dividend_date",
+          "frequency",
+          "historical_adjustment_factor",
+          "id",
+          "pay_date",
+          "record_date",
+          "split_adjusted_cash_amount",
+          "ticker"
+        ]
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "endpoint_family": "daily_adjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    },
+    {
+      "symbol": "MSFT",
+      "endpoint_family": "daily_unadjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    },
+    {
+      "symbol": "TSLA",
+      "endpoint_family": "splits",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 2,
+        "result_item_key_names": [
+          "adjustment_type",
+          "execution_date",
+          "historical_adjustment_factor",
+          "id",
+          "split_from",
+          "split_to",
+          "ticker"
+        ]
+      }
+    },
+    {
+      "symbol": "TSLA",
+      "endpoint_family": "dividends",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "request_id",
+          "results",
+          "status"
+        ],
+        "result_container_key": "results",
+        "result_count": 0,
+        "result_item_key_names": []
+      }
+    },
+    {
+      "symbol": "TSLA",
+      "endpoint_family": "daily_adjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    },
+    {
+      "symbol": "TSLA",
+      "endpoint_family": "daily_unadjusted",
+      "http_status": 200,
+      "ok": true,
+      "error_type": null,
+      "response_shape": {
+        "payload_type": "dict",
+        "top_level_key_names": [
+          "adjusted",
+          "count",
+          "queryCount",
+          "request_id",
+          "results",
+          "resultsCount",
+          "status",
+          "ticker"
+        ],
+        "result_container_key": "results",
+        "result_count": 500,
+        "result_item_key_names": [
+          "c",
+          "h",
+          "l",
+          "n",
+          "o",
+          "t",
+          "v",
+          "vw"
+        ]
+      }
+    }
+  ],
+  "storage": {
+    "raw_payload_root": "provider_samples/us_short_massive_corporate_action_validation_20260712/raw",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_secrets": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_raw_payload_rows": false,
+    "tracked_summary_contains_price_values": false,
+    "tracked_summary_contains_event_values": false
+  },
+  "boundary": {
+    "provider_selected": false,
+    "corporate_action_reconciliation_performed": false,
+    "return_calculation_performed": false,
+    "paper_gate_evaluable_claimed": false,
+    "ship_gate_or_production_authorized": false,
+    "datahub_or_runner_consumption_authorized": false,
+    "sr_provider_001_closed": false
+  }
+}
