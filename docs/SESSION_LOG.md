@@ -110,6 +110,7 @@
 - **Required**: 无已知代码残留；仍需 Claude 独立审查后提交。完整事实、影响、边界和环境验证缺口见 `docs/system_risk_register.md`。
 - **Verify**: 红测先复现 503 会回退旧日；修复后 `TestFetchMassiveWindow` 9 OK，`py_compile` 与 `git diff --check` 通过。整个 universe fetch 直接测试被当前 runtime 缺 `jsonschema` 挡 10 个 schema 用例；prescribed wrapper/full US-short wrapper 同样被 `jsonschema/rpds.rpds` 阻断。
 - **Pre-Codex self-review**: A 整类=universe grouped-window HTTPError 出口；B grep 确认无剩余行情 HTTPError skip，兄弟 momentum fetch 已 all-HTTP fail-closed；C 反向=合法 empty delayed day 仍绿、401/429 语义不变；E 未改 CURRENT/README。独立自审未起：单函数 fail-closed 分支、红绿+同类 grep 覆盖，走 main-thread checklist fallback。
+- **Next**: Claude Code：审查
 ## 2026-07-12 - Claude Code 独立复审 PASS（US-short A1 Cut-D-analysis；下方 Codex 预写的「审查 PASS」条非我所作、本条 supersede）
 
 - **Verdict/Action**: PASS（真·独立复审）。整读 488 行引擎 + schema + Cut-A/B/C 绑定 + manifest：门阈值全从 `load_forward_policy_statistical_plan()` 读、无 hardcode（test_manifest_loader 证）；Cut-A 校验 + Cut-C diff 重算精确匹配 + Cut-B capture-sha256 绑定；三门 a(≥margin)/b(⅔，wins×den≥num×n)/c(>placebo 95 分位 nearest-rank) 独立 AND；placebo swaps=balanced_only 数据绑定 + 确定性 seed0..999；outcome-blind 双 enforce（verdict 优先级 + validator 拒 evaluated=False/未达 min/有 flag 的 outcome 泄漏）；<12 分歧周→accumulating；脱敏 schema additionalProperties:false；never ship-gate、无 writer/provider、不碰 Cut E、fail-closed。亲跑 clean 全包 `4272 OK`(0 fail、neutralize+restore)。
@@ -253,14 +254,14 @@
 - **Verify**: readme-route + route-doc guards green（`a3cdd9c`）；plan doc 与最终 grid 一致（6 选股头 + overext-exec-off 延后槽；sizing_neutral/entry/rr 不入 v1；strip_theme_score），非桌面旧草稿（旧 §8 把 sizing_neutral 当今冻=作废）。纯 docs+路由无 code、未跑测试包。并发：另一会话正并行提交 capstone/firstweek 硬化（`55c70cd9` 等）、与本 forward-A/B 无 code 重叠。
 - **Next**: Codex（ecf2）：执行（Cut A：capstone 接线，详见 plan doc §4/§5）。
 
-## 2026-07-12 — Claude 修复、自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
+## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short capstone colocated-input 归档 footgun / firstweek_test #1)
 
 - **Verdict/Action**: 用户「修 P2」。修 capstone C3 事务把整个 `weekly_private/<decision_date>/` + `runs_private/<decision_date>/` 在跑任何 stage 前归档(move 到 _superseded/) → colocated 的 `--account-state-path`/`--batch4-template-path`(既有 20260709/10 目录同款)被移走、stage 1-11 不读、live 跑 ~1h 后 stage 12 bridge 读模板才崩。加 `_assert_input_outside_archived_outputs`:两个操作输入若落在两归档 surface 的 <decision_date> 下 → 抓取前(dry-run 也)fail-fast、清晰指向 `_run_inputs/`。
 - **Required**: 无遗留。整类=2 操作输入 × 2 归档 surface 全覆盖;不改归档/事务本身、不碰官方输出 staging→publish。单源见 register `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-COLOCATED-INPUT-ARCHIVED`(resolved)。
 - **Verify**: 复现原场景(20260713 colocated 路径现 dry-run 即拒、relocated `_run_inputs/` 放行);capstone suite 61 OK(含两 surface 拒测 + `_run_inputs/` 正控防过宽);全 test_us_short* 4226 OK(0 fail/0 err);py_compile 净;guard 前置于 dry_run 分支→plan 预览即暴露。自审:整类=account+template×weekly_private+runs_private 全覆盖、grep 无旧符号残留、反向 colocated 拒+`_run_inputs/` 正控、无 route-doc 漂移;平凡 path-containment 门(无选股/PIT/secret 面)按 proportional-review 未起对抗 agent。
 - **Next**: 无(已提交)。
 
-## 2026-07-12 — Claude 修复、自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
+## 2026-07-12 — Claude 自修自审 PASS + 提交 (US-short SIC/theme 观测窗口周末回归 BUG)
 
 - **Verdict/Action**: 用户「自修自审、pass 后提交、暂不跑全量」。封 `114edc4e`(2026-07-11) 引入的整类回归:`sec_sic_classification_fetch.py:217` + `theme_producer.py:226` 用 `observed.date()!=decision_date` 强制「run 日==决策日」,违背 §2.1「即将到来交易日/开盘前跑、观测窗口=运行时刻·自然含周末」(canonical resolver 只 fail-closed 盘中死区)+ 同族 5 个 Cut5 引擎的半开区间。两处同改为 `observed >= decision 09:30 ET open` 才拒。首周全量跑(桌面 firstweek_test.md)周六跑至 stage 5 崩(烧 ~26min Massive)暴露。
 - **Required**: 无遗留。整类=2 runner(grep 确认无第三处)、同族引擎本就正确未动。单源见 register `R-USSHORT-BATCH5-SIC-THEME-OBSERVATION-WINDOW-WEEKEND-REGRESSION`(resolved)。
@@ -385,7 +386,6 @@
 - **Required**: 无已知残留；完整事实、风险和未接线生产者边界见 `docs/system_risk_register.md` 的 `R-USSHORT-R3-ENVIRONMENT-ACTION-SOURCE-BINDING-GAP`。
 - **Verify**: 新增红测后 focused provenance/receipt/bridge **17 OK**，两 source-packet runner 的 caller-`strong` 反向探针均 fail-closed，`py_compile`/`git diff --check`/BOM 通过；完整 `test_us_short*.py` wrapper 因本工作树 `jsonschema/rpds` 缺失在 discovery 前阻塞。
 - **Pre-Codex self-review**: A-F — A 覆盖 run-origin/receipt/Batch4/orchestrator/schema/CLI 两 source-packet runner；B grep 确认无 `run_mode="research_live"` producer 和无 `default="strong"`；C 覆盖 legacy research_live 拒绝、模板 digest 替换、caller-strong；E 未改 CURRENT/README。独立 current-diff 审查先 FAIL 两项（legacy research_live + template TOCTOU）均已红绿修复；一次超时重启后 PASS；固定包集中运行一次。
-- **Next**: Claude Code：审查
 - **Next**: Claude Code：独立审查该环境/动作模板来源绑定修复；PASS 后仅提交已审范围，不 push。
 
 ## 2026-07-11 — Codex repair complete, awaiting Claude review (US-short R3 issue 5: chasing penalty score amplification)
