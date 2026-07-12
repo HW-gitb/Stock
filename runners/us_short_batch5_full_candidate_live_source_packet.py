@@ -919,9 +919,41 @@ def _build_corporate_action_capture(
     }
 
 
-def _theme_contract_industry_ids(*, parent_theme_projection_path: Path, tickers: list[str]) -> dict[str, str]:
-    """Return source-bound industry identities, falling back to isolated neutral identities only when unavailable."""
+def _industry_ids_from_sector_map(classification: Any, *, fallback: dict[str, str], tickers: list[str]) -> dict[str, str]:
+    """Map a `{sector_by_ticker: {...}}` classification onto `industry:<sector>` ids, keeping the isolated
+    `industry:unclassified:<ticker>` fallback for any ticker the classification does not cover."""
+    sectors = classification.get("sector_by_ticker") if type(classification) is dict else None
+    if type(sectors) is not dict:
+        raise FullCandidateLiveSourcePacketError("sector-classification packet lacks sector_by_ticker")
+    identities = dict(fallback)
+    for ticker in tickers:
+        sector = sectors.get(ticker)
+        if type(sector) is str and sector.strip():
+            identities[ticker] = f"industry:{sector.strip().casefold()}"
+    return identities
+
+
+def _theme_contract_industry_ids(
+    *,
+    parent_theme_projection_path: Path,
+    tickers: list[str],
+    classification_packet_path: Path | None = None,
+) -> dict[str, str]:
+    """Return source-bound industry identities, falling back to isolated neutral identities only when unavailable.
+
+    The full/capstone pipeline supplies the run's SIC packet directly via ``classification_packet_path``: the
+    projection-inputs theme binding intentionally carries only candidate/source-theme roles (not the
+    sector_classification role), so the merged theme this runner reads never re-exposes it. Using the packet the
+    SIC stage already produced gives the contract real ``industry:<sector>`` identities — so the §4.5 same-theme
+    seat cap groups by real industry (not per-ticker singletons) once a >no_strong_theme seat budget is enabled —
+    instead of always falling back. A caller that instead binds the classification into the theme projection
+    itself may omit the path and use that SHA-verified binding.
+    """
     fallback = {ticker: f"industry:unclassified:{ticker.casefold()}" for ticker in tickers}
+    if classification_packet_path is not None:
+        classification = _read_json(
+            _existing_state_json(classification_packet_path, field="sector_classification_packet_path"))
+        return _industry_ids_from_sector_map(classification, fallback=fallback, tickers=tickers)
     parent = _read_json(parent_theme_projection_path)
     binding = parent.get("source_binding") if type(parent) is dict else None
     artifacts = binding.get("source_artifacts") if type(binding) is dict else None
@@ -939,16 +971,7 @@ def _theme_contract_industry_ids(*, parent_theme_projection_path: Path, tickers:
     classification_path = _existing_state_json(artifact["path"], field="theme_projection.sector_classification_packet")
     if file_sha256(classification_path) != artifact["sha256"]:
         raise FullCandidateLiveSourcePacketError("theme projection sector-classification binding changed")
-    classification = _read_json(classification_path)
-    sectors = classification.get("sector_by_ticker") if type(classification) is dict else None
-    if type(sectors) is not dict:
-        raise FullCandidateLiveSourcePacketError("bound sector-classification packet lacks sector_by_ticker")
-    identities = dict(fallback)
-    for ticker in tickers:
-        sector = sectors.get(ticker)
-        if type(sector) is str and sector.strip():
-            identities[ticker] = f"industry:{sector.strip().casefold()}"
-    return identities
+    return _industry_ids_from_sector_map(_read_json(classification_path), fallback=fallback, tickers=tickers)
 
 
 def _build_theme_selection_contract(
@@ -963,6 +986,7 @@ def _build_theme_selection_contract(
     resolved_sources: dict[str, Any],
     catalyst_recall_tickers: list[str],
     overextension_projection_path: Path | None,
+    classification_packet_path: Path | None = None,
 ) -> dict[str, Any]:
     """Materialize the current Pass2-clean theme contract from this run's bound inputs.
 
@@ -991,6 +1015,7 @@ def _build_theme_selection_contract(
     identities = _theme_contract_industry_ids(
         parent_theme_projection_path=parent_theme_projection_path,
         tickers=pass2_clean,
+        classification_packet_path=classification_packet_path,
     )
     overextension_states = {ticker: "none" for ticker in pass2_clean}
     if overextension_projection_path is not None:
@@ -1615,6 +1640,7 @@ def run_full_candidate_live_source_packet(
     output_data_context_path: Path = DEFAULT_OUTPUT_DATA_CONTEXT_PATH,
     context_components_output_path: Path | None = DEFAULT_CONTEXT_COMPONENTS_OUTPUT_PATH,
     overextension_projection_path: Path | None = None,
+    sector_classification_packet_path: Path | None = None,
     yfinance_grade_actions_path: Path | None = None,
     source_artifact_prefix: Path = SOURCE_ARTIFACT_PREFIX,
     summary_path: Path = SUMMARY_PATH,
@@ -1861,6 +1887,7 @@ def run_full_candidate_live_source_packet(
         resolved_sources=resolved_sources,
         catalyst_recall_tickers=verified_targets["_catalyst_recall_symbols"],
         overextension_projection_path=overextension_path,
+        classification_packet_path=sector_classification_packet_path,
     )
 
     _write_json_atomic(candidate_subset, paths["candidate_subset"])

@@ -333,6 +333,45 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
 
+    def test_sector_classification_packet_yields_real_industry_theme_ids(self):
+        # The capstone passes the run's own SIC packet directly (the projection-inputs theme binding drops that
+        # role), so same-real-industry names share an `industry:<sector>` theme_id instead of per-ticker
+        # singletons — this is what lets the §4.5 same-theme seat cap group by real industry.
+        classification_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_classification.json")
+        _write_json(classification_path, {"sector_by_ticker": {
+            "AAPL": "Technology", "MSFT": "Technology", "JPM": "Financials"}})
+        self.addCleanup(lambda: classification_path.unlink(missing_ok=True))
+        client = FullCandidateFakeClient()
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=16,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                source_artifact_prefix=self.paths["prefix"],
+                sector_classification_packet_path=classification_path,
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        contract_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_theme_selection_contract.json")
+        per = json.loads(contract_path.read_text(encoding="utf-8"))["per_ticker"]
+        self.assertEqual(set(per), {"AAPL", "MSFT", "JPM"})
+        self.assertEqual(per["AAPL"]["theme_id"], "industry:technology")
+        self.assertEqual(per["MSFT"]["theme_id"], "industry:technology")   # same real industry -> shared id
+        self.assertEqual(per["JPM"]["theme_id"], "industry:financials")
+
     def test_stale_clock_source_projection_binding_is_rejected_before_fetch(self):
         # Reverse control (Required B, expensive-fetch boundary): the live re-derivation validates the
         # momentum source binding against the CANDIDATE clock before any provider call; a stale clock

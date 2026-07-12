@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-13 — Claude Code 自修自审 PASS（US-short capstone theme-contract Optional：真行业身份接线）
+
+- **Verdict/Action**: PASS + 提交（branch `codex/us-short-capstone-theme-contract-preflight`，未 push；master 平行窗口活未清、待协调并入）。修上一审记录的 latent Optional：`_theme_contract_industry_ids` 现接受 capstone 直传 SIC 分类包（projection-inputs theme 绑定丢了 sector_classification role），产出真 `industry:<sector>` 身份、同真行业名共享 theme_id → §4.5 同主题席位帽可按真行业分组。今天仍 inert（no_strong_theme→席位预算 3==同主题帽 3、Top15 不变），修的是前向正确性 + 清死代码。
+- **Required**: 无。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读改动：直传路径 fail-closed（`_existing_state_json` + 缺 sector_by_ticker raise）、未覆盖 ticker 留 unclassified 回退、SHA-绑定旧路径保留；新反向控制测试证同 Technology 的 AAPL/MSFT 共享 `industry:technology`、JPM 独立、既有 unclassified 回退测试不变；py_compile OK、focused 19 OK、亲跑 ecf2 全离线 `test_us_short*` 4311 OK（+1 零回归）。§6a 未起（inert+contained+反向控制、producer 已 §6a 审过，proportional）。
+- **Next**: 待 master 平行窗口活清后并入。
+
 ## 2026-07-13 — Claude Code 独立审查 PASS（US-short full-candidate capstone theme-contract producer）
 
 - **Verdict/Action**: PASS + 提交于 branch `codex/us-short-capstone-theme-contract-preflight`（master 此间已被平行窗口推进+有另一窗口未提交活、暂不能 ff、待协调并入；未 push）。full-candidate Pass2 现按本轮 resolved 源自产 source-bound `theme_selection_contract`、不再要求 operator 预置；解一键 capstone Pass2 阻断（首个 full live run 实测崩点）。
