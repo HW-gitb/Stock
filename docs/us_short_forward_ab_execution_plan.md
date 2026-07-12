@@ -166,6 +166,16 @@ register + code are the source of truth.
     capture-bound future-week inputs only and return a de-identified in-memory summary. They create no input/output
     writer, do not read a historical result directory, and leave the official selection, lifecycle ledger, and Cut E
     untouched. The detailed material boundary is `R-USSHORT-A1-CUT-D-ANALYSIS-VERDICT-ENGINE`.
+- **[DEFERRED — gated on the live run] Outcome production — the "抓价算分" input layer that feeds Cut B + Cut D-analysis.**
+  Fetch the forward prices for each accumulated weekly capture's baskets → compute per-week, per-policy
+  `net_benchmark_excess` (same-week benchmark + cost model) → this is the outcome/scorecard input Cut B and Cut D-analysis
+  consume. **Without it the six heads only accumulate captures and NO "which head is better" verdict can ever compute.**
+  DEFERRED, NOT forgotten: (i) provider-gated (real forward-price fetch, SR-PROVIDER-001); (ii) downstream of real weeks —
+  there is no forward data until the weekly capstone runs live and accumulates 6-head captures, so building it now = an
+  empty pipe; (iii) no pre-registration freeze concern (it only computes returns), unlike the Cut-D manifest. **Trigger to
+  build**: once the weekly capstone starts running live + accumulating real 6-head capture weeks. Never ship-gate; the pure
+  return-computation is fixture-buildable offline early, but there is no urgency until real weeks exist. (Also tracked in
+  Claude memory `project_us_short_forward_ab_outcome_production_pipe`.)
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 
