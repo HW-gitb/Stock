@@ -131,6 +131,36 @@ register + code are the source of truth.
   - **Boundary**: comparison/calibration only — `shadow_counts_ship_gate=false`, `changes_primary_selection=false`,
     zero new provider, no §2.1/§12.2 exception, private ticker artifacts gitignored, tracked manifest de-identified.
     The manifest METHOD must land before the first authorized LIVE capture run.
+- **[ ] Cut D-analysis — the offline VERDICT ENGINE that APPLIES the Cut-D manifest** (the "analysis code may lag"
+  piece; build it NOW, before any real data — freezing the analysis logic before results exist is the cleanest
+  pre-registration, zero researcher freedom). Pure / offline / deterministic: consumes the ALREADY-DEFINED contracts
+  (Cut A captures + Cut B ≥12-week outcome scorecards + the Cut C decision-diff) and applies the const-pinned Cut-D
+  manifest to emit, per shadow head, a divergence-week count + a promotion-eligibility verdict + outcome-blind
+  futility/harm flags. NEW code = the placebo engine + the (a)(b)(c) gates + the futility/harm detector + per-head verdict.
+  - **Computes (EVERY threshold read from the manifest via `load_forward_policy_statistical_plan()` — single source,
+    NEVER re-hardcode a number in the analysis code):** divergence-week = head's Top15 membership symmetric-diff vs
+    balanced ≥1 (reuse Cut C; rank/bucket NOT counted); promotion needs ALL of (a) mean paired `net_benchmark_excess`
+    advantage ≥ `comparison_win_margin` over ≥12 divergence weeks, (b) paired-win consistency ≥ `paired_win_consistency_fraction`
+    (2/3), (c) advantage > the 95th pct (`placebo_percentile_exclusive_gt`) of the head's placebo null; placebo null =
+    `replicates`(1000) deterministic seeds `seed_start..seed_end_inclusive`(0..999), each perturbing balanced's Top15 by
+    the head's realized THAT-week divergence count (random in/out from the same eligible pool) per manifest `method`;
+    futility = `< futility.minimum_divergence_weeks`(2) divergence weeks within the first `within_first_decision_weeks`(8);
+    harm = mean weekly Top15 turnover > `2.0×` OR fill < `0.5` sustained ≥ `sustained_decision_weeks`(2); per-head verdict
+    ∈ {accumulating, futility_flag, harm_flag, promotion_eligible, not_eligible}; a flag only SURFACES for review, never auto-drops.
+  - **Required guardrails (review focus):** (1) PURE / real-weeks-only — below the min divergence weeks → `accumulating`,
+    NO promotion verdict (`promotion_before_minimum_allowed=false`); it MUST NOT produce / backfill / replay / fabricate any
+    forward evidence; zero provider; writes no outcome data. (2) Manifest = the ONLY threshold authority (avoid the
+    §4-vs-manifest drift class). (3) Bind to real weeks — reject stale / out-of-order / duplicate weeks + look-ahead
+    (outcome week ≤ as_of), mirroring the upgrade-gate §12.2 ③/①. (4) Never ship-gate; `changes_primary_selection=false`;
+    ticker-bearing → private/gitignored, tracked summary de-identified (counts / verdicts only — no ticker / no $).
+    (5) Deterministic placebo; fail-closed on malformed input.
+  - **Does NOT**: fetch forward prices or PRODUCE outcomes (that forward-outcome production is provider-gated + needs real
+    weeks — a separate later piece; this engine consumes the outcome CONTRACT + fixtures); wire a live auto-writer into the
+    weekly run (read-only over accumulated private data); touch Cut E. Offline-buildable + fixture-testable NOW.
+  - **Tests (fixtures)**: <12 → `accumulating` (no fabricated numbers); ≥12 passing all gates → `promotion_eligible`; each
+    of (a)/(b)/(c) failing alone → `not_eligible`; futility / harm each → flag; placebo determinism (same seed → identical
+    null); manifest-as-single-source (mutate a manifest threshold → the verdict follows, proving no hardcode); fail-closed
+    on bad shapes; a zero-real-week input yields NO forward evidence.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 

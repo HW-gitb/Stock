@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-12 - Claude Code 决策（US-short A1 Cut-D 分析消费者 spec 已定·交 Codex 执行）
+
+- **决策**: 用户批准现在建 Cut-D 分析消费者（「代码可缓」的分析码，现在建=预注册最干净、零研究者自由度）。spec 已写进 `docs/us_short_forward_ab_execution_plan.md` §4（Cut D-analysis）。= 纯离线 verdict 引擎：吃 Cut A capture + Cut B ≥12 周成绩单 + Cut C decision-diff，套 const-pin 的 Cut D manifest，逐头出 divergence-week 计数 + (a)(b)(c) promotion 判定 + outcome-blind futility/harm flag。新码=placebo(1000×seed0..999)+三道门+futility/harm+逐头 verdict。
+- **护栏（审查重点）**: 纯离线只吃真周（<12 分歧周→accumulating、不出判定、绝不产/补/replay/伪造 forward 证据、零 provider、不写 outcome）；阈值全从 manifest 读、不 hardcode（防 §4-vs-manifest 漂移类）；绑真周拒 stale/乱序/重复/look-ahead；never ship-gate、含票名 gitignored、tracked 脱敏；placebo 确定性；fail-closed。不抓 forward 价/不产 outcome（独立 gated 后续）、不接 live auto-writer、不碰 Cut E。
+- **规模/边界**: ~1-2 刀（placebo 引擎 + 三门 + futility/harm + verdict/schema/fixtures）；纯判定逻辑，真跑还差独立的 outcome 生产（gated），但那不挡现在建。
+- **Next**: Codex：`执行` Cut-D 分析消费者（按 §4 spec 建、fixtures 测；不产 forward 证据、不碰 Cut E；不提交、待 Claude 审查）。
+
 ## 2026-07-12 - Claude Code 审查（US-short A1 Cut D 预注册统计计划 manifest）PASS
 
 - **Verdict/Action**: PASS + 已提交（ecf2）。manifest/engine/schema/tests 忠实冻结我的 spec + 用户批准值（win_margin 0.001、⅔=[2,3]、placebo 95 分位、1000×seed0..999·data-bound、divergence=Top15 对称差≥1、outcome-blind、≥12 分歧周）；const-pin 全字段 + engine 跨 grid & lifecycle #28 三角校验 min-weeks；ship-gate 隔离（boundary block 校验）；无 backfill/replay-as-forward（same-run-only）；fail-closed；未接消费者（analysis code 按计划滞后）。
