@@ -190,7 +190,8 @@ notional coverage ≥ **98%**, weekly compliance (dollar AND count) ≥ **95%** 
 check. Allowed exceptions are only pre-listed objective events (halt, no valid quote, regulatory restriction) — never
 "felt wrong". **(v1.0 red-team patch, hole A) Every claimed exception needs an objective evidence stamp captured at
 the time (halt record / quote snapshot / regulatory notice); an unstamped exception counts as a discretionary skip
-(cash), so you cannot quietly re-label a losing pick as "no quote".** **(v1.0 red-team patch, hole E) A non-compliant
+(scored at the rule counterfactual per N1 above — never favorable cash), so you cannot quietly re-label a losing
+pick as "no quote".** **(v1.0 red-team patch, hole E) A non-compliant
 week stays IN the strategy return series at what actually happened (or benchmark/cash per the frozen rule); it is
 NEVER dropped from the alpha computation — non-compliance lowers coverage, but must never become a lever to excise
 bad weeks.** Below threshold ⇒ the actual portfolio evaluates system+operator, but does NOT prove the scoring engine;
