@@ -1,0 +1,125 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_corporate_action_workflow/1.0.0/schema.json",
+  "title": "US-short Corporate-Action Offline Manual Workflow",
+  "description": "Private offline workflow binding lifecycle triggers, a strict SEC candidate, low-trust yfinance alarm, optional Massive diagnostics, and the existing manually confirmed event recorder to a private manual disposition ticket. No input can auto-confirm semantics or satisfy paper, alpha, production, or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "security_binding", "input_evidence", "workflow_status", "blocking_reasons", "review_flags", "disposition", "paper_confirmation_state", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_corporate_action_workflow"},
+    "schema_version": {"const": "1.0.0"},
+    "security_binding": {"$ref": "#/$defs/securityBinding"},
+    "input_evidence": {"$ref": "#/$defs/inputEvidence"},
+    "workflow_status": {"enum": ["manual_review_required", "private_disposition_ready", "private_disposition_prepared"]},
+    "blocking_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["manual_event_missing", "manual_event_requires_review", "sec_candidate_confirmed_event_mismatch"]}
+    },
+    "review_flags": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["lifecycle_trigger_present", "sec_candidate_terms_extracted", "sec_candidate_requires_manual_review", "yfinance_advisory_alarm", "yfinance_source_unavailable", "massive_unresolved_evidence", "massive_split_exact_diagnostic_only", "manual_event_confirmed"]}
+    },
+    "disposition": {"$ref": "#/$defs/disposition"},
+    "paper_confirmation_state": {"$ref": "#/$defs/paperConfirmationState"},
+    "boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"workflow_status": {"const": "manual_review_required"}}},
+      "then": {"properties": {"blocking_reasons": {"minItems": 1}, "disposition": {"const": {"eligible": false, "private_ticket_prepared": false, "ticket_ref_sha256": null}}}}
+    },
+    {
+      "if": {"properties": {"workflow_status": {"const": "private_disposition_ready"}}},
+      "then": {"properties": {"blocking_reasons": {"maxItems": 0}, "input_evidence": {"properties": {"manual_event_record": {"$ref": "#/$defs/manualConfirmedEvidenceRef"}}}, "disposition": {"const": {"eligible": true, "private_ticket_prepared": false, "ticket_ref_sha256": null}}, "boundary": {"properties": {"account_state_read": {"const": true}}}}}
+    },
+    {
+      "if": {"properties": {"workflow_status": {"const": "private_disposition_prepared"}}},
+      "then": {"properties": {"blocking_reasons": {"maxItems": 0}, "input_evidence": {"properties": {"manual_event_record": {"$ref": "#/$defs/manualConfirmedEvidenceRef"}}}, "disposition": {"properties": {"eligible": {"const": true}, "private_ticket_prepared": {"const": true}, "ticket_ref_sha256": {"$ref": "#/$defs/sha256"}}}, "boundary": {"properties": {"account_state_read": {"const": true}}}}}
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+    "securityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security_id", "issuer_cik", "current_ticker", "identity_ref_sha256"],
+      "properties": {
+        "security_id": {"type": "string", "pattern": "^US-CIK-[0-9]{10}-(COMMON|CLASS_[A-Z]{1,3}|ADR|PREFERRED)$"},
+        "issuer_cik": {"type": "string", "pattern": "^[0-9]{10}$"},
+        "current_ticker": {"$ref": "#/$defs/ticker"},
+        "identity_ref_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_ref_sha256", "status"],
+      "properties": {
+        "artifact_ref_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"type": "string", "minLength": 1, "maxLength": 96}
+      }
+    },
+    "inputEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lifecycle_observation", "sec_parse_candidate", "yfinance_daily_alarm", "massive_assessment", "manual_event_record"],
+      "properties": {
+        "lifecycle_observation": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/lifecycleEvidenceRef"}]},
+        "sec_parse_candidate": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/secEvidenceRef"}]},
+        "yfinance_daily_alarm": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/yfinanceEvidenceRef"}]},
+        "massive_assessment": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/massiveEvidenceRef"}]},
+        "manual_event_record": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/manualEvidenceRef"}]}
+      }
+    },
+    "lifecycleEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"const": "trigger_present"}}}]},
+    "secEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"enum": ["candidate_terms_extracted", "manual_review"]}}}]},
+    "yfinanceEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"enum": ["clear", "advisory_alarm", "source_unavailable"]}}}]},
+    "massiveEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"enum": ["diagnostic_only", "no_events"]}}}]},
+    "manualEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"enum": ["confirmed_event", "manual_review"]}}}]},
+    "manualConfirmedEvidenceRef": {"allOf": [{"$ref": "#/$defs/evidenceRef"}, {"properties": {"status": {"const": "confirmed_event"}}}]},
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eligible", "private_ticket_prepared", "ticket_ref_sha256"],
+      "properties": {
+        "eligible": {"type": "boolean"},
+        "private_ticket_prepared": {"type": "boolean"},
+        "ticket_ref_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "paperConfirmationState": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adjustment_mode_confirmed", "split_dividend_treatment_confirmed", "ex_date_price_consistency_confirmed", "paper_performance_evaluable", "paper_performance_blocked"],
+      "properties": {
+        "adjustment_mode_confirmed": {"const": false},
+        "split_dividend_treatment_confirmed": {"const": false},
+        "ex_date_price_consistency_confirmed": {"const": false},
+        "paper_performance_evaluable": {"const": false},
+        "paper_performance_blocked": {"const": true}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_call_performed", "raw_payload_persisted", "corporate_action_semantics_auto_confirmed", "account_state_read", "account_state_mutated", "broker_order_placed", "return_calculation_performed", "selection_or_ranking_changed", "datahub_consumption_allowed", "paper_gate_confirmation_claimed", "ship_gate_evidence_claimed"],
+      "properties": {
+        "provider_call_performed": {"const": false},
+        "raw_payload_persisted": {"const": false},
+        "corporate_action_semantics_auto_confirmed": {"const": false},
+        "account_state_read": {"type": "boolean"},
+        "account_state_mutated": {"const": false},
+        "broker_order_placed": {"const": false},
+        "return_calculation_performed": {"const": false},
+        "selection_or_ranking_changed": {"const": false},
+        "datahub_consumption_allowed": {"const": false},
+        "paper_gate_confirmation_claimed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false}
+      }
+    }
+  }
+}

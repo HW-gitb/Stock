@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short 公司行动离线人工串链编排）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。编排刀把 lifecycle/SEC candidate/yfinance/Massive/录入器/account_state 只读/planner 串一条：**ticket 只从 recorder confirmed_event 出、candidate 绝不自动升级、candidate≠confirmed 即阻断、double-confirm 才出私有票据**；`os.link` 原子 no-clobber（TOCTOU 已修）失败回滚无孤儿；account 只读、10 旗+paper 三确认全 const false；输出私有无泄。无真 fetch。universe summary 未纳入。
+- **Required**: 无。P1 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open（candidate 非确认语义、DEFM14A/CVR 全人工、链止于私有票据非 paper/ship 证据）。单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（七不变式全 HELD·11 slice+25 回归+失败注入零 bypass：candidate 不自动升级[candidate-only/走私/篡改全拒]、SEC≠confirmed 逐字段阻断、double-confirm 门、os.link no-clobber 无 TOCTOU+失败回滚、account 只读、私有 no-leak、复用引擎无削弱、not-wired）。整读 workflow 引擎；自撰 grep dead-end。focused+guards 57 OK；**亲跑全包 `Ran 4417 / OK / 0 fail`**（207s）。编排真持仓票据流+人工门→§6a 必起。
+- **Next**: 判断=这是当前可做的最后一刀（结论见 chat）；apply-back/paper 对账/复杂并购/真 fetch 均 deferred/gated。
+
+## 2026-07-13 — Codex 执行（US-short 公司行动离线人工串链）
+
+- **Verdict/Action**: 一刀接通现有 lifecycle、SEC candidate、yfinance 日报警、可选 Massive diagnostic、manual event recorder、私有 `account_state` 只读与 disposition planner；无人工 confirmed event 即停在复核，严格 candidate 与 confirmed event 不一致即阻断。只有双重显式确认才准备私有票据；输出使用原子 no-clobber 发布，失败清临时/半成品；paper 三项确认及 provider/账户修改/券商/收益/选股/DataHub/ship 权限全部钉死为 false。
+- **Required**: P1 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open：candidate 仍非确认语义，DEFM14A/CVR/复杂或歧义行动仍全人工；当前可完成的离线工程链止于私有人工处置票据，不能当 paper/ship-gate 证据。
+- **Verify**: workflow focused `11 OK`；相邻 lifecycle/source-intake/recorder/account/disposition/Massive/paper-gate/schema/doc-guards `236 OK`；完整离线 `test_us_short*.py` 在最终 no-clobber 加固前 `4415 OK (1 skipped)`，加固后受影响包已复跑；`py_compile`、schema JSON、UTF-8/BOM、旧字段 ripple grep、`git diff --check` 通过。仅 fixture/离线测试，未执行 provider/live、未读真实账户。
+- **Pre-Codex self-review**: main-thread A-F 覆盖身份/ticker/SEC accession/confirmed-event/ticket-byte digest binding、无人工确认、候选错配、伪造权限、tracked/private 路径、无覆盖与两阶段失败残留。独立 current-diff-only agent 初审抓到 `exists()`→`os.replace()` 竞态覆盖，已用 staged hard-link 原子 no-clobber + 竞态反向测试修复；复核 PASS。此 PASS 仅为 Codex 内部自审，不是 Claude 审查。
+- **Next**: Claude Code 独立审查本 scope；仅 PASS 后提交，`docs/us_short_universe_fetch_summary_20260713.json` 不纳入。
+
 ## 2026-07-13 — Claude Code 审查（US-short 公司行动源入口：SEC 简单解析 + yfinance 日报警）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。两条 default-dry-run 单票入口：SEC 解析器把唯一明确 8-K 现金/换股条款降成**待人工确认 candidate**（字段名**故意≠planner**→结构上非确认事件、无 source_confirmation/event_id；CVR/election/proration/adjustment/多值/日期歧义/successor 未绑全 freeze）；yfinance 只报 split/dividend/空源/异常、低信任单票 freeze。两路私有、无 raw/URL/UA 泄、**不接 planner/账户/选股/paper/ship**（dead-end）。无真 fetch。universe summary 未纳入。
