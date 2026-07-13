@@ -209,6 +209,79 @@
 - **Verify**: `81 OK`（新验证包、既有 Massive shape/full-candidate runner、paper gate、schema、route guards）+ `py_compile` + `git diff --check`；doc-governance `59/60`，唯一失败是紧随的既有 Claude 收口条目含两组 `Verdict/Action`，不属于本刀；`--dry-run-env` 仅确认 key 存在、raw root gitignored、计划 12 calls。
 - **Pre-Codex self-review**: A-F checked；A=3 symbols × 4 endpoint families 全覆盖；B=`rg -n -i 'massive_corporate_action_validation|corporate_action_reconciliation_performed.*true|paper_gate_evaluable_claimed.*true|ship_gate_or_production_authorized.*true' docs schemas runners tests`：7 个新面齐全，其他 `true` 命中仅既有负向测试；C=缺确认/非 gitignored raw 均在 fetch 前拒绝；独立 current-diff-only self-review PASS；无 API 调用。
 - **Next**: Claude：审查
+## 2026-07-13 — Claude Code 自修自审 PASS（US-short 两个 review-Optional：yfinance guard 假阳 + checkpoint 保留）
+
+- **Verdict/Action**: PASS + 提交（branch，未 push）。修上两轮记的 2 个 Optional。**① yfinance guard 其实是真 bug、不是 cosmetic**：实测真单字母票 `M`/`R`/`T`（Macy's/Ryder/AT&T）词边界撞固定 `limitations` 英文散文（"Missing"/"Resolver"/"Tracked"）、`US` 撞 `scope` 身份 → 真 + 中性 summary 都 raise → advisory-neutral fallback 再抛 → 整轮非确定崩。改成 ticker 只扫 summary 的 free-form 路径叶子（`*_path`/`*_root`；schema const/enum 保证其余无票值），secret/URL/sensitive 扫描不动。**② checkpoint 保留**：`create_manifest` 现剪掉更旧 decision-date 的 bundle（bounded/private/fail-soft）。
+- **Required**: 无。两个 R-ID 的 Optional 均 resolved（单源见 register）。
+- **Verify**: review-evidence:not_available（真实工具输出）。改前实测 `M`/`R`/`T`/`US` 在固定 chrome 上 FALSE-POSITIVE；改后 guard 测试扩 `M`/`R`/`T`/`US` 不误报 + 保留 `U`-in-path 真泄漏仍拒；新 checkpoint 保留测试（旧日期剪、当前 + 非日期 decoy 留）；py_compile OK、亲跑 ecf2 全离线 `test_us_short*` **4325 OK**。§6a 未起（缩 guard 假阳面、不弱化 secret/path 保护；retention fail-soft 私密受限）。
+- **Next**: 待 master 平行窗口活清后并入。
+
+## 2026-07-13 — Claude Code 独立复审 PASS（US-short capstone checkpoint/resume；P1 blocker 已修）
+
+- **Verdict/Action**: PASS + 提交（branch，未 push；master 平行窗口活未清、待协调并入）。上轮 FAIL 的 P1（新私密目录 `capstone_checkpoints_private` 没进 `.gitignore` → 生产每次 `--live` 在 checkpoint 初始化就崩）已修：`.gitignore` 加该目录、§11.6/§18.1 补清单、加走**仓内真实生产路径**的回归测试（RED-before/GREEN-after）+ bonus receipt-v2 时钟保留测试。修得窄——只 `.gitignore` 是新生产码，已审 sound 的 engine/capstone/run_origin/schema 本轮未动（diff 确认）。
+- **Required**: 无。`R-USSHORT-WEEKLY-CAPSTONE-CHECKPOINT-RESUME` → resolved（retention Optional 保留 deferred；单源见 register）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**直接复现 FAIL 的逆**：`git check-ignore` 生产 checkpoint 路径＝IGNORED、`reject_nonprivate_output_path(该路径)`＝PASS（上轮同两条实测是拒）；读 §11.6/§18.1 diff + 新测（`_guard_private` 打真生产路径且不写文件）+ receipt-v2 时钟≠run 时钟测；亲跑 ecf2 全离线 `test_us_short*` **4324 OK / 1 skipped**。§6a 未起（工程韧性、不碰选股/provider-health/ship-gate、provenance 门整读+已被回归测试、唯一缺陷经直接生产路径复现已修）。
+- **Next**: 待 master 平行窗口活清后并入。
+
+## 2026-07-13 — Codex P1 repair complete, pending Claude re-review (checkpoint production private path)
+
+- **Verdict/Action**: Repaired the sole Claude Required for `R-USSHORT-WEEKLY-CAPSTONE-CHECKPOINT-RESUME`: production `state/us_short/capstone_checkpoints_private/...` is now explicitly gitignored and accepted by the same fail-closed private-path guard used by the checkpoint writer; §11.6 / §18.1 enumerate the directory.
+- **Required**: Claude Code independent re-review before commit; Codex does not commit/push. Non-blocking retention Optional remains deferred.
+- **Verify**: new production-path test red before ignore (`CapstoneCheckpointError` caused by `PrivatePathError`) and green after; direct `git check-ignore -v` binds `.gitignore` rule; focused 99 OK; full offline `test_us_short*.py` 4,324 OK / 1 skipped; doc/route guards 60 OK. No live/provider/yfinance execution; protected untracked universe summary untouched.
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback (no independent agent), fixed pack concentrated once. A: all seven private families enumerated (`weekly_private`, `account_state_csv`, `runs_private`, `model_paper_private`, `lifecycle`, `shadow_compare_private`, `capstone_checkpoints_private`); B: active design old `四行` / `仍待实现期` wording 0 hits and checkpoint path appears only in ignore/design/register/engine/test/session surfaces; C: existing nonprivate-destination rejection remains green while the real in-repo private destination is accepted; E: transient review gate only in SESSION_LOG/register, CURRENT untouched.
+- **Next**: Claude Code: review.
+
+## 2026-07-13 — Claude Code 独立审查 FAIL（US-short capstone checkpoint/resume）
+
+- **Verdict/Action**: FAIL（未提交，留 ecf2 待 Codex 修）。设计骨架对（分级 reuse 正确、receipt v2 诚实不改旧时间戳、SHA 绑定+防路径穿越+跨树显式 bundle+drift 级联失效），但**一个 P1 阻断**：新私密目录 `capstone_checkpoints_private` 没进 `.gitignore`，而 `create_manifest` 对每个 production_run 无条件写它 → 生产 `private_root=state/us_short`（仓内）下 `_guard_private` 拒写（实测 raise）→ 每次真 `--live` 在 checkpoint 初始化就 abort（还没跑任何 stage），把整个 capstone 在生产直接跑挂（不只 resume）。
+- **Required**: `R-USSHORT-WEEKLY-CAPSTONE-CHECKPOINT-RESUME` — P1 整类修：①`.gitignore` 加 `state/*/capstone_checkpoints_private/`；②§11.6 私密目录清单补该目录；③加回归测试走仓内相对 private_root（或断言该路径 git-ignored）覆盖生产路径、修前红修后绿。其余已验证 sound、无需返工；单源见 register。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 checkpoint engine/capstone orchestration/run_origin v2/两 schema；直接调 `reject_nonprivate_output_path(state/us_short/capstone_checkpoints_private/…)` 实测 REJECT + `git check-ignore` 同路径 NOT IGNORED；亲跑 ecf2 全离线 `test_us_short*` 4323 OK（但全用 tempdir private_root、漏生产路径＝本 bug 逃逸原因）。
+- **Next**: Codex：修复
+
+## 2026-07-13 — Codex repair complete, pending Claude review (US-short capstone checkpoint/resume)
+
+- **Verdict/Action**: Repaired `R-USSHORT-WEEKLY-CAPSTONE-CHECKPOINT-RESUME` in one schema-first slice: explicit private SHA-bound checkpoint bundles, freshness-classed `--resume`, volatile-universe refresh/equivalence, and receipt v2 per-stage `executed`/`reused`/`refreshed_equivalent` provenance without timestamp rewriting.
+- **Required**: Claude Code independent review before commit. Review freshness invalidation, exact file + non-file contract/input/output bindings, private-path guard, transaction recovery, and cross-worktree explicit import; Codex does not commit/push.
+- **Verify**: focused 113 OK before final privacy guard + 80 OK after; final full offline `test_us_short*.py` 4,323 OK / 1 skipped; doc/route guards 60 OK; schema JSON, `py_compile`, same-class grep, and `git diff --check` clean. No live provider/yfinance rerun; protected untracked universe summary untouched.
+- **Pre-Codex self-review**: A-F checked. Same-class/ripple: no file-exists skip, implicit worktree scan, timestamp rewrite, Path-B forward exception, or reuse of Pass2/yfinance/VIX; exact pipeline + non-file preflight contract and input/output/result/bundle digests fail closed; volatile status drift forces dependent rerun; checkpoint writes require external-or-gitignored privacy before mkdir; existing official-output transaction recovery is composed with resume.
+- **Next**: Claude Code: review.
+
+## 2026-07-13 — Claude Code 独立审查 PASS（US-short yfinance advisory-neutral boundary）
+
+- **Verdict/Action**: PASS + 提交（branch `codex/us-short-capstone-theme-contract-preflight`，未 push；master 平行窗口活未清、待协调并入）。yfinance 现按「结构门（授权/preflight/PIT/schema/路径）先跑→抛即 fail-closed；之后 fetch/解析/组装/summary 整段视作 advisory 阶段，任一失败→runner 内原子覆盖成本轮全目标中性 package+actions+`advisory_stage_neutralized` summary、degraded-success 返回」修好——一个「绝不该 block emit」的 advisory 源不再一票否决整轮。capstone/receipt 零改；guard 子串→词边界 + 新 advisory_failure 字段 schema-const 焊死。
+- **Required**: 无。`R-USSHORT-WEEKLY-CAPSTONE-YFINANCE-ADVISORY-NEUTRAL-BOUNDARY` → resolved。一个非阻断 Optional（guard 仍整-JSON 扫、仅词边界；恰等于大写固定 token 的 ticker[如 `US` 撞 `"market":"US"`/`US-short`]仍会误报→fail-closed 中止、不泄漏、但挡轮；Codex 自己也说结构化叶子检查更优、留后续）；closure+Optional 全文单源见 register。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 wrapper/post-gate/fallback/guard：结构门全在 try 外（抛即 abort）、post-gate 内无结构门、fallback 验证后再原子覆盖已写真 package/actions、guard 词边界+const-pin；4 反向控制测试覆盖（结构失败仍 fatal / 词边界不误报但真泄漏仍拒 / post-gate 失败全中性原子覆盖 / 意外 err 带 ticker 也不泄漏）；亲跑 ecf2 全离线 `test_us_short*` **4315 OK**。§6a 未起（contained advisory 松门、结构门保留且专测证伪、零选股/receipt 改）；详见 register。
+- **Next**: 待 master 平行窗口活清后并入。
+
+## 2026-07-13 — Codex repair complete, pending Claude review (US-short yfinance advisory-neutral boundary)
+
+- **Verdict/Action**: Repaired `R-USSHORT-WEEKLY-CAPSTONE-YFINANCE-ADVISORY-NEUTRAL-BOUNDARY`: after authorization/preflight/PIT/path gates, the runner now converts any escaping yfinance fetch/parse/build/summary failure into a validated full-target neutral package + actions + `advisory_stage_neutralized` summary; capstone/receipt remain unchanged. The summary ticker guard now matches standalone symbol tokens, so ticker `U` no longer collides with fixed `US-short` text while an exact token still rejects.
+- **Required**: Claude Code independent review before commit. No live provider/yfinance rerun; existing untracked `docs/us_short_universe_fetch_summary_20260713.json` is protected and excluded.
+- **Verify**: red reproduced `U` substring false-positive and post-gate summary abort after real artifacts; focused yfinance/capstone 99 OK; full offline `test_us_short*.py` 4,315 OK / 1 skipped; schema JSON and `py_compile` clean.
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback (no independent agent). A/B: runner/schema/design/register/consumer/receipt searched, old `symbol in text` has 0 active hits and capstone remains non-best-effort; C: exact-token leak still fails, malformed preflight stays fatal, unexpected RuntimeError neutralizes without leaking its ticker-bearing text; D: phase boundary is structural rather than exception-type sniffing; E: CURRENT/README unchanged, material detail only in register; F: fallback validates all three payloads before atomic per-file replacement and propagates fallback write/validation errors.
+- **Next**: Claude Code: review.
+
+## 2026-07-13 — Claude Code 自修自审 PASS（US-short capstone theme-contract Optional：真行业身份接线）
+
+- **Verdict/Action**: PASS + 提交（branch `codex/us-short-capstone-theme-contract-preflight`，未 push；master 平行窗口活未清、待协调并入）。修上一审记录的 latent Optional：`_theme_contract_industry_ids` 现接受 capstone 直传 SIC 分类包（projection-inputs theme 绑定丢了 sector_classification role），产出真 `industry:<sector>` 身份、同真行业名共享 theme_id → §4.5 同主题席位帽可按真行业分组。今天仍 inert（no_strong_theme→席位预算 3==同主题帽 3、Top15 不变），修的是前向正确性 + 清死代码。
+- **Required**: 无。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读改动：直传路径 fail-closed（`_existing_state_json` + 缺 sector_by_ticker raise）、未覆盖 ticker 留 unclassified 回退、SHA-绑定旧路径保留；新反向控制测试证同 Technology 的 AAPL/MSFT 共享 `industry:technology`、JPM 独立、既有 unclassified 回退测试不变；py_compile OK、focused 19 OK、亲跑 ecf2 全离线 `test_us_short*` 4311 OK（+1 零回归）。§6a 未起（inert+contained+反向控制、producer 已 §6a 审过，proportional）。
+- **Next**: 待 master 平行窗口活清后并入。
+
+## 2026-07-13 — Claude Code 独立审查 PASS（US-short full-candidate capstone theme-contract producer）
+
+- **Verdict/Action**: PASS + 提交于 branch `codex/us-short-capstone-theme-contract-preflight`（master 此间已被平行窗口推进+有另一窗口未提交活、暂不能 ff、待协调并入；未 push）。full-candidate Pass2 现按本轮 resolved 源自产 source-bound `theme_selection_contract`、不再要求 operator 预置；解一键 capstone Pass2 阻断（首个 full live run 实测崩点）。
+- **Required**: 无。`R-USSHORT-BATCH5-WEEKLY-CAPSTONE-THEME-SELECTION-CONTRACT-PRODUCER` → resolved。一个非阻断 Optional（latent，P3）：新 classified `theme_id` 分支在实际管线 dead（projection-inputs theme 绑定丢 `sector_classification_packet`→恒 `industry:unclassified:<ticker>` 单例），今天 inert（no_strong_theme→同主题帽 min(3,3) 非约束、Top15 不变），仅前向风险、建议后续单独轮修；closure+Optional 全文单源见 register。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 producer+消费引擎、字段对齐已审 0c94 fixture、market_confirmed 对非-provisional 行 inert、coverage 恰配、SHA 绑定真实、坏源 fail-closed；§6a 独立对抗 agent PASS（6 探针 HELD，SHA 篡改实测 raise）；亲跑 ecf2 全离线 `test_us_short*` 4310 OK / 1 skipped。
+- **Next**: 可 re-run 一键 capstone 验证闭环（另需用户 + 窗口/额度）。
+
+## 2026-07-12 — Codex repair complete, pending Claude review (US-short full-candidate capstone theme contract producer)
+
+- **Verdict/Action**: Repaired `R-USSHORT-BATCH5-WEEKLY-CAPSTONE-THEME-SELECTION-CONTRACT-PRODUCER`: full-candidate Pass2 now materializes the source-bound `theme_selection_contract` from this run's resolved Pass2 sources immediately before source-packet assembly; it no longer requires an operator-precreated sidecar.
+- **Required**: Claude Code independent review is required before commit. No real provider rerun was performed; this slice remains fake-client/offline verified only.
+- **Verify**: Red reproduced the missing-file abort; focused full-candidate/capstone/data-context tests 115 OK; doc guards 60 OK; full offline `test_us_short*.py` 4,310 OK / 1 skipped; `py_compile` and `git diff --check` clean.
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback (no independent agent). A: full-candidate producer plus all source-packet consumers checked; B: stale `Both legacy and full-candidate...` and missing-contract guard wording 0 active hits, with legacy-builder requirement intentionally retained; C: stale sidecar replacement and Pass2-clean/no-neutral-fill reverse tests; D: no fabricated shared industry without a bound classification source; E: design/register single-source timing update and only this review gate in SESSION_LOG; F: fixed pack run once after code/docs, then only doc guard after this entry.
+- **Next**: Claude Code: review.
 
 ## 2026-07-12 — Claude Code 收口对齐（R3 PORTFOLIO cap register 翻正 resolved；ecf2 清理被权限拦）
 
@@ -218,6 +291,7 @@
 - **Next**: 用户决定是否授权 `git worktree remove` 清 ecf2。
 
 ## 2026-07-12 — Claude Code 审查（US-short 0c94 集成 + A1 三键 forward_policy_heads）PASS
+## 2026-07-12 — Claude Code independent review PASS (US-short master integration + A1 three-key heads)
 
 - **Verdict/Action**: PASS + 提交（master 集成批次）。0c94 issue 1/5/6 引擎（`theme_selection`/`weekend_cash` caps/sec）与已审 0c94(10cd543) **逐字节 IDENTICAL**、只确认未变；集成缝正确：forward_policy_heads 六头全穿同一 source-bound 契约→3 键、无 per-head 特判，`_source_theme_selection_contract` 绑 score-composition state+rows 拒漂移，theme_off 自动零 theme 席、retain 头正常席；data_context 官方 Top15 用已校验 3 键 `data_context["selection_inputs"]`+显式 decision_date（两调用点一致、latent 漂移修）。
 - **Required**: 无。`R-USSHORT-A1-0C94-THREE-KEY-SELECTION-INPUTS-HEADS-ADAPTATION` → resolved；三个 R3 R-ID 随集成落 master，单源见 register。

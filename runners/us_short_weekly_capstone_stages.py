@@ -147,6 +147,7 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
         overextension_projection_path=ctx.overextension_projection_path,
+        sector_classification_packet_path=ctx.classification_packet_path,
         yfinance_grade_actions_path=ctx.yfinance_grade_actions_path,
         summary_path=_stage_summary_targets(ctx)["pass2"],
         confirm_user_authorization=ctx.confirm_user_authorization,

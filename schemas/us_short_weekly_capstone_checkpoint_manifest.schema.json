@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_weekly_capstone_checkpoint_manifest.schema.json",
+  "title": "US-short weekly capstone resumable checkpoint manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "checkpoint_id", "decision_date", "price_basis_date",
+    "created_at", "updated_at", "run_contract", "pipeline_contract", "stages"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_weekly_capstone_checkpoint_manifest" },
+    "schema_version": { "const": "1.0.0" },
+    "checkpoint_id": { "$ref": "#/definitions/sha256" },
+    "decision_date": { "$ref": "#/definitions/date8" },
+    "price_basis_date": { "$ref": "#/definitions/date8" },
+    "created_at": { "type": "string", "minLength": 1 },
+    "updated_at": { "type": "string", "minLength": 1 },
+    "run_contract": { "$ref": "#/definitions/run_contract" },
+    "pipeline_contract": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": { "$ref": "#/definitions/stage_contract" }
+    },
+    "stages": {
+      "type": "array", "uniqueItems": true,
+      "items": { "$ref": "#/definitions/stage_checkpoint" }
+    }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "date8": { "type": "string", "pattern": "^[0-9]{8}$" },
+    "logical_path": { "type": "string", "minLength": 1, "not": { "pattern": "(^|/)\\.\\.(/|$)" } },
+    "reuse_policy": { "enum": ["never", "frozen_inputs", "refresh_then_reuse_if_equivalent"] },
+    "run_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "authorized_momentum_top_k", "authorized_pass2_call_budget", "catalyst_recall_tickers",
+        "frozen_holding_tickers"
+      ],
+      "properties": {
+        "authorized_momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
+        "authorized_pass2_call_budget": { "type": "integer", "minimum": 1 },
+        "catalyst_recall_tickers": {
+          "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,15}$" }
+        },
+        "frozen_holding_tickers": {
+          "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,15}$" }
+        }
+      }
+    },
+    "stage_contract": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "contract_version", "reuse_policy"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "contract_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "reuse_policy": { "$ref": "#/definitions/reuse_policy" }
+      }
+    },
+    "artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["logical_path", "sha256"],
+      "properties": {
+        "logical_path": { "$ref": "#/definitions/logical_path" },
+        "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "bundled_artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["logical_path", "bundle_path", "sha256"],
+      "properties": {
+        "logical_path": { "$ref": "#/definitions/logical_path" },
+        "bundle_path": { "$ref": "#/definitions/logical_path" },
+        "sha256": { "$ref": "#/definitions/sha256" }
+      }
+    },
+    "stage_checkpoint": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "name", "contract_version", "reuse_policy", "execution_mode", "generated_at", "observed_at",
+        "input_manifest", "output_manifest", "result", "result_sha256"
+      ],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "contract_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "reuse_policy": { "$ref": "#/definitions/reuse_policy" },
+        "execution_mode": { "enum": ["executed", "reused", "refreshed_equivalent"] },
+        "generated_at": { "type": "string", "minLength": 1 },
+        "observed_at": { "type": ["string", "null"], "minLength": 1 },
+        "input_manifest": { "type": "array", "items": { "$ref": "#/definitions/artifact" } },
+        "output_manifest": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/bundled_artifact" } },
+        "result": { "type": "object" },
+        "result_sha256": { "$ref": "#/definitions/sha256" }
+      }
+    }
+  }
+}

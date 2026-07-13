@@ -49,6 +49,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_canonical_asof import OutOfWindowError, resolve_canonical_asof  # noqa: E402
+from engine import us_short_capstone_checkpoint as checkpoint_store  # noqa: E402
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window  # noqa: E402
 from engine.us_short_private_paths import reject_nonprivate_output_path  # noqa: E402
 from engine.us_short_run_origin import _issue_capstone_research_live_receipt  # noqa: E402
@@ -282,6 +283,8 @@ class Stage:
     outputs: Callable[[CapstoneContext], list[Path]]
     run: Callable[[CapstoneContext], dict[str, Any]]
     best_effort: bool = False
+    contract_version: str = "1.0.0"
+    reuse_policy: str = "never"
 
 
 def default_pipeline() -> list[Stage]:
@@ -290,21 +293,35 @@ def default_pipeline() -> list[Stage]:
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
     return [
-        Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe),
+        Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe,
+              contract_version="1.0.0", reuse_policy="refresh_then_reuse_if_equivalent"),
         Stage("momentum_fetch", True, lambda c: [c.candidate_path],
-              lambda c: [c.series_packet_path, c.ohlcv_series_packet_path], st.run_momentum_fetch),
+              lambda c: [c.series_packet_path, c.ohlcv_series_packet_path], st.run_momentum_fetch,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
         Stage("overextension_producer", False, lambda c: [c.candidate_path, c.ohlcv_series_packet_path],
-              lambda c: [c.overextension_projection_path], st.run_overextension_producer),
-        Stage("momentum_producer", False, lambda c: [c.candidate_path, c.series_packet_path], lambda c: [c.momentum_projection_path], st.run_momentum_producer),
-        Stage("sic_fetch", True, lambda c: [c.candidate_path], lambda c: [c.classification_packet_path], st.run_sic_fetch),
-        Stage("theme_producer", False, lambda c: [c.candidate_path, c.series_packet_path, c.classification_packet_path], lambda c: [c.theme_projection_path], st.run_theme_producer),
-        Stage("projection_inputs", False, lambda c: [c.momentum_projection_path, c.theme_projection_path], lambda c: [c.merged_momentum_path, c.merged_theme_path], st.run_projection_inputs),
-        Stage("pass2_preflight", False, lambda c: [c.merged_momentum_path, c.merged_theme_path], lambda c: [c.preflight_summary_path], st.run_pass2_preflight),
+              lambda c: [c.overextension_projection_path], st.run_overextension_producer,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("momentum_producer", False, lambda c: [c.candidate_path, c.series_packet_path],
+              lambda c: [c.momentum_projection_path], st.run_momentum_producer,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("sic_fetch", True, lambda c: [c.candidate_path], lambda c: [c.classification_packet_path],
+              st.run_sic_fetch, contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("theme_producer", False,
+              lambda c: [c.candidate_path, c.series_packet_path, c.classification_packet_path],
+              lambda c: [c.theme_projection_path], st.run_theme_producer,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("projection_inputs", False, lambda c: [c.momentum_projection_path, c.theme_projection_path],
+              lambda c: [c.merged_momentum_path, c.merged_theme_path], st.run_projection_inputs,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("pass2_preflight", False, lambda c: [c.merged_momentum_path, c.merged_theme_path],
+              lambda c: [c.preflight_summary_path], st.run_pass2_preflight,
+              contract_version="1.0.0", reuse_policy="frozen_inputs"),
         Stage("yfinance_grades_fetch", True, lambda c: [c.preflight_summary_path],
               lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
-              st.run_yfinance_grades_fetch),
+              st.run_yfinance_grades_fetch, contract_version="1.1.0"),
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
-              lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch),
+              lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch,
+              contract_version="2.0.0"),
         Stage("forward_policy_shadow", False, lambda c: [c.data_context_path, c.context_components_path],
               lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path],
               st.run_forward_policy_shadow, best_effort=True),
@@ -323,7 +340,7 @@ def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
     ]
 
 
-def _plan(ctx: CapstoneContext, stages: list[Stage]) -> dict[str, Any]:
+def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None = None) -> dict[str, Any]:
     """The dry-run plan: canonical dates + every stage's gated flag + I/O paths. No execution, no fetch."""
     return {
         "mode": "dry_run",
@@ -332,16 +349,29 @@ def _plan(ctx: CapstoneContext, stages: list[Stage]) -> dict[str, Any]:
         "run_date": ctx.now_et.strftime("%Y%m%d"),
         "gated_stages_need_authorization": [s.name for s in stages if s.gated],
         "authorized": ctx.confirm_user_authorization,
+        "resume_from": str(Path(resume_from).resolve()) if resume_from is not None else None,
         "stages": [
             {
                 "name": s.name,
                 "kind": "gated_live_fetch" if s.gated else "offline",
                 "best_effort": s.best_effort,
+                "contract_version": s.contract_version,
+                "reuse_policy": s.reuse_policy,
                 "inputs": [_rel(p) for p in s.inputs(ctx)],
                 "outputs": [_rel(p) for p in s.outputs(ctx)],
             }
             for s in stages
         ],
+    }
+
+
+def _checkpoint_run_contract(ctx: CapstoneContext) -> dict[str, Any]:
+    """Non-file inputs that can change frozen-stage output despite identical artifact SHA-256s."""
+    return {
+        "authorized_momentum_top_k": ctx.authorized_momentum_top_k,
+        "authorized_pass2_call_budget": ctx.authorized_pass2_call_budget,
+        "catalyst_recall_tickers": list(ctx.catalyst_recall_tickers),
+        "frozen_holding_tickers": list(ctx.frozen_holding_tickers or ()),
     }
 
 
@@ -411,9 +441,26 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
 
     def _result(name):
         value = by_name.get(name)
-        if not isinstance(value, dict) or value.get("generated_at") != ctx.generated_at:
-            raise WeeklyCapstoneError(f"{name} lacks same-run generated_at provider evidence")
+        if not isinstance(value, dict):
+            raise WeeklyCapstoneError(f"{name} lacks provider evidence")
         return value
+
+    stage_executions = tuple(
+        (
+            item["name"],
+            item.get("execution_mode", "executed"),
+            item.get("stage_generated_at")
+            if isinstance(item.get("stage_generated_at"), str)
+            else item.get("result", {}).get("generated_at", ctx.generated_at),
+            item.get("stage_observed_at")
+            if isinstance(item.get("stage_observed_at"), str)
+            else item.get("result", {}).get("observed_at", ctx.observed_at),
+            hashlib.sha256(json.dumps(
+                item.get("result", {}), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")).hexdigest(),
+        )
+        for item in required_results
+    )
 
     universe = _result("universe_fetch")
     if universe.get("decision_clock", {}).get("decision_date") != ctx.decision_date:
@@ -429,7 +476,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     if momentum_scope.get("network_access_performed") is not True \
             or momentum_scope.get("provider_calls_performed") is not True \
             or momentum.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
-        raise WeeklyCapstoneError("momentum fetch lacks same-run provider-call evidence")
+        raise WeeklyCapstoneError("momentum fetch lacks source-bound provider-call evidence")
     momentum_calls = momentum.get("fetch_stats", {}).get("grouped_calls_made")
 
     sic = _result("sic_fetch")
@@ -437,7 +484,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     if sic_scope.get("network_access_performed") is not True \
             or sic_scope.get("provider_calls_performed") is not True \
             or sic.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
-        raise WeeklyCapstoneError("SIC fetch lacks same-run provider-call evidence")
+        raise WeeklyCapstoneError("SIC fetch lacks source-bound provider-call evidence")
     sic_evidence = sic.get("provider_call_evidence", {})
     if sic_evidence.get("network_access_performed") is not True \
             or sic_evidence.get("provider_calls_performed") is not True:
@@ -511,7 +558,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
     provider_health_facts = tuple((key, provider_health[key]) for key in ("fmp", "sec_edgar"))
     run_id = hashlib.sha256(
         f"{ctx.decision_date}|{ctx.generated_at}|{source_path}|{source_sha256}|"
-        f"{source_manifest_sha256}|{action_input_manifest[0][2]}|{evidence_sha256}".encode("utf-8")
+        f"{source_manifest_sha256}|{action_input_manifest[0][2]}|{evidence_sha256}|{stage_executions}".encode("utf-8")
     ).hexdigest()
     return _issue_capstone_research_live_receipt(
         run_id=run_id,
@@ -526,6 +573,7 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
         provider_summary_digests=provider_summary_digests,
         provider_health_facts=provider_health_facts,
         provider_evidence_sha256=evidence_sha256,
+        stage_executions=stage_executions,
     )
 
 
@@ -813,6 +861,7 @@ def run_weekly_capstone(
     stages: list[Stage] | None = None,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
+    resume_from: Path | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
@@ -837,6 +886,9 @@ def run_weekly_capstone(
     pipeline = stages if stages is not None else default_pipeline()
     if any(stage.best_effort and stage.name != "forward_policy_shadow" for stage in pipeline):
         raise WeeklyCapstoneError("only forward_policy_shadow may be best_effort")
+    if any(stage.reuse_policy not in {"never", "frozen_inputs", "refresh_then_reuse_if_equivalent"}
+           for stage in pipeline):
+        raise WeeklyCapstoneError("capstone stage has an unknown checkpoint reuse policy")
 
     # C3 footgun guard: reject an operator input colocated under the per-decision output dir a live run archives,
     # before any fetch (dry-run too, so the plan preview catches it). See _assert_input_outside_archived_outputs.
@@ -845,7 +897,7 @@ def run_weekly_capstone(
         _assert_input_outside_archived_outputs(ctx, Path(_input_path), _input_label)
 
     if dry_run:
-        return _plan(ctx, pipeline)
+        return _plan(ctx, pipeline, resume_from=resume_from)
 
     if not ctx.confirm_user_authorization:
         raise WeeklyCapstoneError(
@@ -854,6 +906,8 @@ def run_weekly_capstone(
             "the plan first")
 
     production_run = (stages is None) and (ctx.confirm_user_authorization is True)
+    if resume_from is not None and not production_run:
+        raise WeeklyCapstoneError("--resume is available only on the real default capstone pipeline")
     if production_run and (
         type(ctx.authorized_momentum_top_k) is not int
         or isinstance(ctx.authorized_momentum_top_k, bool)
@@ -874,12 +928,63 @@ def run_weekly_capstone(
             ctx,
             frozen_holding_tickers=tuple(sorted(position["ticker"] for position in account_state["positions"])),
         )
+    resume_manifest = None
+    resume_manifest_path = None
+    if resume_from is not None:
+        resume_manifest_path = Path(resume_from).resolve()
+        try:
+            resume_manifest = checkpoint_store.load_manifest(resume_manifest_path)
+            checkpoint_store.validate_resume_header(
+                resume_manifest,
+                decision_date=ctx.decision_date,
+                price_basis_date=ctx.price_basis_date,
+                run_contract=_checkpoint_run_contract(ctx),
+                stages=pipeline,
+            )
+        except checkpoint_store.CapstoneCheckpointError as exc:
+            raise WeeklyCapstoneError(f"resume checkpoint rejected: {exc}") from exc
+    checkpoint_manifest_path = None
+    checkpoint_manifest = None
+    if production_run:
+        try:
+            checkpoint_manifest_path, checkpoint_manifest = checkpoint_store.create_manifest(
+                private_root=ctx.private_root,
+                decision_date=ctx.decision_date,
+                price_basis_date=ctx.price_basis_date,
+                generated_at=ctx.generated_at,
+                run_contract=_checkpoint_run_contract(ctx),
+                stages=pipeline,
+            )
+        except checkpoint_store.CapstoneCheckpointError as exc:
+            raise WeeklyCapstoneError(f"cannot initialize capstone checkpoint: {exc}") from exc
+        print(f"[US-SHORT CHECKPOINT] {checkpoint_manifest_path}", file=sys.stderr)
+
     # C3: archive any prior current outputs BEFORE provider execution. A failure here rolls back before this run
     # starts; once it succeeds, every later no-emit/failure has an empty current slot. Official outputs are written
     # under a private run-scoped staging root and published only after all three siblings validate.
     transaction = _begin_current_output_transaction(ctx)
     results: list[dict[str, Any]] = []
     shadow_capture_failure: dict[str, str] | None = None
+
+    def stage_clocks(result: dict[str, Any], *, fallback_generated_at: str) -> tuple[str, str | None]:
+        generated = result.get("generated_at") if isinstance(result.get("generated_at"), str) else fallback_generated_at
+        decision_clock = result.get("decision_clock") if isinstance(result.get("decision_clock"), dict) else {}
+        observed = result.get("observed_at") if isinstance(result.get("observed_at"), str) else decision_clock.get("observed_at")
+        return generated, observed if isinstance(observed, str) else generated
+
+    def append_stage_result(
+        stage: Stage, result: dict[str, Any], *, execution_mode: str,
+        stage_generated_at: str, stage_observed_at: str | None,
+    ) -> None:
+        results.append({
+            "name": stage.name,
+            "gated": stage.gated,
+            "best_effort": stage.best_effort,
+            "execution_mode": execution_mode,
+            "stage_generated_at": stage_generated_at,
+            "stage_observed_at": stage_observed_at,
+            "result": result,
+        })
 
     def record_shadow_capture_failure(stage: Stage, exc: Exception) -> None:
         nonlocal shadow_capture_failure
@@ -897,6 +1002,9 @@ def run_weekly_capstone(
             "name": stage.name,
             "gated": stage.gated,
             "best_effort": True,
+            "execution_mode": "executed",
+            "stage_generated_at": ctx.generated_at,
+            "stage_observed_at": ctx.observed_at,
             "result": {"shadow_capture_failed": shadow_capture_failure},
         })
 
@@ -916,7 +1024,8 @@ def run_weekly_capstone(
             # schema/date/identity/digest checks. Empty input lists (e.g. universe_fetch, vix_regime) pass trivially.
             # A best_effort (shadow) stage routes an unreadable input through the SAME shadow-capture-failure path as a
             # run failure: a missing/partial shadow input must never abort the real weekly report (best_effort intent).
-            unreadable_inputs = [Path(p) for p in stage.inputs(stage_ctx) if not _input_readable(Path(p))]
+            input_paths = [Path(p) for p in stage.inputs(stage_ctx)]
+            unreadable_inputs = [path for path in input_paths if not _input_readable(path)]
             if unreadable_inputs:
                 unreadable = WeeklyCapstoneError(
                     f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
@@ -926,6 +1035,36 @@ def run_weekly_capstone(
                     continue
                 raise unreadable
             expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
+            if resume_manifest is not None and stage.reuse_policy == "frozen_inputs":
+                try:
+                    restored = checkpoint_store.restore_stage(
+                        source_manifest_path=resume_manifest_path,
+                        source_manifest=resume_manifest,
+                        stage=stage,
+                        input_paths=input_paths,
+                        input_logical_paths=[_rel(path) for path in input_paths],
+                        output_paths=expected_outputs,
+                        output_logical_paths=[_rel(path) for path in expected_outputs],
+                    )
+                except checkpoint_store.CapstoneCheckpointError as exc:
+                    raise WeeklyCapstoneError(f"resume checkpoint restore failed at stage '{stage.name}': {exc}") from exc
+                if restored is not None:
+                    result, stage_generated_at, stage_observed_at = restored
+                    append_stage_result(
+                        stage, result, execution_mode="reused",
+                        stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+                    )
+                    try:
+                        checkpoint_manifest = checkpoint_store.record_stage(
+                            manifest_path=checkpoint_manifest_path, manifest=checkpoint_manifest, stage=stage,
+                            execution_mode="reused", generated_at=stage_generated_at, observed_at=stage_observed_at,
+                            input_paths=input_paths, input_logical_paths=[_rel(path) for path in input_paths],
+                            output_paths=expected_outputs, output_logical_paths=[_rel(path) for path in expected_outputs],
+                            result=result,
+                        )
+                    except checkpoint_store.CapstoneCheckpointError as exc:
+                        raise WeeklyCapstoneError(f"cannot persist reused stage '{stage.name}': {exc}") from exc
+                    continue
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:
                 result = stage.run(stage_ctx)
@@ -939,12 +1078,11 @@ def run_weekly_capstone(
             # not a missing-output failure. Detect it from the bridge's own emit flag and return the honest no-emit.
             bridge_emitted = _bridge_emitted(result) if stage.name == "weekly_bridge" else None
             if stage.name == "weekly_bridge" and bridge_emitted is False:
-                results.append({
-                    "name": stage.name,
-                    "gated": stage.gated,
-                    "best_effort": stage.best_effort,
-                    "result": result,
-                })
+                stage_generated_at, stage_observed_at = stage_clocks(result, fallback_generated_at=ctx.generated_at)
+                append_stage_result(
+                    stage, result, execution_mode="executed",
+                    stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+                )
                 _abort_current_output_transaction(transaction)
                 summary = {
                     "mode": "live",
@@ -960,6 +1098,7 @@ def run_weekly_capstone(
                         "moved": [_rel(path) for path in transaction.archived_paths],
                     },
                     "stages": results,
+                    "checkpoint_manifest": str(checkpoint_manifest_path) if checkpoint_manifest_path else None,
                 }
                 if shadow_capture_failure is not None:
                     summary["shadow_capture_failed"] = shadow_capture_failure
@@ -1002,12 +1141,37 @@ def run_weekly_capstone(
                     continue
                 raise WeeklyCapstoneError(
                     f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}")
-            results.append({
-                "name": stage.name,
-                "gated": stage.gated,
-                "best_effort": stage.best_effort,
-                "result": result,
-            })
+            execution_mode = "executed"
+            if resume_manifest is not None and stage.reuse_policy == "refresh_then_reuse_if_equivalent":
+                try:
+                    if checkpoint_store.refresh_output_from_equivalent_checkpoint(
+                        source_manifest_path=resume_manifest_path,
+                        source_manifest=resume_manifest,
+                        stage=stage,
+                        output_paths=expected_outputs,
+                        output_logical_paths=[_rel(path) for path in expected_outputs],
+                    ):
+                        execution_mode = "refreshed_equivalent"
+                except checkpoint_store.CapstoneCheckpointError as exc:
+                    raise WeeklyCapstoneError(
+                        f"resume equivalence refresh failed at stage '{stage.name}': {exc}"
+                    ) from exc
+            stage_generated_at, stage_observed_at = stage_clocks(result, fallback_generated_at=ctx.generated_at)
+            append_stage_result(
+                stage, result, execution_mode=execution_mode,
+                stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+            )
+            if production_run and stage.name != "weekly_bridge":
+                try:
+                    checkpoint_manifest = checkpoint_store.record_stage(
+                        manifest_path=checkpoint_manifest_path, manifest=checkpoint_manifest, stage=stage,
+                        execution_mode=execution_mode, generated_at=stage_generated_at,
+                        observed_at=stage_observed_at, input_paths=input_paths,
+                        input_logical_paths=[_rel(path) for path in input_paths], output_paths=expected_outputs,
+                        output_logical_paths=[_rel(path) for path in expected_outputs], result=result,
+                    )
+                except checkpoint_store.CapstoneCheckpointError as exc:
+                    raise WeeklyCapstoneError(f"cannot persist stage checkpoint '{stage.name}': {exc}") from exc
         _publish_current_output_transaction(ctx, transaction)
     except Exception:
         try:
@@ -1029,6 +1193,7 @@ def run_weekly_capstone(
         "emitted": True,
         "emitted_report": _rel(ctx.private_root / "weekly_private" / ctx.decision_date / "weekly_report.md"),
         "stages": results,
+        "checkpoint_manifest": str(checkpoint_manifest_path) if checkpoint_manifest_path else None,
     }
     if shadow_capture_failure is not None:
         summary["shadow_capture_failed"] = shadow_capture_failure
@@ -1077,6 +1242,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--retry-backoff-seconds", type=float, default=2.0)
     parser.add_argument("--max-total-http-attempts", type=int,
                         help="explicit physical HTTP-attempt cap required for live 429 retries")
+    parser.add_argument("--resume", type=Path,
+                        help="explicit checkpoint_manifest.json bundle to validate/import; never scans other worktrees")
     args = parser.parse_args(argv)
     try:
         summary = run_weekly_capstone(
@@ -1089,6 +1256,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=not args.live, provider_pace_seconds=args.provider_pace_seconds,
             max_retries_per_call=args.max_retries_per_call, retry_backoff_seconds=args.retry_backoff_seconds,
             max_total_http_attempts=args.max_total_http_attempts,
+            resume_from=args.resume,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

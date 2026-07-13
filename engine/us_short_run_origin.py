@@ -63,7 +63,9 @@ _RECEIPT_REQUIRED_RUN_MODES = frozenset({"research_live", "mixed_source"})
 # completed stage set, and provider-call evidence. The one-click capstone issues it after the gated live fetch.
 # A GENERIC caller — the CLI (research_live is not an argparse
 # choice) or a direct public-function caller — cannot select either mode: passing True / a look-alike object fails
-# receipt validation. In-process Python cannot be cryptographically sandboxed; deliberately calling the private
+# The receipt can honestly aggregate source-bound executed/reused stages across explicit checkpoint bundles;
+# it never rewrites a stage clock to pretend that every stage ran in one process. In-process Python cannot be
+# cryptographically sandboxed; deliberately calling the private
 # receipt issuer remains outside the generic-caller threat model.
 _RECEIPT_ISSUER = object()
 _RECEIPT_SIGNING_KEY = os.urandom(32)
@@ -74,16 +76,18 @@ _REQUIRED_PRE_BRIDGE_STAGES = (
 _REQUIRED_PROVIDER_STAGES = ("universe_fetch", "momentum_fetch", "sic_fetch", "pass2_fetch")
 _REQUIRED_PROVIDER_SUMMARY_STAGES = (*_REQUIRED_PROVIDER_STAGES, "vix_regime")
 _REQUIRED_PROVIDER_HEALTH_KEYS = ("fmp", "sec_edgar")
+_RECEIPT_V2_SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "us_short_weekly_capstone_receipt_v2.schema.json"
 
 
 @dataclass(frozen=True)
 class _CapstoneResearchLiveReceipt:
-    """Run-specific evidence receipt carried through every research-live consumer boundary."""
+    """Source-bound execution receipt carried through every research-live consumer boundary."""
 
     run_id: str
     decision_date: str
     generated_at: str
     completed_stages: tuple[str, ...]
+    stage_executions: tuple[tuple[str, str, str, str | None, str], ...]
     source_packet_path: str
     source_packet_sha256: str
     source_artifact_manifest: tuple[tuple[str, str, str], ...]
@@ -157,8 +161,37 @@ def _valid_provider_health_facts(value) -> bool:
         return False
 
 
+def _valid_stage_executions(value) -> bool:
+    try:
+        return (
+            isinstance(value, tuple)
+            and tuple(row[0] for row in value) == _REQUIRED_PRE_BRIDGE_STAGES
+            and all(
+                isinstance(row, tuple) and len(row) == 5
+                and row[1] in {"executed", "reused", "refreshed_equivalent"}
+                and isinstance(row[2], str) and bool(row[2])
+                and (row[3] is None or isinstance(row[3], str) and bool(row[3]))
+                and _is_sha256(row[4])
+                for row in value
+            )
+        )
+    except (TypeError, ValueError, IndexError):
+        return False
+
+
+def _validate_receipt_v2_payload(payload: dict) -> None:
+    try:
+        from jsonschema import Draft7Validator
+        schema = json.loads(_RECEIPT_V2_SCHEMA_PATH.read_text(encoding="utf-8"))
+    except (ImportError, OSError, ValueError) as exc:
+        raise RunOriginError("cannot load receipt v2 schema validator") from exc
+    errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
+    if errors:
+        raise RunOriginError("receipt v2 failed schema validation: " + "; ".join(e.message for e in errors[:5]))
+
+
 def _receipt_signature_payload(
-    *, run_id, decision_date, generated_at, completed_stages, source_packet_path, source_packet_sha256,
+    *, run_id, decision_date, generated_at, completed_stages, stage_executions, source_packet_path, source_packet_sha256,
     source_artifact_manifest, action_input_manifest, provider_call_counts, provider_summary_digests, provider_health_facts,
     provider_evidence_sha256,
 ) -> bytes:
@@ -168,6 +201,7 @@ def _receipt_signature_payload(
             "decision_date": decision_date,
             "generated_at": generated_at,
             "completed_stages": list(completed_stages),
+            "stage_executions": [list(row) for row in stage_executions],
             "source_packet_path": source_packet_path,
             "source_packet_sha256": source_packet_sha256,
             "source_artifact_manifest": [list(row) for row in source_artifact_manifest],
@@ -186,7 +220,7 @@ def _issue_capstone_research_live_receipt(
     *, run_id: str, decision_date: str, generated_at: str, completed_stages,
     source_packet_path, source_packet_sha256: str, source_artifact_manifest,
     provider_call_counts, provider_summary_digests, provider_health_facts, provider_evidence_sha256: str,
-    action_input_manifest=(),
+    action_input_manifest=(), stage_executions=None,
 ):
     """Issue an immutable receipt from a complete, source-bound capstone provider execution."""
     stages = tuple(completed_stages)
@@ -195,6 +229,15 @@ def _issue_capstone_research_live_receipt(
     action_manifest = tuple((field, path, digest) for field, path, digest in action_input_manifest)
     summary_digests = tuple((stage, digest) for stage, digest in provider_summary_digests)
     health_facts = tuple((key, state) for key, state in provider_health_facts)
+    if stage_executions is None:
+        stage_executions = tuple(
+            (stage, "executed", generated_at, generated_at, hashlib.sha256(
+                f"{stage}|{generated_at}".encode("utf-8")
+            ).hexdigest())
+            for stage in stages
+        )
+    else:
+        stage_executions = tuple(tuple(row) for row in stage_executions)
     if stages != _REQUIRED_PRE_BRIDGE_STAGES:
         raise RunOriginError("research_live receipt missing or reordering required pre-bridge stages")
     if tuple(stage for stage, _ in calls) != _REQUIRED_PROVIDER_STAGES:
@@ -209,6 +252,8 @@ def _issue_capstone_research_live_receipt(
         raise RunOriginError("research_live receipt requires exact provider-stage summary digests")
     if not _valid_provider_health_facts(health_facts):
         raise RunOriginError("research_live receipt requires exact provider-health facts")
+    if not _valid_stage_executions(stage_executions):
+        raise RunOriginError("research_live receipt requires exact per-stage execution provenance")
     if not (isinstance(run_id, str) and _is_sha256(run_id)):
         raise RunOriginError("research_live receipt run_id must be a sha256 identity")
     if not (isinstance(decision_date, str) and len(decision_date) == 8 and decision_date.isascii()
@@ -222,6 +267,30 @@ def _issue_capstone_research_live_receipt(
     if not _is_sha256(source_packet_sha256) or not _is_sha256(provider_evidence_sha256):
         raise RunOriginError("research_live receipt requires sha256 source and provider-evidence digests")
     resolved_source_path = str(source_path.resolve())
+    receipt_payload = {
+        "schema_name": "us_short_weekly_capstone_receipt",
+        "schema_version": "2.0.0",
+        "run_id": run_id,
+        "decision_date": decision_date,
+        "finalized_at": generated_at,
+        "completed_stages": list(stages),
+        "stage_executions": [
+            {
+                "name": name, "execution_mode": mode, "generated_at": stage_generated_at,
+                "observed_at": observed_at, "result_sha256": result_sha256,
+            }
+            for name, mode, stage_generated_at, observed_at, result_sha256 in stage_executions
+        ],
+        "source_packet_path": resolved_source_path,
+        "source_packet_sha256": source_packet_sha256,
+        "source_artifact_manifest": [list(row) for row in source_manifest],
+        "action_input_manifest": [list(row) for row in action_manifest],
+        "provider_call_counts": [list(row) for row in calls],
+        "provider_summary_digests": [list(row) for row in summary_digests],
+        "provider_health_facts": [list(row) for row in health_facts],
+        "provider_evidence_sha256": provider_evidence_sha256,
+    }
+    _validate_receipt_v2_payload(receipt_payload)
     signature = hmac.new(
         _RECEIPT_SIGNING_KEY,
         _receipt_signature_payload(
@@ -229,6 +298,7 @@ def _issue_capstone_research_live_receipt(
             decision_date=decision_date,
             generated_at=generated_at,
             completed_stages=stages,
+            stage_executions=stage_executions,
             source_packet_path=resolved_source_path,
             source_packet_sha256=source_packet_sha256,
             source_artifact_manifest=source_manifest,
@@ -245,6 +315,7 @@ def _issue_capstone_research_live_receipt(
         decision_date=decision_date,
         generated_at=generated_at,
         completed_stages=stages,
+        stage_executions=stage_executions,
         source_packet_path=resolved_source_path,
         source_packet_sha256=source_packet_sha256,
         source_artifact_manifest=source_manifest,
@@ -264,6 +335,7 @@ def is_capstone_research_live_capability(candidate) -> bool:
         isinstance(candidate, _CapstoneResearchLiveReceipt)
         and candidate._issuer is _RECEIPT_ISSUER
         and candidate.completed_stages == _REQUIRED_PRE_BRIDGE_STAGES
+        and _valid_stage_executions(candidate.stage_executions)
         and _valid_provider_calls(candidate.provider_call_counts)
         and _is_sha256(candidate.run_id)
         and _is_sha256(candidate.source_packet_sha256)
@@ -283,6 +355,7 @@ def is_capstone_research_live_capability(candidate) -> bool:
             decision_date=candidate.decision_date,
             generated_at=candidate.generated_at,
             completed_stages=candidate.completed_stages,
+            stage_executions=candidate.stage_executions,
             source_packet_path=candidate.source_packet_path,
             source_packet_sha256=candidate.source_packet_sha256,
             source_artifact_manifest=candidate.source_artifact_manifest,

@@ -391,7 +391,10 @@ def _summary_status(
     fetch_errors: int,
     parser_failures: int,
     resolver_rejection: dict[str, str] | None,
+    advisory_failure: dict[str, str] | None,
 ) -> tuple[str, str]:
+    if advisory_failure is not None:
+        return "advisory_stage_neutralized", "down"
     if resolver_rejection is not None:
         return "resolver_rejected_neutralized", "down"
     if dependency_missing:
@@ -421,6 +424,13 @@ def _safe_resolver_rejection(exc: YFinanceGradesError) -> dict[str, str]:
     }
 
 
+def _safe_advisory_failure() -> dict[str, str]:
+    return {
+        "category": "post_structural_gate_failure",
+        "message": "noncritical yfinance stage failed after structural gates; neutralized",
+    }
+
+
 def _build_summary(
     *,
     generated_at: str,
@@ -432,6 +442,7 @@ def _build_summary(
     attempts: list[dict[str, Any]],
     dependency_missing: bool,
     resolver_rejection: dict[str, str] | None,
+    advisory_failure: dict[str, str] | None,
     pace_seconds: float,
     raw_root: Path,
     summary_path: Path,
@@ -453,11 +464,12 @@ def _build_summary(
         fetch_errors=fetch_errors,
         parser_failures=parser_failures,
         resolver_rejection=resolver_rejection,
+        advisory_failure=advisory_failure,
     )
     raw_written = successful > 0
     return {
         "schema_name": "us_short_yfinance_grades_fetch_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "authorization_ref": AUTHORIZATION_REF,
         "generated_at": generated_at,
         "scope": {
@@ -500,6 +512,7 @@ def _build_summary(
             "rate_limit_or_crumb_failure_count": rate_failures,
             "dependency_missing": dependency_missing,
             "resolver_rejection": resolver_rejection,
+            "advisory_failure": advisory_failure,
             "first_failure_symbol_index": first_failure,
             "pace_seconds": pace_seconds,
         },
@@ -541,12 +554,39 @@ def _build_summary(
     }
 
 
+def _summary_freeform_strings(summary: dict[str, Any]) -> str:
+    """Free-form string leaves the ticker-leak scan must inspect. The tracked summary is schema-enforced
+    aggregate-only (const / enum / int / date / bool), so the ONLY strings that could carry a leaked ticker are the
+    runner-built file PATHS (keys ending `_path` / `_root`). Scanning the whole serialized summary instead
+    false-positives short / single-letter tickers on the FIXED chrome — e.g. real tickers `M` / `R` / `T` on the
+    English `limitations` prose ("Missing" / "Resolver" / "Tracked"), or `US` on the `scope` identity — and would
+    abort the advisory stage (and its neutral fallback). Any NEW free-form string field must be added here; the
+    summary schema (`additionalProperties:false` + const/enum) is the structural guarantee that no other field can
+    carry a ticker value."""
+    parts: list[str] = []
+
+    def _walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if isinstance(item, str) and (key.endswith("_path") or key.endswith("_root")):
+                    parts.append(item)
+                else:
+                    _walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                _walk(item)
+
+    _walk(summary)
+    return "\n".join(parts)
+
+
 def _assert_summary_safe(summary: dict[str, Any], target_symbols: list[str], sensitive_values: list[str]) -> None:
     text = json.dumps(summary, ensure_ascii=False, sort_keys=True)
     if _SUMMARY_FORBIDDEN.search(text):
         raise YFinanceGradesFetchError("tracked yfinance grades summary may not contain URLs, secrets, or raw payload fields")
+    freeform = _summary_freeform_strings(summary)
     for symbol in target_symbols:
-        if symbol and symbol in text:
+        if symbol and re.search(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])", freeform):
             raise YFinanceGradesFetchError("tracked yfinance grades summary may not contain ticker names")
     for value in sensitive_values:
         if value and value in text:
@@ -577,36 +617,76 @@ def _dry_run_result(preflight_path: Path, target_count: int) -> dict[str, Any]:
     }
 
 
-def run_yfinance_grades_fetch(
+def _materialize_advisory_neutral_fallback(
     *,
-    preflight_summary_path: Path = PREFLIGHT_SUMMARY_PATH,
-    output_source_package_path: Path = SOURCE_PACKAGE_PATH,
-    output_resolved_actions_path: Path = RESOLVED_ACTIONS_PATH,
-    summary_path: Path = SUMMARY_PATH,
-    raw_root: Path = RAW_ROOT,
-    client: Any = None,
-    importer=importlib.import_module,
-    confirm_user_authorization: bool = False,
-    generated_at: str | None = None,
-    observed_at: str | None = None,
-    pace_seconds: float = DEFAULT_PACE_SECONDS,
+    generated_at: str,
+    decision_date: str,
+    source_as_of: str,
+    observed_at: str,
+    preflight_path: Path,
+    target_symbols: list[str],
+    attempts: list[dict[str, Any]],
+    pace_seconds: float,
+    raw_root: Path,
+    summary_path: Path,
+    source_package_path: Path,
+    resolved_actions_path: Path,
 ) -> dict[str, Any]:
-    if not confirm_user_authorization:
-        raise YFinanceGradesFetchError("yfinance grades fetch requires explicit user authorization")
-    if not (isinstance(pace_seconds, (int, float)) and not isinstance(pace_seconds, bool) and math.isfinite(pace_seconds) and 0 <= pace_seconds <= 60):
-        raise YFinanceGradesFetchError("pace_seconds must be finite and within [0, 60]")
-    generated_at = generated_at or iso_now()
-    observed_at = observed_at or generated_at
-    if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
-        raise YFinanceGradesFetchError("generated_at and observed_at must be timezone-aware RFC3339 instants")
-    preflight_path = _validate_preflight_path(preflight_summary_path)
-    _, decision_date, source_as_of, target_symbols = _load_ready_preflight(preflight_path)
-    source_package_path = _validate_state_json_path(output_source_package_path, field="output_source_package_path")
-    resolved_actions_path = _validate_state_json_path(output_resolved_actions_path, field="output_resolved_actions_path")
-    raw_root_resolved = _validate_raw_root(raw_root)
-    summary_resolved = _validate_summary_path(summary_path)
+    """Replace every downstream-visible artifact with a complete neutral set after a post-gate failure.
 
-    attempts: list[dict[str, Any]] = []
+    All payloads are built and validated before any replacement.  Each final file uses the existing atomic writer,
+    and an I/O failure still propagates so Pass2 can never consume an incomplete fallback set.
+    """
+    package = _package_from_attempts(
+        target_symbols=target_symbols,
+        source_as_of=source_as_of,
+        observed_at=observed_at,
+        attempts_by_symbol={},
+        force_down=True,
+    )
+    resolved_actions = _neutral_resolved_actions(target_symbols)
+    summary = _build_summary(
+        generated_at=generated_at,
+        expected_decision_date=decision_date,
+        source_as_of=source_as_of,
+        observed_at=observed_at,
+        preflight_path=preflight_path,
+        target_count=len(target_symbols),
+        attempts=attempts,
+        dependency_missing=False,
+        resolver_rejection=None,
+        advisory_failure=_safe_advisory_failure(),
+        pace_seconds=pace_seconds,
+        raw_root=raw_root,
+        summary_path=summary_path,
+        source_package_path=source_package_path,
+        resolved_actions_path=resolved_actions_path,
+    )
+    _validate_json_schema(summary, SUMMARY_SCHEMA_PATH, label="neutral yfinance grades fetch summary")
+    _assert_summary_safe(summary, target_symbols, [])
+    _write_json_atomic(package, source_package_path)
+    _write_json_atomic(resolved_actions, resolved_actions_path)
+    _write_json_atomic(summary, summary_path)
+    return summary
+
+
+def _run_post_structural_gate(
+    *,
+    generated_at: str,
+    decision_date: str,
+    source_as_of: str,
+    observed_at: str,
+    preflight_path: Path,
+    target_symbols: list[str],
+    attempts: list[dict[str, Any]],
+    pace_seconds: float,
+    raw_root: Path,
+    summary_path: Path,
+    source_package_path: Path,
+    resolved_actions_path: Path,
+    client: Any,
+    importer,
+) -> dict[str, Any]:
     attempts_by_symbol: dict[str, dict[str, Any]] = {}
     dependency_missing = False
     try:
@@ -616,13 +696,13 @@ def run_yfinance_grades_fetch(
         yf_client = None
 
     if yf_client is not None:
-        raw_root_resolved.mkdir(parents=True, exist_ok=True)
+        raw_root.mkdir(parents=True, exist_ok=True)
         for index, symbol in enumerate(target_symbols, start=1):
             attempt, raw_rows = _fetch_one(yf_client, symbol)
             attempts.append(attempt)
             attempts_by_symbol[symbol] = attempt
             if raw_rows is not None and attempt["status"] == "ok":
-                _write_json_atomic({"ticker": symbol, "upgrades_downgrades": raw_rows}, raw_root_resolved / f"{symbol}.json")
+                _write_json_atomic({"ticker": symbol, "upgrades_downgrades": raw_rows}, raw_root / f"{symbol}.json")
             if attempt["status"] == "rate_limit_or_crumb_failure":
                 break
             if index < len(target_symbols) and pace_seconds:
@@ -658,14 +738,79 @@ def run_yfinance_grades_fetch(
         attempts=attempts,
         dependency_missing=dependency_missing,
         resolver_rejection=resolver_rejection,
-        pace_seconds=float(pace_seconds),
-        raw_root=raw_root_resolved,
-        summary_path=summary_resolved,
+        advisory_failure=None,
+        pace_seconds=pace_seconds,
+        raw_root=raw_root,
+        summary_path=summary_path,
         source_package_path=source_package_path,
         resolved_actions_path=resolved_actions_path,
     )
-    _write_summary_validated(summary, summary_resolved, target_symbols)
+    _write_summary_validated(summary, summary_path, target_symbols)
     return summary
+
+
+def run_yfinance_grades_fetch(
+    *,
+    preflight_summary_path: Path = PREFLIGHT_SUMMARY_PATH,
+    output_source_package_path: Path = SOURCE_PACKAGE_PATH,
+    output_resolved_actions_path: Path = RESOLVED_ACTIONS_PATH,
+    summary_path: Path = SUMMARY_PATH,
+    raw_root: Path = RAW_ROOT,
+    client: Any = None,
+    importer=importlib.import_module,
+    confirm_user_authorization: bool = False,
+    generated_at: str | None = None,
+    observed_at: str | None = None,
+    pace_seconds: float = DEFAULT_PACE_SECONDS,
+) -> dict[str, Any]:
+    if not confirm_user_authorization:
+        raise YFinanceGradesFetchError("yfinance grades fetch requires explicit user authorization")
+    if not (isinstance(pace_seconds, (int, float)) and not isinstance(pace_seconds, bool) and math.isfinite(pace_seconds) and 0 <= pace_seconds <= 60):
+        raise YFinanceGradesFetchError("pace_seconds must be finite and within [0, 60]")
+    generated_at = generated_at or iso_now()
+    observed_at = observed_at or generated_at
+    if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
+        raise YFinanceGradesFetchError("generated_at and observed_at must be timezone-aware RFC3339 instants")
+    preflight_path = _validate_preflight_path(preflight_summary_path)
+    _, decision_date, source_as_of, target_symbols = _load_ready_preflight(preflight_path)
+    source_package_path = _validate_state_json_path(output_source_package_path, field="output_source_package_path")
+    resolved_actions_path = _validate_state_json_path(output_resolved_actions_path, field="output_resolved_actions_path")
+    raw_root_resolved = _validate_raw_root(raw_root)
+    summary_resolved = _validate_summary_path(summary_path)
+
+    attempts: list[dict[str, Any]] = []
+    try:
+        return _run_post_structural_gate(
+            generated_at=generated_at,
+            decision_date=decision_date,
+            source_as_of=source_as_of,
+            observed_at=observed_at,
+            preflight_path=preflight_path,
+            target_symbols=target_symbols,
+            attempts=attempts,
+            pace_seconds=float(pace_seconds),
+            raw_root=raw_root_resolved,
+            summary_path=summary_resolved,
+            source_package_path=source_package_path,
+            resolved_actions_path=resolved_actions_path,
+            client=client,
+            importer=importer,
+        )
+    except Exception:  # noqa: BLE001 — this boundary is intentionally phase-based, not exception-type sniffing
+        return _materialize_advisory_neutral_fallback(
+            generated_at=generated_at,
+            decision_date=decision_date,
+            source_as_of=source_as_of,
+            observed_at=observed_at,
+            preflight_path=preflight_path,
+            target_symbols=target_symbols,
+            attempts=attempts,
+            pace_seconds=float(pace_seconds),
+            raw_root=raw_root_resolved,
+            summary_path=summary_resolved,
+            source_package_path=source_package_path,
+            resolved_actions_path=resolved_actions_path,
+        )
 
 
 def run_default(

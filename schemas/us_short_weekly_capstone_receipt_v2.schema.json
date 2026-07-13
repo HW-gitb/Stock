@@ -1,0 +1,73 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_weekly_capstone_receipt_v2.schema.json",
+  "title": "US-short capstone cross-execution receipt v2 payload",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "run_id", "decision_date", "finalized_at", "completed_stages",
+    "stage_executions", "source_packet_path", "source_packet_sha256", "source_artifact_manifest",
+    "action_input_manifest", "provider_call_counts", "provider_summary_digests", "provider_health_facts",
+    "provider_evidence_sha256"
+  ],
+  "properties": {
+    "schema_name": { "const": "us_short_weekly_capstone_receipt" },
+    "schema_version": { "const": "2.0.0" },
+    "run_id": { "$ref": "#/definitions/sha256" },
+    "decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+    "finalized_at": { "type": "string", "minLength": 1 },
+    "completed_stages": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "stage_executions": {
+      "type": "array", "minItems": 1, "uniqueItems": true,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["name", "execution_mode", "generated_at", "observed_at", "result_sha256"],
+        "properties": {
+          "name": { "type": "string", "minLength": 1 },
+          "execution_mode": { "enum": ["executed", "reused", "refreshed_equivalent"] },
+          "generated_at": { "type": "string", "minLength": 1 },
+          "observed_at": { "type": ["string", "null"], "minLength": 1 },
+          "result_sha256": { "$ref": "#/definitions/sha256" }
+        }
+      }
+    },
+    "source_packet_path": { "type": "string", "minLength": 1 },
+    "source_packet_sha256": { "$ref": "#/definitions/sha256" },
+    "source_artifact_manifest": { "$ref": "#/definitions/manifest3" },
+    "action_input_manifest": { "$ref": "#/definitions/manifest3" },
+    "provider_call_counts": { "$ref": "#/definitions/counts" },
+    "provider_summary_digests": { "$ref": "#/definitions/digests" },
+    "provider_health_facts": {
+      "type": "array", "items": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "items": [{ "type": "string", "minLength": 1 }, { "enum": ["ok", "down"] }],
+        "additionalItems": false
+      }
+    },
+    "provider_evidence_sha256": { "$ref": "#/definitions/sha256" }
+  },
+  "definitions": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "manifest3": {
+      "type": "array", "items": {
+        "type": "array", "minItems": 3, "maxItems": 3,
+        "items": [{ "type": "string", "minLength": 1 }, { "type": "string", "minLength": 1 }, { "$ref": "#/definitions/sha256" }],
+        "additionalItems": false
+      }
+    },
+    "counts": {
+      "type": "array", "items": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "items": [{ "type": "string", "minLength": 1 }, { "type": "integer", "minimum": 0 }],
+        "additionalItems": false
+      }
+    },
+    "digests": {
+      "type": "array", "items": {
+        "type": "array", "minItems": 2, "maxItems": 2,
+        "items": [{ "type": "string", "minLength": 1 }, { "$ref": "#/definitions/sha256" }],
+        "additionalItems": false
+      }
+    }
+  }
+}
