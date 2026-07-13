@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short 公司行动源入口：SEC 简单解析 + yfinance 日报警）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。两条 default-dry-run 单票入口：SEC 解析器把唯一明确 8-K 现金/换股条款降成**待人工确认 candidate**（字段名**故意≠planner**→结构上非确认事件、无 source_confirmation/event_id；CVR/election/proration/adjustment/多值/日期歧义/successor 未绑全 freeze）；yfinance 只报 split/dividend/空源/异常、低信任单票 freeze。两路私有、无 raw/URL/UA 泄、**不接 planner/账户/选股/paper/ship**（dead-end）。无真 fetch。universe summary 未纳入。
+- **Required**: 无。P1 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open（candidate 必人工确认；DEFM14A/CVR 全人工；总接线未做）。单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（七不变式全 HELD·20 测试+探针零 bypass：suggest-only、复杂/歧义全 freeze、gated SEC fetch 12 攻击全拒 calls=0[URL 强绑 sec.gov+CIK/accession、拦 redirect/userinfo]、yfinance 低信任不决策、not-wired、无真 fetch、secret 净化）。Codex 自审未起子 agent→我补 §6a；亲读 SEC 解析器+抓取 runner；自撰 grep not-wired。focused+guards 66 OK；**亲跑全包 `Ran 4406 / OK / 0 fail`**（203s）。live-fetch+并购解析+honesty 红线→§6a 必起。
+- **Next**: 剩「串链子编排」（检测/报警→提示→录入→出票）待用户；DEFM14A/CVR + 真 fetch 仍 gated/人工。
+
+## 2026-07-13 — Codex 执行（US-short 公司行动源入口：SEC 简单解析 + yfinance 日报警）
+
+- **Verdict/Action**: 建成 default-dry-run 的两条单票入口：SEC 仅在逐次确认后按 1-call request 抓一个 CIK/accession/Archives URL 严格绑定的文档，只把唯一明确的 8-K/8-K-A 现金/换股/股加现条款降成待人工确认 candidate；复杂/歧义冻结。yfinance 仅按显式 price date 报 split/dividend/空源/ticker-date 异常，低信任且异常中性化；两路输出均私有、不留 raw/URL/User-Agent，不接 planner/账户/选股/paper/ship。
+- **Required**: `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open：candidate 必须人工确认；DEFM14A/CVR 等仍全人工；Massive/SEC/价格对账与 lifecycle→account ticket 总接线未做。
+- **Verify**: 反向 red→green；source-intake focused 20 OK、相邻链 90 OK、doc guards 60 OK；完整离线 `test_us_short*.py` `4406 OK (1 skipped)`；`py_compile`、UTF-8/BOM/尾空白、ripple grep、`git diff --check` 通过。未调用 SEC/yfinance、未读真实账户。
+- **Pre-Codex self-review**: main-thread A-F：SEC {cash,stock,stock+cash} 与 {DEFM14A,CVR,election/proration,adjustment/fractional,multi-value,unbound CIK,bad chronology} 全覆盖；yfinance {clear,split,dividend,missing,mismatch,malformed} 全覆盖并只冻单票；schema const 钉死 1 call/no raw/no auto-confirm/no selection/paper/ship。因本任务未授权子 agent，按主线程 current-diff fallback 自审；固定包集中一次跑完。
+- **Next**: Claude Code 独立审查本 slice；仅 PASS 后提交，universe summary 不纳入。
+
 ## 2026-07-13 — Claude Code 审查（US-short 录入器 account_state 接线：测试→真实同一线）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。录入器持仓输入改读私有 `account_state`（`--confirm-account-read` opt-in→取 old_ticker 唯一 long 持仓），**纯 additive、未削弱前次不变式**。无持仓/畸形/重复/非 long/未确认→单票 manual_review 不出票；confirmed record 只留账本 digest（无股数/值）；真票据由 `build_private_disposition` 建 + TOCTOU 重核 + 写私有 gitignored；boundary `account_state_read` 诚实、其余 False；schema 1.1.0。universe summary 未纳入。

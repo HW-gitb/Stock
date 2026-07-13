@@ -1,0 +1,119 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_sec_corporate_action_parse_candidate/1.0.0/schema.json",
+  "title": "US-short SEC simple corporate-action parse candidate",
+  "description": "A strict 8-K/8-K-A simple-terms parser result. Extracted terms remain unconfirmed, require human confirmation, and cannot directly reach the disposition planner.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "security_binding", "source_binding", "parse_status", "manual_review_reasons", "event_candidate", "human_confirmation_required", "ticker_scoped_freeze_required", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_sec_corporate_action_parse_candidate"},
+    "schema_version": {"const": "1.0.0"},
+    "security_binding": {"$ref": "#/$defs/securityBinding"},
+    "source_binding": {"$ref": "#/$defs/sourceBinding"},
+    "parse_status": {"enum": ["candidate_terms_extracted", "manual_review"]},
+    "manual_review_reasons": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"enum": ["unsupported_form", "complex_terms_present", "missing_or_ambiguous_effective_date", "ambiguous_cash_terms", "ambiguous_stock_terms", "consideration_not_exactly_extractable", "successor_identity_missing", "successor_not_text_bound"]}
+    },
+    "event_candidate": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/eventCandidate"}]},
+    "human_confirmation_required": {"const": true},
+    "ticker_scoped_freeze_required": {"type": "boolean"},
+    "boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"parse_status": {"const": "candidate_terms_extracted"}}},
+      "then": {
+        "properties": {
+          "manual_review_reasons": {"maxItems": 0},
+          "event_candidate": {"$ref": "#/$defs/eventCandidate"},
+          "ticker_scoped_freeze_required": {"const": false}
+        }
+      },
+      "else": {
+        "properties": {
+          "manual_review_reasons": {"minItems": 1},
+          "event_candidate": {"type": "null"},
+          "ticker_scoped_freeze_required": {"const": true}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "timestamp": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.+(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "securityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["security_id", "current_ticker", "identity_ref_sha256"],
+      "properties": {
+        "security_id": {"type": "string", "pattern": "^US-CIK-[0-9]{10}-(COMMON|CLASS_[A-Z]{1,3}|ADR|PREFERRED)$"},
+        "current_ticker": {"$ref": "#/$defs/ticker"},
+        "identity_ref_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "sourceBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_id", "issuer_cik", "form_type", "accession_number", "filed_date", "accepted_at", "observed_at", "document_ref_sha256"],
+      "properties": {
+        "provider_id": {"const": "sec_edgar"},
+        "issuer_cik": {"type": "string", "pattern": "^[0-9]{10}$"},
+        "form_type": {"type": "string", "minLength": 1, "maxLength": 32},
+        "accession_number": {"type": "string", "pattern": "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"},
+        "filed_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+        "accepted_at": {"$ref": "#/$defs/timestamp"},
+        "observed_at": {"$ref": "#/$defs/timestamp"},
+        "document_ref_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "eventCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["old_ticker", "event_type", "successor_ticker", "exchange_ratio_numerator", "exchange_ratio_denominator", "cash_per_share_cents", "effective_date", "source_evidence_ref_sha256"],
+      "properties": {
+        "old_ticker": {"$ref": "#/$defs/ticker"},
+        "event_type": {"enum": ["cash_consideration", "stock_conversion", "stock_and_cash_consideration"]},
+        "successor_ticker": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ticker"}]},
+        "exchange_ratio_numerator": {"type": ["integer", "null"], "minimum": 1},
+        "exchange_ratio_denominator": {"type": ["integer", "null"], "minimum": 1},
+        "cash_per_share_cents": {"type": ["integer", "null"], "minimum": 1},
+        "effective_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_evidence_ref_sha256": {"$ref": "#/$defs/sha256"}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"event_type": {"const": "cash_consideration"}}},
+          "then": {"properties": {"successor_ticker": {"type": "null"}, "exchange_ratio_numerator": {"type": "null"}, "exchange_ratio_denominator": {"type": "null"}, "cash_per_share_cents": {"type": "integer", "minimum": 1}}}
+        },
+        {
+          "if": {"properties": {"event_type": {"const": "stock_conversion"}}},
+          "then": {"properties": {"successor_ticker": {"$ref": "#/$defs/ticker"}, "exchange_ratio_numerator": {"type": "integer", "minimum": 1}, "exchange_ratio_denominator": {"type": "integer", "minimum": 1}, "cash_per_share_cents": {"type": "null"}}}
+        },
+        {
+          "if": {"properties": {"event_type": {"const": "stock_and_cash_consideration"}}},
+          "then": {"properties": {"successor_ticker": {"$ref": "#/$defs/ticker"}, "exchange_ratio_numerator": {"type": "integer", "minimum": 1}, "exchange_ratio_denominator": {"type": "integer", "minimum": 1}, "cash_per_share_cents": {"type": "integer", "minimum": 1}}}
+        }
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_call_performed", "raw_document_read", "raw_document_persisted", "source_semantics_confirmed", "planner_event_emitted", "account_state_read", "selection_or_ranking_changed", "broker_order_placed", "ship_gate_evidence_claimed"],
+      "properties": {
+        "provider_call_performed": {"type": "boolean"},
+        "raw_document_read": {"const": true},
+        "raw_document_persisted": {"const": false},
+        "source_semantics_confirmed": {"const": false},
+        "planner_event_emitted": {"const": false},
+        "account_state_read": {"const": false},
+        "selection_or_ranking_changed": {"const": false},
+        "broker_order_placed": {"const": false},
+        "ship_gate_evidence_claimed": {"const": false}
+      }
+    }
+  }
+}

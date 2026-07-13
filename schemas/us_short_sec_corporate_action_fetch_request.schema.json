@@ -1,0 +1,23 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_sec_corporate_action_fetch_request/1.0.0/schema.json",
+  "title": "US-short bounded SEC corporate-action document fetch request",
+  "description": "One operator-reviewed SEC Archives document reference. It fixes the physical call budget at one, prohibits raw persistence and automatic legal-semantic confirmation, and still requires a separate per-execution CLI confirmation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "provider_id", "document_url", "issuer_cik", "form_type", "accession_number", "filed_date", "accepted_at", "max_provider_calls", "raw_document_persist_allowed", "automatic_confirmation_allowed"],
+  "properties": {
+    "schema_name": {"const": "us_short_sec_corporate_action_fetch_request"},
+    "schema_version": {"const": "1.0.0"},
+    "provider_id": {"const": "sec_edgar"},
+    "document_url": {"type": "string", "pattern": "^https://www\\.sec\\.gov/Archives/edgar/data/[0-9]{1,10}/[0-9]{18}/[A-Za-z0-9][A-Za-z0-9._-]{0,255}$", "maxLength": 1000},
+    "issuer_cik": {"type": "string", "pattern": "^[0-9]{10}$"},
+    "form_type": {"type": "string", "minLength": 1, "maxLength": 32},
+    "accession_number": {"type": "string", "pattern": "^[0-9]{10}-[0-9]{2}-[0-9]{6}$"},
+    "filed_date": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+    "accepted_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T.+(Z|[+-][0-9]{2}:[0-9]{2})$"},
+    "max_provider_calls": {"const": 1},
+    "raw_document_persist_allowed": {"const": false},
+    "automatic_confirmation_allowed": {"const": false}
+  }
+}
