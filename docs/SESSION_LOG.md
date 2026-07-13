@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short 人工公司行动 confirmed-event 录入器）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。录入器（engine+runner+schema）忠实实现 `4fc9dfd` 规格：`--confirm` 才产 confirmed event，否则/CVR/缺/不一致→单票 manual_review freeze；现金→整数分（拒 $54.2）、比例 strict 正整数、round-trip 经既有 planner 证能出票；evidence CIK ∈ {old,successor} 身份（Twitter 错链→拒、T-Mobile successor→放行）；输出不留 URL、注入持仓非真账户、boundary 七旗 false、SR-PROVIDER-001 open。universe summary 未纳入。
+- **Required**: 无 material finding。**Optional（登记、非阻断本刀）**: 已提交 planner(cut5) latent 不对称 → 新 register `R-USSHORT-DISPOSITION-PLANNER-CASH-EVENT-STRAY-RATIO-PHANTOM-ENTITLEMENT`（P3：cash 事件带游离 ratio 算幻影换股；**录入器更严+schema 钉 cash→ratio-null → 不可达**；建议 Codex 硬化 planner 对称）。单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（八不变式全 HELD·165 探针·零 P1/P2：confirm 门拒非 bool/truthy、CVR/unsupported→review、精确分与分数、CIK old-or-successor、身份绑定、无账户/网络/URL 泄、伪造拒+round-trip planner、dead-end）。整读 engine+runner+schema 一致。focused+guards 56 OK；**亲跑全包 `Ran 4383 / OK / 0 fail`**（188s）。真钱边界+新 fail-closed 引擎→起 §6a。
+- **Next**: 无 Codex 命令；planner 硬化（新 P3）+ merger 语义/真账户授权（P1）待用户。
+
+## 2026-07-13 — Codex 执行（US-short 人工公司行动 confirmed-event 录入器）
+
+- **Verdict/Action**: 按 `4fc9dfd` 的纯离线设计新增人工录入器、只读本地 JSON 的 runner 和 schema；显式 `--confirm` 才把精确分数/分、日期和 source digest 交给既有 planner。SEC EDGAR URL 的 CIK 必须绑定旧证券，或换股时绑定 successor 身份；CVR、未确认、缺失或不一致输入只冻结该 ticker 并人工复核。输出不保留 URL；未联网、未读写真实账户、未应用处置。
+- **Required**: `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍为 open P1。录入器不解析或证明 SEC 原文语义，也没有真实账户读取/私有处置写入授权；不得把票据当成交、收益、选股或 ship-gate 证据。
+- **Verify**: CIK/successor 反向测试先 red（旧实现不接受 identity-bound successor，schema 不接受新绑定字段）后 green；最终 focused + 现有 disposition/identity/doc guards `83 OK`；完整离线 `test_us_short*.py` `4383 OK (1 skipped)`；`py_compile` 与 `git diff --check` 通过。
+- **Pre-Codex self-review**: A-F 已完成：4 个事件类型均覆盖，stock 两类均要求 successor identity；ripple grep 仅命中新 engine/runner/schema/tests/权威文档，无 provider-client import；伪造身份、非绑定 evidence CIK、确认缺失、CVR、错误精度和 boundary 漂移均拒绝/冻结；README、§12、同一 P1 已同步，`CURRENT` 未改。未启用子 agent；按清单完成 main-thread current-diff fallback，自审不构成 Claude 审查。
+- **Next**: Claude Code 独立审查当前 scope；仅 PASS 后提交该 scope。
+
 ## 2026-07-13 — Claude Code 设计交接（给 Codex：建「人工公司行动事件录入器」= P1 confirmed-event 上游）
 
 - **目标**: 建 disposition planner 的 confirmed-event 上游（`R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 的 Required next action 之一）。把人工从 SEC 读到的 5 字段 → 生成 `engine/us_short_corporate_action_disposition._validate_event` 恰好接受的 confirmed `event`，round-trip 经 `build_manual_disposition`(注入持仓) 证明能产合法票据。纯离线、schema-first、no-network、no-account。

@@ -306,6 +306,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **满仓线 = 12 个月 forward-live（= `live_normalized` 证据，非纸面）+ 月度 alpha t≥2.0 / Sharpe≥1.0 / 回撤≤15% 四指标 AND 门**；不给美股开后门。
 - **美股 active-only**：历史回测因幸存者偏差等永远只能排雷/找灵感/版本比较，证明不了 alpha、不解锁 ship-gate、不授权 full-size/DataHub/production；只能 forward 攒。forward universe 须 PIT 冻结于起点、真实捕捉退市/停牌/并购/无法成交，不删除（落地物 = `forward_universe_snapshot`，§18.1）。现有私有 lifecycle observation 以已绑定状态候选和冻结快照比对：inactive/缺席只标 `inactive_or_ticker_change_unresolved` 或 manual-review block，绝不误称已确认并购/换股；不自动换股、现金折算或强制平仓。
 - **公司行动处置票据（私有、手动落地）**：仅当人工已确认且 source-bound 的事件明确 old ticker、effective date、换股比例和/或每股现金对价时，纯规划器才用精确分数/整数分生成换股、现金或强制退出的**人工确认票据**；它不读写真实账户、不接券商、不自动改持仓/记现金/强平，且不计算收益或改变选股。inactive/缺席本身永远不满足该输入门。
+- **人工公司行动事件录入器（纯离线）**：人工从 SEC 读到 accession/URL 后，录入 old ticker、事件类型、精确整数换股分数、两位小数现金和 effective date；SEC EDGAR URL 的 CIK 必须匹配 old 身份，或换股时匹配 identity-bound successor，防止复制错发行人链接。只有显式确认才生成 planner 可消费的 source-bound event。输出只保留 accession、证据 CIK 与 canonical evidence digest，不保留 URL；CVR 或缺失/不一致输入一律冻结该 ticker 并人工复核，不猜条款、不产票据。此录入器不 fetch/parse SEC，不能证明原始 SEC 语义已正确，且不读账户或应用处置。
 - **证券身份与源故障隔离（纯离线）**：证券身份以 `CIK + 受控 share_class` 固定、ticker 只是可变标签；同发行人不同股份类别不合并。源故障只冻结该身份绑定的 ticker 并要求人工复核，不停全局、不冻结其他股票、不自动重试。yfinance 只保留未执行的烟雾报警位，SEC 只保留默认拒 fetch、未读 raw 的抓取/解析入口；均不构成 provider 选择、公司行动语义或选股依据。
 - **成熟度 = 提醒 + 手动控仓**（不搞系统分档帽）：系统带每周成绩单——paper 成绩单是**进度/设计提醒**，**ship-gate 累加器只累计 `live_normalized`**（manual_actual + 对账，见下双轨）。
 - **双轨（角色对齐 `docs/evidence_capital_policy.md`：纯 paper 不得判满仓 ship-gate）**：
