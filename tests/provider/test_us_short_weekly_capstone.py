@@ -35,7 +35,7 @@ _RECEIPT_STAGE_NAMES = tuple(
 
 def _research_receipt(*, decision_date="20260709", source_path=None, generated_at="2026-07-09T08:00:00-04:00",
                       source_manifest=None, provider_summaries=None,
-                      provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok"))):
+                      provider_health_facts=(("fmp", "ok"), ("sec_edgar", "ok")), stage_executions=None):
     from engine.us_short_run_origin import _issue_capstone_research_live_receipt
     source = Path(source_path or (ROOT / "state" / "us_short" / "receipt_test_source.json")).resolve()
     source_digest = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else "1" * 64
@@ -66,6 +66,7 @@ def _research_receipt(*, decision_date="20260709", source_path=None, generated_a
         provider_summary_digests=provider_summary_digests,
         provider_health_facts=provider_health_facts,
         provider_evidence_sha256=evidence_digest,
+        stage_executions=stage_executions,
     )
 
 
@@ -337,6 +338,22 @@ class CapstoneFakeChainTest(unittest.TestCase):
     def test_research_receipt_does_not_require_shadow_stage(self):
         receipt = _research_receipt()
         self.assertNotIn("forward_policy_shadow", receipt.completed_stages)
+
+    def test_receipt_v2_preserves_reused_stage_times_without_rewriting_them(self):
+        stage_executions = tuple(
+            (
+                name,
+                "reused" if name == "momentum_fetch" else "executed",
+                "2026-07-08T08:00:00-04:00" if name == "momentum_fetch" else "2026-07-09T08:00:00-04:00",
+                "2026-07-08T08:00:00-04:00" if name == "momentum_fetch" else "2026-07-09T08:00:00-04:00",
+                hashlib.sha256(name.encode("utf-8")).hexdigest(),
+            )
+            for name in _RECEIPT_STAGE_NAMES
+        )
+        receipt = _research_receipt(stage_executions=stage_executions)
+        self.assertEqual(receipt.stage_executions, stage_executions)
+        self.assertEqual(dict((row[0], row[1]) for row in receipt.stage_executions)["momentum_fetch"], "reused")
+        self.assertNotEqual(receipt.stage_executions[1][2], receipt.generated_at)
 
     def test_stage_missing_output_fails_fast_with_stage_name(self):
         order: list[str] = []
