@@ -304,7 +304,8 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 
 ## 12. Ship-gate / 上真钱 / Active-only / 纸面成绩单
 - **满仓线 = 12 个月 forward-live（= `live_normalized` 证据，非纸面）+ 月度 alpha t≥2.0 / Sharpe≥1.0 / 回撤≤15% 四指标 AND 门**；不给美股开后门。
-- **美股 active-only**：历史回测因幸存者偏差等永远只能排雷/找灵感/版本比较，证明不了 alpha、不解锁 ship-gate、不授权 full-size/DataHub/production；只能 forward 攒。forward universe 须 PIT 冻结于起点、真实捕捉退市/停牌/并购/无法成交，不删除（落地物 = `forward_universe_snapshot`，§18.1）。
+- **美股 active-only**：历史回测因幸存者偏差等永远只能排雷/找灵感/版本比较，证明不了 alpha、不解锁 ship-gate、不授权 full-size/DataHub/production；只能 forward 攒。forward universe 须 PIT 冻结于起点、真实捕捉退市/停牌/并购/无法成交，不删除（落地物 = `forward_universe_snapshot`，§18.1）。现有私有 lifecycle observation 以已绑定状态候选和冻结快照比对：inactive/缺席只标 `inactive_or_ticker_change_unresolved` 或 manual-review block，绝不误称已确认并购/换股；不自动换股、现金折算或强制平仓。
+- **公司行动处置票据（私有、手动落地）**：仅当人工已确认且 source-bound 的事件明确 old ticker、effective date、换股比例和/或每股现金对价时，纯规划器才用精确分数/整数分生成换股、现金或强制退出的**人工确认票据**；它不读写真实账户、不接券商、不自动改持仓/记现金/强平，且不计算收益或改变选股。inactive/缺席本身永远不满足该输入门。
 - **成熟度 = 提醒 + 手动控仓**（不搞系统分档帽）：系统带每周成绩单——paper 成绩单是**进度/设计提醒**，**ship-gate 累加器只累计 `live_normalized`**（manual_actual + 对账，见下双轨）。
 - **双轨（角色对齐 `docs/evidence_capital_policy.md`：纯 paper 不得判满仓 ship-gate）**：
   - `model_paper_track`（**paper 级、设计迭代轨**）：按当周 action_table + 限价 + valid_entry_band + 止损/止盈确定性模拟成交，**仅用于**设计迭代/校准/变体对比（§12.2）/pre-live 验证；不受用户是否买入影响。**`evidence_level=paper`，绝不判 full-size ship-gate**（evidence_capital_policy §2/§4：paper 不得 claim 满仓毕业）。

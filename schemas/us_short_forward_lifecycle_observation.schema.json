@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_forward_lifecycle_observation/1.0.0/schema.json",
+  "title": "US-short Forward Lifecycle Observation",
+  "description": "Private, source-bound observation of a frozen forward active universe against a later status-sourced candidate artifact. It records only fail-closed lifecycle triggers and never confirms a merger or ticker change, performs a conversion/cash valuation, changes selection, or claims live-normalized or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "forward_start_date", "decision_date", "observed_at", "snapshot_ref", "candidate_ref", "events", "coverage", "retention_policy", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_forward_lifecycle_observation" },
+    "schema_version": { "const": "1.0.0" },
+    "forward_start_date": { "$ref": "#/$defs/date" },
+    "decision_date": { "$ref": "#/$defs/date" },
+    "observed_at": { "type": "string", "minLength": 1 },
+    "snapshot_ref": { "$ref": "#/$defs/privateRef" },
+    "candidate_ref": { "$ref": "#/$defs/privateRef" },
+    "events": { "type": "array", "items": { "$ref": "#/$defs/event" } },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "retention_policy": { "$ref": "#/$defs/retentionPolicy" },
+    "boundary": { "$ref": "#/$defs/boundary" }
+  },
+  "$defs": {
+    "date": { "type": "string", "pattern": "^[0-9]{8}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+    "privateRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^state/us_short/.+\\.json$" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "symbol", "event_type", "decision_date", "observed_at", "manual_review_required", "new_entry_blocked", "automatic_conversion_or_cash_valuation_performed"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$" },
+        "symbol": { "$ref": "#/$defs/symbol" },
+        "event_type": {
+          "enum": [
+            "inactive_or_ticker_change_unresolved",
+            "halted",
+            "bankruptcy",
+            "otc_or_exchange_migration",
+            "missing_from_current_universe_requires_manual_review",
+            "critical_status_unknown_requires_manual_review"
+          ]
+        },
+        "decision_date": { "$ref": "#/$defs/date" },
+        "observed_at": { "type": "string", "minLength": 1 },
+        "manual_review_required": { "const": true },
+        "new_entry_blocked": { "const": true },
+        "automatic_conversion_or_cash_valuation_performed": { "const": false }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["frozen_symbol_count", "current_candidate_row_count", "matched_frozen_symbol_count", "missing_frozen_symbol_count", "known_clear_symbol_count", "blocked_symbol_count", "critical_status_unknown_symbol_count"],
+      "properties": {
+        "frozen_symbol_count": { "type": "integer", "minimum": 0 },
+        "current_candidate_row_count": { "type": "integer", "minimum": 0 },
+        "matched_frozen_symbol_count": { "type": "integer", "minimum": 0 },
+        "missing_frozen_symbol_count": { "type": "integer", "minimum": 0 },
+        "known_clear_symbol_count": { "type": "integer", "minimum": 0 },
+        "blocked_symbol_count": { "type": "integer", "minimum": 0 },
+        "critical_status_unknown_symbol_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "retentionPolicy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forward_snapshot_symbols_deleted", "lifecycle_events_retained"],
+      "properties": {
+        "forward_snapshot_symbols_deleted": { "const": false },
+        "lifecycle_events_retained": { "const": true }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["network_access_performed", "provider_calls_performed", "raw_payload_capture_performed", "merger_or_ticker_change_semantics_confirmed", "automatic_corporate_action_processing_performed", "return_calculation_performed", "selection_or_ranking_changed", "datahub_consumption_allowed", "ship_gate_evidence_claimed", "broker_or_order_automation_allowed"],
+      "properties": {
+        "network_access_performed": { "const": false },
+        "provider_calls_performed": { "const": false },
+        "raw_payload_capture_performed": { "const": false },
+        "merger_or_ticker_change_semantics_confirmed": { "const": false },
+        "automatic_corporate_action_processing_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "selection_or_ranking_changed": { "const": false },
+        "datahub_consumption_allowed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false },
+        "broker_or_order_automation_allowed": { "const": false }
+      }
+    }
+  }
+}

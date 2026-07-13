@@ -1,0 +1,144 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_corporate_action_manual_disposition/1.0.0/schema.json",
+  "title": "US-short Corporate-Action Manual Disposition",
+  "description": "Private, source-bound manual disposition ticket for a single already confirmed corporate-action event and one injected long position. It calculates exact stock and cash entitlements but never reads or mutates account state, places an order, performs an automatic conversion/cash booking, calculates returns, or changes selection or ship-gate evidence.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "position_binding", "event_binding", "manual_disposition", "boundary"],
+  "properties": {
+    "schema_name": { "const": "us_short_corporate_action_manual_disposition" },
+    "schema_version": { "const": "1.0.0" },
+    "position_binding": { "$ref": "#/$defs/positionBinding" },
+    "event_binding": { "$ref": "#/$defs/eventBinding" },
+    "manual_disposition": { "$ref": "#/$defs/manualDisposition" },
+    "boundary": { "$ref": "#/$defs/boundary" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "event_binding": { "properties": { "event_type": { "const": "stock_conversion" } } } } },
+      "then": { "properties": { "manual_disposition": { "$ref": "#/$defs/stockDisposition" } } }
+    },
+    {
+      "if": { "properties": { "event_binding": { "properties": { "event_type": { "const": "cash_consideration" } } } } },
+      "then": { "properties": { "manual_disposition": { "$ref": "#/$defs/cashDisposition" } } }
+    },
+    {
+      "if": { "properties": { "event_binding": { "properties": { "event_type": { "const": "stock_and_cash_consideration" } } } } },
+      "then": { "properties": { "manual_disposition": { "$ref": "#/$defs/stockCashDisposition" } } }
+    },
+    {
+      "if": { "properties": { "event_binding": { "properties": { "event_type": { "const": "forced_exit" } } } } },
+      "then": { "properties": { "manual_disposition": { "$ref": "#/$defs/forcedExitDisposition" } } }
+    }
+  ],
+  "$defs": {
+    "symbol": { "type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "positionBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "shares"],
+      "properties": {
+        "ticker": { "$ref": "#/$defs/symbol" },
+        "shares": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "eventBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["event_id", "event_type", "old_ticker", "effective_date", "source_evidence_ref_sha256", "source_confirmation", "successor_ticker", "stock_ratio_numerator", "stock_ratio_denominator", "cash_per_old_share_cents"],
+      "properties": {
+        "event_id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$" },
+        "event_type": { "enum": ["stock_conversion", "cash_consideration", "stock_and_cash_consideration", "forced_exit"] },
+        "old_ticker": { "$ref": "#/$defs/symbol" },
+        "effective_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+        "source_evidence_ref_sha256": { "$ref": "#/$defs/sha256" },
+        "source_confirmation": { "const": "manually_confirmed_source_bound" },
+        "successor_ticker": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+        "stock_ratio_numerator": { "type": ["integer", "null"], "minimum": 1 },
+        "stock_ratio_denominator": { "type": ["integer", "null"], "minimum": 1 },
+        "cash_per_old_share_cents": { "type": ["integer", "null"], "minimum": 1 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "event_type": { "const": "stock_conversion" } } },
+          "then": { "properties": { "successor_ticker": { "$ref": "#/$defs/symbol" }, "stock_ratio_numerator": { "type": "integer", "minimum": 1 }, "stock_ratio_denominator": { "type": "integer", "minimum": 1 }, "cash_per_old_share_cents": { "type": "null" } } }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "cash_consideration" } } },
+          "then": { "properties": { "successor_ticker": { "type": "null" }, "stock_ratio_numerator": { "type": "null" }, "stock_ratio_denominator": { "type": "null" }, "cash_per_old_share_cents": { "type": "integer", "minimum": 1 } } }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "stock_and_cash_consideration" } } },
+          "then": { "properties": { "successor_ticker": { "$ref": "#/$defs/symbol" }, "stock_ratio_numerator": { "type": "integer", "minimum": 1 }, "stock_ratio_denominator": { "type": "integer", "minimum": 1 }, "cash_per_old_share_cents": { "type": "integer", "minimum": 1 } } }
+        },
+        {
+          "if": { "properties": { "event_type": { "const": "forced_exit" } } },
+          "then": { "properties": { "successor_ticker": { "type": "null" }, "stock_ratio_numerator": { "type": "null" }, "stock_ratio_denominator": { "type": "null" }, "cash_per_old_share_cents": { "type": "null" } } }
+        }
+      ]
+    },
+    "entitlement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": { "type": "integer", "minimum": 1 },
+        "denominator": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "manualDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "successor_ticker", "successor_share_entitlement", "cash_entitlement_cents", "manual_exit_required", "manual_confirmation_to_apply_required"],
+      "properties": {
+        "action": { "enum": ["manual_convert_shares", "manual_record_cash_consideration", "manual_convert_and_record_cash", "manual_exit_at_broker_confirmed_terms"] },
+        "successor_ticker": { "type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9.-]{0,9}$" },
+        "successor_share_entitlement": { "anyOf": [{ "$ref": "#/$defs/entitlement" }, { "type": "null" }] },
+        "cash_entitlement_cents": { "type": ["integer", "null"], "minimum": 1 },
+        "manual_exit_required": { "type": "boolean" },
+        "manual_confirmation_to_apply_required": { "const": true }
+      }
+    },
+    "stockDisposition": {
+      "allOf": [
+        { "$ref": "#/$defs/manualDisposition" },
+        { "properties": { "action": { "const": "manual_convert_shares" }, "successor_ticker": { "$ref": "#/$defs/symbol" }, "successor_share_entitlement": { "$ref": "#/$defs/entitlement" }, "cash_entitlement_cents": { "type": "null" }, "manual_exit_required": { "const": false } } }
+      ]
+    },
+    "cashDisposition": {
+      "allOf": [
+        { "$ref": "#/$defs/manualDisposition" },
+        { "properties": { "action": { "const": "manual_record_cash_consideration" }, "successor_ticker": { "type": "null" }, "successor_share_entitlement": { "type": "null" }, "cash_entitlement_cents": { "type": "integer", "minimum": 1 }, "manual_exit_required": { "const": false } } }
+      ]
+    },
+    "stockCashDisposition": {
+      "allOf": [
+        { "$ref": "#/$defs/manualDisposition" },
+        { "properties": { "action": { "const": "manual_convert_and_record_cash" }, "successor_ticker": { "$ref": "#/$defs/symbol" }, "successor_share_entitlement": { "$ref": "#/$defs/entitlement" }, "cash_entitlement_cents": { "type": "integer", "minimum": 1 }, "manual_exit_required": { "const": false } } }
+      ]
+    },
+    "forcedExitDisposition": {
+      "allOf": [
+        { "$ref": "#/$defs/manualDisposition" },
+        { "properties": { "action": { "const": "manual_exit_at_broker_confirmed_terms" }, "successor_ticker": { "type": "null" }, "successor_share_entitlement": { "type": "null" }, "cash_entitlement_cents": { "type": "null" }, "manual_exit_required": { "const": true } } }
+      ]
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account_state_read", "account_state_mutated", "broker_order_placed", "automatic_position_conversion_performed", "automatic_cash_booking_performed", "return_calculation_performed", "selection_or_ranking_changed", "ship_gate_evidence_claimed"],
+      "properties": {
+        "account_state_read": { "const": false },
+        "account_state_mutated": { "const": false },
+        "broker_order_placed": { "const": false },
+        "automatic_position_conversion_performed": { "const": false },
+        "automatic_cash_booking_performed": { "const": false },
+        "return_calculation_performed": { "const": false },
+        "selection_or_ranking_changed": { "const": false },
+        "ship_gate_evidence_claimed": { "const": false }
+      }
+    }
+  }
+}

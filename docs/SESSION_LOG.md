@@ -8,6 +8,29 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short forward-lifecycle 捕获 + 公司行动手动处置 bundle）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。同一 register P1 下两半一并审：detector（`us_short_forward_lifecycle_capture.py`：冻结 forward active универс vs later candidate → 私有 fail-closed 人工复核 block）+ planner（`us_short_corporate_action_disposition.py`：人工已确认 source-bound 事件 + 注入 long 持仓 → 精确换股/现金/强退票据）。两半 offline、私有 gitignored、无 consumer、不读写账户/不接券商/不改选股、boundary 全 const-false、SR-PROVIDER-001+§12.1 保持 open。universe summary 仍未纳入。
+- **Required**: 无 material finding。`R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED`（P1 open：诚实登记缺 merger 上游语义，非本 bundle 缺陷）单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（六族全 HELD·零 bypass：detector 结构上发不出 confirmed-merger+unknown→非 active；planner 8 伪造 confirmation 全拒+math 精确 reduced Fraction/整数分；boundary const-pin+dead-end 无 consumer；私有 gitignored+PIT[as_of==decision·flags 从 provenance 重算·无回看·no-clobber]；零 tracked 值/secret；零 fetch）。整读两 engine+两 schema 一致；design §12/README/register 同步准。focused+guards 59 OK；**亲跑全包 `Ran 4359 / OK / 0 fail`**（182s）。仓位/账户红线→起 §6a。
+- **Next**: 无 Codex 命令；merger 上游语义契约 + 真账户读/私有处置写授权（P1 Required）待用户。
+
+## 2026-07-13 — Codex 执行（US-short 公司行动第 5 刀：精确处置票据，手动落地）
+
+- **Verdict/Action**: 新增纯 `corporate_action_manual_disposition`：只接收已人工确认、source-bound digest 的单一公司行动与注入的 long position，分别生成纯换股、纯现金、换股+现金或强制退出的**人工确认票据**；换股以精确分数、现金以整数分表达。未读真实账户、未写账户状态、未接券商或自动下单。
+- **Required**: `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open P1。inactive/缺席不能伪装成确认事件；仍缺可审计的 old/successor、effective date、stock/cash terms 输入和用户对真实账户读取/私有处置文件写入的单独授权。不得把票据当成交、收益、选股或 ship-gate 证据。
+- **Verify**: 先 red（engine/schema 缺失）；处置+账户契约+lifecycle+doc guards `159 OK`；完整离线 `*us_short*.py` `4359 OK (1 skipped)`；`py_compile`、`git diff --check` 通过。测试只用临时夹具账户，未读取真实账户或持仓。
+- **Pre-Codex self-review**: A-F checked；A=4 类事件（stock/cash/stock+cash/forced exit）均有引擎+schema coverage；B=grep 仅命中本 engine/schema/tests/权威文档、无 account/provider/selection consumer；C=无 source confirmation/digest、ticker 不符、零/布尔 ratio、forced-exit 混入对价、boundary tamper 均拒绝；E=README/§12/register 同步、`CURRENT` 未动。首次 current-diff 自审 FAIL（本 entry 缺失）→ 已补齐后同范围复核 PASS（无 must-fix）；未伪称 Claude 审查。
+- **Next**: Claude Code 独立审查第 4、5 刀当前 scope；PASS 后仅提交已审查 scope。
+
+## 2026-07-13 — Codex 执行（US-short forward lifecycle：第 4 刀的未覆盖事件留存与阻断）
+
+- **Verdict/Action**: 未重复改已有的 SEC active-listing / Nasdaq halt / bankruptcy 状态源；新增私有 `forward_universe_snapshot` → status-sourced candidate observation。冻结起点的 ticker 永不删除；后续 inactive/ticker ambiguity、halt、bankruptcy、OTC、候选缺席或关键状态 unknown 都只写 gitignored `state/us_short/` 事件、阻新建并要求人工复核。未创建真实 forward snapshot、未跑全量/网络/外部调用。
+- **Required**: 新 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 为 open P1：inactive/缺席不是已确认 merger/ticker mapping，尚无 successor、换股比例、现金对价、effective date 或成交价；不得自动换股、现金折算、强制平仓、收益计算或改选股。
+- **Verify**: 先 red（runner/schema 缺失）；forward lifecycle + snapshot/status-source/universe-fetch + doc guards `273 OK`；完整离线 `*us_short*.py` `4352 OK (1 skipped)`；`py_compile` 与 `git diff --check` 通过。测试内的 provider 文案均为注入夹具，无实际请求。
+- **Pre-Codex self-review**: A-F checked；A=6 类事件全覆盖；B=`rg` 只命中新 runner/schema/tests/权威路由，无 selection consumer；C=无确认、伪造 status provenance、非 canonical ticker、重复/覆盖输出均 fail-closed；E=README/§12/register 同步、`CURRENT` 未动。首次轻量独立自审超时；按清单重启一次的更窄 current-diff-only 自审 PASS（无 must-fix、未跑大包），主线程固定包证据独立保留；未伪称 Claude 审查。
+- **Next**: Claude Code 独立审查本刀；PASS 后仅提交当前 scope。
+
 ## 2026-07-13 — Claude Code 审查（US-short Massive 公司行动第四刀：私有 raw 规范化）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。cut4 = 离线 raw adapter：读已捕获的 12 个 gitignored raw wrapper → 每票产 1 个**仅落 gitignored `provider_samples/.../normalized/`** 的 source-bound 规范化包（绑 capture packet sha + 4 wrapper sha、日线锁 NY 午夜、最小事件/两价模式字段）。**未联网、未写任何 tracked 值/secret、未接 consumer**、boundary 六旗全 false 只 `raw_payload_read_and_normalized:true`、SR-PROVIDER-001 保持 open。universe summary 仍未纳入。
