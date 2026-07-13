@@ -8,6 +8,31 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short planner P3：非换股 stray-ratio 幻影权益已闭）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push，**仅 planner P3 slice**）。`_validate_event` 改对称（stock 类要求 successor/分子/分母全在；非 stock 类任一在即拒）→ 幻影权益修掉，坏形状事件到不了 `_manual_disposition` 幻影分支。**只提交 planner P3**（disposition 引擎 + 反向矩阵 + schema 测试 + register + 本 log）；Codex **并发在建的 account_state 接线刀 WIP**（改了 `test_us_short_corporate_action_event_recorder.py`）**留未提交、待其自己审**。universe summary 未纳入。
+- **Required**: 无。`R-USSHORT-DISPOSITION-PLANNER-CASH-EVENT-STRAY-RATIO-PHANTOM-ENTITLEMENT` → resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 diff（对称化）；**自撰对抗探针**：现金+游离{比例/仅分子/successor}、forced_exit+比例 4 变体**全 REJECTED**，4 类合法事件全出**正确**票据（stock 1:1→10 股、stock+cash→15 股+现金、无过度收紧）。focused 48 OK；**亲跑全包 `Ran 4383 / OK / 0 fail`**（191s；树含 Codex 并发 account_state recorder-test WIP、不在本提交内）。contained 离线收紧 + 精确 exploit 复现 → 未起 §6a。
+- **Next**: account_state 接线刀（Codex WIP、我上条设计交接）待建完 + 审。
+
+## 2026-07-13 — Claude Code 设计交接（给 Codex：录入器持仓输入改读 account_state，测试→真实同一线）
+
+- **目标**: 把 `us_short_corporate_action_event_recorder` 的持仓输入从「手填注入 `position`」改成「读系统私有 `account_state` 账本里 `old_ticker` 的 long 持仓股数」。测试期读测试/纸面持仓（现由手工表 `runners/us_short_account_state_from_manual_tables.py` 生成），实盘期读真实持仓——**同一 schema、同一根线、无 test/real 分支**。用户 2026-07-13 明确授权读私有账户。
+- **输入/复用**: 显式传入 `account_state` 私有本地 JSON 路径 + `--confirm-account-read` opt-in 门；复用 `schemas/us_short_account_state.schema.json` + 其既有 loader/validator；解析出 `old_ticker` 的 **long** position 取 `shares`（strict 正整数）作为喂 `build_manual_disposition` 的 position。planner 与事件逻辑不变（本刀只换持仓来源）。
+- **授权/boundary**: 读本地私有 `account_state` = P1 里「读私有账户」那步（已授权）；**只读、不写账本、不下单、绝不接券商**。boundary 诚实化：`account_state_read` → `True`（本地只读账本），`account_state_mutated`/`broker_order_placed`/`selection_or_ranking_changed`/`ship_gate_evidence_claimed` 仍 `False`；recorder validator + schema 的对应 const 同步更新。
+- **fail-closed**: `account_state` 缺失/畸形 → `manual_review`；`old_ticker` 无 long 持仓 → 明确 `no_position_for_ticker`（不出票、不伪造 0 股）；同 ticker 多持仓/歧义 → 拒；非 long → 拒（US-short long-only）。
+- **无泄漏**: 实际处置票据（含 shares×ratio / cash 金额）落 **私有 gitignored** artifact 供人工执行；**任何 tracked 文件不得含股数、金额、其他持仓或整本 account_state**；tracked summary 只 counts/status。
+- **测试**: 持有 long 票→正确票据；未持有→`no_position_for_ticker` 不出票；畸形 account_state→manual_review；非 long/重复持仓→拒；boundary 诚实；tracked 输出零股数/金额/账户泄漏；用手工表生成的 account_state 端到端跑通（证「测试→真实同一线」）。
+- **Next**: Codex 执行本刀（独立 slice，纯离线，不动 planner P3 那刀）；Claude 独立审查。
+
+## 2026-07-13 — Codex 修复（US-short planner 非换股 stray-ratio 幻影权益）
+
+- **Verdict/Action**: 修复 `R-USSHORT-DISPOSITION-PLANNER-CASH-EVENT-STRAY-RATIO-PHANTOM-ENTITLEMENT`：planner 现在要求两类换股事件同时具备 successor/分子/分母；现金与强制退出事件任一夹带这三项即在 `_validate_event` 拒绝，不能再算出幻影换股数。未触及 provider、联网、账户、券商、选股或 ship-gate。
+- **Required**: P3 处于 `in_progress`，待 Claude Code 独立审查并提交后才可在 register 关闭；P1 公司行动原文语义与真实账户授权仍不在本刀范围。
+- **Verify**: 新反向矩阵先 red：现金事件夹带 successor、分子或分母共 3 条均被旧 planner 放行；修复后现金与 forced-exit 的 6 个同类变体均拒绝，schema 同矩阵也拒绝。focused + identity/recorder/doc guards `83 OK`；完整离线 `test_us_short*.py` `4383 OK (1 skipped)`；`py_compile` 通过。
+- **Pre-Codex self-review**: A-F 已完成：4 类事件均保留合法正控，2 类非换股 × {successor, numerator, denominator} 全覆盖；ripple grep 确认 planner 的唯一入口/validator/recorder round-trip 和两份 schema 均使用同一字段契约；`_manual_disposition` 只接已规范化事件。register 单源同步，`CURRENT` 未改。未启用子 agent；按清单完成 main-thread current-diff fallback，自审不构成 Claude 审查。
+- **Next**: Claude Code 独立审查当前 planner P3 scope；仅 PASS 后提交该 scope。
+
 ## 2026-07-13 — Claude Code 审查（US-short 人工公司行动 confirmed-event 录入器）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。录入器（engine+runner+schema）忠实实现 `4fc9dfd` 规格：`--confirm` 才产 confirmed event，否则/CVR/缺/不一致→单票 manual_review freeze；现金→整数分（拒 $54.2）、比例 strict 正整数、round-trip 经既有 planner 证能出票；evidence CIK ∈ {old,successor} 身份（Twitter 错链→拒、T-Mobile successor→放行）；输出不留 URL、注入持仓非真账户、boundary 七旗 false、SR-PROVIDER-001 open。universe summary 未纳入。

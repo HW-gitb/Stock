@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import sys
 import unittest
 from pathlib import Path
@@ -132,6 +133,29 @@ class CorporateActionManualDispositionSchemaTest(unittest.TestCase):
         value = valid_ticket()
         value["manual_disposition"]["cash_entitlement_cents"] = 100
         self.assert_invalid(value)
+
+        for kind, disposition_shape in (
+            ("cash_consideration", {"action": "manual_record_cash_consideration", "cash_entitlement_cents": 625, "manual_exit_required": False}),
+            ("forced_exit", {"action": "manual_exit_at_broker_confirmed_terms", "cash_entitlement_cents": None, "manual_exit_required": True}),
+        ):
+            non_stock = valid_ticket()
+            non_stock["event_binding"].update(
+                event_type=kind,
+                successor_ticker=None,
+                stock_ratio_numerator=None,
+                stock_ratio_denominator=None,
+                cash_per_old_share_cents=125 if kind == "cash_consideration" else None,
+            )
+            non_stock["manual_disposition"].update(
+                successor_ticker=None,
+                successor_share_entitlement=None,
+                **disposition_shape,
+            )
+            for field, value in (("successor_ticker", "NEW"), ("stock_ratio_numerator", 3), ("stock_ratio_denominator", 2)):
+                forged = copy.deepcopy(non_stock)
+                forged["event_binding"][field] = value
+                with self.subTest(non_stock_event=kind, stray_stock_field=field):
+                    self.assert_invalid(forged)
 
 
 if __name__ == "__main__":

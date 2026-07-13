@@ -93,6 +93,18 @@ class CorporateActionDispositionTest(unittest.TestCase):
         with self.assertRaises(disposition.CorporateActionDispositionError):
             disposition.build_manual_disposition(position(), bad)
 
+        for kind in ("cash_consideration", "forced_exit"):
+            for field, value in (
+                ("successor_ticker", "NEW"),
+                ("stock_ratio_numerator", 3),
+                ("stock_ratio_denominator", 2),
+            ):
+                bad = event(kind)
+                bad[field] = value
+                with self.subTest(non_stock_event=kind, stray_stock_field=field):
+                    with self.assertRaises(disposition.CorporateActionDispositionError):
+                        disposition.build_manual_disposition(position(), bad)
+
         bad = event()
         bad["unexpected"] = True
         with self.assertRaises(disposition.CorporateActionDispositionError):

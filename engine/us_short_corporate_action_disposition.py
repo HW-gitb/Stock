@@ -94,8 +94,12 @@ def _validate_event(event: Any, *, position_ticker: str) -> dict[str, Any]:
     cash_cents = _nullable_positive_int(event["cash_per_old_share_cents"], field="event.cash_per_old_share_cents")
     has_stock = event_type in {"stock_conversion", "stock_and_cash_consideration"}
     has_cash = event_type in {"cash_consideration", "stock_and_cash_consideration"}
-    if has_stock != (successor is not None and numerator is not None and denominator is not None):
-        raise CorporateActionDispositionError("stock event semantics require exactly successor ticker and ratio")
+    stock_fields = (successor, numerator, denominator)
+    if has_stock:
+        if any(value is None for value in stock_fields):
+            raise CorporateActionDispositionError("stock event semantics require exactly successor ticker and ratio")
+    elif any(value is not None for value in stock_fields):
+        raise CorporateActionDispositionError("non-stock event cannot carry successor or stock ratio")
     if has_cash != (cash_cents is not None):
         raise CorporateActionDispositionError("cash event semantics require exactly cash_per_old_share_cents")
     if event_type == "forced_exit" and any(value is not None for value in (successor, numerator, denominator, cash_cents)):
