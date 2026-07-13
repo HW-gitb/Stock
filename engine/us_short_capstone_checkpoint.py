@@ -75,6 +75,27 @@ def pipeline_contract(stages) -> list[dict[str, str]]:
     ]
 
 
+def _prune_superseded_decision_checkpoints(private_root: Path, current_decision_date: str) -> None:
+    """Retention: a checkpoint bundle is only resumable for its own decision week (`validate_resume_header` binds the
+    decision date — you cannot resume a past week), so bundle trees under an OLDER `capstone_checkpoints_private/
+    <YYYYMMDD>/` directory are dead weight. Remove them on each new run so the private checkpoint store does not grow
+    unboundedly across weeks. Bounded + private + fail-soft: only 8-digit-date directories strictly older than the
+    current one, under the same fail-closed private root, are removed, and any prune error is swallowed (retention
+    must never abort a run)."""
+    base = (Path(private_root) / "capstone_checkpoints_private").resolve()
+    if not base.is_dir():
+        return
+    for child in list(base.iterdir()):
+        try:
+            if not (child.is_dir() and len(child.name) == 8 and child.name.isdigit()
+                    and child.name < current_decision_date):
+                continue
+            _guard_private(child)
+            shutil.rmtree(child)
+        except (OSError, CapstoneCheckpointError):
+            continue
+
+
 def create_manifest(
     *, private_root: Path, decision_date: str, price_basis_date: str, generated_at: str, run_contract: dict[str, Any],
     stages,
@@ -98,6 +119,7 @@ def create_manifest(
         "stages": [],
     }
     _write_manifest(manifest_path, manifest)
+    _prune_superseded_decision_checkpoints(Path(private_root), decision_date)
     return manifest_path, manifest
 
 

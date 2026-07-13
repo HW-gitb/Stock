@@ -241,7 +241,10 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             client=_FakeYFinanceClient({"AAPL": [], "MSFT": [], "JPM": []}),
             confirm_user_authorization=True,
         )
-        runner._assert_summary_safe(summary, ["U", "ON", "ALL", "RAW"], [])
+        # real single-letter tickers M/R/T (Macy's/Ryder/AT&T) + US must NOT false-positive on the fixed
+        # `limitations` prose ("Missing"/"Resolver"/"Tracked") or the `scope` identity ("US"/"US-short"); the
+        # whole-JSON scan used to abort on them. Only free-form path leaves are ticker-scanned now.
+        runner._assert_summary_safe(summary, ["U", "ON", "ALL", "RAW", "M", "R", "T", "US"], [])
 
         summary["source_artifacts"]["source_package_path"] = "state/us_short/U.json"
         with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "ticker names"):

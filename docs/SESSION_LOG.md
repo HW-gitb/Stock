@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-13 — Claude Code 自修自审 PASS（US-short 两个 review-Optional：yfinance guard 假阳 + checkpoint 保留）
+
+- **Verdict/Action**: PASS + 提交（branch，未 push）。修上两轮记的 2 个 Optional。**① yfinance guard 其实是真 bug、不是 cosmetic**：实测真单字母票 `M`/`R`/`T`（Macy's/Ryder/AT&T）词边界撞固定 `limitations` 英文散文（"Missing"/"Resolver"/"Tracked"）、`US` 撞 `scope` 身份 → 真 + 中性 summary 都 raise → advisory-neutral fallback 再抛 → 整轮非确定崩。改成 ticker 只扫 summary 的 free-form 路径叶子（`*_path`/`*_root`；schema const/enum 保证其余无票值），secret/URL/sensitive 扫描不动。**② checkpoint 保留**：`create_manifest` 现剪掉更旧 decision-date 的 bundle（bounded/private/fail-soft）。
+- **Required**: 无。两个 R-ID 的 Optional 均 resolved（单源见 register）。
+- **Verify**: review-evidence:not_available（真实工具输出）。改前实测 `M`/`R`/`T`/`US` 在固定 chrome 上 FALSE-POSITIVE；改后 guard 测试扩 `M`/`R`/`T`/`US` 不误报 + 保留 `U`-in-path 真泄漏仍拒；新 checkpoint 保留测试（旧日期剪、当前 + 非日期 decoy 留）；py_compile OK、亲跑 ecf2 全离线 `test_us_short*` **4325 OK**。§6a 未起（缩 guard 假阳面、不弱化 secret/path 保护；retention fail-soft 私密受限）。
+- **Next**: 待 master 平行窗口活清后并入。
+
 ## 2026-07-13 — Claude Code 独立复审 PASS（US-short capstone checkpoint/resume；P1 blocker 已修）
 
 - **Verdict/Action**: PASS + 提交（branch，未 push；master 平行窗口活未清、待协调并入）。上轮 FAIL 的 P1（新私密目录 `capstone_checkpoints_private` 没进 `.gitignore` → 生产每次 `--live` 在 checkpoint 初始化就崩）已修：`.gitignore` 加该目录、§11.6/§18.1 补清单、加走**仓内真实生产路径**的回归测试（RED-before/GREEN-after）+ bonus receipt-v2 时钟保留测试。修得窄——只 `.gitignore` 是新生产码，已审 sound 的 engine/capstone/run_origin/schema 本轮未动（diff 确认）。

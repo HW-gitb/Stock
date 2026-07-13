@@ -554,12 +554,39 @@ def _build_summary(
     }
 
 
+def _summary_freeform_strings(summary: dict[str, Any]) -> str:
+    """Free-form string leaves the ticker-leak scan must inspect. The tracked summary is schema-enforced
+    aggregate-only (const / enum / int / date / bool), so the ONLY strings that could carry a leaked ticker are the
+    runner-built file PATHS (keys ending `_path` / `_root`). Scanning the whole serialized summary instead
+    false-positives short / single-letter tickers on the FIXED chrome — e.g. real tickers `M` / `R` / `T` on the
+    English `limitations` prose ("Missing" / "Resolver" / "Tracked"), or `US` on the `scope` identity — and would
+    abort the advisory stage (and its neutral fallback). Any NEW free-form string field must be added here; the
+    summary schema (`additionalProperties:false` + const/enum) is the structural guarantee that no other field can
+    carry a ticker value."""
+    parts: list[str] = []
+
+    def _walk(value: Any) -> None:
+        if isinstance(value, dict):
+            for key, item in value.items():
+                if isinstance(item, str) and (key.endswith("_path") or key.endswith("_root")):
+                    parts.append(item)
+                else:
+                    _walk(item)
+        elif isinstance(value, list):
+            for item in value:
+                _walk(item)
+
+    _walk(summary)
+    return "\n".join(parts)
+
+
 def _assert_summary_safe(summary: dict[str, Any], target_symbols: list[str], sensitive_values: list[str]) -> None:
     text = json.dumps(summary, ensure_ascii=False, sort_keys=True)
     if _SUMMARY_FORBIDDEN.search(text):
         raise YFinanceGradesFetchError("tracked yfinance grades summary may not contain URLs, secrets, or raw payload fields")
+    freeform = _summary_freeform_strings(summary)
     for symbol in target_symbols:
-        if symbol and re.search(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])", text):
+        if symbol and re.search(rf"(?<![A-Z0-9]){re.escape(symbol)}(?![A-Z0-9])", freeform):
             raise YFinanceGradesFetchError("tracked yfinance grades summary may not contain ticker names")
     for value in sensitive_values:
         if value and value in text:

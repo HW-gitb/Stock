@@ -158,6 +158,26 @@ class CapstoneCheckpointTest(unittest.TestCase):
                 output_logical_paths=["state/us_short/series.json"],
             )
 
+    def test_create_manifest_prunes_superseded_older_decision_checkpoints(self):
+        base = (self.root / "private" / "capstone_checkpoints_private").resolve()
+        self.assertTrue((base / "20260713").is_dir())  # setUp created the current-week bundle
+        checkpoint.create_manifest(
+            private_root=self.root / "private", decision_date="20260701", price_basis_date="20260630",
+            generated_at="2026-06-30T08:00:00-04:00", run_contract=self.run_contract, stages=self.stages,
+        )
+        decoy = base / "keepme"
+        decoy.mkdir(parents=True, exist_ok=True)
+        (decoy / "x.json").write_text("{}", encoding="utf-8")
+        self.assertTrue((base / "20260701").is_dir())
+        # a new current-week run prunes strictly-older 8-digit-date dirs, keeps the current date + the non-date decoy
+        checkpoint.create_manifest(
+            private_root=self.root / "private", decision_date="20260713", price_basis_date="20260710",
+            generated_at="2026-07-12T09:00:00-04:00", run_contract=self.run_contract, stages=self.stages,
+        )
+        self.assertFalse((base / "20260701").exists())
+        self.assertTrue((base / "20260713").is_dir())
+        self.assertTrue(decoy.is_dir())
+
 
 class CapstoneResumeIntegrationTest(unittest.TestCase):
     def setUp(self):
