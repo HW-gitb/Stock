@@ -14,6 +14,7 @@
 - **输入契约（全人工确认、离线）**: `old_ticker`；`event_type`∈{stock_conversion,cash_consideration,stock_and_cash_consideration,forced_exit}；`successor_ticker`(非 stock 类=null)；换股比例=**精确整数 numerator/denominator**（operator 把 SEC 小数写成分数，如 0.10256→10256/100000；非精确即拒、绝不四舍五入）；每股现金=**整数分**（$54.20→5420；非 2 位小数即拒）；`effective_date`(YYYY-MM-DD→YYYYMMDD)；`source_evidence`(SEC URL/accession)→ `source_evidence_ref_sha256`=canonical evidence 串 sha256；显式 `--confirm` 才置 `source_confirmation=manually_confirmed_source_bound`（缺=拒）。
 - **持仓**: 注入（手填 shares），**不读真实账户**（真账户读仍 gated 于 P1）。
 - **复用 + 安全旁路**: `us_short_security_identity` 绑 old_ticker→CIK/class（改名保身份）；输入缺/不一致 → 走 `build_ticker_scoped_source_freeze` 人工复核、绝不猜；CVR / 系统无对应字段（如 Celgene 的 CVR）→ 标 `manual_review`、不产票据。
+- **evidence-CIK 交叉校验（练习实证新增）**: `source_evidence` 若为 SEC EDGAR URL，从路径 `.../data/{CIK}/...` 提取 CIK 并要求 == 该 identity 的 `issuer_cik`；不符即拒（离线抓不到正文，但能挡「复制错发行人链接」——本练习实证：Sprint[CIK 101830] 事件被误填 Twitter[CIK 1418091] 链接）。非 EDGAR-URL 形态的 evidence 只存 hash、不做此校验。
 - **boundary**: offline、无网络、不读写账户、无券商、不改选股、非 ship-gate；缺任一字段/前后不一致=fail-closed。
 - **测试**: 4 类事件（TWTR 现金 / Sprint 换股 / Celgene 股+现金→CVR manual_review / forced_exit）+ 分与分数精确 + confirmation 门 + round-trip 到合法 disposition 票据 + reverse 拒。
 - **Next**: Codex 执行本录入器（新 engine/runner + schema + tests，纯离线，独立 slice）；Claude 独立审查。
