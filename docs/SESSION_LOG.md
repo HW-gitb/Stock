@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short 公司行动离线地基：证券身份 + 单票安全旁路 + provider 接口骨架）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。第一/二步离线地基两件：`security_identity`（CIK+share_class 稳定身份，改名不改 id、GOOGL/GOOG 不合并、指纹防篡改）+ `offline_provider_boundary`（yfinance 不 import·不联网、SEC gateway 永 raise、单票 freeze 只冻本票）。**正是你要的安全旁路**：源坏只冻这一只，全局不停、别票不冻、不自动重试，且无入参可设 true。offline、无 consumer、不碰账户/选股、boundary const-false、SR-PROVIDER-001 open。universe summary 未纳入。
+- **Required**: 无 material finding。同一 open P1 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED`（register Evidence 追加本刀、无新孤儿）单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（六不变式全 HELD·零 P1/P2，14 slice+63 探针：安全旁路只冻单只+三全局旗结构不可设 true、无 yfinance/网络+gateway 永 raise、GOOGL/GOOG 不合并+forged/篡改拒、`flag=0` 也拒、dead-end；两 P3 非 bug）。整读两 engine；README 无 dangle、register 更新同一 P1。focused+guards 60 OK；**亲跑全包 `Ran 4373 / OK / 0 fail`**（205s）。新 fail-closed 引擎+fetch 边界→起 §6a。
+- **Next**: 无 Codex 命令；merger 源语义（人工从 SEC 读懂 5 字段）+ 真账户读授权（P1 Required）待用户。
+
+## 2026-07-13 — Codex 执行（US-short 公司行动闭环：纯离线身份、单票旁路与 provider 接口骨架）
+
+- **Verdict/Action**: 新增 `CIK + 受控 share_class` 稳定证券身份记录；ticker 改名不改变身份，同发行人不同股份类别不合并。数据源不可用/畸形时只生成该 ticker 的人工复核冻结，不能停全局、冻其他票或自动重试。yfinance 仅是未执行的报警位；SEC 仅是默认拒绝 fetch、未读 raw 的接口入口。未安装/导入 yfinance、未联网、未读账户/持仓、未改选股或收益。
+- **Required**: `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍为 open P1。身份与隔离只防止源故障扩大；不证明 SEC 公司行动语义、ticker successor、换股/现金条款、复权对账或 paper/live 可评估。
+- **Verify**: 先 red（两个 engine 与三份 schema 缺失）；首次 focused+guards `85 OK` 后自审发现同 CIK 双股类会混同，新增该反向测试先 red 再 green；最终 focused+guards `87 OK`、完整离线 `*us_short*.py` `4373 OK (1 skipped)`；`py_compile` 与 `git diff --check` 通过。新模块 provider-client import grep 为 0，且无 runner consumer。
+- **Pre-Codex self-review**: A-F checked；A=身份稳定、同 CIK 不同 share class、ticker 篡改、单票冻结、全局/无关冻结/自动重试反向路径均有 engine+schema coverage；B=同类 grep 仅命中新 engine/schema/tests/权威文档、无 runner consumer；C=非 canonical ticker、非 CIK、篡改 identity/boundary、SEC fetch 均 fail-closed；E=README/§12/register 同步，`CURRENT` 未动。无可用独立 agent，按清单完成 main-thread current-diff fallback PASS；这不是 Claude 审查。
+- **Next**: Claude Code 独立审查当前纯离线身份/旁路/接口 scope；PASS 后仅提交该 scope。
+
 ## 2026-07-13 — Claude Code 审查（US-short forward-lifecycle 捕获 + 公司行动手动处置 bundle）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。同一 register P1 下两半一并审：detector（`us_short_forward_lifecycle_capture.py`：冻结 forward active универс vs later candidate → 私有 fail-closed 人工复核 block）+ planner（`us_short_corporate_action_disposition.py`：人工已确认 source-bound 事件 + 注入 long 持仓 → 精确换股/现金/强退票据）。两半 offline、私有 gitignored、无 consumer、不读写账户/不接券商/不改选股、boundary 全 const-false、SR-PROVIDER-001+§12.1 保持 open。universe summary 仍未纳入。

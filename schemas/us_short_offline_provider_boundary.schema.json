@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_offline_provider_boundary/1.0.0/schema.json",
+  "title": "US-short Offline Provider Boundary",
+  "description": "Pure/offline yfinance smoke-alarm and SEC corporate-event interface skeleton. Neither imports a provider package nor accesses the network or raw payloads. A source failure freezes only the bound security for manual review, not unrelated symbols or the global run.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "security_binding", "yfinance_smoke_alarm", "sec_corporate_event_interface", "failure_isolation", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_offline_provider_boundary"},
+    "schema_version": {"const": "1.0.0"},
+    "security_binding": {"$ref": "#/$defs/securityBinding"},
+    "yfinance_smoke_alarm": {"$ref": "#/$defs/yfinanceAlarm"},
+    "sec_corporate_event_interface": {"$ref": "#/$defs/secInterface"},
+    "failure_isolation": {"$ref": "#/$defs/failureIsolation"},
+    "boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "$defs": {
+    "securityId": {"type": "string", "pattern": "^US-CIK-[0-9]{10}-(COMMON|CLASS_[A-Z]{1,3}|ADR|PREFERRED)$"},
+    "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "securityBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["security_id", "current_ticker", "identity_ref_sha256"],
+      "properties": {"security_id": {"$ref": "#/$defs/securityId"}, "current_ticker": {"$ref": "#/$defs/ticker"}, "identity_ref_sha256": {"$ref": "#/$defs/sha256"}}
+    },
+    "yfinanceAlarm": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "package_import_attempted", "network_access_performed", "failure_disposition", "selection_use_allowed"],
+      "properties": {
+        "status": {"const": "not_executed_offline"}, "package_import_attempted": {"const": false},
+        "network_access_performed": {"const": false}, "failure_disposition": {"const": "ticker_scoped_freeze"},
+        "selection_use_allowed": {"const": false}
+      }
+    },
+    "secInterface": {
+      "type": "object", "additionalProperties": false,
+      "required": ["fetch_mode", "fetch_invoked", "raw_payload_read", "parser_entry_status", "corporate_event_semantics_confirmed"],
+      "properties": {
+        "fetch_mode": {"const": "offline_default"}, "fetch_invoked": {"const": false},
+        "raw_payload_read": {"const": false}, "parser_entry_status": {"const": "awaits_separately_authorized_source_bound_payload"},
+        "corporate_event_semantics_confirmed": {"const": false}
+      }
+    },
+    "failureIsolation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["global_run_blocked", "unrelated_symbols_frozen", "manual_review_required"],
+      "properties": {"global_run_blocked": {"const": false}, "unrelated_symbols_frozen": {"const": false}, "manual_review_required": {"const": true}}
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider_selected", "provider_call_performed", "account_state_read", "broker_order_placed", "return_calculation_performed", "selection_or_ranking_changed", "ship_gate_evidence_claimed"],
+      "properties": {
+        "provider_selected": {"const": false}, "provider_call_performed": {"const": false}, "account_state_read": {"const": false},
+        "broker_order_placed": {"const": false}, "return_calculation_performed": {"const": false},
+        "selection_or_ranking_changed": {"const": false}, "ship_gate_evidence_claimed": {"const": false}
+      }
+    }
+  }
+}

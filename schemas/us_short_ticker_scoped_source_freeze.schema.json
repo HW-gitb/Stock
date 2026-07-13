@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_ticker_scoped_source_freeze/1.0.0/schema.json",
+  "title": "US-short Ticker-Scoped Source Freeze",
+  "description": "Pure/offline containment disposition for one identity-bound ticker after an unavailable, malformed, stale, or contract-violating source response. It requires manual review while explicitly prohibiting global-run blocking, unrelated-symbol freezes, retries, account reads, order automation, and selection/ranking changes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "frozen_security_id", "frozen_tickers", "source_id", "failure_class", "manual_review_required", "global_run_blocked", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_ticker_scoped_source_freeze"},
+    "schema_version": {"const": "1.0.0"},
+    "frozen_security_id": {"type": "string", "pattern": "^US-CIK-[0-9]{10}-(COMMON|CLASS_[A-Z]{1,3}|ADR|PREFERRED)$"},
+    "frozen_tickers": {"type": "array", "minItems": 1, "maxItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"}},
+    "source_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{0,63}$"},
+    "failure_class": {"enum": ["unavailable_or_malformed_response", "source_contract_violation", "source_stale_or_unavailable"]},
+    "manual_review_required": {"const": true},
+    "global_run_blocked": {"const": false},
+    "boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "$defs": {
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["provider_retry_performed", "unrelated_symbols_frozen", "selection_or_ranking_changed", "account_state_read", "broker_or_order_automation_allowed"],
+      "properties": {
+        "provider_retry_performed": {"const": false},
+        "unrelated_symbols_frozen": {"const": false},
+        "selection_or_ranking_changed": {"const": false},
+        "account_state_read": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false}
+      }
+    }
+  }
+}
