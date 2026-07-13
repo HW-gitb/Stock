@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 审查（US-short 录入器 account_state 接线：测试→真实同一线）PASS
+
+- **Verdict/Action**: PASS + 提交（master、未 push）。录入器持仓输入改读私有 `account_state`（`--confirm-account-read` opt-in→取 old_ticker 唯一 long 持仓），**纯 additive、未削弱前次不变式**。无持仓/畸形/重复/非 long/未确认→单票 manual_review 不出票；confirmed record 只留账本 digest（无股数/值）；真票据由 `build_private_disposition` 建 + TOCTOU 重核 + 写私有 gitignored；boundary `account_state_read` 诚实、其余 False；schema 1.1.0。universe summary 未纳入。
+- **Required**: 无。P1 `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍 open（本地私有账本读已授权+接线；merger 语义仍人工）。单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:not_available（真实工具输出）。**§6a 独立对抗 agent CLEAN**（七不变式全 HELD·13 slice+93 探针零 bypass：account-read fail-closed[无持仓/畸形/重复/非 long/未确认→review]、authorization 门、无前次削弱、tracked 零股数/值/账户泄、boundary 诚实、无网络、测试→真实同一线；+TOCTOU 防护）。整读 engine diff 逐条确认；record schema 无 account-value 字段。focused+guards 59 OK；**亲跑全包 `Ran 4386 / OK / 0 fail`**（191s）。真钱边界+读私有账户+改已审引擎→起 §6a。
+- **Next**: 这条链剩 yfinance 日报警 + 串链子编排（见早先「几刀」分析）待用户。
+
+## 2026-07-13 — Codex 执行（US-short 公司行动录入器 account_state 接线）
+
+- **Verdict/Action**: 录入器已删除手工注入 `position`；只有显式 `--confirm-account-read` 才读私有本地、既有 schema 校验过的 `us_short_account_state`，取 `old_ticker` 的唯一 long 正整数持仓。confirmed record 只留账本 digest binding；实际处置票据只写 absolute gitignored/external private path。无持仓、畸形/重复/非 long、未确认读账本都单票 `manual_review`，不出票。
+- **Required**: `R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 仍为 open P1：人工 SEC 确认不是 parser 证据；不得自动换股、记现金、强制退出、改选股、接 DataHub/券商或作 ship-gate 声明。
+- **Verify**: account converter/private-path/disposition/identity/schema `107 OK`；最终 recorder/runner/schema `13 OK`；文档守卫 `60 OK`；完整本地 `test_us_short*.py` `4385 OK (1 skipped)`；`py_compile`、ripple grep、`git diff --check` 通过。所有 account-state 用临时 fixture；未读取真实账户。
+- **Pre-Codex self-review**: main-thread A-F：position 输入面已从生产 shape 移除，confirmed/manual-review × account-read 边界、无持仓/畸形/非 long/旧手填/账本变更/私有路径全有反向断言；route/design/register 单源同步，`CURRENT` 未改；无 Claude 审查结论或提交。
+- **Next**: Claude Code 独立审查本刀 scope；仅 PASS 后提交该 scope。
+
 ## 2026-07-13 — Claude Code 审查（US-short planner P3：非换股 stray-ratio 幻影权益已闭）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push，**仅 planner P3 slice**）。`_validate_event` 改对称（stock 类要求 successor/分子/分母全在；非 stock 类任一在即拒）→ 幻影权益修掉，坏形状事件到不了 `_manual_disposition` 幻影分支。**只提交 planner P3**（disposition 引擎 + 反向矩阵 + schema 测试 + register + 本 log）；Codex **并发在建的 account_state 接线刀 WIP**（改了 `test_us_short_corporate_action_event_recorder.py`）**留未提交、待其自己审**。universe summary 未纳入。

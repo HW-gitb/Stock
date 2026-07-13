@@ -3,8 +3,9 @@
 This is the confirmed-event upstream of ``us_short_corporate_action_disposition``.  An
 operator manually transcribes a reviewed SEC accession/URL, whose EDGAR CIK must bind to the
 old security or an identity-bound successor, into exact stock fractions and integer cents, then
-explicitly confirms it.  The module never fetches SEC, persists a URL, reads an account, or
-applies a disposition.  Unsafe or unsupported input produces a
+explicitly confirms it.  A separately opt-in runner may supply a validated private local
+``account_state``; the recorder retains only a digest binding and never persists account data or
+a disposition ticket.  Unsafe or unsupported input produces a
 ticker-scoped manual-review freeze rather than an inferred event.
 """
 from __future__ import annotations
@@ -18,10 +19,11 @@ from typing import Any
 from engine import us_short_corporate_action_disposition as disposition
 from engine import us_short_security_identity as identity
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from runners import us_short_account_state_from_manual_tables as account_converter
 
 
 _INPUT_KEYS = frozenset((
-    "security_identity", "position", "old_ticker", "event_type", "successor_ticker",
+    "security_identity", "old_ticker", "event_type", "successor_ticker",
     "successor_security_identity", "stock_ratio_numerator", "stock_ratio_denominator", "cash_per_old_share_usd",
     "effective_date", "sec_accession", "sec_url", "unsupported_consideration",
 ))
@@ -35,6 +37,9 @@ _SEC_ARCHIVES_URL_RE = re.compile(
 _CASH_USD_RE = re.compile(r"^(0|[1-9][0-9]*)\.[0-9]{2}$")
 _SECURITY_ID_RE = re.compile(r"^US-CIK-[0-9]{10}-(COMMON|CLASS_[A-Z]{1,3}|ADR|PREFERRED)$")
 _MANUAL_EVENT_ID_RE = re.compile(r"^manual-sec-[0-9a-f]{24}$")
+_RECORD_SCHEMA_VERSION = "1.1.0"
+_ACCOUNT_STATE_SCHEMA_NAME = "us_short_account_state"
+_ACCOUNT_STATE_SCHEMA_VERSION = "1.0.0"
 
 
 class CorporateActionEventRecorderError(ValueError):
@@ -128,6 +133,7 @@ def _manual_review(
     security_binding: dict[str, Any],
     source_binding: dict[str, Any],
     reason: str,
+    account_state_read: bool,
 ) -> dict[str, Any]:
     freeze = identity.build_ticker_scoped_source_freeze(
         security_identity,
@@ -136,24 +142,25 @@ def _manual_review(
     )
     record = {
         "schema_name": "us_short_corporate_action_manual_event_record",
-        "schema_version": "1.0.0",
+        "schema_version": _RECORD_SCHEMA_VERSION,
         "record_status": "manual_review",
         "security_binding": security_binding,
         "successor_security_binding": None,
         "source_binding": source_binding,
+        "account_state_binding": None,
         "confirmed_event": None,
         "manual_review": {"reason": reason, "ticker_scoped_freeze": freeze},
-        "boundary": _boundary(),
+        "boundary": _boundary(account_state_read=account_state_read),
     }
     validate_manual_event_record(record)
     return record
 
 
-def _boundary() -> dict[str, bool]:
+def _boundary(*, account_state_read: bool) -> dict[str, bool]:
     return {
         "provider_call_performed": False,
         "raw_payload_read": False,
-        "account_state_read": False,
+        "account_state_read": account_state_read,
         "account_state_mutated": False,
         "broker_order_placed": False,
         "selection_or_ranking_changed": False,
@@ -236,16 +243,54 @@ def _confirmed_event(
         "stock_ratio_denominator": denominator,
         "cash_per_old_share_cents": cash,
     }
-    # Reuse the downstream planner as the only event-semantics authority and prove the injected
-    # position can produce a manual-only ticket.  The ticket is intentionally not persisted here.
-    disposition.build_manual_disposition(manual["position"], event)
+    # Reuse the downstream planner as the only event-semantics authority.  The actual private
+    # position is resolved only after this source/event input is valid, and the ticket is built
+    # separately by ``build_private_disposition``.
+    disposition.build_manual_disposition({"ticker": old_ticker, "direction": "long", "shares": 1}, event)
     return event, source_binding, successor_binding
 
 
-def record_manual_corporate_action(manual: Any, *, confirm: bool) -> dict[str, Any]:
+def _account_state_binding_and_position(account_state: Any, *, old_ticker: str) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Validate the canonical private ledger and expose only the one required long position."""
+    try:
+        if not isinstance(account_state, dict) or type(account_state.get("as_of")) is not str:
+            raise CorporateActionEventRecorderError("account_state must be a valid local ledger")
+        account_converter.validate_account_state(account_state, account_state["as_of"])
+    except (CorporateActionEventRecorderError, account_converter.ConvertError, KeyError, TypeError) as exc:
+        raise CorporateActionEventRecorderError("account_state is invalid") from exc
+    matches = [position for position in account_state["positions"] if position["ticker"] == old_ticker]
+    if not matches:
+        raise CorporateActionEventRecorderError("no_position_for_ticker")
+    if len(matches) != 1 or matches[0]["direction"] != "long":
+        raise CorporateActionEventRecorderError("account_state is invalid")
+    shares = _strict_positive_int(matches[0]["shares"], field="account_state.position.shares")
+    binding = {
+        "schema_name": _ACCOUNT_STATE_SCHEMA_NAME,
+        "schema_version": _ACCOUNT_STATE_SCHEMA_VERSION,
+        "as_of": account_state["as_of"],
+        "account_state_ref_sha256": _sha256_json(account_state),
+    }
+    return binding, {"ticker": old_ticker, "direction": "long", "shares": shares}
+
+
+def _account_review_reason(account_state: Any, *, old_ticker: str) -> tuple[str | None, dict[str, Any] | None]:
+    try:
+        binding, _ = _account_state_binding_and_position(account_state, old_ticker=old_ticker)
+        return None, binding
+    except CorporateActionEventRecorderError as exc:
+        if str(exc) == "no_position_for_ticker":
+            return "no_position_for_ticker", None
+        return "account_state_invalid", None
+
+
+def record_manual_corporate_action(
+    manual: Any, *, account_state: Any = None, confirm: bool, account_state_read: bool = True
+) -> dict[str, Any]:
     """Record an event only after explicit manual confirmation; otherwise freeze one ticker."""
     if type(confirm) is not bool:
         raise CorporateActionEventRecorderError("confirm must be boolean")
+    if type(account_state_read) is not bool:
+        raise CorporateActionEventRecorderError("account_state_read must be boolean")
     if not isinstance(manual, dict):
         raise CorporateActionEventRecorderError("manual input must be an object with security_identity")
     security_identity, security_binding = _security_binding(manual.get("security_identity"))
@@ -253,41 +298,66 @@ def record_manual_corporate_action(manual: Any, *, confirm: bool) -> dict[str, A
     if manual.get("unsupported_consideration") == "cvr":
         return _manual_review(
             security_identity=security_identity, security_binding=security_binding,
-            source_binding=source_binding, reason="unsupported_consideration_cvr",
+            source_binding=source_binding, reason="unsupported_consideration_cvr", account_state_read=False,
         )
     if not confirm:
         return _manual_review(
             security_identity=security_identity, security_binding=security_binding,
-            source_binding=source_binding, reason="manual_confirmation_missing",
+            source_binding=source_binding, reason="manual_confirmation_missing", account_state_read=False,
         )
     try:
         event, source_binding, successor_binding = _confirmed_event(manual, security_identity=security_identity)
     except (CorporateActionEventRecorderError, disposition.CorporateActionDispositionError):
         return _manual_review(
             security_identity=security_identity, security_binding=security_binding,
-            source_binding=source_binding, reason="confirmed_event_input_invalid",
+            source_binding=source_binding, reason="confirmed_event_input_invalid", account_state_read=False,
+        )
+    if not account_state_read:
+        return _manual_review(
+            security_identity=security_identity, security_binding=security_binding,
+            source_binding=source_binding, reason="account_read_confirmation_missing", account_state_read=False,
+        )
+    account_reason, account_binding = _account_review_reason(account_state, old_ticker=event["old_ticker"])
+    if account_reason is not None:
+        return _manual_review(
+            security_identity=security_identity, security_binding=security_binding,
+            source_binding=source_binding, reason=account_reason, account_state_read=True,
         )
     record = {
         "schema_name": "us_short_corporate_action_manual_event_record",
-        "schema_version": "1.0.0",
+        "schema_version": _RECORD_SCHEMA_VERSION,
         "record_status": "confirmed_event",
         "security_binding": security_binding,
         "successor_security_binding": successor_binding,
         "source_binding": source_binding,
+        "account_state_binding": account_binding,
         "confirmed_event": event,
         "manual_review": {"reason": None, "ticker_scoped_freeze": None},
-        "boundary": _boundary(),
+        "boundary": _boundary(account_state_read=True),
     }
     validate_manual_event_record(record)
     return record
 
 
+def build_private_disposition(account_state: Any, record: Any) -> dict[str, Any]:
+    """Build a private ticket only from the account digest bound into a confirmed recorder output."""
+    record = validate_manual_event_record(record)
+    if record["record_status"] != "confirmed_event":
+        raise CorporateActionEventRecorderError("manual-review record cannot produce a disposition")
+    binding, position = _account_state_binding_and_position(
+        account_state, old_ticker=record["confirmed_event"]["old_ticker"]
+    )
+    if binding != record["account_state_binding"]:
+        raise CorporateActionEventRecorderError("account_state does not match the confirmed record binding")
+    return disposition.build_manual_disposition(position, record["confirmed_event"])
+
+
 def validate_manual_event_record(record: Any) -> dict[str, Any]:
     """Fail closed on a forged recorder output before it can be sent to the planner."""
-    required = {"schema_name", "schema_version", "record_status", "security_binding", "successor_security_binding", "source_binding", "confirmed_event", "manual_review", "boundary"}
+    required = {"schema_name", "schema_version", "record_status", "security_binding", "successor_security_binding", "source_binding", "account_state_binding", "confirmed_event", "manual_review", "boundary"}
     if not isinstance(record, dict) or set(record) != required:
         raise CorporateActionEventRecorderError("manual event record has an unexpected top-level shape")
-    if record["schema_name"] != "us_short_corporate_action_manual_event_record" or record["schema_version"] != "1.0.0":
+    if record["schema_name"] != "us_short_corporate_action_manual_event_record" or record["schema_version"] != _RECORD_SCHEMA_VERSION:
         raise CorporateActionEventRecorderError("manual event record identity is invalid")
     binding = record["security_binding"]
     if not isinstance(binding, dict) or set(binding) != {"security_id", "issuer_cik", "current_ticker", "identity_ref_sha256"}:
@@ -305,9 +375,21 @@ def validate_manual_event_record(record: Any) -> dict[str, Any]:
     review = record["manual_review"]
     if not isinstance(review, dict) or set(review) != {"reason", "ticker_scoped_freeze"}:
         raise CorporateActionEventRecorderError("manual review shape is invalid")
-    if record["boundary"] != _boundary():
-        raise CorporateActionEventRecorderError("recorder boundary is invalid")
+    account_binding = record["account_state_binding"]
     if record["record_status"] == "confirmed_event":
+        if record["boundary"] != _boundary(account_state_read=True):
+            raise CorporateActionEventRecorderError("confirmed event account boundary is invalid")
+        if (
+            not isinstance(account_binding, dict)
+            or set(account_binding) != {"schema_name", "schema_version", "as_of", "account_state_ref_sha256"}
+            or account_binding["schema_name"] != _ACCOUNT_STATE_SCHEMA_NAME
+            or account_binding["schema_version"] != _ACCOUNT_STATE_SCHEMA_VERSION
+            or type(account_binding["as_of"]) is not str
+            or not re.fullmatch(r"[0-9]{8}", account_binding["as_of"])
+            or not isinstance(account_binding["account_state_ref_sha256"], str)
+            or re.fullmatch(r"[0-9a-f]{64}", account_binding["account_state_ref_sha256"]) is None
+        ):
+            raise CorporateActionEventRecorderError("confirmed event account-state binding is invalid")
         if review != {"reason": None, "ticker_scoped_freeze": None}:
             raise CorporateActionEventRecorderError("confirmed event cannot carry a manual-review disposition")
         if not (isinstance(source["sec_accession"], str) and _ACCESSION_RE.fullmatch(source["sec_accession"]) and isinstance(source["evidence_issuer_cik"], str) and re.fullmatch(r"[0-9]{10}", source["evidence_issuer_cik"]) and isinstance(source["source_evidence_ref_sha256"], str) and re.fullmatch(r"[0-9a-f]{64}", source["source_evidence_ref_sha256"])):
@@ -335,7 +417,19 @@ def validate_manual_event_record(record: Any) -> dict[str, Any]:
             raise CorporateActionEventRecorderError("confirmed event evidence CIK is not identity-bound")
         disposition.build_manual_disposition({"ticker": binding["current_ticker"], "direction": "long", "shares": 1}, event)
     elif record["record_status"] == "manual_review":
-        if record["confirmed_event"] is not None or record["successor_security_binding"] is not None or review["reason"] not in {"manual_confirmation_missing", "unsupported_consideration_cvr", "confirmed_event_input_invalid"}:
+        if (
+            record["confirmed_event"] is not None
+            or record["successor_security_binding"] is not None
+            or account_binding is not None
+            or review["reason"] not in {
+                "manual_confirmation_missing", "unsupported_consideration_cvr", "confirmed_event_input_invalid",
+                "account_read_confirmation_missing", "account_state_invalid", "no_position_for_ticker",
+            }
+            or record["boundary"] not in (
+                _boundary(account_state_read=False),
+                _boundary(account_state_read=True),
+            )
+        ):
             raise CorporateActionEventRecorderError("manual-review record is invalid")
         freeze = review["ticker_scoped_freeze"]
         if not isinstance(freeze, dict) or freeze.get("frozen_security_id") != binding["security_id"] or freeze.get("frozen_tickers") != [binding["current_ticker"]] or freeze.get("global_run_blocked") is not False:

@@ -104,7 +104,7 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
   - `positions.csv`：`ticker / shares / avg_cost_usd / entry_date / current_stop / notes`；
   - `trades.csv`（= §12 `manual_actual_track` / `execution_log_private` 落地文件）：`decision_date / ticker / suggested_action / executed / fill_price / fill_shares / skip_reason / manual_override`；
   - `account.csv`：`us_market_equity` + `us_short_available_cash` + 可选 `portfolio_total_equity`（仅参考）；短线桶 = `us_market_equity ÷ 3`，系统自己算，不从含糊"总额"瞎猜。
-- **转换器 → `us_short_account_state`**（US 自有 schema，不共用 A 股）→ 周报/持仓重评/成绩单消费。
+- **转换器 → `us_short_account_state`**（US 自有 schema，不共用 A 股）→ 周报/持仓重评/成绩单消费；公司行动录入器只在显式 `--confirm-account-read` 下读取同一私有 schema 的 `old_ticker` long 持仓，confirmed record 仅留 digest binding，实际处置票据只写 gitignored/external private path。
 - **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / decision_as_of`；trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。CSV canonical 防 Excel 强转。
 
 ### 3.7 数据源分层健康检查（跑前必做）
