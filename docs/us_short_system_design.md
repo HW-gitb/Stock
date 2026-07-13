@@ -88,6 +88,8 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
 
 **FMP analyst grades 关键性裁决（2026-07-10）**：周末 capstone 的 `FMP grades` 仅是 §4.2 催化剂里的小分量信号，定位为 **advisory / non-critical**。grades 覆盖不足或不可用时，provider health 仍如实显示 `fmp=down`，整体进入 `usable_with_fallback`，该分量按中性 + `data_quality` 标签处理，但**不阻断 weekly emit**。本裁决只适用于 grades endpoint，不代表其他 FMP 价格、状态或审计字段自动变成非关键。SEC submissions 仍是 audit/veto 的 critical source：覆盖不足继续进入 `restricted / blocked` 并 NO-EMIT。原因是 2026-07-10 freshday 小盘候选实跑确认 grades 198/200 返回 HTTP 402 subscription wall，而 HOOD/MRNA 与 VIX 的 200 仅证明新配额及大盘可用，不能代表真实小盘覆盖。
 
+**yfinance grades 运行边界（2026-07-13）**：weekly runner 的授权、preflight/schema/PIT、输入输出路径与 source-binding 属结构门，失败仍 fail-closed；结构门通过后，非官方低信任 yfinance 的 fetch/解析/组装/summary 任一失败必须在 runner 内原子覆盖为本轮完整目标集的中性 source package + resolved actions + counts-only `advisory_stage_neutralized` summary，再以 degraded-success 返回。capstone 不把它改成 shadow/best-effort，也不从同轮 receipt 移除；Pass2 只消费覆盖后的中性 actions。fallback 自身无法完整写入或验证时仍阻断，禁止下游读取半成品。
+
 ### 3.3 数据口径与 Unknown 分层（避免过度保守）
 - 关键价格字段（`current_price/OHLCV/ATR/volume/support/resistance`）须同源·同 as-of·同复权·同 session；记 `adjustment_mode / session_scope / timezone`；混源 → `data_degraded`。
 - **关键 unknown → 禁新建/加仓**（持仓只给风控/减/清/重评）：结构化审计/状态字段——SEC filing 存在性 / delisting / halt / bankruptcy / major active offering(S-1/S-3/424B/ATM) / critical stock status。

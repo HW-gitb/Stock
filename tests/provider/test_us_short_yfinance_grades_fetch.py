@@ -5,6 +5,7 @@ import os
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -163,6 +164,20 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         self.assertFalse(self.paths["source"].exists())
         self.assertFalse(self.paths["resolved"].exists())
 
+    def test_structural_preflight_schema_failure_remains_fatal_before_provider_or_fallback_writes(self):
+        preflight = _read_json(self.paths["preflight"])
+        preflight["pass2_target_universe"]["target_symbols"] = []
+        _write_json(self.paths["preflight"], preflight)
+        client = _FakeYFinanceClient({"AAPL": []})
+
+        with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "target_symbols"):
+            self._run(client=client, confirm_user_authorization=True)
+
+        self.assertEqual(client.calls, [])
+        self.assertFalse(self.paths["summary"].exists())
+        self.assertFalse(self.paths["source"].exists())
+        self.assertFalse(self.paths["resolved"].exists())
+
     def test_default_dry_run_neither_imports_nor_writes(self):
         imports = []
         result = runner.run_default(
@@ -220,6 +235,66 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         self.assertTrue(projected["analyst_collective_downgrade_by_ticker"]["AAPL"])
         self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["MSFT"])
         self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["JPM"])
+
+    def test_summary_guard_matches_ticker_tokens_not_arbitrary_substrings(self):
+        summary = self._run(
+            client=_FakeYFinanceClient({"AAPL": [], "MSFT": [], "JPM": []}),
+            confirm_user_authorization=True,
+        )
+        runner._assert_summary_safe(summary, ["U", "ON", "ALL", "RAW"], [])
+
+        summary["source_artifacts"]["source_package_path"] = "state/us_short/U.json"
+        with self.assertRaisesRegex(runner.YFinanceGradesFetchError, "ticker names"):
+            runner._assert_summary_safe(summary, ["U"], [])
+
+    def test_post_gate_summary_failure_atomically_replaces_real_outputs_with_full_neutral_set(self):
+        client = _FakeYFinanceClient(
+            {
+                "AAPL": [_grade_row(firm="BankA"), _grade_row(grade_date="2026-06-11", firm="BankB")],
+                "MSFT": [],
+                "JPM": [_grade_row(action="up", firm="BankC", to_grade="Buy", from_grade="Hold")],
+            }
+        )
+        real_assert = runner._assert_summary_safe
+
+        def reject_primary_summary(summary, target_symbols, sensitive_values):
+            if summary["scope"]["status"] != "advisory_stage_neutralized":
+                raise runner.YFinanceGradesFetchError("simulated post-gate summary rejection")
+            return real_assert(summary, target_symbols, sensitive_values)
+
+        with mock.patch.object(runner, "_assert_summary_safe", side_effect=reject_primary_summary):
+            summary = self._run(client=client, confirm_user_authorization=True)
+
+        self.assertEqual(summary["scope"]["status"], "advisory_stage_neutralized")
+        self.assertEqual(summary["scope"]["provider_status"], "down")
+        self.assertEqual(
+            summary["execution"]["advisory_failure"],
+            {
+                "category": "post_structural_gate_failure",
+                "message": "noncritical yfinance stage failed after structural gates; neutralized",
+            },
+        )
+        self.assertEqual(summary["execution"]["attempted_symbol_count"], 3)
+        source = _read_json(self.paths["source"])
+        self.assertEqual(set(source["grades_by_ticker"]), {"AAPL", "MSFT", "JPM"})
+        self.assertTrue(all(not row["records"] for row in source["grades_by_ticker"].values()))
+        resolved = _read_json(self.paths["resolved"])
+        self.assertEqual(resolved["signals"], {})
+        self.assertEqual(set(resolved["excluded"]), {"AAPL", "MSFT", "JPM"})
+        self.assertEqual(_read_json(self.paths["summary"]), summary)
+
+    def test_unexpected_post_gate_build_failure_uses_same_neutral_boundary_without_type_sniffing(self):
+        client = _FakeYFinanceClient({"AAPL": [_grade_row()], "MSFT": [], "JPM": []})
+        with mock.patch.object(
+            runner,
+            "resolve_yfinance_grade_actions",
+            side_effect=RuntimeError("unexpected builder failure with AAPL context"),
+        ):
+            summary = self._run(client=client, confirm_user_authorization=True)
+
+        self.assertEqual(summary["scope"]["status"], "advisory_stage_neutralized")
+        self.assertNotIn("AAPL", self.paths["summary"].read_text(encoding="utf-8"))
+        self.assertEqual(set(_read_json(self.paths["resolved"])["excluded"]), {"AAPL", "MSFT", "JPM"})
 
     def test_dependency_missing_writes_down_neutral_without_raw_payloads(self):
         def _missing(_name):

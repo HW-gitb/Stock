@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema_name": { "const": "us_short_yfinance_grades_fetch_summary" },
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "const": "1.1.0" },
     "authorization_ref": { "const": "user_chat_20260710_us_short_yfinance_grades_fetch" },
     "generated_at": { "type": "string", "minLength": 1 },
     "scope": {
@@ -58,7 +58,8 @@
             "completed_with_fetch_errors",
             "halted_rate_limit_or_crumb_failure",
             "dependency_missing",
-            "resolver_rejected_neutralized"
+            "resolver_rejected_neutralized",
+            "advisory_stage_neutralized"
           ]
         },
         "provider_status": { "enum": ["ok", "down"] },
@@ -113,6 +114,7 @@
         "rate_limit_or_crumb_failure_count",
         "dependency_missing",
         "resolver_rejection",
+        "advisory_failure",
         "first_failure_symbol_index",
         "pace_seconds"
       ],
@@ -133,6 +135,20 @@
               "properties": {
                 "error_class": { "const": "YFinanceGradesError" },
                 "message": { "const": "resolver rejected yfinance package; neutralized" }
+              }
+            }
+          ]
+        },
+        "advisory_failure": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["category", "message"],
+              "properties": {
+                "category": { "const": "post_structural_gate_failure" },
+                "message": { "const": "noncritical yfinance stage failed after structural gates; neutralized" }
               }
             }
           ]

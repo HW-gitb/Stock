@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 独立审查 PASS（US-short yfinance advisory-neutral boundary）
+
+- **Verdict/Action**: PASS + 提交（branch `codex/us-short-capstone-theme-contract-preflight`，未 push；master 平行窗口活未清、待协调并入）。yfinance 现按「结构门（授权/preflight/PIT/schema/路径）先跑→抛即 fail-closed；之后 fetch/解析/组装/summary 整段视作 advisory 阶段，任一失败→runner 内原子覆盖成本轮全目标中性 package+actions+`advisory_stage_neutralized` summary、degraded-success 返回」修好——一个「绝不该 block emit」的 advisory 源不再一票否决整轮。capstone/receipt 零改；guard 子串→词边界 + 新 advisory_failure 字段 schema-const 焊死。
+- **Required**: 无。`R-USSHORT-WEEKLY-CAPSTONE-YFINANCE-ADVISORY-NEUTRAL-BOUNDARY` → resolved。一个非阻断 Optional（guard 仍整-JSON 扫、仅词边界；恰等于大写固定 token 的 ticker[如 `US` 撞 `"market":"US"`/`US-short`]仍会误报→fail-closed 中止、不泄漏、但挡轮；Codex 自己也说结构化叶子检查更优、留后续）；closure+Optional 全文单源见 register。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 wrapper/post-gate/fallback/guard：结构门全在 try 外（抛即 abort）、post-gate 内无结构门、fallback 验证后再原子覆盖已写真 package/actions、guard 词边界+const-pin；4 反向控制测试覆盖（结构失败仍 fatal / 词边界不误报但真泄漏仍拒 / post-gate 失败全中性原子覆盖 / 意外 err 带 ticker 也不泄漏）；亲跑 ecf2 全离线 `test_us_short*` **4315 OK**。§6a 未起（contained advisory 松门、结构门保留且专测证伪、零选股/receipt 改）；详见 register。
+- **Next**: 待 master 平行窗口活清后并入。
+
+## 2026-07-13 — Codex repair complete, pending Claude review (US-short yfinance advisory-neutral boundary)
+
+- **Verdict/Action**: Repaired `R-USSHORT-WEEKLY-CAPSTONE-YFINANCE-ADVISORY-NEUTRAL-BOUNDARY`: after authorization/preflight/PIT/path gates, the runner now converts any escaping yfinance fetch/parse/build/summary failure into a validated full-target neutral package + actions + `advisory_stage_neutralized` summary; capstone/receipt remain unchanged. The summary ticker guard now matches standalone symbol tokens, so ticker `U` no longer collides with fixed `US-short` text while an exact token still rejects.
+- **Required**: Claude Code independent review before commit. No live provider/yfinance rerun; existing untracked `docs/us_short_universe_fetch_summary_20260713.json` is protected and excluded.
+- **Verify**: red reproduced `U` substring false-positive and post-gate summary abort after real artifacts; focused yfinance/capstone 99 OK; full offline `test_us_short*.py` 4,315 OK / 1 skipped; schema JSON and `py_compile` clean.
+- **Pre-Codex self-review**: A-F checked; main-thread checklist fallback (no independent agent). A/B: runner/schema/design/register/consumer/receipt searched, old `symbol in text` has 0 active hits and capstone remains non-best-effort; C: exact-token leak still fails, malformed preflight stays fatal, unexpected RuntimeError neutralizes without leaking its ticker-bearing text; D: phase boundary is structural rather than exception-type sniffing; E: CURRENT/README unchanged, material detail only in register; F: fallback validates all three payloads before atomic per-file replacement and propagates fallback write/validation errors.
+- **Next**: Claude Code: review.
+
 ## 2026-07-13 — Claude Code 自修自审 PASS（US-short capstone theme-contract Optional：真行业身份接线）
 
 - **Verdict/Action**: PASS + 提交（branch `codex/us-short-capstone-theme-contract-preflight`，未 push；master 平行窗口活未清、待协调并入）。修上一审记录的 latent Optional：`_theme_contract_industry_ids` 现接受 capstone 直传 SIC 分类包（projection-inputs theme 绑定丢了 sector_classification role），产出真 `industry:<sector>` 身份、同真行业名共享 theme_id → §4.5 同主题席位帽可按真行业分组。今天仍 inert（no_strong_theme→席位预算 3==同主题帽 3、Top15 不变），修的是前向正确性 + 清死代码。
