@@ -101,12 +101,10 @@
       "h1": -0.040857,
       "h3": 3.199741,
       "h5": 0.225325,
-      "h10": null
+      "h10": -4.686439
     },
-    "forward_returns_pending": [
-      "h10"
-    ],
-    "backfill_complete": false,
+    "forward_returns_pending": [],
+    "backfill_complete": true,
     "forward_return_basis": {
       "benchmark": "000852.SH",
       "benchmark_name": "CSI1000",
@@ -138,6 +136,50 @@
     "v14_3_raw_regime": "defense",
     "divergence": true,
     "v14_3_fired_rule": "iv_percentile_252d_gt_90",
+    "v14_3_window_n": 252,
+    "v14_3_insufficient_window": false,
+    "data_quality_flags": [],
+    "forward_returns": {
+      "h1": -1.718936,
+      "h3": -5.833897,
+      "h5": -4.900721,
+      "h10": null
+    },
+    "forward_returns_pending": [
+      "h10"
+    ],
+    "backfill_complete": false,
+    "forward_return_basis": {
+      "benchmark": "000852.SH",
+      "benchmark_name": "CSI1000",
+      "measure": "forward_close_to_close_simple_return",
+      "horizons_trading_days": {
+        "h1": 1,
+        "h3": 3,
+        "h5": 5,
+        "h10": 10
+      },
+      "unit": "percent",
+      "price_basis": "index_close_unadjusted",
+      "cost_basis": "gross",
+      "scope": "market_level_regime_indicator"
+    },
+    "boundary": {
+      "production": false,
+      "comparison_only": true,
+      "drives_phase5_risk_posture": false,
+      "mixes_with_overlay_star_or_m67_action": false
+    }
+  },
+  {
+    "schema_name": "a_short_regime_comparison_weekly",
+    "schema_version": "1.0.0",
+    "as_of": "20260710",
+    "generated_at": null,
+    "v14_2_regime": "unknown",
+    "v14_3_raw_regime": "contraction",
+    "divergence": true,
+    "v14_3_fired_rule": "streak_collapse",
     "v14_3_window_n": 252,
     "v14_3_insufficient_window": false,
     "data_quality_flags": [],
