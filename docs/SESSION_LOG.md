@@ -8,6 +8,16 @@
 
 ---
 
+## 2026-07-13 — Claude Code 设计交接（给 Codex：建「人工公司行动事件录入器」= P1 confirmed-event 上游）
+
+- **目标**: 建 disposition planner 的 confirmed-event 上游（`R-USSHORT-FORWARD-LIFECYCLE-MERGER-TICKER-SEMANTICS-UNRESOLVED` 的 Required next action 之一）。把人工从 SEC 读到的 5 字段 → 生成 `engine/us_short_corporate_action_disposition._validate_event` 恰好接受的 confirmed `event`，round-trip 经 `build_manual_disposition`(注入持仓) 证明能产合法票据。纯离线、schema-first、no-network、no-account。
+- **输入契约（全人工确认、离线）**: `old_ticker`；`event_type`∈{stock_conversion,cash_consideration,stock_and_cash_consideration,forced_exit}；`successor_ticker`(非 stock 类=null)；换股比例=**精确整数 numerator/denominator**（operator 把 SEC 小数写成分数，如 0.10256→10256/100000；非精确即拒、绝不四舍五入）；每股现金=**整数分**（$54.20→5420；非 2 位小数即拒）；`effective_date`(YYYY-MM-DD→YYYYMMDD)；`source_evidence`(SEC URL/accession)→ `source_evidence_ref_sha256`=canonical evidence 串 sha256；显式 `--confirm` 才置 `source_confirmation=manually_confirmed_source_bound`（缺=拒）。
+- **持仓**: 注入（手填 shares），**不读真实账户**（真账户读仍 gated 于 P1）。
+- **复用 + 安全旁路**: `us_short_security_identity` 绑 old_ticker→CIK/class（改名保身份）；输入缺/不一致 → 走 `build_ticker_scoped_source_freeze` 人工复核、绝不猜；CVR / 系统无对应字段（如 Celgene 的 CVR）→ 标 `manual_review`、不产票据。
+- **boundary**: offline、无网络、不读写账户、无券商、不改选股、非 ship-gate；缺任一字段/前后不一致=fail-closed。
+- **测试**: 4 类事件（TWTR 现金 / Sprint 换股 / Celgene 股+现金→CVR manual_review / forced_exit）+ 分与分数精确 + confirmation 门 + round-trip 到合法 disposition 票据 + reverse 拒。
+- **Next**: Codex 执行本录入器（新 engine/runner + schema + tests，纯离线，独立 slice）；Claude 独立审查。
+
 ## 2026-07-13 — Claude Code 审查（US-short 公司行动离线地基：证券身份 + 单票安全旁路 + provider 接口骨架）PASS
 
 - **Verdict/Action**: PASS + 提交（master、未 push）。第一/二步离线地基两件：`security_identity`（CIK+share_class 稳定身份，改名不改 id、GOOGL/GOOG 不合并、指纹防篡改）+ `offline_provider_boundary`（yfinance 不 import·不联网、SEC gateway 永 raise、单票 freeze 只冻本票）。**正是你要的安全旁路**：源坏只冻这一只，全局不停、别票不冻、不自动重试，且无入参可设 true。offline、无 consumer、不碰账户/选股、boundary const-false、SR-PROVIDER-001 open。universe summary 未纳入。
