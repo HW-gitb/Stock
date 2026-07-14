@@ -35,7 +35,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _fetch_daily_close, _attach_block_discount,
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
-    _attach_holding_disposition,
+    _attach_holding_disposition, _factor_comparison_realized_regime,
 )
 from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
@@ -4165,6 +4165,30 @@ class AccountMainBoardAndOutputPrivacyTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             g(f"{repo}/state/a_short/__probe__.md", True, False)      # .md 不被同规则忽略 → 必须拒(P0 根因)
         g(f"{repo}/state/a_short/weekly_private/20260615/__probe__.md", True, False)  # weekly_private 下 → 放行
+
+
+class FactorComparisonRealizedRegimeTests(unittest.TestCase):
+    def test_private_csi300_context_is_pit_bound_and_provider_failure_is_nonblocking(self):
+        dates = pd.bdate_range("2026-01-02", periods=21)
+
+        class Pro:
+            def __init__(self):
+                self.calls = []
+
+            def index_daily(self, **kwargs):
+                self.calls.append(kwargs)
+                rows = [
+                    {"trade_date": value.strftime("%Y%m%d"), "close": 100.0 * (1.003 ** index)}
+                    for index, value in enumerate(dates)
+                ]
+                return pd.DataFrame(list(reversed(rows)))
+
+        pro = Pro()
+        state = _factor_comparison_realized_regime(pro, "20260202", "20260130")
+        self.assertEqual(state["status"], "available")
+        self.assertEqual(state["label"], "trend_up_vol_low")
+        self.assertEqual(pro.calls[0]["ts_code"], "000300.SH")
+        self.assertEqual(_factor_comparison_realized_regime(None, "20260202", "20260130")["status"], "unavailable")
 
 
 if __name__ == "__main__":

@@ -61,6 +61,7 @@ state/*/runs_private/
 state/*/model_paper_private/
 state/*/lifecycle/
 state/*/shadow_compare_private/
+state/*/factor_comparison_private/
 state/*/capstone_checkpoints_private/
 
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---

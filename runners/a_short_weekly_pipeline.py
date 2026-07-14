@@ -2549,6 +2549,30 @@ def resolve_market_regime(ai: dict) -> tuple[str, dict | None]:
     }
 
 
+def _factor_comparison_realized_regime(pro, decision_date: str, price_data_through: str) -> dict:
+    """Read one PIT CSI300 slice for D1/D3 only; failures remain comparison-only/unavailable."""
+    from datetime import datetime, timedelta
+    from engine.a_short_factor_comparison import (build_realized_regime, load_governance,
+                                                  unavailable_realized_regime)
+
+    governance = load_governance()
+    if pro is None:
+        return unavailable_realized_regime(governance, "index_provider_unavailable")
+    try:
+        end = str(price_data_through)
+        start = (datetime.strptime(end, "%Y%m%d") - timedelta(days=60)).strftime("%Y%m%d")
+        raw = pro.index_daily(ts_code=governance["realized_regime"]["index_ts_code"],
+                              start_date=start, end_date=end, fields="trade_date,close")
+        if raw is None or raw.empty:
+            return unavailable_realized_regime(governance, "index_provider_empty")
+        rows = raw[["trade_date", "close"]].to_dict("records")
+        if any(str(row.get("trade_date")) > end for row in rows):
+            return unavailable_realized_regime(governance, "index_after_price_clock")
+        return build_realized_regime(rows, decision_date=decision_date, governance=governance)
+    except Exception as exc:
+        return unavailable_realized_regime(governance, f"index_provider_error:{type(exc).__name__}")
+
+
 def _fetch_dividends(pro, ts_code: str):
     """#1 真除权数据 provider:tushare `pro.dividend`(只取 `div_proc=='实施'` —— 预案/通过的 ex_date 未定,
     不据此提示)→ [{"ann_date","ex_date"}](YYYYMMDD|None;空白→None)。**fail-closed**:缺证明 实施/公告日/
@@ -2756,6 +2780,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="S3b R4b 跨周持久收紧 ratchet sidecar 路径(默认 gitignored state/a_short/holding_ratchet/;含真实持仓,过私密路径守门)")
     p.add_argument("--skip-ratchet", action="store_true",
                    help="跳过 S3b R4b 跨周 ratchet 持久层(不读写 sidecar、不注入 machine.ratchet)")
+    p.add_argument("--factor-comparison-root", default=None,
+                   help="D1/D3 private comparison root (must end state/a_short/factor_comparison_private; sidecar only)")
+    p.add_argument("--factor-comparison-forward", action="store_true",
+                   help="mark this comparison snapshot as a live forward observation; historical replay stays non-counting")
     args = p.parse_args(argv)
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
@@ -2864,6 +2892,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                "positions_count": len(acct.get("positions") or [])}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
+    pro = None
     if price_provider is None:
         if not args.confirm_fetch_authorized:
             raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:周末 run 会抓前复权价")
@@ -3088,6 +3117,22 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
     print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
+
+
+    # D1/D3 capture consumes the exact normalized, PIT-safe candidates while they are in memory.
+    # The private sidecar is non-blocking: any failure is visible but never alters M6.7 or selection.
+    if args.factor_comparison_root:
+        try:
+            from engine.a_short_factor_comparison import capture_week
+            realized_regime = _factor_comparison_realized_regime(pro, args.as_of, price_data_through)
+            comparison = capture_week(
+                root=args.factor_comparison_root, decision_date=args.as_of, candidates=normalized,
+                run_identity=source_identity, forward_eligible=args.factor_comparison_forward,
+                realized_regime=realized_regime)
+            print(f"[factor-comparison] {comparison['status']} -> {comparison['day']} (production unchanged)")
+        except Exception as exc:
+            print(f"[WARN] factor comparison capture unavailable: {type(exc).__name__}: {exc}; "
+                  "M6.7 output remains authoritative and unchanged")
 
 
 if __name__ == "__main__":

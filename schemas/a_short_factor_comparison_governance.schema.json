@@ -1,0 +1,100 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_factor_comparison_governance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "lane", "comparison_only", "baseline_policy_id", "factor_registry", "selection", "outcome_basis", "realized_regime", "decision_rule", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_factor_comparison_governance"},
+    "schema_version": {"const": "1.1.0"},
+    "lane": {"const": "a_short"},
+    "comparison_only": {"const": true},
+    "baseline_policy_id": {"const": "v14_2_frozen"},
+    "factor_registry": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["factor_id", "category", "one_change_only", "enabled", "parameters"],
+        "properties": {
+          "factor_id": {"enum": ["entry_ma_pullback", "entry_range_pullback", "iv_step_down", "iv_joint_stress"]},
+          "category": {"enum": ["entry_anchor", "iv_policy"]},
+          "one_change_only": {"const": true},
+          "enabled": {"const": true},
+          "parameters": {"type": "object"}
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["slots", "ranking", "virtual_account_available_cash"],
+      "properties": {
+        "slots": {"const": 3},
+        "ranking": {"const": "egs_score_desc_then_ts_code"},
+        "virtual_account_available_cash": {"const": 1000000.0}
+      }
+    },
+    "outcome_basis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry", "exit", "horizons_trading_days", "cost_pct", "price_basis"],
+      "properties": {
+        "entry": {"const": "t_plus_1_open"},
+        "exit": {"const": "t_plus_n_close"},
+        "horizons_trading_days": {"const": [5, 10, 20]},
+        "cost_pct": {"const": 0.16},
+        "price_basis": {"const": "qfq_via_adj_factor"}
+      }
+    },
+    "realized_regime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["index_ts_code", "lookback_trading_days", "min_history_bars", "trend_up_min_pct", "trend_down_max_pct", "high_realized_vol_annualized_pct", "max_staleness_calendar_days"],
+      "properties": {
+        "index_ts_code": {"const": "000300.SH"},
+        "lookback_trading_days": {"const": 20},
+        "min_history_bars": {"const": 21},
+        "trend_up_min_pct": {"const": 2.0},
+        "trend_down_max_pct": {"const": -2.0},
+        "high_realized_vol_annualized_pct": {"const": 25.0},
+        "max_staleness_calendar_days": {"const": 7}
+      }
+    },
+    "decision_rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_horizon_days", "min_effective_weeks_provisional", "min_effective_weeks_adopt", "min_comparison_regimes_adopt", "min_nonoverlap_blocks_adopt", "retire_after_effective_weeks", "adopt_min_mean_paired_net_excess_pct", "adopt_min_win_rate", "max_drawdown_worsening_pct", "max_bad_name_rate_worsening_pct", "permutation_draws", "bootstrap_draws", "confidence_level", "familywise_correction", "adjusted_pvalue_max", "power_target"],
+      "properties": {
+        "primary_horizon_days": {"const": 10},
+        "min_effective_weeks_provisional": {"const": 12},
+        "min_effective_weeks_adopt": {"const": 24},
+        "min_comparison_regimes_adopt": {"const": 2},
+        "min_nonoverlap_blocks_adopt": {"const": 12},
+        "retire_after_effective_weeks": {"const": 36},
+        "adopt_min_mean_paired_net_excess_pct": {"const": 0.25},
+        "adopt_min_win_rate": {"const": 0.55},
+        "max_drawdown_worsening_pct": {"const": 2.0},
+        "max_bad_name_rate_worsening_pct": {"const": 0.05},
+        "permutation_draws": {"const": 20000},
+        "bootstrap_draws": {"const": 5000},
+        "confidence_level": {"const": 0.95},
+        "familywise_correction": {"const": "holm_bonferroni"},
+        "adjusted_pvalue_max": {"const": 0.05},
+        "power_target": {"const": 0.8}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "automatic_policy_switch", "historical_replay_counts_as_forward"],
+      "properties": {
+        "production": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false}
+      }
+    }
+  }
+}

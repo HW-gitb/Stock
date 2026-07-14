@@ -331,6 +331,10 @@ if ($SkipSemanticRisk) {
                 # 价格门 intraday tolerance(容忍最新已结算 bar=前一交易日);真·过去回放(as_of<运行日)保持默认
                 # strict_as_of。实际价格时钟记进 weekly_m67 lineage。
                 $M67Args += @('--price-freshness-mode', 'intraday_prior_settled')
+                # D1/D3: freeze the normalized live decision once, under the private comparison root.
+                # This is sidecar-only; it cannot alter the production EGS/M6.7 result.
+                $FactorComparisonRoot = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private'
+                $M67Args += @('--factor-comparison-root', $FactorComparisonRoot, '--factor-comparison-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             $RunM67 = $true
@@ -358,6 +362,15 @@ if ($SkipSemanticRisk) {
                     exit $M67ExitCode
                 } else {
                     Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
+                    if (-not $IsHistoricalAsOf) {
+                        # Cache-only settlement: no provider call and no blocking of the weekly path.
+                        & $PythonExe runners\a_short_factor_comparison.py settle --root $FactorComparisonRoot
+                        $FactorComparisonExitCode = $LASTEXITCODE
+                        if ($null -eq $FactorComparisonExitCode) { $FactorComparisonExitCode = 1 }
+                        if ($FactorComparisonExitCode -ne 0) {
+                            Write-Host "[WARN] factor comparison settlement exit $FactorComparisonExitCode (comparison-only; weekly output unchanged)" -ForegroundColor Yellow
+                        }
+                    }
                 }
             }
         }

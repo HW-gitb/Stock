@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-14 — Claude PASS / Codex 提交（A-short D1/D3 因素对照）
+
+- **Verdict/Action**: Claude 已通过 D1/D3 因素对照轨；Codex 仅提交该刀的私密周度结果、独立市场状态与统计裁决接线。
+- **Required**: 无；D2、D4、B1 保持独立未提交，不能从本次 PASS 推断其已通过。
+- **Verify**: D1/D3 定向回归 14 OK；Python 编译与暂存 `git diff --check` 通过。
+- **Next**: 仅在后续真实周度运行中积累 forward 证据；任何生产规则变更仍须独立审查和用户确认。
+
 ## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
 
 - **Verdict/Action**: 两处均 PASS、无 Required。① `has_crash_veto` 4→5 日窗口 = 仅循环 bound `min(5→6)`;3 条件（>5% 跌 / 收弱在振幅下 20% / 次日不修复）逐字未改;`grp` DESC 排序（egs_main:2687）、PIT 剔最新未确认日;测试钉「第 5 个确认日触发、第 6 个不触发」。是**硬否决收紧**（更保守、risk_filter_only 的安全方向）;它**改选股**（`l2_crash_veto` 245→301、55 只本会入排名被剔）= 该 veto 的既定/正确效果。② `a_short_crash_veto_tracker` = comparison-only:ps1 在 tracker 失败时「formal selection/M6.7 continues unchanged」（**非阻断**）;summary 仅 `_validate_crash_veto_tracking_summary` 校验后挂周报（**不改选股**）;control 确定性（L2→L1→pool）;cohort 按 `scope+days` 隔离（245 与 55 永不混）;T+1 开 / T+5·T+10 收 / qfq / 0.16% 双边成本约定正确。
