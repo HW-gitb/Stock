@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY）PASS
+
+- **Verdict/Action**: PASS + 提交（9add 分支，未 push）。复审 Codex 的 SEC 破产扫描有界重试刀:fail-closed 全成立——`_sec_get_bankruptcy_with_retry` 每路径要么返真 payload 要么 raise,绝无返 None/伪造 `screened_no_filing`;持久 429/5xx/timeout 有界后仍 raise→scan 中止不写候选;403/404 首次即失败不重试;上限 4 次、退避 1/2/4s;`from None` 抑制 URL 泄漏;malformed 200 仍走原 fail-closed(重试不吞)。generic `_sec_get`/injected/standalone 未改。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 retry helper + 唯一 caller。**亲跑 focused 171 OK + 全包 `discover -p test_us_short*.py` = 4426 OK**（exit 0、9add tree、未采信执行方计数）。Codex 4 新测精准覆盖:瞬时 429→503→timeout→成功(4 调用+退避[1,2,4]+计数=4)/持久 503 有界后 raise+无 clean wrapper+无 URL+cause None/403·404 单调用不重试/URLError 包装 timeout 重试。P3 纯运营非选股面→按比例复审不起 §6a agent。
+- **Next**: 按用户指令,提交本刀后把整个 9add merge 到 master(已 clean;core `universe_fetch` 与 master 同→干净合;capstone_stages/weekly_capstone test/4 文档 三方合、保双方条目)。
+
+## 2026-07-14 — Codex 修复（R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY）
+
+- **Verdict/Action**: integrated bankruptcy scan 新增 transient-only 有界退避：每票最多 4 次请求，429/5xx/直接或包装 timeout 按 1s/2s/4s 重试；403/404 立即失败，耗尽仍中止，不跳票、不伪造 clean。通用 SEC 与 injected/standalone 路径未改。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY` 修复已实现、待独立审查；完整 finding、边界和关闭标准单源见 `docs/system_risk_register.md`。
+- **Verify**: 红测旧路径 4 errors；修后 scan 7 OK、universe+capstone 171 OK、全离线 `test_us_short*` 4426 OK（1 skipped）、`py_compile`/`git diff --check` 通过。持久 503 四次后 raise、403/404 单次失败、错误无 URL chain、失败不写 clean wrapper；成功重试按真实 HTTP 尝试数计 evidence。无 provider/live 调用。
+- **Pre-Codex self-review**: A-F main-thread checklist（未获 subagent 授权）：唯一生产消费者改用 scan-only wrapper；同类 generic `_sec_get` 调用不变；429→503→timeout→成功与持久/4xx反向例均覆盖；fair-access 跨票 pacing 保留、retry backoff 自带更长间隔；解析前后顺序与 R3 safety gate 不变；CURRENT/README 无瞬态或契约膨胀。
+- **Next**: Claude Code：仅独立审查本 SEC bankruptcy retry 刀；PASS 后提交本范围，不 push。
+
 ## 2026-07-13 — Claude Code 立项 R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY（P3，路由 Codex）
 
 - **Verdict/Action**: 把破产扫描复审时提的 P3① 从 Optional 提升为独立 Required（带 finding ID）落 register，路由 Codex 执行。缺陷:`_sec_get`（`us_short_universe_fetch.py:248`）单发无重试,破产扫描 ~2400 次顺序 SEC 调用中任一次瞬时 429/5xx/timeout 即中止整个 6–10 分钟周跑（universe 非 best-effort）。纯运营脆弱,不涉选股/PIT/source-truth/secret。

@@ -200,6 +200,117 @@ class TestIntegratedBankruptcySubmissionsFetch(unittest.TestCase):
             self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
                               "company_submissions_recent_filings.json").exists())
 
+    def test_transient_429_503_and_timeout_are_bounded_retried_then_screen_completes(self):
+        import tempfile
+
+        clean = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
+        transient = [
+            _mod.urllib.error.HTTPError(
+                "https://data.sec.gov/submissions/CIK0000320193.json", 429, "rate", {}, None),
+            _mod.urllib.error.HTTPError(
+                "https://data.sec.gov/submissions/CIK0000320193.json", 503, "down", {}, None),
+            TimeoutError("read timed out"),
+            clean,
+        ]
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_sec_get", side_effect=transient) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            raw_root = Path(tmp) / "raw"
+            screen, stats = _mod.fetch_bankruptcy_submissions_for_eligible(
+                sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                eligible_tickers=["AAPL"],
+                sec_ua="ua@test",
+                raw_root=raw_root,
+                status_as_of=STATUS_AS_OF,
+                observed_at=STATUS_OBSERVED_AT,
+            )
+
+        self.assertEqual(sec_get.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0, 4.0])
+        self.assertEqual(screen["by_ticker"]["AAPL"]["screen_status"], "screened_no_filing")
+        self.assertEqual(stats["sec_company_submissions_calls"], 4)
+
+    def test_persistent_503_exhausts_bounded_attempts_without_clean_wrapper(self):
+        import tempfile
+
+        error = _mod.urllib.error.HTTPError(
+            "https://data.sec.gov/submissions/CIK0000320193.json", 503, "down", {}, None)
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_sec_get", side_effect=error) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            raw_root = Path(tmp) / "raw"
+            with self.assertRaisesRegex(RuntimeError, "HTTP 503 after 3 retry") as ctx:
+                _mod.fetch_bankruptcy_submissions_for_eligible(
+                    sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                    eligible_tickers=["AAPL"],
+                    sec_ua="ua@test",
+                    raw_root=raw_root,
+                    status_as_of=STATUS_AS_OF,
+                    observed_at=STATUS_OBSERVED_AT,
+                )
+
+            self.assertEqual(sec_get.call_count, 4)
+            self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0, 4.0])
+            self.assertNotIn("https://", str(ctx.exception))
+            self.assertIsNone(ctx.exception.__cause__)
+            self.assertTrue(ctx.exception.__suppress_context__)
+            self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
+                              "company_submissions_recent_filings.json").exists())
+
+    def test_urlerror_wrapped_timeout_is_retried_and_counted(self):
+        import tempfile
+
+        clean = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(
+                 _mod,
+                 "_sec_get",
+                 side_effect=[_mod.urllib.error.URLError(TimeoutError("connect timed out")), clean],
+             ) as sec_get, patch.object(_mod.time, "sleep") as sleep:
+            screen, stats = _mod.fetch_bankruptcy_submissions_for_eligible(
+                sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                eligible_tickers=["AAPL"],
+                sec_ua="ua@test",
+                raw_root=Path(tmp) / "raw",
+                status_as_of=STATUS_AS_OF,
+                observed_at=STATUS_OBSERVED_AT,
+            )
+
+        self.assertEqual(sec_get.call_count, 2)
+        sleep.assert_called_once_with(1.0)
+        self.assertEqual(screen["by_ticker"]["AAPL"]["screen_status"], "screened_no_filing")
+        self.assertEqual(stats["sec_company_submissions_calls"], 2)
+
+    def test_403_and_404_fail_fast_without_retry_or_clean_wrapper(self):
+        import tempfile
+
+        for code in (403, 404):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as tmp, \
+                 patch.object(
+                     _mod,
+                     "_sec_get",
+                     side_effect=_mod.urllib.error.HTTPError(
+                         "https://data.sec.gov/submissions/CIK0000320193.json", code, "client", {}, None),
+                 ) as sec_get, patch.object(_mod.time, "sleep") as sleep:
+                raw_root = Path(tmp) / "raw"
+                with self.assertRaisesRegex(RuntimeError, f"HTTP {code} is not retryable") as ctx:
+                    _mod.fetch_bankruptcy_submissions_for_eligible(
+                        sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                        eligible_tickers=["AAPL"],
+                        sec_ua="ua@test",
+                        raw_root=raw_root,
+                        status_as_of=STATUS_AS_OF,
+                        observed_at=STATUS_OBSERVED_AT,
+                    )
+
+                sec_get.assert_called_once()
+                sleep.assert_not_called()
+                self.assertNotIn("https://", str(ctx.exception))
+                self.assertIsNone(ctx.exception.__cause__)
+                self.assertTrue(ctx.exception.__suppress_context__)
+                self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
+                                  "company_submissions_recent_filings.json").exists())
+
 
 class TestFetchSecShares(unittest.TestCase):
     def test_latest_end_per_cik_wins(self):

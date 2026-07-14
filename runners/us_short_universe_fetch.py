@@ -86,6 +86,8 @@ SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 SEC_FRAMES_URL = "https://data.sec.gov/api/xbrl/frames/dei/EntityCommonStockSharesOutstanding/shares/{q}.json"
 SEC_SHARE_FRAMES = ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"]
 SEC_FAIR_ACCESS_SLEEP = 0.15
+SEC_BANKRUPTCY_MAX_RETRIES = 3
+SEC_BANKRUPTCY_RETRY_BACKOFF_SECONDS = 1.0
 # A corrupted/hostile candidate artifact must never turn one capstone run into an unbounded SEC crawl. The normal
 # eligible universe is roughly 2,400 names; 5,000 leaves operational headroom while remaining a hard fail-closed cap.
 MAX_INTEGRATED_BANKRUPTCY_SCREEN_SYMBOLS = 5_000
@@ -256,6 +258,41 @@ def _sec_get(url: str, sec_ua: str) -> Any:
     return json.loads(raw.decode("utf-8"))
 
 
+def _sec_get_bankruptcy_with_retry(url: str, sec_ua: str) -> tuple[Any, int]:
+    """Fetch one company-submissions payload with bounded transient-only retry.
+
+    This wrapper is intentionally used only by the integrated candidate bankruptcy scan. The existing standalone
+    SEC ticker/share and injected-screen paths retain their prior behavior. Errors are converted without chaining so
+    the requested URL cannot leak through an HTTPError/URLError traceback.
+    """
+    retries = 0
+    while True:
+        try:
+            return _sec_get(url, sec_ua), retries + 1
+        except urllib.error.HTTPError as exc:
+            retryable = exc.code == 429 or 500 <= exc.code <= 599
+            if not retryable:
+                raise RuntimeError(
+                    f"SEC company-submissions HTTP {exc.code} is not retryable"
+                ) from None
+            if retries >= SEC_BANKRUPTCY_MAX_RETRIES:
+                raise RuntimeError(
+                    f"SEC company-submissions HTTP {exc.code} after {retries} retry attempt(s)"
+                ) from None
+        except (TimeoutError, urllib.error.URLError) as exc:
+            reason = exc.reason if isinstance(exc, urllib.error.URLError) else exc
+            if not isinstance(reason, TimeoutError):
+                raise RuntimeError(
+                    "SEC company-submissions transport error is not retryable"
+                ) from None
+            if retries >= SEC_BANKRUPTCY_MAX_RETRIES:
+                raise RuntimeError(
+                    f"SEC company-submissions timeout after {retries} retry attempt(s)"
+                ) from None
+        retries += 1
+        time.sleep(SEC_BANKRUPTCY_RETRY_BACKOFF_SECONDS * (2 ** (retries - 1)))
+
+
 # ---------------------------------------------------------------------------
 # SEC: ticker + CIK + exchange
 # ---------------------------------------------------------------------------
@@ -321,11 +358,14 @@ def fetch_bankruptcy_submissions_for_eligible(
         canonical.append(ticker)
 
     screen_rows: dict[str, dict[str, Any]] = {}
+    actual_request_count = 0
     for index, ticker in enumerate(canonical):
         if index:
             time.sleep(SEC_FAIR_ACCESS_SLEEP)
         cik = sec_map[ticker]["cik"]
-        payload = _sec_get(SEC_SUBMISSIONS_URL.format(cik=cik), sec_ua)
+        payload, request_count = _sec_get_bankruptcy_with_retry(
+            SEC_SUBMISSIONS_URL.format(cik=cik), sec_ua)
+        actual_request_count += request_count
         # Parse each payload immediately. A malformed 200 must fail before it can be labeled screened_no_filing.
         one_ticker_screen = _status_source.build_bankruptcy_screen_from_sec_submissions(
             as_of=status_as_of,
@@ -351,7 +391,7 @@ def fetch_bankruptcy_submissions_for_eligible(
         "by_ticker": screen_rows,
     }, {
         "eligible_symbol_count": len(canonical),
-        "sec_company_submissions_calls": len(canonical),
+        "sec_company_submissions_calls": actual_request_count,
     }
 
 
