@@ -1065,6 +1065,10 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "suspended": int(len(suspended_set or [])),
                 "relisted": int(len(relisted_set or [])),
                 "holder_reduction_veto_10d": int(len((red_dict or {}).get("veto_10d", set()))),
+            },
+            # 排名层淘汰不是 L0 硬否决；独立存放，避免 weekly exclusion_summary 把它们误当
+            # 上游硬过滤原因。旧 v1.4 混装产物由 weekly 对明确键做兼容，不放松其他未知键 fail-closed。
+            "rank_exclusion_counts": {
                 "l1_industry_leader": _rank_stage_excluded_count(
                     rank_reconciliation, "l1_industry_leader"
                 ),
@@ -2721,12 +2725,13 @@ def precompute_stock_stats(codes, all_daily):
         )
 
         # 闪崩/断头铡刀检测。**有意偏离 v14.2 Rule6「5日内放量跌>8%」**(2026-06-19 审查决定保留):此处用更稳健的
-        # **价格结构**口径——单日跌>5% ∧ 收在当日振幅下 20%(收得弱) ∧ 次日收盘<(pre_close+close)/2(不修复)。
+        # **价格结构**口径——最近 5 个已有次日确认的交易日内，单日跌>5% ∧ 收在当日振幅下 20%(收得弱)
+        # ∧ 次日收盘<(pre_close+close)/2(不修复)。最新交易日尚无次日确认，故不纳入本次窗口。
         # 不依赖含糊的「放量」量级,且加「弱收 + 次日不修复」两道结构确认,对 risk_filter_only 系统更保守可靠。
         # 阈值 −5(非 −8)+ 结构门是 deliberate(非把 8 打错成 5);改 −8 / 加放量 = 放松一条硬否决,故不改。
         # 行为由 tests/phase6/test_egs_main_board_and_holder_pit.py::HasCrashVetoSpecDeviationTest 钉住。
         has_crash_veto = False
-        for i in range(1, min(5, len(grp))):
+        for i in range(1, min(6, len(grp))):
             day_chg = grp.iloc[i].get("pct_chg", 0)
             if day_chg < -5:
                 high_p  = grp.iloc[i].get("high",  0)

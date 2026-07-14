@@ -156,6 +156,34 @@ class HasCrashVetoSpecDeviationTest(unittest.TestCase):
         self.assertFalse(by["600002.SH"])   # 次日修复 → 不触发(recovery 门)
         self.assertFalse(by["600003.SH"])   # 跌幅<5% → 不触发(−5 阈值门,非 spec 的 −8)
 
+    @staticmethod
+    def _window_stock(code, crash_date):
+        rows = []
+        for date in pd.date_range("2026-05-23", "2026-05-29"):
+            trade_date = date.strftime("%Y%m%d")
+            rows.append({
+                "ts_code": code, "trade_date": trade_date,
+                "open": 10.0, "high": 10.2, "low": 9.8,
+                "close": 10.0, "pre_close": 10.0, "pct_chg": 0.0,
+                "vol": 1000.0, "amount": 200000.0,
+            })
+
+        crash_index = next(i for i, row in enumerate(rows) if row["trade_date"] == crash_date)
+        rows[crash_index].update({"high": 10.0, "low": 9.0, "close": 9.0, "pct_chg": -10.0})
+        rows[crash_index + 1].update({"high": 9.2, "low": 8.8, "close": 9.0, "pre_close": 9.0})
+        return rows
+
+    def test_crash_veto_scans_five_confirmed_days_not_six(self) -> None:
+        em = self.egs_main
+        panel = pd.DataFrame(
+            self._window_stock("600004.SH", "20260524")  # DESC iloc[5]：第5个已有次日确认的交易日
+            + self._window_stock("600005.SH", "20260523")  # DESC iloc[6]：第6个，必须在窗口外
+        )
+        stats = em.precompute_stock_stats({"600004.SH", "600005.SH"}, panel)
+        by = {r["ts_code"]: bool(r["has_crash_veto"]) for _, r in stats.iterrows()}
+        self.assertTrue(by["600004.SH"])
+        self.assertFalse(by["600005.SH"])
+
 
 class EgsImportNoTokenSideEffectTest(unittest.TestCase):
     """P0(Codex 审查补漏):egs_main import **不得调 ts.set_token**——set_token 在 import 期写 ~/tk.csv,

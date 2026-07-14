@@ -26,6 +26,11 @@ def load_minimal_analysis_input_payload() -> dict[str, Any]:
             "relisted": 0,
             "holder_reduction_veto_10d": 0,
         },
+        "rank_exclusion_counts": {
+            "l1_industry_leader": 0,
+            "l2_quality_risk": 0,
+            "rank_unexpected": 0,
+        },
     }
     payload["market_context"] = {
         "trade_calendar": {

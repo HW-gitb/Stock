@@ -4,6 +4,7 @@
 #   1) A-EGS\egs_main.py                       (主选股；产 data_health.json by Codex layer)
 #   2) runners\data_canary.py                  (旁路跨源对账；sina 默认，VPN-agnostic)
 #   3) runners\forward_tracker.py              (Phase 3.5 实盘 forward 累计；不影响主流程)
+#   3b) a_short_crash_veto_tracker.py          (旁路冻结闪崩否决名单，补算5/10交易日并写大白话结论；不改选股)
 #   4) M6.7 authoritative operation 周报(a_short_iv_feed_build + a_short_weekly_pipeline:建市场 IV feed → 跑
 #                                               M6.7 pipeline,语义 cninfo+DeepSeek 行内;watch pool =
 #                                               当次 EGS analysis_input;run-path 见契约 §web_llm 产出路径)
@@ -267,6 +268,25 @@ if ($SkipTracker) {
     }
 }
 
+# --- Stage 3b: crash-veto 5d/10d comparison tracker ---
+# 只在 live 周跑冻结新批次；历史回放不得污染 forward 账本。失败只让本周周报不带该小节，绝不影响 EGS/M6.7。
+$CrashVetoSummary = Join-Path $ProjectRoot 'logs\a_short_crash_veto_summary.json'
+$CrashVetoSummaryReady = $false
+if ($IsHistoricalAsOf) {
+    Write-Host "[3b/4] Historical replay: crash-veto forward tracker skipped" -ForegroundColor DarkGray
+} else {
+    Write-Host "[3b/4] Updating crash-veto 5/10-trading-day comparison ..." -ForegroundColor Yellow
+    & $PythonExe runners\a_short_crash_veto_tracker.py update --as-of $AsOf --rule-confirmed-days 5 --confirm-fetch-authorized
+    $CrashVetoExitCode = $LASTEXITCODE
+    if ($null -eq $CrashVetoExitCode) { $CrashVetoExitCode = 1 }
+    if ($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)) {
+        $CrashVetoSummaryReady = $true
+        Write-Host "[ADVISORY] crash-veto comparison ready -> $CrashVetoSummary (selection unchanged)" -ForegroundColor Yellow
+    } else {
+        Write-Host "[WARN] crash-veto comparison unavailable (exit $CrashVetoExitCode); formal selection/M6.7 continues unchanged." -ForegroundColor Yellow
+    }
+}
+
 # --- Stage 4: M6.7 authoritative operation weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
 #     sidecar; ONE Friday entry now also runs the M6.7 pipeline with semantic [cninfo official + DeepSeek
 #     web] rendered inline). semantic 证据本身 advisory-only；但 requested M6.7 失败必须写 failed receipt + 非零退出；落 research 非生产
@@ -305,6 +325,7 @@ if ($SkipSemanticRisk) {
             exit 22
         } else {
             $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
                 # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用
                 # 价格门 intraday tolerance(容忍最新已结算 bar=前一交易日);真·过去回放(as_of<运行日)保持默认

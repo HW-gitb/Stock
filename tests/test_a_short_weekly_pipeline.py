@@ -528,6 +528,25 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(loaded["iv_feed_ref"], "feed.json")
         self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "建仓")
 
+    def test_main_accepts_legacy_v14_mixed_rank_counts_without_misreporting_them_as_l0(self):
+        """Real Run-1 regression: old v1.4 mixed rank counts must not crash or become hard-veto summary rows."""
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+        ai["universe_summary"].pop("rank_exclusion_counts", None)  # exact legacy v1.4 shape
+        ai["universe_summary"]["excluded_counts"] = {
+            "unlock": 2, "suspended": 0, "relisted": 0, "holder_reduction_veto_10d": 0,
+            "l1_industry_leader": 601, "l2_quality_risk": 255, "rank_unexpected": 0,
+        }
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["exclusion_summary"]["total_excluded"], 2)
+        self.assertEqual([r["source_field"] for r in weekly["exclusion_summary"]["by_reason"]],
+                         ["share_float_unlock"])
+
     def test_price_freshness_mode_controls_tolerance(self):
         # the intraday tolerance is gated on the EXPLICIT --price-freshness-mode (NOT inferred from
         # run-date==as-of). Spy on _fetch_price_series to capture what main passed as the accepted clock.
@@ -1730,6 +1749,14 @@ class ExclusionSummaryTests(unittest.TestCase):
             _build_exclusion_summary({"unlock": 1, "stage3_policy_veto": 4}, AS_OF)
         es = _build_exclusion_summary({"unlock": 1, "stage3_policy_veto": 0}, AS_OF)  # 0 无害
         self.assertEqual(es["total_excluded"], 1)
+
+    def test_legacy_rank_keys_are_known_post_l0_and_ignored(self):
+        es = _build_exclusion_summary({
+            "unlock": 2, "l1_industry_leader": 601, "l2_quality_risk": 255,
+            "rank_unexpected": 0,
+        }, AS_OF)
+        self.assertEqual(es["total_excluded"], 2)
+        self.assertEqual([r["source_field"] for r in es["by_reason"]], ["share_float_unlock"])
 
     def test_schema_and_validator_accept(self):
         w = self._weekly_excl({"unlock": 2, "suspended": 1})

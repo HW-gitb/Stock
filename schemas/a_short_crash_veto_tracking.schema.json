@@ -1,0 +1,89 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_crash_veto_tracking_summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "generated_at", "as_of",
+    "comparison_only", "affects_selection", "production_rule_changed",
+    "one_week_plain", "two_week_plain", "final_decision", "variants"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_crash_veto_tracking_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "minLength": 1},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "comparison_only": {"const": true},
+    "affects_selection": {"const": false},
+    "production_rule_changed": {"const": false},
+    "one_week_plain": {"type": "string", "minLength": 1},
+    "two_week_plain": {"type": "string", "minLength": 1},
+    "final_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "basis_cohort_ids", "plain_text"],
+      "properties": {
+        "status": {"enum": ["insufficient_keep", "change_candidate", "keep", "mixed_keep"]},
+        "basis_cohort_ids": {
+          "type": "array",
+          "items": {"type": "string", "pattern": "^crash-veto-[0-9a-f]{20}$"},
+          "uniqueItems": true
+        },
+        "plain_text": {"type": "string", "minLength": 1}
+      }
+    },
+    "variants": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cohort_id", "as_of", "scope", "rule_confirmed_days", "member_count",
+          "one_week", "two_week", "one_week_plain", "two_week_plain", "decision", "conclusion_plain"
+        ],
+        "properties": {
+          "cohort_id": {"type": "string", "pattern": "^crash-veto-[0-9a-f]{20}$"},
+          "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "scope": {"type": "string", "minLength": 1},
+          "rule_confirmed_days": {"type": "integer", "minimum": 1},
+          "member_count": {"type": "integer", "minimum": 0},
+          "one_week": {"$ref": "#/definitions/horizon"},
+          "two_week": {"$ref": "#/definitions/horizon"},
+          "one_week_plain": {"type": "string", "minLength": 1},
+          "two_week_plain": {"type": "string", "minLength": 1},
+          "decision": {"enum": ["insufficient_keep", "change_candidate", "keep", "mixed_keep"]},
+          "conclusion_plain": {"type": "string", "minLength": 1}
+        }
+      }
+    }
+  },
+  "definitions": {
+    "horizon": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "horizon_trading_days", "member_count", "paired_count", "status_counts"],
+      "properties": {
+        "status": {"enum": ["pending", "ready"]},
+        "horizon_trading_days": {"enum": [5, 10]},
+        "member_count": {"type": "integer", "minimum": 0},
+        "paired_count": {"type": "integer", "minimum": 0},
+        "status_counts": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        },
+        "coverage_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "blocked_mean_return_pct": {"type": "number"},
+        "blocked_median_return_pct": {"type": "number"},
+        "control_mean_return_pct": {"type": "number"},
+        "mean_paired_excess_pct": {"type": "number"},
+        "median_paired_excess_pct": {"type": "number"},
+        "outperform_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "blocked_loss_gt_5_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "blocked_loss_gt_10_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "control_loss_gt_5_rate": {"type": "number", "minimum": 0, "maximum": 1},
+        "blocked_mean_mae_pct": {"type": ["number", "null"]},
+        "control_mean_mae_pct": {"type": ["number", "null"]}
+      }
+    }
+  }
+}

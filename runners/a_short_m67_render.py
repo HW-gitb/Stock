@@ -485,6 +485,23 @@ def render_weekly_markdown(weekly: dict) -> str:
                 "| SW二级行业 | 候选数 | 有红旗 | 红旗候选 | 摘要 |", "|---|---|---|---|---|"]
         out += [f"| {g['sw_l2_name']} | {g['candidate_count']} | {g['red_flag_candidate_count']} | "
                 f"{'、'.join(g['red_flag_codes'])} | {g['summary']} |" for g in _indf["by_industry"]]
+    # 闪崩否决追踪:每次周跑顺手冻结/补算；comparison-only，不改正式 EGS/TopN/M6.7。
+    _cv = weekly.get("crash_veto_tracking")
+    if _cv:
+        out += ["", "## 闪崩否决追踪（只做对比，不影响本周选股）",
+                "> 口径：决策日下一交易日开盘模拟买入，第5/第10个交易日收盘比较；前复权并扣0.16%双边成本。",
+                f"- 一周：{_cv['one_week_plain']}",
+                f"- 两周：{_cv['two_week_plain']}"]
+        _scope_label = {
+            "legacy_official_4d": "旧4日口径官方被拦组",
+            "active_5d_incremental_rank_impact": "新增第5日实际多拦组",
+            "official_all_crash_veto": "当前口径官方被拦组",
+        }
+        for _variant in (_cv.get("variants") or []):
+            out.append(f"- {_scope_label.get(_variant['scope'], _variant['scope'])}"
+                       f"（{_variant['as_of']}，{_variant['member_count']}只）：{_variant['conclusion_plain']}")
+        out.append(f"- **最终结论：{_cv['final_decision']['plain_text']}**")
+        out.append("> 这里只给观察结论；即使显示“建议复审”，系统也不会自动改阈值或放行股票。")
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
     _excl = weekly.get("exclusion_summary")
     if _excl:

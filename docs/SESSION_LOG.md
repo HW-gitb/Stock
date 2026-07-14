@@ -8,6 +8,44 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
+
+- **Verdict/Action**: 两处均 PASS、无 Required。① `has_crash_veto` 4→5 日窗口 = 仅循环 bound `min(5→6)`;3 条件（>5% 跌 / 收弱在振幅下 20% / 次日不修复）逐字未改;`grp` DESC 排序（egs_main:2687）、PIT 剔最新未确认日;测试钉「第 5 个确认日触发、第 6 个不触发」。是**硬否决收紧**（更保守、risk_filter_only 的安全方向）;它**改选股**（`l2_crash_veto` 245→301、55 只本会入排名被剔）= 该 veto 的既定/正确效果。② `a_short_crash_veto_tracker` = comparison-only:ps1 在 tracker 失败时「formal selection/M6.7 continues unchanged」（**非阻断**）;summary 仅 `_validate_crash_veto_tracking_summary` 校验后挂周报（**不改选股**）;control 确定性（L2→L1→pool）;cohort 按 `scope+days` 隔离（245 与 55 永不混）;T+1 开 / T+5·T+10 收 / qfq / 0.16% 双边成本约定正确。
+- **Required**: 无。
+- **Optional**: 5 日窗口改选股（高影响）——代码正确 + 方向安全（收紧），但**最终 13 候选的确切变化未在真实数据上重跑核对**;想眼见为实需再跑一次 egs（5 日口径）对比 13 候选。tracker 首个真实 5/10 日 forward 结论亦待未来周跑走完。
+- **Verify**: 亲跑 `test_egs_main_board_and_holder_pit` + `test_a_short_crash_veto_tracker` **13 OK**;`grp` DESC 排序、ps1 非阻断分支、cohort 隔离、control 匹配均整读核实。无子 agent。
+- **Next**: 用户定（提交整个 Run-1 批次[EGS→weekly 排除计数 + 5 日窗口 + tracker 均已复审 PASS] / 先再跑 egs 5 日口径核 13 候选变化）。
+
+## 2026-07-14 — Claude Code 独立复审（A-short Run 1 #4 EGS→weekly 排除计数语义冲突）代码+on-data PASS
+
+- **Verdict/Action**: 代码正确、contract/消费端-only、无 Required、未改排名/阈值/权重/cohort。EGS 把 3 个排名淘汰键迁到 schema-bound `rank_exclusion_counts`、`excluded_counts` 只留 4 个 L0 键;weekly `_build_exclusion_summary` 只忽略 `_LEGACY_RANK_EXCLUSION_KEYS`(l1_industry_leader/l2_quality_risk/rank_unexpected,兼容旧 v1.4)、其余任意非零未知键仍 raise(no-dangling 门在)。
+- **Required**: 无(见 register `R-ASHORT-RUN1-EGS-WEEKLY-EXCLUSION-COUNT-SEMANTIC-COLLISION` 复审补注)。
+- **Verify**: 离线 contract+weekly **441 OK**;**决定性 on-data**——拿正是崩溃过的 legacy-mixed 20260714 产物(601/255 在 `excluded_counts`)重跑真实 weekly:现在 `exit=0`、fresh 产物、`stage=complete`、`total_excluded=141`(仅 4 L0 键)、601/255 既不崩也不误报。无子 agent。
+- **Next**: 用户定。**另注(不在本审范围)**:同一工作树交织别窗口两处 crash-veto 改动——`has_crash_veto` 4→5 日窗口(`l2_crash_veto` 245→301、**改选股**)+ `a_short_crash_veto_tracker`(comparison-only);需各自严格复审、勿与 #4 一起提交。
+
+## 2026-07-14 — Codex 修复（A-short Run 1：EGS→weekly 排除计数语义冲突）
+
+- **Verdict/Action**: 问题仍存在，现已修复：新 EGS 将排名淘汰移到 `rank_exclusion_counts`；weekly 兼容旧 v1.4 混装产物，但不把排名淘汰误报成 L0 硬否决。
+- **Required**: 当前无已知代码残留；完整边界见 register `R-ASHORT-RUN1-EGS-WEEKLY-EXCLUSION-COUNT-SEMANTIC-COLLISION`，待 Claude 独立审查。
+- **Verify**: weekly 437 OK；EGS 37 OK / 1 skip；route/wrapper 38 OK；doc governance 35 OK；真实旧产物生成 141 个 L0 摘要，其他非零未知键仍 fail-closed。
+- **Proof-of-use**: 真实 20260714 旧产物的 601/255 排名计数被兼容忽略，周报摘要只保留 141 个真 L0；新 exporter 集成测试不再生成混装字段。
+- **Next**: Claude Code 只审本问题及其新旧产物回归，不改选股、排名、阈值或权重。
+
+## 2026-07-14 — Codex 执行（A-short 闪崩否决 5/10 交易日前瞻对比）
+
+- **Verdict/Action**: 已接入 comparison-only 闪崩否决追踪。每次 live `weekly_screening.ps1` 在 EGS 后冻结当次官方 `l2_crash_veto` 名单，后续周跑自动以 T+1 开盘、T+5/T+10 收盘、前复权、0.16% 双边成本补算；每票匹配 3 只同行业优先、规模/20日动量/20日成交额相近的正式排名票。结果写入 M6.7 Markdown 的「闪崩否决追踪」小节，固定给一周、两周和“设计是否需要改”的大白话结论；绝不自动改阈值、放行股票或影响本周选股。
+- **Required**: 首批已在 gitignored state 中冻结：旧 4 日官方 245 只；5 日修复新增 56 只中，55 只原本会进入排名，另 1 只本来还会被其他 L2 规则拦掉，故敏感度组只纳入实际排名影响的 55 只。两组分开统计、不混算；当前均未满 5/10 交易日，结论为“证据未走完，暂不改设计”。provider 补行情失败时先保住名单、追踪旁路不阻断正式 EGS/M6.7。
+- **Verify**: 新 tracker/匹配/已结算日边界/缺价可见性/双窗口 deadband/分组不混算/周跑接线测试 **8 OK**；`tests.test_a_short_weekly_pipeline` **435 OK**；EGS reconciliation/停牌/重上市/L3/daily-stats/breakout/五日窗口包 **33 OK / 1 skip**；首批 bootstrap 精确得到 `245 + 55 + 1(other-L2)`；summary 过独立 schema，PowerShell parse 与 `git diff --check` 通过。
+- **Next**: Claude Code 只审本次闪崩否决追踪实现及既有 5 日窗口修复；重点核对名单冻结、T+1/T+5/T+10、两组隔离、旁路非阻断和周报大白话结论，不改策略阈值。
+
+## 2026-07-14 — Codex 修复（A-short `has_crash_veto` 五个已确认交易日窗口）
+
+- **Verdict/Action**: 已把闪崩价格结构检查从前 4 个扩为最近 5 个“已有次日确认”的交易日；最新未确认日仍不参与，第 6 个及更早交易日仍在窗口外。5%跌幅、收盘位于振幅下20%、次日未修复三道条件均未改变；未改阈值、权重、排序或 provider 路径。
+- **Required**: 本切片无已知代码残留。用户询问的原 245 只一周/两周误杀评估本轮只给方案、未计算未来收益；20260714 原正式 reconciliation 仍是该 245 只的 run-bound cohort，后续不得与本修复新增的第5日样本混算。
+- **Verify**: 新边界测试先红（第5个未触发）后绿，并钉住“第5个触发、第6个不触发”；全部 `test_egs_*.py` **43 OK / 1 dependency skip**；AST / ripple grep / `git diff --check` 通过（仅既有 LF→CRLF warning）。20260714 provider-forbidden 缓存复算：旧四日口径 245，新五日口径 301，净增 56、移除 0。
+- **Pre-Codex self-review**: A-F 检查窗口输入/循环边界/反向第6日/既有三门不变；独立 current-diff-only agent 仅审该循环和测试，结果 PASS；无 timeout/fallback，固定包集中一次跑完。
+- **Next**: Claude Code 只审查本窗口修复；不要在本次审查中改 5%/8%/放量阈值，原245只 forward 比较另走 comparison-only cohort。
+
 ## 2026-07-14 — Claude Code 独立复审（A-short Run 1 问题 #1 SW行业源 / #3 观察池对账）代码 PASS
 
 - **Verdict/Action**: #1/#3 代码正确、无 Required、未改选股/阈值/权重/排序。#3 只改 data_health:`watch_df=top50.head(watch_n)` 导出未动、`watch_eligible=len(top50)` 使 `actual==min(eligible,target)` 恒成立→13-Tier1 过 `eligible_pool_exhausted`(无假 WARN)、删旧 `watch_n` 告警、仅真导出丢行报错、`validate_data_health_consistency` 拒伪造对账/低覆盖 pass。#1 L1 快路径 `index_member_all(l1_code,is_new=Y)` 经 `_normalize_sw_member_columns` + 同一 `_apply_pit_window`→与旧 L2 路径同源等价;仅每 L1 非空·<2000 行·形状对·总量≥MIN 才用,否则整弃回退旧逐 L2;历史 as_of 永不用;记 `sw_industry_membership`。

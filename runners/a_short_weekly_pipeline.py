@@ -45,6 +45,8 @@ ACCOUNT_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
 PRESET_PATH = ROOT / "presets" / "a_short.yaml"
 HOLDING_RATCHET_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                            "schemas", "a_short_holding_ratchet.schema.json")
+CRASH_VETO_TRACKING_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                                               "schemas", "a_short_crash_veto_tracking.schema.json")
 # S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
 HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
@@ -472,6 +474,11 @@ _EXCL_REASON_META = {
     "relisted": ("relisted", "l0_filter", "trade_date_window", "次新/relisted"),
 }
 
+# EGS v1.4 曾把这些 post-L0 排名淘汰键混入 excluded_counts，导致 weekly 把它们当未知 L0
+# 硬过滤原因而 fail-closed。新产物已迁至 universe_summary.rank_exclusion_counts；消费端仅为旧 v1.4
+# 明确忽略这三个已知非-L0键。除此之外的任意非零未知键仍阻断，保留 no-dangling 安全门。
+_LEGACY_RANK_EXCLUSION_KEYS = frozenset({"l1_industry_leader", "l2_quality_risk", "rank_unexpected"})
+
 # exclusion_summary.evidence_ref 的唯一受审 lineage key:builder 发射 + validator 精确校验共用单一来源,
 # 防"乱写 value 仍过"。本轮 evidence 只支持 lineage_key(指向已消费的 analysis_input 派生 key);
 # artifact_path 在真实产出可解析 artifact 前不开放(4.2.md §6.2/§10.2)。
@@ -481,12 +488,13 @@ _EXCL_EVIDENCE_LINEAGE_KEY = "analysis_input.universe_summary.excluded_counts"
 def _build_exclusion_summary(excluded_counts: dict, as_of: str):
     """4.2 Round2: 把 analysis_input.universe_summary.excluded_counts(egs_main filter_l0 已记)转成周报
     批次级 exclusion_summary(counts-only, public_tracked;不暴露个股代码/持仓)。total==0 → None(无可报)。
-    不改 egs_main、不抓数、不虚构个股行。**完整性 fail-closed**(R-ASHORT-GAP42-ROUND2):excluded_counts 是开放契约
-    (analysis_input schema additionalProperties),任何 count>0 的未映射键 → raise(绝不静默丢一个上游过滤原因);
-    新原因须先在 _EXCL_REASON_META 映射 stage/veto_class/pit_basis 后才能进摘要。"""
+    不抓数、不虚构个股行。**完整性 fail-closed**(R-ASHORT-GAP42-ROUND2):明确的旧 v1.4 排名键属于
+    post-L0 排名淘汰，兼容忽略；除此之外任何 count>0 的未映射键 → raise(绝不静默丢一个真正的
+    上游过滤原因)，新 L0 原因须先在 _EXCL_REASON_META 映射后才能进摘要。"""
     excluded_counts = excluded_counts or {}
     _unknown = sorted(k for k, v in excluded_counts.items()
-                      if int(v or 0) > 0 and k not in _EXCL_REASON_META)
+                      if int(v or 0) > 0 and k not in _EXCL_REASON_META
+                      and k not in _LEGACY_RANK_EXCLUSION_KEYS)
     if _unknown:
         raise ValueError(f"exclusion_summary 完整性: 未映射的上游过滤原因(count>0) {_unknown} —— "
                          "须先在 _EXCL_REASON_META 映射 stage/veto_class/pit_basis(no-dangling fail-closed)")
@@ -509,9 +517,16 @@ def _build_exclusion_summary(excluded_counts: dict, as_of: str):
                              "as_of": str(as_of)}}
 
 
+def _validate_crash_veto_tracking_summary(payload: dict, expected_as_of: str | None = None) -> None:
+    with open(CRASH_VETO_TRACKING_SCHEMA_PATH, "r", encoding="utf-8") as handle:
+        jsonschema.validate(payload, json.load(handle))
+    if expected_as_of is not None and str(payload.get("as_of")) != str(expected_as_of):
+        raise ValueError(f"crash-veto summary as_of {payload.get('as_of')} != weekly as_of {expected_as_of}")
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
-                        new_exposure_capacity=None) -> dict:
+                        new_exposure_capacity=None, crash_veto_tracking: dict | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
@@ -539,7 +554,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     lineage.setdefault("run_id", f"a-short-{as_of}-{fallback_digest[:16]}")
     lineage.setdefault("candidate_digest", fallback_digest)
     lineage.setdefault("stage_status", "complete")
-    return {
+    weekly = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
@@ -548,6 +563,10 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    if crash_veto_tracking is not None:
+        _validate_crash_veto_tracking_summary(crash_veto_tracking, expected_as_of=as_of)
+        weekly["crash_veto_tracking"] = crash_veto_tracking
+    return weekly
 
 
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
@@ -561,6 +580,8 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     except ValueError:
         raise ValueError(f"weekly as_of {weekly['as_of']} 非合法日历日期")
     validate_feed_summary_consistency(iv_feed_summary)        # 读取方校验 feed(P2)
+    if weekly.get("crash_veto_tracking") is not None:
+        _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
     # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
     if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
         raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
@@ -2713,6 +2734,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--analysis-input", required=True, help="EGS analysis_input.json (top-N 候选)")
     p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
+    p.add_argument("--crash-veto-summary", help="闪崩否决 5/10 日 comparison-only 摘要(可选；只进周报、不改决策)")
     p.add_argument("--overlay", help="overlay artifact(可选)")
     p.add_argument("--account", help="账户状态 JSON(available_cash / positions / rule12 / rule13_cooldowns)")
     p.add_argument("--out", required=True)
@@ -2759,6 +2781,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     def _load(path):
         with open(path, encoding="utf-8") as f:
             return json.load(f)
+
+    crash_veto_tracking = None
+    if args.crash_veto_summary:
+        crash_veto_tracking = _load(args.crash_veto_summary)
+        try:
+            _validate_crash_veto_tracking_summary(crash_veto_tracking, expected_as_of=args.as_of)
+        except Exception as exc:
+            raise SystemExit(f"[FATAL] invalid/stale --crash-veto-summary: {exc}")
 
     # analysis_input 消费方校验(#R-ASHORT-WEEKLY-ANALYSIS-INPUT-CONSUMER-VALIDATION-GAP):
     # 用仓库契约校验 schema + PIT,并强制 trade_date == --as-of(拒错配/未来/陈旧批次)。
@@ -2976,7 +3006,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
-                                 new_exposure_capacity=new_exposure_capacity)
+                                 new_exposure_capacity=new_exposure_capacity,
+                                 crash_veto_tracking=crash_veto_tracking)
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}
@@ -3042,8 +3073,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _indf = _industry_fundamentals(weekly.get("financial_trends"), _fin_trend_ind, args.as_of)
     if _indf:
         weekly["industry_fundamentals"] = _indf
-    # 4.2 Round2: 上游过滤批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
-    # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d), 不改 egs_main、不抓数。
+    # 4.2 Round2: L0 硬否决批次级摘要(counts-only, public) — 复用 analysis_input.universe_summary.excluded_counts
+    # (egs_main filter_l0 已记 unlock/suspended/relisted/holder_reduction_veto_10d)，不抓数；排名淘汰另存不混报。
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)
     if _excl:
         weekly["exclusion_summary"] = _excl

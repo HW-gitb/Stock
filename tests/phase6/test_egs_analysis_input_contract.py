@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import sys
 import tempfile
 import unittest
@@ -92,9 +93,52 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
 
         summary = payload["universe_summary"]
         self.assertEqual(summary["after_l0_count"], 3)
-        self.assertEqual(summary["excluded_counts"]["l1_industry_leader"], 1)
-        self.assertEqual(summary["excluded_counts"]["l2_quality_risk"], 1)
-        self.assertEqual(summary["excluded_counts"]["rank_unexpected"], 0)
+        self.assertNotIn("l1_industry_leader", summary["excluded_counts"])
+        self.assertNotIn("l2_quality_risk", summary["excluded_counts"])
+        self.assertNotIn("rank_unexpected", summary["excluded_counts"])
+        self.assertEqual(summary["rank_exclusion_counts"]["l1_industry_leader"], 1)
+        self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
+        self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
+
+    def test_real_egs_export_flows_through_weekly_main_without_rank_count_crash(self) -> None:
+        """Run-1 #4 regression: actual EGS exporter contract -> weekly main, not two isolated unit fixtures."""
+        from runners.a_short_weekly_pipeline import main as weekly_main
+
+        as_of = "20260522"
+        self.egs_main.CONF["l3_mode"] = "pit"
+        self.egs_main.CONF["l3_pit_strict"] = True
+        self.egs_main.CONF["l3_snapshot_date"] = as_of
+        reconciliation = {
+            "l0_count": 3,
+            "unexpected_stage_change_count": 0,
+            "stage_counts": [
+                {"stage": "l1_industry_leader", "excluded_count": 601},
+                {"stage": "l2_quality_risk", "excluded_count": 255},
+            ],
+        }
+        feed = {
+            "as_of": as_of, "n_days": 5,
+            "series": [
+                {"trade_date": day, "iv_value": 0.20 + i * 0.001,
+                 "iv_percentile_252d": 50.0, "hv_value": 0.18 + i * 0.001}
+                for i, day in enumerate(["20260518", "20260519", "20260520", "20260521", as_of])
+            ],
+        }
+        prices = [{"high": 10.2, "low": 9.8, "close": 10.0} for _ in range(30)]
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp, latest_td=as_of, rank_reconciliation=reconciliation)
+            feed_path = Path(tmp) / "feed.json"
+            out_path = Path(tmp) / "weekly.json"
+            feed_path.write_text(json.dumps(feed), encoding="utf-8")
+            weekly_main(["--as-of", as_of, "--analysis-input", str(analysis_path),
+                         "--iv-feed", str(feed_path), "--out", str(out_path)],
+                        price_provider=lambda _code: prices)
+            weekly = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertTrue(out_path.exists())
+        self.assertEqual(payload["universe_summary"]["rank_exclusion_counts"]["l1_industry_leader"], 601)
+        self.assertNotIn("l1_industry_leader", payload["universe_summary"]["excluded_counts"])
+        self.assertNotIn("exclusion_summary", weekly)  # no L0 count in this fixture; rank counts are not hard vetoes
 
     def _export(self, output_root: str, latest_td: str, rank_reconciliation=None):
         df = pd.DataFrame([{

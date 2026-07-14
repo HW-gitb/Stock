@@ -165,11 +165,23 @@
         },
         "excluded_counts": {
           "type": "object",
+          "description": "L0 hard-veto counts consumed by the weekly exclusion summary. Legacy v1.4 artifacts may also contain the three explicitly compatible rank-exclusion keys.",
           "additionalProperties": {
             "type": "integer",
             "minimum": 0
           },
           "default": {}
+        },
+        "rank_exclusion_counts": {
+          "type": "object",
+          "description": "Post-L0 ranking-stage eliminations; separate from excluded_counts, which is consumed as L0 hard-veto counts by the weekly report.",
+          "additionalProperties": false,
+          "required": ["l1_industry_leader", "l2_quality_risk", "rank_unexpected"],
+          "properties": {
+            "l1_industry_leader": {"type": "integer", "minimum": 0},
+            "l2_quality_risk": {"type": "integer", "minimum": 0},
+            "rank_unexpected": {"type": "integer", "minimum": 0}
+          }
         }
       }
     },
