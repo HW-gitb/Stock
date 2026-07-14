@@ -18,7 +18,9 @@ import subprocess
 import sys
 import time
 import uuid
+from contextlib import redirect_stderr, redirect_stdout
 from datetime import date, datetime, timezone
+from io import StringIO
 from pathlib import Path
 from typing import Any
 
@@ -324,10 +326,15 @@ def _error_category(exc: Exception) -> str:
 
 
 def _fetch_one(client: Any, symbol: str) -> tuple[dict[str, Any], list[dict[str, Any]] | None]:
+    # yfinance can write provider response text directly to the process console.  It is advisory-only here, so keep
+    # that raw text out of both operator output and our hygienic aggregate summary; the structured status below is
+    # the only retained outcome.
+    provider_console = StringIO()
     try:
-        ticker = client.ticker(symbol)
-        fields, raw_rows = _table_rows(ticker.upgrades_downgrades)
-        rows, coverage, parser = _normalized_source_rows(symbol, fields, raw_rows)
+        with redirect_stdout(provider_console), redirect_stderr(provider_console):
+            ticker = client.ticker(symbol)
+            fields, raw_rows = _table_rows(ticker.upgrades_downgrades)
+            rows, coverage, parser = _normalized_source_rows(symbol, fields, raw_rows)
     except Exception as exc:
         return {"status": _error_category(exc), "records": [], "coverage": "missing", "parser": "failed"}, None
     status = "ok" if parser == "ok" else "parser_failed"

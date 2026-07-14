@@ -357,7 +357,11 @@ def validate_account_state(state: dict, as_of: str) -> None:
         raise ConvertError(f"us_short_account_state failed schema: {e.message} (at {list(e.absolute_path)})")
 
     if state["as_of"] != as_of:
-        raise ConvertError(f"account_state.as_of {state['as_of']} != run --as-of {as_of}")
+        raise ConvertError(
+            f"account_state.as_of {state['as_of']} != run --as-of {as_of}; re-create the private account state "
+            f"with --as-of {as_of} only after confirming the account and position facts remain current for that "
+            "decision date"
+        )
     # Date validity is enforced HERE, not only in the CSV builder: this validator is the single source
     # of truth, so a hand-edited / non-builder JSON must also be rejected for IMPOSSIBLE dates (the
     # schema pattern ^[0-9]{8}$ would accept 20260631) and FUTURE (PIT-violating) entry dates.

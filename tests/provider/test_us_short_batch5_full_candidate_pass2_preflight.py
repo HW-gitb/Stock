@@ -213,6 +213,37 @@ class FullCandidatePass2PreflightTest(unittest.TestCase):
         self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_full_candidate_cut"], 16)
         self.assertTrue(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
 
+    def test_budget_preview_derives_exact_forecast_but_does_not_authorize_execution(self):
+        # P2: the first preflight must be able to tell the operator the exact budget without turning that
+        # observation into an authorization.  A separate, exact budget-bearing rerun remains mandatory.
+        runner = self._module()
+        _write_json(
+            self.paths["momentum"],
+            _constant_projection("momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0),
+        )
+        _write_json(
+            self.paths["theme"],
+            _constant_projection("theme_block_by_ticker", ("AAPL", "MSFT", "JPM"), "scored_theme_base", score=50.0),
+        )
+
+        summary = runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["summary"],
+            momentum_top_k=2,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+
+        self.assertEqual(summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"], 11)
+        self.assertEqual(summary["scope"]["status"], "blocked_execution_constraints")
+        self.assertFalse(summary["execution_gate"]["ready_to_run_full_candidate_live_packet"])
+        self.assertFalse(summary["execution_gate"]["authorized_budget_matches_rederived_forecast"])
+        self.assertNotIn("authorized_total_call_budget", summary["execution_gate"])
+        self.assertIn("pass2_call_budget_not_yet_authorized", summary["execution_gate"]["block_reasons"])
+
     def test_neutral_fill_local_coverage_is_not_used_as_expensive_pass2_target(self):
         runner = self._module()
         momentum = _constant_projection(

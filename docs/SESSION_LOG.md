@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（US-short P2 预算预览 + P3 操作提示/控制台卫生）PASS
+
+- **Verdict/Action**: PASS + 提交（178a 分支，未 push）。P2:`--prepare-pass2-budget` 只跑真管道到 pass2_preflight（`full_pipeline[:preflight+1]`、`preflight_indexes!=[7]` fail-closed 防 shape 漂移）、出精确 forecast 但**永不授权**（gate 仍带 `pass2_call_budget_not_yet_authorized` 否则 raise、无官方输出、返回前不进 checkpoint/transaction）；正常全跑仍拒缺预算并提示先 preview；preview 模式拒收预算。P3:账户日期仍 fatal + 重建提示;yfinance 原始 404 经 redirect 捕获丢弃、不进 console/summary、advisory-neutral 不变。均 operability/卫生、不碰选股。
+- **Required**: 无。register 两项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 preview 截断/gate/两 P3 面。**亲跑全包 `discover -p test_us_short*.py` = 4449 OK**（178a tree、未采信执行方计数）。测试真断言:P2 stage order `[:8]`/not_authorized/无 `weekly_private/<date>`/缺预算仍 raise;P3 stdout+stderr 均空 + summary 无 `ITIC/quoteSummary/404` + `fetch_error_count=3`。contained operability、按比例复审、未起 §6a agent。
+- **Next**: 待用户定是否把整支（P1+P2+P3）merge 到 master。一条 non-blocking Optional（preview 二次跑 ~2h 上游漏斗）见 register。
+
+## 2026-07-14 — Codex 修复（US-short P2 预算预览闭环 + P3 操作提示/控制台卫生）
+
+- **Verdict/Action**: 已修复。P2 新增只运行至 Pass2 preflight 的 `--prepare-pass2-budget` 和独立 preflight 的 `--print-budget`：两者给出精确 forecast，但持续明确未授权；正常全链仍须人工独立确认精确 `--pass2-call-budget N`。P3 保持账户日期精确阻断并给出重建提示，同时屏蔽 yfinance 原始 provider 控制台文本。
+- **Required**: `R-USSHORT-CAPSTONE-PASS2-BUDGET-PREVIEW-CIRCULAR-GATE`、`R-USSHORT-P3-OPERATOR-PIT-MESSAGE-AND-YFINANCE-CONSOLE-HYGIENE` 待 Claude Code 独立审查；完整边界见 register。
+- **Verify**: P2/P3 focused 回归 179 OK；全离线 `*us_short*.py` 4449 OK / 1 skipped；`py_compile` 与 `git diff --check` 通过。
+- **Pre-Codex self-review**: A 覆盖正常全链、默认 pipeline 预算预览前缀、standalone forecast、Pass2 adapter 和 P3 两个输出面；B `rg` 覆盖 `run_preflight` 调用、预算/preview 标识及 downstream source gate；C 钉住 preview 永不 ready/永不自动授权、Pass2 仍拒绝缺预算、日期仍 fatal、raw 404 不出 console/summary；E 未改 CURRENT；F 固定包集中跑完。独立 current-diff-only agent 在限定文件审查后 PASS，无超时/重启。
+- **Next**: Claude Code：审查。
+
 ## 2026-07-14 — Claude Code 独立复审（US-short P1 Pass2 漏斗：overextension 全量对账 v1.3.0）PASS
 
 - **Verdict/Action**: PASS + 提交（178a 分支，未 push）。复审 Codex 的漏斗 scope 修复:full-candidate runner 在**全体 eligible** artifact 上核 overextension 绑定（`_validate_full_overextension_before_funnel`，行 1794）、在 Pass2 target 推导(1800)/凭证读(1839)/fetch(1853) **之前** fail-closed;packet 带配对 `overextension_candidate_artifact_path`(=全量);独立 consumer 改对**全量**校验(非 subset);配对 both-or-neither 三处 + schema allOf;v1.3.0。是 scope 修正、不改选股数学。

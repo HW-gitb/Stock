@@ -207,7 +207,7 @@ class ValidateTests(unittest.TestCase):
 
     def test_as_of_mismatch_rejected(self):
         state, _ = _build()
-        with self.assertRaises(CE):
+        with self.assertRaisesRegex(CE, r"re-create.*--as-of 20260101"):
             conv.validate_account_state(state, "20260101")
 
     def test_short_direction_in_state_rejected(self):

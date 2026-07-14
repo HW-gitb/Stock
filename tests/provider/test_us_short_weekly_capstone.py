@@ -99,6 +99,14 @@ class CapstoneDryRunTest(unittest.TestCase):
         with self.assertRaises(WeeklyCapstoneError):
             self._run(datetime(2026, 7, 9, 8, 0, 0), dry_run=False, confirm_user_authorization=False)
 
+    def test_live_run_without_budget_explains_the_budget_preview_then_exact_rerun(self):
+        with self.assertRaisesRegex(WeeklyCapstoneError, "prepare-pass2-budget"):
+            self._run(
+                datetime(2026, 7, 9, 8, 0, 0),
+                dry_run=False,
+                confirm_user_authorization=True,
+            )
+
     def test_retry_without_physical_cap_fails_before_any_pipeline_stage(self):
         entered: list[str] = []
         stage = Stage(
@@ -193,7 +201,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         shutil.rmtree(self.private_root, ignore_errors=True)
 
     def _fake_stages(self, order_sink, *, break_stage=None, skip_output_stage=None, bridge_batch4=None,
-                     missing_input_stage=None, present_input_stage=None):
+                     missing_input_stage=None, present_input_stage=None, preflight_result=None):
         def outs_for(name):
             return {
                 "universe_fetch": lambda c: [c.candidate_path],
@@ -244,6 +252,8 @@ class CapstoneFakeChainTest(unittest.TestCase):
                                 },
                             }
                         }
+                    if nm == "pass2_preflight" and preflight_result is not None:
+                        return preflight_result
                     return {"stage": nm}
                 return run
 
@@ -260,11 +270,12 @@ class CapstoneFakeChainTest(unittest.TestCase):
         return stages
 
     def _run(self, order_sink, **kw):
+        account_state_path = kw.pop("account_state_path", Path("account.json"))
         return run_weekly_capstone(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=self.private_root,
             batch4_template_path=Path("template.json"),
-            account_state_path=Path("account.json"),
+            account_state_path=account_state_path,
             dry_run=False,
             confirm_user_authorization=True,
             state_dir=self.state_dir,
@@ -283,6 +294,41 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertEqual(summary["decision_date"], "20260709")
         self.assertTrue(summary["emitted_report"].endswith("weekly_report.md"))
         self.assertNotIn("shadow_capture_failed", summary)
+
+    def test_budget_preview_uses_default_prefix_only_and_never_authorizes_pass2(self):
+        # P2 end-to-end control: the one-click preview uses the real default-pipeline shape, stops immediately after
+        # preflight, emits the forecast, and does not mint a checkpoint/output transaction or run later stages.
+        from tests.test_us_short_account_state_from_manual_tables import _build
+
+        state, _ = _build(positions=[], as_of="20260709")
+        account_path = self.private_root / "account.json"
+        account_path.write_text(json.dumps(state), encoding="utf-8")
+        order: list[str] = []
+        preflight_result = {
+            "scope": {"status": "blocked_execution_constraints"},
+            "endpoint_call_forecast": {"total_calls_for_pass2_target_cut": 11},
+            "pass2_target_universe": {"target_count": 2},
+            "execution_gate": {
+                "ready_to_run_full_candidate_live_packet": False,
+                "block_reasons": ["pass2_call_budget_not_yet_authorized"],
+            },
+        }
+        fake_pipeline = self._fake_stages(order, preflight_result=preflight_result)
+        with mock.patch("runners.us_short_weekly_capstone.default_pipeline", return_value=fake_pipeline):
+            summary = self._run(
+                order,
+                account_state_path=account_path,
+                prepare_pass2_budget=True,
+                authorized_momentum_top_k=2,
+            )
+
+        self.assertEqual(order, _STAGE_NAMES[:8])
+        self.assertEqual(summary["mode"], "pass2_budget_preview")
+        self.assertEqual(summary["pass2_call_budget"], 11)
+        self.assertEqual(summary["pass2_target_count"], 2)
+        self.assertEqual(summary["operational_use"], "not_authorized")
+        self.assertIn("--pass2-call-budget 11", summary["next_required"])
+        self.assertFalse((self.private_root / "weekly_private" / "20260709").exists())
 
     def test_shadow_failure_is_loud_nonblocking_and_bridge_emits(self):
         order: list[str] = []
@@ -919,6 +965,23 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 with self.assertRaisesRegex(PermissionError, "frozen K"):
                     adapter(ctx)
                 call.assert_not_called()
+
+    def test_preflight_allows_budget_preview_but_pass2_fetch_still_requires_exact_budget(self):
+        from dataclasses import replace
+        from runners import us_short_weekly_capstone_stages as st
+        ctx = replace(
+            self._ctx(authorized=True),
+            authorized_pass2_call_budget=None,
+            pass2_budget_preview=True,
+        )
+        with mock.patch.object(st, "_account_holding_tickers", return_value=[]), \
+             mock.patch.object(st._preflight, "run_preflight", return_value={"ok": True}) as preflight:
+            self.assertEqual(st.run_pass2_preflight(ctx), {"ok": True})
+        self.assertIsNone(preflight.call_args.kwargs["authorized_total_call_budget"])
+        with mock.patch.object(st._pass2, "run_full_candidate_live_source_packet") as packet:
+            with self.assertRaisesRegex(PermissionError, "frozen K"):
+                st.run_pass2_fetch(ctx)
+            packet.assert_not_called()
 
     def test_bridge_forwards_ctx_mixed_source_capability_not_self_mint(self):
         # A1: the bridge NO LONGER self-mints from ctx.confirm_user_authorization — it forwards ctx.research_live_capability

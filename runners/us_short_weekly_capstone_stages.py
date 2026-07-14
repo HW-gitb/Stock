@@ -89,16 +89,27 @@ def _account_holding_tickers(ctx) -> list[str]:
     return sorted(position["ticker"] for position in state["positions"])
 
 
-def _require_frozen_funnel_authorization(ctx) -> None:
+def _require_frozen_funnel_authorization(ctx, *, allow_budget_preview: bool = False) -> None:
+    k_is_valid = (
+        type(getattr(ctx, "authorized_momentum_top_k", None)) is int
+        and not isinstance(ctx.authorized_momentum_top_k, bool)
+        and 1 <= ctx.authorized_momentum_top_k <= 250
+    )
+    budget_is_valid = (
+        type(getattr(ctx, "authorized_pass2_call_budget", None)) is int
+        and not isinstance(ctx.authorized_pass2_call_budget, bool)
+        and ctx.authorized_pass2_call_budget >= 1
+    )
+    if k_is_valid and budget_is_valid:
+        return
     if (
-        type(getattr(ctx, "authorized_momentum_top_k", None)) is not int
-        or isinstance(ctx.authorized_momentum_top_k, bool)
-        or not 1 <= ctx.authorized_momentum_top_k <= 250
-        or type(getattr(ctx, "authorized_pass2_call_budget", None)) is not int
-        or isinstance(ctx.authorized_pass2_call_budget, bool)
-        or ctx.authorized_pass2_call_budget < 1
+        allow_budget_preview
+        and k_is_valid
+        and getattr(ctx, "pass2_budget_preview", False) is True
+        and getattr(ctx, "authorized_pass2_call_budget", None) is None
     ):
-        raise PermissionError("Pass2 stages require a frozen K and positive exact call budget in the run context")
+        return
+    raise PermissionError("Pass2 stages require a frozen K and positive exact call budget in the run context")
 
 
 # --- GATED stages (live provider fetch; SR-PROVIDER-001) ---
@@ -237,7 +248,7 @@ def run_projection_inputs(ctx) -> dict[str, Any]:
 
 def run_pass2_preflight(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
-    _require_frozen_funnel_authorization(ctx)
+    _require_frozen_funnel_authorization(ctx, allow_budget_preview=True)
     return _preflight.run_preflight(
         candidate_artifact_path=ctx.candidate_path,
         expected_decision_date=ctx.decision_date,
