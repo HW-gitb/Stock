@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-13 — Claude Code 立项 R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY（P3，路由 Codex）
+
+- **Verdict/Action**: 把破产扫描复审时提的 P3① 从 Optional 提升为独立 Required（带 finding ID）落 register，路由 Codex 执行。缺陷:`_sec_get`（`us_short_universe_fetch.py:248`）单发无重试,破产扫描 ~2400 次顺序 SEC 调用中任一次瞬时 429/5xx/timeout 即中止整个 6–10 分钟周跑（universe 非 best-effort）。纯运营脆弱,不涉选股/PIT/source-truth/secret。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY`（P3,open）。修=给 SEC 抓取路径加有界退避重试（比照 `fetch_massive_window` 429 模式、扩到 5xx/timeout）,**须仍 fail-closed**:重试用尽仍 raise、绝不跳过错票、绝不伪造 `screened_no_filing`;4xx（404/403）不重试;保留 fair-access pacing + 无 secret 链接;有界总次数。完整 repair boundary + closure 单源见 `docs/system_risk_register.md`。
+- **Verify**: 尚未修（立项）。closure=红→绿（瞬时 429/503/timeout 重试后扫描完成 / 持久错有界后仍 raise / 404 不重试快失败 / 无静默跳票 / 无伪造 clean）+ focused `test_us_short_universe_fetch`+`test_us_short_weekly_capstone` 绿 + 全离线 `test_us_short*` 绿。
+- **Next**: Codex:🔵 **修复** `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY`（scope=`us_short_universe_fetch.py` + 其 test,不碰选股/注入-screen/standalone 路径）→ 完成后 Claude 独立复审。
+
 ## 2026-07-13 — Claude Code 独立复审（R-USSHORT-R3-KEY-SAFETY capstone fresh bankruptcy scan）PASS
 
 - **Verdict/Action**: PASS + 提交（9add 分支，未 push）。复审 Codex 的 capstone 集成刀（universe 先派生 preliminary eligible、逐票抓同轮 SEC submissions、解析 Item 1.03、破产剔除、剩余全 `screened_no_filing` 再写候选）：fail-closed 安全核成立——畸形 200 raise 不伪造 clean、gate-shape 精确匹配 `_require_current_bankruptcy_coverage` 六谓词、PIT 三向 fail-closed（filing_date>as_of + 窗外 observed_at + lookback 有界）、破产票 apply_pass1 剔除、扫描集⊇最终候选、5000 上限+CIK 校验；capstone adapter 仅加 `scan_bankruptcy_for_eligible=True` 一行。
