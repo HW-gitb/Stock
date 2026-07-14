@@ -1242,7 +1242,7 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
         from runners import us_short_weekly_capstone_stages as st
 
         checks = [
-            (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization"]),
+            (st._universe.run_fetch, ["now_et", "candidate_list_path", "generated_at", "confirm_user_authorization", "scan_bankruptcy_for_eligible"]),
             (st._mom_fetch.run_fetch, ["candidate_artifact_path", "series_packet_path", "ohlcv_series_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._sic.run_fetch, ["candidate_artifact_path", "classification_packet_path", "summary_path", "generated_at", "confirm_user_authorization"]),
             (st._yfinance_grades.run_yfinance_grades_fetch, ["preflight_summary_path", "output_source_package_path", "output_resolved_actions_path", "summary_path", "raw_root", "confirm_user_authorization", "generated_at", "observed_at", "pace_seconds"]),
@@ -1258,6 +1258,22 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
             params = set(inspect.signature(fn).parameters)
             bad = [k for k in kwargs if k not in params]
             self.assertEqual(bad, [], f"{fn.__module__}.{fn.__name__} rejects kwargs {bad}")
+
+    def test_capstone_universe_adapter_requires_integrated_fresh_bankruptcy_scan(self):
+        from runners import us_short_weekly_capstone_stages as st
+        from runners.us_short_weekly_capstone import resolve_capstone_context
+
+        ctx = resolve_capstone_context(
+            now_et=datetime(2026, 7, 9, 8, 0, 0),
+            private_root=Path(tempfile.gettempdir()) / "cap_priv_bankruptcy",
+            batch4_template_path=Path("template.json"),
+            account_state_path=Path("account.json"),
+            confirm_user_authorization=True,
+        )
+        with mock.patch.object(st._universe, "run_fetch", return_value={}) as run_fetch:
+            st.run_universe(ctx)
+
+        self.assertIs(run_fetch.call_args.kwargs["scan_bankruptcy_for_eligible"], True)
 
     def test_capstone_adapters_thread_same_window_ohlcv_to_projection_and_pass2(self):
         from runners import us_short_weekly_capstone_stages as st

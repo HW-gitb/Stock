@@ -135,6 +135,42 @@
 - **Verify**: 新增前五刀对抗测试 16 OK；converter/engine/render/wrapper/schema/route guards 最终定向包 262 OK；周报扩展包 403 项中，文档字段漏列已修并纳入最终包，只余既有测试误读真实私密 future ratchet state 的隔离错误（初始基线同类，属后续刀/测试隔离，不在本刀越界修）；`py_compile`、五份 JSON schema、UTF-8/BOM、ripple grep、`git diff --check` 通过。
 - **Pre-Codex self-review**: 主线程逐刀核对 account identity/digest/date、Rule12 空表/对账阻断/0 cash、bucket capacity 与原因层、entry 前高点排除/ratchet 文案及机表同值、IV stale/unknown regime/comparison 参数；无子 agent（本任务未要求委派）。真实账户仅得到“Rule12 表零行”的聚合阻断事实，未回显现金/持仓/交易/密钥。
 - **Next**: Claude Code 只独立审查 `ashort_review1` 前五刀；不审第六刀、不代填 Rule12。用户补真实 Rule12 行后，再重跑 `20260713` 私密周报并核对 JSON/Markdown。
+## 2026-07-14 — Claude Code 独立复审（R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY）PASS
+
+- **Verdict/Action**: PASS + 提交（9add 分支，未 push）。复审 Codex 的 SEC 破产扫描有界重试刀:fail-closed 全成立——`_sec_get_bankruptcy_with_retry` 每路径要么返真 payload 要么 raise,绝无返 None/伪造 `screened_no_filing`;持久 429/5xx/timeout 有界后仍 raise→scan 中止不写候选;403/404 首次即失败不重试;上限 4 次、退避 1/2/4s;`from None` 抑制 URL 泄漏;malformed 200 仍走原 fail-closed(重试不吞)。generic `_sec_get`/injected/standalone 未改。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 retry helper + 唯一 caller。**亲跑 focused 171 OK + 全包 `discover -p test_us_short*.py` = 4426 OK**（exit 0、9add tree、未采信执行方计数）。Codex 4 新测精准覆盖:瞬时 429→503→timeout→成功(4 调用+退避[1,2,4]+计数=4)/持久 503 有界后 raise+无 clean wrapper+无 URL+cause None/403·404 单调用不重试/URLError 包装 timeout 重试。P3 纯运营非选股面→按比例复审不起 §6a agent。
+- **Next**: 按用户指令,提交本刀后把整个 9add merge 到 master(已 clean;core `universe_fetch` 与 master 同→干净合;capstone_stages/weekly_capstone test/4 文档 三方合、保双方条目)。
+
+## 2026-07-14 — Codex 修复（R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY）
+
+- **Verdict/Action**: integrated bankruptcy scan 新增 transient-only 有界退避：每票最多 4 次请求，429/5xx/直接或包装 timeout 按 1s/2s/4s 重试；403/404 立即失败，耗尽仍中止，不跳票、不伪造 clean。通用 SEC 与 injected/standalone 路径未改。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY` 修复已实现、待独立审查；完整 finding、边界和关闭标准单源见 `docs/system_risk_register.md`。
+- **Verify**: 红测旧路径 4 errors；修后 scan 7 OK、universe+capstone 171 OK、全离线 `test_us_short*` 4426 OK（1 skipped）、`py_compile`/`git diff --check` 通过。持久 503 四次后 raise、403/404 单次失败、错误无 URL chain、失败不写 clean wrapper；成功重试按真实 HTTP 尝试数计 evidence。无 provider/live 调用。
+- **Pre-Codex self-review**: A-F main-thread checklist（未获 subagent 授权）：唯一生产消费者改用 scan-only wrapper；同类 generic `_sec_get` 调用不变；429→503→timeout→成功与持久/4xx反向例均覆盖；fair-access 跨票 pacing 保留、retry backoff 自带更长间隔；解析前后顺序与 R3 safety gate 不变；CURRENT/README 无瞬态或契约膨胀。
+- **Next**: Claude Code：仅独立审查本 SEC bankruptcy retry 刀；PASS 后提交本范围，不 push。
+
+## 2026-07-13 — Claude Code 立项 R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY（P3，路由 Codex）
+
+- **Verdict/Action**: 把破产扫描复审时提的 P3① 从 Optional 提升为独立 Required（带 finding ID）落 register，路由 Codex 执行。缺陷:`_sec_get`（`us_short_universe_fetch.py:248`）单发无重试,破产扫描 ~2400 次顺序 SEC 调用中任一次瞬时 429/5xx/timeout 即中止整个 6–10 分钟周跑（universe 非 best-effort）。纯运营脆弱,不涉选股/PIT/source-truth/secret。
+- **Required**: `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY`（P3,open）。修=给 SEC 抓取路径加有界退避重试（比照 `fetch_massive_window` 429 模式、扩到 5xx/timeout）,**须仍 fail-closed**:重试用尽仍 raise、绝不跳过错票、绝不伪造 `screened_no_filing`;4xx（404/403）不重试;保留 fair-access pacing + 无 secret 链接;有界总次数。完整 repair boundary + closure 单源见 `docs/system_risk_register.md`。
+- **Verify**: 尚未修（立项）。closure=红→绿（瞬时 429/503/timeout 重试后扫描完成 / 持久错有界后仍 raise / 404 不重试快失败 / 无静默跳票 / 无伪造 clean）+ focused `test_us_short_universe_fetch`+`test_us_short_weekly_capstone` 绿 + 全离线 `test_us_short*` 绿。
+- **Next**: Codex:🔵 **修复** `R-USSHORT-BATCH5-BANKRUPTCY-SCAN-SEC-FETCH-NO-RETRY`（scope=`us_short_universe_fetch.py` + 其 test,不碰选股/注入-screen/standalone 路径）→ 完成后 Claude 独立复审。
+
+## 2026-07-13 — Claude Code 独立复审（R-USSHORT-R3-KEY-SAFETY capstone fresh bankruptcy scan）PASS
+
+- **Verdict/Action**: PASS + 提交（9add 分支，未 push）。复审 Codex 的 capstone 集成刀（universe 先派生 preliminary eligible、逐票抓同轮 SEC submissions、解析 Item 1.03、破产剔除、剩余全 `screened_no_filing` 再写候选）：fail-closed 安全核成立——畸形 200 raise 不伪造 clean、gate-shape 精确匹配 `_require_current_bankruptcy_coverage` 六谓词、PIT 三向 fail-closed（filing_date>as_of + 窗外 observed_at + lookback 有界）、破产票 apply_pass1 剔除、扫描集⊇最终候选、5000 上限+CIK 校验；capstone adapter 仅加 `scan_bankruptcy_for_eligible=True` 一行。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**亲跑全包 `discover -p test_us_short*.py` = 4422 OK**（85s、9add tree、未采信执行方计数）。整读 parser/`_sec_submissions_recent_arrays`/`_resolve_bankruptcy`/`apply_pass1` 消费链。**独立 §6a 对抗 agent PASS**：15 敌意 payload 全 raise、E2E 真路径 clean 票过 gate、破产票被剔+强喂被拒、mid-scan 崩→`WeeklyCapstoneError` 中止回滚、raw 仅入 gitignored root、tracked summary 无 secret/URL。
+- **Next**: 两条 P3 Optional（非阻断、fail-closed 方向、待用户/Codex 定）：①`_sec_get` 单发无 429/5xx 重试、~2400 SEC 调用首错即中止全跑（勿以「跳过错票」削弱门）；②空 preliminary_eligible→raise 非空报告（仅数据灾难可达）。Landing：需并入 master（master 领先 4 提交+带他窗 a_short 未提交 WIP，未动 master）。
+
+## 2026-07-13 — Codex 修复（R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS：capstone fresh bankruptcy scan）
+
+- **Verdict/Action**: capstone universe 现对 preliminary Pass1 eligible 逐票抓取同轮 SEC submissions、解析 Item 1.03 后重建最终候选；破产命中剔除，剩余 eligible 全为当前 `screened_no_filing`，未完成全量解析前不写最终 candidate。
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 本 capstone seam 待独立审查；完整事实与关闭标准单源见 `docs/system_risk_register.md`。
+- **Verify**: 红测复现缺 runner 入口/adapter flag/signature；修后 focused 167 OK、下游 gate+schema+route 76 OK、全离线 `test_us_short*` 4422 OK（1 skipped）、`py_compile`/`git diff --check` 通过。doc-governance 单测仅命中 HEAD 既有 issue-6 日志 bullet-too-long；本 entry 无新增 offender。全程 mocked/offline，未调 provider。
+- **Pre-Codex self-review**: A-F main-thread checklist（未获 subagent 授权）：同类入口与唯一 capstone adapter 已扫；目标集含 FMP rescue 后 eligible、排除 non-eligible；missing CIK/畸形 payload/破产正例与 clean 反向例均 fail-closed；standalone 默认和注入 seam 不变；CURRENT 未写瞬态；固定包仅有既存日志 guard 基线失败。
+- **Next**: Claude Code：仅独立审查本 capstone fresh bankruptcy scan 修复；PASS 后提交本范围，不 push。
 
 ## 2026-07-13 — Claude Code 独立复审（US-short issue-6 主题选择/生命周期席位治理 Top15）PASS
 

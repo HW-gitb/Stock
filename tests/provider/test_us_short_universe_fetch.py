@@ -122,6 +122,196 @@ class TestFetchSecTickers(unittest.TestCase):
                 _mod.fetch_sec_tickers("ua@test.com")
 
 
+class TestIntegratedBankruptcySubmissionsFetch(unittest.TestCase):
+    def test_fetches_exact_eligible_set_once_and_writes_only_raw_wrappers(self):
+        import tempfile
+
+        sec_map = {
+            "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+            "MSFT": {"cik": 789019, "exchange": "NASDAQ"},
+            "LOWADV": {"cik": 999999, "exchange": "NYSE"},
+        }
+        payloads = [
+            _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[]),
+            _sec_submissions(forms=["8-K"], filing_dates=["2026-06-20"],
+                             accessions=["0000789019-26-000001"], items=["9.01"]),
+        ]
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_sec_get", side_effect=payloads) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            raw_root = Path(tmp) / "raw"
+            screen, stats = _mod.fetch_bankruptcy_submissions_for_eligible(
+                sec_map=sec_map,
+                eligible_tickers=["AAPL", "MSFT"],
+                sec_ua="ua@test",
+                raw_root=raw_root,
+                status_as_of=STATUS_AS_OF,
+                observed_at=STATUS_OBSERVED_AT,
+            )
+
+            self.assertEqual(list(screen["by_ticker"]), ["AAPL", "MSFT"])
+            self.assertEqual(screen["by_ticker"]["AAPL"]["screen_status"], "screened_no_filing")
+            self.assertEqual(screen["by_ticker"]["MSFT"]["screen_status"], "screened_no_filing")
+            self.assertEqual(stats, {"eligible_symbol_count": 2, "sec_company_submissions_calls": 2})
+            self.assertEqual(sec_get.call_count, 2)
+            self.assertEqual(sec_get.call_args_list[0].args[0], _mod.SEC_SUBMISSIONS_URL.format(cik=320193))
+            self.assertEqual(sec_get.call_args_list[1].args[0], _mod.SEC_SUBMISSIONS_URL.format(cik=789019))
+            sleep.assert_called_once_with(_mod.SEC_FAIR_ACCESS_SLEEP)
+            self.assertTrue((raw_root / "bankruptcy_8k" / "AAPL" /
+                             "company_submissions_recent_filings.json").is_file())
+            self.assertTrue((raw_root / "bankruptcy_8k" / "MSFT" /
+                             "company_submissions_recent_filings.json").is_file())
+            self.assertFalse((raw_root / "bankruptcy_8k" / "LOWADV").exists())
+
+    def test_missing_cik_rejects_whole_scan_before_any_fetch_or_write(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp, patch.object(_mod, "_sec_get") as sec_get:
+            raw_root = Path(tmp) / "raw"
+            with self.assertRaisesRegex(RuntimeError, "missing positive SEC CIK"):
+                _mod.fetch_bankruptcy_submissions_for_eligible(
+                    sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+                             "BROKEN": {"cik": None, "exchange": "NYSE"}},
+                    eligible_tickers=["AAPL", "BROKEN"],
+                    sec_ua="ua@test",
+                    raw_root=raw_root,
+                    status_as_of=STATUS_AS_OF,
+                    observed_at=STATUS_OBSERVED_AT,
+                )
+            sec_get.assert_not_called()
+            self.assertFalse(raw_root.exists())
+
+    def test_malformed_submissions_fails_before_screened_clean_wrapper(self):
+        import tempfile
+
+        malformed = _sec_submissions(
+            forms=["8-K"], filing_dates=[], accessions=["0000320193-26-000001"], items=["1.03"])
+        with tempfile.TemporaryDirectory() as tmp, patch.object(_mod, "_sec_get", return_value=malformed):
+            raw_root = Path(tmp) / "raw"
+            with self.assertRaisesRegex(Exception, "length mismatch"):
+                _mod.fetch_bankruptcy_submissions_for_eligible(
+                    sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                    eligible_tickers=["AAPL"],
+                    sec_ua="ua@test",
+                    raw_root=raw_root,
+                    status_as_of=STATUS_AS_OF,
+                    observed_at=STATUS_OBSERVED_AT,
+                )
+            self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
+                              "company_submissions_recent_filings.json").exists())
+
+    def test_transient_429_503_and_timeout_are_bounded_retried_then_screen_completes(self):
+        import tempfile
+
+        clean = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
+        transient = [
+            _mod.urllib.error.HTTPError(
+                "https://data.sec.gov/submissions/CIK0000320193.json", 429, "rate", {}, None),
+            _mod.urllib.error.HTTPError(
+                "https://data.sec.gov/submissions/CIK0000320193.json", 503, "down", {}, None),
+            TimeoutError("read timed out"),
+            clean,
+        ]
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_sec_get", side_effect=transient) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            raw_root = Path(tmp) / "raw"
+            screen, stats = _mod.fetch_bankruptcy_submissions_for_eligible(
+                sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                eligible_tickers=["AAPL"],
+                sec_ua="ua@test",
+                raw_root=raw_root,
+                status_as_of=STATUS_AS_OF,
+                observed_at=STATUS_OBSERVED_AT,
+            )
+
+        self.assertEqual(sec_get.call_count, 4)
+        self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0, 4.0])
+        self.assertEqual(screen["by_ticker"]["AAPL"]["screen_status"], "screened_no_filing")
+        self.assertEqual(stats["sec_company_submissions_calls"], 4)
+
+    def test_persistent_503_exhausts_bounded_attempts_without_clean_wrapper(self):
+        import tempfile
+
+        error = _mod.urllib.error.HTTPError(
+            "https://data.sec.gov/submissions/CIK0000320193.json", 503, "down", {}, None)
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(_mod, "_sec_get", side_effect=error) as sec_get, \
+             patch.object(_mod.time, "sleep") as sleep:
+            raw_root = Path(tmp) / "raw"
+            with self.assertRaisesRegex(RuntimeError, "HTTP 503 after 3 retry") as ctx:
+                _mod.fetch_bankruptcy_submissions_for_eligible(
+                    sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                    eligible_tickers=["AAPL"],
+                    sec_ua="ua@test",
+                    raw_root=raw_root,
+                    status_as_of=STATUS_AS_OF,
+                    observed_at=STATUS_OBSERVED_AT,
+                )
+
+            self.assertEqual(sec_get.call_count, 4)
+            self.assertEqual([call.args[0] for call in sleep.call_args_list], [1.0, 2.0, 4.0])
+            self.assertNotIn("https://", str(ctx.exception))
+            self.assertIsNone(ctx.exception.__cause__)
+            self.assertTrue(ctx.exception.__suppress_context__)
+            self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
+                              "company_submissions_recent_filings.json").exists())
+
+    def test_urlerror_wrapped_timeout_is_retried_and_counted(self):
+        import tempfile
+
+        clean = _sec_submissions(forms=[], filing_dates=[], accessions=[], items=[])
+        with tempfile.TemporaryDirectory() as tmp, \
+             patch.object(
+                 _mod,
+                 "_sec_get",
+                 side_effect=[_mod.urllib.error.URLError(TimeoutError("connect timed out")), clean],
+             ) as sec_get, patch.object(_mod.time, "sleep") as sleep:
+            screen, stats = _mod.fetch_bankruptcy_submissions_for_eligible(
+                sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                eligible_tickers=["AAPL"],
+                sec_ua="ua@test",
+                raw_root=Path(tmp) / "raw",
+                status_as_of=STATUS_AS_OF,
+                observed_at=STATUS_OBSERVED_AT,
+            )
+
+        self.assertEqual(sec_get.call_count, 2)
+        sleep.assert_called_once_with(1.0)
+        self.assertEqual(screen["by_ticker"]["AAPL"]["screen_status"], "screened_no_filing")
+        self.assertEqual(stats["sec_company_submissions_calls"], 2)
+
+    def test_403_and_404_fail_fast_without_retry_or_clean_wrapper(self):
+        import tempfile
+
+        for code in (403, 404):
+            with self.subTest(code=code), tempfile.TemporaryDirectory() as tmp, \
+                 patch.object(
+                     _mod,
+                     "_sec_get",
+                     side_effect=_mod.urllib.error.HTTPError(
+                         "https://data.sec.gov/submissions/CIK0000320193.json", code, "client", {}, None),
+                 ) as sec_get, patch.object(_mod.time, "sleep") as sleep:
+                raw_root = Path(tmp) / "raw"
+                with self.assertRaisesRegex(RuntimeError, f"HTTP {code} is not retryable") as ctx:
+                    _mod.fetch_bankruptcy_submissions_for_eligible(
+                        sec_map={"AAPL": {"cik": 320193, "exchange": "NASDAQ"}},
+                        eligible_tickers=["AAPL"],
+                        sec_ua="ua@test",
+                        raw_root=raw_root,
+                        status_as_of=STATUS_AS_OF,
+                        observed_at=STATUS_OBSERVED_AT,
+                    )
+
+                sec_get.assert_called_once()
+                sleep.assert_not_called()
+                self.assertNotIn("https://", str(ctx.exception))
+                self.assertIsNone(ctx.exception.__cause__)
+                self.assertTrue(ctx.exception.__suppress_context__)
+                self.assertFalse((raw_root / "bankruptcy_8k" / "AAPL" /
+                                  "company_submissions_recent_filings.json").exists())
+
+
 class TestFetchSecShares(unittest.TestCase):
     def test_latest_end_per_cik_wins(self):
         q1 = {"data": [{"cik": 1, "val": 100, "end": "2026-03-31"}]}
@@ -851,6 +1041,102 @@ class TestRunFetchE2E(unittest.TestCase):
         self.assertFalse(by_ticker["HALT"]["eligible"])
         self.assertIn("status_halted", by_ticker["HALT"]["reasons"])
         self.assertEqual(by_ticker["HALT"]["status_provenance"]["flags"]["halted"]["source_id"], "exchange_halt_feed")
+
+    def test_integrated_eligible_bankruptcy_scan_rebuilds_final_candidate_before_pass2(self):
+        """The capstone seam must not emit the preliminary unscreened candidate artifact.
+
+        Scan exactly the preliminary Pass1-eligible set, then rebuild status provenance and eligibility from the
+        fresh SEC Item 1.03 screen. A positive bankruptcy row drops out; every surviving eligible row is explicitly
+        screened_no_filing. A low-ADV row is never sent to the per-issuer SEC scan.
+        """
+        sec_map = {
+            "AAPL": {"cik": 320193, "exchange": "NASDAQ"},
+            "BANKR": {"cik": 123456, "exchange": "NYSE"},
+            "LOWADV": {"cik": 999999, "exchange": "NYSE"},
+        }
+        shares = {
+            320193: {"shares": 15_000_000_000, "end": "2026-03-31"},
+            123456: {"shares": 1_000_000_000, "end": "2026-03-31"},
+            999999: {"shares": 1_000_000_000, "end": "2026-03-31"},
+        }
+        screen = {
+            "observed": True,
+            "observed_at": "2026-06-29T12:00:00+00:00",
+            "lookback_window": "P90D",
+            "by_ticker": {
+                "AAPL": {"screen_status": "screened_no_filing"},
+                "BANKR": {
+                    "screen_status": "bankrupt_8k_found",
+                    "filing_accession": "0001140361-26-000001",
+                },
+            },
+        }
+
+        def fake_grouped(date, key):
+            return [
+                {"T": "AAPL", "c": 200.0, "v": 50_000_000},
+                {"T": "BANKR", "c": 20.0, "v": 10_000_000},
+                {"T": "LOWADV", "c": 10.0, "v": 100},
+            ]
+
+        cand = ROOT / "state" / "us_short" / "candidate_universe_20260629.json"
+        cand.unlink(missing_ok=True)
+        self.addCleanup(cand.unlink, missing_ok=True)
+        self.addCleanup(cand.with_name(cand.name + ".tmp").unlink, missing_ok=True)
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmp:
+            tmpp = Path(tmp)
+            with patch.dict(os.environ, {
+                "SEC_USER_AGENT": "ua@test", "MASSIVE_API_KEY": "MASSIVE_SECRET_ZZZ", "FMP_API_KEY": "",
+            }), patch.object(_mod, "fetch_sec_tickers", return_value=sec_map), \
+                 patch.object(_mod, "fetch_sec_shares", return_value=shares), \
+                 patch.object(_mod, "_massive_grouped_for_date", side_effect=fake_grouped), \
+                 patch.object(_mod, "fetch_nasdaq_trade_halt_feed", return_value={
+                     "observed": True,
+                     "observed_at": "2026-06-29T12:00:00+00:00",
+                     "halted_symbols": [],
+                 }), patch.object(
+                     _mod,
+                     "fetch_bankruptcy_submissions_for_eligible",
+                     return_value=(screen, {
+                         "eligible_symbol_count": 2,
+                         "sec_company_submissions_calls": 2,
+                     }),
+                 ) as bankruptcy_fetch, patch.object(_mod.time, "sleep"), \
+                 patch.object(_mod._sv, "validate_raw_root"):
+                summary = _mod.run_fetch(
+                    now_et=datetime(2026, 6, 29, 8, 0, 0),
+                    summary_path=tmpp / "sum.json",
+                    raw_root=tmpp / "raw",
+                    candidate_list_path=cand,
+                    generated_at="2026-06-29T12:00:00+00:00",
+                    confirm_user_authorization=True,
+                    scan_bankruptcy_for_eligible=True,
+                )
+            artifact = json.loads(cand.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            bankruptcy_fetch.call_args.kwargs["eligible_tickers"],
+            ["AAPL", "BANKR"],
+        )
+        by_ticker = {row["ticker"]: row for row in artifact["rows"]}
+        self.assertEqual(artifact["eligible_tickers"], ["AAPL"])
+        self.assertEqual(
+            by_ticker["AAPL"]["status_provenance"]["flags"]["bankruptcy"]["screen_status"],
+            "screened_no_filing",
+        )
+        self.assertTrue(by_ticker["BANKR"]["bankruptcy"])
+        self.assertFalse(by_ticker["BANKR"]["eligible"])
+        self.assertEqual(
+            summary["status_screening"]["bankruptcy_8k_source"],
+            "integrated_eligible_sec_submissions",
+        )
+        self.assertEqual(summary["status_screening"]["bankruptcy_8k_input_symbol_count"], 2)
+        self.assertEqual(summary["provider_call_evidence"]["sec_bankruptcy_submissions_calls"], 2)
+        self.assertTrue(all(
+            row["status_provenance"]["flags"]["bankruptcy"]["screen_status"] == "screened_no_filing"
+            for row in artifact["rows"] if row["eligible"]
+        ))
 
     def test_run_fetch_can_consume_injected_sec_bankruptcy_submissions(self):
         sec_map = {"AAPL": {"cik": 320193, "exchange": "NASDAQ"},
