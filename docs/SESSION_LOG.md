@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（US-short P1 Pass2 漏斗：overextension 全量对账 v1.3.0）PASS
+
+- **Verdict/Action**: PASS + 提交（178a 分支，未 push）。复审 Codex 的漏斗 scope 修复:full-candidate runner 在**全体 eligible** artifact 上核 overextension 绑定（`_validate_full_overextension_before_funnel`，行 1794）、在 Pass2 target 推导(1800)/凭证读(1839)/fetch(1853) **之前** fail-closed;packet 带配对 `overextension_candidate_artifact_path`(=全量);独立 consumer 改对**全量**校验(非 subset);配对 both-or-neither 三处 + schema allOf;v1.3.0。是 scope 修正、不改选股数学。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**决定性实证**:拿 07-14 真崩溃产物跑修复后 validator —— 真投影(绑定 2424)对**全量** PASS、对 **200 子集** FAIL(复现原崩)→ 修复对症;full-bound 投影对 subset 必 FAIL → 把配对路径指向 subset 也绕不过门。**亲跑全包 `discover -p test_us_short*.py` = 4444 OK**(178a tree、未采信执行方计数)。对抗测试伪造 binding(sha=0×64)→ 在 1794 abort(fetch 前、经 FakeClient)。contained scope-fix、按比例复审、未起 §6a agent。
+- **Next**: 待用户定是否 merge 到 master(P1 不进 master 则全量仍跑不到头)。
+
+## 2026-07-14 — Codex 修复（US-short P1 Pass2 漏斗：overextension 全量对账先于 top-K 收缩）
+
+- **Verdict/Action**: 已修复。source-packet v1.3.0 现在在全体 eligible artifact 上核验 overextension 投影，并在 Pass2 target 推导、top-K 子集落地、密钥环境读取及一切外部抓取之前 fail-closed；对账成功后才沿用原有 Pass2-clean/top-K 子集路径。
+- **Required**: `R-USSHORT-BATCH5-OVEREXTENSION-FULL-UNIVERSE-RECONCILIATION` 待 Claude Code 独立审查；边界与完整证据见 register。
+- **Verify**: 新 3 eligible→top-K 2 的 red→green 集成回归通过；伪造 full binding 的新用例证明零 provider fetch、不会落地 subset/source-packet；source-packet/data_context 79 OK、capstone/Batch5→Batch4 89 OK、legacy source-packet 7 OK、全离线 `*us_short*.py` 4444 OK / 1 skipped。
+- **Pre-Codex self-review**: A 覆盖 full-binding 在 Pass2/top-K/fetch 前、后续 subset scope、两条生产器和 provenance；B `rg -n -g 'us_short_batch5_*source_packet.py' -g 'us_short_batch5_data_context_source_packet.schema.json' '"schema_version": "1\\.2\\.0"' runners tests schemas` = 0 active hits；C 钉住 3→2 正控、伪 binding 反控、缺任一配对路径 fail-closed；E 未改 CURRENT；F 全离线包已集中跑完，doc/diff guard 通过。独立 current-diff-only agent 先抓到过晚对账，修复后复审 PASS。
+- **Next**: Claude Code：审查。
+
 ## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
 
 - **Verdict/Action**: 两处均 PASS、无 Required。① `has_crash_veto` 4→5 日窗口 = 仅循环 bound `min(5→6)`;3 条件（>5% 跌 / 收弱在振幅下 20% / 次日不修复）逐字未改;`grp` DESC 排序（egs_main:2687）、PIT 剔最新未确认日;测试钉「第 5 个确认日触发、第 6 个不触发」。是**硬否决收紧**（更保守、risk_filter_only 的安全方向）;它**改选股**（`l2_crash_veto` 245→301、55 只本会入排名被剔）= 该 veto 的既定/正确效果。② `a_short_crash_veto_tracker` = comparison-only:ps1 在 tracker 失败时「formal selection/M6.7 continues unchanged」（**非阻断**）;summary 仅 `_validate_crash_veto_tracking_summary` 校验后挂周报（**不改选股**）;control 确定性（L2→L1→pool）;cohort 按 `scope+days` 隔离（245 与 55 永不混）;T+1 开 / T+5·T+10 收 / qfq / 0.16% 双边成本约定正确。

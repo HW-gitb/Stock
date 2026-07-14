@@ -18,6 +18,7 @@ if str(ROOT) not in sys.path:
 
 from runners import us_short_batch5_full_candidate_live_source_packet as runner  # noqa: E402
 from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
+from engine.us_short_overextension_producer import eligible_tickers_sha256  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
     _OFFERING_OBSERVED_AT,
@@ -44,6 +45,47 @@ def _write_json(path: Path, payload) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return path
+
+
+def _full_overextension_projection() -> dict:
+    """A full Pass1-eligible projection whose consumer must bind before top-K narrowing."""
+    tickers = ("AAPL", "MSFT", "JPM")
+    return {
+        "schema_name": "us_short_full_universe_overextension_projection",
+        "schema_version": "1.0.0",
+        "generated_at": "2026-06-15T08:30:00-04:00",
+        "decision_clock": {
+            "expected_decision_date": _DECISION_DATE,
+            "candidate_price_basis_date": "20260612",
+            "price_basis_date": "2026-06-12",
+            "source_as_of": "2026-06-12",
+        },
+        "source_contract": {"session": "RTH", "adjustment_mode": "split_adjusted"},
+        "candidate_binding": {
+            "eligible_count": len(tickers),
+            "eligible_tickers_sha256": eligible_tickers_sha256(tickers),
+        },
+        "overextension_by_ticker": {
+            ticker: {
+                "overextension_state": "none",
+                "strips_theme_score": False,
+                "execution_flags": {},
+                "conditions_met": 0,
+                "condition_names": [],
+                "disposition": "scored",
+                "pit": {
+                    "as_of": "2026-06-12",
+                    "session": "RTH",
+                    "adjustment_mode": "split_adjusted",
+                    "n_points": 70,
+                },
+            }
+            for ticker in tickers
+        },
+        "disposition_counts": {"scored": len(tickers), "insufficient_data": 0},
+        "scored_count": len(tickers),
+        "target_count": len(tickers),
+    }
 
 
 class FullCandidateFakeClient:
@@ -228,6 +270,7 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             self.paths["summary"],
             self.paths["output"],
             self.paths["components"],
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_full_overextension.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_candidate_subset.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_offering_audit_source.json"),
             self.paths["prefix"].with_name(self.paths["prefix"].name + "_analyst_grade_actions.json"),
@@ -332,6 +375,119 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
         self.assertNotIn("api.massive.com", text.lower())
         self.assertNotIn("data.sec.gov", text.lower())
         self.assertNotIn('"payload"', text)
+
+    def test_full_overextension_binds_eligible_universe_before_top_k_subset_assembly(self):
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
+        )
+        momentum["momentum_by_ticker"] = {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0}
+        _write_json(self.paths["momentum"], momentum)
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            momentum_top_k=2,
+            authorized_total_call_budget=11,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        overextension_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_full_overextension.json"
+        )
+        _write_json(overextension_path, _full_overextension_projection())
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ):
+            summary = runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=11,
+                authorized_momentum_top_k=2,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                overextension_projection_path=overextension_path,
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=FullCandidateFakeClient(),
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(summary["candidate_universe"]["eligible_count"], 2)
+        self.assertEqual(summary["pass2_target_universe"]["target_count"], 2)
+        source_packet_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_source_packet.json"
+        )
+        packet = json.loads(source_packet_path.read_text(encoding="utf-8"))
+        self.assertEqual(packet["schema_version"], "1.3.0")
+        self.assertEqual(packet["paths"]["candidate_artifact_path"], str(
+            self.paths["prefix"].with_name(self.paths["prefix"].name + "_candidate_subset.json").relative_to(ROOT)
+        ).replace("\\", "/"))
+        self.assertEqual(packet["paths"]["overextension_candidate_artifact_path"], str(
+            self.paths["candidate"].relative_to(ROOT)
+        ).replace("\\", "/"))
+        full_candidate = json.loads(self.paths["candidate"].read_text(encoding="utf-8"))
+        self.assertEqual(full_candidate["eligible_tickers"], ["AAPL", "MSFT", "JPM"])
+        context = json.loads(self.paths["output"].read_text(encoding="utf-8"))
+        self.assertEqual({row["ticker"] for row in context["universe"]}, {"AAPL", "MSFT"})
+
+    def test_invalid_full_overextension_aborts_before_top_k_subset_or_provider_fetch(self):
+        momentum = _constant_projection(
+            "momentum_by_ticker", ("AAPL", "MSFT", "JPM"), "scored", score=50.0
+        )
+        momentum["momentum_by_ticker"] = {"AAPL": 90.0, "MSFT": 80.0, "JPM": 10.0}
+        _write_json(self.paths["momentum"], momentum)
+        preflight_runner.run_preflight(
+            candidate_artifact_path=self.paths["candidate"],
+            expected_decision_date=_DECISION_DATE,
+            momentum_projection_path=self.paths["momentum"],
+            theme_projection_path=self.paths["theme"],
+            summary_path=self.paths["preflight"],
+            momentum_top_k=2,
+            authorized_total_call_budget=11,
+            confirm_user_authorization=True,
+            generated_at="2026-07-06T12:00:00+00:00",
+        )
+        overextension_path = self.paths["prefix"].with_name(
+            self.paths["prefix"].name + "_full_overextension.json"
+        )
+        projection = _full_overextension_projection()
+        projection["candidate_binding"]["eligible_tickers_sha256"] = "0" * 64
+        _write_json(overextension_path, projection)
+        client = FullCandidateFakeClient()
+
+        with self._env(), mock.patch.object(
+            runner.sample_validation, "_read_windows_environment_value", return_value=None
+        ), self.assertRaisesRegex(runner.FullCandidateLiveSourcePacketError, "overextension source"):
+            runner.run_full_candidate_live_source_packet(
+                preflight_summary_path=self.paths["preflight"],
+                expected_total_call_budget=11,
+                authorized_momentum_top_k=2,
+                output_data_context_path=self.paths["output"],
+                context_components_output_path=self.paths["components"],
+                overextension_projection_path=overextension_path,
+                source_artifact_prefix=self.paths["prefix"],
+                summary_path=self.paths["summary"],
+                raw_root=self.raw_root,
+                client=client,
+                confirm_user_authorization=True,
+                run_data_context=True,
+                generated_at="2026-07-06T12:00:00+00:00",
+                observed_at=_OFFERING_OBSERVED_AT,
+                sec_sleep_seconds=0,
+            )
+
+        self.assertEqual(client.urls, [])
+        for key in ("summary", "output", "components"):
+            self.assertFalse(self.paths[key].exists())
+        for suffix in ("_candidate_subset.json", "_source_packet.json"):
+            self.assertFalse(self.paths["prefix"].with_name(self.paths["prefix"].name + suffix).exists())
 
     def test_sector_classification_packet_yields_real_industry_theme_ids(self):
         # The capstone passes the run's own SIC packet directly (the projection-inputs theme binding drops that

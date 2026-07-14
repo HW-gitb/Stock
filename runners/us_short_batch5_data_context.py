@@ -73,7 +73,11 @@ SOURCE_REF_PATH_KEYS = (
     "catalyst_governance_path",
     "theme_selection_contract_path",
 )
-OPTIONAL_SOURCE_REF_PATH_KEYS = ("overextension_projection_path", "yfinance_grade_actions_path")
+OPTIONAL_SOURCE_REF_PATH_KEYS = (
+    "overextension_projection_path",
+    "overextension_candidate_artifact_path",
+    "yfinance_grade_actions_path",
+)
 _SOURCE_REF_ROLE_BY_PATH_KEY = {
     key: key[:-5] if key.endswith("_path") else key
     for key in (*SOURCE_REF_PATH_KEYS, *OPTIONAL_SOURCE_REF_PATH_KEYS)
@@ -148,6 +152,10 @@ def _validated_source_ref_paths(value: Any) -> dict[str, str]:
             "source_ref_paths must contain all required keys and only optional supported keys: "
             f"required={sorted(SOURCE_REF_PATH_KEYS)} optional={sorted(OPTIONAL_SOURCE_REF_PATH_KEYS)}"
         )
+    has_overextension_projection = "overextension_projection_path" in value
+    has_overextension_candidate = "overextension_candidate_artifact_path" in value
+    if has_overextension_projection != has_overextension_candidate:
+        _fail("overextension projection and its full eligible-universe candidate artifact must be paired")
     out: dict[str, str] = {}
     for path_key in (*SOURCE_REF_PATH_KEYS, *OPTIONAL_SOURCE_REF_PATH_KEYS):
         if path_key not in value:
@@ -173,6 +181,7 @@ def _source_refs_for_family(source_refs_by_role: dict[str, str], family: str) ->
         ]
     if family in {"selection_inputs", "per_ticker_analysis"} and "overextension_projection" in source_refs_by_role:
         roles.append("overextension_projection")
+        roles.append("overextension_candidate_artifact")
     return [
         {"role": role, "path": source_refs_by_role[role]}
         for role in roles

@@ -974,10 +974,32 @@ def _theme_contract_industry_ids(
     return _industry_ids_from_sector_map(_read_json(classification_path), fallback=fallback, tickers=tickers)
 
 
+def _validate_full_overextension_before_funnel(
+    *,
+    overextension_projection_path: Path | None,
+    candidate_artifact_path: Path,
+    expected_decision_date: str,
+    eligibility_governance: dict[str, Any],
+) -> dict[str, Any] | None:
+    """Bind the full eligible universe before deriving a bounded Pass2 target."""
+    if overextension_projection_path is None:
+        return None
+    try:
+        return data_context_assembly.validate_overextension_projection(
+            _read_json(overextension_projection_path),
+            candidate_artifact=_read_json(candidate_artifact_path),
+            expected_decision_date=expected_decision_date,
+            eligibility_governance=eligibility_governance,
+        )
+    except data_context_assembly.DataContextAssemblyError as exc:
+        raise FullCandidateLiveSourcePacketError(
+            f"cannot bind full eligible universe to overextension source: {exc}"
+        ) from exc
+
+
 def _build_theme_selection_contract(
     *,
     candidate_subset: dict[str, Any],
-    candidate_artifact: dict[str, Any],
     eligibility_governance: dict[str, Any],
     expected_decision_date: str,
     theme_opportunity_state: str,
@@ -985,7 +1007,7 @@ def _build_theme_selection_contract(
     target_theme_projection: dict[str, Any],
     resolved_sources: dict[str, Any],
     catalyst_recall_tickers: list[str],
-    overextension_projection_path: Path | None,
+    validated_full_overextension: dict[str, Any] | None,
     classification_packet_path: Path | None = None,
 ) -> dict[str, Any]:
     """Materialize the current Pass2-clean theme contract from this run's bound inputs.
@@ -1018,21 +1040,12 @@ def _build_theme_selection_contract(
         classification_packet_path=classification_packet_path,
     )
     overextension_states = {ticker: "none" for ticker in pass2_clean}
-    if overextension_projection_path is not None:
-        try:
-            validated = data_context_assembly.validate_overextension_projection(
-                _read_json(overextension_projection_path),
-                candidate_artifact=candidate_artifact,
-                expected_decision_date=expected_decision_date,
-                eligibility_governance=eligibility_governance,
-            )
-        except data_context_assembly.DataContextAssemblyError as exc:
-            raise FullCandidateLiveSourcePacketError(
-                f"cannot bind theme selection contract to overextension source: {exc}"
-            ) from exc
+    if validated_full_overextension is not None:
         for ticker in pass2_clean:
             try:
-                overextension_states[ticker] = validated["overextension_by_ticker"][ticker]["overextension_state"]
+                overextension_states[ticker] = validated_full_overextension["overextension_by_ticker"][ticker][
+                    "overextension_state"
+                ]
             except (KeyError, TypeError) as exc:
                 raise FullCandidateLiveSourcePacketError(
                     "overextension source is missing a Pass2-clean theme-contract ticker"
@@ -1072,12 +1085,17 @@ def _build_local_source_packet(
     momentum_projection_path: Path,
     theme_projection_path: Path,
     overextension_projection_path: Path | None,
+    overextension_candidate_artifact_path: Path | None,
     yfinance_grade_actions_path: Path | None,
     output_data_context_path: Path,
     context_components_output_path: Path | None,
     holdings: list[dict[str, Any]],
     catalyst_recall_feed: list[str],
 ) -> dict[str, Any]:
+    if (overextension_projection_path is None) != (overextension_candidate_artifact_path is None):
+        raise FullCandidateLiveSourcePacketError(
+            "overextension projection and its full eligible-universe candidate artifact must be paired"
+        )
     packet_paths: dict[str, Any] = {
         "candidate_artifact_path": _repo_rel(paths["candidate_subset"]),
         "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
@@ -1092,6 +1110,7 @@ def _build_local_source_packet(
     }
     if overextension_projection_path is not None:
         packet_paths["overextension_projection_path"] = _repo_rel(overextension_projection_path)
+        packet_paths["overextension_candidate_artifact_path"] = _repo_rel(overextension_candidate_artifact_path)
     if yfinance_grade_actions_path is not None:
         packet_paths["yfinance_grade_actions_path"] = _repo_rel(yfinance_grade_actions_path)
     if context_components_output_path is not None:
@@ -1111,7 +1130,7 @@ def _build_local_source_packet(
         ).hexdigest()
     return {
         "schema_name": "us_short_batch5_data_context_source_packet",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "generated_at": generated_at,
         "scope": {
             "market": "US",
@@ -1772,6 +1791,12 @@ def run_full_candidate_live_source_packet(
 
     eligibility_governance = load_eligibility_governance(ELIGIBILITY_GOVERNANCE_PATH)
     load_catalyst_governance()
+    validated_full_overextension = _validate_full_overextension_before_funnel(
+        overextension_projection_path=overextension_path,
+        candidate_artifact_path=candidate_path,
+        expected_decision_date=expected_decision_date,
+        eligibility_governance=eligibility_governance,
+    )
     verified_targets = _rederive_and_verify_pass2_targets(
         candidate_artifact_path=candidate_path,
         expected_decision_date=expected_decision_date,
@@ -1878,7 +1903,6 @@ def run_full_candidate_live_source_packet(
     )
     theme_selection_contract = _build_theme_selection_contract(
         candidate_subset=candidate_subset,
-        candidate_artifact=_read_json(candidate_path),
         eligibility_governance=eligibility_governance,
         expected_decision_date=expected_decision_date,
         theme_opportunity_state=theme_opportunity_state,
@@ -1886,7 +1910,7 @@ def run_full_candidate_live_source_packet(
         target_theme_projection=target_theme_projection,
         resolved_sources=resolved_sources,
         catalyst_recall_tickers=verified_targets["_catalyst_recall_symbols"],
-        overextension_projection_path=overextension_path,
+        validated_full_overextension=validated_full_overextension,
         classification_packet_path=sector_classification_packet_path,
     )
 
@@ -1906,6 +1930,7 @@ def run_full_candidate_live_source_packet(
         momentum_projection_path=paths["momentum_projection"],
         theme_projection_path=paths["theme_projection"],
         overextension_projection_path=overextension_path,
+        overextension_candidate_artifact_path=candidate_path if overextension_path is not None else None,
         yfinance_grade_actions_path=yfinance_actions_path,
         output_data_context_path=output_path,
         context_components_output_path=components_path,
