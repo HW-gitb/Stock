@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.2.0"
+      "const": "1.4.0"
     },
     "generated_at": {
       "type": "string"
@@ -103,6 +103,9 @@
         "watch_l1_unknown_count",
         "watch_l2_unknown_count",
         "full_l2_unknown_count",
+        "watch_pool_reconciliation",
+        "sw_industry_membership",
+        "rank_universe_reconciliation",
         "suspend_daily_coverage",
         "completeness_score_min",
         "completeness_score_below_95_count",
@@ -149,6 +152,203 @@
         "full_l2_unknown_count": {
           "type": ["integer", "null"],
           "minimum": 0
+        },
+        "watch_pool_reconciliation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "reason",
+            "target_count",
+            "eligible_count",
+            "expected_count",
+            "actual_count",
+            "shortfall_count"
+          ],
+          "properties": {
+            "status": {"enum": ["pass", "fail"]},
+            "reason": {
+              "enum": ["target_met", "eligible_pool_exhausted", "output_count_mismatch"]
+            },
+            "target_count": {"type": "integer", "minimum": 0},
+            "eligible_count": {"type": "integer", "minimum": 0},
+            "expected_count": {"type": "integer", "minimum": 0},
+            "actual_count": {"type": "integer", "minimum": 0},
+            "shortfall_count": {"type": "integer", "minimum": 0}
+          }
+        },
+        "sw_industry_membership": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "source",
+            "as_of",
+            "active_count",
+            "min_active",
+            "request_group_count",
+            "fast_path_used",
+            "fallback_used",
+            "cache_hit",
+            "message"
+          ],
+          "properties": {
+            "status": {"enum": ["pass", "fail", "not_observed"]},
+            "source": {
+              "enum": [null, "cache", "index_member_all_l1_current", "index_member_l2_history"]
+            },
+            "as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "active_count": {"type": ["integer", "null"], "minimum": 0},
+            "min_active": {"type": "integer", "minimum": 0},
+            "request_group_count": {"type": "integer", "minimum": 0},
+            "fast_path_used": {"type": "boolean"},
+            "fallback_used": {"type": "boolean"},
+            "cache_hit": {"type": "boolean"},
+            "message": {"type": ["string", "null"]}
+          },
+          "allOf": [
+            {
+              "if": {"properties": {"status": {"const": "pass"}}},
+              "then": {
+                "properties": {
+                  "source": {
+                    "enum": ["cache", "index_member_all_l1_current", "index_member_l2_history"]
+                  },
+                  "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                  "active_count": {"type": "integer", "minimum": 0}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"status": {"const": "not_observed"}}},
+              "then": {
+                "properties": {
+                  "source": {"const": null},
+                  "as_of": {"const": null},
+                  "active_count": {"const": null},
+                  "request_group_count": {"const": 0},
+                  "fast_path_used": {"const": false},
+                  "fallback_used": {"const": false},
+                  "cache_hit": {"const": false},
+                  "message": {"const": null}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"source": {"const": "cache"}}},
+              "then": {
+                "properties": {
+                  "fast_path_used": {"const": false},
+                  "fallback_used": {"const": false},
+                  "cache_hit": {"const": true}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"source": {"const": "index_member_all_l1_current"}}},
+              "then": {
+                "properties": {
+                  "fast_path_used": {"const": true},
+                  "fallback_used": {"const": false},
+                  "cache_hit": {"const": false}
+                }
+              }
+            },
+            {
+              "if": {"properties": {"source": {"const": "index_member_l2_history"}}},
+              "then": {
+                "properties": {
+                  "fast_path_used": {"const": false},
+                  "fallback_used": {"const": true},
+                  "cache_hit": {"const": false}
+                }
+              }
+            }
+          ]
+        },
+        "rank_universe_reconciliation": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "status",
+            "l0_count",
+            "ranked_count",
+            "expected_excluded_count",
+            "unexpected_excluded_count",
+            "unexpected_added_count",
+            "unexpected_stage_change_count",
+            "accounted_count",
+            "unaccounted_count",
+            "duplicate_code_count",
+            "accounting_balanced",
+            "detail_row_count",
+            "source_coverage_failure_count",
+            "stage_counts",
+            "source_coverage"
+          ],
+          "properties": {
+            "status": {
+              "enum": ["pass", "fail", "not_observed"]
+            },
+            "l0_count": {"type": "integer", "minimum": 0},
+            "ranked_count": {"type": "integer", "minimum": 0},
+            "expected_excluded_count": {"type": "integer", "minimum": 0},
+            "unexpected_excluded_count": {"type": "integer", "minimum": 0},
+            "unexpected_added_count": {"type": "integer", "minimum": 0},
+            "unexpected_stage_change_count": {"type": "integer", "minimum": 0},
+            "accounted_count": {"type": "integer", "minimum": 0},
+            "unaccounted_count": {"type": "integer", "minimum": 0},
+            "duplicate_code_count": {"type": "integer", "minimum": 0},
+            "accounting_balanced": {"type": "boolean"},
+            "detail_row_count": {"type": "integer", "minimum": 0},
+            "source_coverage_failure_count": {"type": "integer", "minimum": 0},
+            "stage_counts": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "stage",
+                  "input_count",
+                  "output_count",
+                  "excluded_count",
+                  "added_count",
+                  "expected_exclusion"
+                ],
+                "properties": {
+                  "stage": {"type": "string"},
+                  "input_count": {"type": "integer", "minimum": 0},
+                  "output_count": {"type": "integer", "minimum": 0},
+                  "excluded_count": {"type": "integer", "minimum": 0},
+                  "added_count": {"type": "integer", "minimum": 0},
+                  "expected_exclusion": {"type": "boolean"}
+                }
+              }
+            },
+            "source_coverage": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "requested_count",
+                  "covered_count",
+                  "missing_count",
+                  "coverage_ratio",
+                  "min_coverage",
+                  "status"
+                ],
+                "properties": {
+                  "requested_count": {"type": "integer", "minimum": 0},
+                  "covered_count": {"type": "integer", "minimum": 0},
+                  "missing_count": {"type": "integer", "minimum": 0},
+                  "coverage_ratio": {"type": "number", "minimum": 0, "maximum": 1},
+                  "min_coverage": {"type": "number", "minimum": 0, "maximum": 1},
+                  "status": {"enum": ["pass", "fail"]}
+                }
+              }
+            }
+          }
         },
         "suspend_daily_coverage": {
           "type": "object",

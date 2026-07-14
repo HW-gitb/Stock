@@ -16,8 +16,11 @@ engine also rejects non-empty daily payloads that are too incomplete to support
 safe suspend inference instead of treating missing rows as suspended stocks.
 Suspend coverage observations are written to
 `logs/suspend_daily_coverage_<as_of>.json` and mirrored into schema-validated
-`data_health` v1.2.0 `metrics.suspend_daily_coverage`; cached observations are
-explicitly marked as cache hits, not fresh provider coverage.
+`data_health` v1.4.0 (`metrics.suspend_daily_coverage`, SW-industry source
+observation, watch-pool accounting, and post-L0 rank/source reconciliation);
+cached observations are explicitly marked as cache hits, not fresh provider
+coverage. Formal EGS runs also publish
+`rank_universe_reconciliation.csv`, with one terminal outcome per L0 symbol.
 
 Validation environment:
 

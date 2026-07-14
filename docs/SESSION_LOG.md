@@ -8,6 +8,36 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（A-short Run 1 问题 #1 SW行业源 / #3 观察池对账）代码 PASS
+
+- **Verdict/Action**: #1/#3 代码正确、无 Required、未改选股/阈值/权重/排序。#3 只改 data_health:`watch_df=top50.head(watch_n)` 导出未动、`watch_eligible=len(top50)` 使 `actual==min(eligible,target)` 恒成立→13-Tier1 过 `eligible_pool_exhausted`(无假 WARN)、删旧 `watch_n` 告警、仅真导出丢行报错、`validate_data_health_consistency` 拒伪造对账/低覆盖 pass。#1 L1 快路径 `index_member_all(l1_code,is_new=Y)` 经 `_normalize_sw_member_columns` + 同一 `_apply_pit_window`→与旧 L2 路径同源等价;仅每 L1 非空·<2000 行·形状对·总量≥MIN 才用,否则整弃回退旧逐 L2;历史 as_of 永不用;记 `sw_industry_membership`。
+- **Required**: 无(完整不变式与边界见 register `R-ASHORT-RUN1-SW-MEMBERSHIP-WATCH-POOL-ACCOUNTING` 复审补注)。
+- **Verify**: 亲跑 sw+watch health + rank recon + contract + suspend + board/holder-PIT + 刀6-10 回归 **43 OK**;schema const `1.4.0`。on-data 残留(Optional 非缺陷):L1 快路径是新取数法、等价论强+doubt 即 fail-closed,首个真 v1.4 EGS 跑应确认快路径成员+候选/行业分布 vs 旧 L2 稳定;修复已 gate 到下次授权跑、禁旧跑倒填。无子 agent。
+- **Next**: 用户定(跑 live egs_main 出首个 v1.4 正式产物做 #1/#2/#3 on-data 确认[已授权] / 提交 / 收口)。
+
+## 2026-07-14 — Codex 修复（A-short 实盘 Run 1 问题 #1 / #3）
+
+- **Verdict/Action**: 已只修 #1/#3。#1 将 current-date SW 成分改为按 L1 分组的 `index_member_all(is_new=Y)` 快路径并规范化 `ts_code/l2_code`；空/坏形状/单组触 2000 上限/覆盖不足及历史 as-of 均整路作废，回到 L2 PIT 历史路径。#3 将 watch_n 明确为上限，新增 target/eligible/actual 对账；13/15 合格池耗尽不再误报，合格13却导出12则阻断。data_health 升 v1.4；未改阈值、权重、排名或正式 Tier2 填充。
+- **Required**: 本轮无已知代码残留；完整不变式见 register `R-ASHORT-RUN1-SW-MEMBERSHIP-WATCH-POOL-ACCOUNTING`。当前未调用 provider，下一次正常 EGS 才能生成首份真实 v1.4 SW 来源/请求组观察；本工作树仍须 Claude 独立审查后再提交。
+- **Verify**: 新增 7 个对抗测试；全部 EGS Phase 6 为 42 OK / 1 dependency skip；刀6-10+weekly guard 31 OK；doc/route/README guards 60 OK；无写 pyc 的 syntax compile + schema JSON parse OK；`git diff --check` 仅行尾转换 warning。
+- **Pre-Codex self-review**: A-F 主线程检查。A 覆盖 current alias/空形状与行上限/覆盖门/historical PIT/cache/fallback 及 watch target-met/eligible-exhausted/output-loss/schema/consistency；B 活跃旧快路径日志与旧 watch WARN 0 命中；C 反向测试钉住触顶回退、历史禁 current、13→12 阻断、伪造对账/低覆盖 pass 拒绝；E CURRENT 未写在飞 gate；F schema、编码、diff 已查。无子 agent、无 timeout/fallback。
+- **Next**: Claude Code 只审查 Run 1 问题 #1/#3 修复；连同未提交的 #2 工作树整体核对，PASS 后提交。
+
+## 2026-07-14 — Claude Code 独立复审（A-short Run 1 问题 #2 排名池逐阶段对账）代码 PASS
+
+- **Verdict/Action**: 代码正确、无 Required。**红线守住——选股/排名未改**:`score_l1`/`score_l2` 过滤表达式逐字未动、只在 filter 前加 reason 记录,评分链 l1→l5 顺序/参数未改。`build_rank_universe_reconciliation` 逐股守恒(仅 L1/L2 为 expected 排除;master/L3/L4/L5 丢行·加行·重复·未对账·源覆盖不足→fail,`run_egs` 发布事务前 raise 中止)。data_health v1.3 删 `<1000` 误报、加 source_coverage/reconciliation error + `ranked==full` 交叉核;对账 CSV 进原子发布+manifest(刀8)、analysis_input 加 after_l0/L1/L2 计数。未改阈值/权重/排序。
+- **Required**: 无(完整不变式与边界见 register `R-ASHORT-RUN1-RANK-UNIVERSE-RECONCILIATION` 复审补注)。
+- **Verify**: 亲跑 reconciliation+contract+suspend+PIT+daily-stats+relisted+刀6-10 回归 **43 OK**;schema const `1.3.0`。未在 live 独立重跑:`1512=656+601+245+10` 是执行方离线回放、修复正确性不依赖该数(逻辑使真实 post-L0 分解可见+对真实丢失 fail-closed);下次授权 EGS 跑出 v1.3 正式产物即 on-data 确认。无子 agent。
+- **Next**: 用户定(跑 live egs_main 20260714 出 v1.3 正式产物做 on-data 确认[已授权] / 提交本刀 / 收口)。
+
+## 2026-07-14 — Codex 修复（A-short 实盘 Run 1 问题 #2：排名池逐阶段对账）
+
+- **Verdict/Action**: 已只修 #2。20260714 本地缓存回放证明 `1512 -> 656` 不是财务批量截断：601 个 L1 行业龙头过滤、245 个 L2 闪崩否决、10 个 L2 ESP/估值质量否决，合计 856，未解释/未分类均 0；财务覆盖 5528/5528，L0 的 daily-stats/daily-basic/financial 覆盖均完整。新增逐股 `rank_universe_reconciliation.csv`、阶段/来源覆盖 fail-closed、analysis_input L0/排除计数、data_health v1.3；删除错误的 `full_count<1000` 猜测式 WARN。未改阈值/权重，未做 provider call，未提交。
+- **Required**: 本刀无已知代码残留；完整不变式与验证边界见 register `R-ASHORT-RUN1-RANK-UNIVERSE-RECONCILIATION`。下一次真实 EGS 正常运行才会生成 v1.3 正式产物；本轮不越界执行 #1/#3。
+- **Verify**: 新/改 TDD 7 OK；reconciliation+suspend/schema 11 OK；全部 EGS Phase 6 定向 35 OK / 1 dependency skip；provider-forbidden 20260714 完整缓存回放精确得到 1512=656+601+245+10、0 unclassified；临时正式发布链也得到 health/rank=`ok/pass`、0 source failure/unaccounted，health+manifest 均绑定 reconciliation。扩展 `test_a_short*.py` 在 bundled Python 非绿（15 个 `requests` 缺依赖 error；另 1 error + 3 failures 为与本刀无关的 holding-rule 断言），不冒充 PASS 证据。
+- **Pre-Codex self-review**: A-F 主线程核对逐阶段集合守恒、L1/L2 精确原因、来源截断/非预期丢行/重复/新增反向门、schema/manifest/事务接线、旧 `<1000` 告警移除、20260714 缓存复放。无子 agent、无联网、无账户读取、无阈值救援。
+- **Next**: Claude Code 只审查 Run 1 问题 #2 修复；不扩大到 #1/#3，不提交前自行改策略阈值。
+
 ## 2026-07-14 — Claude Code 独立复审（A-short `ashort_review1` 第 11—13 刀）代码 PASS
 
 - **Verdict/Action**: 三刀代码正确、无 Required。刀11 execution 回测交易日历+T+1(入场日止损排队/买入日不可卖)、停牌/零量/一字跌停全挡→退出排至首个可卖日 open、逐日 last_close 盯市使被困亏损进 max_drawdown、ship-gate 恒 `full_size_allowed=false`;刀12 preflight 一次列全缺失依赖、token 直传 `ts.pro_api`、AST 证全 a_short callsite 零 `set_token`;刀13 校准 SHA-256 校验 seen 源+冻结核对 IV tie(80/90 inclusive)+真实绑定件派生漏斗(38→8→8→22→0、0 provider/0 蒙特卡洛)、结论 insufficient_sample、`production_threshold_change=false`。整读+亲跑确认、无操作残留。

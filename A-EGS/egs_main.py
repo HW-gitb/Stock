@@ -135,7 +135,7 @@ CONF = {
     "cache_dir":        os.path.join(RESULT_DIR, "egs_cache"),
     "cache_ttl":        20 * 3600,
     "top_n":            50,    # 内部候选池大小（供 Phase 2 DeepSeek 终审使用）
-    "watch_n":          15,    # 周频候选观察池（对外展示）
+    "watch_n":          15,    # 周频候选观察池上限（正式运行不拿 Tier2 凑数）
     "final_n":          5,     # 最终推荐数量
     "suspend_lookback":         5,
     "suspend_daily_min_coverage": 0.95,
@@ -843,9 +843,166 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         },
     }
 
+def _code_set(value):
+    if value is None:
+        return set()
+    if isinstance(value, pd.DataFrame):
+        if "ts_code" not in value.columns:
+            return set()
+        series = value["ts_code"]
+    elif isinstance(value, pd.Series):
+        series = value
+    else:
+        try:
+            return {str(item) for item in value if item is not None and str(item).strip()}
+        except TypeError:
+            return set()
+    return {
+        str(item) for item in series.dropna().tolist()
+        if str(item).strip()
+    }
+
+
+def build_rank_universe_reconciliation(df_l0, stages, sources):
+    """Account for every post-L0 symbol and expose source truncation.
+
+    ``stages`` entries are ``(name, dataframe, expected_exclusion, reason)``.
+    Scoring-only joins must set ``expected_exclusion=False`` so any row loss
+    becomes a publish-blocking error instead of disappearing silently.
+    ``sources`` entries are ``(requested, available, min_coverage)``.
+    """
+    l0_codes = _code_set(df_l0)
+    l0_duplicate_count = (
+        int(df_l0["ts_code"].duplicated().sum())
+        if isinstance(df_l0, pd.DataFrame) and "ts_code" in df_l0.columns else 0
+    )
+    active_codes = set(l0_codes)
+    terminal = {}
+    stage_counts = []
+    expected_excluded_count = 0
+    unexpected_excluded_count = 0
+    unexpected_added_count = 0
+    duplicate_code_count = l0_duplicate_count
+
+    for stage_name, stage_df, expected_exclusion, reason in stages:
+        stage_codes = _code_set(stage_df)
+        stage_duplicate_count = (
+            int(stage_df["ts_code"].duplicated().sum())
+            if isinstance(stage_df, pd.DataFrame) and "ts_code" in stage_df.columns else 0
+        )
+        duplicate_code_count += stage_duplicate_count
+        added = stage_codes - active_codes
+        excluded = active_codes - stage_codes
+        if expected_exclusion and isinstance(reason, dict):
+            classified_excluded = {code for code in excluded if code in reason}
+            expected_excluded_count += len(classified_excluded)
+            unexpected_excluded_count += len(excluded - classified_excluded)
+        elif expected_exclusion:
+            expected_excluded_count += len(excluded)
+        else:
+            unexpected_excluded_count += len(excluded)
+        unexpected_added_count += len(added)
+        for ts_code in excluded:
+            terminal_reason = (
+                reason.get(ts_code, "stage_exclusion_unclassified")
+                if isinstance(reason, dict) else reason
+            )
+            terminal[ts_code] = {
+                "outcome": "excluded",
+                "terminal_stage": stage_name,
+                "reason": terminal_reason,
+            }
+        stage_counts.append({
+            "stage": stage_name,
+            "input_count": len(active_codes),
+            "output_count": len(stage_codes & l0_codes),
+            "excluded_count": len(excluded),
+            "added_count": len(added),
+            "expected_exclusion": bool(expected_exclusion),
+        })
+        active_codes = stage_codes & l0_codes
+
+    final_stage = stage_counts[-1]["stage"] if stage_counts else "l0"
+    for ts_code in active_codes:
+        terminal[ts_code] = {
+            "outcome": "ranked",
+            "terminal_stage": final_stage,
+            "reason": "ranked",
+        }
+    unaccounted_codes = l0_codes - set(terminal)
+    detail = pd.DataFrame([
+        {"ts_code": ts_code, **terminal[ts_code]}
+        for ts_code in sorted(terminal)
+    ], columns=["ts_code", "outcome", "terminal_stage", "reason"])
+
+    source_coverage = {}
+    source_coverage_failure_count = 0
+    for source_name, source_spec in (sources or {}).items():
+        requested, available, min_coverage = source_spec
+        requested_codes = _code_set(requested)
+        available_codes = _code_set(available)
+        covered_count = len(requested_codes & available_codes)
+        requested_count = len(requested_codes)
+        missing_count = requested_count - covered_count
+        coverage_ratio = covered_count / requested_count if requested_count else 1.0
+        source_status = "pass" if coverage_ratio >= float(min_coverage) else "fail"
+        if source_status == "fail":
+            source_coverage_failure_count += 1
+        source_coverage[source_name] = {
+            "requested_count": requested_count,
+            "covered_count": covered_count,
+            "missing_count": missing_count,
+            "coverage_ratio": float(coverage_ratio),
+            "min_coverage": float(min_coverage),
+            "status": source_status,
+        }
+
+    accounted_count = len(terminal)
+    accounting_balanced = (
+        accounted_count == len(l0_codes)
+        and len(active_codes) + expected_excluded_count + unexpected_excluded_count == len(l0_codes)
+        and not unaccounted_codes
+    )
+    unexpected_stage_change_count = unexpected_excluded_count + unexpected_added_count
+    status = "pass"
+    if (
+        not accounting_balanced
+        or unexpected_stage_change_count
+        or duplicate_code_count
+        or source_coverage_failure_count
+    ):
+        status = "fail"
+    summary = {
+        "status": status,
+        "l0_count": len(l0_codes),
+        "ranked_count": len(active_codes),
+        "expected_excluded_count": expected_excluded_count,
+        "unexpected_excluded_count": unexpected_excluded_count,
+        "unexpected_added_count": unexpected_added_count,
+        "unexpected_stage_change_count": unexpected_stage_change_count,
+        "accounted_count": accounted_count,
+        "unaccounted_count": len(unaccounted_codes),
+        "duplicate_code_count": duplicate_code_count,
+        "accounting_balanced": accounting_balanced,
+        "detail_row_count": int(len(detail)),
+        "source_coverage_failure_count": source_coverage_failure_count,
+        "stage_counts": stage_counts,
+        "source_coverage": source_coverage,
+    }
+    return summary, detail
+
+
+def _rank_stage_excluded_count(rank_reconciliation, stage_name):
+    for item in (rank_reconciliation or {}).get("stage_counts", []):
+        if item.get("stage") == stage_name:
+            return int(item.get("excluded_count", 0))
+    return 0
+
+
 def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates,
                           unlock_set, suspended_set, relisted_set, red_dict,
-                          tier1_csv_path, full_csv_path, output_root=None):
+                          tier1_csv_path, full_csv_path, output_root=None,
+                          rank_reconciliation=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -896,7 +1053,10 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         },
         "universe_summary": {
             "listed_count": None,
-            "after_l0_count": None,
+            "after_l0_count": (
+                int(rank_reconciliation["l0_count"])
+                if rank_reconciliation is not None else None
+            ),
             "full_count": int(len(df_full)),
             "watch_count": int(len(watch_df)),
             "final_count": int(min(len(tier1_final), CONF["final_n"])) if tier1_final is not None else 0,
@@ -905,6 +1065,15 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 "suspended": int(len(suspended_set or [])),
                 "relisted": int(len(relisted_set or [])),
                 "holder_reduction_veto_10d": int(len((red_dict or {}).get("veto_10d", set()))),
+                "l1_industry_leader": _rank_stage_excluded_count(
+                    rank_reconciliation, "l1_industry_leader"
+                ),
+                "l2_quality_risk": _rank_stage_excluded_count(
+                    rank_reconciliation, "l2_quality_risk"
+                ),
+                "rank_unexpected": int(
+                    (rank_reconciliation or {}).get("unexpected_stage_change_count", 0)
+                ),
             },
         },
         "market_context": {
@@ -999,7 +1168,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     return analysis_path, snapshot_path, candidates_path, analysis_input
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.2.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.4.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
 
@@ -1040,9 +1209,59 @@ def _candidate_quality_scores(analysis_input):
     return scores
 
 
+def _rank_reconciliation_not_observed():
+    return {
+        "status": "not_observed",
+        "l0_count": 0,
+        "ranked_count": 0,
+        "expected_excluded_count": 0,
+        "unexpected_excluded_count": 0,
+        "unexpected_added_count": 0,
+        "unexpected_stage_change_count": 0,
+        "accounted_count": 0,
+        "unaccounted_count": 0,
+        "duplicate_code_count": 0,
+        "accounting_balanced": True,
+        "detail_row_count": 0,
+        "source_coverage_failure_count": 0,
+        "stage_counts": [],
+        "source_coverage": {},
+    }
+
+
+def build_watch_pool_reconciliation(actual_count, eligible_count, target_count):
+    """Account for a short watch pool without treating a target cap as a minimum.
+
+    Production exports every eligible Tier1 row up to ``target_count``.  A pool
+    below the target is therefore healthy when the eligible pool itself is
+    exhausted; only an unexplained export count mismatch is a data-health error.
+    """
+    actual_count = max(int(actual_count), 0)
+    eligible_count = max(int(eligible_count), 0)
+    target_count = max(int(target_count), 0)
+    expected_count = min(eligible_count, target_count)
+    status = "pass" if actual_count == expected_count else "fail"
+    if status == "fail":
+        reason = "output_count_mismatch"
+    elif actual_count >= target_count:
+        reason = "target_met"
+    else:
+        reason = "eligible_pool_exhausted"
+    return {
+        "status": status,
+        "reason": reason,
+        "target_count": target_count,
+        "eligible_count": eligible_count,
+        "expected_count": expected_count,
+        "actual_count": actual_count,
+        "shortfall_count": max(target_count - actual_count, 0),
+    }
+
+
 def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                       analysis_path, snapshot_path, candidates_path,
-                      tier1_csv_path, full_csv_path):
+                      tier1_csv_path, full_csv_path, rank_reconciliation=None,
+                      rank_reconciliation_path=None, watch_eligible_count=None):
     errors = []
     warnings_ = []
     watch_count = int(len(watch_df)) if watch_df is not None else 0
@@ -1062,6 +1281,17 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
     l1_unknown_count = _missing_count(watch_df, "l1_name")
     l2_unknown_count = _missing_count(watch_df, "l2_name")
     full_l2_unknown_count = _missing_count(df_full, "l2_name")
+    rank_reconciliation = dict(
+        rank_reconciliation or _rank_reconciliation_not_observed()
+    )
+    if watch_eligible_count is None:
+        watch_eligible_count = watch_count
+    watch_pool_reconciliation = build_watch_pool_reconciliation(
+        actual_count=watch_count,
+        eligible_count=watch_eligible_count,
+        target_count=CONF.get("watch_n", 15),
+    )
+    sw_industry_membership = _current_sw_industry_source_observation()
 
     if not isinstance(analysis_input, dict):
         errors.append(_health_issue("analysis_input", "analysis_input is not a JSON object"))
@@ -1096,6 +1326,8 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         "tier1_csv": tier1_csv_path,
         "full_rank": full_csv_path,
     }
+    if rank_reconciliation_path:
+        checked_paths["rank_universe_reconciliation"] = rank_reconciliation_path
     missing_outputs = [role for role, path in checked_paths.items() if path and not os.path.exists(path)]
     if missing_outputs:
         errors.append(_health_issue(
@@ -1106,21 +1338,45 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
 
     if df_full is None or df_full.empty:
         errors.append(_health_issue("full_universe", "full ranked universe is empty"))
-    elif len(df_full) < 1000:
-        warnings_.append(_health_issue(
-            "full_universe",
-            "full ranked universe is smaller than expected",
-            full_count=len(df_full),
-        ))
+    if rank_reconciliation.get("status") == "fail":
+        if int(rank_reconciliation.get("source_coverage_failure_count", 0)):
+            errors.append(_health_issue(
+                "rank_source_coverage",
+                "one or more rank inputs are below their required symbol coverage",
+                failure_count=rank_reconciliation.get("source_coverage_failure_count"),
+            ))
+        if (
+            int(rank_reconciliation.get("unexpected_stage_change_count", 0))
+            or int(rank_reconciliation.get("unaccounted_count", 0))
+            or int(rank_reconciliation.get("duplicate_code_count", 0))
+            or not bool(rank_reconciliation.get("accounting_balanced", False))
+        ):
+            errors.append(_health_issue(
+                "rank_universe_reconciliation",
+                "post-L0 rank universe has an unexplained row change",
+                unexpected_stage_change_count=rank_reconciliation.get("unexpected_stage_change_count"),
+                unaccounted_count=rank_reconciliation.get("unaccounted_count"),
+                duplicate_code_count=rank_reconciliation.get("duplicate_code_count"),
+            ))
+    elif rank_reconciliation.get("status") == "pass" and df_full is not None:
+        if int(rank_reconciliation.get("ranked_count", -1)) != int(len(df_full)):
+            errors.append(_health_issue(
+                "rank_universe_reconciliation",
+                "reconciled ranked count does not match full-rank output",
+                reconciled_ranked_count=rank_reconciliation.get("ranked_count"),
+                full_count=len(df_full),
+            ))
 
     if watch_count == 0:
         errors.append(_health_issue("watch_pool", "watch pool is empty"))
-    elif watch_count < int(CONF.get("watch_n", 15)):
-        warnings_.append(_health_issue(
-            "watch_pool",
-            "watch pool count is below configured watch_n",
-            watch_count=watch_count,
-            watch_n=CONF.get("watch_n"),
+    if watch_pool_reconciliation["status"] == "fail":
+        errors.append(_health_issue(
+            "watch_pool_reconciliation",
+            "exported watch pool count does not match the eligible capped pool",
+            actual_count=watch_pool_reconciliation["actual_count"],
+            expected_count=watch_pool_reconciliation["expected_count"],
+            eligible_count=watch_pool_reconciliation["eligible_count"],
+            target_count=watch_pool_reconciliation["target_count"],
         ))
 
     if final_count == 0:
@@ -1207,6 +1463,9 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             "watch_l1_unknown_count": l1_unknown_count,
             "watch_l2_unknown_count": l2_unknown_count,
             "full_l2_unknown_count": full_l2_unknown_count,
+            "watch_pool_reconciliation": watch_pool_reconciliation,
+            "sw_industry_membership": sw_industry_membership,
+            "rank_universe_reconciliation": rank_reconciliation,
             "suspend_daily_coverage": _current_suspend_daily_coverage_observation(),
             "completeness_score_min": min(quality_scores) if quality_scores else None,
             "completeness_score_below_95_count": low_quality_count,
@@ -1215,16 +1474,64 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         "outputs_checked": checked_paths,
         "limitations": [
             "This is an internal Tushare output health check, not a second-source reconciliation.",
-            "It checks structural integrity, key field coverage, counts, industry labels, and data completeness.",
+            "It checks structural integrity, source coverage, post-L0 rank reconciliation, key field coverage, counts, industry labels, and data completeness.",
             "AKShare canary (runners/data_canary.py) now uses sina (stock_zh_a_spot) by default and works reliably; "
             "the em source needs VPN split-tunnel for *.eastmoney.com if pe/pb reconciliation is required.",
         ],
     }
 
 
+def validate_data_health_consistency(health):
+    metrics = health.get("metrics", {}) if isinstance(health, dict) else {}
+    watch = metrics.get("watch_pool_reconciliation")
+    if not isinstance(watch, dict):
+        raise ValueError("data_health missing watch_pool_reconciliation")
+    expected_watch = build_watch_pool_reconciliation(
+        actual_count=watch.get("actual_count"),
+        eligible_count=watch.get("eligible_count"),
+        target_count=watch.get("target_count"),
+    )
+    if watch != expected_watch:
+        raise ValueError("data_health watch_pool_reconciliation is internally inconsistent")
+
+    sw = metrics.get("sw_industry_membership")
+    if not isinstance(sw, dict):
+        raise ValueError("data_health missing sw_industry_membership")
+    status = sw.get("status")
+    source = sw.get("source")
+    fast_path_used = bool(sw.get("fast_path_used"))
+    fallback_used = bool(sw.get("fallback_used"))
+    cache_hit = bool(sw.get("cache_hit"))
+    if sum((fast_path_used, fallback_used, cache_hit)) > 1:
+        raise ValueError("data_health SW source flags are mutually exclusive")
+    if status == "not_observed":
+        if source is not None or sw.get("active_count") is not None or any(
+            (fast_path_used, fallback_used, cache_hit)
+        ):
+            raise ValueError("data_health unobserved SW source carries observed values")
+    elif status == "pass":
+        active_count = int(sw.get("active_count"))
+        min_active = int(sw.get("min_active"))
+        if active_count < min_active:
+            raise ValueError("data_health passing SW source is below minimum coverage")
+        expected_flags = {
+            "cache": (False, False, True),
+            "index_member_all_l1_current": (True, False, False),
+            "index_member_l2_history": (False, True, False),
+        }
+        if source not in expected_flags or (
+            fast_path_used,
+            fallback_used,
+            cache_hit,
+        ) != expected_flags[source]:
+            raise ValueError("data_health passing SW source does not match its source flags")
+    return health
+
+
 def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                        analysis_path, snapshot_path, candidates_path,
-                       tier1_csv_path, full_csv_path):
+                       tier1_csv_path, full_csv_path, rank_reconciliation=None,
+                       rank_reconciliation_path=None, watch_eligible_count=None):
     health = build_data_health(
         df_full=df_full,
         watch_df=watch_df,
@@ -1236,8 +1543,12 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         candidates_path=candidates_path,
         tier1_csv_path=tier1_csv_path,
         full_csv_path=full_csv_path,
+        rank_reconciliation=rank_reconciliation,
+        rank_reconciliation_path=rank_reconciliation_path,
+        watch_eligible_count=watch_eligible_count,
     )
     validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
+    validate_data_health_consistency(health)
     health_path = os.path.join(os.path.dirname(analysis_path), "data_health.json")
     write_json_atomic(health_path, health)
     return health_path, health
@@ -1515,6 +1826,37 @@ def get_stock_list():
     return df
 
 SW_INDUSTRY_MIN_ACTIVE = 3000
+SW_INDEX_MEMBER_ALL_ROW_LIMIT = 2000
+_LAST_SW_INDUSTRY_SOURCE_OBSERVATION = None
+
+
+def _sw_industry_source_not_observed():
+    return {
+        "status": "not_observed",
+        "source": None,
+        "as_of": None,
+        "active_count": None,
+        "min_active": int(SW_INDUSTRY_MIN_ACTIVE),
+        "request_group_count": 0,
+        "fast_path_used": False,
+        "fallback_used": False,
+        "cache_hit": False,
+        "message": None,
+    }
+
+
+def _record_sw_industry_source_observation(**details):
+    global _LAST_SW_INDUSTRY_SOURCE_OBSERVATION
+    payload = _sw_industry_source_not_observed()
+    payload.update(details)
+    _LAST_SW_INDUSTRY_SOURCE_OBSERVATION = payload
+    return dict(payload)
+
+
+def _current_sw_industry_source_observation():
+    if _LAST_SW_INDUSTRY_SOURCE_OBSERVATION is None:
+        return _sw_industry_source_not_observed()
+    return dict(_LAST_SW_INDUSTRY_SOURCE_OBSERVATION)
 
 
 def _sw_mapping_is_usable(mapping):
@@ -1535,7 +1877,29 @@ def _normalize_member_dates(df):
     return df
 
 
-def _apply_pit_window(df, l2_codes, as_of_date):
+def _normalize_sw_member_columns(df, source):
+    """Normalize the two documented Tushare SW member response shapes."""
+    if df is None or df.empty:
+        return pd.DataFrame(columns=["con_code", "index_code", "in_date", "out_date"])
+    normalized = df.copy()
+    if source == "index_member_all":
+        aliases = {}
+        if "con_code" not in normalized.columns and "ts_code" in normalized.columns:
+            aliases["ts_code"] = "con_code"
+        if "index_code" not in normalized.columns and "l2_code" in normalized.columns:
+            aliases["l2_code"] = "index_code"
+        normalized = normalized.rename(columns=aliases)
+    missing = [name for name in ("con_code", "index_code") if name not in normalized.columns]
+    if missing:
+        log.warning(
+            f"SW industry member source={source} missing required columns {missing}; "
+            "rejecting this source shape"
+        )
+        return pd.DataFrame(columns=["con_code", "index_code", "in_date", "out_date"])
+    return _normalize_member_dates(normalized)
+
+
+def _apply_pit_window(df, l2_codes, as_of_date, source="index_member"):
     """Filter to L2 codes of interest and keep only rows active at as_of.
 
     Defends against Tushare returning a DataFrame without the expected schema
@@ -1544,13 +1908,9 @@ def _apply_pit_window(df, l2_codes, as_of_date):
     """
     if df is None or df.empty:
         return df
-    for required in ("index_code", "con_code"):
-        if required not in df.columns:
-            log.warning(
-                f"SW industry member df missing required column {required!r}; "
-                "treating as empty so caller can fall through to next fetch tier"
-            )
-            return pd.DataFrame(columns=["con_code", "index_code", "in_date", "out_date"])
+    df = _normalize_sw_member_columns(df, source)
+    if df.empty:
+        return df
     df = df[df["index_code"].isin(l2_codes)].copy()
     df = _normalize_member_dates(df)
     mask_in = (df["in_date"] == "") | (df["in_date"] <= as_of_date)
@@ -1574,6 +1934,18 @@ def get_sw_industry_map():
     cached = load_cache(key)
     if cached is not None:
         if _sw_mapping_is_usable(cached):
+            _record_sw_industry_source_observation(
+                status="pass",
+                source="cache",
+                as_of=TODAY,
+                active_count=int(len(cached)),
+                min_active=int(SW_INDUSTRY_MIN_ACTIVE),
+                request_group_count=0,
+                fast_path_used=False,
+                fallback_used=False,
+                cache_hit=True,
+                message=None,
+            )
             return cached
         cached_size = len(cached) if isinstance(cached, dict) else "invalid"
         log.warning(f"SW industry cache {key} coverage too low ({cached_size}); refetching")
@@ -1597,78 +1969,110 @@ def get_sw_industry_map():
         """L2-by-L2 batching fallback. Slow but covers when full-market endpoints
         return incomplete data. Returns a concat'd raw DataFrame (unfiltered)."""
         frames = []
-        for l2_code in tqdm(df_l2["index_code"].tolist(), desc="SW industry L2 batching"):
+        l2_code_list = df_l2["index_code"].dropna().astype(str).drop_duplicates().tolist()
+        for l2_code in tqdm(l2_code_list, desc="SW industry L2 batching"):
             t = safe_api(pro.index_member, index_code=l2_code, fields=member_fields)
             if t is not None and not t.empty:
                 frames.append(t)
         if not frames:
-            return pd.DataFrame()
-        return pd.concat(frames, ignore_index=True)
+            return pd.DataFrame(), len(l2_code_list)
+        return pd.concat(frames, ignore_index=True), len(l2_code_list)
+
+    def _fetch_current_by_l1(index_member_all):
+        """Use the documented current-members endpoint in bounded L1 groups.
+
+        The unfiltered endpoint is capped and therefore cannot prove full-market
+        completeness.  Each L1 response must be non-empty, below the documented
+        row limit, and have the official ts_code/l2_code shape; otherwise the
+        caller discards the whole fast-path result and uses the PIT history path.
+        """
+        if df_l1 is None or df_l1.empty or "index_code" not in df_l1.columns:
+            return pd.DataFrame(), 0, "l1_classification_unavailable"
+        l1_codes = df_l1["index_code"].dropna().astype(str).drop_duplicates().tolist()
+        frames = []
+        fields = "ts_code,l2_code,in_date,out_date,is_new"
+        for l1_code in l1_codes:
+            raw = safe_api(
+                index_member_all,
+                l1_code=l1_code,
+                is_new="Y",
+                fields=fields,
+                retries=1,
+            )
+            if raw is None or raw.empty:
+                return pd.DataFrame(), len(frames) + 1, f"empty_l1_response:{l1_code}"
+            if len(raw) >= SW_INDEX_MEMBER_ALL_ROW_LIMIT:
+                return pd.DataFrame(), len(frames) + 1, f"row_limit_hit:{l1_code}:{len(raw)}"
+            normalized = _normalize_sw_member_columns(raw, "index_member_all")
+            if normalized.empty:
+                return pd.DataFrame(), len(frames) + 1, f"bad_shape:{l1_code}"
+            frames.append(normalized)
+        if not frames:
+            return pd.DataFrame(), 0, "no_l1_groups"
+        return pd.concat(frames, ignore_index=True), len(l1_codes), None
 
     df_mem = pd.DataFrame()
     member_source = None
-    l2_batch_done = False
+    request_group_count = 0
+    fallback_reason = None
 
-    # Tier 1: official aggregate endpoint (requires SW-paid permission).
+    # Current production run: query the official endpoint by L1 group.  Never
+    # trust the capped unfiltered response, and never use current-only rows for
+    # a historical PIT replay.
     index_member_all = getattr(pro, "index_member_all", None)
-    if callable(index_member_all):
-        log.info("Trying Tushare index_member_all for full SW industry membership...")
-        candidate = safe_api(index_member_all, fields=member_fields)
-        if candidate is not None and not candidate.empty:
-            df_mem = candidate
-            member_source = "index_member_all"
-            log.info(f"index_member_all returned {len(df_mem)} rows")
+    wall_date = datetime.now().strftime("%Y%m%d")
+    if TODAY == wall_date and callable(index_member_all):
+        candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
+        if not candidate.empty:
+            candidate = _apply_pit_window(
+                candidate,
+                l2_codes,
+                TODAY,
+                source="index_member_all",
+            )
+            fast_count = candidate["con_code"].nunique()
+            if fast_count >= SW_INDUSTRY_MIN_ACTIVE:
+                df_mem = candidate
+                member_source = "index_member_all_l1_current"
+            else:
+                fallback_reason = f"coverage_below_min:{fast_count}<{SW_INDUSTRY_MIN_ACTIVE}"
+    elif TODAY != wall_date:
+        fallback_reason = "historical_as_of_requires_pit_history"
+    else:
+        fallback_reason = "index_member_all_unavailable"
 
-    # Tier 2: generic full-market endpoint.
-    if df_mem is None or df_mem.empty:
-        candidate = safe_api(pro.index_member, fields=member_fields)
-        if candidate is not None and not candidate.empty:
-            df_mem = candidate
-            member_source = "index_member"
-
-    # Tier 3: L2-by-L2 batching (first attempt).
-    if df_mem is None or df_mem.empty:
-        log.warning("全量历史成分股接口失败，降级分批请求...")
-        df_mem = _fetch_l2_batch()
-        l2_batch_done = True
-        if not df_mem.empty:
-            member_source = "l2_batch"
-
-    if df_mem is None or df_mem.empty:
-        log.error("无法获取任何行业成分股")
-        raise RuntimeError("SW industry member fetch failed; cannot build reliable L2 map")
-
-    df_mem = _apply_pit_window(df_mem, l2_codes, TODAY)
-    active_count = df_mem["con_code"].nunique()
-
-    # If index_member_all gave thin coverage, try the generic endpoint before
-    # paying the slow per-L2 batching cost.
-    if active_count < SW_INDUSTRY_MIN_ACTIVE and member_source == "index_member_all":
+    if df_mem.empty:
         log.warning(
-            f"index_member_all returned only {active_count} active stocks; trying index_member before L2 batching"
+            "SW industry L1 current fast path unavailable or incomplete "
+            f"({fallback_reason}); fetching PIT history by L2 index_code"
         )
-        retry_mem = safe_api(pro.index_member, fields=member_fields)
-        if retry_mem is not None and not retry_mem.empty:
-            df_mem = _apply_pit_window(retry_mem, l2_codes, TODAY)
-            active_count = df_mem["con_code"].nunique()
-            member_source = "index_member"
-
-    # If still thin AND we haven't already exhausted the L2 batching path, do it.
-    # `l2_batch_done` prevents the wasteful double-run when initial fetch already
-    # fell through to batching.
-    if active_count < SW_INDUSTRY_MIN_ACTIVE and not l2_batch_done:
-        log.warning(
-            f"Full SW industry member request returned only {active_count} active stocks; fetching by L2 index_code"
-        )
-        batched = _fetch_l2_batch()
-        l2_batch_done = True
+        batched, l2_group_count = _fetch_l2_batch()
+        request_group_count += l2_group_count
         if batched.empty:
+            _record_sw_industry_source_observation(
+                status="fail",
+                source="index_member_l2_history",
+                as_of=TODAY,
+                request_group_count=request_group_count,
+                fallback_used=True,
+                message=fallback_reason,
+            )
             raise RuntimeError("SW industry member fetch failed; cannot build reliable L2 map")
-        df_mem = _apply_pit_window(batched, l2_codes, TODAY)
-        active_count = df_mem["con_code"].nunique()
-        member_source = "l2_batch"
+        df_mem = _apply_pit_window(batched, l2_codes, TODAY, source="index_member")
+        member_source = "index_member_l2_history"
 
+    active_count = df_mem["con_code"].nunique()
     if active_count < SW_INDUSTRY_MIN_ACTIVE:
+        _record_sw_industry_source_observation(
+            status="fail",
+            source=member_source,
+            as_of=TODAY,
+            active_count=int(active_count),
+            request_group_count=request_group_count,
+            fast_path_used=member_source == "index_member_all_l1_current",
+            fallback_used=member_source == "index_member_l2_history",
+            message=fallback_reason,
+        )
         raise RuntimeError(
             f"SW industry map coverage too low: {active_count} active stocks "
             f"(source={member_source}); aborting to avoid invalid Tier1 output"
@@ -1705,6 +2109,18 @@ def get_sw_industry_map():
         raise RuntimeError(
             f"SW industry map coverage too low after mapping: {len(mapping)} stocks; aborting to avoid invalid Tier1 output"
         )
+    _record_sw_industry_source_observation(
+        status="pass",
+        source=member_source,
+        as_of=TODAY,
+        active_count=int(len(mapping)),
+        min_active=int(SW_INDUSTRY_MIN_ACTIVE),
+        request_group_count=int(request_group_count),
+        fast_path_used=member_source == "index_member_all_l1_current",
+        fallback_used=member_source == "index_member_l2_history",
+        cache_hit=False,
+        message=fallback_reason,
+    )
     save_cache(key, mapping)
     return mapping
 
@@ -2443,8 +2859,10 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
 # ═══════════════════════════════════════════════════
 # §6 L1~L5 评分
 # ═══════════════════════════════════════════════════
-def score_l1(df, csi300_ret):
+def score_l1(df, csi300_ret, exclusion_reasons=None):
     df = df.copy()
+    if exclusion_reasons is None:
+        exclusion_reasons = {}
     df["pct_20d_n"]    = pd.to_numeric(df["pct_20d"], errors="coerce")
     df["total_mv_n"]   = pd.to_numeric(df.get("total_mv",    pd.Series(dtype=float)), errors="coerce")
     df["avg_amt_5d_n"] = pd.to_numeric(df.get("avg_amount_5d", pd.Series(dtype=float)), errors="coerce")
@@ -2476,6 +2894,13 @@ def score_l1(df, csi300_ret):
     df.loc[df["l1_score"] >= 1.5, "l1_flag"] = "PASS"
     df.loc[df["l1_score"] == 1.0, "l1_flag"] = "ITF-2"
     df.loc[df["l1_score"] <  1.0, "l1_flag"] = "ELIM"
+    l1_elim = df["l1_flag"] == "ELIM"
+    for _, row in df.loc[l1_elim, ["ts_code", "l2_name"]].iterrows():
+        exclusion_reasons[str(row["ts_code"])] = (
+            "l1_unknown_industry_elim"
+            if str(row["l2_name"]).strip() in {"", "未知", "nan", "None"}
+            else "l1_industry_leader_elim"
+        )
     df = df[df["l1_flag"] != "ELIM"].copy()
 
     # ── [逻辑修复③] ITF-ADJ：直接用原始 "pe" 列，pe_n 在 score_l2 才创建 ──
@@ -2500,11 +2925,16 @@ def score_l1(df, csi300_ret):
     return df.reset_index(drop=True)
 
 
-def score_l2(df, mg_df, trade_dates, global_ind_med):
+def score_l2(df, mg_df, trade_dates, global_ind_med, exclusion_reasons=None):
     df = df.copy()
+    if exclusion_reasons is None:
+        exclusion_reasons = {}
 
     if "has_crash_veto" in df.columns:
         n_before = len(df)
+        crash_mask = df["has_crash_veto"] == True
+        for ts_code in df.loc[crash_mask, "ts_code"].astype(str):
+            exclusion_reasons[ts_code] = "l2_crash_veto"
         df = df[df["has_crash_veto"] == False].copy()
         log.info(f"异常大跌一票否决：剔除 {n_before - len(df)} 只")
 
@@ -2606,6 +3036,8 @@ def score_l2(df, mg_df, trade_dates, global_ind_med):
 
     mask_espq   = df["l2_flags"].str.contains("ESP-Q", na=False)
     mask_triple = mask_espq & mask_pe3 & mask_peg_ok & (df["peg_n"] > 2)
+    for ts_code in df.loc[mask_triple, "ts_code"].astype(str):
+        exclusion_reasons[ts_code] = "l2_espq_valuation_veto"
     df = df[~mask_triple].copy()
 
     if not mg_df.empty and "rzye" in mg_df.columns and len(trade_dates) >= 10:
@@ -2625,6 +3057,8 @@ def score_l2(df, mg_df, trade_dates, global_ind_med):
 
             exempt_ret  = set(df[df["pct_20d_n"] >= 3]["ts_code"])
             veto_margin = set(mg_chg["ts_code"]) - exempt_ret - exempt_vol
+            for ts_code in veto_margin & set(df["ts_code"].astype(str)):
+                exclusion_reasons[str(ts_code)] = "l2_margin_growth_veto"
             df = df[~df["ts_code"].isin(veto_margin)].copy()
 
     df["reduce_penalty"] = df["reduce_deduct"].fillna(0) * 10
@@ -3379,13 +3813,47 @@ def run_egs(backtest_mode=False, output_root=None):
     mf_df = get_moneyflow(trade_dates)
     mg_df = get_margin(trade_dates)
 
-    df = build_master(df_l0, stats_df, df_db, df_fin=df_raw_fin, sw_map=sw_map, red_dict=red_dict)
+    df_master = build_master(
+        df_l0, stats_df, df_db, df_fin=df_raw_fin, sw_map=sw_map, red_dict=red_dict
+    )
+    l1_exclusion_reasons = {}
+    df_l1 = score_l1(
+        df_master, csi300_ret, exclusion_reasons=l1_exclusion_reasons
+    )
+    l2_exclusion_reasons = {}
+    df_l2 = score_l2(
+        df_l1, mg_df, trade_dates, global_ind_med,
+        exclusion_reasons=l2_exclusion_reasons,
+    )
+    df_l3 = score_l3(df_l2, trade_dates, all_daily)
+    df_l4 = score_l4(df_l3, mf_df)
+    df_full, top50 = score_l5(df_l4, sw_map)
 
-    df = score_l1(df, csi300_ret)
-    df = score_l2(df, mg_df, trade_dates, global_ind_med)
-    df = score_l3(df, trade_dates, all_daily)
-    df = score_l4(df, mf_df)
-    df_full, top50 = score_l5(df, sw_map)
+    rank_reconciliation, rank_reconciliation_detail = build_rank_universe_reconciliation(
+        df_l0=df_l0,
+        stages=[
+            ("master_join", df_master, False, "master_join_loss"),
+            ("l1_industry_leader", df_l1, True, l1_exclusion_reasons),
+            ("l2_quality_risk", df_l2, True, l2_exclusion_reasons),
+            ("l3_scoring", df_l3, False, "l3_unexpected_row_loss"),
+            ("l4_scoring", df_l4, False, "l4_unexpected_row_loss"),
+            ("l5_rank", df_full, False, "l5_unexpected_row_loss"),
+        ],
+        sources={
+            "daily_stats_l0": (df_l0, stats_df, 1.0),
+            "daily_basic_l0": (df_l0, df_db, 1.0),
+            "financial_l0": (df_l0, df_raw_fin, 1.0),
+            "financial_full_universe": (df_stocks, df_raw_fin, 0.95),
+        },
+    )
+    if rank_reconciliation["status"] != "pass":
+        raise RuntimeError(
+            "rank universe reconciliation failed: "
+            f"source_coverage_failures={rank_reconciliation['source_coverage_failure_count']}, "
+            f"unexpected_stage_changes={rank_reconciliation['unexpected_stage_change_count']}, "
+            f"unaccounted={rank_reconciliation['unaccounted_count']}, "
+            f"duplicate_codes={rank_reconciliation['duplicate_code_count']}"
+        )
 
     # 行业热度权重各 variant vs legacy 的选股 diff(每周自动记录 → 防遗忘;不改生产选股)。
     # 从**本次 run 的 output_root 派生**,落到与 analysis_input 同一个 run 桶
@@ -3431,6 +3899,7 @@ def run_egs(backtest_mode=False, output_root=None):
     # ── Top 15 候选观察池 ─────────────────────────────────────────────────────
     watch_n   = CONF["watch_n"]
     watch_df  = top50.head(watch_n).copy()
+    watch_eligible_count = int(len(top50))
 
     # backtest 模式下，若 Tier1 候选不足 watch_n（常见于 esp 准入硬条件激活时），
     # 从 Tier2 按 final_score 补足，让回测样本量稳定在 watch_n。
@@ -3446,6 +3915,7 @@ def run_egs(backtest_mode=False, output_root=None):
         if not tier2_fill.empty:
             log.info(f"[BACKTEST] watch_df Tier1 仅 {len(watch_df)} 只，从 Tier2 补 {len(tier2_fill)} 只达 watch_n={watch_n}")
             watch_df = pd.concat([watch_df, tier2_fill[watch_df.columns]], ignore_index=True)
+            watch_eligible_count = max(watch_eligible_count, int(len(watch_df)))
 
     # 赛道热度 overlay(Slice A,comparison-track 非生产):只覆盖 Stage3 后最终周报候选 watch_df，
     # 与 analysis_input.candidates 保持同一批，避免 M6.7 因多行/缺行而 fail-closed。
@@ -3480,7 +3950,10 @@ def run_egs(backtest_mode=False, output_root=None):
     watch_cols = [c for c in watch_cols if c in watch_df.columns]
 
     print("\n" + "═" * 60)
-    print(f"  候选观察池 (EGS {EGS_VERSION})  Top {min(len(watch_df), watch_n)}  ← 周末分析用，周一开盘前确认")
+    print(
+        f"  候选观察池 (EGS {EGS_VERSION})  {len(watch_df)}/{watch_n} "
+        "← 合格池不足时不拿 Tier2 凑数；周末分析用，周一开盘前确认"
+    )
     print("═" * 60)
     if watch_df.empty:
         print("  [!!] 本次无候选标的。")
@@ -3519,6 +3992,9 @@ def run_egs(backtest_mode=False, output_root=None):
         else os.path.join(project_root, "result", "a_short")
     )
     official_dir = os.path.join(base_root, latest_td)
+    rank_reconciliation_path = os.path.join(
+        official_dir, "rank_universe_reconciliation.csv"
+    )
     transaction_paths = [
         tier1_csv_path,
         tier1_xlsx_path,
@@ -3527,6 +4003,7 @@ def run_egs(backtest_mode=False, output_root=None):
         os.path.join(official_dir, "snapshot.json"),
         os.path.join(official_dir, "candidates.csv"),
         os.path.join(official_dir, "data_health.json"),
+        rank_reconciliation_path,
         os.path.join(official_dir, "official_publish.json"),
     ]
     publish_context = nullcontext() if backtest_mode else official_output_transaction(transaction_paths)
@@ -3534,6 +4011,12 @@ def run_egs(backtest_mode=False, output_root=None):
         write_csv_atomic(watch_df[watch_cols], tier1_csv_path, index=False, encoding="utf-8-sig")
         save_ranked_xlsx(watch_df[watch_cols], tier1_xlsx_path, group_size=5)
         write_csv_atomic(df_full, full_csv_path, index=False, encoding="utf-8-sig")
+        write_csv_atomic(
+            rank_reconciliation_detail,
+            rank_reconciliation_path,
+            index=False,
+            encoding="utf-8-sig",
+        )
         analysis_path, snapshot_path, candidates_path, analysis_input = export_analysis_input(
             df_full=df_full,
             watch_df=watch_df,
@@ -3547,6 +4030,7 @@ def run_egs(backtest_mode=False, output_root=None):
             tier1_csv_path=tier1_csv_path,
             full_csv_path=full_csv_path,
             output_root=CONF.get("output_root"),
+            rank_reconciliation=rank_reconciliation,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -3565,6 +4049,9 @@ def run_egs(backtest_mode=False, output_root=None):
             candidates_path=candidates_path,
             tier1_csv_path=tier1_csv_path,
             full_csv_path=full_csv_path,
+            rank_reconciliation=rank_reconciliation,
+            rank_reconciliation_path=rank_reconciliation_path,
+            watch_eligible_count=watch_eligible_count,
         )
         log_data_health_summary(health_path, health)
         marker_path, _manifest = publish_egs_run_manifest(
@@ -3577,6 +4064,7 @@ def run_egs(backtest_mode=False, output_root=None):
                 "data_health": health_path,
                 "tier1_csv": tier1_csv_path,
                 "full_rank": full_csv_path,
+                "rank_universe_reconciliation": rank_reconciliation_path,
             },
         )
     log.info(f"[OK] official EGS publish marker saved to {marker_path}")
@@ -3633,7 +4121,7 @@ def run_egs(backtest_mode=False, output_root=None):
 
         _records_to_save = _records + _current_leavers
         write_json_atomic(_LAST_SEL_FILE, _records_to_save)
-        log.info(f"[OK] 本次候选池记录（Top{watch_n}）已保存至 {_LAST_SEL_FILE}")
+        log.info(f"[OK] 本次候选池记录（{len(watch_df)}/{watch_n}）已保存至 {_LAST_SEL_FILE}")
     except Exception as _e:
         log.warning(f"候选池记录保存失败: {_e}")
 

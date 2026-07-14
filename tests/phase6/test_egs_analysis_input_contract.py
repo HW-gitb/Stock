@@ -70,7 +70,33 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
 
         validate_analysis_input_contract(payload)
 
-    def _export(self, output_root: str, latest_td: str):
+    def test_export_records_reconciled_l0_and_stage_exclusion_counts(self) -> None:
+        self.egs_main.CONF["l3_mode"] = "pit"
+        self.egs_main.CONF["l3_pit_strict"] = True
+        self.egs_main.CONF["l3_snapshot_date"] = "20260522"
+        reconciliation = {
+            "l0_count": 3,
+            "unexpected_stage_change_count": 0,
+            "stage_counts": [
+                {"stage": "l1_industry_leader", "excluded_count": 1},
+                {"stage": "l2_quality_risk", "excluded_count": 1},
+            ],
+        }
+
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp,
+                latest_td="20260522",
+                rank_reconciliation=reconciliation,
+            )
+
+        summary = payload["universe_summary"]
+        self.assertEqual(summary["after_l0_count"], 3)
+        self.assertEqual(summary["excluded_counts"]["l1_industry_leader"], 1)
+        self.assertEqual(summary["excluded_counts"]["l2_quality_risk"], 1)
+        self.assertEqual(summary["excluded_counts"]["rank_unexpected"], 0)
+
+    def _export(self, output_root: str, latest_td: str, rank_reconciliation=None):
         df = pd.DataFrame([{
             "ts_code": "600000.SH",
             "name": "Probe",
@@ -97,6 +123,7 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             tier1_csv_path=ROOT / "tier1.csv",
             full_csv_path=ROOT / "full.csv",
             output_root=output_root,
+            rank_reconciliation=rank_reconciliation,
         )
 
 

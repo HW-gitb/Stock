@@ -173,16 +173,16 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
             health["metrics"]["suspend_daily_coverage"]["coverage_ratio"],
             0.98,
         )
-        self.assertEqual(health["schema_version"], "1.2.0")
+        self.assertEqual(health["schema_version"], "1.4.0")
         schema = json.loads(DATA_HEALTH_SCHEMA.read_text(encoding="utf-8"))
         Draft7Validator.check_schema(schema)
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.2.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.4.0")
         self.assertFalse(list(Draft7Validator(schema).iter_errors(health)))
 
     def test_export_data_health_validates_schema_before_write(self) -> None:
         invalid_health = {
             "schema_name": "data_health",
-            "schema_version": "1.2.0",
+            "schema_version": "1.4.0",
             "generated_at": "2026-06-01T00:00:00+08:00",
             "trade_date": "20260529",
             "preset": "a_short",
@@ -209,6 +209,17 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
                 "watch_l1_unknown_count": 0,
                 "watch_l2_unknown_count": 0,
                 "full_l2_unknown_count": 0,
+                "watch_pool_reconciliation": {
+                    "status": "pass",
+                    "reason": "eligible_pool_exhausted",
+                    "target_count": 15,
+                    "eligible_count": 1,
+                    "expected_count": 1,
+                    "actual_count": 1,
+                    "shortfall_count": 14,
+                },
+                "sw_industry_membership": self.egs_main._sw_industry_source_not_observed(),
+                "rank_universe_reconciliation": self.egs_main._rank_reconciliation_not_observed(),
                 "suspend_daily_coverage": {
                     "schema_name": "suspend_daily_coverage_log",
                     "schema_version": "1.0.0",
