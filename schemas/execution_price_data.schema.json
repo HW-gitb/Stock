@@ -52,6 +52,15 @@
       "minItems": 1,
       "uniqueItems": true
     },
+    "trade_calendar": {
+      "type": "array",
+      "description": "Optional complete open-market calendar for the covered range. When present, a missing symbol row on an open date is treated as suspension/no quote instead of silently compressing holding time.",
+      "items": {
+        "$ref": "#/$defs/date8"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
     "rows": {
       "type": "array",
       "items": {
@@ -194,6 +203,11 @@
         },
         "source_flags": {
           "$ref": "#/$defs/stringList"
+        },
+        "volume": {
+          "type": ["number", "null"],
+          "minimum": 0,
+          "description": "Optional provider-native volume. Zero volume makes an exit unfillable; missing volume does not by itself prove zero volume."
         }
       }
     },

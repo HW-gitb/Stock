@@ -4,7 +4,7 @@
 #   1) A-EGS\egs_main.py                       (主选股；产 data_health.json by Codex layer)
 #   2) runners\data_canary.py                  (旁路跨源对账；sina 默认，VPN-agnostic)
 #   3) runners\forward_tracker.py              (Phase 3.5 实盘 forward 累计；不影响主流程)
-#   4) M6.7 advisory 周报(a_short_iv_feed_build + a_short_weekly_pipeline:建市场 IV feed → 跑
+#   4) M6.7 authoritative operation 周报(a_short_iv_feed_build + a_short_weekly_pipeline:建市场 IV feed → 跑
 #                                               M6.7 pipeline,语义 cninfo+DeepSeek 行内;watch pool =
 #                                               当次 EGS analysis_input;run-path 见契约 §web_llm 产出路径)
 #   5) V14.3 regime 比较账本(a_short_regime_comparison_runner:旁路 sidecar,comparison-only 非生产、V14.2 冻结;
@@ -16,11 +16,11 @@
 #                                               升级/退役决定——跨LLM、不管哪个AI跑都提醒;不算指标、不自动升级)
 #
 # 设计约束：
-# - canary / tracker / semantic 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
-# - canary / tracker / semantic 自身失败不影响整体 exit code（旁路约束：不阻断选股）
-# - semantic 是 advisory-only:cninfo 取数失败/反爬绝不阻断周报;落 research 非生产 lane,
-#   绝不进 result/a_short、不进 production scoring/decision/veto
-# - 整体 exit code 取 egs_main 的 exit code
+# - canary / tracker / M6.7 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
+# - canary / tracker 自身失败不影响整体 exit code（旁路约束：不阻断选股）
+# - M6.7 内的 semantic 证据仍是 advisory-only，不进 production scoring/veto；但调用方既已请求
+#   M6.7，则 analysis/IV/account/pipeline 任一失败必须写 failed receipt 并以非零退出，不能假装周报成功
+# - 未请求 M6.7 时整体 exit code 取 egs_main；请求后还必须包含 M6.7 成功
 #
 # Usage:
 #   .\runners\weekly_screening.ps1                                   # 省略 -AsOf = 自动解析 canonical(即将到来/当前未收盘的交易日)
@@ -29,7 +29,7 @@
 #   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
-#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 跳过【整个】M6.7 advisory 周报(IV/价/account/语义全跳;非仅 semantic — Slice 3b-2 起语义已行内化)
+#   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 跳过【整个】M6.7 operation 周报(IV/价/account/语义全跳;非仅 semantic — Slice 3b-2 起语义已行内化)
 #   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
 #                                                                     # 带 -Account 报告含真实持仓 → 自动落 gitignored 私密目录 state\a_short\weekly_private\<as_of>\(防提交泄漏);无 -Account 走标准 research lane
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
@@ -58,7 +58,7 @@ param(
     [string]$CanarySource = 'sina',
     [ValidateSet('pit', 'today', 'neutralize')]
     [string]$L3Mode = $null,
-    [string]$PythonExe = 'python',
+    [string]$PythonExe = '',
     [string]$Account = $null,
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
@@ -77,16 +77,32 @@ param(
 # project root is one level up. If this script is ever moved, update
 # both the path math and the python invocations below.
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
+. (Join-Path $ProjectRoot '.tools\Resolve-AshortPython.ps1')
+try {
+    $PythonExe = Resolve-AshortPython -Requested $PythonExe
+} catch {
+    Write-Host "[FATAL] $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+function Write-M67FailureReceipt {
+    param([string]$Directory, [string]$Reason, [int]$ExitCode)
+    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+    $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
+    $Tmp = "$Receipt.tmp"
+    @{
+        schema_name = 'a_short_weekly_publish_receipt'
+        schema_version = '1.0.0'
+        as_of = $AsOf
+        stage_status = 'failed'
+        failure_reason = $Reason
+        exit_code = $ExitCode
+    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8
+    Move-Item -LiteralPath $Tmp -Destination $Receipt -Force
+}
 if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py') -PathType Leaf)) {
     Write-Host "[FATAL] expected A-EGS\egs_main.py (as a file) under $ProjectRoot." -ForegroundColor Red
     exit 1
 }
-if (-not (Get-Command $PythonExe -ErrorAction SilentlyContinue)) {
-    Write-Host "[FATAL] Python executable not found: $PythonExe" -ForegroundColor Red
-    Write-Host "        Pass -PythonExe C:\Path\To\python.exe or add python to PATH." -ForegroundColor Red
-    exit 1
-}
-
 $RunDate = Get-Date -Format 'yyyyMMdd'
 if ([string]::IsNullOrWhiteSpace($AsOf)) {
     # --- 省略 -AsOf → 解析 canonical 决策日（拉 trade_cal，需网络/TUSHARE_TOKEN）---
@@ -163,6 +179,14 @@ if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $Allow
 
 if ($IsHistoricalAsOf -and $AllowHistoricalOverwrite) {
     Write-Host "[WARN] Historical official-output overwrite explicitly allowed for $AsOf." -ForegroundColor Yellow
+}
+
+$PreflightScript = Join-Path $ProjectRoot 'runners\a_short_preflight.py'
+& $PythonExe $PreflightScript
+$PreflightExit = $LASTEXITCODE
+if ($null -eq $PreflightExit -or $PreflightExit -ne 0) {
+    Write-Host "[FATAL] A-short preflight failed before any provider or private-state access." -ForegroundColor Red
+    exit 2
 }
 
 Set-Location $ProjectRoot
@@ -243,18 +267,21 @@ if ($SkipTracker) {
     }
 }
 
-# --- Stage 4: M6.7 advisory weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
+# --- Stage 4: M6.7 authoritative operation weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
 #     sidecar; ONE Friday entry now also runs the M6.7 pipeline with semantic [cninfo official + DeepSeek
-#     web] rendered inline). 旁路约束(同 canary/tracker):advisory-only,失败绝不阻断周报;落 research 非生产
+#     web] rendered inline). semantic 证据本身 advisory-only；但 requested M6.7 失败必须写 failed receipt + 非零退出；落 research 非生产
 #     lane(禁 result/a_short)。真取数:IV options + 前复权价 + cninfo + em 资讯(web 源)+ DeepSeek。web 源 = em(取代失效 sina);run-path 见契约 §web_llm 产出路径。
 if ($SkipSemanticRisk) {
     Write-Host ""
-    Write-Host "[4/4] -SkipSemanticRisk set, M6.7 advisory not run" -ForegroundColor DarkGray
+    Write-Host "[4/4] -SkipSemanticRisk set, M6.7 operation report not run" -ForegroundColor DarkGray
 } else {
     Write-Host ""
     $SemAnalysisInput = Join-Path $ProjectRoot "result\a_short\$AsOf\analysis_input.json"
     if (-not (Test-Path $SemAnalysisInput)) {
-        Write-Host "[WARN] M6.7 advisory skipped: analysis_input not found at $SemAnalysisInput (advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
+        $M67Dir = if ($Account) { Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf" } else { Join-Path $ProjectRoot "research\results\a_short\$AsOf" }
+        Write-M67FailureReceipt -Directory $M67Dir -Reason 'analysis_input_missing' -ExitCode 21
+        Write-Host "[FATAL] M6.7 requested but analysis_input is missing: $SemAnalysisInput" -ForegroundColor Red
+        exit 21
     } else {
         # 持仓恒列入隐私护栏(固化):带 -Account 的周报含真实持仓(代码/成本/止损)→ 落 gitignored 私密目录
         # state\a_short\weekly_private\<as_of>\(.gitignore: state/*/weekly_private/),绝不入 git 追踪的 research lane。
@@ -273,7 +300,9 @@ if ($SkipSemanticRisk) {
         $IvExitCode = $LASTEXITCODE
         if ($null -eq $IvExitCode) { $IvExitCode = 1 }
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
-            Write-Host "[WARN] M6.7 advisory skipped: IV feed build failed (exit $IvExitCode; advisory sidecar, weekly not blocked)" -ForegroundColor Yellow
+            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22
+            Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
+            exit 22
         } else {
             $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if (-not $IsHistoricalAsOf) {
@@ -288,9 +317,10 @@ if ($SkipSemanticRisk) {
                 if (Test-Path $Account) {
                     $M67Args += @('--account', $Account)
                 } else {
-                    # bad -Account path: refuse to silently run sizing-less M6.7 (skip, not a misleading 观察 artifact)
-                    Write-Host "[WARN] M6.7 advisory skipped: -Account path not found: $Account (refusing to run sizing-less with a bad account path; fix the path, or omit -Account for observation-only)" -ForegroundColor Yellow
-                    $RunM67 = $false
+                    # bad -Account path: fail the requested M6.7; never emit a misleading sizing-less artifact.
+                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'account_path_missing' -ExitCode 23
+                    Write-Host "[FATAL] M6.7 requested but -Account path was not found: $Account" -ForegroundColor Red
+                    exit 23
                 }
             } else {
                 Write-Host "[WARN] M6.7 no -Account: observation-only (no position sizing/holding-state). The weekly_m67 artifact is marked sizing_mode=observation_only_no_account - 建仓 candidates render as 观察 (sizing artifact, NOT a real avoid signal). Pass -Account <account-state.json> (cash/positions/Rule12/Rule13) for real sizing and holding-state decisions." -ForegroundColor Yellow
@@ -301,10 +331,12 @@ if ($SkipSemanticRisk) {
                 $M67ExitCode = $LASTEXITCODE
                 if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
                 if ($M67ExitCode -ne 0) {
-                    # 真取数失败(IV/价/cninfo/em/DeepSeek)不影响主流程退出码(旁路约束:advisory 绝不阻断选股)
-                    Write-Host "[WARN] M6.7 advisory exit $M67ExitCode (advisory sidecar; real-fetch/cninfo/DeepSeek failure does NOT block the weekly)" -ForegroundColor Yellow
+                    # requested M6.7 是本次正式运维产物；失败必须显式传播，不能返回选股成功假象。
+                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode
+                    Write-Host "[FATAL] M6.7 requested and weekly pipeline failed (exit $M67ExitCode)" -ForegroundColor Red
+                    exit $M67ExitCode
                 } else {
-                    Write-Host "[ADVISORY] M6.7 weekly report (semantic inline) -> $M67Out. Standalone summary sidecar retired (Slice 3b-2); advisory-only, not a veto/ship-gate." -ForegroundColor Yellow
+                    Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
                 }
             }
         }
@@ -326,7 +358,20 @@ if ($SkipRegime) {
     Write-Host ""
     $RegimeLedger = Join-Path $ProjectRoot "research\results\a_short\regime_daily_ledger.json"
     $RegimeIvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
-    $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf, '--confirm-fetch-authorized')
+    # The comparison baseline must use the same effective V14.2 state as M6.7. EGS currently emits
+    # unknown in its frozen slot; production resolves that to shock, so never compare V14.3 to literal
+    # unknown while the actual weekly posture is shock.
+    $EffectiveV142Regime = 'shock'
+    try {
+        $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status
+        if ($RawV142Regime -in @('attack', 'shock', 'defense', 'contraction')) {
+            $EffectiveV142Regime = $RawV142Regime
+        }
+    } catch {
+        Write-Host "[regime] unable to read production regime from analysis_input; using fail-closed effective shock" -ForegroundColor Yellow
+    }
+    $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
+                    '--v14_2-regime', $EffectiveV142Regime, '--confirm-fetch-authorized')
     if (-not (Test-Path $RegimeLedger)) {
         Write-Host "[regime] no existing ledger -> one-time --bootstrap (252-day backfill; may take several minutes)" -ForegroundColor Yellow
         $RegimeArgs += '--bootstrap'

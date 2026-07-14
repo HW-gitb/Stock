@@ -10,7 +10,7 @@
     "schema_name": {"const": "a_short_account_state"},
     "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "available_cash": {"type": "number", "exclusiveMinimum": 0},
+    "available_cash": {"type": "number", "minimum": 0},
     "total_equity": {"type": ["number", "null"], "exclusiveMinimum": 0},
     "current_gross_exposure": {"type": ["number", "null"], "minimum": 0},
     "positions": {

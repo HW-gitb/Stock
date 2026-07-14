@@ -1,0 +1,98 @@
+{
+  "schema_name": "a_short_entry_funnel_calibration_report",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-13T18:30:00+08:00",
+  "preregistration_ref": {
+    "path": "research/preregistrations/a_short_entry_funnel_calibration_20260713.json",
+    "sha256": "1ea6dc3bc9effc4fab0e5cd3e9acbf0f3f659652323c64befa2736cccf6af408"
+  },
+  "source_integrity": {
+    "status": "all_sha256_verified",
+    "verified_files": 14,
+    "provider_calls": 0,
+    "random_simulations": 0
+  },
+  "funnel": {
+    "distinct_weeks": 3,
+    "candidate_count": 38,
+    "hard_veto_count": 8,
+    "ma_shape_failure_count": 8,
+    "entry_trigger_failure_count": 22,
+    "rr_plan_count": 0,
+    "capital_gate_evaluable_count": 0,
+    "unclassified_count": 0,
+    "stages": [
+      {
+        "stage": "egs_candidate",
+        "passed_count": 38,
+        "pass_rate": 1.0,
+        "status": "observed"
+      },
+      {
+        "stage": "no_hard_veto",
+        "passed_count": 30,
+        "pass_rate": 0.78947368,
+        "status": "observed"
+      },
+      {
+        "stage": "ma_shape",
+        "passed_count": 22,
+        "pass_rate": 0.73333333,
+        "status": "observed"
+      },
+      {
+        "stage": "low_pullback_or_breakout",
+        "passed_count": 0,
+        "pass_rate": 0.0,
+        "status": "observed"
+      },
+      {
+        "stage": "reward_risk",
+        "passed_count": 0,
+        "pass_rate": null,
+        "status": "observed"
+      },
+      {
+        "stage": "capital_gate",
+        "passed_count": 0,
+        "pass_rate": null,
+        "status": "not_evaluable_private_account"
+      }
+    ]
+  },
+  "iv_boundary": {
+    "observation_count": 7,
+    "minimum": 50.7937,
+    "median": 83.7302,
+    "maximum": 94.0476,
+    "above_80_count": 4,
+    "above_90_count": 2,
+    "exact_80_count": 0,
+    "exact_90_count": 0,
+    "policy_verified": true
+  },
+  "overlay_evidence": {
+    "seen_observations": 4,
+    "seen_candidate_count": 51,
+    "seen_eligible_count": 22,
+    "future_confirmatory_observations": 0,
+    "future_confirmatory_required": 12,
+    "promotion_evaluable": false
+  },
+  "calibration_conclusion": {
+    "status": "insufficient_sample_with_entry_trigger_bottleneck",
+    "observed_bottleneck": "low_pullback_or_breakout",
+    "egs_entry_mismatch_proven": false,
+    "specific_threshold_too_strict_proven": false,
+    "sample_sufficient": false,
+    "production_threshold_change": false,
+    "next_evidence": "collect_frozen_future_confirmatory_weeks_without_threshold_changes"
+  },
+  "boundary": {
+    "calibration_only": true,
+    "is_alpha": false,
+    "is_buy_advice": false,
+    "satisfies_ship_gate": false,
+    "full_size_allowed": false
+  }
+}

@@ -28,6 +28,7 @@ if str(ROOT) not in sys.path:
 
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
 from engine.analyzer.state_manager import STATE_ROOT
+from engine.data.analysis_input_contract import validate_analysis_input_contract
 
 REPORT_SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
 PRICE_DATA_SCHEMA_PATH = ROOT / "schemas" / "execution_price_data.schema.json"
@@ -217,10 +218,10 @@ def load_preset_capital_profile(path: Path) -> dict[str, Any]:
 
 def load_analysis_input(path: Path) -> dict[str, Any]:
     payload = load_json(path)
-    if not isinstance(payload, dict):
-        raise ValueError(f"analysis_input must be a JSON object: {path}")
-    if not isinstance(payload.get("candidates"), list):
-        raise ValueError(f"analysis_input.candidates must be a list: {path}")
+    # Preserve the runner's documented legacy-version compatibility while
+    # validating every substantive field against the current full contract.
+    payload["schema_version"] = normalized_analysis_input_schema_version(payload)
+    validate_analysis_input_contract(payload, label=f"execution backtest input {path}")
     return payload
 
 
@@ -593,6 +594,42 @@ def is_limit_up_unbuyable(row: dict[str, Any]) -> bool:
     return entry_open >= up_limit * 0.999
 
 
+def execution_trade_calendar(price_data: dict[str, Any]) -> list[str]:
+    declared = price_data.get("trade_calendar")
+    if isinstance(declared, list) and declared:
+        return sorted({str(value) for value in declared})
+    return sorted(
+        {
+            str(row.get("trade_date"))
+            for row in price_data.get("rows", [])
+            if isinstance(row, dict) and row.get("trade_date")
+        }
+    )
+
+
+def is_one_price_limit_down(row: dict[str, Any]) -> bool:
+    down_limit = coerce_positive_float(row.get("down_limit"))
+    prices = [
+        coerce_positive_float(row.get(field))
+        for field in ("open_qfq", "high_qfq", "low_qfq", "close_qfq")
+    ]
+    if down_limit is None or any(value is None for value in prices):
+        return False
+    tolerance = max(1e-8, down_limit * 0.001)
+    return all(abs(float(value) - down_limit) <= tolerance for value in prices)
+
+
+def exit_sellability(row: dict[str, Any] | None) -> tuple[bool, str | None]:
+    if row is None:
+        return False, "suspended"
+    volume = row.get("volume")
+    if isinstance(volume, (int, float)) and float(volume) <= 0:
+        return False, "zero_volume"
+    if is_one_price_limit_down(row):
+        return False, "one_price_limit_down"
+    return True, None
+
+
 def calculate_shares(
     entry_price: float, cash: float, bucket_capital: float, args: argparse.Namespace
 ) -> int:
@@ -671,6 +708,7 @@ def build_execution_assumptions(
                 "stop_loss",
                 "take_profit",
                 "time_stop",
+                "exit_delayed",
                 "cash_constrained",
                 "exit",
             ],
@@ -851,7 +889,14 @@ def simulate_execution(
     bucket_capital = validated_bucket_capital_from_context(capital_context)
     cash = bucket_capital
     peak_equity = bucket_capital
+    max_drawdown = 0.0
     by_symbol = price_rows_by_symbol(price_data)
+    rows_by_symbol_date = {
+        symbol: {str(row.get("trade_date")): row for row in rows}
+        for symbol, rows in by_symbol.items()
+    }
+    trade_calendar = execution_trade_calendar(price_data)
+    calendar_index = {date: index for index, date in enumerate(trade_calendar)}
     trades: list[dict[str, Any]] = []
     skipped_rows: list[dict[str, Any]] = []
     daily_equity: list[dict[str, Any]] = [
@@ -868,6 +913,7 @@ def simulate_execution(
     missing_price_data_count = 0
     entry_unbuyable_count = 0
     missing_stop_count = 0
+    plans_by_entry_date: dict[str, list[dict[str, Any]]] = {}
 
     for candidate in payload.get("candidates", []):
         ts_code = candidate_code(candidate)
@@ -927,9 +973,8 @@ def simulate_execution(
                 events, event_id, as_of, ts_code, "missing_stop", event_message_for_skip(row)
             )
             continue
-
-        exit_index = entry_index + args.time_stop_days - 1
-        if exit_index >= len(rows):
+        entry_date = str(entry_row.get("trade_date"))
+        if entry_date not in calendar_index:
             missing_price_data_count += 1
             row = skip_row(candidate, "missing_price_data")
             skipped_rows.append(row)
@@ -937,112 +982,178 @@ def simulate_execution(
                 events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
             )
             continue
-
-        exit_row = rows[exit_index]
-        exit_row_index = exit_index
-        exit_reason = "time_stop"
-        exit_price = coerce_positive_float(exit_row.get("close_qfq"))
-        if exit_price is None:
-            missing_price_data_count += 1
-            row = skip_row(candidate, "missing_price_data")
-            skipped_rows.append(row)
-            event_id = add_event(
-                events, event_id, as_of, ts_code, "missing_price_data", event_message_for_skip(row)
-            )
-            continue
-        for row_index in range(entry_index, exit_index + 1):
-            row = rows[row_index]
-            low = coerce_positive_float(row.get("low_qfq"))
-            if low is not None and low <= stop_loss:
-                open_price = coerce_positive_float(row.get("open_qfq"))
-                exit_row = row
-                exit_row_index = row_index
-                exit_reason = "stop_loss"
-                exit_price = (
-                    open_price if open_price is not None and open_price <= stop_loss else stop_loss
-                )
-                break
-
-        shares = calculate_shares(entry_price, cash, bucket_capital, args)
-        if shares <= 0:
-            row = skip_row(candidate, "cash_constrained")
-            skipped_rows.append(row)
-            event_id = add_event(
-                events, event_id, as_of, ts_code, "cash_constrained", event_message_for_skip(row)
-            )
-            continue
-
-        entry_date = str(entry_row["trade_date"])
-        entry_gross = shares * entry_price
-        entry_cost = entry_gross * args.cost_pct
-        cash -= entry_gross + entry_cost
-        event_id = add_event(
-            events,
-            event_id,
-            entry_date,
-            ts_code,
-            "entry",
-            f"entered {shares} shares at T+1 open_qfq {entry_price:.4f}",
-        )
-
-        exit_date = str(exit_row["trade_date"])
-        exit_gross = shares * exit_price
-        exit_cost = exit_gross * args.cost_pct
-        pnl = exit_gross - exit_cost - entry_gross - entry_cost
-        cash += exit_gross - exit_cost
-        holding_days = exit_row_index - entry_index + 1
-        trades.append(
+        plans_by_entry_date.setdefault(entry_date, []).append(
             {
-                "trade_id": len(trades) + 1,
+                "candidate": candidate,
                 "ts_code": ts_code,
                 "entry_date": entry_date,
-                "exit_date": exit_date,
-                "entry_price": round(entry_price, 6),
-                "exit_price": round(exit_price, 6),
-                "shares": shares,
-                "pnl": round(pnl, 6),
-                "return_pct": round(pnl / (entry_gross + entry_cost), 8),
-                "exit_reason": exit_reason,
-                "holding_days": holding_days,
+                "entry_price": entry_price,
+                "entry_row": entry_row,
+                "stop_loss": stop_loss,
             }
         )
-        event_id = add_event(
-            events,
-            event_id,
-            exit_date,
-            ts_code,
-            exit_reason,
-            f"{exit_reason} exit at {exit_price:.4f}",
-        )
-        event_id = add_event(
-            events,
-            event_id,
-            exit_date,
-            ts_code,
-            "exit",
-            f"closed trade with net pnl {pnl:.2f}",
-        )
-        equity = cash
+
+    positions: list[dict[str, Any]] = []
+    executed_count = 0
+    for trade_date in [date for date in trade_calendar if date > as_of]:
+        remaining_positions: list[dict[str, Any]] = []
+        for position in positions:
+            ts_code = str(position["ts_code"])
+            row = rows_by_symbol_date.get(ts_code, {}).get(trade_date)
+            close_price = coerce_positive_float(row.get("close_qfq")) if row else None
+            if close_price is not None:
+                position["last_close"] = close_price
+
+            current_index = calendar_index[trade_date]
+            entry_index = int(position["entry_calendar_index"])
+            low = coerce_positive_float(row.get("low_qfq")) if row else None
+            stop_triggered = low is not None and low <= float(position["stop_loss"])
+            time_stop_triggered = current_index - entry_index >= args.time_stop_days
+            pending_reason = position.get("pending_exit_reason")
+            exit_reason = str(pending_reason) if pending_reason else None
+            if exit_reason is None and stop_triggered:
+                exit_reason = "stop_loss"
+            if exit_reason is None and time_stop_triggered:
+                exit_reason = "time_stop"
+
+            if exit_reason is None:
+                remaining_positions.append(position)
+                continue
+
+            sellable, blocked_reason = exit_sellability(row)
+            if current_index <= entry_index:
+                sellable, blocked_reason = False, "t1_restriction"
+            if not sellable:
+                position["pending_exit_reason"] = exit_reason
+                event_id = add_event(
+                    events,
+                    event_id,
+                    trade_date,
+                    ts_code,
+                    "exit_delayed",
+                    f"{exit_reason} exit delayed: {blocked_reason}",
+                )
+                remaining_positions.append(position)
+                continue
+
+            open_price = coerce_positive_float(row.get("open_qfq")) if row else None
+            if pending_reason is not None:
+                exit_price = open_price
+            elif exit_reason == "stop_loss":
+                stop_loss = float(position["stop_loss"])
+                exit_price = open_price if open_price is not None and open_price <= stop_loss else stop_loss
+            else:
+                exit_price = close_price
+            if exit_price is None:
+                position["pending_exit_reason"] = exit_reason
+                event_id = add_event(
+                    events,
+                    event_id,
+                    trade_date,
+                    ts_code,
+                    "exit_delayed",
+                    f"{exit_reason} exit delayed: missing_exit_price",
+                )
+                remaining_positions.append(position)
+                continue
+
+            shares = int(position["shares"])
+            entry_gross = float(position["entry_gross"])
+            entry_cost = float(position["entry_cost"])
+            exit_gross = shares * exit_price
+            exit_cost = exit_gross * args.cost_pct
+            pnl = exit_gross - exit_cost - entry_gross - entry_cost
+            cash += exit_gross - exit_cost
+            holding_days = current_index - entry_index + 1
+            trades.append(
+                {
+                    "trade_id": len(trades) + 1,
+                    "ts_code": ts_code,
+                    "entry_date": position["entry_date"],
+                    "exit_date": trade_date,
+                    "entry_price": round(float(position["entry_price"]), 6),
+                    "exit_price": round(exit_price, 6),
+                    "shares": shares,
+                    "pnl": round(pnl, 6),
+                    "return_pct": round(pnl / (entry_gross + entry_cost), 8),
+                    "exit_reason": exit_reason,
+                    "holding_days": holding_days,
+                }
+            )
+            event_id = add_event(
+                events, event_id, trade_date, ts_code, exit_reason, f"{exit_reason} exit at {exit_price:.4f}"
+            )
+            event_id = add_event(
+                events, event_id, trade_date, ts_code, "exit", f"closed trade with net pnl {pnl:.2f}"
+            )
+        positions = remaining_positions
+
+        for plan in plans_by_entry_date.get(trade_date, []):
+            shares = calculate_shares(float(plan["entry_price"]), cash, bucket_capital, args)
+            if shares <= 0:
+                row = skip_row(plan["candidate"], "cash_constrained")
+                skipped_rows.append(row)
+                event_id = add_event(
+                    events, event_id, trade_date, str(plan["ts_code"]), "cash_constrained", event_message_for_skip(row)
+                )
+                continue
+            entry_price = float(plan["entry_price"])
+            entry_gross = shares * entry_price
+            entry_cost = entry_gross * args.cost_pct
+            cash -= entry_gross + entry_cost
+            executed_count += 1
+            position = {
+                **plan,
+                "shares": shares,
+                "entry_gross": entry_gross,
+                "entry_cost": entry_cost,
+                "entry_calendar_index": calendar_index[trade_date],
+                "last_close": coerce_positive_float(plan["entry_row"].get("close_qfq")) or entry_price,
+                "pending_exit_reason": None,
+            }
+            event_id = add_event(
+                events,
+                event_id,
+                trade_date,
+                str(plan["ts_code"]),
+                "entry",
+                f"entered {shares} shares at T+1 open_qfq {entry_price:.4f}",
+            )
+            entry_low = coerce_positive_float(plan["entry_row"].get("low_qfq"))
+            if entry_low is not None and entry_low <= float(plan["stop_loss"]):
+                position["pending_exit_reason"] = "stop_loss"
+                event_id = add_event(
+                    events,
+                    event_id,
+                    trade_date,
+                    str(plan["ts_code"]),
+                    "exit_delayed",
+                    "stop_loss exit delayed: t1_restriction",
+                )
+            positions.append(position)
+
+        market_value = sum(int(position["shares"]) * float(position["last_close"]) for position in positions)
+        equity = cash + market_value
         peak_equity = max(peak_equity, equity)
         drawdown = 0.0 if peak_equity <= 0 else (equity / peak_equity) - 1.0
+        max_drawdown = min(max_drawdown, drawdown)
         daily_equity.append(
             {
-                "trade_date": exit_date,
+                "trade_date": trade_date,
                 "equity": round(equity, 6),
                 "cash": round(cash, 6),
-                "market_value": 0.0,
+                "market_value": round(market_value, 6),
                 "drawdown": round(drawdown, 8),
             }
         )
 
     trade_count = len(trades)
     wins = sum(1 for trade in trades if float(trade["pnl"]) > 0)
-    total_pnl = sum(float(trade["pnl"]) for trade in trades)
     avg_holding_days = None
     if trade_count:
         avg_holding_days = sum(int(trade["holding_days"]) for trade in trades) / trade_count
     date_warnings: list[dict[str, Any]] = []
-    if trade_count == 0:
+    if executed_count == 0:
         date_warnings.append(
             {
                 "trade_date": as_of,
@@ -1071,21 +1182,21 @@ def simulate_execution(
             "entry_unbuyable_count": entry_unbuyable_count,
             "missing_stop_count": missing_stop_count,
             "win_rate": (wins / trade_count) if trade_count else None,
-            "total_return": (total_pnl / bucket_capital) if trade_count else None,
+            "total_return": ((daily_equity[-1]["equity"] / bucket_capital) - 1.0) if executed_count else None,
             "annualized_return": None,
-            "max_drawdown": None,
+            "max_drawdown": round(max_drawdown, 8) if executed_count else None,
             "avg_holding_days": avg_holding_days,
-            "ending_equity": cash,
+            "ending_equity": daily_equity[-1]["equity"],
         },
         "date_warnings": date_warnings,
         "limitations": [
             "Phase 5 minimal fill simulation uses daily OHLC only; intraday path within the day is not modeled.",
             "Stop-loss exits use the day's open_qfq when it opens below the stop; otherwise a low_qfq stop touch fills at the stop price.",
-            "The first fill increment processes candidates sequentially and does not yet model concurrent open positions.",
-            "Daily equity currently records starting equity and realized exit dates; open-position mark-to-market is not yet modeled.",
-            "max_drawdown is null because realized exit-date cash drawdowns are not ship-gate drawdown evidence until mark-to-market equity is implemented.",
+            "Suspension is represented by a missing symbol row on a declared trade_calendar date; without trade_calendar, the runner falls back to the union of observed row dates.",
+            "Stop-loss and time-stop exits remain pending through suspension, zero volume, and one-price limit-down, then fill at the first sellable open.",
+            "Daily equity marks every open position to close_qfq and carries the last close through suspension; max_drawdown includes trapped-position losses.",
             "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report.",
-            "total_return is realized total_pnl divided by initial bucket_capital; no alternate ending-equity-normalized return is emitted yet.",
+            "total_return is ending marked-to-market equity divided by initial bucket_capital minus one; no annualized return is emitted yet.",
             "All generated actions are backtest events only; manual-order-only boundary remains in force.",
         ],
     }
@@ -1120,14 +1231,18 @@ def build_ship_gate_evaluation(
 ) -> dict[str, Any]:
     policy = capital_context["ship_gate"]
     trade_count = int(report_metrics.get("trade_count") or 0)
-    max_drawdown_value = None
-    max_drawdown_threshold = float(policy["max_drawdown_max"])
-    max_drawdown_passed = None
-    max_drawdown_reason = (
-        "open-position mark-to-market is not implemented; "
-        "max_drawdown is not evaluable for ship-gate evidence"
+    max_drawdown_raw = report_metrics.get("max_drawdown")
+    max_drawdown_value = (
+        float(max_drawdown_raw) if isinstance(max_drawdown_raw, (int, float)) else None
     )
-    if trade_count == 0:
+    max_drawdown_threshold = float(policy["max_drawdown_max"])
+    max_drawdown_passed = (
+        abs(max_drawdown_value) <= max_drawdown_threshold
+        if max_drawdown_value is not None
+        else None
+    )
+    max_drawdown_reason = "daily close mark-to-market drawdown from this execution backtest"
+    if max_drawdown_value is None and trade_count == 0:
         max_drawdown_reason = "no executed trades to evaluate drawdown signal"
 
     metric_results = {
@@ -1167,14 +1282,14 @@ def build_ship_gate_evaluation(
     return {
         "policy_logic": str(policy["policy_logic"]),
         "status": status,
-        "full_size_allowed": status == "pass",
+        "full_size_allowed": False,
         "failure_mode": str(policy.get("failure_mode") or SHIP_GATE_FAILURE_MODE),
         "manual_execution_only": bool(capital_context["manual_execution_only"]),
         "metric_results": metric_results,
         "limitations": [
             "monthly_alpha_t_stat and sharpe need multi-period benchmark-aware aggregation outside a single execution report.",
             "forward_live_months is always 0 for a backtest report; Phase 6 forward tracking must supply live evidence.",
-            "full_size_allowed only turns true when every AND-gate metric is evaluable and passes under the manual-order boundary.",
+            "Backtest evidence never grants full-size permission; full_size_allowed remains false until the independent forward-live ship gate passes.",
         ],
     }
 
@@ -1215,7 +1330,7 @@ def build_report(
         "settings": {
             "mode": args.mode,
             "start_date": as_of,
-            "end_date": as_of,
+            "end_date": str((price_data or {}).get("date_range", {}).get("end_date") or as_of),
             "initial_capital": capital_context["bucket_capital"],
             "primary_input": "analysis_input",
             "deterministic_report_required": False,

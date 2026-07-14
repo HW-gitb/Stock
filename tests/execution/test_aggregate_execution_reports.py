@@ -12,6 +12,7 @@ except ImportError:  # pragma: no cover - environment guard
 
 from runners.aggregate_execution_reports import main as aggregate_main
 from runners.backtest_execution import ROOT, main as execution_main
+from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
 
 
 @unittest.skipIf(Draft7Validator is None, "jsonschema not installed")
@@ -34,6 +35,12 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         mode: str = "smoke",
     ) -> Path:
         out_dir = work_dir / end_date
+        analysis_input = work_dir / "analysis_input_current.json"
+        if not analysis_input.exists():
+            analysis_input.write_text(
+                json.dumps(cloned_minimal_analysis_input_payload(), ensure_ascii=False),
+                encoding="utf-8",
+            )
         rc = execution_main(
             [
                 "--mode",
@@ -41,7 +48,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
                 "--as-of",
                 "20260522",
                 "--input-path",
-                str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                str(analysis_input),
                 "--price-data",
                 str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
                 *self.capital_cli_args(),

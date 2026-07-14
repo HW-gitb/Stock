@@ -1,29 +1,17 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""A-short 4.3：手工持仓表格 → account_state.json 转换器（Slice 4.3-B）.
+"""A-short 手工账户表 → 原子 account bundle 转换器。
 
-把用户手工维护的本地 CSV 表格（account / positions / trades / manual_controls / portfolio_rule12）
-转换成 **既有** `schemas/a_short_account_state.schema.json` v1.1.0(向后兼容 1.0.0)的 `account_state.json`，供周报
-M6.7 经现有 `--account` 路径消费。本切片：
-
-- 只产出既有 schema 契约（**不新建第二份 account_state 契约**），落盘前必过既有
-  `runners.a_short_weekly_pipeline.validate_account_state`（单一校验真相源）。
-- 转换器是**唯一的自动推进层**：把过期的 Rule12/Rule13 active 冷静期推进到正确的下一态；推进只走
-  **更严格或明确安全**侧（Rule12 过期→recovery_1，绝不→inactive；Rule13 过期→pending_recheck，
-  仅在 new_catalyst_confirmed && m4_recheck_passed 都为真时→cleared_for_reentry）。validator 的
-  「过期 active → FATAL」保留作 defense-in-depth：转换器输出**永远不应**再触发它。
-- provenance（每条状态来自哪张表、是否被自动推进）落 **lineage 旁产物**
-  （`schemas/a_short_account_state_lineage.schema.json`），**不进** account_state.json、不被引擎消费。
-- CSV 为 canonical 输入：可 diff、可测、无 `openpyxl` 依赖、不被 Excel 静默把
-  `20260601` / `000001` / `TRUE` 改型。所有关键字段按字符串读出再**显式 parse**，被强转/非法 → FATAL。
-
-边界（与 4.3 设计一致）：不接券商、不抓行情、不自动下单、不改 M6.7 行为、不改 egs/V14.2/打分。
-完整设计与列映射见 `docs/a_short_account_state_manual_tables_4_3.md`。
+五张必需 CSV（account / positions / trades / manual_controls / portfolio_rule12）一次读取，
+输出一个由 digest 绑定的 account + lineage JSON。``account.as_of`` 保留真实账户事实日，
+``decision_as_of`` 单独记录周报决策日；Rule12 缺失或空白一律拒跑。转换器只做确定性的
+状态校验/推进，不接券商、不抓行情、不自动下单。完整列映射见
+``docs/a_short_account_state_manual_tables_4_3.md``。
 
 用法：
     python runners/a_short_account_state_from_manual_tables.py \
         --input-dir state/a_short/account_state_csv --as-of 20260615 \
-        --out state/a_short/account_state.json [--lineage-out state/a_short/account_state_lineage.json]
+        --out state/a_short/account_bundle.json
 """
 from __future__ import annotations
 
@@ -48,10 +36,13 @@ ACCOUNT_SCHEMA_NAME = "a_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.1.0"
 LINEAGE_SCHEMA_NAME = "a_short_account_state_lineage"
 LINEAGE_SCHEMA_VERSION = "1.0.0"
+ACCOUNT_BUNDLE_SCHEMA_NAME = "a_short_account_bundle"
+ACCOUNT_BUNDLE_SCHEMA_VERSION = "1.0.0"
+ACCOUNT_BUNDLE_SCHEMA_PATH = ROOT / "schemas" / "a_short_account_bundle.schema.json"
 
-# Required input tables (header row + 0..N data rows). portfolio_rule12 is OPTIONAL: missing → Rule12 inactive.
-REQUIRED_TABLES = ("account", "positions", "trades", "manual_controls")
-OPTIONAL_TABLES = ("portfolio_rule12",)
+# Rule12 is a highest-priority portfolio fact.  Missing/blank must not silently become inactive.
+REQUIRED_TABLES = ("account", "positions", "trades", "manual_controls", "portfolio_rule12")
+OPTIONAL_TABLES = ()
 
 EXPECTED_COLUMNS = {
     "account": ("as_of", "available_cash", "total_equity", "current_gross_exposure",
@@ -227,6 +218,83 @@ def build_account_state(tables: dict, decision_as_of: str, config: dict | None =
     return account_state, lineage
 
 
+def _canonical_json_sha256(payload: dict) -> str:
+    raw = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(raw).hexdigest()
+
+
+def _bundle_digest(account: dict, lineage: dict) -> str:
+    return _canonical_json_sha256({"account": account, "lineage": lineage})
+
+
+def build_account_bundle(tables: dict, decision_as_of: str, config: dict | None = None,
+                         source_tables: list | None = None, generated_at: str | None = None) -> dict:
+    """Build one atomically publishable account+lineage snapshot.
+
+    ``account.as_of`` remains the true manual-facts date.  ``decision_as_of`` is kept only at the
+    bundle/lineage level, so a Friday snapshot used for a Monday-before-open decision cannot be
+    relabelled as Monday facts.  The digest binds account and lineage in the same JSON object.
+    """
+    account, lineage = build_account_state(tables, decision_as_of, config)
+    facts_as_of = lineage["facts_as_of"]
+    account["as_of"] = facts_as_of
+    lineage["source_tables"] = list(source_tables or [])
+    lineage["generated_at"] = generated_at
+    digest = _bundle_digest(account, lineage)
+    bundle = {
+        "schema_name": ACCOUNT_BUNDLE_SCHEMA_NAME,
+        "schema_version": ACCOUNT_BUNDLE_SCHEMA_VERSION,
+        "decision_as_of": str(decision_as_of),
+        "facts_as_of": facts_as_of,
+        "snapshot_id": f"a-short-account-{facts_as_of}-{digest[:16]}",
+        "snapshot_digest": digest,
+        "account": account,
+        "lineage": lineage,
+    }
+    validate_account_bundle(bundle, str(decision_as_of))
+    return bundle
+
+
+def validate_account_bundle(bundle: dict, decision_as_of: str) -> dict:
+    """Validate schema, date identity and account/lineage digest binding."""
+    import jsonschema
+    if not isinstance(bundle, dict):
+        raise ConvertError("account bundle 须为 JSON object")
+    try:
+        schema = json.loads(ACCOUNT_BUNDLE_SCHEMA_PATH.read_text(encoding="utf-8"))
+        jsonschema.validate(bundle, schema)
+    except (OSError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ConvertError(f"account bundle schema invalid: {exc}") from exc
+    if bundle.get("decision_as_of") != str(decision_as_of):
+        raise ConvertError(
+            f"account bundle decision_as_of {bundle.get('decision_as_of')} != 本次 {decision_as_of}")
+    account, lineage = bundle["account"], bundle["lineage"]
+    total_equity = account.get("total_equity")
+    gross_exposure = account.get("current_gross_exposure")
+    if (isinstance(total_equity, bool) or not isinstance(total_equity, (int, float)) or total_equity <= 0 or
+            isinstance(gross_exposure, bool) or not isinstance(gross_exposure, (int, float)) or gross_exposure < 0):
+        raise ConvertError("account bundle 必须提供有效 total_equity/current_gross_exposure，供 bucket 敞口门使用")
+    facts = bundle["facts_as_of"]
+    if account.get("as_of") != facts or lineage.get("facts_as_of") != facts:
+        raise ConvertError("account bundle facts_as_of / account.as_of / lineage.facts_as_of 不一致")
+    if lineage.get("decision_as_of") != str(decision_as_of):
+        raise ConvertError("account bundle lineage.decision_as_of 与本次决策日不一致")
+    expected = _bundle_digest(account, lineage)
+    if bundle.get("snapshot_digest") != expected:
+        raise ConvertError("account bundle snapshot_digest 与 account+lineage 内容不一致（疑似错配/篡改）")
+    expected_id = f"a-short-account-{facts}-{expected[:16]}"
+    if bundle.get("snapshot_id") != expected_id:
+        raise ConvertError("account bundle snapshot_id 与 facts_as_of/digest 不一致")
+    from runners.a_short_weekly_pipeline import validate_account_state
+    validate_account_state(account, facts)
+    try:
+        lineage_schema = json.loads((ROOT / "schemas" / "a_short_account_state_lineage.schema.json").read_text(encoding="utf-8"))
+        jsonschema.validate(lineage, lineage_schema)
+    except (OSError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ConvertError(f"account bundle lineage schema invalid: {exc}") from exc
+    return bundle
+
+
 def _validate_config(cfg: dict) -> None:
     days = cfg.get("rule13_cooldown_calendar_days")
     if not isinstance(days, int) or isinstance(days, bool) or days < 0:
@@ -249,11 +317,8 @@ def _build_account_fields(rows: list, decision_as_of: str) -> tuple:
     if _parse_bool(a.get("broker_connection_allowed"), "account.broker_connection_allowed"):
         raise ConvertError("account.broker_connection_allowed 必须为 FALSE")
     available_cash = _parse_float(a.get("available_cash"), "account.available_cash")
-    if available_cash <= 0:
-        raise ConvertError(
-            "account.available_cash 必须 > 0（account_state schema 约束)。满仓 0 现金的纯持仓"
-            "管理态当前不支持；如需该态请单独走 schema 加性升级（下调下限 + 调整 weekly_pipeline"
-            " available_cash 门），不在本切片内")
+    if available_cash < 0:
+        raise ConvertError("account.available_cash 必须 >= 0；0 现金允许继续管理已有持仓，但禁止新建仓")
     return facts_as_of, {
         "available_cash": available_cash,
         "total_equity": _parse_optional_float(a.get("total_equity"), "account.total_equity", positive=True),
@@ -299,11 +364,7 @@ def _build_rule12(rows: list, decision_as_of: str, cfg: dict) -> tuple:
     if len(rows) > 1:
         raise ConvertError(f"portfolio_rule12 表至多 1 行（组合级状态唯一），实际 {len(rows)} 行")
     if not rows or _opt_str(rows[0].get("status")) is None:
-        # 缺表 / status 空 → 无组合熔断常态（用户日常零负担）
-        return {"status": "inactive", "reason": None, "triggered_at": None, "cooldown_until": None,
-                "recovery_position_multiplier": None, "consecutive_stop_losses_window": None,
-                "drawdown_pct": None, "iv_change_abs_1d_pctpt": None}, \
-               {"source": "default_inactive", "progressed": None}
+        raise ConvertError("portfolio_rule12 表/状态缺失；无法证明组合熔断未触发，拒绝默认 inactive")
     r = rows[0]
     status = _opt_str(r.get("status"))
     if status not in VALID_RULE12_STATUSES:
@@ -520,14 +581,17 @@ def _write_json_atomic(path: Path, payload) -> None:
 
 
 def main(argv=None) -> int:
-    p = argparse.ArgumentParser(description="A-short 4.3 手工表格 → account_state.json 转换器")
-    p.add_argument("--input-dir", required=True, help="含 account/positions/trades/manual_controls[/portfolio_rule12].csv 的目录")
-    p.add_argument("--as-of", required=True, help="决策日 YYYYMMDD（= 输出 account_state.as_of = 周报 --as-of）")
-    p.add_argument("--out", required=True, help="输出 account_state.json 路径")
-    p.add_argument("--lineage-out", help="输出 lineage 旁产物路径（默认 <out 同目录>/<out 主名>_lineage.json）")
+    p = argparse.ArgumentParser(description="A-short 手工表格 → 原子 account bundle 转换器")
+    p.add_argument("--input-dir", required=True,
+                   help="含 account/positions/trades/manual_controls/portfolio_rule12.csv 五张必需表的目录")
+    p.add_argument("--as-of", required=True, help="决策日 YYYYMMDD（= bundle.decision_as_of = 周报 --as-of）")
+    p.add_argument("--out", required=True, help="输出原子 account bundle JSON 路径（内含 account + lineage）")
+    p.add_argument("--lineage-out", help=argparse.SUPPRESS)
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
                    help="显式允许把 account_state/lineage 写到仓库内非 gitignored 路径（默认拒，防账户隐私被提交泄漏）")
     args = p.parse_args(argv)
+    if args.lineage_out:
+        raise ConvertError("--lineage-out 已停用：account 与 lineage 必须作为同一个 bundle 原子发布")
 
     input_dir = Path(args.input_dir)
     if not input_dir.is_dir():
@@ -547,28 +611,20 @@ def main(argv=None) -> int:
         source_tables.append({"name": name, "path": str(path).replace("\\", "/"),
                               "sha256": _sha256(path), "row_count": len(rows)})
 
-    account_state, lineage = build_account_state(tables, args.as_of, _load_preset_config())
-    lineage["source_tables"] = source_tables
-    lineage["generated_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
-
-    # 落盘前过既有校验真相源（defense-in-depth：转换器输出永远不应触发它的「过期 active→FATAL」）
-    from runners.a_short_weekly_pipeline import validate_account_state
-    validate_account_state(account_state, account_state["as_of"])
+    bundle = build_account_bundle(
+        tables, args.as_of, _load_preset_config(), source_tables=source_tables,
+        generated_at=datetime.now().strftime("%Y-%m-%dT%H:%M:%S"))
+    account_state, lineage = bundle["account"], bundle["lineage"]
 
     out_path = Path(args.out)
-    lineage_path = Path(args.lineage_out) if args.lineage_out else \
-        out_path.with_name(out_path.stem + "_lineage.json")
-    # 隐私护栏(P0 修复):account_state + lineage 含真实 cash/positions/cost/stop/cooldown → 拒落仓库内 git 未忽略路径
+    # 隐私护栏(P0 修复):bundle 含真实 cash/positions/cost/stop/cooldown → 拒落仓库内 git 未忽略路径
     # (fail-fast,早于任何写盘);复用 weekly 同守门(git check-ignore 真值)。默认私密目录 = gitignored state/a_short/。
     from runners.a_short_weekly_pipeline import _reject_nonprivate_account_output_path
-    for _p in (out_path, lineage_path):
-        _reject_nonprivate_account_output_path(str(_p), True, args.allow_nonprivate_account_out)
-    _write_json_atomic(out_path, account_state)
-    _write_json_atomic(lineage_path, lineage)
+    _reject_nonprivate_account_output_path(str(out_path), True, args.allow_nonprivate_account_out)
+    _write_json_atomic(out_path, bundle)
 
     _print_plain_summary(account_state, lineage)
-    print(f"[OK] account_state → {out_path}")
-    print(f"[OK] lineage       → {lineage_path}")
+    print(f"[OK] account bundle → {out_path} ({bundle['snapshot_id']})")
     return 0
 
 

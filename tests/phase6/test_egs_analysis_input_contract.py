@@ -37,9 +37,15 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             "l3_pit_strict": self.egs_main.CONF.get("l3_pit_strict"),
             "l3_snapshot_date": self.egs_main.CONF.get("l3_snapshot_date"),
         }
+        self._original_health = dict(self.egs_main._LAST_HARD_VETO_SOURCE_HEALTH)
+        self.egs_main._LAST_HARD_VETO_SOURCE_HEALTH = {
+            name: {"status": "known_clear", "observed_at": "20260522"}
+            for name in ("suspension", "unlock", "holder_reduction")
+        }
 
     def tearDown(self) -> None:
         self.egs_main.CONF.update(self._original_l3)
+        self.egs_main._LAST_HARD_VETO_SOURCE_HEALTH = self._original_health
 
     def test_export_validates_analysis_input_before_write(self) -> None:
         self.egs_main.CONF["l3_mode"] = "pit"

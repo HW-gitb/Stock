@@ -34,9 +34,9 @@ v7.5 新增（周频优化 6 项）：
 修复清单（沿用 v7.4 全部 24 项）：
 
   ── 崩溃修复（4项）
-  ✅ get_daily_basic：开盘前/非交易日自动回退至前3个交易日
-  ✅ get_unlock_future：daily_basic_df 为空时前置防御跳过
-  ✅ get_suspend_info：无日线数据时返回空集，不全量标停牌
+  ✅ get_daily_basic：开盘前可回退至前3个官方交易日，并保留真实 source date
+  ✅ get_unlock_future：分母缺失时 unknown/blocked，不猜测解禁比例
+  ✅ get_suspend_info：无日线数据时阻断，不把未知源当成空停牌集
   ✅ filter_l0：pct_20d 全 NaN 时跳过过滤，不输出空表
 
   ── 逻辑修复（10项）
@@ -72,7 +72,8 @@ v7.5 新增（周频优化 6 项）：
   ⬜ 调研次数扣分：无可用数据源
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
-import argparse, os, sys, time, pickle, logging, warnings
+import argparse, os, sys, time, pickle, logging, warnings, shutil, uuid
+from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
 
 import numpy as np
@@ -106,7 +107,11 @@ L3_SNAPSHOT_DIR = os.path.join(PROJECT_ROOT, "state", "l3_snapshots")
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
-from engine.data.analysis_input_contract import validate_analysis_input_contract, validate_json_schema
+from engine.data.analysis_input_contract import (
+    build_a_short_run_identity,
+    validate_analysis_input_contract,
+    validate_json_schema,
+)
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
@@ -179,6 +184,21 @@ log = logging.getLogger("EGS")
 EGS_VERSION = "v7.10"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
+_LAST_HARD_VETO_SOURCE_HEALTH = {
+    "suspension": {"status": "unknown", "observed_at": None},
+    "unlock": {"status": "unknown", "observed_at": None},
+    "holder_reduction": {"status": "unknown", "observed_at": None},
+}
+_LAST_UNLOCK_DETAILS = {}
+
+
+def _record_hard_veto_source(name, status, observed_at=None, **details):
+    if status not in {"known_clear", "known_hit", "unknown"}:
+        raise ValueError(f"invalid hard-veto source status: {status}")
+    payload = {"status": status, "observed_at": observed_at}
+    payload.update({k: _json_value(v) for k, v in details.items()})
+    _LAST_HARD_VETO_SOURCE_HEALTH[name] = payload
+    return payload
 # Canonical list of Tushare API endpoints egs_main consumes during a
 # screening run. Sourced here so downstream consumers (data_health,
 # backtest_rank's data_lineage) read one truth via _current_egs_api_families()
@@ -247,6 +267,48 @@ def write_json_atomic(path, data):
     with open(tmp, "w", encoding="utf-8") as f:
         _json.dump(data, f, ensure_ascii=False, indent=2)
     os.replace(tmp, path)
+
+
+@contextmanager
+def official_output_transaction(paths):
+    """Restore every prior official surface if any publish step fails."""
+    ordered = list(dict.fromkeys(os.path.abspath(str(path)) for path in paths))
+    backups = {}
+    absent = set()
+    try:
+        for path in ordered:
+            if os.path.exists(path):
+                backup = f"{path}.rollback-{uuid.uuid4().hex}"
+                shutil.copy2(path, backup)
+                backups[path] = backup
+            else:
+                absent.add(path)
+        yield
+    except BaseException:
+        rollback_errors = []
+        for path in ordered:
+            try:
+                backup = backups.get(path)
+                if backup and os.path.exists(backup):
+                    ensure_writable(path)
+                    os.replace(backup, path)
+                elif path in absent and os.path.exists(path):
+                    os.remove(path)
+            except OSError as exc:
+                rollback_errors.append(f"{path}: {exc}")
+        if rollback_errors:
+            raise RuntimeError(
+                "official EGS publish failed and rollback was incomplete: "
+                + "; ".join(rollback_errors)
+            )
+        raise
+    finally:
+        for backup in backups.values():
+            try:
+                if os.path.exists(backup):
+                    os.remove(backup)
+            except OSError:
+                pass
 
 def _suspend_daily_coverage_log_path(as_of):
     return os.path.join(LOG_DIR, f"suspend_daily_coverage_{as_of}.json")
@@ -451,6 +513,11 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
     chasing_high = _json_bool(_row_get(row, "chasing_high"))
     is_breakout = _json_bool(_row_get(row, "is_breakout"))
     is_lock = _json_bool(_row_get(row, "is_lock"))
+    quote_source_date = str(_row_get(row, "source_trade_date", latest_td))
+    unlock_detail = dict(_LAST_UNLOCK_DETAILS.get(ts_code) or {})
+    suspension_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("suspension") or {})
+    unlock_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("unlock") or {})
+    reduction_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("holder_reduction") or {})
 
     rule6_checks = [
         _rule_check(
@@ -552,7 +619,8 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "pre_close": None,
             "pct_change": None,
             "price_source": "tushare_eod",
-            "price_time": _eod_price_time(latest_td),
+            "price_time": _eod_price_time(quote_source_date),
+            "source_trade_date": quote_source_date,
             "adjustment": "qfq",
             "ex_rights_30d": None,
         },
@@ -678,15 +746,22 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
                 "completed_3m_pct_share": None,
                 "completed_3m_amount": None,
                 "reduce_penalty": _json_float(_row_get(row, "reduce_penalty")),
+                "source_status": reduction_health.get("status", "unknown"),
+                "observed_at": reduction_health.get("observed_at"),
             },
             "unlock": {
-                "unlock_pct": None,
-                "unlock_date": None,
+                "unlock_pct": unlock_detail.get("unlock_pct"),
+                "unlock_date": unlock_detail.get("unlock_date"),
                 "large_unlock_flag": ts_code in unlock_set,
+                "source_status": unlock_detail.get("status", unlock_health.get("status", "unknown")),
+                "observed_at": unlock_detail.get("observed_at", unlock_health.get("observed_at")),
+                "denominator": unlock_detail.get("denominator"),
             },
             "suspension": {
                 "is_suspended": ts_code in suspended_set,
                 "recent_suspension_5d": None,
+                "source_status": suspension_health.get("status", "unknown"),
+                "observed_at": suspension_health.get("observed_at"),
             },
             "delisting": {
                 "st_flag": False,
@@ -788,6 +863,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set)
         for rank, (_, row) in enumerate(watch_df.iterrows(), start=1)
     ]
+    run_identity = build_a_short_run_identity(latest_td, candidates)
 
     analysis_input = {
         "schema_name": "analysis_input",
@@ -804,6 +880,11 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             "l3_mode": CONF.get("l3_mode", "today"),
             "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
             "l3_snapshot_date": CONF.get("l3_snapshot_date"),
+            "hard_veto_source_health": {
+                name: dict(_LAST_HARD_VETO_SOURCE_HEALTH.get(name) or {})
+                for name in ("suspension", "unlock", "holder_reduction")
+            },
+            "run_identity": run_identity,
             "input_files": [
                 {"role": "watch_pool", "path": os.path.relpath(tier1_csv_path, project_root), "sha256": None},
                 {"role": "full_rank", "path": os.path.relpath(full_csv_path, project_root), "sha256": None},
@@ -830,6 +911,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             "trade_calendar": {
                 "latest_trade_date": latest_td,
                 "next_trade_date": None,
+                "calendar_source": "tushare.trade_cal",
+                "recent_trade_dates": list(trade_dates),
                 "is_pre_holiday_window": False,
                 "holiday_days_ahead": None,
             },
@@ -891,6 +974,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
 
     candidates_df = watch_df.copy()
     candidates_df["run_date"] = latest_td
+    candidates_df["run_id"] = run_identity["run_id"]
+    candidates_df["candidate_digest"] = run_identity["candidate_digest"]
     write_csv_atomic(candidates_df, candidates_path, index=False, encoding="utf-8-sig")
 
     snapshot = {
@@ -902,6 +987,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         "analysis_input": os.path.relpath(analysis_path, project_root),
         "candidates": os.path.relpath(candidates_path, project_root),
         "source_files": analysis_input["source"]["input_files"],
+        "run_identity": run_identity,
         "counts": analysis_input["universe_summary"],
         "columns": {
             "watch": list(candidates_df.columns),
@@ -1157,6 +1243,38 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
     return health_path, health
 
 
+def publish_egs_run_manifest(analysis_input, health, paths):
+    """Publish the sole official marker after every EGS artifact validates.
+
+    Files written by a failed/staged run are not official without this marker;
+    because the marker itself is atomically replaced last, the prior official
+    run identity remains authoritative on any upstream failure.
+    """
+    if health.get("overall_status") == "error":
+        raise RuntimeError("data_health is error; refusing official EGS publish")
+    import hashlib
+    run_identity = dict(((analysis_input.get("source") or {}).get("run_identity") or {}))
+    if not run_identity:
+        raise RuntimeError("analysis_input missing run_identity; refusing official EGS publish")
+    files = {}
+    for role, path in paths.items():
+        with open(path, "rb") as handle:
+            files[role] = {"path": os.path.basename(path), "sha256": hashlib.sha256(handle.read()).hexdigest()}
+    manifest = {
+        "schema_name": "a_short_egs_official_publish",
+        "schema_version": "1.0.0",
+        "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "trade_date": analysis_input["trade_date"],
+        "run_id": run_identity["run_id"],
+        "candidate_digest": run_identity["candidate_digest"],
+        "stage_status": "complete",
+        "files": files,
+    }
+    marker = os.path.join(os.path.dirname(paths["analysis_input"]), "official_publish.json")
+    write_json_atomic(marker, manifest)
+    return marker, manifest
+
+
 def log_data_health_summary(health_path, health):
     status = str(health.get("overall_status", "error")).upper()
     errors_count = len(health.get("errors", []))
@@ -1338,20 +1456,30 @@ def to_chunks(lst, size):
 # §2 数据拉取
 # ═══════════════════════════════════════════════════
 def get_trade_dates(n=25):
-    key = f"trade_dates_{TODAY}"
+    key = f"trade_dates_{TODAY}_official_v2"
     cached = load_cache(key)
     if cached is not None and len(cached) >= n:
         return cached[:n]
     # 缓存不存在或数量不足 n，重新拉取；dstr(100) 覆盖约70个交易日
     df = safe_api(pro.trade_cal, exchange="SSE", start_date=dstr(100), end_date=TODAY,
                   is_open="1", fields="cal_date")
-    if df is None:
-        dates = [d.strftime("%Y%m%d") for d in
-                 sorted([TODAY_DT - timedelta(days=i) for i in range(200)
-                         if (TODAY_DT - timedelta(days=i)).weekday() < 5],
-                        reverse=True)][:max(n, 70)]
-    else:
-        dates = sorted(df["cal_date"].tolist(), reverse=True)[:max(n, 70)]
+    if df is None or df.empty:
+        raise RuntimeError("official trade calendar source unavailable; refusing weekday fallback")
+    if "cal_date" not in df.columns:
+        raise RuntimeError("official trade calendar payload has no cal_date column")
+    raw_dates = df["cal_date"].dropna().astype(str).tolist()
+    dates = []
+    for value in raw_dates:
+        try:
+            parsed = datetime.strptime(value, "%Y%m%d")
+        except ValueError as exc:
+            raise RuntimeError(f"official trade calendar contains invalid cal_date {value!r}") from exc
+        if parsed > TODAY_DT:
+            raise RuntimeError(f"official trade calendar contains future cal_date {value!r}")
+        dates.append(value)
+    dates = sorted(set(dates), reverse=True)[:max(n, 70)]
+    if len(dates) < n:
+        raise RuntimeError(f"official trade calendar returned only {len(dates)} dates; need {n}")
     save_cache(key, dates)
     return dates[:n]
 
@@ -1639,8 +1767,12 @@ def get_daily_basic(trade_date, fallback_dates=None):
     若 trade_date 当日无数据（午夜运行 / 非交易日），
     依次尝试 fallback_dates[1..3] 回退到前一个有效交易日。
     """
-    key = f"daily_basic_{trade_date}"
-    if (cached := load_cache(key)) is not None: return cached
+    requested_trade_date = trade_date
+    key = f"daily_basic_{trade_date}_source_v2"
+    if (cached := load_cache(key)) is not None:
+        if "source_trade_date" not in cached.columns:
+            raise RuntimeError("daily_basic cache lacks source_trade_date provenance")
+        return cached
 
     df = safe_api(pro.daily_basic, trade_date=trade_date,
                   fields="ts_code,close,pe,pe_ttm,pb,roe,turnover_rate,total_mv,circ_mv")
@@ -1652,15 +1784,19 @@ def get_daily_basic(trade_date, fallback_dates=None):
                           fields="ts_code,close,pe,pe_ttm,pb,roe,turnover_rate,total_mv,circ_mv")
             if df is not None and len(df) > 0:
                 trade_date = fb
-                key = f"daily_basic_{trade_date}"
+                key = f"daily_basic_{trade_date}_source_v2"
                 break
 
     if df is None or len(df) == 0:
-        log.error("daily_basic 所有候选日期均无数据，解禁/估值计算将降级")
-        return pd.DataFrame()
+        raise RuntimeError(
+            f"daily_basic source unavailable for {requested_trade_date}; "
+            "refusing quote/unlock inference without an observed market date"
+        )
 
     for col in ["close","pe","pe_ttm","pb","roe","turnover_rate","total_mv","circ_mv"]:
         if col in df.columns: df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.copy()
+    df["source_trade_date"] = trade_date
     save_cache(key, df)
     return df
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1713,23 +1849,29 @@ def get_suspend_info(trade_dates):
     """
     判断停牌股票。
     若当日数据未就绪（开盘前运行），回退到前一交易日。
-    若所有候选日均无数据，跳过停牌过滤（返回空集），
-    避免把全市场错误标记为停牌导致 L0 输出为空。
+    若所有候选日均无数据，阻断本次运行；未知源不得伪装成已知空集。
     """
-    key = f"suspend_{trade_dates[0]}_v2"
+    key = f"suspend_{trade_dates[0]}_v3"
     global _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION
     _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
     if (cached := load_cache(key)) is not None:
+        if not isinstance(cached, dict) or cached.get("status") not in {"known_clear", "known_hit"}:
+            raise RuntimeError("suspend cache lacks tri-state provenance")
+        members = set(cached.get("members") or [])
+        _record_hard_veto_source(
+            "suspension", cached["status"], cached.get("observed_at"),
+            source="local_cache", hit_count=len(members),
+        )
         _record_suspend_daily_coverage_observation(
             as_of=trade_dates[0],
-            trade_date=None,
+            trade_date=cached.get("observed_at"),
             status="cache_hit_coverage_not_observed",
-            suspended_count=len(cached),
+            suspended_count=len(members),
             attempted_trade_dates=trade_dates[:3],
             source="local suspend cache",
             message="suspend set loaded from cache; no fresh daily coverage measurement in this run",
         )
-        return cached
+        return members
     all_codes = set(get_stock_list()["ts_code"].dropna().astype(str))
 
     for td in trade_dates[:3]:
@@ -1747,21 +1889,31 @@ def get_suspend_info(trade_dates):
                 f"停牌数据取自 {td}，daily覆盖 {len(traded_codes)}/{len(all_codes)}，"
                 f"停牌股 {len(suspended)} 只"
             )
-            save_cache(key, suspended)
+            source_status = "known_hit" if suspended else "known_clear"
+            _record_hard_veto_source(
+                "suspension", source_status, td,
+                source="tushare.daily", hit_count=len(suspended),
+            )
+            save_cache(key, {
+                "status": source_status,
+                "observed_at": td,
+                "members": sorted(suspended),
+            })
             return suspended
 
     _record_suspend_daily_coverage_observation(
         as_of=trade_dates[0],
         trade_date=None,
-        status="no_daily_payload_skip_filter",
+        status="no_daily_payload_blocked",
         stock_universe_count=len(all_codes),
         min_coverage=float(CONF.get("suspend_daily_min_coverage", 0.95)),
         attempted_trade_dates=trade_dates[:3],
-        message="all candidate pro.daily payloads were empty; suspend filtering is skipped",
+        message="all candidate pro.daily payloads were empty; actionable output is blocked",
     )
-    log.warning("停牌数据无法获取，跳过停牌过滤")
-    save_cache(key, set())
-    return set()
+    _record_hard_veto_source(
+        "suspension", "unknown", None, source="tushare.daily", hit_count=None,
+    )
+    raise RuntimeError("suspend source unavailable; refusing to treat unknown as clear")
 
 def _lookback_cutoff_trade_date(trade_dates, lookback):
     lookback = max(1, int(lookback))
@@ -1941,20 +2093,44 @@ def get_margin(trade_dates):
 
 # ── [崩溃修复②] ─────────────────────────────────────────────────────────────
 def get_unlock_future(stock_list, daily_basic_df):
-    key = f"unlock_future_{TODAY}"
-    if (cached := load_cache(key)) is not None: return cached
+    key = f"unlock_future_{TODAY}_v2"
+    global _LAST_UNLOCK_DETAILS
+    _LAST_UNLOCK_DETAILS = {}
+    if (cached := load_cache(key)) is not None:
+        if not isinstance(cached, dict) or cached.get("status") not in {"known_clear", "known_hit"}:
+            raise RuntimeError("unlock cache lacks tri-state provenance")
+        _LAST_UNLOCK_DETAILS = dict(cached.get("details") or {})
+        members = set(cached.get("members") or [])
+        _record_hard_veto_source(
+            "unlock", cached["status"], cached.get("observed_at"),
+            source="local_cache", hit_count=len(members),
+        )
+        return members
 
-    # 前置防御：daily_basic 数据缺失时跳过，不在非关键路径崩溃
     if daily_basic_df.empty or "close" not in daily_basic_df.columns:
-        log.warning("daily_basic 数据缺失，跳过解禁过滤（不影响其他层评分）")
-        save_cache(key, set())
-        return set()
+        _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
+        raise RuntimeError("unlock denominator source unavailable; refusing unknown as clear")
 
-    df_float = safe_api(pro.share_float, start_date=TODAY, end_date=dfuture(30),
-                        fields="ts_code,float_date,float_share,float_ratio")
-    if df_float is None or df_float.empty:
-        save_cache(key, set())
+    df_float = safe_api(getattr(pro, "share_float", None), start_date=TODAY, end_date=dfuture(30),
+                        fields="ts_code,ann_date,float_date,float_share,float_ratio")
+    if df_float is None:
+        _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
+        raise RuntimeError("unlock source unavailable; refusing unknown as clear")
+    if df_float.empty:
+        payload = {"status": "known_clear", "observed_at": TODAY, "members": [], "details": {}}
+        _record_hard_veto_source("unlock", "known_clear", TODAY, source="tushare.share_float", hit_count=0)
+        save_cache(key, payload)
         return set()
+    required = {"ts_code", "ann_date", "float_date", "float_share"}
+    missing = required - set(df_float.columns)
+    if missing:
+        _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
+        raise RuntimeError(f"unlock source missing required fields: {sorted(missing)}")
+    ann_dates = df_float["ann_date"].astype(str)
+    parsed_ann = pd.to_datetime(ann_dates, format="%Y%m%d", errors="coerce")
+    if parsed_ann.isna().any() or (ann_dates > TODAY).any():
+        _record_hard_veto_source("unlock", "unknown", None, source="tushare.share_float")
+        raise RuntimeError("unlock source PIT violation: ann_date must be valid and <= as_of")
 
     db = daily_basic_df[["ts_code","close","circ_mv"]].copy()
     db["close"]   = pd.to_numeric(db["close"],   errors="coerce")
@@ -1964,30 +2140,71 @@ def get_unlock_future(stock_list, daily_basic_df):
 
     df = df_float.merge(db, on="ts_code", how="left")
     df["float_share"] = pd.to_numeric(df["float_share"], errors="coerce")
-    df["float_ratio"] = pd.to_numeric(df["float_ratio"], errors="coerce")
-
     df["unlock_pct"] = np.nan
     mask_circ = df["circ_share"].notna() & (df["circ_share"] > 0)
     df.loc[mask_circ & df["float_share"].notna(), "unlock_pct"] = (
         df["float_share"] / df["circ_share"] * 100
     )
-    fallback = df["float_ratio"].notna()
-    df.loc[fallback & df["unlock_pct"].isna(), "unlock_pct"] = df["float_ratio"] * 0.6
-
-    large = set(df[df["unlock_pct"] > CONF["unlock_ratio"]]["ts_code"].tolist())
-    save_cache(key, large)
-    return large
+    # Missing a real circulating-share denominator is unknown, not clear.  Block
+    # the affected symbol conservatively; float_ratio is provider-relative and
+    # must never be converted with a guessed coefficient.
+    unknown_denominator = set(df[df["unlock_pct"].isna()]["ts_code"].dropna().astype(str))
+    large = set(df[df["unlock_pct"] > CONF["unlock_ratio"]]["ts_code"].dropna().astype(str))
+    blocked = large | unknown_denominator
+    details = {}
+    for _, item in df.iterrows():
+        code = str(item.get("ts_code"))
+        details[code] = {
+            "status": "unknown" if code in unknown_denominator else ("known_hit" if code in large else "known_clear"),
+            "observed_at": str(item.get("ann_date")),
+            "unlock_date": str(item.get("float_date")),
+            "unlock_pct": _json_float(item.get("unlock_pct")),
+            "denominator": "circ_mv_div_close" if code not in unknown_denominator else "missing",
+        }
+    _LAST_UNLOCK_DETAILS = details
+    source_status = "known_hit" if blocked else "known_clear"
+    payload = {"status": source_status, "observed_at": TODAY, "members": sorted(blocked), "details": details}
+    _record_hard_veto_source(
+        "unlock", source_status, TODAY, source="tushare.share_float",
+        hit_count=len(large), unknown_denominator_count=len(unknown_denominator),
+    )
+    save_cache(key, payload)
+    return blocked
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_holder_reductions():
-    key = f"reductions_{TODAY}"
-    if (cached := load_cache(key)) is not None: return cached
-    df = safe_api(pro.stk_holdertrade, start_date=dstr(30), end_date=TODAY,
+    key = f"reductions_{TODAY}_v2"
+    if (cached := load_cache(key)) is not None:
+        if not isinstance(cached, dict) or cached.get("source_status") not in {"known_clear", "known_hit"}:
+            raise RuntimeError("holder-reduction cache lacks tri-state provenance")
+        result = {
+            "veto_10d": set(cached.get("veto_10d") or []),
+            "deduct_30d": set(cached.get("deduct_30d") or []),
+        }
+        _record_hard_veto_source(
+            "holder_reduction", cached["source_status"], cached.get("observed_at"),
+            source="local_cache", hit_count=len(result["veto_10d"] | result["deduct_30d"]),
+        )
+        return result
+    df = safe_api(getattr(pro, "stk_holdertrade", None), start_date=dstr(30), end_date=TODAY,
                   fields="ts_code,ann_date,in_de")
-    if df is None or len(df) == 0:
+    if df is None:
+        _record_hard_veto_source("holder_reduction", "unknown", None, source="tushare.stk_holdertrade")
+        raise RuntimeError("holder-reduction source unavailable; refusing unknown as clear")
+    if len(df) == 0:
         empty_res = {"veto_10d": set(), "deduct_30d": set()}
-        save_cache(key, empty_res)
+        _record_hard_veto_source("holder_reduction", "known_clear", TODAY, source="tushare.stk_holdertrade", hit_count=0)
+        save_cache(key, {"source_status": "known_clear", "observed_at": TODAY, "veto_10d": [], "deduct_30d": []})
         return empty_res
+    required = {"ts_code", "ann_date", "in_de"}
+    missing = required - set(df.columns)
+    if missing:
+        raise RuntimeError(f"holder-reduction source missing required fields: {sorted(missing)}")
+    ann_dates = df["ann_date"].astype(str)
+    parsed_ann = pd.to_datetime(ann_dates, format="%Y%m%d", errors="coerce")
+    if parsed_ann.isna().any() or (ann_dates > TODAY).any():
+        _record_hard_veto_source("holder_reduction", "unknown", None, source="tushare.stk_holdertrade")
+        raise RuntimeError("holder-reduction PIT violation: ann_date must be valid and <= as_of")
     df = df[df["in_de"]=="DE"].copy()
     df["ann_dt"] = pd.to_datetime(df["ann_date"], format="%Y%m%d", errors="coerce")
     cut10 = TODAY_DT - timedelta(days=10)
@@ -1999,7 +2216,15 @@ def get_holder_reductions():
     # 已被上面第一段(as_of-30 ≤ ann_date ≤ as_of)纳入 v10,故移除后**实盘行为不变、仅消除历史污染**。
     # 已公告且执行在未来的减持计划由第一段按 ann_date 捕获(ann_date≤as_of);未来才公告的不属 PIT 可知。
     result = {"veto_10d": v10, "deduct_30d": v30}
-    save_cache(key, result)
+    source_status = "known_hit" if (v10 or v30) else "known_clear"
+    _record_hard_veto_source(
+        "holder_reduction", source_status, TODAY, source="tushare.stk_holdertrade",
+        hit_count=len(v10 | v30),
+    )
+    save_cache(key, {
+        "source_status": source_status, "observed_at": TODAY,
+        "veto_10d": sorted(v10), "deduct_30d": sorted(v30),
+    })
     return result
 
 
@@ -2183,7 +2408,7 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
 
     if not df_db.empty:
         cols = [c for c in ["ts_code","close","pe","pe_ttm","pb","roe",
-                             "turnover_rate","total_mv","circ_mv"] if c in df_db.columns]
+                             "turnover_rate","total_mv","circ_mv","source_trade_date"] if c in df_db.columns]
         df = df.merge(df_db[cols], on="ts_code", how="left")
 
     if not stats_df.empty:
@@ -3286,42 +3511,75 @@ def run_egs(backtest_mode=False, output_root=None):
     full_csv_path  = _rp(f"egs_full_{TODAY}.csv")
     tier1_xlsx_path = os.path.join(CONF.get("xlsx_dir", SCRIPT_DIR), f"egs_tier1_{TODAY}.xlsx")
 
-    write_csv_atomic(watch_df[watch_cols], tier1_csv_path, index=False, encoding="utf-8-sig")
-    save_ranked_xlsx(watch_df[watch_cols], tier1_xlsx_path, group_size=5)
-    write_csv_atomic(df_full, full_csv_path, index=False, encoding="utf-8-sig")
-    analysis_path, snapshot_path, candidates_path, analysis_input = export_analysis_input(
-        df_full=df_full,
-        watch_df=watch_df,
-        tier1_final=tier1_final,
-        latest_td=latest_td,
-        trade_dates=trade_dates,
-        unlock_set=unlock_set,
-        suspended_set=suspended_set,
-        relisted_set=relisted_set,
-        red_dict=red_dict,
-        tier1_csv_path=tier1_csv_path,
-        full_csv_path=full_csv_path,
-        output_root=CONF.get("output_root"),
+    project_root = os.path.dirname(SCRIPT_DIR)
+    configured_root = CONF.get("output_root")
+    base_root = (
+        configured_root if configured_root and os.path.isabs(configured_root)
+        else os.path.join(project_root, configured_root) if configured_root
+        else os.path.join(project_root, "result", "a_short")
     )
-    log.info(f"[OK] analysis_input saved to {analysis_path}")
-    log.info(f"[OK] snapshot saved to {snapshot_path}")
-    log.info(f"[OK] candidates saved to {candidates_path}")
-    if backtest_mode:
-        log.info("[BACKTEST] skip egs_last_selection tracking state")
-        return tier1_final
-    health_path, health = export_data_health(
-        df_full=df_full,
-        watch_df=watch_df,
-        tier1_final=tier1_final,
-        analysis_input=analysis_input,
-        latest_td=latest_td,
-        analysis_path=analysis_path,
-        snapshot_path=snapshot_path,
-        candidates_path=candidates_path,
-        tier1_csv_path=tier1_csv_path,
-        full_csv_path=full_csv_path,
-    )
-    log_data_health_summary(health_path, health)
+    official_dir = os.path.join(base_root, latest_td)
+    transaction_paths = [
+        tier1_csv_path,
+        tier1_xlsx_path,
+        full_csv_path,
+        os.path.join(official_dir, "analysis_input.json"),
+        os.path.join(official_dir, "snapshot.json"),
+        os.path.join(official_dir, "candidates.csv"),
+        os.path.join(official_dir, "data_health.json"),
+        os.path.join(official_dir, "official_publish.json"),
+    ]
+    publish_context = nullcontext() if backtest_mode else official_output_transaction(transaction_paths)
+    with publish_context:
+        write_csv_atomic(watch_df[watch_cols], tier1_csv_path, index=False, encoding="utf-8-sig")
+        save_ranked_xlsx(watch_df[watch_cols], tier1_xlsx_path, group_size=5)
+        write_csv_atomic(df_full, full_csv_path, index=False, encoding="utf-8-sig")
+        analysis_path, snapshot_path, candidates_path, analysis_input = export_analysis_input(
+            df_full=df_full,
+            watch_df=watch_df,
+            tier1_final=tier1_final,
+            latest_td=latest_td,
+            trade_dates=trade_dates,
+            unlock_set=unlock_set,
+            suspended_set=suspended_set,
+            relisted_set=relisted_set,
+            red_dict=red_dict,
+            tier1_csv_path=tier1_csv_path,
+            full_csv_path=full_csv_path,
+            output_root=CONF.get("output_root"),
+        )
+        log.info(f"[OK] analysis_input saved to {analysis_path}")
+        log.info(f"[OK] snapshot saved to {snapshot_path}")
+        log.info(f"[OK] candidates saved to {candidates_path}")
+        if backtest_mode:
+            log.info("[BACKTEST] skip egs_last_selection tracking state")
+            return tier1_final
+        health_path, health = export_data_health(
+            df_full=df_full,
+            watch_df=watch_df,
+            tier1_final=tier1_final,
+            analysis_input=analysis_input,
+            latest_td=latest_td,
+            analysis_path=analysis_path,
+            snapshot_path=snapshot_path,
+            candidates_path=candidates_path,
+            tier1_csv_path=tier1_csv_path,
+            full_csv_path=full_csv_path,
+        )
+        log_data_health_summary(health_path, health)
+        marker_path, _manifest = publish_egs_run_manifest(
+            analysis_input,
+            health,
+            {
+                "analysis_input": analysis_path,
+                "snapshot": snapshot_path,
+                "candidates": candidates_path,
+                "data_health": health_path,
+                "tier1_csv": tier1_csv_path,
+                "full_rank": full_csv_path,
+            },
+        )
+    log.info(f"[OK] official EGS publish marker saved to {marker_path}")
     log.info(f"[OK] 结果已保存至 {tier1_csv_path} / {tier1_xlsx_path} / {full_csv_path}")
 
     # ── 保存本次候选池记录供下次追踪（v7.5扩展至Top15）──────────────────────────

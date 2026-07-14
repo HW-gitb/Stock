@@ -13,9 +13,10 @@
   },
   "date_range": {
     "start_date": "20260522",
-    "end_date": "20260525"
+    "end_date": "20260526"
   },
   "symbols": ["600000.SH", "600001.SH"],
+  "trade_calendar": ["20260522", "20260525", "20260526"],
   "rows": [
     {
       "ts_code": "600000.SH",
@@ -71,6 +72,34 @@
       "adj_factor": 98.2,
       "up_limit": 22.0,
       "down_limit": 18.0,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
+    },
+    {
+      "ts_code": "600000.SH",
+      "trade_date": "20260526",
+      "is_trade_day": true,
+      "open_qfq": 13.7,
+      "high_qfq": 13.9,
+      "low_qfq": 13.5,
+      "close_qfq": 13.8,
+      "pre_close_qfq": 13.6,
+      "adj_factor": 101.2,
+      "up_limit": 14.96,
+      "down_limit": 12.24,
+      "source_flags": ["daily", "adj_factor", "stk_limit"]
+    },
+    {
+      "ts_code": "600001.SH",
+      "trade_date": "20260526",
+      "is_trade_day": true,
+      "open_qfq": 20.3,
+      "high_qfq": 20.6,
+      "low_qfq": 20.1,
+      "close_qfq": 20.4,
+      "pre_close_qfq": 20.2,
+      "adj_factor": 98.2,
+      "up_limit": 22.22,
+      "down_limit": 18.18,
       "source_flags": ["daily", "adj_factor", "stk_limit"]
     }
   ],

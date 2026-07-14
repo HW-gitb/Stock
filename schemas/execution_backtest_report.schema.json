@@ -392,6 +392,7 @@
                   "stop_loss",
                   "take_profit",
                   "time_stop",
+                  "exit_delayed",
                   "cash_constrained",
                   "circuit_breaker",
                   "cooldown_block",

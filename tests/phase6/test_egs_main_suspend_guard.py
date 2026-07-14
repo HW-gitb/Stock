@@ -87,7 +87,8 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
             suspended = self.egs_main.get_suspend_info(["20260529", "20260528", "20260527"])
 
         self.assertEqual(suspended, set(all_codes[98:]))
-        self.assertEqual(saved["suspend_20260529_v2"], set(all_codes[98:]))
+        self.assertEqual(saved["suspend_20260529_v3"]["members"], sorted(all_codes[98:]))
+        self.assertEqual(saved["suspend_20260529_v3"]["status"], "known_hit")
         payload = json.loads((Path(self.tmp_log_dir.name) / "suspend_daily_coverage_20260529.json").read_text(encoding="utf-8"))
         self.assertEqual(payload["status"], "pass")
         self.assertEqual(payload["trade_date"], "20260529")
@@ -99,7 +100,7 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
             "pass",
         )
 
-    def test_empty_daily_responses_still_skip_suspend_filter(self) -> None:
+    def test_empty_daily_responses_block_suspend_filter(self) -> None:
         stock_list = pd.DataFrame({"ts_code": ["000001.SZ", "000002.SZ"]})
         saved = {}
 
@@ -114,12 +115,12 @@ class EgsMainSuspendGuardTest(unittest.TestCase):
              patch.object(self.egs_main, "save_cache", side_effect=fake_save_cache), \
              patch.object(self.egs_main, "get_stock_list", return_value=stock_list), \
              patch.object(self.egs_main, "safe_api", side_effect=fake_safe_api):
-            suspended = self.egs_main.get_suspend_info(["20260529", "20260528", "20260527"])
+            with self.assertRaisesRegex(RuntimeError, "suspend source unavailable"):
+                self.egs_main.get_suspend_info(["20260529", "20260528", "20260527"])
 
-        self.assertEqual(suspended, set())
-        self.assertEqual(saved["suspend_20260529_v2"], set())
+        self.assertNotIn("suspend_20260529_v3", saved)
         payload = json.loads((Path(self.tmp_log_dir.name) / "suspend_daily_coverage_20260529.json").read_text(encoding="utf-8"))
-        self.assertEqual(payload["status"], "no_daily_payload_skip_filter")
+        self.assertEqual(payload["status"], "no_daily_payload_blocked")
         self.assertEqual(payload["stock_universe_count"], 2)
         self.assertEqual(payload["attempted_trade_dates"], ["20260529", "20260528", "20260527"])
 

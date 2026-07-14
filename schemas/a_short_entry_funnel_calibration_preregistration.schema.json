@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_entry_funnel_calibration_preregistration/1.0.0/schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "frozen_at", "scope", "source_refs", "frozen_measurement", "decision_gates", "iv_policy", "overlay_policy", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_entry_funnel_calibration_preregistration"},
+    "schema_version": {"const": "1.0.0"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lane", "purpose", "seen_data_disclosed", "production_threshold_change"],
+      "properties": {
+        "lane": {"const": "a_short"},
+        "purpose": {"const": "tradeability_and_calibration_only"},
+        "seen_data_disclosed": {"const": true},
+        "production_threshold_change": {"const": false}
+      }
+    },
+    "source_refs": {
+      "type": "object", "additionalProperties": false,
+      "required": ["weekly_reports_seen", "iv_feeds_seen", "overlays_seen"],
+      "properties": {
+        "weekly_reports_seen": {"type": "array", "minItems": 3, "items": {"$ref": "#/$defs/sourceRef"}},
+        "iv_feeds_seen": {"type": "array", "minItems": 7, "items": {"$ref": "#/$defs/sourceRef"}},
+        "overlays_seen": {"type": "array", "minItems": 4, "items": {"$ref": "#/$defs/sourceRef"}}
+      }
+    },
+    "frozen_measurement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["funnel_order", "classification_priority", "ma_failure_marker", "entry_trigger_failure_marker", "rr_pass_rule", "capital_gate_rule"],
+      "properties": {
+        "funnel_order": {"const": ["egs_candidate", "no_hard_veto", "ma_shape", "low_pullback_or_breakout", "reward_risk", "capital_gate"]},
+        "classification_priority": {"const": ["hard_veto", "ma_shape_failure", "entry_trigger_failure", "plan_present", "unclassified"]},
+        "ma_failure_marker": {"const": "MA5/10/20"},
+        "entry_trigger_failure_marker": {"const": "低吸/突破"},
+        "rr_pass_rule": {"const": "machine.entry_exit_size_star.plan exists only after the frozen RR gate passes"},
+        "capital_gate_rule": {"const": "evaluate only from an explicit reviewed account input; public no-account reports remain not_evaluable"}
+      }
+    },
+    "decision_gates": {
+      "type": "object", "additionalProperties": false,
+      "required": ["future_confirmatory_min_weeks", "future_confirmatory_min_candidates", "target_pre_capital_build_rate", "target_active_week_rate", "judgement_order"],
+      "properties": {
+        "future_confirmatory_min_weeks": {"const": 12},
+        "future_confirmatory_min_candidates": {"const": 120},
+        "target_pre_capital_build_rate": {"const": {"minimum": 0.02, "maximum": 0.20}},
+        "target_active_week_rate": {"const": {"minimum": 0.25, "maximum": 0.75}},
+        "judgement_order": {"const": ["insufficient_sample", "egs_entry_mismatch", "specific_gate_too_strict", "within_calibration_band", "too_lax"]}
+      }
+    },
+    "iv_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["window", "minimum_observations", "current_included", "tie_rule", "round_decimals", "halve_rule", "veto_rule", "exact_80_action", "exact_90_action"],
+      "properties": {
+        "window": {"const": 252},
+        "minimum_observations": {"const": 60},
+        "current_included": {"const": true},
+        "tie_rule": {"const": "count_values_less_than_or_equal_to_current"},
+        "round_decimals": {"const": 4},
+        "halve_rule": {"const": "percentile > 80 and percentile <= 90"},
+        "veto_rule": {"const": "percentile > 90"},
+        "exact_80_action": {"const": "no_halving"},
+        "exact_90_action": {"const": "halve_not_veto"}
+      }
+    },
+    "overlay_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seen_through", "future_confirmatory_after", "future_confirmatory_min_observations", "seen_data_can_promote", "top_k_search_allowed", "window_search_allowed", "margin_search_allowed"],
+      "properties": {
+        "seen_through": {"const": "20260713"},
+        "future_confirmatory_after": {"const": "20260713"},
+        "future_confirmatory_min_observations": {"const": 12},
+        "seen_data_can_promote": {"const": false},
+        "top_k_search_allowed": {"const": false},
+        "window_search_allowed": {"const": false},
+        "margin_search_allowed": {"const": false}
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider_call", "random_monte_carlo", "production_change", "buy_advice", "ship_gate_evidence", "full_size_allowed"],
+      "properties": {
+        "provider_call": {"const": false},
+        "random_monte_carlo": {"const": false},
+        "production_change": {"const": false},
+        "buy_advice": {"const": false},
+        "ship_gate_evidence": {"const": false},
+        "full_size_allowed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "sourceRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["as_of", "path", "sha256"],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

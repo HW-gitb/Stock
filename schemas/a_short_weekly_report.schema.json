@@ -319,20 +319,70 @@
       "properties": {
         "available_cash_start": {"type": "number"},
         "allocated_cash_total": {"type": "number"},
-        "remaining_cash": {"type": "number"}
+        "remaining_cash": {"type": "number"},
+        "new_exposure_capacity_start": {"type": "number", "minimum": 0},
+        "remaining_new_exposure_capacity": {"type": "number", "minimum": 0}
       }
     },
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode", "price_freshness"],
+      "required": ["run_id", "candidate_digest", "stage_status", "analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode", "account_snapshot", "price_freshness"],
       "properties": {
+        "run_id": {"type": "string", "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"},
+        "candidate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "stage_status": {"const": "complete"},
         "analysis_input": {"type": "string"},
         "selection_bucket": {"type": "string"},
         "iv_feed": {"type": "string"},
         "account_ref": {"type": "string"},
         "account_status": {"enum": ["provided", "absent"]},
         "sizing_mode": {"enum": ["sized", "observation_only_no_account"]},
+        "account_snapshot": {
+          "oneOf": [
+            {"type": "null"},
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["snapshot_id", "snapshot_digest", "facts_as_of", "decision_as_of", "positions_count", "integrity_status", "blocking_kinds", "blocking_count"],
+              "properties": {
+                "snapshot_id": {"type": "string", "pattern": "^a-short-account-[0-9]{8}-[0-9a-f]{16}$"},
+                "snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "facts_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                "positions_count": {"type": "integer", "minimum": 0},
+                "integrity_status": {"enum": ["clear", "blocked"]},
+                "blocking_kinds": {
+                  "type": "array",
+                  "items": {"enum": ["net_buy_not_in_positions", "shares_mismatch"]},
+                  "uniqueItems": true
+                },
+                "blocking_count": {"type": "integer", "minimum": 0}
+              }
+            }
+          ]
+        },
+        "iv_freshness": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "iv_data_through", "price_data_through"],
+          "properties": {
+            "status": {"const": "aligned"},
+            "iv_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+            "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        },
+        "market_regime": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["source_status", "effective_status", "effective_regime", "fallback_active"],
+          "properties": {
+            "source_status": {"enum": ["attack", "shock", "defense", "contraction", "unknown", "missing"]},
+            "effective_status": {"enum": ["attack", "shock", "defense", "contraction"]},
+            "effective_regime": {"enum": ["进攻期", "震荡期", "防御期", "收缩期"]},
+            "fallback_active": {"type": "boolean"}
+          }
+        },
         "price_freshness": {
           "type": "object",
           "additionalProperties": false,

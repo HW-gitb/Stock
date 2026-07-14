@@ -25,7 +25,7 @@ from runners.a_short_weekly_pipeline import (_build_holdings, main,  # noqa: E40
 import os  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import (AS_OF, _analysis_input, _ai_candidate,  # noqa: E402
-                                                _account, _feed, _series)
+                                                _account, _feed, _series, _write_account)
 
 PDT = AS_OF   # price_data_through (candidate clock) used by holdings injection tests
 
@@ -297,7 +297,7 @@ class MainIntegrationTests(unittest.TestCase):
         ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
         (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
         (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
-        (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+        _write_account(Path(td) / "acct.json", acct)
 
     def _run(self, td, acct):
         out = Path(td) / "weekly.json"

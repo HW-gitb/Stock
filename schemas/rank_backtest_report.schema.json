@@ -12,6 +12,11 @@
     "preset",
     "mode",
     "engineering_smoke",
+    "evidence_role",
+    "includes_backtest_only_tier2_filler",
+    "includes_full_m67_operation_chain",
+    "production_or_live_historical_replay",
+    "full_size_allowed",
     "settings",
     "windows",
     "sample_count",
@@ -51,6 +56,21 @@
     },
     "engineering_smoke": {
       "type": "boolean"
+    },
+    "evidence_role": {
+      "const": "engineering_rank_replay"
+    },
+    "includes_backtest_only_tier2_filler": {
+      "const": true
+    },
+    "includes_full_m67_operation_chain": {
+      "const": false
+    },
+    "production_or_live_historical_replay": {
+      "const": false
+    },
+    "full_size_allowed": {
+      "const": false
     },
     "settings": {
       "type": "object",

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 import re
 from datetime import datetime
 from pathlib import Path
@@ -14,6 +15,25 @@ _DATE8_RE = re.compile(r"^[0-9]{8}$")
 
 class AnalysisInputContractError(ValueError):
     """Raised when analysis_input passes JSON Schema but fails PIT invariants."""
+
+
+def candidate_digest(candidates: Any) -> str:
+    if not isinstance(candidates, list):
+        raise AnalysisInputContractError("candidates must be a list before digesting")
+    encoded = json.dumps(
+        candidates, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False
+    ).encode("utf-8")
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def build_a_short_run_identity(trade_date: str, candidates: list[dict[str, Any]]) -> dict[str, str]:
+    date_value = _parse_date8(trade_date, "trade_date", "run identity")
+    digest = candidate_digest(candidates)
+    return {
+        "run_id": f"a-short-{date_value}-{digest[:16]}",
+        "candidate_digest": digest,
+        "stage_status": "egs_validated",
+    }
 
 
 def validate_analysis_input_file(path: str | Path, label: str | None = None) -> dict[str, Any]:
@@ -61,6 +81,26 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
     trade_date = _parse_date8(payload.get("trade_date"), "trade_date", label)
 
     source = payload.get("source") or {}
+    hard_sources = source.get("hard_veto_source_health")
+    if hard_sources is not None:
+        for name in ("suspension", "unlock", "holder_reduction"):
+            item = hard_sources.get(name) or {}
+            if item.get("status") == "unknown":
+                raise AnalysisInputContractError(
+                    f"{label} hard-veto source {name} is unknown; actionable candidates are blocked"
+                )
+            _validate_candidate_date(
+                item.get("observed_at"), f"source.hard_veto_source_health.{name}.observed_at",
+                trade_date, label,
+            )
+    run_identity = source.get("run_identity")
+    if run_identity is not None:
+        expected_digest = candidate_digest(payload.get("candidates") or [])
+        if run_identity.get("candidate_digest") != expected_digest:
+            raise AnalysisInputContractError(f"{label} candidate_digest does not match candidates")
+        expected_run_id = f"a-short-{trade_date}-{expected_digest[:16]}"
+        if run_identity.get("run_id") != expected_run_id:
+            raise AnalysisInputContractError(f"{label} run_id does not match trade_date/candidate_digest")
     l3_mode = source.get("l3_mode")
     l3_snapshot_date = source.get("l3_snapshot_date")
     if l3_mode == "pit":
@@ -86,6 +126,55 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
             trade_date,
             label,
         )
+        quote = candidate.get("quote") or {}
+        source_date = quote.get("source_trade_date")
+        if source_date is not None:
+            parsed_source_date = _parse_date8(
+                source_date, f"candidates[{index}].quote.source_trade_date", label
+            )
+            if parsed_source_date > trade_date:
+                raise AnalysisInputContractError(
+                    f"{label} PIT validation failed: candidates[{index}].quote.source_trade_date "
+                    f"{parsed_source_date} is after trade_date {trade_date}"
+                )
+            calendar = ((payload.get("market_context") or {}).get("trade_calendar") or {})
+            recent_dates = calendar.get("recent_trade_dates")
+            if recent_dates is not None and parsed_source_date not in recent_dates:
+                raise AnalysisInputContractError(
+                    f"{label} quote source date {parsed_source_date} is absent from official recent_trade_dates"
+                )
+        price_time = quote.get("price_time")
+        if price_time is not None:
+            try:
+                price_dt = datetime.fromisoformat(str(price_time).replace("Z", "+00:00"))
+                generated_dt = datetime.fromisoformat(str(payload.get("generated_at")).replace("Z", "+00:00"))
+            except (TypeError, ValueError) as exc:
+                raise AnalysisInputContractError(
+                    f"{label} quote/generated timestamp must be valid ISO 8601"
+                ) from exc
+            if price_dt.tzinfo is None or generated_dt.tzinfo is None:
+                raise AnalysisInputContractError(f"{label} quote/generated timestamp must include timezone")
+            if price_dt > generated_dt:
+                raise AnalysisInputContractError(
+                    f"{label} quote price_time {price_time} is after generated_at {payload.get('generated_at')}"
+                )
+            if source_date is not None and price_dt.strftime("%Y%m%d") != source_date:
+                raise AnalysisInputContractError(
+                    f"{label} quote price_time date does not match source_trade_date {source_date}"
+                )
+        event_risk = candidate.get("event_risk") or {}
+        for source_name in ("holder_reduction", "unlock", "suspension"):
+            item = event_risk.get(source_name) or {}
+            if item.get("source_status") == "unknown":
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}].event_risk.{source_name} source is unknown"
+                )
+            _validate_candidate_date(
+                item.get("observed_at"),
+                f"candidates[{index}].event_risk.{source_name}.observed_at",
+                trade_date,
+                label,
+            )
 
 
 def _validate_candidate_date(value: Any, field_path: str, trade_date: str, label: str) -> None:

@@ -1,0 +1,76 @@
+{
+  "schema_name": "a_short_entry_funnel_calibration_preregistration",
+  "schema_version": "1.0.0",
+  "frozen_at": "2026-07-13T18:00:00+08:00",
+  "scope": {
+    "lane": "a_short",
+    "purpose": "tradeability_and_calibration_only",
+    "seen_data_disclosed": true,
+    "production_threshold_change": false
+  },
+  "source_refs": {
+    "weekly_reports_seen": [
+      {"as_of": "20260609", "path": "research/results/a_short/weekly_20260609/weekly.json", "sha256": "1295005a0c39219911105135e2d800d082940aeb41e502fc796975d1576d0985"},
+      {"as_of": "20260612", "path": "research/results/a_short/20260612/weekly_m67.json", "sha256": "c44fce930d0f0b3af8753e5472958cd3434c0d6e49405df59dd52a8b05e2b53e"},
+      {"as_of": "20260706", "path": "research/results/a_short/20260706/weekly_m67.json", "sha256": "31072e004ae1b2c6bad33f7751be7fcf5662f1ccb19a32b05a73f064839a8fe6"}
+    ],
+    "iv_feeds_seen": [
+      {"as_of": "20260605", "path": "research/results/a_short/iv_feed_20260605/iv_feed.json", "sha256": "ae74c3fd901970f596db83798099fe53b5223553b3ec8129e373a02f8fa87ff9"},
+      {"as_of": "20260609", "path": "research/results/a_short/iv_feed_20260609/iv_feed.json", "sha256": "601a07edf8efef2650581e90866ece512152eadb8a8be4e2788a14e5dd750c57"},
+      {"as_of": "20260612", "path": "research/results/a_short/iv_feed_20260612/iv_feed.json", "sha256": "f453bc7b5aa6316f725273cdb75883666e9d02e3f599e4d2a16ceaa005c8a75b"},
+      {"as_of": "20260622", "path": "research/results/a_short/iv_feed_20260622/iv_feed.json", "sha256": "a4c3f7223661ceaca1316b00807a5086ef24d8d67296c2a17b4621098ef83e55"},
+      {"as_of": "20260629", "path": "research/results/a_short/iv_feed_20260629/iv_feed.json", "sha256": "ddf9b01d5b44c759bb5e07f9a9d0afc1be5eb4cc3257d0a39f97a1708bad9014"},
+      {"as_of": "20260706", "path": "research/results/a_short/iv_feed_20260706/iv_feed.json", "sha256": "4c8b382b777334cb5ec11f7249d17ff5b589a7f882ff0ea72001194ef0a87562"},
+      {"as_of": "20260713", "path": "research/results/a_short/iv_feed_20260713/iv_feed.json", "sha256": "d1d944a70d9b64b33ed7a1eb405fd73715e1a3242c226a715545c79c18b0672d"}
+    ],
+    "overlays_seen": [
+      {"as_of": "20260622", "path": "result/a_short/20260622/overlay.json", "sha256": "d7bc466d167dd289c002a7e29068830eac4f73ecf484aabd15a03dfae8dc30dd"},
+      {"as_of": "20260629", "path": "result/a_short/20260629/overlay.json", "sha256": "6a88c1fa6c661d70c60bde0d8a7fb050b44400aa68a77c1c1ba1d29680aec9cf"},
+      {"as_of": "20260706", "path": "result/a_short/20260706/overlay.json", "sha256": "6da5ccf04204f61b138f5a47c5ec98d56aa1a7b05c298e9c843cf7258858e34c"},
+      {"as_of": "20260713", "path": "result/a_short/20260713/overlay.json", "sha256": "3165c42e935e6344e84f92bf2bbd751009294dc1d60b2e1a7858e445fc089a51"}
+    ]
+  },
+  "frozen_measurement": {
+    "funnel_order": ["egs_candidate", "no_hard_veto", "ma_shape", "low_pullback_or_breakout", "reward_risk", "capital_gate"],
+    "classification_priority": ["hard_veto", "ma_shape_failure", "entry_trigger_failure", "plan_present", "unclassified"],
+    "ma_failure_marker": "MA5/10/20",
+    "entry_trigger_failure_marker": "低吸/突破",
+    "rr_pass_rule": "machine.entry_exit_size_star.plan exists only after the frozen RR gate passes",
+    "capital_gate_rule": "evaluate only from an explicit reviewed account input; public no-account reports remain not_evaluable"
+  },
+  "decision_gates": {
+    "future_confirmatory_min_weeks": 12,
+    "future_confirmatory_min_candidates": 120,
+    "target_pre_capital_build_rate": {"minimum": 0.02, "maximum": 0.20},
+    "target_active_week_rate": {"minimum": 0.25, "maximum": 0.75},
+    "judgement_order": ["insufficient_sample", "egs_entry_mismatch", "specific_gate_too_strict", "within_calibration_band", "too_lax"]
+  },
+  "iv_policy": {
+    "window": 252,
+    "minimum_observations": 60,
+    "current_included": true,
+    "tie_rule": "count_values_less_than_or_equal_to_current",
+    "round_decimals": 4,
+    "halve_rule": "percentile > 80 and percentile <= 90",
+    "veto_rule": "percentile > 90",
+    "exact_80_action": "no_halving",
+    "exact_90_action": "halve_not_veto"
+  },
+  "overlay_policy": {
+    "seen_through": "20260713",
+    "future_confirmatory_after": "20260713",
+    "future_confirmatory_min_observations": 12,
+    "seen_data_can_promote": false,
+    "top_k_search_allowed": false,
+    "window_search_allowed": false,
+    "margin_search_allowed": false
+  },
+  "boundary": {
+    "provider_call": false,
+    "random_monte_carlo": false,
+    "production_change": false,
+    "buy_advice": false,
+    "ship_gate_evidence": false,
+    "full_size_allowed": false
+  }
+}

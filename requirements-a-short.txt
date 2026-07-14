@@ -1,0 +1,9 @@
+# Complete dependency surface for the A-short offline tests and weekly entry.
+akshare
+jsonschema>=4.0,<5
+numpy
+openpyxl
+pandas
+requests
+tqdm
+tushare

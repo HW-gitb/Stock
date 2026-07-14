@@ -140,6 +140,7 @@ def build_price_row(row: dict[str, str]) -> dict[str, Any]:
         "adj_factor": float(row["adj_factor"]),
         "up_limit": parse_optional_float(row.get("up_limit")),
         "down_limit": parse_optional_float(row.get("down_limit")),
+        "volume": parse_optional_float(row.get("volume")),
         "source_flags": parse_source_flags(row.get("source_flags")),
     }
 
@@ -210,6 +211,7 @@ def materialize_payload(
             "end_date": effective_end,
         },
         "symbols": selected_symbols,
+        "trade_calendar": dates,
         "rows": filtered_rows,
         "limitations": limitations,
     }

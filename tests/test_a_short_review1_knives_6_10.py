@@ -1,0 +1,363 @@
+from __future__ import annotations
+
+import importlib.util
+import hashlib
+import json
+import os
+import copy
+import sys
+import tempfile
+import unittest
+from datetime import datetime
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.data.analysis_input_contract import (
+    AnalysisInputContractError,
+    build_a_short_run_identity,
+    validate_analysis_input_contract,
+)
+from runners import a_short_weekly_pipeline as weekly_pipeline
+from runners import forward_tracker
+from runners import backtest_rank, backtest_execution
+from runners.a_short_m67_render import render_weekly_markdown
+from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
+
+EGS_SCRIPT = ROOT / "A-EGS" / "egs_main.py"
+
+
+def _load_egs_module():
+    old_argv = sys.argv[:]
+    sys.argv = [str(EGS_SCRIPT), "--help"]
+    try:
+        spec = importlib.util.spec_from_file_location("egs_review1_knives_6_10", EGS_SCRIPT)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+        return module
+    finally:
+        sys.argv = old_argv
+
+
+class HardVetoSourceAndCalendarTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.em = _load_egs_module()
+
+    def test_trade_calendar_source_failure_never_fabricates_weekdays(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(trade_cal=lambda **kwargs: None)
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "safe_api", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "trade calendar"):
+                em.get_trade_dates(5)
+
+    def test_trade_calendar_rejects_malformed_provider_payload(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(trade_cal=lambda **kwargs: None)
+        malformed = pd.DataFrame({"wrong": ["20260102"]})
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "safe_api", return_value=malformed):
+            with self.assertRaisesRegex(RuntimeError, "cal_date"):
+                em.get_trade_dates(5)
+
+    def test_daily_basic_fallback_records_actual_quote_source_date(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(daily_basic=lambda **kwargs: None)
+        calls = []
+
+        def fake_safe_api(_fn, *args, **kwargs):
+            calls.append(kwargs["trade_date"])
+            if kwargs["trade_date"] == "20260105":
+                return pd.DataFrame()
+            return pd.DataFrame([{
+                "ts_code": "600000.SH", "close": 10.0, "pe": 8.0,
+                "pe_ttm": 9.0, "pb": 1.0, "roe": 10.0,
+                "turnover_rate": 1.0, "total_mv": 1000.0, "circ_mv": 800.0,
+            }])
+
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache"), \
+             patch.object(em, "safe_api", side_effect=fake_safe_api):
+            frame = em.get_daily_basic("20260105", ["20260105", "20251231"])
+
+        self.assertEqual(calls, ["20260105", "20251231"])
+        self.assertEqual(set(frame["source_trade_date"]), {"20251231"})
+
+    def test_missing_suspend_source_blocks_run(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(daily=lambda **kwargs: None)
+        stocks = pd.DataFrame({"ts_code": ["600000.SH", "000001.SZ"]})
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "save_cache"), \
+             patch.object(em, "get_stock_list", return_value=stocks), \
+             patch.object(em, "safe_api", return_value=pd.DataFrame()):
+            with self.assertRaisesRegex(RuntimeError, "suspend source unavailable"):
+                em.get_suspend_info(["20260105", "20251231"])
+
+    def test_unlock_uses_real_circulating_share_denominator_only(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(share_float=lambda **kwargs: None)
+        daily = pd.DataFrame([
+            {"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0, "source_trade_date": "20251231"},
+            {"ts_code": "000001.SZ", "close": None, "circ_mv": None, "source_trade_date": "20251231"},
+        ])
+        source = pd.DataFrame([
+            {"ts_code": "600000.SH", "ann_date": "20260104", "float_date": "20260120", "float_share": 20.0, "float_ratio": 99.0},
+            {"ts_code": "000001.SZ", "ann_date": "20260104", "float_date": "20260120", "float_share": 20.0, "float_ratio": 99.0},
+        ])
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "safe_api", return_value=source):
+                blocked = em.get_unlock_future(pd.DataFrame(), daily)
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+        # 600000: 20 / (1000/10) = 20%, a real denominator hit.
+        # 000001: denominator missing => blocked/unknown; float_ratio must not rescue it.
+        self.assertEqual(blocked, {"600000.SH", "000001.SZ"})
+        self.assertNotIn("0.6", Path(EGS_SCRIPT).read_text(encoding="utf-8")[
+            Path(EGS_SCRIPT).read_text(encoding="utf-8").index("def get_unlock_future"):
+            Path(EGS_SCRIPT).read_text(encoding="utf-8").index("def get_holder_reductions")
+        ])
+
+    def test_unlock_rejects_future_observation(self) -> None:
+        em = self.em
+        old_today, old_dt = em.TODAY, em.TODAY_DT
+        em.TODAY, em.TODAY_DT = "20260105", datetime(2026, 1, 5)
+        em.pro = SimpleNamespace(share_float=lambda **kwargs: None)
+        daily = pd.DataFrame([{"ts_code": "600000.SH", "close": 10.0, "circ_mv": 1000.0}])
+        future = pd.DataFrame([{
+            "ts_code": "600000.SH", "ann_date": "20260106", "float_date": "20260120",
+            "float_share": 20.0, "float_ratio": 20.0,
+        }])
+        try:
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "safe_api", return_value=future):
+                with self.assertRaisesRegex(RuntimeError, "unlock.*PIT"):
+                    em.get_unlock_future(pd.DataFrame(), daily)
+        finally:
+            em.TODAY, em.TODAY_DT = old_today, old_dt
+
+    def test_missing_holder_reduction_source_blocks_run(self) -> None:
+        em = self.em
+        em.pro = SimpleNamespace(stk_holdertrade=lambda **kwargs: None)
+        with patch.object(em, "load_cache", return_value=None), \
+             patch.object(em, "safe_api", return_value=None):
+            with self.assertRaisesRegex(RuntimeError, "holder-reduction source unavailable"):
+                em.get_holder_reductions()
+
+
+class RunIdentityAndPublishTest(unittest.TestCase):
+    def test_analysis_input_run_identity_binds_exact_candidate_set(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["source"]["run_identity"] = build_a_short_run_identity(
+            payload["trade_date"], payload["candidates"]
+        )
+        validate_analysis_input_contract(payload)
+        payload["candidates"][0]["name"] = "changed-after-digest"
+        with self.assertRaisesRegex(AnalysisInputContractError, "candidate_digest"):
+            validate_analysis_input_contract(payload)
+
+    def test_multi_file_publish_failure_restores_every_old_surface(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = [root / "weekly_m67.json", root / "weekly_m67.md", root / "ratchet.json"]
+            for path in paths:
+                path.write_bytes(("old:" + path.name).encode("utf-8"))
+            payloads = {str(path): ("new:" + path.name).encode("utf-8") for path in paths}
+            real_replace = os.replace
+            calls = {"count": 0}
+
+            def fail_second(src, dst):
+                calls["count"] += 1
+                if calls["count"] == 2:
+                    raise OSError("injected publish failure")
+                return real_replace(src, dst)
+
+            with patch.object(weekly_pipeline.os, "replace", side_effect=fail_second):
+                with self.assertRaisesRegex(OSError, "injected"):
+                    weekly_pipeline._replace_many_with_rollback(payloads)
+
+            for path in paths:
+                self.assertEqual(path.read_bytes(), ("old:" + path.name).encode("utf-8"))
+
+    def test_egs_official_transaction_restores_every_old_surface_on_failure(self) -> None:
+        em = HardVetoSourceAndCalendarTest.em
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = [Path(tmp) / name for name in (
+                "analysis_input.json", "candidates.csv", "data_health.json", "official_publish.json"
+            )]
+            for path in paths:
+                path.write_text("old:" + path.name, encoding="utf-8")
+            with self.assertRaisesRegex(RuntimeError, "injected publish failure"):
+                with em.official_output_transaction(paths):
+                    for path in paths:
+                        path.write_text("new:" + path.name, encoding="utf-8")
+                    raise RuntimeError("injected publish failure")
+            for path in paths:
+                self.assertEqual(path.read_text(encoding="utf-8"), "old:" + path.name)
+
+    def test_weekly_consumer_rejects_analysis_bytes_not_bound_by_marker(self) -> None:
+        identity = {"run_id": "a-short-20260105-" + "a" * 16, "candidate_digest": "a" * 64}
+        with tempfile.TemporaryDirectory() as tmp:
+            analysis = Path(tmp) / "analysis_input.json"
+            analysis.write_text("original", encoding="utf-8")
+            marker = {
+                **identity,
+                "stage_status": "complete",
+                "files": {"analysis_input": {
+                    "path": analysis.name,
+                    "sha256": hashlib.sha256(analysis.read_bytes()).hexdigest(),
+                }},
+            }
+            weekly_pipeline._validate_official_publish_marker(analysis, marker, identity)
+            analysis.write_text("tampered", encoding="utf-8")
+            with self.assertRaisesRegex(SystemExit, "does not bind"):
+                weekly_pipeline._validate_official_publish_marker(analysis, marker, identity)
+
+    def test_markdown_exposes_same_run_digest_and_complete_status(self) -> None:
+        digest = "a" * 64
+        weekly = {
+            "as_of": "20260105", "reports": [],
+            "run_lineage": {
+                "run_id": "a-short-20260105-" + digest[:16],
+                "candidate_digest": digest,
+                "stage_status": "complete",
+                "account_status": "absent",
+                "sizing_mode": "observation_only_no_account",
+            },
+        }
+        rendered = render_weekly_markdown(weekly)
+        self.assertIn("a-short-20260105-" + digest[:16], rendered)
+        self.assertIn(digest, rendered)
+        self.assertIn("stage=complete", rendered)
+
+    def test_wrapper_m67_failure_paths_exit_nonzero(self) -> None:
+        text = (ROOT / "runners" / "weekly_screening.ps1").read_text(encoding="utf-8")
+        for code in ("exit 21", "exit 22", "exit 23", "exit $M67ExitCode"):
+            self.assertIn(code, text)
+        self.assertIn("stage_status = 'failed'", text)
+
+
+class ForwardCohortReplacementTest(unittest.TestCase):
+    @staticmethod
+    def _payload(codes: list[str]) -> dict:
+        payload = cloned_minimal_analysis_input_payload()
+        template = payload["candidates"][0]
+        candidates = []
+        for index, code in enumerate(codes):
+            row = copy.deepcopy(template)
+            row["ts_code"] = code
+            row["name"] = f"candidate-{index}"
+            row["exchange"] = "SH" if code.endswith(".SH") else "SZ"
+            candidates.append(row)
+        payload["candidates"] = candidates
+        payload["source"]["run_identity"] = build_a_short_run_identity(
+            payload["trade_date"], candidates
+        )
+        return payload
+
+    def test_same_day_rerun_replaces_cohort_instead_of_union(self) -> None:
+        as_of = cloned_minimal_analysis_input_payload()["trade_date"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "result"
+            bucket = root / as_of
+            bucket.mkdir(parents=True)
+            tracker = Path(tmp) / "forward_tracker.csv"
+            input_path = bucket / "analysis_input.json"
+            input_path.write_text(json.dumps(self._payload(["600000.SH", "000001.SZ"]), ensure_ascii=False), encoding="utf-8")
+            with patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
+                 patch.object(forward_tracker, "TRACKER_CSV", tracker):
+                self.assertEqual(forward_tracker.capture(as_of), 0)
+                input_path.write_text(json.dumps(self._payload(["000001.SZ", "600001.SH"]), ensure_ascii=False), encoding="utf-8")
+                self.assertEqual(forward_tracker.capture(as_of), 0)
+
+            written = pd.read_csv(tracker, dtype={"as_of": str, "ts_code": str})
+            self.assertEqual(set(written[written["as_of"] == as_of]["ts_code"]), {"000001.SZ", "600001.SH"})
+            self.assertNotIn("600000.SH", set(written["ts_code"]))
+            self.assertEqual(written["run_id"].nunique(), 1)
+            self.assertEqual(written["candidate_digest"].nunique(), 1)
+
+    def test_incomplete_same_run_capture_is_replaced_not_treated_as_noop(self) -> None:
+        payload = self._payload(["600000.SH", "000001.SZ"])
+        as_of = payload["trade_date"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp) / "result"
+            bucket = root / as_of
+            bucket.mkdir(parents=True)
+            tracker = Path(tmp) / "forward_tracker.csv"
+            input_path = bucket / "analysis_input.json"
+            input_path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            identity = payload["source"]["run_identity"]
+            partial = forward_tracker._candidate_row(
+                as_of, "2026-01-01T00:00:00+08:00", identity["run_id"],
+                identity["candidate_digest"], payload["candidates"][0],
+            )
+            pd.DataFrame([partial], columns=forward_tracker.SCHEMA_COLUMNS).to_csv(tracker, index=False)
+            with patch.object(forward_tracker, "LIVE_RESULT_ROOT", root), \
+                 patch.object(forward_tracker, "TRACKER_CSV", tracker):
+                self.assertEqual(forward_tracker.capture(as_of), 0)
+            written = pd.read_csv(tracker, dtype={"as_of": str, "ts_code": str})
+            self.assertEqual(set(written["ts_code"]), {"600000.SH", "000001.SZ"})
+
+
+class BacktestInputAndEvidenceBoundaryTest(unittest.TestCase):
+    def test_invalid_pit_input_fails_before_rank_or_execution_output(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["candidates"][0]["fundamental"]["expectation"]["earnings_report_date"] = "20990101"
+        as_of = payload["trade_date"]
+        with tempfile.TemporaryDirectory() as tmp:
+            source_root = Path(tmp) / "generated"
+            bucket = source_root / as_of
+            bucket.mkdir(parents=True)
+            path = bucket / "analysis_input.json"
+            path.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
+            out = Path(tmp) / "outputs"
+            with patch.object(backtest_rank, "BACKTEST_DIR", out):
+                with self.assertRaisesRegex(ValueError, "invalid rank backtest input"):
+                    backtest_rank.load_analysis_inputs(source_root, [as_of])
+            self.assertFalse(out.exists())
+            with self.assertRaisesRegex(AnalysisInputContractError, "earnings_report_date"):
+                backtest_execution.load_analysis_input(path)
+
+    def test_rank_schema_pins_engineering_replay_boundary(self) -> None:
+        schema = json.loads((ROOT / "schemas" / "rank_backtest_report.schema.json").read_text(encoding="utf-8"))
+        props = schema["properties"]
+        self.assertEqual(props["evidence_role"]["const"], "engineering_rank_replay")
+        self.assertTrue(props["includes_backtest_only_tier2_filler"]["const"])
+        self.assertFalse(props["includes_full_m67_operation_chain"]["const"])
+        self.assertFalse(props["production_or_live_historical_replay"]["const"])
+        self.assertFalse(props["full_size_allowed"]["const"])
+
+    def test_execution_backtest_never_grants_full_size(self) -> None:
+        capital_context = {
+            "manual_execution_only": True,
+            "ship_gate": {
+                "policy_logic": "and",
+                "monthly_alpha_t_stat_min": 2.0,
+                "sharpe_min": 1.0,
+                "max_drawdown_max": 0.15,
+                "forward_live_months_min": 12,
+                "failure_mode": "paper_or_minimal_size_or_risk_filter_only",
+            },
+        }
+        evaluation = backtest_execution.build_ship_gate_evaluation(
+            {"trade_count": 100, "max_drawdown": 0.01}, capital_context
+        )
+        self.assertFalse(evaluation["full_size_allowed"])
+
+
+if __name__ == "__main__":
+    unittest.main()

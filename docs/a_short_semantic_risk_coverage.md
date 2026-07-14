@@ -30,7 +30,7 @@
 - 语义 advisory 自 **Slice 3b 逐票行内化**进 M6.7 周报 .md(`runners/a_short_m67_render._semantic_line`,从每票 `machine.layer.semantic_risk` 渲染);**独立面板渲染已退役**。advisory 仍只是引擎层 trace 的渲染,**绝不进确定性周报 JSON**、不改任何结论。
 
 ## 运行接入(cadence)
-- **M6.7 advisory 接入 `runners/weekly_screening.ps1`**(Stage 4,旁路;Slice 3b-2):周报 egs_main 成功后,以当次 `result/a_short/<as_of>/analysis_input.json` 为输入跑 M6.7 pipeline(建市场 IV feed + `a_short_weekly_pipeline`,语义 cninfo official + DeepSeek web 逐票**行内**),落 `research/results/a_short/<as_of>/weekly_m67.json`。**advisory-only 旁路**:真取数失败绝不阻断周报(同 canary/tracker),禁 result/a_short,`-SkipSemanticRisk` 可关。
+- **M6.7 operation 接入 `runners/weekly_screening.ps1`**(Stage 4;Slice 3b-2):EGS 成功后,只消费通过 `official_publish.json` byte-digest 绑定的当次 `analysis_input.json`,运行 IV + `a_short_weekly_pipeline`,把 cninfo/DeepSeek 的 advisory 证据逐票行内渲染。M6.7 是唯一操作周报；旧 analysis 报告只作 research 输入。语义证据仍不进 production scoring/veto，但调用方既已请求 M6.7，则 analysis/IV/account/pipeline 任一失败必须写 `failed` receipt 并非零退出，禁止以选股成功冒充周报成功；`-SkipSemanticRisk` 可显式跳过整段 M6.7。
 - **web_llm 产出路径见契约 §web_llm 产出路径(单一来源)**。`weekly_screening.ps1` Stage-4 现跑 M6.7 pipeline(语义行内,3b-2);独立 summary CLI 已退役。
 - watch pool = 当次 EGS `analysis_input.candidates`;M6.7 provider 内用 `main_board_top15` 过主板 Top15(纯函数单测)。
 

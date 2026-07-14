@@ -13,16 +13,26 @@ except ImportError:  # pragma: no cover - environment guard
     Draft7Validator = None  # type: ignore[assignment]
 
 from runners.backtest_execution import ROOT, build_report, classify_skips, main, parse_args
+from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
 
 
 @unittest.skipIf(Draft7Validator is None, "jsonschema not installed")
 class BacktestExecutionSmokeTest(unittest.TestCase):
-    def load_fixture_payload(self) -> dict:
-        return json.loads(
-            (ROOT / "tests" / "fixtures" / "analysis_input_minimal.json").read_text(
-                encoding="utf-8"
-            )
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._analysis_input_tmp = tempfile.TemporaryDirectory()
+        cls.analysis_input_path = Path(cls._analysis_input_tmp.name) / "analysis_input.json"
+        cls.analysis_input_path.write_text(
+            json.dumps(cloned_minimal_analysis_input_payload(), ensure_ascii=False),
+            encoding="utf-8",
         )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._analysis_input_tmp.cleanup()
+
+    def load_fixture_payload(self) -> dict:
+        return json.loads(self.analysis_input_path.read_text(encoding="utf-8"))
 
     def capital_cli_args(self) -> list[str]:
         return [
@@ -40,7 +50,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     *self.capital_cli_args(),
                     "--out-dir",
                     str(out_dir),
@@ -172,7 +182,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
                     *self.capital_cli_args(),
@@ -188,7 +198,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 {
                     "path": "tests/fixtures/execution_price_data_minimal.json",
                     "start_date": "20260522",
-                    "end_date": "20260525",
+                    "end_date": "20260526",
                     "adj": "qfq_via_adj_factor",
                 },
             )
@@ -209,7 +219,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
                     *self.capital_cli_args(),
@@ -222,23 +232,20 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
             self.assertEqual(rc, 0)
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            self.assertEqual(report["settings"]["end_date"], "20260526")
             self.assertEqual(report["metrics"]["trade_count"], 1)
             self.assertEqual(report["metrics"]["skipped_count"], 1)
             self.assertEqual(report["metrics"]["missing_stop_count"], 0)
             self.assertEqual(report["metrics"]["entry_unbuyable_count"], 0)
             self.assertEqual(report["metrics"]["win_rate"], 1.0)
-            self.assertEqual(report["metrics"]["avg_holding_days"], 1.0)
+            self.assertEqual(report["metrics"]["avg_holding_days"], 2.0)
             self.assertGreater(report["metrics"]["ending_equity"], 116666.55)
-            self.assertIsNone(report["metrics"]["max_drawdown"])
+            self.assertIsNotNone(report["metrics"]["max_drawdown"])
             self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
             drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
-            self.assertIsNone(drawdown_result["value"])
-            self.assertIsNone(drawdown_result["passed"])
+            self.assertIsNotNone(drawdown_result["value"])
+            self.assertIsNotNone(drawdown_result["passed"])
             self.assertIn("mark-to-market", drawdown_result["reason"])
-            self.assertIn(
-                "max_drawdown is null",
-                " ".join(report["limitations"]),
-            )
             self.assertIn("not safety evidence", " ".join(report["limitations"]))
             self.assertIsNone(
                 report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
@@ -253,10 +260,10 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(len(trades), 1)
             self.assertEqual(trades[0]["ts_code"], "600000.SH")
             self.assertEqual(trades[0]["entry_date"], "20260525")
-            self.assertEqual(trades[0]["exit_date"], "20260525")
+            self.assertEqual(trades[0]["exit_date"], "20260526")
             self.assertEqual(trades[0]["shares"], "800")
             self.assertEqual(trades[0]["exit_reason"], "time_stop")
-            self.assertEqual(trades[0]["holding_days"], "1")
+            self.assertEqual(trades[0]["holding_days"], "2")
 
             with (out_dir / "order_events.csv").open(
                 "r", encoding="utf-8", newline=""
@@ -272,7 +279,203 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 skipped = list(csv.DictReader(handle))
             self.assertEqual([row["reason"] for row in skipped], ["analyzer_hard_veto"])
 
-    def test_ship_gate_drawdown_is_not_evaluable_until_mark_to_market_exists(self) -> None:
+    def test_buy_day_stop_is_queued_until_t1_sellable_session(self) -> None:
+        payload = self.load_fixture_payload()
+        payload["candidates"] = [payload["candidates"][0]]
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["symbols"] = ["600000.SH"]
+        price_data["trade_calendar"] = ["20260522", "20260525", "20260526"]
+        price_data["date_range"]["end_date"] = "20260526"
+        price_data["rows"] = [
+            row
+            for row in price_data["rows"]
+            if row["ts_code"] == "600000.SH" and row["trade_date"] != "20260526"
+        ]
+        entry_row = next(
+            row for row in price_data["rows"] if row["trade_date"] == "20260525"
+        )
+        entry_row["low_qfq"] = 12.4
+        next_row = deepcopy(entry_row)
+        next_row.update(
+            {
+                "trade_date": "20260526",
+                "open_qfq": 12.3,
+                "high_qfq": 12.6,
+                "low_qfq": 12.1,
+                "close_qfq": 12.4,
+                "pre_close_qfq": 13.6,
+                "up_limit": 14.96,
+                "down_limit": 12.24,
+            }
+        )
+        price_data["rows"].append(next_row)
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            input_path = work_dir / "analysis_input.json"
+            price_path = work_dir / "price_data.json"
+            out_dir = work_dir / "execution"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(input_path),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "10",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
+                trades = list(csv.DictReader(handle))
+
+        self.assertEqual(trades[0]["entry_date"], "20260525")
+        self.assertEqual(trades[0]["exit_date"], "20260526")
+        self.assertEqual(trades[0]["exit_reason"], "stop_loss")
+
+    def test_suspension_zero_volume_and_limit_down_delay_exit_and_mark_trapped_loss(self) -> None:
+        payload = self.load_fixture_payload()
+        payload["candidates"] = [payload["candidates"][0]]
+        price_data = json.loads(
+            (ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        price_data["symbols"] = ["600000.SH"]
+        price_data["trade_calendar"] = [
+            "20260522",
+            "20260525",
+            "20260526",
+            "20260527",
+            "20260528",
+            "20260529",
+            "20260601",
+        ]
+        price_data["date_range"]["end_date"] = "20260601"
+        price_data["rows"] = [
+            row
+            for row in price_data["rows"]
+            if row["ts_code"] == "600000.SH" and row["trade_date"] != "20260526"
+        ]
+        entry_row = next(
+            row for row in price_data["rows"] if row["trade_date"] == "20260525"
+        )
+        entry_row["low_qfq"] = 12.4
+        entry_row["volume"] = 1000.0
+
+        # 20260526 deliberately has no symbol row: suspended on an open market date.
+        zero_volume = deepcopy(entry_row)
+        zero_volume.update(
+            {
+                "trade_date": "20260527",
+                "open_qfq": 11.8,
+                "high_qfq": 11.9,
+                "low_qfq": 11.6,
+                "close_qfq": 11.7,
+                "pre_close_qfq": 13.6,
+                "up_limit": 14.96,
+                "down_limit": 12.24,
+                "volume": 0.0,
+            }
+        )
+        limit_down_1 = deepcopy(zero_volume)
+        limit_down_1.update(
+            {
+                "trade_date": "20260528",
+                "open_qfq": 10.8,
+                "high_qfq": 10.8,
+                "low_qfq": 10.8,
+                "close_qfq": 10.8,
+                "pre_close_qfq": 11.7,
+                "down_limit": 10.8,
+                "volume": 500.0,
+            }
+        )
+        limit_down_2 = deepcopy(limit_down_1)
+        limit_down_2.update(
+            {
+                "trade_date": "20260529",
+                "open_qfq": 9.72,
+                "high_qfq": 9.72,
+                "low_qfq": 9.72,
+                "close_qfq": 9.72,
+                "pre_close_qfq": 10.8,
+                "down_limit": 9.72,
+            }
+        )
+        sellable = deepcopy(limit_down_2)
+        sellable.update(
+            {
+                "trade_date": "20260601",
+                "open_qfq": 10.2,
+                "high_qfq": 10.5,
+                "low_qfq": 9.9,
+                "close_qfq": 10.3,
+                "pre_close_qfq": 9.72,
+                "down_limit": 8.75,
+            }
+        )
+        price_data["rows"].extend([zero_volume, limit_down_1, limit_down_2, sellable])
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            input_path = work_dir / "analysis_input.json"
+            price_path = work_dir / "price_data.json"
+            out_dir = work_dir / "execution"
+            input_path.write_text(json.dumps(payload), encoding="utf-8")
+            price_path.write_text(json.dumps(price_data), encoding="utf-8")
+            rc = main(
+                [
+                    "--as-of",
+                    "20260522",
+                    "--input-path",
+                    str(input_path),
+                    "--price-data",
+                    str(price_path),
+                    *self.capital_cli_args(),
+                    "--time-stop-days",
+                    "10",
+                    "--out-dir",
+                    str(out_dir),
+                ]
+            )
+            self.assertEqual(rc, 0)
+            report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
+            with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
+                trades = list(csv.DictReader(handle))
+            with (out_dir / "daily_equity.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                daily = list(csv.DictReader(handle))
+            with (out_dir / "order_events.csv").open(
+                "r", encoding="utf-8", newline=""
+            ) as handle:
+                events = list(csv.DictReader(handle))
+
+        self.assertEqual(trades[0]["exit_date"], "20260601")
+        self.assertEqual(trades[0]["exit_price"], "10.2")
+        self.assertEqual([row["trade_date"] for row in daily], price_data["trade_calendar"])
+        trapped_day = next(row for row in daily if row["trade_date"] == "20260529")
+        self.assertLess(float(trapped_day["drawdown"]), 0.0)
+        self.assertEqual(report["metrics"]["max_drawdown"], min(float(row["drawdown"]) for row in daily))
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+        delay_messages = [row["message"] for row in events if row["event_code"] == "exit_delayed"]
+        self.assertTrue(any("suspended" in message for message in delay_messages))
+        self.assertTrue(any("zero_volume" in message for message in delay_messages))
+        self.assertGreaterEqual(sum("one_price_limit_down" in message for message in delay_messages), 2)
+
+    def test_ship_gate_drawdown_uses_daily_mark_to_market(self) -> None:
         payload = self.load_fixture_payload()
         payload["candidates"][1] = deepcopy(payload["candidates"][1])
         payload["candidates"][1]["industry"] = deepcopy(payload["candidates"][1]["industry"])
@@ -315,13 +518,11 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
 
         self.assertEqual(report["metrics"]["trade_count"], 2)
-        self.assertIsNone(report["metrics"]["max_drawdown"])
+        self.assertIsNotNone(report["metrics"]["max_drawdown"])
         drawdown_result = report["ship_gate_evaluation"]["metric_results"]["max_drawdown"]
-        self.assertIsNone(drawdown_result["value"])
-        self.assertIsNone(drawdown_result["passed"])
+        self.assertIsNotNone(drawdown_result["value"])
+        self.assertIsNotNone(drawdown_result["passed"])
         self.assertIn("mark-to-market", drawdown_result["reason"])
-        self.assertIn("not evaluable", drawdown_result["reason"])
-        self.assertIn("max_drawdown is null", " ".join(report["limitations"]))
 
     def test_stop_loss_takes_priority_over_time_stop(self) -> None:
         price_data = json.loads(
@@ -343,7 +544,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(price_path),
                     *self.capital_cli_args(),
@@ -357,12 +558,12 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertEqual(rc, 0)
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
             self.assertEqual(report["metrics"]["trade_count"], 1)
-            self.assertLess(report["metrics"]["ending_equity"], 116666.55)
+            self.assertGreater(report["metrics"]["ending_equity"], 116666.55)
             with (out_dir / "trades.csv").open("r", encoding="utf-8", newline="") as handle:
                 trades = list(csv.DictReader(handle))
             self.assertEqual(trades[0]["exit_reason"], "stop_loss")
-            self.assertEqual(trades[0]["exit_price"], "12.5")
-            self.assertLess(float(trades[0]["pnl"]), 0.0)
+            self.assertEqual(trades[0]["exit_price"], "13.7")
+            self.assertGreater(float(trades[0]["pnl"]), 0.0)
 
             with (out_dir / "order_events.csv").open(
                 "r", encoding="utf-8", newline=""
@@ -376,13 +577,10 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        price_data["date_range"]["end_date"] = "20260526"
-        for row in list(price_data["rows"]):
-            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260525":
-                next_row = deepcopy(row)
-                next_row.update(
+        for row in price_data["rows"]:
+            if row["ts_code"] == "600000.SH" and row["trade_date"] == "20260526":
+                row.update(
                     {
-                        "trade_date": "20260526",
                         "open_qfq": 12.2,
                         "high_qfq": 12.4,
                         "low_qfq": 12.0,
@@ -392,7 +590,6 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "down_limit": 12.24,
                     }
                 )
-                price_data["rows"].append(next_row)
                 break
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -404,7 +601,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(price_path),
                     *self.capital_cli_args(),
@@ -446,7 +643,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(price_path),
                     *self.capital_cli_args(),
@@ -480,7 +677,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(ROOT / "tests" / "fixtures" / "execution_price_data_minimal.json"),
                     *self.capital_cli_args(),
@@ -534,7 +731,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(price_path),
                     *self.capital_cli_args(),
@@ -577,7 +774,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--price-data",
                         str(price_path),
                         *self.capital_cli_args(),
@@ -602,7 +799,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--price-data",
                         str(price_path),
                         *self.capital_cli_args(),
@@ -629,7 +826,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--price-data",
                         str(price_path),
                         *self.capital_cli_args(),
@@ -670,7 +867,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260523",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         *self.capital_cli_args(),
                         "--out-dir",
                         tmpdir,
@@ -685,7 +882,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         *self.capital_cli_args(),
                         "--initial-capital",
                         "1000000",
@@ -710,7 +907,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--portfolio-allocation",
                         str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
                         "--cash-buffer-state",
@@ -743,7 +940,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--portfolio-allocation",
                         str(ROOT / "tests" / "fixtures" / "portfolio_allocation_minimal.json"),
                         "--cash-buffer-state",
@@ -767,7 +964,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--input-path",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         *self.capital_cli_args(),
                         "--preset-path",
                         str(preset_path),
@@ -778,7 +975,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
     def build_report_for_payload(self, payload: dict) -> dict:
         args = parse_args(["--as-of", str(payload["trade_date"]), *self.capital_cli_args()])
-        input_path = ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"
+        input_path = self.analysis_input_path
         skipped_rows = classify_skips(payload["candidates"])
         capital_context = {
             "portfolio_allocation_ref": {

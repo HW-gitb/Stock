@@ -37,12 +37,21 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
     _attach_holding_disposition,
 )
+from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
+)
+import runners.a_short_weekly_pipeline as _weekly_pipeline_module  # noqa: E402
+
+# Every main() call in this module uses an isolated synthetic ratchet. Tests must
+# never discover, read, or update the user's gitignored private account state.
+_TEST_RATCHET_DIR = tempfile.TemporaryDirectory()
+_weekly_pipeline_module.HOLDING_RATCHET_DEFAULT_PATH = str(
+    Path(_TEST_RATCHET_DIR.name) / "ratchet_state.json"
 )
 
 AS_OF = "20260609"
@@ -142,11 +151,35 @@ def _account():
     }
 
 
+def _account_bundle(account=None, decision_as_of=AS_OF):
+    account = copy.deepcopy(account or _account())
+    facts_as_of = account["as_of"]
+    lineage = {
+        "schema_name": "a_short_account_state_lineage", "schema_version": "1.0.0",
+        "generated_at": None, "decision_as_of": decision_as_of, "facts_as_of": facts_as_of,
+        "facts_staleness": ("current" if facts_as_of == decision_as_of else "stale_warning"),
+        "config": {"rule13_cooldown_calendar_days": 5,
+                   "rule13_default_max_reentry_position_pct": 0.5,
+                   "rule12_default_recovery_position_multiplier": 0.5},
+        "source_tables": [], "rule12": {"source": "excel_portfolio_rule12", "progressed": None},
+        "rule13_cooldowns": [], "consistency_warnings": [],
+    }
+    digest = _bundle_digest(account, lineage)
+    return {"schema_name": "a_short_account_bundle", "schema_version": "1.0.0",
+            "decision_as_of": decision_as_of, "facts_as_of": facts_as_of,
+            "snapshot_id": f"a-short-account-{facts_as_of}-{digest[:16]}",
+            "snapshot_digest": digest, "account": account, "lineage": lineage}
+
+
+def _write_account(path, account=None, decision_as_of=AS_OF):
+    Path(path).write_text(json.dumps(_account_bundle(account, decision_as_of)), encoding="utf-8")
+
+
 def _feed(last_pct=55.0):
     series = [{"trade_date": d, "iv_value": 0.15 + 0.001 * i,
                "iv_percentile_252d": (last_pct if i == 4 else 40.0),
                "hv_value": 0.14 + 0.001 * i}
-              for i, d in enumerate(["20260601", "20260602", "20260603", "20260604", "20260605"])]
+              for i, d in enumerate(["20260601", "20260602", "20260603", "20260604", AS_OF])]
     return {"as_of": AS_OF, "n_days": len(series), "series": series}
 
 
@@ -189,6 +222,10 @@ def _sized_lineage():
     # (provided, sized) run_lineage —— 带账户定量的合法 lineage(配 available_cash>0 用,过 #3 双向不变式)。
     return {"analysis_input": "ai.json", "selection_bucket": "bucket", "iv_feed": "iv_feed.json",
             "account_ref": "acct.json", "account_status": "provided", "sizing_mode": "sized",
+            "account_snapshot": {"snapshot_id": "a-short-account-20260609-0123456789abcdef",
+                                 "snapshot_digest": "0" * 64, "facts_as_of": AS_OF,
+                                 "decision_as_of": AS_OF, "positions_count": 0,
+                                 "integrity_status": "clear", "blocking_kinds": [], "blocking_count": 0},
             "price_freshness": {"mode": "strict_as_of", "run_date": None,
                                 "accepted_prior_settled_date": None, "price_data_through": AS_OF}}
 
@@ -477,7 +514,7 @@ class MainWiringTests(unittest.TestCase):
             candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
         (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
-        (Path(td) / "acct.json").write_text(json.dumps(_account()), encoding="utf-8")
+        _write_account(Path(td) / "acct.json")
 
     def test_main_with_injected_price_provider(self):
         with tempfile.TemporaryDirectory() as td:
@@ -506,6 +543,8 @@ class MainWiringTests(unittest.TestCase):
                 return pd.DataFrame({"cal_date": ["20260605", "20260608", AS_OF]})
 
         orig = wp._fetch_price_series
+        old_ts = sys.modules.get("tushare")
+        sys.modules["tushare"] = object()
         wp._fetch_price_series = _spy
         try:
             with tempfile.TemporaryDirectory() as td:
@@ -524,6 +563,10 @@ class MainWiringTests(unittest.TestCase):
                 self.assertIsNone(cap["accept"])
         finally:
             wp._fetch_price_series = orig
+            if old_ts is not None:
+                sys.modules["tushare"] = old_ts
+            else:
+                sys.modules.pop("tushare", None)
 
     def test_intraday_mode_rejects_historical_run_date_after_as_of(self):
         # explicit intraday mode where the run-date is AFTER as_of (genuine past replay, as_of EOD已发布)
@@ -553,6 +596,8 @@ class MainWiringTests(unittest.TestCase):
                 return pd.DataFrame({"cal_date": ["20260605", "20260608", AS_OF]})
 
         orig = wp._fetch_price_series
+        old_ts = sys.modules.get("tushare")
+        sys.modules["tushare"] = object()
         wp._fetch_price_series = _spy
         try:
             with tempfile.TemporaryDirectory() as td:
@@ -567,6 +612,10 @@ class MainWiringTests(unittest.TestCase):
                 self.assertEqual(cap["accept"], "20260608")   # 前瞻 → 前一交易日容忍生效
         finally:
             wp._fetch_price_series = orig
+            if old_ts is not None:
+                sys.modules["tushare"] = old_ts
+            else:
+                sys.modules.pop("tushare", None)
 
     def test_strict_mode_records_price_freshness_lineage(self):
         # default strict run: the artifact records the price clock = as_of (injected list → strict clock).
@@ -596,7 +645,9 @@ class MainWiringTests(unittest.TestCase):
         sys.modules["tushare"] = fake
         try:
             with tempfile.TemporaryDirectory() as td:
-                self._write_inputs(td)
+                feed = _feed()
+                feed["series"][-1]["trade_date"] = "20260608"
+                self._write_inputs(td, feed=feed)
                 out = Path(td) / "weekly_m67.json"
                 main(["--as-of", AS_OF, "--run-date", AS_OF, "--price-freshness-mode", "intraday_prior_settled",
                       "--analysis-input", str(Path(td) / "ai.json"), "--iv-feed", str(Path(td) / "feed.json"),
@@ -664,7 +715,7 @@ class MainWiringTests(unittest.TestCase):
             acct = _account()
             acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
                                   "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
-            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            _write_account(Path(td) / "acct.json", acct)
             out = Path(td) / "weekly.json"
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                   "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
@@ -690,7 +741,7 @@ class MainWiringTests(unittest.TestCase):
                 "m4_recheck_passed": False,
                 "max_reentry_position_pct": 0.5,
             }]
-            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            _write_account(Path(td) / "acct.json", acct)
             out = Path(td) / "weekly.json"
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                   "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
@@ -1054,7 +1105,7 @@ class PriceFetchTests(unittest.TestCase):
             ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
             (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
             (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
-            (Path(td) / "acct.json").write_text(json.dumps(_account()), encoding="utf-8")
+            _write_account(Path(td) / "acct.json")
             out = Path(td) / "weekly.json"
             old = sys.modules.get("tushare")
             sys.modules["tushare"] = fake
@@ -2823,7 +2874,7 @@ class DragonListTests(unittest.TestCase):
                                   "avg_cost": 10.0, "entry_date": "20260601", "stop_loss": 9.0}]
             (Path(td) / "ai.json").write_text(json.dumps(ai), encoding="utf-8")
             (Path(td) / "feed.json").write_text(json.dumps(_feed()), encoding="utf-8")
-            (Path(td) / "acct.json").write_text(json.dumps(acct), encoding="utf-8")
+            _write_account(Path(td) / "acct.json", acct)
             out = Path(td) / "weekly.json"
             dprov = (lambda d: [{"ts_code": "600519.SH", "name": "持仓", "net_amount": 1e6, "reason": "涨幅偏离"}] if d == "20260605" else [])
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),

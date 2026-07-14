@@ -44,6 +44,7 @@ if str(ROOT) not in sys.path:
 from engine.analyzer.rule6_hard_veto import DEFAULT_RULES as DEFAULT_VETO_RULES
 from engine.analyzer.rule6_hard_veto import normalize_rules as _normalize_veto_rules
 from engine.analyzer.rule6_hard_veto import run_veto
+from engine.data.analysis_input_contract import validate_analysis_input_contract
 
 RESULT_ROOT = ROOT / "result" / "a_short"
 BACKTEST_DIR = RESULT_ROOT / "backtest"
@@ -133,15 +134,14 @@ def parse_windows(value):
 
 
 def _safe_load_analysis(path):
-    """Return (data, ok). ok=False means the file should be regenerated."""
+    """Load and fully validate one analysis_input before any report output."""
     try:
         with path.open("r", encoding="utf-8") as f:
             data = json.load(f)
-    except Exception:
-        return None, False
-    if not isinstance(data, dict) or "candidates" not in data or "trade_date" not in data:
-        return None, False
-    return data, True
+        validate_analysis_input_contract(data, label=f"rank backtest input {path}")
+    except Exception as exc:
+        return None, exc
+    return data, None
 
 
 def load_analysis_inputs(source_root, date_filter=None):
@@ -151,11 +151,14 @@ def load_analysis_inputs(source_root, date_filter=None):
     date_filter = None if date_filter is None else set(date_filter)
     records = []
     for path in sorted(source_root.glob("20*/analysis_input.json")):
-        data, ok = _safe_load_analysis(path)
-        if not ok:
-            print(f"[WARN] skip malformed {path.relative_to(ROOT)}")
-            continue
+        data, error = _safe_load_analysis(path)
+        if error is not None:
+            raise ValueError(f"invalid rank backtest input {path}: {error}") from error
         trade_date = data["trade_date"]
+        if path.parent.name != str(trade_date):
+            raise ValueError(
+                f"rank backtest input directory date {path.parent.name} != trade_date {trade_date}"
+            )
         if date_filter is not None and trade_date not in date_filter:
             continue
         for candidate in data.get("candidates", []):
@@ -294,8 +297,7 @@ def _tushare_pro():
     token = os.environ.get("TUSHARE_TOKEN")
     if not token:
         raise RuntimeError("TUSHARE_TOKEN is required for backtest data fetches")
-    ts.set_token(token)
-    return ts.pro_api()
+    return ts.pro_api(token)
 
 
 def _fn_label(fn):
@@ -1994,6 +1996,11 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
         "preset": "a_short",
         "mode": mode,
         "engineering_smoke": mode == "smoke",
+        "evidence_role": "engineering_rank_replay",
+        "includes_backtest_only_tier2_filler": True,
+        "includes_full_m67_operation_chain": False,
+        "production_or_live_historical_replay": False,
+        "full_size_allowed": False,
         "settings": settings,
         "windows": windows,
         "sample_count": int(len(samples)),
@@ -2026,6 +2033,7 @@ def write_outputs(samples, summary, factor_stats, rule6_stats, monthly_df, windo
             "excess_eligible": "t1 minus same-date eligible universe equal-weight t1 return. Eligible universe is Tier1+Tier2 rows from generated/_intermediate/egs_full_YYYYMMDD.csv.",
         },
         "limitations": [
+            "Evidence role is engineering_rank_replay only: generated pools may include backtest-only Tier2 filler and do not replay the full weekly/M6.7 operation chain.",
             "Backtest writes generated candidate pools and intermediate EGS CSV/XLSX artifacts under result/a_short/backtest/generated/ (isolated from official output).",
             "Forward returns are qfq-adjusted via Tushare adj_factor; transaction cost defaults to 0.16% round-trip.",
             "T+1 entry is marked pending_no_entry_limit_up when Tushare stk_limit says entry open is at/near up_limit; falls back to board-specific limit rules only when stk_limit is unavailable.",

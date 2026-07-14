@@ -121,12 +121,25 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         text = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("[string]$Account", text)                          # -Account param exists
         self.assertIn("$M67Args += @('--account', $Account)", text)      # valid account -> passed to the M6.7 pipeline
-        self.assertIn("-Account path not found", text)                   # bad supplied path -> labelled
-        self.assertIn("$RunM67 = $false", text)                          # bad supplied path -> SKIP (no silent sizing-less run)
+        self.assertIn("-Account path was not found", text)               # bad supplied path -> labelled
+        self.assertIn("exit 23", text)                                  # bad supplied path -> fail requested M6.7 (no silent sizing-less run)
         self.assertIn("no -Account: observation-only", text)             # omitted account -> observation-only, labelled
         self.assertIn("sizing_mode=observation_only_no_account", text)   # points at the durable artifact marker
         self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
         self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
+
+    def test_requested_m67_failures_are_receipted_and_nonzero(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("Write-M67FailureReceipt", text)
+        for reason in (
+            "analysis_input_missing",
+            "iv_feed_failed",
+            "account_path_missing",
+            "weekly_pipeline_failed",
+        ):
+            self.assertIn(reason, text)
+        for exit_code in ("exit 21", "exit 22", "exit 23", "exit $M67ExitCode"):
+            self.assertIn(exit_code, text)
 
     def test_regime_stage_wired_live_only_nonblocking(self):
         # V14.3 regime comparison sidecar wired into the one-click weekly: runs only on a live run

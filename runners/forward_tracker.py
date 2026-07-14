@@ -56,6 +56,7 @@ from runners.backtest_rank import (
     attach_forward_returns,
     fetch_forward_daily,
 )
+from engine.data.analysis_input_contract import validate_analysis_input_contract
 
 TRACKER_CSV = ROOT / "logs" / "forward_tracker.csv"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
@@ -65,6 +66,8 @@ LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
 SCHEMA_COLUMNS = [
     "as_of",
     "captured_at",
+    "run_id",
+    "candidate_digest",
     "ts_code",
     "name",
     "tier",
@@ -118,10 +121,12 @@ def _get(d, *keys, default=None):
     return cur
 
 
-def _candidate_row(as_of: str, captured_at: str, c: dict) -> dict:
+def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: str, c: dict) -> dict:
     return {
         "as_of": as_of,
         "captured_at": captured_at,
+        "run_id": run_id,
+        "candidate_digest": candidate_digest,
         "ts_code": c.get("ts_code"),
         "name": c.get("name"),
         "tier": _get(c, "selection", "tier"),
@@ -189,37 +194,42 @@ def capture(as_of: str) -> int:
         return 2
     with input_path.open("r", encoding="utf-8") as f:
         payload = json.load(f)
+    try:
+        validate_analysis_input_contract(payload, label=f"forward capture {as_of}")
+    except Exception as exc:
+        print(f"[FATAL] invalid analysis_input: {exc}")
+        return 2
+    if str(payload.get("trade_date")) != str(as_of):
+        print(f"[FATAL] analysis_input trade_date {payload.get('trade_date')} != --as-of {as_of}")
+        return 2
+    identity = ((payload.get("source") or {}).get("run_identity") or {})
+    run_id = identity.get("run_id")
+    digest = identity.get("candidate_digest")
+    if not run_id or not digest:
+        print("[FATAL] analysis_input missing run identity; refusing ambiguous same-day cohort")
+        return 2
     candidates = payload.get("candidates") or []
-    if not candidates:
-        print(f"[WARN] {as_of}: zero candidates in analysis_input.json (nothing to capture)")
-        return 0
 
     captured_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    new_rows = [_candidate_row(as_of, captured_at, c) for c in candidates]
+    new_rows = [_candidate_row(as_of, captured_at, run_id, digest, c) for c in candidates]
     new_df = pd.DataFrame(new_rows, columns=SCHEMA_COLUMNS)
 
     existing = _load_existing_tracker()
-    if not existing.empty:
-        key = ["as_of", "ts_code"]
-        existing[key[0]] = existing[key[0]].astype(str)
-        existing[key[1]] = existing[key[1]].astype(str)
-        new_df[key[0]] = new_df[key[0]].astype(str)
-        new_df[key[1]] = new_df[key[1]].astype(str)
-        # Drop new rows that already exist (idempotent re-runs); keep the
-        # existing row so we don't lose any backfilled return values.
-        mask_dup = new_df.set_index(key).index.isin(existing.set_index(key).index)
-        n_dup = int(mask_dup.sum())
-        new_df = new_df[~mask_dup]
-        if n_dup:
-            print(f"[INFO] {as_of}: {n_dup} rows already in tracker, skipping")
-
-    if new_df.empty:
-        print(f"[OK] {as_of}: nothing new to append (tracker rows: {len(existing)})")
+    same_day = existing[existing["as_of"].astype(str) == str(as_of)] if not existing.empty else existing
+    expected_codes = sorted(str(row["ts_code"]) for row in new_rows)
+    captured_codes = sorted(same_day["ts_code"].dropna().astype(str).tolist()) if not same_day.empty else []
+    if not same_day.empty and set(same_day["run_id"].dropna().astype(str)) == {run_id} and \
+            set(same_day["candidate_digest"].dropna().astype(str)) == {digest} and \
+            len(same_day) == len(new_df) and captured_codes == expected_codes:
+        print(f"[OK] {as_of}: identical run already captured; preserving backfill")
         return 0
 
-    combined = pd.concat([existing, new_df], ignore_index=True)
+    # A same-day rerun is an authoritative cohort replacement.  Never union
+    # candidates across run identities (A/B then B/C must end as B/C only).
+    prior_other_days = existing[existing["as_of"].astype(str) != str(as_of)] if not existing.empty else existing
+    combined = pd.concat([prior_other_days, new_df], ignore_index=True)
     _write_tracker(combined)
-    print(f"[OK] {as_of}: appended {len(new_df)} rows (tracker rows now: {len(combined)})")
+    print(f"[OK] {as_of}: replaced cohort with run {run_id} ({len(new_df)} rows; tracker rows now {len(combined)})")
     return 0
 
 

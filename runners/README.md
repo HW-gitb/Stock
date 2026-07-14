@@ -7,7 +7,7 @@ Planned scripts:
 - `screen.py`
 - `analyze.py`
 - `backtest_rank.py`
-- `backtest_execution.py` (Phase 5 skeleton exists; full simulator pending)
+- `backtest_execution.py` (Phase 5 offline daily-bar simulator; not production or ship-gate evidence by itself)
 
 Current Phase 1/2 entry remains `A-EGS/egs_main.py`. Direct historical
 `--as-of` runs must use `--l3-mode pit` / `neutralize`, or explicitly declare
@@ -21,9 +21,13 @@ explicitly marked as cache hits, not fresh provider coverage.
 
 Validation environment:
 
-- Use the project/local Python that has the repo's data stack installed for
-  schema-validating commands, for example:
-  `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`.
+- `runners\weekly_screening.ps1` now resolves `-PythonExe`, `STOCK_PYTHON`,
+  PATH, or a standard Windows Python install in that order, then runs the
+  offline dependency preflight before any provider or private-state access.
+- Run the complete offline A-short check with one command:
+  `.\runners\a_short_offline_check.ps1`. Missing dependencies are listed
+  together; install them once with
+  `python -m pip install -r requirements-a-short.txt`, then rerun the command.
 - Install mandatory runtime validation dependencies with:
   `python -m pip install -r requirements.txt`.
 - Install development / test dependencies with:
@@ -35,15 +39,18 @@ Validation environment:
 Existing helpers:
 
 - `backtest_rank.py` — Phase 2 rank 回测入口；smoke-mode historical `today` L3 generation explicitly passes `--allow-historical-live-l3`, while production defaults to L3 neutralization.
+- `a_short_preflight.py` / `a_short_offline_check.ps1` - resolve one explicit or standard project Python, report every missing A-short dependency in one offline pass, then run the fixed offline test pack without provider or private-account access.
+- `a_short_entry_funnel_calibration.py` - local-only, source-hash-bound evaluator for the preregistered A-short funnel / IV / overlay seen sample; it cannot search or change production thresholds and keeps future confirmatory observations separate.
 - `backtest_execution.py` - Phase 5 execution backtest runner; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`
   JSON via `--price-data`, requires explicit `--portfolio-allocation` and
   `--cash-buffer-state` inputs for bucket-aware capital context, reads
   `presets/a_short.yaml` by default via `--preset-path`, validates
   `execution_report.json`, and writes CSV outputs under
-  `result/a_short/backtest/execution/`. With `--price-data`, it runs the minimal
-  daily-OHLC fill simulation; without `--price-data`, it keeps the skeleton skip
-  behavior. It rejects cash-state bucket capital above the policy ceiling
+  `result/a_short/backtest/execution/`. With `--price-data`, it runs a trading-calendar
+  daily-OHLC portfolio simulation with T+1, delayed unsellable exits, concurrent
+  cash use, and close-to-close mark-to-market; without `--price-data`, it keeps the
+  skeleton skip behavior. It rejects cash-state bucket capital above the policy ceiling
   (`market_capital * bucket_ceiling_pct`) before sizing can use it.
 - `aggregate_execution_reports.py` - Phase 5 multi-period aggregation helper;
   reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
@@ -91,4 +98,4 @@ Existing helpers:
 - `diagnose_tier1_bad_signals.py` — Phase 3.2 Tier1 坏票特征诊断；只读现有 `rank_samples.csv` 和 generated full-rank CSV，不重跑 EGS
 - `run_analysis_report.py` — Phase 4 单票 deterministic report runner；读取 `analysis_input.json`，调用 analyzer/state，默认用 as-of A 股收盘时间评估 JSON state（可用 `--state-now` 覆盖），输出 schema-validated JSON + Markdown 到 `result/a_short/<as_of>/reports/`
 - `data_canary.py` — Phase 2.6 advisory-only 旁路跨源对账（Tushare vs akshare）；exit 0 / warning 不能当作 data_passed、alpha、production-readiness 或 ship-gate evidence。
-- `weekly_screening.ps1` — 周实盘一键脚本（**省略 `-AsOf` → 自动解析 canonical 决策日 = 即将到来/当前未收盘的交易日**，`runners/resolve_canonical_asof.py`；窗口内[周五收盘后→周一收盘前]任意时刻/多次跑都收敛到同一 as_of，防 forward-evidence 灌水）：依次跑 `egs_main.py` + `data_canary.py` + `forward_tracker.py` + **M6.7 advisory**(Slice 3b-2: build market IV feed + `a_short_weekly_pipeline.py`, 语义 cninfo+DeepSeek 行内 -> `research/results/a_short/<as_of>/weekly_m67.json`; `-Account` 传手工账户状态 JSON: cash/positions/Rule12/Rule13,供 sizing 与已有持仓/冷静期判断,不接券商; `-SkipSemanticRisk` 可关, advisory 旁路非阻断) + **V14.3 regime 比较 sidecar**(`a_short_regime_comparison_runner.py`:comparison-only 非生产、V14.2 仍冻结,不碰选股/M6.7/否决/生产;**只在 live 运行跑**(`as_of >= 运行日`:今日 或 前瞻 canonical 周一;真·过去回放 `as_of < 运行日` 跳过——账本是 forward 累积的已结算交易日证据)、**advisory 旁路非阻断**;无 `research/results/a_short/regime_daily_ledger.json` → 一次性 `--bootstrap` 252日回填(首跑数分钟)、有 → increment ~5日;runner 把 as_of 收敛到最新已结算交易日(盘中周一→上周五),有则复用本次 IV feed;`-SkipRegime` 可关)；historical `-AsOf` requires explicit `-L3Mode pit` / `neutralize`, rejects `today`, and refuses to overwrite existing official outputs unless `-AllowHistoricalOverwrite` is passed.
+- `weekly_screening.ps1` — 周实盘一键脚本（省略 `-AsOf` 时解析 canonical 决策日）：依次跑 EGS、canary、forward capture、**唯一操作输出 M6.7**、V14.3 comparison sidecar。M6.7 只消费 final marker + byte digest 绑定的当次 EGS 包，最终 JSON/Markdown/receipt/ratchet 同事务发布；请求后 analysis/IV/account/pipeline 任一失败会写 `failed` receipt 并非零退出。语义证据仍 advisory-only，不进生产评分/veto；`-SkipSemanticRisk` 可跳过整段 M6.7。带 `-Account` 时输出进 gitignored private root；无账户仅 observation-only。V14.3 由 `a_short_regime_comparison_runner.py` 运行，仍是 live-only、`comparison-only`、`--bootstrap` 首次建账且失败**非阻断** M6.7，`-SkipRegime` 可关。historical `-AsOf` 必须显式 `-L3Mode pit|neutralize`，默认拒覆盖既有正式输出。

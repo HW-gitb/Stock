@@ -1,0 +1,109 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_entry_funnel_calibration_report/1.0.0/schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "preregistration_ref", "source_integrity", "funnel", "iv_boundary", "overlay_evidence", "calibration_conclusion", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_entry_funnel_calibration_report"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "preregistration_ref": {"$ref": "#/$defs/ref"},
+    "source_integrity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "verified_files", "provider_calls", "random_simulations"],
+      "properties": {
+        "status": {"const": "all_sha256_verified"},
+        "verified_files": {"type": "integer", "minimum": 14},
+        "provider_calls": {"const": 0},
+        "random_simulations": {"const": 0}
+      }
+    },
+    "funnel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["distinct_weeks", "candidate_count", "hard_veto_count", "ma_shape_failure_count", "entry_trigger_failure_count", "rr_plan_count", "capital_gate_evaluable_count", "unclassified_count", "stages"],
+      "properties": {
+        "distinct_weeks": {"type": "integer", "minimum": 1},
+        "candidate_count": {"type": "integer", "minimum": 1},
+        "hard_veto_count": {"type": "integer", "minimum": 0},
+        "ma_shape_failure_count": {"type": "integer", "minimum": 0},
+        "entry_trigger_failure_count": {"type": "integer", "minimum": 0},
+        "rr_plan_count": {"type": "integer", "minimum": 0},
+        "capital_gate_evaluable_count": {"type": "integer", "minimum": 0},
+        "unclassified_count": {"type": "integer", "minimum": 0},
+        "stages": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/stage"}}
+      }
+    },
+    "iv_boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observation_count", "minimum", "median", "maximum", "above_80_count", "above_90_count", "exact_80_count", "exact_90_count", "policy_verified"],
+      "properties": {
+        "observation_count": {"type": "integer", "minimum": 1},
+        "minimum": {"type": "number", "minimum": 0, "maximum": 100},
+        "median": {"type": "number", "minimum": 0, "maximum": 100},
+        "maximum": {"type": "number", "minimum": 0, "maximum": 100},
+        "above_80_count": {"type": "integer", "minimum": 0},
+        "above_90_count": {"type": "integer", "minimum": 0},
+        "exact_80_count": {"type": "integer", "minimum": 0},
+        "exact_90_count": {"type": "integer", "minimum": 0},
+        "policy_verified": {"const": true}
+      }
+    },
+    "overlay_evidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["seen_observations", "seen_candidate_count", "seen_eligible_count", "future_confirmatory_observations", "future_confirmatory_required", "promotion_evaluable"],
+      "properties": {
+        "seen_observations": {"type": "integer", "minimum": 0},
+        "seen_candidate_count": {"type": "integer", "minimum": 0},
+        "seen_eligible_count": {"type": "integer", "minimum": 0},
+        "future_confirmatory_observations": {"type": "integer", "minimum": 0},
+        "future_confirmatory_required": {"const": 12},
+        "promotion_evaluable": {"const": false}
+      }
+    },
+    "calibration_conclusion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "observed_bottleneck", "egs_entry_mismatch_proven", "specific_threshold_too_strict_proven", "sample_sufficient", "production_threshold_change", "next_evidence"],
+      "properties": {
+        "status": {"enum": ["insufficient_sample_with_entry_trigger_bottleneck", "egs_entry_mismatch", "specific_gate_too_strict", "within_calibration_band", "too_lax"]},
+        "observed_bottleneck": {"enum": ["hard_veto", "ma_shape", "low_pullback_or_breakout", "reward_risk", "capital_gate", "none"]},
+        "egs_entry_mismatch_proven": {"type": "boolean"},
+        "specific_threshold_too_strict_proven": {"type": "boolean"},
+        "sample_sufficient": {"type": "boolean"},
+        "production_threshold_change": {"const": false},
+        "next_evidence": {"const": "collect_frozen_future_confirmatory_weeks_without_threshold_changes"}
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["calibration_only", "is_alpha", "is_buy_advice", "satisfies_ship_gate", "full_size_allowed"],
+      "properties": {
+        "calibration_only": {"const": true},
+        "is_alpha": {"const": false},
+        "is_buy_advice": {"const": false},
+        "satisfies_ship_gate": {"const": false},
+        "full_size_allowed": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "ref": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": {"type": "string", "minLength": 1},
+        "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "stage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["stage", "passed_count", "pass_rate", "status"],
+      "properties": {
+        "stage": {"enum": ["egs_candidate", "no_hard_veto", "ma_shape", "low_pullback_or_breakout", "reward_risk", "capital_gate"]},
+        "passed_count": {"type": "integer", "minimum": 0},
+        "pass_rate": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+        "status": {"enum": ["observed", "not_evaluable_private_account"]}
+      }
+    }
+  }
+}

@@ -31,6 +31,7 @@ from runners.materialize_execution_price_data_tushare import (
     validate_payload_matches_request,
     write_payload,
 )
+from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
 
 
 class FakeTusharePro:
@@ -122,6 +123,18 @@ class FakeTusharePro:
 
 @unittest.skipIf(Draft7Validator is None, "jsonschema not installed")
 class TushareExecutionPriceDataTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls._analysis_input_tmp = tempfile.TemporaryDirectory()
+        cls.analysis_input_path = Path(cls._analysis_input_tmp.name) / "analysis_input.json"
+        cls.analysis_input_path.write_text(
+            json.dumps(cloned_minimal_analysis_input_payload()), encoding="utf-8"
+        )
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._analysis_input_tmp.cleanup()
+
     def test_build_payload_from_tushare_is_schema_valid(self) -> None:
         payload = build_payload_from_tushare(
             FakeTusharePro(),
@@ -179,7 +192,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
 
     def test_symbols_from_analysis_input_fixture(self) -> None:
         self.assertEqual(
-            symbols_from_analysis_input(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+            symbols_from_analysis_input(self.analysis_input_path),
             ["600000.SH", "600001.SH"],
         )
 
@@ -268,7 +281,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--analysis-input",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--end-date",
                     "20260525",
                     "--cache-dir",
@@ -334,7 +347,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
                         "--as-of",
                         "20260522",
                         "--analysis-input",
-                        str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                        str(self.analysis_input_path),
                         "--symbols",
                         "600000.SH",
                         "--end-date",
@@ -370,7 +383,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
                     "--as-of",
                     "20260522",
                     "--input-path",
-                    str(ROOT / "tests" / "fixtures" / "analysis_input_minimal.json"),
+                    str(self.analysis_input_path),
                     "--price-data",
                     str(price_path),
                     "--portfolio-allocation",
@@ -388,7 +401,8 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
 
         self.assertEqual(rc, 0)
         self.assertEqual(report["schema_version"], "1.2.0")
-        self.assertEqual(report["metrics"]["trade_count"], 1)
+        self.assertEqual(report["metrics"]["trade_count"], 0)
+        self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
         self.assertEqual(
             report["data_lineage"]["api_families"]["execution_price"],
             TUSHARE_API_FAMILIES,

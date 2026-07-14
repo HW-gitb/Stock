@@ -368,6 +368,13 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
     sr_down = []
     if has_position:
         sr_down.append("已有持仓:按持仓管理输出,不按新开仓处理")
+    integrity = stateful.get("account_integrity") or {}
+    if integrity.get("new_entry_blocked"):
+        kinds = ",".join(str(x) for x in (integrity.get("blocking_kinds") or [])) or "unknown"
+        if has_position:
+            sr_down.append(f"account_integrity blocked({kinds}):已有持仓仅管理/禁止加仓")
+        else:
+            sr_hard.append(f"account_integrity blocked({kinds}):持仓对账未闭环,禁止新开仓")
     r12 = stateful.get("rule12") or {}
     if r12.get("status") == "active_cooldown":
         if has_position:
@@ -452,6 +459,15 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     risk_eh = entry_high - stop_t
     if risk_eh <= 0:
         return None, "区间上沿 ≤ 止损(最不利价无效)"
+    if not use_structural_res:
+        # Fallback target and RR gate must share the same worst-case entry basis.  The old code
+        # derived t1 from ``close`` and then judged it against ``entry_high``, making valid
+        # breakout fallback cases structurally unreachable.
+        t1_t = tick_up(entry_high + rr_floor * risk_eh)
+        t2_t = tick_down(max(t1_t + ATR_MULT.get(regime, 1.25) * atr,
+                             entry_high + 2.0 * risk_eh))
+        if t1_t is None or t2_t is None or t2_t < t1_t:
+            return None, "RR fallback 目标取整后结构失效"
     rr_eh = (t1_t - entry_high) / risk_eh
     if rr_eh < rr_floor:
         return None, f"最不利价(区间上沿)盈亏比 {rr_eh:.2f} < {rr_floor}"
@@ -460,9 +476,24 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     cap_pct = SINGLE_CAP_PCT.get(regime, 0.40)
     if cap_pct <= 0:
         return None, "本环境禁新建仓"
-    avail = (inp.get("account") or {}).get("available_cash") or 0.0
+    acct = inp.get("account") or {}
+    avail = acct.get("available_cash") or 0.0
     amt5 = (inp.get("liquidity") or {}).get("avg_amount_5d") or 0.0
-    cap = min(avail * cap_pct, amt5 * IMPACT_COST_FRAC)
+    bucket_capital = acct.get("bucket_capital")
+    new_capacity = acct.get("new_exposure_capacity")
+    if bucket_capital is not None or new_capacity is not None:
+        if not isinstance(bucket_capital, (int, float)) or isinstance(bucket_capital, bool) or bucket_capital <= 0:
+            return None, "bucket_capital 缺失/非法,禁止新建仓"
+        if not isinstance(new_capacity, (int, float)) or isinstance(new_capacity, bool) or new_capacity <= 0:
+            return None, "A-short bucket 已满/超限(new_exposure_capacity<=0),禁止新建仓"
+        cap = min(float(avail), float(bucket_capital) * cap_pct,
+                  float(new_capacity), amt5 * IMPACT_COST_FRAC)
+        notes.append(
+            f"bucket额度:capital={float(bucket_capital):.2f},remaining={float(new_capacity):.2f}")
+    else:
+        # Backward-compatible pure-engine mode. The production weekly pipeline always supplies the
+        # bucket context; legacy direct unit callers remain usable until their fixtures migrate.
+        cap = min(avail * cap_pct, amt5 * IMPACT_COST_FRAC)
     cap *= 0.5            # 试探仓:edge 未验证,默认半仓打底
     notes.append("试探仓(edge 未验证,默认上限×0.5)")
     if extra_halve:
@@ -481,7 +512,11 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
             "support": sup, "support_quality": ind.get("support_quality"),   # #5 stop 的结构支撑基准 + 质量
             "resistance": res, "resistance_quality": ind.get("resistance_quality"),   # #6 t1/RR 的结构阻力基准 + 质量
             "t1_basis": t1_basis,   # #6:t1 来源(structural_resistance / rr_floor_fallback)——决定 advice 目标基准文案是否标结构阻力
-            "shares": shares, "avg_amount_5d": amt5, "sizing_notes": notes}, None
+            "shares": shares, "avg_amount_5d": amt5, "sizing_notes": notes,
+            "capital_context": ({"bucket_capital": float(bucket_capital),
+                                 "new_exposure_capacity": float(new_capacity),
+                                 "single_position_cap_pct": cap_pct}
+                                if bucket_capital is not None else None)}, None
 
 
 def holding_levels(inp: dict, ind: dict, regime: str):
@@ -490,20 +525,37 @@ def holding_levels(inp: dict, ind: dict, regime: str):
     = 最终可执行价)+ post-tick 重校验。缺价/ATR/最高价 → reject(render 显"未算出",**绝不伪造**);
     现价 ≤ 取整后跟踪止损,或取整后止盈结构失效 → `breached`(t1/t2=None,标已破位、不伪造止盈)。
     返回 (plan, None) | (None, reject_reason)。"""
-    close, recent_high, atr = inp.get("close"), ind.get("resistance"), ind.get("atr14")
-    res = ind.get("resistance")
-    if close is None or recent_high is None or atr is None or atr <= 0:
-        return None, "缺价/ATR/近20日最高,无法精算跟踪止损"
-    stop = tick_up(recent_high - ATR_MULT.get(regime, 1.25) * atr)     # 止损向上取(不低于风险线)
+    close, atr = inp.get("close"), ind.get("atr14")
+    position = ((inp.get("stateful_risk") or {}).get("position") or {})
+    entry_date = str(position.get("entry_date") or "")
+    manual_stop = position.get("stop_loss")
+    dated_post_entry = [row for row in (inp.get("price_series") or [])
+                        if entry_date and str(row.get("trade_date") or "") >= entry_date and
+                        isinstance(row.get("high"), (int, float)) and not isinstance(row.get("high"), bool)]
+    highest_since_entry = max((float(row["high"]) for row in dated_post_entry), default=None)
+    # Undated legacy fixtures cannot prove a post-entry high. Preserve the locked entry stop rather
+    # than letting a pre-entry 20-day resistance silently tighten the live holding.
+    if highest_since_entry is None and manual_stop is None:
+        highest_since_entry = ind.get("resistance")
+    if close is None or atr is None or atr <= 0 or (highest_since_entry is None and manual_stop is None):
+        return None, "缺价/ATR/入场后最高价与初始止损,无法精算跟踪止损"
+    stop_candidates = []
+    if isinstance(manual_stop, (int, float)) and not isinstance(manual_stop, bool):
+        stop_candidates.append(float(manual_stop))
+    if highest_since_entry is not None:
+        stop_candidates.append(highest_since_entry - ATR_MULT.get(regime, 1.25) * atr)
+    stop = tick_up(max(stop_candidates))     # 初始止损锁定 + 入场后 trailing,只升不降
     if stop is None:
         return None, "止损非有限,取整失败"
     base = {"entry": None, "shares": None, "stop": stop, "basis": "trailing_ratchet",
-            "recent_high": recent_high, "atr": atr}
+            "recent_high": highest_since_entry, "highest_since_entry": highest_since_entry,
+            "entry_stop": manual_stop, "entry_date": entry_date or None, "atr": atr}
     risk = close - stop
     if risk <= 0:                          # 现价 ≤ 取整后跟踪止损 → 已破位(被动诚实,不伪造止盈)
         return {**base, "t1": None, "t2": None, "breached": True}, None
     rr_floor = RR_FLOOR.get(regime, 1.5)
-    raw_t1 = res if (res and res > close) else close + rr_floor * risk
+    res = ind.get("resistance")
+    raw_t1 = res if (res and res > close and not entry_date) else close + rr_floor * risk
     t1 = tick_down(raw_t1)                 # 止盈向下取(不高估可实现目标)
     t2 = tick_down(max(raw_t1 + ATR_MULT.get(regime, 1.25) * atr, close + 2.0 * risk))
     if t1 is None or t2 is None or not (t1 > close and t2 >= t1):      # post-tick 结构失效 → 退破位
@@ -1157,6 +1209,9 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             _fprev = _fcut.get("风控触发") or ""
             _fcut["风控触发"] = (f"{_fprev}｜{_fq_imps[0]['reason']}" if _fprev and _fprev != "无"
                                   else _fq_imps[0]["reason"])
+    sizing_block = ([reject] if action == "观察" and reject and
+                    any(marker in str(reject) for marker in
+                        ("bucket", "new_exposure_capacity", "股数/金额不足", "组合现金分配")) else [])
     result = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -1166,7 +1221,11 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "indicators": ind, "risk_families": fam,
             "layer": {"hard_veto": hard, "downgrade": downgrades,
                       "observe_only": observe, "llm_enrichment": llm_notes,
-                      "semantic_risk": sc["trace"]},
+                      "semantic_risk": sc["trace"],
+                      "decision_reasons": {"hard_veto": list(hard),
+                                           "downgrade": list(downgrades),
+                                           "observe_only": list(observe),
+                                           "sizing_block": sizing_block}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,

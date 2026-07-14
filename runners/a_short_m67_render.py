@@ -274,6 +274,10 @@ def render_weekly_markdown(weekly: dict) -> str:
     # Slice 3b-2: durable run_lineage banner — esp. the no-account no-sizing warning so a reader of THIS
     # artifact (not just the terminal) cannot mistake a sizing-artifact 观察 for a real avoid signal.
     rl = weekly.get("run_lineage") or {}
+    if rl:
+        out.append("**run**:id=`" + str(rl.get("run_id", "?")) +
+                   "` | candidate_digest=`" + str(rl.get("candidate_digest", "?")) +
+                   "` | stage=" + str(rl.get("stage_status", "?")))
     if rl.get("sizing_mode") and rl.get("sizing_mode") != "sized":
         out.append("> ⚠️ **无账户(account_status=" + str(rl.get("account_status", "?")) +
                    "):仓位 sizing N/A —— 建仓候选会渲染为「观察」(可建股数/金额不足),这是 **sizing 假象、非真 avoid 信号**;"
@@ -283,6 +287,26 @@ def render_weekly_markdown(weekly: dict) -> str:
                    str(rl.get("iv_feed", "?")) + "` | account=" + str(rl.get("account_status", "?")) +
                    " | account_ref=`" + str(rl.get("account_ref", "")) + "`" +
                    " | sizing=" + str(rl.get("sizing_mode", "?")))
+    snap = rl.get("account_snapshot") or {}
+    if snap:
+        out.append("**account snapshot**:facts_as_of=`" + str(snap.get("facts_as_of")) +
+                   "` | decision_as_of=`" + str(snap.get("decision_as_of")) +
+                   "` | snapshot_id=`" + str(snap.get("snapshot_id")) +
+                   "` | positions=" + str(snap.get("positions_count", 0)) +
+                   " | integrity=" + str(snap.get("integrity_status", "?")))
+        if snap.get("integrity_status") == "blocked":
+            out.append("> ⚠️ **账户持仓对账阻断**：禁止新开仓；已有持仓继续管理。原因=`" +
+                       ",".join(snap.get("blocking_kinds") or []) + "`")
+    ivf = rl.get("iv_freshness") or {}
+    if ivf:
+        out.append("**IV clock**:status=" + str(ivf.get("status")) +
+                   " | IV数据截至 `" + str(ivf.get("iv_data_through")) + "`")
+    mr = rl.get("market_regime") or {}
+    if mr:
+        out.append("**market regime**:source=`" + str(mr.get("source_status")) +
+                   "` | effective=`" + str(mr.get("effective_status")) +
+                   "` (" + str(mr.get("effective_regime")) + ") | fallback=" +
+                   str(mr.get("fallback_active")).lower())
     # 价格时钟(诚实标注 M6.7 技术指标实际用到的价格日期;盘中容忍前一交易日时尤其要显眼,免得读者把
     # as_of=周一 误读成价格也到周一)。
     pf = rl.get("price_freshness") or {}

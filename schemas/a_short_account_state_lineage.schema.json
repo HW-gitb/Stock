@@ -45,7 +45,7 @@
       "additionalProperties": false,
       "required": ["source", "progressed"],
       "properties": {
-        "source": {"enum": ["excel_portfolio_rule12", "default_inactive"]},
+        "source": {"const": "excel_portfolio_rule12"},
         "progressed": {"$ref": "#/$defs/progressionOrNull"}
       }
     },

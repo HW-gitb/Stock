@@ -157,8 +157,7 @@ def tushare_pro() -> Any:
     import tushare as ts
 
     _pin_tushare_base_url()
-    ts.set_token(token)
-    return ts.pro_api()
+    return ts.pro_api(token)
 
 
 def _fn_label(fn: Callable[..., Any]) -> str:
@@ -203,7 +202,7 @@ def fetch_symbol_frames(pro: Any, symbol: str, start_date: str, end_date: str) -
         ts_code=symbol,
         start_date=start_date,
         end_date=end_date,
-        fields="ts_code,trade_date,open,high,low,close,pre_close",
+        fields="ts_code,trade_date,open,high,low,close,pre_close,vol",
     )
     adj = ts_call(
         pro.adj_factor,
@@ -295,6 +294,7 @@ def build_rows_for_symbol(
                 "adj_factor": float(adj_factor),
                 "up_limit": adjusted_optional_price(row.up_limit, adj_factor),
                 "down_limit": adjusted_optional_price(row.down_limit, adj_factor),
+                "volume": numeric_or_none(getattr(row, "vol", None)),
                 "source_flags": ["daily", "adj_factor", "stk_limit"],
             }
         )
@@ -349,6 +349,7 @@ def build_payload_from_tushare(
             "end_date": end_date,
         },
         "symbols": symbols,
+        "trade_calendar": sorted(open_dates),
         "rows": sorted(rows, key=lambda item: (item["ts_code"], item["trade_date"])),
         "limitations": [
             "Materialized from Tushare daily/adj_factor/stk_limit/trade_cal; no fill simulation is performed by this helper.",

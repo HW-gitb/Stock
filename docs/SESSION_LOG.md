@@ -8,6 +8,66 @@
 
 ---
 
+## 2026-07-14 — Claude Code 独立复审（A-short `ashort_review1` 第 11—13 刀）代码 PASS
+
+- **Verdict/Action**: 三刀代码正确、无 Required。刀11 execution 回测交易日历+T+1(入场日止损排队/买入日不可卖)、停牌/零量/一字跌停全挡→退出排至首个可卖日 open、逐日 last_close 盯市使被困亏损进 max_drawdown、ship-gate 恒 `full_size_allowed=false`;刀12 preflight 一次列全缺失依赖、token 直传 `ts.pro_api`、AST 证全 a_short callsite 零 `set_token`;刀13 校准 SHA-256 校验 seen 源+冻结核对 IV tie(80/90 inclusive)+真实绑定件派生漏斗(38→8→8→22→0、0 provider/0 蒙特卡洛)、结论 insufficient_sample、`production_threshold_change=false`。整读+亲跑确认、无操作残留。
+- **Required**: 无(完整机制/关闭边界见 register `R-ASHORT-REVIEW1-KNIVES-11-13-CLOSURE` 复审补注)。
+- **Verify**: `test_a_short_preflight`+`test_a_short_entry_funnel_calibration`+`execution.test_backtest_execution`(含买入日止损排队+停牌/零量/跌停延迟退出+被困亏损 MTM)+execution schema/aggregate/materializer **74 OK / 0 fail**;无子 agent。
+- **Next**: 用户定(跑 live egs_main→weekly 20260714 闭合刀1/2/8 真产物[已授权] / review1 收口);桌面 `ashort_review1.md` 状态列已按复审更新为 13 刀均完成·Claude PASS。
+
+## 2026-07-14 — Claude Code 独立复审（A-short `ashort_review1` 第 6—10 刀）代码 PASS
+
+- **Verdict/Action**: 五刀**代码正确**——刀6 停牌/解禁/减持源三态(缺源 RuntimeError 不当空集)、解禁 `ann_date<=TODAY` PIT + 真 `circ_mv/close` 分母(缺分母→blocked、无 `float_ratio×0.6` 魔法系数);刀7 `get_trade_dates` 强制官方 `trade_cal`(None/畸形/未来/不足即 raise、不伪造工作日)、`get_daily_basic` 回退记真实 `source_trade_date`;刀8 run-identity/digest 绑定候选集、`official_output_transaction`+`_replace_many_with_rollback` 失败全量回滚、`publish_weekly_bundle` 先验后原子发布(json/md/receipt/ratchet 同 run/digest/stage=complete)、marker 拒篡改字节、ps1 failed-receipt+非零退出;刀9 `capture` 同日覆盖 cohort(绝不跨 run 并集、仅精确同 run 全量为 no-op);刀10 rank/execution 输出前全 schema+PIT 校验(无效 PIT 在建目录前失败)、rank const-pin `engineering_rank_replay`、execution ship-gate 恒 `full_size_allowed=false`。整读 + 红测确认。无 Required。
+- **Required**: 无。
+- **Optional**: 刀6/7/8 的**真数据最终产物**(`analysis_input.json`/`candidates.csv`/`data_health.json` + weekly)尚未在真跑上核对——离线联动已由 consumer contract validator 焊死,只差一次 live `egs_main→weekly`(与 刀1-5 R2 同一次已授权运营 emit,账户数据补齐后已解锁)。
+- **Verify**: `tests.test_a_short_review1_knives_6_10` **18 OK**;affected 包(execution + backtest_rank phase3 + egs PIT/suspend/calendar guards + forward_tracker + weekly_screening guardrails + schema)**152 OK / 0 fail**。无子 agent。
+- **Next**: 用户定(跑 live egs_main→weekly 20260714 核对真产物[已授权] / 复审 刀11-13 / 标完成)。
+
+## 2026-07-14 — Claude Code 独立复审（A-short `ashort_review1` 第 1 刀 R1/R2 闭环复审）PASS
+
+- **Verdict/Action**: R1 已闭——`tests/test_a_short_holdings_in_m67.py` 迁到 `_write_account`(converter-backed bundle)、a-short 定向包 **689 OK / 0 fail**(原 2 ERROR 消)。R2 已闭——`weekly_private/20260713/` pre-fix 旧件已整体移入 gitignored `weekly_private/quarantined/20260713_pre_account_bundle/`、canonical 路径已空;用户补齐真实账户事实(account.csv `as_of=20260714` + 非空 `total_equity`/`current_gross_exposure`、`portfolio_rule12.csv` status=inactive)→ 真 CSV `build_account_bundle` 实建成功、空-Rule12 fail-closed 已解。刀1 代码仍 PASS、本轮无改判。
+- **Required**: 无。
+- **Optional**: 真实 `weekly_private/20260714/weekly_m67.json/.md` 尚未产出——final-output 写路径已由 `test_main_emits_bound_clocks_and_effective_regime` 证明,产它=一次 fetch 授权的 egs_main+weekly 正常运行,现已解锁、待用户触发。
+- **Verify**: 定向包 knives_1_5+holdings+account+phase5+weekly+m67_render+schema×2 **689 OK**;真 CSV in-memory `build_account_bundle` 成功(facts=decision=20260714 / npos=1 / warns=0);quarantine 路径确认、canonical `weekly_private/20260713` 缺。无子 agent。
+- **Next**: 用户定(产 20260714 真周报[需 fetch 授权] / 复审 刀6-10 / 刀1 标完成)。
+
+## 2026-07-14 — Codex 修复（A-short `ashort_review1` 前五刀 Claude 复审 R1/R2）
+- **Verdict/Action**: 已只修 Claude 复审的 R1/R2：`holdings_in_m67` 两个 main 集成测试改用 digest-bound account bundle；旧 `weekly_private/20260713` 私有周报从正式路径完整移入 gitignored quarantine，正式路径现不存在。未读/回显账户字段，未伪造新周报，未提交。
+- **Required**: 当前真实周报仍不能生成，因为真实 Rule12、`total_equity`、`current_gross_exposure` 事实缺失；这是 fail-closed 的外部数据前提，不是可由代码或授权代填的缺陷。完整边界见 `docs/system_risk_register.md::R-ASHORT-REVIEW1-KNIVES-1-5-CLOSURE`。
+- **Verify**: Claude 所列 account/weekly/engine/render/holdings/schema 固定包 **689 OK**；R1 先红为 `MainIntegrationTests` 两个裸 account-state `SystemExit`，迁移后 `test_a_short_holdings_in_m67` **33 OK**；R2 复核 canonical 私有路径不存在且 quarantine 仍被 gitignore 覆盖。
+- **Pre-Codex self-review**: A-F 主线程检查。A：account 输入的裸 state/bundle、持仓/空持仓两 main 路径全覆盖；B：`--account` 唯一生产契约仍是 bundle，正式私有路径无旧件；C：裸 state 仍拒绝、bundle 正常产出；D 不适用；E：register 写当前隔离态和真实重跑前提，`CURRENT` 未写在飞 gate；F：私有路径只做目录移动、未读内容。无子 agent、无 timeout/fallback。
+- **Next**: Claude Code 只复审 R1/R2；不代填账户事实、不扩大到其他刀。
+
+## 2026-07-13 — Claude Code 独立复审（A-short `ashort_review1` 第 1—5 刀）代码 PASS · 闭环 2 Required
+
+- **Verdict/Action**: 五刀**代码正确**——account bundle facts 保真 + digest 绑定/篡改被拒(刀1);Rule12 缺表 fail-closed、对账 net_buy/mismatch 阻断新建仓且持仓续管、0 现金持仓管理(刀2);`exit_and_size` bucket+`new_exposure_capacity` sizing、满仓→0、`decision_reasons` hard_veto/downgrade/sizing_block 分层、降级不进硬否决(刀3);`holding_levels` 只用入场后高点+初始止损地板、突破 RR 统一 entry_high、ratchet 落 plan.stop/table.损/advice 同值(刀4);IV 按 `price_data_through` 卡陈旧、regime→effective shock、ps1 传 `--v14_2-regime shock`(刀5)。均整读 + 自算 + 红测确认。但闭环 2 Required、不标完成。
+- **Required**: 见 `docs/system_risk_register.md::R-ASHORT-REVIEW1-KNIVES-1-5-CLOSURE`(复审补注)。R1=刀1 bundle 契约漏迁 `tests/test_a_short_holdings_in_m67.py::MainIntegrationTests`(2 ERROR、回归包 RED,非 cut-12 future-ratchet);R2=置顶规则2 最终产物断链——`state/a_short/weekly_private/20260713/weekly_m67.json/.md` 是 pre-fix 旧件(run_lineage 三键 null、无 decision_reasons),当前代码正确 fail-closed 无法重生,旧件冒充当前周报须移除/隔离,真产物待用户补 Rule12+total_equity+current_gross_exposure。禁代填/伪造。
+- **Verify**: `tests.test_a_short_review1_knives_1_5` **16 OK**;account/phase5/weekly/render/holdings/schema 定向 **673 中 671 OK / 2 ERROR**(=R1);真 CSV 跑 converter → `[FATAL] portfolio_rule12` fail-closed **exit 1**;`20260713/weekly_m67.json` run_lineage `account_snapshot/iv_freshness/market_regime` 均 null 确证 pre-fix。无子 agent。
+- **Next**: Codex：修复
+
+## 2026-07-13 — Codex 修复（A-short `ashort_review1` 第 11—13 刀）
+- **Verdict/Action**: 已连续完成且只完成第 11—13 刀：执行回测改为交易日驱动的 T+1/不可卖延迟/并发资金/逐日盯市；测试私有 ratchet 隔离，A-short 去掉 `ts.set_token`，增加统一解释器解析、完整依赖清单与一键离线检查；先预注册并锁定既有 weekly/IV/overlay 样本后再校准。结果为样本不足且 entry trigger 是当前瓶颈，未改生产阈值，未提交。
+- **Required**: 本范围无已知 material 残留；完整机制、校准数字和关闭边界只见 `docs/system_risk_register.md::R-ASHORT-REVIEW1-KNIVES-11-13-CLOSURE`。当前机器若所选 Python 缺依赖，preflight 会一次列全并 fail-fast；授权不能替代安装事实，也未读取真实账户或调用 provider。
+- **Verify**: 第 11—13 刀连同第 1—10 刀与 weekly/aggregate 回归固定包 **546 OK**；route/doc/schema guard **78 OK**。25 个改动/新增 Python `py_compile`，3 个 PowerShell 脚本 parse，14 个 JSON parse，52 个改动文本 strict UTF-8/no-BOM/no-U+FFFD；执行旧契约、active A-short `ts.set_token(`、tracked wrapper 私有 runtime、生产 threshold/governance diff 均 0；`git diff --check` 通过（仅 line-ending warning）。
+- **Pre-Codex self-review**: A-F 主线程检查。A：卖出态 T+1/停牌/零量/一字跌停/恢复可卖 × event/position/equity/metric/schema；解释器 explicit/env/PATH/standard/missing + ratchet 私有隔离；校准 weekly/IV/overlay × seen/future/schema/runner/report 全覆盖。B：活跃代码/README/test 旧执行措辞 0、`ts.set_token(` 0、私有 runtime 0。C：合法 T+1、可卖开盘、无交易 skeleton、同值 IV、坏 hash、缺 future 反向均测。D 不适用。E：`CURRENT` 未改，route 仅稳定指针。F：日期/非有限/跨字段/编码/diff 已查。无子 agent、无 timeout/fallback，固定包集中重跑。
+- **Next**: Claude Code 只独立审查 `ashort_review1` 第 11—13 刀；不扩大到第 1—10 刀，不提交前自行补功能或改阈值。
+
+## 2026-07-13 — Codex 修复（A-short `ashort_review1` 第 6—10 刀）
+
+- **Verdict/Action**: 已连续完成且只完成第 6—10 刀：硬否决源三态 + 解禁 PIT/真实分母；官方交易日历 + 行情真实 source date/time；EGS/weekly run identity、byte-bound final marker、失败回滚事务、failed receipt/非零退出与唯一 M6.7 操作输出；forward 同日 cohort 按 run 覆盖；rank/execution 在输出前跑完整 analysis-input schema/PIT 校验并把 rank 降权为 `engineering_rank_replay`。未进入第 11 刀，未提交。
+- **Required**: 本范围无已知 material 残留。真实私密周报仍因 `portfolio_rule12.csv` 缺真实组合行而 fail-closed，禁止用授权代替事实、禁止伪造或覆盖旧私密周报；完整刀号映射与关闭边界见 `docs/system_risk_register.md::R-ASHORT-REVIEW1-KNIVES-6-10-CLOSURE`。全周报 435 项仅余 13 个测试读取真实 future ratchet 的既有隔离错误，正是第 12 刀 P1-13，未越界修。
+- **Verify**: cuts 1—10 集成/定向固定包 **486 OK / 1 skipped**（其中 state-isolated weekly pure-contract 307 OK；含 rank/execution、EGS/calendar/PIT、forward、wrapper、account、schema/route guards）。whole-weekly 435 项只余 13 个读取真实 future ratchet 的 cut-12 P1-13 隔离错误，本刀零残留失败。9 个 Python 模块 `py_compile`、7 份 schema JSON parse、32 个改动文本 strict UTF-8/no-BOM/no-U+FFFD、active-scope ripple grep 0 stale、`git diff --check` 通过（仅 line-ending warning）。
+- **Pre-Codex self-review**: A-F 主线程检查。A：三类硬源×cache/producer/consumer、calendar/daily-basic/quote、EGS 六文件+marker、weekly JSON/MD/receipt/ratchet、forward exact/incomplete/new-run、rank/execution 两入口全覆盖；B：活跃 README/design/runner/test 已同步，旧 fail-open/M6.7 非阻断措辞 0 命中；C：known-clear/prior-settled/同 run/legacy 正向与 unknown/future/rollback/tamper/partial-run/invalid-PIT 反向均测；E：`CURRENT` 无在飞 gate；F：日期、非有限/跨字段、UTF-8/BOM/diff 纳入固定包。无子 agent，未触发超时 fallback。
+- **Next**: Claude Code 只独立审查 `ashort_review1` 第 6—10 刀；不审第 11 刀、不修第 12 刀、不代填 Rule12。
+
+## 2026-07-13 — Codex 修复（A-short `ashort_review1` 前五刀）
+
+- **Verdict/Action**: 已连续完成且只完成前五刀：账户真实事实日 + account/lineage 原子 bundle；Rule12/账户对账 fail-closed 且 0 现金仍管持仓；A-short bucket/总敞口进入 sizing 并分层 action reason；entry 后高点 + 初始止损 + 跨周最终止损同值、低吸/突破 RR 同价基；IV/价格同钟与 raw/effective regime 绑定 comparison baseline。未进入第六刀，未提交。
+- **Required**: 真实私密运行仍被 `state/a_short/account_state_csv/portfolio_rule12.csv` 的零数据行正确阻断；这是缺少真实组合级账户事实，不是授权缺口，禁止代填/默认 inactive。旧私密周报未覆盖。完整关闭条件与刀号映射见 `docs/system_risk_register.md::R-ASHORT-REVIEW1-KNIVES-1-5-CLOSURE`。
+- **Verify**: 新增前五刀对抗测试 16 OK；converter/engine/render/wrapper/schema/route guards 最终定向包 262 OK；周报扩展包 403 项中，文档字段漏列已修并纳入最终包，只余既有测试误读真实私密 future ratchet state 的隔离错误（初始基线同类，属后续刀/测试隔离，不在本刀越界修）；`py_compile`、五份 JSON schema、UTF-8/BOM、ripple grep、`git diff --check` 通过。
+- **Pre-Codex self-review**: 主线程逐刀核对 account identity/digest/date、Rule12 空表/对账阻断/0 cash、bucket capacity 与原因层、entry 前高点排除/ratchet 文案及机表同值、IV stale/unknown regime/comparison 参数；无子 agent（本任务未要求委派）。真实账户仅得到“Rule12 表零行”的聚合阻断事实，未回显现金/持仓/交易/密钥。
+- **Next**: Claude Code 只独立审查 `ashort_review1` 前五刀；不审第六刀、不代填 Rule12。用户补真实 Rule12 行后，再重跑 `20260713` 私密周报并核对 JSON/Markdown。
+
 ## 2026-07-13 — Claude Code 独立复审（US-short issue-6 主题选择/生命周期席位治理 Top15）PASS
 
 - **Verdict/Action**: PASS。应用户要求按审查标准全量复审 `7df1e080` 已落定的 issue-6 主题选择闭环（`R-USSHORT-R3-THEME-LIFECYCLE-SEAT-COMPOSITION-TOP15-CLOSURE`）；无代码改动、无新提交（仅本 log）。`us_short_theme_selection` 引擎 + `_select_top15` 接线 + 生命周期席位构成 + 源 contract SHA-256 绑定 + 报告标签 + OR provisional 门（含新单测）全部符合 §4.3/§4.5/§13，且比设计更诚实（用 `industry_heat_v1` 不冒充 `gics_established`、跨行业默认禁用）；不砍 theme 权重、不另建治理平台，符合 codex_r3.md 约束（把既有生命周期表接进选股、留 forward/shadow 后判降权）。

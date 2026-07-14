@@ -16,9 +16,12 @@ crowding) → IV feed(252d 分位,市场级) → Phase 5 引擎(逐票 M6.7) →
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import re
 import sys
+import tempfile
 from pathlib import Path
 
 # Ensure the project root is importable when run directly as `python runners\<this>.py`
@@ -39,11 +42,26 @@ OVERLAY_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspa
                                    "schemas", "a_short_theme_overlay_comparison.schema.json")
 ACCOUNT_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                    "schemas", "a_short_account_state.schema.json")
+PRESET_PATH = ROOT / "presets" / "a_short.yaml"
 HOLDING_RATCHET_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                            "schemas", "a_short_holding_ratchet.schema.json")
 # S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
 HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
+
+
+def _validate_official_publish_marker(analysis_path: str | Path, marker: dict,
+                                      source_identity: dict) -> None:
+    """Bind the consumed analysis file bytes to the final EGS publish marker."""
+    if marker.get("stage_status") != "complete" or \
+            marker.get("run_id") != source_identity.get("run_id") or \
+            marker.get("candidate_digest") != source_identity.get("candidate_digest"):
+        raise SystemExit("[FATAL] official publish marker does not match analysis_input run identity")
+    file_ref = ((marker.get("files") or {}).get("analysis_input") or {})
+    path = Path(analysis_path)
+    actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    if file_ref.get("path") != path.name or file_ref.get("sha256") != actual_sha:
+        raise SystemExit("[FATAL] official publish marker does not bind the consumed analysis_input bytes")
 
 
 def _is_valid_date(s) -> bool:
@@ -125,7 +143,66 @@ def validate_account_state(account: dict, as_of: str) -> dict:
     return account
 
 
-def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str) -> dict:
+def load_account_bundle(path: str, decision_as_of: str) -> tuple[dict, dict, dict]:
+    """Load the only production-facing A-short account input: one bound account+lineage bundle.
+
+    Legacy bare ``a_short_account_state`` files are rejected because they cannot prove the true facts
+    date or that the account and lineage came from the same converter publication.
+    """
+    try:
+        with open(path, encoding="utf-8") as f:
+            bundle = json.load(f)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise SystemExit(f"[FATAL] --account bundle 无法读取/解析: {exc}") from exc
+    if not isinstance(bundle, dict) or bundle.get("schema_name") != "a_short_account_bundle":
+        raise SystemExit(
+            "[FATAL] --account 必须是 a_short_account_bundle；旧裸 account_state 无法证明真实 facts_as_of/"
+            "account-lineage 同批，须先用转换器重新生成")
+    from runners.a_short_account_state_from_manual_tables import ConvertError, validate_account_bundle
+    try:
+        validate_account_bundle(bundle, decision_as_of)
+    except ConvertError as exc:
+        raise SystemExit(str(exc)) from exc
+    return bundle["account"], bundle["lineage"], bundle
+
+
+def load_bucket_ceiling_pct(path: Path = PRESET_PATH) -> float:
+    """Load the A-short capital ceiling from its reviewed preset; fail closed on drift/missing data."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise SystemExit(f"[FATAL] 无法读取 A-short capital preset {path}: {exc}") from exc
+    match = re.search(r"(?m)^\s{2}bucket_ceiling_pct:\s*([0-9]+(?:\.[0-9]+)?)\s*(?:#.*)?$", text)
+    value = float(match.group(1)) if match else None
+    if value is None or not (0 < value <= 1):
+        raise SystemExit("[FATAL] presets/a_short.yaml capital.bucket_ceiling_pct 缺失/非法")
+    return value
+
+
+def account_integrity_from_lineage(lineage: dict) -> dict:
+    """Classify converter reconciliation evidence; ambiguity blocks only new entries."""
+    warnings = list((lineage or {}).get("consistency_warnings") or [])
+    blocking = [w for w in warnings if w.get("kind") in {"net_buy_not_in_positions", "shares_mismatch"}]
+    return {
+        "status": "blocked" if blocking else "clear",
+        "blocking_kinds": sorted({str(w.get("kind")) for w in blocking}),
+        "blocking_count": len(blocking),
+        "new_entry_blocked": bool(blocking),
+    }
+
+
+def account_consistency_warnings_by_code(lineage: dict) -> dict:
+    """Return the bound bundle's reconciliation warnings keyed by security code."""
+    out = {}
+    for warning in (lineage or {}).get("consistency_warnings") or []:
+        code = str(warning.get("ts_code") or "")
+        if code:
+            out[code] = str(warning.get("message") or "")
+    return out
+
+
+def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str,
+                                account_integrity: dict | None = None) -> dict:
     """Derive per-candidate Rule12/Rule13/position context from the validated account state."""
     if not account:
         return {}
@@ -141,6 +218,8 @@ def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str) 
         "size_multiplier": 1.0,
         "reasons": [],
         "as_of": as_of,
+        "account_integrity": dict(account_integrity or {"status": "clear", "blocking_kinds": [],
+                                                        "blocking_count": 0, "new_entry_blocked": False}),
     }
 
     r12 = account.get("rule12") or {"status": "inactive"}
@@ -190,35 +269,18 @@ def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str) 
             ctx["reasons"].append(f"Rule13 cleared_for_reentry:size_multiplier={float(mult):.2f}")
     elif cd and has_position:
         ctx["rule13"] = {"status": "not_applicable_existing_position", "source_status": cd.get("status")}
+    integrity = ctx["account_integrity"]
+    if integrity.get("new_entry_blocked"):
+        if has_position:
+            ctx["reasons"].append("account_integrity blocked:已有持仓仅管理/禁止加仓")
+        else:
+            ctx["reasons"].append("account_integrity blocked:持仓对账未闭环,禁止新开仓")
     return ctx
-
-
-def _load_account_consistency_warnings(account_path: str) -> dict:
-    """持仓恒列入 S1: best-effort 读 4.3 转换器的 lineage 旁产物(`<account 主名>_lineage.json`,与
-    account_state.json 同目录),取 4.3-D `consistency_warnings` → {ts_code: message}。旁产物缺失/坏
-    → {}(advisory,绝不阻断周报)。"""
-    if not account_path:
-        return {}
-    try:
-        p = Path(account_path)
-        lineage_path = p.with_name(p.stem + "_lineage.json")
-        if not lineage_path.is_file():
-            return {}
-        with open(lineage_path, encoding="utf-8") as f:
-            data = json.load(f)
-        out = {}
-        for w in (data.get("consistency_warnings") or []):
-            code = str(w.get("ts_code") or "")
-            if code:
-                out[code] = str(w.get("message") or "")
-        return out
-    except Exception:
-        return {}
 
 
 def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, regime,
                     regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None,
-                    semantic_provider=None, web_llm_provider=None):
+                    semantic_provider=None, web_llm_provider=None, account_integrity=None):
     """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
     user-stop**。返回 (holding_normalized, holding_meta, manual_review):
     - Tier-2(在 `egs_full`): 复用 egs_full 的 EGS 分/风险;**现价取 price provider 最新 bar**(非 egs_full
@@ -259,7 +321,8 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
         cand["quote"] = {"close": series[-1].get("close")}
         n = normalize_candidate(cand, series, None, iv_pct, account, regime,
                                 regime_fallback=regime_fallback,
-                                stateful_risk=stateful_risk_for_candidate(acct, code, as_of),
+                                stateful_risk=stateful_risk_for_candidate(
+                                    acct, code, as_of, account_integrity=account_integrity),
                                 semantic=(semantic_provider(code) if semantic_provider else None),
                                 semantic_web_llm=(web_llm_provider(code) if web_llm_provider else None),
                                 iv_value=iv_value, hv_value=hv_value)
@@ -355,12 +418,12 @@ def _demote_build_to_observe(report: dict, rank: int) -> None:
         f"组合现金分配后不足一手/最小金额 → 转观察(分配排序第 {rank};原拟建仓价位见 machine.diagnostic_raw_plan)。本周不建仓。")
 
 
-def _allocate_cash(reports: list, available_cash) -> dict:
+def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
     只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
     from runners.a_short_phase5_engine import MIN_SHARES, MIN_AMOUNT
-    if available_cash is None or available_cash <= 0:
+    if available_cash is None:
         return None
     builds = [(i, r) for i, r in enumerate(reports) if r["m67"]["table"]["操作"] == "建仓"]
 
@@ -371,24 +434,33 @@ def _allocate_cash(reports: list, available_cash) -> dict:
                 -(plan.get("rr_at_entry_high") or 0.0), -(plan.get("avg_amount_5d") or 0.0),
                 i, str(r.get("ts_code", "")))     # original_topN_rank=i;ts_code 末位 tie-break 保确定性
 
-    remaining, allocated_total = float(available_cash), 0.0
+    remaining, allocated_total = max(0.0, float(available_cash)), 0.0
+    exposure_remaining = (None if new_exposure_capacity is None
+                          else max(0.0, float(new_exposure_capacity)))
     for rank, (i, r) in enumerate(sorted(builds, key=_key), start=1):
         plan = r["machine"]["entry_exit_size_star"]["plan"]
         eh, raw = plan["entry_high"], plan["shares"]
-        affordable = int(remaining // eh // 100) * 100 if eh > 0 else 0
+        effective_remaining = remaining if exposure_remaining is None else min(remaining, exposure_remaining)
+        affordable = int(effective_remaining // eh // 100) * 100 if eh > 0 else 0
         allocated = min(raw, affordable)
         if allocated < MIN_SHARES or allocated * eh < MIN_AMOUNT:
             _demote_build_to_observe(r, rank)        # 不足 → 转观察(不输出按上沿买不起的建仓)
             continue
         cost = round(allocated * eh, 2)              # 2dp:与展示/审计的 cash_budget_used 同口径,摘要可精确对账
         remaining -= cost; allocated_total += cost
+        if exposure_remaining is not None:
+            exposure_remaining -= cost
         plan["raw_shares"], plan["shares"], plan["allocated_shares"] = raw, allocated, allocated
         plan["cash_budget_used"], plan["cash_allocation_rank"] = cost, rank
         r["m67"]["table"]["股数"] = allocated         # table 同步 plan(过 validator 建仓一致性)
         if allocated < raw:
             r["m67"]["精简结论区"]["操作建议"] += f"(组合现金分配:股数由 {raw} 降至 {allocated},占用现金 {cost})"
-    return {"available_cash_start": round(float(available_cash), 2),
-            "allocated_cash_total": round(allocated_total, 2), "remaining_cash": round(remaining, 2)}
+    summary = {"available_cash_start": round(float(available_cash), 2),
+               "allocated_cash_total": round(allocated_total, 2), "remaining_cash": round(remaining, 2)}
+    if new_exposure_capacity is not None:
+        summary.update({"new_exposure_capacity_start": round(float(new_exposure_capacity), 2),
+                        "remaining_new_exposure_capacity": round(exposure_remaining, 2)})
+    return summary
 
 
 # 4.2 Round2: analysis_input.universe_summary.excluded_counts 键 → exclusion_summary by_reason 元信息
@@ -438,23 +510,35 @@ def _build_exclusion_summary(excluded_counts: dict, as_of: str):
 
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
-                        iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None) -> dict:
+                        iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
+                        new_exposure_capacity=None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
     reports = [(build_holding_report(n, as_of, generated_at)
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
                for n in normalized_list]
-    cash_summary = _allocate_cash(reports, available_cash)   # #3 全局现金分配(原地改建仓票:股数/分配字段;归零转观察)
+    cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity)
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
-    lineage = run_lineage if run_lineage is not None else {
+    fallback_digest = hashlib.sha256(json.dumps(
+        [n.get("ts_code") for n in normalized_list], ensure_ascii=False,
+        separators=(",", ":"),
+    ).encode("utf-8")).hexdigest()
+    lineage = dict(run_lineage) if run_lineage is not None else {
+        "run_id": f"a-short-{as_of}-{fallback_digest[:16]}",
+        "candidate_digest": fallback_digest,
+        "stage_status": "complete",
         "analysis_input": "", "selection_bucket": "", "iv_feed": iv_feed_ref,
         "account_ref": "",
         "account_status": "absent", "sizing_mode": "observation_only_no_account",
+        "account_snapshot": None,
         "price_freshness": {"mode": "strict_as_of", "run_date": None,
                             "accepted_prior_settled_date": None, "price_data_through": str(as_of)}}
+    lineage.setdefault("run_id", f"a-short-{as_of}-{fallback_digest[:16]}")
+    lineage.setdefault("candidate_digest", fallback_digest)
+    lineage.setdefault("stage_status", "complete")
     return {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
@@ -488,6 +572,12 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     if any(b for b in weekly["boundary"].values()):
         raise ValueError("weekly boundary 必须全 false")
     rl = weekly.get("run_lineage") or {}
+    if rl.get("stage_status") != "complete":
+        raise ValueError("run_lineage.stage_status must be complete before publish")
+    if not re.fullmatch(rf"a-short-{weekly['as_of']}-[0-9a-f]{{16}}", str(rl.get("run_id") or "")):
+        raise ValueError("run_lineage.run_id is not bound to weekly as_of")
+    if not re.fullmatch(r"[0-9a-f]{64}", str(rl.get("candidate_digest") or "")):
+        raise ValueError("run_lineage.candidate_digest is invalid")
     # (account_status, sizing_mode) 是严格双态:恰为 (provided,sized) 或 (absent,observation_only_no_account)。
     # 任何其他配对——含矛盾的 (provided, observation_only_no_account)——都必须 raise,以免错标的 lineage 让
     # sizing-less 的「观察」被读成有账户支撑(或反之)。main 只会产出合法配对;此处兜住外部/手构的报告。
@@ -500,6 +590,35 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     # (account_status,sizing_mode) 配对不够——还须把它绑死 cash_allocation,否则手构/refactor 的报告可声称
     # 账户定量(sized)却静默跳过全局现金分配(重开多股过度分配 bug),或声称无账户却带分配。main 永远一致;此处兜底。
     sized = (rl.get("account_status"), rl.get("sizing_mode")) == ("provided", "sized")
+    snap = rl.get("account_snapshot")
+    if sized:
+        if not isinstance(snap, dict):
+            raise ValueError("run_lineage=(provided,sized) 但 account_snapshot 非对象")
+        if snap.get("decision_as_of") != weekly.get("as_of"):
+            raise ValueError("run_lineage.account_snapshot.decision_as_of 与周报 as_of 不一致")
+        if str(snap.get("facts_as_of") or "") > str(weekly.get("as_of") or ""):
+            raise ValueError("run_lineage.account_snapshot.facts_as_of 晚于周报 as_of")
+        if snap.get("integrity_status") == "blocked" and not snap.get("blocking_kinds"):
+            raise ValueError("account_snapshot integrity_status=blocked 但无 blocking_kinds")
+        if snap.get("blocking_count", 0) < len(snap.get("blocking_kinds") or []):
+            raise ValueError("account_snapshot blocking_count 小于 blocking_kinds 数量")
+    elif snap is not None:
+        raise ValueError("无账户 observation-only 报告不得带 account_snapshot")
+    ivf = rl.get("iv_freshness")
+    pf = rl.get("price_freshness") or {}
+    if ivf is not None:
+        if ivf.get("status") != "aligned" or ivf.get("iv_data_through") != pf.get("price_data_through") or \
+                ivf.get("price_data_through") != pf.get("price_data_through"):
+            raise ValueError("run_lineage.iv_freshness 未与 price_freshness.price_data_through 对齐")
+    mr = rl.get("market_regime")
+    if mr is not None:
+        source = mr.get("source_status")
+        effective = mr.get("effective_status")
+        if source in ("unknown", "missing"):
+            if effective != "shock" or mr.get("effective_regime") != "震荡期" or not mr.get("fallback_active"):
+                raise ValueError("unknown/missing production regime 必须 fail-closed 为 effective shock/震荡期")
+        elif effective != source or mr.get("fallback_active"):
+            raise ValueError("已知 production regime 的 source/effective/fallback 不一致")
     ca = weekly.get("cash_allocation")
     if sized and not isinstance(ca, dict):
         raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
@@ -588,6 +707,11 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError("cash_allocation.remaining_cash != available_cash_start - allocated_cash_total")
         if rem < -0.011:
             raise ValueError("cash_allocation.remaining_cash 为负(超额分配)")
+        if "new_exposure_capacity_start" in ca:
+            exp_start = ca["new_exposure_capacity_start"]
+            exp_rem = ca["remaining_new_exposure_capacity"]
+            if abs(exp_rem - (exp_start - total)) > 0.011 or exp_rem < -0.011:
+                raise ValueError("cash_allocation bucket 新增敞口额度对账失败")
     # #1 除权除息提示一致性(schema 管类型/pattern;此处管历法 + 跨字段 + 范围:ex_date 合法日历日、
     # ex_date>=as_of、days_to_ex==ex_date−as_of、**days_to_ex<=EX_DIV_WINDOW_DAYS**、**ts_code 必属本周候选/持仓**。
     # advisory 但仍校验,防伪造/错算/越界/张冠李戴的提示混入周报。)
@@ -1025,6 +1149,94 @@ def write_weekly_report(weekly: dict, iv_feed_summary: dict, out_path: str) -> N
     os.replace(tmp, out_path)
 
 
+def _replace_many_with_rollback(payloads: dict[str, bytes]) -> None:
+    """Best-effort multi-file transaction for the small weekly publish set."""
+    staged = {}
+    old = {}
+    replaced = []
+    try:
+        for path, data in payloads.items():
+            absolute = os.path.abspath(path)
+            os.makedirs(os.path.dirname(absolute), exist_ok=True)
+            old[absolute] = Path(absolute).read_bytes() if os.path.exists(absolute) else None
+            fd, tmp = tempfile.mkstemp(prefix=f".{Path(absolute).name}.", suffix=".tmp",
+                                       dir=os.path.dirname(absolute))
+            with os.fdopen(fd, "wb") as handle:
+                handle.write(data)
+                handle.flush()
+                os.fsync(handle.fileno())
+            staged[absolute] = tmp
+        for absolute, tmp in staged.items():
+            os.replace(tmp, absolute)
+            replaced.append(absolute)
+        staged.clear()
+    except Exception:
+        for absolute in reversed(replaced):
+            previous = old[absolute]
+            if previous is None:
+                try:
+                    os.unlink(absolute)
+                except FileNotFoundError:
+                    pass
+            else:
+                fd, restore = tempfile.mkstemp(prefix=f".{Path(absolute).name}.", suffix=".restore",
+                                               dir=os.path.dirname(absolute))
+                with os.fdopen(fd, "wb") as handle:
+                    handle.write(previous)
+                    handle.flush()
+                    os.fsync(handle.fileno())
+                os.replace(restore, absolute)
+        raise
+    finally:
+        for tmp in staged.values():
+            try:
+                os.unlink(tmp)
+            except FileNotFoundError:
+                pass
+
+
+def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md_path: str,
+                          *, allow_nonprivate_account_out: bool = False,
+                          ratchet_publish: tuple[str, dict, str, str] | None = None) -> str:
+    """Validate all final surfaces, then publish JSON/Markdown/ratchet/receipt together."""
+    from runners.a_short_m67_render import render_weekly_markdown, _weekly_has_account_data
+
+    _reject_production_output_path(out_path)
+    if _weekly_has_account_data(weekly):
+        _reject_nonprivate_account_output_path(md_path, True, allow_nonprivate_account_out)
+    with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(weekly, json.load(f))
+    with open(M67_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        m67schema = json.load(f)
+    for report in weekly["reports"]:
+        jsonschema.validate(report, m67schema)
+    validate_weekly_report(weekly, iv_feed_summary)
+    markdown = render_weekly_markdown(weekly)
+    lineage = weekly["run_lineage"]
+    receipt = {
+        "schema_name": "a_short_weekly_publish_receipt",
+        "schema_version": "1.0.0",
+        "as_of": weekly["as_of"],
+        "run_id": lineage["run_id"],
+        "candidate_digest": lineage["candidate_digest"],
+        "account_snapshot": lineage.get("account_snapshot"),
+        "stage_status": "complete",
+        "outputs": [os.path.basename(out_path), os.path.basename(md_path)],
+    }
+    receipt_path = os.path.splitext(out_path)[0] + ".receipt.json"
+    payloads = {
+        out_path: (json.dumps(weekly, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+        md_path: markdown.encode("utf-8"),
+        receipt_path: (json.dumps(receipt, ensure_ascii=False, indent=2) + "\n").encode("utf-8"),
+    }
+    if ratchet_publish is not None:
+        ratchet_path, state, as_of, generated_at = ratchet_publish
+        ratchet_doc = _holding_ratchet_doc(state, as_of, generated_at)
+        payloads[ratchet_path] = (json.dumps(ratchet_doc, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+    _replace_many_with_rollback(payloads)
+    return receipt_path
+
+
 def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
     """#5 消费方校验:overlay 必须过 schema + `validate_overlay_summary_consistency`,
     且 as_of 必须 == 周报 as_of(同一周末批;拒未来/陈旧)。返回 {ts_code: row}。"""
@@ -1060,6 +1272,20 @@ def latest_iv_hv(iv_feed_summary: dict):
         return None, None
     last = series[-1]
     return last.get("iv_value"), last.get("hv_value")
+
+
+def validate_iv_feed_freshness(iv_feed_summary: dict, price_data_through: str) -> dict:
+    """Bind the consumed IV observation to the same settled clock as the price features."""
+    series = iv_feed_summary.get("series") or []
+    latest = str((series[-1] if series else {}).get("trade_date") or "")
+    if not latest:
+        raise SystemExit("[FATAL] IV feed 无可用 trade_date，无法执行 IV 新鲜度闸门")
+    if latest != str(price_data_through):
+        raise SystemExit(
+            f"[FATAL] IV feed latest_trade_date {latest} != price_data_through {price_data_through};"
+            "IV 与价格时钟不一致/陈旧，拒绝生成周报")
+    return {"status": "aligned", "iv_data_through": latest,
+            "price_data_through": str(price_data_through)}
 
 
 MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
@@ -1686,7 +1912,8 @@ def _apply_holding_ratchet(weekly, state, as_of):
     set machine.ratchet + 更新 state[key]。持仓身份=(ts_code, entry_date)(entry_date 取 machine.stateful_risk.position;
     无 entry_date → 无稳定身份,跳过 ratchet,诚实不伪造)。re-entry(新 entry_date)= 新 key → bootstrap。写后过 `_ratchet_report_error`
     弱不变式(与 validate_m67_consistency 持有分支单一来源)。返回更新后的 state(就地)。非持仓行 no-op。"""
-    from runners.a_short_phase5_engine import _holding_ratchet, _ratchet_report_error
+    from runners.a_short_phase5_engine import (_apply_holding_disposition, _holding_ratchet,
+                                                _ratchet_report_error)
     _future = [k for k, r in state.items() if str(r.get("last_as_of") or "") > str(as_of)]
     if _future:                                     # PIT:sidecar 含未来态(乱序/replay 旧周配新 sidecar)→ 拒(镜像 regime ledger future-contamination)
         raise ValueError(f"R4b ratchet sidecar 含未来态(last_as_of > as_of {as_of}):{_future[:3]}(PIT 违反/乱序 run)")
@@ -1708,6 +1935,28 @@ def _apply_holding_ratchet(weekly, state, as_of):
         key = _holding_ratchet_key(ts, str(ed))
         machine_ratchet, row = _holding_ratchet(this_week, state.get(key))
         mc["ratchet"] = machine_ratchet
+        final_stop = machine_ratchet.get("ratcheted_stop")
+        if isinstance(final_stop, (int, float)) and not isinstance(final_stop, bool) and plan:
+            # Ratchet is the effective stop, not an advisory side channel. Keep the machine plan,
+            # final table and downstream disposition prices on one value.
+            old_stop = plan.get("stop")
+            plan["stop"] = final_stop
+            table = rep["m67"]["table"]
+            table["损"] = final_stop
+            if isinstance(mc.get("current_close"), (int, float)) and mc["current_close"] <= final_stop:
+                plan.update({"breached": True, "t1": None, "t2": None})
+                table["盈一"] = table["盈二"] = None
+                rep["m67"]["精简结论区"]["操作建议"] = (
+                    f"已有持仓，本周禁止自动加仓。⚠️ 现价已跌破跨周最终止损 {final_stop}"
+                    " —— 触发后由你盘中无条件手动执行并人工复核。")
+            else:
+                advice = str(rep["m67"]["精简结论区"].get("操作建议") or "")
+                old_phrase = f"系统跟踪止损 {old_stop}"
+                if old_phrase not in advice:
+                    raise ValueError(f"R4b ratchet 无法在操作建议定位旧系统止损 {old_stop}，拒绝留下双口径")
+                rep["m67"]["精简结论区"]["操作建议"] = advice.replace(
+                    old_phrase, f"跨周最终止损 {final_stop}", 1)
+            _apply_holding_disposition(rep)
         _err = _ratchet_report_error(mc)
         if _err:
             raise ValueError(f"R4b ratchet apply 弱不变式失败({ts}/{ed}): {_err}")
@@ -1715,9 +1964,7 @@ def _apply_holding_ratchet(weekly, state, as_of):
     return state
 
 
-def save_holding_ratchet(path, state, as_of, generated_at):
-    """写跨周 ratchet sidecar(assemble envelope + boundary,过 schema)。调用方须先过私密路径守门(gitignored)。
-    rows = state 全量(含上轮持仓的历史行:无害,lookup 按当周身份;re-entry 留旧行不删——不剪枝避免误删暂离本周的持仓态)。"""
+def _holding_ratchet_doc(state, as_of, generated_at):
     rows = sorted(state.values(), key=lambda r: (str(r.get("ts_code")), str(r.get("entry_date"))))
     _keys = [_holding_ratchet_key(r.get("ts_code"), r.get("entry_date")) for r in rows]
     if len(_keys) != len(set(_keys)):        # reader/writer 对称 fail-closed:state 是 dict 本就唯一,此 guard 防手构非-dict-derived state 写出重复行(同 load 复合唯一)
@@ -1731,6 +1978,13 @@ def save_holding_ratchet(path, state, as_of, generated_at):
            "holdings": rows}
     with open(HOLDING_RATCHET_SCHEMA_PATH, "r", encoding="utf-8") as f:
         jsonschema.validate(doc, json.load(f))
+    return doc
+
+
+def save_holding_ratchet(path, state, as_of, generated_at):
+    """写跨周 ratchet sidecar(assemble envelope + boundary,过 schema)。调用方须先过私密路径守门(gitignored)。
+    rows = state 全量(含上轮持仓的历史行:无害,lookup 按当周身份;re-entry 留旧行不删——不剪枝避免误删暂离本周的持仓态)。"""
+    doc = _holding_ratchet_doc(state, as_of, generated_at)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
     tmp = str(path) + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
@@ -2267,6 +2521,7 @@ def resolve_market_regime(ai: dict) -> tuple[str, dict | None]:
     return "震荡期", {
         "active": True,
         "source_status": status or "missing",
+        "effective_status": "shock",
         "fallback_regime": "震荡期",
         "reason": "EGS market_regime unknown/missing→按震荡期保守处理",
         "action": "downgrade_and_halve",
@@ -2511,7 +2766,28 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if str(ai.get("trade_date")) != args.as_of:
         raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of {args.as_of}"
                          "(批次错配/未来/陈旧,拒跑周报)")
+    from engine.data.analysis_input_contract import build_a_short_run_identity
+    source_identity = dict(((ai.get("source") or {}).get("run_identity") or {}))
+    try:
+        Path(args.analysis_input).resolve().relative_to((ROOT / "result" / "a_short").resolve())
+        official_input = True
+    except ValueError:
+        official_input = False
+    if official_input:
+        if not source_identity:
+            raise SystemExit("[FATAL] official analysis_input missing run_identity")
+        marker_path = Path(args.analysis_input).resolve().parent / "official_publish.json"
+        if not marker_path.exists():
+            raise SystemExit("[FATAL] official analysis_input has no final publish marker")
+        marker = _load(marker_path)
+        _validate_official_publish_marker(args.analysis_input, marker, source_identity)
+    elif not source_identity:
+        # Hermetic fixtures/research callers outside result/a_short get a
+        # deterministic identity; production paths never take this branch.
+        source_identity = build_a_short_run_identity(args.as_of, ai.get("candidates") or [])
     feed = _load(args.iv_feed)
+    from runners.a_short_iv_feed_build import validate_feed_summary_consistency
+    validate_feed_summary_consistency(feed)
     iv_pct = latest_iv_percentile(feed)        # 市场级 IV 分位(None → 引擎按 missing 处理)
     iv_value, hv_value = latest_iv_hv(feed)    # #6 IV-HV advisory:市场级 IV/HV 原始值(引擎算标签)
     overlay = _load_validated_overlay(args.overlay, args.as_of) if args.overlay else {}
@@ -2522,22 +2798,39 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.overlay and set(overlay) != set(weekly_candidates):
         raise SystemExit(f"[FATAL] overlay 候选集 {sorted(overlay)} != 周报候选 {sorted(weekly_candidates)}"
                          "(同日错批/缺行/多行,缺行会被静默降级;须同一批全覆盖,拒跑)")
-    acct = validate_account_state(_load(args.account), args.as_of) if args.account else {}
+    if args.account:
+        acct, account_lineage, account_bundle = load_account_bundle(args.account, args.as_of)
+    else:
+        acct, account_lineage, account_bundle = {}, {}, {}
+    account_integrity = account_integrity_from_lineage(account_lineage)
     # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
     regime, regime_fallback = resolve_market_regime(ai)
-    # available_cash 是用户必填输入。**--account 提供则必须有正数 available_cash**(拒静默无 sizing);
+    # available_cash 是用户必填输入。零现金仍须管理已有持仓,但不得建立新仓;
     # 未提供 --account → observation-only(sizing_mode 标进 run_lineage,读者不会把 sizing 假象的「观察」当真 avoid 信号)。
     available_cash = acct.get("available_cash")
     if args.account:
-        if isinstance(available_cash, bool) or not isinstance(available_cash, (int, float)) or available_cash <= 0:
-            raise SystemExit(f"[FATAL] --account {args.account} 提供但 available_cash 缺失/非正数;拒跑(不静默退化成无 sizing 的观察)")
+        if isinstance(available_cash, bool) or not isinstance(available_cash, (int, float)) or available_cash < 0:
+            raise SystemExit(f"[FATAL] --account {args.account} 提供但 available_cash 缺失/为负数;拒跑")
         account_status, sizing_mode = "provided", "sized"
     else:
         account_status, sizing_mode = "absent", "observation_only_no_account"
+    bucket_ceiling_pct = load_bucket_ceiling_pct() if args.account else None
+    total_equity = acct.get("total_equity")
+    current_gross_exposure = acct.get("current_gross_exposure")
+    if args.account and (isinstance(total_equity, bool) or not isinstance(total_equity, (int, float)) or
+                         total_equity <= 0 or isinstance(current_gross_exposure, bool) or
+                         not isinstance(current_gross_exposure, (int, float)) or current_gross_exposure < 0):
+        raise SystemExit("[FATAL] --account 缺 total_equity/current_gross_exposure,无法执行 bucket 敞口门")
+    bucket_capital = (float(total_equity) * bucket_ceiling_pct) if args.account else None
+    new_exposure_capacity = (max(0.0, bucket_capital - float(current_gross_exposure))
+                             if args.account else None)
     account = {"available_cash": available_cash,
-               "total_equity": acct.get("total_equity"),
-               "current_gross_exposure": acct.get("current_gross_exposure"),
+               "total_equity": total_equity,
+               "current_gross_exposure": current_gross_exposure,
+               "bucket_ceiling_pct": bucket_ceiling_pct,
+               "bucket_capital": bucket_capital,
+               "new_exposure_capacity": new_exposure_capacity,
                "positions_count": len(acct.get("positions") or [])}
     # 价格序列:注入(测试)或执行期抓取(需授权)
     prior_settled = None     # 实际接受的前一交易日(仅 intraday_prior_settled 模式;记进 lineage)
@@ -2605,7 +2898,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     normalized = [normalize_candidate(c, price_results[c["ts_code"]][0], overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       regime_fallback=regime_fallback,
-                                      stateful_risk=stateful_risk_for_candidate(acct, c["ts_code"], args.as_of),
+                                      stateful_risk=stateful_risk_for_candidate(
+                                          acct, c["ts_code"], args.as_of,
+                                          account_integrity=account_integrity),
                                       semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
                                       iv_value=iv_value, hv_value=hv_value)
@@ -2623,6 +2918,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] 候选价格最新 bar 日期不一致(混合时钟 {latest_dates});不写周报"
                          "(端点不均/部分陈旧须排查,不可静默混用不同价格日)")
     price_data_through = latest_dates[0] if latest_dates else str(args.as_of)
+    iv_freshness = validate_iv_feed_freshness(feed, price_data_through)
     accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
     price_freshness = {"mode": args.price_freshness_mode,
                        "run_date": (str(args.run_date) if args.run_date else None),
@@ -2634,11 +2930,29 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             return os.path.relpath(pth).replace("\\", "/")
         except Exception:
             return os.path.basename(pth)
-    run_lineage = {"analysis_input": _rel(args.analysis_input),
+    run_lineage = {"run_id": source_identity["run_id"],
+                   "candidate_digest": source_identity["candidate_digest"],
+                   "stage_status": "complete",
+                   "analysis_input": _rel(args.analysis_input),
                    "selection_bucket": _rel(os.path.dirname(args.analysis_input)),
                    "iv_feed": _rel(args.iv_feed),
                    "account_ref": (_rel(args.account) if args.account else ""),
                    "account_status": account_status, "sizing_mode": sizing_mode,
+                   "account_snapshot": ({"snapshot_id": account_bundle["snapshot_id"],
+                                         "snapshot_digest": account_bundle["snapshot_digest"],
+                                         "facts_as_of": account_bundle["facts_as_of"],
+                                         "decision_as_of": account_bundle["decision_as_of"],
+                                         "positions_count": len(acct.get("positions") or []),
+                                         "integrity_status": account_integrity["status"],
+                                         "blocking_kinds": account_integrity["blocking_kinds"],
+                                         "blocking_count": account_integrity["blocking_count"]}
+                                        if args.account else None),
+                   "iv_freshness": iv_freshness,
+                   "market_regime": {"source_status": ((ai.get("market_context") or {}).get("market_regime") or {}).get("status") or "missing",
+                                     "effective_status": ((regime_fallback or {}).get("effective_status") or
+                                                          next(k for k, v in REGIME_MAP.items() if v == regime)),
+                                     "effective_regime": regime,
+                                     "fallback_active": bool(regime_fallback)},
                    "price_freshness": price_freshness}
     # 持仓恒列入 S1 + 语义(4.2 S2): 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 语义经持仓 provider 注入 advisory);选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
@@ -2657,13 +2971,15 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
             acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
-            semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider)
+            semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider,
+            account_integrity=account_integrity)
     weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
-                                 available_cash=(available_cash if args.account else None))   # #3 全局现金分配仅 sized 模式
+                                 available_cash=(available_cash if args.account else None),
+                                 new_exposure_capacity=new_exposure_capacity)
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
-    cons_by = _load_account_consistency_warnings(args.account) if args.account else {}
+    cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}
     for rep in weekly["reports"]:
         code = rep["ts_code"]
         if code in holding_meta:
@@ -2712,12 +3028,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _attach_holding_disposition(weekly)
     # S3b R4b: 跨周持久收紧 ratchet(仅 --account 真持仓 run;持仓处置/R4a 已就位后,沉淀 stop/disposition 跨周只升不降 + 滚动到价)。
     # 涉真实持仓(entry_date/ratcheted_stop/prices)→ sidecar 必 gitignored(私密路径守门,git check-ignore 真值);re-entry 重置;bootstrap。
+    _pending_ratchet = None
     if args.account and not args.skip_ratchet:
         _rt_path = os.path.abspath(args.ratchet_path)
         _reject_nonprivate_account_output_path(_rt_path, True, args.allow_nonprivate_account_out)   # sidecar 含真实持仓,须 gitignored
         _rt_state = load_holding_ratchet(_rt_path)
         _apply_holding_ratchet(weekly, _rt_state, args.as_of)
-        save_holding_ratchet(_rt_path, _rt_state, args.as_of, gen)
+        _pending_ratchet = (_rt_path, _rt_state, args.as_of, gen)
     # 4.2 财报质量趋势 ⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选红旗 → 行业上下文。
     # candidate-scope(基于本周候选,非全行业普查);只列有红旗行业;无 operation_impact(逐票已由③④落地,本层只加行业摘要)。
     _fin_trend_ind = {str(c.get("ts_code")): ((c.get("industry") or {}).get("sw_l2_name") or "未知")
@@ -2730,14 +3047,16 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)
     if _excl:
         weekly["exclusion_summary"] = _excl
-    from runners.a_short_m67_render import write_weekly_markdown
     md_path = os.path.splitext(args.out)[0] + ".md"
-    write_weekly_report(weekly, feed, args.out)
-    write_weekly_markdown(weekly, md_path, allow_nonprivate_account_out=args.allow_nonprivate_account_out)
+    receipt_path = publish_weekly_bundle(
+        weekly, feed, args.out, md_path,
+        allow_nonprivate_account_out=args.allow_nonprivate_account_out,
+        ratchet_publish=_pending_ratchet,
+    )
     actions = {}
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
-    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path})")
+    print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
 
 
 if __name__ == "__main__":

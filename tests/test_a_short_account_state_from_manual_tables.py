@@ -221,12 +221,11 @@ class Rule13ProgressionTests(unittest.TestCase):
 
 
 class Rule12Tests(unittest.TestCase):
-    def test_default_inactive_when_table_missing(self):
+    def test_missing_rule12_table_fails_closed(self):
         t = _tables()
         t["portfolio_rule12"] = []
-        acc, ln = conv.build_account_state(t, AS_OF)
-        self.assertEqual(acc["rule12"]["status"], "inactive")
-        self.assertEqual(ln["rule12"]["source"], "default_inactive")
+        with self.assertRaises(conv.ConvertError):
+            conv.build_account_state(t, AS_OF)
 
     def test_active_within_cooldown_stays_active(self):
         t = _tables()
@@ -264,11 +263,11 @@ class Rule12Tests(unittest.TestCase):
 
 
 class AccountGateTests(unittest.TestCase):
-    def test_zero_cash_fatal(self):
+    def test_zero_cash_allowed_for_holding_management(self):
         t = _tables()
         t["account"][0]["available_cash"] = "0"
-        with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+        acc, _ = conv.build_account_state(t, AS_OF)
+        self.assertEqual(acc["available_cash"], 0.0)
 
     def test_manual_order_only_false_fatal(self):
         t = _tables()
@@ -374,9 +373,10 @@ class FileLevelTests(unittest.TestCase):
             out = Path(d) / "account_state.json"
             rc = conv.main(["--input-dir", str(EXAMPLE_DIR), "--as-of", AS_OF, "--out", str(out)])
             self.assertEqual(rc, 0)
-            acc = json.loads(out.read_text(encoding="utf-8"))
-            validate_account_state(acc, AS_OF)
-            lineage = json.loads((out.with_name("account_state_lineage.json")).read_text(encoding="utf-8"))
+            bundle = json.loads(out.read_text(encoding="utf-8"))
+            conv.validate_account_bundle(bundle, AS_OF)
+            self.assertFalse(out.with_name("account_state_lineage.json").exists())
+            lineage = bundle["lineage"]
             self.assertEqual({s["name"] for s in lineage["source_tables"]},
                              {"account", "positions", "trades", "manual_controls", "portfolio_rule12"})
             self.assertEqual(len(lineage["source_tables"][0]["sha256"]), 64)

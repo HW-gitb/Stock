@@ -96,6 +96,26 @@
           "pattern": "^[0-9]{8}$",
           "description": "When l3_mode=pit, the actual snapshot date used (max(snap_date) <= as_of). Null for today/neutralize."
         },
+        "hard_veto_source_health": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["suspension", "unlock", "holder_reduction"],
+          "properties": {
+            "suspension": {"$ref": "#/$defs/hardVetoSourceHealth"},
+            "unlock": {"$ref": "#/$defs/hardVetoSourceHealth"},
+            "holder_reduction": {"$ref": "#/$defs/hardVetoSourceHealth"}
+          }
+        },
+        "run_identity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["run_id", "candidate_digest", "stage_status"],
+          "properties": {
+            "run_id": {"type": "string", "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"},
+            "candidate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "stage_status": {"const": "egs_validated"}
+          }
+        },
         "input_files": {
           "type": "array",
           "items": {
@@ -178,6 +198,16 @@
             },
             "next_trade_date": {
               "$ref": "#/$defs/date8Nullable"
+            },
+            "calendar_source": {
+              "type": "string",
+              "enum": ["tushare.trade_cal"]
+            },
+            "recent_trade_dates": {
+              "type": "array",
+              "minItems": 1,
+              "uniqueItems": true,
+              "items": {"$ref": "#/$defs/date8"}
             },
             "is_pre_holiday_window": {
               "type": "boolean"
@@ -619,6 +649,9 @@
               ],
               "format": "date-time",
               "description": "ISO 8601 timestamp for the quoted price. EOD A-share examples use 15:00:00+08:00."
+            },
+            "source_trade_date": {
+              "$ref": "#/$defs/date8"
             },
             "adjustment": {
               "type": "string",
@@ -1270,6 +1303,12 @@
                 "reduce_penalty": {
                   "$ref": "#/$defs/numberNullable",
                   "description": "Unit: points."
+                },
+                "source_status": {
+                  "$ref": "#/$defs/hardVetoSourceStatus"
+                },
+                "observed_at": {
+                  "$ref": "#/$defs/date8Nullable"
                 }
               }
             },
@@ -1289,6 +1328,16 @@
                     "boolean",
                     "null"
                   ]
+                },
+                "source_status": {
+                  "$ref": "#/$defs/hardVetoSourceStatus"
+                },
+                "observed_at": {
+                  "$ref": "#/$defs/date8Nullable"
+                },
+                "denominator": {
+                  "type": ["string", "null"],
+                  "enum": ["circ_mv_div_close", "missing", null]
                 }
               }
             },
@@ -1307,6 +1356,12 @@
                     "boolean",
                     "null"
                   ]
+                },
+                "source_status": {
+                  "$ref": "#/$defs/hardVetoSourceStatus"
+                },
+                "observed_at": {
+                  "$ref": "#/$defs/date8Nullable"
                 }
               }
             },
@@ -1929,6 +1984,19 @@
             "null"
           ]
         }
+      }
+    },
+    "hardVetoSourceStatus": {
+      "type": "string",
+      "enum": ["known_clear", "known_hit", "unknown"]
+    },
+    "hardVetoSourceHealth": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["status", "observed_at"],
+      "properties": {
+        "status": {"$ref": "#/$defs/hardVetoSourceStatus"},
+        "observed_at": {"$ref": "#/$defs/date8Nullable"}
       }
     },
     "checkStatus": {
