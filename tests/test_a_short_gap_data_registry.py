@@ -823,6 +823,22 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         series = [{"high": 9.0 + i * 0.05, "low": 8.9 + i * 0.05, "close": 9.0 + i * 0.05} for i in range(30)]
         return _good_input(stateful_risk=_held_state(), close=10.6, price_series=series)
 
+    def _structural_resistance_held_inp(self):
+        series = [{"high": 12.0, "low": 8.0, "close": 10.6} for _ in range(30)]
+        return _good_input(stateful_risk=_held_state(), close=10.6, price_series=series)
+
+    def _breached_held_inp(self):
+        dates = ([f"202605{day:02d}" for day in range(19, 32)]
+                 + [f"202606{day:02d}" for day in range(1, 18)])
+        series = []
+        for i, trade_date in enumerate(dates):
+            row = {"high": 2.92, "low": 2.88, "close": 2.90,
+                   "trade_date": trade_date}
+            if i in (13, 14):
+                row.update(high=3.10, low=2.88 if i == 13 else 2.87)
+            series.append(row)
+        return _good_input(stateful_risk=_held_state(), price_series=series)
+
     def test_r3_clear_review_clear_price_eq_s3a_stop(self):
         r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
         r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
@@ -836,15 +852,16 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         jsonschema.validate(r, _load(M67_SCHEMA))
 
     def test_r3_reduce_review_reduce_price_eq_s3a_t1(self):
-        r = build_m67_report(self._clean_held_inp(), AS_OF, "t")
+        r = build_m67_report(self._structural_resistance_held_inp(), AS_OF, "t")
         plan = r["machine"]["entry_exit_size_star"]["plan"]
         self.assertFalse(plan["breached"])
-        self.assertIsNotNone(plan["t1"])
+        self.assertEqual(plan["t1"], 12.0)
         r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
         _apply_holding_disposition(r)
         self.assertEqual(r["m67"]["table"]["减仓价"], plan["t1"])            # 减仓价 = S3a 盈一
         self.assertEqual(r["m67"]["table"]["减仓比例"], _REDUCE_RATIO_ADVISORY)
         self.assertEqual(r["machine"]["reduce_price"], plan["t1"])
+        self.assertEqual(r["machine"]["reduce_price"], 12.0)
         self.assertNotIn("清仓价", r["m67"]["table"])
         validate_m67_consistency(r)
         jsonschema.validate(r, _load(M67_SCHEMA))
@@ -858,7 +875,7 @@ class HoldingDispositionS3bTests(unittest.TestCase):
 
     def test_r3_breached_reduce_price_null_not_fabricated(self):
         # 破位 → plan.t1=None → reduce_review 减仓价=null(诚实不伪造),减仓比例仍 advisory
-        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
         r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
         _apply_holding_disposition(r)
@@ -1017,7 +1034,7 @@ class HoldingDispositionS3bTests(unittest.TestCase):
     # build 接线(held 报告)
     def test_r4a_held_fields_present_and_clean(self):
         # 默认 held(破位)→ 三字段就位;hold disposition → price_cross none;avg_cost<plan.stop(破位)→ 移保本不触发
-        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertIn("current_close", r["machine"])
         self.assertEqual(r["machine"]["price_cross"], "none")
         self.assertEqual(r["machine"]["move_to_breakeven"], {"triggered": False, "breakeven_price": None})
@@ -1026,7 +1043,7 @@ class HoldingDispositionS3bTests(unittest.TestCase):
 
     def test_r4a_clear_review_breached_price_cross_reached(self):
         # 破位 held + clear_review → 清仓价=plan.stop≥现价 → price_cross=clear_price_reached(到价清仓=S3a 破位)
-        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
         r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
         _apply_holding_disposition(r)
@@ -1225,7 +1242,10 @@ class HoldingRatchetS3bR4bTests(unittest.TestCase):
     def test_r4b_validator_held_with_ratchet_passes(self):
         r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
         plan_stop = r["machine"]["entry_exit_size_star"]["plan"]["stop"]
-        r["machine"]["ratchet"] = self._good_ratchet(ratcheted_stop=plan_stop, week_count=1)
+        breakeven = r["machine"]["move_to_breakeven"]["breakeven_price"]
+        self.assertIsNotNone(breakeven)
+        r["machine"]["ratchet"] = self._good_ratchet(
+            ratcheted_stop=max(plan_stop, breakeven), week_count=1)
         validate_m67_consistency(r)
         jsonschema.validate(r, _load(M67_SCHEMA))
 

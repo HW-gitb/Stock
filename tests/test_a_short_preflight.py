@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import os
 import sys
+import types
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -27,12 +28,17 @@ class AShortPreflightTests(unittest.TestCase):
         )
 
     def test_a_short_provider_initializers_pass_token_without_set_token(self) -> None:
-        fake_tushare = mock.Mock(spec=["pro_api"])
+        class _FakeDataApi:
+            pass
+        setattr(_FakeDataApi, "_DataApi__http_url", "old")
+        fake_tushare = types.SimpleNamespace(
+            __version__="1.4.29",
+            pro=types.SimpleNamespace(client=types.SimpleNamespace(DataApi=_FakeDataApi)),
+            pro_api=mock.Mock(),
+        )
         fake_tushare.pro_api.return_value = object()
         with mock.patch.dict(sys.modules, {"tushare": fake_tushare}), mock.patch.dict(
             os.environ, {"TUSHARE_TOKEN": "masked-test-token"}
-        ), mock.patch.object(backtest_rank, "_pin_tushare_base_url"), mock.patch.object(
-            execution_materializer, "_pin_tushare_base_url"
         ):
             backtest_rank._tushare_pro()
             execution_materializer.tushare_pro()

@@ -8,6 +8,53 @@
 
 ---
 
+## 2026-07-14 — Codex 修复（A-short 市场时钟 tzdata 显式依赖）
+
+- **Verdict/Action**: 已将 Windows 市场时钟所需的 IANA 时区数据从 pandas 的传递依赖改为 A-short 的直接依赖：`tzdata>=2022.7`。未改市场时钟、日期判定、策略或 provider 调用链。
+- **Required**: 无；该项为 `R-ASHORT-TUSHARE-PRIVATE-ENDPOINT-RUNTIME-CONTRACT` 同一“显式运行时契约”切片的 Optional disposition，仍待独立审查后随已审查范围提交。
+- **Verify**: 新依赖契约在未声明 `tzdata` 时红测；改为兼容基线后 `tests.test_a_share_market_clock`、`tests.test_a_short_tushare_runtime_contract`、`tests.test_resolve_canonical_asof` 共 23 OK。测试仅读取依赖清单并执行离线时钟/假 Tushare 契约，未调用 provider。
+- **Pre-Codex self-review**: A：`ZoneInfo("Asia/Shanghai")` 的唯一市场时钟依赖已由 A-short requirements 显式覆盖；B：守卫只要求一条合法 `tzdata` 依赖声明，不锁死未来例行更新；C：移除 direct dependency 的反向例已红；D：未以 pandas 传递依赖替代部署契约，未放宽 fail-closed；E：register 与本 entry 只记录当前切片；F：定向 23 OK。未使用子 agent。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short Tushare endpoint 运行时契约）
+
+- **Verdict/Action**: 已将 A-short 的 Tushare 初始化收敛到 `engine/a_short_tushare_client.py`；`requirements-a-short.txt` 精确钉扎 `tushare==1.4.29`。EGS、rank backtest、执行价格物化器和 IV probe 都在 `pro_api()` 前复用同一版本/私有字段/endpoint pin 的 fail-closed 检查，仍只直接传 token，绝不调用 `set_token`。
+- **Required**: 无；`R-ASHORT-TUSHARE-PRIVATE-ENDPOINT-RUNTIME-CONTRACT` 保持 `in_progress P2`，待独立审查和已审查提交后关闭。
+- **Verify**: 新增契约测试先红：不受支持版本仍创建 client、缺 `_DataApi__http_url` 时 backtest 只 warning、依赖与四个入口未收敛；修复后两种 fake runtime 均在 `pro_api()` 前 raise，四入口旧私有字段/直接 client grep 为 0。定向 73 OK；含 EGS、回测、周筛主链的受影响包为 536 OK。全程未调用 provider。
+- **Pre-Codex self-review**: A：完整集合为 EGS、rank backtest、execution-price materializer、IV probe 四个生产初始化口；下游 weekly/regime/health 等既有消费者继续仅经 IV probe 的同一导出初始化器；B：对四入口 `rg _DataApi__http_url|def _pin_tushare_base_url|.pro_api(` 为 0，并由新测试永久守护；C：错版本与缺私有字段均断言 `pro_api` 未被调用，正确版本仍保留 endpoint pin + no-`set_token` 回归；D：只收紧不支持 runtime，未放宽 endpoint、token、PIT、策略或执行边界；E：未改 CURRENT/README，requirements 为唯一运行时版本来源，register/SESSION_LOG 只记录当前风险；F：受影响包 536 OK，compile、`git diff --check`、UTF-8 无 BOM/U+FFFD 已通过。未使用子 agent；主线程完成 A-F 自审，无 timeout。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A 股市场时钟绑定）
+
+- **Verdict/Action**: 已新增 `engine/a_share_market_clock.py`，把 A 股业务日期固定到 `Asia/Shanghai`；canonical resolver、周筛 wrapper、EGS 的日期分支和 forward tracker 的成熟日判断均改为使用该市场时钟。纯记录用的带偏移时间戳保持原样。
+- **Required**: 无；`R-ASHORT-MARKET-CLOCK-HOST-TIMEZONE-DEPENDENCY` 保持 `in_progress P1`，待独立审查和已审查提交后关闭。
+- **Verify**: 新测试先因共享市场时钟模块不存在而失败；实现后 `tests/test_a_share_market_clock.py` + `tests/test_resolve_canonical_asof.py` 为 19 OK，forward/cache + 刀6-10 回归为 33 OK，`tests/test_a_short_weekly_pipeline.py` 为 437 OK；Python compile、PowerShell ParseFile 均通过。UTC `2026-06-26T07:30Z` 被固定解释为上海 15:30 并在收盘后解析到 `20260629`；共享时钟拒绝无时区的显式 instant。
+- **Pre-Codex self-review**: A：覆盖 resolver 默认时钟、wrapper `RunDate`、EGS 的 `TODAY`/L3/SW 分支、forward maturity 四类业务日期消费者；B：审阅 `datetime.now|Get-Date` 的全部命中，业务日期旧形态为 0，EGS 余下 6 处均是生成/发布时间戳；C：同一 UTC instant 的收盘边界、带时区 resolver 注入归一化和 naive-instant 拒绝都有回归；D：未改变策略、阈值、PIT 数据规则或 P2 endpoint，时间戳不被误改为业务日期；E：未改 CURRENT/README，仅登记当前 open-risk 与交接；F：compile、PowerShell parse、`git diff --check`、UTF-8 无 BOM/U+FFFD 已通过。未使用子 agent；主线程完成 A-F 自审，无 timeout。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short S3b 持仓夹具语义漂移）
+
+- **Verdict/Action**: 已修复 3 个破位/R4a 测试夹具和 1 个 R4b ratchet 断言；运行时代码、策略参数和手工执行边界未改。
+- **Required**: 无；`R-ASHORT-S3A-HOLDING-T1-RESISTANCE-BYPASS` 仍按既有条目等待独立审查与已审查提交后关闭。
+- **Verify**: 四项先红后绿；`tests/test_a_short_gap_data_registry.py` 170 OK。破位夹具现提供入场后高点使跟踪止损真实高于现价；ratchet 夹具现以 `max(S3a stop, 已触发移保本)` 构造，不再违反 only-up 不变式。
+- **Pre-Codex self-review**: A：覆盖 R3 破位减仓价、R4a 持仓字段/清仓到价、R4b validator 三个出口；B：仅更新对应测试夹具与 register/SESSION_LOG 的当前事实，无旧夹具语义残留；C：非破位的 `_clean_held_inp()` 和无移保本的纯函数反向用例保留；D：未改 fail-closed、价格、策略或执行逻辑；E：未改 CURRENT/README；F：`test_a_short_gap_data_registry.py` 170 OK，3 个变更文件均为 UTF-8 无 BOM，`git diff --check` 通过。未使用子 agent。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short S3a 持仓盈一结构压力位旁路）
+
+- **Verdict/Action**: 已删除 S3a 盈一选择中错误的 entry-date 限制；真实持仓在有效 `resistance > close` 时与无持仓日期的规则相同，S3b 减仓价继续直接引用该 S3a 值。
+- **Required**: `R-ASHORT-S3A-HOLDING-T1-RESISTANCE-BYPASS` 代码与定向回归已完成；register 保持 `in_progress`，待独立审查和已审查提交后关闭。
+- **Verify**: 新增两项用例红测分别得到 `71.17 != 72.0`、`22.67 != 12.0`，修复后 S3a 真实持仓结构位、反向 RR-fallback、S3b `reduce_review -> reduce_price` 三项均通过；`test_a_short_phase5_engine.py` 118 OK，`test_a_short_weekly_pipeline.py` 437 OK。`test_a_short_gap_data_registry.py` 仍有既有 3 fail + 1 error（持仓语义迁移/ratchet 夹具），不属于本刀。
+- **Pre-Codex self-review**: A：同类出口为 S3a `holding_levels` 与 S3b R3 `reduce_price`，均有回归；B：`$needle = ('res and res > close ' + 'and not entry_date'); rg -F -- $needle` 在 repo 当前代码/文档/测试为 0 hits；C：新增 `resistance <= close` 的真实持仓反向用例，RR floor 仍生效；D：只删错误条件、未放宽缺价/破位/手工执行闸；E：未改 CURRENT/README，register 仅记录当前修复状态；F：5 个变更文件均为 UTF-8 无 BOM，`git diff --check` 通过。按当前协作规则未启用子 agent，主线程完成 A-F 自检，无 timeout。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 审查（A-short S3a 持仓盈一结构压力位旁路）FAIL
+
+- **Verdict/Action**: 新增 1 项 P1 Required：`R-ASHORT-S3A-HOLDING-T1-RESISTANCE-BYPASS`。`holding_levels()` 的 entry-date 条件错误排除了实际持仓的结构压力位盈一；S3b 减仓价复用该值，完整修复边界单一来源见 register。
+- **Required**: `R-ASHORT-S3A-HOLDING-T1-RESISTANCE-BYPASS`（open）。
+- **Verify**: bundled Python 离线反例：相同 `close=10/atr=1/resistance=12/high=10/manual_stop=5`，有 `entry_date` 得 `t1=11.87`、无 `entry_date` 得 `12.0`；`tests/test_a_short_weekly_pipeline.py` 437 OK。S3a/S3b 定向包现有 204 tests 另有 3 fail + 1 error，为既有持仓语义迁移测试漂移，不能作为本项通过证据。
+- **Next**: 用户决定是否授权 Codex 修复 `R-ASHORT-S3A-HOLDING-T1-RESISTANCE-BYPASS`。
+
 ## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
 
 - **Verdict/Action**: 两处均 PASS、无 Required。① `has_crash_veto` 4→5 日窗口 = 仅循环 bound `min(5→6)`;3 条件（>5% 跌 / 收弱在振幅下 20% / 次日不修复）逐字未改;`grp` DESC 排序（egs_main:2687）、PIT 剔最新未确认日;测试钉「第 5 个确认日触发、第 6 个不触发」。是**硬否决收紧**（更保守、risk_filter_only 的安全方向）;它**改选股**（`l2_crash_veto` 245→301、55 只本会入排名被剔）= 该 veto 的既定/正确效果。② `a_short_crash_veto_tracker` = comparison-only:ps1 在 tracker 失败时「formal selection/M6.7 continues unchanged」（**非阻断**）;summary 仅 `_validate_crash_veto_tracking_summary` 校验后挂周报（**不改选股**）;control 确定性（L2→L1→pool）;cohort 按 `scope+days` 隔离（245 与 55 永不混）;T+1 开 / T+5·T+10 收 / qfq / 0.16% 双边成本约定正确。

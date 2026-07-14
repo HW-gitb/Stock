@@ -104,7 +104,11 @@ if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py') -PathType Leaf)
     Write-Host "[FATAL] expected A-EGS\egs_main.py (as a file) under $ProjectRoot." -ForegroundColor Red
     exit 1
 }
-$RunDate = Get-Date -Format 'yyyyMMdd'
+$MarketNow = [System.TimeZoneInfo]::ConvertTimeBySystemTimeZoneId(
+    [System.DateTimeOffset]::UtcNow,
+    'China Standard Time'
+)
+$RunDate = $MarketNow.ToString('yyyyMMdd', [System.Globalization.CultureInfo]::InvariantCulture)
 if ([string]::IsNullOrWhiteSpace($AsOf)) {
     # --- 省略 -AsOf → 解析 canonical 决策日（拉 trade_cal，需网络/TUSHARE_TOKEN）---
     # 窗口内任意时刻(周五盘后→周一盘前)运行都收敛到「即将到来/当前未收盘的交易日」(正常周=即将到来的周一),

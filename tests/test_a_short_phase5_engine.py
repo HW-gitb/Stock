@@ -458,8 +458,10 @@ class TickPriceTests(unittest.TestCase):
 class HoldingLevelsTests(unittest.TestCase):
     """S3a: 持仓系统跟踪止损/止盈(被动)= recent_high(20日高=resistance)−ATR×倍数;side-aware tick;
     破位/缺数据不伪造;不算入场价/股数。"""
-    def test_normal_levels_ticked_no_entry_no_shares(self):
-        plan, rej = holding_levels({"close": 70.1}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")
+    def test_normal_levels_ticked_for_held_position(self):
+        plan, rej = holding_levels(
+            {"close": 70.1, "stateful_risk": {"position": {"entry_date": "20260601"}}},
+            {"resistance": 72.0, "atr14": 2.1}, "震荡期")
         self.assertIsNone(rej)
         self.assertFalse(plan["breached"])
         self.assertEqual(plan["stop"], 69.38)      # tick_up(72−1.25×2.1=69.375) 止损向上
@@ -472,6 +474,14 @@ class HoldingLevelsTests(unittest.TestCase):
         low, _ = holding_levels({"close": 70.0}, {"resistance": 72.0, "atr14": 2.0}, "震荡期")
         high, _ = holding_levels({"close": 70.0}, {"resistance": 75.0, "atr14": 2.0}, "震荡期")
         self.assertGreater(high["stop"], low["stop"])   # 近高更高 → 跟踪止损上移(ratchet)
+
+    def test_held_position_uses_rr_floor_when_resistance_not_above_close(self):
+        plan, rej = holding_levels(
+            {"close": 70.0, "stateful_risk": {"position": {"entry_date": "20260601"}}},
+            {"resistance": 70.0, "atr14": 2.0}, "震荡期")
+        self.assertIsNone(rej)
+        self.assertFalse(plan["breached"])
+        self.assertEqual(plan["t1"], 73.75)
 
     def test_breached_when_price_below_trailing_stop(self):
         plan, rej = holding_levels({"close": 68.0}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")

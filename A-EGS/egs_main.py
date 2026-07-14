@@ -118,6 +118,8 @@ from engine.egs_industry_heat import (
     write_weight_comparison,
 )
 from engine.a_short_run_paths import weight_comparison_path
+from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
+from engine.a_short_tushare_client import init_tushare_pro
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -148,29 +150,11 @@ CONF = {
     "l3_cache_mode":    "refresh",  # formal runs refresh L3; tests may set reuse
 }
 
-def _pin_tushare_base_url():
-    # tushare 1.4.29 hardcodes http://api.waditu.com/dataapi which 503s and
-    # makes pro.<api>(...) silently return an empty DataFrame. Override the
-    # default endpoint; allow TUSHARE_BASE_URL to point at a mirror if needed.
-    import warnings
-    from tushare.pro.client import DataApi
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    if hasattr(DataApi, attr):
-        setattr(DataApi, attr, base_url)
-    else:
-        warnings.warn(
-            f"tushare.DataApi has no attribute {attr}; default URL not overridden "
-            "(this codebase was written against tushare 1.4.29 internals)."
-        )
-
-
 if TOKEN and ts is not None:
-    _pin_tushare_base_url()
     # 直接把 token 传给 pro_api,**不调 ts.set_token**:set_token 会在 import 期写 ~/tk.csv(import 文件副作用 +
     # 沙箱/受限环境 PermissionError → 卡住只读单测),且 egs_main 全程用本地 `pro` 客户端、不依赖全局 token
-    # (weekly pipeline 等都 api=pro)。与 runners/a_short_iv_feed_probe.py::init_tushare_pro 同一 sanctioned 口径(no set_token)。
-    pro = ts.pro_api(TOKEN)
+    # (weekly pipeline 等都 api=pro)。共享初始化器同时 pin 已验证 endpoint 并拒绝版本/私有结构漂移。
+    pro = init_tushare_pro(TOKEN, ts_module=ts)
 else:
     pro = None
 
@@ -212,8 +196,8 @@ EGS_API_FAMILIES = [
 ]
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
-TODAY    = datetime.now().strftime("%Y%m%d")
-TODAY_DT = datetime.now()
+TODAY = a_share_market_date()
+TODAY_DT = a_share_market_wall_time()
 
 
 # ═══════════════════════════════════════════════════
@@ -1748,7 +1732,7 @@ def _guard_historical_asof_l3_mode(as_of, l3_mode, allow_historical_live_l3=Fals
     """
     if not as_of:
         return
-    effective_run_date = run_date or datetime.now().strftime("%Y%m%d")
+    effective_run_date = run_date or a_share_market_date()
     if str(as_of) < str(effective_run_date) and l3_mode == "today" and not allow_historical_live_l3:
         raise SystemExit(
             f"[FATAL] Historical --as-of {as_of} predates the run date {effective_run_date} "
@@ -2024,7 +2008,7 @@ def get_sw_industry_map():
     # trust the capped unfiltered response, and never use current-only rows for
     # a historical PIT replay.
     index_member_all = getattr(pro, "index_member_all", None)
-    wall_date = datetime.now().strftime("%Y%m%d")
+    wall_date = a_share_market_date()
     if TODAY == wall_date and callable(index_member_all):
         candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
         if not candidate.empty:
@@ -3195,7 +3179,7 @@ def score_l3(df, trade_dates, all_daily):
         # concept_members) so future PIT reads do not silently mark
         # non-candidate stocks as COV-LOW.
         try:
-            real_today = datetime.now().strftime("%Y%m%d")
+            real_today = a_share_market_date()
             market_stock_concepts = _build_market_stock_concepts(
                 stock_concepts, concept_members, CONF["max_concepts_per_stock"]
             )

@@ -555,7 +555,7 @@ def holding_levels(inp: dict, ind: dict, regime: str):
         return {**base, "t1": None, "t2": None, "breached": True}, None
     rr_floor = RR_FLOOR.get(regime, 1.5)
     res = ind.get("resistance")
-    raw_t1 = res if (res and res > close and not entry_date) else close + rr_floor * risk
+    raw_t1 = res if (res and res > close) else close + rr_floor * risk
     t1 = tick_down(raw_t1)                 # 止盈向下取(不高估可实现目标)
     t2 = tick_down(max(raw_t1 + ATR_MULT.get(regime, 1.25) * atr, close + 2.0 * risk))
     if t1 is None or t2 is None or not (t1 > close and t2 >= t1):      # post-tick 结构失效 → 退破位

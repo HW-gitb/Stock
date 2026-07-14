@@ -57,6 +57,7 @@ from runners.backtest_rank import (
     fetch_forward_daily,
 )
 from engine.data.analysis_input_contract import validate_analysis_input_contract
+from engine.a_share_market_clock import a_share_market_date
 
 TRACKER_CSV = ROOT / "logs" / "forward_tracker.csv"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
@@ -238,7 +239,7 @@ def capture(as_of: str) -> int:
 # ============================================================
 
 def _today_yyyymmdd() -> str:
-    return datetime.now().strftime("%Y%m%d")
+    return a_share_market_date()
 
 
 def _mature_as_ofs(df: pd.DataFrame, today: str, windows: list[int]) -> list[str]:

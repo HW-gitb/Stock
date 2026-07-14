@@ -45,6 +45,7 @@ from engine.analyzer.rule6_hard_veto import DEFAULT_RULES as DEFAULT_VETO_RULES
 from engine.analyzer.rule6_hard_veto import normalize_rules as _normalize_veto_rules
 from engine.analyzer.rule6_hard_veto import run_veto
 from engine.data.analysis_input_contract import validate_analysis_input_contract
+from engine.a_short_tushare_client import init_tushare_pro
 
 RESULT_ROOT = ROOT / "result" / "a_short"
 BACKTEST_DIR = RESULT_ROOT / "backtest"
@@ -274,30 +275,12 @@ def rule6_any_triggered(rule6_checks):
 # Tushare with retry
 # ============================================================
 
-def _pin_tushare_base_url():
-    # tushare 1.4.29 hardcodes http://api.waditu.com/dataapi which 503s and
-    # makes pro.<api>(...) silently return an empty DataFrame. Override the
-    # default endpoint; allow TUSHARE_BASE_URL to point at a mirror if needed.
-    import warnings
-    from tushare.pro.client import DataApi
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    if hasattr(DataApi, attr):
-        setattr(DataApi, attr, base_url)
-    else:
-        warnings.warn(
-            f"tushare.DataApi has no attribute {attr}; default URL not overridden "
-            "(this codebase was written against tushare 1.4.29 internals)."
-        )
-
-
 def _tushare_pro():
     import tushare as ts
-    _pin_tushare_base_url()
     token = os.environ.get("TUSHARE_TOKEN")
     if not token:
         raise RuntimeError("TUSHARE_TOKEN is required for backtest data fetches")
-    return ts.pro_api(token)
+    return init_tushare_pro(token, ts_module=ts)
 
 
 def _fn_label(fn):
