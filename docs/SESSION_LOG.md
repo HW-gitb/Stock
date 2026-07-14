@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-13 — Claude Code 独立复审（R-USSHORT-R3-KEY-SAFETY capstone fresh bankruptcy scan）PASS
+
+- **Verdict/Action**: PASS + 提交（9add 分支，未 push）。复审 Codex 的 capstone 集成刀（universe 先派生 preliminary eligible、逐票抓同轮 SEC submissions、解析 Item 1.03、破产剔除、剩余全 `screened_no_filing` 再写候选）：fail-closed 安全核成立——畸形 200 raise 不伪造 clean、gate-shape 精确匹配 `_require_current_bankruptcy_coverage` 六谓词、PIT 三向 fail-closed（filing_date>as_of + 窗外 observed_at + lookback 有界）、破产票 apply_pass1 剔除、扫描集⊇最终候选、5000 上限+CIK 校验；capstone adapter 仅加 `scan_bankruptcy_for_eligible=True` 一行。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**亲跑全包 `discover -p test_us_short*.py` = 4422 OK**（85s、9add tree、未采信执行方计数）。整读 parser/`_sec_submissions_recent_arrays`/`_resolve_bankruptcy`/`apply_pass1` 消费链。**独立 §6a 对抗 agent PASS**：15 敌意 payload 全 raise、E2E 真路径 clean 票过 gate、破产票被剔+强喂被拒、mid-scan 崩→`WeeklyCapstoneError` 中止回滚、raw 仅入 gitignored root、tracked summary 无 secret/URL。
+- **Next**: 两条 P3 Optional（非阻断、fail-closed 方向、待用户/Codex 定）：①`_sec_get` 单发无 429/5xx 重试、~2400 SEC 调用首错即中止全跑（勿以「跳过错票」削弱门）；②空 preliminary_eligible→raise 非空报告（仅数据灾难可达）。Landing：需并入 master（master 领先 4 提交+带他窗 a_short 未提交 WIP，未动 master）。
+
+## 2026-07-13 — Codex 修复（R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS：capstone fresh bankruptcy scan）
+
+- **Verdict/Action**: capstone universe 现对 preliminary Pass1 eligible 逐票抓取同轮 SEC submissions、解析 Item 1.03 后重建最终候选；破产命中剔除，剩余 eligible 全为当前 `screened_no_filing`，未完成全量解析前不写最终 candidate。
+- **Required**: `R-USSHORT-R3-KEY-SAFETY-SOURCE-SEMANTICS` 本 capstone seam 待独立审查；完整事实与关闭标准单源见 `docs/system_risk_register.md`。
+- **Verify**: 红测复现缺 runner 入口/adapter flag/signature；修后 focused 167 OK、下游 gate+schema+route 76 OK、全离线 `test_us_short*` 4422 OK（1 skipped）、`py_compile`/`git diff --check` 通过。doc-governance 单测仅命中 HEAD 既有 issue-6 日志 bullet-too-long；本 entry 无新增 offender。全程 mocked/offline，未调 provider。
+- **Pre-Codex self-review**: A-F main-thread checklist（未获 subagent 授权）：同类入口与唯一 capstone adapter 已扫；目标集含 FMP rescue 后 eligible、排除 non-eligible；missing CIK/畸形 payload/破产正例与 clean 反向例均 fail-closed；standalone 默认和注入 seam 不变；CURRENT 未写瞬态；固定包仅有既存日志 guard 基线失败。
+- **Next**: Claude Code：仅独立审查本 capstone fresh bankruptcy scan 修复；PASS 后提交本范围，不 push。
+
 ## 2026-07-13 — Claude Code 独立复审（US-short issue-6 主题选择/生命周期席位治理 Top15）PASS
 
 - **Verdict/Action**: PASS。应用户要求按审查标准全量复审 `7df1e080` 已落定的 issue-6 主题选择闭环（`R-USSHORT-R3-THEME-LIFECYCLE-SEAT-COMPOSITION-TOP15-CLOSURE`）；无代码改动、无新提交（仅本 log）。`us_short_theme_selection` 引擎 + `_select_top15` 接线 + 生命周期席位构成 + 源 contract SHA-256 绑定 + 报告标签 + OR provisional 门（含新单测）全部符合 §4.3/§4.5/§13，且比设计更诚实（用 `industry_heat_v1` 不冒充 `gics_established`、跨行业默认禁用）；不砍 theme 权重、不另建治理平台，符合 codex_r3.md 约束（把既有生命周期表接进选股、留 forward/shadow 后判降权）。

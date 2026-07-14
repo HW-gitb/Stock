@@ -82,9 +82,13 @@ CANDIDATE_LIST_DIR = ROOT / "state" / "us_short"
 RAW_ROOT_DIR = ROOT / "provider_samples"
 
 SEC_EXCHANGE_TICKERS_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
+SEC_SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik:010d}.json"
 SEC_FRAMES_URL = "https://data.sec.gov/api/xbrl/frames/dei/EntityCommonStockSharesOutstanding/shares/{q}.json"
 SEC_SHARE_FRAMES = ["CY2026Q1I", "CY2025Q4I", "CY2025Q3I", "CY2025Q2I"]
 SEC_FAIR_ACCESS_SLEEP = 0.15
+# A corrupted/hostile candidate artifact must never turn one capstone run into an unbounded SEC crawl. The normal
+# eligible universe is roughly 2,400 names; 5,000 leaves operational headroom while remaining a hard fail-closed cap.
+MAX_INTEGRATED_BANKRUPTCY_SCREEN_SYMBOLS = 5_000
 EXCHANGE_WHITELIST = ("NYSE", "NASDAQ")
 NASDAQ_TRADE_HALTS_RSS_URL = "https://www.nasdaqtrader.com/rss.aspx?feed=tradehalts"
 
@@ -276,6 +280,79 @@ def fetch_sec_tickers(sec_ua: str) -> dict[str, dict[str, Any]]:
         if ct and ct not in out and isinstance(cik, int):
             out[ct] = {"cik": cik, "exchange": exch}
     return out
+
+
+def fetch_bankruptcy_submissions_for_eligible(
+    *,
+    sec_map: dict[str, dict[str, Any]],
+    eligible_tickers: list[str],
+    sec_ua: str,
+    raw_root: Path,
+    status_as_of: str,
+    observed_at: str,
+) -> tuple[dict[str, Any], dict[str, int]]:
+    """Fetch one SEC company-submissions payload for every preliminary Pass1-eligible ticker.
+
+    This is the capstone integration half of the already-reviewed Item 1.03 parser. It deliberately reuses the SEC
+    ticker/CIK map fetched by the universe stage (no second ticker-map call), stores raw wrappers only under the
+    caller's already-validated gitignored raw root, and fails on the first missing CIK/provider/shape error. Partial
+    raw wrappers may remain for audit, but no candidate artifact is emitted until the complete set parses.
+    """
+    if not isinstance(sec_map, dict) or not isinstance(eligible_tickers, list):
+        raise RuntimeError("integrated bankruptcy scan requires sec_map dict + eligible_tickers list")
+    if not eligible_tickers:
+        raise RuntimeError("integrated bankruptcy scan requires at least one preliminary eligible ticker")
+    if len(eligible_tickers) > MAX_INTEGRATED_BANKRUPTCY_SCREEN_SYMBOLS:
+        raise RuntimeError(
+            "integrated bankruptcy scan exceeds the fail-closed eligible-symbol cap "
+            f"({len(eligible_tickers)} > {MAX_INTEGRATED_BANKRUPTCY_SCREEN_SYMBOLS})"
+        )
+    canonical: list[str] = []
+    seen: set[str] = set()
+    for raw in eligible_tickers:
+        ticker = canonical_us_ticker(raw)
+        if ticker is None or ticker != raw or ticker in seen:
+            raise RuntimeError("integrated bankruptcy scan requires unique canonical eligible tickers")
+        meta = sec_map.get(ticker)
+        cik = meta.get("cik") if isinstance(meta, dict) else None
+        if type(cik) is not int or isinstance(cik, bool) or cik <= 0:
+            raise RuntimeError(f"integrated bankruptcy scan missing positive SEC CIK for {ticker}")
+        seen.add(ticker)
+        canonical.append(ticker)
+
+    screen_rows: dict[str, dict[str, Any]] = {}
+    for index, ticker in enumerate(canonical):
+        if index:
+            time.sleep(SEC_FAIR_ACCESS_SLEEP)
+        cik = sec_map[ticker]["cik"]
+        payload = _sec_get(SEC_SUBMISSIONS_URL.format(cik=cik), sec_ua)
+        # Parse each payload immediately. A malformed 200 must fail before it can be labeled screened_no_filing.
+        one_ticker_screen = _status_source.build_bankruptcy_screen_from_sec_submissions(
+            as_of=status_as_of,
+            observed_at=observed_at,
+            submissions_by_ticker={ticker: payload},
+        )
+        raw_path = raw_root / "bankruptcy_8k" / ticker / "company_submissions_recent_filings.json"
+        _write_json_atomic(
+            {
+                "provider_id": "sec_edgar",
+                "endpoint_family": "company_submissions",
+                "symbol": ticker,
+                "ok": True,
+                "payload": payload,
+            },
+            raw_path,
+        )
+        screen_rows[ticker] = one_ticker_screen["by_ticker"][ticker]
+    return {
+        "observed": True,
+        "observed_at": observed_at,
+        "lookback_window": "P90D",
+        "by_ticker": screen_rows,
+    }, {
+        "eligible_symbol_count": len(canonical),
+        "sec_company_submissions_calls": len(canonical),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -1083,6 +1160,7 @@ def run_fetch(
     dry_run_env: bool = False,
     bankruptcy_screen_paths: list[Path] | tuple[Path, ...] | None = None,
     bankruptcy_submissions_by_ticker: dict[str, Any] | None = None,
+    scan_bankruptcy_for_eligible: bool = False,
 ) -> dict[str, Any]:
     if not confirm_user_authorization and not dry_run_env:
         raise RuntimeError("live execution requires --confirm-user-authorization")
@@ -1120,8 +1198,13 @@ def run_fetch(
     candidate_list_path = candidate_list_path or _candidate_path_for(decision_date)
     _sv.validate_raw_root(raw_root)
     _validate_candidate_path(candidate_list_path, decision_date)   # gitignored-root gate BEFORE any fetch/write
-    if bankruptcy_screen_paths and bankruptcy_submissions_by_ticker is not None:
-        raise RuntimeError("provide only one bankruptcy source shape: screen path(s) or SEC submissions")
+    if type(scan_bankruptcy_for_eligible) is not bool:
+        raise RuntimeError("scan_bankruptcy_for_eligible must be an exact bool")
+    supplied_bankruptcy_sources = int(bool(bankruptcy_screen_paths)) + int(bankruptcy_submissions_by_ticker is not None)
+    if supplied_bankruptcy_sources > 1 or (scan_bankruptcy_for_eligible and supplied_bankruptcy_sources):
+        raise RuntimeError(
+            "provide exactly one bankruptcy source shape: integrated eligible scan, screen path(s), or SEC submissions"
+        )
     bankruptcy_screen, bankruptcy_screen_file_count = _load_bankruptcy_screen_paths(
         bankruptcy_screen_paths, decision_date=decision_date, generated_at=generated_at)
 
@@ -1199,12 +1282,65 @@ def run_fetch(
         print(f"      FMP 兜底跳过 (FMP_API_KEY 未设); {len(fallback_targets)} 缺市值未救回", flush=True)
 
     fmp_attempted = fmp_call_stats.get("actual_request_count", 0)
+    integrated_bankruptcy_stats = {
+        "eligible_symbol_count": 0,
+        "sec_company_submissions_calls": 0,
+    }
+    if scan_bankruptcy_for_eligible:
+        preliminary_eligible = eligible_tickers_from_rows(rows)
+        print(
+            f"      SEC bankruptcy Item 1.03 fresh scan: {len(preliminary_eligible)} eligible tickers...",
+            flush=True,
+        )
+        bankruptcy_screen, integrated_bankruptcy_stats = fetch_bankruptcy_submissions_for_eligible(
+            sec_map=sec_map,
+            eligible_tickers=preliminary_eligible,
+            sec_ua=sec_ua,
+            raw_root=raw_root,
+            status_as_of=_status_as_of_from_decision_date(decision_date),
+            observed_at=generated_at,
+        )
+        status_records, status_source_outcome, status_source_payloads = build_live_status_records(
+            sec_map,
+            decision_date=decision_date,
+            observed_at=generated_at,
+            halt_feed=halt_feed,
+            halt_feed_state=halt_feed_state,
+            bankruptcy_screen=bankruptcy_screen,
+        )
+        rows = apply_pass1(
+            sec_map,
+            sec_shares,
+            market_data,
+            governance=governance,
+            fmp_caps=fmp_caps,
+            as_of=used_date,
+            observed_at=generated_at,
+            status_records=status_records,
+        )
+        summary_counts = summarize_rows(rows)
+        # Replace the preliminary unscreened status snapshot only after the complete candidate-wide scan parsed.
+        _write_json_atomic(
+            {
+                "decision_date": decision_date,
+                "price_basis_date": price_basis_date,
+                "used_date": used_date,
+                "observed_window_dates": observed_window_dates,
+                "status_source_payloads": status_source_payloads,
+                "sec_shares_by_cik": {str(k): v for k, v in sec_shares.items()},
+                "market_data": market_data,
+            },
+            raw_root / "raw_universe_data.json",
+        )
 
     print(f"      eligible={summary_counts['eligible_count']}  "
           f"ineligible={summary_counts['ineligible_count']}  "
           f"no_price={summary_counts['no_price_count']}  no_shares={summary_counts['no_shares_count']}  "
           f"fmp_rescued={len(fmp_caps)}", flush=True)
-    if bankruptcy_screen is not None:
+    if scan_bankruptcy_for_eligible:
+        bankruptcy_source = "integrated_eligible_sec_submissions"
+        bankruptcy_input_count = integrated_bankruptcy_stats["eligible_symbol_count"]
+    elif bankruptcy_screen is not None:
         bankruptcy_source = "injected_bankruptcy_screen"
         bankruptcy_input_count = len(bankruptcy_screen["by_ticker"])
     elif bankruptcy_submissions_by_ticker is not None:
@@ -1214,7 +1350,18 @@ def run_fetch(
         bankruptcy_source = "not_supplied"
         bankruptcy_input_count = 0
     bankruptcy_8k_scan_performed = bankruptcy_source != "not_supplied"
-    if bankruptcy_source == "injected_bankruptcy_screen":
+    if bankruptcy_source == "integrated_eligible_sec_submissions":
+        bankruptcy_disclosure = (
+            "Pass1 first derives the otherwise-eligible set, then the same authorized universe run fetches one SEC "
+            "company-submissions payload per eligible ticker, parses Item 1.03 with the current decision clock, and "
+            "rebuilds the final candidate artifact. Every surviving eligible ticker is screened_no_filing; a "
+            "positive bankruptcy filing is removed before any downstream Pass2 consumer can read the artifact."
+        )
+        bankruptcy_limitation = (
+            "The integrated SEC Item 1.03 scan is candidate-wide and current-run bound, but remains research/live "
+            "provider evidence only; it does not authorize DataHub, production, ship-gate, or broker/order use."
+        )
+    elif bankruptcy_source == "injected_bankruptcy_screen":
         bankruptcy_disclosure = (
             "Pass1 sources delisted/otc from the SEC active-listing reference, halted from the Nasdaq current "
             "halt feed, and bankruptcy from user-authorized gitignored SEC Item 1.03 screen output. The runner "
@@ -1261,6 +1408,7 @@ def run_fetch(
         "nasdaq_halt_feed_calls": 1,
         "massive_grouped_daily_calls": massive_call_stats.get("actual_request_count", 0),
         "sec_share_frame_calls": len(SEC_SHARE_FRAMES),
+        "sec_bankruptcy_submissions_calls": integrated_bankruptcy_stats["sec_company_submissions_calls"],
         "fmp_profile_calls": fmp_call_stats.get("actual_request_count", 0),
     }
     provider_call_evidence["actual_total_calls"] = sum(
