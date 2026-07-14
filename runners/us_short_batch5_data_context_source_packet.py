@@ -54,7 +54,11 @@ SOURCE_PATH_FIELDS = (
     "catalyst_governance_path",
     "theme_selection_contract_path",
 )
-OPTIONAL_SOURCE_PATH_FIELDS = ("overextension_projection_path", "yfinance_grade_actions_path")
+OPTIONAL_SOURCE_PATH_FIELDS = (
+    "overextension_projection_path",
+    "overextension_candidate_artifact_path",
+    "yfinance_grade_actions_path",
+)
 PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS = (
     "offering_audit_source_path",
     "analyst_grade_actions_path",
@@ -691,9 +695,19 @@ def run_packet(
                 "theme_selection_contract_path",
             )
         }
-        if "overextension_projection_path" in paths:
+        has_overextension_projection = "overextension_projection_path" in paths
+        has_overextension_candidate = "overextension_candidate_artifact_path" in paths
+        if has_overextension_projection != has_overextension_candidate:
+            raise SourcePacketError(
+                "overextension projection and its full eligible-universe candidate artifact must be paired"
+            )
+        if has_overextension_projection:
             source_payloads["overextension_projection_path"] = _source_json(
                 paths["overextension_projection_path"], field="overextension_projection_path"
+            )
+            source_payloads["overextension_candidate_artifact_path"] = _source_json(
+                paths["overextension_candidate_artifact_path"],
+                field="overextension_candidate_artifact_path",
             )
         if "yfinance_grade_actions_path" in paths:
             source_payloads["yfinance_grade_actions_path"] = _source_json(
@@ -779,7 +793,7 @@ def run_packet(
             projection = source_payloads["overextension_projection_path"]
             validated_overextension = validate_overextension_projection(
                 projection,
-                candidate_artifact=source_payloads["candidate_artifact_path"],
+                candidate_artifact=source_payloads["overextension_candidate_artifact_path"],
                 expected_decision_date=packet["decision_clock"]["expected_decision_date"],
                 eligibility_governance=eligibility_governance,
             )

@@ -87,6 +87,7 @@ class CapstoneContext:
     account_state_path: Path
     authorized_momentum_top_k: int = 200
     authorized_pass2_call_budget: int | None = None
+    pass2_budget_preview: bool = False
     catalyst_recall_tickers: tuple[str, ...] = ()
     frozen_holding_tickers: tuple[str, ...] | None = None
     confirm_user_authorization: bool = False
@@ -218,6 +219,7 @@ def resolve_capstone_context(
     account_state_path: Path,
     authorized_momentum_top_k: int = 200,
     authorized_pass2_call_budget: int | None = None,
+    pass2_budget_preview: bool = False,
     catalyst_recall_tickers: tuple[str, ...] = (),
     calendar_path: Path = CALENDAR_PRESET,
     confirm_user_authorization: bool = False,
@@ -256,6 +258,7 @@ def resolve_capstone_context(
         account_state_path=Path(account_state_path),
         authorized_momentum_top_k=authorized_momentum_top_k,
         authorized_pass2_call_budget=authorized_pass2_call_budget,
+        pass2_budget_preview=pass2_budget_preview,
         catalyst_recall_tickers=tuple(catalyst_recall_tickers),
         confirm_user_authorization=confirm_user_authorization,
         provider_pace_seconds=provider_pace_seconds,
@@ -842,6 +845,87 @@ def _publish_current_output_transaction(ctx: CapstoneContext, txn: _CurrentOutpu
         _release_decision_lock(txn.decision_lock)
 
 
+def _run_pass2_budget_preview(ctx: CapstoneContext, pipeline: list[Stage]) -> dict[str, Any]:
+    """Run only the real upstream funnel through local Pass2 preflight and return its exact call forecast.
+
+    This deliberately creates neither a checkpoint nor an official-output transaction and never invokes yfinance,
+    Pass2, VIX, or the weekly bridge.  The resulting forecast remains non-authorizing: it must be supplied again as
+    an independently approved exact budget to the normal full run.
+    """
+    results: list[dict[str, Any]] = []
+    for stage in pipeline:
+        input_paths = [Path(p) for p in stage.inputs(ctx)]
+        unreadable_inputs = [path for path in input_paths if not _input_readable(path)]
+        if unreadable_inputs:
+            raise WeeklyCapstoneError(
+                f"stage '{stage.name}' cannot start: declared input(s) missing or unreadable this run: "
+                f"{[_rel(p) for p in unreadable_inputs]}"
+            )
+        expected_outputs = [Path(p) for p in stage.outputs(ctx)]
+        before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
+        try:
+            result = stage.run(ctx)
+        except Exception as exc:  # noqa: BLE001 - preserve the public stage label for the one-click preview
+            raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
+        missing = [
+            path for path in expected_outputs
+            if _output_fingerprint(path) is None
+            or _output_fingerprint(path) == before[str(path.resolve())]
+        ]
+        if missing:
+            raise WeeklyCapstoneError(
+                f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}"
+            )
+        generated = result.get("generated_at") if isinstance(result, dict) else None
+        decision_clock = result.get("decision_clock") if isinstance(result, dict) else None
+        observed = result.get("observed_at") if isinstance(result, dict) else None
+        if not isinstance(observed, str) and isinstance(decision_clock, dict):
+            observed = decision_clock.get("observed_at")
+        results.append({
+            "name": stage.name,
+            "gated": stage.gated,
+            "best_effort": False,
+            "execution_mode": "executed_budget_preview",
+            "stage_generated_at": generated if isinstance(generated, str) else ctx.generated_at,
+            "stage_observed_at": observed if isinstance(observed, str) else ctx.observed_at,
+            "result": result,
+        })
+
+    preflight = results[-1]["result"] if results else None
+    try:
+        forecast = preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
+        target_count = preflight["pass2_target_universe"]["target_count"]
+        gate = preflight["execution_gate"]
+    except (KeyError, TypeError) as exc:
+        raise WeeklyCapstoneError("pass2_preflight budget preview returned an incomplete forecast contract") from exc
+    if type(forecast) is not int or isinstance(forecast, bool) or forecast < 1:
+        raise WeeklyCapstoneError("pass2_preflight budget preview returned a non-positive exact call forecast")
+    if type(target_count) is not int or isinstance(target_count, bool) or target_count < 1:
+        raise WeeklyCapstoneError("pass2_preflight budget preview returned an invalid Pass2 target count")
+    if (
+        not isinstance(gate, dict)
+        or gate.get("ready_to_run_full_candidate_live_packet") is not False
+        or "pass2_call_budget_not_yet_authorized" not in gate.get("block_reasons", [])
+    ):
+        raise WeeklyCapstoneError(
+            "pass2_preflight budget preview must remain explicitly blocked until the exact call budget is independently authorized"
+        )
+    return {
+        "mode": "pass2_budget_preview",
+        "execution_mode": "live_preflight_provider_fetch",
+        "operational_use": "not_authorized",
+        "decision_date": ctx.decision_date,
+        "price_basis_date": ctx.price_basis_date,
+        "pass2_call_budget": forecast,
+        "pass2_target_count": target_count,
+        "next_required": (
+            "independently authorize this exact budget, then rerun the full capstone with "
+            f"--pass2-call-budget {forecast}"
+        ),
+        "stages": results,
+    }
+
+
 def run_weekly_capstone(
     *,
     now_et: datetime,
@@ -862,6 +946,7 @@ def run_weekly_capstone(
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
     resume_from: Path | None = None,
+    prepare_pass2_budget: bool = False,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
@@ -877,13 +962,26 @@ def run_weekly_capstone(
         account_state_path=account_state_path, calendar_path=calendar_path,
         authorized_momentum_top_k=authorized_momentum_top_k,
         authorized_pass2_call_budget=authorized_pass2_call_budget,
+        pass2_budget_preview=prepare_pass2_budget,
         catalyst_recall_tickers=catalyst_recall_tickers,
         confirm_user_authorization=confirm_user_authorization, provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds,
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
         sample_root=sample_root,
     )
-    pipeline = stages if stages is not None else default_pipeline()
+    if prepare_pass2_budget and dry_run:
+        raise WeeklyCapstoneError(
+            "--prepare-pass2-budget executes the upstream live preflight; use the ordinary dry-run to inspect its plan"
+        )
+    if prepare_pass2_budget and stages is not None:
+        raise WeeklyCapstoneError("--prepare-pass2-budget is available only on the real default capstone pipeline")
+    full_pipeline = stages if stages is not None else default_pipeline()
+    pipeline = full_pipeline
+    if prepare_pass2_budget:
+        preflight_indexes = [i for i, stage in enumerate(full_pipeline) if stage.name == "pass2_preflight"]
+        if preflight_indexes != [7]:
+            raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight at stage 8")
+        pipeline = full_pipeline[:preflight_indexes[0] + 1]
     if any(stage.best_effort and stage.name != "forward_policy_shadow" for stage in pipeline):
         raise WeeklyCapstoneError("only forward_policy_shadow may be best_effort")
     if any(stage.reuse_policy not in {"never", "frozen_inputs", "refresh_then_reuse_if_equivalent"}
@@ -905,21 +1003,32 @@ def run_weekly_capstone(
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
             "the plan first")
 
-    production_run = (stages is None) and (ctx.confirm_user_authorization is True)
+    production_run = (stages is None) and (ctx.confirm_user_authorization is True) and not prepare_pass2_budget
+    budget_preview_run = (stages is None) and (ctx.confirm_user_authorization is True) and prepare_pass2_budget
     if resume_from is not None and not production_run:
         raise WeeklyCapstoneError("--resume is available only on the real default capstone pipeline")
-    if production_run and (
-        type(ctx.authorized_momentum_top_k) is not int
-        or isinstance(ctx.authorized_momentum_top_k, bool)
-        or not 1 <= ctx.authorized_momentum_top_k <= 250
-        or type(ctx.authorized_pass2_call_budget) is not int
-        or isinstance(ctx.authorized_pass2_call_budget, bool)
-        or ctx.authorized_pass2_call_budget < 1
-    ):
+    k_is_valid = (
+        type(ctx.authorized_momentum_top_k) is int
+        and not isinstance(ctx.authorized_momentum_top_k, bool)
+        and 1 <= ctx.authorized_momentum_top_k <= 250
+    )
+    budget_is_valid = (
+        type(ctx.authorized_pass2_call_budget) is int
+        and not isinstance(ctx.authorized_pass2_call_budget, bool)
+        and ctx.authorized_pass2_call_budget >= 1
+    )
+    if production_run and (not k_is_valid or not budget_is_valid):
         raise WeeklyCapstoneError(
-            "live default pipeline requires independently authorized momentum_top_k (1..250) and positive exact Pass2 call budget"
+            "live default pipeline requires independently authorized momentum_top_k (1..250) and positive exact Pass2 "
+            "call budget; first run --prepare-pass2-budget with the same K to derive the forecast, then independently "
+            "authorize and re-run with --pass2-call-budget N (the preview never authorizes execution)"
         )
-    if production_run:
+    if budget_preview_run and (not k_is_valid or ctx.authorized_pass2_call_budget is not None):
+        raise WeeklyCapstoneError(
+            "--prepare-pass2-budget requires independently authorized momentum_top_k (1..250) and no Pass2 call budget; "
+            "it derives, but never accepts or grants, the exact execution budget"
+        )
+    if production_run or budget_preview_run:
         from runners.us_short_account_state_from_manual_tables import validate_account_state
 
         account_state = json.loads(ctx.account_state_path.read_text(encoding="utf-8"))
@@ -928,6 +1037,8 @@ def run_weekly_capstone(
             ctx,
             frozen_holding_tickers=tuple(sorted(position["ticker"] for position in account_state["positions"])),
         )
+    if budget_preview_run:
+        return _run_pass2_budget_preview(ctx, pipeline)
     resume_manifest = None
     resume_manifest_path = None
     if resume_from is not None:
@@ -1237,6 +1348,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--calendar-path", type=Path, default=CALENDAR_PRESET)
     parser.add_argument("--confirm-user-authorization", action="store_true")
     parser.add_argument("--live", action="store_true", help="execute (default is a dry-run plan only)")
+    parser.add_argument(
+        "--prepare-pass2-budget",
+        action="store_true",
+        help=(
+            "run only the authorized upstream funnel through Pass2 preflight and print its exact call forecast; "
+            "does not authorize or execute yfinance, Pass2, VIX, or the weekly bridge"
+        ),
+    )
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
     parser.add_argument("--max-retries-per-call", type=int, default=0)
     parser.add_argument("--retry-backoff-seconds", type=float, default=2.0)
@@ -1253,10 +1372,11 @@ def main(argv: list[str] | None = None) -> int:
             authorized_pass2_call_budget=args.pass2_call_budget,
             catalyst_recall_tickers=tuple(args.catalyst_recall_ticker),
             calendar_path=args.calendar_path, confirm_user_authorization=args.confirm_user_authorization,
-            dry_run=not args.live, provider_pace_seconds=args.provider_pace_seconds,
+            dry_run=not (args.live or args.prepare_pass2_budget), provider_pace_seconds=args.provider_pace_seconds,
             max_retries_per_call=args.max_retries_per_call, retry_backoff_seconds=args.retry_backoff_seconds,
             max_total_http_attempts=args.max_total_http_attempts,
             resume_from=args.resume,
+            prepare_pass2_budget=args.prepare_pass2_budget,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

@@ -4,6 +4,8 @@ import json
 import os
 import sys
 import unittest
+from contextlib import redirect_stderr, redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -78,6 +80,19 @@ class _FakeYFinanceClient:
         return _FakeTicker(self._tables.get(symbol, []))
 
 
+class _NoisyFailingTicker:
+    @property
+    def upgrades_downgrades(self):
+        print('HTTP Error 404: {"quoteSummary":{"error":"No fundamentals data found for symbol: ITIC"}}')
+        print('HTTP Error 404: {"quoteSummary":{"error":"No fundamentals data found for symbol: ITIC"}}', file=sys.stderr)
+        raise RuntimeError("provider fetch failed")
+
+
+class _NoisyFailingYFinanceClient:
+    def ticker(self, symbol: str):
+        return _NoisyFailingTicker()
+
+
 class UsShortYFinanceGradesFetchTest(unittest.TestCase):
     def setUp(self):
         self.slug = f"yf_grades_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
@@ -114,6 +129,7 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             momentum_projection_path=self.paths["momentum"],
             theme_projection_path=self.paths["theme"],
             summary_path=self.paths["preflight"],
+            authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-10T12:00:00+00:00",
         )
@@ -235,6 +251,21 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
         self.assertTrue(projected["analyst_collective_downgrade_by_ticker"]["AAPL"])
         self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["MSFT"])
         self.assertFalse(projected["analyst_collective_downgrade_by_ticker"]["JPM"])
+
+    def test_provider_console_noise_is_suppressed_and_kept_out_of_summary(self):
+        # P3: yfinance can print raw provider errors itself.  The operator sees only the structured outcome;
+        # raw message/ticker text is neither echoed nor persisted in the tracked aggregate summary.
+        stdout, stderr = StringIO(), StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            summary = self._run(client=_NoisyFailingYFinanceClient(), confirm_user_authorization=True)
+
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(summary["scope"]["status"], "completed_with_fetch_errors")
+        self.assertEqual(summary["execution"]["fetch_error_count"], 3)
+        summary_text = self.paths["summary"].read_text(encoding="utf-8")
+        for forbidden in ("ITIC", "quoteSummary", "404"):
+            self.assertNotIn(forbidden, summary_text)
 
     def test_summary_guard_matches_ticker_tokens_not_arbitrary_substrings(self):
         summary = self._run(

@@ -209,7 +209,7 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         )
         packet = {
             "schema_name": "us_short_batch5_data_context_source_packet",
-            "schema_version": "1.2.0",
+            "schema_version": "1.3.0",
             "generated_at": "2026-07-04T00:00:00Z",
             "scope": {
                 "market": "US",
@@ -600,12 +600,13 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
         _write_json(self.paths["overextension"], _overextension_projection())
         packet = self._packet_payload()
         packet["paths"]["overextension_projection_path"] = _rel(self.paths["overextension"])
+        packet["paths"]["overextension_candidate_artifact_path"] = _rel(self.paths["candidate"])
         packet["paths"]["output_context_components_path"] = _rel(self.paths["components"])
         _write_json(self.paths["packet"], packet)
 
         result = run_packet(self.packet, generated_at="2026-07-04T00:00:02Z")
 
-        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 10)
+        self.assertEqual(result["source_artifacts"]["local_source_artifacts_read"], 11)
         components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
         selection = components["data_context"]["selection_inputs"]["per_ticker"]
         rows = components["per_ticker_analysis"]
@@ -619,6 +620,10 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             {"role": "overextension_projection", "path": _rel(self.paths["overextension"])},
             source_refs,
         )
+        self.assertIn(
+            {"role": "overextension_candidate_artifact", "path": _rel(self.paths["candidate"])},
+            source_refs,
+        )
         self.assertEqual(
             components["run_provenance"]["families"]["selection_inputs"]["observed_at"],
             "2026-06-15T08:30:00",
@@ -628,9 +633,23 @@ class Batch5DataContextSourcePacketTest(unittest.TestCase):
             {field for field, _, _ in source_packet_input_manifest(self.packet)},
         )
 
+    def test_overextension_projection_and_full_candidate_paths_must_be_paired(self):
+        _write_json(self.paths["overextension"], _overextension_projection())
+        base_packet = self._packet_payload()
+        for field in ("overextension_projection_path", "overextension_candidate_artifact_path"):
+            with self.subTest(only_path=field):
+                packet = json.loads(json.dumps(base_packet))
+                packet["paths"][field] = _rel(
+                    self.paths["overextension"] if field == "overextension_projection_path" else self.paths["candidate"]
+                )
+                _write_json(self.paths["packet"], packet)
+                with self.assertRaises(SourcePacketError):
+                    run_preflight(self.packet)
+
     def test_overextension_projection_clock_and_candidate_binding_fail_closed(self):
         packet = self._packet_payload()
         packet["paths"]["overextension_projection_path"] = _rel(self.paths["overextension"])
+        packet["paths"]["overextension_candidate_artifact_path"] = _rel(self.paths["candidate"])
         _write_json(self.paths["packet"], packet)
         def forge_contract_and_rows(projection):
             projection["source_contract"]["session"] = "EXT"

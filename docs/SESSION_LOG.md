@@ -14,6 +14,35 @@
 - **Required**: 无；D2、D4、B1 保持独立未提交，不能从本次 PASS 推断其已通过。
 - **Verify**: D1/D3 定向回归 14 OK；Python 编译与暂存 `git diff --check` 通过。
 - **Next**: 仅在后续真实周度运行中积累 forward 证据；任何生产规则变更仍须独立审查和用户确认。
+## 2026-07-14 — Claude Code 独立复审（US-short P2 预算预览 + P3 操作提示/控制台卫生）PASS
+
+- **Verdict/Action**: PASS + 提交（178a 分支，未 push）。P2:`--prepare-pass2-budget` 只跑真管道到 pass2_preflight（`full_pipeline[:preflight+1]`、`preflight_indexes!=[7]` fail-closed 防 shape 漂移）、出精确 forecast 但**永不授权**（gate 仍带 `pass2_call_budget_not_yet_authorized` 否则 raise、无官方输出、返回前不进 checkpoint/transaction）；正常全跑仍拒缺预算并提示先 preview；preview 模式拒收预算。P3:账户日期仍 fatal + 重建提示;yfinance 原始 404 经 redirect 捕获丢弃、不进 console/summary、advisory-neutral 不变。均 operability/卫生、不碰选股。
+- **Required**: 无。register 两项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。整读 preview 截断/gate/两 P3 面。**亲跑全包 `discover -p test_us_short*.py` = 4449 OK**（178a tree、未采信执行方计数）。测试真断言:P2 stage order `[:8]`/not_authorized/无 `weekly_private/<date>`/缺预算仍 raise;P3 stdout+stderr 均空 + summary 无 `ITIC/quoteSummary/404` + `fetch_error_count=3`。contained operability、按比例复审、未起 §6a agent。
+- **Next**: 待用户定是否把整支（P1+P2+P3）merge 到 master。一条 non-blocking Optional（preview 二次跑 ~2h 上游漏斗）见 register。
+
+## 2026-07-14 — Codex 修复（US-short P2 预算预览闭环 + P3 操作提示/控制台卫生）
+
+- **Verdict/Action**: 已修复。P2 新增只运行至 Pass2 preflight 的 `--prepare-pass2-budget` 和独立 preflight 的 `--print-budget`：两者给出精确 forecast，但持续明确未授权；正常全链仍须人工独立确认精确 `--pass2-call-budget N`。P3 保持账户日期精确阻断并给出重建提示，同时屏蔽 yfinance 原始 provider 控制台文本。
+- **Required**: `R-USSHORT-CAPSTONE-PASS2-BUDGET-PREVIEW-CIRCULAR-GATE`、`R-USSHORT-P3-OPERATOR-PIT-MESSAGE-AND-YFINANCE-CONSOLE-HYGIENE` 待 Claude Code 独立审查；完整边界见 register。
+- **Verify**: P2/P3 focused 回归 179 OK；全离线 `*us_short*.py` 4449 OK / 1 skipped；`py_compile` 与 `git diff --check` 通过。
+- **Pre-Codex self-review**: A 覆盖正常全链、默认 pipeline 预算预览前缀、standalone forecast、Pass2 adapter 和 P3 两个输出面；B `rg` 覆盖 `run_preflight` 调用、预算/preview 标识及 downstream source gate；C 钉住 preview 永不 ready/永不自动授权、Pass2 仍拒绝缺预算、日期仍 fatal、raw 404 不出 console/summary；E 未改 CURRENT；F 固定包集中跑完。独立 current-diff-only agent 在限定文件审查后 PASS，无超时/重启。
+- **Next**: Claude Code：审查。
+
+## 2026-07-14 — Claude Code 独立复审（US-short P1 Pass2 漏斗：overextension 全量对账 v1.3.0）PASS
+
+- **Verdict/Action**: PASS + 提交（178a 分支，未 push）。复审 Codex 的漏斗 scope 修复:full-candidate runner 在**全体 eligible** artifact 上核 overextension 绑定（`_validate_full_overextension_before_funnel`，行 1794）、在 Pass2 target 推导(1800)/凭证读(1839)/fetch(1853) **之前** fail-closed;packet 带配对 `overextension_candidate_artifact_path`(=全量);独立 consumer 改对**全量**校验(非 subset);配对 both-or-neither 三处 + schema allOf;v1.3.0。是 scope 修正、不改选股数学。
+- **Required**: 无。register 该项 in_progress→resolved（单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。**决定性实证**:拿 07-14 真崩溃产物跑修复后 validator —— 真投影(绑定 2424)对**全量** PASS、对 **200 子集** FAIL(复现原崩)→ 修复对症;full-bound 投影对 subset 必 FAIL → 把配对路径指向 subset 也绕不过门。**亲跑全包 `discover -p test_us_short*.py` = 4444 OK**(178a tree、未采信执行方计数)。对抗测试伪造 binding(sha=0×64)→ 在 1794 abort(fetch 前、经 FakeClient)。contained scope-fix、按比例复审、未起 §6a agent。
+- **Next**: 待用户定是否 merge 到 master(P1 不进 master 则全量仍跑不到头)。
+
+## 2026-07-14 — Codex 修复（US-short P1 Pass2 漏斗：overextension 全量对账先于 top-K 收缩）
+
+- **Verdict/Action**: 已修复。source-packet v1.3.0 现在在全体 eligible artifact 上核验 overextension 投影，并在 Pass2 target 推导、top-K 子集落地、密钥环境读取及一切外部抓取之前 fail-closed；对账成功后才沿用原有 Pass2-clean/top-K 子集路径。
+- **Required**: `R-USSHORT-BATCH5-OVEREXTENSION-FULL-UNIVERSE-RECONCILIATION` 待 Claude Code 独立审查；边界与完整证据见 register。
+- **Verify**: 新 3 eligible→top-K 2 的 red→green 集成回归通过；伪造 full binding 的新用例证明零 provider fetch、不会落地 subset/source-packet；source-packet/data_context 79 OK、capstone/Batch5→Batch4 89 OK、legacy source-packet 7 OK、全离线 `*us_short*.py` 4444 OK / 1 skipped。
+- **Pre-Codex self-review**: A 覆盖 full-binding 在 Pass2/top-K/fetch 前、后续 subset scope、两条生产器和 provenance；B `rg -n -g 'us_short_batch5_*source_packet.py' -g 'us_short_batch5_data_context_source_packet.schema.json' '"schema_version": "1\\.2\\.0"' runners tests schemas` = 0 active hits；C 钉住 3→2 正控、伪 binding 反控、缺任一配对路径 fail-closed；E 未改 CURRENT；F 全离线包已集中跑完，doc/diff guard 通过。独立 current-diff-only agent 先抓到过晚对账，修复后复审 PASS。
+- **Next**: Claude Code：审查。
 
 ## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
 

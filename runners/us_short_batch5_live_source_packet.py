@@ -493,7 +493,7 @@ def _build_local_source_packet(
     }
     return {
         "schema_name": "us_short_batch5_data_context_source_packet",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "generated_at": generated_at,
         "scope": {
             "market": "US",

@@ -404,9 +404,12 @@ def _build_summary(
     )
     pass2_targets_ready = pass2_targets["target_count"] > 0 and pass2_targets["fmp_grade_calls_within_free_daily_cap"]
     forecast = _forecast_calls(pass2_targets["target_count"], candidate_count)
+    # A missing budget is a preview, never an implicit authorization.  The forecast is intentionally visible so the
+    # operator can make the independently authorized exact-budget rerun, but downstream live-source runners still
+    # require a ready gate whose budget exactly matches this value.
     budget_ready = (
-        authorized_total_call_budget is None
-        or authorized_total_call_budget == forecast["total_calls_for_pass2_target_cut"]
+        authorized_total_call_budget is not None
+        and authorized_total_call_budget == forecast["total_calls_for_pass2_target_cut"]
     )
     ready = local_ready and pass2_targets_ready and budget_ready
     status = (
@@ -423,7 +426,9 @@ def _build_summary(
         block_reasons.append("no_momentum_scored_or_forced_holding_pass2_targets")
     if not pass2_targets["fmp_grade_calls_within_free_daily_cap"]:
         block_reasons.append("pass2_target_count_exceeds_fmp_free_daily_grade_call_cap")
-    if not budget_ready:
+    if authorized_total_call_budget is None:
+        block_reasons.append("pass2_call_budget_not_yet_authorized")
+    elif not budget_ready:
         block_reasons.append("authorized_call_budget_does_not_match_rederived_target_forecast")
     momentum_coverage = _public_projection_coverage(momentum_coverage, path=momentum_path)
     theme_coverage = _public_projection_coverage(theme_coverage, path=theme_path)
@@ -479,14 +484,14 @@ def _build_summary(
             "block_reasons": block_reasons,
             "requires_separate_network_tool_approval": True,
             "requires_explicit_call_budget": True,
+            "authorized_momentum_top_k": momentum_top_k,
+            "authorized_budget_matches_rederived_forecast": budget_ready,
             "provider_selection_claimed": False,
             "corporate_action_reconciliation_claimed": False,
             "datahub_or_production_allowed": False,
             "ship_gate_evidence_allowed": False,
         }, **({
-            "authorized_momentum_top_k": momentum_top_k,
             "authorized_total_call_budget": authorized_total_call_budget,
-            "authorized_budget_matches_rederived_forecast": budget_ready,
         } if authorized_total_call_budget is not None else {})),
         "storage": {
             "tracked_summary_path": _repo_rel(summary_path),
@@ -675,7 +680,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--forced-holding-ticker", action="append", default=[])
     parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--momentum-top-k", type=int, default=MOMENTUM_TOP_K_DEFAULT)
-    parser.add_argument("--authorized-total-call-budget", type=int, required=True)
+    budget_mode = parser.add_mutually_exclusive_group(required=True)
+    budget_mode.add_argument("--authorized-total-call-budget", type=int)
+    budget_mode.add_argument(
+        "--print-budget",
+        action="store_true",
+        help="derive the exact Pass2 call forecast only; leaves execution explicitly blocked",
+    )
     parser.add_argument("--generated-at")
     parser.add_argument("--confirm-user-authorization", action="store_true")
     return parser.parse_args(argv)
@@ -703,11 +714,19 @@ def main(argv: list[str] | None = None) -> int:
     print(
         json.dumps(
             {
+                "mode": "budget_preview" if args.print_budget else "authorization_check",
                 "status": summary["scope"]["status"],
                 "eligible_count": summary["candidate_universe"]["eligible_count"],
                 "pass2_target_count": summary["pass2_target_universe"]["target_count"],
                 "forecast_calls": summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
                 "summary_path": summary["storage"]["tracked_summary_path"],
+                **({
+                    "next_required": (
+                        "re-run with --authorized-total-call-budget "
+                        f"{summary['endpoint_call_forecast']['total_calls_for_pass2_target_cut']} "
+                        "after independent authorization"
+                    ),
+                } if args.print_budget else {}),
             },
             ensure_ascii=False,
             indent=2,
