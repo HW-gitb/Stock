@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/deterministic_report/1.2.0/schema.json",
+  "$id": "https://stock.local/schemas/deterministic_report/1.3.0/schema.json",
   "title": "Deterministic Analysis Report",
   "description": "Phase 4 machine-readable contract emitted by runners/run_analysis_report.py before any optional LLM enrichment.",
   "type": "object",
@@ -32,7 +32,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.2.0",
+      "const": "1.3.0",
       "description": "Semantic version of this deterministic report contract."
     },
     "generated_at": {
@@ -453,6 +453,29 @@
           "enum": ["pit", "today", "neutralize"],
           "description": "L3 cat_score mode copied from analysis_input.source.l3_mode; legacy missing values are emitted as today."
         },
+        "l3_provider": {
+          "type": ["string", "null"],
+          "enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null]
+        },
+        "l3_snapshot_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{8}$"
+        },
+        "l3_catalog_digest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "l3_catalog_board_count": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "l3_scoring_universe": {
+          "type": ["string", "null"],
+          "enum": ["a_share_main_board", null]
+        },
+        "l3_coverage_complete": {
+          "type": ["boolean", "null"]
+        },
         "enrichment_applied": {
           "type": "boolean",
           "description": "True only after a validated deterministic_report_enrichment patch has been merged."
@@ -477,7 +500,25 @@
           "type": "string",
           "format": "date-time"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"analysis_input_schema_version": {"const": "1.2.0"}},
+            "required": ["analysis_input_schema_version"]
+          },
+          "then": {
+            "required": [
+              "l3_provider",
+              "l3_snapshot_date",
+              "l3_catalog_digest",
+              "l3_catalog_board_count",
+              "l3_scoring_universe",
+              "l3_coverage_complete"
+            ]
+          }
+        }
+      ]
     },
     "analyzerInvocation": {
       "type": "object",

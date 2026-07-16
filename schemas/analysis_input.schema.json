@@ -1,6 +1,6 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/analysis_input/1.1.0/schema.json",
+  "$id": "https://stock.local/schemas/analysis_input/1.2.0/schema.json",
   "title": "Stock Analysis Input",
   "description": "Contract file passed from screening/ranking into the deterministic analyzer and analysis Skill.",
   "type": "object",
@@ -94,7 +94,54 @@
         "l3_snapshot_date": {
           "type": ["string", "null"],
           "pattern": "^[0-9]{8}$",
-          "description": "When l3_mode=pit, the actual snapshot date used (max(snap_date) <= as_of). Null for today/neutralize."
+          "description": "Actual L3 snapshot date read or written by this run. For pit it must be <= trade_date; neutralize may be null."
+        },
+        "l3_provider": {
+          "type": ["string", "null"],
+          "enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null],
+          "description": "Provider provenance for the L3 graph. A live today run uses hithink_finance; legacy snapshots retain their explicit legacy label."
+        },
+        "l3_coverage": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": [
+            "source",
+            "catalog_tag",
+            "catalog_digest",
+            "catalog_board_count",
+            "received_board_count",
+            "verified_empty_board_count",
+            "scope_filtered_empty_board_count",
+            "raw_member_row_count",
+            "unique_member_pair_count",
+            "main_board_member_pair_count",
+            "excluded_non_main_board_member_count",
+            "out_of_a_share_member_count",
+            "market_suffix_counts",
+            "scoring_universe",
+            "complete"
+          ],
+          "properties": {
+            "source": {"const": "hithink_finance"},
+            "catalog_tag": {"const": "cn_concept"},
+            "catalog_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "catalog_board_count": {"type": "integer", "minimum": 389},
+            "received_board_count": {"type": "integer", "minimum": 389},
+            "verified_empty_board_count": {"type": "integer", "minimum": 0},
+            "scope_filtered_empty_board_count": {"type": "integer", "minimum": 0},
+            "raw_member_row_count": {"type": "integer", "minimum": 0},
+            "unique_member_pair_count": {"type": "integer", "minimum": 0},
+            "main_board_member_pair_count": {"type": "integer", "minimum": 0},
+            "excluded_non_main_board_member_count": {"type": "integer", "minimum": 0},
+            "out_of_a_share_member_count": {"type": "integer", "minimum": 0},
+            "market_suffix_counts": {
+              "type": "object",
+              "additionalProperties": {"type": "integer", "minimum": 0}
+            },
+            "scoring_universe": {"const": "a_share_main_board"},
+            "complete": {"const": true}
+          },
+          "description": "Complete-catalog receipt. A board may be skipped only when the API explicitly returned an empty item list."
         },
         "hard_veto_source_health": {
           "type": "object",
@@ -484,6 +531,32 @@
               "l3_mode",
               "l3_pit_strict",
               "l3_snapshot_date"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "description": "Current 1.2.0 A-short outputs require explicit provider and coverage lineage for every L3 mode.",
+      "if": {
+        "properties": {
+          "schema_version": { "const": "1.2.0" }
+        },
+        "required": ["schema_version"]
+      },
+      "then": {
+        "properties": {
+          "source": {
+            "required": [
+              "screening_engine",
+              "screening_engine_version",
+              "data_provider",
+              "input_files",
+              "l3_mode",
+              "l3_pit_strict",
+              "l3_snapshot_date",
+              "l3_provider",
+              "l3_coverage"
             ]
           }
         }

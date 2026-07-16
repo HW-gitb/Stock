@@ -16,7 +16,7 @@ engine also rejects non-empty daily payloads that are too incomplete to support
 safe suspend inference instead of treating missing rows as suspended stocks.
 Suspend coverage observations are written to
 `logs/suspend_daily_coverage_<as_of>.json` and mirrored into schema-validated
-`data_health` v1.4.0 (`metrics.suspend_daily_coverage`, SW-industry source
+`data_health` v1.5.0 (`metrics.suspend_daily_coverage`, SW-industry source
 observation, watch-pool accounting, and post-L0 rank/source reconciliation);
 cached observations are explicitly marked as cache hits, not fresh provider
 coverage. Formal EGS runs also publish
@@ -56,10 +56,10 @@ Existing helpers:
   skeleton skip behavior. It rejects cash-state bucket capital above the policy ceiling
   (`market_capital * bucket_ceiling_pct`) before sizing can use it.
 - `aggregate_execution_reports.py` - Phase 5 multi-period aggregation helper;
-  reads schema-valid `execution_backtest_report` v1.2.0 files, aggregates
+  reads schema-valid `execution_backtest_report` v1.3.0 files, aggregates
   monthly return / Sharpe / worst drawdown evidence, optionally computes
   benchmark-aware monthly alpha t-stat from a `YYYYMM -> return` JSON, and writes
-  schema-valid `execution_aggregate_report` v1.1.4. Zero-trade reports with
+  schema-valid `execution_aggregate_report` v1.1.5. Zero-trade reports with
   null `total_return` are excluded from return statistics rather than counted
   as 0.0% months. Full-size permission remains blocked until execution reports
   provide capacity/concurrency-adjusted returns; production-mode inputs,

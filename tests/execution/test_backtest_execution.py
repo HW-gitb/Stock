@@ -13,7 +13,10 @@ except ImportError:  # pragma: no cover - environment guard
     Draft7Validator = None  # type: ignore[assignment]
 
 from runners.backtest_execution import ROOT, build_report, classify_skips, main, parse_args
-from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
+from tests.support.analysis_input_payload import (
+    cloned_minimal_analysis_input_payload,
+    current_hithink_analysis_input_payload,
+)
 
 
 @unittest.skipIf(Draft7Validator is None, "jsonschema not installed")
@@ -72,7 +75,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertEqual(report["schema_name"], "execution_backtest_report")
-            self.assertEqual(report["schema_version"], "1.2.0")
+            self.assertEqual(report["schema_version"], "1.3.0")
             self.assertEqual(report["settings"]["primary_input"], "analysis_input")
             self.assertFalse(report["settings"]["deterministic_report_required"])
             self.assertEqual(report["settings"]["initial_capital"], 116666.55)
@@ -851,6 +854,20 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
         report = self.build_report_for_payload(payload)
 
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
+
+    def test_current_hithink_lineage_is_preserved(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+
+        report = self.build_report_for_payload(payload)
+
+        lineage = report["data_lineage"]
+        self.assertEqual(lineage["data_provider"], "mixed")
+        self.assertEqual(lineage["l3_provider"], "hithink_finance")
+        self.assertEqual(lineage["l3_snapshot_date"], "20260522")
+        self.assertEqual(lineage["l3_catalog_digest"], "a" * 64)
+        self.assertEqual(lineage["l3_catalog_board_count"], 389)
+        self.assertEqual(lineage["l3_scoring_universe"], "a_share_main_board")
+        self.assertTrue(lineage["l3_coverage_complete"])
 
     def test_invalid_l3_mode_raises(self) -> None:
         payload = self.load_fixture_payload()

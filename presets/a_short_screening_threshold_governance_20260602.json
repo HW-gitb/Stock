@@ -120,14 +120,6 @@
       "preset_migration_status": "mirrored_from_current_conf_pending_runtime_loader_migration"
     },
     {
-      "conf_key": "max_concepts_per_stock",
-      "expected_value": 5,
-      "value_type": "integer",
-      "unit": "concept count",
-      "production_role": "Maximum retained L3 concepts per stock for concept exposure and reporting.",
-      "preset_migration_status": "mirrored_from_current_conf_pending_runtime_loader_migration"
-    },
-    {
       "conf_key": "overheat_5d",
       "expected_value": 8.0,
       "value_type": "number",

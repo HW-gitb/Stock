@@ -32,7 +32,7 @@ from engine.data.analysis_input_contract import validate_analysis_input_file
 SCHEMA_PATH = ROOT / "schemas" / "deterministic_report.schema.json"
 ENRICHMENT_SCHEMA_PATH = ROOT / "schemas" / "deterministic_report_enrichment.schema.json"
 LIVE_RESULT_ROOT = ROOT / "result" / "a_short"
-REPORT_SCHEMA_VERSION = "1.2.0"
+REPORT_SCHEMA_VERSION = "1.3.0"
 PROMPT_REF_ALIASES = {
     "regulatory_check": "regulatory_48h",
 }
@@ -122,6 +122,7 @@ def build_report(payload: dict[str, Any], candidate: dict[str, Any],
             "state_snapshot_ref": _state_snapshot_ref(),
             "analysis_input_schema_version": str(payload.get("schema_version") or "0.0.0"),
             "l3_mode": _analysis_input_l3_mode(payload),
+            **_analysis_input_l3_lineage(payload),
             "enrichment_applied": False,
             "enrichment_source": None,
             "state_evaluation_time": state_evaluation_time,
@@ -472,6 +473,19 @@ def _analysis_input_l3_mode(payload: dict[str, Any]) -> str:
     if l3_mode not in {"pit", "today", "neutralize"}:
         raise ValueError(f"unsupported analysis_input.source.l3_mode: {l3_mode!r}")
     return l3_mode
+
+
+def _analysis_input_l3_lineage(payload: dict[str, Any]) -> dict[str, Any]:
+    source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+    coverage = source.get("l3_coverage") if isinstance(source.get("l3_coverage"), dict) else {}
+    return {
+        "l3_provider": source.get("l3_provider"),
+        "l3_snapshot_date": source.get("l3_snapshot_date"),
+        "l3_catalog_digest": coverage.get("catalog_digest"),
+        "l3_catalog_board_count": coverage.get("catalog_board_count"),
+        "l3_scoring_universe": coverage.get("scoring_universe"),
+        "l3_coverage_complete": coverage.get("complete"),
+    }
 
 
 def _state_evaluation_time(as_of: str, state_now: datetime | str | None = None) -> str:

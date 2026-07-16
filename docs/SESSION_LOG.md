@@ -8,6 +8,90 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立复审（3 项 A-short P3 修复：IV 分类/收据归属/L3 reuse 新鲜度）PASS
+
+- **Verdict/Action**: PASS（未提交）。Codex 主树修的 3 项 P3 逐项复审通过。①`_categorize_error`:`timed out`/`time-out`/`gateway time-out`/裸 `\b5\d{2}\b`→可重试(network/provider_server),`403 forbidden`→permission 单次不重试(正确安全分类);更早的 rate_limit/permission/signature 先判,故 `quota 500`/`field 512` 里的裸5xx不误归;`import re`(line25)在位、脱敏边界(只 type名+类别)未动。②收据归属:build `if args.failure_receipt_out:` 守 + `unlink(missing_ok=True)` 在 fetch 前清;`weekly_screening.ps1` `if Test-Path -PathType Leaf` 守后 `Remove-Item`(首轮无收据不崩)。③reuse staleness:`>14d` 未 override 即 FATAL 且仍零 provider call、`l3_allow_stale_cache` default False fail-closed、`--allow-stale-l3-cache` parser 强制配 `--reuse-l3-cache` 仅测试路径、不泄漏生产 today。
+- **Required**: 无。三项均 fail-safe、不碰选股逻辑/权重/veto/评分/PIT/密钥;无 scope creep(本轮 21:19-21:26 只动 4 目标文件 + 4 对应测试 + register/SESSION_LOG,backtest_* 为 L3 期文件)。
+- **Verify**: 亲跑聚焦包 160 OK(IV 91 / L3 hithink 9 / L3 guard 11 / weekly 14 / doc-gov 35);三修复各有真断言新测试:`test_403_forbidden_is_permission_and_does_not_retry`、`test_non_provider_failure_clears_stale_failure_receipt`(断言陈旧收据被清)、`test_today_reuse_rejects_stale_snapshot_without_provider_call`(15日陈旧→拒+零 provider call)。register 三 P3 → Claude PASS pending commit。
+- **Next**: 待用户明确 `提交` 授权。提交会打包整个主树未提交集(L3 HiThink 两 P1 + IV + 3 P3),而 L3 P1 register 仍标「user explicitly required no commit」——需用户先解除该约束 + 确认提交范围。
+
+## 2026-07-16 — Codex 修复 3 项 A-short P3（IV resilience/receipt ownership/L3 test-cache freshness；不提交）
+
+- **Verdict/Action**: 用户授权修复后，先逐项核对 finding：三项均成立；`403 forbidden` 的正确修复是权限类单次失败，而不是误当网络错误重试。三项均已在主工作树实现，等待 Claude Code 独立审查后再决定提交。
+- **Required**: `R-ASHORT-IV-CATEGORIZE-ERROR-TRANSIENT-VARIANTS`、`R-ASHORT-IV-WEEKLY-STALE-PID-RECEIPT`、`R-ASHORT-L3-REUSE-CACHE-NO-STALENESS-GATE` 均为 working-tree repaired；完整机制和关闭条件只见 `docs/system_risk_register.md`。
+- **Verify**: 仓库依赖路径下离线聚焦包 **129 OK**：`test_egs_main_l3_guard`、`test_hithink_l3_source`、`test_weekly_screening_guardrails`、`test_a_short_iv_feed_probe_execution`、`test_a_short_iv_feed_build`、`test_doc_governance_guard`；`git diff --check` 通过。未调用 Tushare/HiThink，未跑正式 EGS/周报，未写实盘路径。
+- **Pre-Codex self-review**: A 覆盖 timeout/time-out/bare-5xx/403 四类和 stale-receipt/default-vs-override cache 分支；B 复查分类、收据消费者和 reuse/backtest 调用点；C 钉住 403 不重试、非 provider 失败不留收据、stale override 仍零 provider call；D/E 未改评分/PIT/CURRENT；F 聚焦包一次完成。独立 current-diff-only agent 初次要求补 override 零调用回归；补后 PASS，无超时降级。
+- **Next**: Claude Code：仅审这 3 个 P3 修复；PASS 后提交已覆盖切片，不碰相邻未提交改动。
+
+## 2026-07-16 — Claude Code 立项 3 项 P3 Optional + 路由 Codex（IV/L3 两 P1 复审）
+
+- **Verdict/Action**: 上一条两 P1 独立复审 PASS 后,用户选择先处理 3 项 P3 Optional 再提交。三项已入 register Hot Queue(单源 `docs/system_risk_register.md`):`R-ASHORT-IV-CATEGORIZE-ERROR-TRANSIENT-VARIANTS`、`R-ASHORT-IV-WEEKLY-STALE-PID-RECEIPT`、`R-ASHORT-L3-REUSE-CACHE-NO-STALENESS-GATE`。
+- **Required**: 三项均 P3、fail-safe、不碰选股逻辑/权重/veto/评分/PIT/密钥。范围仅:`runners/a_short_iv_feed_probe.py`(`_categorize_error` 补 `timed out`/`time-out`/裸5xx 等瞬时变体→可重试,`other` 仍作非重试兜底,不弱化脱敏);`runners/a_short_iv_feed_build.py`+`runners/weekly_screening.ps1`(收据路径归属本轮,非 provider 失败不引陈旧 `iv_feed_failure_$PID.json`);`A-EGS/egs_main.py:3181-3201`(reuse-cache 加 staleness 门,reuse 仍仅测试)。各刀加对应测试。
+- **Verify**: 修后须亲跑 L3+IV 聚焦包 + doc-gov guard,并对齐参照刀安全语义(不弱化 fail-closed/脱敏)。
+- **Next**: Codex:🔵 **修复** register 三 ID(按 register 规格);修完 Claude 复审→提交。代码在主树未提交,Codex 须在能看到主树改动的树执行(未提交跨树不可见)。
+
+## 2026-07-16 — Claude Code 独立复审（主树 A-short L3 HiThink + IV feed 两 P1）PASS
+
+- **Verdict/Action**: PASS（未提交）。6ebd L3(HiThink)已由用户合并入主树 + 主树原有 IV feed,两 P1 独立复审。L3 六不变量全 HOLD:today 不完整每路径 `raise SystemExit`(3130/3147/3183/3191/3211/3240/3275)且不被吞(不在回滚 CM 内、CM 末 re-raise、SystemExit 非 Exception)→无静默 50 发布;主板过滤在强度计算前(源 `_validated_member_codes`+快照 `_main_board_l3_membership` 双重);无 5 概念/代码序截断(取全概念 rank max);`--reuse-l3-cache` 零 provider 调用;source/completeness lineage 五段(analysis_input→data_health→report→execution→aggregate)字段名对齐不断;密钥只入 X-api-key header、异常只留 label+类型名、`_request_with_retry` 不 `from` 故 URL 不经 __context__ 逃逸。IV 五不变量全 HOLD:retry≤3(仅 rate_limit/provider_server/network)+1 次未恢复 fail-fast break 停后续 opt_daily;失败写脱敏收据+SystemExit 无半成品;收据 additionalProperties:false+schema+一致性+原子写;分类 429/503/504/network 正确(provider_server 先于 network);weekly M6.7 非零退出(exit 22)+per-PID 收据防陈旧引用。
+- **Required**: 无(阻断项)。两独立黑盒对抗 agent(L3/IV,worktree-隔离不喂结论)独立复核亦 all invariants HOLD、无 P0/P1,与我一致。
+- **Verify**: 亲跑(直连 python 非采信 exit code):L3 聚焦 `test_hithink_l3_source` 9 + `test_egs_main_l3_guard` 10 OK、IV `test_a_short_iv*` OK、schema 1644/execution 68/skill 17 全 OK。那 8 个失败(audit×4 `'source' is a required property`、gap_data_registry×4 ratchet)在**确认干净 master(`Stock-wt/a-short`,0 改动 da767a2e)一模一样失败 → 全 master 预存、非本刀**(`source` 必填 master HEAD 已 True)。SystemExit 吞没/五段 lineage(下游 3 runner 29/10/3 处)/weekly IV 接线均代码核实。
+- **Next**: 待用户定:①接受 P3 Optional 直接提交,或②先路由 Codex 修 P3 再提交。P3 Optional(非阻断,均 fail-safe·非选股影响):IV `_categorize_error` 漏 `Read timed out`/`504 Gateway Time-out`/裸504/403-forbidden→other→不重试直接 fail-fast(削韧性但安全);weekly PID 复用+非 provider 失败可引陈旧 `iv_feed_failure_$PID.json`(仅误导指针,build 启动 unlink 一行可修);L3 reuse-cache 无 staleness 门(reuse 非生产、snapshot_date 诚实)。
+
+## 2026-07-16 - Codex 修复（6ebd A-short L3 HiThink 五项 Required；不提交）
+
+- **Verdict/Action**: 五项 Required 已在 6ebd 工作树修复并经独立 current-diff-only Codex agent 复审 PASS；A-short L3 现严格限主板、目录完整性有独立锚、评分不截断概念、来源回执贯穿下游、测试缓存路径零 provider call。按用户明确要求未暂存、未提交。
+- **Required**: `R-ASHORT-L3-HITHINK-MAIN-BOARD-SCOPE`、`R-ASHORT-L3-HITHINK-CATALOG-SELF-COMPLETENESS`、`R-ASHORT-L3-HITHINK-CONCEPT-CAP-ORDERING`、`R-ASHORT-L3-HITHINK-LINEAGE-RECEIPT`、`R-ASHORT-L3-HITHINK-CACHE-CONTRACT-DRIFT` 均为 working-tree repaired / agent PASS，仍保持 `in_progress`，待外部 reviewer disposition 与以后单独授权提交；完整证据见 register。
+- **Verify**: schema 1644 OK；execution 68 OK；deterministic-report 17 OK；最新 L3/lineage focused 43 OK（含只改变创业板涨跌幅、主板 cat_score 不变的结果级反向测试）；doc-governance 60 OK；L3 helper 全 PASS；JSON parse、syntax compile、`git diff --check` PASS。Phase6 全包仍只有同一旧 fixture 缺 `source` 的 4 个无关失败。未请求 HiThink、未跑正式 EGS、未发布/写入实盘结果、未保存 raw/secret。
+- **Pre-Codex self-review**: A 覆盖 source→snapshot→score/overlay→analysis_input/data_health→deterministic/execution/aggregate→reuse CLI；B 现行目录已无 `fresh Tushare` / `Tushare L3` / `EGS v7.10` / `max_concepts_per_stock` 残留；C 反向钉住非主板影响、1-board/掉板目录、六概念截断、缺失/不一致回执、reuse provider 调用；D/E 未改 CURRENT、无跨 lane 扩张；F 固定离线包已跑完。独立 agent PASS，无超时降级。
+- **Next**: Claude Code：审查。
+
+## 2026-07-16 - Codex 审查 FAIL（6ebd A-short L3 HiThink 数据源切换）
+
+- **Verdict/Action**: FAIL；最高风险切片（新 live provider + 新 fail-closed 数据源引擎），仅审 6ebd 相对 HEAD 的 10 个 tracked 与 2 个 untracked L3 文件；业务代码未改、未提交，完整 scope 与结论见 register。
+- **Required**: `R-ASHORT-L3-HITHINK-MAIN-BOARD-SCOPE`、`R-ASHORT-L3-HITHINK-CATALOG-SELF-COMPLETENESS`、`R-ASHORT-L3-HITHINK-CONCEPT-CAP-ORDERING`、`R-ASHORT-L3-HITHINK-LINEAGE-RECEIPT`、`R-ASHORT-L3-HITHINK-CACHE-CONTRACT-DRIFT`；完整修复条件见 `docs/system_risk_register.md`。
+- **Verify**: focused 32 OK；schema 全包 1642 OK；Phase6 93 项中 4 个未改旧 fixture 失败、与本刀无关；主板影响/目录截断/概念 cap/回执缺失四个离线反向探针均复现；§6a 独立只读禁联网 agent FAIL（同 5 Required）；secret/raw 边界未见泄漏；未做 live provider 或正式 EGS 发布。
+- **Next**: Codex：修复。
+
+## 2026-07-16 - Codex execute (A-short L3 HiThink complete-catalog gate)
+
+- **Verdict/Action**: HiThink Financial API is now the only live L3 concept-membership source. A missing board, request failure, or malformed payload aborts the selection; there is no Tushare or score-50 fallback. Only an explicit successful empty member list is skipped and recorded.
+- **Required**: `R-ASHORT-L3-HITHINK-CATALOG-COMPLETE-GATE` remains in_progress pending independent Claude Code review before closure or commit.
+- **Verify**: Offline HiThink source, EGS guard, analysis-input/data-health, and route packs: **119 OK**. Live read-only adapter check: catalog **389/389**, explicit empty boards **0**, member pairs **69,755**, out-of-A-share `.NQ` members **1**; no raw payload or API key saved.
+- **Pre-Codex self-review**: A complete/empty/error/snapshot/contract paths covered; B confirmed no live `pro.concept` / `concept_detail` or old L3 cache reference; C incomplete source aborts before publication; D N/A; E CURRENT unchanged; F py_compile, focused packs, and `git diff --check` run. No subagent or timeout fallback.
+- **Next**: Claude Code: review.
+
+## 2026-07-15 - Historical A-short L3 iWencai attempt (superseded by 2026-07-16 HiThink implementation)
+
+- **Verdict/Action**: Added the repo-owned iWencai OpenAPI primary adapter before the current Tushare THS and AkShare Eastmoney fallbacks. It uses two bulk request families (concept catalog plus A-share concept memberships), explicitly sends `is_cache=0`, rejects missing/duplicate/incomplete pages or missing catalog date fields, and builds the existing verified graph entirely in memory before the existing atomic snapshot handoff. The generic verifier now skips only the meaningless per-concept delay for this already-bulk-fetched graph; Tushare/AkShare retain their existing throttling. Receipts record source roles, request-side no-cache fact, response-date/pagination/coverage metadata and never retain a key, body, URL or proxy.
+- **Required**: `R-ASHORT-L3-CONCEPT-SOURCE-SILENT-DEGRADE` remains in progress pending independent Claude review. No change to score weights, candidate ordering, M6.7 operations/sizing/cash, account paths or trading boundaries. Server-internal cache behavior remains unprovable from a client request, so the contract is explicit request-side `is_cache=0` plus source-date recording rather than a false server-cache claim.
+- **Verify**: 471 focused A-short weekly/L3 regressions OK. Authorized temporary live validation (cleaned after completion, no official result path) accepted iWencai with two HTTP 200 requests: 389 concepts, 388 non-empty memberships, 5,526 unique members, catalog date `20260715`, primary-only/no fallback. The first full validation exposed a 0.5s generic in-memory-loop delay; the source-specific zero delay was repaired before final validation.
+- **Pre-Codex self-review**: A covered no-cache request body, catalog/member pagination, duplicate-page and missing-date rejection, key-free receipt, primary-only lazy fallback, source order and all-source inherited fail-closed path; B confirms `score_l3` remains snapshot-only and unchanged; C confirms no official output path was used by live validation; E leaves `CURRENT` untouched and updates the active register/runner documentation plus desktop M6.7 handoff.
+- **Next**: Claude Code: review the L3 iWencai-primary slice only; do not alter scoring, thresholds, M6.7 operations, account/broker paths, or unrelated A-short/US-short work.
+
+## 2026-07-15 - Codex repair (A-short IV-feed partial provider-failure retry, fail-fast, and safe receipt)
+
+- **Verdict/Action**: Added bounded per-date `opt_daily` retry (three attempts with exponential backoff), one-unrecovered-failure fail-fast, and an atomic schema-validated per-run `iv_feed_failure_<pid>.json` sidecar. It records only endpoint, failure/attempt counts, date range, retry-recovery count, fail-fast state, and approved categories for permission/quota, signature/arguments, rate limit, provider server, network, or residual other. The IV builder never writes a partial feed; `weekly_screening.ps1` passes the receipt path and references it from the existing M6.7 failure receipt without reading/copying arbitrary error content.
+- **Required**: `R-ASHORT-IV-FEED-PARTIAL-FAILURE-OBSERVABILITY` remains in progress pending the user's requested independent Claude review. No live provider call was made; the historical event remains externally unclassified because the old runner did not retain a safe enough receipt.
+- **Verify**: final fixed A-short regression pack 685 OK. Coverage includes transient retry recovery, persistent network-class failure with exactly three attempts and no further daily calls, receipt schema/write, no secret/raw-text leakage, no half-feed, weekly receipt reference wiring, and 429/503/504 separation into rate-limit versus provider-server categories.
+- **Pre-Codex self-review**: A covered all provider endpoints plus the `opt_daily` retry/fail-fast class and all six safe categories; B confirms the only failure artifact schema is closed-world and the wrapper passes a per-run path rather than reserializing untrusted failure content; C covers transient recovery and persistent failure/no-publication; E leaves `CURRENT` untouched and records the single active risk. Independent current-diff review found the same-`as_of` stale-sidecar reference and the 504 classification-order gap; both repairs were rechecked PASS.
+- **Next**: Claude Code: review this IV-feed P1 repair only; do not run live provider calls or modify L3, scoring, thresholds, broker paths, or unrelated A-short/US-short work.
+
+## 2026-07-14 - Historical A-short L3 Tushare/AkShare attempt (superseded by 2026-07-16 HiThink implementation)
+
+- **Verdict/Action**: Replaced the provider-rejected legacy Tushare `concept`/`concept_detail` primary with the current THS concept/member adapter, added the same HTTPS route pin used by EGS/IV, and retained the existing AkShare Eastmoney fallback. Source receipts now preserve only bounded failure kind (`proxy_error` / connection / timeout / TLS / provider exception) plus proxy-configured boolean and endpoint mode; no raw response, URL, proxy address, or token is retained. The test-only L3-degradation switch now canonicalizes its output root and rejects the official publish path; EGS API lineage no longer falsely lists builder-managed legacy L3 calls.
+- **Required**: `R-ASHORT-L3-CONCEPT-SOURCE-SILENT-DEGRADE` remains in progress pending the user's requested independent Claude review. Live evidence now isolates the external blockers: Tushare `trade_cal` succeeds, but THS concept access is `permission`; AkShare Eastmoney is `proxy_error` with no environment proxy configured. No verified snapshot exists, so EGS/M6.7 remain correctly blocked.
+- **Verify**: fixed L3/EGS/weekly/schema/doc-guard regression pack 597 OK; AST/JSON parse and `git diff --check` OK (CRLF notices only). Bounded live probes used no business-output path and the builder wrote only the sanitized 20260715 failure receipt.
+- **Pre-Codex self-review**: A covered legacy and current Tushare member shapes, AkShare mapping, and official-root degradation rejection; B confirmed no runtime source invokes legacy `concept`/`concept_detail` and `EGS_API_FAMILIES` excludes those builder-managed APIs; C confirms permission and proxy errors fail closed; E leaves `CURRENT` untouched and updates the single active risk/runner pointer. An independent current-diff review found the official-root/subdirectory bypass and stale lineage label; both are repaired, regression-tested, and rechecked PASS.
+- **Next**: Claude Code: review the L3 four-cut implementation plus this current-interface follow-up only; do not change scoring weights, thresholds, broker paths, or unrelated A-short/US-short work.
+
+## 2026-07-14 - Historical A-short L3 snapshot attempt (superseded by 2026-07-16 HiThink implementation)
+
+- **Verdict/Action**: Implemented four connected cuts: (1) provider adapters with canary, sanitized error classes and bounded retry; (2) a fresh, atomic verified L3 snapshot with provenance, graph coverage and content hash; (3) EGS reads only that snapshot and sends unavailable L3 to `data_health=error` / blocks the official marker; (4) mapped AkShare Eastmoney fallback plus source/fallback audit fields. `weekly_screening.ps1` invokes the builder before live EGS. No order execution or broker path was added.
+- **Required**: `R-ASHORT-L3-CONCEPT-SOURCE-SILENT-DEGRADE` is in progress pending the user's requested independent Claude review. The no-cache 2026-07-14 live probe reached the new fail-closed boundary: both providers were unavailable as sanitized `transport` failures, no verified L3 snapshot was written, and EGS/M6.7 did not run.
+- **Verify**: final focused A-short L3/EGS/weekly/schema/doc-guard pack: 592 OK; syntax and JSON parses OK; `git diff --check` OK. The live probe persisted only `logs/a_short_l3_snapshot_20260714.json` without raw payloads, URLs or secrets.
+- **Pre-Codex self-review**: A covered primary-interface/transport/fallback, partial graph, fresh/legacy snapshot, candidate coverage, health, official marker and weekly entry surfaces; B `score_l3` has zero direct `pro.concept`, `pro.concept_detail` or `load_cache` calls; C adds both fallback-success and all-sources-fail controls; E leaves `CURRENT` untouched and adds only the runner route pointer plus register entry. No subagent used.
+- **Next**: Claude Code: review the four-cut L3 repair only; do not change scoring weights, thresholds, broker paths, or unrelated A-short/US-short work.
+
 ## 2026-07-14 — Claude PASS / Codex 提交（A-short D1/D3 因素对照）
 
 - **Verdict/Action**: Claude 已通过 D1/D3 因素对照轨；Codex 仅提交该刀的私密周度结果、独立市场状态与统计裁决接线。

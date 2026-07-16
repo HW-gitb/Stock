@@ -103,6 +103,9 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
             raise AnalysisInputContractError(f"{label} run_id does not match trade_date/candidate_digest")
     l3_mode = source.get("l3_mode")
     l3_snapshot_date = source.get("l3_snapshot_date")
+    l3_provider = source.get("l3_provider")
+    l3_coverage = source.get("l3_coverage")
+    schema_version = payload.get("schema_version")
     if l3_mode == "pit":
         if not l3_snapshot_date:
             raise AnalysisInputContractError(
@@ -115,6 +118,72 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
                 f"{label} PIT validation failed: source.l3_snapshot_date "
                 f"{l3_snapshot_date} is after trade_date {trade_date}"
             )
+    if l3_coverage is not None:
+        if l3_provider != "hithink_finance":
+            raise AnalysisInputContractError(
+                f"{label} L3 coverage requires source.l3_provider='hithink_finance'"
+            )
+        if l3_coverage.get("catalog_board_count") != l3_coverage.get("received_board_count"):
+            raise AnalysisInputContractError(
+                f"{label} L3 coverage is incomplete: catalog and received board counts differ"
+            )
+        if l3_coverage.get("complete") is not True:
+            raise AnalysisInputContractError(f"{label} L3 coverage is not complete")
+        if l3_coverage.get("scoring_universe") != "a_share_main_board":
+            raise AnalysisInputContractError(f"{label} L3 coverage is not main-board scoped")
+        catalog_count = l3_coverage.get("catalog_board_count")
+        verified_empty_count = l3_coverage.get("verified_empty_board_count")
+        scope_empty_count = l3_coverage.get("scope_filtered_empty_board_count")
+        raw_pair_count = l3_coverage.get("raw_member_row_count")
+        unique_pair_count = l3_coverage.get("unique_member_pair_count")
+        main_board_pair_count = l3_coverage.get("main_board_member_pair_count")
+        excluded_pair_count = l3_coverage.get("excluded_non_main_board_member_count")
+        out_of_a_share_count = l3_coverage.get("out_of_a_share_member_count")
+        suffix_pair_count = sum((l3_coverage.get("market_suffix_counts") or {}).values())
+        if verified_empty_count + scope_empty_count > catalog_count:
+            raise AnalysisInputContractError(f"{label} L3 empty-board counts exceed catalog size")
+        if raw_pair_count < unique_pair_count:
+            raise AnalysisInputContractError(f"{label} L3 raw member rows are below unique pairs")
+        if main_board_pair_count + excluded_pair_count != unique_pair_count:
+            raise AnalysisInputContractError(f"{label} L3 scoped member-pair counts do not reconcile")
+        if out_of_a_share_count > excluded_pair_count:
+            raise AnalysisInputContractError(f"{label} L3 out-of-A-share count exceeds exclusions")
+        if suffix_pair_count != unique_pair_count:
+            raise AnalysisInputContractError(f"{label} L3 market suffix counts do not reconcile")
+
+    if schema_version == "1.2.0":
+        if l3_mode == "today":
+            if l3_provider != "hithink_finance" or l3_coverage is None:
+                raise AnalysisInputContractError(
+                    f"{label} current live L3 requires hithink_finance with a complete coverage receipt"
+                )
+            if source.get("data_provider") != "mixed":
+                raise AnalysisInputContractError(
+                    f"{label} current live L3 requires source.data_provider='mixed'"
+                )
+        elif l3_mode == "pit":
+            if l3_provider not in {"hithink_finance", "legacy_tushare_snapshot"}:
+                raise AnalysisInputContractError(
+                    f"{label} current PIT L3 requires explicit snapshot provider provenance"
+                )
+            if l3_provider == "hithink_finance" and l3_coverage is None:
+                raise AnalysisInputContractError(
+                    f"{label} current HiThink PIT L3 requires its persisted coverage receipt"
+                )
+            expected_data_provider = "mixed" if l3_provider == "hithink_finance" else "tushare"
+            if source.get("data_provider") != expected_data_provider:
+                raise AnalysisInputContractError(
+                    f"{label} PIT data_provider does not match L3 snapshot provider"
+                )
+        elif l3_mode == "neutralize":
+            if l3_provider != "neutralized" or l3_coverage is not None:
+                raise AnalysisInputContractError(
+                    f"{label} neutralized L3 requires provider='neutralized' and null coverage"
+                )
+            if source.get("data_provider") != "tushare":
+                raise AnalysisInputContractError(
+                    f"{label} neutralized L3 requires source.data_provider='tushare'"
+                )
 
     for index, candidate in enumerate(payload.get("candidates") or []):
         if not isinstance(candidate, dict):

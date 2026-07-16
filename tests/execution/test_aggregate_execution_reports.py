@@ -12,7 +12,10 @@ except ImportError:  # pragma: no cover - environment guard
 
 from runners.aggregate_execution_reports import main as aggregate_main
 from runners.backtest_execution import ROOT, main as execution_main
-from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
+from tests.support.analysis_input_payload import (
+    cloned_minimal_analysis_input_payload,
+    current_hithink_analysis_input_payload,
+)
 
 
 @unittest.skipIf(Draft7Validator is None, "jsonschema not installed")
@@ -33,12 +36,16 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         max_drawdown: float,
         trade_count: int | None = None,
         mode: str = "smoke",
+        analysis_payload: dict | None = None,
     ) -> Path:
         out_dir = work_dir / end_date
         analysis_input = work_dir / "analysis_input_current.json"
         if not analysis_input.exists():
             analysis_input.write_text(
-                json.dumps(cloned_minimal_analysis_input_payload(), ensure_ascii=False),
+                json.dumps(
+                    analysis_payload or cloned_minimal_analysis_input_payload(),
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
         rc = execution_main(
@@ -177,7 +184,7 @@ class AggregateExecutionReportsTest(unittest.TestCase):
 
         self.assertEqual(errors, [])
         self.assertEqual(report["schema_name"], "execution_aggregate_report")
-        self.assertEqual(report["schema_version"], "1.1.4")
+        self.assertEqual(report["schema_version"], "1.1.5")
         self.assertEqual(report["metrics"]["report_count"], 2)
         self.assertEqual(report["metrics"]["month_count"], 2)
         self.assertEqual(report["metrics"]["trade_count_total"], 2)
@@ -193,6 +200,33 @@ class AggregateExecutionReportsTest(unittest.TestCase):
         )
         self.assertEqual(report["ship_gate_evaluation"]["status"], "not_evaluable")
         self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
+
+    def test_current_hithink_lineage_is_carried_into_aggregate_input_refs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            work_dir = Path(tmpdir)
+            report_path = self.write_execution_report(
+                work_dir,
+                "20260522",
+                0.03,
+                -0.05,
+                analysis_payload=current_hithink_analysis_input_payload(),
+            )
+            out_path = work_dir / "aggregate.json"
+
+            rc = aggregate_main([
+                "--report", str(report_path),
+                "--out-path", str(out_path),
+            ])
+
+            self.assertEqual(rc, 0)
+            ref = json.loads(out_path.read_text(encoding="utf-8"))["inputs"]["execution_reports"][0]
+            self.assertEqual(ref["data_provider"], "mixed")
+            self.assertEqual(ref["l3_provider"], "hithink_finance")
+            self.assertEqual(ref["l3_snapshot_date"], "20260522")
+            self.assertEqual(ref["l3_catalog_digest"], "a" * 64)
+            self.assertEqual(ref["l3_catalog_board_count"], 389)
+            self.assertEqual(ref["l3_scoring_universe"], "a_share_main_board")
+            self.assertTrue(ref["l3_coverage_complete"])
 
     def test_zero_trade_report_without_return_is_excluded_from_monthly_series(
         self,

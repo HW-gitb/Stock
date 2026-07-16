@@ -7,7 +7,10 @@ from engine.data.analysis_input_contract import (
     AnalysisInputContractError,
     validate_analysis_input_contract,
 )
-from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
+from tests.support.analysis_input_payload import (
+    cloned_minimal_analysis_input_payload,
+    current_hithink_analysis_input_payload,
+)
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -48,6 +51,64 @@ class AnalysisInputContractTest(unittest.TestCase):
 
         with self.assertRaisesRegex(AnalysisInputContractError, "after trade_date"):
             validate_analysis_input_contract(payload)
+
+    def test_live_hithink_coverage_receipt_must_be_complete(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.2.0"
+        payload["source"].update({
+            "data_provider": "mixed",
+            "l3_provider": "hithink_finance",
+            "l3_coverage": {
+                "source": "hithink_finance",
+                "catalog_tag": "cn_concept",
+                "catalog_digest": "a" * 64,
+                "catalog_board_count": 389,
+                "received_board_count": 389,
+                "verified_empty_board_count": 0,
+                "scope_filtered_empty_board_count": 0,
+                "raw_member_row_count": 69755,
+                "unique_member_pair_count": 69755,
+                "main_board_member_pair_count": 69000,
+                "excluded_non_main_board_member_count": 755,
+                "out_of_a_share_member_count": 1,
+                "market_suffix_counts": {"NQ": 1, "SH": 30000, "SZ": 39754},
+                "scoring_universe": "a_share_main_board",
+                "complete": True,
+            },
+        })
+        validate_analysis_input_contract(payload)
+
+        payload["source"]["l3_coverage"]["received_board_count"] = 388
+        with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            validate_analysis_input_contract(payload)
+
+        payload["source"]["l3_coverage"]["catalog_board_count"] = 1
+        payload["source"]["l3_coverage"]["received_board_count"] = 1
+        with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            validate_analysis_input_contract(payload)
+
+        payload = current_hithink_analysis_input_payload()
+        payload["source"]["l3_coverage"]["main_board_member_pair_count"] += 1
+        with self.assertRaisesRegex(AnalysisInputContractError, "do not reconcile"):
+            validate_analysis_input_contract(payload)
+
+    def test_current_live_hithink_receipt_is_mandatory(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.2.0"
+        payload["source"]["data_provider"] = "mixed"
+        payload["source"].pop("l3_provider", None)
+        payload["source"].pop("l3_coverage", None)
+
+        with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            validate_analysis_input_contract(payload)
+
+    def test_legacy_1_1_today_payload_remains_readable_without_hithink_receipt(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.1.0"
+        payload["source"].pop("l3_provider", None)
+        payload["source"].pop("l3_coverage", None)
+
+        validate_analysis_input_contract(payload)
 
     def test_future_earnings_report_date_is_rejected(self) -> None:
         payload = cloned_minimal_analysis_input_payload()

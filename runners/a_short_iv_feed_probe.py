@@ -22,6 +22,8 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
+import time
 
 import jsonschema
 import pandas as pd
@@ -31,6 +33,10 @@ SCHEMA_VERSION = "1.0.0"
 UNDERLYING = "510050.SH"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_iv_feed_probe_summary.schema.json")
+FAILURE_RECEIPT_SCHEMA_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "schemas", "a_short_iv_feed_failure_receipt.schema.json",
+)
 
 MIN_CONTRACTS = 20
 MIN_STRIKES = 5
@@ -42,6 +48,14 @@ MIN_VALID_QUOTE_DAYS = 15              # 共同日有效报价的天数(非行�
 MIN_UNDERLIER_DAYS = 15               # 标的 close>0 的 PIT 有效天数
 REQUIRED_OPT_BASIC_FIELDS = ["ts_code", "call_put", "exercise_price", "maturity_date"]
 REQUIRED_OPT_DAILY_FIELDS = ["ts_code", "trade_date", "settle", "close", "vol", "oi"]
+OPT_DAILY_MAX_ATTEMPTS = 3
+OPT_DAILY_RETRY_BACKOFF_SECONDS = 0.25
+MAX_UNRECOVERED_OPT_DAILY_FAILURES = 1
+RETRYABLE_OPT_DAILY_ERROR_CATEGORIES = frozenset({
+    "rate_limit",
+    "provider_server",
+    "network",
+})
 
 
 def _valid_date_mask(s: pd.Series) -> pd.Series:
@@ -349,11 +363,23 @@ def write_probe_summary(summary: dict, out_path: str) -> None:
 def _categorize_error(exc) -> str:
     """粗分类(sanitized:只给类别,不外泄 token/url/raw 行)。"""
     msg = str(exc).lower()
-    if any(k in msg for k in ("permission", "denied", "权限", "积分", "quota", "没有", "无权")):
+    if any(k in msg for k in ("rate limit", "too many requests", "throttle", "429")):
+        return "rate_limit"
+    if any(k in msg for k in (
+        "permission", "denied", "forbidden", "http 403", "403 forbidden",
+        "权限", "积分", "quota", "没有", "无权",
+    )):
         return "permission_or_quota"
     if any(k in msg for k in ("argument", "param", "field", "signature", "参数", "字段")):
         return "signature_or_args"
-    if any(k in msg for k in ("timeout", "connection", "network", "ssl", "max retries", "超时")):
+    if (any(k in msg for k in (
+        "internal server", "service unavailable", "bad gateway", "gateway timeout", "gateway time-out",
+        "http 500", "http 502", "http 503", "http 504",
+    )) or re.search(r"\b5\d{2}\b", msg)):
+        return "provider_server"
+    if any(k in msg for k in (
+        "timeout", "time-out", "timed out", "connection", "network", "ssl", "proxy", "max retries", "超时",
+    )):
         return "network"
     return "other"
 
@@ -374,7 +400,96 @@ def _safe_pro_call(pro, method: str, **kw):
                                 "error_category": _categorize_error(exc)}
 
 
-def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates: int = 25):
+def _safe_pro_call_with_retry(pro, method: str, *, max_attempts: int = 1,
+                              retry_backoff_seconds: float = 0.0, sleep_fn=None, **kw):
+    """Retry only transient/rate-limited calls; never retain exception text."""
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be >= 1")
+    sleeper = sleep_fn or time.sleep
+    for attempt in range(1, max_attempts + 1):
+        df, status = _safe_pro_call(pro, method, **kw)
+        if status["ok"]:
+            return df, {**status, "attempt_count": attempt, "retry_count": attempt - 1}
+        if status["error_category"] not in RETRYABLE_OPT_DAILY_ERROR_CATEGORIES:
+            return pd.DataFrame(), {**status, "attempt_count": attempt, "retry_count": attempt - 1}
+        if attempt < max_attempts:
+            sleeper(retry_backoff_seconds * (2 ** (attempt - 1)))
+    return pd.DataFrame(), {**status, "attempt_count": max_attempts,
+                             "retry_count": max_attempts - 1}
+
+
+def build_fetch_failure_summary(report: dict, as_of: str) -> dict:
+    """Create a strict, secret-safe operational receipt from failed endpoint statuses only."""
+    grouped: dict[str, dict] = {}
+    for status in report.get("endpoint_statuses") or []:
+        if status.get("ok"):
+            continue
+        endpoint = str(status.get("endpoint") or "")
+        group = grouped.setdefault(endpoint, {
+            "endpoint": endpoint,
+            "failure_count": 0,
+            "total_attempt_count": 0,
+            "error_categories": set(),
+            "trade_dates": [],
+        })
+        group["failure_count"] += 1
+        group["total_attempt_count"] += int(status.get("attempt_count") or 1)
+        category = status.get("error_category")
+        if category:
+            group["error_categories"].add(str(category))
+        trade_date = status.get("trade_date")
+        if trade_date:
+            group["trade_dates"].append(str(trade_date))
+
+    failures = []
+    for endpoint in sorted(grouped):
+        group = grouped[endpoint]
+        dates = sorted(set(group.pop("trade_dates")))
+        group["error_categories"] = sorted(group["error_categories"])
+        group["first_trade_date"] = dates[0] if dates else None
+        group["last_trade_date"] = dates[-1] if dates else None
+        failures.append(group)
+    return {
+        "schema_name": "a_short_iv_feed_failure_receipt",
+        "schema_version": "1.0.0",
+        "as_of": str(as_of),
+        "status": "failed",
+        "reason": "provider_call_failure",
+        "trade_dates_planned": int(report.get("trade_dates_planned") or 0),
+        "trade_dates_probed": int(report.get("trade_dates_probed") or 0),
+        "retry_recovered_count": len(report.get("retry_recoveries") or []),
+        "opt_daily_fail_fast_triggered": bool(report.get("opt_daily_fail_fast_triggered")),
+        "failures": failures,
+    }
+
+
+def validate_fetch_failure_summary(summary: dict) -> None:
+    """Validate the receipt shape and semantic dates before it is written."""
+    with open(FAILURE_RECEIPT_SCHEMA_PATH, "r", encoding="utf-8") as f:
+        jsonschema.validate(summary, json.load(f))
+    if not _is_valid_yyyymmdd(summary["as_of"]):
+        raise ValueError("failure receipt as_of is not a valid calendar date")
+    if summary["trade_dates_probed"] > summary["trade_dates_planned"]:
+        raise ValueError("failure receipt probed dates exceed planned dates")
+    for failure in summary["failures"]:
+        for field in ("first_trade_date", "last_trade_date"):
+            value = failure[field]
+            if value is not None and not _is_valid_yyyymmdd(value):
+                raise ValueError(f"failure receipt {field} is not a valid calendar date")
+
+
+def write_fetch_failure_summary(summary: dict, out_path: str) -> None:
+    """Atomically write only validated, sanitized operational failure evidence."""
+    validate_fetch_failure_summary(summary)
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    tmp = str(out_path) + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(summary, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, out_path)
+
+
+def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates: int = 25,
+                       sleep_fn=None):
     """执行期:拉 SSE 期权合约/行情 + 510050 标的价。返回 (opt_basic, opt_daily, underlier, report)。
     report 含 per-endpoint sanitized status + had_provider_error(任一端点抛异常即 True),
     供 main 区分 provider 失败(中止、不写 summary) vs 真·覆盖不足(写 not-computable)。
@@ -390,11 +505,26 @@ def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates
     statuses.append(s)
     dates = sorted(cal["cal_date"].astype(str).tolist())[-max_trade_dates:] if ("cal_date" in cal.columns and not cal.empty) else []
     frames = []
+    opt_daily_attempted_dates = []
+    retry_recoveries = []
+    opt_daily_fail_fast_triggered = False
+    unrecovered_opt_daily_failures = 0
     for d in dates:
-        od, s = _safe_pro_call(pro, "opt_daily", trade_date=d, exchange="SSE",
-                               fields="ts_code,trade_date,settle,close,vol,oi")
+        opt_daily_attempted_dates.append(d)
+        od, s = _safe_pro_call_with_retry(
+            pro, "opt_daily", max_attempts=OPT_DAILY_MAX_ATTEMPTS,
+            retry_backoff_seconds=OPT_DAILY_RETRY_BACKOFF_SECONDS, sleep_fn=sleep_fn,
+            trade_date=d, exchange="SSE", fields="ts_code,trade_date,settle,close,vol,oi",
+        )
+        if s["ok"] and s["retry_count"]:
+            retry_recoveries.append({"endpoint": "opt_daily", "trade_date": d,
+                                     "attempt_count": s["attempt_count"]})
         if not s["ok"]:
             statuses.append({**s, "trade_date": d})
+            unrecovered_opt_daily_failures += 1
+            if unrecovered_opt_daily_failures >= MAX_UNRECOVERED_OPT_DAILY_FAILURES:
+                opt_daily_fail_fast_triggered = True
+                break
         if not od.empty:
             frames.append(od)
     opt_daily = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
@@ -404,8 +534,11 @@ def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates
     had_provider_error = any(not st["ok"] for st in statuses)
     report = {
         "opt_basic_rows": int(len(opt_basic)), "opt_daily_rows": int(len(opt_daily)),
-        "underlier_rows": int(len(underlier)), "trade_dates_probed": len(dates),
+        "underlier_rows": int(len(underlier)), "trade_dates_planned": len(dates),
+        "trade_dates_probed": len(opt_daily_attempted_dates),
         "endpoint_statuses": statuses, "had_provider_error": had_provider_error,
+        "retry_recoveries": retry_recoveries,
+        "opt_daily_fail_fast_triggered": opt_daily_fail_fast_triggered,
     }
     return opt_basic, opt_daily, underlier, report
 

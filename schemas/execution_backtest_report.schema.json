@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_backtest_report/1.2.0/schema.json",
+  "$id": "https://stock.local/schemas/execution_backtest_report/1.3.0/schema.json",
   "title": "Execution Backtest Report",
-  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.2.0 adds a preliminary ship_gate_evaluation block on top of the bucket-aware capital_context and minimal fill simulation outputs. The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.3.0 adds explicit L3 provider and completeness lineage on top of the v1.2.0 ship-gate and capital-context outputs. The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -29,7 +29,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.2.0"
+      "const": "1.3.0"
     },
     "generated_at": {
       "type": "string",
@@ -108,7 +108,7 @@
         "initial_capital": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "Run-level starting capital. In schema v1.2.0 this must represent the selected bucket capital, not total account capital; capital_context is the authoritative source."
+          "description": "Run-level starting capital. In schema v1.2.0 and later this must represent the selected bucket capital, not total account capital; capital_context is the authoritative source."
         },
         "primary_input": {
           "type": "string",
@@ -516,7 +516,7 @@
       "properties": {
         "data_provider": {
           "type": "string",
-          "enum": ["tushare", "us_provider"]
+          "enum": ["tushare", "mixed", "us_provider"]
         },
         "api_families": {
           "type": "object",
@@ -578,8 +578,49 @@
         "l3_mode": {
           "type": "string",
           "enum": ["pit", "today", "neutralize"]
+        },
+        "l3_provider": {
+          "type": ["string", "null"],
+          "enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null]
+        },
+        "l3_snapshot_date": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9]{8}$"
+        },
+        "l3_catalog_digest": {
+          "type": ["string", "null"],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "l3_catalog_board_count": {
+          "type": ["integer", "null"],
+          "minimum": 1
+        },
+        "l3_scoring_universe": {
+          "type": ["string", "null"],
+          "enum": ["a_share_main_board", null]
+        },
+        "l3_coverage_complete": {
+          "type": ["boolean", "null"]
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {"analysis_input_schema_version": {"const": "1.2.0"}},
+            "required": ["analysis_input_schema_version"]
+          },
+          "then": {
+            "required": [
+              "l3_provider",
+              "l3_snapshot_date",
+              "l3_catalog_digest",
+              "l3_catalog_board_count",
+              "l3_scoring_universe",
+              "l3_coverage_complete"
+            ]
+          }
+        }
+      ]
     },
     "outputs": {
       "type": "object",

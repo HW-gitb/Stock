@@ -26,6 +26,7 @@ import types  # noqa: E402
 from runners.a_short_iv_feed_probe import (  # noqa: E402
     filter_50etf_options, run_probe, write_probe_summary, build_probe_summary,
     assess_opt_coverage, main, UNDERLYING, init_tushare_pro, fetch_probe_inputs, _safe_pro_call,
+    _categorize_error, build_fetch_failure_summary, write_fetch_failure_summary,
 )
 
 
@@ -197,6 +198,137 @@ class FetchLineageTests(unittest.TestCase):
         self.assertEqual(bad["error_class"], "PermissionError")
         self.assertEqual(bad["error_category"], "permission_or_quota")
 
+    def test_opt_daily_transient_failure_retries_and_recovers(self):
+        calls = {"count": 0}
+        pauses = []
+        behaviors = _good_pro_behaviors()
+        original = behaviors["opt_daily"]
+
+        def flaky_opt_daily(**kw):
+            if kw["trade_date"] == PIT_DATES[0] and calls["count"] == 0:
+                calls["count"] += 1
+                raise TimeoutError("transient timeout")
+            calls["count"] += 1
+            return original(**kw)
+
+        behaviors["opt_daily"] = flaky_opt_daily
+        _, _, _, report = fetch_probe_inputs(
+            _FakePro(behaviors), AS_OF, sleep_fn=pauses.append,
+        )
+
+        self.assertFalse(report["had_provider_error"])
+        self.assertFalse(report["opt_daily_fail_fast_triggered"])
+        self.assertEqual(report["trade_dates_probed"], report["trade_dates_planned"])
+        self.assertEqual(report["retry_recoveries"], [{
+            "endpoint": "opt_daily", "trade_date": PIT_DATES[0], "attempt_count": 2,
+        }])
+        self.assertEqual(pauses, [0.25])
+
+    def test_opt_daily_error_phrase_variants_retry_before_fail_fast(self):
+        variants = (
+            ("Read timed out", "network"),
+            ("504 Gateway Time-out", "provider_server"),
+            ("Server returned 504", "provider_server"),
+        )
+        for message, expected_category in variants:
+            with self.subTest(message=message):
+                calls = {"count": 0}
+                pauses = []
+                behaviors = _good_pro_behaviors()
+                original = behaviors["opt_daily"]
+
+                def flaky_opt_daily(**kw):
+                    if kw["trade_date"] == PIT_DATES[0] and calls["count"] == 0:
+                        calls["count"] += 1
+                        raise RuntimeError(message)
+                    calls["count"] += 1
+                    return original(**kw)
+
+                self.assertEqual(_categorize_error(RuntimeError(message)), expected_category)
+                _, _, _, report = fetch_probe_inputs(
+                    _FakePro({**behaviors, "opt_daily": flaky_opt_daily}), AS_OF,
+                    sleep_fn=pauses.append,
+                )
+
+                self.assertFalse(report["had_provider_error"])
+                self.assertEqual(report["retry_recoveries"], [{
+                    "endpoint": "opt_daily", "trade_date": PIT_DATES[0], "attempt_count": 2,
+                }])
+                self.assertEqual(pauses, [0.25])
+
+    def test_403_forbidden_is_permission_and_does_not_retry(self):
+        calls = {"count": 0}
+        pauses = []
+
+        def forbidden_opt_daily(**_kw):
+            calls["count"] += 1
+            raise RuntimeError("403 forbidden")
+
+        self.assertEqual(_categorize_error(RuntimeError("403 forbidden")), "permission_or_quota")
+        behaviors = _good_pro_behaviors()
+        _, _, _, report = fetch_probe_inputs(
+            _FakePro({**behaviors, "opt_daily": forbidden_opt_daily}), AS_OF,
+            sleep_fn=pauses.append,
+        )
+
+        failure = [s for s in report["endpoint_statuses"] if s["endpoint"] == "opt_daily"][0]
+        self.assertTrue(report["had_provider_error"])
+        self.assertEqual(failure["error_category"], "permission_or_quota")
+        self.assertEqual(failure["attempt_count"], 1)
+        self.assertEqual(calls["count"], 1)
+        self.assertEqual(pauses, [])
+
+    def test_opt_daily_terminal_failure_does_not_retry(self):
+        calls = {"count": 0}
+        pauses = []
+
+        def denied_opt_daily(**_kw):
+            calls["count"] += 1
+            raise PermissionError("permission denied")
+
+        behaviors = _good_pro_behaviors()
+        behaviors["opt_daily"] = denied_opt_daily
+        _, _, _, report = fetch_probe_inputs(
+            _FakePro(behaviors), AS_OF, sleep_fn=pauses.append,
+        )
+
+        self.assertTrue(report["had_provider_error"])
+        self.assertTrue(report["opt_daily_fail_fast_triggered"])
+        self.assertEqual(report["trade_dates_probed"], 1)
+        failure = [s for s in report["endpoint_statuses"] if s["endpoint"] == "opt_daily"][0]
+        self.assertEqual(failure["error_category"], "permission_or_quota")
+        self.assertEqual(failure["attempt_count"], 1)
+        self.assertEqual(failure["retry_count"], 0)
+        self.assertEqual(calls["count"], 1)
+        self.assertEqual(pauses, [])
+
+    def test_persistent_opt_daily_failure_fails_fast_and_writes_sanitized_receipt(self):
+        behaviors = _good_pro_behaviors()
+        behaviors["opt_daily"] = RuntimeError(
+            "connection timeout url=https://api.example.invalid/?token=SECRET123 raw_rows=[1]"
+        )
+        _, _, _, report = fetch_probe_inputs(_FakePro(behaviors), AS_OF, sleep_fn=lambda _seconds: None)
+
+        self.assertTrue(report["had_provider_error"])
+        self.assertTrue(report["opt_daily_fail_fast_triggered"])
+        failures = [s for s in report["endpoint_statuses"] if s["endpoint"] == "opt_daily"]
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(failures[0]["attempt_count"], 3)
+        receipt = build_fetch_failure_summary(report, AS_OF)
+        self.assertEqual(receipt["trade_dates_planned"], len(PIT_DATES))
+        self.assertEqual(receipt["trade_dates_probed"], 1)
+        self.assertEqual(receipt["failures"], [{
+            "endpoint": "opt_daily", "failure_count": 1, "total_attempt_count": 3,
+            "error_categories": ["network"], "first_trade_date": PIT_DATES[0],
+            "last_trade_date": PIT_DATES[0],
+        }])
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "iv_failure.json"
+            write_fetch_failure_summary(receipt, str(out))
+            raw = out.read_text(encoding="utf-8")
+        for leak in ("SECRET123", "token=", "url=", "raw_rows", "api.example.invalid", "RuntimeError"):
+            self.assertNotIn(leak, raw)
+
     def test_terminal_output_does_not_leak_url_token_rawrows(self):
         leaky = RuntimeError("request failed url=https://api.example.invalid/dataapi?token=SECRET123 raw_rows=[{'x':1}]")
         buf = io.StringIO()
@@ -207,6 +339,20 @@ class FetchLineageTests(unittest.TestCase):
             self.assertNotIn(leak, out)
         self.assertFalse(status["ok"])
         self.assertEqual(status["error_class"], "RuntimeError")
+
+    def test_sanitized_error_categories_distinguish_rate_limit_and_provider_server(self):
+        _df, limited = _safe_pro_call(
+            _FakePro({"opt_basic": RuntimeError("HTTP 429 Too Many Requests")}), "opt_basic",
+        )
+        _df, server = _safe_pro_call(
+            _FakePro({"opt_basic": RuntimeError("HTTP 503 Service Unavailable")}), "opt_basic",
+        )
+        _df, gateway_timeout = _safe_pro_call(
+            _FakePro({"opt_basic": RuntimeError("HTTP 504 Gateway Timeout")}), "opt_basic",
+        )
+        self.assertEqual(limited["error_category"], "rate_limit")
+        self.assertEqual(server["error_category"], "provider_server")
+        self.assertEqual(gateway_timeout["error_category"], "provider_server")
 
 
 class MainGuardTests(unittest.TestCase):

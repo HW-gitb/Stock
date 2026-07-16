@@ -25,7 +25,6 @@ EXPECTED_THRESHOLD_KEYS = {
     "suspend_daily_min_coverage",
     "daily_stats_min_rows",
     "momentum_std_threshold",
-    "max_concepts_per_stock",
     "overheat_5d",
     "overheat_20d",
     "esp_raw_cap",

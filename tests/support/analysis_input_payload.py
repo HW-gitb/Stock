@@ -202,3 +202,34 @@ def _normalize_candidate(candidate: dict[str, Any]) -> None:
 
 def cloned_minimal_analysis_input_payload() -> dict[str, Any]:
     return deepcopy(load_minimal_analysis_input_payload())
+
+
+def current_hithink_analysis_input_payload() -> dict[str, Any]:
+    payload = cloned_minimal_analysis_input_payload()
+    payload["schema_version"] = "1.2.0"
+    payload["source"].update({
+        "screening_engine_version": "v7.11",
+        "data_provider": "mixed",
+        "l3_mode": "today",
+        "l3_pit_strict": False,
+        "l3_snapshot_date": payload["trade_date"],
+        "l3_provider": "hithink_finance",
+        "l3_coverage": {
+            "source": "hithink_finance",
+            "catalog_tag": "cn_concept",
+            "catalog_digest": "a" * 64,
+            "catalog_board_count": 389,
+            "received_board_count": 389,
+            "verified_empty_board_count": 0,
+            "scope_filtered_empty_board_count": 0,
+            "raw_member_row_count": 69755,
+            "unique_member_pair_count": 69755,
+            "main_board_member_pair_count": 69000,
+            "excluded_non_main_board_member_count": 755,
+            "out_of_a_share_member_count": 1,
+            "market_suffix_counts": {"NQ": 1, "SH": 30000, "SZ": 39754},
+            "scoring_universe": "a_share_main_board",
+            "complete": True,
+        },
+    })
+    return payload

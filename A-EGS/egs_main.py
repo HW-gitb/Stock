@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-EGS v7.10 量化选股框架 — 周频增强版 + as-of backtest mode (2026.05.24)
+EGS v7.11 量化选股框架 — 周频增强版 + as-of backtest mode (2026.07.16)
 
 v7.10 changelog (从 v7.9):
 - ESP 极端低基数增长 cap：esp_raw_w 上限 200，降低低基数同比暴涨对排序的污染
@@ -20,7 +20,7 @@ v7.7 changelog (从 v7.6):
 - 加 SW_INDUSTRY_MIN_ACTIVE=3000 + index_member_all/index_member/L2 分批 三段回退
 - cache key bump v4→v5 invalidate 旧坏缓存
 - L3 PIT 三模式 (--l3-mode pit/today/neutralize) + state/l3_snapshots/ snapshot 累积
-- analysis_input.source 加 l3_mode/l3_pit_strict/l3_snapshot_date（schema 1.1.0）
+- analysis_input.source 加版本化 HiThink provider/complete-catalog/main-board lineage（schema 1.2.0）
 - 影响：所有 v7.6 候选池逻辑上失效，需重生成才能下统计结论
 ============================================================
 v7.5 新增（周频优化 6 项）：
@@ -117,6 +117,13 @@ from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
     write_weight_comparison,
 )
+from engine.a_short_hithink_l3 import (
+    SOURCE_ID as HITHINK_L3_SOURCE_ID,
+    HiThinkL3SourceError,
+    MIN_CONCEPT_CATALOG_BOARD_COUNT,
+    catalog_digest,
+    fetch_complete_concept_graph,
+)
 from engine.a_short_run_paths import weight_comparison_path
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
@@ -141,11 +148,11 @@ CONF = {
     "suspend_daily_min_coverage": 0.95,
     "daily_stats_min_rows":     1000,
     "momentum_std_threshold":   8.0,
-    "max_concepts_per_stock":   5,
     "overheat_5d":      8.0,   # 5日涨幅超过此值触发过热标记
     "overheat_20d":     22.0,  # 20日涨幅超过此值且仍近高位触发过热标记
     "esp_raw_cap":      200.0, # 低基数同比暴涨 cap，防止 esp_raw 极端值污染排序
     "l3_cache_mode":    "refresh",  # formal runs refresh L3; tests may set reuse
+    "l3_allow_stale_cache": False,   # test-only override; stale reuse otherwise fails closed
 }
 
 def _pin_tushare_base_url():
@@ -181,7 +188,8 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.10"
+EGS_VERSION = "v7.11"
+ANALYSIS_INPUT_SCHEMA_VERSION = "1.2.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
 _LAST_HARD_VETO_SOURCE_HEALTH = {
@@ -208,7 +216,6 @@ EGS_API_FAMILIES = [
     "moneyflow", "moneyflow_hsgt", "margin_detail",
     "share_float", "stk_holdertrade", "stock_basic", "trade_cal",
     "index_member_all", "index_member", "index_classify",
-    "concept", "concept_detail",
 ]
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
@@ -1024,7 +1031,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
 
     analysis_input = {
         "schema_name": "analysis_input",
-        "schema_version": "1.1.0",
+        "schema_version": ANALYSIS_INPUT_SCHEMA_VERSION,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "trade_date": latest_td,
         "preset": "a_short",
@@ -1033,10 +1040,14 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         "source": {
             "screening_engine": "egs_main.py",
             "screening_engine_version": EGS_VERSION,
-            "data_provider": "tushare",
+            "data_provider": (
+                "mixed" if CONF.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
+            ),
             "l3_mode": CONF.get("l3_mode", "today"),
             "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
             "l3_snapshot_date": CONF.get("l3_snapshot_date"),
+            "l3_provider": CONF.get("l3_provider"),
+            "l3_coverage": CONF.get("l3_coverage"),
             "hard_veto_source_health": {
                 name: dict(_LAST_HARD_VETO_SOURCE_HEALTH.get(name) or {})
                 for name in ("suspension", "unlock", "holder_reduction")
@@ -1172,7 +1183,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     return analysis_path, snapshot_path, candidates_path, analysis_input
 
 
-DATA_HEALTH_SCHEMA_VERSION = "1.4.0"
+DATA_HEALTH_SCHEMA_VERSION = "1.5.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
 
@@ -1303,10 +1314,10 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         source = analysis_input.get("source", {})
         if analysis_input.get("schema_name") != "analysis_input":
             errors.append(_health_issue("analysis_input_schema", "analysis_input schema_name mismatch"))
-        if analysis_input.get("schema_version") != "1.1.0":
+        if analysis_input.get("schema_version") != ANALYSIS_INPUT_SCHEMA_VERSION:
             errors.append(_health_issue(
                 "analysis_input_version",
-                "analysis_input schema_version is not 1.1.0",
+                f"analysis_input schema_version is not {ANALYSIS_INPUT_SCHEMA_VERSION}",
                 schema_version=analysis_input.get("schema_version"),
             ))
         if source.get("screening_engine_version") != EGS_VERSION:
@@ -1316,10 +1327,14 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                 expected=EGS_VERSION,
                 actual=source.get("screening_engine_version"),
             ))
-        if source.get("data_provider") != "tushare":
+        expected_data_provider = (
+            "mixed" if source.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
+        )
+        if source.get("data_provider") != expected_data_provider:
             errors.append(_health_issue(
                 "data_provider",
-                "analysis_input data_provider is not tushare",
+                "analysis_input data_provider does not match its L3 provider composition",
+                expected=expected_data_provider,
                 actual=source.get("data_provider"),
             ))
 
@@ -1448,10 +1463,13 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
         "source": {
             "screening_engine": "egs_main.py",
             "screening_engine_version": EGS_VERSION,
-            "data_provider": "tushare",
+            "data_provider": (
+                "mixed" if CONF.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
+            ),
             "api_families": list(EGS_API_FAMILIES),
             "l3_mode": CONF.get("l3_mode", "today"),
             "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
+            "l3_provider": CONF.get("l3_provider"),
         },
         "overall_status": status,
         "errors": errors,
@@ -1626,28 +1644,8 @@ def _l3_snapshot_path(date_str):
     return os.path.join(L3_SNAPSHOT_DIR, f"{L3_SNAPSHOT_PREFIX}{date_str}{L3_SNAPSHOT_SUFFIX}")
 
 
-def _build_market_stock_concepts(fetched_stock_concepts, concept_members, limit):
-    """Combine candidate-pool-specific stock_concepts (API-fetched, respects
-    Tushare's per-stock ordering) with concept_members inverted (market-wide
-    coverage), then apply the same per-stock concept limit egs_main uses live.
-
-    Result: every stock that belongs to at least one concept has a concept list,
-    with per-stock cardinality <= `limit`. Closes the C2 coverage gap so future
-    PIT reads do not silently mark non-candidate stocks as COV-LOW.
-    """
-    full = {code: list(cids) for code, cids in fetched_stock_concepts.items()}
-    for cid, ts_codes in concept_members.items():
-        for code in ts_codes:
-            bucket = full.setdefault(code, [])
-            if cid not in bucket:
-                bucket.append(cid)
-    if limit and limit > 0:
-        for code in list(full):
-            full[code] = full[code][:limit]
-    return full
-
-
-def _write_l3_snapshot(date_str, concepts_df, stock_concepts, concept_members):
+def _write_l3_snapshot(date_str, concepts_df, stock_concepts, concept_members,
+                       l3_source=None, coverage=None):
     """Atomic single-file snapshot. Same-day re-runs overwrite cleanly; crash
     mid-write cannot produce inconsistent multi-file state (H1).
 
@@ -1663,6 +1661,10 @@ def _write_l3_snapshot(date_str, concepts_df, stock_concepts, concept_members):
         "stock_concepts": stock_concepts,
         "concept_members": concept_members,
     }
+    if l3_source is not None:
+        payload["l3_source"] = str(l3_source)
+    if coverage is not None:
+        payload["coverage"] = dict(coverage)
     tmp = path + ".tmp"
     with open(tmp, "wb") as f:
         pickle.dump(payload, f)
@@ -1683,7 +1685,22 @@ def _list_l3_snapshot_dates():
     return sorted(dates)
 
 
-def _load_l3_snapshot(as_of):
+def _main_board_l3_membership(concept_members):
+    scoped_members = {}
+    stock_concepts = {}
+    for concept_id, member_codes in (concept_members or {}).items():
+        members = sorted({
+            str(code) for code in (member_codes or []) if is_a_share_main_board(code)
+        })
+        scoped_members[str(concept_id)] = members
+        for code in members:
+            stock_concepts.setdefault(code, []).append(str(concept_id))
+    for code in stock_concepts:
+        stock_concepts[code] = sorted(set(stock_concepts[code]))
+    return stock_concepts, scoped_members
+
+
+def _load_l3_snapshot(as_of, include_metadata=False):
     """Return (concepts_df, stock_concepts, concept_members, snap_date) for the
     latest complete snapshot with snap_date <= as_of, or None if none exist or
     the file is corrupt (caller handles fallback)."""
@@ -1707,12 +1724,37 @@ def _load_l3_snapshot(as_of):
     if missing:
         log.warning(f"L3 snapshot {snap_date} missing keys {missing}; treating as missing")
         return None
-    return (
-        payload["concepts_df"],
-        payload["stock_concepts"],
-        payload["concept_members"],
-        snap_date,
+    stock_concepts, concept_members = _main_board_l3_membership(payload["concept_members"])
+    result = (payload["concepts_df"], stock_concepts, concept_members, snap_date)
+    if include_metadata:
+        return result + (payload.get("l3_source"), payload.get("coverage"))
+    return result
+
+
+def _is_complete_hithink_snapshot(concepts_df, concept_members, coverage):
+    if not isinstance(coverage, dict):
+        return False
+    catalog_codes = _catalog_codes_from_snapshot(concepts_df)
+    main_board_member_pair_count = sum(
+        len(set(member_codes or [])) for member_codes in (concept_members or {}).values()
     )
+    return (
+        coverage.get("source") == HITHINK_L3_SOURCE_ID
+        and coverage.get("scoring_universe") == "a_share_main_board"
+        and coverage.get("complete") is True
+        and len(catalog_codes) >= MIN_CONCEPT_CATALOG_BOARD_COUNT
+        and coverage.get("catalog_digest") == catalog_digest(catalog_codes)
+        and coverage.get("catalog_board_count") == len(catalog_codes)
+        and coverage.get("catalog_board_count") == coverage.get("received_board_count")
+        and set(concept_members or {}) == catalog_codes
+        and coverage.get("main_board_member_pair_count") == main_board_member_pair_count
+    )
+
+
+def _catalog_codes_from_snapshot(concepts_df):
+    if not isinstance(concepts_df, pd.DataFrame) or "code" not in concepts_df.columns:
+        return set()
+    return set(concepts_df["code"].dropna().astype(str))
 
 
 def set_asof(date_str):
@@ -3075,13 +3117,21 @@ def score_l3(df, trade_dates, all_daily):
     df["cat_score"] = 50.0
     df["cat_flag"]  = ""
     CONF["l3_snapshot_date"] = None  # M2: reset every call; pit branch will set if applicable
+    CONF["l3_provider"] = None
+    CONF["l3_coverage"] = None
 
     l3_mode = CONF.get("l3_mode", "today")
     if l3_mode == "neutralize":
+        CONF["l3_provider"] = "neutralized"
         log.info("L3 mode=neutralize: cat_score=50.0 for all candidates, skipping L3 API calls")
         return df
 
     if all_daily.empty:
+        if l3_mode == "today":
+            raise SystemExit(
+                "[FATAL] L3 requires usable market daily data to calculate concept intensity; "
+                "no selection will be published."
+            )
         df["cat_flag"] = "COV-LOW"
         return df
 
@@ -3094,11 +3144,16 @@ def score_l3(df, trade_dates, all_daily):
     ad5 = ad5[["ts_code", "trade_date", "pct_chg", "amount"]].dropna(subset=["pct_chg", "amount"])
 
     if ad5.empty:
+        if l3_mode == "today":
+            raise SystemExit(
+                "[FATAL] L3 has no usable recent daily rows to calculate concept intensity; "
+                "no selection will be published."
+            )
         df["cat_flag"] = "COV-LOW"
         return df
 
     if l3_mode == "pit":
-        snapshot = _load_l3_snapshot(TODAY)
+        snapshot = _load_l3_snapshot(TODAY, include_metadata=True)
         if snapshot is None:
             if CONF.get("l3_pit_strict", False):
                 raise SystemExit(
@@ -3108,8 +3163,10 @@ def score_l3(df, trade_dates, all_daily):
                 )
             log.warning(f"L3 mode=pit: no snapshot <= {TODAY}, falling back to cat_score=50.0")
             return df
-        concepts_df, stock_concepts, concept_members, snap_date = snapshot
+        concepts_df, stock_concepts, concept_members, snap_date, l3_source, coverage = snapshot
         CONF["l3_snapshot_date"] = snap_date
+        CONF["l3_provider"] = l3_source or "legacy_tushare_snapshot"
+        CONF["l3_coverage"] = coverage
         gap_days = (datetime.strptime(TODAY, "%Y%m%d") - datetime.strptime(snap_date, "%Y%m%d")).days
         if gap_days > 14:
             log.warning(
@@ -3117,106 +3174,96 @@ def score_l3(df, trade_dates, all_daily):
             )
         else:
             log.info(f"L3 mode=pit: using snapshot from {snap_date} (gap={gap_days}d)")
-    else:
-        # l3_mode == "today": fetch fresh from Tushare (existing behavior).
+    elif l3_mode == "today":
+        real_today = datetime.now().strftime("%Y%m%d")
+        prior_snapshot = _load_l3_snapshot(real_today, include_metadata=True)
         reuse_l3_cache = CONF.get("l3_cache_mode") == "reuse"
 
-        # Step 1: 正式运行刷新 L3；测试阶段可复用共享缓存。
-        concepts_key = "concepts_ts_latest"
-        concepts_df = load_cache(concepts_key) if reuse_l3_cache else None
-        if concepts_df is None and reuse_l3_cache:
-            legacy_key = f"concepts_ts_{TODAY}"
-            concepts_df = load_cache(legacy_key)
-            if concepts_df is not None and not concepts_df.empty:
-                save_cache(concepts_key, concepts_df)
-        if concepts_df is None:
-            concepts_df = safe_api(pro.concept, src="ts")
-            if concepts_df is not None and not concepts_df.empty:
-                save_cache(concepts_key, concepts_df)
-
-        if concepts_df is None or concepts_df.empty:
-            log.warning("L3: 概念列表获取失败，cat_score 默认 50")
-            df["cat_flag"] = "COV-LOW"
-            return df
-
-        # Step 2: 正式运行逐股刷新；测试阶段只补缺失股票。
-        candidate_codes = df["ts_code"].tolist()
-        sc_key = "stock_concepts_latest"
-        stock_concepts = load_cache(sc_key) if reuse_l3_cache else None  # ts_code -> [concept_id, ...]
-
-        if stock_concepts is None:
-            stock_concepts = {}
-            if reuse_l3_cache:
-                legacy_key = f"stock_concepts_{TODAY}_{len(candidate_codes)}"
-                legacy_stock_concepts = load_cache(legacy_key)
-                if isinstance(legacy_stock_concepts, dict):
-                    stock_concepts.update(legacy_stock_concepts)
-
-        missing_codes = [code for code in candidate_codes if (not reuse_l3_cache) or code not in stock_concepts]
-        if missing_codes:
-            for code in tqdm(missing_codes, desc="L3 概念归属"):
-                time.sleep(0.5)
-                detail = safe_api(pro.concept_detail, ts_code=code, fields="id,concept_name")
-                if detail is not None and not detail.empty and "id" in detail.columns:
-                    stock_concepts[code] = detail["id"].dropna().tolist()[:CONF["max_concepts_per_stock"]]
-                else:
-                    stock_concepts[code] = []
-            save_cache(sc_key, stock_concepts)
-
-        # Step 3: 获取全量概念成分股（全市场所有概念，用于准确百分位排名）
-        all_concept_ids = set(concepts_df["code"].dropna().tolist())
-        if not all_concept_ids:
-            df["cat_flag"] = "COV-LOW"
-            return df
-
-        cm_key = f"concept_members_latest_{len(all_concept_ids)}"
-        concept_members = load_cache(cm_key) if reuse_l3_cache else None  # concept_id -> [ts_code, ...]
-
-        if concept_members is None:
-            concept_members = {}
-            if reuse_l3_cache:
-                legacy_key = f"concept_members_{TODAY}_{len(all_concept_ids)}"
-                legacy_concept_members = load_cache(legacy_key)
-                if isinstance(legacy_concept_members, dict):
-                    concept_members.update(legacy_concept_members)
-
-        missing_concept_ids = [cid for cid in all_concept_ids if (not reuse_l3_cache) or cid not in concept_members]
-        if missing_concept_ids:
-            for cid in tqdm(missing_concept_ids, desc="L3 概念成分"):
-                time.sleep(0.5)
-                members = safe_api(pro.concept_detail, id=cid, fields="ts_code")
-                if members is not None and not members.empty and "ts_code" in members.columns:
-                    concept_members[cid] = members["ts_code"].dropna().tolist()
-            save_cache(cm_key, concept_members)
-
-        # Persist a PIT snapshot tagged with the real-world date the data was
-        # observed (not the simulated as_of). Same-day re-runs overwrite.
-        # C2: expand stock_concepts to market-wide coverage (inverted from
-        # concept_members) so future PIT reads do not silently mark
-        # non-candidate stocks as COV-LOW.
-        try:
-            real_today = datetime.now().strftime("%Y%m%d")
-            market_stock_concepts = _build_market_stock_concepts(
-                stock_concepts, concept_members, CONF["max_concepts_per_stock"]
-            )
-            if TODAY != real_today:
-                # L3: backtest run in today-mode emits a real-world dated snapshot,
-                # not an as_of-dated one. Make this visible so users don't expect a
-                # snapshot labelled with as_of.
-                log.info(
-                    f"L3 snapshot tagged with real-world date {real_today} "
-                    f"(not as_of {TODAY}); future pit reads find it by snap_date"
+        if reuse_l3_cache:
+            if prior_snapshot is None:
+                raise SystemExit(
+                    "[FATAL] --reuse-l3-cache requires an existing complete HiThink L3 snapshot; "
+                    "no provider call was made."
                 )
-            _write_l3_snapshot(real_today, concepts_df, market_stock_concepts, concept_members)
-            CONF["l3_snapshot_date"] = real_today
-            cand_n, mkt_n = len(stock_concepts), len(market_stock_concepts)
+            concepts_df, stock_concepts, concept_members, snap_date, l3_source, coverage = prior_snapshot
+            if l3_source != HITHINK_L3_SOURCE_ID or not _is_complete_hithink_snapshot(
+                concepts_df, concept_members, coverage
+            ):
+                raise SystemExit(
+                    "[FATAL] --reuse-l3-cache found no reusable complete HiThink main-board snapshot; "
+                    "no provider call was made."
+                )
+            reuse_gap_days = (datetime.strptime(real_today, "%Y%m%d") -
+                              datetime.strptime(snap_date, "%Y%m%d")).days
+            if reuse_gap_days > 14:
+                if not CONF.get("l3_allow_stale_cache", False):
+                    raise SystemExit(
+                        f"[FATAL] --reuse-l3-cache snapshot {snap_date} is {reuse_gap_days}d behind "
+                        f"run date {real_today} (>14d); refresh L3 or use --allow-stale-l3-cache for testing only. "
+                        "No provider call was made."
+                    )
+                log.warning(
+                    f"L3 testing cache reused stale snapshot {snap_date} "
+                    f"({reuse_gap_days}d behind run date {real_today}; explicit test-only override)"
+                )
+            CONF["l3_snapshot_date"] = snap_date
+            CONF["l3_provider"] = HITHINK_L3_SOURCE_ID
+            CONF["l3_coverage"] = dict(coverage)
             log.info(
-                f"L3 snapshot saved -> state/l3_snapshots/{L3_SNAPSHOT_PREFIX}{real_today}{L3_SNAPSHOT_SUFFIX} "
-                f"(stock_concepts: candidates={cand_n} -> market={mkt_n})"
+                f"L3 testing cache reused: snapshot={snap_date}, "
+                f"catalog={coverage['catalog_board_count']}, provider call skipped"
             )
-        except Exception as e:
-            log.warning(f"L3 snapshot write failed (non-fatal): {e}")
+        else:
+            expected_catalog_codes = None
+            if prior_snapshot is not None and prior_snapshot[4] == HITHINK_L3_SOURCE_ID:
+                expected_catalog_codes = _catalog_codes_from_snapshot(prior_snapshot[0]) or None
+            try:
+                l3_graph = fetch_complete_concept_graph(
+                    expected_catalog_codes=expected_catalog_codes,
+                )
+            except HiThinkL3SourceError as exc:
+                raise SystemExit(
+                    "[FATAL] HiThink L3 concept catalog is incomplete or unavailable; "
+                    f"no selection will be published. {exc}"
+                ) from None
 
+            concepts_df = l3_graph.concepts_df
+            concept_members = l3_graph.concept_members
+            stock_concepts = l3_graph.stock_concepts
+            coverage = l3_graph.coverage
+            CONF["l3_provider"] = HITHINK_L3_SOURCE_ID
+            CONF["l3_coverage"] = dict(coverage)
+
+            # Snapshot persistence is part of the source receipt. A complete live
+            # graph that cannot be durably recorded is not publishable.
+            try:
+                if TODAY != real_today:
+                    log.info(
+                        f"L3 snapshot tagged with real-world date {real_today} "
+                        f"(not as_of {TODAY}); future pit reads find it by snap_date"
+                    )
+                _write_l3_snapshot(
+                    real_today,
+                    concepts_df,
+                    stock_concepts,
+                    concept_members,
+                    l3_source=HITHINK_L3_SOURCE_ID,
+                    coverage=coverage,
+                )
+            except Exception as exc:
+                raise SystemExit(
+                    "[FATAL] Complete HiThink L3 graph could not be snapshotted; "
+                    f"no selection will be published ({type(exc).__name__})."
+                ) from None
+            CONF["l3_snapshot_date"] = real_today
+            log.info(
+                f"L3 complete graph saved -> state/l3_snapshots/{L3_SNAPSHOT_PREFIX}{real_today}{L3_SNAPSHOT_SUFFIX} "
+                f"(boards={coverage['received_board_count']}/{coverage['catalog_board_count']}, "
+                f"verified_empty={coverage['verified_empty_board_count']}, "
+                f"stocks={len(stock_concepts)})"
+            )
+    else:
+        raise ValueError(f"unsupported L3 mode {l3_mode!r}")
     # Re-validate concepts_df (defensive for both pit and today branches).
     if concepts_df is None or concepts_df.empty:
         df["cat_flag"] = "COV-LOW"
@@ -3238,6 +3285,11 @@ def score_l3(df, trade_dates, all_daily):
         concept_intensity[cid] = float((sub["pct_chg"] * sub["amount"]).sum() / total_amt)
 
     if not concept_intensity:
+        if l3_mode == "today":
+            raise SystemExit(
+                "[FATAL] Complete HiThink L3 membership produced no usable concept intensity; "
+                "no selection will be published."
+            )
         log.warning("L3: 概念强度全部计算失败，cat_score 默认 50")
         df["cat_flag"] = "COV-LOW"
         return df
@@ -4137,10 +4189,17 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EGS A-share short-term screener")
     parser.add_argument("--as-of", dest="as_of", help="Run as of an A-share trading date, format YYYYMMDD")
     parser.add_argument("--backtest-mode", action="store_true", help="Skip mutable tracking state for historical batch runs")
-    parser.add_argument("--reuse-l3-cache", action="store_true", help="Testing only: reuse shared L3 concept caches instead of refreshing them")
+    parser.add_argument(
+        "--reuse-l3-cache", action="store_true",
+        help="Testing only: reuse an existing complete HiThink main-board L3 snapshot; never calls the provider",
+    )
+    parser.add_argument(
+        "--allow-stale-l3-cache", action="store_true",
+        help="Testing only: allow --reuse-l3-cache to use a snapshot over 14 days old; never calls the provider",
+    )
     parser.add_argument("--l3-mode", dest="l3_mode", choices=["pit", "today", "neutralize"],
                         default="today",
-                        help="L3 cat_score source. today (default): fresh Tushare snapshot (writes "
+                        help="L3 cat_score source. today (default): fresh complete HiThink main-board snapshot (writes "
                              "state/l3_snapshots/*_{today}.pkl). pit: load latest snapshot <= as_of "
                              "(no API calls). neutralize: cat_score=50.0, skip L3 entirely.")
     parser.add_argument("--l3-pit-strict", action="store_true",
@@ -4162,10 +4221,12 @@ if __name__ == "__main__":
     if args.reuse_l3_cache:
         CONF["l3_cache_mode"] = "reuse"
         if args.l3_mode != "today":
-            log.warning(
-                f"--reuse-l3-cache has no effect under --l3-mode={args.l3_mode} "
-                "(the today-branch L3 cache logic is the only consumer)"
+            parser.error(
+                f"--reuse-l3-cache is only valid with --l3-mode=today, not {args.l3_mode}"
             )
+    elif args.allow_stale_l3_cache:
+        parser.error("--allow-stale-l3-cache requires --reuse-l3-cache")
+    CONF["l3_allow_stale_cache"] = bool(args.allow_stale_l3_cache)
     CONF["l3_mode"] = args.l3_mode
     CONF["l3_pit_strict"] = bool(args.l3_pit_strict)
     if args.l3_pit_strict and args.l3_mode != "pit":

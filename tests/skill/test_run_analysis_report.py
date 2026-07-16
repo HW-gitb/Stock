@@ -17,7 +17,10 @@ from runners.run_analysis_report import (
     validate_enrichment,
     write_report,
 )
-from tests.support.analysis_input_payload import load_minimal_analysis_input_payload
+from tests.support.analysis_input_payload import (
+    current_hithink_analysis_input_payload,
+    load_minimal_analysis_input_payload,
+)
 
 
 def _load_payload() -> dict:
@@ -68,7 +71,7 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         self.assertEqual(report["schema_name"], "deterministic_report")
-        self.assertEqual(report["schema_version"], "1.2.0")
+        self.assertEqual(report["schema_version"], "1.3.0")
         self.assertEqual(report["ts_code"], "600000.SH")
         self.assertEqual(report["veto"], run_veto(candidate))
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
@@ -101,6 +104,24 @@ class RunAnalysisReportTest(unittest.TestCase):
         )
 
         self.assertEqual(report["data_lineage"]["l3_mode"], "today")
+
+    def test_current_hithink_lineage_is_preserved(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        candidate = find_candidate(payload, "600000.SH")
+
+        report = build_report(
+            payload,
+            candidate,
+            generated_at="2026-05-25T00:00:00+08:00",
+        )
+
+        lineage = report["data_lineage"]
+        self.assertEqual(lineage["l3_provider"], "hithink_finance")
+        self.assertEqual(lineage["l3_snapshot_date"], "20260522")
+        self.assertEqual(lineage["l3_catalog_digest"], "a" * 64)
+        self.assertEqual(lineage["l3_catalog_board_count"], 389)
+        self.assertEqual(lineage["l3_scoring_universe"], "a_share_main_board")
+        self.assertTrue(lineage["l3_coverage_complete"])
 
     def test_circuit_breaker_uses_asof_replay_time_not_wall_clock(self) -> None:
         payload = _load_payload()
@@ -204,7 +225,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.2.0",
+                "report_schema_version": "1.3.0",
             },
             "source": {
                 "kind": "manual",
@@ -258,7 +279,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "600000.SH",
-                "report_schema_version": "1.2.0",
+                "report_schema_version": "1.3.0",
             },
             "source": {
                 "kind": "manual",
@@ -310,7 +331,7 @@ class RunAnalysisReportTest(unittest.TestCase):
             "target": {
                 "as_of": "20260522",
                 "ts_code": "999999.SH",  # mismatch vs report ts_code 600000.SH
-                "report_schema_version": "1.2.0",
+                "report_schema_version": "1.3.0",
             },
             "source": {
                 "kind": "manual",

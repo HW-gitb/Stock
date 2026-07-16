@@ -1,0 +1,58 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short IV feed sanitized provider-failure receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "status",
+    "reason",
+    "trade_dates_planned",
+    "trade_dates_probed",
+    "retry_recovered_count",
+    "opt_daily_fail_fast_triggered",
+    "failures"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_iv_feed_failure_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"const": "failed"},
+    "reason": {"const": "provider_call_failure"},
+    "trade_dates_planned": {"type": "integer", "minimum": 0},
+    "trade_dates_probed": {"type": "integer", "minimum": 0},
+    "retry_recovered_count": {"type": "integer", "minimum": 0},
+    "opt_daily_fail_fast_triggered": {"type": "boolean"},
+    "failures": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "endpoint",
+          "failure_count",
+          "total_attempt_count",
+          "error_categories",
+          "first_trade_date",
+          "last_trade_date"
+        ],
+        "properties": {
+          "endpoint": {"enum": ["opt_basic", "trade_cal", "opt_daily", "fund_daily"]},
+          "failure_count": {"type": "integer", "minimum": 1},
+          "total_attempt_count": {"type": "integer", "minimum": 1},
+          "error_categories": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {"enum": ["permission_or_quota", "signature_or_args", "rate_limit", "network", "provider_server", "other"]}
+          },
+          "first_trade_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+          "last_trade_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}
+        }
+      }
+    }
+  }
+}

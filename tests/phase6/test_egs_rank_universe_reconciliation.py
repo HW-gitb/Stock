@@ -121,7 +121,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
         })
         analysis_input = {
             "schema_name": "analysis_input",
-            "schema_version": "1.1.0",
+            "schema_version": self.egs_main.ANALYSIS_INPUT_SCHEMA_VERSION,
             "source": {
                 "screening_engine_version": self.egs_main.EGS_VERSION,
                 "data_provider": "tushare",

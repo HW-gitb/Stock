@@ -288,12 +288,19 @@ def main(argv=None, pro_factory=None):
     from datetime import datetime
     from runners.a_short_iv_feed_probe import (
         init_tushare_pro, fetch_probe_inputs, filter_50etf_options, _is_valid_yyyymmdd,
+        build_fetch_failure_summary, write_fetch_failure_summary,
     )
     p = argparse.ArgumentParser(description="A-short 50ETF IV feed build (BS ATM constant-maturity → 252d pct)")
     p.add_argument("--as-of", required=True, help="YYYYMMDD")
     p.add_argument("--out", required=True)
+    p.add_argument("--failure-receipt-out", default=None,
+                   help="optional sanitized failure receipt; cleared at startup and written only when a provider call fails")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     args = p.parse_args(argv)
+    if args.failure_receipt_out:
+        # A weekly run can reuse an OS PID. Clear before any validation or fetch
+        # so a cited receipt can only have been written by this invocation.
+        Path(args.failure_receipt_out).unlink(missing_ok=True)
     if not args.confirm_fetch_authorized:
         raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:本 build 会调用 Tushare,须用户授权")
     if not _is_valid_yyyymmdd(args.as_of):
@@ -311,9 +318,16 @@ def main(argv=None, pro_factory=None):
         pro, args.as_of, lookback_days=ROLL_WINDOW * 2, max_trade_dates=ROLL_WINDOW + 30)
     print(f"[iv_build] fetch rows(basic/daily/underlier)="
           f"{report['opt_basic_rows']}/{report['opt_daily_rows']}/{report['underlier_rows']}; "
-          f"trade_dates_probed={report['trade_dates_probed']}; had_provider_error={report['had_provider_error']}")
+          f"trade_dates_probed={report['trade_dates_probed']}/{report['trade_dates_planned']}; "
+          f"retry_recovered={len(report['retry_recoveries'])}; "
+          f"opt_daily_fail_fast={report['opt_daily_fail_fast_triggered']}; "
+          f"had_provider_error={report['had_provider_error']}")
     if report["had_provider_error"]:
-        raise SystemExit("[FATAL] provider-call failure;不构建 feed(无法区分无访问/无数据)。")
+        if args.failure_receipt_out:
+            failure_summary = build_fetch_failure_summary(report, args.as_of)
+            write_fetch_failure_summary(failure_summary, args.failure_receipt_out)
+            print(f"[iv_build] sanitized failure receipt -> {args.failure_receipt_out}")
+        raise SystemExit("[FATAL] provider-call failure;不构建 feed(已停止后续 opt_daily 请求；见脱敏失败收据)。")
     basic = filter_50etf_options(opt_basic)
     codes = set(basic["ts_code"].astype(str)) if not basic.empty else set()
     daily = opt_daily[opt_daily["ts_code"].astype(str).isin(codes)].copy() if codes and not opt_daily.empty else pd.DataFrame()

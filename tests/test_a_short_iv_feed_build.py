@@ -237,6 +237,46 @@ class BuildMainRegressionTests(unittest.TestCase):
                            pro_factory=lambda: _FakePro(beh))
             self.assertFalse(out.exists())
 
+    def test_non_provider_failure_clears_stale_failure_receipt(self):
+        from runners.a_short_iv_feed_build import main as build_main
+        beh, last = _fake_market(20)        # insufficient history, not a provider failure
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "feed.json"
+            receipt = Path(d) / "iv_feed_failure.json"
+            receipt.write_text('{"stale": true}', encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                build_main([
+                    "--as-of", last, "--out", str(out),
+                    "--failure-receipt-out", str(receipt),
+                    "--confirm-fetch-authorized",
+                ], pro_factory=lambda: _FakePro(beh))
+            self.assertFalse(receipt.exists())
+
+    def test_provider_failure_writes_sanitized_receipt_not_partial_feed(self):
+        from runners.a_short_iv_feed_build import main as build_main
+        beh, last = _fake_market(70)
+        beh["opt_daily"] = RuntimeError(
+            "network timeout url=https://api.example.invalid/?token=SECRET123 raw_rows=[1]"
+        )
+        with tempfile.TemporaryDirectory() as d:
+            out = Path(d) / "feed.json"
+            receipt = Path(d) / "iv_feed_failure.json"
+            with self.assertRaises(SystemExit):
+                build_main([
+                    "--as-of", last, "--out", str(out),
+                    "--failure-receipt-out", str(receipt),
+                    "--confirm-fetch-authorized",
+                ], pro_factory=lambda: _FakePro(beh))
+            self.assertFalse(out.exists())
+            payload = json.loads(receipt.read_text(encoding="utf-8"))
+
+        self.assertEqual(payload["status"], "failed")
+        self.assertTrue(payload["opt_daily_fail_fast_triggered"])
+        self.assertEqual(payload["failures"][0]["endpoint"], "opt_daily")
+        serialized = json.dumps(payload, ensure_ascii=False)
+        for leak in ("SECRET123", "token=", "url=", "raw_rows", "api.example.invalid", "RuntimeError"):
+            self.assertNotIn(leak, serialized)
+
 
 class FeedSchemaTests(unittest.TestCase):
     def setUp(self):

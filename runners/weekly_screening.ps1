@@ -86,18 +86,22 @@ try {
     exit 1
 }
 function Write-M67FailureReceipt {
-    param([string]$Directory, [string]$Reason, [int]$ExitCode)
+    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '')
     New-Item -ItemType Directory -Force -Path $Directory | Out-Null
     $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
     $Tmp = "$Receipt.tmp"
-    @{
+    $Payload = [ordered]@{
         schema_name = 'a_short_weekly_publish_receipt'
         schema_version = '1.0.0'
         as_of = $AsOf
         stage_status = 'failed'
         failure_reason = $Reason
         exit_code = $ExitCode
-    } | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8
+    }
+    if (-not [string]::IsNullOrWhiteSpace($FailureDetailRef)) {
+        $Payload['failure_detail_ref'] = $FailureDetailRef
+    }
+    $Payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8
     Move-Item -LiteralPath $Tmp -Destination $Receipt -Force
 }
 if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py') -PathType Leaf)) {
@@ -203,7 +207,7 @@ Write-Host "skip tracker:  $SkipTracker"
 Write-Host "skip semantic: $SkipSemanticRisk"
 Write-Host ""
 
-# --- Stage 1: egs_main ---
+# --- Stage 1: egs_main (the HiThink L3 graph is fetched and verified in-process) ---
 $EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--l3-mode', $EffectiveL3Mode)
 if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
@@ -313,14 +317,21 @@ if ($SkipSemanticRisk) {
             $M67Dir = Join-Path $ProjectRoot "research\results\a_short\$AsOf"
         }
         $IvFeed = Join-Path $ProjectRoot "research\results\a_short\iv_feed_$AsOf\iv_feed.json"
+        # A PID can be recycled. Clear this run's detail path before invoking the
+        # builder; the builder repeats the ownership guard before any fetch.
+        $IvFailureReceipt = Join-Path $M67Dir "iv_feed_failure_$PID.json"
+        if (Test-Path -LiteralPath $IvFailureReceipt -PathType Leaf) {
+            Remove-Item -LiteralPath $IvFailureReceipt -Force -ErrorAction Stop
+        }
         $M67Out = Join-Path $M67Dir "weekly_m67.json"
         $OverlayPath = Join-Path $ProjectRoot "result\a_short\$AsOf\overlay.json"
         Write-Host "[4/4] Building market IV feed: runners\a_short_iv_feed_build.py --as-of $AsOf ..." -ForegroundColor Yellow
-        & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --out $IvFeed --confirm-fetch-authorized
+        & $PythonExe runners\a_short_iv_feed_build.py --as-of $AsOf --out $IvFeed --failure-receipt-out $IvFailureReceipt --confirm-fetch-authorized
         $IvExitCode = $LASTEXITCODE
         if ($null -eq $IvExitCode) { $IvExitCode = 1 }
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
-            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22
+            $IvFailureDetailRef = if (Test-Path $IvFailureReceipt) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
+            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef
             Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
             exit 22
         } else {

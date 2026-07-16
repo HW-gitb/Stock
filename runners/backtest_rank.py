@@ -53,7 +53,7 @@ BT_CACHE_DIR = BACKTEST_DIR / "cache"
 FORWARD_DAILY_CACHE = BT_CACHE_DIR / "forward_daily.pkl"
 EGS_SCRIPT = ROOT / "A-EGS" / "egs_main.py"
 REPORT_SCHEMA = ROOT / "schemas" / "rank_backtest_report.schema.json"
-EXPECTED_ANALYSIS_INPUT_SCHEMA = "1.1.0"
+EXPECTED_ANALYSIS_INPUT_SCHEMA = "1.2.0"
 
 
 def _current_egs_version():
@@ -1131,7 +1131,7 @@ def _veto_subset_specs(samples):
     `all_veto_passed` so the four hard-veto rules can be compared against the
     `all` baseline — chasing_high / overheat / l2_unknown were defined to act
     on Tier2 filler, and the Tier1-only baseline cannot show that effect
-    because EGS v7.10 already downgraded those signals before they entered
+    because EGS v7.11 already downgraded those signals before they entered
     Tier1.
 
     A subset is skipped when it equals the parent (redundant) or is empty.
@@ -1863,12 +1863,25 @@ def generate_candidates(dates, python_cmd, output_root, skip_existing=True,
                 # Legacy files (pre-1.1) lack source.l3_mode; treat as "today".
                 src = (data.get("source") or {}) if isinstance(data, dict) else {}
                 existing_mode = src.get("l3_mode", "today")
+                existing_l3_provider = src.get("l3_provider")
                 existing_strict = bool(src.get("l3_pit_strict", False))
                 existing_schema = data.get("schema_version")
                 existing_engine = src.get("screening_engine_version")
                 reasons = []
                 if existing_mode != l3_mode:
                     reasons.append(f"l3_mode {existing_mode!r} != {l3_mode!r}")
+                if l3_mode == "today" and existing_l3_provider != "hithink_finance":
+                    reasons.append(
+                        f"l3_provider {existing_l3_provider!r} != 'hithink_finance'"
+                    )
+                if l3_mode == "neutralize" and existing_l3_provider != "neutralized":
+                    reasons.append(
+                        f"l3_provider {existing_l3_provider!r} != 'neutralized'"
+                    )
+                if l3_mode == "pit" and existing_l3_provider not in {
+                    "hithink_finance", "legacy_tushare_snapshot"
+                }:
+                    reasons.append(f"l3_provider {existing_l3_provider!r} is not a PIT provider")
                 if l3_mode == "pit" and existing_strict != l3_pit_strict:
                     reasons.append(f"l3_pit_strict {existing_strict} != {l3_pit_strict}")
                 if existing_schema != EXPECTED_ANALYSIS_INPUT_SCHEMA:
@@ -1913,8 +1926,8 @@ def _l3_limitation_line(settings):
     if mode == "pit":
         return ("L3 cat_score read from PIT snapshots under state/l3_snapshots/ (latest snapshot "
                 "<= as_of). No look-ahead bias in L3 within the snapshot coverage; gaps > 14 days are warned.")
-    return ("L3 concept membership uses today's Tushare snapshot (pro.concept / pro.concept_detail "
-            "have no as_of parameter); cat_score may carry look-ahead bias on multi-month windows. "
+    return ("L3 concept membership uses a current complete HiThink main-board snapshot; "
+            "cat_score may carry look-ahead bias on multi-month windows. "
             "Use --l3-mode=neutralize for unbiased historical backtests, or --l3-mode=pit once snapshots accumulate.")
 
 
@@ -2137,7 +2150,7 @@ def main():
     parser.add_argument("--no-skip-existing", action="store_true",
                         help="Regenerate existing analysis_input.json files in the backtest tree")
     parser.add_argument("--reuse-l3-cache", action="store_true",
-                        help="Smoke only: reuse shared L3 concept caches during candidate generation")
+                        help="Smoke only: reuse a complete HiThink main-board L3 snapshot; no provider call")
     parser.add_argument("--include-immature", action="store_true",
                         help="Smoke only: include as-of dates whose future window is incomplete")
     parser.add_argument("--refresh-forward-daily", action="store_true",

@@ -24,7 +24,7 @@
       "const": "data_health"
     },
     "schema_version": {
-      "const": "1.4.0"
+      "const": "1.5.0"
     },
     "generated_at": {
       "type": "string"
@@ -48,7 +48,8 @@
         "data_provider",
         "api_families",
         "l3_mode",
-        "l3_pit_strict"
+        "l3_pit_strict",
+        "l3_provider"
       ],
       "properties": {
         "screening_engine": {
@@ -58,7 +59,7 @@
           "type": "string"
         },
         "data_provider": {
-          "const": "tushare"
+          "enum": ["tushare", "mixed"]
         },
         "api_families": {
           "type": "array",
@@ -71,6 +72,11 @@
         },
         "l3_pit_strict": {
           "type": "boolean"
+        },
+        "l3_provider": {
+          "type": ["string", "null"],
+          "enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null],
+          "description": "L3 concept-graph provenance; live/persisted HiThink membership makes the overall provider composition mixed."
         }
       }
     },

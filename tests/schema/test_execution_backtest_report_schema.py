@@ -19,7 +19,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_backtest_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.2.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.3.0")
         self.assertIn("contract remains unfrozen", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(

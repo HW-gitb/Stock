@@ -141,6 +141,16 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         for exit_code in ("exit 21", "exit 22", "exit 23", "exit $M67ExitCode"):
             self.assertIn(exit_code, text)
 
+    def test_iv_feed_failure_receipt_is_wired_without_copying_error_text(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("$IvFailureReceipt", text)
+        self.assertIn('"iv_feed_failure_$PID.json"', text)
+        self.assertIn("Remove-Item -LiteralPath $IvFailureReceipt", text)
+        self.assertIn("--failure-receipt-out $IvFailureReceipt", text)
+        self.assertIn("-FailureDetailRef $IvFailureDetailRef", text)
+        self.assertIn("failure_detail_ref", text)
+        self.assertNotIn("Get-Content -Raw $IvFailureReceipt", text)
+
     def test_regime_stage_wired_live_only_nonblocking(self):
         # V14.3 regime comparison sidecar wired into the one-click weekly: runs only on a live run
         # (skipped for historical replay), non-blocking, bootstrap-or-increment by ledger existence.

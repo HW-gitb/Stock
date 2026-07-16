@@ -10,8 +10,8 @@ into discovery / validation.
 IMPORTANT scope limit — backtest runs with `--mode production` use
 `--l3-mode neutralize` by default (CURRENT.md, AGENTS.md). Under
 neutralize, EGS hard-codes `cat_score = 50.0` for all candidates
-(egs_main.py:2202) to avoid L3 look-ahead since the Tushare L3 API
-has no as_of parameter. So:
+(egs_main.py) to avoid L3 look-ahead since current HiThink concept membership
+has no historical as-of endpoint. So:
   * cat_score is excluded from this analysis NOT because EGS lacks
     discrimination, but because the backtest data path zeros it out.
     Live `--l3-mode today` runs produce varying cat_score in 12-100.
@@ -175,7 +175,7 @@ def write_markdown(path: Path, table: pd.DataFrame, args) -> None:
         "",
         "Backtest production runs default to `--l3-mode neutralize`, which hard-codes",
         "`cat_score = 50.0` for all candidates (egs_main.py:2202). Live weekly runs",
-        "default to `--l3-mode today` where Tushare L3 API gives real cat_score in",
+        "default to `--l3-mode today` where the complete HiThink main-board graph gives real cat_score in",
         "12-100. So:",
         "- This analysis reflects `final_score ≈ 0.20*esp + 0.50*l4 + 15` (backtest);",
         "  live `final_score = 0.20*esp + 0.30*cat + 0.50*l4` may behave differently.",

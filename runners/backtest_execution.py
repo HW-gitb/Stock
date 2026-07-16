@@ -294,6 +294,19 @@ def normalized_l3_mode(payload: dict[str, Any]) -> str:
     return mode
 
 
+def normalized_l3_lineage(payload: dict[str, Any]) -> dict[str, Any]:
+    source = payload.get("source") if isinstance(payload.get("source"), dict) else {}
+    coverage = source.get("l3_coverage") if isinstance(source.get("l3_coverage"), dict) else {}
+    return {
+        "l3_provider": source.get("l3_provider"),
+        "l3_snapshot_date": source.get("l3_snapshot_date"),
+        "l3_catalog_digest": coverage.get("catalog_digest"),
+        "l3_catalog_board_count": coverage.get("catalog_board_count"),
+        "l3_scoring_universe": coverage.get("scoring_universe"),
+        "l3_coverage_complete": coverage.get("complete"),
+    }
+
+
 def normalized_analysis_input_schema_version(payload: dict[str, Any]) -> str:
     raw_value = payload.get("schema_version")
     version = str(raw_value or "")
@@ -509,7 +522,7 @@ def validate_initial_capital_guard(args: argparse.Namespace, capital_context: di
     bucket_capital = float(capital_context["bucket_capital"])
     if abs(args.initial_capital - bucket_capital) > 0.01:
         raise ValueError(
-            "--initial-capital is only a guard in v1.2.0 and must equal "
+            "--initial-capital is only a guard in execution report v1.2.0+ and must equal "
             f"capital_context.bucket_capital ({bucket_capital:.2f}); got {args.initial_capital:.2f}"
         )
 
@@ -1323,7 +1336,7 @@ def build_report(
 
     return {
         "schema_name": "execution_backtest_report",
-        "schema_version": "1.2.0",
+        "schema_version": "1.3.0",
         "generated_at": generated_at or iso_now(),
         "preset": str(capital_context["preset"]),
         "mode": args.mode,
@@ -1360,7 +1373,7 @@ def build_report(
         "capital_context": capital_context,
         "execution_assumptions": build_execution_assumptions(args, capital_context),
         "data_lineage": {
-            "data_provider": "tushare",
+            "data_provider": str(payload.get("source", {}).get("data_provider") or "tushare"),
             "api_families": {
                 "candidate_generation": ["analysis_input"],
                 "execution_price": execution_price_api_families(price_data),
@@ -1387,6 +1400,7 @@ def build_report(
                 for name, version in sorted(RULE_VERSIONS.items())
             ],
             "l3_mode": normalized_l3_mode(payload),
+            **normalized_l3_lineage(payload),
         },
         "outputs": output_refs(out_dir),
         "metrics": report_metrics,

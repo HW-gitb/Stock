@@ -1,8 +1,8 @@
-# deterministic_report 1.2.0 覆盖率说明
+# deterministic_report 1.3.0 覆盖率说明
 
 Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再让 Skill 和可选 LLM enrich 在这个契约外层工作。
 
-当前结论：`deterministic_report.schema.json` v1.2.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。v1.1.0 在 v1.0.0 基础上补齐 `data_lineage.l3_mode` / `enrichment_applied` / `enrichment_source`，v1.2.0 进一步补齐 `data_lineage.state_evaluation_time`，让 circuit-breaker state replay 不再依赖 wall-clock now。
+当前结论：`deterministic_report.schema.json` v1.3.0 已覆盖 v14.2 M6.7 报告所需的最小结构；`runners/run_analysis_report.py` 已能从 `analysis_input.json + analyzer + state` 生成 schema-validated JSON + Markdown。当前 runner 还会从 analysis_input 继续携带 L3 provider、snapshot date、catalog digest/count、主板 scoring universe 与 coverage-complete 状态，避免只剩 `l3_mode` 而丢失来源身份。
 
 > **⚠️ 阅读须知(2026-06-12 刷新):本文「v14.2 映射」表原为 Phase-4 时代撰写**,其中标 `not_implemented_phase4` 的"入场价/止损止盈/仓位/星级/盈亏比/ATR"等,**自 Phase 5 起已在下游实现**——但走的是**另一条下游路径**:`runners/a_short_phase5_engine.py` → `a_short_m67_report`(**非 deterministic_report**),由 `a_short_weekly_pipeline.py` 串联。该路径 **非生产 / not validated alpha / risk_filter_only / 不真钱 / 不接券商 / 不自动下单**;`a_short_m67_report` 的对外动作是 `否决 / 观察 / 建仓`,其中"建仓"是带"**试探仓(edge 未验证)·无条件止损·仅 risk_filter**"诚实护栏的**研究级建议,不是生产买入信号**。下表「当前状态」列已就 Phase 5 覆盖的模块标注「**→ Phase5(M6.7 path)已建·非买入**」。两条下游路径并存:deterministic_report(Phase3/4 analyzer/state)与 a_short_m67_report(Phase5 决策引擎)。
 
@@ -39,7 +39,7 @@ Phase 4 目标：先把单票分析输出固定成可回放的机器契约，再
 
 ## LLM enrichment patch
 
-`schemas/deterministic_report_enrichment.schema.json` v1.2.0 is the only supported patch format for writing LLM notes back through the runner.
+`schemas/deterministic_report_enrichment.schema.json` v1.3.0 is the only supported patch format for writing LLM notes back through the runner.
 
 The patch can target only:
 
@@ -50,7 +50,7 @@ It must also declare:
 
 - `target.as_of`
 - `target.ts_code`
-- `target.report_schema_version` = `1.2.0`
+- `target.report_schema_version` = `1.3.0`
 - `source.kind`
 - `source.prompt_refs`
 

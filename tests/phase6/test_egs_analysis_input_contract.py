@@ -37,7 +37,11 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             "l3_mode": self.egs_main.CONF.get("l3_mode"),
             "l3_pit_strict": self.egs_main.CONF.get("l3_pit_strict"),
             "l3_snapshot_date": self.egs_main.CONF.get("l3_snapshot_date"),
+            "l3_provider": self.egs_main.CONF.get("l3_provider"),
+            "l3_coverage": self.egs_main.CONF.get("l3_coverage"),
         }
+        self.egs_main.CONF["l3_provider"] = "legacy_tushare_snapshot"
+        self.egs_main.CONF["l3_coverage"] = None
         self._original_health = dict(self.egs_main._LAST_HARD_VETO_SOURCE_HEALTH)
         self.egs_main._LAST_HARD_VETO_SOURCE_HEALTH = {
             name: {"status": "known_clear", "observed_at": "20260522"}

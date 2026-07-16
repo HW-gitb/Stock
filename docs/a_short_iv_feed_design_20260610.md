@@ -46,7 +46,7 @@ V14.2 的 Rule 3(IV>80%分位削半/>90%禁建仓)、M0.5(波动率觉醒)、M1(
 
 - 本切片(probe)= 设计 + probe 评估逻辑 + 结果 schema + **执行 wiring** + 测试。
 - **执行 wiring(已加)**:`init_tushare_pro`(pin base URL,**不调 set_token**;pin 不上硬 RuntimeError) → `fetch_probe_inputs`(拉 `opt_basic`(SSE)/`opt_daily`(逐交易日)/`fund_daily`(510050);每端点 sanitized status,终端只打 class/category 不打 raw 异常) → `run_probe`(过滤 50ETF + 限定 opt_daily + assess + build) → **`write_probe_summary`(写盘前强制 JSON schema + `validate_probe_summary_consistency`,唯一 sanctioned 写盘路径**,关闭 consumer-validation forward-item)。`main` 需 `TUSHARE_TOKEN` + `--confirm-fetch-authorized`。
-- **provider 错误血缘(关键)**:**任一端点抛异常 → `main` 中止、不写 summary**(无法区分"无访问/签名错/配额"与"无数据",不可伪装成官方 not-computable);**仅"成功返回但覆盖不足"才写 `computable=false` summary**。
+- **provider 错误血缘(关键)**: `opt_daily` 每个交易日最多三次有界指数退避重试；仍失败即停止后续逐日请求，`main` 中止且绝不写 partial feed / `computable=false` summary。build 可原子写 schema-validated、每次运行独有的 `iv_feed_failure_<pid>.json`，只含端点、失败/尝试数、日期范围、分类、已恢复重试数和 fail-fast 状态；不保留 raw 异常、URL、token、proxy 或 provider rows。其他端点异常同样中止；**仅成功返回但覆盖不足**才写 `computable=false` summary。
 - 真实 `opt_basic`/`opt_daily`/`fund_daily` 调用 = 用户授权 `执行`(per-run fetch 授权)。Tushare 接口签名 / 2000 积分访问以执行期实测为准(异常 → 中止;成功但 0 行 → not-computable + sanitized fetch report)。
 - 不动 production / egs_main / V14.2(冻结);不真钱、不 ship-gate。
 - IV feed 全量构建 / BS 反解 / 252d 分位 = **已实现(批① part 1)**;**接 Slice B / 周末 pipeline = 批②**;历史回填执行 + 回测 = 后续。

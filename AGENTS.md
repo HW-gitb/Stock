@@ -54,7 +54,7 @@
 
 ## 当前进度
 
-- ✅ A 股短线筛选脚本：`A-EGS/egs_main.py` v7.10 已支持 `--as-of` 历史日期运行
+- ✅ A 股短线筛选脚本：`A-EGS/egs_main.py` v7.11 已支持 `--as-of` 历史日期运行；live L3 使用 HiThink 完整概念目录并严格投影到 A 股主板
 - ✅ A 股短线分析框架：`skills/a_short_analysis/reference/v14.2_spec.md` 已定位为规格说明书，不作为运行时提示词
 - ✅ 美股短线资料：已整理到 `skills/us_short_analysis/reference/`
 - ✅ 策略设计综合版：`docs/strategy_design_synthesis.md` 已固化为短线双通道 + 长线 alpha 主系统 + research / coordinator 的设计入口
@@ -80,7 +80,7 @@
 - ✅ Phase 1b：`egs_main.py` 已接入 `analysis_input.json`、`snapshot.json`、`candidates.csv` 导出器
 - ✅ 项目目录：已按 engine/shared + preset/state/skill/result 分离原则建立骨架
 - ✅ Phase 2：`runners/backtest_rank.py` 已跑通 24 期 production rank 回测；工程链路通过，策略优化继续推进
-- ✅ L3 概念缓存：正式运行默认刷新 L3；搭建/测试阶段可用 `--reuse-l3-cache` 复用共享缓存加速
+- ✅ L3 概念缓存：正式运行默认刷新 HiThink 完整主板 L3；搭建/测试阶段可用 `--reuse-l3-cache` 只读复用完整、带 coverage receipt 的 HiThink snapshot（无合格 snapshot 则阻断且不联网）
 - ✅ Phase 4 minimal：`deterministic_report` schema、纯 Python runner、coverage doc、Skill 使用文档、prompts 骨架、LLM enrichment patch schema/example 已落地
 
 ## 三条不可动摇的原则
@@ -574,7 +574,7 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 - 专门检验 `q0_dt_yoy > 200%`、`q1_dt_yoy > 200%`、`esp_raw` 极端值分组的未来 20 日收益。
 - 如果低基数高增长标的没有稳定超额收益，在 `esp_raw` 计算中加入 winsorize 或低基数惩罚。
 - 统计 `data_quality.completeness_score` 与后验收益的关系，决定低完整度样本是否退出 rank 回测。
-- 正式运行无论每周五选股还是正式回测验证，都应刷新 L3；只有搭建/测试阶段可用 `--reuse-l3-cache` 复用共享缓存。
+- 正式运行无论每周五选股还是正式回测验证，都应刷新 L3；只有搭建/测试阶段可用 `--reuse-l3-cache` 复用完整、主板范围且 coverage receipt 合格的 HiThink snapshot；无合格 snapshot 必须阻断且不得转为联网抓取。
 - EGS v7.9 后 `data_quality.completeness_score` 已改为动态计算；v7.9 之前的完整度分组结论不可用。
 - 24 期 v7.10 production 回测显示：追高风险、OVERHEAT/LOCK、ESP 低基数、Tier2 filler 和低 Tier1-count 日期是下一批优先优化点。
 
@@ -630,7 +630,7 @@ reverse-chronological：**新 dated entry prepend 到文件顶部**。若 H1 int
 - `schemas/a_short_screening_threshold_governance.schema.json` / `presets/a_short_screening_threshold_governance_20260602.json` — A-short screening threshold governance parity contract（mirrors current `A-EGS/egs_main.py::CONF`; no runtime behavior change / no screening run / no provider call）
 - `schemas/research_preregistration.schema.json` / `schemas/research_preflight_result.schema.json` / `schemas/program_test_budget_ledger.schema.json` / `schemas/evidence_report.schema.json` / `research/preregistrations/a_share_minimal_data_burst_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_corrected_basis_20260531.json` / `research/preregistrations/a_share_minimal_data_burst_full_universe_redesign_20260531.json` / `research/results/a_share_minimal_data_burst_corrected_basis_20260531/preflight_zero_signal_events_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/preflight_event_count_20260531.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/evidence_report.json` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/signal_events.csv` / `research/results/a_share_minimal_data_burst_full_universe_redesign_20260531/monthly_stats.csv` / `research/ledgers/a_share_burst_program_test_budget_ledger_20260531.json` — research-only preregistration, preflight, evidence, and ledger artifacts（不进 production、不声称 ship-gate evidence；full-universe redesigned outcome 已失败，任何 further redesigned test 必须新 ledger planned test + reviewed preregistration）
 - `schemas/analysis_input.schema.json` — analysis_input 契约，当前 `1.1.0`，JSON Schema Draft 7
-- `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.2.0`，Phase 4 runner 输出 JSON 必须通过该 schema
+- `schemas/deterministic_report.schema.json` — deterministic report 契约，当前 `1.3.0`，Phase 4 runner 输出 JSON 必须通过该 schema
 - `schemas/rank_backtest_report.schema.json` — backtest_report 契约，当前 `1.11.0`（含 date_warnings + data_lineage + analyzer veto replay）
 - `schemas/provider_capability_catalog.schema.json` — Phase 7 provider capability / field catalog 契约，当前 `1.0.0`（schema-first；不锁最终 provider / adapter / DataHub table）
 - `schemas/examples/provider_capability_catalog.example.json` — Phase 7 provider capability catalog 示例（验证 schema；不是生产 provider registry）
