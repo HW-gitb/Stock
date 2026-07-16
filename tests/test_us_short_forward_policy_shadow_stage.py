@@ -10,6 +10,7 @@ from engine.us_short_eligibility_gate import load_eligibility_governance
 from engine.us_short_forward_policy_shadow_stage import (
     ForwardPolicyShadowStageError,
     materialize_forward_policy_shadow,
+    validate_forward_shadow_selection_record,
 )
 from runners import us_short_weekly_capstone_stages as capstone_stages
 
@@ -149,6 +150,9 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
         self.assertNotIn("BETA", summary_text)
         self.assertFalse(summary["boundary"]["shadow_counts_ship_gate"])
         self.assertFalse(summary["boundary"]["provider_calls_added"])
+        # JSON writers sort object keys; the persisted policy-keyed map must remain valid after reload rather than
+        # treating serialization order as a strategy-contract order.
+        validate_forward_shadow_selection_record(private_record)
 
     def test_common_pool_is_pass2_clean_and_identical_across_all_heads(self):
         self.data_context["universe"].append({

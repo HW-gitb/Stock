@@ -141,8 +141,11 @@ def _atomic_json_write(path: Path, payload: dict) -> None:
 
 
 def _validate_decisions(decisions: object, *, decision_date: str, price_basis_date: str) -> dict:
-    if not isinstance(decisions, dict) or tuple(decisions) != SELECTION_POLICY_IDS:
-        raise ForwardPolicyShadowStageError("selection decisions must cover the frozen immediate policy set in grid order")
+    # JSON object member order is not a contract: private records are atomically written with sorted keys, so a
+    # persisted/reloaded valid six-head map must not fail merely because its object members are alphabetical.  The
+    # frozen grid order remains carried explicitly in ``selection_policies`` and all per-head semantics are keyed.
+    if not isinstance(decisions, dict) or set(decisions) != set(SELECTION_POLICY_IDS):
+        raise ForwardPolicyShadowStageError("selection decisions must cover exactly the frozen immediate policy set")
     for policy_id, decision in decisions.items():
         if not isinstance(decision, dict):
             raise ForwardPolicyShadowStageError(f"{policy_id} selection decision must be a dict")

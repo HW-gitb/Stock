@@ -156,6 +156,21 @@
 - **Required**: `R-ASHORT-D4-SOURCE-HASH-BINDING-UNENFORCED`（material）— 完整 Required / 风险 / 两条 closure 路径 / 两条 low Optional 见 `docs/system_risk_register.md`（单一来源）。B1、D2 code PASS 无 Required。
 - **Verify**: 亲跑 d6ac 树 5 目标模块 581 OK + `tests/schema *a_short*` 48 OK；全 lane `discover test_a_short*` 出 3F+4E，经已提交基线 da767a2e（无 B1/D2/D4）对照证完全相同、全为既存（entry_funnel 缺 `result/a_short/20260622/overlay.json` fixture；gap_data_registry holding disposition R3/R4a/R4b），非本切片回归；1 独立对抗只读 agent 攻 D4 六不变式 = 5 ENFORCED + source-hash 1 GAP（已亲验预注册/runner/仓库无 rank_samples.csv）；review-evidence:not_available。
 - **Next**: Codex：修复
+## 2026-07-17 — Claude Code 独立复审（US-short A1 对比轨 v2 第四刀：私有前瞻周封包 + 重算绑定）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。`private_week.py` 把 capture+订单快照+前向输入+收益绑成一份 ticker-bearing 私有周记录、原子写 gitignored `shadow_compare_private`。安全全闭:①隐私 `reject_nonprivate_output_path`+绝对+canonical 名(探针实证 tracked 路径 raise);②防篡改 reload 重跑 outcome core 要求 outcome==recomputed;③四 digest 全绑;④no-count 全或无不造 fabricated;⑤BOUNDARY 全 False、无 provider/ledger/ship-gate。附带 blade-1 `_validate_decisions` tuple→set(reload 必要修、非松安全)。docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-PRIVATE-FORWARD-WEEK-MATERIALIZATION-BINDING` in_progress→resolved。含 blade-1 shadow_stage 同刀改动一并审。
+- **Verify**: 整读消费引擎体(private_week+复用 blade-1/2/3)。亲跑(298a 树、未采信 Codex 4473):焦点 forward_policy 81 OK;全包 `test_us_short*` 4473 OK(我给 300s)。自写隐私探针 fail-closed(shadow_compare_private git-check-ignore IGNORED、tracked 路径 raise、错目录/错名 raise);重算防篡改逻辑代码核实+Codex tamper 回归在焦点包。按比例(shadow-only、私写但 gitignored、无选股影响)未起 §6a agent。
+- **Next**: 正式裁决器+累积+banner / 全候选价格源捕获·provider(gated) 后续,本刀未触。
+
+## 2026-07-17 — Codex execute（US-short A1 对比轨 v2 第四刀：私有前瞻周封包与输入/收益重算绑定）
+
+- **Verdict/Action**: 新增离线私有周封包器：只消费已验证的 Cut-A capture、共同订单快照与调用方注入的日线/成本/复权证据；原子写入 gitignored 私有记录，并把 capture、整份订单封包、输入封包和收益封包分别摘要绑定。读取验证会从已存输入重跑 H5/H10/H20 核心并要求结果完全一致；订单层 no-count 不伪造输入/收益，价格不完整或复权不通过明确落为整周 no-count。同步修正 Cut-A 私有 JSON 重读时把对象键序误作政策顺序的问题，显式 `selection_policies` 仍是顺序权威。
+- **Required**: `R-USSHORT-A1-PRIVATE-FORWARD-WEEK-MATERIALIZATION-BINDING` 待 Claude Code 仅审本刀并在 PASS 后提交。来源采集/provider、周运行器、累积/正式裁决/banner、组合新版、正式系统与 ship-gate 均未实施。
+- **Verify**: 红测先证实封包器不存在；最终 focused 私有封包/Cut-A/订单/收益/comparison `40 OK`、文档守卫 `60 OK`、`py_compile`、新 schema JSON parse、`git diff --check` 通过；完整 `test_us_short*.py` `4473 OK`（`1 skipped`）。
+- **Pre-Codex self-review**: A-F checked。A：ready、订单层 no-count、H20 不完整/复权 no-count 三种整周状态均封闭，且重算收益必须等于已存收益；B：`rg -n "materialize_forward_policy_private_week|us_short_forward_policy_private_week" engine runners -g "*.py"` 仅命中新 engine、runner 0；C：capture/order 摘要漂移、输入摘要篡改、有效成本替换并同步输入摘要但保留旧收益、非标准私有路径均 fail-closed；E：只改 A1 route/roadmap/register 与最小交接，`CURRENT` 未改；F：私有路径 gitignore、无 provider/runner/ledger/evaluator 接线、UTF-8 BOM/FFFD 与 diff 检查通过。独立 current-diff 自审首次 FAIL（存储输入可替换但旧收益未重算）→ 修复并加对抗回归 → 复审 PASS，无 timeout/restart；固定包在最终代码后集中跑完。
+- **Next**: Claude Code：只审 US-short A1 comparison v2 第四刀；PASS 后由 Claude 提交。
+
 ## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第三刀：共同候选订单快照生产器）PASS
 
 - **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。纯离线 `us_short_forward_policy_order_snapshot.py` 为共同池每票产标准化 model-paper 订单(填 blade 2 的 orders 空档):不收 policy ID→六头同一执行几何、不能注入政策专属订单;输入须恰覆盖共同池;复用正式 `analyze_rows`/`support_atr_engine`;order 几何 stop<low<=entry<=high<tp(喂 paper-fill bracket);任一不可执行/市场 no-entry→整周 no-count 不造 fallback;capture+价格输入+订单三 digest 绑定;BOUNDARY 全 False、in-memory 无 fetch/write。设计意图对齐,docs 无 overclaim。
