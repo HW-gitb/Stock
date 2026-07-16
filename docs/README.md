@@ -22,6 +22,7 @@ Use this routing table instead of guessing which file to read.
 | Highest-level project rules, fixed decisions, command aliases, required reading order | `AGENTS.md` |
 | Current state and next implementation step | `docs/CURRENT.md` |
 | Durable open-risk queue for data / PIT / schema / execution / security findings | `docs/system_risk_register.md` |
+| Disposable A-short/US-short full-system runtest capsules: fresh detached clone, no cache/resume, signed safe deletion; never production evidence | `docs/runtest_capsule.md`, `runners/runtest_capsule.py`, `runners/a_short_runtest.ps1`, `runners/us_short_runtest.ps1`, `tests/test_runtest_capsule.py` |
 | Latest cross-LLM reasoning, review verdicts, rejected alternatives, pending Optional disposition | `docs/SESSION_LOG.md` top 1-3 entries |
 | Review workflow compatibility pointer; canonical role split, short-command binding, and closeout gate live in `AGENTS.md` | `docs/AI_REVIEW_PROTOCOL.md` |
 | Implementer pre-review self-review gate (current executor/fixer = Codex; A-F + B2 + Proof-of-use) — full rule body single-sourced in the checklist; `AGENTS.md §Claude implementer standard` item 7 carries only the mandatory pointer (legacy section name; no rule-body restatement) | `docs/pre_codex_self_review_checklist.md` |

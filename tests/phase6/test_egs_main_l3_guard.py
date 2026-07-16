@@ -68,6 +68,24 @@ class EgsMainL3GuardTest(unittest.TestCase):
         # 这类前瞻 live 运行用 l3=today 正确,不应被当历史回放拦死(判据已从 != 放宽为 <)。
         self.egs_main._guard_historical_asof_l3_mode("20260622", "today", run_date="20260620")
 
+    def test_disabled_egs_cache_neither_reads_nor_writes(self) -> None:
+        original_conf = dict(self.egs_main.CONF)
+        try:
+            with TemporaryDirectory(dir=str(ROOT)) as tmp:
+                self.egs_main.CONF["result_dir"] = tmp
+                self.egs_main.CONF["cache_dir"] = str(Path(tmp) / "cache")
+                self.egs_main.CONF["cache_policy"] = "disabled"
+                self.egs_main.save_cache("fresh", {"must": "not write"})
+                self.assertFalse(Path(self.egs_main.CONF["cache_dir"]).exists())
+
+                cache_path = Path(self.egs_main.CONF["cache_dir"]) / "existing.pkl"
+                cache_path.parent.mkdir(parents=True)
+                cache_path.write_bytes(b"not-a-valid-pickle")
+                self.assertIsNone(self.egs_main.load_cache("existing"))
+        finally:
+            self.egs_main.CONF.clear()
+            self.egs_main.CONF.update(original_conf)
+
     def test_today_l3_uses_complete_hithink_graph_and_persists_coverage_receipt(self) -> None:
         graph = HiThinkL3Graph(
             concepts_df=pd.DataFrame([

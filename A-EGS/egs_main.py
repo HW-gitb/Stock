@@ -141,6 +141,7 @@ CONF = {
     "result_dir":       RESULT_DIR,
     "cache_dir":        os.path.join(RESULT_DIR, "egs_cache"),
     "cache_ttl":        20 * 3600,
+    "cache_policy":     "enabled",  # runtest capsules force disabled: no read or write of EGS cache
     "top_n":            50,    # 内部候选池大小（供 Phase 2 DeepSeek 终审使用）
     "watch_n":          15,    # 周频候选观察池上限（正式运行不拿 Tier2 凑数）
     "final_n":          5,     # 最终推荐数量
@@ -235,12 +236,16 @@ def _rp(filename):
     return os.path.join(CONF["result_dir"], filename)
 
 def load_cache(key):
+    if CONF.get("cache_policy") == "disabled":
+        return None
     p = _cp(key)
     if not os.path.exists(p): return None
     if time.time() - os.path.getmtime(p) > CONF["cache_ttl"]: return None
     with open(p, "rb") as f: return pickle.load(f)
 
 def save_cache(key, data):
+    if CONF.get("cache_policy") == "disabled":
+        return
     p = _cp(key)
     tmp = p + ".tmp"
     if os.path.exists(p):
@@ -4190,6 +4195,10 @@ if __name__ == "__main__":
     parser.add_argument("--as-of", dest="as_of", help="Run as of an A-share trading date, format YYYYMMDD")
     parser.add_argument("--backtest-mode", action="store_true", help="Skip mutable tracking state for historical batch runs")
     parser.add_argument(
+        "--cache-policy", choices=["enabled", "disabled"], default="enabled",
+        help="EGS request cache policy. disabled performs no cache reads or writes (required by runtest capsules).",
+    )
+    parser.add_argument(
         "--reuse-l3-cache", action="store_true",
         help="Testing only: reuse an existing complete HiThink main-board L3 snapshot; never calls the provider",
     )
@@ -4211,6 +4220,8 @@ if __name__ == "__main__":
                         help="Override base output directory for analysis_input/snapshot/candidates "
                              "(default: <project_root>/result/a_short). Used by backtest to isolate generated artifacts.")
     args = parser.parse_args()
+
+    CONF["cache_policy"] = args.cache_policy
 
     _guard_historical_asof_l3_mode(
         args.as_of,

@@ -59,6 +59,8 @@ param(
     [string]$CanarySource = 'sina',
     [ValidateSet('pit', 'today', 'neutralize')]
     [string]$L3Mode = $null,
+    [ValidateSet('enabled', 'disabled')]
+    [string]$CachePolicy = 'enabled',
     [string]$PythonExe = '',
     [string]$Account = $null,
     [switch]$AllowHistoricalOverwrite,
@@ -208,7 +210,7 @@ Write-Host "skip semantic: $SkipSemanticRisk"
 Write-Host ""
 
 # --- Stage 1: egs_main (the HiThink L3 graph is fetched and verified in-process) ---
-$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--l3-mode', $EffectiveL3Mode)
+$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy)
 if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
 }

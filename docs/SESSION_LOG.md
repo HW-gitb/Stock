@@ -8,6 +8,28 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立自审 PASS（P2 source-guard 补 A-EGS 顶层 xlsx；solo 自修）
+
+- **Verdict/Action**: solo 自修自审(用户授权,一次性、不入长期分工)。`_iter_guarded_files` 加 `A-EGS/*.xlsx` glob 封整类顶层 xlsx(非硬编码 egs_tier1;glob 非递归、不与 `A-EGS/Result` 重复、不误拉 A-EGS 源码)。这是 §6a 对抗 agent 枚举出的唯一 in-lane 漏根;`data/a_long/*` out-of-lane(非 runtest market)故 surgical 不加。
+- **Required**: `R-RUNTEST-CAPSULE-PRODUCTION-OUTPUT-ISOLATION` 的 Reviewer finding 已闭(单源见 register)。只加 backstop 覆盖,不碰主隔离 1-7 / 选股 / PIT / 密钥。
+- **Verify**: 复现探针 改主仓 A-EGS xlsx 修前 MISSED→修后 DETECTED;runtest_capsule 8 OK(+1 反向测试)、egs guard 12 OK、doc-gov 35 OK。自审:①docs 只泛描 guard 无根集枚举·零残留 ②反向失败=guard TRIPS 非漏报;独立对抗 pass=刚 §6a agent 已冷打整制品+枚举本类,单行加 glob 不另起 agent。
+- **Next**: 待用户 `提交`——整个 P2(capsule+双 launcher+egs cache_policy+本 gap 修)一并收口。
+
+## 2026-07-16 — Claude Code 独立复审（P2 runtest capsule 输出隔离）— 主隔离 PASS · 1 P2-latent gap
+
+- **Verdict/Action**: P2 主隔离达到设计目的:runtest 只在 `Stock_runtest_private/<market>/<run_id>/repo` clone 内跑、绝不污染主仓。invariants 1-7 全 HOLD(我 + §6a 对抗 agent 逐条 trace,细节见 register):cwd=clone + worker=clone 内入口 + `__file__`-relative 输出、路径反逃逸、签名+layout+非active 删除门、外置 HMAC 绑路径、`cache_policy=disabled` 真禁读写、非生产 manifest。
+- **Required**: **1 项 P2-latent(闭环前须修)**:source-guard 漏 `A-EGS/*.xlsx` 顶层(EGS 默认 `xlsx_dir=SCRIPT_DIR` 写此、非 guarded 的 `A-EGS/Result/`)→ 主仓误写 backstop 测不到;主隔离完好时无现行 vector,绝对 `xlsx_dir`/`output_root` 分支潜在触发。修=guarded 加 `A-EGS` 顶层(一行)。见 register。
+- **Verify**: 亲跑 P2 核心 54 OK(capsule 7 / egs guard 12 / doc-gov 35);egs cache no-op、xlsx 路径、`.gitignore` 双规则、guard 6 根均代码核实;§6a 对抗 agent 独立确认 1-7 HOLD + 同一 gap(它比我到位:确认 us-short 私密根都在 `state/` 下、已覆盖)。
+- **Next**: 待用户定:路由 Codex 修 source-guard gap(+ 顺带 `data/a_long/raw`|`audit_cache`、P3 committed-atomically 提醒)再闭环;或接受 latent。P3 非阻断见 register。
+
+## 2026-07-16 — Codex 修复 P2（A-short / US-short 全量 runtest 输出隔离；不提交）
+
+- **Verdict/Action**: P2 三刀已完成，`R-RUNTEST-CAPSULE-PRODUCTION-OUTPUT-ISOLATION` 仍为 `in_progress`，待 Claude Code 独立审查。新增共享 `runtest_capsule.py`：每次从明确 commit 创建 `D:\cnhea\Stock_runtest_private\<market>\<run_id>\repo` detached clone，并写外部 HMAC key 签名的非生产 manifest；A-short/US-short 新入口均只在该 clone 内跑完整既有入口。未跑任何联网全量流程。
+- **Required**: `R-RUNTEST-CAPSULE-PRODUCTION-OUTPUT-ISOLATION` 见 `docs/system_risk_register.md`；A-short 强制 `cache_policy=disabled`，US 强制 capsule private root、无 resume 且拒绝全部 `-ExtraArgs`，避免路径或授权门被覆盖回主仓。
+- **Verify**: 集中离线包 **155 OK**：runtest capsule、EGS L3 guards、weekly guards、US capstone/checkpoint、doc-governance；PowerShell 两入口 parse OK、`git diff --check` OK。新回归含：旧 ignored cache/checkpoint 不进入 clone、来源仓写入触发 finalization fail、active/tampered/out-of-root 不可删、私密输入不出现在 manifest、以及真实 PowerShell `--private-root` raw-override 在建胶囊前被拒绝。未调用 provider、未完整运行 A/US、未写正式/私密实盘目录、未读密钥、未删除用户胶囊。
+- **Pre-Codex self-review**: A 覆盖 A/US 全量入口及所有固定产物根（A 在 clone；US state/sample `ROOT` 为 clone、private root 为 capsule）；B `RUNTET` 零残留、所有 raw pass-through 已取消；C 覆盖 cache read/write、source-guard 反向写入、active/tampered/path-traversal delete、US private-root 覆盖；D 无自然语言分类；E 未改 `CURRENT`、route 行只作薄指针；F UTF-8 无 BOM、diff check 与集中包一次完成。轻量独立 agent 初审发现 `ExtraArgs` 覆盖漏洞，修后同 agent PASS；无第二次超时。
+- **Next**: Claude Code：仅审 P2 runtest capsule 切片；PASS 后提交该切片，不做 provider/full-runtest。
+
 ## 2026-07-16 — Claude Code 独立审查 PASS + 提交（US-short 周报固定输出路径 + 一键启动脚本 + Optional 收口）
 
 - **Verdict/Action**: PASS + 提交合并 master(`090bf743` 主改 + `e6f8c575` Optional 收口,含在现 master `008e20f5`,未 push)。①`runners/us_short_weekly_capstone.py` CLI `--private-root` 由 required 改默认 `STATE_DIR`(state/us_short)→周报/行动表/机读固定落 `state/us_short/{weekly_private,runs_private}/<决策日>/`(从主库 D:\cnhea\Stock 跑即该绝对路径);programmatic `run_weekly_capstone` 仍 required、旧测试不受影响。②新增 `runners/us_short_weekly_capstone.ps1` 薄封装:自动算当前 ET(UTC→Eastern)、复用 private-root 默认、固定私密 `_run_inputs` 输入路径、默认安全 dry-run、`-Live`/`-PrepareBudget` 显式升级;不改选股/不 push/不碰真钱边界。均低选股影响(仅输出路径+启动器)。
