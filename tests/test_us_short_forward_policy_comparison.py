@@ -20,6 +20,7 @@ from engine import us_short_paper_scorecard_comparison as score_cmp  # noqa: E40
 from engine import us_short_forward_policy_decision_diff as decision_diff  # noqa: E402
 from engine import us_short_shadow_compare as selection_cmp  # noqa: E402
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS  # noqa: E402
+from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256  # noqa: E402
 
 POLICIES = tuple(SELECTION_POLICY_IDS)
 
@@ -35,13 +36,19 @@ def _capture(decision_date="20260713", *, source_digest="a" * 64) -> dict:
         "catalyst_off": ["BBB", "DDD"],
         "overextension_selection_off": ["AAA", "BBB"],
     }
+    common_pool = ["AAA", "BBB", "CCC", "DDD"]
     return {
         "schema_name": "us_short_forward_policy_shadow_selection",
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
         "generated_at": "2026-07-12T08:00:00-04:00",
         "source_context_sha256": source_digest,
+        "comparison_contract_sha256": statistical_plan_sha256(),
+        "common_selection_pool": common_pool,
+        "common_selection_pool_sha256": __import__("hashlib").sha256(
+            __import__("json").dumps(common_pool, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
         "selection_policies": list(POLICIES),
         "selection_decisions": {
             name: {
@@ -49,8 +56,8 @@ def _capture(decision_date="20260713", *, source_digest="a" * 64) -> dict:
                 "decision_date": decision_date,
                 "price_basis_date": price_basis_date,
                 "run_date": (decision - timedelta(days=1)).strftime("%Y%m%d"),
-                "cheap_eligible": [],
-                "candidates": [],
+                "cheap_eligible": list(common_pool),
+                "candidates": list(common_pool),
                 "recall_available": [],
                 "recall_added": [],
                 "recall_excluded": [],
@@ -156,7 +163,7 @@ class SelectionComparison(unittest.TestCase):
             ("decision_date", "20260231"),
             ("price_basis_date", "20260713"),
             ("source_context_sha256", "bad"),
-            ("schema_version", "2.0.0"),
+            ("schema_version", "1.0.0"),
         ):
             bad = _capture()
             bad[key] = bad_value

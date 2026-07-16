@@ -29,8 +29,9 @@ exception** (Path A; the delayed-materialization Path B was rejected).
   wiring MUST preserve it.
 - **Hard gates never shadow-off**: data / PIT / halt / completeness gates are never disabled for a head;
   only economic-judgment vetoes may be ablated.
-- **1 week = 1 independent statistical block** (not 15 tickers = 15 samples); **≥12 forward weeks** before
-  any promotion review; the statistical plan is **pre-registered day-1** (code may lag, the plan may not).
+- **1 week = 1 independent statistical block** (not 15 tickers = 15 samples); **12 effective-difference
+  weeks are preliminary review only; 24 plus the registered coverage gates are required before a formal
+  recommendation**. The v2 statistical plan is pre-registered before outcomes (code may lag, the plan may not).
 - Past-week reconstruction is research/backtest only — never forward evidence (§2.1/§12.2 ordinary rule).
 
 ## 2. The grid (const-pinned; built)
@@ -93,13 +94,14 @@ register + code are the source of truth.
   non-selection gate stability, rank delta, selection bucket delta, and Top15 membership changes for the five
   shadow policies. Action / size diffs are explicitly marked `not_available_in_cut_a_capture` because Cut A
   does not run downstream analysis/sizing per policy; fabricating those claims is rejected.
-- **[BUILT] Cut D** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
+- **[SUPERSEDED BEFORE ANY OUTCOME] Cut D v1** — immutable weekly **manifest** + **pre-registered statistical plan** (primary metric
   `net_benchmark_excess`; divergence definition; minimum weeks; comparison margin; placebo seed + match
   frequency; paired basis; elimination rule). The plan must be pre-registered day-1; the analysis code may lag.
   **All four open parameters are FROZEN below (user-ratified 2026-07-12). Build the schema/preset/manifest + tests to
   these EXACT values — do not re-open or invent. Do NOT touch Cut E; do NOT commit until Claude review.**
 
-  **Frozen pre-registration statistical plan v1** (the const-pinned Cut-D manifest must encode exactly this):
+  **Historical v1 pre-registration record** (superseded before any outcome by the v2 contract below; retain only
+  for provenance, never use it to judge a factor):
   - **Primary metric**: `net_benchmark_excess`, paired same-week vs `balanced` (already in grid `evaluation_plan`).
   - **Independence unit**: `decision_week` (1 week = 1 block; frozen). **≥12 DIVERGENCE weeks** (not calendar weeks)
     before any promotion review (`minimum_forward_weeks_before_promotion_review=12`).
@@ -131,9 +133,9 @@ register + code are the source of truth.
   - **Boundary**: comparison/calibration only — `shadow_counts_ship_gate=false`, `changes_primary_selection=false`,
     zero new provider, no §2.1/§12.2 exception, private ticker artifacts gitignored, tracked manifest de-identified.
     The manifest METHOD must land before the first authorized LIVE capture run.
-- **[BUILT] Cut D-analysis — the offline VERDICT ENGINE that APPLIES the Cut-D manifest** (the "analysis code may lag"
-  piece; build it NOW, before any real data — freezing the analysis logic before results exist is the cleanest
-  pre-registration, zero researcher freedom). Pure / offline / deterministic: consumes the ALREADY-DEFINED contracts
+- **[SUPERSEDED COMPATIBILITY DIAGNOSTIC] Cut D-analysis — the offline legacy three-gate diagnostic.** The detailed
+  v1 bullets below are historical only; current code may expose only `diagnostic_*` statuses and cannot issue a v2
+  formal recommendation. The historical implementation was pure/offline/deterministic and consumed the then-defined contracts
   (Cut A captures + Cut B ≥12-week outcome scorecards + the Cut C decision-diff) and applies the const-pinned Cut-D
   manifest to emit, per shadow head, a divergence-week count + a promotion-eligibility verdict + outcome-blind
   futility/harm flags. NEW code = the placebo engine + the (a)(b)(c) gates + the futility/harm detector + per-head verdict.
@@ -166,10 +168,22 @@ register + code are the source of truth.
     capture-bound future-week inputs only and return a de-identified in-memory summary. They create no input/output
     writer, do not read a historical result directory, and leave the official selection, lifecycle ledger, and Cut E
     untouched. The detailed material boundary is `R-USSHORT-A1-CUT-D-ANALYSIS-VERDICT-ENGINE`.
+- **[BUILT — first repair blade] Comparison v2 evidence contract + capture binding.**
+  `presets/us_short_forward_policy_statistical_plan_20260716.json` supersedes v1 before any real outcome. It freezes
+  the four isolated factor questions (theme weight, catalyst selection, overextension selection, with execution
+  ablation explicitly second-wave), a **Pass2-clean common pool** for every head, H10 after-cost direct return,
+  H5/H20 diagnostics, 12-week preliminary / 24-week formal / 36-week retirement clocks, non-overlap and market-risk
+  coverage, Holm-Bonferroni correction, risk guardrails, explicit recommendation statuses, a decision receipt, and
+  a no-auto-switch boundary. Cut-A private capture and its tracked de-identified summary now bind the v2 contract
+  digest and the derived common-pool digest; a Pass2-vetoed name cannot enter placebo or outcome inputs. The existing
+  Cut-D-analysis consumer is deliberately only a compatibility diagnostic aligned to common-pool/H10/24; it must not
+  emit a v2 formal recommendation. No outcome writer, weekly orchestration, lifecycle/banner wiring, provider call,
+  primary-rule change, or second-wave ledger is included in this blade.
 - **[DEFERRED — gated on the live run] Outcome production — the "抓价算分" input layer that feeds Cut B + Cut D-analysis.**
   Fetch the forward prices for each accumulated weekly capture's baskets → compute per-week, per-policy
-  `net_benchmark_excess` (same-week benchmark + cost model) → this is the outcome/scorecard input Cut B and Cut D-analysis
-  consume. **Without it the six heads only accumulate captures and NO "which head is better" verdict can ever compute.**
+  H10 after-cost direct basket return (with H5/H20 diagnostics, fixed execution/time-mark and the same cost model) →
+  this is the v2 outcome input for the later formal evaluator. **Without it the six heads only accumulate captures and
+  no formal "which head is better" recommendation can ever compute.**
   DEFERRED, NOT forgotten: (i) provider-gated (real forward-price fetch, SR-PROVIDER-001); (ii) downstream of real weeks —
   there is no forward data until the weekly capstone runs live and accumulates 6-head captures, so building it now = an
   empty pipe; (iii) no pre-registration freeze concern (it only computes returns), unlike the Cut-D manifest. **Trigger to

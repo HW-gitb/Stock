@@ -43,6 +43,12 @@ class ForwardPolicyStatisticalEvaluationSummarySchemaTests(unittest.TestCase):
         with self.assertRaises(jsonschema.ValidationError):
             jsonschema.validate(bad, SCHEMA)
 
+    def test_rejects_a_legacy_diagnostic_that_claims_formal_promotion(self):
+        bad = evaluation.evaluate_forward_policy_statistical_evaluation([], as_of="20260712")
+        bad["policy_verdicts"]["theme_plus"]["verdict"] = "promotion_eligible"
+        with self.assertRaises(jsonschema.ValidationError):
+            jsonschema.validate(bad, SCHEMA)
+
 
 if __name__ == "__main__":
     unittest.main()

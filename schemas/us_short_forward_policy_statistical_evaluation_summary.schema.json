@@ -1,13 +1,13 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "US-short A1 Cut-D analysis summary",
-  "description": "De-identified in-memory summary emitted by the pure offline Cut-D verdict engine. It contains no tickers, prices, provider rows, raw outcome rows, action/size data, ship-gate evidence, or persistent forward evidence.",
+  "title": "US-short A1 legacy diagnostic summary",
+  "description": "De-identified in-memory summary emitted by the pure offline compatibility diagnostic. Its status values can never express a formal adoption, retention, or discard recommendation; the later v2 evaluator owns that decision. It contains no tickers, prices, provider rows, raw outcome rows, action/size data, ship-gate evidence, or persistent forward evidence.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "as_of", "evaluated_decision_week_count", "selection_policies", "primary_policy", "policy_verdicts", "boundary"],
   "properties": {
     "schema_name": {"const": "us_short_forward_policy_statistical_evaluation_summary"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "2.0.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "evaluated_decision_week_count": {"type": "integer", "minimum": 0},
     "selection_policies": {"const": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"]},
@@ -71,7 +71,7 @@
             "gate_c_placebo": {"type": ["boolean", "null"]}
           }
         },
-        "verdict": {"enum": ["accumulating", "futility_flag", "harm_flag", "promotion_eligible", "not_eligible"]}
+        "verdict": {"enum": ["diagnostic_accumulating", "diagnostic_futility_flag", "diagnostic_harm_flag", "diagnostic_pass_not_formal_recommendation", "diagnostic_not_passed_not_formal_recommendation"]}
       }
     }
   }

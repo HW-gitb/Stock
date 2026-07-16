@@ -136,12 +136,38 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
             "balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off",
         ])
         self.assertEqual(set(private_record["selection_decisions"]), set(private_record["selection_policies"]))
+        self.assertEqual(private_record["schema_version"], "2.0.0")
+        self.assertEqual(private_record["common_selection_pool"], ["ALFA", "BETA"])
+        self.assertEqual(len(private_record["common_selection_pool_sha256"]), 64)
+        self.assertEqual(len(private_record["comparison_contract_sha256"]), 64)
+        self.assertEqual(summary["common_selection_pool_count"], 2)
+        self.assertEqual(summary["common_selection_pool_sha256"], private_record["common_selection_pool_sha256"])
+        self.assertEqual(summary["comparison_contract_sha256"], private_record["comparison_contract_sha256"])
         self.assertEqual(summary["decision_date"], "20260713")
         self.assertEqual(summary["price_basis_date"], "20260710")
         self.assertNotIn("ALFA", summary_text)
         self.assertNotIn("BETA", summary_text)
         self.assertFalse(summary["boundary"]["shadow_counts_ship_gate"])
         self.assertFalse(summary["boundary"]["provider_calls_added"])
+
+    def test_common_pool_is_pass2_clean_and_identical_across_all_heads(self):
+        self.data_context["universe"].append({
+            "ticker": "VETO", "exchange": "NASDAQ", "price": 20.0, "adv_usd": 10_000_000.0,
+            "market_cap_usd": 1_000_000_000.0, "delisted": False, "halted": False,
+            "bankruptcy": False, "otc": False,
+        })
+        self.data_context["candidate_pass2_signals"]["VETO"] = {"bankruptcy": True}
+
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._materialize(Path(tmp))
+            private_record = json.loads(Path(result["private_record_path"]).read_text(encoding="utf-8"))
+
+        self.assertIn("VETO", private_record["selection_decisions"]["balanced"]["candidates"])
+        self.assertNotIn("VETO", private_record["common_selection_pool"])
+        self.assertTrue(all(
+            set(decision["admitted"]).issubset(set(private_record["common_selection_pool"]))
+            for decision in private_record["selection_decisions"].values()
+        ))
 
     def test_invalid_frozen_input_fails_before_writing_either_artifact(self):
         with tempfile.TemporaryDirectory() as tmp:

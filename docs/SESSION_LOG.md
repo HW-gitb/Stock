@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第一刀）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。§6 五攻击点全闭合：①Pass2 veto 无法泄入共同池（委托权威 `run_selection`、exclusion_records 对每张 veto 完整、六头池须逐字节相同+admitted⊆pool）；②capture↔契约双向绑定 `comparison_contract_sha256==statistical_plan_sha256()`（校验冻结 preset 再哈希、drift 即 raise）；③旧诊断改 24 周对齐+全 `diagnostic_*`、schema 硬拒 `promotion_eligible`；④执行头 `overextension_execution_off` 归 second-wave 排除（两处钉死）；⑤BOUNDARY 全 False、无 fetch。设计意图对齐 §2/§3，docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-COMPARISON-V2-CONTRACT-COMMON-POOL` in_progress→resolved。
+- **Verify**: 整读消费引擎体（非只 diff）。亲跑（298a 树、未采信 Codex 44 计数）：焦点 forward_policy 62 OK + schema 17 OK；全包 `test_us_short*` **4454 OK**（Codex 120s 超时未跑全，我给 300s 跑通零回归）。自写 4 对抗探针全 fail-closed。按比例（shadow-only）未起 §6a agent。
+- **Next**: 待用户定 commit 本刀+merge master。blade 2（H10·provider-gated）/3（正式裁决）/4（组合）后续，本刀未触。
+
+## 2026-07-16 — Codex 修复（US-short A1 对比轨 v2 第一刀）
+
+- **Verdict/Action**: 已冻结对比轨 v2 证据契约，并把 Cut-A 共同样本池改为 Pass2-clean；capture/summary 双向绑定 v2 合约与共同池摘要。旧三闸消费者现只会输出 `diagnostic_*`，schema 明确拒绝 `promotion_eligible`，不会被误读为正式采用建议。
+- **Required**: `R-USSHORT-A1-COMPARISON-V2-CONTRACT-COMMON-POOL`（详见 `docs/system_risk_register.md`）待 Claude Code 只审本刀；本刀不做 H10 收益生产、正式裁决/横幅接线、组合验证、provider 调用或正式系统切换。
+- **Verify**: 44 项 A1 v2 聚焦回归、`py_compile`、`git diff --check` 通过；文档守卫 35 项通过。全 `test_us_short*.py` 包在 120 秒硬超时前仅输出进度点，未作为通过证据。
+- **Pre-Codex self-review**: A-F checked；A 覆盖六头全部共同池与三项独立问题/第二波排除；B 对 production engine/schema 的旧 `promotion_eligible|not_eligible` 为 0（对抗测试中保留拒绝样本）；C 新增 schema 反向测试拒绝旧正式晋升词；E 仅更新当前 v2 指针、v1 只留 superseded 历史；F JSON/编译/diff 检查通过。独立 current-diff-only agent 首次限时后重启一次，发现 legacy 输出语义可误读为正式建议；修复后复审 PASS；固定包在最终改动后集中跑完。
+- **Next**: Claude Code：只审 US-short A1 comparison v2 first blade；PASS 后由 Claude 提交，不提前实现第二刀。
+
 ## 2026-07-14 — Claude PASS / Codex 提交（A-short D1/D3 因素对照）
 
 - **Verdict/Action**: Claude 已通过 D1/D3 因素对照轨；Codex 仅提交该刀的私密周度结果、独立市场状态与统计裁决接线。
