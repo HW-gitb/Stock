@@ -8,6 +8,13 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立审查 PASS + 提交（US-short 周报固定输出路径 + 一键启动脚本 + Optional 收口）
+
+- **Verdict/Action**: PASS + 提交合并 master(`090bf743` 主改 + `e6f8c575` Optional 收口,含在现 master `008e20f5`,未 push)。①`runners/us_short_weekly_capstone.py` CLI `--private-root` 由 required 改默认 `STATE_DIR`(state/us_short)→周报/行动表/机读固定落 `state/us_short/{weekly_private,runs_private}/<决策日>/`(从主库 D:\cnhea\Stock 跑即该绝对路径);programmatic `run_weekly_capstone` 仍 required、旧测试不受影响。②新增 `runners/us_short_weekly_capstone.ps1` 薄封装:自动算当前 ET(UTC→Eastern)、复用 private-root 默认、固定私密 `_run_inputs` 输入路径、默认安全 dry-run、`-Live`/`-PrepareBudget` 显式升级;不改选股/不 push/不碰真钱边界。均低选股影响(仅输出路径+启动器)。
+- **Required**: 无。独立审查 3 条 Optional 已全收口:CLI 默认单测(断言省略 --private-root 落 gitignored state/us_short)、ps1 `-Live` 授权注释、`--private-root` help 路径措辞改 checkout-relative。
+- **Verify**: 独立 general-purpose agent 审查=PASS 零 Required(核 `.gitignore` state/*/{weekly_private,runs_private} 均 ignored、私密守卫 `reject_nonprivate_output_path` 在 --private-root 下游不被绕、fail-closed/gated 授权门/scope 无损)。亲跑全包 `discover -p test_us_short*.py` = 4450 OK(4449+新单测)。dry-run 从主库实跑:三产物落 `state/us_short/weekly_private/<date>/` + `runs_private/<date>/`、EXIT=0;ps1 UTF-8 BOM 保 PS5.1 正确解析。多窗口:仅 add 自己 3 文件、ff-merge 只动这 3 个、别窗 50 脏文件全程未碰。
+- **Next**: 每周从 D:\cnhea\Stock 用 `.\runners\us_short_weekly_capstone.ps1`(dry-run 默认出计划);真跑仍多步 gated 授权(-PrepareBudget→独立授权预算→-Live)。周报仍 research-only、非运营权威。ship-gate 时钟未起:0c94(赛道生命周期→Top15)已并入 master(2026-07-12)、前置「0c94 合并或排除」这半已满足;剩 A1 forward-policy 决策(前向结果管道未建+真周未攒)。
+
 ## 2026-07-16 — Claude Code 独立复审（3 项 A-short P3 修复：IV 分类/收据归属/L3 reuse 新鲜度）PASS
 
 - **Verdict/Action**: PASS（未提交）。Codex 主树修的 3 项 P3 逐项复审通过。①`_categorize_error`:`timed out`/`time-out`/`gateway time-out`/裸 `\b5\d{2}\b`→可重试(network/provider_server),`403 forbidden`→permission 单次不重试(正确安全分类);更早的 rate_limit/permission/signature 先判,故 `quota 500`/`field 512` 里的裸5xx不误归;`import re`(line25)在位、脱敏边界(只 type名+类别)未动。②收据归属:build `if args.failure_receipt_out:` 守 + `unlink(missing_ok=True)` 在 fetch 前清;`weekly_screening.ps1` `if Test-Path -PathType Leaf` 守后 `Remove-Item`(首轮无收据不崩)。③reuse staleness:`>14d` 未 override 即 FATAL 且仍零 provider call、`l3_allow_stale_cache` default False fail-closed、`--allow-stale-l3-cache` parser 强制配 `--reuse-l3-cache` 仅测试路径、不泄漏生产 today。
