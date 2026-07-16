@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cnhea.local/schemas/us_short_forward_policy_private_week.schema.json",
+  "title": "US-short comparison v2 private forward-week record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "materialization_status", "capture_binding", "capture",
+    "capture_sha256", "order_snapshot", "order_snapshot_packet_sha256", "forward_inputs",
+    "forward_input_snapshot_sha256", "outcome_packet", "outcome_packet_sha256", "degradation_reason", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_private_week"},
+    "schema_version": {"const": "1.0.0"},
+    "materialization_status": {"enum": ["ready_for_accumulation", "data_degraded_whole_week_no_count"]},
+    "capture_binding": {"type": "object"},
+    "capture": {"type": "object"},
+    "capture_sha256": {"$ref": "#/$defs/sha256"},
+    "order_snapshot": {"type": "object"},
+    "order_snapshot_packet_sha256": {"$ref": "#/$defs/sha256"},
+    "forward_inputs": {"type": ["object", "null"]},
+    "forward_input_snapshot_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "outcome_packet": {"type": ["object", "null"]},
+    "outcome_packet_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "degradation_reason": {"type": ["string", "null"]},
+    "boundary": {"type": "object"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
