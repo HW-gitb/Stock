@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_d4_policy_ablation_execution_summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "preregistration_ref", "input_integrity", "population_views", "policy_comparison", "rule6_ablation", "crash_window_comparison", "decision", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_d4_policy_ablation_execution_summary"},
+    "schema_version": {"const": "1.1.0"},
+    "generated_at": {"type": "string"},
+    "preregistration_ref": {"type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": {"path": {"const": "research/preregistrations/a_short_d4_policy_ablation_20260714.json"}, "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}},
+    "input_integrity": {"type": "object", "additionalProperties": false, "required": ["rank_samples_sha256", "binding_status", "row_count", "provider_calls", "egs_rerun"], "properties": {"rank_samples_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "binding_status": {"const": "posthoc_recorded_unverified"}, "row_count": {"type": "integer", "minimum": 1}, "provider_calls": {"const": 0}, "egs_rerun": {"const": false}}},
+    "population_views": {"type": "array", "minItems": 4, "items": {"$ref": "#/$defs/metric"}},
+    "policy_comparison": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/metric"}},
+    "rule6_ablation": {"type": "array", "minItems": 8, "items": {"$ref": "#/$defs/metric"}},
+    "crash_window_comparison": {"type": "object", "additionalProperties": false, "required": ["status", "legacy_confirmed_days", "candidate_confirmed_days", "reason"], "properties": {"status": {"enum": ["forward_pending", "not_available"]}, "legacy_confirmed_days": {"const": 4}, "candidate_confirmed_days": {"const": 5}, "reason": {"type": "string", "minLength": 1}}},
+    "decision": {"type": "object", "additionalProperties": false, "required": ["status", "rule_deletion_allowed", "production_switch_allowed", "next_action"], "properties": {"status": {"const": "descriptive_research_only"}, "rule_deletion_allowed": {"const": false}, "production_switch_allowed": {"const": false}, "next_action": {"const": "independent_Claude_review_then_wait_for_separate_forward_crash_window_outcome"}}},
+    "boundary": {"type": "object", "additionalProperties": false, "required": ["production", "buy_advice", "ship_gate_evidence"], "properties": {"production": {"const": false}, "buy_advice": {"const": false}, "ship_gate_evidence": {"const": false}}}
+  },
+  "$defs": {"metric": {"type": "object", "additionalProperties": false, "required": ["id", "sample_count", "trade_date_count", "mean_net_return_pct", "monthly_t", "max_drawdown_pct", "win_rate_pct"], "properties": {"id": {"type": "string", "minLength": 1}, "sample_count": {"type": "integer", "minimum": 0}, "trade_date_count": {"type": "integer", "minimum": 0}, "mean_net_return_pct": {"type": ["number", "null"]}, "monthly_t": {"type": ["number", "null"]}, "max_drawdown_pct": {"type": ["number", "null"]}, "win_rate_pct": {"type": ["number", "null"]}}}}
+}

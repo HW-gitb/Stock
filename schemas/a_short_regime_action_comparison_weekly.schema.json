@@ -1,0 +1,35 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_regime_action_comparison_weekly",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "raw_v14_2_regime", "effective_v14_2_regime", "baseline_policy_id", "baseline_policy_epoch", "candidate_v14_3_raw_regime", "candidate_v14_3_fired_rule", "candidate_policy_id", "candidate_policy_epoch", "baseline_action", "candidate_action", "action_diverges", "m67_provenance", "forward_origin", "forward_eligible", "forward_market_returns", "forward_returns_pending", "backfill_complete", "forward_return_basis", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_regime_action_comparison_weekly"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "raw_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction", "unknown"]},
+    "effective_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction"]},
+    "baseline_policy_id": {"const": "v14_2_effective_action_proxy_v1"},
+    "baseline_policy_epoch": {"const": "20260714_effective_fallback_v1"},
+    "candidate_v14_3_raw_regime": {"enum": ["attack", "shock", "defense", "contraction"]},
+    "candidate_v14_3_fired_rule": {"type": "string", "minLength": 1},
+    "candidate_policy_id": {"const": "v14_3_documented_action_proxy_v1"},
+    "candidate_policy_epoch": {"const": "20260714_documented_matrix_v1"},
+    "baseline_action": {"$ref": "#/definitions/action"},
+    "candidate_action": {"$ref": "#/definitions/action"},
+    "action_diverges": {"type": "boolean"},
+    "m67_provenance": {"type": "object", "additionalProperties": false, "required": ["source_schema_name", "source_as_of", "source_sha256", "candidate_build_count"], "properties": {"source_schema_name": {"type": "string", "minLength": 1}, "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "candidate_build_count": {"type": "integer", "minimum": 0}}},
+    "forward_origin": {"type": "object", "additionalProperties": false, "required": ["decision_as_of", "run_date"], "properties": {"decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"}}},
+    "forward_eligible": {"type": "boolean"},
+    "forward_market_returns": {"$ref": "#/definitions/returns"},
+    "forward_returns_pending": {"type": "array", "items": {"enum": ["h1", "h3", "h5", "h10"]}, "uniqueItems": true},
+    "backfill_complete": {"type": "boolean"},
+    "forward_return_basis": {"type": "object"},
+    "boundary": {"type": "object", "additionalProperties": false, "required": ["production", "comparison_only", "drives_m67", "automatic_production_switch"], "properties": {"production": {"const": false}, "comparison_only": {"const": true}, "drives_m67": {"const": false}, "automatic_production_switch": {"const": false}}}
+  },
+  "definitions": {
+    "action": {"type": "object", "additionalProperties": false, "required": ["new_build", "max_exposure_pct"], "properties": {"new_build": {"enum": ["allow", "forbidden"]}, "max_exposure_pct": {"enum": [0, 60, 80]}}},
+    "returns": {"type": "object", "additionalProperties": false, "required": ["h1", "h3", "h5", "h10"], "properties": {"h1": {"type": ["number", "null"]}, "h3": {"type": ["number", "null"]}, "h5": {"type": ["number", "null"]}, "h10": {"type": ["number", "null"]}}}
+  }
+}

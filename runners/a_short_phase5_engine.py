@@ -529,13 +529,28 @@ def holding_levels(inp: dict, ind: dict, regime: str):
     position = ((inp.get("stateful_risk") or {}).get("position") or {})
     entry_date = str(position.get("entry_date") or "")
     manual_stop = position.get("stop_loss")
-    dated_post_entry = [row for row in (inp.get("price_series") or [])
-                        if entry_date and str(row.get("trade_date") or "") >= entry_date and
-                        isinstance(row.get("high"), (int, float)) and not isinstance(row.get("high"), bool)]
-    highest_since_entry = max((float(row["high"]) for row in dated_post_entry), default=None)
-    # Undated legacy fixtures cannot prove a post-entry high. Preserve the locked entry stop rather
-    # than letting a pre-entry 20-day resistance silently tighten the live holding.
-    if highest_since_entry is None and manual_stop is None:
+    price_series = inp.get("price_series") or []
+    highest_since_entry = None
+    if entry_date:
+        if not _is_valid_date(entry_date):
+            return None, "持仓入场日期非法，无法验证入场后最高价"
+        dated_post_entry = []
+        for row in price_series:
+            if not isinstance(row, dict):
+                return None, "持仓价格行缺失或非法，无法验证入场后最高价"
+            trade_date = str(row.get("trade_date") or "")
+            high = row.get("high")
+            if not _is_valid_date(trade_date):
+                return None, "持仓价格日期缺失或非法，无法验证入场后最高价"
+            if trade_date >= entry_date:
+                if (not isinstance(high, (int, float)) or isinstance(high, bool)
+                        or not math.isfinite(float(high))):
+                    return None, "入场后价格最高价缺失或非法，无法精算跟踪止损"
+                dated_post_entry.append(float(high))
+        if not dated_post_entry:
+            return None, "缺入场后价格，无法精算跟踪止损"
+        highest_since_entry = max(dated_post_entry)
+    elif manual_stop is None:
         highest_since_entry = ind.get("resistance")
     if close is None or atr is None or atr <= 0 or (highest_since_entry is None and manual_stop is None):
         return None, "缺价/ATR/入场后最高价与初始止损,无法精算跟踪止损"

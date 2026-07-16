@@ -650,6 +650,15 @@ class HoldingDispositionS3bTests(unittest.TestCase):
                 "pending_successor_slice": None, "production_effect_enabled": False,
                 "implementation_status": "implemented", "privacy_class": "public_tracked"}
 
+    def _breached_held_inp(self):
+        """Make the trailing high post-entry; B1 must not rely on a pre-entry high."""
+        inp = _good_input(stateful_risk=_held_state())
+        inp["price_series"] = [
+            {**row, "high": 3.10} if row["trade_date"] == "20260601" else dict(row)
+            for row in inp["price_series"]
+        ]
+        return inp
+
     # ── 合并引擎(severity-max + blocked_add OR + anti-rescue)──
     def test_merge_severity_max(self):
         self.assertEqual(_merge_holding_disposition(
@@ -820,7 +829,8 @@ class HoldingDispositionS3bTests(unittest.TestCase):
     # ── S3b R3: 减仓价/清仓价/减仓比例 = advisory 价位(复用 S3a 损/盈一,不自动下单=R4)──
     def _clean_held_inp(self):
         # 非破位持仓(close 高于跟踪止损)→ S3a plan 有 stop+t1+t2,供 reduce_review 减仓价(=盈一)非 None 测试
-        series = [{"high": 9.0 + i * 0.05, "low": 8.9 + i * 0.05, "close": 9.0 + i * 0.05} for i in range(30)]
+        series = [{"trade_date": f"202606{i + 1:02d}", "high": 9.0 + i * 0.05,
+                   "low": 8.9 + i * 0.05, "close": 9.0 + i * 0.05} for i in range(30)]
         return _good_input(stateful_risk=_held_state(), close=10.6, price_series=series)
 
     def test_r3_clear_review_clear_price_eq_s3a_stop(self):
@@ -858,7 +868,7 @@ class HoldingDispositionS3bTests(unittest.TestCase):
 
     def test_r3_breached_reduce_price_null_not_fabricated(self):
         # 破位 → plan.t1=None → reduce_review 减仓价=null(诚实不伪造),减仓比例仍 advisory
-        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
         r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
         _apply_holding_disposition(r)
@@ -1026,7 +1036,7 @@ class HoldingDispositionS3bTests(unittest.TestCase):
 
     def test_r4a_clear_review_breached_price_cross_reached(self):
         # 破位 held + clear_review → 清仓价=plan.stop≥现价 → price_cross=clear_price_reached(到价清仓=S3a 破位)
-        r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
         r["machine"]["operation_impact"] = [self._imp("clear_review", blocked=True)]
         _apply_holding_disposition(r)

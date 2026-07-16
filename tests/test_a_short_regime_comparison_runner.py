@@ -15,6 +15,7 @@ import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -25,8 +26,9 @@ if str(ROOT) not in sys.path:
 from runners.a_short_regime_comparison_runner import (  # noqa: E402
     iv_series_to_map, make_feature_provider, run_regime_step, save_panel, save_ledger,
     save_comparison_records, load_ledger, load_comparison_records, main, main_board_only,
-    _latest_settled_as_of,
+    _latest_settled_as_of, save_action_records,
 )
+from engine.a_short_regime_action_comparison import build_action_record  # noqa: E402
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
 from engine.a_short_regime_ledger import build_ledger, BACKFILL_MIN_TRADING_DAYS  # noqa: E402
 
@@ -221,12 +223,97 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertEqual(out2["ledger"]["coverage"]["n"], BACKFILL_MIN_TRADING_DAYS)
             self.assertEqual(out2["evidence"]["total_weeks"], 1)
 
+    def test_d2_action_sidecar_freezes_raw_effective_and_source_digest(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "weekly_m67.json"
+            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
+                              encoding="utf-8")
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
+                      m67_report_path=str(report), action_records_path=str(base / "actions.json"),
+                      action_summary_path=str(base / "summary.json"), action_decision_as_of=cal[-1])
+            with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value=cal[-1]):
+                out = run_regime_step(**kw)
+            self.assertEqual(out["action_comparison"]["records"][0]["raw_v14_2_regime"], "unknown")
+            self.assertEqual(out["action_comparison"]["records"][0]["effective_v14_2_regime"], "shock")
+            self.assertTrue(out["action_comparison"]["records"][0]["forward_eligible"])
+            self.assertTrue((base / "actions.json").exists())
+
+    def test_d2_historical_decision_is_derived_not_counted(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "weekly_m67.json"
+            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
+                              encoding="utf-8")
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
+                      action_records_path=str(base / "actions.json"),
+                      action_summary_path=str(base / "summary.json"),
+                      action_decision_as_of=cal[-2])
+            out = run_regime_step(**kw)
+            row = out["action_comparison"]["records"][0]
+            self.assertFalse(row["forward_eligible"])
+            self.assertEqual(out["action_comparison"]["summary"]["total_forward_weeks"], 0)
+
+    def test_d2_rejects_current_decision_date_for_historical_settlement_before_writes(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "weekly_m67.json"
+            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
+                              encoding="utf-8")
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
+                      action_records_path=str(base / "actions.json"),
+                      action_summary_path=str(base / "summary.json"), action_decision_as_of="20260716")
+            with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value="20260716"):
+                with self.assertRaises(ValueError):
+                    run_regime_step(**kw)
+            self.assertFalse(Path(kw["ledger_path"]).exists())
+
+    def test_d2_action_writer_cannot_seed_historical_forward_row(self):
+        regime = {
+            "as_of": "20230102", "v14_3_raw_regime": "defense",
+            "v14_3_fired_rule": "broad_index_crash",
+            "forward_returns": {"h1": None, "h3": None, "h5": None, "h10": None},
+            "forward_returns_pending": ["h1", "h3", "h5", "h10"],
+        }
+        forged = build_action_record(
+            regime_record=regime, raw_v14_2_regime="shock", effective_v14_2_regime="shock",
+            m67_source={"source_schema_name": "a_short_weekly_report", "source_as_of": "20230102",
+                        "source_sha256": "a" * 64, "candidate_build_count": 0},
+            forward_origin={"decision_as_of": "20230102", "run_date": "20230102"})
+        self.assertTrue(forged["forward_eligible"])
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value="20260716"):
+                with self.assertRaises(ValueError):
+                    save_action_records([forged], str(Path(tmp) / "actions.json"), current_action=forged,
+                                        regime_records=[])
+
+    def test_partial_d2_action_configuration_aborts_before_comparison_writes(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(raw_v14_2_regime="unknown")
+            with self.assertRaises(ValueError):
+                run_regime_step(**kw)
+            self.assertFalse(Path(kw["ledger_path"]).exists())
+            self.assertFalse(Path(kw["records_path"]).exists())
+            self.assertFalse(Path(kw["panel_path"]).exists())
+
 
 class CliGuardTests(unittest.TestCase):
     def test_noncanonical_as_of_rejected_before_fetch(self):
         # R-V143-SLICE2B-RUNNER-CLI-ASOF-LENIENT-FETCH: malformed date fails before any provider call.
         with self.assertRaises(SystemExit):
             main(["--as-of", "2024011", "--confirm-fetch-authorized"])
+
+    def test_cli_refuses_manual_d2_forward_eligibility_flag(self):
+        with self.assertRaises(SystemExit):
+            main(["--as-of", "20260714", "--d2-forward-eligible"])
 
 
 if __name__ == "__main__":

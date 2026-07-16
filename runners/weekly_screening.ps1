@@ -409,6 +409,7 @@ if ($SkipRegime) {
     # unknown in its frozen slot; production resolves that to shock, so never compare V14.3 to literal
     # unknown while the actual weekly posture is shock.
     $EffectiveV142Regime = 'shock'
+    $RawV142Regime = 'unknown'
     try {
         $RawV142Regime = (Get-Content -Raw -Encoding UTF8 $SemAnalysisInput | ConvertFrom-Json).market_context.market_regime.status
         if ($RawV142Regime -in @('attack', 'shock', 'defense', 'contraction')) {
@@ -418,7 +419,10 @@ if ($SkipRegime) {
         Write-Host "[regime] unable to read production regime from analysis_input; using fail-closed effective shock" -ForegroundColor Yellow
     }
     $RegimeArgs = @('runners\a_short_regime_comparison_runner.py', '--as-of', $AsOf,
-                    '--v14_2-regime', $EffectiveV142Regime, '--confirm-fetch-authorized')
+                    '--v14_2-regime', $EffectiveV142Regime,
+                    '--v14_2-raw-regime', $RawV142Regime,
+                    '--m67-report', $M67Out,
+                    '--confirm-fetch-authorized')
     if (-not (Test-Path $RegimeLedger)) {
         Write-Host "[regime] no existing ledger -> one-time --bootstrap (252-day backfill; may take several minutes)" -ForegroundColor Yellow
         $RegimeArgs += '--bootstrap'

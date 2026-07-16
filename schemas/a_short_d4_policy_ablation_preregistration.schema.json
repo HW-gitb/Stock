@@ -1,0 +1,18 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_d4_policy_ablation_preregistration",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "frozen_at", "scope", "source_contract", "frozen_tests", "decision_boundary", "budget", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_d4_policy_ablation_preregistration"},
+    "schema_version": {"const": "1.0.0"},
+    "frozen_at": {"type": "string", "format": "date-time"},
+    "scope": {"type": "object", "additionalProperties": false, "required": ["lane", "purpose", "production_change"], "properties": {"lane": {"const": "a_short"}, "purpose": {"const": "independent_policy_ablation_only"}, "production_change": {"const": false}}},
+    "source_contract": {"type": "object", "additionalProperties": false, "required": ["rank_samples_required_columns", "return_field", "return_status_field", "entry_exit_basis", "cost_basis"], "properties": {"rank_samples_required_columns": {"type": "array", "minItems": 8, "items": {"type": "string"}}, "return_field": {"const": "ret_5d_t1_net"}, "return_status_field": {"const": "ret_5d_status"}, "entry_exit_basis": {"const": "existing_T_plus_1_open_to_T_plus_5_close"}, "cost_basis": {"const": "existing_rank_sample_net_cost_model"}}},
+    "frozen_tests": {"type": "object", "additionalProperties": false, "required": ["population_views", "current_vs_legacy", "rule6_ablation", "crash_window", "horizons"], "properties": {"population_views": {"const": ["all_pre_veto", "tier1_pre_veto", "tier2_pre_veto", "tier1_current_rule6_passed"]}, "current_vs_legacy": {"const": ["tier1_current_all_rule6", "tier1_legacy_no_rule6"]}, "rule6_ablation": {"type": "object", "additionalProperties": false, "required": ["leave_one_out", "only_one_on", "rules"], "properties": {"leave_one_out": {"const": true}, "only_one_on": {"const": true}, "rules": {"const": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]}}}, "crash_window": {"const": {"legacy_confirmed_days": 4, "candidate_confirmed_days": 5, "evaluation": "separate_forward_matched_cohort_only"}}, "horizons": {"const": [5]}}},
+    "decision_boundary": {"type": "object", "additionalProperties": false, "required": ["no_rule_deletion_from_this_run", "no_auto_production_switch", "crash_window_result_can_be_pending"], "properties": {"no_rule_deletion_from_this_run": {"const": true}, "no_auto_production_switch": {"const": true}, "crash_window_result_can_be_pending": {"const": true}}},
+    "budget": {"type": "object", "additionalProperties": false, "required": ["ledger_ref", "test_id", "test_budget_units", "user_authorized_execution"], "properties": {"ledger_ref": {"const": "research/ledgers/a_short_d4_policy_ablation_program_test_budget_ledger_20260714.json"}, "test_id": {"const": "a_short_d4_policy_ablation_20260714"}, "test_budget_units": {"const": 1}, "user_authorized_execution": {"const": true}}},
+    "boundary": {"type": "object", "additionalProperties": false, "required": ["provider_call", "egs_rerun", "parameter_search", "production_change", "buy_advice", "ship_gate_evidence"], "properties": {"provider_call": {"const": false}, "egs_rerun": {"const": false}, "parameter_search": {"const": false}, "production_change": {"const": false}, "buy_advice": {"const": false}, "ship_gate_evidence": {"const": false}}}
+  }
+}

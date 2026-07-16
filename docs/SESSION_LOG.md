@@ -120,6 +120,42 @@
 - **Verify**: final focused A-short L3/EGS/weekly/schema/doc-guard pack: 592 OK; syntax and JSON parses OK; `git diff --check` OK. The live probe persisted only `logs/a_short_l3_snapshot_20260714.json` without raw payloads, URLs or secrets.
 - **Pre-Codex self-review**: A covered primary-interface/transport/fallback, partial graph, fresh/legacy snapshot, candidate coverage, health, official marker and weekly entry surfaces; B `score_l3` has zero direct `pro.concept`, `pro.concept_detail` or `load_cache` calls; C adds both fallback-success and all-sources-fail controls; E leaves `CURRENT` untouched and adds only the runner route pointer plus register entry. No subagent used.
 - **Next**: Claude Code: review the four-cut L3 repair only; do not change scoring weights, thresholds, broker paths, or unrelated A-short/US-short work.
+## 2026-07-16 — Claude 审查 PASS（A-short D2/D4 Optional 硬化；已提交）
+
+- **Verdict/Action**: 复审两项 comparison-only Optional 硬化，PASS。D2：`summarize_action_records` 拒同一 run_date 多条 forward-eligible（防直呼 helper 同日铸 12 周），合法累积每真实日≤1 forward 行不误伤；Codex 诚实标注非密码学封边（`_write_json`/直写仍在保证外、无生产消费）。D4：`_bool` 认数值 1.0 为 veto（对齐 analyzer `_parse_bool`）；`_commit_spent_result` 先原子写账本(spent)再写结果、`os.replace`+temp `finally` 清理，晚失败 fail-closed（花了没结果、不可重跑挑结果）；仅影响未来 D4，spent 账本/结果文件未动。
+- **Required**: 无。两项均为上轮 comparison-only Optional 的加固；详见 `docs/system_risk_register.md`。
+- **Verify**: D2/D4 focused 15 OK（numeric-veto 正负控 / spend-before-publish 顺序断言 `calls==[ledger,result]` / 原子无临时残留 / 同 run_date 拒 四控制）；全 lane `discover test_a_short*` 1490，仅 3 既存 entry_funnel fixture ERROR，无回归；doc guard 35 OK；review-evidence:not_available。
+- **Next**: 已提交本切片。
+
+## 2026-07-16 — Codex 修复（A-short D2 / D4 Optional；待 Claude）
+
+- **Verdict/Action**: 已修但未提交。D2 现在拒绝同一真实运行日塞入多条“前瞻有效”记录，不能一天凑出 12 周证据。D4 现在把数值 `1.0` 当作 hard veto；未来执行先原子记为预算已花，再发布结果，发布失败也不会留下“结果有了、预算没花”。
+- **Required**: Claude 独立复审这两项 Optional；历史 D4 不重跑、不改结果，仍只是人工可信。
+- **Verify**: D2/D4 focused **37 OK**。
+- **Pre-Codex self-review**: 同日伪造 2 条 forward 记录会被汇总拒绝；模拟结果发布失败时先调用 ledger 写入；原子写后无临时残留。
+- **Next**: Claude：审查
+
+## 2026-07-16 — Claude 审查 PASS（A-short B1 + D2 + D4；已提交）
+
+- **Verdict/Action**: 复审 Codex 修复，三刀 PASS。B1：holding_levels 严格 fail-closed（非法/缺失 trade_date、非-dict 行、非法 entry_date、非有限 high、无入场后行一律拒，绝不回退买入前高点）+ fixture 带日期，4 个既存持仓处置失败反修好、无新回归。D2：forward_eligible 由真实时钟派生+validate 反查、summarize 只数 forward_eligible、save 绑当前行受控 run_date；§6a 独立 agent+我核实 runner 路径不可伪造（每真实日≤1 forward 行）。D4：route-b relabel，结果 binding_status=posthoc_recorded_unverified（schema const 焊死）、hash/行数未变、overclaim 已改。
+- **Required**: 无。`R-ASHORT-D4-SOURCE-HASH-BINDING-UNENFORCED` 经 route-b 已闭；另 2 类 comparison-only Optional（D2 helper 脱 runner 直呼可伪造 = 防御纵深、人工门下游；D4 `_bool`+写盘原子性 moot）均见 `docs/system_risk_register.md`、非选股/真钱、不阻断。
+- **Verify**: 亲跑全 lane `discover test_a_short*` **1486**，仅 3 既存 entry_funnel fixture ERROR（缺 `result/a_short/20260622/overlay.json`，基线 da767a2e 同）；schema 48 OK；2 独立对抗 agent（D4 source-hash / D2 forward 伪造）结论均亲验；doc guard OK；review-evidence:not_available。
+- **Next**: 已提交本切片；Optional 硬化待用户定是否另起一轮。
+
+## 2026-07-16 — Codex 修复（A-short B1 + D2 + D4；待 Claude）
+
+- **Verdict/Action**: 已修但未提交。**B1**：持仓止损只看入场日及之后的、有真实日期的价格；日期缺失或无入场后价格直接拒绝，绝不回退到买入前高点。**D2**：前瞻有效只能由 runner 自己的实际运行日生成；历史回放不能手工标成有效，写入器不能伪造历史有效周。**D4**：旧单次结果改正为“事后记录哈希、只供人工判断”，不再假称已预先锁哈希。
+- **Required**: Claude 对 B1、D2、D4 当前 diff 独立复审；D4 旧结果不得当作 source-hash-bound 证据。无自动生产切换、无提交。
+- **Verify**: `test_a_short_phase5_engine` + `gap_data_registry` + `d4_policy_ablation` + `regime_action_comparison` + `regime_comparison_runner` + `weekly_pipeline` **761 OK**；Python 编译、D2/D4 JSON 解析、PowerShell 语法、`git diff --check` 通过。
+- **Pre-Codex self-review**: 独立对抗复核先后抓到 D2 的手工 Boolean、可伪造 run-date、以及直接写入器三条历史证据绕过；现已分别移除、改为受控时钟+7 日绑定、并限制为当周追加/既有收益回填。最终独立复核 **PASS**。
+- **Next**: Claude：审查
+
+## 2026-07-16 — Claude 审查 FAIL（A-short D4 source-hash;B1·D2 code PASS）
+
+- **Verdict/Action**: 逐刀独立审查（互不背书）。**B1 PASS**：`_fetch_price_series` 保留已净化 `{trade_date,high,low,close}`→已提交 `holding_levels` 按 `>=entry_date` 剔入场前高点，ripple 净、无回归。**D2 PASS**：双层强制 raw+M6.7 同现、effective∈concrete fail-closed、写路径挡生产 `/result/a_short/`、m67 仅 sha256+建仓数、counts-only 不改选股、gate 12/8。**D4 FAIL**：自称 source-hash-bound 但预注册无期望哈希、runner 只记录不比较（详 register）。
+- **Required**: `R-ASHORT-D4-SOURCE-HASH-BINDING-UNENFORCED`（material）— 完整 Required / 风险 / 两条 closure 路径 / 两条 low Optional 见 `docs/system_risk_register.md`（单一来源）。B1、D2 code PASS 无 Required。
+- **Verify**: 亲跑 d6ac 树 5 目标模块 581 OK + `tests/schema *a_short*` 48 OK；全 lane `discover test_a_short*` 出 3F+4E，经已提交基线 da767a2e（无 B1/D2/D4）对照证完全相同、全为既存（entry_funnel 缺 `result/a_short/20260622/overlay.json` fixture；gap_data_registry holding disposition R3/R4a/R4b），非本切片回归；1 独立对抗只读 agent 攻 D4 六不变式 = 5 ENFORCED + source-hash 1 GAP（已亲验预注册/runner/仓库无 rank_samples.csv）；review-evidence:not_available。
+- **Next**: Codex：修复
 
 ## 2026-07-14 — Claude PASS / Codex 提交（A-short D1/D3 因素对照）
 
@@ -156,6 +192,22 @@
 - **Verify**: 新 3 eligible→top-K 2 的 red→green 集成回归通过；伪造 full binding 的新用例证明零 provider fetch、不会落地 subset/source-packet；source-packet/data_context 79 OK、capstone/Batch5→Batch4 89 OK、legacy source-packet 7 OK、全离线 `*us_short*.py` 4444 OK / 1 skipped。
 - **Pre-Codex self-review**: A 覆盖 full-binding 在 Pass2/top-K/fetch 前、后续 subset scope、两条生产器和 provenance；B `rg -n -g 'us_short_batch5_*source_packet.py' -g 'us_short_batch5_data_context_source_packet.schema.json' '"schema_version": "1\\.2\\.0"' runners tests schemas` = 0 active hits；C 钉住 3→2 正控、伪 binding 反控、缺任一配对路径 fail-closed；E 未改 CURRENT；F 全离线包已集中跑完，doc/diff guard 通过。独立 current-diff-only agent 先抓到过晚对账，修复后复审 PASS。
 - **Next**: Claude Code：审查。
+
+## 2026-07-14 — Codex 修复（A-short D1/D3 裁决可达性与统计门）
+
+- **Verdict/Action**: 修复 D1/D3 采用路径死锁：独立 CSI300 实现状态替代生产 fallback 标签；D3 状态缺失 fail-closed；采用/舍弃改为非重叠配对块、sign-flip、四头 Holm、bootstrap CI。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 待 Claude 独立审查独立状态 PIT、D3 单因素边界、统计门与 36 周无证据不舍弃；详见 `docs/system_risk_register.md`。
+- **Verify**: 相关回归 866 OK；Python 编译、PowerShell 语法、doc guard 和 `git diff --check` 通过。
+- **Pre-Codex self-review**: 生产 `market_regime` 未被写回；CSI300 失败仅写 unavailable；Holm 固定覆盖四头；组合头仍未接入。
+- **Next**: Claude 审查本 D1/D3 修复；不重跑既有对照或改正式规则。
+
+## 2026-07-14 — Codex 修复（A-short B1 + D1-D4）
+
+- **Verdict/Action**: B1 与 D1-D4 已修复；未改生产选股、阈值、权重或自动操作。
+- **Required**: `R-ASHORT-B1-TRAILING-STOP-PREENTRY-HIGH`、`R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 待 Claude 独立逐刀审查；详见 `docs/system_risk_register.md`。
+- **Verify**: D4 单次预注册已执行；相关回归 859 OK、Python 编译与 PowerShell 语法通过、`git diff --check` 无错误。
+- **Pre-Codex self-review**: D3 只放宽 IV、不放宽收缩期硬限制；D2/D4 的账本、私有路径、前瞻与预算边界已复核。
+- **Next**: Claude 逐刀审查 B1、D1+D3、D2、D4；D1-D3/D2 后续按周积累，D4 不重跑。
 
 ## 2026-07-14 — Claude Code 独立复审（A-short 闪崩否决 5 日窗口 + comparison-only tracker）代码 PASS
 

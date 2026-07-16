@@ -1,0 +1,16 @@
+{
+  "schema_name": "a_short_regime_action_comparison_governance",
+  "schema_version": "1.0.0",
+  "baseline_policy_id": "v14_2_effective_action_proxy_v1",
+  "baseline_policy_epoch": "20260714_effective_fallback_v1",
+  "candidate_policy_id": "v14_3_documented_action_proxy_v1",
+  "candidate_policy_epoch": "20260714_documented_matrix_v1",
+  "action_matrix": {
+    "attack": {"new_build": "allow", "max_exposure_pct": 80},
+    "shock": {"new_build": "allow", "max_exposure_pct": 60},
+    "defense": {"new_build": "forbidden", "max_exposure_pct": 0},
+    "contraction": {"new_build": "forbidden", "max_exposure_pct": 0}
+  },
+  "review_gate": {"forward_live_weeks_min": 12, "divergence_h10_samples_min": 8},
+  "boundary": {"production": false, "comparison_only": true, "drives_m67": false, "automatic_production_switch": false}
+}
