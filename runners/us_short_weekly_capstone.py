@@ -1340,10 +1340,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--now-et", required=True, type=_parse_now_et,
                         help="naive ET wall-clock decision instant, e.g. 2026-07-09T08:00:00 (Beijing→ET upstream)")
     parser.add_argument("--private-root", type=Path, default=STATE_DIR,
-                        help="private (gitignored) output root; default state/us_short — the weekly report/action "
-                             "table land under <root>/weekly_private/<decision_date>/, the machine record under "
-                             "<root>/runs_private/<decision_date>/ (repo-relative, so a run from the D:/cnhea/Stock "
-                             "checkout writes D:/cnhea/Stock/state/us_short/weekly_private/…)")
+                        help="private (gitignored) output root; default state/us_short, relative to the checkout you "
+                             "run from — the weekly report / action table land under <root>/weekly_private/"
+                             "<decision_date>/ and the machine record under <root>/runs_private/<decision_date>/. "
+                             "Running from the main D:/cnhea/Stock checkout therefore writes under "
+                             "D:/cnhea/Stock/state/us_short/; a feature worktree writes under its own tree.")
     parser.add_argument("--batch4-template-path", required=True, type=Path)
     parser.add_argument("--account-state-path", required=True, type=Path)
     parser.add_argument("--momentum-top-k", type=int, default=200)

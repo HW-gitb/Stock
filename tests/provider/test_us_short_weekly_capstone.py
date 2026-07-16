@@ -90,6 +90,28 @@ class CapstoneDryRunTest(unittest.TestCase):
                          ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
                           "vix_regime"])
 
+    def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
+        """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
+        action table / machine record land on a provably-private path with no explicit flag (privacy contract)."""
+        import io
+        from contextlib import redirect_stdout
+        from runners import us_short_weekly_capstone as cap
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            rc = cap.main([
+                "--now-et", "2026-07-09T08:00:00",
+                "--batch4-template-path", "template.json",
+                "--account-state-path", "account.json",
+            ])
+        self.assertEqual(rc, 0)
+        plan = json.loads(buf.getvalue())
+        bridge = next(s for s in plan["stages"] if s["name"] == "weekly_bridge")
+        self.assertEqual(bridge["outputs"], [
+            "state/us_short/weekly_private/20260709/weekly_report.md",
+            "state/us_short/weekly_private/20260709/action_table.csv",
+            "state/us_short/runs_private/20260709/machine_record.json",
+        ])
+
     def test_intraday_now_et_fails_closed(self):
         # 07-09 11:00 ET is inside the RTH session [09:30, 16:00) -> §2.1 dead zone -> no canonical, no run.
         with self.assertRaises(WeeklyCapstoneError):

@@ -101,6 +101,7 @@ if (-not [string]::IsNullOrWhiteSpace($PrivateRoot)) { $cliArgs += @("--private-
 if ($MomentumTopK -gt 0) { $cliArgs += @("--momentum-top-k", "$MomentumTopK") }
 if ($Pass2Budget -gt 0)  { $cliArgs += @("--pass2-call-budget", "$Pass2Budget") }
 if ($PrepareBudget)      { $cliArgs += "--prepare-pass2-budget" }
+# -Live 自动带上 --confirm-user-authorization(= 本次 per-execution 授权,SR-PROVIDER-001);dry-run 是默认,操作方须自觉打 -Live 才联网真跑,不会被无意触发。
 if ($Live)               { $cliArgs += @("--live", "--confirm-user-authorization") }
 if ($ExtraArgs.Count -gt 0) { $cliArgs += $ExtraArgs }
 
