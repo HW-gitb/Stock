@@ -1,0 +1,23 @@
+{
+  "schema_name": "a_short_d4_policy_ablation_preregistration",
+  "schema_version": "1.0.0",
+  "frozen_at": "2026-07-14T18:00:00+08:00",
+  "scope": {"lane": "a_short", "purpose": "independent_policy_ablation_only", "production_change": false},
+  "source_contract": {
+    "rank_samples_required_columns": ["trade_date", "tier", "hard_veto", "ret_5d_status", "ret_5d_t1_net", "chasing_high", "overheat_flag", "l2_name", "esp_raw"],
+    "return_field": "ret_5d_t1_net",
+    "return_status_field": "ret_5d_status",
+    "entry_exit_basis": "existing_T_plus_1_open_to_T_plus_5_close",
+    "cost_basis": "existing_rank_sample_net_cost_model"
+  },
+  "frozen_tests": {
+    "population_views": ["all_pre_veto", "tier1_pre_veto", "tier2_pre_veto", "tier1_current_rule6_passed"],
+    "current_vs_legacy": ["tier1_current_all_rule6", "tier1_legacy_no_rule6"],
+    "rule6_ablation": {"leave_one_out": true, "only_one_on": true, "rules": ["chasing_high", "overheat", "l2_unknown", "esp_non_positive"]},
+    "crash_window": {"legacy_confirmed_days": 4, "candidate_confirmed_days": 5, "evaluation": "separate_forward_matched_cohort_only"},
+    "horizons": [5]
+  },
+  "decision_boundary": {"no_rule_deletion_from_this_run": true, "no_auto_production_switch": true, "crash_window_result_can_be_pending": true},
+  "budget": {"ledger_ref": "research/ledgers/a_short_d4_policy_ablation_program_test_budget_ledger_20260714.json", "test_id": "a_short_d4_policy_ablation_20260714", "test_budget_units": 1, "user_authorized_execution": true},
+  "boundary": {"provider_call": false, "egs_rerun": false, "parameter_search": false, "production_change": false, "buy_advice": false, "ship_gate_evidence": false}
+}

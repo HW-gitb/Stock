@@ -12,6 +12,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import date, timedelta
 from pathlib import Path
 
 import jsonschema
@@ -39,12 +40,13 @@ def _series():
     # inside the 20d lookback but outside the 14d ATR window, so ATR stays ~0.04. closes 2.90 so MAs ~2.90.
     s = []
     for i in range(30):
+        trade_date = (date(2026, 5, 11) + timedelta(days=i)).strftime("%Y%m%d")
         if i == 12:
-            s.append({"high": 3.10, "low": 2.87, "close": 2.90})
+            s.append({"trade_date": trade_date, "high": 3.10, "low": 2.87, "close": 2.90})
         elif i == 13:
-            s.append({"high": 3.10, "low": 2.88, "close": 2.90})   # #6:次日背书近20日高 → resistance strong(否则单日 3.10 被判插针)
+            s.append({"trade_date": trade_date, "high": 3.10, "low": 2.88, "close": 2.90})   # #6:次日背书近20日高 → resistance strong(否则单日 3.10 被判插针)
         else:
-            s.append({"high": 2.92, "low": 2.88, "close": 2.90})
+            s.append({"trade_date": trade_date, "high": 2.92, "low": 2.88, "close": 2.90})
     return s
 
 
@@ -472,6 +474,35 @@ class HoldingLevelsTests(unittest.TestCase):
         low, _ = holding_levels({"close": 70.0}, {"resistance": 72.0, "atr14": 2.0}, "震荡期")
         high, _ = holding_levels({"close": 70.0}, {"resistance": 75.0, "atr14": 2.0}, "震荡期")
         self.assertGreater(high["stop"], low["stop"])   # 近高更高 → 跟踪止损上移(ratchet)
+
+    def test_dated_post_entry_high_excludes_pre_entry_extreme(self):
+        # B1: a historical 20-day high before entry must not tighten a live holding's trailing stop.
+        inp = {"close": 11.0,
+               "price_series": [
+                   {"trade_date": "20260610", "high": 100.0, "low": 9.0, "close": 10.0},
+                   {"trade_date": "20260611", "high": 12.0, "low": 10.0, "close": 11.0},
+               ],
+               "stateful_risk": {"position": {"entry_date": "20260611", "stop_loss": 8.0}}}
+        plan, rej = holding_levels(inp, {"resistance": 100.0, "atr14": 1.0}, "震荡期")
+        self.assertIsNone(rej)
+        self.assertEqual(plan["highest_since_entry"], 12.0)
+        self.assertEqual(plan["stop"], 10.75)
+
+    def test_held_missing_price_dates_fail_closed_even_with_manual_stop(self):
+        for date in (None, "20260631"):
+            inp = {"close": 11.0,
+                   "price_series": [{"trade_date": date, "high": 12.0, "low": 10.0, "close": 11.0}],
+                   "stateful_risk": {"position": {"entry_date": "20260611", "stop_loss": 8.0}}}
+            plan, reason = holding_levels(inp, {"resistance": 12.0, "atr14": 1.0}, "震荡期")
+            self.assertIsNone(plan)
+            self.assertIn("价格日期", reason)
+
+    def test_held_nonmapping_price_row_fails_closed(self):
+        inp = {"close": 11.0, "price_series": [None],
+               "stateful_risk": {"position": {"entry_date": "20260611", "stop_loss": 8.0}}}
+        plan, reason = holding_levels(inp, {"resistance": 12.0, "atr14": 1.0}, "震荡期")
+        self.assertIsNone(plan)
+        self.assertIn("价格行", reason)
 
     def test_breached_when_price_below_trailing_stop(self):
         plan, rej = holding_levels({"close": 68.0}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")

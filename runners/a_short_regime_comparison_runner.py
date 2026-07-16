@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -40,14 +41,24 @@ from engine.a_short_regime_ledger import (
     LEDGER_LANE_ROOT, LEDGER_FILENAME,
 )
 from engine.a_short_regime_classifier import validate_comparison_record
+from engine.a_short_regime_action_comparison import (
+    build_action_record, m67_provenance, merge_action_records, refresh_action_records,
+    summarize_action_records, validate_action_record,
+)
 from engine.data.a_share_board_scope import is_a_share_main_board
 
 RECORDS_FILENAME = "regime_comparison_records.json"
 PANEL_FILENAME = "regime_comparison_panel.md"
+ACTION_RECORDS_FILENAME = "regime_action_comparison_records.json"
+ACTION_SUMMARY_FILENAME = "regime_action_comparison_summary.json"
 IV_FEED_SCHEMA_PATH = ROOT / "schemas" / "a_short_iv_feed.schema.json"
 
 
 # ---- pure helpers -----------------------------------------------------------------------------
+
+def _current_run_date() -> str:
+    """Single controlled clock for D2 forward-evidence eligibility."""
+    return datetime.now().strftime("%Y%m%d")
 
 def validate_iv_feed(iv_feed: dict) -> None:
     """Validate an a_short_iv_feed artifact before consumption: schema + the feed's own consistency
@@ -103,6 +114,8 @@ def lane_paths(project_root: str | Path | None = None) -> dict:
         "ledger": str(lane / LEDGER_FILENAME),
         "records": str(lane / RECORDS_FILENAME),
         "panel": str(lane / PANEL_FILENAME),
+        "action_records": str(lane / ACTION_RECORDS_FILENAME),
+        "action_summary": str(lane / ACTION_SUMMARY_FILENAME),
     }
 
 
@@ -152,6 +165,50 @@ def save_comparison_records(records: list, path: str) -> None:
     _write_json(records, path)
 
 
+def save_action_records(records: list, path: str, *, current_action: dict,
+                        regime_records: list[dict]) -> None:
+    """Persist append-only D2 evidence, admitting only the runner's current observation.
+
+    Older observations must equal the sanctioned return-backfill refresh of the already persisted
+    history. On an empty history this prevents a helper/API caller from seeding arbitrary historical
+    rows as forward evidence. The one current row is checked against the runner-owned clock.
+    """
+    validate_action_record(current_action)
+    current_as_of = str(current_action["as_of"])
+    origin = current_action["forward_origin"]
+    actual_run_date = _current_run_date()
+    if origin["run_date"] != actual_run_date:
+        raise ValueError("save_action_records: current action run date is not the controlled runner date")
+    if abs((datetime.strptime(str(origin["decision_as_of"]), "%Y%m%d") -
+            datetime.strptime(current_as_of, "%Y%m%d")).days) > 7:
+        raise ValueError("save_action_records: current action decision date is stale versus settled regime date")
+    prior = load_comparison_records(path)
+    prior_by_date = {}
+    for row in prior:
+        validate_action_record(row)
+        as_of = str(row["as_of"])
+        if as_of in prior_by_date:
+            raise ValueError(f"save_action_records: existing duplicate as_of {as_of}")
+        prior_by_date[as_of] = row
+    refreshed_prior = refresh_action_records(prior, regime_records)
+    refreshed_by_date = {str(row["as_of"]): row for row in refreshed_prior}
+    seen = set()
+    for row in records:
+        validate_action_record(row)
+        as_of = str(row["as_of"])
+        if as_of in seen:
+            raise ValueError(f"save_action_records: duplicate as_of {as_of}")
+        seen.add(as_of)
+        if as_of == current_as_of:
+            if row != current_action:
+                raise ValueError("save_action_records: current action does not match runner observation")
+        elif refreshed_by_date.get(as_of) != row:
+            raise ValueError("save_action_records: non-current action must match sanctioned history refresh")
+    if seen != set(refreshed_by_date) | {current_as_of}:
+        raise ValueError("save_action_records: action history cannot drop or add non-current rows")
+    _write_json(records, path)
+
+
 def save_panel(markdown: str, path: str) -> None:
     _reject_production_path(path)
     os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
@@ -162,7 +219,10 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                     daily: pd.DataFrame, stk_limit: pd.DataFrame,
                     csi300: pd.DataFrame, csi1000: pd.DataFrame, iv_feed: dict | None,
                     ledger_path: str, records_path: str, panel_path: str,
-                    bootstrap: bool = False, feature_provider=None) -> dict:
+                    bootstrap: bool = False, feature_provider=None,
+                    raw_v14_2_regime: str | None = None, m67_report_path: str | None = None,
+                    action_records_path: str | None = None, action_summary_path: str | None = None,
+                    action_decision_as_of: str | None = None) -> dict:
     """One comparison run (orchestration; all data frames injected, so unit-testable without Tushare).
 
     Loads the ledger + comparison-record history, builds the real feature provider, runs the audited
@@ -172,6 +232,25 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     ``bootstrap=False`` raises (a weekly run must not silently create a ledger), and a bootstrap that
     yields fewer than ``BACKFILL_MIN_TRADING_DAYS`` rows raises (do not start the evidence clock from an
     insufficient window). Returns the step output."""
+    action_requested = any(v is not None for v in
+                           (raw_v14_2_regime, m67_report_path, action_records_path, action_summary_path,
+                            action_decision_as_of))
+    if action_requested and not all(v is not None for v in
+                                    (raw_v14_2_regime, m67_report_path, action_records_path, action_summary_path,
+                                     action_decision_as_of)):
+        raise ValueError("D2 action comparison requires raw V14.2 regime, M6.7 source, paths and decision date")
+    if action_requested:
+        decision_as_of = str(action_decision_as_of)
+        if not is_canonical_date(decision_as_of) or not is_canonical_date(str(as_of)):
+            raise ValueError("D2 action comparison requires real decision and settled regime dates")
+        # The decision may use Friday's settled regime during a Monday run, but a historical
+        # replay cannot pretend to be today's decision by supplying an unrelated date.
+        if abs((datetime.strptime(decision_as_of, "%Y%m%d") -
+                datetime.strptime(str(as_of), "%Y%m%d")).days) > 7:
+            raise ValueError("D2 decision date is more than seven calendar days from settled regime date")
+        action_run_date = _current_run_date()
+        if not is_canonical_date(action_run_date):
+            raise ValueError("D2 controlled runner clock returned an invalid date")
     cal = list(trade_calendar)
     ledger = load_ledger(ledger_path)
     was_empty = not (ledger.get("rows") or [])
@@ -195,6 +274,22 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     save_ledger(out["ledger"], ledger_path, as_of=as_of, trade_calendar=cal)
     save_comparison_records(out["comparison_records"], records_path)
     save_panel(out["panel_markdown"], panel_path)
+    if action_requested:
+        old_actions = load_comparison_records(str(action_records_path))
+        refreshed = refresh_action_records(old_actions, out["comparison_records"])
+        current_action = build_action_record(
+            regime_record=out["comparison_record"], raw_v14_2_regime=str(raw_v14_2_regime),
+            effective_v14_2_regime=v14_2_regime,
+            m67_source=m67_provenance(str(m67_report_path), as_of=as_of),
+            forward_origin={"decision_as_of": str(action_decision_as_of),
+                            "run_date": str(action_run_date)},
+        )
+        actions = merge_action_records(refreshed, current_action)
+        summary = summarize_action_records(actions)
+        save_action_records(actions, str(action_records_path), current_action=current_action,
+                            regime_records=out["comparison_records"])
+        _write_json(summary, str(action_summary_path))
+        out["action_comparison"] = {"records": actions, "summary": summary}
     return out
 
 
@@ -252,6 +347,10 @@ def main(argv=None) -> int:
     ap = argparse.ArgumentParser(description="A-short V14.3 regime comparison runner (non-production)")
     ap.add_argument("--as-of", required=True, help="run date YYYYMMDD")
     ap.add_argument("--v14_2-regime", default="unknown", help="production V14.2 M1 regime label")
+    ap.add_argument("--v14_2-raw-regime", default=None,
+                    help="raw analysis_input V14.2 label; required with --m67-report for D2")
+    ap.add_argument("--m67-report", default=None,
+                    help="same-week M6.7 report; only SHA-256 + candidate build count are persisted")
     ap.add_argument("--bootstrap", action="store_true",
                     help="one-time 252-day backfill (heavy Tushare 执行)")
     ap.add_argument("--iv-feed", default=None, help="path to the a_short_iv_feed.json artifact")
@@ -264,7 +363,6 @@ def main(argv=None) -> int:
     if not args.confirm_fetch_authorized:
         raise SystemExit("real Tushare fetch is user-authorized only: pass --confirm-fetch-authorized "
                          "(the bootstrap 252-day backfill is the first real-Tushare 执行 in V14.3)")
-    from datetime import datetime, timedelta
     paths = lane_paths()
     ledger0 = load_ledger(paths["ledger"])
     has_ledger = bool(ledger0.get("rows"))
@@ -293,11 +391,18 @@ def main(argv=None) -> int:
     if effective_as_of != as_of:
         print(f"[regime] as_of {as_of} 当日 EOD 尚未结算;regime ledger 推进到最新已结算交易日 {effective_as_of}")
     iv_feed = json.loads(Path(args.iv_feed).read_text(encoding="utf-8")) if args.iv_feed else None
+    if bool(args.v14_2_raw_regime) != bool(args.m67_report):
+        raise SystemExit("D2 action comparison requires both --v14_2-raw-regime and --m67-report, or neither")
+    action_paths = ({"action_records_path": paths["action_records"], "action_summary_path": paths["action_summary"],
+                     "action_decision_as_of": as_of}
+                    if args.v14_2_raw_regime else {})
     out = run_regime_step(as_of=effective_as_of, trade_calendar=cal, v14_2_regime=args.v14_2_regime,
                           daily=daily, stk_limit=stk_limit, csi300=csi300, csi1000=csi1000,
                           iv_feed=iv_feed, ledger_path=paths["ledger"],
                           records_path=paths["records"], panel_path=paths["panel"],
-                          bootstrap=args.bootstrap)
+                          bootstrap=args.bootstrap, raw_v14_2_regime=args.v14_2_raw_regime,
+                          m67_report_path=args.m67_report,
+                          **action_paths)
     print(f"V14.3 regime comparison written (non-production): ledger n={out['ledger']['coverage']['n']}, "
           f"evidence={out['evidence']}, panel={paths['panel']}")
     return 0

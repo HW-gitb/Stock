@@ -2607,7 +2607,8 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
     → 严格 == end。语义:在决策时点(as_of>=今天:今日 或 即将到来的交易日)最新已结算行情就是前一交易日,
     使用它非 look-ahead、亦非陈旧。
 
-    返回 `(series, latest_trade_date)`:series=[{high,low,close}](engine 形状,不含日期);latest_trade_date=
+    返回 `(series, latest_trade_date)`:series=[{trade_date,high,low,close}](engine 形状；日期供持仓 trailing-stop
+    只消费入场后高点);latest_trade_date=
     实际最新已结算 bar 日期(供 main 记 `price_data_through` lineage,诚实标注真实价格时钟);无行 → `([], None)`。"""
     from datetime import datetime
     try:
@@ -2636,8 +2637,9 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
         if not (accept_prior_settled_date is not None and latest == str(accept_prior_settled_date)):
             raise SystemExit(f"[FATAL] pro_bar {ts_code} 最新 bar {latest} != as_of {end}"
                              "(数据陈旧,未含 as_of 当日);不写周报")
-    series = [{"high": r["high"], "low": r["low"], "close": r["close"]} for r in rows]
-    return series, (rows[-1]["trade_date"] if rows else None)
+    # Keep the PIT-safe date with each bar.  Phase5 indicator functions consume high/low/close only,
+    # while holding_levels must exclude pre-entry highs when computing a trailing stop.
+    return rows, (rows[-1]["trade_date"] if rows else None)
 
 
 def _prev_trading_day(pro, as_of: str) -> str | None:
@@ -3117,8 +3119,6 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
     print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
-
-
     # D1/D3 capture consumes the exact normalized, PIT-safe candidates while they are in memory.
     # The private sidecar is non-blocking: any failure is visible but never alters M6.7 or selection.
     if args.factor_comparison_root:

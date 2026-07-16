@@ -1,0 +1,165 @@
+{
+  "schema_name": "a_short_d4_policy_ablation_execution_summary",
+  "schema_version": "1.1.0",
+  "generated_at": "2026-07-14T18:30:00+08:00",
+  "preregistration_ref": {
+    "path": "research/preregistrations/a_short_d4_policy_ablation_20260714.json",
+    "sha256": "37e3d2e2e18b3c6142b503d286538080c34b8a8fc5941425144cc3a3bd3bb7d4"
+  },
+  "input_integrity": {
+    "rank_samples_sha256": "d04ef86a398e02fd6c4289582e38569c11b4cd84b1cc7b55a63fedf3db675532",
+    "binding_status": "posthoc_recorded_unverified",
+    "row_count": 360,
+    "provider_calls": 0,
+    "egs_rerun": false
+  },
+  "population_views": [
+    {
+      "id": "all_pre_veto",
+      "sample_count": 348,
+      "trade_date_count": 24,
+      "mean_net_return_pct": 0.56034346,
+      "monthly_t": 0.201154,
+      "max_drawdown_pct": -22.86830418,
+      "win_rate_pct": 52.01149425
+    },
+    {
+      "id": "tier1_pre_veto",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    },
+    {
+      "id": "tier2_pre_veto",
+      "sample_count": 44,
+      "trade_date_count": 6,
+      "mean_net_return_pct": 0.23797926,
+      "monthly_t": 0.02812348,
+      "max_drawdown_pct": -13.60545875,
+      "win_rate_pct": 54.54545455
+    },
+    {
+      "id": "tier1_current_rule6_passed",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    }
+  ],
+  "policy_comparison": [
+    {
+      "id": "tier1_current_all_rule6",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    },
+    {
+      "id": "tier1_legacy_no_rule6",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    }
+  ],
+  "rule6_ablation": [
+    {
+      "id": "leave_one_out_chasing_high",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    },
+    {
+      "id": "leave_one_out_overheat",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    },
+    {
+      "id": "leave_one_out_l2_unknown",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    },
+    {
+      "id": "leave_one_out_esp_non_positive",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    },
+    {
+      "id": "only_one_on_chasing_high",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    },
+    {
+      "id": "only_one_on_overheat",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    },
+    {
+      "id": "only_one_on_l2_unknown",
+      "sample_count": 304,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60700144,
+      "monthly_t": 0.90960855,
+      "max_drawdown_pct": -10.7215633,
+      "win_rate_pct": 51.64473684
+    },
+    {
+      "id": "only_one_on_esp_non_positive",
+      "sample_count": 301,
+      "trade_date_count": 23,
+      "mean_net_return_pct": 0.60242805,
+      "monthly_t": 0.7312948,
+      "max_drawdown_pct": -12.4504293,
+      "win_rate_pct": 51.49501661
+    }
+  ],
+  "crash_window_comparison": {
+    "status": "forward_pending",
+    "legacy_confirmed_days": 4,
+    "candidate_confirmed_days": 5,
+    "reason": "separate matched cohorts are frozen; do not use this historical Rule6 ablation as a 4d/5d result"
+  },
+  "decision": {
+    "status": "descriptive_research_only",
+    "rule_deletion_allowed": false,
+    "production_switch_allowed": false,
+    "next_action": "independent_Claude_review_then_wait_for_separate_forward_crash_window_outcome"
+  },
+  "boundary": {
+    "production": false,
+    "buy_advice": false,
+    "ship_gate_evidence": false
+  }
+}

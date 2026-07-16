@@ -1,0 +1,51 @@
+{
+  "schema_name": "program_test_budget_ledger",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-14T18:00:00+08:00",
+  "artifact_id": "a_short_d4_policy_ablation_program_test_budget_ledger_20260714",
+  "ledger_status": "active_no_new_test_authorized",
+  "family_id": "a_short_d4_policy_ablation_v1",
+  "lane_id": "a_short_variant_research",
+  "singleton_scope": {
+    "protected_decision": "Whether the frozen current Rule6 baseline differs descriptively from the named legacy, leave-one-out and only-one-on ablations; it cannot delete a rule or change production.",
+    "applies_to": [
+      "The one D4 rank-sample ablation run with its input SHA-256 recorded post-hoc only (reviewer-trust-only provenance).",
+      "The separate 4-day versus 5-day crash-veto forward cohort status."
+    ],
+    "does_not_authorize": [
+      "No provider call, EGS rerun, parameter search, benchmark sweep, production change, order automation, ship-gate claim, or rule deletion."
+    ]
+  },
+  "creation_reason": {
+    "triggering_preflight_ref": "ashort_claude_r1_D4",
+    "triggering_preregistration_ref": "research/preregistrations/a_short_d4_policy_ablation_20260714.json",
+    "reason": "Direct user authorization on 2026-07-14 for one independently preregistered D4 diagnostic run before Claude review."
+  },
+  "budget_policy": {
+    "ledger_cardinality": "singleton_program_level",
+    "tests_spent_count": 1,
+    "tests_available_without_new_review": 0,
+    "next_test_requires_reviewed_preregistration": true,
+    "next_test_requires_user_approval": true,
+    "spend_rule": "One D4 execution spends the only test regardless of descriptive outcome or forward-pending crash window; the spent run has only a post-hoc recorded input SHA-256, not pre-bound provenance.",
+    "no_silent_rescue_rule": "Do not rerun with changed populations, rules, cost basis, horizon, source snapshot, or crash cohort; any later test requires a new reviewed preregistration and user approval."
+  },
+  "test_spend_log": [
+    {
+      "test_id": "a_short_d4_policy_ablation_20260714",
+      "preregistration_ref": "research/preregistrations/a_short_d4_policy_ablation_20260714.json",
+      "result_ref": "research/results/a_short_d4_policy_ablation_20260714/execution_summary.json",
+      "status": "spent_passed_research_continue_only",
+      "tests_spent": 1,
+      "promotion_relevant": true,
+      "result_summary": "Executed exactly once from a local rank-samples file whose SHA-256 was recorded post-hoc only; provenance is reviewer-trust-only. All named populations and Rule6 ablations were emitted, while 4d/5d remains a separate forward-pending cohort comparison.",
+      "allowed_followup": "Independent Claude review may interpret only the descriptive report. No rule deletion, production change, rerun, or crash-window decision is authorized."
+    }
+  ],
+  "planned_tests": [],
+  "next_required_actions": [
+    "Independent Claude review of the D4 preregistration, source hash, all fixed heads, and no-rule-deletion boundary.",
+    "Wait for the separate 4d/5d matched-cohort forward result; do not infer it from historical Rule6 ablations.",
+    "Any new outcome test requires a new reviewed preregistration and user approval."
+  ]
+}

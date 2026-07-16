@@ -1038,7 +1038,7 @@ class PriceFetchTests(unittest.TestCase):
         self.assertEqual(ts.calls.get("asset"), "E")
         self.assertEqual(ts.calls.get("adj"), "qfq")
         self.assertEqual(len(series), 2)
-        self.assertNotIn("trade_date", series[0])   # engine input shape is {high,low,close}
+        self.assertEqual(series[0]["trade_date"], "20260108")  # holding trailing-stop needs the PIT date
         self.assertEqual(latest, "20260109")        # actual latest bar date surfaced for lineage
 
     def test_provider_exception_aborts(self):
