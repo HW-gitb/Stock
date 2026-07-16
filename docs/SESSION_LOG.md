@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第二刀：H10 收益生产核心）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。纯离线收益核心 `us_short_forward_policy_outcome.py`:吃1份 v2 capture+每票唯一订单(恰覆盖共同池、非 policy-keyed)+20 根 caller 日线;安全全闭:①无落 ledger(纯 in-memory、BOUNDARY 九项全 False)、held 名只 evaluation_mark_only;②无 look-ahead(精确 20bar 窗、多一根 raise、h5<h10<h20 且均>decision);③no-count 全或无+reason 与 adjustment 交叉校验;④order/pool/price 三 digest 绑定;⑤复用正式 paper 引擎(固定 passive stop 非 trailing→逐 bar 正确)。无 provider/writer/runner/ship-gate。设计意图对齐 §4,docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-OUTCOME-PRODUCTION-COMMON-ORDER` open→resolved。
+- **Verify**: 整读消费引擎体(outcome+paper multi_day_exit/fill 语义)。亲跑(298a 树、未采信 Codex 4459):焦点 forward_policy 67 OK;全包 `test_us_short*` 4459 OK(我给 300s)。自写 9 对抗探针全 fail-closed(extra/missing ticker·<20/21bar·日历不一致·非增日期·缺/多订单·坏OHLC)。按比例(shadow-only·无 live/secret/选股影响)未起 §6a agent。
+- **Next**: blade 3(正式裁决+累积+banner)/all-candidate 订单·价格源(gated) 后续,本刀未触。
+
+## 2026-07-16 — Codex 修复（US-short A1 对比轨 v2 第二刀：有限期收益生产核心）
+
+- **Verdict/Action**: 已完成纯离线的 H5/H10/H20 私有收益生产核心：严格消费一份 v2 Cut-A capture、Pass2-clean 共同池每票唯一统一订单、20 个交易时段日线、统一成本 prior 和既有复权/公司行动门。停损/止盈复用正式 model-paper 引擎；H5/H10/H20 仍未平仓只产生 comparison-only mark，绝不写入正式 paper ledger。复权门不通过或任一池内日线不完整时输出整周 `data_degraded_whole_week_no_count`，无任何候选收益值。无 provider、writer、runner、正式裁决/切换或 ship-gate 接线。
+- **Required**: `R-USSHORT-A1-OUTCOME-PRODUCTION-COMMON-ORDER` 待 Claude Code 仅审本刀并在 PASS 后提交；后续仍只剩 all-candidate order/price source producer、私有累积/正式裁决与 banner、组合新版比较，均未实施。
+- **Verify**: 红测先证实生产器不存在；修复后 focused comparison/paper/doc guard `195 OK`；最终完整 `discover -s tests -p 'test_us_short*.py'` `4459 OK`（`1 skipped`）；`py_compile`、新 schema JSON parse、`git diff --check` 通过。`rg -n "produce_forward_policy_outcome|us_short_forward_policy_outcome" engine runners` 只命中本新 engine，runner 命中 0。
+- **Pre-Codex self-review**: A-F checked / A 覆盖 common-pool 全量订单、cash/stop/TP/held-mark/no-count 和 H1=决策日但 H5/H10/H20 必须在决策日后的完整类；B 对新符号/runner 消费者 grep（runner 0）；C 新增 stop-priority、no-count、价格快照摘要、前瞻日历和篡改净值反向测试；D 不把 H1 同日早盘合法入场误拒为历史回放；E 只更新当前 comparison route/roadmap/register，不改 CURRENT；F schema/py_compile/diff check 通过。current-diff-only 独立自审先 FAIL（缺 price snapshot digest、日期锚定）→ 两项修复 → 复审 PASS；固定包在最终代码后集中跑完。
+- **Next**: Claude Code：只审 US-short A1 comparison v2 第二刀；PASS 后由 Claude 提交。
+
 ## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第一刀）PASS
 
 - **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。§6 五攻击点全闭合：①Pass2 veto 无法泄入共同池（委托权威 `run_selection`、exclusion_records 对每张 veto 完整、六头池须逐字节相同+admitted⊆pool）；②capture↔契约双向绑定 `comparison_contract_sha256==statistical_plan_sha256()`（校验冻结 preset 再哈希、drift 即 raise）；③旧诊断改 24 周对齐+全 `diagnostic_*`、schema 硬拒 `promotion_eligible`；④执行头 `overextension_execution_off` 归 second-wave 排除（两处钉死）；⑤BOUNDARY 全 False、无 fetch。设计意图对齐 §2/§3，docs 无 overclaim。

@@ -179,17 +179,17 @@ register + code are the source of truth.
   Cut-D-analysis consumer is deliberately only a compatibility diagnostic aligned to common-pool/H10/24; it must not
   emit a v2 formal recommendation. No outcome writer, weekly orchestration, lifecycle/banner wiring, provider call,
   primary-rule change, or second-wave ledger is included in this blade.
-- **[DEFERRED — gated on the live run] Outcome production — the "抓价算分" input layer that feeds Cut B + Cut D-analysis.**
-  Fetch the forward prices for each accumulated weekly capture's baskets → compute per-week, per-policy
-  H10 after-cost direct basket return (with H5/H20 diagnostics, fixed execution/time-mark and the same cost model) →
-  this is the v2 outcome input for the later formal evaluator. **Without it the six heads only accumulate captures and
-  no formal "which head is better" recommendation can ever compute.**
-  DEFERRED, NOT forgotten: (i) provider-gated (real forward-price fetch, SR-PROVIDER-001); (ii) downstream of real weeks —
-  there is no forward data until the weekly capstone runs live and accumulates 6-head captures, so building it now = an
-  empty pipe; (iii) no pre-registration freeze concern (it only computes returns), unlike the Cut-D manifest. **Trigger to
-  build**: once the weekly capstone starts running live + accumulating real 6-head capture weeks. Never ship-gate; the pure
-  return-computation is fixture-buildable offline early, but there is no urgency until real weeks exist. (Also tracked in
-  Claude memory `project_us_short_forward_ab_outcome_production_pipe`.)
+- **[BUILT — second repair blade, pure/offline only] Outcome production core.**
+  `engine/us_short_forward_policy_outcome.py` now consumes a validated v2 Cut-A capture plus one caller-supplied
+  **common-pool** model-paper order per Pass2-clean ticker, exactly 20 caller-supplied daily bars, one frozen cost prior,
+  and existing corporate-action evidence. It produces private H5/H10/H20 after-cost candidate returns: same-day/multi-day
+  exits reuse the paper engines; a still-open name is an `evaluation_mark_only` at the horizon and never changes the
+  model-paper ledger. An incomplete series or non-evaluable adjustment gate produces a whole-week
+  `data_degraded_whole_week_no_count` packet with no candidate values. This is the provider-free calculation core, not a
+  fetcher, writer, scheduler, or formal judge.
+  **Still deferred/gated**: production of the all-candidate standardized order snapshot, forward-price/source capture,
+  private weekly persistence/accumulation, evaluator/banner wiring, and all provider calls under `SR-PROVIDER-001`. No
+  factor recommendation can issue until those later blades consume real forward packets.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 
