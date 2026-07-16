@@ -187,9 +187,19 @@ register + code are the source of truth.
   model-paper ledger. An incomplete series or non-evaluable adjustment gate produces a whole-week
   `data_degraded_whole_week_no_count` packet with no candidate values. This is the provider-free calculation core, not a
   fetcher, writer, scheduler, or formal judge.
-  **Still deferred/gated**: production of the all-candidate standardized order snapshot, forward-price/source capture,
-  private weekly persistence/accumulation, evaluator/banner wiring, and all provider calls under `SR-PROVIDER-001`. No
-  factor recommendation can issue until those later blades consume real forward packets.
+  **Still deferred/gated**: source-bound all-candidate price capture, private forward-price persistence/accumulation,
+  evaluator/banner wiring, and all provider calls under `SR-PROVIDER-001`. No factor recommendation can issue until
+  those later blades consume real forward packets.
+- **[BUILT — third repair blade, pure/offline only] All-candidate common order snapshot.**
+  `engine/us_short_forward_policy_order_snapshot.py` consumes the validated Cut-A capture plus an exact
+  Pass2-clean candidate-price input map at the capture's `price_basis_date`. It invokes the existing candidate
+  price-analysis path exactly once under one shared market regime, then emits one canonical model-paper order per
+  common-pool ticker with input/order digests. It never accepts a policy key, selected-only input, or a partial
+  order map. If any pool member lacks an executable plan, or the common regime does not permit a new entry, it emits
+  `data_degraded_whole_week_no_count` with no order map instead of inventing an order or silently dropping a name.
+  This is still only an in-memory producer: it adds no forward-price fetch, writer, accumulator, evaluator, banner,
+  primary-rule change, or provider authorization. The later source/writer cut must bind the generated common-order
+  digest before it calls the H5/H10/H20 outcome core.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 

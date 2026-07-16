@@ -1,0 +1,90 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_forward_policy_order_snapshot_packet/1.0.0/schema.json",
+  "title": "US-short A1 comparison v2 common order snapshot packet",
+  "description": "Private, pure/offline common candidate order snapshot. It accepts all-candidate caller-supplied price inputs and a frozen Cut-A capture, reuses the existing price engine under one shared regime, writes nothing, and cannot change primary selection or authorize provider, broker, outcome, or ship-gate activity.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "order_snapshot_status", "capture_binding", "common_selection_pool",
+    "common_price_input_snapshot_sha256", "market_risk_regime", "orders_by_ticker",
+    "common_order_snapshot_sha256", "non_executable_tickers", "degradation_reason", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_order_snapshot_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "order_snapshot_status": {"enum": ["ready_for_outcome", "data_degraded_whole_week_no_count"]},
+    "capture_binding": {"$ref": "#/$defs/captureBinding"},
+    "common_selection_pool": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "common_price_input_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "market_risk_regime": {"type": "string", "minLength": 1},
+    "orders_by_ticker": {
+      "type": "object",
+      "additionalProperties": {"$ref": "#/$defs/order"}
+    },
+    "common_order_snapshot_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "non_executable_tickers": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "degradation_reason": {
+      "type": ["string", "null"],
+      "enum": [null, "common_candidate_order_not_executable", "new_entry_not_permitted"]
+    },
+    "boundary": {
+      "const": {
+        "track": "comparison_non_production",
+        "evidence_level": "forward_policy_common_order_snapshot",
+        "shadow_counts_ship_gate": false,
+        "full_size_ship_gate_allowed": false,
+        "changes_primary_selection": false,
+        "provider_calls_added": false,
+        "broker_or_order_automation_allowed": false,
+        "writes_order_snapshot": false,
+        "writes_outcome_data": false
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "captureBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256",
+        "common_selection_pool_sha256", "capture_sha256"
+      ],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_context_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "common_selection_pool_sha256": {"$ref": "#/$defs/sha256"},
+        "capture_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "order_type", "order_expiry", "valid_entry_low", "valid_entry_high", "limit_order_price",
+        "breakout_entry_price", "stop_clear_price", "take_profit_exit_price"
+      ],
+      "properties": {
+        "order_type": {"enum": ["pullback_limit", "breakout_stop_limit"]},
+        "order_expiry": {"const": "first_regular_session_only"},
+        "valid_entry_low": {"type": "number", "exclusiveMinimum": 0},
+        "valid_entry_high": {"type": "number", "exclusiveMinimum": 0},
+        "limit_order_price": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "breakout_entry_price": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "stop_clear_price": {"type": "number", "exclusiveMinimum": 0},
+        "take_profit_exit_price": {"type": "number", "exclusiveMinimum": 0}
+      }
+    }
+  }
+}
