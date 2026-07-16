@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-16 — Claude 审查 PASS（A-short D2/D4 Optional 硬化；已提交）
+
+- **Verdict/Action**: 复审两项 comparison-only Optional 硬化，PASS。D2：`summarize_action_records` 拒同一 run_date 多条 forward-eligible（防直呼 helper 同日铸 12 周），合法累积每真实日≤1 forward 行不误伤；Codex 诚实标注非密码学封边（`_write_json`/直写仍在保证外、无生产消费）。D4：`_bool` 认数值 1.0 为 veto（对齐 analyzer `_parse_bool`）；`_commit_spent_result` 先原子写账本(spent)再写结果、`os.replace`+temp `finally` 清理，晚失败 fail-closed（花了没结果、不可重跑挑结果）；仅影响未来 D4，spent 账本/结果文件未动。
+- **Required**: 无。两项均为上轮 comparison-only Optional 的加固；详见 `docs/system_risk_register.md`。
+- **Verify**: D2/D4 focused 15 OK（numeric-veto 正负控 / spend-before-publish 顺序断言 `calls==[ledger,result]` / 原子无临时残留 / 同 run_date 拒 四控制）；全 lane `discover test_a_short*` 1490，仅 3 既存 entry_funnel fixture ERROR，无回归；doc guard 35 OK；review-evidence:not_available。
+- **Next**: 已提交本切片。
+
+## 2026-07-16 — Codex 修复（A-short D2 / D4 Optional；待 Claude）
+
+- **Verdict/Action**: 已修但未提交。D2 现在拒绝同一真实运行日塞入多条“前瞻有效”记录，不能一天凑出 12 周证据。D4 现在把数值 `1.0` 当作 hard veto；未来执行先原子记为预算已花，再发布结果，发布失败也不会留下“结果有了、预算没花”。
+- **Required**: Claude 独立复审这两项 Optional；历史 D4 不重跑、不改结果，仍只是人工可信。
+- **Verify**: D2/D4 focused **37 OK**。
+- **Pre-Codex self-review**: 同日伪造 2 条 forward 记录会被汇总拒绝；模拟结果发布失败时先调用 ledger 写入；原子写后无临时残留。
+- **Next**: Claude：审查
+
 ## 2026-07-16 — Claude 审查 PASS（A-short B1 + D2 + D4；已提交）
 
 - **Verdict/Action**: 复审 Codex 修复，三刀 PASS。B1：holding_levels 严格 fail-closed（非法/缺失 trade_date、非-dict 行、非法 entry_date、非有限 high、无入场后行一律拒，绝不回退买入前高点）+ fixture 带日期，4 个既存持仓处置失败反修好、无新回归。D2：forward_eligible 由真实时钟派生+validate 反查、summarize 只数 forward_eligible、save 绑当前行受控 run_date；§6a 独立 agent+我核实 runner 路径不可伪造（每真实日≤1 forward 行）。D4：route-b relabel，结果 binding_status=posthoc_recorded_unverified（schema const 焊死）、hash/行数未变、overclaim 已改。

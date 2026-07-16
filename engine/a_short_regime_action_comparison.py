@@ -222,6 +222,9 @@ def summarize_action_records(records: list[dict]) -> dict:
     for row in records:
         validate_action_record(row)
     forward_records = [r for r in records if r["forward_eligible"]]
+    forward_run_dates = [str(r["forward_origin"]["run_date"]) for r in forward_records]
+    if len(set(forward_run_dates)) != len(forward_run_dates):
+        raise ValueError("action comparison has multiple forward-eligible records from one runner date")
     divergent = [r for r in forward_records if r["action_diverges"]]
     h10 = [r for r in divergent if r["forward_market_returns"]["h10"] is not None]
     favorable = 0

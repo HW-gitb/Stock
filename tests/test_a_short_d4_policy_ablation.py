@@ -2,12 +2,14 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 from jsonschema import Draft7Validator
 
 from runners.a_short_d4_policy_ablation import (
-    LEDGER_PATH, PREREG_PATH, PREREG_SCHEMA, SUMMARY_SCHEMA, _load, build_summary,
+    LEDGER_PATH, PREREG_PATH, PREREG_SCHEMA, SUMMARY_SCHEMA, _atomic_write_json,
+    _bool, _commit_spent_result, _load, build_summary,
 )
 
 RESULT_PATH = PREREG_PATH.parents[2] / "research/results/a_short_d4_policy_ablation_20260714/execution_summary.json"
@@ -25,6 +27,35 @@ def _row(**overrides):
 
 
 class D4PolicyAblationTests(unittest.TestCase):
+    def test_numeric_hard_veto_is_parsed_like_rule6(self):
+        self.assertEqual(_bool(pd.Series([1.0, 0.0, "true", "false"])).tolist(),
+                         [True, False, True, False])
+
+    def test_spend_is_committed_before_result_publish(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            ledger = Path(tmp) / "ledger.json"
+            result = Path(tmp) / "result.json"
+            calls = []
+
+            def writer(path, value):
+                calls.append(path)
+                if path == result:
+                    raise OSError("simulated result publish failure")
+
+            with patch("runners.a_short_d4_policy_ablation._atomic_write_json", side_effect=writer):
+                with self.assertRaises(OSError):
+                    _commit_spent_result(summary={"result": True}, ledger={"spent": True},
+                                         out_path=result, ledger_path=ledger)
+            self.assertEqual(calls, [ledger, result])
+
+    def test_atomic_json_write_replaces_without_temp_residue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "result.json"
+            path.write_text('{"old": true}\n', encoding="utf-8")
+            _atomic_write_json(path, {"new": True})
+            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"new": True})
+            self.assertFalse(list(Path(tmp).glob(".result.json.*.tmp")))
+
     def test_preregistration_schema_is_frozen(self):
         prereg = _load(PREREG_PATH)
         self.assertEqual(list(Draft7Validator(_load(PREREG_SCHEMA)).iter_errors(prereg)), [])

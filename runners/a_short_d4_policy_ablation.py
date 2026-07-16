@@ -15,7 +15,9 @@ import argparse
 import hashlib
 import json
 import math
+import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -58,7 +60,29 @@ def _sha256(path: Path) -> str:
 
 
 def _bool(series: pd.Series) -> pd.Series:
-    return series.fillna(False).astype(str).str.strip().str.lower().isin({"1", "true", "yes", "y"})
+    text_true = series.fillna(False).astype(str).str.strip().str.lower().isin({"1", "true", "yes", "y"})
+    numeric_true = pd.to_numeric(series, errors="coerce").eq(1)
+    return text_true | numeric_true
+
+
+def _atomic_write_json(path: Path, value: dict) -> None:
+    """Atomically replace one JSON artifact without leaving a partial official file."""
+    encoded = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=path.parent)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(encoded)
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
+def _commit_spent_result(*, summary: dict, ledger: dict, out_path: Path, ledger_path: Path) -> None:
+    """Spend first, then publish: a late failure is fail-closed, never an unspent result."""
+    _atomic_write_json(ledger_path, ledger)
+    _atomic_write_json(out_path, summary)
 
 
 def _finite(values: pd.Series) -> pd.Series:
@@ -189,8 +213,6 @@ def execute(*, samples_path: Path, generated_at: str, out_path: Path = OUT_PATH,
     summary = build_summary(samples_path=samples_path, prereg=prereg, generated_at=generated_at,
                             crash_summary_path=crash_summary_path)
     _validate(summary, SUMMARY_SCHEMA, "D4 execution summary")
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_text(json.dumps(summary, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     result_ref = out_path.relative_to(ROOT).as_posix()
     ledger["ledger_status"] = "active_no_new_test_authorized"
     ledger["budget_policy"]["tests_spent_count"] = 1
@@ -202,7 +224,7 @@ def execute(*, samples_path: Path, generated_at: str, out_path: Path = OUT_PATH,
     ledger["planned_tests"] = []
     ledger["next_required_actions"] = ["Independent Claude review of the D4 preregistration, source hash, all fixed heads, and no-rule-deletion boundary.", "Wait for the separate 4d/5d matched-cohort forward result; do not infer it from historical Rule6 ablations.", "Any new outcome test requires a new reviewed preregistration and user approval."]
     _validate(ledger, LEDGER_SCHEMA, "spent D4 ledger")
-    ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    _commit_spent_result(summary=summary, ledger=ledger, out_path=out_path, ledger_path=ledger_path)
     return summary
 
 

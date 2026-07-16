@@ -62,6 +62,17 @@ class RegimeActionComparisonTests(unittest.TestCase):
             rows.append(row)
         self.assertEqual(summarize_action_records(rows)["status"], "review_candidate_preferred")
 
+    def test_summary_rejects_multiple_forward_records_from_one_run_date(self):
+        rows = []
+        for i in range(2):
+            as_of = f"202607{i + 1:02d}"
+            rows.append(build_action_record(
+                regime_record=_regime_record(as_of=as_of), raw_v14_2_regime="shock",
+                effective_v14_2_regime="shock", m67_source=self._source(),
+                forward_origin=self._origin(decision_as_of="20260714", run_date="20260714")))
+        with self.assertRaises(ValueError):
+            summarize_action_records(rows)
+
     def test_historical_replay_is_never_counted_as_forward_evidence(self):
         row = build_action_record(
             regime_record=_regime_record(returns={"h1": 1.0, "h3": 1.0, "h5": 1.0, "h10": 1.0}),
