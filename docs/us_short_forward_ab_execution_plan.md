@@ -210,6 +210,18 @@ register + code are the source of truth.
   explicit no-count record. It does not fetch a source, scan/accumulate weeks, wire the weekly runner, issue a
   recommendation, or change the model-paper ledger. The next blade is the smallest private accumulator/evaluator
   consumer; actual source acquisition and any provider call stay separately gated.
+- **[BUILT — fifth repair blade, pure/offline projection only] Common-pool H10 weekly evidence.**
+  `engine/us_short_forward_policy_weekly_evidence.py` revalidates one fourth-blade private record (including its
+  stored-input outcome recomputation), retains and revalidates that complete private source week plus its frozen
+  Cut-A capture, then reads the same common-pool H10 after-cost candidate value for every policy's exact captured
+  selection. It emits six full-Top15 H10 basket means and five paired policy-minus-balanced
+  deltas, preserves the three registered factor-question arm groups, and labels the H10 date separately from the later
+  H20 availability date. An upstream whole-week no-count remains a value-free no-count projection (retaining an
+  already-valid order digest only when the later price/adjustment gate, rather than order creation, degraded). This is neither a
+  source-provenance assertion nor a directory reader/accumulator: `produces_forward_evidence:false`, no private write,
+  no evaluator/receipt/banner, no recommendation, no model-paper-ledger change, and no conversion of an H10 evaluation mark into a production exit.
+  The next blade is the smallest private accumulator with an explicit same-run provenance gate; source acquisition and
+  provider calls remain separately gated.
 - **[DEFERRED] Cut E** — shadow-branch ledger that activates `overextension_execution_off` (second-wave-live).
   Path-dependent; a separate cut once the ledger exists; never backfills pre-ledger weeks.
 

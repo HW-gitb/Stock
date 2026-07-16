@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cnhea.local/schemas/us_short_forward_policy_h10_weekly_evidence.schema.json",
+  "title": "US-short comparison v2 private H10 weekly evidence projection",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "projection_status", "degradation_reason", "source_private_week_record_sha256",
+    "source_private_week_record", "capture_binding", "frozen_capture", "common_selection_pool",
+    "common_order_snapshot_sha256", "common_price_snapshot_sha256",
+    "market_risk_regime", "h10_session_date", "outcome_available_as_of", "selection_policies", "primary_policy",
+    "factor_questions", "policy_selections", "candidate_after_cost_net_return", "policy_h10_after_cost_net_return",
+    "policy_minus_balanced", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_h10_weekly_evidence"},
+    "schema_version": {"const": "1.0.0"},
+    "projection_status": {"enum": ["ready_for_private_accumulation", "data_degraded_whole_week_no_count"]},
+    "degradation_reason": {"type": ["string", "null"]},
+    "source_private_week_record_sha256": {"$ref": "#/$defs/sha256"},
+    "source_private_week_record": {"type": "object"},
+    "capture_binding": {"type": "object"},
+    "frozen_capture": {"type": "object"},
+    "common_selection_pool": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "common_order_snapshot_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "common_price_snapshot_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "market_risk_regime": {"type": "string", "minLength": 1},
+    "h10_session_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "outcome_available_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "selection_policies": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "primary_policy": {"type": "string", "minLength": 1},
+    "factor_questions": {"type": "object"},
+    "policy_selections": {"type": "object"},
+    "candidate_after_cost_net_return": {"type": ["object", "null"]},
+    "policy_h10_after_cost_net_return": {"type": ["object", "null"]},
+    "policy_minus_balanced": {"type": ["object", "null"]},
+    "boundary": {"type": "object"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}
