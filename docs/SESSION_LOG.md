@@ -8,6 +8,21 @@
 
 ---
 
+## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第三刀：共同候选订单快照生产器）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。纯离线 `us_short_forward_policy_order_snapshot.py` 为共同池每票产标准化 model-paper 订单(填 blade 2 的 orders 空档):不收 policy ID→六头同一执行几何、不能注入政策专属订单;输入须恰覆盖共同池;复用正式 `analyze_rows`/`support_atr_engine`;order 几何 stop<low<=entry<=high<tp(喂 paper-fill bracket);任一不可执行/市场 no-entry→整周 no-count 不造 fallback;capture+价格输入+订单三 digest 绑定;BOUNDARY 全 False、in-memory 无 fetch/write。设计意图对齐,docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-COMMON-ORDER-SNAPSHOT-PRODUCER` in_progress→resolved。
+- **Verify**: 整读消费引擎体(order_snapshot+_validate_order 几何)。亲跑(298a 树、未采信 Codex 4467):焦点 forward_policy 75 OK;全包 `test_us_short*` 4467 OK(我给 300s)。自写 10 对抗探针全 fail-closed(缺/多输入·ticker键不符·坏submode·非bool·stop不低于low·tp不高于high·limit越带·pullback带breakout价)。按比例(shadow-only·无 live/secret/选股影响)未起 §6a agent。
+- **Next**: blade 3 正式裁决+累积+banner / 全候选价格源·持久化(gated) 后续,本刀未触。
+
+## 2026-07-16 - Codex execute (US-short A1 comparison v2 third blade: common candidate order snapshot)
+
+- **Verdict/Action**: Added a pure/offline in-memory producer for one standardized order map across the exact Cut-A Pass2-clean pool. It binds the capture and price-basis date, requires a price-control input for every candidate, runs the existing candidate price-analysis path under one market regime, and hashes both the input and completed order map. A strategy head cannot pass a policy-specific, selected-only, missing, or extra candidate order. An unbuildable candidate or market-wide no-new-entry state returns a whole-week no-count packet with no partial map; it does not invent a fallback order.
+- **Required**: `R-USSHORT-A1-COMMON-ORDER-SNAPSHOT-PRODUCER` is in progress and awaits Claude Code independent review. Source-bound all-candidate OHLCV/ATR capture, forward-price fetch/persistence, accumulator, outcome-core wiring, formal evaluator/receipt, persistent banner, provider calls, primary selection changes, broker automation, A-share/US-long, and ship-gate evidence remain out of scope.
+- **Verify**: red first: the new test failed before the module existed. Green after the final identity/carry-state hardening: focused snapshot 8 OK; forward-policy focused 72 OK; price-analysis/outcome compatibility 107 OK; route/doc guards 60 OK; full `test_us_short*.py` 4467 OK (1 skipped); `py_compile`, schema JSON parse, and `git diff --check` pass.
+- **Pre-Codex self-review**: A-F checked. A: ready / candidate-unbuildable / market-no-entry exits each have a schema-validated packet and no partial order map; keyed candidate identity is verified twice (canonical map key plus row ticker). B: `rg -n "produce_forward_policy_order_snapshot" runners engine -g "*.py"` finds the new engine only (runner 0); no pre-existing consumer/writer was changed. C: selected-only/missing pool, date drift, swapped identity, malformed price container/carry state, order tamper, defensive breakout downgrade, and no-entry no-count are pinned. E: only the active comparison route/register/roadmap and minimal log changed; `CURRENT` untouched. F: strict real date/boolean/int checks, finite canonical JSON digest, no network/persistence. Independent current-diff agent: PASS, no timeout/restart; fixed verification pack ran once after final code changes.
+- **Next**: Claude Code review this third blade only; after PASS, Claude commits.
+
 ## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第二刀：H10 收益生产核心）PASS
 
 - **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。纯离线收益核心 `us_short_forward_policy_outcome.py`:吃1份 v2 capture+每票唯一订单(恰覆盖共同池、非 policy-keyed)+20 根 caller 日线;安全全闭:①无落 ledger(纯 in-memory、BOUNDARY 九项全 False)、held 名只 evaluation_mark_only;②无 look-ahead(精确 20bar 窗、多一根 raise、h5<h10<h20 且均>decision);③no-count 全或无+reason 与 adjustment 交叉校验;④order/pool/price 三 digest 绑定;⑤复用正式 paper 引擎(固定 passive stop 非 trailing→逐 bar 正确)。无 provider/writer/runner/ship-gate。设计意图对齐 §4,docs 无 overclaim。
