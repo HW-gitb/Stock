@@ -55,15 +55,15 @@ BOUNDARY = {
 }
 _WEEK_KEYS = frozenset({
     "capture", "decision_diff", "scorecard_comparison", "outcome_as_of",
-    "candidate_net_benchmark_excess", "outcome_metric", "outcome_basis", "forward_evidence",
+    "candidate_after_cost_net_return", "outcome_metric", "outcome_basis", "forward_evidence",
 })
 _FORWARD_EVIDENCE = {
     "recording_mode": "same_run_live_capture_only",
     "historical_replay_counts_as_forward": False,
     "backfill_allowed": False,
 }
-_OUTCOME_METRIC = "net_benchmark_excess"
-_OUTCOME_BASIS = "same_decision_week_benchmark_and_cost_model"
+_OUTCOME_METRIC = "policy_minus_balanced_after_cost_net_return"
+_OUTCOME_BASIS = "same_decision_week_h10_after_cost_common_pool"
 _SUMMARY_KEYS = frozenset({
     "schema_name", "schema_version", "as_of", "evaluated_decision_week_count", "selection_policies",
     "primary_policy", "policy_verdicts", "boundary",
@@ -125,26 +125,26 @@ def _selection_sets(capture: dict, *, selection_count: int) -> dict[str, set[str
 
 
 def _candidate_values(record: dict, capture: dict, selections: dict[str, set[str]]) -> dict[str, float]:
-    candidates = capture["selection_decisions"][SELECTION_POLICY_IDS[0]]["candidates"]
+    candidates = capture["common_selection_pool"]
     if not isinstance(candidates, list) or len(candidates) != len(set(candidates)) or any(
         type(ticker) is not str or not ticker for ticker in candidates
     ):
-        raise ForwardPolicyStatisticalEvaluationError("Cut-A candidate pool must be a unique non-blank ticker list")
+        raise ForwardPolicyStatisticalEvaluationError("Cut-A common selection pool must be a unique non-blank ticker list")
     candidate_set = set(candidates)
     if not candidate_set:
-        raise ForwardPolicyStatisticalEvaluationError("Cut-D placebo requires the non-empty Cut-A candidate pool")
+        raise ForwardPolicyStatisticalEvaluationError("Cut-D placebo requires the non-empty Pass2-clean common pool")
     for policy_id, selected in selections.items():
         if not selected <= candidate_set:
             raise ForwardPolicyStatisticalEvaluationError(
                 "policy %r selected a ticker outside the Cut-A candidate pool" % (policy_id,)
             )
-    values = record["candidate_net_benchmark_excess"]
+    values = record["candidate_after_cost_net_return"]
     if not isinstance(values, dict) or set(values) != candidate_set:
         raise ForwardPolicyStatisticalEvaluationError(
-            "candidate_net_benchmark_excess must cover exactly the Cut-A candidate pool"
+            "candidate_after_cost_net_return must cover exactly the Pass2-clean common pool"
         )
     if any(not _finite(value) for value in values.values()):
-        raise ForwardPolicyStatisticalEvaluationError("candidate_net_benchmark_excess values must be finite numeric")
+        raise ForwardPolicyStatisticalEvaluationError("candidate_after_cost_net_return values must be finite numeric")
     return {ticker: float(value) for ticker, value in values.items()}
 
 
@@ -152,7 +152,9 @@ def _validate_week(record: object, *, as_of: str, selection_count: int) -> dict:
     if not isinstance(record, dict) or set(record) != _WEEK_KEYS:
         raise ForwardPolicyStatisticalEvaluationError("weekly evidence must carry the exact Cut-D-analysis input keys")
     if record["outcome_metric"] != _OUTCOME_METRIC or record["outcome_basis"] != _OUTCOME_BASIS:
-        raise ForwardPolicyStatisticalEvaluationError("weekly outcome metric/basis is not the preregistered same-week net excess")
+        raise ForwardPolicyStatisticalEvaluationError(
+            "weekly outcome metric/basis is not the preregistered same-decision-week H10 direct after-cost return"
+        )
     if record["forward_evidence"] != _FORWARD_EVIDENCE:
         raise ForwardPolicyStatisticalEvaluationError("weekly evidence may not be replayed, backfilled, or non-live-capture")
     if not _strict_yyyymmdd(record["outcome_as_of"]) or record["outcome_as_of"] > as_of:
@@ -275,7 +277,7 @@ def _placebo_95th_percentile(divergence_weeks: list[dict], *, policy_id: str, pl
                 - _basket_net_excess(week["candidate_values"], balanced)
             )
         null_means.append(_mean(weekly_advantages))
-    percentile = plan["statistics"]["elimination_rule"]["promotion_gate"]["placebo_percentile_exclusive_gt"]
+    percentile = plan["statistics"]["elimination_rule"]["formal_recommendation_gate"]["placebo_percentile_exclusive_gt"]
     if not (0.0 < percentile <= 1.0):
         raise ForwardPolicyStatisticalEvaluationError("manifest placebo percentile is invalid")
     ordered = sorted(null_means)
@@ -297,7 +299,7 @@ def _empty_outcome_gate() -> dict:
 
 
 def _evaluate_outcomes(divergence_weeks: list[dict], *, policy_id: str, plan: dict) -> dict:
-    promotion_gate = plan["statistics"]["elimination_rule"]["promotion_gate"]
+    promotion_gate = plan["statistics"]["elimination_rule"]["formal_recommendation_gate"]
     advantages = []
     for week in divergence_weeks:
         values = week["candidate_values"]
@@ -369,18 +371,18 @@ def _verdict_for_policy(weeks: list[dict], *, policy_id: str, plan: dict) -> dic
     ]
     flags = _policy_flags(weeks, policy_id=policy_id, plan=plan)
     if flags["harm_turnover"] or flags["harm_fill"]:
-        verdict, outcome_gate = "harm_flag", _empty_outcome_gate()
+        verdict, outcome_gate = "diagnostic_harm_flag", _empty_outcome_gate()
     elif flags["futility"]:
-        verdict, outcome_gate = "futility_flag", _empty_outcome_gate()
-    elif len(divergence_weeks) < statistics["minimum_forward_weeks_before_promotion_review"]:
-        verdict, outcome_gate = "accumulating", _empty_outcome_gate()
+        verdict, outcome_gate = "diagnostic_futility_flag", _empty_outcome_gate()
+    elif len(divergence_weeks) < statistics["minimum_divergence_weeks_before_formal_recommendation"]:
+        verdict, outcome_gate = "diagnostic_accumulating", _empty_outcome_gate()
     else:
         outcome_gate = _evaluate_outcomes(divergence_weeks, policy_id=policy_id, plan=plan)
-        verdict = "promotion_eligible" if all(
+        verdict = "diagnostic_pass_not_formal_recommendation" if all(
             outcome_gate[key] for key in (
                 "gate_a_mean_advantage", "gate_b_paired_wins", "gate_c_placebo",
             )
-        ) else "not_eligible"
+        ) else "diagnostic_not_passed_not_formal_recommendation"
     return {
         "divergence_week_count": len(divergence_weeks),
         "review_flags": flags,
@@ -406,7 +408,7 @@ def _validate_summary_with_plan(summary: object, *, plan: dict) -> None:
     verdicts = summary["policy_verdicts"]
     if not isinstance(verdicts, dict) or tuple(verdicts) != SELECTION_POLICY_IDS[1:]:
         raise ForwardPolicyStatisticalEvaluationError("Cut-D-analysis summary must cover exactly the five shadow heads")
-    minimum = plan["statistics"]["minimum_forward_weeks_before_promotion_review"]
+    minimum = plan["statistics"]["minimum_divergence_weeks_before_formal_recommendation"]
     for policy_id, block in verdicts.items():
         if not isinstance(block, dict) or set(block) != _VERDICT_KEYS:
             raise ForwardPolicyStatisticalEvaluationError("summary verdict block for %r is malformed" % (policy_id,))
@@ -421,8 +423,8 @@ def _validate_summary_with_plan(summary: object, *, plan: dict) -> None:
         if gate["evaluated"] is False:
             if any(gate[key] is not None for key in _OUTCOME_GATE_KEYS - {"evaluated"}):
                 raise ForwardPolicyStatisticalEvaluationError("outcome-blind summary for %r leaked outcome data" % (policy_id,))
-            expected = "harm_flag" if flags["harm_turnover"] or flags["harm_fill"] else \
-                "futility_flag" if flags["futility"] else "accumulating"
+            expected = "diagnostic_harm_flag" if flags["harm_turnover"] or flags["harm_fill"] else \
+                "diagnostic_futility_flag" if flags["futility"] else "diagnostic_accumulating"
             if verdict != expected:
                 raise ForwardPolicyStatisticalEvaluationError("outcome-blind verdict for %r is inconsistent" % (policy_id,))
         else:
@@ -436,9 +438,9 @@ def _validate_summary_with_plan(summary: object, *, plan: dict) -> None:
                 "gate_a_mean_advantage", "gate_b_paired_wins", "gate_c_placebo",
             )):
                 raise ForwardPolicyStatisticalEvaluationError("summary outcome gate flags for %r are invalid" % (policy_id,))
-            expected = "promotion_eligible" if all(
+            expected = "diagnostic_pass_not_formal_recommendation" if all(
                 gate[key] for key in ("gate_a_mean_advantage", "gate_b_paired_wins", "gate_c_placebo")
-            ) else "not_eligible"
+            ) else "diagnostic_not_passed_not_formal_recommendation"
             if verdict != expected:
                 raise ForwardPolicyStatisticalEvaluationError("summary promotion verdict for %r is inconsistent" % (policy_id,))
 
@@ -453,8 +455,11 @@ def evaluate_forward_policy_statistical_evaluation(weekly_evidence: object, *, a
 
     ``weekly_evidence`` is an ordered in-memory list.  Each item binds a validated Cut-A capture, its exact Cut-C
     decision diff, a capture-bound Cut-B scorecard comparison, and a complete candidate-pool map of same-week,
-    after-cost ``net_benchmark_excess`` values.  No caller-side input is persisted or mutated.  An empty list is a
-    valid zero-real-week query and returns only accumulating/outcome-blind summaries.
+    H10 after-cost return values over the exact Pass2-clean common pool.  No caller-side input is persisted or
+    mutated.  This blade only updates the legacy three-gate diagnostic to the v2 pool/24-week contract; the later
+    v2 verdict blade adds the frozen non-overlap/regime/Holm/risk/family-winner gates before any user-facing advice.
+    An empty list is a
+    valid zero-real-week query and returns only diagnostic-accumulating, outcome-blind summaries.
     """
     plan = statistical_plan.load_forward_policy_statistical_plan()
     if not _strict_yyyymmdd(as_of):
@@ -473,7 +478,7 @@ def evaluate_forward_policy_statistical_evaluation(weekly_evidence: object, *, a
 
     result = {
         "schema_name": "us_short_forward_policy_statistical_evaluation_summary",
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "as_of": as_of,
         "evaluated_decision_week_count": len(weeks),
         "selection_policies": list(SELECTION_POLICY_IDS),

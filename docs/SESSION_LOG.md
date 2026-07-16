@@ -156,6 +156,35 @@
 - **Required**: `R-ASHORT-D4-SOURCE-HASH-BINDING-UNENFORCED`（material）— 完整 Required / 风险 / 两条 closure 路径 / 两条 low Optional 见 `docs/system_risk_register.md`（单一来源）。B1、D2 code PASS 无 Required。
 - **Verify**: 亲跑 d6ac 树 5 目标模块 581 OK + `tests/schema *a_short*` 48 OK；全 lane `discover test_a_short*` 出 3F+4E，经已提交基线 da767a2e（无 B1/D2/D4）对照证完全相同、全为既存（entry_funnel 缺 `result/a_short/20260622/overlay.json` fixture；gap_data_registry holding disposition R3/R4a/R4b），非本切片回归；1 独立对抗只读 agent 攻 D4 六不变式 = 5 ENFORCED + source-hash 1 GAP（已亲验预注册/runner/仓库无 rank_samples.csv）；review-evidence:not_available。
 - **Next**: Codex：修复
+## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第二刀：H10 收益生产核心）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。纯离线收益核心 `us_short_forward_policy_outcome.py`:吃1份 v2 capture+每票唯一订单(恰覆盖共同池、非 policy-keyed)+20 根 caller 日线;安全全闭:①无落 ledger(纯 in-memory、BOUNDARY 九项全 False)、held 名只 evaluation_mark_only;②无 look-ahead(精确 20bar 窗、多一根 raise、h5<h10<h20 且均>decision);③no-count 全或无+reason 与 adjustment 交叉校验;④order/pool/price 三 digest 绑定;⑤复用正式 paper 引擎(固定 passive stop 非 trailing→逐 bar 正确)。无 provider/writer/runner/ship-gate。设计意图对齐 §4,docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-OUTCOME-PRODUCTION-COMMON-ORDER` open→resolved。
+- **Verify**: 整读消费引擎体(outcome+paper multi_day_exit/fill 语义)。亲跑(298a 树、未采信 Codex 4459):焦点 forward_policy 67 OK;全包 `test_us_short*` 4459 OK(我给 300s)。自写 9 对抗探针全 fail-closed(extra/missing ticker·<20/21bar·日历不一致·非增日期·缺/多订单·坏OHLC)。按比例(shadow-only·无 live/secret/选股影响)未起 §6a agent。
+- **Next**: blade 3(正式裁决+累积+banner)/all-candidate 订单·价格源(gated) 后续,本刀未触。
+
+## 2026-07-16 — Codex 修复（US-short A1 对比轨 v2 第二刀：有限期收益生产核心）
+
+- **Verdict/Action**: 已完成纯离线的 H5/H10/H20 私有收益生产核心：严格消费一份 v2 Cut-A capture、Pass2-clean 共同池每票唯一统一订单、20 个交易时段日线、统一成本 prior 和既有复权/公司行动门。停损/止盈复用正式 model-paper 引擎；H5/H10/H20 仍未平仓只产生 comparison-only mark，绝不写入正式 paper ledger。复权门不通过或任一池内日线不完整时输出整周 `data_degraded_whole_week_no_count`，无任何候选收益值。无 provider、writer、runner、正式裁决/切换或 ship-gate 接线。
+- **Required**: `R-USSHORT-A1-OUTCOME-PRODUCTION-COMMON-ORDER` 待 Claude Code 仅审本刀并在 PASS 后提交；后续仍只剩 all-candidate order/price source producer、私有累积/正式裁决与 banner、组合新版比较，均未实施。
+- **Verify**: 红测先证实生产器不存在；修复后 focused comparison/paper/doc guard `195 OK`；最终完整 `discover -s tests -p 'test_us_short*.py'` `4459 OK`（`1 skipped`）；`py_compile`、新 schema JSON parse、`git diff --check` 通过。`rg -n "produce_forward_policy_outcome|us_short_forward_policy_outcome" engine runners` 只命中本新 engine，runner 命中 0。
+- **Pre-Codex self-review**: A-F checked / A 覆盖 common-pool 全量订单、cash/stop/TP/held-mark/no-count 和 H1=决策日但 H5/H10/H20 必须在决策日后的完整类；B 对新符号/runner 消费者 grep（runner 0）；C 新增 stop-priority、no-count、价格快照摘要、前瞻日历和篡改净值反向测试；D 不把 H1 同日早盘合法入场误拒为历史回放；E 只更新当前 comparison route/roadmap/register，不改 CURRENT；F schema/py_compile/diff check 通过。current-diff-only 独立自审先 FAIL（缺 price snapshot digest、日期锚定）→ 两项修复 → 复审 PASS；固定包在最终代码后集中跑完。
+- **Next**: Claude Code：只审 US-short A1 comparison v2 第二刀；PASS 后由 Claude 提交。
+
+## 2026-07-16 — Claude Code 独立复审（US-short A1 对比轨 v2 第一刀）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。§6 五攻击点全闭合：①Pass2 veto 无法泄入共同池（委托权威 `run_selection`、exclusion_records 对每张 veto 完整、六头池须逐字节相同+admitted⊆pool）；②capture↔契约双向绑定 `comparison_contract_sha256==statistical_plan_sha256()`（校验冻结 preset 再哈希、drift 即 raise）；③旧诊断改 24 周对齐+全 `diagnostic_*`、schema 硬拒 `promotion_eligible`；④执行头 `overextension_execution_off` 归 second-wave 排除（两处钉死）；⑤BOUNDARY 全 False、无 fetch。设计意图对齐 §2/§3，docs 无 overclaim。
+- **Required**: 无。register `R-USSHORT-A1-COMPARISON-V2-CONTRACT-COMMON-POOL` in_progress→resolved。
+- **Verify**: 整读消费引擎体（非只 diff）。亲跑（298a 树、未采信 Codex 44 计数）：焦点 forward_policy 62 OK + schema 17 OK；全包 `test_us_short*` **4454 OK**（Codex 120s 超时未跑全，我给 300s 跑通零回归）。自写 4 对抗探针全 fail-closed。按比例（shadow-only）未起 §6a agent。
+- **Next**: 待用户定 commit 本刀+merge master。blade 2（H10·provider-gated）/3（正式裁决）/4（组合）后续，本刀未触。
+
+## 2026-07-16 — Codex 修复（US-short A1 对比轨 v2 第一刀）
+
+- **Verdict/Action**: 已冻结对比轨 v2 证据契约，并把 Cut-A 共同样本池改为 Pass2-clean；capture/summary 双向绑定 v2 合约与共同池摘要。旧三闸消费者现只会输出 `diagnostic_*`，schema 明确拒绝 `promotion_eligible`，不会被误读为正式采用建议。
+- **Required**: `R-USSHORT-A1-COMPARISON-V2-CONTRACT-COMMON-POOL`（详见 `docs/system_risk_register.md`）待 Claude Code 只审本刀；本刀不做 H10 收益生产、正式裁决/横幅接线、组合验证、provider 调用或正式系统切换。
+- **Verify**: 44 项 A1 v2 聚焦回归、`py_compile`、`git diff --check` 通过；文档守卫 35 项通过。全 `test_us_short*.py` 包在 120 秒硬超时前仅输出进度点，未作为通过证据。
+- **Pre-Codex self-review**: A-F checked；A 覆盖六头全部共同池与三项独立问题/第二波排除；B 对 production engine/schema 的旧 `promotion_eligible|not_eligible` 为 0（对抗测试中保留拒绝样本）；C 新增 schema 反向测试拒绝旧正式晋升词；E 仅更新当前 v2 指针、v1 只留 superseded 历史；F JSON/编译/diff 检查通过。独立 current-diff-only agent 首次限时后重启一次，发现 legacy 输出语义可误读为正式建议；修复后复审 PASS；固定包在最终改动后集中跑完。
+- **Next**: Claude Code：只审 US-short A1 comparison v2 first blade；PASS 后由 Claude 提交，不提前实现第二刀。
 
 ## 2026-07-14 — Claude PASS / Codex 提交（A-short D1/D3 因素对照）
 

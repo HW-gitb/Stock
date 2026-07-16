@@ -11,11 +11,13 @@ from engine import us_short_forward_policy_decision_diff as decision_diff
 from engine import us_short_forward_policy_statistical_evaluation as evaluation
 from engine import us_short_paper_scorecard_comparison as scorecard_comparison
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
+from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
 
 
 POLICIES = tuple(SELECTION_POLICY_IDS)
 SHADOW = "theme_plus"
 CANDIDATES = ["T%02d" % index for index in range(30)]
+COMMON_POOL = CANDIDATES[:20]
 BALANCED = CANDIDATES[:15]
 
 
@@ -48,11 +50,16 @@ def _capture(decision_date: str, *, shadow_replacement: str | None = "T15", sour
         selections[SHADOW] = BALANCED[1:] + [shadow_replacement]
     return {
         "schema_name": "us_short_forward_policy_shadow_selection",
-        "schema_version": "1.0.0",
+        "schema_version": "2.0.0",
         "decision_date": decision_date,
         "price_basis_date": (decision - timedelta(days=3)).strftime("%Y%m%d"),
         "generated_at": "2026-07-12T08:00:00-04:00",
         "source_context_sha256": source_digest,
+        "comparison_contract_sha256": statistical_plan_sha256(),
+        "common_selection_pool": list(COMMON_POOL),
+        "common_selection_pool_sha256": __import__("hashlib").sha256(
+            __import__("json").dumps(COMMON_POOL, separators=(",", ":")).encode("utf-8")
+        ).hexdigest(),
         "selection_policies": list(POLICIES),
         "selection_decisions": {
             name: {
@@ -65,7 +72,10 @@ def _capture(decision_date: str, *, shadow_replacement: str | None = "T15", sour
                 "recall_available": False,
                 "recall_added": [],
                 "recall_excluded": [],
-                "exclusion_records": [],
+                "exclusion_records": [
+                    {"stage": "pass2_audit_gate", "ticker": ticker, "category": "hard_veto", "reasons": ["fixture"]}
+                    for ticker in CANDIDATES[20:]
+                ],
                 "admitted": selections[name],
                 "selection_seats": {},
                 "theme_selection_mode": "industry_heat_v1_cross_industry_disabled",
@@ -112,16 +122,16 @@ def _week(
         shadow_replacement=shadow_replacement,
         source_digest=format(index + 1, "064x"),
     )
-    candidate_values = {ticker: 0.0 for ticker in CANDIDATES}
+    candidate_values = {ticker: 0.0 for ticker in COMMON_POOL}
     candidate_values.update(values or {})
     return {
         "capture": capture,
         "decision_diff": decision_diff.build_forward_policy_decision_diff_log(capture)["private"],
         "scorecard_comparison": _scorecard(capture, candidate_values, fills=fills),
         "outcome_as_of": (decision + timedelta(days=4)).strftime("%Y%m%d"),
-        "candidate_net_benchmark_excess": candidate_values,
-        "outcome_metric": "net_benchmark_excess",
-        "outcome_basis": "same_decision_week_benchmark_and_cost_model",
+        "candidate_after_cost_net_return": candidate_values,
+        "outcome_metric": "policy_minus_balanced_after_cost_net_return",
+        "outcome_basis": "same_decision_week_h10_after_cost_common_pool",
         "forward_evidence": {
             "recording_mode": "same_run_live_capture_only",
             "historical_replay_counts_as_forward": False,
@@ -144,54 +154,54 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
 
         self.assertEqual(result["evaluated_decision_week_count"], 0)
         self.assertFalse(result["boundary"]["produces_forward_evidence"])
-        self.assertTrue(all(block["verdict"] == "accumulating" for block in result["policy_verdicts"].values()))
+        self.assertTrue(all(block["verdict"] == "diagnostic_accumulating" for block in result["policy_verdicts"].values()))
         self.assertTrue(all(block["outcome_gate"]["evaluated"] is False for block in result["policy_verdicts"].values()))
 
-    def test_under_minimum_is_outcome_blind_and_deidentified(self):
-        weeks = _weeks(11, values={"T15": 0.03})
+    def test_under_formal_minimum_is_outcome_blind_and_deidentified(self):
+        weeks = _weeks(23, values={"T15": 0.03})
         result = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         block = result["policy_verdicts"][SHADOW]
 
-        self.assertEqual(block["divergence_week_count"], 11)
-        self.assertEqual(block["verdict"], "accumulating")
+        self.assertEqual(block["divergence_week_count"], 23)
+        self.assertEqual(block["verdict"], "diagnostic_accumulating")
         self.assertFalse(block["outcome_gate"]["evaluated"])
         self.assertIsNone(block["outcome_gate"]["mean_paired_advantage"])
         self.assertNotIn("T15", repr(result))
 
-    def test_promotion_requires_all_three_frozen_gates_and_is_deterministic(self):
-        weeks = _weeks(12, values={"T15": 0.03})
+    def test_legacy_diagnostic_pass_requires_all_three_frozen_gates_and_is_deterministic(self):
+        weeks = _weeks(24, values={"T15": 0.03})
         first = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         second = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         block = first["policy_verdicts"][SHADOW]
 
         self.assertEqual(first, second)
-        self.assertEqual(block["verdict"], "promotion_eligible")
+        self.assertEqual(block["verdict"], "diagnostic_pass_not_formal_recommendation")
         self.assertTrue(block["outcome_gate"]["gate_a_mean_advantage"])
         self.assertTrue(block["outcome_gate"]["gate_b_paired_wins"])
         self.assertTrue(block["outcome_gate"]["gate_c_placebo"])
         self.assertGreater(block["outcome_gate"]["mean_paired_advantage"], block["outcome_gate"]["placebo_95th_percentile"])
 
-    def test_each_promotion_gate_can_fail_alone(self):
-        gate_a_weeks = _weeks(12, values={"T15": 0.0005})
+    def test_each_legacy_diagnostic_gate_can_fail_alone(self):
+        gate_a_weeks = _weeks(24, values={"T15": 0.0005})
         gate_a = evaluation.evaluate_forward_policy_statistical_evaluation(gate_a_weeks, as_of=_as_of(gate_a_weeks))["policy_verdicts"][SHADOW]
-        self.assertEqual(gate_a["verdict"], "not_eligible")
+        self.assertEqual(gate_a["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertFalse(gate_a["outcome_gate"]["gate_a_mean_advantage"])
         self.assertTrue(gate_a["outcome_gate"]["gate_b_paired_wins"])
         self.assertTrue(gate_a["outcome_gate"]["gate_c_placebo"])
 
         gate_b_weeks = [
-            _week(index, values={"T15": 0.03 if index < 7 else -0.005})
-            for index in range(12)
+            _week(index, values={"T15": 0.03 if index < 15 else -0.005})
+            for index in range(24)
         ]
         gate_b = evaluation.evaluate_forward_policy_statistical_evaluation(gate_b_weeks, as_of=_as_of(gate_b_weeks))["policy_verdicts"][SHADOW]
-        self.assertEqual(gate_b["verdict"], "not_eligible")
+        self.assertEqual(gate_b["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertTrue(gate_b["outcome_gate"]["gate_a_mean_advantage"])
         self.assertFalse(gate_b["outcome_gate"]["gate_b_paired_wins"])
         self.assertTrue(gate_b["outcome_gate"]["gate_c_placebo"])
 
-        gate_c_weeks = _weeks(12, values={"T15": 0.03, "T16": 0.6})
+        gate_c_weeks = _weeks(24, values={"T15": 0.03, "T16": 0.6})
         gate_c = evaluation.evaluate_forward_policy_statistical_evaluation(gate_c_weeks, as_of=_as_of(gate_c_weeks))["policy_verdicts"][SHADOW]
-        self.assertEqual(gate_c["verdict"], "not_eligible")
+        self.assertEqual(gate_c["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertTrue(gate_c["outcome_gate"]["gate_a_mean_advantage"])
         self.assertTrue(gate_c["outcome_gate"]["gate_b_paired_wins"])
         self.assertFalse(gate_c["outcome_gate"]["gate_c_placebo"])
@@ -201,7 +211,7 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
         futility = evaluation.evaluate_forward_policy_statistical_evaluation(
             futility_weeks, as_of=_as_of(futility_weeks),
         )["policy_verdicts"][SHADOW]
-        self.assertEqual(futility["verdict"], "futility_flag")
+        self.assertEqual(futility["verdict"], "diagnostic_futility_flag")
         self.assertTrue(futility["review_flags"]["futility"])
         self.assertFalse(futility["outcome_gate"]["evaluated"])
 
@@ -212,18 +222,18 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
         turnover = evaluation.evaluate_forward_policy_statistical_evaluation(
             turnover_weeks, as_of=_as_of(turnover_weeks),
         )["policy_verdicts"][SHADOW]
-        self.assertEqual(turnover["verdict"], "harm_flag")
+        self.assertEqual(turnover["verdict"], "diagnostic_harm_flag")
         self.assertTrue(turnover["review_flags"]["harm_turnover"])
         self.assertFalse(turnover["outcome_gate"]["evaluated"])
 
         fill_weeks = _weeks(2, fills={SHADOW: 7})
         fill = evaluation.evaluate_forward_policy_statistical_evaluation(fill_weeks, as_of=_as_of(fill_weeks))["policy_verdicts"][SHADOW]
-        self.assertEqual(fill["verdict"], "harm_flag")
+        self.assertEqual(fill["verdict"], "diagnostic_harm_flag")
         self.assertTrue(fill["review_flags"]["harm_fill"])
         self.assertFalse(fill["outcome_gate"]["evaluated"])
 
     def test_manifest_loader_is_the_threshold_source(self):
-        weeks = _weeks(12, values={"T15": 0.03})
+        weeks = _weeks(24, values={"T15": 0.03})
         altered = copy.deepcopy(evaluation.statistical_plan.load_forward_policy_statistical_plan())
         altered["statistics"]["comparison_win_margin"] = 0.04
         with mock.patch.object(
@@ -234,8 +244,20 @@ class ForwardPolicyStatisticalEvaluationTests(unittest.TestCase):
             result = evaluation.evaluate_forward_policy_statistical_evaluation(weeks, as_of=_as_of(weeks))
         block = result["policy_verdicts"][SHADOW]
 
-        self.assertEqual(block["verdict"], "not_eligible")
+        self.assertEqual(block["verdict"], "diagnostic_not_passed_not_formal_recommendation")
         self.assertFalse(block["outcome_gate"]["gate_a_mean_advantage"])
+
+    def test_candidate_outcomes_cover_only_the_pass2_clean_common_pool(self):
+        week = _week(0, values={"T15": 0.03})
+        self.assertEqual(set(week["candidate_after_cost_net_return"]), set(COMMON_POOL))
+        self.assertNotIn("T29", week["candidate_after_cost_net_return"])
+
+        leaked_pre_pass2 = copy.deepcopy(week)
+        leaked_pre_pass2["candidate_after_cost_net_return"]["T29"] = 0.5
+        with self.assertRaises(evaluation.ForwardPolicyStatisticalEvaluationError):
+            evaluation.evaluate_forward_policy_statistical_evaluation(
+                [leaked_pre_pass2], as_of=_as_of([leaked_pre_pass2]),
+            )
 
     def test_rejects_replay_duplicate_stale_and_lookahead_inputs(self):
         week = _week(0)

@@ -1,0 +1,143 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_forward_policy_outcome_packet/1.0.0/schema.json",
+  "title": "US-short A1 comparison v2 private forward outcome packet",
+  "description": "Private, pure/offline H5/H10/H20 outcome packet for the frozen Pass2-clean common pool. It consumes caller-supplied orders, bars, cost prior, and corporate-action evidence; it fetches nothing, writes nothing, does not alter the model-paper ledger, and cannot authorize a production or ship-gate change.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "outcome_status", "capture_binding", "common_selection_pool",
+    "common_order_snapshot_sha256", "common_price_snapshot_sha256", "frozen_cost_prior", "adjustment_evaluability",
+    "entry_session_date", "outcome_as_of", "horizon_session_dates", "degradation_reason", "candidate_outcomes", "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_outcome_packet"},
+    "schema_version": {"const": "1.0.0"},
+    "outcome_status": {"enum": ["ready_for_comparison", "data_degraded_whole_week_no_count"]},
+    "capture_binding": {"$ref": "#/$defs/captureBinding"},
+    "common_selection_pool": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"type": "string", "minLength": 1}
+    },
+    "common_order_snapshot_sha256": {"$ref": "#/$defs/sha256"},
+    "common_price_snapshot_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+    "frozen_cost_prior": {"$ref": "#/$defs/costPrior"},
+    "adjustment_evaluability": {"$ref": "#/$defs/adjustmentEvaluability"},
+    "entry_session_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "outcome_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "horizon_session_dates": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "required": ["h5", "h10", "h20"],
+      "properties": {
+        "h5": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "h10": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "h20": {"type": "string", "pattern": "^[0-9]{8}$"}
+      }
+    },
+    "degradation_reason": {"type": ["string", "null"], "enum": [null, "adjustment_evidence_not_evaluable", "incomplete_price_series"]},
+    "candidate_outcomes": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/candidateOutcome"}
+    },
+    "boundary": {
+      "const": {
+        "track": "comparison_non_production",
+        "evidence_level": "forward_policy_private_paper_outcome",
+        "shadow_counts_ship_gate": false,
+        "full_size_ship_gate_allowed": false,
+        "changes_primary_selection": false,
+        "provider_calls_added": false,
+        "broker_or_order_automation_allowed": false,
+        "writes_outcome_data": false,
+        "evaluation_mark_is_production_exit": false,
+        "evaluation_mark_changes_model_paper_ledger": false
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "captureBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256",
+        "common_selection_pool_sha256", "capture_sha256"
+      ],
+      "properties": {
+        "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_context_sha256": {"$ref": "#/$defs/sha256"},
+        "comparison_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "common_selection_pool_sha256": {"$ref": "#/$defs/sha256"},
+        "capture_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "costPrior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commission_fee", "slippage_bps", "spread_cost"],
+      "properties": {
+        "commission_fee": {"type": "number", "minimum": 0},
+        "slippage_bps": {"type": "number", "minimum": 0},
+        "spread_cost": {"type": "number", "minimum": 0}
+      }
+    },
+    "adjustmentEvaluability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status", "unconfirmed", "blocks_paper_performance_due_to_corporate_action",
+        "full_size_ship_gate_allowed", "ship_gate_evidence_level", "adjustment_context",
+        "corporate_action_gate_source"
+      ],
+      "properties": {
+        "status": {"enum": ["evaluable", "not_evaluable"]},
+        "unconfirmed": {"type": "array", "items": {"type": "string"}},
+        "blocks_paper_performance_due_to_corporate_action": {"type": "boolean"},
+        "full_size_ship_gate_allowed": {"const": false},
+        "ship_gate_evidence_level": {"const": "paper_not_live_normalized"},
+        "adjustment_context": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["adjustment_mode_confirmed", "split_dividend_handled", "ex_date_price_consistent"],
+          "properties": {
+            "adjustment_mode_confirmed": {"type": "boolean"},
+            "split_dividend_handled": {"type": "boolean"},
+            "ex_date_price_consistent": {"type": "boolean"}
+          }
+        },
+        "corporate_action_gate_source": {"const": "offline_adjustment_evidence"}
+      }
+    },
+    "horizonOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outcome", "model_paper_status", "realized", "gross_return", "total_cost_fraction",
+        "candidate_after_cost_net_return", "unfilled_cash"
+      ],
+      "properties": {
+        "outcome": {"enum": ["cash_unfilled", "model_paper_exit", "evaluation_mark_only"]},
+        "model_paper_status": {"enum": ["not_filled", "filled_stopped", "filled_tp_exit", "filled_held"]},
+        "realized": {"type": "boolean"},
+        "gross_return": {"type": "number"},
+        "total_cost_fraction": {"type": "number", "minimum": 0},
+        "candidate_after_cost_net_return": {"type": "number"},
+        "unfilled_cash": {"type": "boolean"}
+      }
+    },
+    "candidateOutcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "h5", "h10", "h20"],
+      "properties": {
+        "ticker": {"type": "string", "minLength": 1},
+        "h5": {"$ref": "#/$defs/horizonOutcome"},
+        "h10": {"$ref": "#/$defs/horizonOutcome"},
+        "h20": {"$ref": "#/$defs/horizonOutcome"}
+      }
+    }
+  }
+}
