@@ -4,7 +4,7 @@
   "description": "Governed weight profiles for A-EGS production egs_base, adding SW L2 industry_heat. active_profile is 'balanced' (LIVE: industry/theme weight raised → production selection changes). 'legacy' (esp.20/cat.30/l4.50/ind 0 = pre-change formula) is retained as a one-flag rollback + regression anchor. Each profile's weights must sum to 1.0 (enforced by parity test, not schema).",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "active_profile", "profiles", "industry_heat_def", "boundary"],
+  "required": ["schema_name", "schema_version", "active_profile", "profiles", "industry_heat_def", "industry_trend_classifier", "boundary"],
   "properties": {
     "schema_name": {"const": "egs_industry_heat_governance"},
     "schema_version": {"const": "1.0.0"},
@@ -43,6 +43,21 @@
         "l1_fallback": {"const": false},
         "definition_note": {"type": "string", "minLength": 1},
         "l4_overlap_treatment": {"type": "string", "minLength": 1}
+      }
+    },
+    "industry_trend_classifier": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classifier_version", "source_id", "headwind_max", "tailwind_min", "risk_filter_v1_prior", "forward_calibration_required", "positive_effect_enabled", "semantic_boundary"],
+      "properties": {
+        "classifier_version": {"const": "industry_heat_trend_v1"},
+        "source_id": {"const": "A-EGS.industry_heat_score"},
+        "headwind_max": {"const": 20.0},
+        "tailwind_min": {"const": 80.0},
+        "risk_filter_v1_prior": {"const": true},
+        "forward_calibration_required": {"const": true},
+        "positive_effect_enabled": {"const": false},
+        "semantic_boundary": {"const": "deterministic SW L2 price-momentum classification; LLM fundamental/policy industry judgement is a separate advisory field"}
       }
     },
     "promotion": {"type": "object"},

@@ -92,7 +92,8 @@
           "industry_pass": {"type": "boolean"},
           "theme_eff": {"type": ["number", "null"]},
           "eligible": {"type": "boolean"},
-          "crowding_hit": {"type": "boolean"}
+          "crowding_hit": {"type": "boolean"},
+          "theme_taxonomy": {"$ref": "#/$defs/themeTaxonomy"}
         }
       }
     },
@@ -117,7 +118,67 @@
         "production": {"const": false},
         "changes_final_score_or_tier": {"const": false},
         "is_buy_advice": {"const": false},
-        "satisfies_ship_gate": {"const": false}
+        "satisfies_ship_gate": {"const": false},
+        "production_effect_enabled": {"const": false},
+        "automatic_promotion": {"const": false}
+      }
+    }
+  },
+  "$defs": {
+    "rawConcept": {
+      "type": "object", "additionalProperties": false,
+      "required": ["concept_id", "concept_name", "source_id", "source_as_of", "source_snapshot_date", "coverage_digest", "membership_source"],
+      "properties": {
+        "concept_id": {"type": "string"}, "concept_name": {"type": "string"}, "source_id": {"type": "string"},
+        "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "source_snapshot_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "coverage_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}, "membership_source": {"enum": ["hithink_complete_concept_members", "legacy_snapshot_concept_members"]}
+      }
+    },
+    "canonicalTheme": {
+      "type": "object", "additionalProperties": false,
+      "required": ["theme_id", "name_cn", "name_en", "status", "matched_raw_concepts", "matched_subthemes", "role", "role_confidence", "classification_basis", "business_evidence", "coverage_status", "unknown_reason", "production_effect_enabled", "automatic_promotion"],
+      "properties": {
+        "theme_id": {"type": "string"}, "name_cn": {"type": "string"}, "name_en": {"type": "string"},
+        "status": {"enum": ["comparison_only", "approved", "retired"]}, "matched_raw_concepts": {"type": "array", "items": {"$ref": "#/$defs/rawConcept"}},
+        "matched_subthemes": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["subtheme_id", "name", "matched_raw_concept_ids"], "properties": {"subtheme_id": {"type": "string"}, "name": {"type": "string"}, "matched_raw_concept_ids": {"type": "array", "items": {"type": "string"}}}}},
+        "role": {"enum": ["core", "key_supplier", "adjacent", "weak_link", "unknown"]}, "role_confidence": {"enum": ["high", "medium", "unknown"]},
+        "classification_basis": {"enum": ["registry_membership_and_structured_business_evidence", "registry_membership_proxy_only"]}, "business_evidence": {"type": "array", "items": {"type": "object"}},
+        "coverage_status": {"enum": ["checked", "unknown_or_unavailable"]}, "unknown_reason": {"type": ["string", "null"]},
+        "production_effect_enabled": {"const": false}, "automatic_promotion": {"const": false}
+      }
+    },
+    "themeTaxonomy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["taxonomy_schema_name", "taxonomy_schema_version", "taxonomy_configuration_fingerprint", "source_as_of", "l3_provenance", "raw_concepts", "canonical_themes", "primary_canonical_theme_id", "production_effect_enabled", "automatic_promotion"],
+      "properties": {
+        "taxonomy_schema_name": {"const": "a_short_theme_taxonomy"}, "taxonomy_schema_version": {"const": "1.2.0"},
+        "taxonomy_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "l3_provenance": {
+          "type": "object", "additionalProperties": false,
+          "required": ["provider", "snapshot_date", "coverage_digest", "coverage_complete", "scoring_universe", "raw_membership_source", "validation_status"],
+          "properties": {
+            "provider": {"enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null]},
+            "snapshot_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+            "coverage_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+            "coverage_complete": {"type": ["boolean", "null"]},
+            "scoring_universe": {"type": ["string", "null"]},
+            "raw_membership_source": {"enum": ["hithink_complete_concept_members", "legacy_snapshot_concept_members", "unavailable"]},
+            "validation_status": {"enum": ["verified_complete", "legacy_snapshot", "unavailable"]}
+          }
+        },
+        "raw_concepts": {"type": "array", "items": {"$ref": "#/$defs/rawConcept"}}, "canonical_themes": {"type": "array", "items": {"$ref": "#/$defs/canonicalTheme"}},
+        "primary_canonical_theme_id": {"type": ["string", "null"]}, "production_effect_enabled": {"const": false}, "automatic_promotion": {"const": false},
+        "comparison_status": {"const": "unknown_or_unavailable"}, "unavailable_reason": {"type": "string"},
+        "comparison_metrics": {"$ref": "#/$defs/comparisonMetrics"}
+      }
+    },
+    "comparisonMetrics": {
+      "type": "object", "additionalProperties": false,
+      "required": ["theme_heat_score", "breadth_pass", "persistence_mult", "fit_score", "fit_pass", "comparison_status"],
+      "properties": {
+        "theme_heat_score": {"type": ["number", "null"]}, "breadth_pass": {"type": "boolean"},
+        "persistence_mult": {"type": ["number", "null"]}, "fit_score": {"type": ["number", "null"]},
+        "fit_pass": {"type": "boolean"}, "comparison_status": {"const": "available"}
       }
     }
   }

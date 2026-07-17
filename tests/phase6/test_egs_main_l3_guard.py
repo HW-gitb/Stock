@@ -132,7 +132,8 @@ class EgsMainL3GuardTest(unittest.TestCase):
                 self.assertEqual(self.egs_main.CONF["l3_provider"], "hithink_finance")
                 self.assertEqual(self.egs_main.CONF["l3_coverage"], graph.coverage)
                 self.assertGreater(scored.loc[0, "cat_score"], scored.loc[1, "cat_score"])
-                snapshot = self.egs_main._load_l3_snapshot("20260716", include_metadata=True)
+                snapshot = self.egs_main._load_l3_snapshot(
+                    self.egs_main.CONF["l3_snapshot_date"], include_metadata=True)
                 self.assertIsNotNone(snapshot)
                 self.assertEqual(snapshot[4], "hithink_finance")
                 self.assertEqual(snapshot[5], graph.coverage)

@@ -115,7 +115,10 @@ from engine.data.analysis_input_contract import (
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
-    write_weight_comparison,
+    write_weight_comparison, load_governance,
+)
+from engine.a_short_industry_theme import (
+    classify_industry_trend, taxonomy_by_code, unavailable_theme_taxonomy,
 )
 from engine.a_short_hithink_l3 import (
     SOURCE_ID as HITHINK_L3_SOURCE_ID,
@@ -510,7 +513,8 @@ def _rule_check(check_id, name, group, status="unknown", severity="watch", metri
         "notes": notes,
     }
 
-def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set):
+def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set,
+                        industry_heat_governance=None):
     ts_code = str(_row_get(row, "ts_code", ""))
     exchange = ts_code.split(".")[-1] if "." in ts_code else "SZ"
     close = _json_float(_row_get(row, "close"))
@@ -561,6 +565,24 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         _rule_check("rule6_ar_growth_gt_revenue_growth", "AR growth faster than revenue growth", "post_veto", "pending_data"),
     ]
 
+    industry_trend_signal = classify_industry_trend(
+        score=_row_get(row, "industry_heat_score"),
+        sw_l2_code=_row_get(row, "l2_code"),
+        sw_l2_name=_row_get(row, "l2_name"),
+        source_as_of=quote_source_date,
+        expected_as_of=latest_td,
+        governance=industry_heat_governance or load_governance(),
+    )
+    theme_taxonomy = _row_get(row, "theme_taxonomy")
+    if not isinstance(theme_taxonomy, dict):
+        theme_taxonomy = unavailable_theme_taxonomy(
+            str(latest_td),
+            "l3_taxonomy_not_available_for_this_run",
+            l3_provider=CONF.get("l3_provider"),
+            l3_snapshot_date=CONF.get("l3_snapshot_date"),
+            l3_coverage=CONF.get("l3_coverage"),
+        )
+
     def _is_missing(value):
         return value is None or value == "" or value == "未知"
 
@@ -604,7 +626,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
     present_count = len(core_quality_fields) - len(actual_missing_fields)
     completeness_score = round((present_count / len(core_quality_fields)) * 100, 2)
     pending_fields = [
-        "industry.industry_trend",
+        "industry.industry_fundamental_trend",
         "event_risk.regulatory",
         "catalyst.policy_news",
     ]
@@ -641,8 +663,10 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "sw_l1_name": _json_value(_row_get(row, "l1_name")),
             "sw_l2_code": _json_str(_row_get(row, "l2_code")),
             "sw_l2_name": _json_value(_row_get(row, "l2_name")),
-            "industry_trend": "pending_llm",
-            "industry_trend_evidence": [],
+            "industry_trend": industry_trend_signal["industry_trend"],
+            "industry_trend_signal": industry_trend_signal,
+            "industry_fundamental_trend": "pending_llm",
+            "industry_fundamental_trend_evidence": [],
         },
         "scores": {
             "final_score": _json_score(_row_get(row, "final_score")),
@@ -785,6 +809,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         "catalyst": {
             "concepts": [],
             "concept_strength_score": _json_score(_row_get(row, "cat_score")),
+            "theme_taxonomy": theme_taxonomy,
             "policy_news": [],
             "earnings": {"has_recent_report": None, "is_primary_catalyst": None},
             "time_window": "unknown",
@@ -1028,8 +1053,10 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     final_codes = set(tier1_final.head(CONF["final_n"]).get("ts_code", pd.Series(dtype=str)).tolist()) \
         if tier1_final is not None and not tier1_final.empty else set()
 
+    industry_heat_governance = load_governance()
     candidates = [
-        _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set)
+        _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set,
+                            industry_heat_governance)
         for rank, (_, row) in enumerate(watch_df.iterrows(), start=1)
     ]
     run_identity = build_a_short_run_identity(latest_td, candidates)
@@ -3982,16 +4009,59 @@ def run_egs(backtest_mode=False, output_root=None):
     # 赛道热度 overlay(Slice A,comparison-track 非生产):只覆盖 Stage3 后最终周报候选 watch_df，
     # 与 analysis_input.candidates 保持同一批，避免 M6.7 因多行/缺行而 fail-closed。
     # 生产行业热度评分已在 score_l5 完成；本 overlay 仅供后续分析/对照，不反向改变候选排序。
+    watch_df["theme_taxonomy"] = [
+        unavailable_theme_taxonomy(
+            TODAY,
+            "l3_taxonomy_not_available_for_this_run",
+            l3_provider=CONF.get("l3_provider"),
+            l3_snapshot_date=CONF.get("l3_snapshot_date"),
+            l3_coverage=CONF.get("l3_coverage"),
+        )
+        for _ in range(len(watch_df))
+    ]
     try:
         from runners.a_short_theme_overlay_comparison import emit_overlay, overlay_emit_allowed
         from engine.a_short_run_paths import overlay_path
-        _l3 = _load_l3_snapshot(TODAY) if overlay_emit_allowed(CONF.get("l3_mode")) else None
+        _l3 = (_load_l3_snapshot(TODAY, include_metadata=True)
+               if overlay_emit_allowed(CONF.get("l3_mode")) else None)
         if _l3 is not None:
+            _taxonomy_by_code = taxonomy_by_code(
+                watch_df, stock_concepts=_l3[1], concept_members=_l3[2],
+                concepts_df=_l3[0], as_of=TODAY,
+                l3_provider=_l3[4], l3_snapshot_date=_l3[3], l3_coverage=_l3[5],
+            )
+            watch_df["theme_taxonomy"] = watch_df["ts_code"].astype(str).map(_taxonomy_by_code)
             _ov_pool = watch_df[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
             _ov_pool["baseline_rank"] = range(1, len(_ov_pool) + 1)
             _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
             _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
                                        TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
+            # Preserve comparison metrics with the governed taxonomy for the
+            # later forward evaluator. This never feeds ranking or M6.7.
+            with open(_ov_written, encoding="utf-8") as _ov_handle:
+                _ov_summary = json.load(_ov_handle)
+            _ov_metrics = {str(item.get("ts_code")): item for item in (_ov_summary.get("candidates") or [])}
+
+            def _taxonomy_with_metrics(row):
+                _base = dict(row.get("theme_taxonomy") or unavailable_theme_taxonomy(
+                    TODAY,
+                    "taxonomy_missing_after_overlay",
+                    l3_provider=CONF.get("l3_provider"),
+                    l3_snapshot_date=CONF.get("l3_snapshot_date"),
+                    l3_coverage=CONF.get("l3_coverage"),
+                ))
+                _metric = _ov_metrics.get(str(row.get("ts_code"))) or {}
+                _base["comparison_metrics"] = {
+                    "theme_heat_score": _metric.get("theme_heat_score"),
+                    "breadth_pass": bool(_metric.get("breadth_pass")),
+                    "persistence_mult": _metric.get("persistence_mult"),
+                    "fit_score": _metric.get("fit_score"),
+                    "fit_pass": bool(_metric.get("fit_pass")),
+                    "comparison_status": "available",
+                }
+                return _base
+
+            watch_df["theme_taxonomy"] = watch_df.apply(_taxonomy_with_metrics, axis=1)
             log.info(f"赛道热度 overlay 已写(非生产,comparison-track）：{_ov_written}")
         else:
             log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode=neutralize 或无快照),不编造概念")

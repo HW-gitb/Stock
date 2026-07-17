@@ -1,0 +1,37 @@
+{
+  "schema_name": "a_short_theme_taxonomy",
+  "schema_version": "1.2.0",
+  "effective_date": "20260717",
+  "raw_concept_source": {
+    "source_id": "analysis_input.source.l3_provider",
+    "provider": "runtime_bound_l3",
+    "membership_required": true,
+    "runtime_receipt_required": true,
+    "live_coverage_receipt_required": true,
+    "legacy_snapshot_allowed_for_comparison": true
+  },
+  "canonical_themes": [
+    {
+      "theme_id": "physical_ai",
+      "name_cn": "物理AI",
+      "name_en": "physical_ai",
+      "aliases": ["具身智能", "机器人产业链"],
+      "included_raw_concept_ids": [],
+      "included_raw_concept_names": ["机器人", "工业机器人", "机器视觉", "传感器", "减速器", "伺服系统", "执行器", "控制器", "边缘AI"],
+      "excluded_raw_concept_ids": [],
+      "excluded_raw_concept_names": [],
+      "subthemes": [
+        {"subtheme_id": "robot_body", "name": "机器人本体", "included_raw_concept_ids": [], "included_raw_concept_names": ["机器人", "工业机器人"]},
+        {"subtheme_id": "perception", "name": "机器视觉与感知", "included_raw_concept_ids": [], "included_raw_concept_names": ["机器视觉", "传感器"]},
+        {"subtheme_id": "actuation", "name": "执行器与传动", "included_raw_concept_ids": [], "included_raw_concept_names": ["减速器", "伺服系统", "执行器"]},
+        {"subtheme_id": "control_edge_ai", "name": "控制器与边缘AI", "included_raw_concept_ids": [], "included_raw_concept_names": ["控制器", "边缘AI"]}
+      ],
+      "minimum_evidence_requirements": ["ts_code", "role", "source_id", "observed_at", "checked_at", "finding_id"],
+      "role_rules": "structured_evidence_only_no_free_text_inference",
+      "status": "comparison_only",
+      "forward_calibration": {"minimum_forward_live_weeks": 12, "automatic_promotion": false},
+      "production_effect_enabled": false
+    }
+  ]
+}
+

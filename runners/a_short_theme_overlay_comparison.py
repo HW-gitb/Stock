@@ -283,7 +283,7 @@ def build_summary(overlay_df: pd.DataFrame, as_of: str, pit_source: dict,
                   dropped_at_l0_l5: list, generated_at: str) -> dict:
     candidates = []
     for _, r in overlay_df.iterrows():
-        candidates.append({
+        candidate = {
             "ts_code": str(r["ts_code"]),
             "baseline_rank": _safe_int(r.get("baseline_rank")),
             "overlay_rank": _safe_int(r.get("overlay_rank")),
@@ -303,7 +303,10 @@ def build_summary(overlay_df: pd.DataFrame, as_of: str, pit_source: dict,
             "theme_eff": _safe_float(r.get("theme_eff")),
             "eligible": bool(r.get("eligible")),
             "crowding_hit": bool(r.get("crowding_hit")),
-        })
+        }
+        if isinstance(r.get("theme_taxonomy"), dict):
+            candidate["theme_taxonomy"] = r.get("theme_taxonomy")
+        candidates.append(candidate)
     return {
         "schema_name": SCHEMA_NAME,
         "schema_version": SCHEMA_VERSION,
@@ -322,6 +325,8 @@ def build_summary(overlay_df: pd.DataFrame, as_of: str, pit_source: dict,
             "changes_final_score_or_tier": False,
             "is_buy_advice": False,
             "satisfies_ship_gate": False,
+            "production_effect_enabled": False,
+            "automatic_promotion": False,
         },
     }
 
@@ -335,6 +340,9 @@ def _safe_int(x):
 
 # ── 不变量校验(消费完整性 / 热度不覆盖硬风控 / fit 门控 / 同尺度)──────────────
 def validate_overlay_summary_consistency(summary: dict) -> None:
+    boundary = summary.get("boundary") or {}
+    if boundary.get("production_effect_enabled", False) or boundary.get("automatic_promotion", False):
+        raise ValueError("comparison overlay may not enable production effect or automatic promotion")
     cands = summary["candidates"]
     # R-ASLICEA-SCHEMA-OUTPUT-INVARIANTS: producer-side count + rank integrity
     if summary.get("candidate_count") != len(cands):
@@ -373,7 +381,11 @@ def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataF
                                       stock_concepts: dict, concept_members: dict, sw_map: dict,
                                       as_of: str, generated_at: str, bench20=None, bench60=None,
                                       pit_source: dict | None = None,
-                                      dropped_at_l0_l5: list | None = None) -> dict:
+                                      dropped_at_l0_l5: list | None = None,
+                                      concepts_df: pd.DataFrame | None = None,
+                                      l3_provider: str | None = None,
+                                      l3_snapshot_date: str | None = None,
+                                      l3_coverage: dict | None = None) -> dict:
     """用 egs_main run 内存数据(全量日线 + L3 概念 + SW 映射)装配 overlay summary(comparison-track,
     非生产)。只切片 + 调已测计算链,不抓数据。`all_daily` 需含 ts_code/trade_date/pct_chg/amount 且
     覆盖 ≥60 交易日。bench20/bench60 缺省 None —— 对全行业同一常数减法不改跨行业百分位,故无害。"""
@@ -390,6 +402,8 @@ def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataF
     amount_latest = (ad[ad["trade_date"] == latest].groupby("ts_code")["amount"].sum().to_dict()
                      if latest else {})
 
+    from engine.a_short_industry_theme import complete_stock_concepts, taxonomy_by_code
+    stock_concepts = complete_stock_concepts(stock_concepts, concept_members)
     theme_heat = compute_theme_heat(stock_concepts, concept_members, daily_5d, daily_20d)
     best_concept = theme_heat["best_concept"]
     industry_heat_by_l2 = compute_industry_heat(sw_map, daily_20d, daily_60d, bench20, bench60)
@@ -405,6 +419,11 @@ def build_overlay_summary_from_panels(pool_df: pd.DataFrame, all_daily: pd.DataF
 
     assembled = assemble_overlay(pool_df, theme_heat, industry_heat_by_l2, breadth,
                                  persistence, fit, sw_l2_by_code)
+    taxonomy = taxonomy_by_code(assembled, stock_concepts=stock_concepts,
+                                concept_members=concept_members, concepts_df=concepts_df, as_of=as_of,
+                                l3_provider=l3_provider, l3_snapshot_date=l3_snapshot_date,
+                                l3_coverage=l3_coverage)
+    assembled["theme_taxonomy"] = assembled["ts_code"].astype(str).map(taxonomy)
     return build_summary(assembled, as_of,
                          pit_source or {"concept_membership": "pit", "sw_mapping": "forward"},
                          dropped_at_l0_l5 or [], generated_at)
@@ -438,15 +457,19 @@ def emit_overlay(l3_mode, pool_df, all_daily, l3_snapshot, sw_map, as_of, genera
     """#2(b) EGS-run overlay emit(comparison-track 非生产)——**从 `A-EGS/egs_main.py` 提取的真实落点**,
     便于单测守护(此前只测了 `overlay_emit_allowed`/summary 合法性,emit 块本身无测试、又在 swallow-all
     except 内 → 断线/错标会静默过)。门控 + 按模式标 `concept_membership` + 装配 + 写盘。
-    `l3_snapshot` = `_load_l3_snapshot` 返回的 `(concepts_df, stock_concepts, concept_members, snap_date)`。
+    `l3_snapshot` = `_load_l3_snapshot` 返回的四元组，或包含 provider/coverage receipt 的六元组。
     门未过(neutralize/None/"")或无快照 → 返回 None(不产出、不编造、不写盘);pit→'pit'、否则(today)→'forward'。
     成功 → write_overlay_summary(schema+consistency)后返回 out_path。"""
     if not overlay_emit_allowed(l3_mode) or l3_snapshot is None:
         return None
     concept_src = "pit" if l3_mode == "pit" else "forward"
+    l3_provider = l3_snapshot[4] if len(l3_snapshot) > 4 else None
+    l3_coverage = l3_snapshot[5] if len(l3_snapshot) > 5 else None
     summary = build_overlay_summary_from_panels(
         pool_df, all_daily, l3_snapshot[1], l3_snapshot[2], sw_map, as_of, generated_at,
-        pit_source={"concept_membership": concept_src, "sw_mapping": "forward"})
+        pit_source={"concept_membership": concept_src, "sw_mapping": "forward"},
+        concepts_df=l3_snapshot[0], l3_provider=l3_provider,
+        l3_snapshot_date=l3_snapshot[3], l3_coverage=l3_coverage)
     write_overlay_summary(summary, out_path)
     return out_path
 
