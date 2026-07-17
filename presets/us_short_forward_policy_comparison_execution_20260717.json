@@ -1,0 +1,23 @@
+{
+  "schema_name": "us_short_forward_policy_comparison_execution",
+  "schema_version": "1.0.0",
+  "as_of": "20260717",
+  "common_execution_policy": {
+    "sub_mode": "pullback",
+    "defensive_breakout_probe_allowed": false
+  },
+  "cost_prior": {
+    "commission_fee": 0.001,
+    "slippage_bps": 10.0,
+    "spread_cost": 0.0005
+  },
+  "boundary": {
+    "track": "comparison_non_production",
+    "selection_factor_isolated": true,
+    "provider_calls_added": false,
+    "shadow_counts_ship_gate": false,
+    "changes_primary_selection": false,
+    "automatic_production_switch": false,
+    "broker_or_order_automation_allowed": false
+  }
+}

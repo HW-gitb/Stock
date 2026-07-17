@@ -154,6 +154,30 @@ def empty_forward_policy_comparison_ledger() -> dict:
     }
 
 
+def comparison_banner_from_private_ledger_path(ledger_path: object) -> str:
+    """Render the non-blocking, de-identified A1 reminder from the canonical private ledger.
+
+    A missing, unreadable, or invalid comparison ledger can never stop the official weekly report:
+    this track is advisory-only.  The banner makes that loss of comparison evidence visible while
+    keeping ``balanced`` unchanged and disclosing no ticker or price data.
+    """
+    path = Path(ledger_path)
+    if path.name != "forward_policy_comparison_ledger.json" or path.parent.name != "shadow_compare_private":
+        raise ForwardPolicyComparisonLedgerError("comparison reminder requires a shadow_compare_private canonical ledger name")
+    if not path.exists():
+        adjudication = evaluate_forward_policy_comparison_ledger(empty_forward_policy_comparison_ledger())
+        return render_forward_policy_comparison_banner(adjudication)
+    try:
+        ledger = json.loads(path.read_text(encoding="utf-8"))
+        adjudication = evaluate_forward_policy_comparison_ledger(ledger)
+        return render_forward_policy_comparison_banner(adjudication, ledger=ledger)
+    except (OSError, ValueError, json.JSONDecodeError, ForwardPolicyComparisonLedgerError):
+        return (
+            "US-SHORT A1 comparison track: inconclusive (private comparison evidence unavailable); "
+            "advisory only, never auto-switch balanced"
+        )
+
+
 def validate_forward_policy_comparison_ledger(ledger: object) -> dict:
     if not isinstance(ledger, dict) or set(ledger) != _LEDGER_KEYS:
         raise ForwardPolicyComparisonLedgerError("comparison ledger must use its exact closed-world key set")

@@ -180,11 +180,19 @@ class CapstoneContext:
         return self._s("shadow_compare_private") / f"forward_policy_selection_{self.decision_date}.json"
 
     @property
+    def forward_policy_source_capture_private_path(self) -> Path:
+        return self._s("shadow_compare_private") / f"forward_policy_source_capture_{self.decision_date}.json"
+
+    @property
     def forward_policy_summary_path(self) -> Path:
         # Count-only and intentionally outside the private state tree: this is the §11.6 trackable companion to the
         # ticker-bearing shadow record.  Tests inject sample_root, while production uses the repository root.
         return self.sample_root / "research" / "results" / "us_short_forward_policy_shadow" / \
             f"forward_policy_summary_{self.decision_date}.json"
+
+    @property
+    def forward_policy_comparison_ledger_path(self) -> Path:
+        return self._s("shadow_compare_private") / "forward_policy_comparison_ledger.json"
 
     @property
     def vix_regime_summary_path(self) -> Path:
@@ -325,10 +333,15 @@ def default_pipeline() -> list[Stage]:
         Stage("pass2_fetch", True, lambda c: [c.preflight_summary_path, c.overextension_projection_path, c.yfinance_grade_actions_path],
               lambda c: [c.source_packet_path, c.context_components_path], st.run_pass2_fetch,
               contract_version="2.0.0"),
-        Stage("forward_policy_shadow", False, lambda c: [c.data_context_path, c.context_components_path],
-              lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path],
-              st.run_forward_policy_shadow, best_effort=True),
         Stage("vix_regime", True, lambda c: [], lambda c: [c.vix_regime_summary_path], st.run_vix_regime),
+        Stage("forward_policy_shadow", False,
+              lambda c: [c.data_context_path, c.context_components_path, c.ohlcv_series_packet_path,
+                         c.vix_regime_summary_path, c.batch4_template_path],
+              lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path,
+                         c.forward_policy_source_capture_private_path],
+              st.run_forward_policy_shadow, best_effort=True),
+        Stage("forward_policy_maturity", False, lambda c: [c.ohlcv_series_packet_path], lambda c: [],
+              st.run_forward_policy_maturity, best_effort=True),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
     ]
 
@@ -982,8 +995,8 @@ def run_weekly_capstone(
         if preflight_indexes != [7]:
             raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight at stage 8")
         pipeline = full_pipeline[:preflight_indexes[0] + 1]
-    if any(stage.best_effort and stage.name != "forward_policy_shadow" for stage in pipeline):
-        raise WeeklyCapstoneError("only forward_policy_shadow may be best_effort")
+    if any(stage.best_effort and stage.name not in {"forward_policy_shadow", "forward_policy_maturity"} for stage in pipeline):
+        raise WeeklyCapstoneError("only comparison-capture stages may be best_effort")
     if any(stage.reuse_policy not in {"never", "frozen_inputs", "refresh_then_reuse_if_equivalent"}
            for stage in pipeline):
         raise WeeklyCapstoneError("capstone stage has an unknown checkpoint reuse policy")

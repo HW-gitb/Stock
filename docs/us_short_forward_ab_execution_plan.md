@@ -187,9 +187,11 @@ register + code are the source of truth.
   model-paper ledger. An incomplete series or non-evaluable adjustment gate produces a whole-week
   `data_degraded_whole_week_no_count` packet with no candidate values. This is the provider-free calculation core, not a
   fetcher, writer, scheduler, or formal judge.
-  **Still deferred/gated**: source-bound all-candidate price acquisition, weekly orchestration/accumulation,
-  evaluator/banner wiring, and all provider calls under `SR-PROVIDER-001`. No factor recommendation can issue until
-  those later blades consume real forward packets.
+  **Now wired, still fail-closed**: the capstone source stage captures the Pass2-clean all-candidate controls from
+  its already-fetched full-universe OHLCV packet, then a later weekly stage matures only the newly captured private
+  records and feeds a ready receipt into the existing accumulator/advisor. It adds no provider call. Until an
+  independently verified corporate-action/adjustment evidence sidecar exists, maturity writes an explicit whole-week
+  no-count record, so no factor recommendation can accumulate from an unverified packet.
 - **[BUILT — third repair blade, pure/offline only] All-candidate common order snapshot.**
   `engine/us_short_forward_policy_order_snapshot.py` consumes the validated Cut-A capture plus an exact
   Pass2-clean candidate-price input map at the capture's `price_basis_date`. It invokes the existing candidate
@@ -197,9 +199,8 @@ register + code are the source of truth.
   common-pool ticker with input/order digests. It never accepts a policy key, selected-only input, or a partial
   order map. If any pool member lacks an executable plan, or the common regime does not permit a new entry, it emits
   `data_degraded_whole_week_no_count` with no order map instead of inventing an order or silently dropping a name.
-  This is still only an in-memory producer: it adds no forward-price fetch, writer, accumulator, evaluator, banner,
-  primary-rule change, or provider authorization. The later source/writer cut must bind the generated common-order
-  digest before it calls the H5/H10/H20 outcome core.
+  The original producer remains in-memory; the later source stage now binds its generated order digest through a
+  private source capture, without changing primary selection or authorizing a provider call.
 - **[BUILT — fourth repair blade, offline/private writer only] Bound forward-week persistence.**
   `engine/us_short_forward_policy_private_week.py` takes one validated Cut-A capture, the third-blade common-order
   snapshot, and caller-injected 20-session bars/cost/adjustment evidence. Before one atomic private write it
@@ -230,7 +231,7 @@ register + code are the source of truth.
 > must land **before the first authorized LIVE capture run** ("代码可缓、计划不能缓"); Cut B then applies that
 > pre-registered method to Cut A's captures.
 
-## 4.1 Functional blade 3 — source-bound accumulation / formal advice (consumer implemented; weekly producer pending)
+## 4.1 Functional blade 3 — source-bound accumulation / formal advice (end-to-end local wiring)
 
 `engine/us_short_forward_policy_comparison_ledger.py` and its two schemas add the private consumer half of the
 third functional blade. A ready fourth/fifth-blade private week can enter the ledger only with a distinct same-run
@@ -244,11 +245,20 @@ block bootstrap/placebo, and within-question Holm correction. It returns only `c
 `recommend_adopt_arm`, `recommend_retain_balanced`, `recommend_discard_arm`, or `inconclusive`; creates a pending
 explicit user receipt; and renders a persistent de-identified reminder stating that `balanced` is never auto-switched.
 
-**Open producer seam, therefore blade 3 is not closed yet:** current `forward_policy_shadow` captures same-day
-selections only. It does not have the all-candidate price-control map at capture nor the future H20
-price/cost/adjustment source packet, so it cannot issue the required same-run receipt or inject the reminder into the
-frozen official weekly report. No manual receipt may be treated as a real weekly record. That future producer must be
-a separately reviewed, explicitly authorized source-stage implementation; it adds no new provider call budget.
+`forward_policy_shadow` now immediately freezes a private `forward_policy_source_capture_<decision_date>.json` from
+the same capstone's already-fetched full-universe OHLCV packet: every Pass2-clean common-pool ticker receives the
+same pullback-only model-paper geometry, frozen cost prior, shared axes, and source digests. The later
+`forward_policy_maturity` stage scans **only** those post-deployment source captures, uses the current already-fetched
+OHLCV packet for the first H20 sessions, writes the canonical private outcome, and appends only a ready receipt to
+the existing ledger. It never reconstructs old selections or backfills prior weeks.
+
+The capstone bridge injects the de-identified A1 reminder as weekly-report banner ⑥; missing/invalid private ledger
+is visible as `inconclusive` but never blocks the official report or changes `balanced`. **The remaining hard gate is
+intentional:** this implementation has no corporate-action/adjustment reconciliation producer. In its absence every
+matured capture is written as `data_degraded_whole_week_no_count`; it cannot advance any 12/24/36-week clock. A later
+authorized, independently reviewed evidence producer may place only a validated
+`forward_policy_adjustment_evidence_<decision_date>.json` sidecar in the private directory; the already-wired
+maturity stage will then count the ready packet. No manual receipt is accepted as real weekly evidence.
 
 ## 5. Per-cut discipline (every cut)
 

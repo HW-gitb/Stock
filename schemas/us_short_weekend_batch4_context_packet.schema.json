@@ -144,7 +144,12 @@
         "coverage_inputs": {"type": "array", "items": {"type": "object"}},
         "core_conclusion": {"type": "string"},
         "risk_downgrade_note": {"type": "string"},
-        "macro_cluster_banner": {"type": "string"}
+        "macro_cluster_banner": {"type": "string"},
+        "forward_policy_comparison_reminder": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional de-identified US-short A1 comparison-track reminder injected only by the capstone bridge; advisory-only and never a selection input."
+        }
       }
     },
     "lifecycle_register_path": {"type": "string", "minLength": 1,

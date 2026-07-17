@@ -26,10 +26,11 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
-    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "forward_policy_shadow", "vix_regime", "weekly_bridge",
+    "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
+    "forward_policy_maturity", "weekly_bridge",
 ]
 _RECEIPT_STAGE_NAMES = tuple(
-    name for name in _STAGE_NAMES if name not in {"forward_policy_shadow", "weekly_bridge"}
+    name for name in _STAGE_NAMES if name not in {"forward_policy_shadow", "forward_policy_maturity", "weekly_bridge"}
 )
 
 
@@ -236,8 +237,12 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 "pass2_preflight": lambda c: [c.preflight_summary_path],
                 "yfinance_grades_fetch": lambda c: [c.yfinance_grade_source_package_path, c.yfinance_grade_actions_path],
                 "pass2_fetch": lambda c: [c.source_packet_path, c.context_components_path],
-                "forward_policy_shadow": lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path],
                 "vix_regime": lambda c: [c.vix_regime_summary_path],
+                "forward_policy_shadow": lambda c: [
+                    c.forward_shadow_selection_private_path, c.forward_policy_summary_path,
+                    c.forward_policy_source_capture_private_path,
+                ],
+                "forward_policy_maturity": lambda c: [],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "action_table.csv",
@@ -287,7 +292,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 ins = lambda c: []
             stages.append(Stage(
                 name, gated, ins, outs, make_run(name, outs),
-                best_effort=(name == "forward_policy_shadow"),
+                best_effort=name in {"forward_policy_shadow", "forward_policy_maturity"},
             ))
         return stages
 
@@ -395,17 +400,35 @@ class CapstoneFakeChainTest(unittest.TestCase):
             for call in printed.call_args_list
         ))
 
-    def test_only_shadow_stage_may_be_best_effort(self):
+    def test_maturity_failure_is_loud_nonblocking_and_bridge_emits(self):
+        order: list[str] = []
+        with mock.patch("builtins.print") as printed:
+            summary = self._run(
+                order,
+                stages=self._fake_stages(order, break_stage="forward_policy_maturity"),
+            )
+        self.assertTrue(summary["emitted"])
+        self.assertEqual(order, _STAGE_NAMES)
+        self.assertEqual(summary["shadow_capture_failed"]["stage"], "forward_policy_maturity")
+        maturity_result = next(item for item in summary["stages"] if item["name"] == "forward_policy_maturity")
+        self.assertTrue(maturity_result["best_effort"])
+        self.assertTrue(any(
+            "US-SHORT SHADOW CAPTURE FAILED" in str(call.args[0])
+            for call in printed.call_args_list
+        ))
+
+    def test_only_comparison_capture_stages_may_be_best_effort(self):
         order: list[str] = []
         stages = self._fake_stages(order)
         next(stage for stage in stages if stage.name == "vix_regime").best_effort = True
-        with self.assertRaisesRegex(WeeklyCapstoneError, "only forward_policy_shadow"):
+        with self.assertRaisesRegex(WeeklyCapstoneError, "only comparison-capture stages"):
             self._run(order, stages=stages)
         self.assertEqual(order, [])
 
-    def test_research_receipt_does_not_require_shadow_stage(self):
+    def test_research_receipt_does_not_require_comparison_capture_stages(self):
         receipt = _research_receipt()
         self.assertNotIn("forward_policy_shadow", receipt.completed_stages)
+        self.assertNotIn("forward_policy_maturity", receipt.completed_stages)
 
     def test_receipt_v2_preserves_reused_stage_times_without_rewriting_them(self):
         stage_executions = tuple(
@@ -1060,6 +1083,8 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                 out = st.run_weekly_bridge(ctx)
             self.assertTrue(out["batch4_run"]["emitted"])
             self.assertEqual(m.call_args.kwargs["vix_regime"], regime)
+            self.assertIn("US-SHORT A1 对比轨", m.call_args.kwargs["forward_policy_comparison_reminder"])
+            self.assertIn("仅建议，不自动切换 balanced", m.call_args.kwargs["forward_policy_comparison_reminder"])
 
             ctx.vix_regime_summary_path.write_text(
                 json.dumps({**summary, "vix_regime": "进攻", "vix_regime_is_unknown": False}),
@@ -1137,7 +1162,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             {
                 "name": name,
                 "gated": False,
-                "best_effort": name == "forward_policy_shadow",
+                "best_effort": name in {"forward_policy_shadow", "forward_policy_maturity"},
                 "result": provider_results.get(name, {}),
             }
             for name in _STAGE_NAMES[:-1]

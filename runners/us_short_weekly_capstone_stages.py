@@ -19,7 +19,22 @@ from pathlib import Path
 from typing import Any
 
 from engine.us_short_eligibility_gate import load_eligibility_governance
+from engine.us_short_forward_policy_comparison_ledger import (
+    comparison_banner_from_private_ledger_path,
+    empty_forward_policy_comparison_ledger,
+    persist_source_bound_forward_policy_week,
+)
 from engine.us_short_forward_policy_shadow_stage import materialize_forward_policy_shadow
+from engine.us_short_forward_policy_private_week import (
+    ForwardPolicyPrivateWeekError,
+    validate_forward_policy_private_week_record,
+)
+from engine.us_short_forward_policy_source_capture import (
+    ForwardPolicySourceCaptureError,
+    materialize_forward_policy_source_capture,
+    materialize_forward_policy_source_maturity,
+    validate_forward_policy_source_capture,
+)
 from engine.us_short_market_calendar import load_market_calendar, sessions_for_window
 from engine.us_short_run_origin import require_research_live_provider_summary
 from engine.us_short_regime import REGIMES, UNKNOWN
@@ -293,7 +308,7 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
         raise ValueError("forward-policy shadow provenance clock differs from the capstone canonical clock")
     calendar = load_market_calendar(_CALENDAR_PATH)
     sessions = sessions_for_window(ctx.now_et.strftime("%Y%m%d"), calendar=calendar)
-    return materialize_forward_policy_shadow(
+    shadow = materialize_forward_policy_shadow(
         now_et=ctx.now_et,
         sessions=sessions,
         data_context=data_context,
@@ -307,6 +322,127 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
         private_output_path=ctx.forward_shadow_selection_private_path,
         summary_output_path=ctx.forward_policy_summary_path,
     )
+    try:
+        ohlcv_bytes = ctx.ohlcv_series_packet_path.read_bytes()
+        ohlcv_packet = json.loads(ohlcv_bytes)
+        template = _bridge._load_template(ctx.batch4_template_path)
+        vix_summary = json.loads(ctx.vix_regime_summary_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, _bridge.Batch5ToBatch4E2EError) as exc:
+        raise ValueError("forward-policy source capture requires readable same-run OHLCV, VIX, and action template inputs") from exc
+    market_axes = dict(template["market_axis_regimes"])
+    vix_regime = vix_summary.get("vix_regime") if isinstance(vix_summary, dict) else None
+    if vix_regime not in (*REGIMES, UNKNOWN) \
+            or vix_summary.get("vix_regime_is_unknown") is not (vix_regime == UNKNOWN):
+        vix_regime = UNKNOWN
+    market_axes["vix"] = vix_regime
+    source_capture = materialize_forward_policy_source_capture(
+        capture=json.loads(ctx.forward_shadow_selection_private_path.read_text(encoding="utf-8")),
+        ohlcv_packet=ohlcv_packet,
+        ohlcv_packet_sha256=hashlib.sha256(ohlcv_bytes).hexdigest(),
+        source_context_sha256=hashlib.sha256(components_bytes).hexdigest(),
+        overextension_by_ticker=components["overextension_by_ticker"],
+        market_axis_regimes=market_axes,
+        prior_regime=template["prior_regime"],
+        prior_upgrade_count=template["prior_upgrade_count"],
+        private_output_path=ctx.forward_policy_source_capture_private_path,
+    )
+    return {**shadow, "source_capture": source_capture}
+
+
+def run_forward_policy_maturity(ctx) -> dict[str, Any]:
+    """Mature only post-deployment private source captures with the current already-fetched OHLCV packet.
+
+    The private directory scan is deliberately narrow (the new source-capture filename only) and
+    ignores today's/future capture.  It never reconstructs old selections.  Without independently
+    verified corporate-action evidence the materializer writes an explicit no-count record; a receipt
+    and ledger append occur only for a fully evaluable H20 packet.
+    """
+    root = ctx.forward_policy_comparison_ledger_path.parent
+    try:
+        ohlcv_bytes = ctx.ohlcv_series_packet_path.read_bytes()
+        current_ohlcv = json.loads(ohlcv_bytes)
+    except (OSError, ValueError) as exc:
+        raise ValueError("forward-policy maturity requires the current readable OHLCV packet") from exc
+    source_digest = hashlib.sha256(ohlcv_bytes).hexdigest()
+    captures = sorted(root.glob("forward_policy_source_capture_????????.json"))
+    ledger = None
+    processed = ready = no_count = already_ready = awaiting_adjustment = 0
+    for capture_path in captures:
+        try:
+            source_capture = validate_forward_policy_source_capture(
+                json.loads(capture_path.read_text(encoding="utf-8"))
+            )
+        except (OSError, ValueError, ForwardPolicySourceCaptureError) as exc:
+            raise ValueError("forward-policy maturity found an invalid private source capture") from exc
+        decision_date = source_capture["capture"]["decision_date"]
+        if decision_date >= ctx.decision_date:
+            continue
+        evidence_path = root / f"forward_policy_adjustment_evidence_{decision_date}.json"
+        adjustment_evidence = None
+        if evidence_path.exists():
+            try:
+                adjustment_evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+            except (OSError, ValueError) as exc:
+                raise ValueError("forward-policy maturity adjustment-evidence sidecar is unreadable") from exc
+        outcome_path = root / f"forward_policy_outcome_{decision_date}.json"
+        prior_private_week = None
+        if outcome_path.exists():
+            try:
+                prior_private_week = validate_forward_policy_private_week_record(
+                    json.loads(outcome_path.read_text(encoding="utf-8"))
+                )
+            except (OSError, ValueError, ForwardPolicyPrivateWeekError) as exc:
+                raise ValueError("forward-policy maturity prior private outcome is unreadable or invalid") from exc
+            if prior_private_week["materialization_status"] == "ready_for_accumulation":
+                already_ready += 1
+                continue
+            previous_inputs = prior_private_week["forward_inputs"]
+            complete_prior_window = isinstance(previous_inputs, dict) and isinstance(
+                previous_inputs.get("daily_bars_by_ticker"), dict
+            ) and all(
+                isinstance(previous_inputs["daily_bars_by_ticker"].get(ticker), list)
+                and len(previous_inputs["daily_bars_by_ticker"][ticker]) == 20
+                for ticker in source_capture["capture"]["common_selection_pool"]
+            )
+            if adjustment_evidence is None and complete_prior_window:
+                awaiting_adjustment += 1
+                continue
+        result = materialize_forward_policy_source_maturity(
+            source_capture=source_capture,
+            current_ohlcv_packet=current_ohlcv,
+            current_ohlcv_packet_sha256=source_digest,
+            source_run_id=f"capstone-forward-policy-maturity-{ctx.decision_date}",
+            adjustment_evidence=adjustment_evidence,
+            private_outcome_path=outcome_path,
+            prior_private_week_record=prior_private_week,
+        )
+        processed += 1
+        if not result["counted_week_eligible"]:
+            no_count += 1
+            continue
+        if ledger is None:
+            if ctx.forward_policy_comparison_ledger_path.exists():
+                try:
+                    ledger = json.loads(ctx.forward_policy_comparison_ledger_path.read_text(encoding="utf-8"))
+                except (OSError, ValueError) as exc:
+                    raise ValueError("forward-policy maturity comparison ledger is unreadable") from exc
+            else:
+                ledger = empty_forward_policy_comparison_ledger()
+        persisted = persist_source_bound_forward_policy_week(
+            ledger_path=ctx.forward_policy_comparison_ledger_path,
+            ledger=ledger,
+            private_week_record=json.loads(outcome_path.read_text(encoding="utf-8")),
+            source_receipt=result["source_receipt"],
+        )
+        ledger = persisted["ledger"]
+        ready += 1
+    return {
+        "source_captures_processed": processed,
+        "ready_weeks_appended_or_confirmed": ready,
+        "whole_week_no_count": no_count,
+        "already_ready_weeks_untouched": already_ready,
+        "awaiting_adjustment_evidence_untouched": awaiting_adjustment,
+    }
 
 
 def run_weekly_bridge(ctx) -> dict[str, Any]:
@@ -326,6 +462,9 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
     if vix_regime not in (*REGIMES, UNKNOWN) \
             or vix_summary.get("vix_regime_is_unknown") is not (vix_regime == UNKNOWN):
         vix_regime = UNKNOWN
+    comparison_reminder = comparison_banner_from_private_ledger_path(
+        ctx.forward_policy_comparison_ledger_path,
+    )
     return _bridge.run_e2e(
         source_packet_path=ctx.source_packet_path,
         batch4_template_path=ctx.batch4_template_path,
@@ -342,6 +481,7 @@ def run_weekly_bridge(ctx) -> dict[str, Any]:
         bootstrap_lifecycle=True,
         generated_at=ctx.generated_at,
         vix_regime=vix_regime,
+        forward_policy_comparison_reminder=comparison_reminder,
         projection_binding_expectations=_bridge.FULL_CANDIDATE_LIVE_PROJECTION_BINDING,
     )
 
