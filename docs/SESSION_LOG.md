@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 落地 US-short runtest splat fix 到 wt/us-short（`7bed2f7`）+ a_short handoff 入 register
+
+- **Verdict/Action**: 按用户命把已审 PASS 的 US-short 半边落到 wt/us-short:从 Codex worktree 709a 取 2 个代码文件(`us_short_runtest.ps1` + `tests/test_runtest_capsule.py`)——base 与本分支 CR-normalize 后字节一致(本分支已含 2026-07-16 xlsx guard 修),故只落 Codex 的净 diff、不带它 709a 上分叉的两份 doc 编辑。`7bed2f7`。a_short 半边的 Codex 交接指令(verb+scope+文件+精确修法+要保的门+要补的回归)已写入 register 条目「Codex handoff — a_short half」。
+- **Required**: a_short 半边仍 OPEN(A-short 道):`a_short_runtest.ps1:78` 同类 array-splat → 哈希表 splat + 补转发回归;完整自足指令见 register。整合遗留:Codex 在 master 的两份 doc 编辑(重复 register 条目 + SESSION_LOG)+ 709a 上现已冗余的两份代码文件副本待丢弃/reconcile(非我擅动别窗未提交树)。
+- **Verify**: 亲跑本分支 `tests.test_runtest_capsule` **9 OK**(含 `test_us_launcher_binds_all_worker_parameters_by_name`);`git diff --cached --stat` 证只落 splat 块(ps1 +14/-10)+ 新测试(120),无整文件行尾 churn。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：A-short 道修 `a_short_runtest.ps1` 同类 splat + 回归(见 register handoff);Codex 清理 709a 冗余副本 + master 分叉 doc(落点由用户定)。
+
 ## 2026-07-17 — Claude Code 审查（Codex US-short runtest 参数 splat repair）：US-short PASS · a_short 同类 Required 未闭 · 待整合
 
 - **Verdict/Action**: US-short 半边 **PASS**(代码对 + 行为验证 + 真回归)。Codex 在独立 worktree `.codex/worktrees/709a/Stock`(master `ea6e91de`,未含本 branch 的 register 条目、未提交)把 `us_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams` + `& $Worker @WorkerParams`;所有参数/switch/私密输入路径按名绑定,四道门(`-ExtraArgs` 拒绝 / `-Live` 授权 / capsule private-root / no-resume / source guard)全保。**但 Required 未全闭**:`a_short_runtest.ps1:78` 同一 `& $Worker @WorkerArgs` array-splat bug 原样未修(Codex 显式只做 US-short、defer 邻道)。
