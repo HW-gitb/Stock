@@ -5,3 +5,9 @@
 # Do NOT extend this to docs/system_risk_register.md — it has in-place Status edits
 # that a union merge would silently corrupt; leave it on the normal 3-way merge.
 docs/SESSION_LOG.md merge=union
+
+# Sha256-pinned entry-funnel calibration fixtures: byte-exact, no EOL conversion,
+# so the preregistration's frozen sha matches on every checkout regardless of
+# core.autocrlf (otherwise Windows CRLF-smudge drifts the sha and the calibration
+# test skips its frozen-replay assertions).
+tests/fixtures/a_short_entry_funnel_calibration/*.json -text
