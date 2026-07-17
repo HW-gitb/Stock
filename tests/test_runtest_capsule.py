@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -182,7 +183,11 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("Runtest does not forward -ExtraArgs", us_short)
         self.assertIn("if ($ExtraArgs.Count -gt 0)", us_short)
         self.assertNotIn("$WorkerArgs += '-ExtraArgs'", us_short)
-        self.assertIn("'-PrivateRoot', $PrivateRoot", us_short)
+        self.assertNotIn("$WorkerArgs", us_short)
+        self.assertIn("$WorkerParams = @{", us_short)
+        self.assertIn("PrivateRoot = $PrivateRoot", us_short)
+        self.assertIn("PythonExe = $PythonExe", us_short)
+        self.assertIn("& $Worker @WorkerParams", us_short)
         self.assertIn("[string]$CachePolicy = 'enabled'", weekly)
         self.assertIn("'--cache-policy', $CachePolicy", weekly)
 
@@ -208,3 +213,116 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("Runtest does not forward -ExtraArgs", result.stdout + result.stderr)
         self.assertFalse(attempted_root.exists())
         self.assertFalse(self.root.exists())
+
+    def test_us_launcher_binds_all_worker_parameters_by_name(self) -> None:
+        """The wrapper must splat named parameters, never a positional token array."""
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell executable not available")
+
+        source_root = self.base / "worker_binding_source"
+        runners = source_root / "runners"
+        runners.mkdir(parents=True)
+        (runners / "runtest_capsule.py").write_text(
+            """import json
+import shutil
+import sys
+from pathlib import Path
+
+args = sys.argv[1:]
+command = args[args.index(\"create\")] if \"create\" in args else args[args.index(\"activate\")] if \"activate\" in args else args[args.index(\"finish\")]
+
+def value(name):
+    return args[args.index(name) + 1]
+
+if command == \"create\":
+    capsule = Path(value(\"--capsule-root\")) / \"us_short\" / value(\"--run-id\")
+    repo = capsule / \"repo\"
+    (repo / \"runners\").mkdir(parents=True)
+    shutil.copy2(Path(value(\"--source-root\")) / \"runners\" / \"us_short_weekly_capstone.ps1\", repo / \"runners\" / \"us_short_weekly_capstone.ps1\")
+    print(json.dumps({\"capsule\": str(capsule), \"repo\": str(repo)}))
+""",
+            encoding="utf-8",
+        )
+        (runners / "us_short_weekly_capstone.ps1").write_text(
+            """param(
+    [string]$NowEt = '',
+    [string]$PrivateRoot = '',
+    [string]$BatchTemplate = '',
+    [string]$AccountState = '',
+    [switch]$Live,
+    [switch]$PrepareBudget,
+    [int]$Pass2Budget = 0,
+    [int]$MomentumTopK = 0,
+    [string]$PythonExe = ''
+)
+
+[ordered]@{
+    now_et = $NowEt
+    private_root = $PrivateRoot
+    batch_template = $BatchTemplate
+    account_state = $AccountState
+    live = [bool]$Live
+    prepare_budget = [bool]$PrepareBudget
+    pass2_budget = $Pass2Budget
+    momentum_top_k = $MomentumTopK
+    python_exe = $PythonExe
+} | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:RUNTEST_TEST_CAPTURE_PATH -Encoding utf8
+""",
+            encoding="utf-8",
+        )
+        batch_template = self.base / "batch_template.json"
+        account_state = self.base / "account_state.json"
+        batch_template.write_text("{}\n", encoding="utf-8")
+        account_state.write_text("{}\n", encoding="utf-8")
+
+        script = ROOT / "runners" / "us_short_runtest.ps1"
+        escaped = lambda path: str(path).replace("'", "''")
+        cases = (
+            ("dry_run", (), {"live": False, "prepare_budget": False, "pass2_budget": 0, "momentum_top_k": 0}),
+            (
+                "live",
+                ("-BatchTemplate", batch_template, "-AccountState", account_state, "-Live", "-Pass2Budget", "137", "-MomentumTopK", "200"),
+                {"live": True, "prepare_budget": False, "pass2_budget": 137, "momentum_top_k": 200},
+            ),
+            (
+                "prepare_budget",
+                ("-BatchTemplate", batch_template, "-AccountState", account_state, "-PrepareBudget", "-Pass2Budget", "89", "-MomentumTopK", "150"),
+                {"live": False, "prepare_budget": True, "pass2_budget": 89, "momentum_top_k": 150},
+            ),
+        )
+        for name, extra_args, expected in cases:
+            with self.subTest(name=name):
+                capsule_root = self.base / f"capsules_{name}"
+                capture = self.base / f"worker_capture_{name}.json"
+                command_parts = [
+                    f"& '{escaped(script)}'",
+                    "-ConfirmRuntest",
+                    f"-SourceRoot '{escaped(source_root)}'",
+                    f"-CapsuleRoot '{escaped(capsule_root)}'",
+                    f"-RunId 'worker-binding-{name}'",
+                    f"-PythonExe '{escaped(Path(sys.executable))}'",
+                    "-NowEt '2026-07-21T08:00:00'",
+                ]
+                for value in extra_args:
+                    command_parts.append(str(value) if str(value).startswith("-") else f"'{escaped(value)}'")
+                environment = os.environ.copy()
+                environment["RUNTEST_TEST_CAPTURE_PATH"] = str(capture)
+                result = subprocess.run(
+                    [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", " ".join(command_parts)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    errors="replace",
+                    env=environment,
+                )
+                self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+                captured = json.loads(capture.read_text(encoding="utf-8-sig"))
+                capsule = capsule_root / "us_short" / f"worker-binding-{name}"
+                self.assertEqual(captured["now_et"], "2026-07-21T08:00:00")
+                self.assertEqual(captured["private_root"], str(capsule / "private" / "us_short"))
+                self.assertEqual(captured["python_exe"], sys.executable)
+                self.assertEqual(captured["batch_template"], str(capsule / "private_inputs" / "us_batch_template") if expected["live"] or expected["prepare_budget"] else "")
+                self.assertEqual(captured["account_state"], str(capsule / "private_inputs" / "us_account_state") if expected["live"] or expected["prepare_budget"] else "")
+                for key, value in expected.items():
+                    self.assertEqual(captured[key], value)
