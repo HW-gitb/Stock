@@ -36,6 +36,47 @@
 - **Required**: 无(已修 subagent 揪的 P2 生产者 drift);完整边界见 `system_risk_register.md`(`R-ASHORT-93DB-SIX-KNIFE-SELECTIVE-REPLAY`)。
 - **Verify**: 独立 subagent 严格对抗审 PASS(reader 13/13 绕过全拒、刀1-skip 五维证更严、无 master 功能损失、PS 解析干净、单一 preflight);亲跑主树 a_short 1525 OK、us_short 4478 OK、guardrails 16 OK、steady-reaudit 3 OK、子目录 66 OK — 全 0F0E;py_compile/PS parse/正常 diff-check 干净。review-evidence:not_available(全真实工具输出)。
 - **Next**: Codex：Pass
+## 2026-07-17 — Claude Code 落地 a_short 半边 + 收口 R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND（resolved）+ 并入 master + 清 709a
+
+- **Verdict/Action**: 按用户命把复审 PASS 的 a_short 半边落 wt/us-short(`0157973`,3 文件:`a_short_runtest.ps1` + `test_runtest_capsule.py` a_short 断言 delta + 新 `test_a_short_runtest_worker_binding.py`;base 与 709a HEAD CR-norm 字节一致、只落净 diff)。两半均已修+审+落 → register `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` **resolved**。随后把 wt/us-short 并入 **master**(本地 merge、**不 push**),并清空 Codex 709a 工作树(其代码已落 master;其在 master 的分叉 doc 从未 commit、丢弃即可、不污染 master)。
+- **Required**: 无。
+- **Verify**: 亲跑本分支全量 `tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 OK**;`git diff --cached --stat` 证只落 a_short 净 delta(ps1 +15/-5、新测试 153、capsule 断言 +11/-5)无整文件 churn。merge/clear 见随附 git 历史。
+- **Next**: 线闭。可选:胶囊现已修好,可另跑一次 runtest dry-run 真把测试数据放胶囊(原始 §2 请求现解锁)。
+
+## 2026-07-17 — Claude Code 复审（Codex a_short runtest splat）：PASS（断言同步后全量 capsule 11 OK）
+
+- **Verdict/Action**: **PASS**。上一轮 FAIL 的那条已闭:Codex 把 `test_runtest_capsule.py` 的 a_short 断言同步到哈希表形(179 行旧数组 `'-CachePolicy','disabled'` → `CachePolicy = 'disabled'`;并加 `assertNotIn "$WorkerArgs"` / `$WorkerParams = @{` / `L3Mode='today'` / `PythonExe=$PythonExe` / AsOf·Account 条件 / `& $Worker @WorkerParams` 整套锁)。a_short 半边现正确 + 全绿。
+- **Required**: 无。`R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` 两半均已修 + 复审 PASS;剩仅 landing:a_short 仍未提交、悬在 709a(跟已落的 us_short 改动 + Codex 在 master 的分叉 doc 缠在一起),落到哪条分支(A-short 道 vs wt/us-short)待用户定,落后本条 → resolved。
+- **Verify**: 亲跑 709a `python -m unittest tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 tests OK**(含上轮崩的 `test_launchers_keep_full_entry_in_capsule_and_forbid_reuse` now ok);核 `weekly_screening.ps1` param 键名匹配、ps1 仅 worker 块变。us_short 半边(wt/us-short `7bed2f7`)不受影响。review-evidence:not_available(全真实工具输出)。
+- **Next**: 待用户定 a_short landing 落点(我这边可像 us_short 一样落 wt/us-short 关掉整条 register,或路由 A-short 道);Codex 另需清 709a 冗余 + master 分叉 doc。
+
+## 2026-07-17 — Claude Code 审查（Codex a_short runtest splat 尝试）：FAIL — ps1 对但打挂已有 capsule 测试
+
+- **Verdict/Action**: **FAIL**。Codex 在 worktree `.codex/worktrees/709a/Stock`(未提交、master `ea6e91de`)把 `a_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams`(键对 `weekly_screening.ps1` 声明参数、`L3Mode='today'`/`CachePolicy='disabled'` 合 ValidateSet)+ 新增 `tests/test_a_short_runtest_worker_binding.py`(2 测试过:真 PowerShell 调 wrapper 逐参数核按名绑定 + ExtraArgs 拒绝)——**ps1 修法本身对**。**但打挂了已有** `tests/test_runtest_capsule.py::test_launchers_keep_full_entry_in_capsule_and_forbid_reuse`:第 179 行仍断言旧数组形 `"'-CachePolicy', 'disabled'"`,fix 已删该形 → 全量 `tests.test_runtest_capsule` = **FAILED (failures=1)**。Codex 改了 us_short 断言(185-190)却漏了 a_short 那条,且显然改完 a_short 后没重跑全量 capsule 包。
+- **Required**: 改 `tests/test_runtest_capsule.py:179` 为哈希表形(`assertIn("CachePolicy = 'disabled'", a_short)`)+ 照 us_short 给 a_short 块补锁(`$WorkerParams = @{` / `& $Worker @WorkerParams` / `assertNotIn "$WorkerArgs"`),然后**重跑全量** `tests.test_runtest_capsule` 须全 OK(不是只跑新 a_short 测试)。完整单源见 register a_short handoff 的 Review 条。
+- **Verify**: 亲跑 709a `python -m unittest tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 tests, FAILED (failures=1)**——2 个新 a_short 绑定测试过、8/9 capsule 过、唯 line-179 静态断言崩;整读 `a_short_runtest.ps1` 全文(仅 worker 块变、create/activate/finish/source-guard 未动)+ 核 `weekly_screening.ps1` param 块键名匹配。us_short 半边不受影响(我 wt/us-short `7bed2f7` 未含 a_short fix、line 179 仍配旧 a_short、本分支 capsule 9 OK)。
+- **Next**: Codex：修 `test_runtest_capsule.py:179`(+ a_short 块断言镜像)后重跑全量 capsule 包全 OK;仍在 A-short 道、别碰 us_short。
+
+## 2026-07-17 — Claude Code 落地 US-short runtest splat fix 到 wt/us-short（`7bed2f7`）+ a_short handoff 入 register
+
+- **Verdict/Action**: 按用户命把已审 PASS 的 US-short 半边落到 wt/us-short:从 Codex worktree 709a 取 2 个代码文件(`us_short_runtest.ps1` + `tests/test_runtest_capsule.py`)——base 与本分支 CR-normalize 后字节一致(本分支已含 2026-07-16 xlsx guard 修),故只落 Codex 的净 diff、不带它 709a 上分叉的两份 doc 编辑。`7bed2f7`。a_short 半边的 Codex 交接指令(verb+scope+文件+精确修法+要保的门+要补的回归)已写入 register 条目「Codex handoff — a_short half」。
+- **Required**: a_short 半边仍 OPEN(A-short 道):`a_short_runtest.ps1:78` 同类 array-splat → 哈希表 splat + 补转发回归;完整自足指令见 register。整合遗留:Codex 在 master 的两份 doc 编辑(重复 register 条目 + SESSION_LOG)+ 709a 上现已冗余的两份代码文件副本待丢弃/reconcile(非我擅动别窗未提交树)。
+- **Verify**: 亲跑本分支 `tests.test_runtest_capsule` **9 OK**(含 `test_us_launcher_binds_all_worker_parameters_by_name`);`git diff --cached --stat` 证只落 splat 块(ps1 +14/-10)+ 新测试(120),无整文件行尾 churn。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：A-short 道修 `a_short_runtest.ps1` 同类 splat + 回归(见 register handoff);Codex 清理 709a 冗余副本 + master 分叉 doc(落点由用户定)。
+
+## 2026-07-17 — Claude Code 审查（Codex US-short runtest 参数 splat repair）：US-short PASS · a_short 同类 Required 未闭 · 待整合
+
+- **Verdict/Action**: US-short 半边 **PASS**(代码对 + 行为验证 + 真回归)。Codex 在独立 worktree `.codex/worktrees/709a/Stock`(master `ea6e91de`,未含本 branch 的 register 条目、未提交)把 `us_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams` + `& $Worker @WorkerParams`;所有参数/switch/私密输入路径按名绑定,四道门(`-ExtraArgs` 拒绝 / `-Live` 授权 / capsule private-root / no-resume / source guard)全保。**但 Required 未全闭**:`a_short_runtest.ps1:78` 同一 `& $Worker @WorkerArgs` array-splat bug 原样未修(Codex 显式只做 US-short、defer 邻道)。
+- **Required**: ①(未闭·A-short 道)`a_short_runtest.ps1`(71/73/78 行,`-AsOf`/`-Account`)同类 array-splat bug 未修 → 路由 A-short 道修 + 补自己的转发回归。②(整合·非代码缺陷)Codex 在 master 另写同 ID register 条目(scoped US-short-only)+ SESSION_LOG,与本 wt/us-short 条目分叉,整合时须并成一条(本条覆盖双市场)+ 顶部 reconcile。完整细节单源见 register。
+- **Verify**: 亲跑 Codex worktree `tests.test_runtest_capsule` **9 OK**(含新执行级回归 `test_us_launcher_binds_all_worker_parameters_by_name`:真 PowerShell 调 wrapper + 参数捕获假 worker,dry-run/Live/PrepareBudget 三态逐参数核按名绑定,直闭「ps1 转发层零执行覆盖」旧洞);整读改后 `us_short_runtest.ps1`(仅 WorkerArgs→WorkerParams 块变、gates 未动);grep 证 `a_short_runtest.ps1:78` 同 bug 未修。工具级、不碰选股/PIT/生产/真钱,故按比例未起独立对抗 agent。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：A-short 道修 `a_short_runtest.ps1` 同类 splat bug + 回归（US-short 半边 PASS；整合落点/并重复 register 条目待用户定）。
+
+## 2026-07-17 — Claude Code 试跑发现 + 登记 + 路由 Codex（US-short 一键离线试跑；runtest 胶囊参数转发崩溃）
+
+- **Verdict/Action**: 用户命我离线全量试跑 US-short 一键流程(零 fetch、数据自编)查阻塞 + 出三份最终文件。**选股流程本身离线无阻塞**:一键 `--dry-run` 计划正常(decision 20260709 + 13 stage)、全包 `discover -p test_us_short*.py` **4489 OK**、真 funnel(fake client)→真 batch5→batch4 bridge 端到端产三文件(weekly_report.md / action_table.csv / machine_record.json)干净。**但"放胶囊"时炸出真·可复现崩溃**:runtest 胶囊 wrapper 用数组 splat 转发参数给 worker,PowerShell 数组 splat 按位置绑定→把 `-Name` 当位置值塞乱,连文档默认 dry-run 都崩(us_short + a_short 同病)。已登记 `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND`(open, P2 工具级,不碰选股/PIT/生产/真钱)。
+- **Required**: `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` — 两 wrapper 数组 splat → 哈希表 splat 按名绑定 + 补执行级转发回归(现 `test_runtest_capsule.py` 只测 python manager,两 `.ps1` 只 `read_text()` 静态断言、转发层零执行覆盖)。完整根因/复现/修法/边界见 register 单源。
+- **Verify**: PS5.1 逐步复现并定位——内联命名参数跑 dry-run 正常 vs 数组 splat 崩(默认 `@('-PrivateRoot',$p,'-PythonExe','python')`→`NowEt="-PrivateRoot"`… → argparse 崩;带 -NowEt→`-Name` 落 `[int]Pass2Budget`→Int32 转换硬崩);grep 证 `a_short_runtest.ps1:78` 同 `& $Worker @WorkerArgs` 模式、`test_runtest_capsule.py` 只 `read_text()` 两 wrapper。失败胶囊已 HMAC-gated delete 清理、git 树 clean。三文件(离线编撰、OFFLINE_TEST 戳)+ 问题清单在用户桌面(`us_cc_testrun1.md` / `us_cc_testrun1_output/`,repo 外)。
+- **Next**: Codex：修复 `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND`(两 wrapper 数组 splat→哈希表 splat + 转发回归;不碰选股/不 push)。
 
 ## 2026-07-17 — Claude Code 审查（主树 Path A：industry_trend + L3 taxonomy 加法重放）PASS + 提交
 

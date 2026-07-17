@@ -84,22 +84,28 @@ $RunExitCode = 1
 try {
     $Worker = Join-Path $CapsuleRepo 'runners\us_short_weekly_capstone.ps1'
     $PrivateRoot = Join-Path $Capsule 'private\us_short'
-    $WorkerArgs = @('-PrivateRoot', $PrivateRoot, '-PythonExe', $PythonExe)
-    if (-not [string]::IsNullOrWhiteSpace($NowEt)) { $WorkerArgs += @('-NowEt', $NowEt) }
+    # Script parameters require a hashtable splat.  An array splat passes
+    # these tokens positionally, so named values can bind to the wrong worker
+    # parameters (for example PythonExe to Pass2Budget).
+    $WorkerParams = @{
+        PrivateRoot = $PrivateRoot
+        PythonExe = $PythonExe
+    }
+    if (-not [string]::IsNullOrWhiteSpace($NowEt)) { $WorkerParams.NowEt = $NowEt }
     if (-not [string]::IsNullOrWhiteSpace($BatchTemplate)) {
-        $WorkerArgs += @('-BatchTemplate', (Join-Path $Capsule 'private_inputs\us_batch_template'))
+        $WorkerParams.BatchTemplate = Join-Path $Capsule 'private_inputs\us_batch_template'
     }
     if (-not [string]::IsNullOrWhiteSpace($AccountState)) {
-        $WorkerArgs += @('-AccountState', (Join-Path $Capsule 'private_inputs\us_account_state'))
+        $WorkerParams.AccountState = Join-Path $Capsule 'private_inputs\us_account_state'
     }
-    if ($Live) { $WorkerArgs += '-Live' }
-    if ($PrepareBudget) { $WorkerArgs += '-PrepareBudget' }
-    if ($Pass2Budget -gt 0) { $WorkerArgs += @('-Pass2Budget', $Pass2Budget) }
-    if ($MomentumTopK -gt 0) { $WorkerArgs += @('-MomentumTopK', $MomentumTopK) }
+    if ($Live) { $WorkerParams.Live = $true }
+    if ($PrepareBudget) { $WorkerParams.PrepareBudget = $true }
+    if ($Pass2Budget -gt 0) { $WorkerParams.Pass2Budget = $Pass2Budget }
+    if ($MomentumTopK -gt 0) { $WorkerParams.MomentumTopK = $MomentumTopK }
     Write-Host "[RUNTEST] US-short full flow is isolated in $Capsule" -ForegroundColor Cyan
     Push-Location $CapsuleRepo
     try {
-        & $Worker @WorkerArgs
+        & $Worker @WorkerParams
         $RunExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { [int]$LASTEXITCODE }
     } finally {
         Pop-Location

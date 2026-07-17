@@ -24,10 +24,10 @@
       {"as_of": "20260713", "path": "research/results/a_short/iv_feed_20260713/iv_feed.json", "sha256": "d1d944a70d9b64b33ed7a1eb405fd73715e1a3242c226a715545c79c18b0672d"}
     ],
     "overlays_seen": [
-      {"as_of": "20260622", "path": "result/a_short/20260622/overlay.json", "sha256": "d7bc466d167dd289c002a7e29068830eac4f73ecf484aabd15a03dfae8dc30dd"},
-      {"as_of": "20260629", "path": "result/a_short/20260629/overlay.json", "sha256": "6a88c1fa6c661d70c60bde0d8a7fb050b44400aa68a77c1c1ba1d29680aec9cf"},
-      {"as_of": "20260706", "path": "result/a_short/20260706/overlay.json", "sha256": "6da5ccf04204f61b138f5a47c5ec98d56aa1a7b05c298e9c843cf7258858e34c"},
-      {"as_of": "20260713", "path": "result/a_short/20260713/overlay.json", "sha256": "3165c42e935e6344e84f92bf2bbd751009294dc1d60b2e1a7858e445fc089a51"}
+      {"as_of": "20260622", "path": "tests/fixtures/a_short_entry_funnel_calibration/overlay_20260622.json", "sha256": "4a6f120e6f85e0a53cfbb6fcd206f67439d1113e9a915f677819449f9f0051dc"},
+      {"as_of": "20260629", "path": "tests/fixtures/a_short_entry_funnel_calibration/overlay_20260629.json", "sha256": "abf26fc7c3b5e19d6ae9f3ce6f06a870f5e46f780bc3b99d7c5da9f91c782404"},
+      {"as_of": "20260706", "path": "tests/fixtures/a_short_entry_funnel_calibration/overlay_20260706.json", "sha256": "19f04d51ac0de1c6cedf0f11f2d04117734757e326f5e7a42c2674170f07424c"},
+      {"as_of": "20260713", "path": "tests/fixtures/a_short_entry_funnel_calibration/overlay_20260713.json", "sha256": "696537c2153e326e95a4d11abf80ed8c4131a9db3d1cc26b5035fc1e75baaf62"}
     ]
   },
   "frozen_measurement": {
