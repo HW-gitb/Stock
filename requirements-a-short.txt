@@ -6,4 +6,5 @@ openpyxl
 pandas
 requests
 tqdm
-tushare
+tushare==1.4.29
+tzdata>=2022.7

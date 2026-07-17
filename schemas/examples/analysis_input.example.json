@@ -288,111 +288,111 @@
             "id": "rule6_holder_below_5pct",
             "name": "Holder stake reduced below 5%",
             "group": "pre_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_50etf_iv",
             "name": "50ETF IV hard veto",
             "group": "pre_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_cash_debt_double_high",
             "name": "Cash and debt both abnormally high",
             "group": "pre_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_regulatory_48h",
             "name": "Regulatory inquiry or concern within 48h",
             "group": "pre_veto",
-            "status": "pending_llm",
-            "severity": "watch",
+            "status": "not_applicable",
+            "severity": "review",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "仅人工核查：监管/媒体事件保留 cninfo 语义层 advisory，不作自动硬否决"
           },
           {
             "id": "rule6_good_data_bad_reaction",
             "name": "Good data bad reaction",
             "group": "post_veto",
-            "status": "pending_data",
-            "severity": "watch",
+            "status": "not_applicable",
+            "severity": "review",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "仅人工核查：免费数据无卖方一致预期及次日盘中反应，不能自动判定"
           },
           {
             "id": "rule6_volume_stall",
             "name": "Volume stall distribution",
             "group": "post_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_margin_extreme_accumulation",
             "name": "Margin extreme accumulation",
             "group": "post_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_block_trade_discount",
             "name": "Consecutive block-trade discount",
             "group": "post_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_northbound_selloff",
             "name": "Northbound consecutive selloff",
             "group": "post_veto",
-            "status": "pending_data",
-            "severity": "watch",
+            "status": "not_applicable",
+            "severity": "review",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "仅人工核查：逐股北向持仓日度数据已不可得，市场级北向流仅作环境参考"
           },
           {
             "id": "rule6_short_selling_surge",
             "name": "Short selling balance abnormal surge",
             "group": "post_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           },
           {
             "id": "rule6_ar_growth_gt_revenue_growth",
             "name": "AR growth faster than revenue growth",
             "group": "post_veto",
-            "status": "pending_data",
+            "status": "unknown",
             "severity": "watch",
             "metrics": {},
             "evidence": [],
-            "notes": null
+            "notes": "machine-checkable Rule6 source/evaluation unavailable"
           }
         ],
         "regulatory": {

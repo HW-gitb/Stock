@@ -149,6 +149,7 @@ class TushareInitTests(unittest.TestCase):
             pass
         setattr(_FakeDataApi, "_DataApi__http_url", "OLD")
         fake_ts = types.SimpleNamespace(
+            __version__="1.4.29",
             pro=types.SimpleNamespace(client=types.SimpleNamespace(DataApi=_FakeDataApi)),
             set_token=lambda t: calls.__setitem__("set_token", calls["set_token"] + 1),
             pro_api=lambda token: ("PRO", token),
@@ -159,7 +160,7 @@ class TushareInitTests(unittest.TestCase):
         self.assertNotEqual(getattr(_FakeDataApi, "_DataApi__http_url"), "OLD")  # endpoint pinned
 
     def test_pin_failure_missing_dataapi_is_hard_error(self):
-        fake_ts = types.SimpleNamespace(pro=types.SimpleNamespace(),  # no .client.DataApi
+        fake_ts = types.SimpleNamespace(__version__="1.4.29", pro=types.SimpleNamespace(),  # no .client.DataApi
                                         pro_api=lambda token: ("PRO", token))
         with self.assertRaises(RuntimeError):
             init_tushare_pro("tok", ts_module=fake_ts)
@@ -168,6 +169,7 @@ class TushareInitTests(unittest.TestCase):
         class _NoAttrDataApi:  # lacks _DataApi__http_url
             pass
         fake_ts = types.SimpleNamespace(
+            __version__="1.4.29",
             pro=types.SimpleNamespace(client=types.SimpleNamespace(DataApi=_NoAttrDataApi)),
             pro_api=lambda token: ("PRO", token))
         with self.assertRaises(RuntimeError):

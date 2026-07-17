@@ -1,0 +1,195 @@
+{
+  "schema_name": "a_short_rule6_tushare_d_tier_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-14T11:53:03+00:00",
+  "scope": {
+    "market": "A-share",
+    "purpose": "rule6_d_tier_paid_tushare_feasibility_probe_only",
+    "tushare_is_wired_into_rule6": false,
+    "egs_or_weekly_behavior_changed": false,
+    "production_or_ship_gate_claimed": false,
+    "broker_or_order_action": false
+  },
+  "sample": {
+    "symbols": [
+      "600519.SH",
+      "000001.SZ"
+    ],
+    "endpoint_names": [
+      "hk_hold",
+      "report_rc",
+      "anns_d"
+    ],
+    "pinned_tushare_version": "1.4.29"
+  },
+  "execution": {
+    "status": "completed_with_errors",
+    "planned_endpoint_reads": 6,
+    "completed_endpoint_reads": 3,
+    "error_endpoint_reads": 3
+  },
+  "shape_results": [
+    {
+      "symbol": "600519.SH",
+      "endpoint": "hk_hold",
+      "parameters": {
+        "ts_code": "600519.SH",
+        "start_date": "20260701",
+        "end_date": "20260714"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "code",
+          "exchange",
+          "name",
+          "ratio",
+          "trade_date",
+          "ts_code",
+          "vol"
+        ]
+      }
+    },
+    {
+      "symbol": "000001.SZ",
+      "endpoint": "hk_hold",
+      "parameters": {
+        "ts_code": "000001.SZ",
+        "start_date": "20260701",
+        "end_date": "20260714"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 0,
+        "columns": [
+          "code",
+          "exchange",
+          "name",
+          "ratio",
+          "trade_date",
+          "ts_code",
+          "vol"
+        ]
+      }
+    },
+    {
+      "symbol": "600519.SH",
+      "endpoint": "report_rc",
+      "parameters": {
+        "ts_code": "600519.SH",
+        "start_date": "20260401",
+        "end_date": "20260714"
+      },
+      "status": "ok",
+      "shape": {
+        "kind": "dataframe",
+        "row_count": 302,
+        "columns": [
+          "author_name",
+          "classify",
+          "eps",
+          "ev_ebitda",
+          "max_price",
+          "min_price",
+          "name",
+          "np",
+          "op_pr",
+          "op_rt",
+          "org_name",
+          "pe",
+          "quarter",
+          "rating",
+          "rd",
+          "report_date",
+          "report_title",
+          "report_type",
+          "roe",
+          "tp",
+          "ts_code"
+        ]
+      }
+    },
+    {
+      "symbol": "000001.SZ",
+      "endpoint": "report_rc",
+      "parameters": {
+        "ts_code": "000001.SZ",
+        "start_date": "20260401",
+        "end_date": "20260714"
+      },
+      "status": "error",
+      "error_class": "Exception",
+      "error_category": "endpoint_or_parameter"
+    },
+    {
+      "symbol": "600519.SH",
+      "endpoint": "anns_d",
+      "parameters": {
+        "ts_code": "600519.SH",
+        "start_date": "20260712",
+        "end_date": "20260714"
+      },
+      "status": "error",
+      "error_class": "Exception",
+      "error_category": "permission_or_entitlement"
+    },
+    {
+      "symbol": "000001.SZ",
+      "endpoint": "anns_d",
+      "parameters": {
+        "ts_code": "000001.SZ",
+        "start_date": "20260712",
+        "end_date": "20260714"
+      },
+      "status": "error",
+      "error_class": "Exception",
+      "error_category": "permission_or_entitlement"
+    }
+  ],
+  "surface_observations": {
+    "northbound_per_stock": {
+      "endpoint": "hk_hold",
+      "nonempty_response_seen": false,
+      "required_columns_seen": true
+    },
+    "good_data_bad_reaction": {
+      "endpoint": "report_rc",
+      "nonempty_response_seen": true,
+      "required_columns_seen": true
+    },
+    "regulatory_48h": {
+      "endpoint": "anns_d",
+      "nonempty_response_seen": false,
+      "required_columns_seen": false
+    }
+  },
+  "d_tier_disposition": {
+    "northbound_per_stock": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "response shape alone cannot establish a PIT-safe consecutive northbound-sell Rule6 source"
+    },
+    "good_data_bad_reaction": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "response shape alone cannot establish a PIT-safe consensus, result, and reaction contract"
+    },
+    "regulatory_48h": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "announcement shape alone cannot classify official regulatory inquiries within 48 hours"
+    }
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/a_short_rule6_tushare_d_tier_probe_20260714",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secret": false
+  },
+  "decision": {
+    "rule6_d_tier_status_remains_not_applicable": true,
+    "downstream_rule6_wiring_authorized": false,
+    "separate_review_required_before_any_future_use": true
+  }
+}

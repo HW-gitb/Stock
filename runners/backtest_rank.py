@@ -45,6 +45,8 @@ from engine.analyzer.rule6_hard_veto import DEFAULT_RULES as DEFAULT_VETO_RULES
 from engine.analyzer.rule6_hard_veto import normalize_rules as _normalize_veto_rules
 from engine.analyzer.rule6_hard_veto import run_veto
 from engine.data.analysis_input_contract import validate_analysis_input_contract
+from engine.a_share_market_clock import a_share_market_date
+from engine.a_short_tushare_client import init_tushare_pro, is_retryable_tushare_error
 
 RESULT_ROOT = ROOT / "result" / "a_short"
 BACKTEST_DIR = RESULT_ROOT / "backtest"
@@ -274,30 +276,12 @@ def rule6_any_triggered(rule6_checks):
 # Tushare with retry
 # ============================================================
 
-def _pin_tushare_base_url():
-    # tushare 1.4.29 hardcodes http://api.waditu.com/dataapi which 503s and
-    # makes pro.<api>(...) silently return an empty DataFrame. Override the
-    # default endpoint; allow TUSHARE_BASE_URL to point at a mirror if needed.
-    import warnings
-    from tushare.pro.client import DataApi
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    if hasattr(DataApi, attr):
-        setattr(DataApi, attr, base_url)
-    else:
-        warnings.warn(
-            f"tushare.DataApi has no attribute {attr}; default URL not overridden "
-            "(this codebase was written against tushare 1.4.29 internals)."
-        )
-
-
 def _tushare_pro():
     import tushare as ts
-    _pin_tushare_base_url()
     token = os.environ.get("TUSHARE_TOKEN")
     if not token:
         raise RuntimeError("TUSHARE_TOKEN is required for backtest data fetches")
-    return ts.pro_api(token)
+    return init_tushare_pro(token, ts_module=ts)
 
 
 def _fn_label(fn):
@@ -315,6 +299,8 @@ def _ts_call(fn, retries=3, base_delay=0.6, **kwargs):
             return fn(**kwargs)
         except Exception as e:
             last_err = e
+            if not is_retryable_tushare_error(e):
+                raise RuntimeError(f"Tushare call {name} failed without retry: {type(e).__name__}") from e
             wait = base_delay * (2 ** attempt)
             print(f"[RETRY] {name} attempt {attempt + 1} failed ({e}); sleep {wait:.1f}s")
             time.sleep(wait)
@@ -386,7 +372,7 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
     start = asof_sorted[0]
     horizon_calendar_days = int((max_window + buffer_days + 2) * 1.7) + 14
     end = _shift_yyyymmdd(asof_sorted[-1], horizon_calendar_days)
-    today = datetime.now().strftime("%Y%m%d")
+    today = a_share_market_date()
     if end > today:
         end = today
 
@@ -2141,7 +2127,7 @@ def main():
     parser.add_argument("--periods", type=int, default=0, help="Number of historical periods to generate")
     parser.add_argument("--freq", choices=["daily", "weekly", "monthly"], default="weekly")
     parser.add_argument("--start-date", help="Start date for historical generation, YYYYMMDD")
-    parser.add_argument("--end-date", default=datetime.now().strftime("%Y%m%d"),
+    parser.add_argument("--end-date", default=a_share_market_date(),
                         help="End date for historical generation, YYYYMMDD")
     parser.add_argument("--windows", default="5,10,20", help="Forward return windows, comma separated")
     parser.add_argument("--stats-only", action="store_true",

@@ -72,7 +72,7 @@ v7.5 新增（周频优化 6 项）：
   ⬜ 调研次数扣分：无可用数据源
   ⬜ L1 行业毛利率趋势：固定免检 0.5 分
 """
-import argparse, os, sys, time, pickle, logging, warnings, shutil, uuid
+import argparse, os, sys, time, pickle, logging, warnings, shutil, uuid, re, hashlib
 from contextlib import contextmanager, nullcontext
 from datetime import datetime, timedelta
 
@@ -128,6 +128,22 @@ from engine.a_short_hithink_l3 import (
     fetch_complete_concept_graph,
 )
 from engine.a_short_run_paths import weight_comparison_path
+from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
+from engine.a_short_tushare_client import init_tushare_pro
+from engine.a_short_rule6_contract import (
+    RULE6_CONDITIONAL_NA_REASONS,
+    RULE6_D_TIER_REASONS,
+    validate_rule6_check_contract,
+)
+from engine.a_short_rule6_evaluation import (
+    evaluate_ar_growth_gt_revenue_growth,
+    evaluate_block_trade_discount,
+    evaluate_cash_debt_double_high,
+    evaluate_holder_below_5pct,
+    evaluate_margin_extreme_accumulation,
+    evaluate_short_selling_surge,
+    evaluate_volume_stall,
+)
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -159,29 +175,11 @@ CONF = {
     "l3_allow_stale_cache": False,   # test-only override; stale reuse otherwise fails closed
 }
 
-def _pin_tushare_base_url():
-    # tushare 1.4.29 hardcodes http://api.waditu.com/dataapi which 503s and
-    # makes pro.<api>(...) silently return an empty DataFrame. Override the
-    # default endpoint; allow TUSHARE_BASE_URL to point at a mirror if needed.
-    import warnings
-    from tushare.pro.client import DataApi
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    if hasattr(DataApi, attr):
-        setattr(DataApi, attr, base_url)
-    else:
-        warnings.warn(
-            f"tushare.DataApi has no attribute {attr}; default URL not overridden "
-            "(this codebase was written against tushare 1.4.29 internals)."
-        )
-
-
 if TOKEN and ts is not None:
-    _pin_tushare_base_url()
     # 直接把 token 传给 pro_api,**不调 ts.set_token**:set_token 会在 import 期写 ~/tk.csv(import 文件副作用 +
     # 沙箱/受限环境 PermissionError → 卡住只读单测),且 egs_main 全程用本地 `pro` 客户端、不依赖全局 token
-    # (weekly pipeline 等都 api=pro)。与 runners/a_short_iv_feed_probe.py::init_tushare_pro 同一 sanctioned 口径(no set_token)。
-    pro = ts.pro_api(TOKEN)
+    # (weekly pipeline 等都 api=pro)。共享初始化器同时 pin 已验证 endpoint 并拒绝版本/私有结构漂移。
+    pro = init_tushare_pro(TOKEN, ts_module=ts)
 else:
     pro = None
 
@@ -218,13 +216,13 @@ def _record_hard_veto_source(name, status, observed_at=None, **details):
 EGS_API_FAMILIES = [
     "daily", "daily_basic", "fina_indicator", "index_daily",
     "moneyflow", "moneyflow_hsgt", "margin_detail",
-    "share_float", "stk_holdertrade", "stock_basic", "trade_cal",
+    "share_float", "stk_holdertrade", "balancesheet", "block_trade", "stock_basic", "namechange", "trade_cal",
     "index_member_all", "index_member", "index_classify",
 ]
 REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
-TODAY    = datetime.now().strftime("%Y%m%d")
-TODAY_DT = datetime.now()
+TODAY = a_share_market_date()
+TODAY_DT = a_share_market_wall_time()
 
 
 # ═══════════════════════════════════════════════════
@@ -513,8 +511,26 @@ def _rule_check(check_id, name, group, status="unknown", severity="watch", metri
         "notes": notes,
     }
 
+def _rule6_evaluated_check(check_id, name, group, evaluations):
+    """Turn a pure evaluator result into the analysis-input Rule6 record."""
+    evaluation = (evaluations or {}).get(check_id)
+    if not isinstance(evaluation, dict):
+        return _rule_check(check_id, name, group, "unknown", "watch",
+                           notes="machine-checkable Rule6 source/evaluation unavailable")
+    status = evaluation.get("status")
+    severity = evaluation.get("severity")
+    allowed_statuses = {"pass", "fail", "unknown"}
+    if check_id in RULE6_CONDITIONAL_NA_REASONS:
+        allowed_statuses = allowed_statuses | {"not_applicable"}
+    if status not in allowed_statuses or severity not in {"none", "watch", "hard_veto"}:
+        return _rule_check(check_id, name, group, "unknown", "watch",
+                           notes="machine-checkable Rule6 evaluation malformed")
+    return _rule_check(check_id, name, group, status, severity,
+                       metrics=evaluation.get("metrics"), notes=evaluation.get("notes"))
+
+
 def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set,
-                        industry_heat_governance=None):
+                        industry_heat_governance=None, rule6_evaluations=None):
     ts_code = str(_row_get(row, "ts_code", ""))
     exchange = ts_code.split(".")[-1] if "." in ts_code else "SZ"
     close = _json_float(_row_get(row, "close"))
@@ -552,18 +568,23 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "hard_veto" if has_crash_veto else "none",
             {"has_crash_veto": has_crash_veto},
         ),
-        _rule_check("rule6_holder_below_5pct", "Holder stake reduced below 5%", "pre_veto", "pending_data"),
-        _rule_check("rule6_50etf_iv", "50ETF IV hard veto", "pre_veto", "pending_data"),
-        _rule_check("rule6_cash_debt_double_high", "Cash and debt both abnormally high", "pre_veto", "pending_data"),
-        _rule_check("rule6_regulatory_48h", "Regulatory inquiry or concern within 48h", "pre_veto", "pending_llm"),
-        _rule_check("rule6_good_data_bad_reaction", "Good data bad reaction", "post_veto", "pending_data"),
-        _rule_check("rule6_volume_stall", "Volume stall distribution", "post_veto", "pending_data"),
-        _rule_check("rule6_margin_extreme_accumulation", "Margin extreme accumulation", "post_veto", "pending_data"),
-        _rule_check("rule6_block_trade_discount", "Consecutive block-trade discount", "post_veto", "pending_data"),
-        _rule_check("rule6_northbound_selloff", "Northbound consecutive selloff", "post_veto", "pending_data"),
-        _rule_check("rule6_short_selling_surge", "Short selling balance abnormal surge", "post_veto", "pending_data"),
-        _rule_check("rule6_ar_growth_gt_revenue_growth", "AR growth faster than revenue growth", "post_veto", "pending_data"),
+        _rule6_evaluated_check("rule6_holder_below_5pct", "Holder stake reduced below 5%", "pre_veto", rule6_evaluations),
+        # IV is materialized by the weekly IV feed immediately before the M6.7 gate.
+        _rule6_evaluated_check("rule6_50etf_iv", "50ETF IV hard veto", "pre_veto", rule6_evaluations),
+        _rule6_evaluated_check("rule6_cash_debt_double_high", "Cash and debt both abnormally high", "pre_veto", rule6_evaluations),
+        _rule_check("rule6_regulatory_48h", "Regulatory inquiry or concern within 48h", "pre_veto",
+                    "not_applicable", "review", notes=RULE6_D_TIER_REASONS["rule6_regulatory_48h"]),
+        _rule_check("rule6_good_data_bad_reaction", "Good data bad reaction", "post_veto",
+                    "not_applicable", "review", notes=RULE6_D_TIER_REASONS["rule6_good_data_bad_reaction"]),
+        _rule6_evaluated_check("rule6_volume_stall", "Volume stall distribution", "post_veto", rule6_evaluations),
+        _rule6_evaluated_check("rule6_margin_extreme_accumulation", "Margin extreme accumulation", "post_veto", rule6_evaluations),
+        _rule6_evaluated_check("rule6_block_trade_discount", "Consecutive block-trade discount", "post_veto", rule6_evaluations),
+        _rule_check("rule6_northbound_selloff", "Northbound consecutive selloff", "post_veto",
+                    "not_applicable", "review", notes=RULE6_D_TIER_REASONS["rule6_northbound_selloff"]),
+        _rule6_evaluated_check("rule6_short_selling_surge", "Short selling balance abnormal surge", "post_veto", rule6_evaluations),
+        _rule6_evaluated_check("rule6_ar_growth_gt_revenue_growth", "AR growth faster than revenue growth", "post_veto", rule6_evaluations),
     ]
+    validate_rule6_check_contract(rule6_checks)
 
     industry_trend_signal = classify_industry_trend(
         score=_row_get(row, "industry_heat_score"),
@@ -1039,7 +1060,7 @@ def _rank_stage_excluded_count(rank_reconciliation, stage_name):
 def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates,
                           unlock_set, suspended_set, relisted_set, red_dict,
                           tier1_csv_path, full_csv_path, output_root=None,
-                          rank_reconciliation=None):
+                          rank_reconciliation=None, rule6_evaluations_by_code=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1055,8 +1076,11 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
 
     industry_heat_governance = load_governance()
     candidates = [
-        _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set,
-                            industry_heat_governance)
+        _candidate_from_row(
+            row, rank, final_codes, latest_td, unlock_set, suspended_set,
+            industry_heat_governance,
+            rule6_evaluations=(rule6_evaluations_by_code or {}).get(str(_row_get(row, "ts_code", ""))),
+        )
         for rank, (_, row) in enumerate(watch_df.iterrows(), start=1)
     ]
     run_identity = build_a_short_run_identity(latest_td, candidates)
@@ -1822,7 +1846,7 @@ def _guard_historical_asof_l3_mode(as_of, l3_mode, allow_historical_live_l3=Fals
     """
     if not as_of:
         return
-    effective_run_date = run_date or datetime.now().strftime("%Y%m%d")
+    effective_run_date = run_date or a_share_market_date()
     if str(as_of) < str(effective_run_date) and l3_mode == "today" and not allow_historical_live_l3:
         raise SystemExit(
             f"[FATAL] Historical --as-of {as_of} predates the run date {effective_run_date} "
@@ -1872,6 +1896,67 @@ def get_trade_dates(n=25):
     save_cache(key, dates)
     return dates[:n]
 
+def _namechange_date(value, field_name):
+    """Return one optional canonical Tushare date or fail before historical replay."""
+    if value is None or pd.isna(value):
+        return ""
+    text = str(value).strip()
+    if not text:
+        return ""
+    if text.endswith(".0"):
+        text = text[:-2]
+    if not re.fullmatch(r"\d{8}", text):
+        raise RuntimeError(f"namechange has invalid {field_name}: {value!r}")
+    return text
+
+
+def _historical_name_map(df_stocks):
+    """Resolve each universe member's name active and knowable at TODAY."""
+    namechange = getattr(pro, "namechange", None)
+    if not callable(namechange):
+        raise RuntimeError("historical namechange source unavailable; refusing current-name fallback")
+    fields = "ts_code,name,start_date,end_date,change_reason"
+    history = safe_api(namechange, fields=fields)
+    if history is None or history.empty:
+        raise RuntimeError("historical namechange source returned no rows; refusing current-name fallback")
+    required = {"ts_code", "name", "start_date", "end_date"}
+    missing_columns = required - set(history.columns)
+    if missing_columns:
+        raise RuntimeError(
+            "historical namechange payload missing columns: " + ",".join(sorted(missing_columns))
+        )
+
+    history = history.copy()
+    history["ts_code"] = history["ts_code"].fillna("").astype(str).str.strip()
+    history["name"] = history["name"].fillna("").astype(str).str.strip()
+    for column in ("start_date", "end_date"):
+        history[column] = history[column].map(lambda value, c=column: _namechange_date(value, c))
+    if (history["ts_code"] == "").any() or (history["name"] == "").any():
+        raise RuntimeError("historical namechange payload has blank ts_code or name")
+    if (history["start_date"] == "").any():
+        raise RuntimeError("historical namechange payload has blank start_date")
+
+    active = history[
+        (history["start_date"] <= TODAY)
+        & ((history["end_date"] == "") | (history["end_date"] >= TODAY))
+    ].copy()
+    duplicate_codes = active.loc[active["ts_code"].duplicated(keep=False), "ts_code"].unique().tolist()
+    if duplicate_codes:
+        raise RuntimeError(
+            "historical namechange has overlapping active names: " + ",".join(sorted(duplicate_codes)[:10])
+        )
+
+    names = active.set_index("ts_code")["name"].to_dict()
+    universe_codes = set(df_stocks["ts_code"].dropna().astype(str))
+    uncovered = sorted(universe_codes - set(names))
+    if uncovered:
+        raise RuntimeError(
+            "historical namechange PIT coverage incomplete; refusing current-name fallback: "
+            + ",".join(uncovered[:10])
+        )
+    return names
+
+
 def get_stock_list():
     """As-of-aware universe.
 
@@ -1880,7 +1965,10 @@ def get_stock_list():
     a survivorship bias. Keeps a row iff list_date <= TODAY AND
     (delist_date is empty OR delist_date > TODAY).
     """
-    key = f"stock_list_{TODAY}_v2"  # v2 schema: includes D/P statuses + delist_date filtering
+    # Historical rows have PIT-replaced names; current rows deliberately keep
+    # stock_basic names.  They must never share a cache entry.
+    mode = "hist" if TODAY < a_share_market_date() else "cur"
+    key = f"stock_list_{TODAY}_v4_{mode}"
     cached = load_cache(key)
     if cached is not None:
         return cached
@@ -1900,6 +1988,9 @@ def get_stock_list():
         delist = df["delist_date"].fillna("")
         df = df[(delist == "") | (delist > TODAY)].copy()
     df = df.drop_duplicates(subset=["ts_code"], keep="first").reset_index(drop=True)
+    if mode == "hist":
+        historical_names = _historical_name_map(df)
+        df["name"] = df["ts_code"].map(historical_names)
     save_cache(key, df)
     return df
 
@@ -2098,7 +2189,7 @@ def get_sw_industry_map():
     # trust the capped unfiltered response, and never use current-only rows for
     # a historical PIT replay.
     index_member_all = getattr(pro, "index_member_all", None)
-    wall_date = datetime.now().strftime("%Y%m%d")
+    wall_date = a_share_market_date()
     if TODAY == wall_date and callable(index_member_all):
         candidate, request_group_count, fallback_reason = _fetch_current_by_l1(index_member_all)
         if not candidate.empty:
@@ -2457,10 +2548,14 @@ def get_financial_data(ts_codes):
     def _fetch_fina_indicator(chunk, q):
         chunk = list(chunk)
         chunk_str = ",".join(chunk)
-        fi = safe_api(pro.fina_indicator, ts_code=chunk_str, period=q,
-                      fields="ts_code,ann_date,end_date,dt_netprofit_yoy,"
-                             "ocf_to_profit,profit_dedt,dtprofit_to_profit,roe",
-                      retries=2)
+        fi = safe_api(
+            pro.fina_indicator,
+            ts_code=chunk_str,
+            period=q,
+            fields=("ts_code,ann_date,end_date,dt_netprofit_yoy,"
+                    "tr_yoy,ocf_to_profit,profit_dedt,dtprofit_to_profit,roe"),
+            retries=2,
+        )
         if fi is not None:
             return fi
         min_chunk = int(CONF.get("financial_min_chunk", 10))
@@ -2490,6 +2585,9 @@ def get_financial_data(ts_codes):
 
     df_fi["ann_date"] = pd.to_datetime(df_fi["ann_date"], format="%Y%m%d", errors="coerce")
     df_fi = df_fi[df_fi["ann_date"] <= pd.Timestamp(TODAY_DT)]
+    # Keep the explicit disclosure date in a serialisable canonical form for
+    # the downstream Rule6 revenue-growth PIT gate.
+    df_fi["ann_date"] = df_fi["ann_date"].dt.strftime("%Y%m%d")
     df_fi = df_fi.sort_values("ann_date", ascending=False).drop_duplicates(subset=["ts_code","quarter"])
     log.info(f"fina_indicator 合并后：{len(df_fi)} 行")
 
@@ -2497,20 +2595,30 @@ def get_financial_data(ts_codes):
     uniq      = sorted(set(df_fi["ts_code"].tolist()))
     df_merged = pd.DataFrame({"ts_code": uniq})
 
-    fi0_cols = ["ts_code","dt_netprofit_yoy","profit_dedt","dtprofit_to_profit","roe"]
+    fi0_cols = ["ts_code", "ann_date", "end_date", "dt_netprofit_yoy", "tr_yoy",
+                "profit_dedt", "dtprofit_to_profit", "roe"]
     fi0_cols = [c for c in fi0_cols if c in df_fi.columns]
     fi0 = df_fi[df_fi["quarter"]==q0][fi0_cols].copy()
-    rename_map = {"dt_netprofit_yoy":"q0_dt_yoy", "profit_dedt":"q0_profit_dedt",
+    rename_map = {"ann_date": "q0_ann_date", "end_date": "q0_end_date",
+                  "dt_netprofit_yoy":"q0_dt_yoy", "tr_yoy": "q0_revenue_yoy",
+                  "profit_dedt":"q0_profit_dedt",
                   "dtprofit_to_profit":"q0_dt_profit_ratio", "roe":"roe"}
     fi0.columns = [rename_map.get(c, c) for c in fi0.columns]
     df_merged = df_merged.merge(fi0, on="ts_code", how="left")
 
     if q1:
-        fi1 = df_fi[df_fi["quarter"]==q1][["ts_code","dt_netprofit_yoy"]].copy()
-        fi1.columns = ["ts_code","q1_dt_yoy"]
+        fi1_cols = [column for column in ["ts_code", "ann_date", "end_date", "dt_netprofit_yoy", "tr_yoy"]
+                    if column in df_fi.columns]
+        fi1 = df_fi[df_fi["quarter"]==q1][fi1_cols].copy()
+        fi1.columns = [{"ann_date": "q1_ann_date", "end_date": "q1_end_date", "dt_netprofit_yoy": "q1_dt_yoy",
+                        "tr_yoy": "q1_revenue_yoy"}.get(column, column) for column in fi1.columns]
         df_merged = df_merged.merge(fi1, on="ts_code", how="left")
     else:
         df_merged["q1_dt_yoy"] = np.nan
+    for column in ("q0_ann_date", "q1_ann_date", "q0_end_date", "q1_end_date",
+                   "q0_revenue_yoy", "q1_revenue_yoy"):
+        if column not in df_merged.columns:
+            df_merged[column] = np.nan
 
     # TTM 扣非净利润（fina_indicator 批量可用）
     fi_4q = df_fi[df_fi["quarter"].isin(quarters[:4])].copy()
@@ -2527,7 +2635,7 @@ def get_financial_data(ts_codes):
     fi0_ocf.columns = ["ts_code","ttm_ocf_ratio"]
     df_merged = df_merged.merge(fi0_ocf, on="ts_code", how="left")
 
-    for col in ["q0_dt_yoy","q1_dt_yoy","q0_profit_dedt","q0_dt_profit_ratio",
+    for col in ["q0_dt_yoy","q1_dt_yoy","q0_revenue_yoy","q1_revenue_yoy","q0_profit_dedt","q0_dt_profit_ratio",
                 "ttm_profit_dedt","ttm_ocf_ratio","roe"]:
         if col in df_merged.columns:
             df_merged[col] = pd.to_numeric(df_merged[col], errors="coerce")
@@ -2573,17 +2681,313 @@ def get_moneyflow(trade_dates):
     return result
 
 def get_margin(trade_dates):
-    key = f"margin_{trade_dates[0]}"
+    # A ten-session change requires today's observation plus the observation
+    # ten trading sessions earlier; v3 separates the old ten-row cache.
+    key = f"margin_{trade_dates[0]}_rule6_v3"
     if (cached := load_cache(key)) is not None: return cached
     frames = []
-    for d in tqdm(trade_dates[:10], desc="两融"):
-        df = safe_api(pro.margin_detail, trade_date=d, fields="ts_code,trade_date,rzye")
+    for d in tqdm(trade_dates[:11], desc="两融"):
+        df = safe_api(pro.margin_detail, trade_date=d, fields="ts_code,trade_date,rzye,rqye")
         if df is not None: frames.append(df)
     result = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
-    if not result.empty and "rzye" in result.columns:
-        result["rzye"] = pd.to_numeric(result["rzye"], errors="coerce")
+    for column in ("rzye", "rqye"):
+        if not result.empty and column in result.columns:
+            result[column] = pd.to_numeric(result[column], errors="coerce")
     save_cache(key, result)
     return result
+
+
+def _rule6_fetch_dataframe(fn, **kwargs):
+    """Preserve an empty successful response; ``safe_api`` intentionally cannot."""
+    if not callable(fn):
+        return None
+    for attempt in range(3):
+        try:
+            time.sleep(CONF["request_delay"])
+            result = fn(**kwargs)
+            return result if isinstance(result, pd.DataFrame) else None
+        except Exception as exc:
+            log.warning(f"Rule6 API exception [{getattr(fn, '__name__', 'unknown')}] #{attempt + 1}: {exc}")
+            if attempt < 2:
+                time.sleep(2 ** attempt)
+    return None
+
+
+def _rule6_cache_suffix(ts_codes):
+    canonical = ",".join(sorted({str(code) for code in ts_codes if str(code)}))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:16]
+
+
+def get_rule6_balancesheets(ts_codes):
+    """Fetch candidate-only PIT-safe balancesheets for Rule6; missing coverage stays unknown."""
+    codes = sorted({str(code) for code in ts_codes if str(code)})
+    if not codes:
+        return {}
+    key = f"rule6_balancesheet_{TODAY}_{_rule6_cache_suffix(codes)}"
+    if (cached := load_cache(key)) is not None:
+        return cached
+    fields = "ts_code,ann_date,end_date,money_cap,st_borr,total_assets,accounts_receiv,contract_liab"
+    result = {}
+    endpoint = getattr(pro, "balancesheet", None)
+    for code in tqdm(codes, desc="Rule6资产负债表"):
+        df = _rule6_fetch_dataframe(endpoint, ts_code=code, report_type="1", fields=fields)
+        required = {"ts_code", "ann_date", "end_date", "money_cap", "st_borr", "total_assets",
+                    "accounts_receiv", "contract_liab"}
+        if df is None or not required.issubset(set(df.columns)):
+            result[code] = None
+            continue
+        valid_rows = []
+        malformed = False
+        for _, row in df.iterrows():
+            ann_date_value, end_date_value = _json_value(row.get("ann_date")), _json_value(row.get("end_date"))
+            ann_date = str(ann_date_value) if ann_date_value is not None else ""
+            end_date = str(end_date_value) if end_date_value is not None else ""
+            if not (re.fullmatch(r"\d{8}", ann_date or "") and re.fullmatch(r"\d{8}", end_date or "")):
+                malformed = True
+                break
+            if ann_date > TODAY or end_date > TODAY:
+                continue
+            valid_rows.append({
+                "ann_date": ann_date, "end_date": end_date,
+                "money_cap": _json_float(row.get("money_cap")),
+                "st_borr": _json_float(row.get("st_borr")),
+                "total_assets": _json_float(row.get("total_assets")),
+                "accounts_receiv": _json_float(row.get("accounts_receiv")),
+                "contract_liab": _json_float(row.get("contract_liab")),
+            })
+        if malformed or not valid_rows:
+            result[code] = None
+            continue
+        valid_rows.sort(key=lambda item: (item["end_date"], item["ann_date"]), reverse=True)
+        deduped = {}
+        for item in valid_rows:
+            deduped.setdefault(item["end_date"], item)
+        result[code] = list(deduped.values())
+    save_cache(key, result)
+    return result
+
+
+def get_rule6_block_trades(trade_dates):
+    """Fetch exactly the Rule6 ten-trading-day block-trade coverage window."""
+    window = [str(day) for day in list(trade_dates)[:10]]
+    if len(window) != 10:
+        return {day: None for day in window}
+    key = f"rule6_block_trade_{window[0]}_{window[-1]}"
+    if (cached := load_cache(key)) is not None:
+        return cached
+    endpoint = getattr(pro, "block_trade", None)
+    result = {}
+    required = {"ts_code", "trade_date", "price", "vol"}
+    for trade_date in tqdm(window, desc="Rule6大宗交易"):
+        df = _rule6_fetch_dataframe(endpoint, trade_date=trade_date,
+                                    fields="trade_date,ts_code,price,vol,amount")
+        if df is None or not required.issubset(set(df.columns)):
+            result[trade_date] = None
+            continue
+        if df.empty:
+            result[trade_date] = []
+            continue
+        result[trade_date] = [
+            {"ts_code": str(_json_value(row.get("ts_code")) or ""),
+             "trade_date": str(_json_value(row.get("trade_date")) or ""),
+             "price": _json_float(row.get("price")), "vol": _json_float(row.get("vol"))}
+            for _, row in df.iterrows()
+        ]
+    save_cache(key, result)
+    return result
+
+
+def _rule6_date8(value):
+    value = _json_value(value)
+    if value is None:
+        return None
+    text = str(value).strip()
+    if text.endswith(".0"):
+        text = text[:-2]
+    return text if re.fullmatch(r"\d{8}", text) else None
+
+
+def _rule6_daily_rows(all_daily, ts_code, dates):
+    if all_daily is None or all_daily.empty or not {"ts_code", "trade_date"}.issubset(all_daily.columns):
+        return []
+    rows = []
+    for trade_date in dates:
+        match = all_daily[(all_daily["ts_code"].astype(str) == str(ts_code))
+                          & (all_daily["trade_date"].astype(str) == str(trade_date))]
+        if len(match) != 1:
+            return []
+        rows.append(match.iloc[0].to_dict())
+    return rows
+
+
+def _rule6_margin_value(margin_df, ts_code, trade_date, field):
+    if margin_df is None or margin_df.empty or not {"ts_code", "trade_date", field}.issubset(margin_df.columns):
+        return None
+    match = margin_df[(margin_df["ts_code"].astype(str) == str(ts_code))
+                      & (margin_df["trade_date"].astype(str) == str(trade_date))]
+    return _json_float(match.iloc[0].get(field)) if len(match) == 1 else None
+
+
+def _rule6_revenue_periods(df_fin, ts_code):
+    if df_fin is None or df_fin.empty or "ts_code" not in df_fin.columns:
+        return []
+    match = df_fin[df_fin["ts_code"].astype(str) == str(ts_code)]
+    if len(match) != 1:
+        return []
+    row = match.iloc[0]
+    periods = []
+    for prefix in ("q0", "q1"):
+        period = _rule6_date8(row.get(f"{prefix}_end_date"))
+        ann_date = _rule6_date8(row.get(f"{prefix}_ann_date"))
+        revenue_yoy = _json_float(row.get(f"{prefix}_revenue_yoy"))
+        if period is None or ann_date is None or revenue_yoy is None:
+            return []
+        periods.append({"period": period, "ann_date": ann_date, "revenue_yoy_pct": revenue_yoy})
+    return periods
+
+
+# The Shanghai+Shenzhen 融资融券 (margin) target universe is a large, stable set
+# (thousands of securities for years).  A fetched reference-date universe far
+# below this floor is a partial / garbage / truncated provider response, not a
+# real universe; treating a candidate's absence from it as "non-margin" would
+# fail OPEN.  Below the floor the two margin Rule6 checks stay `unknown`
+# (fail-closed), per R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION.
+MARGIN_ELIGIBILITY_MIN_UNIVERSE = 1000
+
+
+_ASHARE_TS_CODE_RE = re.compile(r"^\d{6}\.(SH|SZ|BJ)$")
+
+
+def _canonical_ashare_ts_code(value):
+    """Canonical stripped/upper ``NNNNNN.XX`` A-share code, or None if malformed.
+
+    Margin-universe codes and candidate codes are compared in this single
+    canonical namespace so provider whitespace/case/suffix/float drift cannot
+    masquerade as a different (non-matching) universe and silently clear the
+    margin vetoes; non-canonical shapes are dropped (they never reach the floor).
+    """
+    text = str(value).strip().upper()
+    return text if _ASHARE_TS_CODE_RE.match(text) else None
+
+
+def _clean_margin_ts_codes(frame):
+    """Distinct CANONICAL A-share ts_codes in a margin frame (drops malformed/garbage)."""
+    if not (isinstance(frame, pd.DataFrame) and not frame.empty and "ts_code" in frame.columns):
+        return set()
+    codes = set()
+    for value in frame["ts_code"].dropna():
+        canon = _canonical_ashare_ts_code(value)
+        if canon is not None:
+            codes.add(canon)
+    return codes
+
+
+def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_dict, df_fin):
+    """Evaluate every EGS-computable Rule6 item for the final candidate set.
+
+    This function intentionally runs after ranking: the newly authorized
+    balancesheet and block-trade calls are candidate-only and never influence
+    the screening scores or rank order.
+    """
+    if watch_df is None or watch_df.empty or "ts_code" not in watch_df.columns:
+        return {}
+    codes = [str(code) for code in watch_df["ts_code"].dropna().astype(str).tolist()]
+    if len(trade_dates) < 11:
+        return {code: {} for code in codes}
+    balance_by_code = get_rule6_balancesheets(codes)
+    block_by_date = get_rule6_block_trades(trade_dates[:10])
+    holder_events = (red_dict or {}).get("rule6_holder_events")
+    # Margin-eligibility (两融标的) is inferred from the fetched margin universe:
+    # a stock absent from a reference-date universe that is both COMPLETE
+    # (>= MARGIN_ELIGIBILITY_MIN_UNIVERSE canonical codes) and CLEAN (no malformed
+    # ts_code) is a genuine non-margin target and the two margin Rule6 checks do
+    # not apply to it.  Any provider anomaly must never become a clear result
+    # (R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION): an empty / sub-floor /
+    # truncated response fails the size gate, and any garbage or malformed
+    # (null / non-canonical) reference-date ts_code fails the clean gate -- so a
+    # selective corruption of one candidate's own row cannot masquerade as its
+    # absence.  In every anomaly eligibility stays None → fail-closed `unknown`.
+    margin_ref_codes = set()
+    margin_ref_has_malformed = False
+    if (isinstance(margin_df, pd.DataFrame) and not margin_df.empty
+            and {"ts_code", "trade_date", "rzye", "rqye"}.issubset(margin_df.columns)):
+        ref_frame = margin_df[margin_df["trade_date"].astype(str) == str(trade_dates[0])]
+        for value in ref_frame["ts_code"].dropna():
+            canon = _canonical_ashare_ts_code(value)
+            if canon is None:
+                margin_ref_has_malformed = True   # a corrupt row cannot be trusted to prove absence
+            else:
+                margin_ref_codes.add(canon)
+    margin_universe_present = (
+        len(margin_ref_codes) >= MARGIN_ELIGIBILITY_MIN_UNIVERSE
+        and not margin_ref_has_malformed
+    )
+    margin_eligible_codes = _clean_margin_ts_codes(margin_df) if margin_universe_present else None
+    evaluations_by_code = {}
+    for code in codes:
+        daily_11 = _rule6_daily_rows(all_daily, code, trade_dates[:11])
+        daily_6 = daily_11[:6] if len(daily_11) >= 6 else []
+        latest_daily = daily_11[0] if len(daily_11) == 11 else {}
+        oldest_daily = daily_11[10] if len(daily_11) == 11 else {}
+        if not isinstance(holder_events, list):
+            code_holder_events = None
+        else:
+            code_holder_events = [
+                event for event in holder_events
+                if not isinstance(event, dict) or str(event.get("ts_code")) == code
+            ]
+        code_balances = balance_by_code.get(code)
+        latest_balance = code_balances[0] if isinstance(code_balances, list) and code_balances else None
+        balance_by_period = {
+            item["end_date"]: item for item in (code_balances or [])
+            if isinstance(item, dict) and item.get("end_date")
+        }
+        block_records = {}
+        for trade_date in trade_dates[:10]:
+            source_rows = block_by_date.get(str(trade_date)) if isinstance(block_by_date, dict) else None
+            if source_rows is None:
+                block_records[str(trade_date)] = None
+                continue
+            candidate_rows = []
+            daily_row = _rule6_daily_rows(all_daily, code, [trade_date])
+            close = _json_float(daily_row[0].get("close")) if daily_row else None
+            for item in source_rows:
+                if not isinstance(item, dict) or str(item.get("ts_code")) != code:
+                    continue
+                if str(item.get("trade_date")) != str(trade_date):
+                    candidate_rows.append({"price": None, "vol": None, "close": None})
+                else:
+                    candidate_rows.append({"price": item.get("price"), "vol": item.get("vol"), "close": close})
+            block_records[str(trade_date)] = candidate_rows
+        canonical_code = _canonical_ashare_ts_code(code)
+        is_margin_eligible = (
+            None if (margin_eligible_codes is None or canonical_code is None)
+            else (canonical_code in margin_eligible_codes)
+        )
+        evaluations_by_code[code] = {
+            "rule6_holder_below_5pct": evaluate_holder_below_5pct(code_holder_events, TODAY),
+            "rule6_volume_stall": evaluate_volume_stall(daily_6),
+            "rule6_margin_extreme_accumulation": evaluate_margin_extreme_accumulation(
+                _rule6_margin_value(margin_df, code, trade_dates[0], "rzye"),
+                _rule6_margin_value(margin_df, code, trade_dates[10], "rzye"),
+                _json_float(latest_daily.get("close")), _json_float(oldest_daily.get("close")),
+                is_margin_eligible=is_margin_eligible,
+            ),
+            "rule6_short_selling_surge": evaluate_short_selling_surge(
+                _rule6_margin_value(margin_df, code, trade_dates[0], "rqye"),
+                _rule6_margin_value(margin_df, code, trade_dates[6], "rqye"),
+                hedge_announcement_status=None,
+                is_margin_eligible=is_margin_eligible,
+            ),
+            "rule6_cash_debt_double_high": evaluate_cash_debt_double_high(
+                latest_balance, TODAY,
+            ),
+            "rule6_ar_growth_gt_revenue_growth": evaluate_ar_growth_gt_revenue_growth(
+                _rule6_revenue_periods(df_fin, code), balance_by_period, TODAY,
+            ),
+            "rule6_block_trade_discount": evaluate_block_trade_discount(trade_dates[:10], block_records),
+        }
+    return evaluations_by_code
 
 # ── [崩溃修复②] ─────────────────────────────────────────────────────────────
 def get_unlock_future(stock_list, daily_basic_df):
@@ -2667,13 +3071,14 @@ def get_unlock_future(stock_list, daily_basic_df):
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_holder_reductions():
-    key = f"reductions_{TODAY}_v2"
+    key = f"reductions_{TODAY}_rule6_v3"
     if (cached := load_cache(key)) is not None:
         if not isinstance(cached, dict) or cached.get("source_status") not in {"known_clear", "known_hit"}:
             raise RuntimeError("holder-reduction cache lacks tri-state provenance")
         result = {
             "veto_10d": set(cached.get("veto_10d") or []),
             "deduct_30d": set(cached.get("deduct_30d") or []),
+            "rule6_holder_events": cached.get("rule6_holder_events"),
         }
         _record_hard_veto_source(
             "holder_reduction", cached["source_status"], cached.get("observed_at"),
@@ -2681,14 +3086,15 @@ def get_holder_reductions():
         )
         return result
     df = safe_api(getattr(pro, "stk_holdertrade", None), start_date=dstr(30), end_date=TODAY,
-                  fields="ts_code,ann_date,in_de")
+                  fields="ts_code,ann_date,in_de,after_ratio")
     if df is None:
         _record_hard_veto_source("holder_reduction", "unknown", None, source="tushare.stk_holdertrade")
         raise RuntimeError("holder-reduction source unavailable; refusing unknown as clear")
     if len(df) == 0:
-        empty_res = {"veto_10d": set(), "deduct_30d": set()}
+        empty_res = {"veto_10d": set(), "deduct_30d": set(), "rule6_holder_events": []}
         _record_hard_veto_source("holder_reduction", "known_clear", TODAY, source="tushare.stk_holdertrade", hit_count=0)
-        save_cache(key, {"source_status": "known_clear", "observed_at": TODAY, "veto_10d": [], "deduct_30d": []})
+        save_cache(key, {"source_status": "known_clear", "observed_at": TODAY,
+                         "veto_10d": [], "deduct_30d": [], "rule6_holder_events": []})
         return empty_res
     required = {"ts_code", "ann_date", "in_de"}
     missing = required - set(df.columns)
@@ -2709,7 +3115,14 @@ def get_holder_reductions():
     # 减持并入 veto_10d、提前剔除候选、回测虚高)。对实盘(as_of==今天)该段恒**冗余**:今日公告 ann_date==as_of
     # 已被上面第一段(as_of-30 ≤ ann_date ≤ as_of)纳入 v10,故移除后**实盘行为不变、仅消除历史污染**。
     # 已公告且执行在未来的减持计划由第一段按 ann_date 捕获(ann_date≤as_of);未来才公告的不属 PIT 可知。
-    result = {"veto_10d": v10, "deduct_30d": v30}
+    rule6_events = None
+    if "after_ratio" in df.columns:
+        rule6_events = [
+            {"ts_code": str(row["ts_code"]), "ann_date": str(row["ann_date"]),
+             "in_de": str(row["in_de"]), "after_ratio": _json_float(row["after_ratio"])}
+            for _, row in df.iterrows()
+        ]
+    result = {"veto_10d": v10, "deduct_30d": v30, "rule6_holder_events": rule6_events}
     source_status = "known_hit" if (v10 or v30) else "known_clear"
     _record_hard_veto_source(
         "holder_reduction", source_status, TODAY, source="tushare.stk_holdertrade",
@@ -2718,6 +3131,7 @@ def get_holder_reductions():
     save_cache(key, {
         "source_status": source_status, "observed_at": TODAY,
         "veto_10d": sorted(v10), "deduct_30d": sorted(v30),
+        "rule6_holder_events": rule6_events,
     })
     return result
 
@@ -2924,7 +3338,8 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
     if not df_fin.empty:
         fin_cols = [c for c in ["ts_code","q0_dt_yoy","q1_dt_yoy","q0_profit_dedt",
                                  "q0_dt_profit_ratio","q0_net_income",
-                                 "ttm_net_income","ttm_profit_dedt","ttm_ocf_ratio","roe"]
+                                 "ttm_net_income","ttm_profit_dedt","ttm_ocf_ratio","roe",
+                                 "q0_end_date","q1_end_date","q0_revenue_yoy","q1_revenue_yoy"]
                     if c in df_fin.columns]
         df = df.merge(df_fin[fin_cols], on="ts_code", how="left", suffixes=("","_fin"))
         if "roe_fin" in df.columns:
@@ -4073,6 +4488,9 @@ def run_egs(backtest_mode=False, output_root=None):
         watch_df["cninfo_flag"] = watch_df["ts_code"].map(cninfo_checked).fillna("未检查")
     else:
         watch_df["cninfo_flag"] = "未检查"
+    rule6_evaluations_by_code = _collect_rule6_evaluations(
+        watch_df, all_daily, mg_df, trade_dates, red_dict, df_raw_fin,
+    )
 
     watch_cols = ["ts_code","name","l2_name","final_score","tier",
                   "pct_20d_n","pct_5d_n","pct_60d","drawdown_20d",
@@ -4163,6 +4581,7 @@ def run_egs(backtest_mode=False, output_root=None):
             full_csv_path=full_csv_path,
             output_root=CONF.get("output_root"),
             rank_reconciliation=rank_reconciliation,
+            rule6_evaluations_by_code=rule6_evaluations_by_code,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")

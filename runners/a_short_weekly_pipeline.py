@@ -22,6 +22,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 # Ensure the project root is importable when run directly as `python runners\<this>.py`
@@ -39,6 +40,14 @@ from engine.a_short_industry_theme import (  # noqa: E402
 )
 from engine.egs_industry_heat import load_governance  # noqa: E402
 
+from engine.a_short_rule6_evaluation import materialize_50etf_iv_rule6_check
+from engine.a_short_regulatory_advisory import (
+    RegulatoryAdvisoryContractError,
+    attach_confirmations,
+    validate_confirmation_document,
+)
+from engine.a_short_tushare_client import is_retryable_tushare_error
+
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -54,9 +63,12 @@ HOLDING_RATCHET_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.pa
                                            "schemas", "a_short_holding_ratchet.schema.json")
 CRASH_VETO_TRACKING_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                                "schemas", "a_short_crash_veto_tracking.schema.json")
+REGULATORY_CONFIRMATION_SCHEMA_PATH = ROOT / "schemas" / "a_short_regulatory_advisory_confirmation.schema.json"
 # S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
 HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
+PRICE_FETCH_MAX_ATTEMPTS = 3
+PRICE_FETCH_RETRY_BACKOFF_SECONDS = 0.5
 
 
 def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str, dict]:
@@ -377,7 +389,18 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
     holding_normalized, holding_meta, manual_review = [], {}, []
     for p in positions:
         code = str(p.get("ts_code"))
-        series, latest = _price_provider_result(price_provider, code, as_of)
+        try:
+            series, latest = _price_provider_result(price_provider, code, as_of)
+        except SystemExit:
+            # Candidate price failures remain fail-closed in main.  An
+            # excluded holding instead becomes an explicit manual-management
+            # item so one suspended name cannot erase the whole weekly report.
+            manual_review.append({
+                "ts_code": code,
+                "name": str(p.get("name") or ""),
+                "reason": "持仓价格数据获取失败/停牌，须人工管理",
+            })
+            continue
         if len(series) < MIN_PRICE_OBS or not latest or str(latest) != str(price_data_through):
             reason = (f"无价/停牌(价格序列不足 < {MIN_PRICE_OBS} 交易日)"
                       if (len(series) < MIN_PRICE_OBS or not latest)
@@ -463,6 +486,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "event": {"holder_reduction_active": bool(hr.get("active_plan")),
                   "st_or_delisting": bool(delist.get("st_flag") or delist.get("delisting_warning")),
                   "regulatory_legacy_vetoed": False},
+        "rule6_checks": materialize_50etf_iv_rule6_check(ev.get("rule6_checks"), iv_pct),
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},
         "iv": {"iv_percentile_252d": iv_pct, "iv_value": iv_value, "hv_value": hv_value},
         "market_regime": regime,
@@ -2711,6 +2735,11 @@ def _fetch_dividends(pro, ts_code: str):
             for _, r in df.iterrows()]
 
 
+def _is_retryable_price_fetch_error(exc: Exception) -> bool:
+    """Only transient transport and explicit rate-limit failures may be retried."""
+    return is_retryable_tushare_error(exc)
+
+
 def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
                         accept_prior_settled_date: str | None = None) -> tuple:
     """前复权日线 → [{high,low,close}](oldest→newest)。A 股主板个股用 asset='E'。`end` == 周报 as_of。
@@ -2730,12 +2759,16 @@ def _fetch_price_series(ts_module, pro, ts_code: str, start: str, end: str,
     只消费入场后高点);latest_trade_date=
     实际最新已结算 bar 日期(供 main 记 `price_data_through` lineage,诚实标注真实价格时钟);无行 → `([], None)`。"""
     from datetime import datetime
-    try:
-        df = ts_module.pro_bar(ts_code=ts_code, adj="qfq", asset="E",
-                               start_date=start, end_date=end, api=pro)
-    except Exception as exc:
-        raise SystemExit(f"[FATAL] pro_bar {ts_code} provider 失败: {type(exc).__name__};"
-                         "不写周报(provider 失败 ≠ 无交易,不可 fail-open 成观察)")
+    for attempt in range(1, PRICE_FETCH_MAX_ATTEMPTS + 1):
+        try:
+            df = ts_module.pro_bar(ts_code=ts_code, adj="qfq", asset="E",
+                                   start_date=start, end_date=end, api=pro)
+            break
+        except Exception as exc:
+            if not _is_retryable_price_fetch_error(exc) or attempt == PRICE_FETCH_MAX_ATTEMPTS:
+                raise SystemExit(f"[FATAL] pro_bar {ts_code} provider 失败: {type(exc).__name__};"
+                                 "不写周报(provider 失败 ≠ 无交易,不可 fail-open 成观察)") from exc
+            time.sleep(PRICE_FETCH_RETRY_BACKOFF_SECONDS * attempt)
     if df is None or df.empty:
         return [], None
     df = df.sort_values("trade_date")
@@ -2895,6 +2928,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                         "intraday_prior_settled(实盘当天/前瞻 canonical、as_of 当日 EOD 未发布 → 容忍最新 bar==前一交易日;要求 --as-of >= --run-date)")
     p.add_argument("--skip-semantic", action="store_true",
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
+    p.add_argument("--regulatory-confirmations",
+                   help="人工确认的官方监管 advisory JSON；必须绑定本次 as_of、候选池和官方事件指纹")
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
                    help="显式放行:带 --account 时允许输出落仓库内非私密目录(默认拒,防真实持仓被 git 提交泄漏)")
     p.add_argument("--ratchet-path", default=HOLDING_RATCHET_DEFAULT_PATH,
@@ -2964,6 +2999,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # Hermetic fixtures/research callers outside result/a_short get a
         # deterministic identity; production paths never take this branch.
         source_identity = build_a_short_run_identity(args.as_of, ai.get("candidates") or [])
+    regulatory_confirmations = {}
+    if args.regulatory_confirmations:
+        confirmation_payload = _load(args.regulatory_confirmations)
+        try:
+            with open(REGULATORY_CONFIRMATION_SCHEMA_PATH, encoding="utf-8") as handle:
+                jsonschema.validate(confirmation_payload, json.load(handle))
+            regulatory_confirmations = validate_confirmation_document(
+                confirmation_payload, args.as_of, source_identity["candidate_digest"]
+            )
+        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+            raise SystemExit(f"[FATAL] invalid/stale --regulatory-confirmations: {type(exc).__name__}") from exc
     feed = _load(args.iv_feed)
     from runners.a_short_iv_feed_build import validate_feed_summary_consistency
     validate_feed_summary_consistency(feed)
@@ -3064,6 +3110,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
         semantic_provider = _build_cninfo_semantic_provider(
             weekly_candidates, args.as_of, args.cninfo_lookback_days)
+    if regulatory_confirmations and semantic_provider is None:
+        raise SystemExit("[FATAL] --regulatory-confirmations requires current official CNINFO semantic evidence")
     # 语义 web/LLM provider(Slice 2,advisory 旁路,非阻断):注入优先;否则真 run(--confirm 且未 --skip-semantic)
     # 自动建 DeepSeek 判官 provider(缺 key/SDK/抓取失败 → None,该层全 unknown 中性,绝不阻断周报)。
     if web_llm_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
@@ -3075,6 +3123,17 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     cands = ai.get("candidates", [])
     for candidate in cands:
         candidate["_weekly_as_of"] = str(args.as_of)
+    matched_regulatory_confirmations = set()
+
+    def _semantic_with_confirmation(code):
+        semantic = semantic_provider(code) if semantic_provider else None
+        try:
+            attached, matched = attach_confirmations(semantic, code, regulatory_confirmations)
+        except RegulatoryAdvisoryContractError as exc:
+            raise SystemExit(f"[FATAL] regulatory confirmation does not match current official evidence: {exc}") from exc
+        matched_regulatory_confirmations.update(matched)
+        return attached
+
     # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
     price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
     normalized = [normalize_candidate(c, price_results[c["ts_code"]][0], overlay.get(c["ts_code"]),
@@ -3083,10 +3142,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                       stateful_risk=stateful_risk_for_candidate(
                                           acct, c["ts_code"], args.as_of,
                                           account_integrity=account_integrity),
-                                      semantic=(semantic_provider(c["ts_code"]) if semantic_provider else None),
+                                      semantic=_semantic_with_confirmation(c["ts_code"]),
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
                                       iv_value=iv_value, hv_value=hv_value)
                   for c in cands]
+    unmatched_regulatory_confirmations = set(regulatory_confirmations) - matched_regulatory_confirmations
+    if unmatched_regulatory_confirmations:
+        raise SystemExit("[FATAL] regulatory confirmation is stale or outside the current official candidate events "
+                         f"(unmatched={len(unmatched_regulatory_confirmations)})")
     # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
     short = [(n["ts_code"], len(n["price_series"])) for n in normalized
              if len(n["price_series"]) < MIN_PRICE_OBS]

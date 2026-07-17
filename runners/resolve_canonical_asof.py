@@ -37,8 +37,9 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
-# A 股连续竞价 15:00 收盘（本地 = 市场时区 CST）。本机在中国本地跑，datetime.now() 即 CST，
-# 与 weekly_screening.ps1 的 Get-Date 同源。收盘后该交易日 EOD 视为「已结算」（canonical 滚到下一交易日）。
+from engine.a_share_market_clock import a_share_market_wall_time
+
+# A 股连续竞价 15:00 收盘（上海市场时区）。收盘后该交易日 EOD 视为「已结算」（canonical 滚到下一交易日）。
 A_SHARE_SESSION_CLOSE = time(15, 0)
 
 
@@ -56,6 +57,13 @@ def resolve_canonical_asof(now_dt, trading_days, *, session_close=A_SHARE_SESSIO
 
     返回 dict：{as_of, run_date, last_settled}。确定性：同 now_dt + trading_days → 同输出（无 wall-clock 副作用）。
     """
+    # Test and integration callers may inject an absolute instant.  Preserve the
+    # established naive-input seam as an already-normalized Shanghai wall time,
+    # but never compare an aware non-Shanghai time directly with the 15:00 wall
+    # clock.
+    if now_dt.tzinfo is not None:
+        now_dt = a_share_market_wall_time(now_dt)
+
     run_date = now_dt.strftime("%Y%m%d")
     td = sorted({str(d) for d in trading_days})
     now_t = now_dt.time()
@@ -109,7 +117,7 @@ def main(argv=None, pro_factory=None, now_dt=None):
     p.add_argument("--out", help="把解析结果 JSON 写到此路径（weekly_screening.ps1 读取）")
     args = p.parse_args(argv)
 
-    now = now_dt or datetime.now()
+    now = now_dt or a_share_market_wall_time()
     if pro_factory is not None:
         pro = pro_factory()
     else:

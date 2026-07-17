@@ -10,6 +10,7 @@ import sys
 import unittest
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import patch
 
 import pandas as pd
@@ -76,6 +77,163 @@ class FilterL0BoardScopeTest(unittest.TestCase):
         self.assertNotIn("900901.SH", kept)   # 沪 B 股不再漏排
         self.assertNotIn("200011.SZ", kept)   # 深 B 股不再漏排
         self.assertNotIn("600ABC.SH", kept)   # 畸形码不再漏排(strict is_a_share_main_board inclusion)
+
+
+class HistoricalNamePitTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.egs_main = _load_egs_module()
+
+    def _stock_basic_rows(self):
+        return pd.DataFrame([
+            {"ts_code": "600000.SH", "symbol": "600000", "name": "当前正常名",
+             "list_date": "20100101", "delist_date": "", "market": "主板", "list_status": "L"},
+            {"ts_code": "000001.SZ", "symbol": "000001", "name": "当前正常名",
+             "list_date": "20100101", "delist_date": "", "market": "主板", "list_status": "L"},
+        ])
+
+    def test_historical_stock_list_uses_active_namechange_row_for_st_veto(self):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20200115", datetime(2020, 1, 15)
+        namechange_calls = []
+
+        def stock_basic(**kwargs):
+            return self._stock_basic_rows() if kwargs["list_status"] == "L" else pd.DataFrame()
+
+        def namechange(**kwargs):
+            namechange_calls.append(kwargs)
+            return pd.DataFrame([
+                {"ts_code": "600000.SH", "name": "*ST历史名", "start_date": "20190101",
+                 "end_date": "20201231", "change_reason": "ST"},
+                {"ts_code": "600000.SH", "name": "当前正常名", "start_date": "20210101",
+                 "end_date": "", "change_reason": "撤销ST"},
+                {"ts_code": "000001.SZ", "name": "当前正常名", "start_date": "20100101",
+                 "end_date": "", "change_reason": "其他"},
+            ])
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic, namechange=namechange)
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                stocks = em.get_stock_list()
+                stats = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
+                kept = em.filter_l0(stocks, stats, set(), {}, set(), set())
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+
+        self.assertEqual(dict(zip(stocks["ts_code"], stocks["name"]))["600000.SH"], "*ST历史名")
+        self.assertEqual(set(kept["ts_code"]), {"000001.SZ"})
+        self.assertEqual(len(namechange_calls), 1)
+        self.assertEqual(namechange_calls[0]["fields"],
+                         "ts_code,name,start_date,end_date,change_reason")
+
+    def test_historical_stock_list_does_not_reuse_current_name_cache(self):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20200115", datetime(2020, 1, 15)
+        loaded_keys = []
+
+        def stock_basic(**kwargs):
+            return self._stock_basic_rows() if kwargs["list_status"] == "L" else pd.DataFrame()
+
+        def namechange(**kwargs):
+            return pd.DataFrame([
+                {"ts_code": "600000.SH", "name": "*ST历史名", "start_date": "20190101",
+                 "end_date": "20201231", "change_reason": "ST"},
+                {"ts_code": "000001.SZ", "name": "当前正常名", "start_date": "20100101",
+                 "end_date": "", "change_reason": "其他"},
+            ])
+
+        def load_cache(key):
+            loaded_keys.append(key)
+            # Simulate the shared current-mode cache that must not be queried
+            # by a historical replay.
+            if key.endswith("_cur"):
+                return self._stock_basic_rows()
+            return None
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic, namechange=namechange)
+            with patch.object(em, "load_cache", side_effect=load_cache), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                stocks = em.get_stock_list()
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+
+        self.assertEqual(loaded_keys, ["stock_list_20200115_v4_hist"])
+        self.assertEqual(dict(zip(stocks["ts_code"], stocks["name"]))["600000.SH"], "*ST历史名")
+
+    def test_historical_namechange_coverage_gap_aborts_instead_of_using_current_name(self):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20200115", datetime(2020, 1, 15)
+
+        def stock_basic(**kwargs):
+            return self._stock_basic_rows() if kwargs["list_status"] == "L" else pd.DataFrame()
+
+        def namechange(**kwargs):
+            return pd.DataFrame([
+                {"ts_code": "600000.SH", "name": "当前正常名", "start_date": "20100101",
+                 "end_date": "", "change_reason": "其他"},
+            ])
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic, namechange=namechange)
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                with self.assertRaisesRegex(RuntimeError, "coverage incomplete"):
+                    em.get_stock_list()
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+
+    def test_historical_namechange_end_date_is_inclusive(self):
+        em = self.egs_main
+        old_today, old_pro = em.TODAY, em.pro
+        em.TODAY = "20200115"
+        try:
+            em.pro = SimpleNamespace(namechange=lambda **kwargs: pd.DataFrame([
+                {"ts_code": "600000.SH", "name": "历史名", "start_date": "20190101",
+                 "end_date": "20200115", "change_reason": "其他"},
+            ]))
+            names = em._historical_name_map(pd.DataFrame({"ts_code": ["600000.SH"]}))
+        finally:
+            em.TODAY, em.pro = old_today, old_pro
+
+        self.assertEqual(names, {"600000.SH": "历史名"})
+
+    def test_current_run_keeps_stock_basic_name_without_namechange_fetch(self):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20260714", datetime(2026, 7, 14)
+        namechange_called = False
+
+        def stock_basic(**kwargs):
+            return self._stock_basic_rows() if kwargs["list_status"] == "L" else pd.DataFrame()
+
+        def namechange(**kwargs):
+            nonlocal namechange_called
+            namechange_called = True
+            raise AssertionError("current run must not fetch namechange")
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic, namechange=namechange)
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                stocks = em.get_stock_list()
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+
+        self.assertFalse(namechange_called)
+        self.assertEqual(set(stocks["name"]), {"当前正常名"})
 
 
 class HolderReductionPitTest(unittest.TestCase):

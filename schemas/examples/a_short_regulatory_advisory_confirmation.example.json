@@ -1,0 +1,20 @@
+{
+  "schema_name": "a_short_regulatory_advisory_confirmation",
+  "schema_version": "1.0.0",
+  "as_of": "20260714",
+  "candidate_digest": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+  "confirmations": [
+    {
+      "ts_code": "600000.SH",
+      "event_fingerprint": "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789",
+      "decision": "confirmed_material",
+      "reviewed_at": "2026-07-14T09:30:00+08:00",
+      "note": "已核对交易所/巨潮原始公告，确认与当前候选相关。"
+    }
+  ],
+  "boundary": {
+    "advisory_only": true,
+    "modifies_egs_or_rule6": false,
+    "automates_order": false
+  }
+}

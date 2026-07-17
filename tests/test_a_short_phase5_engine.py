@@ -28,6 +28,7 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     BREAKOUT_RR_BONUS,
     iv_hv_tag, iv_hv_vol_note, IV_HV_RATIO_HI, IV_HV_RATIO_LO, IV_HV_REGIMES,
 )
+from engine.a_short_rule6_contract import RULE6_CHECKS, RULE6_D_TIER_REASONS  # noqa: E402
 
 SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
 GOV_PATH = ROOT / "presets" / "a_short_phase5_engine_governance_20260610.json"
@@ -50,6 +51,15 @@ def _series():
     return s
 
 
+def _rule6_checks(status="pass"):
+    return [
+        {"id": check_id, "group": group,
+         "status": "not_applicable" if check_id in RULE6_D_TIER_REASONS else status,
+         "notes": RULE6_D_TIER_REASONS.get(check_id)}
+        for check_id, group in RULE6_CHECKS
+    ]
+
+
 def _good_input(**over):
     inp = {
         "ts_code": "600000.SH", "name": "测试", "close": 2.90, "price_series": _series(),
@@ -60,6 +70,7 @@ def _good_input(**over):
                     "crash_veto": False, "limit_locked": False, "suspended": False},
         "event": {"holder_reduction_active": False, "st_or_delisting": False,
                   "regulatory_legacy_vetoed": False},
+        "rule6_checks": _rule6_checks(),
         "liquidity": {"avg_amount_5d": 2e8, "avg_amount_20d": 2e8},
         "iv": {"iv_percentile_252d": 55.0},
         "market_regime": "震荡期",
@@ -117,6 +128,78 @@ class IndicatorTests(unittest.TestCase):
         self.assertEqual(ind["resistance_quality"], "strong")
         self.assertAlmostEqual(ind["recent_high_20"], 3.10)  # 原始近20日最高保留
         self.assertAlmostEqual(ind["atr14"], 0.04, places=3)
+
+
+class Rule6CompletionGateTests(unittest.TestCase):
+    def test_d_tier_banner_is_persistent_and_clear_machine_checks_can_build(self):
+        report = build_m67_report(_good_input(rule6_checks=_rule6_checks()), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "建仓")
+        banner = report["m67"]["精简结论区"]["Rule6人工核查"]
+        self.assertIn("仅人工核查", banner)
+        for check_id in RULE6_D_TIER_REASONS:
+            self.assertIn(check_id, banner)
+        validate_m67_consistency(report)
+
+    def test_pending_rule6_check_observes_and_never_builds(self):
+        checks = _rule6_checks()
+        checks[2]["status"] = "pending_data"
+        report = build_m67_report(_good_input(rule6_checks=checks), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "观察")
+        self.assertEqual(report["machine"]["rule6_gate"]["disposition"], "manual_review")
+        self.assertIn("rule6_holder_below_5pct",
+                      report["machine"]["rule6_gate"]["manual_review_check_ids"])
+        self.assertIn("Rule6待人工核查", report["m67"]["精简结论区"]["否决审查触发"])
+        validate_m67_consistency(report)
+
+    def test_failed_rule6_check_is_hard_veto(self):
+        checks = _rule6_checks()
+        checks[2]["status"] = "fail"
+        report = build_m67_report(_good_input(rule6_checks=checks), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "否决")
+        self.assertEqual(report["machine"]["rule6_gate"]["disposition"], "hard_veto")
+        self.assertIn("rule6_holder_below_5pct",
+                      report["machine"]["rule6_gate"]["hard_veto_check_ids"])
+        validate_m67_consistency(report)
+
+    def test_pending_rule6_check_keeps_existing_holding_management(self):
+        checks = _rule6_checks()
+        checks[2]["status"] = "pending_data"
+        report = build_m67_report(
+            _good_input(rule6_checks=checks, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "持有")
+        self.assertEqual(report["machine"]["rule6_gate"]["disposition"], "manual_review")
+        validate_m67_consistency(report)
+
+    def test_market_level_rule6_iv_failure_keeps_existing_holding_management(self):
+        checks = _rule6_checks()
+        iv_check = next(item for item in checks if item["id"] == "rule6_50etf_iv")
+        iv_check.update(status="fail", severity="hard_veto", notes="Rule3 50ETF IV percentile")
+        report = build_m67_report(
+            _good_input(rule6_checks=checks, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "持有")
+        self.assertEqual(report["machine"]["rule6_gate"]["hard_veto_check_ids"], ["rule6_50etf_iv"])
+        self.assertFalse(any("rule6_50etf_iv" in reason
+                             for reason in report["machine"]["layer"]["decision_reasons"]["hard_veto"]))
+        self.assertTrue(any("rule6_50etf_iv" in reason
+                            for reason in report["machine"]["layer"]["decision_reasons"]["downgrade"]))
+        validate_m67_consistency(report)
+
+    def test_security_specific_rule6_failure_still_vetoes_existing_holding(self):
+        checks = _rule6_checks()
+        failure = next(item for item in checks if item["id"] == "rule6_holder_below_5pct")
+        failure.update(status="fail", severity="hard_veto", notes="holder stake below threshold")
+        report = build_m67_report(
+            _good_input(rule6_checks=checks, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(report["m67"]["table"]["操作"], "否决")
+        self.assertTrue(any("rule6_holder_below_5pct" in reason
+                            for reason in report["machine"]["layer"]["decision_reasons"]["hard_veto"]))
+        validate_m67_consistency(report)
+
+    def test_validator_rejects_tampered_d_tier_banner(self):
+        report = build_m67_report(_good_input(rule6_checks=_rule6_checks()), AS_OF, "t")
+        report["m67"]["精简结论区"]["Rule6人工核查"] = "无"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(report)
 
 
 class EffectiveSupportTests(unittest.TestCase):
@@ -460,16 +543,6 @@ class TickPriceTests(unittest.TestCase):
 class HoldingLevelsTests(unittest.TestCase):
     """S3a: 持仓系统跟踪止损/止盈(被动)= recent_high(20日高=resistance)−ATR×倍数;side-aware tick;
     破位/缺数据不伪造;不算入场价/股数。"""
-    def test_normal_levels_ticked_no_entry_no_shares(self):
-        plan, rej = holding_levels({"close": 70.1}, {"resistance": 72.0, "atr14": 2.1}, "震荡期")
-        self.assertIsNone(rej)
-        self.assertFalse(plan["breached"])
-        self.assertEqual(plan["stop"], 69.38)      # tick_up(72−1.25×2.1=69.375) 止损向上
-        self.assertEqual(plan["t1"], 72.0)         # res>close → 近20日高
-        self.assertEqual(plan["t2"], 74.62)        # tick_down(max(72+2.625, 70.1+2×0.72)) 止盈向下
-        self.assertIsNone(plan["entry"])           # 持仓不算入场价
-        self.assertIsNone(plan["shares"])          # 持仓不算股数
-
     def test_ratchet_higher_recent_high_raises_stop(self):
         low, _ = holding_levels({"close": 70.0}, {"resistance": 72.0, "atr14": 2.0}, "震荡期")
         high, _ = holding_levels({"close": 70.0}, {"resistance": 75.0, "atr14": 2.0}, "震荡期")

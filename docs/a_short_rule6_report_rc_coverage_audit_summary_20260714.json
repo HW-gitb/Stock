@@ -1,0 +1,65 @@
+{
+  "schema_name": "a_short_rule6_report_rc_coverage_audit_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-14T12:29:27+00:00",
+  "scope": {
+    "market": "A-share",
+    "purpose": "rule6_good_data_bad_reaction_report_rc_coverage_and_pit_shape_audit_only",
+    "tushare_is_wired_into_rule6": false,
+    "egs_or_weekly_behavior_changed": false,
+    "production_or_ship_gate_claimed": false,
+    "broker_or_order_action": false
+  },
+  "candidate_pool": {
+    "trade_date": "20260714",
+    "candidate_count": 11,
+    "candidate_digest": "ae5333a03430ccf3e925029b647750a8a5af4f118594e7eeb00b71e3cb9675a4",
+    "report_window_start": "20260317",
+    "report_window_end": "20260714",
+    "pinned_tushare_version": "1.4.29",
+    "analysis_input_reference": "result/a_short/20260714/analysis_input.json",
+    "analysis_input_sha256": "2fc155be8ab4bae06079c33d2394d496bf1351d1e51fda22660772d5f59788bc"
+  },
+  "execution": {
+    "status": "completed_with_errors",
+    "planned_report_rc_reads": 11,
+    "completed_report_rc_reads": 0,
+    "error_report_rc_reads": 11,
+    "min_interval_seconds": 60.0,
+    "error_category_counts": {
+      "rate_limited_or_frequency_cap": 11
+    }
+  },
+  "coverage": {
+    "candidates_with_nonempty_response": 0,
+    "candidates_with_as_of_rows": 0,
+    "candidates_with_multiple_orgs": 0,
+    "total_response_rows": 0,
+    "total_as_of_rows": 0,
+    "total_future_dated_rows": 0,
+    "total_invalid_or_missing_report_date_rows": 0,
+    "total_duplicate_identity_rows": 0
+  },
+  "pit_assessment": {
+    "cutoff_field": "report_date",
+    "all_successful_responses_have_report_date_column": true,
+    "all_successful_response_rows_are_on_or_before_trade_date": true,
+    "provider_observed_at_or_ingested_at_present": false,
+    "historical_consensus_reconstruction_proven": false,
+    "rule6_wiring_authorized": false,
+    "reason": "report_date supports only a basic cutoff; provider observed-time, consensus methodology, and event-reaction alignment are not established by this audit"
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/a_short_rule6_report_rc_coverage_audit_20260714",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_candidate_tickers": false,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secret": false
+  },
+  "decision": {
+    "rule6_d_tier_status_remains_not_applicable": true,
+    "downstream_rule6_wiring_authorized": false,
+    "separate_review_required_before_any_future_use": true
+  }
+}

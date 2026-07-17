@@ -7,6 +7,7 @@ from pathlib import Path
 
 import pandas as pd
 
+from engine.a_short_rule6_contract import RULE6_D_TIER_REASONS
 from engine.data.analysis_input_contract import validate_analysis_input_contract
 
 
@@ -47,6 +48,13 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             name: {"status": "known_clear", "observed_at": "20260522"}
             for name in ("suspension", "unlock", "holder_reduction")
         }
+        # This contract fixture must not inherit a prior module's in-memory
+        # l3 reset; export schema validation requires a concrete mode.
+        self.egs_main.CONF.update({
+            "l3_mode": "pit",
+            "l3_pit_strict": True,
+            "l3_snapshot_date": "20260522",
+        })
 
     def tearDown(self) -> None:
         self.egs_main.CONF.update(self._original_l3)
@@ -103,6 +111,40 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
         self.assertEqual(summary["rank_exclusion_counts"]["l1_industry_leader"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["l2_quality_risk"], 1)
         self.assertEqual(summary["rank_exclusion_counts"]["rank_unexpected"], 0)
+
+    def test_export_marks_only_rule6_d_tier_as_manual_only(self) -> None:
+        """The three unavailable checks are explicit human review, never silent passes."""
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            _analysis_path, _snapshot_path, _candidates_path, payload = self._export(
+                tmp, latest_td="20260522"
+            )
+
+        checks = {
+            item["id"]: item
+            for item in payload["candidates"][0]["event_risk"]["rule6_checks"]
+        }
+        self.assertEqual(set(RULE6_D_TIER_REASONS), {
+            check_id for check_id, item in checks.items()
+            if item["status"] == "not_applicable"
+        })
+        for check_id, reason in RULE6_D_TIER_REASONS.items():
+            self.assertEqual(checks[check_id]["notes"], reason)
+            self.assertEqual(checks[check_id]["severity"], "review")
+        computed_without_this_export = {
+            "rule6_holder_below_5pct", "rule6_50etf_iv", "rule6_cash_debt_double_high",
+            "rule6_volume_stall", "rule6_margin_extreme_accumulation", "rule6_block_trade_discount",
+            "rule6_short_selling_surge", "rule6_ar_growth_gt_revenue_growth",
+        }
+        for check_id in computed_without_this_export:
+            self.assertEqual(checks[check_id]["status"], "unknown")
+            self.assertEqual(checks[check_id]["severity"], "watch")
+
+    def test_example_rule6_fixture_has_no_legacy_pending_status(self) -> None:
+        fixture = json.loads((ROOT / "schemas" / "examples" / "analysis_input.example.json").read_text(encoding="utf-8"))
+        checks = fixture["candidates"][0]["event_risk"]["rule6_checks"]
+        statuses = {item["id"]: item["status"] for item in checks}
+        self.assertNotIn("pending_data", statuses.values())
+        self.assertNotIn("pending_llm", statuses.values())
 
     def test_real_egs_export_flows_through_weekly_main_without_rank_count_crash(self) -> None:
         """Run-1 #4 regression: actual EGS exporter contract -> weekly main, not two isolated unit fixtures."""

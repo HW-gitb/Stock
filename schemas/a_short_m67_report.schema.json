@@ -29,12 +29,13 @@
           "type": "object",
           "additionalProperties": false,
           "required": ["当前环境", "波动率状态", "现价与成本", "否决审查触发",
-                       "板块资金事件", "风控触发", "操作建议"],
+                       "Rule6人工核查", "板块资金事件", "风控触发", "操作建议"],
           "properties": {
             "当前环境": {"type": "string"},
             "波动率状态": {"type": "string"},
             "现价与成本": {"type": "string"},
             "否决审查触发": {"type": "string"},
+            "Rule6人工核查": {"type": "string"},
             "板块资金事件": {"type": "string"},
             "风控触发": {"type": "string"},
             "操作建议": {"type": "string"}

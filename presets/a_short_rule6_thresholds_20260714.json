@@ -1,0 +1,26 @@
+{
+  "schema_name": "a_short_rule6_thresholds",
+  "schema_version": "1.0.0",
+  "source_spec": "skills/a_short_analysis/reference/v14.2_spec.md#Rule6",
+  "thresholds": {
+    "holder_below_5pct_after_ratio_lt_pct": 5.0,
+    "iv_nobuild_percentile_gt": 90.0,
+    "volume_stall_lookback_days": 5,
+    "volume_stall_latest_volume_multiple_gt": 2.0,
+    "volume_stall_pct_change_lt_pct": 2.0,
+    "volume_stall_close_range_fraction_lte": 0.3333333333333333,
+    "cash_debt_asset_ratio_gt": 0.25,
+    "margin_extreme_lookback_days": 10,
+    "margin_extreme_growth_gt": 0.2,
+    "margin_extreme_price_gain_lt": 0.05,
+    "block_trade_lookback_days": 10,
+    "block_trade_discount_gt": 0.07,
+    "block_trade_discounted_trade_count_gte": 2,
+    "block_trade_discounted_amount_cny_gt": 100000000.0,
+    "short_selling_lookback_days": 5,
+    "short_selling_balance_growth_gt": 1.0,
+    "ar_growth_consecutive_quarters": 2,
+    "ar_growth_to_revenue_growth_min": 2.0,
+    "contract_liability_growth_to_ar_growth_min": 0.8
+  }
+}

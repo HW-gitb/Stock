@@ -23,10 +23,18 @@ import argparse
 import json
 import os
 import re
+import sys
 import time
+from pathlib import Path
 
 import jsonschema
 import pandas as pd
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.a_short_tushare_client import init_tushare_pro
 
 SCHEMA_NAME = "a_short_iv_feed_probe_summary"
 SCHEMA_VERSION = "1.0.0"
@@ -541,29 +549,6 @@ def fetch_probe_inputs(pro, as_of: str, lookback_days: int = 40, max_trade_dates
         "opt_daily_fail_fast_triggered": opt_daily_fail_fast_triggered,
     }
     return opt_basic, opt_daily, underlier, report
-
-
-def _pin_tushare_base_url(ts_module) -> None:
-    """仿 EGS:pin DataApi 默认 endpoint(1.4.29 默认 url 会 503 静默返回空)。
-    **pin 不上 → 硬 RuntimeError**(拒绝以默认 url 跑,否则会静默空数据污染探测)。"""
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    try:
-        DataApi = ts_module.pro.client.DataApi
-    except AttributeError as exc:
-        raise RuntimeError("tushare.pro.client.DataApi 不可达;拒绝以默认 endpoint 运行 probe") from exc
-    if not hasattr(DataApi, attr):
-        raise RuntimeError(f"DataApi 无 {attr};拒绝以默认 endpoint 运行 probe")
-    setattr(DataApi, attr, base_url)
-
-
-def init_tushare_pro(token: str, ts_module=None):
-    """初始化 pro_api,**不调用 `set_token`**(其会写 ~/tk.csv,有副作用 + 沙箱 PermissionError);
-    pin base url 后用 `pro_api(token)` 直接传 token。ts_module 可注入便于测试。"""
-    if ts_module is None:
-        import tushare as ts_module  # noqa
-    _pin_tushare_base_url(ts_module)
-    return ts_module.pro_api(token)
 
 
 def main(argv=None, pro_factory=None):

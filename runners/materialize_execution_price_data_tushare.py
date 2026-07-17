@@ -23,6 +23,7 @@ from runners.backtest_execution import (
     load_analysis_input,
     validate_json_schema,
 )
+from engine.a_short_tushare_client import init_tushare_pro, is_retryable_tushare_error
 
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution" / "price_data"
@@ -136,28 +137,11 @@ def resolve_date_range(as_of: str, start_date: str | None, end_date: str | None,
     return effective_start, effective_end
 
 
-def _pin_tushare_base_url() -> None:
-    from tushare.pro.client import DataApi
-
-    base_url = os.environ.get("TUSHARE_BASE_URL", "https://api.tushare.pro/dataapi")
-    attr = "_DataApi__http_url"
-    if hasattr(DataApi, attr):
-        setattr(DataApi, attr, base_url)
-    else:
-        raise RuntimeError(
-            f"tushare.DataApi has no attribute {attr}; cannot apply TUSHARE_BASE_URL. "
-            "Update _pin_tushare_base_url for the installed tushare client version."
-        )
-
-
 def tushare_pro() -> Any:
     token = os.environ.get("TUSHARE_TOKEN")
     if not token:
         raise RuntimeError("TUSHARE_TOKEN is required for Tushare price materialization")
-    import tushare as ts
-
-    _pin_tushare_base_url()
-    return ts.pro_api(token)
+    return init_tushare_pro(token)
 
 
 def _fn_label(fn: Callable[..., Any]) -> str:
@@ -176,6 +160,8 @@ def ts_call(fn: Callable[..., Any], retries: int = 3, base_delay: float = 0.6, *
             return fn(**kwargs)
         except Exception as exc:  # pragma: no cover - retry path is environment-bound
             last_err = exc
+            if not is_retryable_tushare_error(exc):
+                raise RuntimeError(f"Tushare call {name} failed without retry: {type(exc).__name__}") from exc
             wait = base_delay * (2**attempt)
             print(f"[RETRY] {name} attempt {attempt + 1} failed ({exc}); sleep {wait:.1f}s")
             time.sleep(wait)
