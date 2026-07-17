@@ -1346,6 +1346,34 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
     return receipt_path
 
 
+def load_published_weekly_bundle(out_path: str) -> dict:
+    """刀2: load an official weekly artifact ONLY through its matching complete receipt.
+    A failed / mismatched receipt (or a missing JSON/Markdown) makes any older bundle non-consumable."""
+    output = Path(out_path)
+    if output.name != "weekly_m67.json":
+        raise ValueError("official weekly JSON must be named weekly_m67.json")
+    receipt_path = output.with_suffix("").with_suffix(".receipt.json")
+    if not output.is_file() or not receipt_path.is_file():
+        raise ValueError("weekly bundle is incomplete: JSON or receipt missing")
+    weekly = json.loads(output.read_text(encoding="utf-8-sig"))
+    receipt = json.loads(receipt_path.read_text(encoding="utf-8-sig"))
+    if not re.fullmatch(r"[0-9]{8}", output.parent.name) or output.parent.name != str(weekly.get("as_of") or ""):
+        raise ValueError("weekly bundle directory does not match artifact as_of")
+    lineage = weekly.get("run_lineage") or {}
+    if receipt.get("stage_status") != "complete":
+        raise ValueError("weekly receipt is not complete")
+    for field in ("as_of", "run_id", "candidate_digest"):
+        expected = weekly.get(field) if field == "as_of" else lineage.get(field)
+        if not expected or receipt.get(field) != expected:
+            raise ValueError(f"weekly receipt {field} does not match artifact")
+    expected_outputs = {output.name, output.with_suffix(".md").name}
+    if set(receipt.get("outputs") or []) != expected_outputs:
+        raise ValueError("weekly receipt output set does not match artifact")
+    if not output.with_suffix(".md").is_file():
+        raise ValueError("weekly Markdown output is missing")
+    return weekly
+
+
 def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
     """#5 消费方校验:overlay 必须过 schema + `validate_overlay_summary_consistency`,
     且 as_of 必须 == 周报 as_of(同一周末批;拒未来/陈旧)。返回 {ts_code: row}。"""

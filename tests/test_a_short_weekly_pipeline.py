@@ -4191,5 +4191,48 @@ class FactorComparisonRealizedRegimeTests(unittest.TestCase):
         self.assertEqual(_factor_comparison_realized_regime(None, "20260202", "20260130")["status"], "unavailable")
 
 
+class LoadPublishedBundleTests(unittest.TestCase):
+    """刀2: the official reader accepts a bundle only through its matching complete receipt."""
+
+    def _bundle(self, root, *, dir_name="20260622", stage_status="complete", tamper=None):
+        d = Path(root) / dir_name
+        d.mkdir(parents=True, exist_ok=True)
+        weekly = {"as_of": "20260622",
+                  "run_lineage": {"run_id": "a-short-20260622-01", "candidate_digest": "b" * 64}}
+        receipt = {"schema_name": "a_short_weekly_publish_receipt", "as_of": "20260622",
+                   "run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
+                   "stage_status": stage_status, "outputs": ["weekly_m67.json", "weekly_m67.md"]}
+        if tamper:
+            tamper(weekly, receipt)
+        (d / "weekly_m67.json").write_text(json.dumps(weekly), encoding="utf-8")
+        (d / "weekly_m67.md").write_text("# report", encoding="utf-8")
+        (d / "weekly_m67.receipt.json").write_text(json.dumps(receipt), encoding="utf-8")
+        return str(d / "weekly_m67.json")
+
+    def test_complete_receipt_accepts(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            self.assertEqual(load_published_weekly_bundle(self._bundle(tmp))["as_of"], "20260622")
+
+    def test_failed_receipt_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                load_published_weekly_bundle(self._bundle(tmp, stage_status="failed"))
+
+    def test_identity_mismatch_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            out = self._bundle(tmp, tamper=lambda w, r: r.__setitem__("run_id", "wrong-id"))
+            with self.assertRaises(ValueError):
+                load_published_weekly_bundle(out)
+
+    def test_directory_asof_mismatch_rejects(self):
+        from runners.a_short_weekly_pipeline import load_published_weekly_bundle
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(ValueError):
+                load_published_weekly_bundle(self._bundle(tmp, dir_name="20260101"))
+
+
 if __name__ == "__main__":
     unittest.main()

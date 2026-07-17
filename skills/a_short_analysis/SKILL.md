@@ -1,19 +1,21 @@
 ---
 name: a_short_analysis
-description: Use for A-share short-term single-stock analysis after screening. Generates or reads Phase 4 deterministic reports via runners/run_analysis_report.py, then optionally enriches LLM-only sections without changing analyzer veto decisions.
+description: Use for the A-share short-term weekly screening and M6.7 operation report, with older single-stock deterministic reports retained as research-only tools.
 ---
 
 # A Short Analysis
 
-This Skill is a usage guide. It is not the deterministic executor.
+This Skill is a usage guide. The unique production-facing entry is `runners/weekly_screening.ps1`, which runs screening and publishes the receipt-gated M6.7 weekly bundle.
 
-The executor is `runners/run_analysis_report.py`. It reads `analysis_input.json`, calls the Phase 3 analyzer/state layer, validates `deterministic_report.schema.json`, and writes JSON + Markdown.
+`runners/run_analysis_report.py` is research-only. It must not be presented as the current production-facing operation path.
 
 ## Non-Runtime Reference Boundary
 
 `reference/v14.2_spec.md` is a frozen design specification, not a runtime prompt. Do not paste it into an LLM as operating instructions, do not treat its persona / workflow language as production execution guidance, and do not use it to authorize live operation advice, buy / sell actions, or sizing outside the schema-validated runner / report workflow and reviewed ship-gate evidence.
 
-The current production-facing path is the deterministic executor plus validated report artifacts. If the reference spec and this Skill disagree on execution authority, this Skill and the schema-validated runner boundary win.
+The current production-facing path is the weekly wrapper plus a matching `weekly_m67.receipt.json` whose `stage_status=complete`, `run_id`, and `candidate_digest` match the JSON. A failed or mismatched receipt makes any older JSON/Markdown non-consumable.
+
+A default run that fails preflight before canonical resolution has no as-of identity, so it exits nonzero without emitting a dated failed receipt; any existing complete bundle remains only the previous completed run. With explicit `-AsOf`, or after canonical resolution, a failure invalidates the same-date bundle.
 
 ## Inputs
 
@@ -24,11 +26,13 @@ The current production-facing path is the deterministic executor plus validated 
 
 ## Quick Start
 
-Generate one deterministic report:
+Run the weekly screening and M6.7 operation report:
 
 ```powershell
-python runners\run_analysis_report.py --as-of 20260522 --ts-code 600415.SH
+.\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode pit -Account path\to\account.json
 ```
+
+For the normal live cadence, omit `-AsOf` and `-L3Mode` so the wrapper resolves the canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.
 
 State replay is deterministic by default: circuit-breaker expiry is evaluated at the as-of A-share close timestamp. Pass `--state-now <ISO timestamp>` only when intentionally replaying a different state evaluation time.
 

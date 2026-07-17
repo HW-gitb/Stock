@@ -144,7 +144,7 @@ def build_report(prereg: dict[str, Any], generated_at: str) -> dict[str, Any]:
     prereg_rel = PREREG_PATH.relative_to(ROOT).as_posix()
     return {
         "schema_name": "a_short_entry_funnel_calibration_report",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "generated_at": generated_at,
         "preregistration_ref": {"path": prereg_rel, "sha256": sha256(PREREG_PATH)},
         "source_integrity": {
@@ -200,6 +200,7 @@ def build_report(prereg: dict[str, Any], generated_at: str) -> dict[str, Any]:
             "next_evidence": "collect_frozen_future_confirmatory_weeks_without_threshold_changes"
         },
         "boundary": {
+            "lane_role": "risk_filter_only",
             "calibration_only": True,
             "is_alpha": False,
             "is_buy_advice": False,

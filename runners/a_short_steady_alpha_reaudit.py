@@ -996,7 +996,7 @@ def build_diagnostics(rows: list[dict[str, str]], same_anchor_context: dict[str,
         "factor_exposure": factor,
         "regime_slices": regime_slices(primary_monthly),
         "veto_filter_effect": {
-            "interpretation": "Tier1 has stronger 5d CSI1000 monthly t than all rows or Tier2; this supports filter value but does not authorize production alpha.",
+            "interpretation": "Tier1 has a stronger 5d CSI1000 monthly t than all rows or Tier2, but this non-randomized subset comparison does not identify causal filter efficacy; filter efficacy is inconclusive.",
             "rows": veto_filter_stats(rows),
         },
         "pit_survivorship_check": {

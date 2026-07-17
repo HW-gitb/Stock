@@ -247,8 +247,8 @@
         "net_alpha_not_estimable_reason": null
       },
       "risk_filter_effectiveness_evidence": {
-        "with_filter_vs_without_filter_drawdown": "2026-06-03 re-audit shows Tier1 has stronger 5d CSI1000 monthly t than all rows or Tier2, but this is not production alpha proof.",
-        "win_rate_comparison": "Existing exploratory evidence plus the repaired re-audit support bad-ticket filtering only; the 5d candidate clue failed the corrected statistical gate.",
+        "with_filter_vs_without_filter_drawdown": "Not measured by the 2026-06-03 re-audit; the Tier1/all/Tier2 subset comparison is non-randomized and filter efficacy remains inconclusive.",
+        "win_rate_comparison": "Filter efficacy is inconclusive. The repaired re-audit only shows that the 5d candidate clue failed the corrected statistical gate.",
         "false_positive_comparison": "Must track candidates filtered out that later perform well.",
         "false_negative_risk": "Strong candidates may be killed by overheat or chasing-high vetoes.",
         "strong_candidate_kill_risk": "Medium until false-negative logs accumulate.",

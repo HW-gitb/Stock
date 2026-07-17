@@ -41,6 +41,7 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
                 *args,
                 "-SkipCanary",
                 "-SkipTracker",
+                "-SkipSemanticRisk",
                 "-PythonExe",
                 sys.executable,
             ],
@@ -140,6 +141,33 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
             self.assertIn(reason, text)
         for exit_code in ("exit 21", "exit 22", "exit 23", "exit $M67ExitCode"):
             self.assertIn(exit_code, text)
+
+    def test_preflight_runs_before_canonical_resolver_and_provider(self) -> None:
+        # 刀3: dependency preflight must run BEFORE the canonical resolver (provider/network),
+        # egs_main, and any private-state access.
+        text = SCRIPT.read_text(encoding="utf-8")
+        preflight = text.index("& $PythonExe $PreflightScript")
+        resolver = text.index("& $PythonExe $ResolveScript")
+        egs = text.index("& $PythonExe @EgsArgs")
+        self.assertLess(preflight, resolver)
+        self.assertLess(preflight, egs)
+        self.assertIn("$null -eq $PreflightExit", text)
+
+    def test_failure_receipt_invalidates_stale_and_records_identity(self) -> None:
+        # 刀2: a failed known-date run removes the stale weekly_m67.json/.md (the old complete receipt
+        # is unlinked FIRST, ErrorAction Stop) and records the real run identity, never fabricated;
+        # every known-date failure stage writes a receipt.
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop", text)
+        self.assertLess(
+            text.index("Remove-Item -LiteralPath $Receipt -Force -ErrorAction Stop"),
+            text.index("Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop"),
+        )
+        self.assertIn("$Payload['run_id']", text)
+        self.assertIn("$Payload['candidate_digest']", text)
+        for reason in ("preflight_failed", "entrypoint_missing", "egs_failed"):
+            self.assertIn(reason, text)
+        self.assertEqual(text.count("-AnalysisInput $SemAnalysisInput"), 3)
 
     def test_iv_feed_failure_receipt_is_wired_without_copying_error_text(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")

@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 实现+复审（93db 六刀 → master：选择性重放 刀2/3/5，跳 刀1/4/6）PASS + 提交
+
+- **Verdict/Action**: PASS + 提交主树。93db 六刀因 master 已独立演进而大量冗余→只重放 master 真缺的:刀2(失败重跑失效旧产物 receipt-first+ErrorAction Stop、Write-KnownM67 全出口、真身份不伪造、load_published 读取门)、刀3(preflight 移到 resolver/provider/私密态之前 + SKILL research-only)、刀5(inconclusive/lane_role + 修生产者 drift 使持久)。跳 刀1(master holding_levels 五维更严、放它=回归)、刀4/刀6(master 已绿/已有自 IV 重试)。master 特性(CachePolicy/FailureDetailRef/IV/industry_trend)全保。
+- **Required**: 无(已修 subagent 揪的 P2 生产者 drift);完整边界见 `system_risk_register.md`(`R-ASHORT-93DB-SIX-KNIFE-SELECTIVE-REPLAY`)。
+- **Verify**: 独立 subagent 严格对抗审 PASS(reader 13/13 绕过全拒、刀1-skip 五维证更严、无 master 功能损失、PS 解析干净、单一 preflight);亲跑主树 a_short 1525 OK、us_short 4478 OK、guardrails 16 OK、steady-reaudit 3 OK、子目录 66 OK — 全 0F0E;py_compile/PS parse/正常 diff-check 干净。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：Pass
+
 ## 2026-07-17 — Claude Code 审查（主树 Path A：industry_trend + L3 taxonomy 加法重放）PASS + 提交
 
 - **Verdict/Action**: PASS + 提交主树。Codex 把已审 `c387a655` 的 industry_trend + provenance v1.2 加法重放到 master:忠实(纯新文件字节一致)、无 master 功能丢失(cache_policy/D2/D4/IV/US-short/HiThink-L3/schema1.2 保留)。不变式全保(headwind→-1 仅展示星+cash 中性化、F1 双层重算、taxonomy comparison-only、legacy 不进 live forward、L3 receipt 对账);governance 仅补 classifier 块(未改权重/评分);3 P3 Optional 全修(schema_version enum、today snapshot≤trade_date、全 unavailable→insufficient_data)。

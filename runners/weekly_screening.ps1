@@ -88,8 +88,9 @@ try {
     exit 1
 }
 function Write-M67FailureReceipt {
-    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '')
-    New-Item -ItemType Directory -Force -Path $Directory | Out-Null
+    param([string]$Directory, [string]$Reason, [int]$ExitCode, [string]$FailureDetailRef = '', [string]$AnalysisInput = $null)
+    $ErrorActionPreference = 'Stop'
+    New-Item -ItemType Directory -Force -Path $Directory -ErrorAction Stop | Out-Null
     $Receipt = Join-Path $Directory 'weekly_m67.receipt.json'
     $Tmp = "$Receipt.tmp"
     $Payload = [ordered]@{
@@ -103,10 +104,53 @@ function Write-M67FailureReceipt {
     if (-not [string]::IsNullOrWhiteSpace($FailureDetailRef)) {
         $Payload['failure_detail_ref'] = $FailureDetailRef
     }
-    $Payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8
-    Move-Item -LiteralPath $Tmp -Destination $Receipt -Force
+    if ($AnalysisInput -and (Test-Path -LiteralPath $AnalysisInput -PathType Leaf)) {
+        try {
+            $Attempt = Get-Content -Raw -Encoding UTF8 -LiteralPath $AnalysisInput | ConvertFrom-Json
+            $Identity = $Attempt.source.run_identity
+            if ($Identity.run_id -and $Identity.candidate_digest) {
+                $Payload['run_id'] = [string]$Identity.run_id
+                $Payload['candidate_digest'] = [string]$Identity.candidate_digest
+            }
+        } catch {
+            # The failed receipt remains honest without fabricated identity.
+        }
+    }
+    # Stage the failed receipt first. Then unlink the old complete receipt BEFORE touching JSON/Markdown,
+    # so any later filesystem failure leaves the official reader fail-closed (missing receipt), never stale-complete.
+    $Payload | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $Tmp -Encoding utf8 -ErrorAction Stop
+    if (Test-Path -LiteralPath $Receipt) {
+        Remove-Item -LiteralPath $Receipt -Force -ErrorAction Stop
+    }
+    foreach ($Leaf in @('weekly_m67.json', 'weekly_m67.md')) {
+        $Stale = Join-Path $Directory $Leaf
+        if (Test-Path -LiteralPath $Stale) {
+            Remove-Item -LiteralPath $Stale -Force -ErrorAction Stop
+        }
+    }
+    Move-Item -LiteralPath $Tmp -Destination $Receipt -Force -ErrorAction Stop
+}
+function Write-KnownM67FailureReceipt {
+    param([string]$Reason, [int]$ExitCode)
+    if ($SkipSemanticRisk -or [string]::IsNullOrWhiteSpace($AsOf)) { return }
+    $Directory = if ($Account) {
+        Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
+    } else {
+        Join-Path $ProjectRoot "research\results\a_short\$AsOf"
+    }
+    Write-M67FailureReceipt -Directory $Directory -Reason $Reason -ExitCode $ExitCode
+}
+# 刀3: dependency preflight runs BEFORE the canonical resolver, provider, or private-state access.
+$PreflightScript = Join-Path $ProjectRoot 'runners\a_short_preflight.py'
+& $PythonExe $PreflightScript
+$PreflightExit = $LASTEXITCODE
+if ($null -eq $PreflightExit -or $PreflightExit -ne 0) {
+    Write-KnownM67FailureReceipt -Reason 'preflight_failed' -ExitCode 2
+    Write-Host "[FATAL] A-short preflight failed before canonical resolution, provider, or private-state access." -ForegroundColor Red
+    exit 2
 }
 if (-not (Test-Path (Join-Path $ProjectRoot 'A-EGS\egs_main.py') -PathType Leaf)) {
+    Write-KnownM67FailureReceipt -Reason 'entrypoint_missing' -ExitCode 1
     Write-Host "[FATAL] expected A-EGS\egs_main.py (as a file) under $ProjectRoot." -ForegroundColor Red
     exit 1
 }
@@ -142,6 +186,7 @@ $EffectiveL3Mode = $L3Mode
 
 if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
     if ($IsHistoricalAsOf) {
+        Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_missing' -ExitCode 1
         Write-Host "[FATAL] Historical -AsOf $AsOf is not the current run date $RunDate." -ForegroundColor Red
         Write-Host "        Pass -L3Mode pit or -L3Mode neutralize explicitly; default --l3-mode=today is blocked for historical official-output runs." -ForegroundColor Red
         exit 1
@@ -150,6 +195,7 @@ if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
 }
 
 if ($IsHistoricalAsOf -and $EffectiveL3Mode -eq 'today') {
+    Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_invalid' -ExitCode 1
     Write-Host "[FATAL] Historical -AsOf $AsOf cannot run with -L3Mode today." -ForegroundColor Red
     Write-Host "        Use -L3Mode pit for a strict PIT snapshot, or -L3Mode neutralize for an L3-neutral replay." -ForegroundColor Red
     exit 1
@@ -176,6 +222,7 @@ $EgsResultDir = Join-Path $EgsRootDir 'Result'
 }
 
 if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $AllowHistoricalOverwrite) {
+    Write-KnownM67FailureReceipt -Reason 'historical_overwrite_blocked' -ExitCode 1
     Write-Host "[FATAL] Historical -AsOf $AsOf would overwrite existing official output(s):" -ForegroundColor Red
     foreach ($Path in $ExistingOfficialOutputs) {
         Write-Host "        $Path" -ForegroundColor Red
@@ -186,14 +233,6 @@ if ($IsHistoricalAsOf -and $ExistingOfficialOutputs.Count -gt 0 -and -not $Allow
 
 if ($IsHistoricalAsOf -and $AllowHistoricalOverwrite) {
     Write-Host "[WARN] Historical official-output overwrite explicitly allowed for $AsOf." -ForegroundColor Yellow
-}
-
-$PreflightScript = Join-Path $ProjectRoot 'runners\a_short_preflight.py'
-& $PythonExe $PreflightScript
-$PreflightExit = $LASTEXITCODE
-if ($null -eq $PreflightExit -or $PreflightExit -ne 0) {
-    Write-Host "[FATAL] A-short preflight failed before any provider or private-state access." -ForegroundColor Red
-    exit 2
 }
 
 Set-Location $ProjectRoot
@@ -221,6 +260,7 @@ $EgsExitCode = $LASTEXITCODE
 if ($null -eq $EgsExitCode) { $EgsExitCode = 1 }
 
 if ($EgsExitCode -ne 0) {
+    Write-KnownM67FailureReceipt -Reason 'egs_failed' -ExitCode $EgsExitCode
     Write-Host ""
     Write-Host "[SKIP] egs_main exit $EgsExitCode -> skipping canary + tracker + semantic (no fresh candidates)" -ForegroundColor Red
     exit $EgsExitCode
@@ -333,7 +373,7 @@ if ($SkipSemanticRisk) {
         if ($null -eq $IvExitCode) { $IvExitCode = 1 }
         if ($IvExitCode -ne 0 -or -not (Test-Path $IvFeed)) {
             $IvFailureDetailRef = if (Test-Path $IvFailureReceipt) { [System.IO.Path]::GetFileName($IvFailureReceipt) } else { '' }
-            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef
+            Write-M67FailureReceipt -Directory $M67Dir -Reason 'iv_feed_failed' -ExitCode 22 -FailureDetailRef $IvFailureDetailRef -AnalysisInput $SemAnalysisInput
             Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
             exit 22
         } else {
@@ -356,7 +396,7 @@ if ($SkipSemanticRisk) {
                     $M67Args += @('--account', $Account)
                 } else {
                     # bad -Account path: fail the requested M6.7; never emit a misleading sizing-less artifact.
-                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'account_path_missing' -ExitCode 23
+                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'account_path_missing' -ExitCode 23 -AnalysisInput $SemAnalysisInput
                     Write-Host "[FATAL] M6.7 requested but -Account path was not found: $Account" -ForegroundColor Red
                     exit 23
                 }
@@ -370,7 +410,7 @@ if ($SkipSemanticRisk) {
                 if ($null -eq $M67ExitCode) { $M67ExitCode = 1 }
                 if ($M67ExitCode -ne 0) {
                     # requested M6.7 是本次正式运维产物；失败必须显式传播，不能返回选股成功假象。
-                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode
+                    Write-M67FailureReceipt -Directory $M67Dir -Reason 'weekly_pipeline_failed' -ExitCode $M67ExitCode -AnalysisInput $SemAnalysisInput
                     Write-Host "[FATAL] M6.7 requested and weekly pipeline failed (exit $M67ExitCode)" -ForegroundColor Red
                     exit $M67ExitCode
                 } else {
