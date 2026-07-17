@@ -544,7 +544,7 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
                     "use a proven handler or unresolved_input_group")
         if handler == "unresolved_input_group" and not str(group.get("unresolved_reason") or "").strip():
             return f"effect contract {group['id']} unresolved input group lacks reason"
-        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk"}:
+        if handler in {"lineage_gate", "phase5_decision", "phase5_risk", "market_regime", "account_cash", "portfolio_risk", "llm_tasks"}:
             proof_paths = group.get("proven_consumer_paths")
             if not isinstance(proof_paths, list) or sorted(proof_paths) != group_paths:
                 return (f"effect contract {group['id']} direct runtime handler lacks all-leaf "
@@ -677,15 +677,24 @@ def _portfolio_status(weekly: dict) -> tuple[str, str]:
 
 
 def _llm_status(weekly: dict) -> tuple[str, str]:
-    ledger = weekly.get("field_impact_ledger") or {}
-    summary = ledger.get("summary") or {}
-    if not ledger:
-        return "not_triggered", "本周没有已接入的 LLM 任务"
-    if summary.get("manual_review_required", 0):
-        return "unavailable_manual_review", "存在缺失、损坏、旧格式或证据不足的 LLM 结果"
-    if summary.get("advisory_qualified", 0):
-        return "applied", "合格负面 LLM 结果已进入 advisory"
-    return "not_triggered", "LLM 已核查但没有合格负面 advisory"
+    from engine.a_short_legacy_llm_tasks import TASK_TYPES
+
+    reports = weekly.get("reports") or []
+    if not reports:
+        return "not_triggered", "本周没有候选/持仓报告，无需生成 legacy task 结果"
+    expected = set(TASK_TYPES)
+    for report in reports:
+        results = (((report.get("machine") or {}).get("layer") or {}).get("llm_task_results"))
+        if not isinstance(results, list) or len(results) != len(expected):
+            return "unavailable_manual_review", "legacy task 结果缺失或数量不完整"
+        types = [row.get("task_type") for row in results if isinstance(row, dict)]
+        if len(types) != len(expected) or set(types) != expected or len(set(types)) != len(types):
+            return "unavailable_manual_review", "legacy task 类型不完整、重复或损坏"
+        if any(str(row.get("ts_code") or "") != str(report.get("ts_code") or "")
+               or str(row.get("as_of") or "") != str(weekly.get("as_of") or "")
+               for row in results):
+            return "unavailable_manual_review", "legacy task 结果与周报候选或日期未绑定"
+    return "applied", "六项 legacy task 已生成、写入逐票 M6.7 与确定性 Phase 4 报告"
 
 
 def _runtime_status(group: dict, weekly: dict) -> tuple[str, str]:

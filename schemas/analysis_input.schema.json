@@ -2377,6 +2377,17 @@
         "task_id": {
           "type": "string"
         },
+        "task_type": {
+          "type": "string",
+          "enum": [
+            "industry_trend",
+            "regulatory_check",
+            "policy_news",
+            "earnings_bad_reaction",
+            "cross_market_linkage",
+            "hidden_risk"
+          ]
+        },
         "prompt": {
           "type": "string",
           "enum": [

@@ -554,6 +554,99 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     }
 
 
+def _attach_llm_task_results(report: dict, task_results: list[dict]) -> None:
+    """Land all six legacy-task records without altering the Phase 5 decision.
+
+    The only decision-relevant input is already consumed before Phase 5:
+    ``industry_trend=headwind`` reaches the pre-existing one-star rule.  Every
+    other record is traceability or advisory-only; this function never changes
+    action, shares, position sizing, or hard-veto state.
+    """
+    from engine.a_short_legacy_llm_tasks import TASK_TYPES
+
+    seen = [item.get("task_type") for item in task_results if isinstance(item, dict)]
+    if len(task_results) != len(TASK_TYPES) or set(seen) != set(TASK_TYPES) or len(set(seen)) != len(seen):
+        raise ValueError("legacy llm_task_results must contain each of the six task types exactly once")
+    machine = report.setdefault("machine", {})
+    layer = machine.setdefault("layer", {})
+    layer["llm_task_results"] = task_results
+    by_type = {item["task_type"]: item for item in task_results}
+    industry = by_type["industry_trend"]
+    layer["industry_trend"] = dict(industry.get("facts") or {})
+    industry_line = (industry.get("facts") or {}).get("industry_trend", "unknown")
+    source = (industry.get("facts") or {}).get("source_id", industry.get("source_id"))
+    star_source = "existing headwind→-1 star rule" if industry_line == "headwind" else "display only; no star increase"
+    cut = (report.get("m67") or {}).get("精简结论区") or {}
+    prev_sector = str(cut.get("板块资金事件") or "")
+    trend_text = f"行业趋势:{industry_line}({source}; {star_source})"
+    cut["板块资金事件"] = trend_text if not prev_sector or prev_sector == "无" else f"{prev_sector}｜{trend_text}"
+
+    earnings = by_type["earnings_bad_reaction"]
+    if earnings.get("result_code") == "negative_manual_review":
+        impacts = machine.setdefault("operation_impact", [])
+        if not any(item.get("source_field") == "earnings_bad_reaction" for item in impacts):
+            reason = "财报后坏反应:非负/改善财务结果后，个股3日相对中证1000走弱；仅人工复核(advisory)。"
+            impacts.append({
+                "source_field": "earnings_bad_reaction",
+                "field_class": "structured",
+                "visibility_shape": "candidate_row_impact",
+                "impact_scope": "new_entry",
+                "new_entry_effect": "manual_review",
+                "holding_effect": "none",
+                "blocked_add_required": False,
+                "veto_class": "none",
+                "reason": reason,
+                "evidence_ref": {"kind": "lineage_key",
+                                 "value": "machine.layer.llm_task_results.earnings_bad_reaction",
+                                 "as_of": report["as_of"]},
+                "confidence": "high",
+                "pit_basis": "disclosure_date",
+                "production_effect_enabled": False,
+                "implementation_status": "implemented",
+                "m67_landing_surface": "精简结论区.风控触发 + 旧任务闭环",
+                "terminal_surface_target": "already_structured",
+                "pending_successor_slice": None,
+                "privacy_class": "public_tracked",
+            })
+            risk = str(cut.get("风控触发") or "")
+            cut["风控触发"] = reason if not risk or risk == "无" else f"{risk}｜{reason}"
+        layer["legacy_task_advisory"] = {"highest": "manual_review", "source": "earnings_bad_reaction"}
+
+
+def _materialize_legacy_task_reports(analysis_input: dict, results_by_code: dict[str, list[dict]],
+                                     out_dir: Path, as_of: str) -> None:
+    """Write one schema-valid, deterministic Phase 4 report per weekly candidate."""
+    from runners.run_analysis_report import (
+        apply_enrichment, build_legacy_task_enrichment, build_report,
+        validate_enrichment, validate_report, write_report,
+    )
+    from engine.a_short_legacy_llm_tasks import build_task_configs
+
+    generated_at = f"{as_of[:4]}-{as_of[4:6]}-{as_of[6:]}T15:00:00+08:00"
+    for candidate in analysis_input.get("candidates") or []:
+        ts_code = str(candidate.get("ts_code") or "")
+        task_results = results_by_code.get(ts_code)
+        if task_results is None:
+            raise ValueError(f"missing legacy task results for Phase 4 candidate {ts_code}")
+        report_candidate = dict(candidate)
+        configured_pairs = {
+            (str(item.get("task_id")), str(item.get("task_type")))
+            for item in (candidate.get("llm_tasks") or []) if isinstance(item, dict)
+        }
+        expected_pairs = {(item["task_id"], item["task_type"]) for item in task_results}
+        if configured_pairs != expected_pairs:
+            # Historical input artifacts retain their original digest and are
+            # never rewritten. The Phase 4 view receives the current, stable
+            # six-task configuration only in memory before report construction.
+            report_candidate["llm_tasks"] = build_task_configs(candidate, as_of)
+        report = build_report(analysis_input, report_candidate, generated_at=generated_at,
+                              state_now=generated_at)
+        enrichment = build_legacy_task_enrichment(report, task_results, generated_at=generated_at)
+        validate_enrichment(enrichment)
+        merged = apply_enrichment(report, enrichment)
+        validate_report(merged)
+        write_report(merged, out_dir)
+
 def _demote_build_to_observe(report: dict, rank: int) -> None:
     """#3:某建仓票全局现金分配后不足一手/最小金额 → 转「观察」。table/machine action 同步、交易字段全 null、
     原拟 plan 留 machine.diagnostic_raw_plan(诊断)、advice 说明。须过 validate_m67_consistency 的观察分支(交易字段全 null)。"""
@@ -905,6 +998,56 @@ def _validate_portfolio_risk(weekly: dict) -> None:
         raise ValueError("portfolio manual-review status lacks missing facts")
 
 
+def _validate_legacy_task_closure(report: dict) -> None:
+    """Validate a materialized six-task closure without rejecting old reports.
+
+    Historical weekly artifacts predate this additive layer and therefore have
+    no ``llm_task_results``. A current report that declares the layer must be
+    complete, candidate/date-bound, and preserve the one-way decision boundary.
+    """
+    from engine.a_short_legacy_llm_tasks import TASK_TYPES
+
+    machine = report.get("machine") or {}
+    layer = machine.get("layer") or {}
+    results = layer.get("llm_task_results")
+    if results is None:
+        return
+    if not isinstance(results, list) or len(results) != len(TASK_TYPES):
+        raise ValueError("legacy llm_task_results must contain six records")
+    by_type = {str(item.get("task_type") or ""): item for item in results if isinstance(item, dict)}
+    if len(by_type) != len(TASK_TYPES) or set(by_type) != set(TASK_TYPES):
+        raise ValueError("legacy llm_task_results task types must be unique and complete")
+    for task_type, item in by_type.items():
+        if item.get("task_id") != f"{report.get('ts_code')}_{task_type}":
+            raise ValueError("legacy llm_task_results task_id is not candidate-bound")
+        if str(item.get("ts_code") or "") != str(report.get("ts_code") or ""):
+            raise ValueError("legacy llm_task_results ts_code is not report-bound")
+        if str(item.get("as_of") or "") != str(report.get("as_of") or ""):
+            raise ValueError("legacy llm_task_results as_of is not report-bound")
+
+    industry = by_type["industry_trend"]
+    industry_effect = str(industry.get("effect") or "none")
+    if industry_effect not in {"none", "star_down_one"}:
+        raise ValueError("legacy industry task may only have star_down_one or none effect")
+    phase5_effect = str((machine.get("industry_trend") or {}).get("effect") or "none")
+    if industry_effect == "star_down_one" and phase5_effect != "star_down":
+        raise ValueError("legacy headwind task was not consumed by the existing Phase5 star-down rule")
+    if industry_effect == "none" and phase5_effect == "star_down":
+        raise ValueError("Phase5 industry star-down lacks the matching legacy headwind task")
+
+    for task_type in ("policy_news", "cross_market_linkage", "hidden_risk"):
+        item = by_type[task_type]
+        if (item.get("status"), item.get("coverage_status"), item.get("effect")) != (
+                "provider_unavailable", "provider_unavailable", "none"):
+            raise ValueError(f"legacy deferred task {task_type} must remain provider_unavailable/effect=none")
+    earnings = by_type["earnings_bad_reaction"]
+    if earnings.get("result_code") == "negative_manual_review":
+        impacts = machine.get("operation_impact") or []
+        matched = [item for item in impacts if item.get("source_field") == "earnings_bad_reaction"]
+        if len(matched) != 1 or matched[0].get("production_effect_enabled") is not False:
+            raise ValueError("legacy earnings manual review must land once as advisory-only operation_impact")
+
+
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
@@ -1034,6 +1177,7 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
             raise ValueError(f"周报含重复 ts_code {rep['ts_code']}")
         seen.add(rep["ts_code"])
         validate_m67_consistency(rep)                        # 逐票 §4 不变量
+        _validate_legacy_task_closure(rep)
         if rep["m67"]["table"]["操作"] != "建仓":
             continue
         pl = (rep["machine"]["entry_exit_size_star"].get("plan") or {})
@@ -2142,6 +2286,95 @@ def _fetch_income(pro, ts_code: str):
             for _, r in df.iterrows()]
 
 
+def _legacy_market_rows(df):
+    """Normalize a daily/index_daily response for the legacy reaction check.
+
+    ``None`` means the provider response cannot support a PIT result; an empty
+    list means the request completed but returned no rows.  This distinction is
+    preserved by the result record rather than treated as a clean reaction.
+    """
+    if df is None or not {"trade_date", "close"}.issubset(set(getattr(df, "columns", []))):
+        return None
+    if getattr(df, "empty", True):
+        return []
+    rows = []
+    for _, row in df.iterrows():
+        date = str(row.get("trade_date") or "")
+        close = _fin_num(row.get("close"))
+        if date and close is not None:
+            rows.append({"trade_date": date, "close": close, "vol": _fin_num(row.get("vol"))})
+    return rows
+
+
+def _latest_legacy_earnings_disclosure(forecasts, incomes, as_of: str):
+    """Choose one PIT-visible non-negative/deteriorating earnings outcome.
+
+    The comparison is deliberately conservative: an incompletely described
+    latest disclosure yields ``None`` instead of inferring a good result.
+    """
+    rows = []
+    for rec in forecasts or []:
+        ann, period = str(rec.get("ann_date") or ""), str(rec.get("end_date") or "")
+        change = _fin_num(rec.get("p_change_min"))
+        if _is_valid_date(ann) and ann <= as_of and _is_valid_date(period) and change is not None:
+            rows.append((ann, 0, {"announcement_date": ann, "report_period": period,
+                                  "financial_outcome": bool(change >= 0), "financial_source": "forecast"}))
+    for rec in incomes or []:
+        ann, period = str(rec.get("ann_date") or ""), str(rec.get("end_date") or "")
+        profit = _fin_num(rec.get("n_income_attr_p"))
+        if profit is None:
+            profit = _fin_num(rec.get("n_income"))
+        if _is_valid_date(ann) and ann <= as_of and _is_valid_date(period) and profit is not None:
+            rows.append((ann, 1, {"announcement_date": ann, "report_period": period,
+                                  "financial_outcome": bool(profit >= 0), "financial_source": "income"}))
+    return max(rows, default=None, key=lambda item: (item[0], item[1]))[2] if rows else None
+
+
+def _build_legacy_earnings_provider(pro, as_of: str, forecast_provider, income_provider):
+    """Build the bounded no-LLM data adapter for earnings bad reactions.
+
+    It uses the existing forecast/income providers, then only a stock daily and
+    CSI1000 daily series.  No industry benchmark is fabricated when no reusable
+    SW L2 series exists.  A cache makes the benchmark one request per run.
+    """
+    from datetime import datetime, timedelta
+
+    csi1000_cache = {}
+
+    def _provider(ts_code: str):
+        try:
+            forecasts = forecast_provider(ts_code) if forecast_provider else None
+            incomes = income_provider(ts_code) if income_provider else None
+        except Exception:
+            return {"provider_status": "failed"}
+        if forecasts is None or incomes is None:
+            return {"provider_status": "failed"}
+        disclosure = _latest_legacy_earnings_disclosure(forecasts, incomes, as_of)
+        if disclosure is None:
+            return {"provider_status": "ready"}
+        start = (datetime.strptime(disclosure["announcement_date"], "%Y%m%d") -
+                 timedelta(days=45)).strftime("%Y%m%d")
+        try:
+            stock = _legacy_market_rows(pro.daily(
+                ts_code=ts_code, start_date=start, end_date=as_of,
+                fields="ts_code,trade_date,close,vol"))
+            cache_key = (start, as_of)
+            if cache_key not in csi1000_cache:
+                csi1000_cache[cache_key] = _legacy_market_rows(pro.index_daily(
+                    ts_code="000852.SH", start_date=start, end_date=as_of,
+                    fields="ts_code,trade_date,close,vol"))
+        except Exception:
+            return {"provider_status": "failed"}
+        csi1000 = csi1000_cache.get((start, as_of))
+        if stock is None or csi1000 is None:
+            return {"provider_status": "failed"}
+        return {"provider_status": "ready", **disclosure,
+                "stock_prices": stock, "csi1000_prices": csi1000,
+                # No new SW L2 benchmark system in this slice.
+                "industry_prices": []}
+
+    return _provider
+
 def _fetch_balancesheet(pro, ts_code: str):
     """④资产负债表 balancesheet provider: tushare `pro.balancesheet(ts_code=, report_type='1')`(逐票**合并报表**资产负债表,**带公告日 ann_date 做
     PIT**)→ [{"ann_date","end_date","total_assets","total_liab","accounts_receiv","inventories","goodwill"}](YYYYMMDD/原值|None)。
@@ -3208,7 +3441,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
          dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None,
          forecast_provider=None, income_provider=None, balancesheet_provider=None,
-         portfolio_risk_provider=None):
+         portfolio_risk_provider=None, legacy_earnings_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -3220,6 +3453,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--overlay", help="overlay artifact(可选)")
     p.add_argument("--account", help="账户状态 JSON(available_cash / positions / rule12 / rule13_cooldowns)")
     p.add_argument("--out", required=True)
+    p.add_argument("--phase4-report-dir", default=None,
+                   help="deterministic Phase 4 report directory (default: result/a_short/<as_of>/reports)")
     p.add_argument("--confirm-fetch-authorized", action="store_true")
     p.add_argument("--cninfo-lookback-days", type=int, default=90,
                    help="语义官方层 cninfo 取数回溯天数(默认 90;真 run --confirm 时自动取数)")
@@ -3448,13 +3683,36 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
 
     # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
     price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
+    if legacy_earnings_provider is None and pro is not None:
+        legacy_earnings_provider = _build_legacy_earnings_provider(
+            pro, args.as_of, forecast_provider, income_provider)
+    # Evaluate the official semantic trace once per candidate. The legacy
+    # regulatory record delegates to exactly this result; it cannot trigger a
+    # second CNINFO or LLM request.
+    semantic_by_code = {
+        str(candidate["ts_code"]): _semantic_with_confirmation(candidate["ts_code"])
+        for candidate in cands
+    }
+    from engine.a_short_legacy_llm_tasks import build_task_results
+    task_results_by_code = {}
+    for candidate in cands:
+        code = str(candidate["ts_code"])
+        try:
+            earnings_evidence = legacy_earnings_provider(code) if legacy_earnings_provider else None
+        except Exception:
+            earnings_evidence = {"provider_status": "failed"}
+        task_results_by_code[code] = build_task_results(
+            candidate, args.as_of,
+            official_structured=semantic_by_code[code],
+            earnings_evidence=earnings_evidence,
+        )
     normalized = [normalize_candidate(c, price_results[c["ts_code"]][0], overlay.get(c["ts_code"]),
                                       iv_pct, account, regime,
                                       regime_fallback=regime_fallback,
                                       stateful_risk=stateful_risk_for_candidate(
                                           acct, c["ts_code"], args.as_of,
                                           account_integrity=account_integrity),
-                                      semantic=_semantic_with_confirmation(c["ts_code"]),
+                                      semantic=semantic_by_code[str(c["ts_code"])],
                                       semantic_web_llm=(web_llm_provider(c["ts_code"]) if web_llm_provider else None),
                                       iv_value=iv_value, hv_value=hv_value)
                   for c in cands]
@@ -3567,6 +3825,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             rep["row_source"], rep["coverage_status"] = "egs_candidate_with_position", "full"
         else:
             rep["row_source"], rep["coverage_status"] = "egs_candidate", "full"
+        if code in task_results_by_code:
+            _attach_llm_task_results(rep, task_results_by_code[code])
         if cons_by.get(code):
             rep["consistency_warning"] = cons_by[code]
     if holdings_manual_review:
@@ -3625,6 +3885,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     _excl = _build_exclusion_summary((ai.get("universe_summary") or {}).get("excluded_counts") or {}, args.as_of)
     if _excl:
         weekly["exclusion_summary"] = _excl
+    # ``build_weekly_report`` creates the initial ledger before the legacy
+    # records exist. Rebuild it only after all six records are attached so the
+    # published contract reflects the actual M6.7 and Phase 4 consumers.
+    from engine.a_short_effect_contract import build_effect_contract_ledger
+    weekly["effect_contract_ledger"] = build_effect_contract_ledger(weekly)
+    # Validate the completed weekly report before publishing its independent
+    # Phase4 views. The builder renders already-created task records and never
+    # mutates analysis_input or the M6.7 decision.
+    validate_weekly_report(weekly, feed)
+    phase4_report_dir = (
+        Path(args.phase4_report_dir) if args.phase4_report_dir else
+        (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input
+         else Path(args.out).resolve().parent / "reports")
+    )
+    _materialize_legacy_task_reports(ai, task_results_by_code, phase4_report_dir, args.as_of)
     md_path = os.path.splitext(args.out)[0] + ".md"
     receipt_path = publish_weekly_bundle(
         weekly, feed, args.out, md_path,

@@ -120,6 +120,7 @@ from engine.egs_industry_heat import (
 from engine.a_short_industry_theme import (
     classify_industry_trend, taxonomy_by_code, unavailable_theme_taxonomy,
 )
+from engine.a_short_legacy_llm_tasks import build_task_configs
 from engine.a_short_hithink_l3 import (
     SOURCE_ID as HITHINK_L3_SOURCE_ID,
     HiThinkL3SourceError,
@@ -646,7 +647,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         "catalyst.policy_news",
     ]
 
-    return {
+    candidate = {
         "ts_code": ts_code,
         "name": str(_row_get(row, "name", "")),
         "exchange": exchange if exchange in ("SH", "SZ") else "SZ",
@@ -876,26 +877,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "m4_review_required": None,
             "hard_veto": bool(reduce_deduct or has_crash_veto),
         },
-        "llm_tasks": [
-            {
-                "task_id": f"{ts_code}_industry_trend",
-                "prompt": "industry_trend",
-                "status": "pending_llm",
-                "inputs": {"sw_l2_name": _json_value(_row_get(row, "l2_name"))},
-            },
-            {
-                "task_id": f"{ts_code}_regulatory_check",
-                "prompt": "regulatory_check",
-                "status": "pending_llm",
-                "inputs": {"ts_code": ts_code, "name": str(_row_get(row, "name", ""))},
-            },
-            {
-                "task_id": f"{ts_code}_policy_news",
-                "prompt": "policy_news",
-                "status": "pending_llm",
-                "inputs": {"sw_l2_name": _json_value(_row_get(row, "l2_name"))},
-            },
-        ],
+        "llm_tasks": [],
         "data_quality": {
             "completeness_score": _json_score(completeness_score),
             "missing_fields": missing_fields,
@@ -903,6 +885,8 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
             "rule11_required": False,
         },
     }
+    candidate["llm_tasks"] = build_task_configs(candidate, latest_td)
+    return candidate
 
 def _code_set(value):
     if value is None:

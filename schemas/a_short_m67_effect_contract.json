@@ -1,7 +1,7 @@
 {
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
-  "analysis_input_all_paths_sha256": "2a4cf5f9aae75bb98be4f6d71f3effde76da115c5a23b46a6d186c5bfafee078",
+  "analysis_input_all_paths_sha256": "9e25c52757851ff43dcdf02ca02e10f9934669e7e5e858c75c80a1061782363a",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -365,15 +365,23 @@
       "source_prefixes": [
         "candidates[].llm_tasks"
       ],
-      "source_paths_sha256": "3f1f3eb2ae0ad060ea36d26e2ff1a508f3b00b10d09ed08b4dce6c259af2599e",
+      "source_paths_sha256": "56cea2bd1f03d0dff185825ead5d47c899e844c1d11347c4789dcac7daa3aff3",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "reports[].machine.layer.llm_task_results",
-        "weekly.field_impact_ledger",
-        "weekly Markdown LLM补充"
+        "weekly.effect_contract_ledger",
+        "weekly Markdown legacy task summaries",
+        "Phase4 deterministic reports"
       ],
-      "runtime_handler": "unresolved_input_group",
-      "unresolved_reason": "Master reconciliation does not claim the separate Phase 3/4 LLM bridge is present; its configured tasks remain an explicit manual-review group until that slice lands."
+      "runtime_handler": "llm_tasks",
+      "proven_consumer_paths": [
+        "candidates[].llm_tasks[].inputs",
+        "candidates[].llm_tasks[].prompt",
+        "candidates[].llm_tasks[].status",
+        "candidates[].llm_tasks[].task_id",
+        "candidates[].llm_tasks[].task_type"
+      ],
+      "consumer_proof_ref": "A-EGS/egs_main.py::build_task_configs; runners/a_short_weekly_pipeline.py::_attach_llm_task_results/_materialize_legacy_task_reports; runners/a_short_m67_render.py::_legacy_task_line"
     },
     {
       "id": "candidate_data_quality",
@@ -394,10 +402,10 @@
     "A-EGS/egs_main.py": "bcf13afdd20b39130c36e0f275bf2c94acb5ed235262d7054d6d5dc6274c67ee",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "d68e33718e0dc0e9b24f753d31d8b030294c03d62058e616c2334ef2923ca7c6",
-    "runners/a_short_weekly_pipeline.py": "3ffaf3646057b870a0399b1213e7b7d0560d0e3f1e3f8fefa5dd0ec66f7dbceb",
-    "runners/a_short_m67_render.py": "eeed64ddf28c514808ad96cfec332e87ac67babd68574a428aa21242ba62dead",
+    "runners/a_short_weekly_pipeline.py": "0a8237bd83453f40ed6f4e6c799811996788d09112c735c633e18bffa2e8b7f3",
+    "runners/a_short_m67_render.py": "b2d74a3f86d437b627eaf580c2b980b58bd70f7d2c55da592f5211d0c146fa27",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
-    "engine/a_short_effect_contract.py": "3c4cc18929a5ea61a76aa9e60316bac648ff9229b1ee6da9f3d55ac7920b0fce"
+    "engine/a_short_effect_contract.py": "3f32e734c47fe84eb01d403cc3343cee2d427c83c3359cc0bcdd2df37b171af5"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "e3837f40ff86f3903cf961b430e69bd6e39dcf6d9b1042027c688c22e66a1df7",
@@ -545,6 +553,7 @@
     "semantic_web_llm",
     "block_trade_appearance",
     "dragon_list_appearance",
+    "earnings_bad_reaction",
     "portfolio_concentration_factor_resonance"
   ],
   "llm_task_types": [

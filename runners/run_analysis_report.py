@@ -15,7 +15,9 @@ import argparse
 import copy
 import hashlib
 import json
+import os
 import sys
+import tempfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,7 @@ if str(ROOT) not in sys.path:
 
 from engine.analyzer import state_manager
 from engine.analyzer.rule6_hard_veto import RULE_VERSIONS, run_veto
+from engine.a_short_legacy_llm_tasks import result_content
 from engine.data.analysis_input_contract import validate_analysis_input_file
 
 
@@ -263,13 +266,19 @@ def _build_llm_sections(candidate: dict[str, Any]) -> list[dict[str, Any]]:
         if not isinstance(task, dict):
             continue
         prompt_name = str(task.get("prompt") or "").strip()
-        code = str(task.get("id") or task.get("code") or prompt_name or task.get("task_id") or "llm_task")
+        task_type = str(task.get("task_type") or prompt_name or "").strip() or None
+        task_id = str(task.get("task_id") or "").strip() or None
+        modern_task = bool(task.get("task_type"))
+        code = str(task.get("id") or task.get("code") or
+                   (task_id if modern_task else prompt_name) or prompt_name or "llm_task")
         prompt_ref = task.get("prompt_ref")
         if prompt_ref is None and prompt_name:
             prompt_file = PROMPT_REF_ALIASES.get(prompt_name, prompt_name)
             prompt_ref = f"skills/a_short_analysis/prompts/{prompt_file}.md"
         sections.append({
             "code": code,
+            "task_id": task_id,
+            "task_type": task_type,
             "title": str(task.get("title") or prompt_name or code),
             "status": "unknown",
             "prompt_ref": None if prompt_ref is None else str(prompt_ref),
@@ -277,6 +286,50 @@ def _build_llm_sections(candidate: dict[str, Any]) -> list[dict[str, Any]]:
             "confidence": "unknown",
         })
     return sections
+
+
+def build_legacy_task_enrichment(report: dict[str, Any], task_results: list[dict[str, Any]],
+                                 generated_at: str | None = None) -> dict[str, Any]:
+    """Build a deterministic Phase 4 patch for one candidate's six task results."""
+    expected = {
+        (str(section.get("task_id") or section.get("code")),
+         str(section.get("task_type") or section.get("title")))
+        for section in ((report.get("llm_notes") or {}).get("sections") or [])
+    }
+    actual = {(str(item.get("task_id")), str(item.get("task_type"))) for item in task_results}
+    if not expected or expected != actual or len(actual) != len(task_results):
+        raise ValueError("legacy task results do not map one-to-one to report task configuration")
+    sections = []
+    for item in task_results:
+        status = str(item.get("status") or "unknown")
+        section_status = "completed" if status == "completed" else "skipped" if status in {
+            "delegated", "provider_unavailable", "window_incomplete"
+        } else "unknown"
+        sections.append({
+            "code": str(item["task_id"]),
+            "task_id": str(item["task_id"]),
+            "task_type": str(item["task_type"]),
+            "title": str(item["task_type"]),
+            "status": section_status,
+            "prompt_ref": "engine/a_short_legacy_llm_tasks.py",
+            "content": result_content(item),
+            "confidence": "high" if section_status == "completed" else "unknown",
+        })
+    return {
+        "schema_name": "deterministic_report_enrichment",
+        "schema_version": "1.3.0",
+        "target": {
+            "as_of": str(report["as_of"]),
+            "ts_code": str(report["ts_code"]),
+            "report_schema_version": str(report["schema_version"]),
+        },
+        "generated_at": generated_at or str(report["generated_at"]),
+        "source": {
+            "kind": "deterministic", "model": None,
+            "prompt_refs": ["engine/a_short_legacy_llm_tasks.py"],
+        },
+        "llm_notes": {"enabled": True, "sections": sections},
+    }
 
 
 def _build_analyzer_invocations(veto: dict[str, Any]) -> list[dict[str, Any]]:
@@ -338,6 +391,16 @@ def apply_enrichment(report: dict[str, Any], enrichment: dict[str, Any]) -> dict
         mismatches.append("report_schema_version")
     if mismatches:
         raise ValueError(f"enrichment target mismatch: {', '.join(mismatches)}")
+    sections = ((enrichment.get("llm_notes") or {}).get("sections") or [])
+    task_pairs = [(section.get("task_id"), section.get("task_type")) for section in sections]
+    if len(task_pairs) != len(set(task_pairs)):
+        raise ValueError("enrichment contains duplicate task sections")
+    configured = {
+        (section.get("task_id"), section.get("task_type"))
+        for section in ((report.get("llm_notes") or {}).get("sections") or [])
+    }
+    if any(pair != (None, None) for pair in task_pairs) and set(task_pairs) != configured:
+        raise ValueError("enrichment task sections do not match report task configuration")
 
     # Deep copy so downstream mutations of the returned report can't reach
     # back into the caller's report (e.g. mutating merged["risk_flags"] would
@@ -346,6 +409,11 @@ def apply_enrichment(report: dict[str, Any], enrichment: dict[str, Any]) -> dict
     merged["llm_notes"] = copy.deepcopy(enrichment["llm_notes"])
     merged["data_lineage"]["enrichment_applied"] = True
     merged["data_lineage"]["enrichment_source"] = copy.deepcopy(enrichment["source"])
+    if (enrichment.get("source") or {}).get("kind") == "deterministic":
+        merged["unknowns"] = [
+            item for item in merged.get("unknowns") or []
+            if item.get("field") != "llm_notes.sections"
+        ]
     return merged
 
 
@@ -443,12 +511,21 @@ def write_report(report: dict[str, Any], out_dir: Path) -> tuple[Path, Path]:
     stem = str(report["ts_code"])
     json_path = out_dir / f"{stem}.json"
     md_path = out_dir / f"{stem}.md"
-    with json_path.open("w", encoding="utf-8", newline="\n") as f:
-        json.dump(report, f, ensure_ascii=False, indent=2)
-        f.write("\n")
-    with md_path.open("w", encoding="utf-8", newline="\n") as f:
-        f.write(render_markdown(report))
+    _atomic_write_text(json_path, json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    _atomic_write_text(md_path, render_markdown(report))
     return json_path, md_path
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Atomically replace one report surface; incomplete files are never published."""
+    fd, temp_name = tempfile.mkstemp(prefix=f".{path.name}.", suffix=".tmp", dir=str(path.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as handle:
+            handle.write(text)
+        os.replace(temp_name, path)
+    finally:
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
 
 
 def _get(obj: Any, *keys: str, default=None):

@@ -13,6 +13,7 @@ from engine.a_short_industry_theme import (
     industry_trend_from_score,
     industry_trend_policy,
 )
+from engine.a_short_legacy_llm_tasks import TASK_TYPES
 from engine.egs_industry_heat import load_governance
 
 
@@ -321,6 +322,7 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
                 raise AnalysisInputContractError(
                     f"{label} candidates[{index}] unavailable industry_trend_signal must classify as unknown"
                 )
+        _validate_legacy_task_configs(candidate, index, trade_date, label)
         taxonomy = ((candidate.get("catalyst") or {}).get("theme_taxonomy") or {})
         if taxonomy:
             if taxonomy.get("production_effect_enabled") is not False or taxonomy.get("automatic_promotion") is not False:
@@ -388,6 +390,46 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
                     raise AnalysisInputContractError(
                         f"{label} candidates[{index}] raw theme concept {raw_index} does not match L3 receipt"
                     )
+
+
+def _validate_legacy_task_configs(candidate: dict[str, Any], index: int,
+                                  trade_date: str, label: str) -> None:
+    """Enforce the modern six-task config without rejecting historical files."""
+    tasks = candidate.get("llm_tasks") or []
+    modern = any(isinstance(task, dict) and "task_type" in task for task in tasks)
+    if not modern:
+        return
+    if len(tasks) != len(TASK_TYPES):
+        raise AnalysisInputContractError(
+            f"{label} candidates[{index}].llm_tasks must contain exactly six legacy tasks"
+        )
+    ts_code = str(candidate.get("ts_code") or "")
+    seen: set[str] = set()
+    task_types: set[str] = set()
+    for task in tasks:
+        if not isinstance(task, dict):
+            raise AnalysisInputContractError(f"{label} candidates[{index}].llm_tasks has a non-object item")
+        task_type = str(task.get("task_type") or "")
+        task_id = str(task.get("task_id") or "")
+        if task_type not in TASK_TYPES or task.get("prompt") != task_type:
+            raise AnalysisInputContractError(
+                f"{label} candidates[{index}].llm_tasks has an invalid task_type/prompt pairing"
+            )
+        if task_id != f"{ts_code}_{task_type}" or task_id in seen:
+            raise AnalysisInputContractError(
+                f"{label} candidates[{index}].llm_tasks task_id is not unique and stable"
+            )
+        inputs = task.get("inputs") or {}
+        if inputs.get("ts_code") != ts_code or inputs.get("as_of") != trade_date:
+            raise AnalysisInputContractError(
+                f"{label} candidates[{index}].llm_tasks task inputs are not bound to candidate/as_of"
+            )
+        seen.add(task_id)
+        task_types.add(task_type)
+    if task_types != set(TASK_TYPES):
+        raise AnalysisInputContractError(
+            f"{label} candidates[{index}].llm_tasks does not contain the required six task types"
+        )
 
 
 def _validate_candidate_date(value: Any, field_path: str, trade_date: str, label: str) -> None:

@@ -44,6 +44,29 @@ def _semantic_line(report: dict) -> str:
     return f"- 语义风险(advisory·非确定·不进确定性字段):{off} / {confirmation} / {web}"
 
 
+def _legacy_task_line(report: dict) -> str:
+    """Render six legacy-task records without hiding unavailable sources."""
+    results = ((report.get("machine") or {}).get("layer") or {}).get("llm_task_results") or []
+    if not results:
+        return ""
+    by_type = {str(item.get("task_type")): item for item in results if isinstance(item, dict)}
+    ordered = ("industry_trend", "regulatory_check", "policy_news", "earnings_bad_reaction",
+               "cross_market_linkage", "hidden_risk")
+    parts = []
+    for task_type in ordered:
+        item = by_type.get(task_type)
+        if item is None:
+            parts.append(f"{task_type}=缺记录")
+            continue
+        status = str(item.get("status") or "unknown")
+        code = str(item.get("result_code") or "unknown")
+        if status == "provider_unavailable":
+            parts.append(f"{task_type}=未核查(provider_unavailable)")
+        else:
+            parts.append(f"{task_type}={code}/{status}")
+    return "- 旧任务闭环(确定性/委托；不调用 DeepSeek):" + "；".join(parts)
+
+
 def _holding_state(report: dict):
     """4.3-C:从 `machine.stateful_risk` 派生「持仓/冷静状态」标签 + 一句说明。**纯渲染、只解释**,
     不改 action/star/hard_veto/sizing。来源信息(trades/manual_controls/转换器推进)在转换器 lineage
@@ -431,6 +454,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         sl = _semantic_line(r)
         if sl:
             out.append(sl)
+        tl = _legacy_task_line(r)
+        if tl:
+            out.append(tl)
         out.append(f"- **操作建议**:{jq.get('操作建议', '')}")
         _dl = _disposition_line(t)          # S3b R1+R2: held 候选(操作=持有)显 持仓处置 + 禁止加仓
         if _dl:

@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 独立复审 PASS (R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER)
+
+- **Verdict/Action**: PASS + 提交。Problem 3 六任务 legacy 闭环适配重放到 master `a81f7065`：核心引擎与 d34f 已审 `aa5cbd75` 逐字同（仅 32 行 industry 适配→改读 master `industry_trend_signal`）；egs_main 复用 master canonical 分类器、无 d34f 重复件；唯一选股效应=既有 headwind 单次 -1 星，新增 `_validate` 交叉校验 legacy⟺Phase5 star effect（反向探针证双向 fail-closed）；财报仅 advisory；三 deferred 恒 provider_unavailable；effect-contract 升 `llm_tasks` 为 proven consumer。`df9807d` 持仓测试冲突已排除、gap 仅 EOL 不入提交。
+- **Required**: 无。`R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER` → resolved（closure 见 `system_risk_register.md`）。
+- **Verify**: 亲跑全包 `discover -p test_a_short*.py` = **1620 OK / 0 fail**（本机 3.13.8）；focused legacy+effect-contract 20 OK；反向探针 legacy/Phase5 effect 双向 mismatch 均 raise；整读被消费引擎体（legacy engine/egs_main/effect_contract/_validate/contract）；风险分级=已审逻辑（核心经 d34f 独立 agent）的重放调和，非新 fail-closed 引擎。review-evidence:not_available。
+- **Next**: Codex：Pass
+
+## 2026-07-17 — Codex 修复（R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER；待独立审查）
+
+- **Verdict/Action**: 基于当前 master `a81f7065`，按 d34f 已审源 `aa5cbd75` 做 Problem 3 的适配重放，而非 merge/cherry-pick。EGS 现在为每个候选稳定生成六项 legacy task；weekly 复用一次既有官方语义结果给监管任务，物化六项结果到 M6.7 和独立 Phase 4 确定性报告。行业逆风仍只复用 master 既有的 `industry_trend` 单次 -1 星；财报后坏反应只写 advisory 人工复核；三项无 provider 的任务保持明确未核查。
+- **Required**: `R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER` 已完成本地实现，待 Claude 独立审查和提交；完整根因/边界/证据见 `system_risk_register.md`。d34f `df9807d` 的 holding-test 预期与当前 master 的持仓语义冲突，探针已失败，故未强行重放；`f82ee4d` 的 `openai>=1,<2` 声明已同步。
+- **Verify**: 静态编译通过；effect-contract + Phase 4 33 OK；新增 legacy 六任务 4 OK；EGS analysis-input/Rule6/schema 30 OK；主入口与监管确认定点 6 OK；gap registry + preflight + entry-funnel 178 OK；`git diff --check` 通过。整份 `tests.test_a_short_weekly_pipeline` 在 300 秒限制内未返回最终 exit code，明确不计为 PASS。
+- **Pre-Codex self-review**: 行业分类复用 master `engine/a_short_industry_theme`，未带入 d34f 的重复分类器；无新 DeepSeek 调用；监管只委托同一份官方语义结果；财报 provider 仍在既有 `--confirm-fetch-authorized` 的 `pro` 路径之后；无 ranking/threshold/权重/资金/股数/action/veto 改动；未写正式周报、未调用 provider、未提交或 push。
+- **Next**: Claude Code：仅审查并决定提交 `R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER`；不得扩展到 d34f 或其他工作树。
+
 ## 2026-07-17 — Claude Code 独立复审 PASS（A-short M67→master r3 重放：Required read-path 收口 + 全绿）
 
 - **Verdict/Action**: PASS。基于当前 master `8170da49`（含 Rule6）的 M67 重放，两个 Required 均收口，本人独立复验通过。effect-ledger read-path 已修（effect_contract:706 读 `machine.industry_trend`），真 headwind 现证 `star_down`+3→2 星+台账 `applied`；搬迁本体不变量守住（config-authority 无 industry_trend、effect-contract 可移植 `_canonical_ast`、master `classify_industry_trend` 原样、零值 fail-closed）；范围干净（仅 M67 文件，无 Rule6/d34f/别窗污染）；是重放非 merge，master/d34f 未被触碰。

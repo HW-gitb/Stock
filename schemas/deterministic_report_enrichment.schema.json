@@ -57,7 +57,7 @@
       "properties": {
         "kind": {
           "type": "string",
-          "enum": ["llm", "manual"]
+          "enum": ["llm", "manual", "deterministic"]
         },
         "model": {
           "type": ["string", "null"]
@@ -109,6 +109,12 @@
         "code": {
           "type": "string",
           "minLength": 1
+        },
+        "task_id": {
+          "type": ["string", "null"]
+        },
+        "task_type": {
+          "type": ["string", "null"]
         },
         "title": {
           "type": "string",
