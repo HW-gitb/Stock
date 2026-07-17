@@ -9,6 +9,28 @@ DEFAULT_TUSHARE_BASE_URL = "https://api.tushare.pro/dataapi"
 _DATA_API_URL_ATTRIBUTE = "_DataApi__http_url"
 
 
+def is_retryable_tushare_error(exc: Exception) -> bool:
+    """Return true only for transport failures and explicit rate limiting.
+
+    Permission, entitlement, malformed-request, and schema errors must surface
+    immediately rather than consuming retries or being misclassified as a
+    transient provider incident.
+    """
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    error_name = type(exc).__name__.lower()
+    if any(token in error_name for token in (
+        "timeout", "connectionerror", "proxyerror", "chunkedencodingerror",
+        "remotedisconnected", "temporarilyunavailable",
+    )):
+        return True
+    message = str(exc).lower()
+    return any(token in message for token in (
+        "rate limit", "too many requests", "http 429", "status 429",
+        "频率限制", "请求过于频繁", "限流", "每分钟最多访问",
+    ))
+
+
 def _require_supported_version(ts_module) -> None:
     version = getattr(ts_module, "__version__", None)
     if version != SUPPORTED_TUSHARE_VERSION:

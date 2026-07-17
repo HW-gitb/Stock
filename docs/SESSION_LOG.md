@@ -8,6 +8,102 @@
 
 ---
 
+## 2026-07-17 — Claude Code A-F4 自修自审收口（非两融 not_applicable 通路）PASS（未提交）
+
+- **Verdict/Action**: PASS（solo 自修+自审，用户授权一次性）。用户裁定 A-F4「不要过度保守」→ 非两融标的正向 `not_applicable` 通路（恢复建仓可达），经三轮独立对抗 agent 逐轮封 fail-open（garbage/gross-截断 → 格式漂移 → 选择性单票畸形）。完整机制/不变式/两处 fail-closed-safe 残余单源见 `system_risk_register.md` `R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION`。
+- **Required**: 无新增；`R-ASHORT-RULE6-MARGIN-ELIGIBILITY-DISPOSITION` 由 accepted_risk 升 resolved（完整边界见 register）。
+- **Verify**: 亲跑场景矩阵经验复现：selective-malform ×4 / empty / subthreshold / suffix-less / float / dup → unknown；真非两融 → not_applicable；clean+40% → fail（veto 保留）；完整 clear 清单 → disposition clear（建仓可达）。全包 `discover -s tests -p test_a_short*.py`(venv)=1515，仅 3 既有 entry_funnel env-error，0 非-env 失败；`test_egs_rule6_computable_wiring` 7 OK（含 5 条 fail-closed 回归）。3 独立对抗 agent 逐条我亲验复现。
+- **Next**: 用户 `提交`(96a2 树)。
+
+## 2026-07-17 — Claude Code 复审（96a2 A-short 4 Required + Optional 收口）PASS（未提交，A-F4 待用户裁定）
+
+- **Verdict/Action**: PASS（独立复审）。Codex 4 Required 均代码级亲验真修 + 全包转绿；VP5 护栏测试真恢复(非删弱)；B-F2/C-F2 亲验；knives 修复=补完整 rule6 clear 清单(非弱化断言)。完整逐条依据单源见 register。
+- **Required**: 无未闭；`R-ASHORT-STOCKLIST-CACHE-MODE-PIT-LEAK` / `R-ASHORT-RULE6-IV-HELD-POSITION-VETO-REGRESSION` / `R-ASHORT-RULE6-SEMANTIC-STALE-TEST-REGRESSION` / `R-ASHORT-WEEKLY-PRICE-TRANSIENT-RETRY` 均 Codex 修 + Claude 复审 PASS（逐条依据见 register）；A-F4 待用户裁定。
+- **Verify**: 亲跑全包 1508（3 env-error / 0 business fail）；独立读验 R1(egs_main:1891)/R2(phase5:342)/R3(gap 护栏测试体+全包)/R4(tushare_client:12)；B-F2(regulatory_advisory:95)/C-F2(weekly:319)/knives 修复真实性核实。
+- **Next**: 用户裁定 A-F4 + 授权提交(96a2 树)。
+
+## 2026-07-17 — Codex 修复（96a2 A-short Required + 合理 Optional，待独立复验）
+
+- **Verdict/Action**: 本地修复完成，尚未提交。历史股票名单缓存现以 `hist`/`cur` 模式隔离；Rule6 的市场级 50ETF IV 失败不再否决已有持仓；已恢复人工确认后的语义 advisory/VP5 护栏测试；周报、回测和执行价格物化器统一为仅瞬态错误重试。非候选持仓的价格读取失败改为人工管理，不中止整份周报。
+- **Required**: `R-ASHORT-STOCKLIST-CACHE-MODE-PIT-LEAK`、`R-ASHORT-RULE6-IV-HELD-POSITION-VETO-REGRESSION`、`R-ASHORT-RULE6-SEMANTIC-STALE-TEST-REGRESSION`、`R-ASHORT-WEEKLY-PRICE-TRANSIENT-RETRY` 已完成本地修复，待独立审查。合理 Optional 已处理：未绑定的 `regulatory_advisory` 被丢弃；Rule6 边界反向测试、两融窗口、营收披露日 PIT 门、上海市场时钟和历史名称真实接口形状核验均已补齐。非两融资格在没有 PIT-safe 正向资格证据时保持 `unknown`，不从空两融数据推导 `not_applicable`。
+- **Verify**: 定向 805 OK；重试合同 2 OK；`Rule6CompletionGateTests` 7 OK。完整 `unittest discover -s tests -p 'test_a_short*.py'` 为 1507 项、无业务 failure，仅 3 个既有 `entry_funnel_calibration` error（本工作树缺 gitignored `result/a_short/20260622/overlay.json`，非本轮代码问题）。一次只读 Tushare `namechange` 形状核验返回所需 5 列、3/3 `start_date` 为 8 位日期、`end_date` 为 8 位日期或空值；不记录 token、原始行或请求 URL。
+- **Proof-of-use**: 各修复项对应 `docs/system_risk_register.md` `R-ASHORT-*` 条目；缓存 mode 入键 / 持仓 IV 不否决 / VP5 护栏测试恢复 / 重试仅瞬态 / 停牌持仓入 manual_review 均有反向测试固定（Claude 复审逐条亲验）。
+- **Next**: Claude Code：审查
+
+## 2026-07-17 — Claude Code 审查（96a2 a-short 7 组交付：Rule6 完整性 / regulatory 人工确认 / 市场时钟 / Tushare 运行时 / 历史名 PIT / 价格重试）FAIL（未提交）
+
+- **Verdict/Action**: FAIL（不可提交）。覆盖判定：7 组对 master(3afe37e2) 零覆盖（master 后续改动正交，新文件全 ABSENT / 6 R-ASHORT id register hits=0），全 7 组进审。核心 fail-closed 契约本身 sound，1 selection-critical + 2 high + 1 medium 必修。完整 finding/file:line/修法单源见 register。
+- **Required**: `R-ASHORT-STOCKLIST-CACHE-MODE-PIT-LEAK`[selection-critical] / `R-ASHORT-RULE6-IV-HELD-POSITION-VETO-REGRESSION`[high] / `R-ASHORT-RULE6-SEMANTIC-STALE-TEST-REGRESSION`[high] / `R-ASHORT-WEEKLY-PRICE-TRANSIENT-RETRY`[medium]（逐条 finding+修法见 register）；Optional/Options（含 A-F4 非两融建仓可达）亦见 register。
+- **Verify**: 全包 venv(py3.12)=1499 FAILED(failures=6/errors=9)；base(bcb09b81) A/B 归因 12 为 96a2 回归；独立亲验 B-F1 缓存键(egs_main:1889)+A-F1(phase5:338)+C-F1(weekly:2594)+Q3 preset 镜像；3 独立对抗 agent 各含经验复现探针。
+- **Next**: 主线程路由 Codex 修 Required（96a2 树），修后回 Claude 复验。
+
+## 2026-07-14 — Codex implementation (A-short official regulatory source + human-confirmation advisory flow)
+
+- **Verdict/Action**: Implemented the local confirmation layer for already-fetched CNINFO `official_structured` events. A high official event now defaults to `pending_confirmation`; a non-empty official link alone cannot veto. Only a schema-valid `confirmed_material` record bound to the current `as_of`, EGS candidate digest, code, and exact event fingerprint reaches the existing non-production M6.7 advisory veto. `confirmed_not_material` cannot rescue another control; `needs_more_information` and blank-link highs remain pending. The confirmation step itself makes no provider call.
+- **Required**: `R-ASHORT-REGULATORY-ADVISORY-HUMAN-CONFIRMATION` is in progress pending independent review. The CLI input is `--regulatory-confirmations <local JSON>` and fails before write on schema, date, digest, fingerprint, duplicate, or unmatched-event errors.
+- **Verify**: combined fixed regression pack **745 OK**; `py_compile` passed for the four affected runtime modules and `git diff --check` passed. Tests include accepted current confirmation, rejected unmatched confirmation, unconfirmed pending, material confirmation, not-material, blank-link, stale/duplicate, schema boundary, renderer trace, and document anchors.
+- **Pre-Codex self-review**: confirmation records carry no token, raw provider response, request URL, or reviewer identity; exact event fingerprinting prevents cross-event reuse; the new `semantic_official_high_confirmed` impact remains `production_effect_enabled=false` and the existing semantic-isolation guard rejects a production hard veto. No EGS, Rule6, rank, threshold, sizing, account, broker, order, backtest, or external-fetch path changed.
+- **Proof-of-use**: a weekly integration test constructs the actual digest-bound JSON argument and produces M6.7 `否决` only after `confirmed_material`; the counterpart unmatched confirmation aborts without report output. `docs/a_short_regulatory_advisory_contract.md` is the operational source of truth.
+- **Next**: Claude Code: review
+
+## 2026-07-14 — Codex 执行（A-short Rule6 `report_rc` 当前候选池覆盖 / PIT 形状审计）
+
+- **Verdict/Action**: 已按用户授权，对同日 EGS 候选池的 11 只股票做 `report_rc` 只读审计；当前工作树没有当天产物，仅读取主工作树的 `result/a_short/20260714/analysis_input.json`，并在摘要中记录相对引用、候选池 digest 与文件 SHA256。首轮无节流读取出现脱敏的频率类失败；最终按每次间隔 60 秒完成 11 次候选专属读取，但 11/11 仍为 `rate_limited_or_frequency_cap`，无成功响应、无成功空响应。因此本轮覆盖率是**未测得**，绝不能写成“11 只没有研报”或“覆盖为零”。候选池也未提供 provider observed/ingested time、历史一致预期重建或业绩事件/次日反应对齐证据；`report_rc` 不接入 Rule6，`rule6_good_data_bad_reaction` 继续 `not_applicable`。
+- **Required**: `R-ASHORT-RULE6-COMPLETENESS-AND-DTIER-DISPOSITION` 仍为 in_progress P1；若要重试候选池覆盖审计，须先解决/确认该接口对现有付费令牌的频率或限额条件，再以独立审查决定是否重跑。即使未来能读到 `report_date` 行，仍须单独审查 observed-time、历史一致预期和事件反应 PIT，不能直接接线。
+- **Verify**: `tests.test_a_short_rule6_report_rc_coverage_audit` 与 schema test 2 OK；实际摘要通过其 JSON Schema。摘要只含 11 候选的 digest/总数/聚合数，不含候选代码、原始行、请求 URL 或 secret；原始响应目录由 `.gitignore` 的 `provider_samples/` 规则覆盖。
+- **Pre-Codex self-review**: runner 只接收通过 `analysis_input` 合约校验的候选池，每候选固定一次 `report_rc`，间隔限制为 0–60 秒，provider 错误仅落脱敏类别；无 EGS/weekly/Rule6 import、无 rank/阈值/仓位/下单改动。`report_rc` 单样本形状、全池频率失败和 PIT 未证明均未被夸大为 D-tier 可用性。
+- **Proof-of-use**: `docs/a_short_rule6_report_rc_coverage_audit_summary_20260714.json` 的 `execution` 为 planned 11 / completed 0 / rate-limited 11；其 `decision.downstream_rule6_wiring_authorized=false` 与 `rule6_d_tier_status_remains_not_applicable=true` 由 schema 固定。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 执行（A-short Rule6 D-tier 付费 Tushare 有界探测）
+
+- **Verdict/Action**: 已按用户授权用现有付费 Tushare 做两只 A 股、三个接口、六次只读形状探测。结论不是“全没有”：`report_rc` 对 `600519.SH` 返回 302 条卖方报告记录，含报告日、机构、评级、EPS、净利润和目标价字段，说明它可能成为“好数据坏反应”的输入之一；但另一只 `000001.SZ` 返回已脱敏的参数/接口类失败，且尚无 PIT 一致预期聚合、业绩事件锚定和次日反应契约，不能接入 Rule6。`hk_hold` 两只均为 0 行，虽有 `trade_date/vol/ratio` 列，仍没有当前逐股北向连续卖出数据；`anns_d` 两只均为权限/授权失败，不能提供监管问询源。三项 D-tier 继续 `not_applicable`，未改变 EGS、weekly、Rule6、排名、仓位或下单。
+- **Required**: `R-ASHORT-RULE6-COMPLETENESS-AND-DTIER-DISPOSITION` 仍为 in_progress P1；若要使用 `report_rc`，必须另行授权并审查 PIT 一致预期、结果/反应对齐、跨股票覆盖和 Rule6 语义，不能凭本探测接线。
+- **Verify**: `tests.test_a_short_rule6_tushare_d_tier_probe` + schema test 3 OK；实测摘要为 6 次计划读取、3 次完成、3 次已分类失败；原始响应仅在 gitignored `provider_samples/a_short_rule6_tushare_d_tier_probe_20260714/`，tracked 摘要无原始行、请求 URL 或 secret。
+- **Pre-Codex self-review**: 仅新建独立 probe/schema/test/shape 摘要；SDK 版本走现有 `tushare==1.4.29` pinned 初始化、只读取现有环境 token 且不显示/落盘 token；错误仅写类别不写供应商文本；业务 EGS/weekly/Rule6 无该 runner import；`hk_hold` 空样本、`report_rc` 单票可用和 `anns_d` 权限失败均不被夸大为 D-tier 可用。
+- **Proof-of-use**: `git check-ignore` 命中 `provider_samples/`；静态扫描确认业务 EGS、weekly 和 Rule6 engine 对本 probe 的 import 为 0；摘要决策字段固定为 `not_applicable`、`downstream_rule6_wiring_authorized=false`。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short Rule6 Task 2–3：可计算项接线与 yfinance 有界探测）
+
+- **Verdict/Action**: Task 2–3 已完成本地实现。七项 EGS 可计算 Rule6 检查由统一 fail-closed evaluator 产生，50ETF IV 仅在 weekly 使用已验证 IV feed 实体化；`rqye`、`balancesheet`、`block_trade` 已按授权接入但尚未运行 Tushare 拉取。任何缺日、缺行、缺字段、日期/PIT 不合格、重复或覆盖不足均输出 `unknown`，不会变 `pass`/`not_applicable`。全部阈值由 schema/preset const 固定为 v14.2；其中应收条件严格为“连续两季应收增速 > 营收增速 ×2”。固定 yfinance 探测已实际完成 8 次只读形状请求；结果未提供北向持仓、A 股卖方一致预期或官方监管问询源，因此三项 D-tier 继续 `not_applicable`，未接入任何 Rule6 决策。
+- **Required**: `R-ASHORT-RULE6-COMPLETENESS-AND-DTIER-DISPOSITION` 仍为 in_progress P1；只剩独立审查与已审查提交，不得把 yfinance 探测接入 Rule6。
+- **Verify**: 固定回归包 **672 OK / 1 dependency skip**，实际 yfinance 摘要通过 schema 校验；两票各有 5 行价格，机构持仓均 0 行，推荐为 0/3 行、新闻为 5/3 行。原始响应位于 gitignored `provider_samples/a_short_rule6_yfinance_probe_20260714/`；未执行 Tushare 调用、未读私有账户、未改排名/打分/仓位/下单。
+- **Pre-Codex self-review**: A：13 项 Rule6 的 D-tier、7 项 EGS 可算项与 weekly IV 项均有唯一出口和回归；B：当前 Rule6 示例状态的 `pending_data|pending_llm` 为 0，业务 EGS/weekly/Rule6 engine 的 yfinance import 为 0；C：缺 evaluation、缺日/字段、阈值恰好边界与非法 yfinance 接线均有反向测试；D：缺失仍收紧为 `unknown`，没有放宽为 clear；E：register 保持单一 open-risk 条目、CURRENT/README 未加入瞬态 gate；F：Python compile、实际摘要 schema、UTF-8/BOM 与 `git diff --check` 均已通过。未使用子 agent；main-thread 完成 A-F，自审无 timeout。
+- **Proof-of-use**: yfinance runner 只被其自身测试/摘要引用，业务 EGS、weekly 和 Rule6 engine 均无 import；原始 payload 的 `git check-ignore` 命中 `.gitignore:provider_samples/`。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short Rule6 Task 1：D-tier 人工处置）
+
+- **Verdict/Action**: 已完成 Task 1：`rule6_northbound_selloff`、`rule6_good_data_bad_reaction`、`rule6_regulatory_48h` 现在只能以各自固定理由输出 `not_applicable`，不再被当作机器检查待办。M6.7 对候选与 EGS 未覆盖持仓持续显示“仅人工核查”横幅；可计算项仍必须逐项 `pass` 才允许建仓，`unknown`/pending 仍观察，`fail` 仍否决。
+- **Required**: `R-ASHORT-RULE6-COMPLETENESS-AND-DTIER-DISPOSITION` 仍为 in_progress；Task 2 的可计算项接线和 Task 3 的 yfinance 有界探针尚未实施，详见 register。
+- **Verify**: Rule6、Phase5、M6.7 render、weekly、EGS analysis-input、board/holder PIT 与文档治理联合回归 642 OK / 1 dependency skip。无 provider 调用、无私有账户读取、无排名/阈值/仓位或下单改动。
+- **Proof-of-use**: 只有三项 D-tier 可为 `not_applicable`；理由漂移、漏横幅或把可计算项降为 `not_applicable` 都会失败。
+- **Next**: Codex：执行 Task 2
+
+## 2026-07-14 — Claude Code 派工（Rule6 三项后续：用户裁定 + 授权，routed to Codex）
+
+- **Verdict/Action**: 复核 ashort_cc_r2 三刀后,用户裁定 Rule6 完整性后续三项——①D 档(北向逐票/好数据坏反应/监管问询)判 not_applicable+诚实标注→恢复建仓、门只拦机器可判项;②接线可算项;③yfinance 仅做有界探针不接硬否决——派 Codex 执行(非我修)。
+- **Required**: `R-ASHORT-RULE6-COMPLETENESS-AND-DTIER-DISPOSITION`(open,三 Task 全文+边界见 register)。用户已授权新增 balancesheet/block_trade 抓取 + margin_detail 加 rqye 字段;yfinance 探针 gitignored raw + no-secret 摘要。
+- **Verify**: 实测确认现状=空仓候选全被 10 项 pending 压成观察、建仓不可达(disposition=manual_review,10 ids);三刀本身 573 OK,ST 名 PIT + 价格重试干净 PASS。
+- **Next**: Codex：执行
+
+## 2026-07-14 — Codex 修复（A-short ashort_cc_r2 三项）
+
+- **Verdict/Action**: 三刀已完成：Rule6 未决状态会让空仓候选输出“观察、不得建仓”；历史回放以 namechange 有效区间还原 ST/退市名称，缺历史行即中止；价格 pro_bar 只对超时、连接和限流故障做最多三次重试，其余错误立即失败。
+- **Required**: `R-ASHORT-RULE6-UNRESOLVED-CHECKS-NONBLOCKING`、`R-ASHORT-HISTORICAL-ST-DELISTING-NONPIT`、`R-ASHORT-WEEKLY-PRICE-TRANSIENT-RETRY`；详见 `docs/system_risk_register.md`。
+- **Verify**: Rule6、Phase5、weekly、EGS historical-name 和 EGS contract 定向包共 577 OK / 1 dependency skip；py_compile 与 git diff --check 通过。未调用 provider，未读取私有账户，未改排名、阈值、仓位规则或下单边界。
+- **Proof-of-use**: Rule6 未决仅观察；历史名称按日期还原；价格瞬态故障最多重试三次。
+- **Next**: Claude Code：审查
+
+## 2026-07-14 — Codex 修复（A-short Rule6 未决核查不得建仓）
+
+- **Verdict/Action**: 已完成第 1 刀：Rule6 不再只是报告中的待办字段。上游固定并校验完整清单；weekly 不再丢弃 \`rule6_checks\`；M6.7 将其统一判为 \`clear\` / \`hard_veto\` / \`manual_review\`。任一失败仍否决；任何未决、未知、缺项、重复或结构漂移都会让空仓候选变为“观察、不得建仓”，已有持仓保持持仓管理。
+- **Required**: \`R-ASHORT-RULE6-UNRESOLVED-CHECKS-NONBLOCKING\` 已修复待独立审查；\`ashort_cc_r2.md\` 的历史 ST/退市 PIT 与价格拉取重试仍是后续两刀，未混入本刀。
+- **Verify**: \`tests.test_a_short_rule6_contract\` + \`tests.test_a_short_phase5_engine\` + \`tests.test_a_short_weekly_pipeline\` **562 OK**；新增完整清单、pending、missing、fail、持仓路径和 weekly 映射回归。未调用 provider，未读取私有账户，未改排名、阈值或下单边界。
+- **Proof-of-use**: pending、缺项与结构漂移均阻止空仓候选建仓；详见 register。
+- **Next**: Codex：修复
+
 ## 2026-07-14 — Codex 修复（A-short 市场时钟 tzdata 显式依赖）
 
 - **Verdict/Action**: 已将 Windows 市场时钟所需的 IANA 时区数据从 pandas 的传递依赖改为 A-short 的直接依赖：`tzdata>=2022.7`。未改市场时钟、日期判定、策略或 provider 调用链。
@@ -19,9 +115,9 @@
 ## 2026-07-14 — Codex 修复（A-short Tushare endpoint 运行时契约）
 
 - **Verdict/Action**: 已将 A-short 的 Tushare 初始化收敛到 `engine/a_short_tushare_client.py`；`requirements-a-short.txt` 精确钉扎 `tushare==1.4.29`。EGS、rank backtest、执行价格物化器和 IV probe 都在 `pro_api()` 前复用同一版本/私有字段/endpoint pin 的 fail-closed 检查，仍只直接传 token，绝不调用 `set_token`。
-- **Required**: 无；`R-ASHORT-TUSHARE-PRIVATE-ENDPOINT-RUNTIME-CONTRACT` 保持 `in_progress P2`，待独立审查和已审查提交后关闭。
+- **Required**: 无；`R-ASHORT-TUSHARE-PRIVATE-ENDPOINT-RUNTIME-CONTRACT` 保持 `in_progress P2`，详见 register。
 - **Verify**: 新增契约测试先红：不受支持版本仍创建 client、缺 `_DataApi__http_url` 时 backtest 只 warning、依赖与四个入口未收敛；修复后两种 fake runtime 均在 `pro_api()` 前 raise，四入口旧私有字段/直接 client grep 为 0。定向 73 OK；含 EGS、回测、周筛主链的受影响包为 536 OK。全程未调用 provider。
-- **Pre-Codex self-review**: A：完整集合为 EGS、rank backtest、execution-price materializer、IV probe 四个生产初始化口；下游 weekly/regime/health 等既有消费者继续仅经 IV probe 的同一导出初始化器；B：对四入口 `rg _DataApi__http_url|def _pin_tushare_base_url|.pro_api(` 为 0，并由新测试永久守护；C：错版本与缺私有字段均断言 `pro_api` 未被调用，正确版本仍保留 endpoint pin + no-`set_token` 回归；D：只收紧不支持 runtime，未放宽 endpoint、token、PIT、策略或执行边界；E：未改 CURRENT/README，requirements 为唯一运行时版本来源，register/SESSION_LOG 只记录当前风险；F：受影响包 536 OK，compile、`git diff --check`、UTF-8 无 BOM/U+FFFD 已通过。未使用子 agent；主线程完成 A-F 自审，无 timeout。
+- **Proof-of-use**: 四个生产入口均经同一初始化器；错误版本、缺字段与直连入口均由离线回归拒绝。
 - **Next**: Claude Code：审查
 
 ## 2026-07-14 — Codex 修复（A 股市场时钟绑定）
@@ -29,7 +125,7 @@
 - **Verdict/Action**: 已新增 `engine/a_share_market_clock.py`，把 A 股业务日期固定到 `Asia/Shanghai`；canonical resolver、周筛 wrapper、EGS 的日期分支和 forward tracker 的成熟日判断均改为使用该市场时钟。纯记录用的带偏移时间戳保持原样。
 - **Required**: 无；`R-ASHORT-MARKET-CLOCK-HOST-TIMEZONE-DEPENDENCY` 保持 `in_progress P1`，待独立审查和已审查提交后关闭。
 - **Verify**: 新测试先因共享市场时钟模块不存在而失败；实现后 `tests/test_a_share_market_clock.py` + `tests/test_resolve_canonical_asof.py` 为 19 OK，forward/cache + 刀6-10 回归为 33 OK，`tests/test_a_short_weekly_pipeline.py` 为 437 OK；Python compile、PowerShell ParseFile 均通过。UTC `2026-06-26T07:30Z` 被固定解释为上海 15:30 并在收盘后解析到 `20260629`；共享时钟拒绝无时区的显式 instant。
-- **Pre-Codex self-review**: A：覆盖 resolver 默认时钟、wrapper `RunDate`、EGS 的 `TODAY`/L3/SW 分支、forward maturity 四类业务日期消费者；B：审阅 `datetime.now|Get-Date` 的全部命中，业务日期旧形态为 0，EGS 余下 6 处均是生成/发布时间戳；C：同一 UTC instant 的收盘边界、带时区 resolver 注入归一化和 naive-instant 拒绝都有回归；D：未改变策略、阈值、PIT 数据规则或 P2 endpoint，时间戳不被误改为业务日期；E：未改 CURRENT/README，仅登记当前 open-risk 与交接；F：compile、PowerShell parse、`git diff --check`、UTF-8 无 BOM/U+FFFD 已通过。未使用子 agent；主线程完成 A-F 自审，无 timeout。
+- **Proof-of-use**: UTC 收盘边界、时区注入与 naive instant 拒绝均有回归；详见 register。
 - **Next**: Claude Code：审查
 
 ## 2026-07-14 — Codex 修复（A-short S3b 持仓夹具语义漂移）

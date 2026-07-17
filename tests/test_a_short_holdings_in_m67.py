@@ -22,6 +22,7 @@ from engine.a_short_egs_full_adapter import (load_egs_full, egs_full_row_to_cand
 from runners.a_short_weekly_pipeline import (_build_holdings, main,  # noqa: E402
                                              _reject_nonprivate_account_output_path,
                                              _is_account_output_git_ignored)
+from engine.a_short_regulatory_advisory import event_fingerprint  # noqa: E402
 import os  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import (AS_OF, _analysis_input, _ai_candidate,  # noqa: E402
@@ -141,18 +142,33 @@ class BuildHoldingsTests(unittest.TestCase):
         self.assertEqual(hn, [])
         self.assertIn("陈旧", mr[0]["reason"])              # 最新 bar != 决策价格日 → 旁路、人工管理
 
+    def test_price_provider_failure_goes_to_manual_review_without_aborting_report(self):
+        acct = _held_acct([("600519.SH", 100)])
+        hn, meta, mr = self._call(
+            acct, {"600000.SH"},
+            lambda c: (_ for _ in ()).throw(SystemExit("provider failed")), egs_full={},
+        )
+        self.assertEqual((hn, meta), ([], {}))
+        self.assertEqual(mr[0]["ts_code"], "600519.SH")
+        self.assertIn("价格数据获取失败", mr[0]["reason"])
+
     def test_s2_semantic_provider_threads_to_holding(self):
         # 4.2 S2: semantic_provider 结果接进持仓 normalize → 端到端经 build_holding_report 发 holding_row_impact
         from runners.a_short_phase5_engine import build_holding_report, validate_m67_consistency
         acct = _held_acct([("600519.SH", 100)])
-        sem = {"600519.SH": {"status": "risk", "had_pit_announcements": True, "events": [
-            {"source": "cninfo", "title": "立案", "category": "监管", "disclosure_date": "20260601",
-             "risk_type": "litigation", "severity": "high", "url_or_pdf": "http://x.pdf"}]}}
+        event = {"source": "cninfo", "title": "立案", "category": "监管", "disclosure_date": "20260601",
+                 "risk_type": "litigation", "severity": "high", "url_or_pdf": "http://x.pdf"}
+        sem = {"600519.SH": {"status": "risk", "had_pit_announcements": True, "events": [event],
+                               "regulatory_advisory": {"event_decisions": [{
+                                   "event_fingerprint": event_fingerprint("600519.SH", event),
+                                   "decision": "confirmed_material",
+                               }]}}}
         hn, meta, mr = _build_holdings(acct, {"600000.SH"}, AS_OF, lambda c: (_series_bars(), PDT), 55.0,
                                        {"available_cash": 5e5}, "震荡期", {}, PDT, egs_full={},
                                        semantic_provider=lambda c: sem.get(str(c)))
         r = build_holding_report(hn[0], AS_OF, "t")          # Tier-3 → build_holding 路径
-        imp = [i for i in (r["machine"].get("operation_impact") or []) if i["source_field"] == "semantic_official_high"]
+        imp = [i for i in (r["machine"].get("operation_impact") or [])
+               if i["source_field"] == "semantic_official_high_confirmed"]
         self.assertTrue(imp and imp[0]["holding_effect"] == "clear_review")   # provider→normalize→build_holding emit
         self.assertEqual(r["m67"]["table"]["操作"], "持有")   # 持仓 semantic 不否决
         validate_m67_consistency(r)

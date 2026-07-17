@@ -18,6 +18,10 @@
 - `unknown` 不能伪装成 clear。未检索、检索失败、证据缺失时保持 unknown(web 侧 `unknown/unknown/no_action`)。
 - **迁移说明**:独立 summary CLI + 周报 .md 单独面板已 Slice 3b 全退役(CLI/Stage-4 退役、面板行内化);`a_short_semantic_risk_summary` 仅留被 M6.7 复用的 builders;最终语义直接体现在 M6.7(见 `docs/a_short_semantic_risk_coverage.md` §融入 M6.7)。
 
+## Current official-regulatory confirmation rule
+
+This current rule supersedes any earlier wording in this document that a complete-evidence official `high` event automatically creates an M6.7 advisory veto. A non-empty `url_or_pdf` is necessary but not sufficient: every official `high` is first `pending_confirmation`. Only a current-pool, candidate digest-bound human `confirmed_material` decision may create `semantic_official` advisory veto inside non-production M6.7. `confirmed_not_material` cannot rescue any other control; `needs_more_information` and a blank link remain pending. The authoritative operational contract is `docs/a_short_regulatory_advisory_contract.md`.
+
 ## official_structured
 
 - 来源:巨潮 cninfo `hisAnnouncement/query`(`stock` = `code,orgId`)。

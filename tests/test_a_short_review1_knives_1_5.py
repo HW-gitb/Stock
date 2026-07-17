@@ -19,10 +19,20 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     stateful_risk_for_candidate, validate_iv_feed_freshness)
 from runners.a_short_weekly_pipeline import main as weekly_main  # noqa: E402
 from runners.a_short_phase5_engine import build_m67_report, exit_and_size  # noqa: E402
+from engine.a_short_rule6_contract import RULE6_CHECKS, RULE6_D_TIER_REASONS  # noqa: E402
 
 
 DECISION = "20260713"
 FACTS = "20260712"
+
+
+def _clear_rule6_checks():
+    return [
+        {"id": check_id, "group": group,
+         "status": "not_applicable" if check_id in RULE6_D_TIER_REASONS else "pass",
+         "notes": RULE6_D_TIER_REASONS.get(check_id)}
+        for check_id, group in RULE6_CHECKS
+    ]
 
 
 def _tables():
@@ -90,6 +100,7 @@ def _engine_input(stateful, cash=0.0):
     return {
         "ts_code": "600000.SH", "name": "测试", "close": 2.90, "price_series": _prices(),
         "derived": {}, "event": {}, "liquidity": {"avg_amount_5d": 1e8},
+        "rule6_checks": _clear_rule6_checks(),
         "iv": {"iv_percentile_252d": 50.0}, "market_regime": "震荡期",
         "account": {"available_cash": cash, "total_equity": 1_200_000.0,
                     "current_gross_exposure": 300_000.0,

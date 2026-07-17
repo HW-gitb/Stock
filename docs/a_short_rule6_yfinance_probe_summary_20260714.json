@@ -1,0 +1,164 @@
+{
+  "schema_name": "a_short_rule6_yfinance_probe_summary",
+  "schema_version": "1.0.0",
+  "generated_at": "2026-07-14T11:28:03+00:00",
+  "scope": {
+    "market": "A-share",
+    "purpose": "rule6_d_tier_feasibility_probe_only",
+    "yfinance_is_wired_into_rule6": false,
+    "egs_or_weekly_behavior_changed": false,
+    "production_or_ship_gate_claimed": false,
+    "broker_or_order_action": false
+  },
+  "sample": {
+    "symbols": [
+      "600519.SS",
+      "000001.SZ"
+    ],
+    "endpoint_names": [
+      "market_price_history",
+      "analyst_recommendations",
+      "news_items",
+      "institutional_holders_proxy"
+    ]
+  },
+  "execution": {
+    "status": "completed",
+    "planned_endpoint_reads": 8,
+    "completed_endpoint_reads": 8,
+    "error_endpoint_reads": 0
+  },
+  "shape_results": [
+    {
+      "symbol": "600519.SS",
+      "endpoints": {
+        "market_price_history": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 5,
+            "columns": [
+              "Adj Close",
+              "Close",
+              "Dividends",
+              "High",
+              "Low",
+              "Open",
+              "Stock Splits",
+              "Volume"
+            ]
+          }
+        },
+        "analyst_recommendations": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 0,
+            "columns": []
+          }
+        },
+        "news_items": {
+          "status": "ok",
+          "shape": {
+            "kind": "list",
+            "row_count": 5,
+            "columns": [
+              "content",
+              "id"
+            ]
+          }
+        },
+        "institutional_holders_proxy": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 0,
+            "columns": []
+          }
+        }
+      }
+    },
+    {
+      "symbol": "000001.SZ",
+      "endpoints": {
+        "market_price_history": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 5,
+            "columns": [
+              "Adj Close",
+              "Close",
+              "Dividends",
+              "High",
+              "Low",
+              "Open",
+              "Stock Splits",
+              "Volume"
+            ]
+          }
+        },
+        "analyst_recommendations": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 3,
+            "columns": [
+              "buy",
+              "hold",
+              "period",
+              "sell",
+              "strongBuy",
+              "strongSell"
+            ]
+          }
+        },
+        "news_items": {
+          "status": "ok",
+          "shape": {
+            "kind": "list",
+            "row_count": 3,
+            "columns": [
+              "content",
+              "id"
+            ]
+          }
+        },
+        "institutional_holders_proxy": {
+          "status": "ok",
+          "shape": {
+            "kind": "dataframe",
+            "row_count": 0,
+            "columns": []
+          }
+        }
+      }
+    }
+  ],
+  "d_tier_disposition": {
+    "northbound_per_stock": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "institutional-holders proxy is not an exchange northbound holding feed"
+    },
+    "good_data_bad_reaction": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "recommendation shape cannot establish required A-share consensus coverage"
+    },
+    "regulatory_48h": {
+      "usable_as_rule6_hard_veto_source": false,
+      "reason": "generic news shape is not an official inquiry or concern feed"
+    }
+  },
+  "storage": {
+    "raw_payload_root": "provider_samples/a_short_rule6_yfinance_probe_20260714",
+    "raw_payload_root_gitignored": true,
+    "tracked_summary_contains_raw_rows": false,
+    "tracked_summary_contains_request_urls": false,
+    "tracked_summary_contains_secret": false
+  },
+  "decision": {
+    "rule6_d_tier_status_remains_not_applicable": true,
+    "downstream_rule6_wiring_authorized": false,
+    "separate_review_required_before_any_future_use": true
+  }
+}

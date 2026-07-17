@@ -135,6 +135,20 @@ class SemanticRiskContractDocs(unittest.TestCase):
         for kw in ("url_or_pdf", "pending", "never veto"):
             self.assertIn(kw, readme, f"README evidence-full row lost anchor: {kw}")
 
+    def test_current_official_advisory_requires_human_confirmation(self):
+        # A full official link alone must never become an automatic M6.7 action. The current
+        # contract is bound to this run's candidate digest and exact official-event fingerprint.
+        for rel_path in ("docs/a_short_semantic_risk_contract.md",
+                         "docs/a_short_semantic_risk_coverage.md",
+                         "docs/a_short_regulatory_advisory_contract.md"):
+            text = _read(rel_path)
+            self.assertIn("confirmed_material", text, rel_path)
+            self.assertIn("pending_confirmation", text, rel_path)
+            self.assertIn("candidate digest", text, rel_path)
+        readme = _read("docs/README.md")
+        self.assertIn("docs/a_short_regulatory_advisory_contract.md", readme)
+        self.assertIn("event-bound human decision", readme)
+
     def test_coverage_doc_rejects_exact_48h_overclaim(self):
         text = _read("docs/a_short_semantic_risk_coverage.md")
         self.assertIn("默认 90 天", text)

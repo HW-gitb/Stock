@@ -23,7 +23,7 @@ from runners.backtest_execution import (
     load_analysis_input,
     validate_json_schema,
 )
-from engine.a_short_tushare_client import init_tushare_pro
+from engine.a_short_tushare_client import init_tushare_pro, is_retryable_tushare_error
 
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution" / "price_data"
@@ -160,6 +160,8 @@ def ts_call(fn: Callable[..., Any], retries: int = 3, base_delay: float = 0.6, *
             return fn(**kwargs)
         except Exception as exc:  # pragma: no cover - retry path is environment-bound
             last_err = exc
+            if not is_retryable_tushare_error(exc):
+                raise RuntimeError(f"Tushare call {name} failed without retry: {type(exc).__name__}") from exc
             wait = base_delay * (2**attempt)
             print(f"[RETRY] {name} attempt {attempt + 1} failed ({exc}); sleep {wait:.1f}s")
             time.sleep(wait)

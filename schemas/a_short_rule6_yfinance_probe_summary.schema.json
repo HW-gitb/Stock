@@ -1,0 +1,71 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-Short Rule6 yfinance D-tier feasibility probe summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "scope", "sample", "execution", "shape_results", "d_tier_disposition", "storage", "decision"],
+  "properties": {
+    "schema_name": {"const": "a_short_rule6_yfinance_probe_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["market", "purpose", "yfinance_is_wired_into_rule6", "egs_or_weekly_behavior_changed", "production_or_ship_gate_claimed", "broker_or_order_action"],
+      "properties": {
+        "market": {"const": "A-share"}, "purpose": {"const": "rule6_d_tier_feasibility_probe_only"},
+        "yfinance_is_wired_into_rule6": {"const": false}, "egs_or_weekly_behavior_changed": {"const": false},
+        "production_or_ship_gate_claimed": {"const": false}, "broker_or_order_action": {"const": false}
+      }
+    },
+    "sample": {
+      "type": "object", "additionalProperties": false, "required": ["symbols", "endpoint_names"],
+      "properties": {
+        "symbols": {"const": ["600519.SS", "000001.SZ"]},
+        "endpoint_names": {"const": ["market_price_history", "analyst_recommendations", "news_items", "institutional_holders_proxy"]}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false, "required": ["status", "planned_endpoint_reads", "completed_endpoint_reads", "error_endpoint_reads"],
+      "properties": {
+        "status": {"enum": ["completed", "completed_with_errors"]}, "planned_endpoint_reads": {"const": 8},
+        "completed_endpoint_reads": {"type": "integer", "minimum": 0, "maximum": 8},
+        "error_endpoint_reads": {"type": "integer", "minimum": 0, "maximum": 8}
+      }
+    },
+    "shape_results": {"type": "array", "minItems": 2, "maxItems": 2},
+    "d_tier_disposition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["northbound_per_stock", "good_data_bad_reaction", "regulatory_48h"],
+      "properties": {
+        "northbound_per_stock": {"$ref": "#/$defs/dTier"},
+        "good_data_bad_reaction": {"$ref": "#/$defs/dTier"},
+        "regulatory_48h": {"$ref": "#/$defs/dTier"}
+      }
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_payload_root", "raw_payload_root_gitignored", "tracked_summary_contains_raw_rows", "tracked_summary_contains_request_urls", "tracked_summary_contains_secret"],
+      "properties": {
+        "raw_payload_root": {"const": "provider_samples/a_short_rule6_yfinance_probe_20260714"},
+        "raw_payload_root_gitignored": {"const": true}, "tracked_summary_contains_raw_rows": {"const": false},
+        "tracked_summary_contains_request_urls": {"const": false}, "tracked_summary_contains_secret": {"const": false}
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rule6_d_tier_status_remains_not_applicable", "downstream_rule6_wiring_authorized", "separate_review_required_before_any_future_use"],
+      "properties": {
+        "rule6_d_tier_status_remains_not_applicable": {"const": true},
+        "downstream_rule6_wiring_authorized": {"const": false},
+        "separate_review_required_before_any_future_use": {"const": true}
+      }
+    }
+  },
+  "$defs": {
+    "dTier": {
+      "type": "object", "additionalProperties": false,
+      "required": ["usable_as_rule6_hard_veto_source", "reason"],
+      "properties": {"usable_as_rule6_hard_veto_source": {"const": false}, "reason": {"type": "string", "minLength": 1}}
+    }
+  }
+}

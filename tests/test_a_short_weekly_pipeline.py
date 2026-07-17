@@ -13,6 +13,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import jsonschema
 import pandas as pd
@@ -41,6 +42,7 @@ from runners.a_short_account_state_from_manual_tables import _bundle_digest  # n
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
+from engine.a_short_rule6_contract import RULE6_CHECKS, RULE6_D_TIER_REASONS  # noqa: E402
 from runners.a_short_semantic_risk_summary import build_summary_from_fetches  # noqa: E402
 from runners.a_short_theme_overlay_comparison import (  # noqa: E402
     assemble_overlay, build_summary,
@@ -99,7 +101,13 @@ def _egs_candidate(ts_code="600000.SH", **over):
                           "hard_veto": False},
         "event_risk": {"holder_reduction": {"active_plan": False},
                        "suspension": {"is_suspended": False},
-                       "delisting": {"st_flag": False, "delisting_warning": False}},
+                       "delisting": {"st_flag": False, "delisting_warning": False},
+                       "rule6_checks": [
+                           {"id": check_id, "group": group,
+                            "status": "not_applicable" if check_id in RULE6_D_TIER_REASONS else "pass",
+                            "notes": RULE6_D_TIER_REASONS.get(check_id)}
+                           for check_id, group in RULE6_CHECKS
+                       ]},
     }
     cand.update(over)
     return cand
@@ -252,6 +260,18 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(n["derived"]["overheat"])
         self.assertTrue(n["event"]["holder_reduction_active"])
         self.assertTrue(n["event"]["st_or_delisting"])
+
+    def test_maps_rule6_checks_and_materializes_only_iv_from_validated_feed(self):
+        cand = _egs_candidate()
+        original = cand["event_risk"]["rule6_checks"]
+        n = normalize_candidate(cand, _series(), _overlay_row(), 55.0, {}, "震荡期")
+        by_id = {check["id"]: check for check in n["rule6_checks"]}
+        original_by_id = {check["id"]: check for check in original}
+        self.assertEqual(by_id["rule6_50etf_iv"]["status"], "pass")
+        self.assertEqual(by_id["rule6_50etf_iv"]["metrics"]["iv_percentile_252d"], 55.0)
+        for check_id, check in original_by_id.items():
+            if check_id != "rule6_50etf_iv":
+                self.assertEqual(by_id[check_id], check)
 
     def test_maps_real_egs_hard_risk_contract_fields(self):
         # R-ASHORT-WEEKLY-EGS-HARD-RISK-MAPPING-GAP: real keys is_lock / suspension.is_suspended /
@@ -516,6 +536,71 @@ class MainWiringTests(unittest.TestCase):
         (Path(td) / "feed.json").write_text(json.dumps(feed or _feed()), encoding="utf-8")
         _write_account(Path(td) / "acct.json")
 
+    def test_main_accepts_only_current_digest_bound_regulatory_confirmation(self):
+        from engine.a_short_regulatory_advisory import event_fingerprint
+        from engine.data.analysis_input_contract import build_a_short_run_identity
+
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+        event = {"source": "cninfo", "title": "official notice", "category": "regulatory",
+                 "disclosure_date": AS_OF, "url_or_pdf": "https://example.invalid/notice.pdf",
+                 "risk_type": "investigation", "severity": "high"}
+        fingerprint = event_fingerprint("600000.SH", event)
+        confirmation = {
+            "schema_name": "a_short_regulatory_advisory_confirmation",
+            "schema_version": "1.0.0",
+            "as_of": AS_OF,
+            "candidate_digest": build_a_short_run_identity(AS_OF, ai["candidates"])["candidate_digest"],
+            "confirmations": [{"ts_code": "600000.SH", "event_fingerprint": fingerprint,
+                               "decision": "confirmed_material",
+                               "reviewed_at": "2026-06-09T09:30:00+08:00",
+                               "note": "Official notice checked manually."}],
+            "boundary": {"advisory_only": True, "modifies_egs_or_rule6": False, "automates_order": False},
+        }
+        semantic = lambda code: ({"status": "risk", "had_pit_announcements": True, "events": [event]}
+                                 if code == "600000.SH" else None)
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            confirmation_path = Path(td) / "regulatory-confirmation.json"
+            confirmation_path.write_text(json.dumps(confirmation), encoding="utf-8")
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out), "--regulatory-confirmations", str(confirmation_path)],
+                 price_provider=lambda code: _series(), semantic_provider=semantic)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        report = {row["ts_code"]: row for row in weekly["reports"]}["600000.SH"]
+        self.assertEqual(report["machine"]["layer"]["semantic_risk"]["regulatory_confirmation"]["status"],
+                         "confirmed_material")
+        self.assertEqual(report["machine"]["layer"]["semantic_risk"]["regulatory_confirmation"]
+                         ["confirmed_material_event_fingerprints"], [fingerprint])
+        self.assertEqual(report["m67"]["table"]["操作"], "否决")
+
+    def test_main_rejects_unmatched_regulatory_confirmation(self):
+        from engine.data.analysis_input_contract import build_a_short_run_identity
+
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH")])
+        confirmation = {
+            "schema_name": "a_short_regulatory_advisory_confirmation",
+            "schema_version": "1.0.0",
+            "as_of": AS_OF,
+            "candidate_digest": build_a_short_run_identity(AS_OF, ai["candidates"])["candidate_digest"],
+            "confirmations": [{"ts_code": "600000.SH", "event_fingerprint": "0" * 64,
+                               "decision": "confirmed_material",
+                               "reviewed_at": "2026-06-09T09:30:00+08:00",
+                               "note": "Must not attach to another event."}],
+            "boundary": {"advisory_only": True, "modifies_egs_or_rule6": False, "automates_order": False},
+        }
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            confirmation_path = Path(td) / "regulatory-confirmation.json"
+            confirmation_path.write_text(json.dumps(confirmation), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(Path(td) / "weekly.json"),
+                      "--regulatory-confirmations", str(confirmation_path)],
+                     price_provider=lambda code: _series(), semantic_provider=lambda code: None)
+
     def test_main_with_injected_price_provider(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
@@ -526,7 +611,8 @@ class MainWiringTests(unittest.TestCase):
             loaded = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(loaded["n_stocks"], 2)
         self.assertEqual(loaded["iv_feed_ref"], "feed.json")
-        self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "建仓")
+        self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "观察")
+        self.assertEqual(loaded["reports"][0]["machine"]["rule6_gate"]["disposition"], "manual_review")
 
     def test_main_accepts_legacy_v14_mixed_rank_counts_without_misreporting_them_as_l0(self):
         """Real Run-1 regression: old v1.4 mixed rank counts must not crash or become hard-veto summary rows."""
@@ -716,7 +802,7 @@ class MainWiringTests(unittest.TestCase):
         self.assertIn("## 一览", text)
 
     def test_main_with_account_records_sized_lineage(self):
-        # R-ASHORT-WEEKLYSCREENING-M67-MISSING-ACCOUNT (behavioral): a valid account -> run_lineage sized + 建仓.
+        # A valid account remains sized, but the example's pending Rule6 checks keep it observe-only.
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             out = Path(td) / "weekly.json"
@@ -726,7 +812,7 @@ class MainWiringTests(unittest.TestCase):
             w = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(w["run_lineage"]["account_status"], "provided")
         self.assertEqual(w["run_lineage"]["sizing_mode"], "sized")
-        self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "建仓")     # sized -> buildable
+        self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "观察")
 
     def test_main_account_position_outputs_hold_for_held_candidate(self):
         with tempfile.TemporaryDirectory() as td:
@@ -743,7 +829,7 @@ class MainWiringTests(unittest.TestCase):
         by = {r["ts_code"]: r for r in w["reports"]}
         self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "持有")
         self.assertIn("已有持仓", by["600000.SH"]["m67"]["精简结论区"]["操作建议"])
-        self.assertEqual(by["000001.SZ"]["m67"]["table"]["操作"], "建仓")
+        self.assertEqual(by["000001.SZ"]["m67"]["table"]["操作"], "观察")
 
     def test_main_rule13_active_blocks_flat_reentry(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1000,9 +1086,9 @@ class MainWiringTests(unittest.TestCase):
             raise RuntimeError("net down")
         self.assertIsNone(_build_cninfo_semantic_provider(["600000.SH"], AS_OF, 90, fetcher=boom))
 
-    def test_main_semantic_provider_folds_into_m67(self):
-        # Slice 1 end-to-end: injected semantic_provider (high official) folds into M6.7 → 否决;
-        # a stock with no semantic stays neutral (impact none). No network (provider injected).
+    def test_main_unconfirmed_semantic_provider_stays_pending(self):
+        # An injected high official event is not a veto without the digest- and event-bound
+        # manual confirmation input; a stock with no semantic stays neutral. No network.
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             out = Path(td) / "weekly.json"
@@ -1014,7 +1100,10 @@ class MainWiringTests(unittest.TestCase):
                                                  if code == "600000.SH" else None))
             w = json.loads(out.read_text(encoding="utf-8"))
         by = {r["ts_code"]: r for r in w["reports"]}
-        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "否决")                # evidence-full high → 否决
+        self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "观察")
+        self.assertEqual(by["600000.SH"]["machine"]["layer"]["semantic_risk"]["impact"], "pending")
+        self.assertEqual(by["600000.SH"]["machine"]["layer"]["semantic_risk"]
+                         ["regulatory_confirmation"]["status"], "pending_confirmation")
         self.assertEqual(by["000001.SZ"]["machine"]["layer"]["semantic_risk"]["impact"], "none")  # no semantic
 
 
@@ -1047,6 +1136,91 @@ class PriceFetchTests(unittest.TestCase):
             RuntimeError("request failed url=https://api.example.invalid token=SECRET123"))
         with self.assertRaises(SystemExit):
             _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+
+    def test_transient_timeout_retries_then_returns_prices(self):
+        ts = _fake_ts(pd.DataFrame({"trade_date": ["20260109"], "high": [3.1],
+                                    "low": [2.95], "close": [3.0]}))
+        attempts = 0
+
+        def flaky_pro_bar(**kw):
+            nonlocal attempts
+            attempts += 1
+            if attempts < 3:
+                raise TimeoutError("provider timed out")
+            return pd.DataFrame({"trade_date": ["20260109"], "high": [3.1],
+                                 "low": [2.95], "close": [3.0]})
+
+        ts.pro_bar = flaky_pro_bar
+        with patch("runners.a_short_weekly_pipeline.time.sleep") as sleep:
+            series, latest = _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleep.call_args_list[0].args, (0.5,))
+        self.assertEqual(sleep.call_args_list[1].args, (1.0,))
+        self.assertEqual((len(series), latest), (1, "20260109"))
+
+    def test_rate_limit_retries_are_bounded_then_abort(self):
+        ts = _fake_ts(None)
+        attempts = 0
+
+        def limited_pro_bar(**kw):
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("HTTP 429 Too Many Requests")
+
+        ts.pro_bar = limited_pro_bar
+        with patch("runners.a_short_weekly_pipeline.time.sleep") as sleep:
+            with self.assertRaises(SystemExit):
+                _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_tushare_chinese_rate_limit_retries_are_bounded_then_abort(self):
+        ts = _fake_ts(None)
+        attempts = 0
+
+        def limited_pro_bar(**kw):
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("每分钟最多访问该接口")
+
+        ts.pro_bar = limited_pro_bar
+        with patch("runners.a_short_weekly_pipeline.time.sleep") as sleep:
+            with self.assertRaises(SystemExit):
+                _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        self.assertEqual(attempts, 3)
+        self.assertEqual(sleep.call_count, 2)
+
+    def test_tushare_permission_error_does_not_retry(self):
+        ts = _fake_ts(None)
+        attempts = 0
+
+        def denied_pro_bar(**kw):
+            nonlocal attempts
+            attempts += 1
+            raise RuntimeError("没有访问该接口的权限")
+
+        ts.pro_bar = denied_pro_bar
+        with patch("runners.a_short_weekly_pipeline.time.sleep") as sleep:
+            with self.assertRaises(SystemExit):
+                _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        self.assertEqual(attempts, 1)
+        sleep.assert_not_called()
+
+    def test_non_transient_exception_does_not_retry(self):
+        ts = _fake_ts(None)
+        attempts = 0
+
+        def invalid_pro_bar(**kw):
+            nonlocal attempts
+            attempts += 1
+            raise ValueError("bad local argument")
+
+        ts.pro_bar = invalid_pro_bar
+        with patch("runners.a_short_weekly_pipeline.time.sleep") as sleep:
+            with self.assertRaises(SystemExit):
+                _fetch_price_series(ts, object(), "600000.SH", "20260101", "20260109")
+        self.assertEqual(attempts, 1)
+        sleep.assert_not_called()
 
     def test_future_bar_aborts(self):
         # R-ASHORT-WEEKLY-PRICE-SERIES-PIT-FRESHNESS-GAP: trade_date > as_of must abort.
@@ -1229,6 +1403,16 @@ def _official(status, sev=None, rt="x", dd="20260601", url="u"):
     return {"status": status, "events": evs, "had_pit_announcements": bool(evs)}
 
 
+def _confirmed_regulatory(semantic, decision="confirmed_material", ts_code="600000.SH", event_indexes=(0,)):
+    from engine.a_short_regulatory_advisory import event_fingerprint
+    out = dict(semantic)
+    out["regulatory_advisory"] = {"event_decisions": [
+        {"event_fingerprint": event_fingerprint(ts_code, semantic["events"][index]), "decision": decision}
+        for index in event_indexes
+    ]}
+    return out
+
+
 def _web(status, risk, action="downgrade", n_sources=1):
     # Slice 2 engine input shape: {"web_llm": {...}, "sources": [...]} (DeepSeek 判官产出)
     src = [{"title": "t", "url": "http://x/%d" % i, "source_type": "sina"} for i in range(n_sources)]
@@ -1250,13 +1434,20 @@ class SemanticIntoM67(unittest.TestCase):
         validate_m67_consistency(r)          # must ALWAYS stay consistent (table↔action, 否决→null, …)
         return r
 
-    def test_high_official_forces_fouju_and_nulls_trade(self):
-        r = self._report(_official("risk", "high", "立案调查"))
+    def test_confirmed_high_official_forces_fouju_and_nulls_trade(self):
+        r = self._report(_confirmed_regulatory(_official("risk", "high", "立案调查")))
         self.assertEqual(r["m67"]["table"]["操作"], "否决")
         for k in ("股数", "入", "盈一", "盈二", "损"):
             self.assertIsNone(r["m67"]["table"][k])
         self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "veto")
         self.assertIn("语义官方", r["m67"]["精简结论区"]["否决审查触发"])
+
+    def test_unconfirmed_high_is_pending_not_veto(self):
+        r = self._report(_official("risk", "high", "立案调查"))
+        self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+        self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "pending")
+        self.assertEqual(r["machine"]["layer"]["semantic_risk"]["regulatory_confirmation"]["status"],
+                         "pending_confirmation")
 
     def test_medium_official_is_pending_no_penalty(self):
         base = self._report(None)
@@ -1339,7 +1530,7 @@ class SemanticIntoM67(unittest.TestCase):
             self.assertEqual(sr["impact"], "pending")
             self.assertEqual(sr["evidence_incomplete_high"], 1)
             self.assertEqual(sr["severity_max"], "high")               # severity honest, impact demoted
-            self.assertIn("缺 URL/PDF", r["m67"]["精简结论区"]["否决审查触发"])
+            self.assertIn("待人工确认", r["m67"]["精简结论区"]["否决审查触发"])
 
     def test_full_url_high_vetoes_even_alongside_a_blank_url_high(self):
         sem = {"status": "risk", "had_pit_announcements": True, "events": [
@@ -1347,14 +1538,14 @@ class SemanticIntoM67(unittest.TestCase):
              "url_or_pdf": "u", "risk_type": "立案", "severity": "high"},
             {"source": "cninfo", "title": "t2", "category": "c", "disclosure_date": "20260601",
              "url_or_pdf": "", "risk_type": "处罚", "severity": "high"}]}
-        r = self._report(sem)
-        self.assertEqual(r["m67"]["table"]["操作"], "否决")            # full-evidence high still vetoes
+        r = self._report(_confirmed_regulatory(sem))
+        self.assertEqual(r["m67"]["table"]["操作"], "否决")            # confirmed full-evidence high vetoes
         self.assertEqual(r["machine"]["layer"]["semantic_risk"]["impact"], "veto")
 
     def test_normalize_semantic_param_threads_through_build_weekly(self):
         n = normalize_candidate(_egs_candidate(), _series(), _overlay_row(), 55.0,
                                 {"available_cash": 500000.0}, "震荡期",
-                                semantic=_official("risk", "high", "立案调查"))
+                                semantic=_confirmed_regulatory(_official("risk", "high", "立案调查")))
         self.assertEqual(n["semantic"]["status"], "risk")
         w = build_weekly_report([n], AS_OF, self.GEN)
         self.assertEqual(w["reports"][0]["m67"]["table"]["操作"], "否决")
@@ -1408,10 +1599,10 @@ class SemanticWebLLMIntoM67(unittest.TestCase):
             self.assertEqual(self._wtrace(r)["impact"], "none")
             self.assertFalse(self._web_downgrades(r))
 
-    def test_web_tailwind_never_rescues_official_hard_veto(self):
+    def test_web_tailwind_never_rescues_confirmed_official_advisory_veto(self):
         from runners.a_short_phase5_engine import build_m67_report, validate_m67_consistency
         n = _normalized()
-        n["semantic"] = _official("risk", "high", "立案调查")     # official high → 否决
+        n["semantic"] = _confirmed_regulatory(_official("risk", "high", "立案调查"))
         n["semantic_web_llm"] = _web("tailwind", "low", action="no_action")
         r = build_m67_report(n, AS_OF, self.GEN); validate_m67_consistency(r)
         self.assertEqual(r["m67"]["table"]["操作"], "否决")        # web tailwind cannot upgrade

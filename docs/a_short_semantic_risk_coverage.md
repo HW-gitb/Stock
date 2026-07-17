@@ -41,5 +41,9 @@
 - **Slice 2(已建)**:DeepSeek web/LLM **判官**接进 M6.7——周报内 `_build_deepseek_web_llm_provider`(一次性批量抓 **em 资讯**(`fetch_em_news`,取代失效 sina;见契约 §web_llm 产出路径)→ 逐票 `runners/a_short_deepseek_semantic_adapter.judge_web_llm` 让 DeepSeek 判,**缺 key/SDK/抓取失败/答复不可解析/违反契约 → 全 unknown 中性,非阻断、绝不打印 key**)产 `web_llm`;引擎 `semantic_web_llm` 族:web **risk/risk_candidate/headwind 且有 sources 证据 → downgrade**(**绝不 hard_veto**),tailwind/clear_light 不救回硬风控,unknown/无输入/违反契约 → 中性化(trace 标 `invalid_neutralized`,非静默)。web_llm 跨字段不变式复用 `_web_llm_consistency_error`(单一来源)。两层来源仍在 `machine.layer.semantic_risk` 可追溯。
 - **Slice 3b 已收口**:render 行内化 + 废弃独立面板(3b-1)+ 退役独立 summary CLI/Stage-4 + weekly_screening 跑 M6.7(3b-2,M6.7 端到端 `执行` 验证通过)。**Slice 3 已 land**(见下:POL-RISK 移除 / cninfo 降 advisory;真生产监管硬否决 = 未来 opt-in (b))。advisory-only / unknown-not-clear / 不进 production scoring / 不进回测 边界全程保留。
 
+## Current official-regulatory confirmation rule
+
+Official CNINFO `high` evidence is first `pending_confirmation` for human confirmation, not an automatic M6.7 veto. The confirmation must bind the current `as_of`, EGS candidate digest, and exact official-event fingerprint. Only `confirmed_material` plus a non-empty official link may create the non-production M6.7 advisory veto; `confirmed_not_material` never rescues another control, and `needs_more_information` or a blank link stays pending. See `docs/a_short_regulatory_advisory_contract.md`.
+
 ## 不在本层(deferred)
 - **Slice 3 已 land(2026-06-20 reconciliation)**:legacy DeepSeek `POL-RISK-VETO` **已移除**、cninfo `REGULATOR-VETO` **已降为 advisory**(`REGULATOR-ADVISORY`,不删生产候选)+ 修「空公告=通过」假清白(→未核查)。**剩 = 把 cninfo 官方命中做成『真』生产监管硬否决 = 未来 opt-in (b)**(修请求形态 `code,orgId` + PIT + governance + 测)。追踪:`docs/system_risk_register.md`(tracker 已 flip `resolved` + Slice-3 Required 条目)+ `tests/test_semantic_risk_slice3_guard.py`(stays-resolved 回归守护)。

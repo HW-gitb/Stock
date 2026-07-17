@@ -25,6 +25,7 @@ from runners.a_short_phase5_engine import (  # noqa: E402
     _REDUCE_RATIO_ADVISORY, _holding_active_alerts,
     _holding_ratchet, _ratchet_report_error, _severity_max_disposition,
 )
+from engine.a_short_regulatory_advisory import event_fingerprint  # noqa: E402
 from runners.a_short_m67_render import _active_alert_line, _ratchet_line  # noqa: E402
 from runners.a_short_weekly_pipeline import (  # noqa: E402
     load_holding_ratchet, _apply_holding_ratchet, save_holding_ratchet, _holding_ratchet_key,
@@ -302,6 +303,11 @@ _OFFICIAL_HIGH = {"status": "risk", "had_pit_announcements": True,
                   "events": [{"source": "cninfo", "title": "立案调查", "category": "监管",
                               "disclosure_date": "20260610", "risk_type": "litigation",
                               "severity": "high", "url_or_pdf": "http://cninfo.example/x.pdf"}]}
+_OFFICIAL_HIGH_CONFIRMED = copy.deepcopy(_OFFICIAL_HIGH)
+_OFFICIAL_HIGH_CONFIRMED["regulatory_advisory"] = {"event_decisions": [{
+    "event_fingerprint": event_fingerprint("600000.SH", _OFFICIAL_HIGH_CONFIRMED["events"][0]),
+    "decision": "confirmed_material",
+}]}
 _OFFICIAL_HIGH_NOURL = {"status": "risk", "had_pit_announcements": True,
                         "events": [{"source": "cninfo", "title": "例行公告", "category": "监管",
                                     "disclosure_date": "20260610", "risk_type": "litigation",
@@ -327,9 +333,9 @@ class SemanticAdvisoryImpactTests(unittest.TestCase):
     web downgrade → priority_down)。semantic 永 advisory / 非生产;web_llm 绝不 hard_veto。"""
 
     def test_official_high_emits_advisory_veto(self):
-        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH_CONFIRMED), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "否决")               # advisory veto 仍落 操作=否决
-        off = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high"]
+        off = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high_confirmed"]
         self.assertEqual(len(off), 1)
         self.assertEqual(off[0]["veto_class"], "m67_advisory_veto")       # 非 production_hard_veto
         self.assertFalse(off[0]["production_effect_enabled"])
@@ -356,17 +362,17 @@ class SemanticAdvisoryImpactTests(unittest.TestCase):
         self.assertEqual(_sem_impacts(build_m67_report(_good_input(), AS_OF, "t")), [])
 
     def test_semantic_impact_passes_schema(self):
-        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH, semantic_web_llm=_WEB_RISK), AS_OF, "t")
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH_CONFIRMED, semantic_web_llm=_WEB_RISK), AS_OF, "t")
         jsonschema.validate(r, _load(M67_SCHEMA))
         self.assertEqual(len(_sem_impacts(r)), 2)                         # official + web 各一条
 
     def test_held_topn_official_high_holding_advisory_not_veto(self):
         # S2 fix(R-...-S2-HOLDING-SEMANTIC-TOPN-RENDER-DRIFT): 持仓在 TopN(走 build_m67)+ official high →
         # 持有(不否决) + holding_row_impact clear_review(按 has_position scope,不依 builder),绝不进候选 hard veto。
-        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH, stateful_risk=_held_state()), AS_OF, "t")
+        r = build_m67_report(_good_input(semantic=_OFFICIAL_HIGH_CONFIRMED, stateful_risk=_held_state()), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "持有")
         self.assertEqual(r["machine"]["layer"]["hard_veto"], [])
-        imp = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high"][0]
+        imp = [i for i in _sem_impacts(r) if i["source_field"] == "semantic_official_high_confirmed"][0]
         self.assertEqual(imp["visibility_shape"], "holding_row_impact")
         self.assertEqual(imp["holding_effect"], "clear_review")
         self.assertTrue(imp["blocked_add_required"])
@@ -390,19 +396,19 @@ class SemanticGuardTests(unittest.TestCase):
     """4.2 第3轮 guard ⑦⑧⑨⑩ + 持仓 holding_row_impact 合法形态(构造输入直接喂 guard)。"""
 
     def _veto_report(self):
-        return build_m67_report(_good_input(semantic=_OFFICIAL_HIGH), AS_OF, "t")   # 候选 advisory-veto
+        return build_m67_report(_good_input(semantic=_OFFICIAL_HIGH_CONFIRMED), AS_OF, "t")   # 候选 advisory-veto
 
     def test_guard7_advisory_veto_must_be_nonproduction(self):
         r = self._veto_report()
         [i for i in r["machine"]["operation_impact"]
-         if i["source_field"] == "semantic_official_high"][0]["production_effect_enabled"] = True
+         if i["source_field"] == "semantic_official_high_confirmed"][0]["production_effect_enabled"] = True
         with self.assertRaises(ValueError):
             validate_operation_impact_no_dangling(r)
 
     def test_semantic_official_cannot_be_promoted_to_production_hard_veto(self):
         r = self._veto_report()
         imp = [i for i in r["machine"]["operation_impact"]
-               if i["source_field"] == "semantic_official_high"][0]
+               if i["source_field"] == "semantic_official_high_confirmed"][0]
         imp["veto_class"] = "production_hard_veto"
         imp["production_effect_enabled"] = True
         with self.assertRaises(ValueError):
@@ -411,7 +417,7 @@ class SemanticGuardTests(unittest.TestCase):
     def test_semantic_official_hard_veto_must_keep_advisory_veto_class(self):
         r = self._veto_report()
         imp = [i for i in r["machine"]["operation_impact"]
-               if i["source_field"] == "semantic_official_high"][0]
+               if i["source_field"] == "semantic_official_high_confirmed"][0]
         imp["veto_class"] = "none"
         with self.assertRaises(ValueError):
             validate_operation_impact_no_dangling(r)
@@ -426,7 +432,7 @@ class SemanticGuardTests(unittest.TestCase):
     def test_any_semantic_advisory_cannot_claim_production_effect(self):
         r = self._veto_report()
         imp = [i for i in r["machine"]["operation_impact"]
-               if i["source_field"] == "semantic_official_high"][0]
+               if i["source_field"] == "semantic_official_high_confirmed"][0]
         imp["source_field"] = "semantic_future_feed"
         imp["veto_class"] = "production_hard_veto"
         imp["production_effect_enabled"] = True
@@ -485,9 +491,10 @@ class HoldingSemanticS2Tests(unittest.TestCase):
         return inp
 
     def test_official_high_holding_clear_review(self):
-        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH_CONFIRMED), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "持有")          # 持仓 semantic 绝不翻否决
-        imp = [i for i in r["machine"]["operation_impact"] if i["source_field"] == "semantic_official_high"][0]
+        imp = [i for i in r["machine"]["operation_impact"]
+               if i["source_field"] == "semantic_official_high_confirmed"][0]
         self.assertEqual(imp["visibility_shape"], "holding_row_impact")
         self.assertEqual(imp["holding_effect"], "clear_review")
         self.assertEqual(imp["new_entry_effect"], "none")
@@ -524,7 +531,7 @@ class HoldingSemanticS2Tests(unittest.TestCase):
         validate_m67_consistency(r)
 
     def test_holding_semantic_does_not_hard_veto(self):
-        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH), AS_OF, "t")
+        r = build_holding_report(self._held_inp(semantic=_OFFICIAL_HIGH_CONFIRMED), AS_OF, "t")
         self.assertEqual(r["machine"]["layer"]["hard_veto"], [])      # 持仓 semantic 不进 hard_veto(S1 被动持有)
 
     def test_official_unknown_holding_text_not_checked(self):

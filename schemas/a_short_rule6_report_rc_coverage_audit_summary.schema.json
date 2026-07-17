@@ -1,0 +1,75 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-Short Rule6 report_rc candidate-pool coverage and PIT-shape audit summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "generated_at", "scope", "candidate_pool", "execution", "coverage", "pit_assessment", "storage", "decision"],
+  "properties": {
+    "schema_name": {"const": "a_short_rule6_report_rc_coverage_audit_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "generated_at": {"type": "string"},
+    "scope": {"$ref": "#/$defs/scope"},
+    "candidate_pool": {
+      "type": "object", "additionalProperties": false,
+      "required": ["trade_date", "candidate_count", "candidate_digest", "report_window_start", "report_window_end", "pinned_tushare_version", "analysis_input_reference", "analysis_input_sha256"],
+      "properties": {
+        "trade_date": {"pattern": "^[0-9]{8}$"}, "candidate_count": {"type": "integer", "minimum": 1},
+        "candidate_digest": {"pattern": "^[0-9a-f]{64}$"}, "report_window_start": {"pattern": "^[0-9]{8}$"}, "report_window_end": {"pattern": "^[0-9]{8}$"},
+        "pinned_tushare_version": {"const": "1.4.29"}, "analysis_input_reference": {"pattern": "^[^\\\\:]+$"}, "analysis_input_sha256": {"pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "execution": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "planned_report_rc_reads", "completed_report_rc_reads", "error_report_rc_reads", "min_interval_seconds", "error_category_counts"],
+      "properties": {
+        "status": {"enum": ["completed", "completed_with_errors"]}, "planned_report_rc_reads": {"type": "integer", "minimum": 1},
+        "completed_report_rc_reads": {"type": "integer", "minimum": 0}, "error_report_rc_reads": {"type": "integer", "minimum": 0},
+        "min_interval_seconds": {"type": "number", "minimum": 0, "maximum": 60},
+        "error_category_counts": {"type": "object", "additionalProperties": false, "properties": {"rate_limited_or_frequency_cap": {"type": "integer", "minimum": 1}, "permission_or_entitlement": {"type": "integer", "minimum": 1}, "authentication": {"type": "integer", "minimum": 1}, "endpoint_or_parameter": {"type": "integer", "minimum": 1}, "provider_or_undetermined": {"type": "integer", "minimum": 1}}}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidates_with_nonempty_response", "candidates_with_as_of_rows", "candidates_with_multiple_orgs", "total_response_rows", "total_as_of_rows", "total_future_dated_rows", "total_invalid_or_missing_report_date_rows", "total_duplicate_identity_rows"],
+      "properties": {
+        "candidates_with_nonempty_response": {"type": "integer", "minimum": 0}, "candidates_with_as_of_rows": {"type": "integer", "minimum": 0}, "candidates_with_multiple_orgs": {"type": "integer", "minimum": 0},
+        "total_response_rows": {"type": "integer", "minimum": 0}, "total_as_of_rows": {"type": "integer", "minimum": 0}, "total_future_dated_rows": {"type": "integer", "minimum": 0},
+        "total_invalid_or_missing_report_date_rows": {"type": "integer", "minimum": 0}, "total_duplicate_identity_rows": {"type": "integer", "minimum": 0}
+      }
+    },
+    "pit_assessment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cutoff_field", "all_successful_responses_have_report_date_column", "all_successful_response_rows_are_on_or_before_trade_date", "provider_observed_at_or_ingested_at_present", "historical_consensus_reconstruction_proven", "rule6_wiring_authorized", "reason"],
+      "properties": {
+        "cutoff_field": {"const": "report_date"}, "all_successful_responses_have_report_date_column": {"type": "boolean"}, "all_successful_response_rows_are_on_or_before_trade_date": {"type": "boolean"},
+        "provider_observed_at_or_ingested_at_present": {"const": false}, "historical_consensus_reconstruction_proven": {"const": false}, "rule6_wiring_authorized": {"const": false}, "reason": {"type": "string", "minLength": 1}
+      }
+    },
+    "storage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["raw_payload_root", "raw_payload_root_gitignored", "tracked_summary_contains_candidate_tickers", "tracked_summary_contains_raw_rows", "tracked_summary_contains_request_urls", "tracked_summary_contains_secret"],
+      "properties": {
+        "raw_payload_root": {"const": "provider_samples/a_short_rule6_report_rc_coverage_audit_20260714"}, "raw_payload_root_gitignored": {"const": true},
+        "tracked_summary_contains_candidate_tickers": {"const": false}, "tracked_summary_contains_raw_rows": {"const": false}, "tracked_summary_contains_request_urls": {"const": false}, "tracked_summary_contains_secret": {"const": false}
+      }
+    },
+    "decision": {"$ref": "#/$defs/decision"}
+  },
+  "$defs": {
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["market", "purpose", "tushare_is_wired_into_rule6", "egs_or_weekly_behavior_changed", "production_or_ship_gate_claimed", "broker_or_order_action"],
+      "properties": {
+        "market": {"const": "A-share"}, "purpose": {"const": "rule6_good_data_bad_reaction_report_rc_coverage_and_pit_shape_audit_only"},
+        "tushare_is_wired_into_rule6": {"const": false}, "egs_or_weekly_behavior_changed": {"const": false}, "production_or_ship_gate_claimed": {"const": false}, "broker_or_order_action": {"const": false}
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rule6_d_tier_status_remains_not_applicable", "downstream_rule6_wiring_authorized", "separate_review_required_before_any_future_use"],
+      "properties": {
+        "rule6_d_tier_status_remains_not_applicable": {"const": true}, "downstream_rule6_wiring_authorized": {"const": false}, "separate_review_required_before_any_future_use": {"const": true}
+      }
+    }
+  }
+}

@@ -33,11 +33,15 @@ def _semantic_line(report: dict) -> str:
     off = (f"官方 {sr.get('official_status', 'unknown')}"
            + (f"[{sev}]" if sev else "") + (f"·{n_ev}事件" if n_ev else "")
            + f"·impact={sr.get('impact', 'none')}")
+    rc = sr.get("regulatory_confirmation") or {}
+    confirmation = (f"监管人工确认 {rc.get('status', 'not_required')}"
+                    + (f"·待核high={rc.get('pending_high_count')}"
+                       if rc.get("pending_high_count") else ""))
     w = sr.get("web_llm") or {}
     web = (f"web {w.get('status', 'unknown')}/{w.get('risk_level', 'unknown')}/{w.get('action', 'no_action')}"
            + f"·{w.get('sources_count', 0)}源·impact={w.get('impact', 'none')}"
            + ("·已中性化" if w.get("invalid_neutralized") else ""))
-    return f"- 语义风险(advisory·非确定·不进确定性字段):{off} / {web}"
+    return f"- 语义风险(advisory·非确定·不进确定性字段):{off} / {confirmation} / {web}"
 
 
 def _holding_state(report: dict):
@@ -210,7 +214,7 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
         for r in holding_reports:
             t = r["m67"]["table"]
             out.append(f"#### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}（{_coverage_label(r)}）")
-            for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "板块资金事件", "风控触发"):
+            for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "Rule6人工核查", "板块资金事件", "风控触发"):
                 out.append(f"- {k}:{_card_field(r, k)}")
             hs_label, hs_reason = _holding_state(r)
             if hs_label not in ("空仓", "—"):
@@ -335,7 +339,7 @@ def render_weekly_markdown(weekly: dict) -> str:
         jq = r["m67"]["精简结论区"]
         t = r["m67"]["table"]
         out.append(f"### {_cell(r.get('ts_code'))} {_cell(r.get('name'))} — {t['操作']}　{_cell(t['优先级'])}")
-        for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "板块资金事件", "风控触发"):
+        for k in ("当前环境", "波动率状态", "现价与成本", "否决审查触发", "Rule6人工核查", "板块资金事件", "风控触发"):
             out.append(f"- {k}:{jq.get(k, '')}")
         hs_label, hs_reason = _holding_state(r)      # 4.3-C:仅在持仓/冷静态显式标出(空仓/无账户不加噪音)
         if hs_label not in ("空仓", "—"):

@@ -1,0 +1,60 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_rule6_thresholds/1.0.0/schema.json",
+  "title": "A-Short Rule6 Frozen Threshold Contract",
+  "description": "Exact v14.2 Rule6 thresholds for the machine-computable checks. These constants are a parity contract, not result-tuned parameters.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "source_spec", "thresholds"],
+  "properties": {
+    "schema_name": {"const": "a_short_rule6_thresholds"},
+    "schema_version": {"const": "1.0.0"},
+    "source_spec": {"const": "skills/a_short_analysis/reference/v14.2_spec.md#Rule6"},
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "holder_below_5pct_after_ratio_lt_pct",
+        "iv_nobuild_percentile_gt",
+        "volume_stall_lookback_days",
+        "volume_stall_latest_volume_multiple_gt",
+        "volume_stall_pct_change_lt_pct",
+        "volume_stall_close_range_fraction_lte",
+        "cash_debt_asset_ratio_gt",
+        "margin_extreme_lookback_days",
+        "margin_extreme_growth_gt",
+        "margin_extreme_price_gain_lt",
+        "block_trade_lookback_days",
+        "block_trade_discount_gt",
+        "block_trade_discounted_trade_count_gte",
+        "block_trade_discounted_amount_cny_gt",
+        "short_selling_lookback_days",
+        "short_selling_balance_growth_gt",
+        "ar_growth_consecutive_quarters",
+        "ar_growth_to_revenue_growth_min",
+        "contract_liability_growth_to_ar_growth_min"
+      ],
+      "properties": {
+        "holder_below_5pct_after_ratio_lt_pct": {"const": 5.0},
+        "iv_nobuild_percentile_gt": {"const": 90.0},
+        "volume_stall_lookback_days": {"const": 5},
+        "volume_stall_latest_volume_multiple_gt": {"const": 2.0},
+        "volume_stall_pct_change_lt_pct": {"const": 2.0},
+        "volume_stall_close_range_fraction_lte": {"const": 0.3333333333333333},
+        "cash_debt_asset_ratio_gt": {"const": 0.25},
+        "margin_extreme_lookback_days": {"const": 10},
+        "margin_extreme_growth_gt": {"const": 0.2},
+        "margin_extreme_price_gain_lt": {"const": 0.05},
+        "block_trade_lookback_days": {"const": 10},
+        "block_trade_discount_gt": {"const": 0.07},
+        "block_trade_discounted_trade_count_gte": {"const": 2},
+        "block_trade_discounted_amount_cny_gt": {"const": 100000000.0},
+        "short_selling_lookback_days": {"const": 5},
+        "short_selling_balance_growth_gt": {"const": 1.0},
+        "ar_growth_consecutive_quarters": {"const": 2},
+        "ar_growth_to_revenue_growth_min": {"const": 2.0},
+        "contract_liability_growth_to_ar_growth_min": {"const": 0.8}
+      }
+    }
+  }
+}
