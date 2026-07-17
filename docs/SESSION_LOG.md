@@ -156,6 +156,19 @@
 - **Required**: `R-ASHORT-D4-SOURCE-HASH-BINDING-UNENFORCED`（material）— 完整 Required / 风险 / 两条 closure 路径 / 两条 low Optional 见 `docs/system_risk_register.md`（单一来源）。B1、D2 code PASS 无 Required。
 - **Verify**: 亲跑 d6ac 树 5 目标模块 581 OK + `tests/schema *a_short*` 48 OK；全 lane `discover test_a_short*` 出 3F+4E，经已提交基线 da767a2e（无 B1/D2/D4）对照证完全相同、全为既存（entry_funnel 缺 `result/a_short/20260622/overlay.json` fixture；gap_data_registry holding disposition R3/R4a/R4b），非本切片回归；1 独立对抗只读 agent 攻 D4 六不变式 = 5 ENFORCED + source-hash 1 GAP（已亲验预注册/runner/仓库无 rank_samples.csv）；review-evidence:not_available。
 - **Next**: Codex：修复
+## 2026-07-17 — Claude Code 独立复审（US-short A1 对比轨 v2 第六刀：source-bound 累积器 + 五状态裁决）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。`comparison_ledger.py`=provenance 门+累积器+H10/风险裁决+待用户 receipt+去标识 banner。①advice-only、BOUNDARY 全 False、balanced 不动;②receipt 精确绑 retained 私有周全 digest+schema const same_run_live_source:true;③非重叠 H10 块+严格递增+去重+backfill/no-count 拒;④五状态+风险护栏(drawdown/tail/turnover/fill 恶化→formal_pass False,大亏不能赢);⑤adjudication/banner 无 ticker、账本只落 gitignored 私密路径。consumer-only:源+report 注入未建→无真周可计、时钟不动。纯新增。
+- **Required**: 无。register `R-USSHORT-A1-SOURCE-BOUND-COMPARISON-ACCUMULATOR` in_progress→resolved。
+- **Verify**: 整读 479 行引擎(receipt 门/累积/裁决/bootstrap/placebo/Holm/风险/banner/持久化)。亲跑(298a、未采信 Codex 4482):焦点 forward_policy 91 OK;全包 `test_us_short*` 4483 OK(300s)。自写 helper 探针核 _nonoverlap 丢重叠周/_holm 单调/_max_drawdown 峰谷/五状态五分支+receipt schema const。按比例(shadow-only·advice-only·gated)未起 §6a agent。
+- **Next**: 全候选价格源+H20 producer+同run receipt 发射 / report banner 注入(均 gated,建齐才有真周计入) 后续,本刀未触。
+
+## 2026-07-17 - Codex execute (US-short A1 functional blade 3: source-bound accumulator consumer)
+
+- **Verdict/Action**: Added the private source-receipt gate, strictly ordered accumulator, H10/risk adjudicator, pending user-decision receipt, and de-identified persistent comparison reminder in `engine/us_short_forward_policy_comparison_ledger.py`. A counted week must bind the retained Cut-A capture, source context, full H20 price window, cost/adjustment evidence, common price snapshot and opaque source packet. The evaluator is advice-only and keeps `balanced` untouched.
+- **Required**: `R-USSHORT-A1-SOURCE-BOUND-COMPARISON-ACCUMULATOR` remains in progress: the weekly capstone still has no Pass2-clean all-candidate capture-price/future H20 source producer, cannot emit the same-run receipt, and cannot inject the reminder into the frozen official report. Therefore no real evidence clock moves yet. Claude Code must review this consumer-only slice and commit only after PASS.
+- **Verify**: final targeted comparison/private-week/projection/plan/schema/doc pack 50 OK; `py_compile`, both new schema parses and `git diff --check` passed. Full `test_us_short*.py`: 4482 OK, 1 skipped; route-doc guards: 25 OK. Current-diff self-review PASS: no new provider call, public ticker artifact, auto-switch, replay/backfill count, selected-only execution path, or report-contract mutation; only the documented source-producer/report-injection seam remains open.
+
 ## 2026-07-17 — Claude Code 独立复审（US-short A1 对比轨 v2 第五刀：共同池 H10 私有投影）PASS
 
 - **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。`weekly_evidence.py` 把一份已验证 blade-4 私有周投影成六头 H10 证据:全池 H10 值(非 selected-only)、六头共享同一值池按各自冻结 Cut-A selection 取、固定 Top15(15)分母、H10<H20-availability 时钟分离、no-count 全或无、evaluation_mark 非 production exit(BOUNDARY 全 False)、reload 重算 means/deltas+重验源私有周(含重跑 outcome core)。纯 in-memory 无 write/provider/accumulator/ship-gate。纯新增、无改已落库码。

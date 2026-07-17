@@ -230,6 +230,26 @@ register + code are the source of truth.
 > must land **before the first authorized LIVE capture run** ("代码可缓、计划不能缓"); Cut B then applies that
 > pre-registered method to Cut A's captures.
 
+## 4.1 Functional blade 3 — source-bound accumulation / formal advice (consumer implemented; weekly producer pending)
+
+`engine/us_short_forward_policy_comparison_ledger.py` and its two schemas add the private consumer half of the
+third functional blade. A ready fourth/fifth-blade private week can enter the ledger only with a distinct same-run
+source receipt that binds the exact capture, source context, retained 20-session price window, frozen costs,
+corporate-action evidence, common-price snapshot and an opaque source-packet digest. No-count, replay/backfill,
+source-digest drift and conflicting decision dates fail closed.
+
+The evaluator is advisory-only. It uses H10 after-cost return plus equal-weight Top15 daily marked NAV (unfilled names
+stay cash), drawdown, bad-pick rate, worst-20% tail loss, fill/turnover, fixed seeds 0..999 for a one-sided paired
+block bootstrap/placebo, and within-question Holm correction. It returns only `continue_accumulation`,
+`recommend_adopt_arm`, `recommend_retain_balanced`, `recommend_discard_arm`, or `inconclusive`; creates a pending
+explicit user receipt; and renders a persistent de-identified reminder stating that `balanced` is never auto-switched.
+
+**Open producer seam, therefore blade 3 is not closed yet:** current `forward_policy_shadow` captures same-day
+selections only. It does not have the all-candidate price-control map at capture nor the future H20
+price/cost/adjustment source packet, so it cannot issue the required same-run receipt or inject the reminder into the
+frozen official weekly report. No manual receipt may be treated as a real weekly record. That future producer must be
+a separately reviewed, explicitly authorized source-stage implementation; it adds no new provider call budget.
+
 ## 5. Per-cut discipline (every cut)
 
 - Own register R-ID + SESSION_LOG block; **offline**; **zero new provider** at decision time (heads reuse the
