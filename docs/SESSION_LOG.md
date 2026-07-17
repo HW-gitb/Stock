@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 落地 a_short 半边 + 收口 R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND（resolved）+ 并入 master + 清 709a
+
+- **Verdict/Action**: 按用户命把复审 PASS 的 a_short 半边落 wt/us-short(`0157973`,3 文件:`a_short_runtest.ps1` + `test_runtest_capsule.py` a_short 断言 delta + 新 `test_a_short_runtest_worker_binding.py`;base 与 709a HEAD CR-norm 字节一致、只落净 diff)。两半均已修+审+落 → register `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` **resolved**。随后把 wt/us-short 并入 **master**(本地 merge、**不 push**),并清空 Codex 709a 工作树(其代码已落 master;其在 master 的分叉 doc 从未 commit、丢弃即可、不污染 master)。
+- **Required**: 无。
+- **Verify**: 亲跑本分支全量 `tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 OK**;`git diff --cached --stat` 证只落 a_short 净 delta(ps1 +15/-5、新测试 153、capsule 断言 +11/-5)无整文件 churn。merge/clear 见随附 git 历史。
+- **Next**: 线闭。可选:胶囊现已修好,可另跑一次 runtest dry-run 真把测试数据放胶囊(原始 §2 请求现解锁)。
+
 ## 2026-07-17 — Claude Code 复审（Codex a_short runtest splat）：PASS（断言同步后全量 capsule 11 OK）
 
 - **Verdict/Action**: **PASS**。上一轮 FAIL 的那条已闭:Codex 把 `test_runtest_capsule.py` 的 a_short 断言同步到哈希表形(179 行旧数组 `'-CachePolicy','disabled'` → `CachePolicy = 'disabled'`;并加 `assertNotIn "$WorkerArgs"` / `$WorkerParams = @{` / `L3Mode='today'` / `PythonExe=$PythonExe` / AsOf·Account 条件 / `& $Worker @WorkerParams` 整套锁)。a_short 半边现正确 + 全绿。
