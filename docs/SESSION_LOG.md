@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 审查（Codex a_short runtest splat 尝试）：FAIL — ps1 对但打挂已有 capsule 测试
+
+- **Verdict/Action**: **FAIL**。Codex 在 worktree `.codex/worktrees/709a/Stock`(未提交、master `ea6e91de`)把 `a_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams`(键对 `weekly_screening.ps1` 声明参数、`L3Mode='today'`/`CachePolicy='disabled'` 合 ValidateSet)+ 新增 `tests/test_a_short_runtest_worker_binding.py`(2 测试过:真 PowerShell 调 wrapper 逐参数核按名绑定 + ExtraArgs 拒绝)——**ps1 修法本身对**。**但打挂了已有** `tests/test_runtest_capsule.py::test_launchers_keep_full_entry_in_capsule_and_forbid_reuse`:第 179 行仍断言旧数组形 `"'-CachePolicy', 'disabled'"`,fix 已删该形 → 全量 `tests.test_runtest_capsule` = **FAILED (failures=1)**。Codex 改了 us_short 断言(185-190)却漏了 a_short 那条,且显然改完 a_short 后没重跑全量 capsule 包。
+- **Required**: 改 `tests/test_runtest_capsule.py:179` 为哈希表形(`assertIn("CachePolicy = 'disabled'", a_short)`)+ 照 us_short 给 a_short 块补锁(`$WorkerParams = @{` / `& $Worker @WorkerParams` / `assertNotIn "$WorkerArgs"`),然后**重跑全量** `tests.test_runtest_capsule` 须全 OK(不是只跑新 a_short 测试)。完整单源见 register a_short handoff 的 Review 条。
+- **Verify**: 亲跑 709a `python -m unittest tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 tests, FAILED (failures=1)**——2 个新 a_short 绑定测试过、8/9 capsule 过、唯 line-179 静态断言崩;整读 `a_short_runtest.ps1` 全文(仅 worker 块变、create/activate/finish/source-guard 未动)+ 核 `weekly_screening.ps1` param 块键名匹配。us_short 半边不受影响(我 wt/us-short `7bed2f7` 未含 a_short fix、line 179 仍配旧 a_short、本分支 capsule 9 OK)。
+- **Next**: Codex：修 `test_runtest_capsule.py:179`(+ a_short 块断言镜像)后重跑全量 capsule 包全 OK;仍在 A-short 道、别碰 us_short。
+
 ## 2026-07-17 — Claude Code 落地 US-short runtest splat fix 到 wt/us-short（`7bed2f7`）+ a_short handoff 入 register
 
 - **Verdict/Action**: 按用户命把已审 PASS 的 US-short 半边落到 wt/us-short:从 Codex worktree 709a 取 2 个代码文件(`us_short_runtest.ps1` + `tests/test_runtest_capsule.py`)——base 与本分支 CR-normalize 后字节一致(本分支已含 2026-07-16 xlsx guard 修),故只落 Codex 的净 diff、不带它 709a 上分叉的两份 doc 编辑。`7bed2f7`。a_short 半边的 Codex 交接指令(verb+scope+文件+精确修法+要保的门+要补的回归)已写入 register 条目「Codex handoff — a_short half」。
