@@ -1,0 +1,40 @@
+{
+  "schema_name": "a_short_m67_runtime_policy",
+  "schema_version": "1.0.0",
+  "policy_id": "a_short_m67_runtime_policy_20260715",
+  "runtime_authority": true,
+  "phase5": {
+    "atr_mult": {"进攻期": 1.75, "震荡期": 1.25, "防御期": 1.0, "收缩期": 1.25},
+    "rr_floor": {"进攻期": 1.5, "震荡期": 1.5, "防御期": 2.0, "收缩期": 1.5},
+    "single_cap_pct": {"进攻期": 0.5, "震荡期": 0.4, "防御期": 0.25, "收缩期": 0.0},
+    "iv_halve_pct": 80.0,
+    "iv_nobuild_pct": 90.0,
+    "iv_hv_ratio_hi": 1.2,
+    "iv_hv_ratio_lo": 0.9,
+    "min_avg_amount_5d": 50000000.0,
+    "lowxi_band": 0.015,
+    "support_lookback": 20,
+    "resistance_lookback": 20,
+    "sr_spike_atr": 1.0,
+    "breakout_rr_bonus": 0.5,
+    "min_shares": 100,
+    "min_amount": 10000.0,
+    "impact_cost_frac": 0.005
+  },
+  "portfolio_risk": {
+    "same_sw_l2_threshold_pct": 40.0,
+    "northbound_threshold_pct": 10.0,
+    "margin_threshold_pct": 8.0,
+    "large_index_threshold_pct": 50.0,
+    "small_float_mv_threshold_pct": 40.0,
+    "small_float_mv_rmb": 8000000000.0,
+    "high_risk_holding_cap_multiplier": 0.8
+  },
+  "weekly_windows": {
+    "min_price_observations": 20,
+    "ex_div_window_days": 14,
+    "forward_event_window_days": 21,
+    "dragon_list_lookback_trading_days": 5,
+    "block_trade_lookback_trading_days": 5
+  }
+}

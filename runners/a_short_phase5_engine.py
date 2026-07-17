@@ -24,6 +24,7 @@ import os
 import jsonschema
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
 
+from engine.a_short_runtime_config import load_runtime_configuration
 from engine.a_short_rule6_contract import assess_rule6_checks, render_rule6_d_tier_banner
 from engine.a_short_regulatory_advisory import (
     RegulatoryAdvisoryContractError,
@@ -35,44 +36,38 @@ SCHEMA_NAME = "a_short_m67_report"
 SCHEMA_VERSION = "1.0.0"
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                            "schemas", "a_short_m67_report.schema.json")
-GOV_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                        "presets", "a_short_phase5_engine_governance_20260610.json")
-
-# ── 冻结阈值(参数化,与 governance artifact 逐字 parity;§4 阈值治理)──────────
-REGIMES = ("进攻期", "震荡期", "防御期", "收缩期")
-ATR_MULT = {"进攻期": 1.75, "震荡期": 1.25, "防御期": 1.0, "收缩期": 1.25}   # 主板中值
-RR_FLOOR = {"进攻期": 1.5, "震荡期": 1.5, "防御期": 2.0, "收缩期": 1.5}
-BREAKOUT_RR_BONUS = 0.5       # #6 V14.2 迁移(proposal §6 首项):突破型追高 entry_high 在现价上方、风险更大 → RR 门在 regime 基础上 +0.5(只建仓侧;持仓无 etype 不受影响)
-SINGLE_CAP_PCT = {"进攻期": 0.50, "震荡期": 0.40, "防御期": 0.25, "收缩期": 0.0}  # 收缩期禁新建仓
-IV_HALVE_PCT = 80.0            # Rule 3:IV>80 分位 → 新建仓减半
-IV_NOBUILD_PCT = 90.0          # Rule 3:IV>90 分位 → 不可建仓(硬)
-IV_HV_RATIO_HI = 1.2          # #6 IV-HV advisory:IV/HV ≥ 此 → 隐含显著高于已实现(期权偏贵/避险情绪);纯信息,不改 decision
-IV_HV_RATIO_LO = 0.9          # #6 IV-HV advisory:IV/HV ≤ 此 → 隐含低于已实现(情绪偏松/或低估波动);纯信息,不改 decision
-OVERHEAT_5D = 8.0
-OVERHEAT_20D = 22.0
-MIN_AVG_AMOUNT_5D = 5e7        # 5日均成交额下限(流动性底线)
-LOWXI_BAND = 0.015            # 低吸:现价在支撑 ±1.5%
-SUPPORT_LOOKBACK = 20
-RESISTANCE_LOOKBACK = 20
-SR_SPIKE_ATR = 1.0            # #5 有效支撑:最低 low 比次低 low 还低 > 1×ATR → 判单日插针,支撑取次低(抗单日极值)
+# ── 业务阈值只从 reviewed JSON runtime policy 导入;Python 不留数值后备 ────────
+_RUNTIME_CONFIGURATION = load_runtime_configuration()
+_PHASE5_POLICY = _RUNTIME_CONFIGURATION["m67"]["phase5"]
+REGIMES = tuple(_PHASE5_POLICY["atr_mult"])
+ATR_MULT = dict(_PHASE5_POLICY["atr_mult"])
+RR_FLOOR = dict(_PHASE5_POLICY["rr_floor"])
+BREAKOUT_RR_BONUS = _PHASE5_POLICY["breakout_rr_bonus"]
+SINGLE_CAP_PCT = dict(_PHASE5_POLICY["single_cap_pct"])
+IV_HALVE_PCT = _PHASE5_POLICY["iv_halve_pct"]
+IV_NOBUILD_PCT = _PHASE5_POLICY["iv_nobuild_pct"]
+IV_HV_RATIO_HI = _PHASE5_POLICY["iv_hv_ratio_hi"]
+IV_HV_RATIO_LO = _PHASE5_POLICY["iv_hv_ratio_lo"]
+MIN_AVG_AMOUNT_5D = _PHASE5_POLICY["min_avg_amount_5d"]
+LOWXI_BAND = _PHASE5_POLICY["lowxi_band"]
+SUPPORT_LOOKBACK = _PHASE5_POLICY["support_lookback"]
+RESISTANCE_LOOKBACK = _PHASE5_POLICY["resistance_lookback"]
+SR_SPIKE_ATR = _PHASE5_POLICY["sr_spike_atr"]
 SR_QUALITY = ("strong", "weak", "fallback_extreme")   # 有效支撑质量标记(strong=极值被次低背书 / weak=插针被剔→取次低 / fallback_extreme=无法评估退原始极值)
-MIN_SHARES = 100
-MIN_AMOUNT = 1e4
-IMPACT_COST_FRAC = 0.005     # 单只建仓 ≤ 5日均成交额 × 0.5%(冲击成本)
+MIN_SHARES = _PHASE5_POLICY["min_shares"]
+MIN_AMOUNT = _PHASE5_POLICY["min_amount"]
+IMPACT_COST_FRAC = _PHASE5_POLICY["impact_cost_frac"]
 
-GOVERNANCE = {
-    "atr_mult": ATR_MULT, "rr_floor": RR_FLOOR, "single_cap_pct": SINGLE_CAP_PCT,
-    "iv_halve_pct": IV_HALVE_PCT, "iv_nobuild_pct": IV_NOBUILD_PCT,
-    "iv_hv_ratio_hi": IV_HV_RATIO_HI, "iv_hv_ratio_lo": IV_HV_RATIO_LO,
-    "overheat_5d": OVERHEAT_5D, "overheat_20d": OVERHEAT_20D,
-    "min_avg_amount_5d": MIN_AVG_AMOUNT_5D, "lowxi_band": LOWXI_BAND,
-    "support_lookback": SUPPORT_LOOKBACK, "resistance_lookback": RESISTANCE_LOOKBACK,
-    "sr_spike_atr": SR_SPIKE_ATR, "breakout_rr_bonus": BREAKOUT_RR_BONUS,
-    "min_shares": MIN_SHARES, "min_amount": MIN_AMOUNT, "impact_cost_frac": IMPACT_COST_FRAC,
+# Compatibility mirror for the pre-existing Phase 5 governance artifact and
+# external readers. Both overheat values still come from the screening JSON;
+# this mirror is not a second runtime source.
+GOVERNANCE = dict(_PHASE5_POLICY) | {
+    "overheat_5d": _RUNTIME_CONFIGURATION["screening"]["overheat_5d"],
+    "overheat_20d": _RUNTIME_CONFIGURATION["screening"]["overheat_20d"],
 }
 
 RISK_FAMILIES = ("overheat_crowding", "liquidity_execution", "negative_event",
-                 "market_regime", "portfolio_concentration", "semantic_official",
+                 "market_regime", "semantic_official",
                  "semantic_web_llm", "stateful_risk")
 
 # 语义 web/LLM 层(Slice 2)只允许产生 downgrade 的已评估风险态(绝不 hard_veto;tailwind/clear_light/unknown 不降级)
@@ -379,15 +374,6 @@ def classify_risk_families(inp: dict, ind: dict, rule6_gate: dict | None = None)
         # 空仓 IV>80 → 减半 downgrade;regime unknown → 保守 downgrade。
         fam["market_regime"].update(hit=True, action="downgrade", reasons=mr)
 
-    # portfolio_concentration
-    pc = []
-    if (inp.get("portfolio") or {}).get("same_l2_exposure_over_cap"):
-        pc.append("同 SW L2 暴露超限")
-    if (inp.get("portfolio") or {}).get("factor_resonance"):
-        pc.append("因子共振")
-    if pc:
-        fam["portfolio_concentration"].update(hit=True, action="downgrade", reasons=pc)
-
     # stateful_risk(Rule12/Rule13 + 当前持仓):已有持仓只做持仓管理/禁止加仓;
     # flat candidate 在 Rule12 冷静期或 Rule13 再入冷静期内不可新建仓。
     sr_hard = []
@@ -613,9 +599,8 @@ def compute_star(inp: dict, fam: dict, eligible: bool) -> int:
     # formal -1. The LLM fundamental/policy advisory is display-only.
     if inp.get("industry_trend") == "headwind":
         star -= 1
-    for f in ("overheat_crowding", "portfolio_concentration"):
-        if fam[f]["action"] == "downgrade":
-            star -= 1
+    if fam["overheat_crowding"]["action"] == "downgrade":
+        star -= 1
     if (fam["market_regime"]["action"] == "downgrade"
             and any("unknown" in str(r) for r in fam["market_regime"].get("reasons", []))):
         star -= 1                         # EGS regime unknown fallback: explicit downgrade
@@ -1392,7 +1377,7 @@ def build_holding_report(inp: dict, as_of: str, generated_at: str) -> dict:
     # Tier-3 placeholder 风险族用 canonical 键(与主引擎 RISK_FAMILIES 对齐,Codex S3#2-1):全 not-evaluated
     # (未核查、非 hit);此前用非 canonical liquidity_impact/event_hard_veto 会让按 canonical 键聚合的下游漏读。
     fam = {k: {"hit": False, "action": "none", "reasons": []} for k in
-           ("market_regime", "overheat_crowding", "portfolio_concentration", "liquidity_execution",
+           ("market_regime", "overheat_crowding", "liquidity_execution",
             "negative_event", "semantic_official", "stateful_risk")}
     # 4.2 S2: 持仓 semantic 数据接入(让持仓也抓 cninfo/web 语义)。复用 _consume_semantic(候选/持仓单一来源)+
     # _semantic_operation_impacts(scope=existing_holding → holding_row_impact: clear_review/hold_watch + blocked_add

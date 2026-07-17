@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/a_short_m67_runtime_policy/1.0.0/schema.json",
+  "title": "A-short M6.7 Runtime Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "policy_id", "runtime_authority", "phase5", "portfolio_risk", "weekly_windows"],
+  "properties": {
+    "schema_name": {"const": "a_short_m67_runtime_policy"},
+    "schema_version": {"const": "1.0.0"},
+    "policy_id": {"type": "string", "minLength": 1},
+    "runtime_authority": {"const": true},
+    "phase5": {"$ref": "#/$defs/phase5"},
+    "portfolio_risk": {"$ref": "#/$defs/portfolioRisk"},
+    "weekly_windows": {"$ref": "#/$defs/weeklyWindows"}
+  },
+  "$defs": {
+    "number": {"type": "number"},
+    "positiveInteger": {"type": "integer", "minimum": 1},
+    "regimeMap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["进攻期", "震荡期", "防御期", "收缩期"],
+      "properties": {"进攻期": {"$ref": "#/$defs/number"}, "震荡期": {"$ref": "#/$defs/number"}, "防御期": {"$ref": "#/$defs/number"}, "收缩期": {"$ref": "#/$defs/number"}}
+    },
+    "phase5": {
+      "type": "object", "additionalProperties": false,
+      "required": ["atr_mult", "rr_floor", "single_cap_pct", "iv_halve_pct", "iv_nobuild_pct", "iv_hv_ratio_hi", "iv_hv_ratio_lo", "min_avg_amount_5d", "lowxi_band", "support_lookback", "resistance_lookback", "sr_spike_atr", "breakout_rr_bonus", "min_shares", "min_amount", "impact_cost_frac"],
+      "properties": {
+        "atr_mult": {"$ref": "#/$defs/regimeMap"}, "rr_floor": {"$ref": "#/$defs/regimeMap"}, "single_cap_pct": {"$ref": "#/$defs/regimeMap"},
+        "iv_halve_pct": {"$ref": "#/$defs/number"}, "iv_nobuild_pct": {"$ref": "#/$defs/number"}, "iv_hv_ratio_hi": {"$ref": "#/$defs/number"}, "iv_hv_ratio_lo": {"$ref": "#/$defs/number"},
+        "min_avg_amount_5d": {"$ref": "#/$defs/number"}, "lowxi_band": {"$ref": "#/$defs/number"},
+        "support_lookback": {"$ref": "#/$defs/positiveInteger"}, "resistance_lookback": {"$ref": "#/$defs/positiveInteger"}, "sr_spike_atr": {"$ref": "#/$defs/number"}, "breakout_rr_bonus": {"$ref": "#/$defs/number"},
+        "min_shares": {"$ref": "#/$defs/positiveInteger"}, "min_amount": {"$ref": "#/$defs/number"}, "impact_cost_frac": {"$ref": "#/$defs/number"}
+      }
+    },
+    "portfolioRisk": {
+      "type": "object", "additionalProperties": false,
+      "required": ["same_sw_l2_threshold_pct", "northbound_threshold_pct", "margin_threshold_pct", "large_index_threshold_pct", "small_float_mv_threshold_pct", "small_float_mv_rmb", "high_risk_holding_cap_multiplier"],
+      "properties": {"same_sw_l2_threshold_pct": {"$ref": "#/$defs/number"}, "northbound_threshold_pct": {"$ref": "#/$defs/number"}, "margin_threshold_pct": {"$ref": "#/$defs/number"}, "large_index_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_threshold_pct": {"$ref": "#/$defs/number"}, "small_float_mv_rmb": {"$ref": "#/$defs/number"}, "high_risk_holding_cap_multiplier": {"$ref": "#/$defs/number"}}
+    },
+    "weeklyWindows": {
+      "type": "object", "additionalProperties": false,
+      "required": ["min_price_observations", "ex_div_window_days", "forward_event_window_days", "dragon_list_lookback_trading_days", "block_trade_lookback_trading_days"],
+      "properties": {"min_price_observations": {"$ref": "#/$defs/positiveInteger"}, "ex_div_window_days": {"$ref": "#/$defs/positiveInteger"}, "forward_event_window_days": {"$ref": "#/$defs/positiveInteger"}, "dragon_list_lookback_trading_days": {"$ref": "#/$defs/positiveInteger"}, "block_trade_lookback_trading_days": {"$ref": "#/$defs/positiveInteger"}}
+    }
+  }
+}

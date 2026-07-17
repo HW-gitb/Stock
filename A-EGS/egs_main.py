@@ -128,6 +128,7 @@ from engine.a_short_hithink_l3 import (
     fetch_complete_concept_graph,
 )
 from engine.a_short_run_paths import weight_comparison_path
+from engine.a_short_runtime_config import load_runtime_configuration, runtime_configuration_lineage
 from engine.a_share_market_clock import a_share_market_date, a_share_market_wall_time
 from engine.a_short_tushare_client import init_tushare_pro
 from engine.a_short_rule6_contract import (
@@ -150,9 +151,11 @@ if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
     raise RuntimeError("请先设置环境变量 TUSHARE_TOKEN：$env:TUSHARE_TOKEN = \"your_token\"")
 # 建议通过环境变量设置：$env:TUSHARE_TOKEN = "your_token"
 
+_RUNTIME_CONFIGURATION = load_runtime_configuration()
+_SCREENING_THRESHOLDS = _RUNTIME_CONFIGURATION["screening"]
+_PORTFOLIO_RISK_THRESHOLDS = _RUNTIME_CONFIGURATION["m67"]["portfolio_risk"]
+
 CONF = {
-    "min_avg_amount":   1.5e8,
-    "unlock_ratio":     5.0,
     "request_delay":    0.42,
     "chunk_size":       150,
     "financial_chunk_size": 80,
@@ -161,18 +164,9 @@ CONF = {
     "cache_dir":        os.path.join(RESULT_DIR, "egs_cache"),
     "cache_ttl":        20 * 3600,
     "cache_policy":     "enabled",  # runtest capsules force disabled: no read or write of EGS cache
-    "top_n":            50,    # 内部候选池大小（供 Phase 2 DeepSeek 终审使用）
-    "watch_n":          15,    # 周频候选观察池上限（正式运行不拿 Tier2 凑数）
-    "final_n":          5,     # 最终推荐数量
-    "suspend_lookback":         5,
-    "suspend_daily_min_coverage": 0.95,
-    "daily_stats_min_rows":     1000,
-    "momentum_std_threshold":   8.0,
-    "overheat_5d":      8.0,   # 5日涨幅超过此值触发过热标记
-    "overheat_20d":     22.0,  # 20日涨幅超过此值且仍近高位触发过热标记
-    "esp_raw_cap":      200.0, # 低基数同比暴涨 cap，防止 esp_raw 极端值污染排序
     "l3_cache_mode":    "refresh",  # formal runs refresh L3; tests may set reuse
     "l3_allow_stale_cache": False,   # test-only override; stale reuse otherwise fails closed
+    **_SCREENING_THRESHOLDS,
 }
 
 if TOKEN and ts is not None:
@@ -859,7 +853,16 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         "portfolio_impact": {
             "same_sw_l2_exposure_after_buy_pct": None,
             "factor_exposures": [
-                {"factor": "sw_l2_industry", "value": None, "threshold": 40, "status": "unknown"}
+                {"factor": "sw_l2_industry", "value": None,
+                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["same_sw_l2_threshold_pct"], "status": "unknown"},
+                {"factor": "northbound_holding_ratio", "value": None,
+                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["northbound_threshold_pct"], "status": "unknown"},
+                {"factor": "margin_balance_to_float_mv", "value": None,
+                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["margin_threshold_pct"], "status": "unknown"},
+                {"factor": "index_component", "value": None,
+                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["large_index_threshold_pct"], "status": "unknown"},
+                {"factor": "small_float_mv", "value": None,
+                 "threshold": _PORTFOLIO_RISK_THRESHOLDS["small_float_mv_threshold_pct"], "status": "unknown"},
             ],
             "correlation_action": "unknown",
         },
@@ -1099,6 +1102,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             "data_provider": (
                 "mixed" if CONF.get("l3_provider") == HITHINK_L3_SOURCE_ID else "tushare"
             ),
+            "runtime_configuration": runtime_configuration_lineage(_RUNTIME_CONFIGURATION),
             "l3_mode": CONF.get("l3_mode", "today"),
             "l3_pit_strict": bool(CONF.get("l3_pit_strict", False)),
             "l3_snapshot_date": CONF.get("l3_snapshot_date"),
@@ -1360,7 +1364,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
     watch_pool_reconciliation = build_watch_pool_reconciliation(
         actual_count=watch_count,
         eligible_count=watch_eligible_count,
-        target_count=CONF.get("watch_n", 15),
+        target_count=CONF["watch_n"],
     )
     sw_industry_membership = _current_sw_industry_source_observation()
 
@@ -1456,22 +1460,22 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
 
     if final_count == 0:
         errors.append(_health_issue("final_pool", "final recommendation pool is empty"))
-    elif final_count < int(CONF.get("final_n", 5)):
+    elif final_count < int(CONF["final_n"]):
         warnings_.append(_health_issue(
             "final_pool",
             "final recommendation count is below configured final_n",
             final_count=final_count,
-            final_n=CONF.get("final_n"),
+            final_n=CONF["final_n"],
         ))
 
     if tier1_count == 0:
         errors.append(_health_issue("tier1_count", "no Tier1 candidates in watch pool"))
-    elif tier1_count < int(CONF.get("final_n", 5)):
+    elif tier1_count < int(CONF["final_n"]):
         warnings_.append(_health_issue(
             "tier1_count",
             "Tier1 count is below final_n",
             tier1_count=tier1_count,
-            final_n=CONF.get("final_n"),
+            final_n=CONF["final_n"],
         ))
 
     if close_bad_count:
@@ -2401,7 +2405,7 @@ def _validated_suspend_traded_codes(daily_td, all_codes, trade_date, as_of=None,
     traded_codes = set(daily_td["ts_code"].dropna().astype(str).tolist())
     in_universe_traded = traded_codes & universe
     coverage = len(in_universe_traded) / len(universe)
-    min_coverage = float(CONF.get("suspend_daily_min_coverage", 0.95))
+    min_coverage = float(CONF["suspend_daily_min_coverage"])
     suspended_count = len(universe - in_universe_traded)
     _record_suspend_daily_coverage_observation(
         as_of=as_of or trade_date,
@@ -2491,7 +2495,7 @@ def get_suspend_info(trade_dates):
         trade_date=None,
         status="no_daily_payload_blocked",
         stock_universe_count=len(all_codes),
-        min_coverage=float(CONF.get("suspend_daily_min_coverage", 0.95)),
+        min_coverage=float(CONF["suspend_daily_min_coverage"]),
         attempted_trade_dates=trade_dates[:3],
         message="all candidate pro.daily payloads were empty; actionable output is blocked",
     )
@@ -3154,7 +3158,7 @@ def _neutral_stats_df(codes):
 
 
 def precompute_stock_stats(codes, all_daily):
-    min_rows = int(CONF.get("daily_stats_min_rows", 1000))
+    min_rows = int(CONF["daily_stats_min_rows"])
     if all_daily.empty:
         raise RuntimeError(
             "daily stats coverage too low: all_daily is empty; "
@@ -3880,12 +3884,12 @@ def score_l5(df, sw_map):
     valid_esp = df["esp_raw"].dropna()
     if not valid_esp.empty:
         p1, p99 = valid_esp.quantile(0.01), valid_esp.quantile(0.99)
-        upper = min(float(p99), float(CONF.get("esp_raw_cap", 200.0)))
+        upper = min(float(p99), float(CONF["esp_raw_cap"]))
         df["esp_raw_w"] = df["esp_raw"].clip(p1, upper)
     else:
         df["esp_raw_w"] = df["esp_raw"].copy()
     df["esp_raw_w"] = df["esp_raw_w"].fillna(0.0)
-    df["low_base_growth_flag"] = pd.to_numeric(df["esp_raw"], errors="coerce") > float(CONF.get("esp_raw_cap", 200.0))
+    df["low_base_growth_flag"] = pd.to_numeric(df["esp_raw"], errors="coerce") > float(CONF["esp_raw_cap"])
 
     cov_mask = df["l2_flags"].str.contains("COV-LOW", na=False)
     df_cov   = df[cov_mask].copy()

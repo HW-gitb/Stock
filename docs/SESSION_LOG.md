@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 独立复审 PASS（A-short M67→master r3 重放：Required read-path 收口 + 全绿）
+
+- **Verdict/Action**: PASS。基于当前 master `8170da49`（含 Rule6）的 M67 重放，两个 Required 均收口，本人独立复验通过。effect-ledger read-path 已修（effect_contract:706 读 `machine.industry_trend`），真 headwind 现证 `star_down`+3→2 星+台账 `applied`；搬迁本体不变量守住（config-authority 无 industry_trend、effect-contract 可移植 `_canonical_ast`、master `classify_industry_trend` 原样、零值 fail-closed）；范围干净（仅 M67 文件，无 Rule6/d34f/别窗污染）；是重放非 merge，master/d34f 未被触碰。
+- **Required**: 无遗留。`R-ASHORT-M67-EFFECT-LEDGER-INDUSTRY-TREND-READ-PATH`、`R-ASHORT-M67-RECONCILE-UNIQUE-PIECES-ONTO-MASTER` → resolved（closure 证据见 `system_risk_register.md`）。
+- **Verify**: 本机 3.13.8 亲跑完整 `discover -p 'test_a_short*.py'` = **1616 OK / 3 skip / 0 fail**（含 Rule6 全部测试，证重放与 Rule6 共存；Codex 之前 full-weekly 300s 超时的边界由本次完整跑通消解——非挂起、仅慢）；`static_contract_error()`=None、注入谓词/常量被抓、零值两路径→manual_review；`test_source_bound_headwind_is_recorded_as_applied` 证台账 applied。均本地/离线，无 provider/账户/网络。
+- **Next**: Claude 提交 r3（仅 M67 PASS 文件、一个 coherent commit）+ merge 到 master `8170da49`（重放干净、非盲并）；不 push。旧 `m67reconcile`(ea6e91de) 与 `m67reconcile-r2` 为过时尝试，建议清理。
+
+## 2026-07-17 — Codex 修复（fresh-master M67 reconciliation r3；未提交）
+
+- **Verdict/Action**: 基于当前 master `8170da49` 新建 r3，按差异重放 M67 专有的组合风险、运行时 JSON 权威、effect-contract/ledger 和周报 schema/render 接线；不是 merge/cherry-pick 旧 `m67reconcile`，未触碰 d34f 或 master。Claude Required 已修：industry ledger 改读 `machine.industry_trend`，不再读死路径 `machine.layer.industry_trend`；契约 terminal surface 与 Rule6 后的指纹同步。真实 headwind（score=20、治理有效）现同时证明 `star_down`、3→2 星和 ledger=`applied`。
+- **Required**: `R-ASHORT-M67-EFFECT-LEDGER-INDUSTRY-TREND-READ-PATH` 与 `R-ASHORT-M67-RECONCILE-UNIQUE-PIECES-ONTO-MASTER` 均实现待独立审查，完整根因、边界、证据和 closure 条件见 `docs/system_risk_register.md` 顶部。旧 Phase 3/4 LLM 报告没有被假装桥接；无结果继续显式 `unavailable_manual_review`。
+- **Verify**: 离线 `static_contract_error()=None`；effect/portfolio/runtime 33 OK；Phase5/render/screening-schema/Phase4 173 OK；EGS analysis-input/Rule6/schema 30 OK；weekly normalize 7 OK、build/validate/cash/schema 26 OK、held-position main wiring 1 OK；JSON 7 份与 Python 12 份解析通过，`git diff --check` 通过。完整 `tests.test_a_short_weekly_pipeline` 在 300 秒限制内无断言失败但未返回最终 exit code，故明确记为未完成、非 PASS。无 provider/web/LLM/account/正式周报/commit/push。
+- **Pre-Codex self-review**: A 覆盖 source-bound headwind、缺失趋势、组合 replace/manual、现金分配、配置血缘和 held not_applicable；B 确认 Rule6 的 confirmed source、industry root write、旧 LLM 非桥接和 d34f 零接触；C 静态台账、schema、Markdown 与关键 weekly paths 一致；D 无自然语言风险推断或外部调用；E 仅 SESSION_LOG/register、未改 CURRENT；F 无截断/临时标记、解析与 diff check 已过。
+- **Next**: Claude Code：只审 `R-ASHORT-M67-RECONCILE-UNIQUE-PIECES-ONTO-MASTER`（含 Required read-path）；先复核 full-weekly timeout 边界，再决定 PASS/commit；不得触碰 d34f。
+
 ## 2026-07-17 — Claude Code 实现+复审（93db 六刀 → master：选择性重放 刀2/3/5，跳 刀1/4/6）PASS + 提交
 
 - **Verdict/Action**: PASS + 提交主树。93db 六刀因 master 已独立演进而大量冗余→只重放 master 真缺的:刀2(失败重跑失效旧产物 receipt-first+ErrorAction Stop、Write-KnownM67 全出口、真身份不伪造、load_published 读取门)、刀3(preflight 移到 resolver/provider/私密态之前 + SKILL research-only)、刀5(inconclusive/lane_role + 修生产者 drift 使持久)。跳 刀1(master holding_levels 五维更严、放它=回归)、刀4/刀6(master 已绿/已有自 IV 重试)。master 特性(CachePolicy/FailureDetailRef/IV/industry_trend)全保。

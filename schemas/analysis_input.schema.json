@@ -22,7 +22,11 @@
   ],
   "properties": {
     "schema_version": {
-      "enum": ["1.0.0", "1.1.0", "1.2.0"],
+      "enum": [
+        "1.0.0",
+        "1.1.0",
+        "1.2.0"
+      ],
       "description": "Semantic version of this schema contract. Unknown versions fail closed until their source and PIT rules are reviewed."
     },
     "generated_at": {
@@ -83,7 +87,11 @@
         },
         "l3_mode": {
           "type": "string",
-          "enum": ["pit", "today", "neutralize"],
+          "enum": [
+            "pit",
+            "today",
+            "neutralize"
+          ],
           "description": "Which L3 cat_score source was used to rank this pool. Absence = legacy file (pre-v1.1); treat as 'today' for backward compat."
         },
         "l3_pit_strict": {
@@ -91,17 +99,31 @@
           "description": "With l3_mode=pit, whether missing snapshot was a fatal error (true) or a soft fallback to cat_score=50 (false)."
         },
         "l3_snapshot_date": {
-          "type": ["string", "null"],
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^[0-9]{8}$",
           "description": "Actual L3 snapshot date read or written by this run. For pit it must be <= trade_date; neutralize may be null."
         },
         "l3_provider": {
-          "type": ["string", "null"],
-          "enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null],
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "hithink_finance",
+            "legacy_tushare_snapshot",
+            "neutralized",
+            null
+          ],
           "description": "Provider provenance for the L3 graph. A live today run uses hithink_finance; legacy snapshots retain their explicit legacy label."
         },
         "l3_coverage": {
-          "type": ["object", "null"],
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": false,
           "required": [
             "source",
@@ -121,45 +143,108 @@
             "complete"
           ],
           "properties": {
-            "source": {"const": "hithink_finance"},
-            "catalog_tag": {"const": "cn_concept"},
-            "catalog_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "catalog_board_count": {"type": "integer", "minimum": 389},
-            "received_board_count": {"type": "integer", "minimum": 389},
-            "verified_empty_board_count": {"type": "integer", "minimum": 0},
-            "scope_filtered_empty_board_count": {"type": "integer", "minimum": 0},
-            "raw_member_row_count": {"type": "integer", "minimum": 0},
-            "unique_member_pair_count": {"type": "integer", "minimum": 0},
-            "main_board_member_pair_count": {"type": "integer", "minimum": 0},
-            "excluded_non_main_board_member_count": {"type": "integer", "minimum": 0},
-            "out_of_a_share_member_count": {"type": "integer", "minimum": 0},
+            "source": {
+              "const": "hithink_finance"
+            },
+            "catalog_tag": {
+              "const": "cn_concept"
+            },
+            "catalog_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "catalog_board_count": {
+              "type": "integer",
+              "minimum": 389
+            },
+            "received_board_count": {
+              "type": "integer",
+              "minimum": 389
+            },
+            "verified_empty_board_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "scope_filtered_empty_board_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "raw_member_row_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unique_member_pair_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "main_board_member_pair_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "excluded_non_main_board_member_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "out_of_a_share_member_count": {
+              "type": "integer",
+              "minimum": 0
+            },
             "market_suffix_counts": {
               "type": "object",
-              "additionalProperties": {"type": "integer", "minimum": 0}
+              "additionalProperties": {
+                "type": "integer",
+                "minimum": 0
+              }
             },
-            "scoring_universe": {"const": "a_share_main_board"},
-            "complete": {"const": true}
+            "scoring_universe": {
+              "const": "a_share_main_board"
+            },
+            "complete": {
+              "const": true
+            }
           },
           "description": "Complete-catalog receipt. A board may be skipped only when the API explicitly returned an empty item list."
         },
         "hard_veto_source_health": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["suspension", "unlock", "holder_reduction"],
+          "required": [
+            "suspension",
+            "unlock",
+            "holder_reduction"
+          ],
           "properties": {
-            "suspension": {"$ref": "#/$defs/hardVetoSourceHealth"},
-            "unlock": {"$ref": "#/$defs/hardVetoSourceHealth"},
-            "holder_reduction": {"$ref": "#/$defs/hardVetoSourceHealth"}
+            "suspension": {
+              "$ref": "#/$defs/hardVetoSourceHealth"
+            },
+            "unlock": {
+              "$ref": "#/$defs/hardVetoSourceHealth"
+            },
+            "holder_reduction": {
+              "$ref": "#/$defs/hardVetoSourceHealth"
+            }
           }
         },
         "run_identity": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["run_id", "candidate_digest", "stage_status"],
+          "required": [
+            "run_id",
+            "candidate_digest",
+            "stage_status"
+          ],
           "properties": {
-            "run_id": {"type": "string", "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"},
-            "candidate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-            "stage_status": {"const": "egs_validated"}
+            "run_id": {
+              "type": "string",
+              "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"
+            },
+            "candidate_digest": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "stage_status": {
+              "const": "egs_validated"
+            }
           }
         },
         "input_files": {
@@ -174,6 +259,66 @@
             "type": "string"
           },
           "default": []
+        },
+        "runtime_configuration": {
+          "type": "object",
+          "description": "Reviewed JSON policy set consumed by this screening run. Official current artifacts carry it so weekly M6.7 can reject a policy change or cross-run configuration mix-up.",
+          "additionalProperties": false,
+          "required": [
+            "schema_name",
+            "schema_version",
+            "configuration_fingerprint",
+            "policies"
+          ],
+          "properties": {
+            "schema_name": {
+              "const": "a_short_runtime_configuration"
+            },
+            "schema_version": {
+              "const": "1.0.0"
+            },
+            "configuration_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "policies": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "policy_id",
+                  "schema_name",
+                  "schema_version",
+                  "path",
+                  "sha256"
+                ],
+                "properties": {
+                  "policy_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "schema_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "schema_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^presets/[A-Za-z0-9_.-]+\\.json$"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },
@@ -222,11 +367,24 @@
           "type": "object",
           "description": "Post-L0 ranking-stage eliminations; separate from excluded_counts, which is consumed as L0 hard-veto counts by the weekly report.",
           "additionalProperties": false,
-          "required": ["l1_industry_leader", "l2_quality_risk", "rank_unexpected"],
+          "required": [
+            "l1_industry_leader",
+            "l2_quality_risk",
+            "rank_unexpected"
+          ],
           "properties": {
-            "l1_industry_leader": {"type": "integer", "minimum": 0},
-            "l2_quality_risk": {"type": "integer", "minimum": 0},
-            "rank_unexpected": {"type": "integer", "minimum": 0}
+            "l1_industry_leader": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "l2_quality_risk": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "rank_unexpected": {
+              "type": "integer",
+              "minimum": 0
+            }
           }
         }
       }
@@ -259,13 +417,17 @@
             },
             "calendar_source": {
               "type": "string",
-              "enum": ["tushare.trade_cal"]
+              "enum": [
+                "tushare.trade_cal"
+              ]
             },
             "recent_trade_dates": {
               "type": "array",
               "minItems": 1,
               "uniqueItems": true,
-              "items": {"$ref": "#/$defs/date8"}
+              "items": {
+                "$ref": "#/$defs/date8"
+              }
             },
             "is_pre_holiday_window": {
               "type": "boolean"
@@ -515,9 +677,13 @@
       "description": "Files emitted under schema_version 1.1.0 must include L3 mode metadata. Legacy 1.0.0 files remain valid for read-back.",
       "if": {
         "properties": {
-          "schema_version": { "const": "1.1.0" }
+          "schema_version": {
+            "const": "1.1.0"
+          }
         },
-        "required": ["schema_version"]
+        "required": [
+          "schema_version"
+        ]
       },
       "then": {
         "properties": {
@@ -539,9 +705,13 @@
       "description": "Current 1.2.0 A-short outputs require explicit provider and coverage lineage for every L3 mode.",
       "if": {
         "properties": {
-          "schema_version": { "const": "1.2.0" }
+          "schema_version": {
+            "const": "1.2.0"
+          }
         },
-        "required": ["schema_version"]
+        "required": [
+          "schema_version"
+        ]
       },
       "then": {
         "properties": {
@@ -803,31 +973,143 @@
               "description": "Structured deterministic SW L2 industry-trend signal classified from the existing EGS industry_heat_score. It is independent of the LLM fundamental/policy advisory.",
               "type": "object",
               "additionalProperties": false,
-              "required": ["classification", "industry_trend", "industry_heat_score", "sw_l2_code", "sw_l2_name", "source_as_of", "classifier_version", "thresholds", "source_id", "risk_filter_v1_prior", "forward_calibration_required", "positive_effect_enabled", "configuration_fingerprint", "validation_status", "unavailable_reason"],
+              "required": [
+                "classification",
+                "industry_trend",
+                "industry_heat_score",
+                "sw_l2_code",
+                "sw_l2_name",
+                "source_as_of",
+                "classifier_version",
+                "thresholds",
+                "source_id",
+                "risk_filter_v1_prior",
+                "forward_calibration_required",
+                "positive_effect_enabled",
+                "configuration_fingerprint",
+                "validation_status",
+                "unavailable_reason"
+              ],
               "properties": {
-                "classification": {"enum": ["headwind", "neutral", "tailwind", "unknown"]},
-                "industry_trend": {"enum": ["headwind", "neutral", "tailwind", "unknown"]},
-                "industry_heat_score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
-                "sw_l2_code": {"type": ["string", "null"]}, "sw_l2_name": {"type": ["string", "null"]},
-                "source_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}, "classifier_version": {"const": "industry_heat_trend_v1"},
-                "thresholds": {"type": "object", "additionalProperties": false, "required": ["headwind_max", "tailwind_min"], "properties": {"headwind_max": {"type": "number", "minimum": 0, "maximum": 100}, "tailwind_min": {"type": "number", "minimum": 0, "maximum": 100}}},
-                "source_id": {"const": "A-EGS.industry_heat_score"}, "risk_filter_v1_prior": {"const": true}, "forward_calibration_required": {"const": true}, "positive_effect_enabled": {"const": false},
-                "configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "validation_status": {"enum": ["valid", "unavailable"]}, "unavailable_reason": {"type": ["string", "null"]}
+                "classification": {
+                  "enum": [
+                    "headwind",
+                    "neutral",
+                    "tailwind",
+                    "unknown"
+                  ]
+                },
+                "industry_trend": {
+                  "enum": [
+                    "headwind",
+                    "neutral",
+                    "tailwind",
+                    "unknown"
+                  ]
+                },
+                "industry_heat_score": {
+                  "type": [
+                    "number",
+                    "null"
+                  ],
+                  "minimum": 0,
+                  "maximum": 100
+                },
+                "sw_l2_code": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sw_l2_name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "source_as_of": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[0-9]{8}$"
+                },
+                "classifier_version": {
+                  "const": "industry_heat_trend_v1"
+                },
+                "thresholds": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "headwind_max",
+                    "tailwind_min"
+                  ],
+                  "properties": {
+                    "headwind_max": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    },
+                    "tailwind_min": {
+                      "type": "number",
+                      "minimum": 0,
+                      "maximum": 100
+                    }
+                  }
+                },
+                "source_id": {
+                  "const": "A-EGS.industry_heat_score"
+                },
+                "risk_filter_v1_prior": {
+                  "const": true
+                },
+                "forward_calibration_required": {
+                  "const": true
+                },
+                "positive_effect_enabled": {
+                  "const": false
+                },
+                "configuration_fingerprint": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "validation_status": {
+                  "enum": [
+                    "valid",
+                    "unavailable"
+                  ]
+                },
+                "unavailable_reason": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
               }
             },
             "industry_trend_evidence": {
               "description": "Deprecated compatibility field for older advisory artifacts. It is not consumed by the deterministic industry_trend classifier or M6.7 decisions.",
               "type": "array",
-              "items": {"$ref": "#/$defs/evidence"},
+              "items": {
+                "$ref": "#/$defs/evidence"
+              },
               "default": []
             },
             "industry_fundamental_trend": {
               "type": "string",
-              "enum": ["tailwind", "neutral", "headwind", "unknown", "pending_llm"]
+              "enum": [
+                "tailwind",
+                "neutral",
+                "headwind",
+                "unknown",
+                "pending_llm"
+              ]
             },
             "industry_fundamental_trend_evidence": {
               "type": "array",
-              "items": {"$ref": "#/$defs/evidence"},
+              "items": {
+                "$ref": "#/$defs/evidence"
+              },
               "default": []
             }
           }
@@ -1444,8 +1726,15 @@
                   "$ref": "#/$defs/date8Nullable"
                 },
                 "denominator": {
-                  "type": ["string", "null"],
-                  "enum": ["circ_mv_div_close", "missing", null]
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "enum": [
+                    "circ_mv_div_close",
+                    "missing",
+                    null
+                  ]
                 }
               }
             },
@@ -1528,33 +1817,165 @@
             "theme_taxonomy": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["taxonomy_schema_name", "taxonomy_schema_version", "taxonomy_configuration_fingerprint", "source_as_of", "l3_provenance", "raw_concepts", "canonical_themes", "primary_canonical_theme_id", "production_effect_enabled", "automatic_promotion"],
+              "required": [
+                "taxonomy_schema_name",
+                "taxonomy_schema_version",
+                "taxonomy_configuration_fingerprint",
+                "source_as_of",
+                "l3_provenance",
+                "raw_concepts",
+                "canonical_themes",
+                "primary_canonical_theme_id",
+                "production_effect_enabled",
+                "automatic_promotion"
+              ],
               "properties": {
-                "taxonomy_schema_name": {"const": "a_short_theme_taxonomy"}, "taxonomy_schema_version": {"const": "1.2.0"},
-                "taxonomy_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                "taxonomy_schema_name": {
+                  "const": "a_short_theme_taxonomy"
+                },
+                "taxonomy_schema_version": {
+                  "const": "1.2.0"
+                },
+                "taxonomy_configuration_fingerprint": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "source_as_of": {
+                  "type": "string",
+                  "pattern": "^[0-9]{8}$"
+                },
                 "l3_provenance": {
-                  "type": "object", "additionalProperties": false,
-                  "required": ["provider", "snapshot_date", "coverage_digest", "coverage_complete", "scoring_universe", "raw_membership_source", "validation_status"],
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "provider",
+                    "snapshot_date",
+                    "coverage_digest",
+                    "coverage_complete",
+                    "scoring_universe",
+                    "raw_membership_source",
+                    "validation_status"
+                  ],
                   "properties": {
-                    "provider": {"enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null]},
-                    "snapshot_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
-                    "coverage_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
-                    "coverage_complete": {"type": ["boolean", "null"]},
-                    "scoring_universe": {"type": ["string", "null"]},
-                    "raw_membership_source": {"enum": ["hithink_complete_concept_members", "legacy_snapshot_concept_members", "unavailable"]},
-                    "validation_status": {"enum": ["verified_complete", "legacy_snapshot", "unavailable"]}
+                    "provider": {
+                      "enum": [
+                        "hithink_finance",
+                        "legacy_tushare_snapshot",
+                        "neutralized",
+                        null
+                      ]
+                    },
+                    "snapshot_date": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[0-9]{8}$"
+                    },
+                    "coverage_digest": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "pattern": "^[0-9a-f]{64}$"
+                    },
+                    "coverage_complete": {
+                      "type": [
+                        "boolean",
+                        "null"
+                      ]
+                    },
+                    "scoring_universe": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "raw_membership_source": {
+                      "enum": [
+                        "hithink_complete_concept_members",
+                        "legacy_snapshot_concept_members",
+                        "unavailable"
+                      ]
+                    },
+                    "validation_status": {
+                      "enum": [
+                        "verified_complete",
+                        "legacy_snapshot",
+                        "unavailable"
+                      ]
+                    }
                   }
                 },
-                "raw_concepts": {"type": "array", "items": {"type": "object"}}, "canonical_themes": {"type": "array", "items": {"type": "object"}},
-                "primary_canonical_theme_id": {"type": ["string", "null"]}, "production_effect_enabled": {"const": false}, "automatic_promotion": {"const": false},
-                "comparison_status": {"const": "unknown_or_unavailable"}, "unavailable_reason": {"type": "string"},
+                "raw_concepts": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "canonical_themes": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "primary_canonical_theme_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "production_effect_enabled": {
+                  "const": false
+                },
+                "automatic_promotion": {
+                  "const": false
+                },
+                "comparison_status": {
+                  "const": "unknown_or_unavailable"
+                },
+                "unavailable_reason": {
+                  "type": "string"
+                },
                 "comparison_metrics": {
-                  "type": "object", "additionalProperties": false,
-                  "required": ["theme_heat_score", "breadth_pass", "persistence_mult", "fit_score", "fit_pass", "comparison_status"],
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "theme_heat_score",
+                    "breadth_pass",
+                    "persistence_mult",
+                    "fit_score",
+                    "fit_pass",
+                    "comparison_status"
+                  ],
                   "properties": {
-                    "theme_heat_score": {"type": ["number", "null"]}, "breadth_pass": {"type": "boolean"},
-                    "persistence_mult": {"type": ["number", "null"]}, "fit_score": {"type": ["number", "null"]},
-                    "fit_pass": {"type": "boolean"}, "comparison_status": {"const": "available"}
+                    "theme_heat_score": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "breadth_pass": {
+                      "type": "boolean"
+                    },
+                    "persistence_mult": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fit_score": {
+                      "type": [
+                        "number",
+                        "null"
+                      ]
+                    },
+                    "fit_pass": {
+                      "type": "boolean"
+                    },
+                    "comparison_status": {
+                      "const": "available"
+                    }
                   }
                 }
               }
@@ -2130,15 +2551,26 @@
     },
     "hardVetoSourceStatus": {
       "type": "string",
-      "enum": ["known_clear", "known_hit", "unknown"]
+      "enum": [
+        "known_clear",
+        "known_hit",
+        "unknown"
+      ]
     },
     "hardVetoSourceHealth": {
       "type": "object",
       "additionalProperties": true,
-      "required": ["status", "observed_at"],
+      "required": [
+        "status",
+        "observed_at"
+      ],
       "properties": {
-        "status": {"$ref": "#/$defs/hardVetoSourceStatus"},
-        "observed_at": {"$ref": "#/$defs/date8Nullable"}
+        "status": {
+          "$ref": "#/$defs/hardVetoSourceStatus"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/date8Nullable"
+        }
       }
     },
     "checkStatus": {

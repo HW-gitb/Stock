@@ -4,24 +4,63 @@
   "description": "A-short weekly pipeline output: top-N per-stock M6.7 reports for one weekend run. reports[] each ALSO validated against a_short_m67_report.schema.json by write_weekly_report (this schema only gates the envelope + per-item minimal shape). Non-production, edge UNVALIDATED — boundary all false.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "generated_at", "as_of",
-               "iv_feed_ref", "n_stocks", "reports", "run_lineage", "boundary"],
+  "required": [
+    "schema_name",
+    "schema_version",
+    "generated_at",
+    "as_of",
+    "iv_feed_ref",
+    "n_stocks",
+    "reports",
+    "run_lineage",
+    "boundary",
+    "portfolio_risk",
+    "effect_contract_ledger"
+  ],
   "properties": {
-    "schema_name": {"const": "a_short_weekly_report"},
-    "schema_version": {"const": "1.0.0"},
-    "generated_at": {"type": "string"},
-    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-    "iv_feed_ref": {"type": "string"},
-    "n_stocks": {"type": "integer", "minimum": 0},
+    "schema_name": {
+      "const": "a_short_weekly_report"
+    },
+    "schema_version": {
+      "const": "1.0.0"
+    },
+    "generated_at": {
+      "type": "string"
+    },
+    "as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "iv_feed_ref": {
+      "type": "string"
+    },
+    "n_stocks": {
+      "type": "integer",
+      "minimum": 0
+    },
     "reports": {
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["schema_name", "as_of", "ts_code", "m67", "machine", "boundary"],
+        "required": [
+          "schema_name",
+          "as_of",
+          "ts_code",
+          "m67",
+          "machine",
+          "boundary"
+        ],
         "properties": {
-          "schema_name": {"const": "a_short_m67_report"},
-          "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-          "ts_code": {"type": "string"}
+          "schema_name": {
+            "const": "a_short_m67_report"
+          },
+          "as_of": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "ts_code": {
+            "type": "string"
+          }
         }
       }
     },
@@ -31,11 +70,21 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["ts_code", "name", "reason"],
+        "required": [
+          "ts_code",
+          "name",
+          "reason"
+        ],
         "properties": {
-          "ts_code": {"type": "string"},
-          "name": {"type": "string"},
-          "reason": {"type": "string"}
+          "ts_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
         }
       }
     },
@@ -45,39 +94,115 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["ts_code", "name", "ex_date", "days_to_ex"],
+        "required": [
+          "ts_code",
+          "name",
+          "ex_date",
+          "days_to_ex"
+        ],
         "properties": {
-          "ts_code": {"type": "string"},
-          "name": {"type": "string"},
-          "ex_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-          "days_to_ex": {"type": "integer", "minimum": 0}
+          "ts_code": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "ex_date": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "days_to_ex": {
+            "type": "integer",
+            "minimum": 0
+          }
         }
       }
     },
     "upcoming_events": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 forward_events: 未来已知事件日历(analysis-only,只进 M6.7、不改 EGS/TopN/result/a_short、production_effect_enabled=false)。决策日已公告(observed_at<=as_of)、event_date 在未来 window 内的 A 股事件;第1刀=限售解禁(limit_unlock),第2刀=财报预约披露(earnings_disclosure)。status=unknown_or_unavailable(provider 不可用/没查到 → 绝不当「无未来事件」) vs checked(已查;events 可空=已查无近期事件;部分(票,类)失败→ unchecked_codes)。可选/缺省 null。",
       "additionalProperties": false,
-      "required": ["as_of", "status", "events"],
+      "required": [
+        "as_of",
+        "status",
+        "events"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["checked", "unknown_or_unavailable"]},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "status": {
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ]
+        },
         "events": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "event_type", "event_date", "observed_at", "source_id", "expected_effect", "confidence", "days_to_event"],
+            "required": [
+              "ts_code",
+              "name",
+              "event_type",
+              "event_date",
+              "observed_at",
+              "source_id",
+              "expected_effect",
+              "confidence",
+              "days_to_event"
+            ],
             "properties": {
-              "ts_code": {"type": "string"},
-              "name": {"type": "string"},
-              "event_type": {"enum": ["limit_unlock", "earnings_disclosure"]},
-              "event_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-              "observed_at": {"type": "string", "pattern": "^[0-9]{8}$"},
-              "source_id": {"type": "string", "minLength": 1},
-              "expected_effect": {"enum": ["manual_review", "priority_down", "sizing_down", "observe_required", "hold_watch", "informational"]},
-              "confidence": {"enum": ["high", "medium", "low"]},
-              "days_to_event": {"type": "integer", "minimum": 0}
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "event_type": {
+                "enum": [
+                  "limit_unlock",
+                  "earnings_disclosure"
+                ]
+              },
+              "event_date": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              },
+              "observed_at": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              },
+              "source_id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "expected_effect": {
+                "enum": [
+                  "manual_review",
+                  "priority_down",
+                  "sizing_down",
+                  "observe_required",
+                  "hold_watch",
+                  "informational"
+                ]
+              },
+              "confidence": {
+                "enum": [
+                  "high",
+                  "medium",
+                  "low"
+                ]
+              },
+              "days_to_event": {
+                "type": "integer",
+                "minimum": 0
+              }
             }
           }
         },
@@ -87,150 +212,407 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "event_type"],
-            "properties": {"ts_code": {"type": "string"}, "name": {"type": "string"},
-                           "event_type": {"enum": ["limit_unlock", "earnings_disclosure"]}}
+            "required": [
+              "ts_code",
+              "name",
+              "event_type"
+            ],
+            "properties": {
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "event_type": {
+                "enum": [
+                  "limit_unlock",
+                  "earnings_disclosure"
+                ]
+              }
+            }
           }
         }
       }
     },
     "dragon_list": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 Round5 龙虎榜(analysis-only · comparison-only):候选近 N 交易日上榜事实 + 净买卖(第一刀)+ 席位分析(第二刀:top_inst 逐席位 exalter/side/net_buy,机构净买 inst_net_buy),落 精简结论区.板块资金事件 + machine.operation_impact(source_field=dragon_list_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only,见 4.2.md §9 决策4)。PIT:龙虎榜 T 日盘后发布 → trade_date<=as_of。status/seats_status=unknown_or_unavailable(provider 不可用/取数全失败 → 绝不当「无上榜/无席位」) vs checked(部分交易日失败 → unchecked_dates/unchecked_seat_dates)。可选/缺省 null。",
       "additionalProperties": false,
-      "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
+      "required": [
+        "as_of",
+        "status",
+        "lookback_trading_days",
+        "window_dates",
+        "events"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["checked", "unknown_or_unavailable"]},
-        "lookback_trading_days": {"type": "integer", "minimum": 1},
-        "window_dates": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]{8}$"},
-          "description": "本轮回望的近 N 个 SSE 交易日(均 <= as_of;PIT 窗口审计)。"},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "status": {
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ]
+        },
+        "lookback_trading_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_dates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "description": "本轮回望的近 N 个 SSE 交易日(均 <= as_of;PIT 窗口审计)。"
+        },
         "events": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "trade_date", "net_amount", "reason"],
+            "required": [
+              "ts_code",
+              "name",
+              "trade_date",
+              "net_amount",
+              "reason"
+            ],
             "properties": {
-              "ts_code": {"type": "string"},
-              "name": {"type": "string"},
-              "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-              "net_amount": {"type": ["number", "null"], "description": "龙虎榜净买卖额(tushare top_list.net_amount 原值,不做单位换算;缺失→null)"},
-              "reason": {"type": ["string", "null"], "description": "上榜原因(top_list.reason;缺失→null)"},
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "trade_date": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              },
+              "net_amount": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "龙虎榜净买卖额(tushare top_list.net_amount 原值,不做单位换算;缺失→null)"
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "上榜原因(top_list.reason;缺失→null)"
+              },
               "seats": {
                 "type": "array",
                 "description": "第二刀 席位分析(top_inst):该(票,上榜日)的逐席位明细(原值)。仅当该交易日 top_inst 取数查成时存在;失败日不附(render 标未核查)。comparison-only,不参与任何决策。",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["exalter", "side", "net_buy"],
+                  "required": [
+                    "exalter",
+                    "side",
+                    "net_buy"
+                  ],
                   "properties": {
-                    "exalter": {"type": ["string", "null"], "description": "营业部/席位名(top_inst.exalter;『机构专用』=机构席位)"},
-                    "side": {"type": ["string", "null"], "description": "买卖方向(top_inst.side;0=买方席位/1=卖方席位,原值)"},
-                    "net_buy": {"type": ["number", "null"], "description": "该席位净买入额(top_inst.net_buy 原值,不做单位换算)"}
+                    "exalter": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "营业部/席位名(top_inst.exalter;『机构专用』=机构席位)"
+                    },
+                    "side": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "买卖方向(top_inst.side;0=买方席位/1=卖方席位,原值)"
+                    },
+                    "net_buy": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "该席位净买入额(top_inst.net_buy 原值,不做单位换算)"
+                    }
                   }
                 }
               },
-              "inst_net_buy": {"type": ["number", "null"], "description": "第二刀:机构席位(exalter 含『机构专用』)净买入额合计;无机构席位 → null(不伪造 0)。仅当 seats 存在时附。"}
+              "inst_net_buy": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "第二刀:机构席位(exalter 含『机构专用』)净买入额合计;无机构席位 → null(不伪造 0)。仅当 seats 存在时附。"
+              }
             }
           }
         },
         "unchecked_dates": {
           "type": "array",
           "description": "per-trade-day coverage(unknown-not-clear 逐日粒度):status=checked 但部分交易日取数失败 → 列出(绝不当「无上榜」)。⊆ window_dates。可选/缺省空。",
-          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          }
         },
-        "seats_status": {"enum": ["checked", "unknown_or_unavailable"],
-          "description": "第二刀 席位层覆盖(top_inst):仅当席位 provider 已接线(--confirm)时存在;unknown_or_unavailable=未接线/全失败(绝不当「无席位」)。缺省=第一刀式调用,未请求席位层。"},
+        "seats_status": {
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ],
+          "description": "第二刀 席位层覆盖(top_inst):仅当席位 provider 已接线(--confirm)时存在;unknown_or_unavailable=未接线/全失败(绝不当「无席位」)。缺省=第一刀式调用,未请求席位层。"
+        },
         "unchecked_seat_dates": {
           "type": "array",
           "description": "席位 per-day coverage:seats_status=checked 但部分有上榜的交易日 top_inst 取数失败 → 列出(该日 events 无 seats,绝不当「无席位」)。⊆ window_dates。可选/缺省空。",
-          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          }
         }
       }
     },
     "block_trade": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 Round5 大宗交易(block_trade, analysis-only · comparison-only):候选+账户持仓近 N 交易日大宗成交事实 + 成交金额(第一刀:amount 当日合计 + trade_count 笔数)+ 买卖方营业部(第二刀:逐笔 parties[buyer/seller/amount]);折价率(第三刀:逐笔 parties[price/discount=(price−当日未复权close)/close]、event.close、顶层 discount_status 覆盖;单位口径=未复权,绝不用前复权 price_series)。落 精简结论区.板块资金事件 + machine.operation_impact(source_field=block_trade_appearance,new_entry_effect=informational/none、holding_effect=none、veto_class=none、production_effect_enabled=false);**绝不改 EGS/TopN/选股/股数/操作/否决**,阈值未定(comparison-only)。PIT:大宗交易 T 日盘后发布 → trade_date<=as_of。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无大宗」) vs checked(部分交易日失败 → unchecked_dates)。可选/缺省 null。",
       "additionalProperties": false,
-      "required": ["as_of", "status", "lookback_trading_days", "window_dates", "events"],
+      "required": [
+        "as_of",
+        "status",
+        "lookback_trading_days",
+        "window_dates",
+        "events"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["checked", "unknown_or_unavailable"]},
-        "lookback_trading_days": {"type": "integer", "minimum": 1},
-        "window_dates": {"type": "array", "items": {"type": "string", "pattern": "^[0-9]{8}$"},
-          "description": "本轮回望的近 N 个 SSE 交易日(均 <= as_of;PIT 窗口审计)。"},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "status": {
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ]
+        },
+        "lookback_trading_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_dates": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          },
+          "description": "本轮回望的近 N 个 SSE 交易日(均 <= as_of;PIT 窗口审计)。"
+        },
         "events": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "trade_date", "amount", "trade_count", "parties"],
+            "required": [
+              "ts_code",
+              "name",
+              "trade_date",
+              "amount",
+              "trade_count",
+              "parties"
+            ],
             "properties": {
-              "ts_code": {"type": "string"},
-              "name": {"type": "string"},
-              "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-              "amount": {"type": ["number", "null"], "description": "当日大宗成交金额合计(tushare block_trade.amount 原值汇总,不做单位换算;全缺→null)"},
-              "trade_count": {"type": "integer", "minimum": 1, "description": "当日大宗成交笔数"},
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "trade_date": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              },
+              "amount": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "当日大宗成交金额合计(tushare block_trade.amount 原值汇总,不做单位换算;全缺→null)"
+              },
+              "trade_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "当日大宗成交笔数"
+              },
               "parties": {
                 "type": "array",
                 "description": "第二刀 买卖方分析:该(票,日)逐笔大宗的买方/卖方营业部 + 金额(原值)。与 block_trade 同一 fetch(fail-closed 要求 buyer/seller 列),checked event **必有**且 len(parties)==trade_count(validator 强制)。comparison-only,不参与任何决策。",
                 "items": {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["buyer", "seller", "amount"],
+                  "required": [
+                    "buyer",
+                    "seller",
+                    "amount"
+                  ],
                   "properties": {
-                    "buyer": {"type": ["string", "null"], "description": "买方营业部(block_trade.buyer)"},
-                    "seller": {"type": ["string", "null"], "description": "卖方营业部(block_trade.seller)"},
-                    "amount": {"type": ["number", "null"], "description": "该笔成交金额(原值,不换算)"},
-                    "price": {"type": ["number", "null"], "description": "第三刀 该笔大宗成交价(block_trade.price 原值/未复权;折价率算子)"},
-                    "discount": {"type": ["number", "null"], "description": "第三刀 折价率=(price−当日未复权close)/close(负=折价/抛压,正=溢价;close 缺/0 或折价层未查成→null)。comparison-only,不参与任何决策。"}
+                    "buyer": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "买方营业部(block_trade.buyer)"
+                    },
+                    "seller": {
+                      "type": [
+                        "string",
+                        "null"
+                      ],
+                      "description": "卖方营业部(block_trade.seller)"
+                    },
+                    "amount": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "该笔成交金额(原值,不换算)"
+                    },
+                    "price": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "第三刀 该笔大宗成交价(block_trade.price 原值/未复权;折价率算子)"
+                    },
+                    "discount": {
+                      "type": [
+                        "number",
+                        "null"
+                      ],
+                      "description": "第三刀 折价率=(price−当日未复权close)/close(负=折价/抛压,正=溢价;close 缺/0 或折价层未查成→null)。comparison-only,不参与任何决策。"
+                    }
                   }
                 }
               },
-              "close": {"type": ["number", "null"], "description": "第三刀 该(票,日)当日**未复权**收盘价(pro.daily raw close;折价率基准,审计用;该日折价未查成或该股当日无 close→缺省/null)"}
+              "close": {
+                "type": [
+                  "number",
+                  "null"
+                ],
+                "description": "第三刀 该(票,日)当日**未复权**收盘价(pro.daily raw close;折价率基准,审计用;该日折价未查成或该股当日无 close→缺省/null)"
+              }
             }
           }
         },
         "unchecked_dates": {
           "type": "array",
           "description": "per-trade-day coverage(unknown-not-clear):status=checked 但部分交易日取数失败 → 列出(绝不当「无大宗」)。⊆ window_dates。可选/缺省空。",
-          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          }
         },
         "discount_status": {
-          "enum": ["checked", "unknown_or_unavailable"],
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ],
           "description": "第三刀 折价率层覆盖(unknown-not-clear):close_provider 接线且≥1 有大宗交易日 pro.daily 查成→checked;全失败→unknown_or_unavailable(绝不当「无折价」);未接线(第二刀式调用)→缺省。"
         },
         "unchecked_discount_dates": {
           "type": "array",
           "description": "第三刀 折价率 per-day coverage:discount_status=checked 但部分有大宗交易日 pro.daily 收盘取数失败 → 列出(该日 events 无 close/discount,绝不当「无折价」)。⊆ window_dates。可选/缺省空。",
-          "items": {"type": "string", "pattern": "^[0-9]{8}$"}
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9]{8}$"
+          }
         }
       }
     },
     "financial_trends": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 财报质量趋势(财报报表 per-stock fetch, analysis-only · comparison-only · candidate-only):候选(非持仓)逐票新增报表取数 → 自然符号红旗(②业绩预告 forecast:tushare 预告 type 负面分类/p_change_max<0;③利润表 income;④资产负债表 balancesheet),落 精简结论区.风控触发(财报趋势对照)+ machine.operation_impact(source_field=financial_trend_{statement_type},new_entry_effect=priority_down、veto_class=none、production_effect_enabled=false);**绝不 hard_veto / 不改 EGS/TopN/选股/股数/否决**,不新设阈值(决策4:用 tushare 自有分类 + 同期方向比较)。仅有红旗才落 record(无红旗=查成无红旗,不落避噪声;coverage 由 status/unchecked_codes 体现)。PIT:仅用 ann_date<=as_of 已公告数据。status=unknown_or_unavailable(provider 不可用/全失败 → 绝不当「无红旗」) vs checked(部分(票,类)失败 → unchecked_codes)。可选/缺省 null。",
       "additionalProperties": false,
-      "required": ["as_of", "status", "records"],
+      "required": [
+        "as_of",
+        "status",
+        "records"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["checked", "unknown_or_unavailable"]},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "status": {
+          "enum": [
+            "checked",
+            "unknown_or_unavailable"
+          ]
+        },
         "records": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "statement_type", "period", "observed_at", "red_flags", "summary"],
+            "required": [
+              "ts_code",
+              "name",
+              "statement_type",
+              "period",
+              "observed_at",
+              "red_flags",
+              "summary"
+            ],
             "properties": {
-              "ts_code": {"type": "string"},
-              "name": {"type": "string"},
-              "statement_type": {"enum": ["forecast", "income", "balancesheet"]},
-              "period": {"type": "string", "pattern": "^[0-9]{8}$", "description": "报告期 end_date(YYYYMMDD)"},
-              "observed_at": {"type": "string", "pattern": "^[0-9]{8}$", "description": "公告日 ann_date(PIT:<=as_of)"},
-              "red_flags": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1},
-                "description": "自然符号红旗代码列表(非空才落 record)"},
-              "summary": {"type": "string", "minLength": 1, "description": "人读红旗摘要(含数值;render + operation_impact reason 复用)"}
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "statement_type": {
+                "enum": [
+                  "forecast",
+                  "income",
+                  "balancesheet"
+                ]
+              },
+              "period": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$",
+                "description": "报告期 end_date(YYYYMMDD)"
+              },
+              "observed_at": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$",
+                "description": "公告日 ann_date(PIT:<=as_of)"
+              },
+              "red_flags": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "description": "自然符号红旗代码列表(非空才落 record)"
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1,
+                "description": "人读红旗摘要(含数值;render + operation_impact reason 复用)"
+              }
             }
           }
         },
@@ -240,34 +622,92 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["ts_code", "name", "statement_type"],
-            "properties": {"ts_code": {"type": "string"}, "name": {"type": "string"},
-                           "statement_type": {"enum": ["forecast", "income", "balancesheet"]}}
+            "required": [
+              "ts_code",
+              "name",
+              "statement_type"
+            ],
+            "properties": {
+              "ts_code": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "statement_type": {
+                "enum": [
+                  "forecast",
+                  "income",
+                  "balancesheet"
+                ]
+              }
+            }
           }
         }
       }
     },
     "industry_fundamentals": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 财报质量趋势⑤ 行业基本面(advisory-only · summary_only · 零新取数):按 SW L2 行业聚合③④(income/balancesheet)候选财报红旗 → 行业上下文摘要。**candidate-scope**(scope=candidates_only:基于本周候选,非全行业普查);只列有≥1 红旗候选的行业;②预告 forecast 不计(行业基本面=已实现 income/balancesheet)。**无 operation_impact**(逐票红旗已由③④落地,本层只加行业摘要)。可选/缺省 null(本周无行业红旗)。",
       "additionalProperties": false,
-      "required": ["as_of", "scope", "by_industry"],
+      "required": [
+        "as_of",
+        "scope",
+        "by_industry"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "scope": {"enum": ["candidates_only"], "description": "诚实标注:基于本周候选聚合,非全行业普查(真全行业需另起 slice)"},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "scope": {
+          "enum": [
+            "candidates_only"
+          ],
+          "description": "诚实标注:基于本周候选聚合,非全行业普查(真全行业需另起 slice)"
+        },
         "by_industry": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["sw_l2_name", "candidate_count", "red_flag_candidate_count", "red_flag_codes", "summary"],
+            "required": [
+              "sw_l2_name",
+              "candidate_count",
+              "red_flag_candidate_count",
+              "red_flag_codes",
+              "summary"
+            ],
             "properties": {
-              "sw_l2_name": {"type": "string", "minLength": 1},
-              "candidate_count": {"type": "integer", "minimum": 1, "description": "该 SW L2 行业本周候选总数(分母,context)"},
-              "red_flag_candidate_count": {"type": "integer", "minimum": 1, "description": "其中有③④财报红旗的候选数"},
-              "red_flag_codes": {"type": "array", "minItems": 1, "items": {"type": "string"},
-                "description": "有红旗的候选 ts_code(均须在 financial_trends income/balancesheet 记录中)"},
-              "summary": {"type": "string", "minLength": 1}
+              "sw_l2_name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "candidate_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "该 SW L2 行业本周候选总数(分母,context)"
+              },
+              "red_flag_candidate_count": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "其中有③④财报红旗的候选数"
+              },
+              "red_flag_codes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string"
+                },
+                "description": "有红旗的候选 ts_code(均须在 financial_trends income/balancesheet 记录中)"
+              },
+              "summary": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         }
@@ -278,90 +718,257 @@
       "description": "闪崩否决 5/10 交易日 comparison-only 追踪摘要；由独立 schema 及 weekly consumer 双重校验，不改 EGS/TopN/M6.7 决策。"
     },
     "exclusion_summary": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "4.2 Round2: L0 硬否决、无 M6.7 个股行的批次级风险摘要(counts-only, 源 analysis_input.universe_summary.excluded_counts；post-L0 排名淘汰不属于本摘要)。public: 仅计数, 不含个股代码/持仓, 故不暴露隐私(运行级私密路由仍按 --account 整体生效)。可选/缺省 null(本轮无 L0 过滤)。",
       "additionalProperties": false,
-      "required": ["as_of", "total_excluded", "by_reason", "m67_text", "evidence_ref"],
+      "required": [
+        "as_of",
+        "total_excluded",
+        "by_reason",
+        "m67_text",
+        "evidence_ref"
+      ],
       "properties": {
-        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "total_excluded": {"type": "integer", "minimum": 0},
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "total_excluded": {
+          "type": "integer",
+          "minimum": 0
+        },
         "by_reason": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["source_field", "stage", "veto_class", "count", "pit_basis", "production_effect_enabled", "privacy_class"],
+            "required": [
+              "source_field",
+              "stage",
+              "veto_class",
+              "count",
+              "pit_basis",
+              "production_effect_enabled",
+              "privacy_class"
+            ],
             "properties": {
-              "source_field": {"type": "string", "minLength": 1},
-              "stage": {"enum": ["l0_filter", "l2_filter", "stage3_filter"]},
-              "veto_class": {"enum": ["production_hard_veto", "m67_advisory_veto"]},
-              "count": {"type": "integer", "minimum": 0},
-              "pit_basis": {"enum": ["disclosure_date", "trade_date_window", "observed_date"]},
-              "production_effect_enabled": {"type": "boolean"},
-              "privacy_class": {"enum": ["public_tracked", "private_account"]}
+              "source_field": {
+                "type": "string",
+                "minLength": 1
+              },
+              "stage": {
+                "enum": [
+                  "l0_filter",
+                  "l2_filter",
+                  "stage3_filter"
+                ]
+              },
+              "veto_class": {
+                "enum": [
+                  "production_hard_veto",
+                  "m67_advisory_veto"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pit_basis": {
+                "enum": [
+                  "disclosure_date",
+                  "trade_date_window",
+                  "observed_date"
+                ]
+              },
+              "production_effect_enabled": {
+                "type": "boolean"
+              },
+              "privacy_class": {
+                "enum": [
+                  "public_tracked",
+                  "private_account"
+                ]
+              }
             }
           }
         },
-        "m67_text": {"type": "string", "minLength": 1},
+        "m67_text": {
+          "type": "string",
+          "minLength": 1
+        },
         "evidence_ref": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["kind", "value", "as_of"],
+          "required": [
+            "kind",
+            "value",
+            "as_of"
+          ],
           "properties": {
-            "kind": {"enum": ["lineage_key"]},
-            "value": {"type": "string", "minLength": 1},
-            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+            "kind": {
+              "enum": [
+                "lineage_key"
+              ]
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1
+            },
+            "as_of": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            }
           }
         }
       }
     },
     "cash_allocation": {
-      "type": ["object", "null"],
+      "type": [
+        "object",
+        "null"
+      ],
       "description": "#3 全局现金分配摘要(带 --account 才有;价格提案 §4/§11.3):多只建仓按区间上沿 entry_high 统一消耗 available_cash,不足一手→转观察。可选/缺省 null(observation-only 无)。",
       "additionalProperties": false,
-      "required": ["available_cash_start", "allocated_cash_total", "remaining_cash"],
+      "required": [
+        "available_cash_start",
+        "allocated_cash_total",
+        "remaining_cash"
+      ],
       "properties": {
-        "available_cash_start": {"type": "number"},
-        "allocated_cash_total": {"type": "number"},
-        "remaining_cash": {"type": "number"},
-        "new_exposure_capacity_start": {"type": "number", "minimum": 0},
-        "remaining_new_exposure_capacity": {"type": "number", "minimum": 0}
+        "available_cash_start": {
+          "type": "number"
+        },
+        "allocated_cash_total": {
+          "type": "number"
+        },
+        "remaining_cash": {
+          "type": "number"
+        },
+        "new_exposure_capacity_start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "remaining_new_exposure_capacity": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "run_lineage": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["run_id", "candidate_digest", "stage_status", "analysis_input", "selection_bucket", "iv_feed", "account_ref", "account_status", "sizing_mode", "account_snapshot", "price_freshness"],
+      "required": [
+        "run_id",
+        "candidate_digest",
+        "stage_status",
+        "analysis_input",
+        "selection_bucket",
+        "iv_feed",
+        "account_ref",
+        "account_status",
+        "sizing_mode",
+        "account_snapshot",
+        "price_freshness",
+        "runtime_configuration"
+      ],
       "properties": {
-        "run_id": {"type": "string", "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"},
-        "candidate_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-        "stage_status": {"const": "complete"},
-        "analysis_input": {"type": "string"},
-        "selection_bucket": {"type": "string"},
-        "iv_feed": {"type": "string"},
-        "account_ref": {"type": "string"},
-        "account_status": {"enum": ["provided", "absent"]},
-        "sizing_mode": {"enum": ["sized", "observation_only_no_account"]},
+        "run_id": {
+          "type": "string",
+          "pattern": "^a-short-[0-9]{8}-[0-9a-f]{16}$"
+        },
+        "candidate_digest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "stage_status": {
+          "const": "complete"
+        },
+        "analysis_input": {
+          "type": "string"
+        },
+        "selection_bucket": {
+          "type": "string"
+        },
+        "iv_feed": {
+          "type": "string"
+        },
+        "account_ref": {
+          "type": "string"
+        },
+        "account_status": {
+          "enum": [
+            "provided",
+            "absent"
+          ]
+        },
+        "sizing_mode": {
+          "enum": [
+            "sized",
+            "observation_only_no_account"
+          ]
+        },
         "account_snapshot": {
           "oneOf": [
-            {"type": "null"},
+            {
+              "type": "null"
+            },
             {
               "type": "object",
               "additionalProperties": false,
-              "required": ["snapshot_id", "snapshot_digest", "facts_as_of", "decision_as_of", "positions_count", "integrity_status", "blocking_kinds", "blocking_count"],
+              "required": [
+                "snapshot_id",
+                "snapshot_digest",
+                "facts_as_of",
+                "decision_as_of",
+                "positions_count",
+                "integrity_status",
+                "blocking_kinds",
+                "blocking_count"
+              ],
               "properties": {
-                "snapshot_id": {"type": "string", "pattern": "^a-short-account-[0-9]{8}-[0-9a-f]{16}$"},
-                "snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
-                "facts_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-                "decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-                "positions_count": {"type": "integer", "minimum": 0},
-                "integrity_status": {"enum": ["clear", "blocked"]},
+                "snapshot_id": {
+                  "type": "string",
+                  "pattern": "^a-short-account-[0-9]{8}-[0-9a-f]{16}$"
+                },
+                "snapshot_digest": {
+                  "type": "string",
+                  "pattern": "^[0-9a-f]{64}$"
+                },
+                "facts_as_of": {
+                  "type": "string",
+                  "pattern": "^[0-9]{8}$"
+                },
+                "decision_as_of": {
+                  "type": "string",
+                  "pattern": "^[0-9]{8}$"
+                },
+                "positions_count": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "integrity_status": {
+                  "enum": [
+                    "clear",
+                    "blocked"
+                  ]
+                },
                 "blocking_kinds": {
                   "type": "array",
-                  "items": {"enum": ["net_buy_not_in_positions", "shares_mismatch"]},
+                  "items": {
+                    "enum": [
+                      "net_buy_not_in_positions",
+                      "shares_mismatch"
+                    ]
+                  },
                   "uniqueItems": true
                 },
-                "blocking_count": {"type": "integer", "minimum": 0}
+                "blocking_count": {
+                  "type": "integer",
+                  "minimum": 0
+                }
               }
             }
           ]
@@ -369,33 +976,159 @@
         "iv_freshness": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["status", "iv_data_through", "price_data_through"],
+          "required": [
+            "status",
+            "iv_data_through",
+            "price_data_through"
+          ],
           "properties": {
-            "status": {"const": "aligned"},
-            "iv_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
-            "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}
+            "status": {
+              "const": "aligned"
+            },
+            "iv_data_through": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            },
+            "price_data_through": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            }
           }
         },
         "market_regime": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["source_status", "effective_status", "effective_regime", "fallback_active"],
+          "required": [
+            "source_status",
+            "effective_status",
+            "effective_regime",
+            "fallback_active"
+          ],
           "properties": {
-            "source_status": {"enum": ["attack", "shock", "defense", "contraction", "unknown", "missing"]},
-            "effective_status": {"enum": ["attack", "shock", "defense", "contraction"]},
-            "effective_regime": {"enum": ["进攻期", "震荡期", "防御期", "收缩期"]},
-            "fallback_active": {"type": "boolean"}
+            "source_status": {
+              "enum": [
+                "attack",
+                "shock",
+                "defense",
+                "contraction",
+                "unknown",
+                "missing"
+              ]
+            },
+            "effective_status": {
+              "enum": [
+                "attack",
+                "shock",
+                "defense",
+                "contraction"
+              ]
+            },
+            "effective_regime": {
+              "enum": [
+                "进攻期",
+                "震荡期",
+                "防御期",
+                "收缩期"
+              ]
+            },
+            "fallback_active": {
+              "type": "boolean"
+            }
           }
         },
         "price_freshness": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["mode", "run_date", "accepted_prior_settled_date", "price_data_through"],
+          "required": [
+            "mode",
+            "run_date",
+            "accepted_prior_settled_date",
+            "price_data_through"
+          ],
           "properties": {
-            "mode": {"enum": ["strict_as_of", "intraday_prior_settled"]},
-            "run_date": {"type": ["string", "null"], "pattern": "^\\d{8}$"},
-            "accepted_prior_settled_date": {"type": ["string", "null"], "pattern": "^\\d{8}$"},
-            "price_data_through": {"type": "string", "pattern": "^\\d{8}$"}
+            "mode": {
+              "enum": [
+                "strict_as_of",
+                "intraday_prior_settled"
+              ]
+            },
+            "run_date": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\d{8}$"
+            },
+            "accepted_prior_settled_date": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "pattern": "^\\d{8}$"
+            },
+            "price_data_through": {
+              "type": "string",
+              "pattern": "^\\d{8}$"
+            }
+          }
+        },
+        "runtime_configuration": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "schema_name",
+            "schema_version",
+            "configuration_fingerprint",
+            "policies"
+          ],
+          "properties": {
+            "schema_name": {
+              "const": "a_short_runtime_configuration"
+            },
+            "schema_version": {
+              "const": "1.0.0"
+            },
+            "configuration_fingerprint": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            },
+            "policies": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "policy_id",
+                  "schema_name",
+                  "schema_version",
+                  "path",
+                  "sha256"
+                ],
+                "properties": {
+                  "policy_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "schema_name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "schema_version": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "path": {
+                    "type": "string",
+                    "pattern": "^presets/[A-Za-z0-9_.-]+\\.json$"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{64}$"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -403,12 +1136,204 @@
     "boundary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["production", "real_money", "is_validated_alpha", "satisfies_ship_gate"],
+      "required": [
+        "production",
+        "real_money",
+        "is_validated_alpha",
+        "satisfies_ship_gate"
+      ],
       "properties": {
-        "production": {"const": false},
-        "real_money": {"const": false},
-        "is_validated_alpha": {"const": false},
-        "satisfies_ship_gate": {"const": false}
+        "production": {
+          "const": false
+        },
+        "real_money": {
+          "const": false
+        },
+        "is_validated_alpha": {
+          "const": false
+        },
+        "satisfies_ship_gate": {
+          "const": false
+        }
+      }
+    },
+    "portfolio_risk": {
+      "type": "object",
+      "description": "Deterministic M5.5/M5.5B portfolio concentration and factor-resonance result. It is calculated from the final sequential cash allocation, not from a text-only pre-check. Missing facts are an explicit manual-review state.",
+      "additionalProperties": false,
+      "required": [
+        "as_of",
+        "status",
+        "summary",
+        "stock_results"
+      ],
+      "properties": {
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "status": {
+          "enum": [
+            "not_applicable",
+            "manual_review_required",
+            "clear",
+            "concentration_over_cap",
+            "factor_resonance",
+            "factor_resonance_high_risk"
+          ]
+        },
+        "summary": {
+          "type": "object"
+        },
+        "fact_sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "source",
+              "as_of"
+            ],
+            "properties": {
+              "source": {
+                "type": "string"
+              },
+              "as_of": {
+                "type": "string",
+                "pattern": "^[0-9]{8}$"
+              }
+            }
+          }
+        },
+        "stock_results": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "effect_contract_ledger": {
+      "type": "object",
+      "description": "M6.7 全字段/规则联动台账。每个 analysis_input 字段组、阈值/判断标准均须在 effect contract 注册为 must_affect_result，或显式标注 intentionally_independent 并给出理由、owner、review_ref。unavailable_manual_review 表示当前生产者到消费者未闭合或事实缺失，不能静默当作无影响。",
+      "additionalProperties": false,
+      "required": [
+        "schema_name",
+        "schema_version",
+        "as_of",
+        "contract_fingerprint",
+        "records",
+        "summary"
+      ],
+      "properties": {
+        "schema_name": {
+          "const": "a_short_effect_contract_ledger"
+        },
+        "schema_version": {
+          "const": "1.0.0"
+        },
+        "as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "contract_fingerprint": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "records": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "policy",
+              "status",
+              "source_prefixes",
+              "source_paths_sha256",
+              "terminal_surfaces",
+              "reason"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "policy": {
+                "enum": [
+                  "must_affect_result",
+                  "intentionally_independent"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "applied",
+                  "not_triggered",
+                  "unavailable_manual_review",
+                  "intentionally_independent"
+                ]
+              },
+              "source_prefixes": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "source_paths_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "terminal_surfaces": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "summary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "total",
+            "applied",
+            "not_triggered",
+            "unavailable_manual_review",
+            "intentionally_independent"
+          ],
+          "properties": {
+            "total": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "applied": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "not_triggered": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "unavailable_manual_review": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "intentionally_independent": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
       }
     }
   }
