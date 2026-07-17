@@ -39,6 +39,9 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _attach_holding_disposition, _factor_comparison_realized_regime,
 )
 from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
+from engine.a_short_runtime_config import (  # noqa: E402
+    load_runtime_configuration, runtime_configuration_lineage,
+)
 from runners.a_short_phase5_engine import validate_operation_impact_no_dangling as _vop  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown, write_weekly_markdown  # noqa: E402
 from runners.a_short_phase5_engine import _semantic_operation_impacts  # noqa: E402
@@ -67,6 +70,7 @@ def _analysis_input(trade_date=AS_OF, candidates=None):
     base = json.loads(FIXT_AI.read_text(encoding="utf-8"))
     base["trade_date"] = trade_date
     src = base.get("source") or {}
+    src["runtime_configuration"] = runtime_configuration_lineage(load_runtime_configuration())
     if src.get("l3_mode") == "pit":               # keep PIT invariant: snapshot <= trade_date
         src["l3_snapshot_date"] = trade_date
     if candidates is not None:
@@ -830,6 +834,10 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(by["600000.SH"]["m67"]["table"]["操作"], "持有")
         self.assertIn("已有持仓", by["600000.SH"]["m67"]["精简结论区"]["操作建议"])
         self.assertEqual(by["000001.SZ"]["m67"]["table"]["操作"], "观察")
+        # An existing holding is exposure baseline, not a proposed new entry.
+        # Portfolio replacement/review therefore remains not_applicable here.
+        self.assertEqual(by["000001.SZ"]["machine"]["layer"]["portfolio_risk"]["status"],
+                         "not_applicable")
 
     def test_main_rule13_active_blocks_flat_reentry(self):
         with tempfile.TemporaryDirectory() as td:
@@ -1720,7 +1728,20 @@ class DeepSeekWebProviderWiring(unittest.TestCase):
 class CashAllocationTests(unittest.TestCase):
     """#3 全局现金分配:多只建仓按区间上沿统一消耗 available_cash,确定性排序,归零转观察,过 schema+validator。"""
     def _builds(self):
-        return [_normalized("600000.SH"), _normalized("600519.SH"), _normalized("601318.SH")]
+        # Cash-allocation tests isolate the cash rule.  Give each synthetic
+        # candidate complete, low-risk and mutually diversified M5.5 facts so
+        # the portfolio fail-closed path is not what decides these assertions.
+        rows = [_normalized("600000.SH"), _normalized("600519.SH"), _normalized("601318.SH")]
+        for row, sw_l2_key in zip(rows, ("bank", "consumer", "health")):
+            row["portfolio_risk_facts"] = {
+                "source": "cash_allocation_fixture",
+                "sw_l2_key": sw_l2_key,
+                "circ_mv_rmb": 10_000_000_000.0,
+                "northbound_holding_ratio_pct": 1.0,
+                "margin_balance_to_float_mv_pct": 1.0,
+                "is_large_index_component": False,
+            }
+        return rows
 
     def test_no_account_no_cash_allocation(self):
         w = build_weekly_report([_normalized()], AS_OF, GEN)        # 默认 absent lineage + available_cash None

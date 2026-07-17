@@ -1,0 +1,568 @@
+{
+  "schema_name": "a_short_m67_effect_contract",
+  "schema_version": "1.0.0",
+  "analysis_input_all_paths_sha256": "2a4cf5f9aae75bb98be4f6d71f3effde76da115c5a23b46a6d186c5bfafee078",
+  "groups": [
+    {
+      "id": "lineage_metadata",
+      "source_prefixes": [
+        "schema_version",
+        "generated_at",
+        "source.input_files",
+        "source.notes"
+      ],
+      "source_paths_sha256": "9010e763e011d4ec7183ce2c0dbb311042fc3cacc1b8003bd3a87c84ea7d396b",
+      "policy": "intentionally_independent",
+      "terminal_surfaces": [
+        "weekly.run_lineage"
+      ],
+      "runtime_handler": "intentionally_independent",
+      "intentional_independence": {
+        "reason": "这些字段只证明报告来自哪一批输入，不表达买卖、星级、仓位或风险。",
+        "owner": "A-short maintainers",
+        "review_ref": "docs/a_short_m67_effect_contract.md"
+      }
+    },
+    {
+      "id": "identity_batch_gate",
+      "source_prefixes": [
+        "trade_date",
+        "preset",
+        "market",
+        "horizon",
+        "schema_name",
+        "source.screening_engine",
+        "source.screening_engine_version",
+        "source.data_provider",
+        "source.l3_mode",
+        "source.l3_pit_strict",
+        "source.l3_snapshot_date",
+        "source.hard_veto_source_health",
+        "source.run_identity",
+        "state_refs"
+      ],
+      "source_paths_sha256": "c02249555b43a7a57519172d918b5f07cfafd235177aa62c6a1c703f22f057db",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly.run_lineage 只保留部分批次身份；preset、provider、L3 和 state_refs 等其余叶字段尚未逐叶证明 M6.7 消费者，整组不得报已联动。"
+    },
+    {
+      "id": "l3_coverage_provenance",
+      "source_prefixes": ["source.l3_coverage", "source.l3_provider"],
+      "source_paths_sha256": "e671490d41a60223e24a1c4ddfaa383b16307da640ee466aa188df15408ca6ca",
+      "policy": "must_affect_result",
+      "terminal_surfaces": ["weekly.effect_contract_ledger", "weekly Markdown 字段/规则联动台账"],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "主干新增的 HiThink L3 覆盖与溯源字段尚未逐叶证明被正式 M6.7 消费；必须显式人工复核。"
+    },
+    {
+      "id": "runtime_configuration",
+      "source_prefixes": [
+        "source.runtime_configuration"
+      ],
+      "source_paths_sha256": "373eaaf3512af46778399e9dfcb434996f3d45df0dbb0528c8b69939292c7123",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.run_lineage.runtime_configuration",
+        "weekly Markdown 配置 fingerprint"
+      ],
+      "runtime_handler": "lineage_gate",
+      "proven_consumer_paths": [
+        "source.runtime_configuration.configuration_fingerprint",
+        "source.runtime_configuration.policies[].path",
+        "source.runtime_configuration.policies[].policy_id",
+        "source.runtime_configuration.policies[].schema_name",
+        "source.runtime_configuration.policies[].schema_version",
+        "source.runtime_configuration.policies[].sha256",
+        "source.runtime_configuration.schema_name",
+        "source.runtime_configuration.schema_version"
+      ],
+      "consumer_proof_ref": "runners/a_short_weekly_pipeline.py validates the analysis_input policy lineage then writes it to weekly; validation and Markdown rendering bind the same fingerprint."
+    },
+    {
+      "id": "universe_selection",
+      "source_prefixes": [
+        "universe_summary"
+      ],
+      "source_paths_sha256": "669d40c9388ff8b49d1791e661c71a27cef7f0025cbf282129f7e672cd78f06a",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "筛选统计会随候选进入周报，但尚未逐字段证明各统计量对正式 M6.7 的消费者；不能只因本周有候选就报已联动。"
+    },
+    {
+      "id": "market_context",
+      "source_prefixes": [
+        "market_context"
+      ],
+      "source_paths_sha256": "fc0178fb32c450a6f576232ee2b32abc9819eb648fce3031c61f13775131c898",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "正式 weekly 当前只读取市场状态等少数字段，整组其余广度、流动性、北向、日历和波动率叶字段尚未逐叶证明消费者；不能报已联动。"
+    },
+    {
+      "id": "account_context",
+      "source_prefixes": [
+        "account_context"
+      ],
+      "source_paths_sha256": "4e6a553cfe533fe69b6609686fd122fc7fa9a7065b451e8a1667b14b7fcb123c",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "正式现金分配读取独立账户输入；analysis_input.account_context 尚未逐叶证明为 M6.7 消费者，必须人工核查。"
+    },
+    {
+      "id": "candidate_identity_selection",
+      "source_prefixes": [
+        "candidates[].ts_code",
+        "candidates[].name",
+        "candidates[].exchange",
+        "candidates[].board",
+        "candidates[].analysis_role",
+        "candidates[].selection"
+      ],
+      "source_paths_sha256": "02f4f04af10db99c5facbfc4076976e00b99932115993b02cfed412b591a538f",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "代码和名称会展示，但交易所、板块、角色和 selection 尚未逐字段证明为正式 M6.7 消费者；本组必须人工核查。"
+    },
+    {
+      "id": "candidate_quote",
+      "source_prefixes": [
+        "candidates[].quote"
+      ],
+      "source_paths_sha256": "33545edacf56f19b3e329007eaacdb5debfdc64dc2e07b4f5b345064eb574939",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly 目前只取 quote.close；其余报价叶字段尚未接入，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_industry_classification",
+      "source_prefixes": [
+        "candidates[].industry.sw_l1_code",
+        "candidates[].industry.sw_l1_name",
+        "candidates[].industry.sw_l2_code",
+        "candidates[].industry.sw_l2_name"
+      ],
+      "source_paths_sha256": "e485df56173691e2dc29394122d25b5c24e5cea7ed364f4d08e7f9a1706c477f",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "组合模块只使用 SW L2；SW L1 叶字段尚未逐叶证明消费者，整组不得报已联动。"
+    },
+    {
+      "id": "industry_trend",
+      "source_prefixes": [
+        "candidates[].industry.industry_trend",
+        "candidates[].industry.industry_trend_signal",
+        "candidates[].industry.industry_trend_evidence"
+      ],
+      "source_paths_sha256": "3b639bd4afdd78d2311dd4940babb62f880d8dbd47c8aa976ca6b56d760b8409",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "reports[].m67.table.优先级",
+        "reports[].machine.industry_trend",
+        "weekly_m67.md deterministic industry-trend line"
+      ],
+      "runtime_handler": "industry_trend"
+    },
+    {
+      "id": "industry_fundamental_advisory",
+      "source_prefixes": [
+        "candidates[].industry.industry_fundamental_trend",
+        "candidates[].industry.industry_fundamental_trend_evidence"
+      ],
+      "source_paths_sha256": "5be5ad452b1323b5bc0e54b1410c382fd3940d405b2afcb7eecdb514558d7ef4",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "主干的行业基本面 LLM advisory 仍是独立的 Phase 3/4 接线；本切片不把它误报为已联动。"
+    },
+    {
+      "id": "candidate_scores",
+      "source_prefixes": [
+        "candidates[].scores"
+      ],
+      "source_paths_sha256": "dad9b9c6d7b1b5aba5a6a86428ee39de5d06b033ab2c9d4feec95867a8eb07d7",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly 只转入少数 ESP/L4/总分和质量旗标；其余 scores 叶字段未逐叶证明 M6.7 消费者，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_technical",
+      "source_prefixes": [
+        "candidates[].technical"
+      ],
+      "source_paths_sha256": "80565630ed6c1f70d79de9cf1d0e97acb71cc254c8580738917ae76f10717e68",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "analysis_input.technical 当前没有被 weekly/Phase5 的候选消费者逐叶读取；不得因候选存在而误报已联动。"
+    },
+    {
+      "id": "candidate_fundamental",
+      "source_prefixes": [
+        "candidates[].fundamental"
+      ],
+      "source_paths_sha256": "405baa3c9b2a36dfb11f98d864b1bab75ecfb1d809b67bccdc30b31ef99609a9",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "少数基本面叶字段会转成财报质量 advisory 或组合事实，但整组仍有未证明的叶字段；未逐叶拆开前不能报已联动。"
+    },
+    {
+      "id": "candidate_capital_flow",
+      "source_prefixes": [
+        "candidates[].capital_flow"
+      ],
+      "source_paths_sha256": "8419d89681cf09249fb516e232cd2c0097b72a5bc2bd8e503d3b3de14f336d2d",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "北向持股比例和融资占比会进入组合事实，但其余资金流叶字段尚无 weekly 消费者；未逐叶拆开前不能报已联动。"
+    },
+    {
+      "id": "candidate_event_risk",
+      "source_prefixes": [
+        "candidates[].event_risk"
+      ],
+      "source_paths_sha256": "a006204918486233041473e0009d3f6119c1339d152579118346cf0337b912d0",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly 只转入部分减持、退市和停牌事实；监管、解禁及其余事件叶字段尚未逐叶证明消费者，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_catalyst",
+      "source_prefixes": [
+        "candidates[].catalyst"
+      ],
+      "source_paths_sha256": "4292282ab816163ced1c740f1feab2846093d45c4b7f2f956345abc1faf03e0f",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "analysis_input.catalyst 当前没有被 weekly/Phase5 的候选消费者逐叶读取；必须人工核查。"
+    },
+    {
+      "id": "candidate_liquidity",
+      "source_prefixes": [
+        "candidates[].liquidity"
+      ],
+      "source_paths_sha256": "a1fe15d3d8daecc1fb846f0123af627c4dea21cc7e859622b290e8f7ea192607",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly 只使用 5/20 日成交额；其余流动性叶字段尚未逐叶证明消费者，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_volatility",
+      "source_prefixes": [
+        "candidates[].volatility"
+      ],
+      "source_paths_sha256": "5326f1e3f8e751633320ffa0756354ac19bbc267199057757b321c72b20a1675",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "analysis_input.volatility 当前未接入 weekly 的 IV/HV 输入；周报使用的是独立 IV feed，不能误报本组已联动。"
+    },
+    {
+      "id": "candidate_analyst",
+      "source_prefixes": [
+        "candidates[].analyst"
+      ],
+      "source_paths_sha256": "51c3529d30c2dd9ca290d2796725d25ad104dbe7e99a9604931cd2e3018cb5ab",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "analysis_input.analyst 当前没有 weekly/Phase5 消费者；必须人工核查。"
+    },
+    {
+      "id": "portfolio_concentration_factor_resonance",
+      "source_prefixes": [
+        "candidates[].portfolio_impact"
+      ],
+      "source_paths_sha256": "5e21e74d63c46deae6b43a5fe83a5ae34d211d0f8f03cdaceedd39f699ff2e35",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "M5.5/M5.5B 使用部分因子暴露字段；correlation_action、阈值等其余叶字段尚未逐叶证明消费者，整组不得报已联动。"
+    },
+    {
+      "id": "candidate_derived_flags",
+      "source_prefixes": [
+        "candidates[].derived_flags"
+      ],
+      "source_paths_sha256": "27ee95006b78047eaf7fcf4f0210e2dd196f6b962693d844b51b1f78755704de",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "weekly 使用多个 derived flag，但 m4_review_required 等叶字段尚未逐叶证明消费者；整组不得报已联动。"
+    },
+    {
+      "id": "llm_tasks",
+      "source_prefixes": [
+        "candidates[].llm_tasks"
+      ],
+      "source_paths_sha256": "3f1f3eb2ae0ad060ea36d26e2ff1a508f3b00b10d09ed08b4dce6c259af2599e",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "reports[].machine.layer.llm_task_results",
+        "weekly.field_impact_ledger",
+        "weekly Markdown LLM补充"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "Master reconciliation does not claim the separate Phase 3/4 LLM bridge is present; its configured tasks remain an explicit manual-review group until that slice lands."
+    },
+    {
+      "id": "candidate_data_quality",
+      "source_prefixes": [
+        "candidates[].data_quality"
+      ],
+      "source_paths_sha256": "680077c4ac6515e5d1a4ac342c6c08bfe66186497725923458b33aed34e44d7b",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "weekly Markdown 字段/规则联动台账"
+      ],
+      "runtime_handler": "unresolved_input_group",
+      "unresolved_reason": "analysis_input.data_quality 当前未驱动 weekly 的数据缺失处置或操作；必须人工核查。"
+    }
+  ],
+  "decision_predicate_sha256": {
+    "A-EGS/egs_main.py": "bcf13afdd20b39130c36e0f275bf2c94acb5ed235262d7054d6d5dc6274c67ee",
+    "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
+    "runners/a_short_phase5_engine.py": "d68e33718e0dc0e9b24f753d31d8b030294c03d62058e616c2334ef2923ca7c6",
+    "runners/a_short_weekly_pipeline.py": "3ffaf3646057b870a0399b1213e7b7d0560d0e3f1e3f8fefa5dd0ec66f7dbceb",
+    "runners/a_short_m67_render.py": "eeed64ddf28c514808ad96cfec332e87ac67babd68574a428aa21242ba62dead",
+    "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
+    "engine/a_short_effect_contract.py": "3c4cc18929a5ea61a76aa9e60316bac648ff9229b1ee6da9f3d55ac7920b0fce"
+  },
+  "runtime_constants_sha256": {
+    "A-EGS/egs_main.py": "e3837f40ff86f3903cf961b430e69bd6e39dcf6d9b1042027c688c22e66a1df7",
+    "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
+    "engine/a_short_portfolio_risk.py": "0e49fe267566d8ee2608fb99ac3cbd37c1ddaae027633d791a194fc2e38761ae"
+  },
+  "runtime_policy_paths_sha256": "a164e3baffe8bcb8f82d07549ffc343213e9832f129178527113abc55bfcca53",
+  "runtime_policy_sha256": {
+    "presets/a_short_screening_threshold_governance_20260602.json": "aeccfa2636685f395442a23892d9d816d22fcf50271b0fe7dbc13bf72cffce9d",
+    "presets/a_short_m67_runtime_policy_20260715.json": "2af7fc3e59fa891a63afbe312ebe41dda77ee967965a980b10cc9dad1969ed49",
+    "presets/egs_industry_heat_governance_20260611.json": "8bbbf474ca92321bf0d1c0e5f6e91d13d332e10545d3a222aa9e32caac3fb8da"
+  },
+  "runtime_policy_schema_sha256": {
+    "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
+    "schemas/a_short_m67_runtime_policy.schema.json": "682f1e490a20f4b30186bf50431ae19d5d03ab7aea3314f652f70d0d62bebf00"
+  },
+  "runtime_policy_leaf_readers_sha256": "9a2c54dd61df5518fb62f18445aebe3ed78cfea423e51672d4a454f43c07288e",
+  "runtime_policy_bindings": [
+    {
+      "id": "screening_thresholds",
+      "policy_path": "presets/a_short_screening_threshold_governance_20260602.json",
+      "source_prefixes": [
+        "thresholds"
+      ],
+      "source_paths_sha256": "e84c2eaa2a14d33fb280fdf127006407516e7b1934e109c07ea755fb791cf08d",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "analysis_input candidate selection",
+        "weekly.run_lineage.runtime_configuration"
+      ],
+      "consumer_refs": [
+        "A-EGS/egs_main.py::CONF loads _SCREENING_THRESHOLDS"
+      ]
+    },
+    {
+      "id": "phase5_thresholds",
+      "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+      "source_prefixes": [
+        "phase5"
+      ],
+      "source_paths_sha256": "bee5707edbf5398bc7b83fd032b638c9e766094a81434a880255c300e77f3a67",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.reports[].m67",
+        "weekly.reports[].machine"
+      ],
+      "consumer_refs": [
+        "runners/a_short_phase5_engine.py imports _PHASE5_POLICY"
+      ]
+    },
+    {
+      "id": "portfolio_risk_thresholds",
+      "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+      "source_prefixes": [
+        "portfolio_risk"
+      ],
+      "source_paths_sha256": "c10f308fc2e07dac98c289123a75910f71949cec479eb0b2d8ef7089e56e9c60",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.portfolio_risk",
+        "weekly.reports[].machine.operation_impact",
+        "weekly.cash_allocation"
+      ],
+      "consumer_refs": [
+        "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY"
+      ]
+    },
+    {
+      "id": "weekly_result_windows",
+      "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+      "source_prefixes": [
+        "weekly_windows"
+      ],
+      "source_paths_sha256": "d88d07b935f4f859bfb542adf0a8378141fb84baaeb03269284704f71bed3914",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly ex_div_notices/upcoming_events/dragon_list/block_trade",
+        "weekly.reports[].m67"
+      ],
+      "consumer_refs": [
+        "runners/a_short_weekly_pipeline.py imports _WEEKLY_WINDOWS"
+      ]
+    },
+    {
+      "id": "industry_trend_classifier",
+      "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+      "source_prefixes": [
+        "industry_trend_classifier.classifier_version",
+        "industry_trend_classifier.forward_calibration_required",
+        "industry_trend_classifier.headwind_max",
+        "industry_trend_classifier.positive_effect_enabled",
+        "industry_trend_classifier.risk_filter_v1_prior",
+        "industry_trend_classifier.source_id",
+        "industry_trend_classifier.tailwind_min"
+      ],
+      "source_paths_sha256": "e8a3ab0bb77e6bee755895083fdcb1f3eb6d49d415bf18a18cefa9a8ae1d8f8c",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "analysis_input candidates[].industry.industry_trend_signal",
+        "weekly reports[].machine.industry_trend",
+        "reports[].m67.table.优先级"
+      ],
+      "consumer_refs": [
+        "engine/a_short_industry_theme.py classifier; A-EGS emits; weekly validates master governance"
+      ]
+    },
+    {
+      "id": "industry_trend_semantic_boundary",
+      "policy_path": "presets/egs_industry_heat_governance_20260611.json",
+      "source_prefixes": [
+        "industry_trend_classifier.semantic_boundary"
+      ],
+      "source_paths_sha256": "c8c26254d99700276e35e01531be74c65d1c976c0bc819d7ce0245fa59a3310e",
+      "policy": "intentionally_independent",
+      "terminal_surfaces": [
+        "weekly.effect_contract_ledger",
+        "docs/a_short_m67_effect_contract.md"
+      ],
+      "intentional_independence": {
+        "reason": "Classifier semantic boundary is explanatory metadata: it documents the deterministic-vs-LLM separation and must not itself create a trade effect.",
+        "owner": "A-short maintainers",
+        "review_ref": "docs/a_short_m67_effect_contract.md"
+      }
+    }
+  ],
+  "comparison_tracks": [
+    {
+      "id": "theme_overlay",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_theme_overlay_comparison.schema.json",
+      "schema_sha256": "cbab2ac920d72bb1234a016fbd4073d9bd44689c9fe6264ed918f3ebe216cbfe",
+      "reason": "Not a missing connection: overlay is a separate forward comparison track and, before manual promotion, is prohibited from changing formal M6.7 star, risk, action, sizing, cash allocation, or veto.",
+      "owner": "runners/a_short_theme_overlay_comparison.py + runners/a_short_overlay_eval.py",
+      "review_ref": "manual promotion only after forward evidence",
+      "consumer_refs": [
+        "result/a_short/<as_of>/overlay.json",
+        "research/results/a_short/overlay_eval_summary.json"
+      ]
+    }
+  ],
+  "operation_impact_sources": [
+    "financial_quality",
+    "holder_reduction_deduct_30d",
+    "semantic_official_high_confirmed",
+    "semantic_web_llm",
+    "block_trade_appearance",
+    "dragon_list_appearance",
+    "portfolio_concentration_factor_resonance"
+  ],
+  "llm_task_types": [
+    "cross_market_linkage",
+    "earnings_bad_reaction",
+    "hidden_risk",
+    "industry_trend",
+    "policy_news",
+    "regulatory_check"
+  ],
+  "portfolio_factor_fields": [
+    "northbound_holding_ratio_pct",
+    "margin_balance_to_float_mv_pct",
+    "large_index_component_pct",
+    "small_float_mv_pct"
+  ],
+  "output_schema_sha256": {
+    "schemas/a_short_weekly_report.schema.json": "d59126653592ab44d45d611e8e11696445217cf413e4ae066aecb784d8100d78",
+    "schemas/a_short_m67_report.schema.json": "99b61cac33f606fdb5e0105aded8f0d74419bd4720751684e1f7fef3b578d34a"
+  }
+}

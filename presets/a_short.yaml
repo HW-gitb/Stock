@@ -20,16 +20,19 @@ paths:
 
 notes:
   - Phase 1 uses A-EGS/egs_main.py as the current screening entry.
-  - Screening threshold governance lives in presets/a_short_screening_threshold_governance_20260602.json.
-  - Current runtime still reads A-EGS/egs_main.py::CONF; parity is enforced by tests/schema/test_a_short_screening_threshold_governance_schema.py until a reviewed preset-loader migration.
+  - Reviewed JSON runtime policies are the sole authority for screening and M6.7 business thresholds.
+  - Python validates and executes those policies; it does not provide business-threshold fallbacks.
   - Rule6 machine-check thresholds are frozen from v14.2 in presets/a_short_rule6_thresholds_20260714.json.
 
 screening_threshold_governance:
   schema_ref: schemas/a_short_screening_threshold_governance.schema.json
   artifact_ref: presets/a_short_screening_threshold_governance_20260602.json
-  source_code_ref: A-EGS/egs_main.py::CONF
-  parity_test_ref: tests/schema/test_a_short_screening_threshold_governance_schema.py
-  status: current_conf_mirrored_no_runtime_behavior_change
+  status: runtime_json_authority
+
+m67_runtime_policy:
+  schema_ref: schemas/a_short_m67_runtime_policy.schema.json
+  artifact_ref: presets/a_short_m67_runtime_policy_20260715.json
+  status: runtime_json_authority
 
 rule6_threshold_governance:
   schema_ref: schemas/a_short_rule6_thresholds.schema.json

@@ -16,6 +16,7 @@ crowding) → IV feed(252d 分位,市场级) → Phase 5 引擎(逐票 M6.7) →
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
 import json
 import os
@@ -32,6 +33,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import jsonschema  # noqa: E402
+from engine.a_short_runtime_config import (  # noqa: E402
+    load_runtime_configuration,
+    runtime_configuration_lineage,
+    validate_runtime_configuration_lineage,
+)
 from engine.a_short_industry_theme import (  # noqa: E402
     configuration_fingerprint,
     finite_industry_heat_score,
@@ -47,6 +53,9 @@ from engine.a_short_regulatory_advisory import (
     validate_confirmation_document,
 )
 from engine.a_short_tushare_client import is_retryable_tushare_error
+
+_RUNTIME_CONFIGURATION = load_runtime_configuration()
+_WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -451,10 +460,28 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     fund = cand.get("fundamental", {}) or {}
     prof = fund.get("profitability", {}) or {}      # 4.2 财报质量①(复用):egs_main 已取的 fina_indicator 派生(零新取数)
     fqual = fund.get("quality", {}) or {}
+    portfolio_impact = cand.get("portfolio_impact", {}) or {}
+    factor_exposures = portfolio_impact.get("factor_exposures", []) or []
+    large_index_component = None
+    for exposure in factor_exposures:
+        if not isinstance(exposure, dict):
+            continue
+        if str(exposure.get("factor") or "") not in {
+                "index_component", "large_index_component", "csi300_or_sse50_component", "csi300_50etf_component"}:
+            continue
+        value = exposure.get("value")
+        if isinstance(value, bool):
+            large_index_component = value
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and value in (0, 1):
+            large_index_component = bool(value)
+        break
     industry = cand.get("industry", {}) or {}
     trend, trend_detail = _industry_trend_for_candidate(
         cand, str(cand.get("_weekly_as_of") or ""))
     fundamental_trend = str(industry.get("industry_fundamental_trend") or "pending_llm")
+    valuation = fund.get("valuation", {}) or {}
+    margin = (cand.get("capital_flow", {}) or {}).get("margin", {}) or {}
+    northbound = (cand.get("capital_flow", {}) or {}).get("northbound", {}) or {}
     taxonomy = ((cand.get("catalyst") or {}).get("theme_taxonomy"))
     overlay = {
         "eligible": bool((overlay_row or {}).get("eligible")),
@@ -492,7 +519,19 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
         "market_regime": regime,
         "regime_fallback": dict(regime_fallback or {}),
         "account": account or {},
-        "portfolio": {},
+        # Final concentration depends on tentative allocation and accepted
+        # earlier positions, so these are facts only; no old inert portfolio
+        # flag branch is retained.
+        "portfolio_risk_facts": {
+            "source": "analysis_input",
+            "sw_l2_key": industry.get("sw_l2_code") or industry.get("sw_l2_name"),
+            "circ_mv_rmb": (valuation.get("circ_mv") * 10000.0
+                            if isinstance(valuation.get("circ_mv"), (int, float))
+                            and not isinstance(valuation.get("circ_mv"), bool) else None),
+            "northbound_holding_ratio_pct": northbound.get("holding_ratio"),
+            "margin_balance_to_float_mv_pct": margin.get("balance_to_float_mv_pct"),
+            "is_large_index_component": large_index_component,
+        },
         "stateful_risk": dict(stateful_risk or {}),
         "observe_only": list(observe_only or []),
         "llm_enrichment": list(llm_enrichment or []),
@@ -531,11 +570,27 @@ def _demote_build_to_observe(report: dict, rank: int) -> None:
         f"组合现金分配后不足一手/最小金额 → 转观察(分配排序第 {rank};原拟建仓价位见 machine.diagnostic_raw_plan)。本周不建仓。")
 
 
-def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None) -> dict:
+_PORTFOLIO_RISK_MARKER = "组合集中度/因子共振"
+_PORTFOLIO_RISK_SOURCE = "portfolio_concentration_factor_resonance"
+
+
+def _demote_build_for_portfolio_risk(report: dict, rank: int, reason: str) -> None:
+    """Reuse the canonical observe conversion, then replace its cash-only reason."""
+    _demote_build_to_observe(report, rank)
+    table = report["m67"]["table"]
+    layer = report["machine"]["entry_exit_size_star"]
+    layer["reject_reason"] = reason
+    table["触发条件"] = reason
+    report["m67"]["精简结论区"]["操作建议"] = f"{reason}；本周不建仓。"
+
+
+def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None,
+                   portfolio_context=None) -> dict:
     """#3 全局现金分配(价格提案 §4 + §11.3/11.4):多只建仓按**区间上沿 entry_high**(最不利价)统一消耗
     available_cash,确定性排序;不足一手/最小金额 → 转观察。**原地改 reports(只动建仓票)**;返回 weekly 现金摘要 | None。
     只 re-rank 建仓,不 rescue hard veto、不把观察/否决变建仓、不碰持仓/Rule12·13。"""
     from runners.a_short_phase5_engine import MIN_SHARES, MIN_AMOUNT
+    from engine.a_short_portfolio_risk import commit_candidate, evaluate_candidate
     if available_cash is None:
         return None
     builds = [(i, r) for i, r in enumerate(reports) if r["m67"]["table"]["操作"] == "建仓"]
@@ -561,12 +616,21 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None) ->
             _demote_build_to_observe(r, rank)        # 不足 → 转观察(不输出按上沿买不起的建仓)
             continue
         cost = round(allocated * eh, 2)              # 2dp:与展示/审计的 cash_budget_used 同口径,摘要可精确对账
+        if portfolio_context is not None:
+            projection = evaluate_candidate(portfolio_context, str(r.get("ts_code")), allocated * eh)
+            portfolio_context["results"][str(r.get("ts_code"))] = projection
+            if projection.get("action") in {"replace", "observe_required"}:
+                _demote_build_for_portfolio_risk(
+                    r, rank, _PORTFOLIO_RISK_MARKER + "：" + "；".join(projection.get("reasons") or []))
+                continue
         remaining -= cost; allocated_total += cost
         if exposure_remaining is not None:
             exposure_remaining -= cost
         plan["raw_shares"], plan["shares"], plan["allocated_shares"] = raw, allocated, allocated
         plan["cash_budget_used"], plan["cash_allocation_rank"] = cost, rank
         r["m67"]["table"]["股数"] = allocated         # table 同步 plan(过 validator 建仓一致性)
+        if portfolio_context is not None:
+            commit_candidate(portfolio_context, projection)
         if allocated < raw:
             r["m67"]["精简结论区"]["操作建议"] += f"(组合现金分配:股数由 {raw} 降至 {allocated},占用现金 {cost})"
     summary = {"available_cash_start": round(float(available_cash), 2),
@@ -575,6 +639,112 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None) ->
         summary.update({"new_exposure_capacity_start": round(float(new_exposure_capacity), 2),
                         "remaining_new_exposure_capacity": round(exposure_remaining, 2)})
     return summary
+
+
+def _append_portfolio_risk_impact(report: dict, as_of: str, *, is_holding: bool,
+                                  effect: str, reason: str, blocked_add: bool) -> None:
+    """Make a deterministic portfolio effect traceable and visibly landed in M6.7."""
+    impacts = report["machine"].setdefault("operation_impact", [])
+    if any(impact.get("source_field") == _PORTFOLIO_RISK_SOURCE for impact in impacts):
+        return
+    impacts.append({
+        "source_field": _PORTFOLIO_RISK_SOURCE,
+        "field_class": "structured",
+        "visibility_shape": "holding_row_impact" if is_holding else "candidate_row_impact",
+        "impact_scope": "existing_holding" if is_holding else "new_entry",
+        "new_entry_effect": "none" if is_holding else effect,
+        "holding_effect": effect if is_holding else "none",
+        "blocked_add_required": bool(blocked_add),
+        "veto_class": "none",
+        "reason": reason,
+        "evidence_ref": {"kind": "lineage_key", "value": "weekly.portfolio_risk", "as_of": str(as_of)},
+        "confidence": "high",
+        "pit_basis": "observed_date",
+        "production_effect_enabled": True,
+        "implementation_status": "implemented",
+        "m67_landing_surface": ("持仓处置/禁止加仓 + 精简结论区.风控触发" if is_holding
+                                else "table.操作/股数/触发条件 + 精简结论区.风控触发"),
+        "terminal_surface_target": "already_structured",
+        "pending_successor_slice": None,
+        "privacy_class": "private_account" if is_holding else "public_tracked",
+    })
+    cut = report["m67"]["精简结论区"]
+    risk = str(cut.get("风控触发") or "")
+    if _PORTFOLIO_RISK_MARKER not in risk:
+        cut["风控触发"] = (risk + "|" if risk else "") + _PORTFOLIO_RISK_MARKER + "：" + reason
+    if is_holding and blocked_add:
+        advice = str(cut.get("操作建议") or "")
+        if "禁止加仓" not in advice:
+            cut["操作建议"] = (advice + "；" if advice else "") + "组合风险触发，禁止加仓并人工复核。"
+
+
+def _holding_adds_portfolio_risk(fact: dict, summary: dict) -> bool:
+    """Whether adding this existing holding would reinforce the current breach."""
+    if summary.get("status") in {"manual_review_required", "factor_resonance_high_risk"}:
+        return True
+    over_industries = {row.get("sw_l2_key") for row in (summary.get("industry_exposures") or [])
+                       if row.get("over_threshold")}
+    if fact.get("sw_l2_key") in over_industries:
+        return True
+    by_factor = {row.get("factor"): row for row in (summary.get("factor_exposures") or [])}
+    for field in ("northbound_holding_ratio_pct", "margin_balance_to_float_mv_pct"):
+        row = by_factor.get(field) or {}
+        if row.get("over_threshold") and isinstance(fact.get(field), (int, float)) and fact[field] > row.get("value_pct", 0):
+            return True
+    if (by_factor.get("large_index_component_pct") or {}).get("over_threshold") and fact.get("is_large_index_component"):
+        return True
+    return bool((by_factor.get("small_float_mv_pct") or {}).get("over_threshold")
+                and isinstance(fact.get("circ_mv_rmb"), (int, float)) and fact["circ_mv_rmb"] < 8_000_000_000.0)
+
+
+def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> dict:
+    """Attach per-stock machine records and deterministic M6.7 impacts after allocation."""
+    from engine.a_short_portfolio_risk import final_summary, not_applicable_result
+    from runners.a_short_phase5_engine import _apply_holding_disposition
+
+    summary = final_summary(context)
+    stock_results = []
+    for report in reports:
+        code = str(report.get("ts_code"))
+        machine = report.get("machine") or {}
+        held = (machine.get("stateful_risk") or {}).get("position_state") == "held"
+        fact = context["facts"].get(code, {"as_of": str(as_of)})
+        if held:
+            blocked = _holding_adds_portfolio_risk(fact, summary)
+            result = {
+                "ts_code": code, "role": "existing_holding", "status": summary.get("status"),
+                "action": "blocked_add" if blocked else "none",
+                "evaluated": summary.get("status") not in {"not_applicable", "manual_review_required"},
+                "candidate_value_rmb": None, "post_position_count": summary.get("positions_count"),
+                "same_sw_l2": None, "factor_exposures": list(summary.get("factor_exposures") or []),
+                "reasons": list(summary.get("reasons") or []),
+                "missing_fields": list(summary.get("missing_fields") or []),
+            }
+            if blocked:
+                holding_effect = "manual_review" if summary.get("status") == "manual_review_required" else "hold_watch"
+                _append_portfolio_risk_impact(report, as_of, is_holding=True, effect=holding_effect,
+                                               reason="；".join(result["reasons"]), blocked_add=True)
+                _apply_holding_disposition(report)
+        else:
+            result = context["results"].get(code) or not_applicable_result(
+                code, "candidate", "本行不是最终建仓候选，未进入组合试算")
+            if result.get("action") in {"replace", "observe_required"}:
+                effect = "manual_review" if result.get("status") == "manual_review_required" else "observe_required"
+                _append_portfolio_risk_impact(report, as_of, is_holding=False, effect=effect,
+                                               reason="；".join(result.get("reasons") or []), blocked_add=False)
+        result = dict(result)
+        result["fact_source"] = str(fact.get("source") or "unknown")
+        result["fact_as_of"] = str(fact.get("as_of") or "")
+        report.setdefault("machine", {}).setdefault("layer", {})["portfolio_risk"] = result
+        stock_results.append(copy.deepcopy(result))
+    fact_sources = sorted({
+        (str(result.get("fact_source") or "unknown"), str(result.get("fact_as_of") or ""))
+        for result in stock_results
+    })
+    return {"as_of": str(as_of), "status": summary.get("status"), "summary": summary,
+            "fact_sources": [{"source": source, "as_of": fact_as_of}
+                             for source, fact_as_of in fact_sources],
+            "stock_results": stock_results}
 
 
 # 4.2 Round2: analysis_input.universe_summary.excluded_counts 键 → exclusion_summary by_reason 元信息
@@ -638,14 +808,22 @@ def _validate_crash_veto_tracking_summary(payload: dict, expected_as_of: str | N
 
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
-                        new_exposure_capacity=None, crash_veto_tracking: dict | None = None) -> dict:
+                        new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
+                        portfolio_fact_overrides: dict | None = None,
+                        account_positions: list[dict] | None = None,
+                        missing_holding_codes: list[str] | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
     reports = [(build_holding_report(n, as_of, generated_at)
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
                for n in normalized_list]
-    cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity)
+    from engine.a_short_portfolio_risk import build_context
+    portfolio_context = build_context(
+        normalized_list, as_of, fact_overrides=portfolio_fact_overrides,
+        account_positions=account_positions, missing_holding_codes=missing_holding_codes)
+    cash_summary = _allocate_cash(reports, available_cash, new_exposure_capacity, portfolio_context)
+    portfolio_risk = _apply_portfolio_risk_results(reports, portfolio_context, as_of)
     # run_lineage ties the consumed selection + IV feed + account/sizing status to this M6.7 artifact
     # (Slice 3b-2: selection 在 result/a_short、M6.7 在 research lane,靠此机器可读 lineage 绑定);
     # default = no-account observation-only,使直接 builder/测试仍 schema-valid。
@@ -662,23 +840,69 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "account_status": "absent", "sizing_mode": "observation_only_no_account",
         "account_snapshot": None,
         "price_freshness": {"mode": "strict_as_of", "run_date": None,
-                            "accepted_prior_settled_date": None, "price_data_through": str(as_of)}}
+                            "accepted_prior_settled_date": None, "price_data_through": str(as_of)},
+        "runtime_configuration": runtime_configuration_lineage(_RUNTIME_CONFIGURATION)}
     lineage.setdefault("run_id", f"a-short-{as_of}-{fallback_digest[:16]}")
     lineage.setdefault("candidate_digest", fallback_digest)
     lineage.setdefault("stage_status", "complete")
+    lineage.setdefault("runtime_configuration", runtime_configuration_lineage(_RUNTIME_CONFIGURATION))
     weekly = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
         "cash_allocation": cash_summary,
+        "portfolio_risk": portfolio_risk,
         "run_lineage": lineage,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    from engine.a_short_effect_contract import build_effect_contract_ledger
+    weekly["effect_contract_ledger"] = build_effect_contract_ledger(weekly)
     if crash_veto_tracking is not None:
         _validate_crash_veto_tracking_summary(crash_veto_tracking, expected_as_of=as_of)
         weekly["crash_veto_tracking"] = crash_veto_tracking
     return weekly
+
+
+def _validate_portfolio_risk(weekly: dict) -> None:
+    """Close the JSON → M6.7 action/share/Markdown wiring for M5.5/M5.5B."""
+    risk = weekly.get("portfolio_risk")
+    if not isinstance(risk, dict) or str(risk.get("as_of")) != str(weekly.get("as_of")):
+        raise ValueError("portfolio_risk missing or not bound to weekly as_of")
+    statuses = {"not_applicable", "manual_review_required", "clear", "concentration_over_cap",
+                "factor_resonance", "factor_resonance_high_risk"}
+    if risk.get("status") not in statuses or not isinstance(risk.get("summary"), dict):
+        raise ValueError("portfolio_risk status/summary invalid")
+    results = risk.get("stock_results")
+    reports = weekly.get("reports") or []
+    if not isinstance(results, list) or len(results) != len(reports):
+        raise ValueError("portfolio_risk stock_results count must equal weekly reports")
+    by_code = {str(row.get("ts_code")): row for row in results if isinstance(row, dict)}
+    if len(by_code) != len(reports):
+        raise ValueError("portfolio_risk stock_results contains duplicate or malformed ts_code")
+    for report in reports:
+        code = str(report.get("ts_code"))
+        result = by_code.get(code)
+        layer = ((report.get("machine") or {}).get("layer") or {}).get("portfolio_risk")
+        if not isinstance(result, dict) or not isinstance(layer, dict):
+            raise ValueError(f"{code} portfolio_risk result is missing")
+        if layer.get("status") != result.get("status") or layer.get("action") != result.get("action"):
+            raise ValueError(f"{code} portfolio_risk machine result diverges from weekly summary")
+        if result.get("action") in {"replace", "observe_required"}:
+            table = report["m67"]["table"]
+            if table.get("操作") != "观察" or table.get("股数") is not None:
+                raise ValueError(f"{code} portfolio block did not reach M6.7 operation/share")
+            impacts = (report.get("machine") or {}).get("operation_impact") or []
+            if not any(impact.get("source_field") == _PORTFOLIO_RISK_SOURCE for impact in impacts):
+                raise ValueError(f"{code} portfolio block has no operation_impact trace")
+        if result.get("status") == "manual_review_required" and not result.get("missing_fields"):
+            raise ValueError(f"{code} portfolio manual review lacks missing fields")
+    summary = risk["summary"]
+    if risk.get("status") == "factor_resonance_high_risk":
+        if summary.get("daily_manual_review_required") is not True or summary.get("holding_single_position_cap_multiplier") != 0.8:
+            raise ValueError("portfolio high-risk status must require daily review and 20% holding-cap reduction")
+    if risk.get("status") == "manual_review_required" and not summary.get("missing_fields"):
+        raise ValueError("portfolio manual-review status lacks missing facts")
 
 
 def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
@@ -702,6 +926,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError(f"IV feed 最新 trade_date {fs[-1]['trade_date']} 晚于周报 as_of {weekly['as_of']}(PIT 违规)")
     if weekly["n_stocks"] != len(weekly["reports"]):
         raise ValueError("n_stocks 与 reports 长度不一致")
+    _validate_portfolio_risk(weekly)
+    from engine.a_short_effect_contract import validate_effect_contract_ledger
+    validate_effect_contract_ledger(weekly)
     if any(b for b in weekly["boundary"].values()):
         raise ValueError("weekly boundary 必须全 false")
     rl = weekly.get("run_lineage") or {}
@@ -711,6 +938,10 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("run_lineage.run_id is not bound to weekly as_of")
     if not re.fullmatch(r"[0-9a-f]{64}", str(rl.get("candidate_digest") or "")):
         raise ValueError("run_lineage.candidate_digest is invalid")
+    try:
+        validate_runtime_configuration_lineage(rl.get("runtime_configuration"))
+    except ValueError as exc:
+        raise ValueError(f"run_lineage.runtime_configuration invalid/stale: {exc}") from exc
     # (account_status, sizing_mode) 是严格双态:恰为 (provided,sized) 或 (absent,observation_only_no_account)。
     # 任何其他配对——含矛盾的 (provided, observation_only_no_account)——都必须 raise,以免错标的 lineage 让
     # sizing-less 的「观察」被读成有账户支撑(或反之)。main 只会产出合法配对;此处兜住外部/手构的报告。
@@ -1452,8 +1683,8 @@ def validate_iv_feed_freshness(iv_feed_summary: dict, price_data_through: str) -
             "price_data_through": str(price_data_through)}
 
 
-MIN_PRICE_OBS = 20               # 指标(支撑/压力 20d、ATR 14d)所需最少 PIT 交易日
-EX_DIV_WINDOW_DAYS = 14          # #1 除权除息提示:as_of 起 N 个日历日内将除权 → advisory 提示(不改决策)
+MIN_PRICE_OBS = _WEEKLY_WINDOWS["min_price_observations"]
+EX_DIV_WINDOW_DAYS = _WEEKLY_WINDOWS["ex_div_window_days"]
 
 
 def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WINDOW_DAYS):
@@ -1494,7 +1725,7 @@ def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WIN
     return sorted(best.values(), key=lambda n: (n["days_to_ex"], n["ts_code"]))
 
 
-FORWARD_EVENT_WINDOW_DAYS = 21   # 4.2 forward_events: as_of 起 N 个日历日内的已公告未来事件 → advisory 日历(§4.4 prior,未来进 governance)
+FORWARD_EVENT_WINDOW_DAYS = _WEEKLY_WINDOWS["forward_event_window_days"]
 _FORWARD_EVENT_MARKER = "未来已知事件"   # holdings_manual_review reason 落地标记:_attach 写入 + validator 据此判 row no-dangling(单一来源,防文案漂移)
 # 4.2 forward_events per-type 元数据(builder emit event 用):provider rec 的事件日字段 / source_id / 置信度(解禁日确定=high;财报预约可改期=medium)/ 中文标签。
 # 加第 N 类事件只在此 4 个 map + provider + schema enum 扩,builder/attach/validator/render/guard 全 type-agnostic。
@@ -2192,7 +2423,7 @@ def _industry_fundamentals(financial_trends, code_to_industry, as_of):
 # 记**候选 + 账户持仓**近 N 交易日上榜事实+净买卖(第一刀)+ 席位分析(第二刀 top_inst)+ 持仓覆盖(第三刀),落 板块资金事件 + operation_impact(source_field=dragon_list_appearance);
 # **绝不改 EGS/TopN/选股/股数/操作/否决**(comparison-only,阈值未定·4.2.md §9 决策4)。
 # 复用 forward_events analysis-only 模式: fail-closed provider / unknown-not-clear / 双向 no-dangling / source-isolation guard。
-DRAGON_LIST_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(§4.1/§11.5 prior,未来进 governance;非生产阈值,不静默写 runner 魔数)
+DRAGON_LIST_LOOKBACK_TRADING_DAYS = _WEEKLY_WINDOWS["dragon_list_lookback_trading_days"]
 _DRAGON_LIST_MARKER = "龙虎榜对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑬ 据此判 row no-dangling(单一来源,防文案漂移)
 _DRAGON_LIST_EVIDENCE_VALUE = "dragon_list.events[appearance]"   # operation_impact.evidence_ref.value(_attach 写入 + 反向 evidence guard 校验共用单一来源)
 
@@ -2439,7 +2670,7 @@ def _attach_dragon_list_impacts(weekly, as_of):
 # ── 4.2 Round5 大宗交易(block_trade)第一刀: analysis-only · comparison-only(镜像龙虎榜第一刀)──────────
 # 记**候选 + 账户持仓**近 N 交易日大宗成交事实 + 成交金额(amount 当日合计 + trade_count 笔数);**绝不改 EGS/TopN/选股/股数/操作/否决**。
 # 买卖方(营业部)分析 = 第二刀;折价率(对齐当日**未复权** close,单位口径已隔离)= 第三刀。复用龙虎榜 analysis-only 模式(含持仓 holding_row_impact/私密、Tier-3 掩面放行)。
-BLOCK_TRADE_LOOKBACK_TRADING_DAYS = 5   # 近 N 交易日窗口(prior,未来进 governance;非生产阈值)
+BLOCK_TRADE_LOOKBACK_TRADING_DAYS = _WEEKLY_WINDOWS["block_trade_lookback_trading_days"]
 _BLOCK_TRADE_MARKER = "大宗交易对照"        # 板块资金事件 落地标记:_attach 写入 + engine guard ⑭ 据此判 row no-dangling(单一来源)
 _BLOCK_TRADE_EVIDENCE_VALUE = "block_trade.events[appearance]"   # operation_impact.evidence_ref.value(_attach + 反向 guard 共用)
 
@@ -2899,12 +3130,85 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
     return provider
 
 
+def _portfolio_frame_records(frame):
+    """Return provider rows without retaining raw frames in the weekly artifact."""
+    if frame is None or not hasattr(frame, "to_dict"):
+        return None
+    try:
+        return frame.to_dict("records")
+    except Exception:
+        return None
+
+
+def _fetch_portfolio_risk_fact_overrides(pro, as_of: str, codes) -> dict:
+    """Fetch the bounded deterministic M5.5B fact set for this weekly universe."""
+    codes = sorted({str(code) for code in codes if code})
+
+    def _call(name, **kwargs):
+        endpoint = getattr(pro, name, None)
+        if not callable(endpoint):
+            return None
+        try:
+            return _portfolio_frame_records(endpoint(**kwargs))
+        except Exception:
+            return None
+
+    daily = _call("daily_basic", trade_date=as_of, fields="ts_code,circ_mv")
+    margin = _call("margin_detail", trade_date=as_of, fields="ts_code,rzye")
+    northbound = _call("hk_hold", trade_date=as_of, fields="ts_code,ratio")
+    csi300 = _call("index_member", index_code="000300.SH", fields="con_code,in_date,out_date")
+    sse50 = _call("index_member", index_code="000016.SH", fields="con_code,in_date,out_date")
+
+    def _map(rows, key):
+        if not rows or any(key not in row for row in rows if isinstance(row, dict)):
+            return None
+        return {str(row.get(key)): row for row in rows if isinstance(row, dict) and row.get(key)}
+
+    def _active_members(rows):
+        if not rows:
+            return None
+        members = set()
+        for row in rows:
+            if not isinstance(row, dict) or not row.get("con_code"):
+                return None
+            start, end = str(row.get("in_date") or ""), str(row.get("out_date") or "")
+            if (not start or start <= as_of) and (not end or end > as_of):
+                members.add(str(row["con_code"]))
+        return members
+
+    daily_map, margin_map, north_map = _map(daily, "ts_code"), _map(margin, "ts_code"), _map(northbound, "ts_code")
+    members_300, members_50 = _active_members(csi300), _active_members(sse50)
+    overrides = {}
+    for code in codes:
+        circ_mv = ((daily_map or {}).get(code) or {}).get("circ_mv")
+        circ_mv = float(circ_mv) * 10000.0 if isinstance(circ_mv, (int, float)) and not isinstance(circ_mv, bool) else None
+        rzye = ((margin_map or {}).get(code) or {}).get("rzye")
+        if margin_map is not None and code not in margin_map:
+            rzye = 0.0
+        ratio = None
+        if isinstance(rzye, (int, float)) and not isinstance(rzye, bool) and circ_mv and circ_mv > 0:
+            ratio = float(rzye) * 100.0 / circ_mv
+        north_ratio = ((north_map or {}).get(code) or {}).get("ratio")
+        if north_map is not None and code not in north_map:
+            north_ratio = 0.0
+        north_ratio = float(north_ratio) if isinstance(north_ratio, (int, float)) and not isinstance(north_ratio, bool) else None
+        large_index = (code in members_300 or code in members_50) if members_300 is not None and members_50 is not None else None
+        overrides[code] = {
+            "ts_code": code, "as_of": str(as_of),
+            "source": "tushare:daily_basic+margin_detail+hk_hold+index_member",
+            "circ_mv_rmb": circ_mv, "margin_balance_to_float_mv_pct": ratio,
+            "northbound_holding_ratio_pct": north_ratio, "is_large_index_component": large_index,
+        }
+    return overrides
+
+
 def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=None,
          web_llm_provider=None, dividend_provider=None,
          holding_semantic_provider=None, holding_web_llm_provider=None, unlock_provider=None,
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
          dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None,
-         forecast_provider=None, income_provider=None, balancesheet_provider=None):
+         forecast_provider=None, income_provider=None, balancesheet_provider=None,
+         portfolio_risk_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -2981,7 +3285,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of {args.as_of}"
                          "(批次错配/未来/陈旧,拒跑周报)")
     from engine.data.analysis_input_contract import build_a_short_run_identity
-    source_identity = dict(((ai.get("source") or {}).get("run_identity") or {}))
+    source_section = ai.get("source") or {}
+    source_identity = dict((source_section.get("run_identity") or {}))
+    try:
+        validate_runtime_configuration_lineage(source_section.get("runtime_configuration"))
+    except ValueError as exc:
+        raise SystemExit(f"[FATAL] analysis_input runtime configuration missing/stale/mismatched: {exc}") from exc
+    source_runtime_configuration = runtime_configuration_lineage(_RUNTIME_CONFIGURATION)
     try:
         Path(args.analysis_input).resolve().relative_to((ROOT / "result" / "a_short").resolve())
         official_input = True
@@ -3107,6 +3417,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             balancesheet_provider = lambda code: _fetch_balancesheet(pro, code)
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
+    if portfolio_risk_provider is None and pro is not None:
+        portfolio_risk_provider = lambda codes, as_of: _fetch_portfolio_risk_fact_overrides(pro, as_of, codes)
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
         semantic_provider = _build_cninfo_semantic_provider(
             weekly_candidates, args.as_of, args.cninfo_lookback_days)
@@ -3198,7 +3510,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                                           next(k for k, v in REGIME_MAP.items() if v == regime)),
                                      "effective_regime": regime,
                                      "fallback_active": bool(regime_fallback)},
-                   "price_freshness": price_freshness}
+                   "price_freshness": price_freshness,
+                   "runtime_configuration": source_runtime_configuration}
     # 持仓恒列入 S1 + 语义(4.2 S2): 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 语义经持仓 provider 注入 advisory);选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
     if args.account:
@@ -3218,11 +3531,30 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
             semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider,
             account_integrity=account_integrity)
-    weekly = build_weekly_report(normalized + holding_normalized, args.as_of, gen,
+    portfolio_normalized = normalized + holding_normalized
+    portfolio_codes = [str(item.get("ts_code")) for item in portfolio_normalized if item.get("ts_code")]
+    portfolio_fact_overrides = None
+    if portfolio_risk_provider is not None:
+        try:
+            supplied = portfolio_risk_provider(portfolio_codes, args.as_of)
+            if not isinstance(supplied, dict):
+                raise ValueError("provider must return a code-keyed dict")
+            portfolio_fact_overrides = supplied
+        except Exception:
+            portfolio_fact_overrides = {
+                code: {"as_of": str(args.as_of), "source": "portfolio_risk_source_unavailable",
+                       "circ_mv_rmb": None, "margin_balance_to_float_mv_pct": None,
+                       "northbound_holding_ratio_pct": None, "is_large_index_component": None}
+                for code in portfolio_codes
+            }
+    weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
                                  new_exposure_capacity=new_exposure_capacity,
-                                 crash_veto_tracking=crash_veto_tracking)
+                                 crash_veto_tracking=crash_veto_tracking,
+                                 portfolio_fact_overrides=portfolio_fact_overrides,
+                                 account_positions=(acct.get("positions") or []),
+                                 missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review])
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}

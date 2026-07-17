@@ -253,6 +253,83 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
     return out
 
 
+def _render_portfolio_risk(weekly: dict) -> list:
+    """Render the deterministic M5.5/M5.5B result beside final allocation."""
+    risk = weekly.get("portfolio_risk")
+    if not isinstance(risk, dict):
+        return []
+    summary = risk.get("summary") or {}
+    labels = {
+        "not_applicable": "暂不适用",
+        "manual_review_required": "未核查/人工复核",
+        "clear": "未超线",
+        "concentration_over_cap": "行业集中度超线",
+        "factor_resonance": "因子共振",
+        "factor_resonance_high_risk": "组合因子共振高危",
+    }
+    status = risk.get("status")
+    out = ["", "## 组合集中度与因子共振（M5.5/M5.5B）",
+           "- 状态：" + labels.get(status, _cell(status))]
+    sources = risk.get("fact_sources") or []
+    if sources:
+        out.append("- 核查口径：" + "；".join(
+            f"{_cell(item.get('source'))}（{_cell(item.get('as_of'))}）"
+            for item in sources if isinstance(item, dict)))
+    for reason in summary.get("reasons") or []:
+        out.append("- " + _cell(reason))
+    if summary.get("missing_fields"):
+        out.append("> ⚠️ 未核查：缺少/失效字段 " + "、".join(_cell(value) for value in summary["missing_fields"])
+                   + "。本周不把它当作无风险；需要组合建仓时已转观察。")
+    factors = summary.get("factor_exposures") or []
+    if factors:
+        out += ["", "| 因子 | 当前暴露 | 阈值 | 状态 |", "|---|---:|---:|---|"]
+        for factor in factors:
+            out.append("| {} | {}% | {}% | {} |".format(
+                _cell(factor.get("label") or factor.get("factor")), _cell(factor.get("value_pct")),
+                _cell(factor.get("threshold_pct")), "超线" if factor.get("over_threshold") else "未超线"))
+    results = risk.get("stock_results") or []
+    if results:
+        out += ["", "| 标的 | 类型 | 结果 | 最终联动 | 原因 |", "|---|---|---|---|---|"]
+        for result in results:
+            action_label = {
+                "replace": "观察/建议替换（不分配股数）",
+                "observe_required": "观察（不分配股数）",
+                "blocked_add": "禁止加仓/人工复核",
+                "allow": "允许最终分配",
+                "none": "不改变操作",
+            }.get(result.get("action"), _cell(result.get("action")))
+            out.append("| {} | {} | {} | {} | {} |".format(
+                _cell(result.get("ts_code")), _cell(result.get("role")),
+                labels.get(result.get("status"), _cell(result.get("status"))), action_label,
+                _cell("；".join(result.get("reasons") or []))))
+    return out
+
+
+def _render_effect_contract_ledger(weekly: dict) -> list:
+    """Render the closed-world field/rule connection status without a trade signal."""
+    ledger = weekly.get("effect_contract_ledger")
+    if not isinstance(ledger, dict):
+        return []
+    summary = ledger.get("summary") or {}
+    total = summary.get("total", 0)
+    if not total:
+        return []
+    out = ["", "## 字段/规则联动台账",
+           "- 已登记 {} 组：已联动 {}；本周未触发 {}；不可自动判定、需人工复核 {}；刻意独立 {}。".format(
+               total, summary.get("applied", 0), summary.get("not_triggered", 0),
+               summary.get("unavailable_manual_review", 0), summary.get("intentionally_independent", 0))]
+    blocked = [row for row in (ledger.get("records") or [])
+               if isinstance(row, dict) and row.get("status") == "unavailable_manual_review"]
+    if not blocked:
+        out.append("> 本周没有被静默丢弃的已登记字段/规则；未触发不等于无风险，刻意独立项只作审计留痕。")
+        return out
+    out += ["> ⚠️ 下列已登记字段/规则当前没有安全的自动结果路径，已明确提示人工复核，不能当作无影响。",
+            "", "| 字段/规则组 | 原因 |", "|---|---|"]
+    for row in blocked:
+        out.append("| {} | {} |".format(_cell(row.get("id")), _cell(row.get("reason"))))
+    return out
+
+
 def render_weekly_markdown(weekly: dict) -> str:
     reports = weekly.get("reports", [])
     # 持仓恒列入 S1: 分区——"本周 EGS 候选"(既有渲染,保持不变)与"账户持仓(非本周候选)"分开。
@@ -282,6 +359,11 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append("**run**:id=`" + str(rl.get("run_id", "?")) +
                    "` | candidate_digest=`" + str(rl.get("candidate_digest", "?")) +
                    "` | stage=" + str(rl.get("stage_status", "?")))
+        rc = rl.get("runtime_configuration") or {}
+        if rc:
+            policy_ids = ",".join(str(row.get("policy_id", "?")) for row in (rc.get("policies") or []))
+            out.append("**配置**:fingerprint=`" + str(rc.get("configuration_fingerprint", "?")) +
+                       "` | policies=`" + policy_ids + "`")
     if rl.get("sizing_mode") and rl.get("sizing_mode") != "sized":
         out.append("> ⚠️ **无账户(account_status=" + str(rl.get("account_status", "?")) +
                    "):仓位 sizing N/A —— 建仓候选会渲染为「观察」(可建股数/金额不足),这是 **sizing 假象、非真 avoid 信号**;"
@@ -324,6 +406,8 @@ def render_weekly_markdown(weekly: dict) -> str:
             out.append("> ⚠️ **价格时钟**:本周报技术指标用的是**前一交易日(" + str(pf.get("price_data_through")) +
                        ")已结算行情**(实盘盘中跑、as_of " + str(as_of) + " 当日 EOD 尚未发布);新闻/语义层窗口仍到 as_of。"
                        "**价格特征截至 " + str(pf.get("price_data_through")) + ",非 " + str(as_of) + "。**")
+    out += _render_portfolio_risk(weekly)
+    out += _render_effect_contract_ledger(weekly)
     out += ["", "## 一览",
             "| 票 | 名称 | 操作 | 持仓/冷静 | EGS分 | 优先级 | 类型 | 入 | 损 | 盈一 | 盈二 | 股数 |",
             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
