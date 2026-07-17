@@ -340,6 +340,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **顺带量"进场偏晚"**：确认门槛天然滞后 → 系统偏晚进场；`theme_aggressive`（更早进）shadow 若长期更差，说明滞后在保护你、更好则说明太晚。结果挂 §13 复审。
 - **存储隐私**：比较轨含票名的 shadow 选股/成绩 → `state/us_short/shadow_compare_private/`（gitignored，§11.6）；tracked 只出脱敏归一化指标（无票名/无 $）。
 - **升级闸防自欺机制（借 A 股 `a_short_overlay_eval.py`）**：① 只数 **live forward** 观测（决策当日 PIT、无 look-ahead）入升级时钟；② **胜出 margin 必须先冻**（governance 填死数值阈值后才允许触发升级复审，防"先看数据再定胜出线"；A1 六头唯一预注册为 `presets/us_short_forward_policy_statistical_plan_20260716.json`：Pass2-clean common pool、H10 扣成本直接收益、12 周初审 / 24 周正式建议 / 36 周退出复审、跨市况、Holm 和风险护栏；`engine/us_short_forward_policy_statistical_evaluation.py` 仅是与 v2 pool/H10/24 对齐的旧三闸离线诊断，不能产生正式采用/保留/舍弃建议）；③ 陈旧/错位 artifact **fail-closed** 不计入（桶名≠as_of 即弃）；④ 每周运行时**醒目横幅**（见 §13 `us_short_lifecycle_eval`）。升级仍需用户决定、绝不自动切生产。
+- **A1 现行落地链**：决策时从已抓取的全市场 OHLCV 冻结所有 Pass2-clean 候选的一套 pullback-only 价格/成本控制，后续周只成熟该私有冻结记录；私有账本的脱敏建议注入周报顶部 banner ⑥。公司行动/复权未获独立核验时必须写整周 no-count、不得推进时钟；这条提示链不阻断正式周报，也不改变 `balanced`。
 
 ## 13. 跨 LLM 提醒机制（硬规则）
 - 复用 `docs/system_risk_register.md` + standing reminder index；**不新造** `evidence_lifecycle_registry`。

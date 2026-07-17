@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cnhea.local/schemas/us_short_forward_policy_source_capture.schema.json",
+  "title": "US-short A1 private source capture",
+  "description": "Ticker-bearing private decision-time source capture for the A1 comparison track. The semantic validator re-derives the common order snapshot and binding before a later maturity stage may consume it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "capture", "candidate_price_inputs_by_ticker", "market_axis_regimes", "prior_regime", "prior_upgrade_count", "order_snapshot", "cost_prior", "execution_contract_sha256", "source_binding", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_source_capture"},
+    "schema_version": {"const": "1.0.0"},
+    "capture": {"type": "object"},
+    "candidate_price_inputs_by_ticker": {"type": "object"},
+    "market_axis_regimes": {"type": "object"},
+    "prior_regime": {"type": ["string", "null"]},
+    "prior_upgrade_count": {"type": "integer", "minimum": 0},
+    "order_snapshot": {"type": "object"},
+    "cost_prior": {"type": "object"},
+    "execution_contract_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_context_sha256", "ohlcv_packet_sha256", "ohlcv_price_basis_date"],
+      "properties": {
+        "source_context_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ohlcv_packet_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "ohlcv_price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "provider_calls_added", "shadow_counts_ship_gate", "changes_primary_selection", "automatic_production_switch", "broker_or_order_automation_allowed", "writes_private_source_capture"],
+      "properties": {
+        "track": {"const": "comparison_non_production"},
+        "provider_calls_added": {"const": false},
+        "shadow_counts_ship_gate": {"const": false},
+        "changes_primary_selection": {"const": false},
+        "automatic_production_switch": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false},
+        "writes_private_source_capture": {"const": true}
+      }
+    }
+  }
+}

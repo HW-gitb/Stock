@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cnhea.local/schemas/us_short_forward_policy_comparison_execution.schema.json",
+  "title": "US-short A1 common-execution comparison contract",
+  "description": "Freezes the one shared model-paper execution basis for the selection-factor comparison track. It is shadow-only and must never change balanced selection or authorize a provider call.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "common_execution_policy", "cost_prior", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_comparison_execution"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"const": "20260717"},
+    "common_execution_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sub_mode", "defensive_breakout_probe_allowed"],
+      "properties": {
+        "sub_mode": {"const": "pullback"},
+        "defensive_breakout_probe_allowed": {"const": false}
+      }
+    },
+    "cost_prior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commission_fee", "slippage_bps", "spread_cost"],
+      "properties": {
+        "commission_fee": {"const": 0.001},
+        "slippage_bps": {"const": 10.0},
+        "spread_cost": {"const": 0.0005}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["track", "selection_factor_isolated", "provider_calls_added", "shadow_counts_ship_gate", "changes_primary_selection", "automatic_production_switch", "broker_or_order_automation_allowed"],
+      "properties": {
+        "track": {"const": "comparison_non_production"},
+        "selection_factor_isolated": {"const": true},
+        "provider_calls_added": {"const": false},
+        "shadow_counts_ship_gate": {"const": false},
+        "changes_primary_selection": {"const": false},
+        "automatic_production_switch": {"const": false},
+        "broker_or_order_automation_allowed": {"const": false}
+      }
+    }
+  }
+}

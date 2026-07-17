@@ -219,6 +219,15 @@ class HappyAssembly(unittest.TestCase):
         for i in range(1, 14):
             self.assertTrue(rd["sections"][i], f"section {i} empty")
 
+    def test_optional_comparison_reminder_renders_in_the_honest_banner(self):
+        reminder = "US-SHORT A1 comparison track: continue_accumulation; advisory only"
+        out = _build_report(
+            _machine_record(), _lifecycle_result(),
+            report_context=_report_context(forward_policy_comparison_reminder=reminder),
+        )
+        self.assertEqual(out["report_data"]["banner"]["forward_policy_comparison_reminder"], reminder)
+        self.assertIn("forward_policy_comparison_reminder", out["weekly_report_md"])
+
     def test_lifecycle_count_reconciles(self):
         rd = _build_report(_machine_record(), _lifecycle_result(due_count=2, due_items=(1, 3)),
                                     report_context=_report_context())["report_data"]

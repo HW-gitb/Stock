@@ -8,6 +8,20 @@
 
 ---
 
+## 2026-07-17 — Claude Code 独立复审（US-short A1 对比轨 v2 第七刀：source capture/maturity + 报告 banner 接线）PASS
+
+- **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。本刀把对比轨接进生产周跑但**全加法**:①`source_capture.py` 复用 capstone 已抓 OHLCV 冻结共同池 pullback-only 执行(无 provider call、私有路径);②capstone 新增两 stage(`forward_policy_shadow` 扩展+`forward_policy_maturity`)**均 best_effort**→挂不破诚实周报;③周报只加**可选** ⑥ 去标识 banner(旧报告仍验、13 节+选股真相字节不变、契约 5→6)、banner-from-path 缺/坏账本优雅永不 crash;④**corporate-action 门**:缺 reviewed 证据→not_evaluable→no-count→真周永不计(证据生产器未建、register 保持 open)。无选股改动/无自动切换。
+- **Required**: 无。register `R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` **保持 open**(gated 下一件、已加复审注)。
+- **Verify**: 整读 source_capture(两 materialize)+capstone/bridge/report/ledger 全 diff+execution 契约。亲跑(298a、未采信 Codex 4489):焦点 forward_policy 95 OK+capstone/report 117 OK;全包 `test_us_short*` 4489 OK(110s)。3 探针:banner 缺账本→安全去标识不 crash / 缺证据→not_evaluable no-count 门 / 非规范路径 raise。因加法+best_effort+无 live/secret/选股改动,未起 §6a agent。
+- **Next**: reviewed corporate-action evidence 生产器(schema-first sidecar,gated)=真周计入前置;blade-6 尚未落 master(前次 ff 被别窗阻)、本刀与 blade-6 一并待落。
+
+## 2026-07-17 — Codex execute — US-short A1 source capture/maturity + persistent report reminder
+
+- **Verdict/Action**: Completed the currently implementable A1 comparison-track closure: the capstone freezes a private Pass2-clean common-pool source capture from the already-fetched full-universe OHLCV, under one pullback-only execution/cost basis; a later best-effort maturity stage consumes only post-deployment captures, persists H20 outcomes, and appends only receipt-bound ready weeks. The official weekly report now carries de-identified banner ⑥ from the private ledger. Missing/unverified corporate-action evidence stays an explicit whole-week no-count and never advances a 12/24/36-week clock; a completed no-count H20 window is retained for a later verified-evidence retry rather than overwritten after the rolling source ages out. No provider call, primary selection change, automatic switch, broker action, historical replay, or ship-gate evidence was added.
+- **Required**: Claude Code independently reviews this A1 source-producer/report-reminder slice and commits only after PASS. `R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` remains open: no actual evidence may count until its separately authorized, schema-first reconciliation sidecar exists.
+- **Verify**: targeted A1/capstone/report/schema/route pack 150 OK; complete offline `test_us_short*.py` 4489 OK (1 skipped); `py_compile`, new/changed JSON parse, `git diff --check`, route-length and spent-ledger guards passed. The full pack's provider-looking output is fixture/isolated test output; this slice did not run a real capstone or perform a new provider call.
+- **Next**: Claude Code：仅审查并提交本 A1 source capture/maturity + banner slice；不执行真实 provider 周跑。
+
 ## 2026-07-17 — Claude Code 独立复审（US-short A1 对比轨 v2 第六刀：source-bound 累积器 + 五状态裁决）PASS
 
 - **Verdict/Action**: PASS、无 Required（298a 树审+亲跑）。`comparison_ledger.py`=provenance 门+累积器+H10/风险裁决+待用户 receipt+去标识 banner。①advice-only、BOUNDARY 全 False、balanced 不动;②receipt 精确绑 retained 私有周全 digest+schema const same_run_live_source:true;③非重叠 H10 块+严格递增+去重+backfill/no-count 拒;④五状态+风险护栏(drawdown/tail/turnover/fill 恶化→formal_pass False,大亏不能赢);⑤adjudication/banner 无 ticker、账本只落 gitignored 私密路径。consumer-only:源+report 注入未建→无真周可计、时钟不动。纯新增。

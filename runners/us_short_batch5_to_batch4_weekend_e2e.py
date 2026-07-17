@@ -212,7 +212,10 @@ def _load_provider_health(path: Path) -> dict[str, str]:
     return health
 
 
-def _patched_report_context(template_report_context: dict[str, Any], *, run_provenance: dict[str, Any], now_et: datetime):
+def _patched_report_context(
+    template_report_context: dict[str, Any], *, run_provenance: dict[str, Any], now_et: datetime,
+    forward_policy_comparison_reminder: str | None = None,
+):
     report_context = copy.deepcopy(template_report_context)
     if not isinstance(report_context, dict) or not isinstance(report_context.get("price_clock"), dict):
         raise Batch5ToBatch4E2EError("batch4 template report_context.price_clock must be an object")
@@ -223,6 +226,10 @@ def _patched_report_context(template_report_context: dict[str, Any], *, run_prov
         "session_scope": "RTH",
         "decision_date": run_provenance["as_of"],
     }
+    if forward_policy_comparison_reminder is not None:
+        if not isinstance(forward_policy_comparison_reminder, str) or not forward_policy_comparison_reminder.strip():
+            raise Batch5ToBatch4E2EError("forward_policy_comparison_reminder must be a non-blank string or absent")
+        report_context["forward_policy_comparison_reminder"] = forward_policy_comparison_reminder.strip()
     return report_context
 
 
@@ -401,6 +408,7 @@ def _assemble_batch4_packet(
     official_output_root: Path | None,
     now_et: datetime,
     vix_regime: str | None = None,
+    forward_policy_comparison_reminder: str | None = None,
 ) -> dict[str, Any]:
     data_context = components["data_context"]
     run_provenance = components["run_provenance"]
@@ -439,6 +447,7 @@ def _assemble_batch4_packet(
             template["report_context"],
             run_provenance=run_provenance,
             now_et=now_et,
+            forward_policy_comparison_reminder=forward_policy_comparison_reminder,
         ),
         "eligibility_governance_path": str(governance_path.resolve()),
         "calendar_path": str(calendar_path.resolve()),
@@ -506,6 +515,7 @@ def run_e2e(
     dry_run: bool = False,
     generated_at: str | None = None,
     vix_regime: str | None = None,
+    forward_policy_comparison_reminder: str | None = None,
     projection_binding_expectations: source_packet_runner.ProjectionBindingExpectations = PROJECTION_INPUTS_BINDING,
 ) -> dict[str, Any]:
     if not isinstance(now_et, datetime) or now_et.tzinfo is not None:
@@ -655,6 +665,7 @@ def run_e2e(
             official_output_root=official_output_root_path,
             now_et=now_et,
             vix_regime=vix_regime,
+            forward_policy_comparison_reminder=forward_policy_comparison_reminder,
         )
         _write_private_json(context_path, packet)
         batch4_summary = _safe_batch4_run(

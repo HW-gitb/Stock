@@ -5,6 +5,7 @@ import tempfile
 import unittest
 from datetime import datetime
 from pathlib import Path
+from unittest import mock
 
 from engine.us_short_eligibility_gate import load_eligibility_governance
 from engine.us_short_forward_policy_shadow_stage import (
@@ -210,9 +211,34 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
                 generated_at = "2026-07-13T08:00:00-04:00"
                 forward_shadow_selection_private_path = root / "forward_policy_selection_20260713.json"
                 forward_policy_summary_path = root / "forward_policy_summary_20260713.json"
+                ohlcv_series_packet_path = root / "ohlcv.json"
+                batch4_template_path = root / "batch4_template.json"
+                vix_regime_summary_path = root / "vix_regime.json"
+                forward_policy_source_capture_private_path = root / "forward_policy_source_capture_20260713.json"
 
-            result = capstone_stages.run_forward_policy_shadow(Context())
+            Context.ohlcv_series_packet_path.write_text("{}", encoding="utf-8")
+            Context.batch4_template_path.write_text("{}", encoding="utf-8")
+            Context.vix_regime_summary_path.write_text("{}", encoding="utf-8")
+            source_capture = {
+                "private_source_capture_path": str(Context.forward_policy_source_capture_private_path),
+                "decision_date": "20260713",
+                "order_snapshot_status": "ready_for_outcome",
+            }
+            with mock.patch.object(
+                capstone_stages, "materialize_forward_policy_source_capture", return_value=source_capture
+            ) as capture, mock.patch.object(
+                capstone_stages._bridge,
+                "_load_template",
+                return_value={
+                    "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
+                    "prior_regime": None,
+                    "prior_upgrade_count": 0,
+                },
+            ):
+                result = capstone_stages.run_forward_policy_shadow(Context())
             self.assertEqual(result["summary"]["selected_counts"]["balanced"], 2)
+            self.assertEqual(result["source_capture"], source_capture)
+            capture.assert_called_once()
             self.assertTrue(Context.forward_shadow_selection_private_path.exists())
             self.assertTrue(Context.forward_policy_summary_path.exists())
 

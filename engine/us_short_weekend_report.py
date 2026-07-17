@@ -70,6 +70,7 @@ _REPORT_CONTEXT_KEYS = frozenset({
     "core_conclusion", "risk_downgrade_note",
     "macro_cluster_banner",
 })
+_OPTIONAL_REPORT_CONTEXT_KEYS = frozenset({"forward_policy_comparison_reminder"})
 # the STRUCTURED decision-stage status the §11.2 report BINDS to (no free-text status, R-USSHORT-BATCH4-OFFICIAL-
 # REPORT-SOURCE-BINDING-GAP): provider health from `classify_provider_health`, the account portfolio_guard, and
 # the theme opportunity state — the EXACT inputs/outputs the decision used, so the report can never contradict the
@@ -159,7 +160,10 @@ def _as_lines(value, where):
 
 
 def _validate_report_context(rc):
-    if not (isinstance(rc, dict) and set(rc) == _REPORT_CONTEXT_KEYS):
+    if not (isinstance(rc, dict) and set(rc) in {
+        _REPORT_CONTEXT_KEYS,
+        _REPORT_CONTEXT_KEYS | _OPTIONAL_REPORT_CONTEXT_KEYS,
+    }):
         raise WeekendReportError(
             f"report_context 顶层键须恰为 {sorted(_REPORT_CONTEXT_KEYS)}（closed-world）: {sorted(rc) if isinstance(rc, dict) else rc!r}")
 
@@ -379,6 +383,9 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     macro = report_context["macro_cluster_banner"]
     if isinstance(macro, str) and macro.strip():
         banner["macro_cluster_warning"] = macro.strip()                                   # ② (optional)
+    reminder = report_context.get("forward_policy_comparison_reminder")
+    if isinstance(reminder, str) and reminder.strip():
+        banner["forward_policy_comparison_reminder"] = reminder.strip()
 
     # --- §11.5 coverage (in §6): bind ONE-TO-ONE to the machine record's holding rows BY TICKER (R-USSHORT-
     # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
