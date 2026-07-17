@@ -67,15 +67,22 @@ foreach ($Name in @('TEMP', 'TMP', 'XDG_CACHE_HOME', 'PYTHONPYCACHEPREFIX')) {
 $RunExitCode = 1
 try {
     $Worker = Join-Path $CapsuleRepo 'runners\weekly_screening.ps1'
-    $WorkerArgs = @('-L3Mode', 'today', '-CachePolicy', 'disabled', '-PythonExe', $PythonExe)
-    if (-not [string]::IsNullOrWhiteSpace($AsOf)) { $WorkerArgs += @('-AsOf', $AsOf) }
+    # A PowerShell script worker requires a hashtable splat.  An array splat
+    # passes these tokens positionally, so the forced runtest gates can bind
+    # to the wrong weekly-screening parameters.
+    $WorkerParams = @{
+        L3Mode = 'today'
+        CachePolicy = 'disabled'
+        PythonExe = $PythonExe
+    }
+    if (-not [string]::IsNullOrWhiteSpace($AsOf)) { $WorkerParams.AsOf = $AsOf }
     if (-not [string]::IsNullOrWhiteSpace($Account)) {
-        $WorkerArgs += @('-Account', (Join-Path $Capsule 'private_inputs\a_short_account'))
+        $WorkerParams.Account = Join-Path $Capsule 'private_inputs\a_short_account'
     }
     Write-Host "[RUNTEST] A-short full flow is isolated in $Capsule" -ForegroundColor Cyan
     Push-Location $CapsuleRepo
     try {
-        & $Worker @WorkerArgs
+        & $Worker @WorkerParams
         $RunExitCode = if ($null -eq $LASTEXITCODE) { 1 } else { [int]$LASTEXITCODE }
     } finally {
         Pop-Location
