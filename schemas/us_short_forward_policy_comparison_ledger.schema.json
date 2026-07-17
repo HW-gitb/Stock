@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cnhea.local/schemas/us_short_forward_policy_comparison_ledger.schema.json",
+  "title": "US-short A1 comparison v2 private accumulation ledger",
+  "description": "Private-only ledger for source-bound forward comparison weeks. It is a strict persistence boundary, not a provider adapter or production-selection authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "comparison_contract_sha256", "records", "user_decisions", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_comparison_ledger"},
+    "schema_version": {"const": "1.0.0"},
+    "comparison_contract_sha256": {"$ref": "#/$defs/sha256"},
+    "records": {"type": "array", "items": {"type": "object"}},
+    "user_decisions": {"type": "object"},
+    "boundary": {"type": "object"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}}
+}
