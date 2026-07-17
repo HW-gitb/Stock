@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 审查（Codex US-short runtest 参数 splat repair）：US-short PASS · a_short 同类 Required 未闭 · 待整合
+
+- **Verdict/Action**: US-short 半边 **PASS**(代码对 + 行为验证 + 真回归)。Codex 在独立 worktree `.codex/worktrees/709a/Stock`(master `ea6e91de`,未含本 branch 的 register 条目、未提交)把 `us_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams` + `& $Worker @WorkerParams`;所有参数/switch/私密输入路径按名绑定,四道门(`-ExtraArgs` 拒绝 / `-Live` 授权 / capsule private-root / no-resume / source guard)全保。**但 Required 未全闭**:`a_short_runtest.ps1:78` 同一 `& $Worker @WorkerArgs` array-splat bug 原样未修(Codex 显式只做 US-short、defer 邻道)。
+- **Required**: ①(未闭·A-short 道)`a_short_runtest.ps1`(71/73/78 行,`-AsOf`/`-Account`)同类 array-splat bug 未修 → 路由 A-short 道修 + 补自己的转发回归。②(整合·非代码缺陷)Codex 在 master 另写同 ID register 条目(scoped US-short-only)+ SESSION_LOG,与本 wt/us-short 条目分叉,整合时须并成一条(本条覆盖双市场)+ 顶部 reconcile。完整细节单源见 register。
+- **Verify**: 亲跑 Codex worktree `tests.test_runtest_capsule` **9 OK**(含新执行级回归 `test_us_launcher_binds_all_worker_parameters_by_name`:真 PowerShell 调 wrapper + 参数捕获假 worker,dry-run/Live/PrepareBudget 三态逐参数核按名绑定,直闭「ps1 转发层零执行覆盖」旧洞);整读改后 `us_short_runtest.ps1`(仅 WorkerArgs→WorkerParams 块变、gates 未动);grep 证 `a_short_runtest.ps1:78` 同 bug 未修。工具级、不碰选股/PIT/生产/真钱,故按比例未起独立对抗 agent。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：A-short 道修 `a_short_runtest.ps1` 同类 splat bug + 回归（US-short 半边 PASS；整合落点/并重复 register 条目待用户定）。
+
 ## 2026-07-17 — Claude Code 试跑发现 + 登记 + 路由 Codex（US-short 一键离线试跑；runtest 胶囊参数转发崩溃）
 
 - **Verdict/Action**: 用户命我离线全量试跑 US-short 一键流程(零 fetch、数据自编)查阻塞 + 出三份最终文件。**选股流程本身离线无阻塞**:一键 `--dry-run` 计划正常(decision 20260709 + 13 stage)、全包 `discover -p test_us_short*.py` **4489 OK**、真 funnel(fake client)→真 batch5→batch4 bridge 端到端产三文件(weekly_report.md / action_table.csv / machine_record.json)干净。**但"放胶囊"时炸出真·可复现崩溃**:runtest 胶囊 wrapper 用数组 splat 转发参数给 worker,PowerShell 数组 splat 按位置绑定→把 `-Name` 当位置值塞乱,连文档默认 dry-run 都崩(us_short + a_short 同病)。已登记 `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND`(open, P2 工具级,不碰选股/PIT/生产/真钱)。
