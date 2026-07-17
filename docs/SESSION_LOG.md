@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 复审（Codex a_short runtest splat）：PASS（断言同步后全量 capsule 11 OK）
+
+- **Verdict/Action**: **PASS**。上一轮 FAIL 的那条已闭:Codex 把 `test_runtest_capsule.py` 的 a_short 断言同步到哈希表形(179 行旧数组 `'-CachePolicy','disabled'` → `CachePolicy = 'disabled'`;并加 `assertNotIn "$WorkerArgs"` / `$WorkerParams = @{` / `L3Mode='today'` / `PythonExe=$PythonExe` / AsOf·Account 条件 / `& $Worker @WorkerParams` 整套锁)。a_short 半边现正确 + 全绿。
+- **Required**: 无。`R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` 两半均已修 + 复审 PASS;剩仅 landing:a_short 仍未提交、悬在 709a(跟已落的 us_short 改动 + Codex 在 master 的分叉 doc 缠在一起),落到哪条分支(A-short 道 vs wt/us-short)待用户定,落后本条 → resolved。
+- **Verify**: 亲跑 709a `python -m unittest tests.test_a_short_runtest_worker_binding tests.test_runtest_capsule` = **11 tests OK**(含上轮崩的 `test_launchers_keep_full_entry_in_capsule_and_forbid_reuse` now ok);核 `weekly_screening.ps1` param 键名匹配、ps1 仅 worker 块变。us_short 半边(wt/us-short `7bed2f7`)不受影响。review-evidence:not_available(全真实工具输出)。
+- **Next**: 待用户定 a_short landing 落点(我这边可像 us_short 一样落 wt/us-short 关掉整条 register,或路由 A-short 道);Codex 另需清 709a 冗余 + master 分叉 doc。
+
 ## 2026-07-17 — Claude Code 审查（Codex a_short runtest splat 尝试）：FAIL — ps1 对但打挂已有 capsule 测试
 
 - **Verdict/Action**: **FAIL**。Codex 在 worktree `.codex/worktrees/709a/Stock`(未提交、master `ea6e91de`)把 `a_short_runtest.ps1` 数组 splat 改成 name-keyed 哈希表 `$WorkerParams`(键对 `weekly_screening.ps1` 声明参数、`L3Mode='today'`/`CachePolicy='disabled'` 合 ValidateSet)+ 新增 `tests/test_a_short_runtest_worker_binding.py`(2 测试过:真 PowerShell 调 wrapper 逐参数核按名绑定 + ExtraArgs 拒绝)——**ps1 修法本身对**。**但打挂了已有** `tests/test_runtest_capsule.py::test_launchers_keep_full_entry_in_capsule_and_forbid_reuse`:第 179 行仍断言旧数组形 `"'-CachePolicy', 'disabled'"`,fix 已删该形 → 全量 `tests.test_runtest_capsule` = **FAILED (failures=1)**。Codex 改了 us_short 断言(185-190)却漏了 a_short 那条,且显然改完 a_short 后没重跑全量 capsule 包。
