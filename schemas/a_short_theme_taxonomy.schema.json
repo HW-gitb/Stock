@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_theme_taxonomy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "effective_date", "raw_concept_source", "canonical_themes"],
+  "properties": {
+    "schema_name": {"const": "a_short_theme_taxonomy"},
+    "schema_version": {"const": "1.2.0"},
+    "effective_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "raw_concept_source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source_id", "provider", "membership_required", "runtime_receipt_required", "live_coverage_receipt_required", "legacy_snapshot_allowed_for_comparison"],
+      "properties": {"source_id": {"const": "analysis_input.source.l3_provider"}, "provider": {"const": "runtime_bound_l3"}, "membership_required": {"const": true}, "runtime_receipt_required": {"const": true}, "live_coverage_receipt_required": {"const": true}, "legacy_snapshot_allowed_for_comparison": {"const": true}}
+    },
+    "canonical_themes": {
+      "type": "array", "minItems": 1, "items": {"$ref": "#/$defs/theme"}
+    }
+  },
+  "$defs": {
+    "stringList": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "subtheme": {
+      "type": "object", "additionalProperties": false,
+      "required": ["subtheme_id", "name", "included_raw_concept_ids", "included_raw_concept_names"],
+      "properties": {
+        "subtheme_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "name": {"type": "string", "minLength": 1},
+        "included_raw_concept_ids": {"$ref": "#/$defs/stringList"}, "included_raw_concept_names": {"$ref": "#/$defs/stringList"}
+      }
+    },
+    "theme": {
+      "type": "object", "additionalProperties": false,
+      "required": ["theme_id", "name_cn", "name_en", "aliases", "included_raw_concept_ids", "included_raw_concept_names", "excluded_raw_concept_ids", "excluded_raw_concept_names", "subthemes", "minimum_evidence_requirements", "role_rules", "status", "forward_calibration", "production_effect_enabled"],
+      "properties": {
+        "theme_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"}, "name_cn": {"type": "string", "minLength": 1}, "name_en": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+        "aliases": {"$ref": "#/$defs/stringList"}, "included_raw_concept_ids": {"$ref": "#/$defs/stringList"}, "included_raw_concept_names": {"$ref": "#/$defs/stringList"},
+        "excluded_raw_concept_ids": {"$ref": "#/$defs/stringList"}, "excluded_raw_concept_names": {"$ref": "#/$defs/stringList"}, "subthemes": {"type": "array", "items": {"$ref": "#/$defs/subtheme"}},
+        "minimum_evidence_requirements": {"$ref": "#/$defs/stringList"}, "role_rules": {"const": "structured_evidence_only_no_free_text_inference"},
+        "status": {"enum": ["comparison_only", "approved", "retired"]},
+        "forward_calibration": {"type": "object", "additionalProperties": false, "required": ["minimum_forward_live_weeks", "automatic_promotion"], "properties": {"minimum_forward_live_weeks": {"const": 12}, "automatic_promotion": {"const": false}}},
+        "production_effect_enabled": {"const": false}
+      }
+    }
+  }
+}
+

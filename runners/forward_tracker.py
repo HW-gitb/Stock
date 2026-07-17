@@ -81,14 +81,50 @@ SCHEMA_COLUMNS = [
     "chasing_high",
     "overheat_flag",
     "l2_name",
+    "industry_heat_score",
+    "industry_trend",
+    "industry_trend_source_as_of",
+    "industry_trend_classifier_version",
+    "industry_trend_source_id",
+    "industry_trend_headwind_max",
+    "industry_trend_tailwind_min",
+    "industry_trend_configuration_fingerprint",
+    "industry_trend_validation_status",
+    "raw_concept_ids",
+    "canonical_themes_json",
+    "canonical_theme_ids",
+    "primary_canonical_theme_id",
+    "canonical_theme_roles",
+    "canonical_theme_role_confidence",
+    "theme_taxonomy_configuration_fingerprint",
+    "theme_taxonomy_source_as_of",
+    "theme_taxonomy_l3_provider",
+    "theme_taxonomy_l3_snapshot_date",
+    "theme_taxonomy_l3_coverage_digest",
+    "theme_taxonomy_l3_coverage_complete",
+    "theme_taxonomy_l3_scoring_universe",
+    "theme_taxonomy_l3_validation_status",
+    "theme_heat_score",
+    "theme_breadth_pass",
+    "theme_persistence_mult",
+    "theme_fit_score",
+    "theme_fit_pass",
+    "forward_live",
+    "historical_replay",
     "base_close",
     "entry_date",
     "entry_unbuyable_reason",
     "ret_5d_t1_net",
+    "ret_5d_excess_csi300",
+    "ret_5d_excess_csi1000",
     "ret_5d_status",
     "ret_10d_t1_net",
+    "ret_10d_excess_csi300",
+    "ret_10d_excess_csi1000",
     "ret_10d_status",
     "ret_20d_t1_net",
+    "ret_20d_excess_csi300",
+    "ret_20d_excess_csi1000",
     "ret_20d_status",
     "backfilled_at",
 ]
@@ -121,7 +157,27 @@ def _get(d, *keys, default=None):
     return cur
 
 
-def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: str, c: dict) -> dict:
+def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: str, c: dict,
+                   l3_mode: str | None = None) -> dict:
+    industry = _get(c, "industry", default={}) or {}
+    signal = industry.get("industry_trend_signal") if isinstance(industry, dict) else {}
+    signal = signal if isinstance(signal, dict) else {}
+    thresholds = signal.get("thresholds") if isinstance(signal.get("thresholds"), dict) else {}
+    taxonomy = _get(c, "catalyst", "theme_taxonomy", default={}) or {}
+    themes = taxonomy.get("canonical_themes") if isinstance(taxonomy, dict) else []
+    themes = themes if isinstance(themes, list) else []
+    raw_concepts = taxonomy.get("raw_concepts") if isinstance(taxonomy, dict) else []
+    raw_concepts = raw_concepts if isinstance(raw_concepts, list) else []
+    metrics = taxonomy.get("comparison_metrics") if isinstance(taxonomy, dict) else {}
+    metrics = metrics if isinstance(metrics, dict) else {}
+    l3_provenance = taxonomy.get("l3_provenance") if isinstance(taxonomy, dict) else {}
+    l3_provenance = l3_provenance if isinstance(l3_provenance, dict) else {}
+    theme_ids = [str(t.get("theme_id")) for t in themes if isinstance(t, dict) and t.get("theme_id")]
+    theme_roles = {str(t.get("theme_id")): str(t.get("role", "unknown"))
+                   for t in themes if isinstance(t, dict) and t.get("theme_id")}
+    role_confidence = {str(t.get("theme_id")): str(t.get("role_confidence", "unknown"))
+                       for t in themes if isinstance(t, dict) and t.get("theme_id")}
+    forward_live = str(l3_mode or "") == "today"
     return {
         "as_of": as_of,
         "captured_at": captured_at,
@@ -140,15 +196,52 @@ def _candidate_row(as_of: str, captured_at: str, run_id: str, candidate_digest: 
         "chasing_high": _get(c, "derived_flags", "chasing_high"),
         "overheat_flag": _get(c, "derived_flags", "overheat_flag"),
         "l2_name": _get(c, "industry", "sw_l2_name"),
+        "industry_heat_score": signal.get("industry_heat_score"),
+        "industry_trend": signal.get("classification"),
+        "industry_trend_source_as_of": signal.get("source_as_of"),
+        "industry_trend_classifier_version": signal.get("classifier_version"),
+        "industry_trend_source_id": signal.get("source_id"),
+        "industry_trend_headwind_max": thresholds.get("headwind_max"),
+        "industry_trend_tailwind_min": thresholds.get("tailwind_min"),
+        "industry_trend_configuration_fingerprint": signal.get("configuration_fingerprint"),
+        "industry_trend_validation_status": signal.get("validation_status"),
+        "raw_concept_ids": json.dumps([str(item.get("concept_id")) for item in raw_concepts
+                                        if isinstance(item, dict) and item.get("concept_id")], ensure_ascii=False),
+        "canonical_themes_json": json.dumps(themes, ensure_ascii=False, sort_keys=True),
+        "canonical_theme_ids": json.dumps(theme_ids, ensure_ascii=False),
+        "primary_canonical_theme_id": taxonomy.get("primary_canonical_theme_id") if isinstance(taxonomy, dict) else None,
+        "canonical_theme_roles": json.dumps(theme_roles, ensure_ascii=False, sort_keys=True),
+        "canonical_theme_role_confidence": json.dumps(role_confidence, ensure_ascii=False, sort_keys=True),
+        "theme_taxonomy_configuration_fingerprint": taxonomy.get("taxonomy_configuration_fingerprint") if isinstance(taxonomy, dict) else None,
+        "theme_taxonomy_source_as_of": taxonomy.get("source_as_of") if isinstance(taxonomy, dict) else None,
+        "theme_taxonomy_l3_provider": l3_provenance.get("provider"),
+        "theme_taxonomy_l3_snapshot_date": l3_provenance.get("snapshot_date"),
+        "theme_taxonomy_l3_coverage_digest": l3_provenance.get("coverage_digest"),
+        "theme_taxonomy_l3_coverage_complete": l3_provenance.get("coverage_complete"),
+        "theme_taxonomy_l3_scoring_universe": l3_provenance.get("scoring_universe"),
+        "theme_taxonomy_l3_validation_status": l3_provenance.get("validation_status"),
+        "theme_heat_score": metrics.get("theme_heat_score"),
+        "theme_breadth_pass": metrics.get("breadth_pass"),
+        "theme_persistence_mult": metrics.get("persistence_mult"),
+        "theme_fit_score": metrics.get("fit_score"),
+        "theme_fit_pass": metrics.get("fit_pass"),
+        "forward_live": forward_live,
+        "historical_replay": not forward_live,
         "base_close": _get(c, "quote", "close"),
         # backfill-filled columns below
         "entry_date": pd.NA,
         "entry_unbuyable_reason": pd.NA,
         "ret_5d_t1_net": pd.NA,
+        "ret_5d_excess_csi300": pd.NA,
+        "ret_5d_excess_csi1000": pd.NA,
         "ret_5d_status": "pending_capture",
         "ret_10d_t1_net": pd.NA,
+        "ret_10d_excess_csi300": pd.NA,
+        "ret_10d_excess_csi1000": pd.NA,
         "ret_10d_status": "pending_capture",
         "ret_20d_t1_net": pd.NA,
+        "ret_20d_excess_csi300": pd.NA,
+        "ret_20d_excess_csi1000": pd.NA,
         "ret_20d_status": "pending_capture",
         "backfilled_at": pd.NA,
     }
@@ -211,7 +304,9 @@ def capture(as_of: str) -> int:
     candidates = payload.get("candidates") or []
 
     captured_at = datetime.now().astimezone().isoformat(timespec="seconds")
-    new_rows = [_candidate_row(as_of, captured_at, run_id, digest, c) for c in candidates]
+    l3_mode = (payload.get("source") or {}).get("l3_mode")
+    new_rows = [_candidate_row(as_of, captured_at, run_id, digest, c, l3_mode=l3_mode)
+                for c in candidates]
     new_df = pd.DataFrame(new_rows, columns=SCHEMA_COLUMNS)
 
     existing = _load_existing_tracker()
@@ -345,6 +440,11 @@ def backfill(windows: list[int]) -> int:
                 df_idx.at[key, f"ret_{w}d_status"] = new_status
             if pd.notna(new_val):
                 df_idx.at[key, f"ret_{w}d_t1_net"] = new_val
+            for benchmark in BENCHMARKS:
+                excess_col = f"ret_{w}d_excess_{benchmark}"
+                excess_val = row.get(excess_col)
+                if pd.notna(excess_val):
+                    df_idx.at[key, excess_col] = excess_val
         df_idx.at[key, "backfilled_at"] = backfilled_at
         updated_keys.append(key)
 

@@ -781,7 +781,7 @@ class BuildReportTests(unittest.TestCase):
         for token in ("试探仓", "止损", "未验证"):
             self.assertIn(token, adv)
         self.assertIsNotNone(r["m67"]["table"]["损"])
-        self.assertEqual(r["m67"]["table"]["优先级"], "⭐×4")  # base3 + overlay eligible
+        self.assertEqual(r["m67"]["table"]["优先级"], "⭐×3")  # comparison overlay has no official star effect
         validate_m67_consistency(r)
         jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 

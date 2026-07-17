@@ -3,10 +3,18 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
+import pandas as pd
+
 from engine.data.analysis_input_contract import (
     AnalysisInputContractError,
     validate_analysis_input_contract,
 )
+from engine.a_short_industry_theme import (
+    classify_industry_trend,
+    classify_theme_taxonomy,
+    unavailable_theme_taxonomy,
+)
+from engine.egs_industry_heat import load_governance
 from tests.support.analysis_input_payload import (
     cloned_minimal_analysis_input_payload,
     current_hithink_analysis_input_payload,
@@ -102,6 +110,20 @@ class AnalysisInputContractTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "schema validation failed"):
             validate_analysis_input_contract(payload)
 
+    def test_unknown_schema_version_fails_closed(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["schema_version"] = "1.3.0"
+
+        with self.assertRaisesRegex(ValueError, "schema validation failed"):
+            validate_analysis_input_contract(payload)
+
+    def test_today_hithink_snapshot_date_must_not_be_after_trade_date(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        payload["source"]["l3_snapshot_date"] = "20260523"
+
+        with self.assertRaisesRegex(AnalysisInputContractError, "snapshot date .*after trade_date"):
+            validate_analysis_input_contract(payload)
+
     def test_legacy_1_1_today_payload_remains_readable_without_hithink_receipt(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
         payload["schema_version"] = "1.1.0"
@@ -109,6 +131,39 @@ class AnalysisInputContractTest(unittest.TestCase):
         payload["source"].pop("l3_coverage", None)
 
         validate_analysis_input_contract(payload)
+
+    def test_theme_taxonomy_l3_receipt_must_match_the_analysis_input_source(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"] = unavailable_theme_taxonomy(
+            payload["trade_date"],
+            "synthetic_test",
+            l3_provider=payload["source"]["l3_provider"],
+            l3_snapshot_date=payload["source"]["l3_snapshot_date"],
+            l3_coverage=payload["source"]["l3_coverage"],
+        )
+        validate_analysis_input_contract(payload)
+
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"]["l3_provenance"]["provider"] = "legacy_tushare_snapshot"
+        with self.assertRaisesRegex(AnalysisInputContractError, "does not match source receipt"):
+            validate_analysis_input_contract(payload)
+
+    def test_raw_theme_concepts_must_keep_the_upstream_l3_receipt_clock(self) -> None:
+        payload = current_hithink_analysis_input_payload()
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"] = classify_theme_taxonomy(
+            ts_code=payload["candidates"][0]["ts_code"],
+            stock_concepts={payload["candidates"][0]["ts_code"]: ["c1"]},
+            concept_members={},
+            concepts_df=pd.DataFrame([{"code": "c1", "name": "concept-1"}]),
+            as_of=payload["trade_date"],
+            l3_provider=payload["source"]["l3_provider"],
+            l3_snapshot_date=payload["source"]["l3_snapshot_date"],
+            l3_coverage=payload["source"]["l3_coverage"],
+        )
+        validate_analysis_input_contract(payload)
+
+        payload["candidates"][0]["catalyst"]["theme_taxonomy"]["raw_concepts"][0]["source_as_of"] = "20260521"
+        with self.assertRaisesRegex(AnalysisInputContractError, "raw theme concept 0 does not match L3 receipt"):
+            validate_analysis_input_contract(payload)
 
     def test_future_earnings_report_date_is_rejected(self) -> None:
         payload = cloned_minimal_analysis_input_payload()
@@ -131,6 +186,46 @@ class AnalysisInputContractTest(unittest.TestCase):
         payload = cloned_minimal_analysis_input_payload()
         payload["candidates"][0]["fundamental"]["expectation"]["earnings_report_date"] = "20260231"
         with self.assertRaisesRegex(AnalysisInputContractError, "calendar date"):
+            validate_analysis_input_contract(payload)
+
+    def test_valid_industry_signal_must_match_its_governed_score_classification(self) -> None:
+        for score, forged_label in ((50.0, "headwind"), (10.0, "tailwind")):
+            with self.subTest(score=score, forged_label=forged_label):
+                payload = cloned_minimal_analysis_input_payload()
+                signal = classify_industry_trend(
+                    score=score,
+                    sw_l2_code="801080",
+                    sw_l2_name="industry",
+                    source_as_of=payload["trade_date"],
+                    expected_as_of=payload["trade_date"],
+                    governance=load_governance(),
+                )
+                signal["classification"] = forged_label
+                signal["industry_trend"] = forged_label
+                payload["candidates"][0]["industry"].update({
+                    "industry_trend": forged_label,
+                    "industry_trend_signal": signal,
+                })
+                payload["candidates"][0]["scores"]["industry_heat_score"] = score
+                with self.assertRaisesRegex(AnalysisInputContractError, "score/classification"):
+                    validate_analysis_input_contract(payload)
+
+    def test_valid_industry_signal_must_match_its_egs_source_score(self) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        signal = classify_industry_trend(
+            score=20.0,
+            sw_l2_code="801080",
+            sw_l2_name="industry",
+            source_as_of=payload["trade_date"],
+            expected_as_of=payload["trade_date"],
+            governance=load_governance(),
+        )
+        payload["candidates"][0]["industry"].update({
+            "industry_trend": "headwind",
+            "industry_trend_signal": signal,
+        })
+        payload["candidates"][0]["scores"]["industry_heat_score"] = 50.0
+        with self.assertRaisesRegex(AnalysisInputContractError, "source score mismatch"):
             validate_analysis_input_contract(payload)
 
 

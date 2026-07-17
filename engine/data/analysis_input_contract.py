@@ -7,6 +7,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from engine.a_short_industry_theme import (
+    configuration_fingerprint,
+    finite_industry_heat_score,
+    industry_trend_from_score,
+    industry_trend_policy,
+)
+from engine.egs_industry_heat import load_governance
+
 
 ROOT = Path(__file__).resolve().parents[2]
 ANALYSIS_INPUT_SCHEMA_PATH = ROOT / "schemas" / "analysis_input.schema.json"
@@ -153,6 +161,16 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
 
     if schema_version == "1.2.0":
         if l3_mode == "today":
+            if not l3_snapshot_date:
+                raise AnalysisInputContractError(
+                    f"{label} current live L3 requires source.l3_snapshot_date"
+                )
+            snapshot_date = _parse_date8(l3_snapshot_date, "source.l3_snapshot_date", label)
+            if snapshot_date > trade_date:
+                raise AnalysisInputContractError(
+                    f"{label} current live L3 snapshot date {l3_snapshot_date} "
+                    f"is after trade_date {trade_date}"
+                )
             if l3_provider != "hithink_finance" or l3_coverage is None:
                 raise AnalysisInputContractError(
                     f"{label} current live L3 requires hithink_finance with a complete coverage receipt"
@@ -244,6 +262,132 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
                 trade_date,
                 label,
             )
+        industry = candidate.get("industry") or {}
+        industry_signal = industry.get("industry_trend_signal") or {}
+        if industry_signal:
+            _validate_candidate_date(
+                industry_signal.get("source_as_of"),
+                f"candidates[{index}].industry.industry_trend_signal.source_as_of",
+                trade_date,
+                label,
+            )
+            if (industry_signal.get("classification") != industry_signal.get("industry_trend")
+                    or industry.get("industry_trend") != industry_signal.get("classification")):
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] deterministic industry_trend_signal does not match industry_trend"
+                )
+            if (industry_signal.get("validation_status") == "valid"
+                    and industry_signal.get("unavailable_reason") is not None):
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] valid industry_trend_signal cannot carry unavailable_reason"
+                )
+            if industry_signal.get("validation_status") == "valid":
+                policy = industry_trend_policy(load_governance())
+                thresholds = industry_signal.get("thresholds")
+                if (
+                    industry_signal.get("classifier_version") != policy["classifier_version"]
+                    or industry_signal.get("source_id") != policy["source_id"]
+                    or not isinstance(thresholds, dict)
+                    or thresholds.get("headwind_max") != policy["headwind_max"]
+                    or thresholds.get("tailwind_min") != policy["tailwind_min"]
+                    or industry_signal.get("risk_filter_v1_prior") is not True
+                    or industry_signal.get("forward_calibration_required") is not True
+                    or industry_signal.get("positive_effect_enabled") is not False
+                    or industry_signal.get("configuration_fingerprint")
+                    != configuration_fingerprint(policy)
+                ):
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] industry_trend_signal policy or fingerprint mismatch"
+                    )
+                score = finite_industry_heat_score(industry_signal.get("industry_heat_score"))
+                expected_classification = industry_trend_from_score(score, policy)
+                if expected_classification is None:
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] valid industry_trend_signal has invalid score"
+                    )
+                source_score = finite_industry_heat_score(
+                    (candidate.get("scores") or {}).get("industry_heat_score")
+                )
+                if source_score is None or abs(score - source_score) > 1e-9:
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] industry_trend_signal source score mismatch"
+                    )
+                if industry_signal.get("classification") != expected_classification:
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] industry_trend_signal score/classification mismatch"
+                    )
+            if (industry_signal.get("validation_status") == "unavailable"
+                    and industry_signal.get("classification") != "unknown"):
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] unavailable industry_trend_signal must classify as unknown"
+                )
+        taxonomy = ((candidate.get("catalyst") or {}).get("theme_taxonomy") or {})
+        if taxonomy:
+            if taxonomy.get("production_effect_enabled") is not False or taxonomy.get("automatic_promotion") is not False:
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] theme taxonomy must remain comparison-only with no automatic promotion"
+                )
+            _validate_candidate_date(
+                taxonomy.get("source_as_of"),
+                f"candidates[{index}].catalyst.theme_taxonomy.source_as_of",
+                trade_date,
+                label,
+            )
+            if taxonomy.get("source_as_of") != trade_date:
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] theme taxonomy source_as_of must equal trade_date"
+                )
+            provenance = taxonomy.get("l3_provenance") or {}
+            coverage = l3_coverage if isinstance(l3_coverage, dict) else {}
+            expected_snapshot_date = l3_snapshot_date if l3_snapshot_date not in (None, "") else None
+            expected_digest = coverage.get("catalog_digest")
+            expected_digest = expected_digest if isinstance(expected_digest, str) else None
+            expected_complete = coverage.get("complete") if isinstance(coverage.get("complete"), bool) else None
+            expected_universe = coverage.get("scoring_universe") if isinstance(coverage.get("scoring_universe"), str) else None
+            if (l3_provider == "hithink_finance" and expected_snapshot_date
+                    and expected_digest and expected_complete is True
+                    and expected_universe == "a_share_main_board"):
+                expected_status = "verified_complete"
+                expected_membership_source = "hithink_complete_concept_members"
+            elif l3_provider == "legacy_tushare_snapshot" and expected_snapshot_date:
+                expected_status = "legacy_snapshot"
+                expected_membership_source = "legacy_snapshot_concept_members"
+            else:
+                expected_status = "unavailable"
+                expected_membership_source = "unavailable"
+            expected_provenance = {
+                "provider": l3_provider if l3_provider not in (None, "") else None,
+                "snapshot_date": expected_snapshot_date,
+                "coverage_digest": expected_digest,
+                "coverage_complete": expected_complete,
+                "scoring_universe": expected_universe,
+                "raw_membership_source": expected_membership_source,
+                "validation_status": expected_status,
+            }
+            if provenance != expected_provenance:
+                raise AnalysisInputContractError(
+                    f"{label} candidates[{index}] theme taxonomy L3 provenance does not match source receipt"
+                )
+            expected_source_id = (
+                f"{l3_provider}.concept_graph"
+                if expected_status in {"verified_complete", "legacy_snapshot"}
+                else None
+            )
+            for raw_index, raw_concept in enumerate(taxonomy.get("raw_concepts") or []):
+                if not isinstance(raw_concept, dict):
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] raw theme concept {raw_index} is invalid"
+                    )
+                if (
+                    raw_concept.get("source_id") != expected_source_id
+                    or raw_concept.get("source_as_of") != expected_snapshot_date
+                    or raw_concept.get("source_snapshot_date") != expected_snapshot_date
+                    or raw_concept.get("coverage_digest") != expected_digest
+                    or raw_concept.get("membership_source") != expected_membership_source
+                ):
+                    raise AnalysisInputContractError(
+                        f"{label} candidates[{index}] raw theme concept {raw_index} does not match L3 receipt"
+                    )
 
 
 def _validate_candidate_date(value: Any, field_path: str, trade_date: str, label: str) -> None:

@@ -22,9 +22,8 @@
   ],
   "properties": {
     "schema_version": {
-      "type": "string",
-      "description": "Semantic version of this schema contract.",
-      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+      "enum": ["1.0.0", "1.1.0", "1.2.0"],
+      "description": "Semantic version of this schema contract. Unknown versions fail closed until their source and PIT rules are reviewed."
     },
     "generated_at": {
       "type": "string",
@@ -800,11 +799,35 @@
                 "pending_llm"
               ]
             },
+            "industry_trend_signal": {
+              "description": "Structured deterministic SW L2 industry-trend signal classified from the existing EGS industry_heat_score. It is independent of the LLM fundamental/policy advisory.",
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["classification", "industry_trend", "industry_heat_score", "sw_l2_code", "sw_l2_name", "source_as_of", "classifier_version", "thresholds", "source_id", "risk_filter_v1_prior", "forward_calibration_required", "positive_effect_enabled", "configuration_fingerprint", "validation_status", "unavailable_reason"],
+              "properties": {
+                "classification": {"enum": ["headwind", "neutral", "tailwind", "unknown"]},
+                "industry_trend": {"enum": ["headwind", "neutral", "tailwind", "unknown"]},
+                "industry_heat_score": {"type": ["number", "null"], "minimum": 0, "maximum": 100},
+                "sw_l2_code": {"type": ["string", "null"]}, "sw_l2_name": {"type": ["string", "null"]},
+                "source_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"}, "classifier_version": {"const": "industry_heat_trend_v1"},
+                "thresholds": {"type": "object", "additionalProperties": false, "required": ["headwind_max", "tailwind_min"], "properties": {"headwind_max": {"type": "number", "minimum": 0, "maximum": 100}, "tailwind_min": {"type": "number", "minimum": 0, "maximum": 100}}},
+                "source_id": {"const": "A-EGS.industry_heat_score"}, "risk_filter_v1_prior": {"const": true}, "forward_calibration_required": {"const": true}, "positive_effect_enabled": {"const": false},
+                "configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "validation_status": {"enum": ["valid", "unavailable"]}, "unavailable_reason": {"type": ["string", "null"]}
+              }
+            },
             "industry_trend_evidence": {
+              "description": "Deprecated compatibility field for older advisory artifacts. It is not consumed by the deterministic industry_trend classifier or M6.7 decisions.",
               "type": "array",
-              "items": {
-                "$ref": "#/$defs/evidence"
-              },
+              "items": {"$ref": "#/$defs/evidence"},
+              "default": []
+            },
+            "industry_fundamental_trend": {
+              "type": "string",
+              "enum": ["tailwind", "neutral", "headwind", "unknown", "pending_llm"]
+            },
+            "industry_fundamental_trend_evidence": {
+              "type": "array",
+              "items": {"$ref": "#/$defs/evidence"},
               "default": []
             }
           }
@@ -1501,6 +1524,40 @@
             "concept_strength_score": {
               "$ref": "#/$defs/scoreNullable",
               "description": "Unit: points, 0-100."
+            },
+            "theme_taxonomy": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["taxonomy_schema_name", "taxonomy_schema_version", "taxonomy_configuration_fingerprint", "source_as_of", "l3_provenance", "raw_concepts", "canonical_themes", "primary_canonical_theme_id", "production_effect_enabled", "automatic_promotion"],
+              "properties": {
+                "taxonomy_schema_name": {"const": "a_short_theme_taxonomy"}, "taxonomy_schema_version": {"const": "1.2.0"},
+                "taxonomy_configuration_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+                "l3_provenance": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["provider", "snapshot_date", "coverage_digest", "coverage_complete", "scoring_universe", "raw_membership_source", "validation_status"],
+                  "properties": {
+                    "provider": {"enum": ["hithink_finance", "legacy_tushare_snapshot", "neutralized", null]},
+                    "snapshot_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+                    "coverage_digest": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+                    "coverage_complete": {"type": ["boolean", "null"]},
+                    "scoring_universe": {"type": ["string", "null"]},
+                    "raw_membership_source": {"enum": ["hithink_complete_concept_members", "legacy_snapshot_concept_members", "unavailable"]},
+                    "validation_status": {"enum": ["verified_complete", "legacy_snapshot", "unavailable"]}
+                  }
+                },
+                "raw_concepts": {"type": "array", "items": {"type": "object"}}, "canonical_themes": {"type": "array", "items": {"type": "object"}},
+                "primary_canonical_theme_id": {"type": ["string", "null"]}, "production_effect_enabled": {"const": false}, "automatic_promotion": {"const": false},
+                "comparison_status": {"const": "unknown_or_unavailable"}, "unavailable_reason": {"type": "string"},
+                "comparison_metrics": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["theme_heat_score", "breadth_pass", "persistence_mult", "fit_score", "fit_pass", "comparison_status"],
+                  "properties": {
+                    "theme_heat_score": {"type": ["number", "null"]}, "breadth_pass": {"type": "boolean"},
+                    "persistence_mult": {"type": ["number", "null"]}, "fit_score": {"type": ["number", "null"]},
+                    "fit_pass": {"type": "boolean"}, "comparison_status": {"const": "available"}
+                  }
+                }
+              }
             },
             "policy_news": {
               "type": "array",

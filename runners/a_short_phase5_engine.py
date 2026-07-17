@@ -298,9 +298,9 @@ def classify_risk_families(inp: dict, ind: dict) -> dict:
     has_position = stateful.get("position_state") == "held"
     fam = {f: {"hit": False, "action": None, "reasons": []} for f in RISK_FAMILIES}
 
-    # overheat_crowding(含 overlay crowding;一次硬处理)
-    oh = bool(d.get("overheat") or d.get("chasing_high") or d.get("chase")
-              or (inp.get("overlay") or {}).get("crowding_hit"))
+    # overheat_crowding only consumes the production EGS price/behaviour fields.
+    # The theme overlay is a comparison artifact and must not enter a risk family.
+    oh = bool(d.get("overheat") or d.get("chasing_high") or d.get("chase"))
     if oh:
         fam["overheat_crowding"].update(hit=True, action="downgrade", reasons=["过热/追高/拥挤"])
 
@@ -580,8 +580,11 @@ def holding_levels(inp: dict, ind: dict, regime: str):
 
 def compute_star(inp: dict, fam: dict, eligible: bool) -> int:
     star = 3
-    if eligible:
-        star += 1                         # overlay 赛道红利
+    # `eligible` is retained only for call compatibility. The theme overlay
+    # is comparison-only and can neither add nor remove a production star.
+    del eligible
+    # Only the source-bound deterministic SW-L2 industry trend may apply this
+    # formal -1. The LLM fundamental/policy advisory is display-only.
     if inp.get("industry_trend") == "headwind":
         star -= 1
     for f in ("overheat_crowding", "portfolio_concentration"):
@@ -1076,6 +1079,12 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                          size_multiplier_reason=state_size_reason)
             action = "建仓" if plan else "观察"
     star = compute_star(inp, fam, eligible) if action != "否决" else 0
+    # Industry trend is authorized to alter only the displayed M6.7 star. Cash
+    # allocation still uses the prior risk-derived order so an SW-L2 signal
+    # label cannot silently change shares, cash, position cap, or action.
+    allocation_input = dict(inp)
+    allocation_input["industry_trend"] = "neutral"
+    allocation_star = compute_star(allocation_input, fam, eligible) if action != "否决" else 0
 
     # 操作建议行(诚实护栏:建仓必带置信/试探/止损)
     if action == "建仓":
@@ -1126,12 +1135,27 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         advice = f"否决,禁止建仓。硬否决:{reject}。{held_suffix}"
 
     # 消费映射(§4 消费完整性:每个被消费输入 → 它对 m67 的影响)
+    industry_trend_detail = dict(inp.get("industry_trend_detail") or {})
+    industry_trend = str(inp.get("industry_trend") or "unknown")
+    fundamental_trend = str(inp.get("industry_fundamental_trend") or "unknown")
+    if industry_trend == "headwind":
+        industry_trend_text = "industry_trend=headwind (deterministic SW L2 heat; formal -1 star)"
+    elif industry_trend == "tailwind":
+        industry_trend_text = "industry_trend=tailwind (display only; no positive star bonus)"
+    elif industry_trend == "neutral":
+        industry_trend_text = "industry_trend=neutral (display only)"
+    else:
+        industry_trend_text = "industry_trend=unknown (fail-closed; manual review, no star adjustment)"
+    fundamental_text = f"industry_fundamental_trend={fundamental_trend} (LLM/advisory; no deterministic decision effect)"
+
     consumption = {
         "indicators": "→ 入场类型/止损/止盈/盈亏比/股数",
         "risk_families": "→ hard_veto(否决)/ downgrade(降星·减仓)/ market_regime(IV闸门)",
-        "overlay.eligible": "→ 星级(赛道红利)",
+        "overlay.eligible": "→ comparison display only; no star/risk/action/cash effect",
+        "overlay.crowding_hit": "→ comparison display only; no production risk-family effect",
         "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
-        "industry_trend": "→ 逆风降星",
+        "industry_trend": "→ deterministic SW L2 headwind only: -1 star; tailwind has no bonus; unknown requires manual review",
+        "industry_fundamental_trend": "→ advisory display only; no deterministic decision effect",
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",
         "account/liquidity": "→ 仓位上限/冲击成本/100股",
@@ -1171,7 +1195,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "现价与成本": price_cost,
             "否决审查触发": (("|".join(hard) + (" | " + sem_note if sem_note else "")) if hard
                               else (sem_note if sem_note else "无")),
-            "板块资金事件": (inp.get("industry_trend") or "unknown") +
+            "板块资金事件": industry_trend_text + " | " + fundamental_text +
                             (f" | {'/'.join(llm_notes)}" if llm_notes else ""),
             "风控触发": ("|".join(downgrades) if downgrades else "无"),
             "操作建议": advice,
@@ -1242,11 +1266,14 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
                                            "observe_only": list(observe),
                                            "sizing_block": sizing_block}},
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
-                                     "star": star, "plan": plan, "reject_reason": reject},
+                                     "star": star, "cash_allocation_star": allocation_star,
+                                     "plan": plan, "reject_reason": reject},
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
                         "iv_value": (inp.get("iv") or {}).get("iv_value"),
                         "hv_value": (inp.get("iv") or {}).get("hv_value"),
                         "iv_hv_ratio": iv_hv_ratio, "iv_hv_regime": iv_hv_regime},
+            "industry_trend": industry_trend_detail,
+            "theme_comparison": dict((inp.get("overlay") or {}).get("theme_taxonomy") or {}),
             "stateful_risk": stateful,
             "consumption": consumption,
         },

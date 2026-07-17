@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 审查（主树 Path A：industry_trend + L3 taxonomy 加法重放）PASS + 提交
+
+- **Verdict/Action**: PASS + 提交主树。Codex 把已审 `c387a655` 的 industry_trend + provenance v1.2 加法重放到 master:忠实(纯新文件字节一致)、无 master 功能丢失(cache_policy/D2/D4/IV/US-short/HiThink-L3/schema1.2 保留)。不变式全保(headwind→-1 仅展示星+cash 中性化、F1 双层重算、taxonomy comparison-only、legacy 不进 live forward、L3 receipt 对账);governance 仅补 classifier 块(未改权重/评分);3 P3 Optional 全修(schema_version enum、today snapshot≤trade_date、全 unavailable→insufficient_data)。
+- **Required**: 无;`R-ASHORT-INDUSTRY-THEME-COMPARISON-BOUNDARY` 落地 master(完整边界/证据单源见 `system_risk_register.md`)。
+- **Verify**: 亲跑主树全包 `discover -p test_a_short*.py` 1520 OK、`discover -p test_us_short*.py` 4478 OK、L3/contract/execution/support 子目录 70 OK — 均 0 fail/0 error;纯新文件 vs c387a655 字节一致;grep 证 cache_policy 未删 / F1 重算在 / 3 Optional 修复 / governance 仅加 classifier 块。review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex：Pass
+
+## 2026-07-17 — Codex 执行（主树 Path A：industry_trend + L3 taxonomy 加法重放；待 Claude 审查）
+
+- **Verdict/Action**: 已从已审查的 e38 `c387a655` 按加法重放到主树，而非直接 merge/cherry-pick 旧基线。主树较新的 HiThink complete-L3、`analysis_input` 1.2、`cache_policy`、D2/D4、IV 和 US-short 保持原样；接入确定性的 `industry_heat_score` 信号（`<=20` 逆风、`>=80` 顺风），其中仅已验证的逆风使 M6.7 展示星级 -1。顺风无正向星级，且所有 trend 不改变 EGS 排名、现金排序、股数、动作或 veto。L3 taxonomy 继续只作 comparison/forward 轨。
+- **Required**: 无新增 Required。执行中发现源分支漏列的必要承接：行业热度治理契约原先没有 `industry_trend_classifier`，会让分类器 fail-closed；已仅补入固定阈值、来源、无正向效应及 schema，未改 profile 权重或评分公式。已同时完成登记的 3 个 P3：未知 schema 版本拒绝、today L3 receipt 不得晚于 trade_date、全 unavailable 的 forward cohort 返回 `insufficient_data`。
+- **Verify**: `py_compile` + JSON parse OK；聚焦 A-short 659 OK；`discover -s tests -p test_a_short*.py` 1520 OK；`discover -s tests -p test_us_short*.py` 4478 OK；`tests/execution` 68 OK；`git diff --check` OK。未单独运行正式 EGS 或每周生产流程。
+- **Pre-Codex self-review**: 已核对所有重叠文件只带入赛道/L3 承接，明确保留主树 cache-policy、持仓价格序列、D2/D4、IV 和 US-short 后续改动；M6.7 的 `cash_allocation_star` 固定中和 industry trend，避免显示星级影响现金分配。
+- **Next**: Claude Code：审查主树本次 Path A 加法重放；PASS 后提交该切片。
+
 跨 LLM 认知交接日志。**reverse-chronological，最新 entry 在顶部**。
 
 本文件存在的目的：commit message 和 handoff 记录"改了什么 / 为什么改"，但不记录 "试过什么没成 / 试过的方案为什么被否决 / 当前 LLM 的纠结点 / 下一步该做什么的判断"。这一层认知信息在跨 LLM 协作时最容易丢失。

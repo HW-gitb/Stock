@@ -31,6 +31,13 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 import jsonschema  # noqa: E402
+from engine.a_short_industry_theme import (  # noqa: E402
+    configuration_fingerprint,
+    finite_industry_heat_score,
+    industry_trend_from_score,
+    industry_trend_policy,
+)
+from engine.egs_industry_heat import load_governance  # noqa: E402
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -50,6 +57,73 @@ CRASH_VETO_TRACKING_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(o
 # S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
 HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
+
+
+def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str, dict]:
+    """Accept only source-bound deterministic heat evidence for formal M6.7 use."""
+    industry = cand.get("industry") or {}
+    scores = cand.get("scores") or {}
+    signal = industry.get("industry_trend_signal")
+    policy = industry_trend_policy(load_governance())
+    reason = None
+    if not isinstance(signal, dict):
+        reason, signal = "industry_trend_signal_missing", {}
+    elif signal.get("validation_status") != "valid":
+        reason = signal.get("unavailable_reason") or "industry_trend_signal_unavailable"
+    elif (signal.get("classification") not in {"headwind", "neutral", "tailwind"}
+          or signal.get("industry_trend") != signal.get("classification")
+          or industry.get("industry_trend") != signal.get("classification")):
+        reason = "industry_trend_classification_mismatch"
+    elif signal.get("source_as_of") != str(expected_as_of):
+        reason = "industry_trend_source_as_of_mismatch"
+    elif (signal.get("sw_l2_code") != industry.get("sw_l2_code")
+          or signal.get("sw_l2_name") != industry.get("sw_l2_name")):
+        reason = "industry_trend_sw_l2_mismatch"
+    else:
+        signal_score, egs_score = signal.get("industry_heat_score"), scores.get("industry_heat_score")
+        if (isinstance(signal_score, bool) or isinstance(egs_score, bool)
+                or not isinstance(signal_score, (int, float))
+                or not isinstance(egs_score, (int, float))):
+            reason = "industry_heat_score_mismatch_or_invalid"
+        else:
+            signal_value = finite_industry_heat_score(signal_score)
+            egs_value = finite_industry_heat_score(egs_score)
+            if signal_value is None or egs_value is None or signal_value != egs_value:
+                reason = "industry_heat_score_mismatch_or_invalid"
+    thresholds = signal.get("thresholds") if isinstance(signal, dict) else None
+    if (reason is None and (
+            signal.get("source_id") != policy["source_id"]
+            or not isinstance(thresholds, dict)
+            or thresholds.get("headwind_max") != policy["headwind_max"]
+            or thresholds.get("tailwind_min") != policy["tailwind_min"]
+            or signal.get("risk_filter_v1_prior") is not True
+            or signal.get("forward_calibration_required") is not True
+            or signal.get("positive_effect_enabled") is not False
+            or signal.get("configuration_fingerprint") != configuration_fingerprint(policy))):
+        reason = "industry_trend_policy_or_fingerprint_mismatch"
+    if (reason is None
+            and industry_trend_from_score(signal.get("industry_heat_score"), policy)
+            != signal.get("classification")):
+        reason = "industry_trend_score_classification_mismatch"
+    if reason is None:
+        classification = signal["classification"]
+        detail = dict(signal)
+        detail.update({
+            "effect": "star_down" if classification == "headwind" else "checked_no_effect",
+            "effect_reason": ("headwind risk-filter prior: Phase 5 star -1"
+                              if classification == "headwind"
+                              else ("positive effect disabled; industry heat already enters EGS ranking, no double star"
+                                    if classification == "tailwind" else "checked, no negative trigger")),
+            "weekly_validation": "valid",
+        })
+        return classification, detail
+    detail = dict(signal)
+    detail.update({
+        "classification": "unknown", "industry_trend": "unknown",
+        "effect": "unavailable_manual_review", "effect_reason": reason,
+        "weekly_validation": "unavailable",
+    })
+    return "unknown", detail
 
 
 def _validate_official_publish_marker(analysis_path: str | Path, marker: dict,
@@ -338,7 +412,7 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
 
 
 def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pct,
-                        account: dict, regime: str, industry_trend: str = "neutral",
+                        account: dict, regime: str,
                         llm_enrichment=None, observe_only=None, semantic=None,
                         semantic_web_llm=None, regime_fallback=None, stateful_risk=None,
                         iv_value=None, hv_value=None) -> dict:
@@ -354,15 +428,28 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     fund = cand.get("fundamental", {}) or {}
     prof = fund.get("profitability", {}) or {}      # 4.2 财报质量①(复用):egs_main 已取的 fina_indicator 派生(零新取数)
     fqual = fund.get("quality", {}) or {}
+    industry = cand.get("industry", {}) or {}
+    trend, trend_detail = _industry_trend_for_candidate(
+        cand, str(cand.get("_weekly_as_of") or ""))
+    fundamental_trend = str(industry.get("industry_fundamental_trend") or "pending_llm")
+    taxonomy = ((cand.get("catalyst") or {}).get("theme_taxonomy"))
+    overlay = {
+        "eligible": bool((overlay_row or {}).get("eligible")),
+        "crowding_hit": bool((overlay_row or {}).get("crowding_hit")),
+        "production_effect_enabled": False,
+        "automatic_promotion": False,
+        "theme_taxonomy": taxonomy if isinstance(taxonomy, dict) else {},
+    }
     return {
         "ts_code": cand.get("ts_code"), "name": cand.get("name"),
         "close": (cand.get("quote") or {}).get("close"),
         "price_series": list(price_series or []),
         "esp_score": sc.get("esp_score"), "l4_score": sc.get("l4_score"),
         "egs_score": sc.get("final_score"),   # EGS 质量总分(M6.7 渲染并列展示,与风控星级区分)
-        "overlay": {"eligible": bool((overlay_row or {}).get("eligible")),
-                    "crowding_hit": bool((overlay_row or {}).get("crowding_hit"))},
-        "industry_trend": industry_trend,
+        "overlay": overlay,
+        "industry_trend": trend,
+        "industry_trend_detail": trend_detail,
+        "industry_fundamental_trend": fundamental_trend,
         # 真实 EGS analysis_input 契约:derived_flags.{is_lock,is_breakout,has_crash_veto,
         # overheat_flag,chasing_high,vol_confirm,hard_veto};suspension 在 event_risk.suspension.is_suspended。
         # vol_confirm 可选:EGS 量能旁证(近5日上涨日额>下跌日额),仅进 EGS l4_score 评分;**不再门控 M6.7 突破**
@@ -432,7 +519,8 @@ def _allocate_cash(reports: list, available_cash, new_exposure_capacity=None) ->
     def _key(ir):
         i, r = ir
         es = r["machine"]["entry_exit_size_star"]; plan = es.get("plan") or {}
-        return (-(es.get("star") or 0), -(r["m67"]["table"].get("EGS分") or 0),
+        return (-(es.get("cash_allocation_star", es.get("star")) or 0),
+                -(r["m67"]["table"].get("EGS分") or 0),
                 -(plan.get("rr_at_entry_high") or 0.0), -(plan.get("avg_amount_5d") or 0.0),
                 i, str(r.get("ts_code", "")))     # original_topN_rank=i;ts_code 末位 tie-break 保确定性
 
@@ -1267,6 +1355,9 @@ def _load_validated_overlay(overlay_path: str, weekly_as_of: str) -> dict:
     with open(OVERLAY_SCHEMA_PATH, encoding="utf-8") as f:
         jsonschema.validate(ov, json.load(f))
     validate_overlay_summary_consistency(ov)
+    boundary = ov.get("boundary") or {}
+    if boundary.get("production_effect_enabled", False) or boundary.get("automatic_promotion", False):
+        raise SystemExit("[FATAL] overlay claims production effect or automatic promotion; comparison-only artifact rejected")
     if str(ov.get("as_of")) != str(weekly_as_of):
         raise SystemExit(f"[FATAL] overlay as_of {ov.get('as_of')} != 周报 as_of {weekly_as_of}"
                          "(未来/陈旧 overlay,须同一周末批)")
@@ -2954,6 +3045,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             {str(c.get("ts_code")): c.get("name", "") for c in _cands},
             args.as_of, args.web_news_lookback_days)
     cands = ai.get("candidates", [])
+    for candidate in cands:
+        candidate["_weekly_as_of"] = str(args.as_of)
     # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
     price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
     normalized = [normalize_candidate(c, price_results[c["ts_code"]][0], overlay.get(c["ts_code"]),
