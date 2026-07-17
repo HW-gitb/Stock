@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-17 — Claude Code 试跑发现 + 登记 + 路由 Codex（US-short 一键离线试跑；runtest 胶囊参数转发崩溃）
+
+- **Verdict/Action**: 用户命我离线全量试跑 US-short 一键流程(零 fetch、数据自编)查阻塞 + 出三份最终文件。**选股流程本身离线无阻塞**:一键 `--dry-run` 计划正常(decision 20260709 + 13 stage)、全包 `discover -p test_us_short*.py` **4489 OK**、真 funnel(fake client)→真 batch5→batch4 bridge 端到端产三文件(weekly_report.md / action_table.csv / machine_record.json)干净。**但"放胶囊"时炸出真·可复现崩溃**:runtest 胶囊 wrapper 用数组 splat 转发参数给 worker,PowerShell 数组 splat 按位置绑定→把 `-Name` 当位置值塞乱,连文档默认 dry-run 都崩(us_short + a_short 同病)。已登记 `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND`(open, P2 工具级,不碰选股/PIT/生产/真钱)。
+- **Required**: `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND` — 两 wrapper 数组 splat → 哈希表 splat 按名绑定 + 补执行级转发回归(现 `test_runtest_capsule.py` 只测 python manager,两 `.ps1` 只 `read_text()` 静态断言、转发层零执行覆盖)。完整根因/复现/修法/边界见 register 单源。
+- **Verify**: PS5.1 逐步复现并定位——内联命名参数跑 dry-run 正常 vs 数组 splat 崩(默认 `@('-PrivateRoot',$p,'-PythonExe','python')`→`NowEt="-PrivateRoot"`… → argparse 崩;带 -NowEt→`-Name` 落 `[int]Pass2Budget`→Int32 转换硬崩);grep 证 `a_short_runtest.ps1:78` 同 `& $Worker @WorkerArgs` 模式、`test_runtest_capsule.py` 只 `read_text()` 两 wrapper。失败胶囊已 HMAC-gated delete 清理、git 树 clean。三文件(离线编撰、OFFLINE_TEST 戳)+ 问题清单在用户桌面(`us_cc_testrun1.md` / `us_cc_testrun1_output/`,repo 外)。
+- **Next**: Codex：修复 `R-RUNTEST-CAPSULE-PS1-WORKER-ARG-SPLAT-MISBIND`(两 wrapper 数组 splat→哈希表 splat + 转发回归;不碰选股/不 push)。
+
 ## 2026-07-17 — Claude Code 审查（主树 Path A：industry_trend + L3 taxonomy 加法重放）PASS + 提交
 
 - **Verdict/Action**: PASS + 提交主树。Codex 把已审 `c387a655` 的 industry_trend + provenance v1.2 加法重放到 master:忠实(纯新文件字节一致)、无 master 功能丢失(cache_policy/D2/D4/IV/US-short/HiThink-L3/schema1.2 保留)。不变式全保(headwind→-1 仅展示星+cash 中性化、F1 双层重算、taxonomy comparison-only、legacy 不进 live forward、L3 receipt 对账);governance 仅补 classifier 块(未改权重/评分);3 P3 Optional 全修(schema_version enum、today snapshot≤trade_date、全 unavailable→insufficient_data)。
