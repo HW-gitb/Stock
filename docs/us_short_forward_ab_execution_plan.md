@@ -279,3 +279,65 @@ maturity stage will then count the ready packet. No manual receipt is accepted a
 3. Do the **first undone cut**, as its own slice (register + SESSION_LOG block).
 4. If a cut needs a genuine design decision, or the next step is ambiguous → **STOP and surface to the user**;
    do not guess a contract or grid change.
+
+## 7. Corporate-action zero-event certificate — one remaining implementation cut (revised 2026-07-18)
+
+**Review verdict on the earlier two-cut proposal: reject and supersede before implementation.** The earlier proposal
+overclaimed that the existing maturity OHLCV plus normalized split/dividend rows could reconcile an eventful week.
+That is not true under the current contracts: `engine/us_short_massive_corporate_action_reconciliation.py` deliberately
+leaves dividend adjustment semantics unresolved, while the forward outcome does not add cash dividends. The existing
+normalizer also binds four families (`splits` / `dividends` / adjusted daily / unadjusted daily), not the proposed
+two-family input. An eventful week therefore must not become `evaluable` from a provider label or price-shape guess.
+
+**Accepted minimal design: one cut, no event-week reconciliation.** The producer may certify only that the exact H20
+window for the exact Pass2-clean common pool contains **zero split events and zero dividend events** under two complete,
+source-bound Massive market-wide result sets. With independently complete zero-event coverage, adjusted versus
+unadjusted treatment is outcome-equivalent for that window; this combination, not the OHLCV label alone, may emit an
+evaluable sidecar. Any in-pool split/dividend, missing field, wrong/missing pool ticker in maturity OHLCV, malformed row,
+HTTP/provider failure, incomplete pagination, digest/date/pool drift, or ambiguous coverage emits a valid
+`not_evaluable` sidecar (or the existing value-free whole-week no-count) and never a partial confirmation. Eventful-week
+support would require a separately reviewed dividend-inclusive return/reconciliation design; it is not implied by this cut.
+
+**The one and only implementation cut — zero-event coverage fetch + private certificate emitter + maturity wiring.**
+
+- Add `schemas/us_short_forward_policy_corporate_action_coverage.schema.json`,
+  `engine/us_short_forward_policy_corporate_action_evidence.py`, and
+  `runners/us_short_forward_policy_corporate_action_fetch.py`; update only the existing forward-policy maturity/capstone
+  seam, its private schemas, focused tests, this plan, the register, and the minimal session handoff. Do not add a second
+  general corporate-action reconciliation engine or modify `balanced`, selection, model-paper execution, ship-gate, or
+  the existing historical Massive assessment artifacts.
+- The runner first derives every newly mature post-deployment capture's exact first-entry-through-H20 date window from
+  the validated maturity OHLCV packet. It batches all eligible captures into one union query window and performs only
+  `GET /stocks/v1/splits` filtered by `execution_date` plus `GET /stocks/v1/dividends` filtered by
+  `ex_dividend_date`, both sorted ascending with `limit=5000`. No per-ticker fetch. Freeze `max_http_attempts=4`,
+  `retry_count=0`, at most two pages per family; any remaining `next_url` means coverage incomplete and no-count.
+  Continuations must stay HTTPS on the exact Massive host and the two endpoint allowlist.
+- The provider boundary is Massive Stocks Basic Free, `$0`, these two endpoint families only. It runs only inside a
+  genuine authorized weekly capstone capability under `user_chat_20260718_us_short_a1_zero_event_certificate`; offline,
+  dry-run, fixture, or caller-created contexts cannot mint that capability. Raw responses and private coverage packets
+  stay under Git-ignored `provider_samples/` / `state/us_short/shadow_compare_private/`; the tracked summary contains
+  counts/status/digests only, never ticker, price, cash amount, URL, raw row, or secret.
+- Freeze `first_eligible_decision_date=20260720`. A source capture before that date is never fetched, certified, replayed,
+  or backfilled. A later rerun may reuse only an exact digest-bound complete private coverage packet for the same union
+  window; it must not silently refresh or rewrite a counted week.
+- The pure emitter binds the frozen decision date, exact common-pool digest, maturity OHLCV SHA256, H20 date, both
+  complete family-result digests, query bounds, page exhaustion, and all in-pool event counts. It may emit the existing
+  paper-gate shape as `confirmed/no_events/no_events/not_applicable_no_events` only when both result sets are complete and
+  the in-pool event count is exactly zero. Every other state is `not_evaluable`; an actual event is recorded privately
+  and de-identified only as a count/reason in tracked observability.
+- Wire the producer immediately before `run_forward_policy_maturity` in the one-click runner. The sidecar path remains
+  `state/us_short/shadow_compare_private/forward_policy_adjustment_evidence_<decision_date>.json`; the existing cut-2
+  validator remains the final release gate. Provider/certificate failure is best-effort for the comparison track but
+  always fail-closed for counting; the official weekly report still completes and `balanced` remains byte-for-byte
+  behaviorally unchanged.
+- Red/green proof must cover: two exhausted empty family pages → evaluator accepts and one week counts; split present;
+  dividend present; event outside the common pool; missing/duplicate/malformed event; wrong date/pool/source digest;
+  H20 not mature; pre-`20260720` capture; first/second-page behavior; hostile or third-page `next_url`; HTTP/non-OK;
+  replay/overwrite; private-path enforcement; tracked-summary secret/ticker/URL scan; capstone capability/no-provider in
+  offline mode; and the existing outcome/private-week/source-receipt/no-count chain. Fixed offline A1/capstone/schema and
+  route-doc guards are required before Claude review.
+
+**Knife count after this revision: 1 total, 1 remaining.** Provider adapter, pure certificate logic, and weekly wiring
+are one fail-closed functional unit and are fixture-testable together; a real weekly call is runtime operation after
+review, not a second development knife. After this cut, zero-event mature weeks can count; eventful weeks intentionally
+remain whole-week no-count.

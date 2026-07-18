@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 审查 PASS（A1 corporate-action producer §7 重写：2 刀→1 刀零事件证书）
+
+- **Verdict/Action**: PASS。Codex FAIL 我原 2 刀**成立**——亲验 reconciliation 引擎明写 dividend 未决(`us_short_massive_corporate_action_reconciliation.py:12-13`、`_MEASUREMENT_FAMILIES` 无 dividends) + forward outcome 不加现金股息(grep 空) → 我"reconcile 事件周复权"确 overclaim(漏了 item-16c 该先核实 outcome)。新 1 刀"只放行零事件周"逻辑严密(零事件=零复权风险)、更安全、fail-closed 强、1 刀成立(fetch adapter fixture 可测、真调用运行期)。docs-only、无代码/provider。
+- **Required**: 无。`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER`(拒因 + 1 刀边界 + 我 PASS + **可行性 flag**:只数零事件周 + ≤2 页覆盖上限→合格周或罕见、收敛更慢、需上线监控零事件率;有意安全权衡、事件周支持留未来重设计)单源见 `docs/system_risk_register.md` 与 `docs/us_short_forward_ab_execution_plan.md §7`。
+- **Verify**: 核实两条拒因事实(reconciliation 股息未决 line 12-13 / outcome grep dividend=空) + 通读新 §7+register 契约 + Massive 官方日期过滤/limit=5000/分页参数。docs-only 按 §tiering rule 6 fast-path、无需全包/独立 agent。review-evidence:not_available。
+- **Next**: Codex：执行
+
+## 2026-07-18 — Codex design review/rewrite (US-short A1 corporate-action producer §7; current worktree)
+
+- **Verdict/Action**: 原两刀方案不通过且未执行；已按 live repo 证据改成 **1 刀**：只在 Massive splits/dividends 两份完整、分页收尽且共同池 H20 窗口零事件时发 evaluable sidecar，任何事件或不确定性整周 no-count。producer、受限 fetch、private emitter、capstone pre-maturity wiring 合并为一个 fail-closed 功能刀。
+- **Required**: 原方案误把 event rows + maturity OHLCV 当成事件周复权核验；现有 Massive assessment 明确 dividend unresolved，forward outcome 也未计现金股息。另补齐市场级日期查询、`limit=5000`、最多 4 HTTP attempts/零 retry/两页每 family、host/endpoint continuation allowlist、`first_eligible_decision_date=20260720`、no-backfill/no-overwrite。完整契约见 `docs/us_short_forward_ab_execution_plan.md §7` 与 register R-ID。
+- **Verify**: docs-only；核对现有 normalizer/reconciliation/paper gate、forward maturity/capstone、Massive 官方 splits/dividends 参数/分页/免费层说明。未执行实现或 provider 调用。
+- **Next**: Claude Code：审查
+
 ## 2026-07-18 — Claude Code 审查 PASS (R-USSHORT-A1-CUT2-MATURITY-ASOF-AND-SIDECAR-BINDING)
 
 - **Verdict/Action**: PASS + 提交。US-short 对比轨第 2/2 刀（maturity 绑定 + 公司行动 sidecar 验证器 + no-count 可观测）。最高危子集（gate 真周是否计入的 fail-closed 证据引擎）→ 起独立对抗 agent。四面全 CLEAN：`maturity_as_of` 机器绑死 OHLCV 包 `decision_clock`（runner 传 canonical `ctx.decision_date`）不可伪造、sidecar 真验证器 fail-closed、track 仍 inert（真 producer 仍 open）、无 provider/selection/ship-gate 触碰、schema 纯加法。cut-2 严格收紧 cut-1 前无成熟上限行为（正是我 cut-1 radar 提的洞的响应）。2 条 non-blocking Optional（provenance-label 松、仅非生产 hand-edit/direct-caller 可达、不影响真周是否计入）。
