@@ -4442,7 +4442,7 @@ def run_egs(backtest_mode=False, output_root=None):
             # Preserve comparison metrics with the governed taxonomy for the
             # later forward evaluator. This never feeds ranking or M6.7.
             with open(_ov_written, encoding="utf-8") as _ov_handle:
-                _ov_summary = json.load(_ov_handle)
+                _ov_summary = _json.load(_ov_handle)
             _ov_metrics = {str(item.get("ts_code")): item for item in (_ov_summary.get("candidates") or [])}
 
             def _taxonomy_with_metrics(row):
