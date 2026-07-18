@@ -5,6 +5,19 @@
 - **机制**: `git config core.hooksPath .githooks` 激活项目既有 pre-commit hook（此前 hooksPath 指向默认 `.git\hooks`，那道门从未生效——带病 review 条目才会落地后再 amend）；并扩 `.githooks/pre-commit` 在 route-doc guard 后加跑 `tests.test_doc_governance_guard`（含 `test_review_cycle_minimal_template_enforced_above_marker`）。
 - **效果**: 提交时若最新 review 条目违反极简模板（非法 label / bullet>500 / 缺 register 指针 / 修复缺 Proof-of-use），提交自动 BLOCK，不再靠人工记得手跑 guard。反向验证：植入非法 `Optional` 标签的 entry → 真提交 EXIT=1（guard 精确报出该 label），随即还原、无坏提交落地；正向：本提交能过=好状态放行。
 - **跨窗影响**: hooksPath 为共享配置，本仓所有 worktree（含 Codex，其树含此 hook 后生效）提交都跑 route-doc + doc-gov 两道 guard；紧急绕过 `git commit --no-verify` 需用户批准（项目政策）；撤销 `git config --unset core.hooksPath`。
+## 2026-07-18 — Claude Code 审查 PASS（US-short A1 corporate-action producer 实现刀；a6f2→提交+并入 master）
+
+- **Verdict/Action**: PASS。整读 fail-closed 链正确：producer 只在 complete+零事件出 confirmed；消费端 `us_short_forward_policy_outcome.py:345-353` 独立重跑 paper-eval gate、非 evaluable→no-count、交叉核对 degradation_reason 防伪造 → 事件/不完整/超页 no-count、只 complete 零事件计数。预算硬 cap（pages≤2/≤4 HTTP/无逐票/0 retry）+ capability 仅 production_run + 不可变拒 backfill + 密钥脱敏 + reconciliation_claimed=False 不 overclaim。1 独立对抗 agent + 我探针：无假零事件/泄密/超预算、SSRF 稳。按 PASS 自动提交并入 master。
+- **Required**: 无。`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` → **resolved**（附 2 条非阻断硬化 Optional：fetch `:162` 坏端口 ValueError、`:225` NaN 崩+brick，均 fail-closed；另 incomplete 永久 no-count 复述 viability flag）完整单源见 `docs/system_risk_register.md`。
+- **Verify**: 显式跑 3 新/改模块=88 OK + 全 `test_us_short*.py`=4510 OK（亲验计数非采信转述）；整读 producer/evidence/gate/outcome/capstone 接线 + coverage schema + a6f2 文档诚实性（标 not-resolved、no real provider call、无 overclaim）。review-evidence:not_available。
+- **Next**: Codex：修复（fetch `:162`/`:225` 两硬化 Optional，首次真周跑前，非紧急）
+
+## 2026-07-18 - Codex execute (A1 corporate-action zero-event certificate; one and only cut)
+
+- **Verdict/Action**: 单刀实现完成，当前 Codex 工作树未提交；零事件成熟周可计数，事件/来源漂移/分页未尽/HTTP 失败均 fail-closed no-count，官方 weekly report 不受 comparison-track 失败影响。
+- **Required**: 无实现欠项；`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` 完整实现与待审边界见 `docs/system_risk_register.md`，状态保持 pending Claude independent review/commit，未提前标 resolved。
+- **Verify**: final offline `test_us_short*.py` = 4510 OK / 1 skipped；corporate-action runner+schema focused 9 OK；existing capstone 79 OK；route-doc guards 25 OK；`py_compile` / JSON / `git diff --check` OK；真实 provider call 0。
+- **Next**: Claude Code：审查
 
 ## 2026-07-18 — Claude Code 审查 PASS（A1 corporate-action producer §7 重写：2 刀→1 刀零事件证书）
 
