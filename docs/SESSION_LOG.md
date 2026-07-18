@@ -45,9 +45,8 @@
 ## 2026-07-18 — Claude Code 独立审查 PASS（R-ASHORT-V143-ACTION-REVIEW-REMINDER；第三刀·未提交）
 
 - **Verdict/Action**: PASS。第三刀 = 把已存在的 D2 action summary 状态在现有 runner 控制台高亮 + 追加进既有 regime panel 的主动提醒。comparison-only、非生产：不碰 EGS/选股/M6.7/仓位/veto/`analysis_input.market_regime`，也不显示最终生产切换问句（人工门后才出）。思路与代码正确、最小、非回归、无 secret。按 handoff `不提交`：审查完不 merge。
-- **Required**: 无。
-- **Optional**（低危放行）: ① reminder 命中时 panel 双写（`runner:328` base + `:349` base+reminder），可先 append 再单次 save；② `main` 用 `summary['total_forward_weeks']` 下标而非 `.get`（安全，因 summary 恒有该键）。
-- **Verify**: 亲跑 worktree 5756 —— `test_a_short_regime_comparison_runner`+`test_a_short_regime_action_comparison` 32 OK（含 2 新：状态矩阵 accumulating→None/candidate→复核/baseline·inconclusive→退役或继续/unknown·auto-switch=true→raise；panel 持久化且断言无最终切换问句）；route/readme/doc-governance guards 60 OK。guard 安全性已证：`summarize_action_records`（`engine/a_short_regime_action_comparison.py:252-260`）恒发 `automatic_production_switch=False` + 两计数键，故 reminder 前置校验对真 summary 必过、`main` 下标安全。doc「V14.2-sourcing defer 已 superseded」属实非 drift：`runners/weekly_screening.ps1:455-467` 真从 `analysis_input.market_context.market_regime.status` 取 raw、`unknown/读失败→shock` 与 M6.7 同 fail-closed，pipe 已真接（生产数据仍恒 unknown）。review-evidence:not_available（真实工具输出）。
+- **Required**: 无。`R-ASHORT-V143-ACTION-REVIEW-REMINDER` 完整边界/closure 单源见 `docs/system_risk_register.md`；两条低危 Optional（reminder 命中时 panel 双写可先 append 再单次 save / `main` 用 `summary['total_forward_weeks']` 下标安全）放行、不阻断。
+- **Verify**: 亲跑 worktree `test_a_short_regime_comparison_runner`+`test_a_short_regime_action_comparison` 32 OK（含 2 新状态矩阵 + panel 持久化 / 无最终切换问句断言）；route/readme/doc-governance guards 60 OK；guard 安全性代码核实（`summarize_action_records` 恒发 `automatic_production_switch=False`+两计数键、`main` 下标安全）；`weekly_screening.ps1:455-467` 从 `analysis_input` 取 raw regime、`unknown/读失败→shock` 同 M6.7 fail-closed。review-evidence:not_available。
 - **Next**: 待用户 `提交` → 由我 merge worktree 5756 → master；不扩展到生产切换。memory `project_regime_v14_2_sourcing_deferred` 已过时（接线已落），待更新。
 
 ## 2026-07-18 — Codex 修复（R-ASHORT-V143-ACTION-REVIEW-REMINDER；待独立审查）
