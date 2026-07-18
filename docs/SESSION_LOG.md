@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 独立审查 PASS（R-ASHORT-V143-ACTION-REVIEW-REMINDER；第三刀·未提交）
+
+- **Verdict/Action**: PASS。第三刀 = 把已存在的 D2 action summary 状态在现有 runner 控制台高亮 + 追加进既有 regime panel 的主动提醒。comparison-only、非生产：不碰 EGS/选股/M6.7/仓位/veto/`analysis_input.market_regime`，也不显示最终生产切换问句（人工门后才出）。思路与代码正确、最小、非回归、无 secret。按 handoff `不提交`：审查完不 merge。
+- **Required**: 无。
+- **Optional**（低危放行）: ① reminder 命中时 panel 双写（`runner:328` base + `:349` base+reminder），可先 append 再单次 save；② `main` 用 `summary['total_forward_weeks']` 下标而非 `.get`（安全，因 summary 恒有该键）。
+- **Verify**: 亲跑 worktree 5756 —— `test_a_short_regime_comparison_runner`+`test_a_short_regime_action_comparison` 32 OK（含 2 新：状态矩阵 accumulating→None/candidate→复核/baseline·inconclusive→退役或继续/unknown·auto-switch=true→raise；panel 持久化且断言无最终切换问句）；route/readme/doc-governance guards 60 OK。guard 安全性已证：`summarize_action_records`（`engine/a_short_regime_action_comparison.py:252-260`）恒发 `automatic_production_switch=False` + 两计数键，故 reminder 前置校验对真 summary 必过、`main` 下标安全。doc「V14.2-sourcing defer 已 superseded」属实非 drift：`runners/weekly_screening.ps1:455-467` 真从 `analysis_input.market_context.market_regime.status` 取 raw、`unknown/读失败→shock` 与 M6.7 同 fail-closed，pipe 已真接（生产数据仍恒 unknown）。review-evidence:not_available（真实工具输出）。
+- **Next**: 待用户 `提交` → 由我 merge worktree 5756 → master；不扩展到生产切换。memory `project_regime_v14_2_sourcing_deferred` 已过时（接线已落），待更新。
+
+## 2026-07-18 — Codex 修复（R-ASHORT-V143-ACTION-REVIEW-REMINDER；待独立审查）
+
+- **Verdict/Action**: 按用户“先执行第三刀”授权，D2 action summary 达到 review 状态后，现会在现有 runner 控制台高亮并写入既有 regime panel；candidate 只提示启动完整证据复核，baseline/inconclusive 提示退役或继续收集，未改生产 regime、选股、M6.7、仓位或自动切换。
+- **Required**: `R-ASHORT-V143-ACTION-REVIEW-REMINDER` 已实现，完整风险、边界和 closure 见 `docs/system_risk_register.md`。
+- **Verify**: V14.3 runner/action/governance、Stage 5 静态接线、doc guards 共 97 OK；`py_compile`、UTF-8 无 BOM/FFFD、`git diff --check` 通过。另一次完整 weekly guard 模块有 4 个历史回放断言被当前 Python 缺 `akshare/requests/tqdm/tushare` 的 preflight 提前挡住，不计为通过。
+- **Pre-Codex self-review**: A 覆盖四种 summary 状态（accumulating/candidate/baseline/inconclusive）及 automatic-switch=true 反向拒绝；B 运行 deferred/sourcing 旧表述全仓 grep=`STALE_CURRENT=0`；C 钉 candidate 不出现最终切换问句、panel 持久化；D N/A；E 只同步当前机制；F 编码/diff 通过。因当前模式禁止子代理，走主线程 checklist fallback。
+- **Next**: Claude Code：仅审查 `R-ASHORT-V143-ACTION-REVIEW-REMINDER`；当前暂未提交，PASS 后按项目流程提交本切片，不扩展到生产切换。
+
 ## 2026-07-18 — Claude Code 审查 PASS（审查标准 tiering 提交 cherry-pick 到 master `2d551925`）
 
 - **Verdict/Action**: PASS。把 3b4b 审查树 detached HEAD 上用户自撰的 `2d5e5b29`（新增 `AGENTS.md` "Verification tiering and one-full-run rule"）cherry-pick 到 master（`36c42f58`→`2d551925`）。忠实性:`range-diff` 单行 `=`（patch 等价）、3 个非-AGENTS 文件逐字 IDENTICAL、`AGENTS.md` 仅 auto-merge 调上下文；与 master 自身 §6a Optional-only 改动互补共存、不矛盾；`test_doc_governance_guard` 随标准同步（强制锚由旧"必亲跑全包"换成 5 个 tiering 锚 + 保留 removed-soft-rule 反回归门）、非削弱。纯 docs/governance，不碰任何生产 runner/引擎/schema/选股。
