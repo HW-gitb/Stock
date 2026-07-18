@@ -18,7 +18,9 @@ Layering:
 
 Boundary (hard): comparison-only, non-production. Writes ONLY under the guard-safe research lane
 (`research/results/a_short/...`), NEVER `result/a_short/<date>`; drives nothing (no Phase 5 / veto /
-sizing / overlay / M6.7 action). V14.2 stays the frozen production baseline.
+sizing / overlay / M6.7 action). V14.2 stays the frozen production baseline. When the D2 action
+summary reaches a review status, this runner prints and persists a reminder to begin evidence review;
+the reminder is not a production switch and never changes the production regime.
 """
 from __future__ import annotations
 
@@ -215,6 +217,56 @@ def save_panel(markdown: str, path: str) -> None:
     Path(path).write_text(markdown, encoding="utf-8")
 
 
+def render_action_review_reminder(summary: dict) -> str | None:
+    """Return the durable, non-production review reminder for a settled D2 action summary.
+
+    The D2 summary is the sole machine-owned input: it already enforces the 12 forward-week / 8
+    settled-H10 gate before it can return a review status. The remaining PIT-backtest, missed-opportunity,
+    data-quality, and state-machine checks are deliberately human/review-owned, so this function asks
+    for that review rather than claiming V14.3 is production-ready. Unknown summary states fail closed
+    instead of silently suppressing a possible reminder.
+    """
+    if summary.get("automatic_production_switch") is not False:
+        raise ValueError("V14.3 action reminder requires automatic_production_switch=false")
+    status = str(summary.get("status"))
+    if status == "accumulating":
+        return None
+    forward = summary.get("total_forward_weeks")
+    h10 = summary.get("settled_divergence_h10")
+    header = "## V14.3 regime review reminder"
+    evidence = f"- 已计入 forward 周数：`{forward}`；已结算 H10 动作分歧：`{h10}`。"
+    boundary = "- 仍为 `comparison-only`；`automatic_production_switch=false`，不会自动切生产。"
+    if status == "review_candidate_preferred":
+        return "\n".join((
+            header,
+            f"- 状态：`{status}`。",
+            evidence,
+            "- 自动提醒：V14.3 forward evidence 已达复核触发门，请启动 V14.3 晋级证据复核"
+            "（含 ≥2 年 PIT 回测、漏失机会、数据污染、状态机与动作矩阵重放）。",
+            boundary,
+        ))
+    if status == "review_baseline_preferred":
+        reason = "V14.2 baseline 目前更优"
+    elif status == "review_inconclusive":
+        reason = "现有证据仍无结论"
+    else:
+        raise ValueError(f"unknown V14.3 action summary status {status!r}")
+    return "\n".join((
+        header,
+        f"- 状态：`{status}`（{reason}）。",
+        evidence,
+        "- 自动提醒：请审查退役或继续收集；不得把当前对比结果接入生产。",
+        boundary,
+    ))
+
+
+def append_action_review_reminder(panel_markdown: str, reminder: str | None) -> str:
+    """Append a current D2 reminder to the existing comparison panel without a second artifact."""
+    if reminder is None:
+        return panel_markdown
+    return f"{panel_markdown.rstrip()}\n\n---\n\n{reminder}\n"
+
+
 def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                     daily: pd.DataFrame, stk_limit: pd.DataFrame,
                     csi300: pd.DataFrame, csi1000: pd.DataFrame, iv_feed: dict | None,
@@ -286,10 +338,15 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         )
         actions = merge_action_records(refreshed, current_action)
         summary = summarize_action_records(actions)
+        reminder = render_action_review_reminder(summary)
         save_action_records(actions, str(action_records_path), current_action=current_action,
                             regime_records=out["comparison_records"])
         _write_json(summary, str(action_summary_path))
-        out["action_comparison"] = {"records": actions, "summary": summary}
+        out["action_comparison"] = {"records": actions, "summary": summary,
+                                    "review_reminder": reminder}
+        if reminder is not None:
+            out["panel_markdown"] = append_action_review_reminder(out["panel_markdown"], reminder)
+            save_panel(out["panel_markdown"], panel_path)
     return out
 
 
@@ -405,6 +462,17 @@ def main(argv=None) -> int:
                           **action_paths)
     print(f"V14.3 regime comparison written (non-production): ledger n={out['ledger']['coverage']['n']}, "
           f"evidence={out['evidence']}, panel={paths['panel']}")
+    action_comparison = out.get("action_comparison")
+    if action_comparison:
+        summary = action_comparison["summary"]
+        reminder = action_comparison["review_reminder"]
+        if reminder is not None:
+            print(f"[REGIME REVIEW REQUIRED]\n{reminder}")
+        else:
+            print("[regime] V14.3 action comparison accumulating: "
+                  f"forward={summary['total_forward_weeks']}, "
+                  f"settled_divergence_h10={summary['settled_divergence_h10']}; "
+                  "comparison-only, no production switch.")
     return 0
 
 

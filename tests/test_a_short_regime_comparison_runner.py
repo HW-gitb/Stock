@@ -26,7 +26,7 @@ if str(ROOT) not in sys.path:
 from runners.a_short_regime_comparison_runner import (  # noqa: E402
     iv_series_to_map, make_feature_provider, run_regime_step, save_panel, save_ledger,
     save_comparison_records, load_ledger, load_comparison_records, main, main_board_only,
-    _latest_settled_as_of, save_action_records,
+    _latest_settled_as_of, save_action_records, render_action_review_reminder,
 )
 from engine.a_short_regime_action_comparison import build_action_record  # noqa: E402
 from engine.a_short_regime_features import compute_regime_daily_features  # noqa: E402
@@ -77,6 +77,31 @@ def _row(d):
 
 
 class PureHelperTests(unittest.TestCase):
+    def test_action_review_reminder_state_matrix_preserves_no_auto_switch_boundary(self):
+        base = {
+            "total_forward_weeks": 12,
+            "settled_divergence_h10": 8,
+            "automatic_production_switch": False,
+        }
+        self.assertIsNone(render_action_review_reminder({**base, "status": "accumulating"}))
+
+        candidate = render_action_review_reminder({**base, "status": "review_candidate_preferred"})
+        self.assertIn("启动 V14.3 晋级证据复核", candidate)
+        self.assertIn("≥2 年 PIT 回测", candidate)
+        self.assertIn("comparison-only", candidate)
+        self.assertNotIn("是否进入生产切换审查", candidate)
+
+        baseline = render_action_review_reminder({**base, "status": "review_baseline_preferred"})
+        self.assertIn("审查退役或继续收集", baseline)
+        inconclusive = render_action_review_reminder({**base, "status": "review_inconclusive"})
+        self.assertIn("审查退役或继续收集", inconclusive)
+
+        with self.assertRaises(ValueError):
+            render_action_review_reminder({**base, "status": "unknown"})
+        with self.assertRaises(ValueError):
+            render_action_review_reminder({**base, "status": "review_candidate_preferred",
+                                            "automatic_production_switch": True})
+
     def test_latest_settled_as_of_caps_to_available_settled_day(self):
         # intraday: requested Monday(0615) but daily settled only through Friday(0612) → cap to Friday
         d = pd.DataFrame({"trade_date": ["20260611", "20260612"], "ts_code": ["A", "A"],
@@ -240,6 +265,32 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertEqual(out["action_comparison"]["records"][0]["effective_v14_2_regime"], "shock")
             self.assertTrue(out["action_comparison"]["records"][0]["forward_eligible"])
             self.assertTrue((base / "actions.json").exists())
+
+    def test_d2_candidate_review_reminder_is_persisted_to_comparison_panel(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        summary = {
+            "total_forward_weeks": 12,
+            "settled_divergence_h10": 8,
+            "automatic_production_switch": False,
+            "status": "review_candidate_preferred",
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "weekly_m67.json"
+            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
+                              encoding="utf-8")
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
+                      m67_report_path=str(report), action_records_path=str(base / "actions.json"),
+                      action_summary_path=str(base / "summary.json"), action_decision_as_of=cal[-1])
+            with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value=cal[-1]), \
+                    patch("runners.a_short_regime_comparison_runner.summarize_action_records", return_value=summary):
+                out = run_regime_step(**kw)
+            self.assertIn("启动 V14.3 晋级证据复核", out["action_comparison"]["review_reminder"])
+            panel = (base / "p.md").read_text(encoding="utf-8")
+            self.assertIn("V14.3 regime review reminder", panel)
+            self.assertIn("启动 V14.3 晋级证据复核", panel)
+            self.assertNotIn("是否进入生产切换审查", panel)
 
     def test_d2_historical_decision_is_derived_not_counted(self):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)

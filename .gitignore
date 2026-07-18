@@ -116,3 +116,6 @@ desktop.ini
 reviewer_probes/
 
 # Human-written result notes and docs remain trackable.
+
+# Local full-pack run ledger (tiering rule 4 cache); machine-local run state, not shared.
+.tools/state/
