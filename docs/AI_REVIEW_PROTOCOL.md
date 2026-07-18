@@ -18,6 +18,7 @@ Current binding lives in `AGENTS.md`; this short compatibility map only prevents
 - `提交` after a Claude Code `审查` PASS is owned by Claude Code automatically; it is not handed to Codex.
 - `执行` remains subject to the specific user command and the project approval gates in `AGENTS.md`.
 - `批准` / `批准修改` is NOT required between a Claude Code `审查` and a Codex `修复`: the user's `修复` directly authorizes repairing the reviewed Required findings, and Codex records that user-directed authorization in `docs/SESSION_LOG.md`. `批准` remains only for a standalone strategic / spend approval the user explicitly chooses to record.
+- Test tier selection, the reviewer's focused-pack rerun, and the one-full-run rule are governed only by `AGENTS.md §Verification tiering and one-full-run rule`; this pointer does not create a second test policy.
 
 ## Required Reading
 
