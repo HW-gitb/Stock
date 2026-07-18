@@ -47,4 +47,14 @@ if [ "$?" -ne 0 ]; then
   echo "to docs/SESSION_LOG.md top; keep docs/CURRENT.md to SETTLED facts only. Fix, then re-commit." 1>&2
   exit 1
 fi
+
+"$PY" -m unittest tests.test_doc_governance_guard 1>&2
+if [ "$?" -ne 0 ]; then
+  echo "" 1>&2
+  echo "pre-commit BLOCKED: doc-governance guard FAILED (likely the review-cycle minimal template)." 1>&2
+  echo "Newest SESSION_LOG review entry above REVIEW-CYCLE-MINIMAL-TEMPLATE-MARKER must use ONLY labels" 1>&2
+  echo "{Verdict/Action, Required, Verify, Next} (+Proof-of-use for 修复); each bullet <=500 chars; cite the" 1>&2
+  echo "register (no double-write of finding detail). Move detail to system_risk_register.md, then re-commit." 1>&2
+  exit 1
+fi
 exit 0

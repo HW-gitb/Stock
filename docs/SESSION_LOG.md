@@ -1,5 +1,11 @@
 # Session Log
 
+## 2026-07-18 — Claude 硬化极简模板执行：激活 + 扩 pre-commit hook（跨窗机制变更，非 Required）
+
+- **机制**: `git config core.hooksPath .githooks` 激活项目既有 pre-commit hook（此前 hooksPath 指向默认 `.git\hooks`，那道门从未生效——带病 review 条目才会落地后再 amend）；并扩 `.githooks/pre-commit` 在 route-doc guard 后加跑 `tests.test_doc_governance_guard`（含 `test_review_cycle_minimal_template_enforced_above_marker`）。
+- **效果**: 提交时若最新 review 条目违反极简模板（非法 label / bullet>500 / 缺 register 指针 / 修复缺 Proof-of-use），提交自动 BLOCK，不再靠人工记得手跑 guard。反向验证：植入非法 `Optional` 标签的 entry → 真提交 EXIT=1（guard 精确报出该 label），随即还原、无坏提交落地；正向：本提交能过=好状态放行。
+- **跨窗影响**: hooksPath 为共享配置，本仓所有 worktree（含 Codex，其树含此 hook 后生效）提交都跑 route-doc + doc-gov 两道 guard；紧急绕过 `git commit --no-verify` 需用户批准（项目政策）；撤销 `git config --unset core.hooksPath`。
+
 ## 2026-07-18 — Claude Code 审查 PASS（A1 corporate-action producer §7 重写：2 刀→1 刀零事件证书）
 
 - **Verdict/Action**: PASS。Codex FAIL 我原 2 刀**成立**——亲验 reconciliation 引擎明写 dividend 未决(`us_short_massive_corporate_action_reconciliation.py:12-13`、`_MEASUREMENT_FAMILIES` 无 dividends) + forward outcome 不加现金股息(grep 空) → 我"reconcile 事件周复权"确 overclaim(漏了 item-16c 该先核实 outcome)。新 1 刀"只放行零事件周"逻辑严密(零事件=零复权风险)、更安全、fail-closed 强、1 刀成立(fetch adapter fixture 可测、真调用运行期)。docs-only、无代码/provider。
