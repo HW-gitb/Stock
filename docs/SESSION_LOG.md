@@ -107,6 +107,87 @@
 - **Verify**: targeted runner/observability/crash-veto/health package 33 OK; phase6 EGS package 66 OK; broad `discover -s tests -p test_a_short*.py` timed out at 600s without a final result and is not PASS evidence.
 - **Pre-Codex self-review**: A N/A (no enumerable contract set); B scope grep found zero live `details suppressed` or named type-only sidecar handlers; C reverse tests preserve benign `NameError` detail while redacting URL/token values and keep sidecar failure non-blocking; D N/A; E only register + session live-state record changed; F focused direct-script, CLI, schema-health, and phase6 checks passed. Lightweight independent self-review was not used because this task's active mode forbids sub-agent delegation.
 - **Next**: Claude Code: review
+## 2026-07-18 — Claude Code 独立复审 PASS（A-short 对比轨 v2 第 2 刀 fixed 版；提交 knife-2）
+
+- **Verdict/Action**: PASS + 提交（knife-2 `_adjudication` 引擎 + 测试 + 设计/register/SESSION_LOG）。F1 修复对症：裁决器新增 `_outcome_payload_digest` 重算并要求 == 自报 + ledger（镜像 capture 的 `_capture_payload_digest`），旧自比已删、malformed typed fail-close；植入失败测试已建。F2 按用户口径统一收紧（单/多挑战者采用门都要 paired bootstrap 下界 ≥ 冻结经济优势，设计 doc 同步）。full 细节单源见 `docs/system_risk_register.md`。
+- **Required**: 无（`R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND` → resolved）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier=focused acceptance（隔离私密模块）：`py_compile` + `test_a_short_factor_comparison_v2_adjudication` + `test_a_short_factor_comparison_v2` = 40 OK + doc-governance 46 OK。F1 我独立探针双证（诚实产物 adj 重算 == knife-1 写入 hash → 不误杀；篡改 net_return 留旧 hash → 重算差 → 新门 raise）。§6a：增量修复既有 agent 已审引擎 → 整读修复面 + 独立反向探针（不强制新 agent）。核 F2 gate 统一 + 设计 doc diff 一致。
+- **Next**: 无（两刀均已提交；第 3 刀 weekly 未开始、需另授权）
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 第 2 刀 outcome 摘要 Required + F2 Optional；待 Claude 独立复审）
+
+- **Verdict/Action**: 裁决器现在先重新计算整个 `outcome.payload`（仅排除自报摘要）的摘要，再要求它同时匹配 outcome 自报值与 ledger 值；任何收益、风险或退出日期篡改都会在读取前拒绝。按用户决定，单挑战者也必须让 paired bootstrap 下界达到冻结经济优势，不能只靠点估计通过。未接 weekly、未改生产、未提交。
+- **Required**: `R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND` 修复待 Claude 独立复审；F2 Optional 已按统一置信下界口径落地，完整事实单源见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + `test_a_short_factor_comparison_v2_adjudication` + `test_a_short_factor_comparison_v2` + doc-governance fixed pack = 100 OK；`git diff --check` 通过（仅 CRLF 提示）。
+- **Pre-Codex self-review**: A-F checked — A：摘要覆盖 payload 的全部字段而非仅三条已知攻击字段；B：旧的 ledger↔self-reported 直接比较已从裁决源移除；C：收益/风险/exit-date 三种篡改均 fail-closed，经济下界低于阈值拒绝、恰等阈值仍可通过；E：设计、风险登记和本交接一致；F：摘要缺失/非对象仍 typed fail-closed。固定包在最终代码/设计修改后集中运行一次。
+- **Next**: Claude Code：仅独立复审 A-short 对比轨 v2 第 2 刀 outcome 摘要 Required 与 F2 Optional，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Claude Code 独立审查（A-short 对比轨 v2 第 2 刀离线裁决）FAIL
+
+- **Verdict/Action**: FAIL（一条 material Required）；未提交。整刀审 knife-2 裁决引擎（867 行）。唯一 blocking = 裁决器 `_collect_evidence`（L290-293）只自比 outcome 文件自报 hash vs ledger 字段、**从不重算** outcome payload 摘要（capture 路径有重算、此处无；`_validate_source_receipt` 把 settlement 置 None 不核）→ 篡改私密 `outcome.json` 内容（net_return/risk/exit_date）留旧 hash 即被静默采信，违背设计 §"第 2 刀"「重验 outcome hash」宣称，可致假 adopt / 破风险门 / 破块独立。另一条 non-blocking Optional F2（单挑战者用点估计经济幅度、符合 §六.3 但与 §六.4 finalist CI 门不一致）。
+- **Required**: `R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND`（完整复现/HELD/F2 单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier=focused acceptance（隔离私密模块）：`py_compile` + `test_a_short_factor_comparison_v2_adjudication` 13 OK + v2 25 + doc-governance 60 OK。F1 我独立探针实证（改 net_return 留 stale hash → 自比通过不 raise、重算才会差；grep 证全文无 outcome payload 摘要重算）。§6a 独立 agent 端到端复现 F1/F1b/F1c，并确认其余全 HELD（证据资格/检查点无 p-hacking/确定性/within-question Holm/唯一赢家 CI 门/人工门/崩溃安全）。整读引擎 867 行 + 对照设计 §"第 2 刀" + governance。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Claude Code 独立复审 PASS（A-short 对比轨 v2 第 1 刀 fixed 版；整刀，仅提交 knife-1）
+
+- **Verdict/Action**: PASS + 提交（仅 knife-1：engine v2 + 4 schema + governance + v2 测试 + owner design + 路由/register/SESSION_LOG；knife-2 `_adjudication` 引擎/测试留未提交待下一轮审）。回撤 Required 与我此前 4 条 Optional 全部闭合并加值断言测试；新增组合物化 `_combined_*` / `experiment_batches.json` 注册表 / common-pool 以 `pool_candidates` 真约束选择等经整刀 + §6a agent 攻不破；两条新 non-blocking O1/O2（组合回执 hash 深度、一次性激活门）。full 细节单源见 register。
+- **Required**: 无（`R-ASHORT-COMPARISON-V2-MAXDD-CUMULATIVE-COMPOUNDING` → resolved；O1/O2 non-blocking 单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier（2026-07-18 tiering 标准；隔离私密模块 → 不触发 full-regression）= focused acceptance：`py_compile` + `test_a_short_factor_comparison_v2`(25) + doc-governance = 60 OK；回撤独立实证 5 控制点（`[5,-10,5]`→14.29、`[10,30,10,30,30]`→15.38[原报 0.0]、NaN/<-100 fail-closed）；§6a 独立 agent 12 探针 / 38 测试全 HELD。整读引擎 1227 行 + governance + design；program schema 195 行未逐行读（经载入校验 + 引擎语义强制）。
+- **Next**: Claude 继续审 knife-2（用户已指示；不接第 3 刀）
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 组合回执绑定；待 Claude 独立复审）
+
+- **Verdict/Action**: 已把组合 batch 的两条 component receipt 变为 capture 前硬校验；组件问题集合必须与登记集合精确一一对应，缺失、pending 或 question/arm/hash 不匹配均拒绝；同一组合问题切换到新 batch 后，旧 batch 已结算 ledger 也被裁决器排除。未接 weekly、未改生产、未提交。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的组合回执绑定待独立复审，完整闭环见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + v2/v1/Phase5/runtime/doc-guard fixed pack = 243 OK（其中组件绑定/新旧 batch focused tests = 38 OK）；`git diff --check` 通过（仅 CRLF 提示）。
+- **Pre-Codex self-review**: 验证 receipt collection 形状、SHA、accepted 状态、组件问题集合精确一一对应及 question/arm 一对一；无回执/pending/错组件均 fail-closed，真实组合旧 batch capture→outcome→ledger 后切换新 batch 的有效证据为零。
+- **Next**: Claude Code：仅独立复审 A-short 对比轨 v2 第 2 刀组合回执绑定，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 第 2 刀组合 batch 闭环；待 Claude 独立复审）
+
+- **Verdict/Action**: 已将预注册组合问题接入私密 composite materializer、capture、cache-only settle、ledger 与 adjudication；未接 weekly、未改生产、未提交。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的组合 batch 闭环待独立复审，完整根因和边界见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + v2/v1/Phase5/runtime/doc-guard focused pack = 243 OK；`git diff --check` 通过。
+- **Pre-Codex self-review**: 组合只能领取其两条已接受 arm/receipt 对应 batch；组件限定为一个 entry 与一个 IV；端到端验证 capture→settle→ledger→adjudication，并核实实际 `evaluation_exit_date` 读链。
+- **Next**: Claude Code：仅独立复审 A-short 对比轨 v2 第 2 刀组合闭环，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 第 2 刀四项 Required；待 Claude 独立复审）
+
+- **Verdict/Action**: 已修复 epoch 合法切段重算、当期 epoch adopt 硬门、finalist 共同块下限，以及 dormant/组合的真实新前向 batch 绑定；未接 weekly、未改生产、未提交。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的第 2 刀四项 Required 待独立复审，完整根因和闭环见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + v2/v1/Phase5/runtime/doc-guard focused pack = 242 OK；`git diff --check` 通过。
+- **Pre-Codex self-review**: 逐项复核旧裁决跨 epoch 重算、当期 epoch 最小块/方向、finalist pair 共同块和 batch capture→ledger→裁决过滤链；新 batch 的旧证据为零计数，组合不预登记新问题不能 capture。
+- **Next**: Claude Code：仅独立复审 A-short 对比轨 v2 第 2 刀修复，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Codex 执行（A-short 对比轨 v2 第 2 刀；待 Claude 独立审查）
+
+- **Verdict/Action**: 已完成冻结私密证据的离线裁决、人工回执、当前提醒、休眠重启登记和组合新前向批次门；未接入 weekly，未改生产，未提交。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的 v2 第 2 刀待独立审查；第 1 刀修复也仍未获本工作树的 Claude re-review，详情见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + v2/v1/Phase5/runtime/doc-guard focused pack = 238 OK；`git diff --check` 通过；裁决器静态读取仅限既有 v2 weekly evidence schema，无 provider/capture/settle/weekly 写线。
+- **Next**: Claude Code：仅独立审查 A-short 对比轨 v2 第 2 刀，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 第 1 刀 Required 与四项 Optional；待 Claude 独立复审）
+
+- **Verdict/Action**: 已修复 `max_drawdown_pct` 与本次四项 Optional；未提交，未开始第 2、3 刀。
+- **Required**: `R-ASHORT-COMPARISON-V2-MAXDD-CUMULATIVE-COMPOUNDING` — 详情见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: `py_compile` + v2/v1/Phase5/runtime/doc-guard focused pack = 229 OK；`git diff --check` 和旧 seam/旧回撤实现零残留检查通过。
+- **Pre-Codex self-review**: A-F checked — 当前 diff-only 独立自审复审 PASS、无超时；补回撤、冻结 close、收缩+IV 公共池、公共池实际输入和未成交分母的反向测试，固定包在最终改动后集中运行一次。
+- **Next**: Claude Code：仅独立复审本次 v2 第 1 刀修复并决定是否提交；不得执行第 2、3 刀。
+
+## 2026-07-18 — Claude Code 独立复审（A-short 对比轨 v2 第 1 刀）FAIL
+
+- **Verdict/Action**: FAIL（一条 material Required）；未提交。
+- **Required**: `R-ASHORT-COMPARISON-V2-MAXDD-CUMULATIVE-COMPOUNDING`（完整范围/复现/HELD 不变量/Optional 单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available；范围、真实测试和复现证据均见风险登记册。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Codex 执行（A-short 对比轨 v2 第 1 刀；待 Claude 独立审查）
+
+- **Verdict/Action**: 第 1 刀已一次完成：新增独立、gitignored 的 v2 私密证据层，冻结 D1/D3 有序 arm、复用当前 Phase5 baseline、按三类正交契约分 epoch，并仅从调用者提供的既有日线 payload 结算 QFQ/risk/no-count 证据。forward 标记同时绑定本机日期、run/source as-of、实际规范化候选摘要及精确 as-of 收盘；capture/receipt 在重放和结算时重算绑定链。未启动统计裁决/reminder（第 2 刀）或 weekly 接线（第 3 刀）。
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的 v2 第 1 刀实现待 Claude 独立审查；完整范围与三刀边界见 `docs/a_short_factor_comparison_v2_design.md`、`docs/system_risk_register.md`。不提交、不解释为生产建议。
+- **Verify**: `py_compile` 通过；`tests.test_a_short_factor_comparison_v2` 20 OK；v2 + v1/Phase5/runtime/文档治理聚焦包 225 OK；`git diff --check` 通过。自检覆盖 schema/contract、真实候选来源绑定、receipt 重算、PIT/adjustment no-count 与 v1/weekly 隔离；独立对抗复核 PASS，且补测 run identity 摘要伪造、过期/未来 price-series、capture 篡改和 receipt 未同步重写均 fail-closed。
+- **Next**: Claude Code：仅独立审查 A-short 对比轨 v2 第 1 刀；通过后决定提交，不得执行第 2 或第 3 刀。
 
 ## 2026-07-17 — Claude Code 独立复审 PASS (R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER)
 

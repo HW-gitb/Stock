@@ -1,0 +1,195 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_factor_comparison_v2_program",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "lane", "comparison_only", "baseline", "questions", "outcome_contract", "adjustment_contract", "risk_evidence", "epoch_policy", "formal_adjudication_contract", "adjudication_contract", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_factor_comparison_v2_program"},
+    "schema_version": {"const": "2.0.0"},
+    "program_id": {"const": "a_short_factor_comparison_v2"},
+    "lane": {"const": "a_short"},
+    "comparison_only": {"const": true},
+    "baseline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["policy_id", "canonical_primitives", "frozen_seams"],
+      "properties": {
+        "policy_id": {"const": "a_short_phase5_canonical"},
+        "canonical_primitives": {
+          "type": "array",
+          "minItems": 4,
+          "items": {"type": "string"},
+          "uniqueItems": true
+        },
+        "frozen_seams": {
+          "type": "array",
+          "minItems": 3,
+          "items": {"type": "string"},
+          "uniqueItems": true
+        }
+      }
+    },
+    "questions": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["question_id", "title", "question_type", "experiment_batch_id", "multiplicity_family_id", "allow_combination", "effect_surface", "common_pool_seam", "ordered_arm_ids", "arms"],
+        "properties": {
+          "question_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+          "title": {"type": "string", "minLength": 1},
+          "question_type": {"enum": ["selection_gate", "score_weight", "score_transform", "rank_or_bucket", "entry_policy", "sizing_policy", "exit_policy", "combination_policy"]},
+          "experiment_batch_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,95}$"},
+          "multiplicity_family_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,95}$"},
+          "allow_combination": {"const": true},
+          "component_factor_ids": {
+            "type": ["array", "null"],
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+            "uniqueItems": true
+          },
+          "effect_surface": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+          "common_pool_seam": {"const": "same_pit_candidate_universe_after_non_iv_immutable_hard_gates"},
+          "ordered_arm_ids": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+            "uniqueItems": true
+          },
+          "arms": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 4,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["arm_id", "kind", "factor_id", "effect_surface", "one_change_only"],
+              "properties": {
+                "arm_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,63}$"},
+                "kind": {"enum": ["baseline", "challenger"]},
+                "factor_id": {"type": ["string", "null"]},
+                "effect_surface": {"type": "string"},
+                "one_change_only": {"const": true}
+              }
+            }
+          }
+        }
+      }
+    },
+    "outcome_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entry", "exit", "horizons_trading_days", "primary_horizon_days", "cost_pct", "price_basis", "model_account", "allocation"],
+      "properties": {
+        "entry": {"const": "t_plus_1_open"},
+        "exit": {"const": "t_plus_n_close"},
+        "horizons_trading_days": {"const": [5, 10, 20]},
+        "primary_horizon_days": {"const": 10},
+        "cost_pct": {"type": "number", "exclusiveMinimum": 0},
+        "price_basis": {"const": "qfq_via_observed_adj_factor"},
+        "model_account": {"const": "fixed_slots_cash_preserving"},
+        "allocation": {"const": "equal_slot_no_reallocation"}
+      }
+    },
+    "adjustment_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required_source", "require_observed_flag", "reject_forward_fill", "reject_default_one", "max_adj_factor_ratio_without_event", "max_qfq_gap_pct_without_event"],
+      "properties": {
+        "required_source": {"const": "provider_observed"},
+        "require_observed_flag": {"const": true},
+        "reject_forward_fill": {"const": true},
+        "reject_default_one": {"const": true},
+        "max_adj_factor_ratio_without_event": {"type": "number", "exclusiveMinimum": 1},
+        "max_qfq_gap_pct_without_event": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "risk_evidence": {
+      "type": "array",
+      "minItems": 9,
+      "items": {"type": "string"},
+      "uniqueItems": true
+    },
+    "epoch_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orthogonality_checks", "legacy_v1_import", "cross_epoch_method"],
+      "properties": {
+        "orthogonality_checks": {
+          "const": ["decision_delta_contract", "immutable_common_pool_contract", "outcome_contract"]
+        },
+        "legacy_v1_import": {"const": "forbidden"},
+        "cross_epoch_method": {"const": "random_effects_reml_hartung_knapp"}
+      }
+    },
+    "formal_adjudication_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["checkpoints_effective_weeks", "alpha_spending", "within_question_family", "finalist_method"],
+      "properties": {
+        "checkpoints_effective_weeks": {"const": [12, 24, 36]},
+        "alpha_spending": {"const": {"24": 0.025, "36": 0.025}},
+        "within_question_family": {"const": "holm_bonferroni"},
+        "finalist_method": {"const": "pre_registered_simultaneous_confidence_bounds"}
+      }
+    },
+    "adjudication_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary_horizon_days", "min_effective_weeks_preliminary", "min_effective_weeks_formal", "retire_after_effective_weeks", "min_nonoverlap_blocks", "min_epoch_blocks", "min_distinct_states", "min_state_effective_weeks", "min_economic_advantage_pct", "min_block_win_rate", "bootstrap_draws", "permutation_draws", "confidence_level", "simultaneous_confidence_level", "max_heterogeneity_i2_pct", "max_active_questions", "max_arms_per_question", "risk_limits", "combination_scheduler"],
+      "properties": {
+        "primary_horizon_days": {"const": 10},
+        "min_effective_weeks_preliminary": {"const": 12},
+        "min_effective_weeks_formal": {"const": 24},
+        "retire_after_effective_weeks": {"const": 36},
+        "min_nonoverlap_blocks": {"const": 12},
+        "min_epoch_blocks": {"const": 4},
+        "min_distinct_states": {"const": 2},
+        "min_state_effective_weeks": {"const": 4},
+        "min_economic_advantage_pct": {"const": 0.25},
+        "min_block_win_rate": {"const": 0.55},
+        "bootstrap_draws": {"const": 5000},
+        "permutation_draws": {"const": 20000},
+        "confidence_level": {"const": 0.95},
+        "simultaneous_confidence_level": {"const": 0.95},
+        "max_heterogeneity_i2_pct": {"const": 50.0},
+        "max_active_questions": {"const": 3},
+        "max_arms_per_question": {"const": 4},
+        "risk_limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["max_drawdown_pct", "bad_name_rate", "tail_loss_pct", "loss_distribution_count", "cash_drag_pct", "unfilled_rate", "fill_rate", "turnover_pct", "total_cost_pct", "max_name_weight_pct", "adjustment_coverage_pct", "no_count_rate"],
+          "properties": {
+            "max_drawdown_pct": {"const": {"maximum": 15.0}},
+            "bad_name_rate": {"const": {"maximum": 0.35}},
+            "tail_loss_pct": {"const": {"minimum": -10.0}},
+            "loss_distribution_count": {"const": {"minimum": 1}},
+            "cash_drag_pct": {"const": {"maximum": 50.0}},
+            "unfilled_rate": {"const": {"maximum": 0.5}},
+            "fill_rate": {"const": {"minimum": 0.5}},
+            "turnover_pct": {"const": {"maximum": 100.0}},
+            "total_cost_pct": {"const": {"maximum": 0.16}},
+            "max_name_weight_pct": {"const": {"maximum": 50.0}},
+            "adjustment_coverage_pct": {"const": {"minimum": 100.0}},
+            "no_count_rate": {"const": {"maximum": 0.2}}
+          }
+        },
+        "combination_scheduler": {"const": "accepted_distinct_questions_require_new_forward_batch"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "automatic_policy_switch", "historical_replay_counts_as_forward", "provider_calls_during_settlement"],
+      "properties": {
+        "production": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false},
+        "provider_calls_during_settlement": {"const": false}
+      }
+    }
+  }
+}

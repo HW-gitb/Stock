@@ -1,0 +1,31 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_factor_comparison_v2_decision_receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "question_id", "arm_id", "epoch_id", "experiment_batch_id", "verdict_sha256", "comparison_contract_sha256", "arm_definition_sha256", "status", "decision", "decided_at", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_factor_comparison_v2_decision_receipt"},
+    "schema_version": {"const": "2.0.0"},
+    "program_id": {"const": "a_short_factor_comparison_v2"},
+    "question_id": {"type": "string"},
+    "arm_id": {"type": "string"},
+    "epoch_id": {"type": "string", "pattern": "^epoch-[a-f0-9]{12}$"},
+    "experiment_batch_id": {"type": "string"},
+    "verdict_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "comparison_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "arm_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "status": {"enum": ["pending", "accepted", "rejected", "deferred"]},
+    "decision": {"enum": [null, "accepted", "rejected", "deferred"]},
+    "decided_at": {"type": ["string", "null"], "pattern": "^[0-9]{8}T[0-9]{6}Z$"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "automatic_policy_switch"],
+      "properties": {
+        "production": {"const": false},
+        "automatic_policy_switch": {"const": false}
+      }
+    }
+  }
+}

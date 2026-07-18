@@ -1,0 +1,139 @@
+{
+  "schema_name": "a_short_factor_comparison_v2_program",
+  "schema_version": "2.0.0",
+  "program_id": "a_short_factor_comparison_v2",
+  "lane": "a_short",
+  "comparison_only": true,
+  "baseline": {
+    "policy_id": "a_short_phase5_canonical",
+    "canonical_primitives": [
+      "runners.a_short_phase5_engine.compute_indicators",
+      "runners.a_short_phase5_engine.classify_risk_families",
+      "runners.a_short_phase5_engine.entry_type",
+      "runners.a_short_phase5_engine.exit_and_size"
+    ],
+    "frozen_seams": [
+      "breakout_rule",
+      "entry_anchor_parameters",
+      "iv_policy_parameters",
+      "egs_normalized_input"
+    ]
+  },
+  "questions": [
+    {
+      "question_id": "d1_entry_anchor",
+      "title": "D1 entry anchor",
+      "question_type": "entry_policy",
+      "experiment_batch_id": "batch_20260718_d1_entry_anchor",
+      "multiplicity_family_id": "d1_entry_anchor_baseline_family",
+      "allow_combination": true,
+      "effect_surface": "entry_type",
+      "common_pool_seam": "same_pit_candidate_universe_after_non_iv_immutable_hard_gates",
+      "ordered_arm_ids": ["baseline", "entry_ma_pullback", "entry_range_pullback"],
+      "arms": [
+        {"arm_id": "baseline", "kind": "baseline", "factor_id": null, "effect_surface": "none", "one_change_only": true},
+        {"arm_id": "entry_ma_pullback", "kind": "challenger", "factor_id": "entry_ma_pullback", "effect_surface": "entry_type", "one_change_only": true},
+        {"arm_id": "entry_range_pullback", "kind": "challenger", "factor_id": "entry_range_pullback", "effect_surface": "entry_type", "one_change_only": true}
+      ]
+    },
+    {
+      "question_id": "d3_iv_policy",
+      "title": "D3 IV policy",
+      "question_type": "sizing_policy",
+      "experiment_batch_id": "batch_20260718_d3_iv_policy",
+      "multiplicity_family_id": "d3_iv_policy_baseline_family",
+      "allow_combination": true,
+      "effect_surface": "iv_policy",
+      "common_pool_seam": "same_pit_candidate_universe_after_non_iv_immutable_hard_gates",
+      "ordered_arm_ids": ["baseline", "iv_step_down", "iv_joint_stress"],
+      "arms": [
+        {"arm_id": "baseline", "kind": "baseline", "factor_id": null, "effect_surface": "none", "one_change_only": true},
+        {"arm_id": "iv_step_down", "kind": "challenger", "factor_id": "iv_step_down", "effect_surface": "iv_policy", "one_change_only": true},
+        {"arm_id": "iv_joint_stress", "kind": "challenger", "factor_id": "iv_joint_stress", "effect_surface": "iv_policy", "one_change_only": true}
+      ]
+    }
+  ],
+  "outcome_contract": {
+    "entry": "t_plus_1_open",
+    "exit": "t_plus_n_close",
+    "horizons_trading_days": [5, 10, 20],
+    "primary_horizon_days": 10,
+    "cost_pct": 0.16,
+    "price_basis": "qfq_via_observed_adj_factor",
+    "model_account": "fixed_slots_cash_preserving",
+    "allocation": "equal_slot_no_reallocation"
+  },
+  "adjustment_contract": {
+    "required_source": "provider_observed",
+    "require_observed_flag": true,
+    "reject_forward_fill": true,
+    "reject_default_one": true,
+    "max_adj_factor_ratio_without_event": 2.0,
+    "max_qfq_gap_pct_without_event": 60.0
+  },
+  "risk_evidence": [
+    "max_drawdown_pct",
+    "bad_name_rate",
+    "tail_loss_pct",
+    "loss_distribution_basis",
+    "loss_distribution_count",
+    "cash_drag_pct",
+    "unfilled_rate",
+    "fill_rate",
+    "turnover_pct",
+    "total_cost_pct",
+    "max_name_weight_pct",
+    "adjustment_coverage_pct"
+  ],
+  "epoch_policy": {
+    "orthogonality_checks": ["decision_delta_contract", "immutable_common_pool_contract", "outcome_contract"],
+    "legacy_v1_import": "forbidden",
+    "cross_epoch_method": "random_effects_reml_hartung_knapp"
+  },
+  "formal_adjudication_contract": {
+    "checkpoints_effective_weeks": [12, 24, 36],
+    "alpha_spending": {"24": 0.025, "36": 0.025},
+    "within_question_family": "holm_bonferroni",
+    "finalist_method": "pre_registered_simultaneous_confidence_bounds"
+  },
+  "adjudication_contract": {
+    "primary_horizon_days": 10,
+    "min_effective_weeks_preliminary": 12,
+    "min_effective_weeks_formal": 24,
+    "retire_after_effective_weeks": 36,
+    "min_nonoverlap_blocks": 12,
+    "min_epoch_blocks": 4,
+    "min_distinct_states": 2,
+    "min_state_effective_weeks": 4,
+    "min_economic_advantage_pct": 0.25,
+    "min_block_win_rate": 0.55,
+    "bootstrap_draws": 5000,
+    "permutation_draws": 20000,
+    "confidence_level": 0.95,
+    "simultaneous_confidence_level": 0.95,
+    "max_heterogeneity_i2_pct": 50.0,
+    "max_active_questions": 3,
+    "max_arms_per_question": 4,
+    "risk_limits": {
+      "max_drawdown_pct": {"maximum": 15.0},
+      "bad_name_rate": {"maximum": 0.35},
+      "tail_loss_pct": {"minimum": -10.0},
+      "loss_distribution_count": {"minimum": 1},
+      "cash_drag_pct": {"maximum": 50.0},
+      "unfilled_rate": {"maximum": 0.5},
+      "fill_rate": {"minimum": 0.5},
+      "turnover_pct": {"maximum": 100.0},
+      "total_cost_pct": {"maximum": 0.16},
+      "max_name_weight_pct": {"maximum": 50.0},
+      "adjustment_coverage_pct": {"minimum": 100.0},
+      "no_count_rate": {"maximum": 0.2}
+    },
+    "combination_scheduler": "accepted_distinct_questions_require_new_forward_batch"
+  },
+  "boundary": {
+    "production": false,
+    "automatic_policy_switch": false,
+    "historical_replay_counts_as_forward": false,
+    "provider_calls_during_settlement": false
+  }
+}
