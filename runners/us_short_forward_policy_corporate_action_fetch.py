@@ -158,8 +158,12 @@ def _continuation_url(value: object, *, family: str, api_key: str) -> str | None
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
     parsed = urllib.parse.urlsplit(value)
     endpoint, _ = _ENDPOINTS[family]
+    try:
+        port = parsed.port
+    except ValueError:  # malformed / out-of-range port in a hostile continuation URL
+        raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
     if parsed.scheme != "https" or parsed.hostname != "api.massive.com" or parsed.path != endpoint \
-            or parsed.username is not None or parsed.password is not None or parsed.port not in (None, 443):
+            or parsed.username is not None or parsed.password is not None or port not in (None, 443):
         raise ForwardPolicyCorporateActionFetchError("unsafe continuation")
     query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
     if any(key.lower() in {"ticker", "tickers"} for key, _ in query):
@@ -221,8 +225,13 @@ def _fetch_family(
             "payload": _redact_secret(payload, api_key),
         }
         raw_path = raw_root / "massive" / f"{family}_page_{page_number}.json"
+        try:
+            page_digest = canonical_sha256(wrapper)
+        except ForwardPolicyCorporateActionEvidenceError:  # non-finite (NaN/Infinity) payload — never persist the poisoning page
+            status, reason = "incomplete", "malformed_payload"
+            break
         _write_once(raw_path, wrapper, "raw corporate-action page")
-        raw_digests.append(canonical_sha256(wrapper))
+        raw_digests.append(page_digest)
         if not ok:
             status, reason = "incomplete", "http_error"
             break

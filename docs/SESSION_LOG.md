@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 修复 US-short A1 corporate-action fetch 两处硬化 Optional（用户命修，自审 PASS，提交 master）
+
+- **Verdict/Action**: 修复 producer fetch adapter 两处对畸形 provider 数据的未捕获崩溃（均 fail-closed 硬化）：`_continuation_url` 包裹 `parsed.port` → 坏端口→`unsafe_continuation`；`_fetch_family` 先算 digest 再写 raw → NaN/Inf payload→`malformed_payload` 且不写/不 brick raw。各配一 planted-failure 子测试。改动仅两函数内部、正常路径行为不变。
+- **Required**: 无。`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` 的 Optional (a)+(b) 已闭、(c) viability flag 仍留，单源见 `docs/system_risk_register.md`。
+- **Verify**: `tests.provider.test_us_short_forward_policy_corporate_action_fetch` = 7 OK（含新 `bad_port_continuation`/`non_finite_payload` 子测试，无修复则崩、有修复干净 incomplete_no_count + not_evaluable）。
+- **Pre-Codex self-review**: fast-path 自审——改动局部无签名/正常路径变化；planted-failure 双测试证明修复 load-bearing；模块 7 OK 无回归。
+- **Next**: 线闭（首次真周跑前硬化就位）
+
 ## 2026-07-18 — Claude 硬化极简模板执行：激活 + 扩 pre-commit hook（跨窗机制变更，非 Required）
 
 - **机制**: `git config core.hooksPath .githooks` 激活项目既有 pre-commit hook（此前 hooksPath 指向默认 `.git\hooks`，那道门从未生效——带病 review 条目才会落地后再 amend）；并扩 `.githooks/pre-commit` 在 route-doc guard 后加跑 `tests.test_doc_governance_guard`（含 `test_review_cycle_minimal_template_enforced_above_marker`）。

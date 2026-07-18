@@ -171,6 +171,14 @@ class ForwardPolicyCorporateActionFetchTests(unittest.TestCase):
                 _ok({"results": [], "next_url": "https://api.massive.com/stocks/v1/splits?cursor=two"}),
                 _ok({"results": []}),
             ],
+            "bad_port_continuation": [
+                _ok({"results": [], "next_url": "https://api.massive.com:99999/stocks/v1/splits?cursor=x"}),
+                _ok({"results": []}),
+            ],
+            "non_finite_payload": [
+                _ok({"results": [], "amount": float("nan")}),
+                _ok({"results": []}),
+            ],
         }
         for name, responses in cases.items():
             with self.subTest(name=name):
