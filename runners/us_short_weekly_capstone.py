@@ -98,6 +98,7 @@ class CapstoneContext:
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
+    corporate_action_live_capability: Any = None  # minted only for the real zero-event provider stage
     official_output_root: Path | None = None  # C3: run-scoped staging root; lifecycle remains under private_root
 
     # --- derived artifact paths (all gitignored under state/us_short/, keyed by the canonical dates) ---
@@ -189,6 +190,11 @@ class CapstoneContext:
         # ticker-bearing shadow record.  Tests inject sample_root, while production uses the repository root.
         return self.sample_root / "research" / "results" / "us_short_forward_policy_shadow" / \
             f"forward_policy_summary_{self.decision_date}.json"
+
+    @property
+    def forward_policy_corporate_action_summary_path(self) -> Path:
+        from runners.us_short_forward_policy_corporate_action_fetch import SUMMARY_REL_ROOT
+        return self.sample_root / SUMMARY_REL_ROOT / f"coverage_summary_{self.decision_date}.json"
 
     @property
     def forward_policy_comparison_ledger_path(self) -> Path:
@@ -299,7 +305,7 @@ class Stage:
 
 
 def default_pipeline() -> list[Stage]:
-    """The 13-stage v1 weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
+    """The weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
@@ -340,6 +346,9 @@ def default_pipeline() -> list[Stage]:
               lambda c: [c.forward_shadow_selection_private_path, c.forward_policy_summary_path,
                          c.forward_policy_source_capture_private_path],
               st.run_forward_policy_shadow, best_effort=True),
+        Stage("forward_policy_corporate_actions", True, lambda c: [c.ohlcv_series_packet_path],
+              lambda c: [c.forward_policy_corporate_action_summary_path],
+              st.run_forward_policy_corporate_actions, best_effort=True),
         Stage("forward_policy_maturity", False, lambda c: [c.ohlcv_series_packet_path], lambda c: [],
               st.run_forward_policy_maturity, best_effort=True),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
@@ -995,7 +1004,9 @@ def run_weekly_capstone(
         if preflight_indexes != [7]:
             raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight at stage 8")
         pipeline = full_pipeline[:preflight_indexes[0] + 1]
-    if any(stage.best_effort and stage.name not in {"forward_policy_shadow", "forward_policy_maturity"} for stage in pipeline):
+    if any(stage.best_effort and stage.name not in {
+        "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+    } for stage in pipeline):
         raise WeeklyCapstoneError("only comparison-capture stages may be best_effort")
     if any(stage.reuse_policy not in {"never", "frozen_inputs", "refresh_then_reuse_if_equivalent"}
            for stage in pipeline):
@@ -1135,6 +1146,18 @@ def run_weekly_capstone(
     try:
         for stage in pipeline:
             stage_ctx = ctx
+            if stage.name == "forward_policy_corporate_actions" and production_run:
+                from runners.us_short_forward_policy_corporate_action_fetch import _issue_weekly_capstone_capability
+
+                stage_ctx = replace(
+                    ctx,
+                    corporate_action_live_capability=_issue_weekly_capstone_capability(
+                        decision_date=ctx.decision_date,
+                        generated_at=ctx.generated_at,
+                        sample_root=ctx.sample_root,
+                        private_root=ctx.forward_policy_comparison_ledger_path.parent,
+                    ),
+                )
             if stage.name == "weekly_bridge":
                 receipt = _provider_execution_receipt(ctx, results) if production_run else None
                 stage_ctx = replace(

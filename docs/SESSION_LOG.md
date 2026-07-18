@@ -1,5 +1,19 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 审查 PASS（US-short A1 corporate-action producer 实现刀；a6f2→提交+并入 master）
+
+- **Verdict/Action**: PASS。整读 fail-closed 链正确：producer 只在 complete+零事件出 confirmed；消费端 `us_short_forward_policy_outcome.py:345-353` 独立重跑 paper-eval gate、非 evaluable→no-count、交叉核对 degradation_reason 防伪造 → 事件/不完整/超页 no-count、只 complete 零事件计数。预算硬 cap（pages≤2/≤4 HTTP/无逐票/0 retry）+ capability 仅 production_run + 不可变拒 backfill + 密钥脱敏 + reconciliation_claimed=False 不 overclaim。1 独立对抗 agent + 我探针：无假零事件/泄密/超预算、SSRF 稳。按 PASS 自动提交并入 master。
+- **Required**: 无。`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` → **resolved**（附 2 条非阻断硬化 Optional：fetch `:162` 坏端口 ValueError、`:225` NaN 崩+brick，均 fail-closed；另 incomplete 永久 no-count 复述 viability flag）完整单源见 `docs/system_risk_register.md`。
+- **Verify**: 显式跑 3 新/改模块=88 OK + 全 `test_us_short*.py`=4510 OK（亲验计数非采信转述）；整读 producer/evidence/gate/outcome/capstone 接线 + coverage schema + a6f2 文档诚实性（标 not-resolved、no real provider call、无 overclaim）。review-evidence:not_available。
+- **Next**: Codex：修复（fetch `:162`/`:225` 两硬化 Optional，首次真周跑前，非紧急）
+
+## 2026-07-18 - Codex execute (A1 corporate-action zero-event certificate; one and only cut)
+
+- **Verdict/Action**: 单刀实现完成，当前 Codex 工作树未提交；零事件成熟周可计数，事件/来源漂移/分页未尽/HTTP 失败均 fail-closed no-count，官方 weekly report 不受 comparison-track 失败影响。
+- **Required**: 无实现欠项；`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` 完整实现与待审边界见 `docs/system_risk_register.md`，状态保持 pending Claude independent review/commit，未提前标 resolved。
+- **Verify**: final offline `test_us_short*.py` = 4510 OK / 1 skipped；corporate-action runner+schema focused 9 OK；existing capstone 79 OK；route-doc guards 25 OK；`py_compile` / JSON / `git diff --check` OK；真实 provider call 0。
+- **Next**: Claude Code：审查
+
 ## 2026-07-18 — Claude Code 审查 PASS（A1 corporate-action producer §7 重写：2 刀→1 刀零事件证书）
 
 - **Verdict/Action**: PASS。Codex FAIL 我原 2 刀**成立**——亲验 reconciliation 引擎明写 dividend 未决(`us_short_massive_corporate_action_reconciliation.py:12-13`、`_MEASUREMENT_FAMILIES` 无 dividends) + forward outcome 不加现金股息(grep 空) → 我"reconcile 事件周复权"确 overclaim(漏了 item-16c 该先核实 outcome)。新 1 刀"只放行零事件周"逻辑严密(零事件=零复权风险)、更安全、fail-closed 强、1 刀成立(fetch adapter fixture 可测、真调用运行期)。docs-only、无代码/provider。

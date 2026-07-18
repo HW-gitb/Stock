@@ -349,6 +349,23 @@ def run_forward_policy_shadow(ctx) -> dict[str, Any]:
     return {**shadow, "source_capture": source_capture}
 
 
+def run_forward_policy_corporate_actions(ctx) -> dict[str, Any]:
+    """Fetch comparison-only market-wide split/dividend coverage before H20 maturity."""
+    _require_ctx_authorization(ctx)
+    from runners.us_short_forward_policy_corporate_action_fetch import run_fetch
+
+    return run_fetch(
+        confirm_user_authorization=ctx.confirm_user_authorization,
+        capability=ctx.corporate_action_live_capability,
+        decision_date=ctx.decision_date,
+        generated_at=ctx.generated_at,
+        maturity_ohlcv_path=ctx.ohlcv_series_packet_path,
+        sample_root=ctx.sample_root,
+        private_root=ctx.forward_policy_comparison_ledger_path.parent,
+        summary_path=ctx.forward_policy_corporate_action_summary_path,
+    )
+
+
 def run_forward_policy_maturity(ctx) -> dict[str, Any]:
     """Mature only post-deployment private source captures with the current already-fetched OHLCV packet.
 

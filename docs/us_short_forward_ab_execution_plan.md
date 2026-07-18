@@ -337,7 +337,7 @@ support would require a separately reviewed dividend-inclusive return/reconcilia
   offline mode; and the existing outcome/private-week/source-receipt/no-count chain. Fixed offline A1/capstone/schema and
   route-doc guards are required before Claude review.
 
-**Knife count after this revision: 1 total, 1 remaining.** Provider adapter, pure certificate logic, and weekly wiring
-are one fail-closed functional unit and are fixture-testable together; a real weekly call is runtime operation after
-review, not a second development knife. After this cut, zero-event mature weeks can count; eventful weeks intentionally
-remain whole-week no-count.
+**Knife count after execution: 1 total, 0 remaining implementation knives (Codex 2026-07-18; pending independent
+Claude review/commit).** Provider adapter, pure certificate logic, and weekly wiring landed as one fail-closed functional
+unit. Fixture proof confirms that zero-event mature weeks can count while eventful or uncertain weeks remain whole-week
+no-count. A real authorized weekly call is runtime operation after review, not a second development knife.

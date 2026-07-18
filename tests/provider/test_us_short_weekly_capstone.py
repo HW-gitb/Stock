@@ -27,10 +27,12 @@ from runners.us_short_weekly_capstone import (  # noqa: E402
 _STAGE_NAMES = [
     "universe_fetch", "momentum_fetch", "overextension_producer", "momentum_producer", "sic_fetch", "theme_producer",
     "projection_inputs", "pass2_preflight", "yfinance_grades_fetch", "pass2_fetch", "vix_regime", "forward_policy_shadow",
-    "forward_policy_maturity", "weekly_bridge",
+    "forward_policy_corporate_actions", "forward_policy_maturity", "weekly_bridge",
 ]
 _RECEIPT_STAGE_NAMES = tuple(
-    name for name in _STAGE_NAMES if name not in {"forward_policy_shadow", "forward_policy_maturity", "weekly_bridge"}
+    name for name in _STAGE_NAMES if name not in {
+        "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity", "weekly_bridge",
+    }
 )
 
 
@@ -89,7 +91,7 @@ class CapstoneDryRunTest(unittest.TestCase):
         self.assertEqual([s["name"] for s in plan["stages"]], _STAGE_NAMES)
         self.assertEqual(plan["gated_stages_need_authorization"],
                          ["universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
-                          "vix_regime"])
+                          "vix_regime", "forward_policy_corporate_actions"])
 
     def test_cli_default_private_root_lands_in_gitignored_state_dir(self):
         """--private-root omitted on the CLI defaults to the gitignored state/us_short tree, so the weekly report /
@@ -242,6 +244,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
                     c.forward_shadow_selection_private_path, c.forward_policy_summary_path,
                     c.forward_policy_source_capture_private_path,
                 ],
+                "forward_policy_corporate_actions": lambda c: [],
                 "forward_policy_maturity": lambda c: [],
                 "weekly_bridge": lambda c: [
                     (c.official_output_root or c.private_root) / "weekly_private" / c.decision_date / "weekly_report.md",
@@ -254,7 +257,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
         for name in _STAGE_NAMES:
             outs = outs_for(name)
             gated = name in ("universe_fetch", "momentum_fetch", "sic_fetch", "yfinance_grades_fetch", "pass2_fetch",
-                             "vix_regime")
+                             "vix_regime", "forward_policy_corporate_actions")
 
             def make_run(nm, outfn):
                 def run(ctx):
@@ -292,7 +295,9 @@ class CapstoneFakeChainTest(unittest.TestCase):
                 ins = lambda c: []
             stages.append(Stage(
                 name, gated, ins, outs, make_run(name, outs),
-                best_effort=name in {"forward_policy_shadow", "forward_policy_maturity"},
+                best_effort=name in {
+                    "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+                },
             ))
         return stages
 
@@ -428,6 +433,7 @@ class CapstoneFakeChainTest(unittest.TestCase):
     def test_research_receipt_does_not_require_comparison_capture_stages(self):
         receipt = _research_receipt()
         self.assertNotIn("forward_policy_shadow", receipt.completed_stages)
+        self.assertNotIn("forward_policy_corporate_actions", receipt.completed_stages)
         self.assertNotIn("forward_policy_maturity", receipt.completed_stages)
 
     def test_receipt_v2_preserves_reused_stage_times_without_rewriting_them(self):
@@ -1162,7 +1168,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             {
                 "name": name,
                 "gated": False,
-                "best_effort": name in {"forward_policy_shadow", "forward_policy_maturity"},
+                "best_effort": name in {
+                    "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
+                },
                 "result": provider_results.get(name, {}),
             }
             for name in _STAGE_NAMES[:-1]
