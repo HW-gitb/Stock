@@ -72,7 +72,7 @@ class ForwardPolicySourceCaptureTests(unittest.TestCase):
     def _capture(self):
         return fixture._capture()
 
-    def _source_capture(self):
+    def _source_capture(self, *, market_axis_regimes=None):
         capture = self._capture()
         packet = _packet(
             decision_date="20260713", price_basis_date="20260710",
@@ -86,12 +86,15 @@ class ForwardPolicySourceCaptureTests(unittest.TestCase):
                 ohlcv_packet_sha256="a" * 64,
                 source_context_sha256=capture["source_context_sha256"],
                 overextension_by_ticker={ticker: None for ticker in fixture.COMMON_POOL},
-                market_axis_regimes=dict(fixture._AGGRESSIVE),
+                market_axis_regimes=dict(
+                    fixture._AGGRESSIVE if market_axis_regimes is None else market_axis_regimes
+                ),
                 prior_regime=None,
                 prior_upgrade_count=0,
                 private_output_path=output,
             )
-            self.assertEqual(result["order_snapshot_status"], "ready_for_outcome")
+            expected_status = "ready_for_outcome" if market_axis_regimes is None else "data_degraded_whole_week_no_count"
+            self.assertEqual(result["order_snapshot_status"], expected_status)
             return json.loads(output.read_text(encoding="utf-8"))
 
     def test_freezes_complete_common_pool_under_one_pullback_execution_basis(self):
@@ -154,6 +157,7 @@ class ForwardPolicySourceCaptureTests(unittest.TestCase):
                 source_capture=record,
                 current_ohlcv_packet=maturity,
                 current_ohlcv_packet_sha256="b" * 64,
+                maturity_as_of="20260810",
                 source_run_id="maturity-20260810",
                 adjustment_evidence=None,
                 private_outcome_path=path,
@@ -162,19 +166,98 @@ class ForwardPolicySourceCaptureTests(unittest.TestCase):
             self.assertFalse(no_count["counted_week_eligible"])
             self.assertIsNone(no_count["source_receipt"])
             persisted_no_count = json.loads(path.read_text(encoding="utf-8"))
+            adjustment_evidence = private_fixture._adjustment_evidence()
+            adjustment_evidence["source_refs"] = [{
+                "id": "maturity_ohlcv_packet",
+                "path": "state/us_short/shadow_compare_private/forward_policy_maturity_source.json",
+                "sha256": "b" * 64,
+            }]
+            for section_name in (
+                "adjustment_mode", "split_handling", "dividend_handling", "ex_date_price_consistency",
+            ):
+                adjustment_evidence[section_name]["source_ref_ids"] = ["maturity_ohlcv_packet"]
 
             ready = source.materialize_forward_policy_source_maturity(
                 source_capture=record,
                 current_ohlcv_packet=maturity,
                 current_ohlcv_packet_sha256="c" * 64,
+                maturity_as_of="20260810",
                 source_run_id="maturity-20260817",
-                adjustment_evidence=private_fixture._adjustment_evidence(),
+                adjustment_evidence=adjustment_evidence,
                 private_outcome_path=path,
                 prior_private_week_record=persisted_no_count,
             )
             self.assertEqual(ready["materialization_status"], "ready_for_accumulation")
             self.assertTrue(ready["counted_week_eligible"])
             self.assertEqual(ready["source_receipt"]["source_packet_sha256"], "b" * 64)
+
+    def test_maturity_as_of_blocks_a_future_h20_window_and_makes_the_no_count_observable(self):
+        record = self._source_capture()
+        maturity = _packet(
+            decision_date="20260731", price_basis_date="20260730",
+            tickers=list(fixture.COMMON_POOL), start=date(2026, 7, 13), days=20,
+        )
+        adjustment_evidence = private_fixture._adjustment_evidence()
+        adjustment_evidence["source_refs"] = [{
+            "id": "maturity_ohlcv_packet",
+            "path": "state/us_short/shadow_compare_private/forward_policy_maturity_source.json",
+            "sha256": "d" * 64,
+        }]
+        for section_name in (
+            "adjustment_mode", "split_handling", "dividend_handling", "ex_date_price_consistency",
+        ):
+            adjustment_evidence[section_name]["source_ref_ids"] = ["maturity_ohlcv_packet"]
+        with tempfile.TemporaryDirectory() as tmp:
+            result = source.materialize_forward_policy_source_maturity(
+                source_capture=record,
+                current_ohlcv_packet=maturity,
+                current_ohlcv_packet_sha256="d" * 64,
+                maturity_as_of="20260731",
+                source_run_id="maturity-20260731",
+                adjustment_evidence=adjustment_evidence,
+                private_outcome_path=Path(tmp) / "forward_policy_outcome_20260713.json",
+            )
+        self.assertFalse(result["counted_week_eligible"])
+        self.assertEqual(result["materialization_status"], "data_degraded_whole_week_no_count")
+        self.assertEqual(result["maturity_observability"]["maturity_as_of"], "20260731")
+        self.assertEqual(result["maturity_observability"]["degradation_reason"], "outcome:incomplete_price_series")
+
+    def test_order_snapshot_no_count_does_not_require_a_nonexistent_adjustment_sidecar(self):
+        record = self._source_capture(market_axis_regimes={})
+        maturity = _packet(
+            decision_date="20260810", price_basis_date="20260807",
+            tickers=list(fixture.COMMON_POOL), start=date(2026, 7, 13), days=20,
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            result = source.materialize_forward_policy_source_maturity(
+                source_capture=record,
+                current_ohlcv_packet=maturity,
+                current_ohlcv_packet_sha256="a" * 64,
+                maturity_as_of="20260810",
+                source_run_id="unit-test",
+                adjustment_evidence=None,
+                private_outcome_path=Path(temp_dir) / "forward_policy_outcome_20260713.json",
+            )
+        self.assertFalse(result["counted_week_eligible"])
+        self.assertEqual(result["maturity_observability"]["degradation_reason"], "order_snapshot:new_entry_not_permitted")
+
+    def test_maturity_rejects_an_evaluable_sidecar_that_is_not_bound_to_its_exact_price_packet(self):
+        record = self._source_capture()
+        maturity = _packet(
+            decision_date="20260810", price_basis_date="20260807",
+            tickers=list(fixture.COMMON_POOL), start=date(2026, 7, 13), days=20,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(source.ForwardPolicySourceCaptureError):
+                source.materialize_forward_policy_source_maturity(
+                    source_capture=record,
+                    current_ohlcv_packet=maturity,
+                    current_ohlcv_packet_sha256="e" * 64,
+                    maturity_as_of="20260810",
+                    source_run_id="maturity-20260810",
+                    adjustment_evidence=private_fixture._adjustment_evidence(),
+                    private_outcome_path=Path(tmp) / "forward_policy_outcome_20260713.json",
+                )
 
 
 if __name__ == "__main__":

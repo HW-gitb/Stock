@@ -13,6 +13,7 @@ source layer; this module only fail-closes and preserves their exact injected fo
 """
 from __future__ import annotations
 
+import datetime
 import hashlib
 import json
 import os
@@ -42,9 +43,15 @@ PRIVATE_ROOT = ROOT / "state" / "us_short" / "shadow_compare_private"
 _RECORD_KEYS = frozenset({
     "schema_name", "schema_version", "materialization_status", "capture_binding", "capture",
     "capture_sha256", "order_snapshot", "order_snapshot_packet_sha256", "forward_inputs",
-    "forward_input_snapshot_sha256", "outcome_packet", "outcome_packet_sha256", "degradation_reason", "boundary",
+    "forward_input_snapshot_sha256", "outcome_packet", "outcome_packet_sha256", "degradation_reason",
+    "maturity_observability", "boundary",
 })
-_FORWARD_INPUT_KEYS = frozenset({"daily_bars_by_ticker", "cost_prior", "adjustment_evidence"})
+_FORWARD_INPUT_KEYS = frozenset({
+    "daily_bars_by_ticker", "cost_prior", "adjustment_evidence", "maturity_as_of", "maturity_source_packet_sha256",
+})
+_MATURITY_OBSERVABILITY_KEYS = frozenset({
+    "maturity_as_of", "maturity_source_packet_sha256", "status", "degradation_reason", "adjustment_evidence_sha256",
+})
 BOUNDARY = {
     "track": "comparison_non_production",
     "evidence_level": "forward_policy_private_week_persistence",
@@ -69,6 +76,20 @@ def _canonical_sha256(value: object) -> str:
     except (TypeError, ValueError) as exc:
         raise ForwardPolicyPrivateWeekError("private forward-week value is not finite canonical JSON") from exc
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _strict_yyyymmdd(value: object) -> bool:
+    if not (type(value) is str and value.isascii() and len(value) == 8 and value.isdigit()):
+        return False
+    try:
+        datetime.date(int(value[:4]), int(value[4:6]), int(value[6:8]))
+    except ValueError:
+        return False
+    return True
+
+
+def _sha256(value: object) -> bool:
+    return type(value) is str and len(value) == 64 and all(char in "0123456789abcdef" for char in value)
 
 
 def _load_schema() -> dict:
@@ -141,15 +162,39 @@ def _validate_capture_snapshot_binding(capture: dict, order_snapshot: dict) -> N
         )
 
 
-def _forward_inputs(*, daily_bars_by_ticker: object, cost_prior: object, adjustment_evidence: object) -> dict:
-    if daily_bars_by_ticker is None or cost_prior is None or adjustment_evidence is None:
+def _forward_inputs(
+    *, daily_bars_by_ticker: object, cost_prior: object, adjustment_evidence: object,
+    maturity_as_of: object, maturity_source_packet_sha256: object,
+) -> dict:
+    if daily_bars_by_ticker is None or cost_prior is None or adjustment_evidence is None \
+            or not _strict_yyyymmdd(maturity_as_of) or not _sha256(maturity_source_packet_sha256):
         raise ForwardPolicyPrivateWeekError(
-            "a ready common-order snapshot requires all caller-injected daily bars, cost prior, and adjustment evidence"
+            "a ready common-order snapshot requires bars, cost, adjustment evidence, and a strict maturity source binding"
         )
     return {
         "daily_bars_by_ticker": daily_bars_by_ticker,
         "cost_prior": cost_prior,
         "adjustment_evidence": adjustment_evidence,
+        "maturity_as_of": maturity_as_of,
+        "maturity_source_packet_sha256": maturity_source_packet_sha256,
+    }
+
+
+def _maturity_observability(
+    *, maturity_as_of: object, maturity_source_packet_sha256: object, status: str, degradation_reason: str | None,
+    adjustment_evidence: object | None,
+) -> dict:
+    if not _strict_yyyymmdd(maturity_as_of) or not _sha256(maturity_source_packet_sha256):
+        raise ForwardPolicyPrivateWeekError("maturity observability needs a strict as-of date and source-packet SHA256")
+    if status not in {"ready_for_accumulation", "data_degraded_whole_week_no_count"} \
+            or (status == "ready_for_accumulation") != (degradation_reason is None):
+        raise ForwardPolicyPrivateWeekError("maturity observability status/reason is invalid")
+    return {
+        "maturity_as_of": maturity_as_of,
+        "maturity_source_packet_sha256": maturity_source_packet_sha256,
+        "status": status,
+        "degradation_reason": degradation_reason,
+        "adjustment_evidence_sha256": None if adjustment_evidence is None else _canonical_sha256(adjustment_evidence),
     }
 
 
@@ -174,6 +219,8 @@ def _outcome_for(*, capture: dict, order_snapshot: dict, inputs: dict) -> dict:
             daily_bars_by_ticker=inputs["daily_bars_by_ticker"],
             cost_prior=inputs["cost_prior"],
             adjustment_evidence=inputs["adjustment_evidence"],
+            maturity_as_of=inputs["maturity_as_of"],
+            maturity_source_packet_sha256=inputs["maturity_source_packet_sha256"],
         )
         validate_forward_policy_outcome_packet(outcome)
     except ForwardPolicyOutcomeError as exc:
@@ -189,7 +236,7 @@ def _outcome_for(*, capture: dict, order_snapshot: dict, inputs: dict) -> dict:
 
 def materialize_forward_policy_private_week(
     *, capture: object, order_snapshot: object, daily_bars_by_ticker: object, cost_prior: object,
-    adjustment_evidence: object, private_output_path: object,
+    adjustment_evidence: object, maturity_as_of: object, maturity_source_packet_sha256: object, private_output_path: object,
 ) -> dict:
     """Atomically write one private, source-injected comparison week after all bindings revalidate.
 
@@ -200,6 +247,8 @@ def materialize_forward_policy_private_week(
     frozen_capture = _validated_capture(capture)
     frozen_snapshot = _validated_order_snapshot(order_snapshot)
     _validate_capture_snapshot_binding(frozen_capture, frozen_snapshot)
+    if not _strict_yyyymmdd(maturity_as_of) or not _sha256(maturity_source_packet_sha256):
+        raise ForwardPolicyPrivateWeekError("private forward-week maturity binding is invalid")
     decision_date = frozen_capture["decision_date"]
     path = Path(private_output_path)
     if not path.is_absolute():
@@ -225,6 +274,7 @@ def materialize_forward_policy_private_week(
     else:
         inputs = _forward_inputs(
             daily_bars_by_ticker=daily_bars_by_ticker, cost_prior=cost_prior, adjustment_evidence=adjustment_evidence,
+            maturity_as_of=maturity_as_of, maturity_source_packet_sha256=maturity_source_packet_sha256,
         )
         outcome = _outcome_for(capture=frozen_capture, order_snapshot=frozen_snapshot, inputs=inputs)
         record.update({
@@ -241,6 +291,13 @@ def materialize_forward_policy_private_week(
                 else f"outcome:{outcome['degradation_reason']}"
             ),
         })
+    record["maturity_observability"] = _maturity_observability(
+        maturity_as_of=maturity_as_of,
+        maturity_source_packet_sha256=maturity_source_packet_sha256,
+        status=record["materialization_status"],
+        degradation_reason=record["degradation_reason"],
+        adjustment_evidence=adjustment_evidence,
+    )
     validate_forward_policy_private_week_record(record)
     _atomic_json_write(path, record)
     return {
@@ -269,6 +326,17 @@ def validate_forward_policy_private_week_record(record: object) -> dict:
 
     status = record["materialization_status"]
     inputs, outcome = record["forward_inputs"], record["outcome_packet"]
+    observed = record["maturity_observability"]
+    if not isinstance(observed, dict) or set(observed) != _MATURITY_OBSERVABILITY_KEYS:
+        raise ForwardPolicyPrivateWeekError("private forward-week maturity observability key set drifted")
+    if _maturity_observability(
+        maturity_as_of=observed["maturity_as_of"],
+        maturity_source_packet_sha256=observed["maturity_source_packet_sha256"], status=status,
+        degradation_reason=record["degradation_reason"], adjustment_evidence=(
+            None if inputs is None else inputs.get("adjustment_evidence")
+        ),
+    ) != observed:
+        raise ForwardPolicyPrivateWeekError("private forward-week maturity observability drifted")
     if order_snapshot["order_snapshot_status"] == "data_degraded_whole_week_no_count":
         expected_reason = f"order_snapshot:{order_snapshot['degradation_reason']}"
         if status != "data_degraded_whole_week_no_count" or record["degradation_reason"] != expected_reason \
@@ -292,6 +360,11 @@ def validate_forward_policy_private_week_record(record: object) -> dict:
             or outcome["common_selection_pool"] != order_snapshot["common_selection_pool"] \
             or outcome["common_order_snapshot_sha256"] != order_snapshot["common_order_snapshot_sha256"]:
         raise ForwardPolicyPrivateWeekError("persisted forward outcome is not bound to the frozen common-order snapshot")
+    if outcome["maturity_binding"] != {
+        "maturity_as_of": inputs["maturity_as_of"],
+        "maturity_source_packet_sha256": inputs["maturity_source_packet_sha256"],
+    }:
+        raise ForwardPolicyPrivateWeekError("persisted forward outcome maturity binding drifted from its exact inputs")
     # A self-consistent input digest alone does not prove the stored outcome was calculated from those exact inputs:
     # an editor could replace valid bars/cost/evidence and update only the input digest.  Re-run the pure outcome core
     # and require the entire packet to match before an accumulator can treat this private record as a real week.

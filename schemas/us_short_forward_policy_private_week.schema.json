@@ -7,7 +7,7 @@
   "required": [
     "schema_name", "schema_version", "materialization_status", "capture_binding", "capture",
     "capture_sha256", "order_snapshot", "order_snapshot_packet_sha256", "forward_inputs",
-    "forward_input_snapshot_sha256", "outcome_packet", "outcome_packet_sha256", "degradation_reason", "boundary"
+    "forward_input_snapshot_sha256", "outcome_packet", "outcome_packet_sha256", "degradation_reason", "maturity_observability", "boundary"
   ],
   "properties": {
     "schema_name": {"const": "us_short_forward_policy_private_week"},
@@ -23,6 +23,18 @@
     "outcome_packet": {"type": ["object", "null"]},
     "outcome_packet_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
     "degradation_reason": {"type": ["string", "null"]},
+    "maturity_observability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maturity_as_of", "maturity_source_packet_sha256", "status", "degradation_reason", "adjustment_evidence_sha256"],
+      "properties": {
+        "maturity_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "maturity_source_packet_sha256": {"$ref": "#/$defs/sha256"},
+        "status": {"enum": ["ready_for_accumulation", "data_degraded_whole_week_no_count"]},
+        "degradation_reason": {"type": ["string", "null"]},
+        "adjustment_evidence_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+      }
+    },
     "boundary": {"type": "object"}
   },
   "$defs": {

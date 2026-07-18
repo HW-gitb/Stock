@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": [
     "schema_name", "schema_version", "outcome_status", "capture_binding", "common_selection_pool",
-    "common_order_snapshot_sha256", "common_price_snapshot_sha256", "frozen_cost_prior", "adjustment_evaluability",
+    "common_order_snapshot_sha256", "common_price_snapshot_sha256", "frozen_cost_prior", "adjustment_evaluability", "maturity_binding",
     "entry_session_date", "outcome_as_of", "horizon_session_dates", "degradation_reason", "candidate_outcomes", "boundary"
   ],
   "properties": {
@@ -24,6 +24,7 @@
     "common_price_snapshot_sha256": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
     "frozen_cost_prior": {"$ref": "#/$defs/costPrior"},
     "adjustment_evaluability": {"$ref": "#/$defs/adjustmentEvaluability"},
+    "maturity_binding": {"$ref": "#/$defs/maturityBinding"},
     "entry_session_date": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
     "outcome_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
     "horizon_session_dates": {
@@ -36,7 +37,7 @@
         "h20": {"type": "string", "pattern": "^[0-9]{8}$"}
       }
     },
-    "degradation_reason": {"type": ["string", "null"], "enum": [null, "adjustment_evidence_not_evaluable", "incomplete_price_series"]},
+    "degradation_reason": {"type": ["string", "null"], "enum": [null, "adjustment_evidence_not_evaluable", "incomplete_price_series", "maturity_not_reached_as_of"]},
     "candidate_outcomes": {
       "type": "array",
       "items": {"$ref": "#/$defs/candidateOutcome"}
@@ -110,6 +111,15 @@
           }
         },
         "corporate_action_gate_source": {"const": "offline_adjustment_evidence"}
+      }
+    },
+    "maturityBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["maturity_as_of", "maturity_source_packet_sha256"],
+      "properties": {
+        "maturity_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "maturity_source_packet_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "horizonOutcome": {

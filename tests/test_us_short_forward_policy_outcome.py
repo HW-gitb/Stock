@@ -168,6 +168,8 @@ class ForwardPolicyOutcomeTests(unittest.TestCase):
             "daily_bars_by_ticker": _bars(),
             "cost_prior": dict(COST),
             "adjustment_evidence": _adjustment_evidence(),
+            "maturity_as_of": _session_dates()[-1],
+            "maturity_source_packet_sha256": "c" * 64,
         }
         kwargs.update(overrides)
         return outcome.produce_forward_policy_outcome(**kwargs)
@@ -180,6 +182,7 @@ class ForwardPolicyOutcomeTests(unittest.TestCase):
         self.assertEqual(result["entry_session_date"], "20260713")
         self.assertEqual(len(result["common_price_snapshot_sha256"]), 64)
         self.assertEqual(result["outcome_as_of"], _session_dates()[19])
+        self.assertEqual(result["maturity_binding"]["maturity_as_of"], _session_dates()[19])
         self.assertEqual(result["horizon_session_dates"], {
             "h5": _session_dates()[4], "h10": _session_dates()[9], "h20": _session_dates()[19],
         })
@@ -251,6 +254,11 @@ class ForwardPolicyOutcomeTests(unittest.TestCase):
                 bar["session_date"] = stale_dates[index]
         with self.assertRaises(outcome.ForwardPolicyOutcomeError):
             self._produce(daily_bars_by_ticker=bars)
+
+    def test_future_h20_window_is_whole_week_no_count_at_the_bound_maturity_as_of(self):
+        result = self._produce(maturity_as_of=_session_dates()[9])
+        self.assertEqual(result["outcome_status"], "data_degraded_whole_week_no_count")
+        self.assertEqual(result["degradation_reason"], "maturity_not_reached_as_of")
 
     def test_rejects_pool_order_or_capture_drift_instead_of_silently_reusing_a_policy_specific_input(self):
         extra_order = {ticker: _order() for ticker in COMMON_POOL}

@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 审查 PASS (R-USSHORT-A1-CUT2-MATURITY-ASOF-AND-SIDECAR-BINDING)
+
+- **Verdict/Action**: PASS + 提交。US-short 对比轨第 2/2 刀（maturity 绑定 + 公司行动 sidecar 验证器 + no-count 可观测）。最高危子集（gate 真周是否计入的 fail-closed 证据引擎）→ 起独立对抗 agent。四面全 CLEAN：`maturity_as_of` 机器绑死 OHLCV 包 `decision_clock`（runner 传 canonical `ctx.decision_date`）不可伪造、sidecar 真验证器 fail-closed、track 仍 inert（真 producer 仍 open）、无 provider/selection/ship-gate 触碰、schema 纯加法。cut-2 严格收紧 cut-1 前无成熟上限行为（正是我 cut-1 radar 提的洞的响应）。2 条 non-blocking Optional（provenance-label 松、仅非生产 hand-edit/direct-caller 可达、不影响真周是否计入）。
+- **Required**: 无。`R-USSHORT-A1-CUT2-MATURITY-ASOF-AND-SIDECAR-BINDING` resolved（闭合证据 + 2 Optional 单源见 `docs/system_risk_register.md`）；`R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER` 仍 open（真复权/公司行动 producer 仍 provider-gated）。
+- **Verify**: 亲跑全包 `discover -p test_us_short*.py` = **4501 OK / 0 fail**（366s；Codex 报的 240s"超时"是 cutoff 太短、既有 `tests/provider/` 子树慢、非 cut-2 非真卡）；整读 outcome/private_week/source_capture/capstone_stages + 2 schema；独立 read-only 对抗 agent（a6f2 隔离）四面 CLEAN（maturity 伪造/sidecar 绑定/inert 边界/fail-closed）。review-evidence:not_available。
+- **Next**: Codex：Pass
+
+## 2026-07-18 — Codex execute (US-short A1 v2.1 second and final one-shot cut; current worktree)
+
+- **Verdict/Action**: 第 2/2 刀已完成：公司行动 evidence sidecar 现须绑定同一份成熟 OHLCV 包；`maturity_as_of` 写入 outcome/private-week，并拒绝或 whole-week no-count 掉 H20 未在该绝对时点成熟的窗口；capstone 汇总全局 no-count 原因。
+- **Required**: 无；真实 provider 调用仍未执行。后续跨 epoch REML+HK 仍是另行 reviewed cut，不属本两刀执行拓扑。
+- **Verify**: red-first（缺 `maturity_as_of`）2 errors；修复后固定离线 forward-policy + capstone/schema 186 OK，route-doc guards 60 OK，`py_compile` / JSON parse / `git diff --check` OK。`discover -p test_us_short*.py` 会进入既有 provider smoke 路径并在 240 秒超时，未作为通过证据。
+- **Pre-Codex self-review**: A 覆盖 ready/no-count/order-no-count 与 evidence sidecar；B `rg` 覆盖 maturity 消费者；C 覆盖未来 H20、sidecar SHA 不匹配与 private binding；E 设计/风险条目同步；F compile/JSON/固定包通过。未用子 agent（当前模式禁止委派）。
+- **Next**: Claude Code：审查
+
 ## 2026-07-18 — Claude Code solo 自修 + 自审 PASS (R-USSHORT-A1-V2-1 R-RE 选项 ii) + 提交 merge
 
 - **Verdict/Action**: 用户授权 solo 快修快审（一次性、不入长期分工）。按 register「USER DECISION option (ii)」实现：多段计数窗口 formal 裁决 emit `inconclusive`（单段字节不变）+ 收窄 plan/design/README 契约（不再声称已强制跨段 RE）+ closed-world validator 同步 + planted 正反测试。整条 R-ID（R-A/R-B/O1/O2 + R-RE）RESOLVED。

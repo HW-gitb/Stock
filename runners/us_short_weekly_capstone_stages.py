@@ -367,6 +367,7 @@ def run_forward_policy_maturity(ctx) -> dict[str, Any]:
     captures = sorted(root.glob("forward_policy_source_capture_????????.json"))
     ledger = None
     processed = ready = no_count = already_ready = awaiting_adjustment = 0
+    no_count_by_reason: dict[str, int] = {}
     for capture_path in captures:
         try:
             source_capture = validate_forward_policy_source_capture(
@@ -406,11 +407,14 @@ def run_forward_policy_maturity(ctx) -> dict[str, Any]:
             )
             if adjustment_evidence is None and complete_prior_window:
                 awaiting_adjustment += 1
+                reason = prior_private_week["degradation_reason"]
+                no_count_by_reason[reason] = no_count_by_reason.get(reason, 0) + 1
                 continue
         result = materialize_forward_policy_source_maturity(
             source_capture=source_capture,
             current_ohlcv_packet=current_ohlcv,
             current_ohlcv_packet_sha256=source_digest,
+            maturity_as_of=ctx.decision_date,
             source_run_id=f"capstone-forward-policy-maturity-{ctx.decision_date}",
             adjustment_evidence=adjustment_evidence,
             private_outcome_path=outcome_path,
@@ -419,6 +423,8 @@ def run_forward_policy_maturity(ctx) -> dict[str, Any]:
         processed += 1
         if not result["counted_week_eligible"]:
             no_count += 1
+            reason = result["maturity_observability"]["degradation_reason"]
+            no_count_by_reason[reason] = no_count_by_reason.get(reason, 0) + 1
             continue
         if ledger is None:
             if ctx.forward_policy_comparison_ledger_path.exists():
@@ -438,8 +444,10 @@ def run_forward_policy_maturity(ctx) -> dict[str, Any]:
         ready += 1
     return {
         "source_captures_processed": processed,
+        "maturity_as_of": ctx.decision_date,
         "ready_weeks_appended_or_confirmed": ready,
         "whole_week_no_count": no_count,
+        "whole_week_no_count_by_reason": dict(sorted(no_count_by_reason.items())),
         "already_ready_weeks_untouched": already_ready,
         "awaiting_adjustment_evidence_untouched": awaiting_adjustment,
     }

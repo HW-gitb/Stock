@@ -135,6 +135,8 @@ def _private_record(*, selected_count: int = 15, no_count: bool = False, incompl
             daily_bars_by_ticker=None if no_count else bars,
             cost_prior=None if no_count else dict(COST),
             adjustment_evidence=None if no_count else _adjustment_evidence(),
+            maturity_as_of=_session_dates()[-1],
+            maturity_source_packet_sha256="c" * 64,
             private_output_path=Path(tmp) / "forward_policy_outcome_20260713.json",
         )
         return json.loads(Path(result["private_record_path"]).read_text(encoding="utf-8"))

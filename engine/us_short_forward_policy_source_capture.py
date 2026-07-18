@@ -38,6 +38,7 @@ from engine.us_short_forward_policy_shadow_stage import (
     ForwardPolicyShadowStageError,
     validate_forward_shadow_selection_record,
 )
+from engine.us_short_paper_eval_gate import PaperEvalGateError, paper_performance_evaluability_from_offline_evidence
 from engine.us_short_private_paths import PrivatePathError, reject_nonprivate_output_path
 
 
@@ -107,7 +108,10 @@ def _sha(value: object) -> bool:
 
 
 def _finite_positive(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0.0
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0.0
+    except OverflowError:
+        return False
 
 
 def _iso_date(compact: str) -> str:
@@ -366,7 +370,18 @@ def unconfirmed_adjustment_evidence(*, decision_date: str, source_packet_sha256:
     }
 
 
-def _maturity_daily_bars(*, source_capture: dict, current_ohlcv_packet: dict) -> dict[str, list[dict]]:
+def _validate_maturity_packet_clock(*, current_ohlcv_packet: dict, maturity_as_of: object) -> str:
+    if not _strict_date(maturity_as_of):
+        raise ForwardPolicySourceCaptureError("maturity_as_of must be a strict real YYYYMMDD")
+    clock = current_ohlcv_packet.get("decision_clock")
+    if not isinstance(clock, dict) or clock.get("expected_decision_date") != maturity_as_of:
+        raise ForwardPolicySourceCaptureError("maturity_as_of must equal the current packet's exact decision clock")
+    return maturity_as_of
+
+
+def _maturity_daily_bars(
+    *, source_capture: dict, current_ohlcv_packet: dict, maturity_as_of: str,
+) -> dict[str, list[dict]]:
     entry_iso = _iso_date(source_capture["capture"]["decision_date"])
     series_by_ticker = current_ohlcv_packet["series_by_ticker"]
     out: dict[str, list[dict]] = {}
@@ -380,7 +395,8 @@ def _maturity_daily_bars(*, source_capture: dict, current_ohlcv_packet: dict) ->
             if not _strict_iso_date(point_date) or (prior_date is not None and point_date <= prior_date):
                 raise ForwardPolicySourceCaptureError(f"{ticker} maturity OHLCV dates are malformed or unordered")
             prior_date = point_date
-        points = [point for point in series["points"] if point["date"] >= entry_iso][:20]
+        maturity_iso = f"{maturity_as_of[:4]}-{maturity_as_of[4:6]}-{maturity_as_of[6:]}"
+        points = [point for point in series["points"] if entry_iso <= point["date"] <= maturity_iso][:20]
         bars = []
         for index, point in enumerate(points, start=1):
             values = {key: point.get(key) for key in ("open", "high", "low", "close")}
@@ -391,6 +407,41 @@ def _maturity_daily_bars(*, source_capture: dict, current_ohlcv_packet: dict) ->
             bars.append({"session_index": index, "session_date": point["date"].replace("-", ""), **values})
         out[ticker] = bars
     return out
+
+
+def _validate_maturity_adjustment_evidence(
+    *, evidence: object, capture: dict, maturity_as_of: str, source_packet_sha256: str,
+) -> dict:
+    """Bind the existing adjustment-evidence sidecar to this exact maturity packet and window."""
+    if not isinstance(evidence, dict) or evidence.get("decision_date") != capture["decision_date"]:
+        raise ForwardPolicySourceCaptureError("maturity adjustment-evidence sidecar must bind the frozen decision date")
+    try:
+        paper_performance_evaluability_from_offline_evidence(evidence)
+    except PaperEvalGateError as exc:
+        raise ForwardPolicySourceCaptureError("maturity adjustment-evidence sidecar is invalid") from exc
+    refs = evidence.get("source_refs")
+    binding = next((
+        item for item in refs if isinstance(item, dict) and item.get("id") == "maturity_ohlcv_packet"
+    ), None) if isinstance(refs, list) else None
+    if binding != {
+        "id": "maturity_ohlcv_packet",
+        "path": "state/us_short/shadow_compare_private/forward_policy_maturity_source.json",
+        "sha256": source_packet_sha256,
+    }:
+        raise ForwardPolicySourceCaptureError("maturity adjustment-evidence sidecar is not bound to the exact price packet")
+    pool = set(capture["common_selection_pool"])
+    maturity_iso = f"{maturity_as_of[:4]}-{maturity_as_of[4:6]}-{maturity_as_of[6:]}"
+    for section_name in ("adjustment_mode", "split_handling", "dividend_handling", "ex_date_price_consistency"):
+        section = evidence.get(section_name)
+        if not isinstance(section, dict) or "maturity_ohlcv_packet" not in section.get("source_ref_ids", []):
+            raise ForwardPolicySourceCaptureError("maturity adjustment-evidence sidecar must bind every gate to the price packet")
+        for event in section.get("event_refs", []):
+            if not isinstance(event, dict) or event.get("ticker") not in pool \
+                    or not _strict_iso_date(event.get("ex_date")) or event["ex_date"] > maturity_iso:
+                raise ForwardPolicySourceCaptureError("maturity corporate-action event is outside the exact common-pool/as-of window")
+            if "maturity_ohlcv_packet" not in event.get("source_ref_ids", []):
+                raise ForwardPolicySourceCaptureError("maturity corporate-action event is not bound to the price packet")
+    return evidence
 
 
 def _reusable_prior_no_count_inputs(*, source_capture: dict, prior_private_week_record: object) -> tuple[dict, dict, str] | None:
@@ -442,6 +493,7 @@ def materialize_forward_policy_source_maturity(
     source_capture: object,
     current_ohlcv_packet: object,
     current_ohlcv_packet_sha256: str,
+    maturity_as_of: str,
     source_run_id: str,
     adjustment_evidence: object | None,
     private_outcome_path: object,
@@ -458,6 +510,9 @@ def materialize_forward_policy_source_maturity(
     if not (_sha(current_ohlcv_packet_sha256) and isinstance(source_run_id, str) and source_run_id):
         raise ForwardPolicySourceCaptureError("maturity needs a current source digest and non-blank run id")
     packet = _validated_ohlcv_packet(current_ohlcv_packet)
+    maturity_as_of = _validate_maturity_packet_clock(
+        current_ohlcv_packet=packet, maturity_as_of=maturity_as_of,
+    )
     capture = frozen_source["capture"]
     path = Path(private_outcome_path)
     if not path.is_absolute():
@@ -472,13 +527,20 @@ def materialize_forward_policy_source_maturity(
         daily_bars, cost_prior, receipt_source_sha256 = prior_inputs
         evidence = adjustment_evidence
     else:
-        daily_bars = _maturity_daily_bars(source_capture=frozen_source, current_ohlcv_packet=packet)
+        daily_bars = _maturity_daily_bars(
+            source_capture=frozen_source, current_ohlcv_packet=packet, maturity_as_of=maturity_as_of,
+        )
         cost_prior = frozen_source["cost_prior"]
         evidence = adjustment_evidence if adjustment_evidence is not None else unconfirmed_adjustment_evidence(
             decision_date=capture["decision_date"],
             source_packet_sha256=current_ohlcv_packet_sha256,
         )
         receipt_source_sha256 = current_ohlcv_packet_sha256
+    if evidence is not None:
+        evidence = _validate_maturity_adjustment_evidence(
+            evidence=evidence, capture=capture, maturity_as_of=maturity_as_of,
+            source_packet_sha256=receipt_source_sha256,
+        )
     try:
         result = materialize_forward_policy_private_week(
             capture=capture,
@@ -486,6 +548,8 @@ def materialize_forward_policy_source_maturity(
             daily_bars_by_ticker=daily_bars,
             cost_prior=cost_prior,
             adjustment_evidence=evidence,
+            maturity_as_of=maturity_as_of,
+            maturity_source_packet_sha256=receipt_source_sha256,
             private_output_path=path,
         )
     except ForwardPolicyPrivateWeekError as exc:
@@ -504,4 +568,5 @@ def materialize_forward_policy_source_maturity(
         **result,
         "source_receipt": receipt,
         "counted_week_eligible": receipt is not None,
+        "maturity_observability": private_week["maturity_observability"],
     }

@@ -60,12 +60,14 @@ BOUNDARY = {
 _PACKET_KEYS = frozenset({
     "schema_name", "schema_version", "outcome_status", "capture_binding", "common_selection_pool",
     "common_order_snapshot_sha256", "common_price_snapshot_sha256", "frozen_cost_prior", "adjustment_evaluability",
-    "entry_session_date", "outcome_as_of", "horizon_session_dates", "degradation_reason", "candidate_outcomes", "boundary",
+    "maturity_binding", "entry_session_date", "outcome_as_of", "horizon_session_dates", "degradation_reason",
+    "candidate_outcomes", "boundary",
 })
 _HORIZON_RESULT_KEYS = frozenset({
     "outcome", "model_paper_status", "realized", "gross_return", "total_cost_fraction",
     "candidate_after_cost_net_return", "unfilled_cash",
 })
+_MATURITY_BINDING_KEYS = frozenset({"maturity_as_of", "maturity_source_packet_sha256"})
 
 
 class ForwardPolicyOutcomeError(ValueError):
@@ -97,6 +99,17 @@ def _finite(value: object) -> bool:
 
 def _finite_positive(value: object) -> bool:
     return _finite(value) and value > 0.0
+
+
+def _maturity_binding(*, maturity_as_of: object, maturity_source_packet_sha256: object) -> dict:
+    if not _strict_yyyymmdd(maturity_as_of) \
+            or not (type(maturity_source_packet_sha256) is str and len(maturity_source_packet_sha256) == 64
+                    and all(char in "0123456789abcdef" for char in maturity_source_packet_sha256)):
+        raise ForwardPolicyOutcomeError("maturity binding must carry a strict as-of date and source-packet SHA256")
+    return {
+        "maturity_as_of": maturity_as_of,
+        "maturity_source_packet_sha256": maturity_source_packet_sha256,
+    }
 
 
 def _load_schema() -> dict:
@@ -175,7 +188,9 @@ def _validate_bar_shape(bar: object, *, ticker: str, expected_index: int) -> tup
     return session_date, dict(bar)
 
 
-def _complete_common_bars(daily_bars_by_ticker: object, *, common_pool: list[str]) -> tuple[dict | None, dict | None]:
+def _complete_common_bars(
+    daily_bars_by_ticker: object, *, common_pool: list[str], maturity_as_of: str,
+) -> tuple[dict | None, dict | None, str | None]:
     """Return normalized bars/date markers, or ``(None, None)`` only for genuine incomplete series.
 
     A caller may have no row or fewer than 20 rows for a pool member when the forward window has not yet completed.
@@ -188,7 +203,7 @@ def _complete_common_bars(daily_bars_by_ticker: object, *, common_pool: list[str
     if extra:
         raise ForwardPolicyOutcomeError("daily_bars_by_ticker contains a ticker outside the Pass2-clean common pool")
     if any(ticker not in daily_bars_by_ticker for ticker in common_pool):
-        return None, None
+        return None, None, "incomplete_price_series"
 
     normalized, reference_dates = {}, None
     for ticker in common_pool:
@@ -196,12 +211,14 @@ def _complete_common_bars(daily_bars_by_ticker: object, *, common_pool: list[str
         if not isinstance(series, list):
             raise ForwardPolicyOutcomeError(f"{ticker} daily bar series must be a list")
         if len(series) < HORIZONS[-1][1]:
-            return None, None
+            return None, None, "incomplete_price_series"
         if len(series) != HORIZONS[-1][1]:
             raise ForwardPolicyOutcomeError("daily bar series must contain exactly the frozen H20 window, not a look-ahead tail")
         dates, bars = [], []
         for index, bar in enumerate(series, start=1):
             session_date, normalized_bar = _validate_bar_shape(bar, ticker=ticker, expected_index=index)
+            if session_date > maturity_as_of:
+                return None, None, "maturity_not_reached_as_of"
             dates.append(session_date)
             bars.append(normalized_bar)
         if any(later <= earlier for earlier, later in zip(dates, dates[1:])):
@@ -216,7 +233,7 @@ def _complete_common_bars(daily_bars_by_ticker: object, *, common_pool: list[str
         "h5": reference_dates[4],
         "h10": reference_dates[9],
         "h20": reference_dates[19],
-    }
+    }, None
 
 
 def _horizon_fill_result(order: dict, bars: list[dict], *, horizon: int) -> dict:
@@ -272,7 +289,9 @@ def _horizon_outcome(order: dict, bars: list[dict], *, horizon: int, cost_prior:
     }
 
 
-def _base_packet(*, capture: dict, common_pool: list[str], orders: dict, cost_prior: dict, adjustment: dict) -> dict:
+def _base_packet(
+    *, capture: dict, common_pool: list[str], orders: dict, cost_prior: dict, adjustment: dict, maturity: dict,
+) -> dict:
     return {
         "schema_name": "us_short_forward_policy_outcome_packet",
         "schema_version": "1.0.0",
@@ -282,15 +301,17 @@ def _base_packet(*, capture: dict, common_pool: list[str], orders: dict, cost_pr
         "common_price_snapshot_sha256": None,
         "frozen_cost_prior": dict(cost_prior),
         "adjustment_evaluability": adjustment,
+        "maturity_binding": maturity,
         "entry_session_date": None,
         "boundary": dict(BOUNDARY),
     }
 
 
 def _degraded_packet(*, capture: dict, common_pool: list[str], orders: dict, cost_prior: dict,
-                     adjustment: dict, reason: str) -> dict:
+                     adjustment: dict, maturity: dict, reason: str) -> dict:
     packet = _base_packet(
         capture=capture, common_pool=common_pool, orders=orders, cost_prior=cost_prior, adjustment=adjustment,
+        maturity=maturity,
     )
     packet.update({
         "outcome_status": "data_degraded_whole_week_no_count",
@@ -304,7 +325,8 @@ def _degraded_packet(*, capture: dict, common_pool: list[str], orders: dict, cos
 
 
 def produce_forward_policy_outcome(*, capture: object, orders_by_ticker: object, daily_bars_by_ticker: object,
-                                   cost_prior: object, adjustment_evidence: object) -> dict:
+                                   cost_prior: object, adjustment_evidence: object, maturity_as_of: object,
+                                   maturity_source_packet_sha256: object) -> dict:
     """Produce one private comparison outcome packet from one frozen Cut-A capture.
 
     ``orders_by_ticker`` and ``daily_bars_by_ticker`` must span exactly the capture's Pass2-clean common pool;
@@ -316,6 +338,9 @@ def produce_forward_policy_outcome(*, capture: object, orders_by_ticker: object,
     frozen_capture, common_pool = _validated_capture(capture)
     frozen_orders = _validate_orders(orders_by_ticker, common_pool=common_pool)
     frozen_cost, total_cost = _validate_cost_prior(cost_prior)
+    maturity = _maturity_binding(
+        maturity_as_of=maturity_as_of, maturity_source_packet_sha256=maturity_source_packet_sha256,
+    )
     try:
         adjustment = paper_performance_evaluability_from_offline_evidence(adjustment_evidence)
     except PaperEvalGateError as exc:
@@ -325,14 +350,16 @@ def produce_forward_policy_outcome(*, capture: object, orders_by_ticker: object,
     if adjustment["status"] != "evaluable":
         return _degraded_packet(
             capture=frozen_capture, common_pool=common_pool, orders=frozen_orders, cost_prior=frozen_cost,
-            adjustment=adjustment, reason="adjustment_evidence_not_evaluable",
+            adjustment=adjustment, maturity=maturity, reason="adjustment_evidence_not_evaluable",
         )
 
-    bars, horizon_dates = _complete_common_bars(daily_bars_by_ticker, common_pool=common_pool)
+    bars, horizon_dates, price_degradation_reason = _complete_common_bars(
+        daily_bars_by_ticker, common_pool=common_pool, maturity_as_of=maturity["maturity_as_of"],
+    )
     if bars is None:
         return _degraded_packet(
             capture=frozen_capture, common_pool=common_pool, orders=frozen_orders, cost_prior=frozen_cost,
-            adjustment=adjustment, reason="incomplete_price_series",
+            adjustment=adjustment, maturity=maturity, reason=price_degradation_reason,
         )
 
     candidate_outcomes = []
@@ -353,7 +380,7 @@ def produce_forward_policy_outcome(*, capture: object, orders_by_ticker: object,
 
     packet = _base_packet(
         capture=frozen_capture, common_pool=common_pool, orders=frozen_orders, cost_prior=frozen_cost,
-        adjustment=adjustment,
+        adjustment=adjustment, maturity=maturity,
     )
     packet.update({
         "outcome_status": "ready_for_comparison",
@@ -419,6 +446,10 @@ def validate_forward_policy_outcome_packet(packet: object) -> dict:
     if adjustment["full_size_ship_gate_allowed"] is not False \
             or adjustment["ship_gate_evidence_level"] != "paper_not_live_normalized":
         raise ForwardPolicyOutcomeError("adjustment evaluability cannot authorize the full-size ship gate")
+    maturity = packet["maturity_binding"]
+    if not isinstance(maturity, dict) or set(maturity) != _MATURITY_BINDING_KEYS:
+        raise ForwardPolicyOutcomeError("outcome maturity binding must use its exact closed-world key set")
+    maturity = _maturity_binding(**maturity)
 
     status = packet["outcome_status"]
     if status == "data_degraded_whole_week_no_count":
@@ -428,7 +459,8 @@ def validate_forward_policy_outcome_packet(packet: object) -> dict:
             raise ForwardPolicyOutcomeError("whole-week no-count packet must not carry a partial outcome value")
         if packet["degradation_reason"] == "adjustment_evidence_not_evaluable" and adjustment["status"] != "not_evaluable":
             raise ForwardPolicyOutcomeError("adjustment no-count packet requires a non-evaluable corporate-action gate")
-        if packet["degradation_reason"] == "incomplete_price_series" and adjustment["status"] != "evaluable":
+        if packet["degradation_reason"] in {"incomplete_price_series", "maturity_not_reached_as_of"} \
+                and adjustment["status"] != "evaluable":
             raise ForwardPolicyOutcomeError("incomplete-price no-count packet requires a separately evaluable adjustment gate")
         return packet
 
@@ -441,7 +473,8 @@ def validate_forward_policy_outcome_packet(packet: object) -> dict:
     if not _strict_yyyymmdd(entry_date) or entry_date < binding["decision_date"]:
         raise ForwardPolicyOutcomeError("entry session must be the decision session or a later first regular session")
     if not (binding["decision_date"] < dates["h5"] < dates["h10"] < dates["h20"]
-            and entry_date < dates["h5"] and packet["outcome_as_of"] == dates["h20"]):
+            and entry_date < dates["h5"] and packet["outcome_as_of"] == dates["h20"]
+            and dates["h20"] <= maturity["maturity_as_of"]):
         raise ForwardPolicyOutcomeError("outcome packet must close its finite window at the H20 session")
     price_digest = packet["common_price_snapshot_sha256"]
     if not isinstance(price_digest, str) or len(price_digest) != 64:

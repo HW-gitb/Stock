@@ -141,6 +141,7 @@ class ForwardPolicyPrivateWeekTests(unittest.TestCase):
         kwargs = {
             "capture": _capture(), "order_snapshot": _order_snapshot(), "daily_bars_by_ticker": _bars(),
             "cost_prior": dict(COST), "adjustment_evidence": _adjustment_evidence(),
+            "maturity_as_of": _session_dates()[-1], "maturity_source_packet_sha256": "c" * 64,
             "private_output_path": root / "forward_policy_outcome_20260713.json",
         }
         kwargs.update(overrides)
@@ -158,6 +159,7 @@ class ForwardPolicyPrivateWeekTests(unittest.TestCase):
         self.assertEqual(record["outcome_packet"]["common_order_snapshot_sha256"], _order_snapshot()["common_order_snapshot_sha256"])
         self.assertEqual(record["outcome_packet"]["common_selection_pool"], COMMON_POOL)
         self.assertEqual(record["outcome_packet"]["outcome_status"], "ready_for_comparison")
+        self.assertEqual(record["maturity_observability"]["maturity_as_of"], _session_dates()[-1])
         self.assertTrue(record["boundary"]["writes_private_forward_packet"])
         self.assertFalse(record["boundary"]["writes_model_paper_ledger"])
 
