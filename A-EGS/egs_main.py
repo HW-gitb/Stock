@@ -112,6 +112,7 @@ from engine.data.analysis_input_contract import (
     validate_analysis_input_contract,
     validate_json_schema,
 )
+from engine.a_short_observability import safe_exception_summary
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
@@ -1237,6 +1238,14 @@ def _health_issue(check, message, **metrics):
     return issue
 
 
+def _comparison_sidecar_warning(sidecar_name, exc):
+    return _health_issue(
+        f"comparison_sidecar_{sidecar_name}",
+        f"comparison-only {sidecar_name} sidecar failed: {safe_exception_summary(exc)}; "
+        "formal selection unchanged",
+    )
+
+
 def _missing_or_nonpositive_count(df, column):
     if df is None or df.empty:
         return None
@@ -1320,7 +1329,8 @@ def build_watch_pool_reconciliation(actual_count, eligible_count, target_count):
 def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                       analysis_path, snapshot_path, candidates_path,
                       tier1_csv_path, full_csv_path, rank_reconciliation=None,
-                      rank_reconciliation_path=None, watch_eligible_count=None):
+                      rank_reconciliation_path=None, watch_eligible_count=None,
+                      sidecar_warnings=None):
     errors = []
     warnings_ = []
     watch_count = int(len(watch_df)) if watch_df is not None else 0
@@ -1496,6 +1506,7 @@ def build_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
             low_count=low_quality_count,
         ))
 
+    warnings_.extend(sidecar_warnings or [])
     status = "error" if errors else ("warn" if warnings_ else "ok")
     return {
         "schema_name": "data_health",
@@ -1597,7 +1608,8 @@ def validate_data_health_consistency(health):
 def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td,
                        analysis_path, snapshot_path, candidates_path,
                        tier1_csv_path, full_csv_path, rank_reconciliation=None,
-                       rank_reconciliation_path=None, watch_eligible_count=None):
+                       rank_reconciliation_path=None, watch_eligible_count=None,
+                       sidecar_warnings=None):
     health = build_data_health(
         df_full=df_full,
         watch_df=watch_df,
@@ -1612,6 +1624,7 @@ def export_data_health(df_full, watch_df, tier1_final, analysis_input, latest_td
         rank_reconciliation=rank_reconciliation,
         rank_reconciliation_path=rank_reconciliation_path,
         watch_eligible_count=watch_eligible_count,
+        sidecar_warnings=sidecar_warnings,
     )
     validate_json_schema(health, schema_path=DATA_HEALTH_SCHEMA_PATH, label=f"data_health export {latest_td}")
     validate_data_health_consistency(health)
@@ -4351,12 +4364,15 @@ def run_egs(backtest_mode=False, output_root=None):
     # 从**本次 run 的 output_root 派生**,落到与 analysis_input 同一个 run 桶
     # <output_root>/<as_of>/(见 engine/a_short_run_paths;与 export_analysis_input 落点一致)。
     # 失败绝不影响生产 run。前向收益记分牌 = register forward-item 后续件。
+    comparison_sidecar_warnings = []
     try:
         _wc_path = weight_comparison_path(TODAY, output_root=output_root)
         write_weight_comparison(df_full, _wc_path, as_of=TODAY)
         log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
     except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
-        log.warning(f"egs 权重 variant 对比 diff 跳过：{type(_wc_exc).__name__}")
+        _wc_warning = _comparison_sidecar_warning("weight_variant", _wc_exc)
+        comparison_sidecar_warnings.append(_wc_warning)
+        log.warning(_wc_warning["message"])
 
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
@@ -4469,7 +4485,9 @@ def run_egs(backtest_mode=False, output_root=None):
         else:
             log.info("赛道热度 overlay 跳过:无 L3 快照(l3_mode=neutralize 或无快照),不编造概念")
     except Exception as _ov_exc:  # noqa: BLE001 (non-production side output must never break the run)
-        log.warning(f"赛道热度 overlay 跳过：{type(_ov_exc).__name__}")
+        _ov_warning = _comparison_sidecar_warning("theme_overlay", _ov_exc)
+        comparison_sidecar_warnings.append(_ov_warning)
+        log.warning(_ov_warning["message"])
 
     watch_df["entry_flag"]  = watch_df.apply(_entry_flag, axis=1)
     if "ts_code" in watch_df.columns:
@@ -4591,6 +4609,7 @@ def run_egs(backtest_mode=False, output_root=None):
             rank_reconciliation=rank_reconciliation,
             rank_reconciliation_path=rank_reconciliation_path,
             watch_eligible_count=watch_eligible_count,
+            sidecar_warnings=comparison_sidecar_warnings,
         )
         log_data_health_summary(health_path, health)
         marker_path, _manifest = publish_egs_run_manifest(

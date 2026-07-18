@@ -53,6 +53,7 @@ from engine.a_short_regulatory_advisory import (
     validate_confirmation_document,
 )
 from engine.a_short_tushare_client import is_retryable_tushare_error
+from engine.a_short_observability import safe_exception_summary  # noqa: E402
 
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
@@ -3177,7 +3178,7 @@ def _factor_comparison_realized_regime(pro, decision_date: str, price_data_throu
             return unavailable_realized_regime(governance, "index_after_price_clock")
         return build_realized_regime(rows, decision_date=decision_date, governance=governance)
     except Exception as exc:
-        return unavailable_realized_regime(governance, f"index_provider_error:{type(exc).__name__}")
+        return unavailable_realized_regime(governance, f"index_provider_error:{safe_exception_summary(exc)}")
 
 
 def _fetch_dividends(pro, ts_code: str):
@@ -3317,7 +3318,7 @@ def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None, c
             by.update({c["ts_code"]: c["official_structured"] for c in summary["candidates"]})
         return lambda ts: by.get(str(ts))
     except Exception as exc:
-        print(f"[weekly] 语义 cninfo 取数失败({type(exc).__name__});语义层全 unknown(advisory,不阻断周报)")
+        print(f"[weekly] 语义 cninfo 取数失败({safe_exception_summary(exc)});语义层全 unknown(advisory,不阻断周报)")
         return None
 
 
@@ -3344,7 +3345,7 @@ def _build_deepseek_web_llm_provider(codes, names_by_code, as_of, lookback_days=
         items_by = {str(r["ts_code"]): _em_sources(r) for r in raws
                     if isinstance(r, dict) and r.get("ts_code")}
     except Exception as exc:
-        print(f"[weekly] 语义 web/LLM em 抓取失败({type(exc).__name__});web 层全 unknown(advisory,不阻断)")
+        print(f"[weekly] 语义 web/LLM em 抓取失败({safe_exception_summary(exc)});web 层全 unknown(advisory,不阻断)")
         return None
     cache = {}
     def provider(code):

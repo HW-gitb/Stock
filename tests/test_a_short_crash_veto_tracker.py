@@ -1,6 +1,8 @@
 import json
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest import mock
 
@@ -13,6 +15,7 @@ from runners.a_short_crash_veto_tracker import (
     detect_crash_codes,
     evaluate_cohort,
     latest_settled_trade_date,
+    main,
     match_controls,
     run_update,
 )
@@ -116,6 +119,20 @@ class CrashVetoTrackerTest(unittest.TestCase):
         self.assertIn("a_short_crash_veto_tracker.py update", script)
         self.assertIn("--crash-veto-summary", script)
         self.assertIn("formal selection/M6.7 continues unchanged", script)
+
+    def test_cli_failure_keeps_diagnostic_message_but_redacts_provider_secret(self):
+        stream = StringIO()
+        with mock.patch("runners.a_short_crash_veto_tracker.run_update", side_effect=RuntimeError(
+            "provider denied https://api.example.test/?token=top-secret TUSHARE_TOKEN=top-secret"
+        )), redirect_stdout(stream):
+            rc = main(["update", "--as-of", "20260714"])
+
+        output = stream.getvalue()
+        self.assertEqual(rc, 2)
+        self.assertIn("RuntimeError: provider denied", output)
+        self.assertNotIn("https://", output)
+        self.assertNotIn("top-secret", output)
+        self.assertNotIn("details suppressed", output)
 
     def test_cohort_is_frozen_before_provider_refresh_failure(self):
         cohort = {"cohort_id": "crash-veto-" + "3" * 20, "as_of": "20260714",

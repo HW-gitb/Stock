@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 审查 PASS (R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT + R-ASHORT-SIDECAR-ERROR-OBSERVABILITY)
+
+- **Verdict/Action**: PASS。Codex 修问题 1（factor_comparison 直跑 import）+ 问题 3（sidecar 可观测性）思路与代码均正确、非回归、secret-safe、未改选股/评分/veto/sizing/provider；并按用户指令一并加修 Optional（`safe_exception_summary` 加至 weekly_pipeline 三处 advisory handler + `str(exc)` 兜底）。详见 register 两条。
+- **Required**: 无。
+- **Verify**: 亲跑 3c49——33 OK + regime/m67/holdings 73 OK；factor_comparison 裸子进程（清 PYTHONPATH）exit 0；env-value 与 str-raises 脱敏探针过；data_health `issue` schema 容任意 check、`warn` 不阻断 publish（仅 error，egs_main:1643）；phase6 全包 4 失败经 master 基线复现=预存无关；无测试 pin 改动串。
+- **Next**: 已提交并 merge 到 master（未 push）。
+
+## 2026-07-18 — Codex repair (A-short full runtest desktop issues 1 and 3)
+
+- **Verdict/Action**: repaired the direct factor-comparison runner import seam and comparison-sidecar diagnostics; no production selection behavior changed.
+- **Required**: `R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT` and `R-ASHORT-SIDECAR-ERROR-OBSERVABILITY` are implemented and await independent review; full detail and boundary live in `docs/system_risk_register.md`.
+- **Verify**: targeted runner/observability/crash-veto/health package 33 OK; phase6 EGS package 66 OK; broad `discover -s tests -p test_a_short*.py` timed out at 600s without a final result and is not PASS evidence.
+- **Pre-Codex self-review**: A N/A (no enumerable contract set); B scope grep found zero live `details suppressed` or named type-only sidecar handlers; C reverse tests preserve benign `NameError` detail while redacting URL/token values and keep sidecar failure non-blocking; D N/A; E only register + session live-state record changed; F focused direct-script, CLI, schema-health, and phase6 checks passed. Lightweight independent self-review was not used because this task's active mode forbids sub-agent delegation.
+- **Next**: Claude Code: review
+
 ## 2026-07-17 — Claude Code 独立复审 PASS (R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER)
 
 - **Verdict/Action**: PASS + 提交。Problem 3 六任务 legacy 闭环适配重放到 master `a81f7065`：核心引擎与 d34f 已审 `aa5cbd75` 逐字同（仅 32 行 industry 适配→改读 master `industry_trend_signal`）；egs_main 复用 master canonical 分类器、无 d34f 重复件；唯一选股效应=既有 headwind 单次 -1 星，新增 `_validate` 交叉校验 legacy⟺Phase5 star effect（反向探针证双向 fail-closed）；财报仅 advisory；三 deferred 恒 provider_unavailable；effect-contract 升 `llm_tasks` 为 proven consumer。`df9807d` 持仓测试冲突已排除、gap 仅 EOL 不入提交。

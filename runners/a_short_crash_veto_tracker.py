@@ -29,6 +29,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from engine.a_short_observability import safe_exception_summary
+
 STATE_PATH = ROOT / "logs" / "a_short_crash_veto_tracker.json"
 SUMMARY_PATH = ROOT / "logs" / "a_short_crash_veto_summary.json"
 PRICE_CACHE_PATH = ROOT / "logs" / "a_short_crash_veto_prices.pkl"
@@ -605,8 +607,8 @@ def main(argv=None) -> int:
         return run_update(args.as_of, args.rule_confirmed_days, Path(args.state), Path(args.summary),
                           Path(args.price_cache), args.confirm_fetch_authorized)
     except Exception as exc:
-        # Provider/HTTP 异常文本可能夹带请求细节；只报异常类型，不回显 URL/token/raw body。
-        print(f"[WARN] crash-veto tracker failed safely ({type(exc).__name__}); details suppressed; formal selection unchanged.")
+        print("[WARN] crash-veto tracker failed safely "
+              f"({safe_exception_summary(exc)}); formal selection unchanged.")
         return 2
 
 

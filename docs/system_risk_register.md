@@ -33,6 +33,21 @@ Status:
 
 ## Hot Queue
 
+### R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT - weekly settlement sidecar could not import the project package when invoked as a script
+
+- **Status / severity**: **resolved — Codex repair + Claude Code 审查 PASS + committed to master (not pushed) 2026-07-18** (P2 operability / A-short comparison-only sidecar). Desktop full runtest `a_cc_testrun1.md` reproduced `ModuleNotFoundError: No module named 'engine'` after Stage 4.
+- **Root cause**: `weekly_screening.ps1` invokes `python runners/a_short_factor_comparison.py settle`; direct Python script execution places `runners/`, not the repository root, on `sys.path`. The runner imported both `engine.*` and `runners.*` before adding the root.
+- **Repair / invariant**: `runners/a_short_factor_comparison.py` now derives the repository root from `__file__` and inserts it only when absent, before either project import. The runner remains cache-only and comparison-only; no provider call, selection, M6.7 result, or production artifact changes.
+- **Regression / closure evidence**: `DirectRunnerInvocationTests.test_settler_direct_script_invocation_bootstraps_project_root` clears `PYTHONPATH`, invokes the runner file directly with a missing cache, and requires its documented no-op exit 0. Targeted package: 33 OK; phase6 EGS package: 66 OK. The broad `discover -s tests -p test_a_short*.py` command reached its 600s timeout without a final result and is not PASS evidence. Closure requires independent review and a reviewed commit.
+
+### R-ASHORT-SIDECAR-ERROR-OBSERVABILITY - comparison sidecars obscured actionable failures and did not surface them in EGS health
+
+- **Status / severity**: **resolved — Codex repair + Claude Code 审查 PASS + committed to master (not pushed) 2026-07-18** (P3 observability / A-short only). Desktop full runtest `a_cc_testrun1.md` recorded an overlay `NameError` only by class while `data_health.json` still reported `overall_status=ok` and no warnings; the crash-veto tracker printed `details suppressed`.
+- **Repair / invariant**: new `engine.a_short_observability.safe_exception_summary` retains a short actionable exception message while redacting URLs and common secret values. EGS applies it to both same-class non-production comparison outputs (`weight_variant` and `theme_overlay`), appends their warning to `data_health`, and thereby changes health to `warn` without blocking formal selection. The crash-veto tracker uses the same redacted detail while preserving its non-blocking exit 2 behavior.
+- **Regression / closure evidence**: tests prove direct benign `NameError` detail, URL/token redaction, crash-veto CLI output, and schema-valid `data_health` `warn` with a sidecar warning. Targeted package: 33 OK; phase6 EGS package: 66 OK. The broad A-short discovery timed out at 600s without a final result and is not PASS evidence. Closure requires independent review and a reviewed commit.
+- **Boundary**: no scoring, ranking, veto, sizing, provider authorization, data fetch, M6.7 formal result, or broker behavior changed.
+- **Optional follow-up (user-directed, Claude 2026-07-18)**: the same `safe_exception_summary` is now also applied to three advisory class-name-only handlers in `runners/a_short_weekly_pipeline.py` (regime index-provider error, cninfo, em web/LLM), and the helper now guards `str(exc)` so a pathological `__str__` cannot raise. Independent review re-run after the Optionals: observability + factor-comparison + crash-veto + phase6-health 33 OK; regime + m67-render + holdings 73 OK; `test_a_short_weekly_pipeline` observed all-`ok` (large/slow suite); env-value-redaction and str-raises probes pass. No test pins the changed diagnostic strings.
+
 ### R-ASHORT-M67-PROBLEM3-REPLAY-ONTO-MASTER - legacy Phase 3/4 six-task chain had no authoritative weekly-M6.7 consumer on master
 
 - **Status / severity**: **resolved — Codex replay + independent Claude review PASS + committed to master 2026-07-17 (not pushed)** (P1 result-integrity / A-short only). The source closure is d34f commits `aa5cbd75` (six-task chain, Claude PASS) and `f82ee4d` (declarative `openai>=1,<2`); this is a selective replay onto master `a81f7065`, not a merge/cherry-pick of d34f.

@@ -10,7 +10,12 @@ from __future__ import annotations
 
 import argparse
 import pickle
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
 from engine.a_short_factor_comparison import DEFAULT_PRIVATE_ROOT, settle_from_daily_payload
 from runners.backtest_rank import FORWARD_DAILY_CACHE

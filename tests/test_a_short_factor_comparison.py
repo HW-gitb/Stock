@@ -5,6 +5,8 @@ import sys
 import tempfile
 import unittest
 import json
+import os
+import subprocess
 from datetime import date, timedelta
 from pathlib import Path
 
@@ -240,6 +242,31 @@ class VerdictStatisticsTests(unittest.TestCase):
     def test_reliable_harm_can_retire_after_36_weeks(self):
         verdict = self._verdict(effect=-1.0, labels=["trend_up_vol_low", "trend_flat_vol_low"])
         self.assertEqual(verdict["status"], "recommend_retire_head")
+
+
+class DirectRunnerInvocationTests(unittest.TestCase):
+    def test_settler_direct_script_invocation_bootstraps_project_root(self):
+        """The weekly PowerShell entry invokes this file directly, not as -m."""
+        with tempfile.TemporaryDirectory() as tmp:
+            env = os.environ.copy()
+            env.pop("PYTHONPATH", None)
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(ROOT / "runners" / "a_short_factor_comparison.py"),
+                    "settle",
+                    "--cache",
+                    str(Path(tmp) / "missing_forward_daily.pkl"),
+                ],
+                cwd=ROOT,
+                env=env,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertIn("cache unavailable", completed.stdout)
 
 
 if __name__ == "__main__":

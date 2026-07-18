@@ -190,7 +190,7 @@ class WatchPoolHealthTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.egs_main = _load_egs_module()
 
-    def _health(self, *, actual_count, eligible_count):
+    def _health(self, *, actual_count, eligible_count, sidecar_warnings=None):
         frame = pd.DataFrame({
             "ts_code": [f"{i:06d}.SZ" for i in range(actual_count)],
             "tier": ["Tier1"] * actual_count,
@@ -224,6 +224,7 @@ class WatchPoolHealthTest(unittest.TestCase):
             tier1_csv_path=str(EGS_SCRIPT),
             full_csv_path=str(EGS_SCRIPT),
             watch_eligible_count=eligible_count,
+            sidecar_warnings=sidecar_warnings,
         )
 
     def test_eligible_pool_exhaustion_is_accounted_without_false_health_warning(self) -> None:
@@ -255,6 +256,25 @@ class WatchPoolHealthTest(unittest.TestCase):
         reconciliation = health["metrics"]["watch_pool_reconciliation"]
         self.assertEqual(reconciliation["status"], "fail")
         self.assertEqual(reconciliation["reason"], "output_count_mismatch")
+
+    def test_comparison_sidecar_failure_is_visible_as_health_warning(self) -> None:
+        warning = self.egs_main._comparison_sidecar_warning(
+            "theme_overlay", NameError("name 'json' is not defined"),
+        )
+        health = self._health(
+            actual_count=13,
+            eligible_count=13,
+            sidecar_warnings=[warning],
+        )
+
+        self.egs_main.validate_json_schema(
+            health,
+            schema_path=str(DATA_HEALTH_SCHEMA),
+            label="comparison sidecar health test",
+        )
+        self.assertEqual(health["overall_status"], "warn")
+        self.assertIn(warning, health["warnings"])
+        self.assertIn("NameError: name 'json' is not defined", warning["message"])
 
     def test_consistency_validator_rejects_forged_watch_accounting(self) -> None:
         health = self._health(actual_count=13, eligible_count=13)
