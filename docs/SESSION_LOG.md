@@ -113,6 +113,20 @@
 - **Verify**: targeted runner/observability/crash-veto/health package 33 OK; phase6 EGS package 66 OK; broad `discover -s tests -p test_a_short*.py` timed out at 600s without a final result and is not PASS evidence.
 - **Pre-Codex self-review**: A N/A (no enumerable contract set); B scope grep found zero live `details suppressed` or named type-only sidecar handlers; C reverse tests preserve benign `NameError` detail while redacting URL/token values and keep sidecar failure non-blocking; D N/A; E only register + session live-state record changed; F focused direct-script, CLI, schema-health, and phase6 checks passed. Lightweight independent self-review was not used because this task's active mode forbids sub-agent delegation.
 - **Next**: Claude Code: review
+## 2026-07-18 — Claude Code 独立审查 PASS（A-short 对比轨 v2 第 3 刀 weekly 接线；提交 knife-3）
+
+- **Verdict/Action**: PASS + 提交（knife-3：新 weekly adapter + daily-cache schema + 测试 + 生产 `a_short_weekly_pipeline`/`m67_render`/effect-contract/weekly schema/weekly 测试 + 设计/register/SESSION_LOG）。生产边界验过：pre-M6.7 helper 对 11 个对抗输入全返回 summary 不 raise → 不阻断生产；`factor_comparison_v2` 只被 validator+banner 消费不进选股；capture 仅在匹配 published bundle 后冻结；v1 写 flags 入口 SystemExit。一条 non-blocking Optional（把 pre-M6.7 特定异常元组放宽为 `except Exception` 加固）。full 细节单源见 `docs/system_risk_register.md`。
+- **Required**: 无（Optional 单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier=full-lane（改生产顶层 weekly runner，tiering rule 3a）：**亲跑 `discover -p test_a_short*.py` = exit 0 零失败**（tail 缓冲挤掉 "Ran N OK" 汇总行，exit 0 决定性；Codex 600s 超时未拿到）。我 11 案例边界探针全 HELD（坏价→no_count→current / 损坏→unavailable count0，无一 raise）。§6a 独立 agent 因会话额度中途失败，死前已独立确认「调用无 guard 但 helper 不 raise + `factor_comparison_v2` 只被 validator/banner 消费」两不变量；其排队的 crash 攻击由我亲补。整读 179L adapter + 生产 wiring diff + daily-cache schema + weekly 测试。
+- **Next**: 无（三刀均已提交；真实 forward 周才出赢家、永不自动切生产）
+
+## 2026-07-18 — Codex 执行（A-short 对比轨 v2 第 3 刀 weekly 接线；待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已一次完成 v2 weekly 接线：发布前只读私密既有 cache 结算/裁决并重写 reminder，周报 Markdown 与终端共用同一脱敏 summary；官方 JSON/Markdown/receipt 成功匹配后才 capture 本周。旧 v1 写入 flags 在入口拒绝；未提交，未改生产选股/操作/仓位。
+- **Required**: 无新 Required；`R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的完整边界、cache/root 失败口径与第 3 刀实现事实见 `docs/system_risk_register.md`。
+- **Verify**: tier=full-lane triggered（改 A-short 顶层 weekly runner）：完整 `discover -s tests -p test_a_short*.py` 运行至 600s 时 exit 124，未计 PASS、未重跑；最终 focused acceptance `test_a_short_factor_comparison_v2` + `test_a_short_factor_comparison_v2_adjudication` + `test_a_short_factor_comparison_v2_weekly` + effect-contract + weekly build/validate/write/4 个 Main wiring + doc guards = 141 OK；`py_compile`、`git diff --check` 通过（仅 CRLF 提示）。
+- **Next**: Claude Code：仅独立审查并决定是否提交 A-short 对比轨 v2 第 3 刀；方案严格止于三刀，不新增任何刀，不改 US-short。
+
 ## 2026-07-18 — Claude Code 独立复审 PASS（A-short 对比轨 v2 第 2 刀 fixed 版；提交 knife-2）
 
 - **Verdict/Action**: PASS + 提交（knife-2 `_adjudication` 引擎 + 测试 + 设计/register/SESSION_LOG）。F1 修复对症：裁决器新增 `_outcome_payload_digest` 重算并要求 == 自报 + ledger（镜像 capture 的 `_capture_payload_digest`），旧自比已删、malformed typed fail-close；植入失败测试已建。F2 按用户口径统一收紧（单/多挑战者采用门都要 paired bootstrap 下界 ≥ 冻结经济优势，设计 doc 同步）。full 细节单源见 `docs/system_risk_register.md`。

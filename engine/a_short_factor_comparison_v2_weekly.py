@@ -1,0 +1,179 @@
+"""A-short comparison-track v2 weekly adapter.
+
+Knife 3 owns the only weekly integration point.  It consumes a pre-existing,
+private daily-cache file before M6.7 publication, then exposes only a
+de-identified reminder summary to the public weekly artifact.  It never calls
+a provider and it never changes production selection, sizing, or actions.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+import pandas as pd
+
+from engine import a_short_factor_comparison as v1
+from engine.a_short_factor_comparison_v2 import (
+    ComparisonV2Error,
+    ROOT,
+    _digest,
+    _private_root,
+    capture_v2_week,
+    settle_v2_from_daily_payload,
+)
+from engine.a_short_factor_comparison_v2_adjudication import adjudicate_v2_from_private_ledger
+
+
+DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
+DAILY_CACHE_NAME = "daily_cache.json"
+PUBLIC_STATUS_NOT_CONFIGURED = "not_configured"
+PUBLIC_STATUS_CURRENT = "evidence_current"
+PUBLIC_STATUS_UNAVAILABLE = "evidence_unavailable_or_inconclusive"
+
+
+def _public_summary(status: str, reminder_count: int = 0) -> dict:
+    if status == PUBLIC_STATUS_NOT_CONFIGURED:
+        message = "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。"
+    elif status == PUBLIC_STATUS_CURRENT:
+        message = f"对比轨 v2：证据已复核，当前人工提醒 {reminder_count} 项；不自动改动生产结论。"
+    elif status == PUBLIC_STATUS_UNAVAILABLE:
+        message = "对比轨 v2：证据不可用或结论未定；不显示旧提醒，生产结论不变。"
+    else:
+        raise ComparisonV2Error("v2 public summary status is unknown")
+    return {
+        "summary_id": "a_short_factor_comparison_v2",
+        "status": status,
+        "reminder_count": reminder_count,
+        "message": message,
+        "production_unchanged": True,
+    }
+
+
+def validate_v2_public_summary(summary: dict) -> None:
+    """Reject a weekly surface that could relay a stale or private reminder."""
+    if not isinstance(summary, dict) or set(summary) != {
+            "summary_id", "status", "reminder_count", "message", "production_unchanged"}:
+        raise ComparisonV2Error("v2 public weekly summary shape drifted")
+    status = summary.get("status")
+    count = summary.get("reminder_count")
+    if summary.get("summary_id") != "a_short_factor_comparison_v2" or \
+            status not in {PUBLIC_STATUS_NOT_CONFIGURED, PUBLIC_STATUS_CURRENT, PUBLIC_STATUS_UNAVAILABLE} or \
+            not isinstance(count, int) or isinstance(count, bool) or count < 0 or \
+            summary.get("production_unchanged") is not True:
+        raise ComparisonV2Error("v2 public weekly summary fields are invalid")
+    if status != PUBLIC_STATUS_CURRENT and count != 0:
+        raise ComparisonV2Error("unavailable v2 weekly summary must not carry a stale reminder count")
+    if summary != _public_summary(status, count):
+        raise ComparisonV2Error("v2 public weekly summary message drifted")
+
+
+def _daily_cache_path(root: Path, daily_cache_path: str | Path | None) -> Path:
+    path = (root / DAILY_CACHE_NAME) if daily_cache_path is None else Path(daily_cache_path).resolve()
+    try:
+        path.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ComparisonV2Error("v2 daily cache must stay under the private v2 root") from exc
+    return path.resolve()
+
+
+def load_v2_daily_cache(*, root: str | Path, daily_cache_path: str | Path | None = None) -> dict:
+    """Load a serialised existing cache; deliberately no provider or fallback exists."""
+    private_root = _private_root(root)
+    path = _daily_cache_path(private_root, daily_cache_path)
+    if not path.is_file():
+        raise ComparisonV2Error("v2 daily cache is unavailable")
+    try:
+        document = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ComparisonV2Error("v2 daily cache is unreadable") from exc
+    try:
+        schema = json.loads(DAILY_CACHE_SCHEMA_PATH.read_text(encoding="utf-8"))
+        jsonschema.validate(document, schema)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ComparisonV2Error("v2 daily cache violates its frozen contract") from exc
+    return {
+        "stocks": pd.DataFrame(document["stocks"]),
+        "limits": pd.DataFrame(document["limits"]),
+        "meta": document["meta"],
+    }
+
+
+def settle_and_summarize_v2_weekly(*, root: str | Path | None,
+                                   daily_cache_path: str | Path | None = None) -> dict:
+    """Settle then adjudicate before M6.7, returning only a de-identified current summary.
+
+    An unavailable cache, corrupt private state, or any integrity failure intentionally
+    produces no reminder.  Thus an old successful reminder can never be replayed into
+    a fresh M6.7 report.
+    """
+    if root is None:
+        return _public_summary(PUBLIC_STATUS_NOT_CONFIGURED)
+    try:
+        private_root = _private_root(root)
+        if not private_root.exists():
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+        payload = load_v2_daily_cache(root=private_root, daily_cache_path=daily_cache_path)
+        settlement = settle_v2_from_daily_payload(root=private_root, daily_payload=payload)
+        if settlement.get("status") != "settled_from_existing_cache":
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+        adjudication = adjudicate_v2_from_private_ledger(root=private_root)
+        if adjudication.get("status") != "adjudicated_private_v2":
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+        reminder_path = private_root / "reminder.json"
+        reminder = json.loads(reminder_path.read_text(encoding="utf-8"))
+        if reminder != adjudication.get("reminder") or \
+                reminder.get("schema_name") != "a_short_factor_comparison_v2_reminder" or \
+                reminder.get("production_unchanged") is not True or \
+                not isinstance(reminder.get("reminders"), list):
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+        return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]))
+    except (ComparisonV2Error, OSError, UnicodeDecodeError, json.JSONDecodeError,
+            jsonschema.ValidationError, ValueError, TypeError):
+        return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+
+
+def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str | Path,
+                                    decision_date: str, source_identity: dict) -> dict:
+    output = Path(out_path)
+    receipt_file = Path(receipt_path)
+    markdown = output.with_suffix(".md")
+    try:
+        weekly = json.loads(output.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ComparisonV2Error("published weekly bundle is unreadable") from exc
+    lineage = weekly.get("run_lineage") if isinstance(weekly, dict) else None
+    if not isinstance(lineage, dict) or str(weekly.get("as_of")) != str(decision_date) or \
+            lineage.get("run_id") != source_identity.get("run_id") or \
+            receipt.get("stage_status") != "complete" or \
+            receipt.get("as_of") != str(decision_date) or \
+            receipt.get("run_id") != lineage.get("run_id") or \
+            receipt.get("candidate_digest") != lineage.get("candidate_digest") or \
+            receipt.get("candidate_digest") != source_identity.get("candidate_digest") or \
+            set(receipt.get("outputs") or []) != {output.name, markdown.name} or not markdown.is_file():
+        raise ComparisonV2Error("published weekly bundle receipt does not match the official M6.7 artifact")
+    summary = weekly.get("factor_comparison_v2")
+    validate_v2_public_summary(summary)
+    return weekly
+
+
+def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
+                                      source_identity: dict, out_path: str | Path, receipt_path: str | Path,
+                                      forward_eligible: bool) -> dict:
+    """Freeze the current week only after a matching M6.7 JSON/Markdown/receipt exists."""
+    _private_root(root)
+    _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
+                                   decision_date=decision_date, source_identity=source_identity)
+    sanitized = [v1._safe_candidate(candidate) for candidate in candidates]
+    identity = {
+        "run_id": str(source_identity["run_id"]),
+        "run_date": str(decision_date),
+        "source_as_of": str(decision_date),
+        "candidate_digest": _digest(sanitized),
+        "official_m67_digest": hashlib.sha256(Path(out_path).read_bytes()).hexdigest(),
+    }
+    return capture_v2_week(root=root, decision_date=decision_date, candidates=candidates,
+                           run_identity=identity, forward_eligible=forward_eligible)

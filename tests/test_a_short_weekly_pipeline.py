@@ -618,6 +618,46 @@ class MainWiringTests(unittest.TestCase):
         self.assertEqual(loaded["reports"][0]["m67"]["table"]["操作"], "观察")
         self.assertEqual(loaded["reports"][0]["machine"]["rule6_gate"]["disposition"], "manual_review")
 
+    def test_v2_comparison_weekly_order_is_pre_publish_summary_then_post_publish_capture(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
+            dates = pd.bdate_range(end=pd.Timestamp(AS_OF), periods=len(_series())).strftime("%Y%m%d").tolist()
+            dated_series = [{**row, "trade_date": trade_date} for row, trade_date in zip(_series(), dates)]
+            with patch("builtins.print") as terminal:
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--factor-comparison-v2-root", str(root)],
+                     price_provider=lambda code: dated_series)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            markdown = out.with_suffix(".md").read_text(encoding="utf-8")
+            self.assertEqual(weekly["factor_comparison_v2"]["status"], "evidence_unavailable_or_inconclusive")
+            self.assertIn(weekly["factor_comparison_v2"]["message"], markdown)
+            terminal_text = "\n".join(str(call.args[0]) for call in terminal.call_args_list if call.args)
+            self.assertIn("[factor-comparison-v2] " + weekly["factor_comparison_v2"]["message"], terminal_text)
+            self.assertTrue((root / "weeks" / AS_OF / "capture.json").is_file())
+            self.assertFalse((root.parent / "ledger.json").exists())  # no legacy v1 dual write
+
+    def test_v2_capture_is_not_reached_when_official_publish_fails(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
+            args = ["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                    "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                    "--out", str(Path(td) / "weekly.json"), "--factor-comparison-v2-root", str(root)]
+            with patch("runners.a_short_weekly_pipeline.publish_weekly_bundle", side_effect=RuntimeError("publish failed")), \
+                    patch("engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly") as capture:
+                with self.assertRaises(RuntimeError):
+                    main(args, price_provider=lambda code: _series())
+                capture.assert_not_called()
+            self.assertFalse(root.exists())
+
+    def test_legacy_v1_comparison_capture_flags_are_rejected_before_any_weekly_work(self):
+        with self.assertRaises(SystemExit):
+            main(["--as-of", AS_OF, "--analysis-input", "missing-ai.json", "--iv-feed", "missing-feed.json",
+                  "--out", "missing-weekly.json", "--factor-comparison-root", "legacy-root"])
+
     def test_main_accepts_legacy_v14_mixed_rank_counts_without_misreporting_them_as_l0(self):
         """Real Run-1 regression: old v1.4 mixed rank counts must not crash or become hard-veto summary rows."""
         ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])

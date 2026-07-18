@@ -1,6 +1,6 @@
 # A-short 对比轨 v2 owner design
 
-状态：第 1 刀修复和第 2 刀离线裁决均已实现，待 Claude Code 独立审查；第 3 刀 weekly 接线尚未开始。
+状态：第 1 刀私密证据层和第 2 刀离线裁决均已独立审查并提交；第 3 刀把 v2 接入 A-short weekly，但仍始终只产出 comparison-only 证据与人工提醒，绝不自动切换生产规则。
 
 ## 目的与边界
 
@@ -65,4 +65,14 @@ state/a_short/factor_comparison_private/v2/
   experiment_batches.json      # 当前问题 batch 与 dormant/组合新前向 batch 的私密登记
 ```
 
-四个 schema 责任面固定为 program/governance、weekly capture/outcome、ledger/adjudication、decision receipt；adjudication、回执集合和提醒的完整字段另由裁决器以固定 key、合同摘要和 receipt schema 做语义校验。第 2 刀不改变第 1 刀的证据生产层，因而不能提前形成 weekly 或生产接线。
+四个 schema 责任面固定为 program/governance、weekly capture/outcome、ledger/adjudication、decision receipt；adjudication、回执集合和提醒的完整字段另由裁决器以固定 key、合同摘要和 receipt schema 做语义校验。
+
+## 第 3 刀：weekly 接线与运行顺序
+
+`runners/a_short_weekly_pipeline.py` 只在传入 `--factor-comparison-v2-root` 时启用 v2；root 必须以 `state/a_short/factor_comparison_private/v2` 结尾并保持 gitignored。日线输入只读取该私密 root 内的既有 `daily_cache.json`（或同一 root 内显式指定的 `--factor-comparison-v2-daily-cache`），其序列化形状由 `schemas/a_short_factor_comparison_v2_daily_cache.schema.json` 固定。该接口没有 provider 参数、没有联网 fallback，也不能从本周 M6.7 价格序列伪造 adjustment evidence。
+
+每次 weekly 运行按如下单一顺序执行：先用私密既有缓存结算历史 capture，再重算 ledger 与离线裁决，并由裁决器原子重写 `reminder.json`；之后才构造、校验和发布官方 M6.7 JSON/Markdown/receipt。周报顶部与终端都只消费同一份脱敏 summary（状态、提醒计数、固定文字），不包含 ticker、arm、回执 hash、私密路径、收益或仓位。缓存缺失、私密 root/ledger/receipt 损坏、解析失败或任何完整性检查失败时，周报明确显示“证据不可用或结论未定”、提醒计数归零，绝不复用旧的成功提醒；M6.7 仍保持权威且不受改变。
+
+只有 `publish_weekly_bundle` 成功返回后，接线才回读同一份 JSON、Markdown 和匹配 receipt，核对 `as_of`、run id、候选摘要与输出集合，再以实际已发布 JSON 的 SHA-256 作为 `official_m67_digest` 冻结本周 v2 capture。发布异常时控制流到不了 capture，因此不会生成假前向周；capture 自身失败只在终端明确提示，绝不回写或否定已发布 M6.7。`--factor-comparison-v2-forward` 仍受第 1 刀真实本地日期门约束；历史重放保持非计数。
+
+旧 `--factor-comparison-root` 与 `--factor-comparison-forward` 现被入口在任何 weekly 工作开始前拒绝：v1 仅可读，禁止 v1/v2 双写、迁移、双计数或用 v1 reminder 覆盖 v2 reminder。第 3 刀没有修改 EGS、TopN、M6.7 操作/股数、veto、账户、生产配置或任何自动 adopt 路径。

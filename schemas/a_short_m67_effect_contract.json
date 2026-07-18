@@ -402,8 +402,8 @@
     "A-EGS/egs_main.py": "bcf13afdd20b39130c36e0f275bf2c94acb5ed235262d7054d6d5dc6274c67ee",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "d68e33718e0dc0e9b24f753d31d8b030294c03d62058e616c2334ef2923ca7c6",
-    "runners/a_short_weekly_pipeline.py": "0a8237bd83453f40ed6f4e6c799811996788d09112c735c633e18bffa2e8b7f3",
-    "runners/a_short_m67_render.py": "b2d74a3f86d437b627eaf580c2b980b58bd70f7d2c55da592f5211d0c146fa27",
+    "runners/a_short_weekly_pipeline.py": "17827de3c20dc5b28ee3a206f86ad9a8571c7779de2df65e7fb59fd512773516",
+    "runners/a_short_m67_render.py": "0f9fa1cfd91dfc2dd831973f41bce7c959d6a2495ba30503ad6c0fb7ebfb0706",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "3f32e734c47fe84eb01d403cc3343cee2d427c83c3359cc0bcdd2df37b171af5"
   },
@@ -571,7 +571,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "d59126653592ab44d45d611e8e11696445217cf413e4ae066aecb784d8100d78",
+    "schemas/a_short_weekly_report.schema.json": "1845fca3372e8d5c7f7cf94e59d04f4f2c59772fea8180cd36faca9413948fdb",
     "schemas/a_short_m67_report.schema.json": "99b61cac33f606fdb5e0105aded8f0d74419bd4720751684e1f7fef3b578d34a"
   }
 }

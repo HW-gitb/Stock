@@ -429,6 +429,9 @@ def render_weekly_markdown(weekly: dict) -> str:
             out.append("> ⚠️ **价格时钟**:本周报技术指标用的是**前一交易日(" + str(pf.get("price_data_through")) +
                        ")已结算行情**(实盘盘中跑、as_of " + str(as_of) + " 当日 EOD 尚未发布);新闻/语义层窗口仍到 as_of。"
                        "**价格特征截至 " + str(pf.get("price_data_through")) + ",非 " + str(as_of) + "。**")
+    comparison_v2 = weekly.get("factor_comparison_v2")
+    if comparison_v2:
+        out.append("**Comparison v2**: " + str(comparison_v2.get("message", "")))
     out += _render_portfolio_risk(weekly)
     out += _render_effect_contract_ledger(weekly)
     out += ["", "## 一览",

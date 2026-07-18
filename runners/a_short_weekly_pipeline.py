@@ -1062,6 +1062,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     validate_feed_summary_consistency(iv_feed_summary)        # 读取方校验 feed(P2)
     if weekly.get("crash_veto_tracking") is not None:
         _validate_crash_veto_tracking_summary(weekly["crash_veto_tracking"], expected_as_of=weekly["as_of"])
+    if weekly.get("factor_comparison_v2") is not None:
+        from engine.a_short_factor_comparison_v2_weekly import validate_v2_public_summary
+        validate_v2_public_summary(weekly["factor_comparison_v2"])
     # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
     if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
         raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
@@ -3477,10 +3480,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--skip-ratchet", action="store_true",
                    help="跳过 S3b R4b 跨周 ratchet 持久层(不读写 sidecar、不注入 machine.ratchet)")
     p.add_argument("--factor-comparison-root", default=None,
-                   help="D1/D3 private comparison root (must end state/a_short/factor_comparison_private; sidecar only)")
+                   help="retired v1 capture root; v1 is read-only and this write path is forbidden")
     p.add_argument("--factor-comparison-forward", action="store_true",
-                   help="mark this comparison snapshot as a live forward observation; historical replay stays non-counting")
+                   help="retired v1 forward flag; v1 is read-only and this write path is forbidden")
+    p.add_argument("--factor-comparison-v2-root", default=None,
+                   help="private v2 root ending state/a_short/factor_comparison_private/v2")
+    p.add_argument("--factor-comparison-v2-daily-cache", default=None,
+                   help="existing v2 daily_cache.json under the private v2 root; never fetches data")
+    p.add_argument("--factor-comparison-v2-forward", action="store_true",
+                   help="mark this current v2 snapshot as a live forward observation; historical replay stays non-counting")
     args = p.parse_args(argv)
+    if args.factor_comparison_root or args.factor_comparison_forward:
+        raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
+                         "Use the v2 private-root flags; v1/v2 dual writes are prohibited.")
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
@@ -3806,6 +3818,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                        "northbound_holding_ratio_pct": None, "is_large_index_component": None}
                 for code in portfolio_codes
             }
+    # Knife 3 pre-M6.7 order: only an existing private cache may settle frozen v2 captures,
+    # then the adjudicator atomically rewrites the current reminder. This helper has no provider
+    # handle and suppresses stale reminders whenever cache/private integrity is not provable.
+    from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
+    factor_comparison_v2 = settle_and_summarize_v2_weekly(
+        root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache)
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -3814,6 +3832,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  portfolio_fact_overrides=portfolio_fact_overrides,
                                  account_positions=(acct.get("positions") or []),
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review])
+    weekly["factor_comparison_v2"] = factor_comparison_v2
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}
@@ -3911,19 +3930,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     for r in weekly["reports"]:
         actions[r["m67"]["table"]["操作"]] = actions.get(r["m67"]["table"]["操作"], 0) + 1
     print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
-    # D1/D3 capture consumes the exact normalized, PIT-safe candidates while they are in memory.
-    # The private sidecar is non-blocking: any failure is visible but never alters M6.7 or selection.
-    if args.factor_comparison_root:
+    # The terminal and Markdown consume the same de-identified pre-M6.7 reminder summary.
+    print(f"[factor-comparison-v2] {factor_comparison_v2['message']}")
+    # Freeze current-week evidence only after the complete official JSON/Markdown/receipt bundle exists.
+    # Capture remains comparison-only and non-blocking, but cannot create a false forward week on
+    # a failed M6.7 publication because this block is reached only after publish_weekly_bundle returns.
+    if args.factor_comparison_v2_root:
         try:
-            from engine.a_short_factor_comparison import capture_week
-            realized_regime = _factor_comparison_realized_regime(pro, args.as_of, price_data_through)
-            comparison = capture_week(
-                root=args.factor_comparison_root, decision_date=args.as_of, candidates=normalized,
-                run_identity=source_identity, forward_eligible=args.factor_comparison_forward,
-                realized_regime=realized_regime)
-            print(f"[factor-comparison] {comparison['status']} -> {comparison['day']} (production unchanged)")
-        except Exception as exc:
-            print(f"[WARN] factor comparison capture unavailable: {type(exc).__name__}: {exc}; "
+            from engine.a_short_factor_comparison_v2_weekly import capture_v2_after_published_weekly
+            comparison = capture_v2_after_published_weekly(
+                root=args.factor_comparison_v2_root, decision_date=args.as_of, candidates=normalized,
+                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                forward_eligible=args.factor_comparison_v2_forward)
+            print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
+        except Exception:
+            print("[factor-comparison-v2] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
 
 

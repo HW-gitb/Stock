@@ -646,6 +646,19 @@
         }
       }
     },
+    "factor_comparison_v2": {
+      "description": "Knife 3 de-identified comparison-track v2 weekly summary. It is produced before M6.7 from only the freshly rewritten private reminder; no ticker, arm, receipt hash, private path, return, or selection data may appear here. It never changes M6.7/EGS/TopN/sizing/action/veto.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["summary_id", "status", "reminder_count", "message", "production_unchanged"],
+      "properties": {
+        "summary_id": {"const": "a_short_factor_comparison_v2"},
+        "status": {"enum": ["not_configured", "evidence_current", "evidence_unavailable_or_inconclusive"]},
+        "reminder_count": {"type": "integer", "minimum": 0},
+        "message": {"type": "string", "minLength": 1},
+        "production_unchanged": {"const": true}
+      }
+    },
     "industry_fundamentals": {
       "type": [
         "object",
