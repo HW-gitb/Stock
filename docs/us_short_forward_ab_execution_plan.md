@@ -279,3 +279,42 @@ maturity stage will then count the ready packet. No manual receipt is accepted a
 3. Do the **first undone cut**, as its own slice (register + SESSION_LOG block).
 4. If a cut needs a genuine design decision, or the next step is ambiguous → **STOP and surface to the user**;
    do not guess a contract or grid change.
+
+## 7. Corporate-action evidence PRODUCER — unblocks real-week counting (user-authorized 2026-07-18)
+
+**Goal**: make the A1 comparison track actually count real weeks. Cut-2 already built the maturity gate + the
+sidecar VALIDATOR (`source_capture.py::_validate_maturity_adjustment_evidence`) + the maturity runner that reads a
+`forward_policy_adjustment_evidence_<decision_date>.json` sidecar and no-counts when it is absent/`not_evaluable`.
+The ONE missing piece is the PRODUCER that WRITES that sidecar. Register `R-USSHORT-A1-CORPORATE-ACTION-EVIDENCE-PRODUCER`
+(open P1) has the frozen boundary — obey it exactly (no OHLCV-label trust, no backfill, no `balanced`/ship-gate, no ticker in tracked artifacts).
+
+**User authorization (2026-07-18)**: build it using **Massive's FREE splits/dividends feed** (`/stocks/v1/splits` +
+`/dividends`, already shape-probed + normalized — reuse `runners/us_short_batch5_massive_corporate_action_shape_probe.py`
++ `engine/us_short_massive_corporate_action_normalize.py`), **$0 free tier**, schema-first, minimum cuts. NOT authorized:
+paid tiers, a new provider, `yfinance`, any source beyond Massive-free splits/dividends, backfill, `balanced`/ship-gate.
+
+**Why 2 cuts (not 1)** — the offline/gated boundary is a safety requirement, not padding (same reason the track itself
+split): the reconciliation LOGIC is offline-provable and must land fully-reviewed BEFORE any real fetch; the live Massive
+fetch cannot be built/tested offline; merging them would fold provider-fetch risk into the logic review and make failures
+un-isolable. This IS the merged minimum (the offline logic is already one cut; the gated fetch is the only other).
+
+- **Cut 1 (OFFLINE, no fetch) — reconciliation producer + sidecar emitter.** New `engine/us_short_corporate_action_reconciliation.py`
+  (schema-first): consume the maturity OHLCV packet + NORMALIZED split/dividend events (injected, in the existing normalizer's
+  output shape), reconcile the four gates the validator requires (`adjustment_mode` / `split_handling` / `dividend_handling`
+  / `ex_date_price_consistency`), bind every gate + event to the exact `maturity_ohlcv_packet` digest + frozen decision date +
+  common pool + `ex_date ≤ maturity_as_of`, and emit the sidecar in the EXACT shape `_validate_maturity_adjustment_evidence`
+  + `paper_performance_evaluability_from_offline_evidence` accept. Fail-closed: any missing / ambiguous / unconfirmed event ⇒
+  `not_evaluable` (NEVER fabricate a confirmation). Tests: a fully-confirmed set ⇒ evaluable sidecar the cut-2 validator accepts
+  and the week counts; split-only / dividend-only / ticker-change / missing-event / out-of-window ⇒ `not_evaluable` no-count;
+  private-path + no-backfill guards; zero ticker/$/secret in tracked artifacts. No provider call.
+- **Cut 2 (GATED, per-execution provider auth) — bounded Massive fetch + weekly wiring.** Add a bounded Massive
+  `/stocks/v1/splits` + `/dividends` fetch for the Pass2-clean common-pool tickers over the H20 window (reuse the probe +
+  normalizer), feed Cut-1's producer to write the real sidecar into the private root BEFORE `run_forward_policy_maturity`, so a
+  fully-confirmed week finally counts. Massive FREE tier ($0); raw only under gitignored `provider_samples/`; tracked summary
+  de-identified (counts only — no secret/URL/ticker/$). Wire it inside the weekly one-click so it runs under this standing
+  authorization (NO per-week approval) — this is the ONE recurring automatic external call. Still shadow-only, never `balanced`,
+  never ship-gate, no backfill; per-execution auth + no-secret summary reviewed like every other gated slice.
+
+**After both cuts**: the weekly one-click auto-fetches split/div (free), certifies adjustment, and counts a real week — no
+per-week human step. The clock then needs ~24-36 divergence weeks (~1yr+) before a first verdict, and any verdict is
+advisory (user accepts/rejects the receipt; production is never auto-switched).
