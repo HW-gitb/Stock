@@ -38,11 +38,11 @@ common pool 是同一 PIT 候选输入在非 IV 的不可变硬门之后的共�
 
 ## 第 2 刀：冻结证据的离线统计裁决
 
-裁决器 `engine/a_short_factor_comparison_v2_adjudication.py` 只读取私密 ledger 中 `forward_eligible=true` 且已终态、且属于该问题当前 experiment batch 的证据；每周都重新验证 source receipt、capture/outcome hash、question/arm 顺序、epoch 和当前统计合同摘要。三签名 epoch 变化只切分证据段并触发跨 epoch 重算，不会把已有裁决永久阻断；统计合同或批次身份漂移才会使旧裁决失效。它不捕捉数据、不执行 weekly、不调用 provider，因而不能把历史回放、伪造摘要或被篡改的旧合同算成新证据。
+裁决器 `engine/a_short_factor_comparison_v2_adjudication.py` 只读取私密 ledger 中 `forward_eligible=true` 且已终态、且属于该问题当前 experiment batch 的证据；每周都重新验证 source receipt、capture hash，以及 outcome payload 的重新计算摘要（必须同时等于 outcome 自报值与 ledger 值）、question/arm 顺序、epoch 和当前统计合同摘要。三签名 epoch 变化只切分证据段并触发跨 epoch 重算，不会把已有裁决永久阻断；统计合同或批次身份漂移才会使旧裁决失效。它不捕捉数据、不执行 weekly、不调用 provider，因而不能把历史回放、伪造摘要或被篡改的旧合同算成新证据。
 
 每个问题的 `question_type`、`experiment_batch_id`、`multiplicity_family_id`、可组合资格、风险上限、块数、统计抽样次数和阶段阈值均冻结在 v2 governance。每个 challenger 只和同周 baseline 作配对差；H10 块仅在新 decision date 晚于前一块 exit date 时纳入，避免重叠持有窗口重复计数。0--11 个有效周只继续积累；12--23 周只出预审；24 周和 36 周才是正式检查点。
 
-正式检查点同时执行：固定种子的 paired bootstrap CI、双侧 paired sign-flip p 值、单侧 sign-test 展示、同一 multiplicity family 内 Holm 校正，以及跨 epoch 的 REML random-effects + Hartung--Knapp 汇总。24/36 周分别使用冻结的 alpha spending 0.025/0.025；当期 epoch 必须自身至少有 4 个非重叠块、方向为正且不变坏，状态分层和异质性也必须一致。若多个 challenger 都越过各自门槛，只有每一 finalist pair 都至少有 12 个共同非重叠 H10 块，且 simultaneous bootstrap 下界仍超过冻结经济优势的唯一 arm 才能建议采用；绝不按点估计挑胜者。
+正式检查点同时执行：固定种子的 paired bootstrap CI、双侧 paired sign-flip p 值、单侧 sign-test 展示、同一 multiplicity family 内 Holm 校正，以及跨 epoch 的 REML random-effects + Hartung--Knapp 汇总。24/36 周分别使用冻结的 alpha spending 0.025/0.025；当期 epoch 必须自身至少有 4 个非重叠块、方向为正且不变坏，状态分层和异质性也必须一致。无论仅有一个还是多个 challenger，采用门都要求 paired bootstrap 下界不低于冻结经济优势；若多个 challenger 都越过各自门槛，只有每一 finalist pair 都至少有 12 个共同非重叠 H10 块，且 simultaneous bootstrap 下界仍超过该优势的唯一 arm 才能建议采用；绝不按点估计挑胜者。
 
 每个 arm 在建议采用前还必须逐项通过 `max_drawdown_pct`、`bad_name_rate`、`tail_loss_pct`、filled-only 损失分布样本数、`cash_drag_pct`、`unfilled_rate`、`fill_rate`、`turnover_pct`、`total_cost_pct`、`max_name_weight_pct`、`adjustment_coverage_pct` 和 no-count rate 的硬门。任一缺失、越界、损失口径漂移、跨 epoch/状态方向冲突或当期 epoch 变坏都会阻断 adopt；36 周的持续可靠伤害可建议淘汰，冲突且 24/36 均无结论则转为 dormant。
 

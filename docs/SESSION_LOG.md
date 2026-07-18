@@ -93,6 +93,28 @@
 - **Verify**: targeted runner/observability/crash-veto/health package 33 OK; phase6 EGS package 66 OK; broad `discover -s tests -p test_a_short*.py` timed out at 600s without a final result and is not PASS evidence.
 - **Pre-Codex self-review**: A N/A (no enumerable contract set); B scope grep found zero live `details suppressed` or named type-only sidecar handlers; C reverse tests preserve benign `NameError` detail while redacting URL/token values and keep sidecar failure non-blocking; D N/A; E only register + session live-state record changed; F focused direct-script, CLI, schema-health, and phase6 checks passed. Lightweight independent self-review was not used because this task's active mode forbids sub-agent delegation.
 - **Next**: Claude Code: review
+## 2026-07-18 — Claude Code 独立复审 PASS（A-short 对比轨 v2 第 2 刀 fixed 版；提交 knife-2）
+
+- **Verdict/Action**: PASS + 提交（knife-2 `_adjudication` 引擎 + 测试 + 设计/register/SESSION_LOG）。F1 修复对症：裁决器新增 `_outcome_payload_digest` 重算并要求 == 自报 + ledger（镜像 capture 的 `_capture_payload_digest`），旧自比已删、malformed typed fail-close；植入失败测试已建。F2 按用户口径统一收紧（单/多挑战者采用门都要 paired bootstrap 下界 ≥ 冻结经济优势，设计 doc 同步）。full 细节单源见 `docs/system_risk_register.md`。
+- **Required**: 无（`R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND` → resolved）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier=focused acceptance（隔离私密模块）：`py_compile` + `test_a_short_factor_comparison_v2_adjudication` + `test_a_short_factor_comparison_v2` = 40 OK + doc-governance 46 OK。F1 我独立探针双证（诚实产物 adj 重算 == knife-1 写入 hash → 不误杀；篡改 net_return 留旧 hash → 重算差 → 新门 raise）。§6a：增量修复既有 agent 已审引擎 → 整读修复面 + 独立反向探针（不强制新 agent）。核 F2 gate 统一 + 设计 doc diff 一致。
+- **Next**: 无（两刀均已提交；第 3 刀 weekly 未开始、需另授权）
+
+## 2026-07-18 — Codex 修复（A-short 对比轨 v2 第 2 刀 outcome 摘要 Required + F2 Optional；待 Claude 独立复审）
+
+- **Verdict/Action**: 裁决器现在先重新计算整个 `outcome.payload`（仅排除自报摘要）的摘要，再要求它同时匹配 outcome 自报值与 ledger 值；任何收益、风险或退出日期篡改都会在读取前拒绝。按用户决定，单挑战者也必须让 paired bootstrap 下界达到冻结经济优势，不能只靠点估计通过。未接 weekly、未改生产、未提交。
+- **Required**: `R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND` 修复待 Claude 独立复审；F2 Optional 已按统一置信下界口径落地，完整事实单源见 `docs/system_risk_register.md`。
+- **Verify**: `py_compile` + `test_a_short_factor_comparison_v2_adjudication` + `test_a_short_factor_comparison_v2` + doc-governance fixed pack = 100 OK；`git diff --check` 通过（仅 CRLF 提示）。
+- **Pre-Codex self-review**: A-F checked — A：摘要覆盖 payload 的全部字段而非仅三条已知攻击字段；B：旧的 ledger↔self-reported 直接比较已从裁决源移除；C：收益/风险/exit-date 三种篡改均 fail-closed，经济下界低于阈值拒绝、恰等阈值仍可通过；E：设计、风险登记和本交接一致；F：摘要缺失/非对象仍 typed fail-closed。固定包在最终代码/设计修改后集中运行一次。
+- **Next**: Claude Code：仅独立复审 A-short 对比轨 v2 第 2 刀 outcome 摘要 Required 与 F2 Optional，不执行第 3 刀，不提交。
+
+## 2026-07-18 — Claude Code 独立审查（A-short 对比轨 v2 第 2 刀离线裁决）FAIL
+
+- **Verdict/Action**: FAIL（一条 material Required）；未提交。整刀审 knife-2 裁决引擎（867 行）。唯一 blocking = 裁决器 `_collect_evidence`（L290-293）只自比 outcome 文件自报 hash vs ledger 字段、**从不重算** outcome payload 摘要（capture 路径有重算、此处无；`_validate_source_receipt` 把 settlement 置 None 不核）→ 篡改私密 `outcome.json` 内容（net_return/risk/exit_date）留旧 hash 即被静默采信，违背设计 §"第 2 刀"「重验 outcome hash」宣称，可致假 adopt / 破风险门 / 破块独立。另一条 non-blocking Optional F2（单挑战者用点估计经济幅度、符合 §六.3 但与 §六.4 finalist CI 门不一致）。
+- **Required**: `R-ASHORT-COMPARISON-V2-KNIFE2-OUTCOME-HASH-UNBOUND`（完整复现/HELD/F2 单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier=focused acceptance（隔离私密模块）：`py_compile` + `test_a_short_factor_comparison_v2_adjudication` 13 OK + v2 25 + doc-governance 60 OK。F1 我独立探针实证（改 net_return 留 stale hash → 自比通过不 raise、重算才会差；grep 证全文无 outcome payload 摘要重算）。§6a 独立 agent 端到端复现 F1/F1b/F1c，并确认其余全 HELD（证据资格/检查点无 p-hacking/确定性/within-question Holm/唯一赢家 CI 门/人工门/崩溃安全）。整读引擎 867 行 + 对照设计 §"第 2 刀" + governance。
+- **Next**: Codex：修复
+
 ## 2026-07-18 — Claude Code 独立复审 PASS（A-short 对比轨 v2 第 1 刀 fixed 版；整刀，仅提交 knife-1）
 
 - **Verdict/Action**: PASS + 提交（仅 knife-1：engine v2 + 4 schema + governance + v2 测试 + owner design + 路由/register/SESSION_LOG；knife-2 `_adjudication` 引擎/测试留未提交待下一轮审）。回撤 Required 与我此前 4 条 Optional 全部闭合并加值断言测试；新增组合物化 `_combined_*` / `experiment_batches.json` 注册表 / common-pool 以 `pool_candidates` 真约束选择等经整刀 + §6a agent 攻不破；两条新 non-blocking O1/O2（组合回执 hash 深度、一次性激活门）。full 细节单源见 register。
