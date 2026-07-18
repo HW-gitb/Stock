@@ -14,7 +14,7 @@ class ForwardPolicyStatisticalPlanTests(unittest.TestCase):
         result = plan.load_forward_policy_statistical_plan()
 
         self.assertEqual(result["policy_scope"]["selection_policies"], list(plan.SELECTION_POLICY_IDS))
-        self.assertEqual(result["schema_version"], "2.0.0")
+        self.assertEqual(result["schema_version"], "2.1.0")
         self.assertEqual(
             result["policy_scope"]["factor_questions"]["theme_weight_choice"],
             ["balanced", "theme_plus", "theme_aggressive", "theme_off"],
@@ -29,6 +29,9 @@ class ForwardPolicyStatisticalPlanTests(unittest.TestCase):
         self.assertEqual(result["statistics"]["minimum_forward_weeks_before_preliminary_review"], 12)
         self.assertEqual(result["statistics"]["minimum_divergence_weeks_before_formal_recommendation"], 24)
         self.assertEqual(result["statistics"]["retire_after_divergence_weeks"], 36)
+        self.assertEqual(result["statistics"]["formal_look_divergence_weeks"], [24, 36])
+        self.assertEqual(result["statistics"]["one_sided_alpha_spending"], [0.0125, 0.0125])
+        self.assertEqual(result["statistics"]["one_sided_alpha_total"], 0.025)
         self.assertEqual(result["statistics"]["familywise_correction"], "holm_bonferroni")
         self.assertEqual(result["statistics"]["comparison_win_margin"], 0.001)
         self.assertEqual(
@@ -36,6 +39,24 @@ class ForwardPolicyStatisticalPlanTests(unittest.TestCase):
             ["continue_accumulation", "recommend_adopt_arm", "recommend_retain_balanced", "recommend_discard_arm", "inconclusive"],
         )
         self.assertEqual(result["boundary"]["shadow_counts_ship_gate"], False)
+        self.assertIn("baseline_epoch_sha256", result["weekly_manifest"]["capture_binding_fields"])
+        self.assertFalse(result["baseline_epoch"]["cross_epoch_formal_pooling_forbidden"])
+        self.assertEqual(
+            result["baseline_epoch"]["effect_surface_change_policy"],
+            "start_source_bound_segment_single_epoch_adjudication_authoritative_multi_segment_deferred",
+        )
+        self.assertEqual(
+            result["baseline_epoch"]["multi_segment_cross_epoch_adjudication"],
+            "deferred_to_later_reviewed_cut_emit_inconclusive",
+        )
+        self.assertTrue(result["baseline_epoch"]["segment_mean_pooling_is_reporting_only"])
+        self.assertEqual(
+            result["decision_contract"]["direct_pairwise_final"]["comparison_basis"],
+            "behaviorally_orthogonal_segments_first_n_pairwise_selection_divergence_weeks",
+        )
+        self.assertEqual(result["execution_cuts"]["authorized_execution_cut_count"], 2)
+        self.assertTrue(result["execution_cuts"]["one_shot_complete_per_cut"])
+        self.assertTrue(result["execution_cuts"]["subcut_execution_forbidden"])
 
     def test_plan_matches_grid_lifecycle_and_design_authorities(self):
         result = plan.load_forward_policy_statistical_plan()
@@ -47,7 +68,7 @@ class ForwardPolicyStatisticalPlanTests(unittest.TestCase):
             result["statistics"]["minimum_forward_weeks_before_preliminary_review"],
             authority["category_thresholds"][item_28_category]["min_count"],
         )
-        self.assertIn("us_short_forward_policy_statistical_plan_20260716.json", design)
+        self.assertIn("us_short_forward_policy_statistical_plan_20260718.json", design)
 
     def test_rejects_second_wave_and_selection_grid_drift(self):
         result = plan.load_forward_policy_statistical_plan()

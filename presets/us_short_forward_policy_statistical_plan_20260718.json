@@ -1,0 +1,145 @@
+{
+  "schema_name": "us_short_forward_policy_statistical_plan",
+  "schema_version": "2.1.0",
+  "as_of": "20260718",
+  "status": "superseding_pre_count_v2_1_two_cut_plan",
+  "policy_scope": {
+    "primary_policy": "balanced",
+    "selection_policies": ["balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off"],
+    "factor_questions": {
+      "theme_weight_choice": ["balanced", "theme_plus", "theme_aggressive", "theme_off"],
+      "catalyst_weight_choice": ["balanced", "catalyst_off"],
+      "overextension_selection_choice": ["balanced", "overextension_selection_off"]
+    },
+    "excluded_second_wave_policy": "overextension_execution_off",
+    "second_wave_question": {
+      "question_id": "overextension_execution_choice",
+      "arms": ["balanced", "overextension_execution_off"],
+      "activation": "separate_shadow_branch_ledger_then_forward_only"
+    },
+    "sizing_neutral_in_scope": false
+  },
+  "weekly_manifest": {
+    "recording_mode": "same_run_live_capture_only",
+    "capture_binding_fields": ["decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256", "baseline_epoch_sha256", "common_selection_pool_sha256", "capture_sha256"],
+    "common_selection_pool_basis": "pass2_clean_after_all_hard_gates_before_policy_ranking",
+    "common_selection_pool_required": true,
+    "all_policy_selections_must_be_subsets": true,
+    "unit_of_independence": "decision_week_coverage_nonoverlap_h10_blocks_for_inference",
+    "dedupe_key": "decision_date_and_policy",
+    "historical_replay_counts_as_forward": false,
+    "backfill_allowed": false
+  },
+  "baseline_epoch": {
+    "effect_surface_contract": "presets/us_short_forward_policy_effect_surface_20260718.json",
+    "capture_binding_field": "baseline_epoch_sha256",
+    "formal_evaluation_unit": "single_qualified_epoch_block_inference",
+    "semantic_identity": "python_ast_without_docstrings_or_attributes_and_canonical_json",
+    "effect_surface_change_policy": "start_source_bound_segment_single_epoch_adjudication_authoritative_multi_segment_deferred",
+    "cross_epoch_formal_pooling_forbidden": false,
+    "per_record_source_binding_invariants": [
+      "common_selection_pool_membership",
+      "per_arm_selection_difference",
+      "h10_outcome_calculation"
+    ],
+    "multi_segment_cross_epoch_adjudication": "deferred_to_later_reviewed_cut_emit_inconclusive",
+    "deferred_cut_scope": "reml_hartung_knapp_interval_plus_frozen_heterogeneity_gate_plus_direction_conflict_not_yet_implemented",
+    "segment_mean_pooling_is_reporting_only": true,
+    "legacy_v2_counted_records_must_not_migrate": true,
+    "epoch_change_disposition": "start_source_bound_segment_record_identity_only_single_epoch_block_inference_authoritative"
+  },
+  "execution_cuts": {
+    "authorized_execution_cut_count": 2,
+    "one_shot_complete_per_cut": true,
+    "subcut_execution_forbidden": true,
+    "cuts": [
+      {
+        "cut_id": "a1_v2_1_offline_epoch_formal_look_and_direct_final",
+        "scope": "semantic_effect_segment_capture_single_epoch_adjudication_multi_segment_deferred_fixed_24_36_looks_and_direct_multi_passer_final",
+        "provider_calls_added": false
+      },
+      {
+        "cut_id": "a1_corporate_action_evidence_and_maturity_wiring",
+        "scope": "authorized_corporate_action_evidence_sidecar_maturity_binding_and_global_no_count_observability",
+        "requires_separate_provider_authorization": true
+      }
+    ]
+  },
+  "outcome_contract": {
+    "selection_attribution": {
+      "primary_metric": "policy_minus_balanced_after_cost_net_return",
+      "candidate_value_field": "candidate_after_cost_net_return",
+      "primary_horizon_trading_sessions": 10,
+      "diagnostic_horizons_trading_sessions": [5, 20],
+      "entry_basis": "first_regular_session_open",
+      "price_basis": "source_verified_split_dividend_adjusted",
+      "cost_basis": "same_frozen_round_trip_cost_for_every_policy",
+      "benchmarks_reported": ["SPY", "QQQ", "RUSSELL_1000"],
+      "benchmark_choice_changes_primary_delta": false,
+      "incomplete_price_or_corporate_action_disposition": "data_degraded_whole_week_no_count"
+    },
+    "execution_protection": {
+      "comparison_only": true,
+      "reuse_model_paper_entry_stop_take_profit_rules": true,
+      "still_open_at_primary_horizon": "evaluation_mark_only_at_h10_close",
+      "evaluation_mark_is_production_exit": false,
+      "evaluation_mark_changes_model_paper_ledger": false,
+      "metrics": ["net_return", "max_drawdown", "bad_pick_rate", "tail_loss", "total_cost_fraction", "unfilled_cash_count", "fill_rate", "turnover"]
+    }
+  },
+  "statistics": {
+    "primary_metric": "policy_minus_balanced_after_cost_net_return",
+    "primary_delta": "policy_minus_balanced",
+    "selection_divergence": {"selection_count": 15, "membership_symmetric_difference_at_least": 1, "rank_and_selection_bucket_diagnostics_are_secondary": true, "action_and_size_outcomes_available": false},
+    "minimum_forward_weeks_before_preliminary_review": 12,
+    "minimum_divergence_weeks_before_formal_recommendation": 24,
+    "minimum_nonoverlap_h10_blocks_before_formal_recommendation": 12,
+    "minimum_market_risk_regimes_before_formal_recommendation": 2,
+    "minimum_divergence_weeks_per_required_regime": 4,
+    "retire_after_divergence_weeks": 36,
+    "formal_look_divergence_weeks": [24, 36],
+    "one_sided_alpha_spending": [0.0125, 0.0125],
+    "one_sided_alpha_total": 0.025,
+    "formal_look_disposition": "only_frozen_first_n_divergence_weeks_are_formally_tested_at_each_look",
+    "familywise_correction": "holm_bonferroni",
+    "adjusted_pvalue_max": 0.025,
+    "paired_block_confidence_lower_alpha": 0.025,
+    "comparison_win_margin": 0.001,
+    "comparison_margin_unit": "net_return_fraction",
+    "placebo": {"replicates": 1000, "seed_start": 0, "seed_end_inclusive": 999, "match_frequency": "data_bound_to_each_head_weekly_divergence_count", "method": "balanced_top15_same_pass2_clean_pool_random_in_out_swaps"},
+    "paired_basis": "same_decision_week_policy_minus_balanced",
+    "risk_guardrails": {"max_drawdown_worsening_fraction_max": 0.02, "bad_pick_rate_worsening_max": 0.05, "tail_loss_worsening_fraction_max": 0.02, "turnover_harm_multiplier_vs_balanced": 2.0, "fill_harm_fraction_vs_balanced": 0.5},
+    "elimination_rule": {
+      "no_automatic_promotion": true,
+      "early_action": "futility_or_harm_only",
+      "outcome_blind_before_formal_minimum": true,
+      "futility": {"comparison": "lt", "minimum_divergence_weeks": 2, "within_first_decision_weeks": 8},
+      "harm": {"combine": "or", "turnover": {"metric": "mean_weekly_top15_turnover", "comparison": "gt", "threshold_multiplier_vs_balanced": 2.0, "sustained_decision_weeks": 2}, "fill": {"metric": "top15_fill_vs_balanced_seat_count", "comparison": "lt", "threshold_fraction": 0.5, "sustained_decision_weeks": 2}},
+      "flag_effect": "surface_for_human_review_only",
+      "formal_recommendation_gate": {"minimum_divergence_weeks": 24, "minimum_nonoverlap_h10_blocks": 12, "minimum_market_risk_regimes": 2, "minimum_divergence_weeks_per_required_regime": 4, "mean_paired_advantage_gte": 0.001, "paired_win_consistency_fraction": [2, 3], "placebo_percentile_exclusive_gt": 0.95, "holm_adjusted_pvalue_lte": 0.025, "paired_block_confidence_interval_lower_gt": 0.0, "all_risk_guardrails_must_pass": true}
+    }
+  },
+  "decision_contract": {
+    "statuses": ["continue_accumulation", "recommend_adopt_arm", "recommend_retain_balanced", "recommend_discard_arm", "inconclusive"],
+    "one_recommended_arm_per_question_max": true,
+    "same_question_multiple_passers_require_direct_pairwise_final": true,
+    "direct_pairwise_final": {
+      "activation": "only_at_reached_formal_look_when_multiple_arms_pass",
+      "comparison_basis": "behaviorally_orthogonal_segments_first_n_pairwise_selection_divergence_weeks",
+      "minimum_pairwise_divergence_weeks": 24,
+      "minimum_nonoverlap_h10_blocks": 12,
+      "minimum_market_risk_regimes": 2,
+      "minimum_divergence_weeks_per_required_regime": 4,
+      "economic_margin": 0.001,
+      "simultaneous_inference": "bonferroni_one_sided_paired_block_bootstrap",
+      "confidence_lower_alpha": 0.025,
+      "unique_winner_requires_all_pairwise_lower_bounds_gt_margin": true,
+      "otherwise_status": "inconclusive"
+    },
+    "user_decision_receipt_required_fields": ["question_id", "arm_id", "verdict_sha256", "contract_sha256", "baseline_epoch_sha256", "decision", "decided_at"],
+    "user_decision_values": ["accept", "reject", "defer"],
+    "automatic_production_switch": false
+  },
+  "combination_policy": {"activation": "after_two_or_more_different_questions_have_user_accepted_winners", "starts_forward_only_after_reviewed_preregistration": true, "historical_backfill_allowed": false, "must_beat": ["balanced", "strongest_accepted_single_arm"], "implemented_in_this_cut": false},
+  "boundary": {"shadow_only": true, "changes_primary_selection": false, "shadow_counts_ship_gate": false, "provider_calls_added": false, "broker_or_order_automation_allowed": false, "historical_replay_is_forward": false, "automatic_production_switch": false}
+}

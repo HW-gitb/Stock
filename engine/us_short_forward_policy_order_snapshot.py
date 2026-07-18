@@ -84,7 +84,10 @@ def _strict_yyyymmdd(value: object) -> bool:
 
 
 def _finite_positive(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0.0
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) and value > 0.0
+    except OverflowError:
+        return False
 
 
 def _load_schema() -> dict:
@@ -109,6 +112,7 @@ def _capture_binding(capture: dict) -> dict:
         "price_basis_date": capture["price_basis_date"],
         "source_context_sha256": capture["source_context_sha256"],
         "comparison_contract_sha256": capture["comparison_contract_sha256"],
+        "baseline_epoch_sha256": capture["baseline_epoch_sha256"],
         "common_selection_pool_sha256": capture["common_selection_pool_sha256"],
         "capture_sha256": _canonical_sha256(capture),
     }

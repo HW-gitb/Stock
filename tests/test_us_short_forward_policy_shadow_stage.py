@@ -138,10 +138,11 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
             "balanced", "theme_plus", "theme_aggressive", "theme_off", "catalyst_off", "overextension_selection_off",
         ])
         self.assertEqual(set(private_record["selection_decisions"]), set(private_record["selection_policies"]))
-        self.assertEqual(private_record["schema_version"], "2.0.0")
+        self.assertEqual(private_record["schema_version"], "2.1.0")
         self.assertEqual(private_record["common_selection_pool"], ["ALFA", "BETA"])
         self.assertEqual(len(private_record["common_selection_pool_sha256"]), 64)
         self.assertEqual(len(private_record["comparison_contract_sha256"]), 64)
+        self.assertEqual(private_record["baseline_epoch_sha256"], summary["baseline_epoch_sha256"])
         self.assertEqual(summary["common_selection_pool_count"], 2)
         self.assertEqual(summary["common_selection_pool_sha256"], private_record["common_selection_pool_sha256"])
         self.assertEqual(summary["comparison_contract_sha256"], private_record["comparison_contract_sha256"])

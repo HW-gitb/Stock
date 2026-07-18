@@ -26,6 +26,7 @@ from engine.us_short_forward_policy_heads import (
     build_selection_policy_decisions,
 )
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256
 from engine.us_short_private_paths import reject_nonprivate_output_path
 
 
@@ -35,7 +36,7 @@ SUMMARY_ROOT = ROOT / "research" / "results" / "us_short_forward_policy_shadow"
 PRIVATE_RECORD_KEYS = frozenset({
     "schema_name", "schema_version", "decision_date", "price_basis_date", "generated_at",
     "source_context_sha256", "comparison_contract_sha256", "common_selection_pool",
-    "common_selection_pool_sha256", "selection_policies", "selection_decisions", "boundary",
+    "baseline_epoch_sha256", "common_selection_pool_sha256", "selection_policies", "selection_decisions", "boundary",
 })
 SELECTION_DECISION_KEYS = frozenset({
     "out_of_window", "decision_date", "price_basis_date", "run_date", "cheap_eligible", "candidates",
@@ -84,7 +85,7 @@ def _validate_summary(summary: object) -> None:
         raise ForwardPolicyShadowStageError("forward-policy summary dates must be strict real YYYYMMDD")
     if summary["price_basis_date"] >= summary["decision_date"]:
         raise ForwardPolicyShadowStageError("price_basis_date must precede decision_date")
-    for field in ("source_context_sha256", "comparison_contract_sha256", "common_selection_pool_sha256"):
+    for field in ("source_context_sha256", "comparison_contract_sha256", "baseline_epoch_sha256", "common_selection_pool_sha256"):
         digest = summary.get(field)
         if not isinstance(digest, str) or len(digest) != 64 \
                 or any(char not in "0123456789abcdef" for char in digest):
@@ -217,7 +218,7 @@ def validate_forward_shadow_selection_record(record: object) -> dict:
     if not isinstance(record, dict) or set(record) != PRIVATE_RECORD_KEYS:
         raise ForwardPolicyShadowStageError("private A1 record key set drifted")
     if record.get("schema_name") != "us_short_forward_policy_shadow_selection" \
-            or record.get("schema_version") != "2.0.0" \
+            or record.get("schema_version") != "2.1.0" \
             or not isinstance(record.get("generated_at"), str) or not record["generated_at"]:
         raise ForwardPolicyShadowStageError("private A1 record identity/generated_at is invalid")
     decision_date, price_basis_date = record.get("decision_date"), record.get("price_basis_date")
@@ -240,20 +241,24 @@ def validate_forward_shadow_selection_record(record: object) -> dict:
         raise ForwardPolicyShadowStageError("private A1 common_selection_pool digest drifted")
     if record.get("comparison_contract_sha256") != statistical_plan_sha256():
         raise ForwardPolicyShadowStageError("private A1 comparison contract digest drifted")
+    epoch = record.get("baseline_epoch_sha256")
+    if not isinstance(epoch, str) or len(epoch) != 64 or any(char not in "0123456789abcdef" for char in epoch):
+        raise ForwardPolicyShadowStageError("private A1 baseline epoch digest is invalid")
     return record
 
 
 def _build_summary(*, decision_date: str, price_basis_date: str, source_context_sha256: str,
                    common_selection_pool: list[str], common_selection_pool_sha256: str,
-                   comparison_contract_sha256: str, decisions: dict) -> dict:
+                   comparison_contract_sha256: str, baseline_epoch: str, decisions: dict) -> dict:
     balanced = set(decisions["balanced"]["admitted"])
     summary = {
         "schema_name": "us_short_forward_policy_shadow_summary",
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
         "source_context_sha256": source_context_sha256,
         "comparison_contract_sha256": comparison_contract_sha256,
+        "baseline_epoch_sha256": baseline_epoch,
         "common_selection_pool_count": len(common_selection_pool),
         "common_selection_pool_sha256": common_selection_pool_sha256,
         "selection_policies": list(SELECTION_POLICY_IDS),
@@ -319,6 +324,7 @@ def materialize_forward_policy_shadow(
     common_selection_pool = _derive_common_selection_pool(decisions)
     common_selection_pool_sha256 = _canonical_sha256(common_selection_pool)
     comparison_contract_sha256 = statistical_plan_sha256()
+    baseline_epoch = baseline_epoch_sha256()
     summary = _build_summary(
         decision_date=decision_date,
         price_basis_date=price_basis_date,
@@ -326,16 +332,18 @@ def materialize_forward_policy_shadow(
         common_selection_pool=common_selection_pool,
         common_selection_pool_sha256=common_selection_pool_sha256,
         comparison_contract_sha256=comparison_contract_sha256,
+        baseline_epoch=baseline_epoch,
         decisions=decisions,
     )
     private_record = {
         "schema_name": "us_short_forward_policy_shadow_selection",
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
         "generated_at": generated_at,
         "source_context_sha256": source_context_sha256,
         "comparison_contract_sha256": comparison_contract_sha256,
+        "baseline_epoch_sha256": baseline_epoch,
         "common_selection_pool": common_selection_pool,
         "common_selection_pool_sha256": common_selection_pool_sha256,
         "selection_policies": list(SELECTION_POLICY_IDS),

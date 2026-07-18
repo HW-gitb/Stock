@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_forward_policy_statistical_plan_v2_1",
+  "title": "US-short A1 Path-A forward policy comparison v2.1 preregistration",
+  "description": "Pre-count superseding contract: exactly one offline first cut binds a content-addressed effect-surface epoch and fixed 24/36 alpha-spent formal looks. It authorizes no provider, replay, production, broker, or ship-gate work.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "status", "policy_scope", "weekly_manifest", "baseline_epoch", "execution_cuts", "outcome_contract", "statistics", "decision_contract", "combination_policy", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_statistical_plan"},
+    "schema_version": {"const": "2.1.0"},
+    "as_of": {"const": "20260718"},
+    "status": {"const": "superseding_pre_count_v2_1_two_cut_plan"},
+    "policy_scope": {"type": "object"},
+    "weekly_manifest": {"type": "object"},
+    "baseline_epoch": {"type": "object"},
+    "execution_cuts": {"type": "object"},
+    "outcome_contract": {"type": "object"},
+    "statistics": {"type": "object"},
+    "decision_contract": {"type": "object"},
+    "combination_policy": {"type": "object"},
+    "boundary": {"type": "object"}
+  }
+}

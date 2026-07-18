@@ -62,7 +62,7 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256",
+        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256", "baseline_epoch_sha256",
         "common_selection_pool_sha256", "capture_sha256"
       ],
       "properties": {
@@ -70,6 +70,7 @@
         "price_basis_date": {"type": "string", "pattern": "^[0-9]{8}$"},
         "source_context_sha256": {"$ref": "#/$defs/sha256"},
         "comparison_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "baseline_epoch_sha256": {"$ref": "#/$defs/sha256"},
         "common_selection_pool_sha256": {"$ref": "#/$defs/sha256"},
         "capture_sha256": {"$ref": "#/$defs/sha256"}
       }

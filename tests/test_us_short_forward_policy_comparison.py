@@ -21,6 +21,7 @@ from engine import us_short_forward_policy_decision_diff as decision_diff  # noq
 from engine import us_short_shadow_compare as selection_cmp  # noqa: E402
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS  # noqa: E402
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256  # noqa: E402
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256  # noqa: E402
 
 POLICIES = tuple(SELECTION_POLICY_IDS)
 
@@ -39,12 +40,13 @@ def _capture(decision_date="20260713", *, source_digest="a" * 64) -> dict:
     common_pool = ["AAA", "BBB", "CCC", "DDD"]
     return {
         "schema_name": "us_short_forward_policy_shadow_selection",
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "decision_date": decision_date,
         "price_basis_date": price_basis_date,
         "generated_at": "2026-07-12T08:00:00-04:00",
         "source_context_sha256": source_digest,
         "comparison_contract_sha256": statistical_plan_sha256(),
+        "baseline_epoch_sha256": baseline_epoch_sha256(),
         "common_selection_pool": common_pool,
         "common_selection_pool_sha256": __import__("hashlib").sha256(
             __import__("json").dumps(common_pool, separators=(",", ":")).encode("utf-8")

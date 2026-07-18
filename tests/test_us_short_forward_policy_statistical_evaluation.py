@@ -12,6 +12,7 @@ from engine import us_short_forward_policy_statistical_evaluation as evaluation
 from engine import us_short_paper_scorecard_comparison as scorecard_comparison
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256
 
 
 POLICIES = tuple(SELECTION_POLICY_IDS)
@@ -50,12 +51,13 @@ def _capture(decision_date: str, *, shadow_replacement: str | None = "T15", sour
         selections[SHADOW] = BALANCED[1:] + [shadow_replacement]
     return {
         "schema_name": "us_short_forward_policy_shadow_selection",
-        "schema_version": "2.0.0",
+        "schema_version": "2.1.0",
         "decision_date": decision_date,
         "price_basis_date": (decision - timedelta(days=3)).strftime("%Y%m%d"),
         "generated_at": "2026-07-12T08:00:00-04:00",
         "source_context_sha256": source_digest,
         "comparison_contract_sha256": statistical_plan_sha256(),
+        "baseline_epoch_sha256": baseline_epoch_sha256(),
         "common_selection_pool": list(COMMON_POOL),
         "common_selection_pool_sha256": __import__("hashlib").sha256(
             __import__("json").dumps(COMMON_POOL, separators=(",", ":")).encode("utf-8")

@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_forward_policy_effect_surface",
+  "title": "US-short A1 comparison effect surface",
+  "description": "Offline static selection/outcome dependency closure whose semantic Python/JSON digest defines an independently evaluated A1 baseline epoch. It creates no provider, capture, replay, production, or ship-gate authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "scope", "paths", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_forward_policy_effect_surface"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"const": "20260718"},
+    "scope": {"const": "a1_path_a_selection_and_h10_outcome_effect_surface"},
+    "paths": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": {"type": "string", "pattern": "^(engine|presets)/[A-Za-z0-9_./-]+$"}
+    },
+    "boundary": {
+      "const": {
+        "offline_semantic_identity_only": true,
+        "effect_surface_change_policy": "start_segment_then_require_behavioral_orthogonality_for_pooling",
+        "provider_calls_added": false,
+        "historical_replay_allowed": false,
+        "cross_epoch_formal_pooling_allowed": false,
+        "changes_primary_selection": false,
+        "shadow_counts_ship_gate": false
+      }
+    }
+  }
+}

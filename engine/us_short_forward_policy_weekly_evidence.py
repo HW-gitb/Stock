@@ -86,7 +86,10 @@ def _sha256(value: object) -> bool:
 
 
 def _finite(value: object) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    try:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _load_schema() -> dict:
@@ -121,6 +124,7 @@ def _capture_binding(capture: dict) -> dict:
         "price_basis_date": capture["price_basis_date"],
         "source_context_sha256": capture["source_context_sha256"],
         "comparison_contract_sha256": capture["comparison_contract_sha256"],
+        "baseline_epoch_sha256": capture["baseline_epoch_sha256"],
         "common_selection_pool_sha256": capture["common_selection_pool_sha256"],
         "capture_sha256": _canonical_sha256(capture),
     }
@@ -272,7 +276,7 @@ def validate_forward_policy_h10_weekly_evidence(record: object) -> dict:
     frozen_capture = _validated_frozen_capture(record["frozen_capture"])
     binding = record["capture_binding"]
     expected_binding_keys = {
-        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256",
+        "decision_date", "price_basis_date", "source_context_sha256", "comparison_contract_sha256", "baseline_epoch_sha256",
         "common_selection_pool_sha256", "capture_sha256",
     }
     if not isinstance(binding, dict) or set(binding) != expected_binding_keys \

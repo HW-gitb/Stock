@@ -9,6 +9,7 @@ import jsonschema
 
 from engine.us_short_forward_policy_shadow_stage import _build_summary
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256
 
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -40,6 +41,7 @@ class ForwardPolicyShadowSummarySchemaTests(unittest.TestCase):
             common_selection_pool=["ALFA", "BETA", "CATA"],
             common_selection_pool_sha256="b" * 64,
             comparison_contract_sha256=statistical_plan_sha256(),
+            baseline_epoch=baseline_epoch_sha256(),
             decisions=_decisions(),
         )
 

@@ -14,6 +14,7 @@ from engine import us_short_forward_policy_order_snapshot as snapshot
 from engine import us_short_forward_policy_private_week as private_week
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256
 
 
 COMMON_POOL = ["ALFA", "BETA"]
@@ -40,9 +41,9 @@ def _decision() -> dict:
 
 def _capture() -> dict:
     return {
-        "schema_name": "us_short_forward_policy_shadow_selection", "schema_version": "2.0.0",
+        "schema_name": "us_short_forward_policy_shadow_selection", "schema_version": "2.1.0",
         "decision_date": "20260713", "price_basis_date": "20260710", "generated_at": "2026-07-13T08:00:00-04:00",
-        "source_context_sha256": "a" * 64, "comparison_contract_sha256": statistical_plan_sha256(),
+        "source_context_sha256": "a" * 64, "comparison_contract_sha256": statistical_plan_sha256(), "baseline_epoch_sha256": baseline_epoch_sha256(),
         "common_selection_pool": list(COMMON_POOL), "common_selection_pool_sha256": _digest(COMMON_POOL),
         "selection_policies": list(SELECTION_POLICY_IDS),
         "selection_decisions": {policy_id: _decision() for policy_id in SELECTION_POLICY_IDS},

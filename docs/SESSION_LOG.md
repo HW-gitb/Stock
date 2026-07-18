@@ -1,5 +1,48 @@
 # Session Log
 
+## 2026-07-18 — Claude Code solo 自修 + 自审 PASS (R-USSHORT-A1-V2-1 R-RE 选项 ii) + 提交 merge
+
+- **Verdict/Action**: 用户授权 solo 快修快审（一次性、不入长期分工）。按 register「USER DECISION option (ii)」实现：多段计数窗口 formal 裁决 emit `inconclusive`（单段字节不变）+ 收窄 plan/design/README 契约（不再声称已强制跨段 RE）+ closed-world validator 同步 + planted 正反测试。整条 R-ID（R-A/R-B/O1/O2 + R-RE）RESOLVED。
+- **Required**: 无。`R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST` resolved（闭合证据单源见 `docs/system_risk_register.md`「RESOLVED 2026-07-18」）；REML+HK（选项 i）与 cut2 producer 显式推迟后续 reviewed cut。
+- **Verify**: 亲跑全包 `test_us_short*` 4497 OK（+2 planted）；doc-gov 35 OK、README route-row 11 OK、route-ledger 14 OK；plan load+JSON+`git diff --check` clean。solo 自审：单段路径不变 + 多段→inconclusive planted 双向证；shadow-only 边界未动。review-evidence:not_available。
+- **Next**: 无（已提交 + 并入 master、不 push）
+
+## 2026-07-18 — 用户拍板 R-RE = 选项 ii（推迟多段裁决 + 收窄契约）；交 Codex 实现
+
+- **Verdict/Action**: 用户 2026-07-18 就上一条 FAIL-narrow 的 R-RE 选 **(ii) DEFER**：counted records 跨 ≥2 segment 时 formal 裁决 emit `inconclusive`（多段不做跨段 adopt）、单段行为不变、收窄 plan/design 契约不再声称已强制的 heterogeneity-aware RE pooling；**不**做 REML+HK（选项 i、未选）。
+- **Required**: `R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST` — R-RE 的用户决定 + Codex 精确实现范围（三步 + out-of-scope + 测试）单源见 `docs/system_risk_register.md` 的「USER DECISION 2026-07-18 → option (ii)」块。R-A/R-B/O1/O2 已 resolved。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Claude Code 复审 FAIL-narrow (R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST)
+
+- **Verdict/Action**: 复审 Codex 修复。R-A/R-B/O1/O2 全 RESOLVED（语义 AST 哈希 + 自动依赖闭包[我+独立 agent 双验含 `scoring_profile_governance` 权重表全捕获]+ OverflowError 守卫 + alpha 分割）。剩 1 条窄 R-RE：RE 只落点估计、多段 CI/p 段-naive 无 Hartung-Knapp、plan overclaim → FAIL-narrow、属用户设计决策。完整证据单源见 register。
+- **Required**: `R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST`（R-RE + R-A/R-B/O1/O2 已 resolved 的完整证据）— 单一来源见 `docs/system_risk_register.md`（本处不复述）。R-RE 修法=用户二选一：(i) 补全 RE 推断（REML+HK 区间+τ² 异质性门+方向冲突→inconclusive，全镜像 a_short R1）(ii) 推迟多段裁决（同 a_short 自己 cut1「不做 random-effects 裁决」：单段权威、多段 emit inconclusive、收窄 plan 声明）；荐 (ii)。
+- **Verify**: 亲跑全包 `test_us_short*` 4495 OK；自跑 `required_effect_surface_paths()` 确认 27 路径含全部 9 先前漏项；独立对抗 agent（a6f2 隔离）FRONT-1 闭包 CLEAN + FRONT-2 印证 R-RE + FRONT-3/4 CLEAN。review-evidence:not_available。
+- **Next**: 用户：定 R-RE 选项 i/ii（荐 ii）→ 再 Codex：修复
+
+## 2026-07-18 — Codex repair (R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST; current worktree only)
+
+- **Verdict/Action**: 接受 R-A/R-B 与 O1/O2：语义化选择/H10 依赖闭包生成 effect segment；公共池、各臂选择差、H10 计算三项来源绑定后，以 REML 合并 segment；保留既有固定 look 与直接决赛。
+- **Required**: `R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST` — R-A/R-B 已实现，O1/O2 已一并处理；第2刀 maturity 绝对时间界仍按 provider-gated scope 留在 register。
+- **Verify**: red-first 为缺少闭包/正式 look alpha/huge-int 守卫的 1 failure + 3 errors；修复后 effect/plan/ledger/numeric 16 OK，固定 A1 + schema/route package 161 OK。
+- **Pre-Codex self-review**: A 闭包覆盖 selection→H10 engine/preset；B grep 仅留历史审查文字；C 混 segment、漏 `dynamic_seats`、注释/docstring/JSON 格式、huge-int 及两次 alpha 反向用例；E 当前设计/README 指向新机制；F JSON/schema、`git diff --check`、固定包通过。未用子 agent（当前模式禁止委派）。
+- **Next**: Claude Code：审查
+
+## 2026-07-18 — Claude Code 审查 FAIL (R-USSHORT-A1-V2-1)
+
+- **Verdict/Action**: FAIL；R-A/R-B 使 v2.1 不能安全收敛。
+- **Required**: `R-USSHORT-A1-V2-1-EPOCH-RESET-AND-ALLOWLIST`；完整证据和修法见 `docs/system_risk_register.md`。
+- **Verify**: reviewer 全包 `test_us_short*.py` 4492 OK；审查证据见 register。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Codex execute (US-short A1 v2.1 first of exactly two one-shot cuts; uncommitted)
+
+- **Verdict/Action**: 第1刀已完整落地：`us_short_forward_policy_statistical_plan_20260718.json` 将执行拓扑钉死为仅两刀、每刀一次完成、禁止子刀；新增 allowlisted content-addressed effect-surface epoch，贯穿 Cut-A capture、common order、outcome、private week、H10 evidence、source receipt、ledger 和用户确认 receipt。ledger 只以当前 epoch 计数，旧 epoch 仅诊断；正式建议只在冻结的 24/36 divergence looks 以每次 0.025 单侧 alpha 计算；同题多通过者必须经过 Bonferroni 直接两两最终裁决。未触发 provider、真实周跑、公司行动证据生产、生产切换或 ship-gate。
+- **Required**: 第2刀仍是唯一后续实现面：在另行 provider 授权后一次性完成公司行动 evidence sidecar、maturity binding 与全局 no-count 可观测性；不得拆成子刀。当前第1刀等待 Claude Code 独立审查，完整边界见 `presets/us_short_forward_policy_statistical_plan_20260718.json` 与 `docs/us_short_system_design.md`。
+- **Verify**: red-first 为缺少 effect-surface 模块与 v2.1 plan 的 2 failures + 1 import error；最终 fixed US-short A1 + route/ledger package **123 OK**，`py_compile`、新 JSON parse、`git diff --check` 均通过。
+- **Pre-Codex self-review**: A 已覆盖 capture→order→outcome→private-week→H10→receipt→ledger 全链及 epoch receipt；B `rg` 确认 live authority 无旧 `20260716` plan 引用，`baseline_epoch_sha256` 已贯穿全部消费者；C 新增 fixed-look (23/24/35/37)、多-passer direct-final、prior-epoch diagnostic-only 反向测试；D 无自然语言分类或外部调用；E 仅 owner design/README/SESSION_LOG 落盘且 README route guard 通过；F schema/日期/digest/closed-world validators、JSON parse、compile、diff check 均过。未使用独立 self-review agent：当前模式禁止子代理委派。
+- **Next**: Claude Code：仅审 US-short A1 v2.1 第1刀；PASS 后由 Claude 提交，不得提前执行第2刀。
+
 ## 2026-07-18 — Claude Code 审查 PASS (R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT + R-ASHORT-SIDECAR-ERROR-OBSERVABILITY)
 
 - **Verdict/Action**: PASS。Codex 修问题 1（factor_comparison 直跑 import）+ 问题 3（sidecar 可观测性）思路与代码均正确、非回归、secret-safe、未改选股/评分/veto/sizing/provider；并按用户指令一并加修 Optional（`safe_exception_summary` 加至 weekly_pipeline 三处 advisory handler + `str(exc)` 兜底）。详见 register 两条。

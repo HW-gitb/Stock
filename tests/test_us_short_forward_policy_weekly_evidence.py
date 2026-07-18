@@ -14,6 +14,7 @@ from engine import us_short_forward_policy_private_week as private_week
 from engine import us_short_forward_policy_weekly_evidence as weekly_evidence
 from engine.us_short_forward_policy_heads import SELECTION_POLICY_IDS
 from engine.us_short_forward_policy_statistical_plan import statistical_plan_sha256
+from engine.us_short_forward_policy_effect_surface import baseline_epoch_sha256
 
 
 POOL = [f"T{index:02d}" for index in range(16)]
@@ -46,9 +47,9 @@ def _capture(*, selected_count: int = 15) -> dict:
     selections = {policy_id: list(balanced) for policy_id in SELECTION_POLICY_IDS}
     selections["theme_plus"] = theme_plus
     return {
-        "schema_name": "us_short_forward_policy_shadow_selection", "schema_version": "2.0.0",
+        "schema_name": "us_short_forward_policy_shadow_selection", "schema_version": "2.1.0",
         "decision_date": "20260713", "price_basis_date": "20260710", "generated_at": "2026-07-13T08:00:00-04:00",
-        "source_context_sha256": "a" * 64, "comparison_contract_sha256": statistical_plan_sha256(),
+        "source_context_sha256": "a" * 64, "comparison_contract_sha256": statistical_plan_sha256(), "baseline_epoch_sha256": baseline_epoch_sha256(),
         "common_selection_pool": list(POOL), "common_selection_pool_sha256": _digest(POOL),
         "selection_policies": list(SELECTION_POLICY_IDS),
         "selection_decisions": {policy_id: _decision(selections[policy_id]) for policy_id in SELECTION_POLICY_IDS},
