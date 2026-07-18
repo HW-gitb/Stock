@@ -130,8 +130,11 @@ def settle_and_summarize_v2_weekly(*, root: str | Path | None,
                 not isinstance(reminder.get("reminders"), list):
             return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
         return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]))
-    except (ComparisonV2Error, OSError, UnicodeDecodeError, json.JSONDecodeError,
-            jsonschema.ValidationError, ValueError, TypeError):
+    except Exception:
+        # Production seam: the comparison track must NEVER block the weekly run, so this
+        # catches any Exception (not a fixed tuple) — a future latent uncaught type in
+        # settle/adjudicate still degrades to "unavailable", never propagates. BaseException
+        # (KeyboardInterrupt/SystemExit) is intentionally not caught.
         return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
 
 

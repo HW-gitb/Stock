@@ -134,6 +134,13 @@
 - **Verify**: targeted runner/observability/crash-veto/health package 33 OK; phase6 EGS package 66 OK; broad `discover -s tests -p test_a_short*.py` timed out at 600s without a final result and is not PASS evidence.
 - **Pre-Codex self-review**: A N/A (no enumerable contract set); B scope grep found zero live `details suppressed` or named type-only sidecar handlers; C reverse tests preserve benign `NameError` detail while redacting URL/token values and keep sidecar failure non-blocking; D N/A; E only register + session live-state record changed; F focused direct-script, CLI, schema-health, and phase6 checks passed. Lightweight independent self-review was not used because this task's active mode forbids sub-agent delegation.
 - **Next**: Claude Code: review
+## 2026-07-18 — Claude Code 收口 A-short 对比轨 v2 第 3 刀 non-blocking Optional（用户指令·trivial 一行·自实现自验）
+
+- **Verdict/Action**: 用户指令下把 pre-M6.7 `settle_and_summarize_v2_weekly` 的 except 从特定元组放宽为 `except Exception`（BaseException 仍传播），使"对比失败绝不阻断生产"对未来意外异常类型也免疫。**如实标注**：我自实现+自验的 trivial 一行、非独立对抗审查。改在 3b4b，未上 master。
+- **Required**: 无（`R-ASHORT-FACTOR-COMPARISON-CLOSED-LOOP` 的 knife-3 Optional → resolved，单源见 `docs/system_risk_register.md`）。
+- **Verify**: review-evidence:not_available（真实工具输出）。`py_compile` OK + focused `test_a_short_factor_comparison_v2_weekly` 4 OK；git diff 仅此一处 except 放宽 + 说明注释；`Exception` ⊇ 原元组 → 现有/可达路径行为不变、无 import 孤儿。
+- **Next**: 无（要上 master 说 merge）
+
 ## 2026-07-18 — Claude Code 独立审查 PASS（A-short 对比轨 v2 第 3 刀 weekly 接线；提交 knife-3）
 
 - **Verdict/Action**: PASS + 提交（knife-3：新 weekly adapter + daily-cache schema + 测试 + 生产 `a_short_weekly_pipeline`/`m67_render`/effect-contract/weekly schema/weekly 测试 + 设计/register/SESSION_LOG）。生产边界验过：pre-M6.7 helper 对 11 个对抗输入全返回 summary 不 raise → 不阻断生产；`factor_comparison_v2` 只被 validator+banner 消费不进选股；capture 仅在匹配 published bundle 后冻结；v1 写 flags 入口 SystemExit。一条 non-blocking Optional（把 pre-M6.7 特定异常元组放宽为 `except Exception` 加固）。full 细节单源见 `docs/system_risk_register.md`。
