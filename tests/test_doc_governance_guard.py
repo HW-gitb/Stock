@@ -672,9 +672,10 @@ class DocGovernanceGuard(unittest.TestCase):
             self.assertNotIn(anchor, template_section, f"SESSION_LOG template still contains stale role binding: {anchor}")
 
     def test_process_speed_defaults_are_shared_and_scripted(self):
-        # User-requested 2026-07-02: make command-speed defaults shared repo policy for both LLMs,
-        # not Codex memory. The anchors deliberately cover the six requested points once, without
-        # reintroducing a sprawling protocol body.
+        # User-requested 2026-07-18: verification scope follows the changed surface.  Both LLMs
+        # independently run the small acceptance pack, while a qualifying full lane regression has
+        # one owner for one unchanged final diff.  These anchors prevent a stale reviewer-full-pack
+        # rule from silently returning without duplicating the authoritative policy body.
         text = AGENTS.read_text(encoding="utf-8")
         m = re.search(r"(?ms)^## Role split and command ownership.*?(?=^## Codex adversarial review standard)", text)
         self.assertIsNotNone(m, "AGENTS lost the role-split section")
@@ -684,8 +685,11 @@ class DocGovernanceGuard(unittest.TestCase):
             "fixed verification packs",
             "`docs/process`",
             ".tools/verify_doc_process.cmd",
-            "focused first, then the required full pack",
-            "the reviewer must personally run the lane full pack",
+            "Verification tiering and one-full-run rule",
+            "Acceptance focus pack — mandatory twice",
+            "Full lane regression — exceptional, not default",
+            "exactly one actor runs the full lane pack",
+            "still-running, timed-out, interrupted, or merely transcribed full run is not PASS evidence",
         ):
             self.assertIn(anchor, section, f"shared process-speed contract lost anchor: {anchor}")
         for removed_soft_rule in (

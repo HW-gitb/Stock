@@ -42,6 +42,12 @@
 - **Verify**: red-first 为缺少 effect-surface 模块与 v2.1 plan 的 2 failures + 1 import error；最终 fixed US-short A1 + route/ledger package **123 OK**，`py_compile`、新 JSON parse、`git diff --check` 均通过。
 - **Pre-Codex self-review**: A 已覆盖 capture→order→outcome→private-week→H10→receipt→ledger 全链及 epoch receipt；B `rg` 确认 live authority 无旧 `20260716` plan 引用，`baseline_epoch_sha256` 已贯穿全部消费者；C 新增 fixed-look (23/24/35/37)、多-passer direct-final、prior-epoch diagnostic-only 反向测试；D 无自然语言分类或外部调用；E 仅 owner design/README/SESSION_LOG 落盘且 README route guard 通过；F schema/日期/digest/closed-world validators、JSON parse、compile、diff check 均过。未使用独立 self-review agent：当前模式禁止子代理委派。
 - **Next**: Claude Code：仅审 US-short A1 v2.1 第1刀；PASS 后由 Claude 提交，不得提前执行第2刀。
+## 2026-07-18 — Claude Code 审查 PASS（审查标准 tiering 提交 cherry-pick 到 master `2d551925`）
+
+- **Verdict/Action**: PASS。把 3b4b 审查树 detached HEAD 上用户自撰的 `2d5e5b29`（新增 `AGENTS.md` "Verification tiering and one-full-run rule"）cherry-pick 到 master（`36c42f58`→`2d551925`）。忠实性:`range-diff` 单行 `=`（patch 等价）、3 个非-AGENTS 文件逐字 IDENTICAL、`AGENTS.md` 仅 auto-merge 调上下文；与 master 自身 §6a Optional-only 改动互补共存、不矛盾；`test_doc_governance_guard` 随标准同步（强制锚由旧"必亲跑全包"换成 5 个 tiering 锚 + 保留 removed-soft-rule 反回归门）、非削弱。纯 docs/governance，不碰任何生产 runner/引擎/schema/选股。
+- **Required**: 无。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier（按本次并入的新标准）= doc-governance focused acceptance、非 full-regression。master 上 `test_doc_governance_guard` 35 OK + `readme_route_row_length`/`route_doc_ledger_status_consistency` 25 OK；`range-diff 647258d0..2d5e5b29 36c42f58..2d551925` = `=`；footprint 恰 4 文件无旁支；§6a Optional-only 文本仍在；master 工作树干净。
+- **Next**: 无（已在 master；未 push）。
 
 ## 2026-07-18 — Claude Code 审查 PASS (R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT + R-ASHORT-SIDECAR-ERROR-OBSERVABILITY)
 
