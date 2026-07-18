@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_factor_comparison_v2_ledger",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "stage", "entries", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_factor_comparison_v2_ledger"},
+    "schema_version": {"const": "2.0.0"},
+    "program_id": {"const": "a_short_factor_comparison_v2"},
+    "stage": {"enum": ["capture_only", "adjudication"]},
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["decision_date", "question_id", "experiment_batch_id", "epoch_id", "forward_eligible", "outcome_status", "capture_sha256", "outcome_sha256"],
+        "properties": {
+          "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "question_id": {"type": "string"},
+          "experiment_batch_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]{2,95}$"},
+          "epoch_id": {"type": "string", "pattern": "^epoch-[a-f0-9]{12}$"},
+          "forward_eligible": {"type": "boolean"},
+          "outcome_status": {"enum": ["pending", "no_count", "settled"]},
+          "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+        }
+      }
+    },
+    "adjudication": {
+      "type": ["object", "null"],
+      "description": "Private question-level adjudication summary; detailed semantic validation is engine-enforced."
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["production", "automatic_policy_switch", "historical_replay_counts_as_forward", "provider_calls_during_settlement"],
+      "properties": {
+        "production": {"const": false},
+        "automatic_policy_switch": {"const": false},
+        "historical_replay_counts_as_forward": {"const": false},
+        "provider_calls_during_settlement": {"const": false}
+      }
+    }
+  }
+}
