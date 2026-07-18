@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-18 — Claude Code 审查 PASS（审查标准 tiering 提交 cherry-pick 到 master `2d551925`）
+
+- **Verdict/Action**: PASS。把 3b4b 审查树 detached HEAD 上用户自撰的 `2d5e5b29`（新增 `AGENTS.md` "Verification tiering and one-full-run rule"）cherry-pick 到 master（`36c42f58`→`2d551925`）。忠实性:`range-diff` 单行 `=`（patch 等价）、3 个非-AGENTS 文件逐字 IDENTICAL、`AGENTS.md` 仅 auto-merge 调上下文；与 master 自身 §6a Optional-only 改动互补共存、不矛盾；`test_doc_governance_guard` 随标准同步（强制锚由旧"必亲跑全包"换成 5 个 tiering 锚 + 保留 removed-soft-rule 反回归门）、非削弱。纯 docs/governance，不碰任何生产 runner/引擎/schema/选股。
+- **Required**: 无。
+- **Verify**: review-evidence:not_available（真实工具输出）。tier（按本次并入的新标准）= doc-governance focused acceptance、非 full-regression。master 上 `test_doc_governance_guard` 35 OK + `readme_route_row_length`/`route_doc_ledger_status_consistency` 25 OK；`range-diff 647258d0..2d5e5b29 36c42f58..2d551925` = `=`；footprint 恰 4 文件无旁支；§6a Optional-only 文本仍在；master 工作树干净。
+- **Next**: 无（已在 master；未 push）。
+
 ## 2026-07-18 — Claude Code 审查 PASS (R-ASHORT-FACTOR-COMPARISON-DIRECT-RUNNER-IMPORT + R-ASHORT-SIDECAR-ERROR-OBSERVABILITY)
 
 - **Verdict/Action**: PASS。Codex 修问题 1（factor_comparison 直跑 import）+ 问题 3（sidecar 可观测性）思路与代码均正确、非回归、secret-safe、未改选股/评分/veto/sizing/provider；并按用户指令一并加修 Optional（`safe_exception_summary` 加至 weekly_pipeline 三处 advisory handler + `str(exc)` 兜底）。详见 register 两条。
