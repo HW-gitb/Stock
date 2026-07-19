@@ -28,7 +28,7 @@
     ]
   },
   "mandatory_banner": {
-    "count": 6,
+    "count": 7,
     "elements": [
       {
         "id": "①",
@@ -65,6 +65,12 @@
         "tag": "forward_policy_comparison_reminder",
         "always_shown": false,
         "ref": "A1 private source-bound comparison-track status; de-identified, advisory-only, and never an automatic primary-system switch"
+      },
+      {
+        "id": "⑦",
+        "tag": "theme_producer_pending_reminder",
+        "always_shown": false,
+        "ref": "standing pending-component reminder shown on LIVE/实盘 runs: the §4.3/§4.5 cross-industry theme discovery+confirmation producer is not built (no free US theme data source); method = provider ready-made theme membership + PIT snapshot (L3-style) → confirmation gate; advisory-only, changes no selection/sizing"
       }
     ]
   },

@@ -228,6 +228,21 @@ class HappyAssembly(unittest.TestCase):
         self.assertEqual(out["report_data"]["banner"]["forward_policy_comparison_reminder"], reminder)
         self.assertIn("forward_policy_comparison_reminder", out["weekly_report_md"])
 
+    def test_theme_producer_pending_reminder_helper_live_only(self):
+        # §13 banner ⑦ standing reminder: only LIVE/实盘 run modes yield the fixed advisory text; offline_test /
+        # a malformed origin yield None so an offline fixture run never surfaces it.
+        for mode in ("research_live", "mixed_source"):
+            self.assertEqual(wr.theme_producer_pending_reminder({"run_mode": mode}), wr.THEME_PRODUCER_PENDING_REMINDER)
+        for origin in ({"run_mode": "offline_test"}, {}, None, "x"):
+            self.assertIsNone(wr.theme_producer_pending_reminder(origin))
+
+    def test_theme_producer_pending_reminder_absent_on_offline_run(self):
+        # an offline_test build (the default run_origin) must NOT surface banner ⑦ — the offline surface is unchanged
+        # (the live/实盘 capstone runs mixed_source, where it DOES surface — covered by the helper test above).
+        out = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())
+        self.assertNotIn("theme_producer_pending_reminder", out["report_data"]["banner"])
+        self.assertNotIn(wr.THEME_PRODUCER_PENDING_REMINDER, out["weekly_report_md"])
+
     def test_lifecycle_count_reconciles(self):
         rd = _build_report(_machine_record(), _lifecycle_result(due_count=2, due_items=(1, 3)),
                                     report_context=_report_context())["report_data"]

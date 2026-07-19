@@ -26,16 +26,16 @@
       }
     },
     "mandatory_banner": {
-      "description": "§11.2 top honest banner — exactly 6 mandatory elements ①-⑥; id + tag + always_shown const-pinned per element (④ price_clock is always shown, the rest are conditional). ref stays descriptive (typed) — it carries the prose design anchor, not governed identity.",
+      "description": "§11.2 top honest banner — exactly 7 mandatory elements ①-⑦; id + tag + always_shown const-pinned per element (④ price_clock is always shown, the rest are conditional). ref stays descriptive (typed) — it carries the prose design anchor, not governed identity.",
       "type": "object",
       "additionalProperties": false,
       "required": ["count", "elements"],
       "properties": {
-        "count": {"const": 6},
+        "count": {"const": 7},
         "elements": {
           "type": "array",
-          "minItems": 6,
-          "maxItems": 6,
+          "minItems": 7,
+          "maxItems": 7,
           "items": [
             {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
              "properties": {"id": {"const": "①"}, "tag": {"const": "true_false_observe_split"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
@@ -48,7 +48,9 @@
             {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
              "properties": {"id": {"const": "⑤"}, "tag": {"const": "hot_excluded_notice"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
             {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
-             "properties": {"id": {"const": "⑥"}, "tag": {"const": "forward_policy_comparison_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
+             "properties": {"id": {"const": "⑥"}, "tag": {"const": "forward_policy_comparison_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}},
+            {"type": "object", "additionalProperties": false, "required": ["id", "tag", "always_shown", "ref"],
+             "properties": {"id": {"const": "⑦"}, "tag": {"const": "theme_producer_pending_reminder"}, "always_shown": {"const": false}, "ref": {"type": "string"}}}
           ]
         }
       }

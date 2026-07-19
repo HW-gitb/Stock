@@ -21,9 +21,10 @@ ACTION_TABLE_PRESET = ROOT / "presets" / "us_short_action_table_contract_2026062
 DESIGN = ROOT / "docs" / "us_short_system_design.md"
 
 EXPECTED_PRICE_CLOCK_FIELDS = ["price_data_through", "news_window_through", "session_scope", "decision_date"]
-EXPECTED_BANNER_IDS = ["①", "②", "③", "④", "⑤", "⑥"]
+EXPECTED_BANNER_IDS = ["①", "②", "③", "④", "⑤", "⑥", "⑦"]
 EXPECTED_BANNER_TAGS = ["true_false_observe_split", "macro_cluster_warning", "ship_gate_progress",
-                       "price_clock", "hot_excluded_notice", "forward_policy_comparison_reminder"]
+                       "price_clock", "hot_excluded_notice", "forward_policy_comparison_reminder",
+                       "theme_producer_pending_reminder"]
 
 
 def _load(p):
@@ -78,9 +79,9 @@ class UsShortWeeklyReportContract(unittest.TestCase):
         for f in EXPECTED_PRICE_CLOCK_FIELDS:
             self.assertIn(f, text, f)
 
-    def test_mandatory_banner_six_elements_ids_and_tags(self):
+    def test_mandatory_banner_seven_elements_ids_and_tags(self):
         mb = self.preset["mandatory_banner"]
-        self.assertEqual(mb["count"], 6)
+        self.assertEqual(mb["count"], 7)
         self.assertEqual([e["id"] for e in mb["elements"]], EXPECTED_BANNER_IDS)
         self.assertEqual([e["tag"] for e in mb["elements"]], EXPECTED_BANNER_TAGS)   # tags now const-pinned
 
@@ -155,7 +156,7 @@ class UsShortWeeklyReportContract(unittest.TestCase):
 
     def test_schema_rejects_extra_banner_element(self):
         self._reject(lambda d: d["mandatory_banner"]["elements"].append(
-            {"id": "⑦", "tag": "x", "always_shown": False, "ref": "y"}))
+            {"id": "⑧", "tag": "x", "always_shown": False, "ref": "y"}))
 
     def test_schema_rejects_unknown_top_level_key(self):
         self._reject(lambda d: d.__setitem__("rendered_md", "..."))

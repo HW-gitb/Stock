@@ -82,6 +82,27 @@ _HOLDING_SOURCES = frozenset({"holding_in_top15", "holding_pass2_only", "holding
 _SELECTED_SOURCES = frozenset({"top15_candidate", "holding_in_top15"})
 _OBSERVE, _BUILD = "观察", "建仓"
 
+# §13 standing pending-component reminder (honest-banner ⑦) — surfaced ONLY on LIVE/实盘 runs (the capstone runs
+# mixed_source; offline_test unit fixtures never surface it, so the offline report surface + its tests are
+# unchanged). The §4.3/§4.5 cross-industry theme discovery+confirmation producer is not built yet (no free US
+# theme data source, user 2026-07-18); this advisory nag rides every live weekly run until it is. It is
+# internally-derived (like banners ①③⑤), NOT a report_context input, and changes NO selection/sizing/price — it is
+# banner text only. The durable rule/pointer lives in docs/system_risk_register.md (§13 reminder single-source).
+THEME_PRODUCER_PENDING_REMINDER = (
+    "【待建·每周提醒】跨行业赛道'发现+确认'部件未建（缺免费美股主题数据源）；有主题 ETF 持仓/概念板块类美股"
+    "成员源后，按 L3 同法（现成成员+PIT 快照→验证器①证实）即可点亮 §4.5 强赛道进攻线。"
+)
+_LIVE_RUN_MODES = frozenset({"research_live", "mixed_source"})   # 实盘/provider-backed capstone runs (not offline_test)
+
+
+def theme_producer_pending_reminder(run_origin):
+    """The §13 standing pending-component reminder text for honest-banner ⑦ — returns the fixed advisory string on
+    a LIVE/实盘 run (run_origin.run_mode ∈ {research_live, mixed_source}), else None so an offline_test fixture run
+    never surfaces it. Banner text only; it never changes selection / sizing / price / any action-table cell."""
+    if isinstance(run_origin, dict) and run_origin.get("run_mode") in _LIVE_RUN_MODES:
+        return THEME_PRODUCER_PENDING_REMINDER
+    return None
+
 
 class WeekendReportError(Exception):
     """The injected machine record / lifecycle result / report_context is malformed (fail-closed before render)."""
@@ -386,6 +407,9 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     reminder = report_context.get("forward_policy_comparison_reminder")
     if isinstance(reminder, str) and reminder.strip():
         banner["forward_policy_comparison_reminder"] = reminder.strip()
+    theme_reminder = theme_producer_pending_reminder(run_origin)   # ⑦ live/实盘-only §13 standing pending-component nag
+    if theme_reminder:
+        banner["theme_producer_pending_reminder"] = theme_reminder
 
     # --- §11.5 coverage (in §6): bind ONE-TO-ONE to the machine record's holding rows BY TICKER (R-USSHORT-
     # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
