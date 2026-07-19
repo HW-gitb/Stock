@@ -642,7 +642,7 @@ class MainWiringTests(unittest.TestCase):
             with patch("builtins.print") as terminal:
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                      "--out", str(out), "--factor-comparison-v2-root", str(root)],
+                      "--out", str(out), "--run-date", AS_OF, "--factor-comparison-v2-root", str(root)],
                      price_provider=lambda code: dated_series)
             weekly = json.loads(out.read_text(encoding="utf-8"))
             markdown = out.with_suffix(".md").read_text(encoding="utf-8")
@@ -659,7 +659,8 @@ class MainWiringTests(unittest.TestCase):
             root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
             args = ["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                     "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                    "--out", str(Path(td) / "weekly.json"), "--factor-comparison-v2-root", str(root)]
+                    "--out", str(Path(td) / "weekly.json"), "--run-date", AS_OF,
+                    "--factor-comparison-v2-root", str(root)]
             with patch("runners.a_short_weekly_pipeline.publish_weekly_bundle", side_effect=RuntimeError("publish failed")), \
                     patch("engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly") as capture:
                 with self.assertRaises(RuntimeError):
@@ -671,6 +672,12 @@ class MainWiringTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--as-of", AS_OF, "--analysis-input", "missing-ai.json", "--iv-feed", "missing-feed.json",
                   "--out", "missing-weekly.json", "--factor-comparison-root", "legacy-root"])
+
+    def test_v2_comparison_capture_requires_a_real_run_date_before_any_weekly_work(self):
+        with self.assertRaises(SystemExit):
+            main(["--as-of", AS_OF, "--analysis-input", "missing-ai.json", "--iv-feed", "missing-feed.json",
+                  "--out", "missing-weekly.json", "--factor-comparison-v2-root",
+                  "state/a_short/factor_comparison_private/v2"])
     def test_main_preserves_watch_as_nonfinal_observation(self):
         ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
         ai["candidates"][1]["analysis_role"] = "watch"

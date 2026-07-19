@@ -24,7 +24,7 @@ baseline 不重写算法。materializer 继续调用 `a_short_phase5_engine` 的
 
 ## Epoch 与来源绑定
 
-每周 capture 写入 program manifest、capture、source receipt、epoch identity 和 source digest。只有本机实际日期、`run_date`、`source_as_of` 与 `decision_date` 全部一致，且 `run_identity.candidate_digest` 等于实际规范化候选快照的摘要、每只候选的最后一根价格恰为该日并与候选 close 一致时，capture 才可标为 forward eligible；历史诊断可落盘但其 ledger 身份永远为非 forward。重放或结算会重新计算 capture、候选快照和 source receipt 的哈希/来源/共享池绑定；已冻结的 arm `selected_symbols`、`decisions` 和 model-paper plan 是 capture 的哈希绑定载荷，不会在结算时重新运行选择器。部分目录、错日期、摘要漂移、非私密路径和旧 v1 路径一律失败。
+每周 capture 写入 program manifest、capture、source receipt、epoch identity 和 source digest。`run_identity` 由 weekly schema 严格绑定 `run_date`、`source_as_of`、`price_data_through`、候选摘要和已发布 M6.7 摘要：`decision_date == source_as_of` 是 canonical 决策锚和 `weeks/<decision_date>` 冻结键；`run_date` 必须等于本机真实运行日；`price_data_through` 是正式 M6.7 lineage 中最后一根已结算价格。forward 仅在 live canonical（`decision_date >= run_date`）、正式 prior-settled lineage、完整发布 bundle 和候选摘要均匹配时成立。周五收盘后、周末或长周末为下一个 canonical 交易日出建议时，快照只能止于 `price_data_through`，不能伪造周一价格；收益仍从 canonical `decision_date` 的 T+1 open（通常周二）开始。历史诊断可落盘但其 ledger 身份永远为非 forward。重放或结算会重新计算 capture、候选快照和 source receipt 的哈希/来源/共享池绑定；已冻结的 arm `selected_symbols`、`decisions` 和 model-paper plan 是 capture 的哈希绑定载荷，不会在结算时重新运行选择器。部分目录、错日期、摘要漂移、非私密路径和旧 v1 路径一律失败。
 
 epoch fast-path 同时绑定三种正交契约：decision-delta、immutable common-pool、outcome contract。任一契约摘要变化即新开 epoch；本刀只记录分段，不清零、不跨段合并。跨 epoch random-effects、最小块数、异质性和最终结论由第 2 刀实现。
 
@@ -34,7 +34,7 @@ common pool 是同一 PIT 候选输入在非 IV 的不可变硬门之后的共�
 
 结算仅接受既有 `daily_payload.stocks`，且不抓取数据。selected-union 的 as-of 到 H20 所有关键价位必须有有限 open/close、正数 `adj_factor`、`adj_factor_observed=true` 与 `adj_factor_source=provider_observed`。缺失、无来源前填/默认值、未核验的复权突变或 QFQ 异常跳空均令该 question-week `no_count`；同时按 arm 写入 no-count 原因与计数。
 
-完整证据采用 T+1 open 至 H5/H10/H20 close 的 QFQ、扣成本、固定 slots 且保留未成交现金的 model-paper NAV。结算缓存 decision-date `close` 必须与 capture 冻结候选 close 精确一致，否则 fail-closed；entry 模型分母和无涨停表时的默认涨停价均只用该冻结 close。H10 `max_drawdown_pct` 按每个累计收益点的 `NAV=1+累计收益/100`（含入场时初始 NAV=1）计算峰谷回撤，不把累计收益再按逐期收益连乘。`bad_name_rate` 与 `tail_loss_pct` 只在实际成交仓位上计算，并随结果记录 `loss_distribution_basis=filled_positions_only` 与样本数；未成交仓位只通过 `cash_drag_pct`、`unfilled_rate` 单独衡量。它还输出成交、换手、成本、集中度和 adjustment coverage；第 2 刀必须逐项读取这些结果，不能只在结果文件中展示。
+完整证据采用 canonical `decision_date` 的 T+1 open 至 H5/H10/H20 close 的 QFQ、扣成本、固定 slots 且保留未成交现金的 model-paper NAV。结算缓存 `price_data_through` 的 close 必须与 capture 冻结候选 close 精确一致，否则 fail-closed；entry 模型分母和无涨停表时的默认涨停价均只用该冻结 close。H10 `max_drawdown_pct` 按每个累计收益点的 `NAV=1+累计收益/100`（含入场时初始 NAV=1）计算峰谷回撤，不把累计收益再按逐期收益连乘。`bad_name_rate` 与 `tail_loss_pct` 只在实际成交仓位上计算，并随结果记录 `loss_distribution_basis=filled_positions_only` 与样本数；未成交仓位只通过 `cash_drag_pct`、`unfilled_rate` 单独衡量。它还输出成交、换手、成本、集中度和 adjustment coverage；第 2 刀必须逐项读取这些结果，不能只在结果文件中展示。
 
 ## 第 2 刀：冻结证据的离线统计裁决
 
@@ -69,10 +69,10 @@ state/a_short/factor_comparison_private/v2/
 
 ## 第 3 刀：weekly 接线与运行顺序
 
-`runners/a_short_weekly_pipeline.py` 只在传入 `--factor-comparison-v2-root` 时启用 v2；root 必须以 `state/a_short/factor_comparison_private/v2` 结尾并保持 gitignored。日线输入只读取该私密 root 内的既有 `daily_cache.json`（或同一 root 内显式指定的 `--factor-comparison-v2-daily-cache`），其序列化形状由 `schemas/a_short_factor_comparison_v2_daily_cache.schema.json` 固定。该接口没有 provider 参数、没有联网 fallback，也不能从本周 M6.7 价格序列伪造 adjustment evidence。
+`runners/weekly_screening.ps1` 仅在 live canonical 运行时先调用 `runners/a_short_factor_comparison_v2_cache_build.py`：它验证真实 `run_date`，只读取 frozen selected-union、以固定调用上限增量请求现有获批 Tushare 的 daily/adj_factor/stk_limit/trade calendar，并原子写入 gitignored v2 cache；缺失复权因子写为 `provider_missing`，绝不前填或默认成 observed。builder 失败只让 v2 证据不可用，M6.7、V14.3、overlay 继续。随后 `runners/a_short_weekly_pipeline.py` 只在传入 `--factor-comparison-v2-root` 与真实 `--run-date` 时启用 v2；root 必须以 `state/a_short/factor_comparison_private/v2` 结尾并保持 gitignored。日线输入只读取该私密 root 内既有 `daily_cache.json`（或同一 root 内显式指定的 `--factor-comparison-v2-daily-cache`），其序列化形状由 `schemas/a_short_factor_comparison_v2_daily_cache.schema.json` 固定。该接口没有 provider 参数、没有联网 fallback，也不能从本周 M6.7 价格序列伪造 adjustment evidence。
 
 每次 weekly 运行按如下单一顺序执行：先用私密既有缓存结算历史 capture，再重算 ledger 与离线裁决，并由裁决器原子重写 `reminder.json`；之后才构造、校验和发布官方 M6.7 JSON/Markdown/receipt。周报顶部与终端都只消费同一份脱敏 summary（状态、提醒计数、固定文字），不包含 ticker、arm、回执 hash、私密路径、收益或仓位。缓存缺失、私密 root/ledger/receipt 损坏、解析失败或任何完整性检查失败时，周报明确显示“证据不可用或结论未定”、提醒计数归零，绝不复用旧的成功提醒；M6.7 仍保持权威且不受改变。
 
-只有 `publish_weekly_bundle` 成功返回后，接线才回读同一份 JSON、Markdown 和匹配 receipt，核对 `as_of`、run id、候选摘要与输出集合，再以实际已发布 JSON 的 SHA-256 作为 `official_m67_digest` 冻结本周 v2 capture。发布异常时控制流到不了 capture，因此不会生成假前向周；capture 自身失败只在终端明确提示，绝不回写或否定已发布 M6.7。`--factor-comparison-v2-forward` 仍受第 1 刀真实本地日期门约束；历史重放保持非计数。
+只有 `publish_weekly_bundle` 成功返回后，接线才回读同一份 JSON、Markdown 和匹配 receipt，核对 `as_of`、run id、候选摘要与输出集合，并从其 `price_freshness` lineage 取真实 `run_date` 和 `price_data_through`，再以实际已发布 JSON 的 SHA-256 作为 `official_m67_digest` 冻结本周 v2 capture。发布异常时控制流到不了 capture，因此不会生成假前向周；capture 自身失败只在终端明确提示，绝不回写或否定已发布 M6.7。`--factor-comparison-v2-forward` 受真实本地日期和 live canonical/prior-settled source binding 双门约束；历史重放保持非计数。
 
 旧 `--factor-comparison-root` 与 `--factor-comparison-forward` 现被入口在任何 weekly 工作开始前拒绝：v1 仅可读，禁止 v1/v2 双写、迁移、双计数或用 v1 reminder 覆盖 v2 reminder。第 3 刀没有修改 EGS、TopN、M6.7 操作/股数、veto、账户、生产配置或任何自动 adopt 路径。

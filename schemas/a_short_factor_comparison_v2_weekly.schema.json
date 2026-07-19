@@ -4,6 +4,21 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "record_type", "program_id", "decision_date", "epoch_id", "payload", "boundary"],
+  "definitions": {
+    "run_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["run_id", "run_date", "source_as_of", "price_data_through", "candidate_digest", "official_m67_digest"],
+      "properties": {
+        "run_id": {"type": "string", "minLength": 1},
+        "run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "candidate_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "official_m67_digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    }
+  },
   "properties": {
     "schema_name": {"const": "a_short_factor_comparison_v2_weekly"},
     "schema_version": {"const": "2.0.0"},
@@ -23,5 +38,15 @@
         "provider_calls_during_settlement": {"const": false}
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"record_type": {"const": "capture"}}},
+      "then": {"properties": {"payload": {"required": ["run_identity"], "properties": {"run_identity": {"$ref": "#/definitions/run_identity"}}}}}
+    },
+    {
+      "if": {"properties": {"record_type": {"const": "source_receipt"}}},
+      "then": {"properties": {"payload": {"required": ["run_identity"], "properties": {"run_identity": {"$ref": "#/definitions/run_identity"}}}}}
+    }
+  ]
 }

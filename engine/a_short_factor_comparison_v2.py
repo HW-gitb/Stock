@@ -421,14 +421,19 @@ def _active_experiment_batch_ids(root: Path, governance: dict) -> dict[str, str]
 def _clean_run_identity(run_identity: dict, decision_date: str) -> dict:
     if not isinstance(run_identity, dict):
         raise ComparisonV2Error("v2 run_identity must be an object")
-    required = ("run_id", "run_date", "source_as_of", "candidate_digest", "official_m67_digest")
+    required = ("run_id", "run_date", "source_as_of", "price_data_through", "candidate_digest", "official_m67_digest")
     if set(run_identity) != set(required):
         raise ComparisonV2Error("v2 run_identity keys drifted")
     identity = {key: str(run_identity[key]) for key in required}
     if not identity["run_id"]:
         raise ComparisonV2Error("v2 run_identity requires run_id")
-    if _date(identity["run_date"]) != decision_date or _date(identity["source_as_of"]) != decision_date:
-        raise ComparisonV2Error("v2 capture requires same-date run and PIT source identity")
+    run_date = _date(identity["run_date"])
+    source_as_of = _date(identity["source_as_of"])
+    price_data_through = _date(identity["price_data_through"])
+    if source_as_of != decision_date:
+        raise ComparisonV2Error("v2 capture requires decision_date to equal the PIT source_as_of")
+    if price_data_through > decision_date or price_data_through > run_date:
+        raise ComparisonV2Error("v2 price_data_through cannot be after decision_date or physical run_date")
     for key in ("candidate_digest", "official_m67_digest"):
         if len(identity[key]) != 64 or any(char not in "0123456789abcdef" for char in identity[key]):
             raise ComparisonV2Error(f"v2 {key} must be a lowercase sha256")
@@ -756,8 +761,10 @@ def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[di
     identity = _clean_run_identity(run_identity, decision_date)
     if not isinstance(forward_eligible, bool):
         raise ComparisonV2Error("forward_eligible must be boolean")
-    if forward_eligible and _today() != decision_date:
+    if forward_eligible and _today() != identity["run_date"]:
         raise ComparisonV2Error("v2 forward_eligible capture requires the real local run date")
+    if forward_eligible and decision_date < identity["run_date"]:
+        raise ComparisonV2Error("v2 forward_eligible capture requires a live canonical decision_date")
     sanitized = [v1._safe_candidate(candidate) for candidate in candidates]
     if not sanitized:
         raise ComparisonV2Error("v2 candidate universe is empty")
@@ -772,11 +779,11 @@ def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[di
     for candidate in sanitized:
         for price_row in candidate["price_series"]:
             trade_date = price_row.get("trade_date")
-            if trade_date is None or _date(trade_date) > decision_date:
-                raise ComparisonV2Error("v2 capture candidate price series must be complete PIT data through decision_date")
-        if _date(candidate["price_series"][-1]["trade_date"]) != decision_date or \
+            if trade_date is None or _date(trade_date) > identity["price_data_through"]:
+                raise ComparisonV2Error("v2 capture candidate price series must be complete PIT data through price_data_through")
+        if _date(candidate["price_series"][-1]["trade_date"]) != identity["price_data_through"] or \
                 float(candidate["price_series"][-1]["close"]) != float(candidate["close"]):
-            raise ComparisonV2Error("v2 capture candidate snapshot must end at the exact decision date and close")
+            raise ComparisonV2Error("v2 capture candidate snapshot must end at price_data_through and match the frozen close")
     _ensure_program(root, governance)
     active_batch_ids = _active_experiment_batch_ids(root, governance)
     epoch = _resolve_epoch(root, governance, decision_date)
@@ -955,7 +962,7 @@ def _loss_distribution_metrics(filled_h10_returns: list[float]) -> dict:
     }
 
 
-def _position_outcomes(*, arm: dict, candidates: dict[str, dict], date_pos: dict[str, int], dates: list[str],
+def _position_outcomes(*, arm: dict, candidates: dict[str, dict], price_data_through: str, date_pos: dict[str, int], dates: list[str],
                        lookup: dict[tuple[str, str], dict], limits: dict[tuple[str, str], float], governance: dict) -> tuple[dict, dict]:
     as_of = arm["decision_date"]
     base_index = date_pos[as_of]
@@ -968,13 +975,13 @@ def _position_outcomes(*, arm: dict, candidates: dict[str, dict], date_pos: dict
             raise ComparisonV2Error("v2 selected arm lacks a frozen model-paper plan")
         plan = decision["plan"]
         entry_date = dates[base_index + 1]
-        base = lookup[(code, as_of)]
+        base = lookup[(code, price_data_through)]
         entry = lookup[(code, entry_date)]
         frozen_candidate = candidates.get(code)
         frozen_close = frozen_candidate.get("close") if isinstance(frozen_candidate, dict) else None
         if not _finite(frozen_close) or not _finite(base.get("close")) or \
                 not math.isclose(float(base["close"]), float(frozen_close), rel_tol=0.0, abs_tol=1e-8):
-            raise ComparisonV2Error("v2 settlement decision close drifts from frozen candidate snapshot")
+            raise ComparisonV2Error("v2 settlement price_data_through close drifts from frozen candidate snapshot")
         entry_model = None
         if _finite(plan.get("entry")) and float(frozen_close) > 0 and _finite(entry.get("open")):
             entry_model = float(plan["entry"]) * float(entry["open"]) / float(frozen_close)
@@ -1081,7 +1088,9 @@ def _settle_question(question: dict, capture: dict, *, dates: list[str], lookup:
     for arm in question["arms"]:
         arm_data = dict(arm)
         arm_data["decision_date"] = decision_date
-        outcome, counts = _position_outcomes(arm=arm_data, candidates=candidate_by_code, date_pos=date_pos, dates=dates,
+        outcome, counts = _position_outcomes(arm=arm_data, candidates=candidate_by_code,
+                                             price_data_through=capture["payload"]["run_identity"]["price_data_through"],
+                                             date_pos=date_pos, dates=dates,
                                              lookup=lookup, limits=limits, governance=governance)
         outcome["risk_evidence"]["adjustment_coverage_pct"] = coverage["coverage_pct"]
         arms.append({"arm_id": arm["arm_definition"]["arm_id"], "selected_symbols": arm["selected_symbols"],

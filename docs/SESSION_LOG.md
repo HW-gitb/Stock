@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-07-19 — Claude Code 独立审查 PASS（A-short P0 因子对比轨 v2 日期契约/缓存/weekly 插头；3500 已提交）
+
+- **Verdict/Action**: PASS。P0 第一刀（B 终案）忠实实现、与 owner design 一致、comparison-only 生产隔离完好；逐行核 engine/adapter/pipeline/ps1/cache_build 均符 B。日期身份：`decision_date==source_as_of`=canonical 决策锚+`weeks/<decision_date>` 冻结键、`run_date`=真实运行日、`price_data_through`=最后已结算 bar；forward 仅 live-canonical(`decision_date>=run_date`)+官方 `intraday_prior_settled`/prior-settled lineage 绑定；PIT 门(779)与结算收盘门(976)两处都锚 `price_data_through`、进场仍 canonical T+1(周二，与 forward_tracker/rank 回测一致)。防伪造链闭合(run_date/price_data_through 取已发布 M6.7 `price_freshness` lineage、`_today()==run_date`+`decision_date>=run_date`+published-bundle 校验、结算端 observed+provider_observed 二次门)。缓存诚实(缺复权→provider_missing 绝不前填成 observed、调用上限抓前拒、原子写、gitignored 私有根、token 不落盘、冲突 fail-closed 保旧)。漂移重跑不覆盖+明确冻结提示、cache/capture 故障均不阻断 M6.7。已提交 3500 工作树。
+- **Required**: 无。
+- **Optional（非阻断，可后续硬化）**: ①`a_short_factor_comparison_v2_daily_cache` schema 对 open/close 无数值上界，离谱有限价会静默进私有缓存(仅 comparison 侧、够不到生产；结算端 observed/provider_observed 二次门已在)；②adapter forward-lineage 拒绝路径(forged `mode` / `price_data_through`≠官方 `accepted_prior_settled`)仅正向周末成功用例，缺反向负测。
+- **Verify**: 3500 树 deps-complete env(tushare/akshare/requests/tqdm 全在)。P0 全消费面 550 OK：聚焦包 v2+adjudication+v2_weekly+cache_build+weekly_pipeline+guardrails=Ran 534 OK + effect-contract hash-pin=16 OK(含周末→周一 canonical 端到端捕获成功、缺复权/预算前拒/冲突原子保旧/终态不重抓、v1 插头·settler 已删守护)。独立对抗 agent(worktree 隔离读)三条不变式(伪造/缓存/生产阻断)全 HOLD、无洞。完整 test_a_short* 全包 Ran 1706 OK(deps-complete env 跑完，unchanged 组件零回归)。secret/scope/whitespace scan 干净、无 state/ 私有缓存入库、无跨市场。
+- **Next**: Codex：无(本刀已审已提交 3500)。cherry-pick→master 与首次受控 live canonical 启用验收按桌面 P0 步骤另行。
+
+## 2026-07-19 — Codex 执行（A-short P0 因子对比轨 v2 日期契约、缓存与 weekly 插头；未提交）
+
+- **Verdict/Action**: 已实施 P0 第一刀，仍为 comparison-only：weekly wrapper 删除退役 v1 参数/settler，live canonical 时先尝试有调用上限的私有 v2 cache builder，再把 v2 root/cache/forward 传给 M6.7。cache builder 只读 frozen selected-union，单尝试调用既有 Tushare 日线/复权/涨停/日历，原子写 gitignored cache；缺失复权一律 `provider_missing`，不前填或默认。capture 的 `run_identity` 现 schema 绑定真实 `run_date`、canonical `source_as_of/decision_date` 与 `price_data_through`；周末/长周末建议的价格冻结在最后已结算 bar，收益仍从 canonical 日 T+1 open 计算。相同重跑幂等，内容漂移不覆盖，周流程明确提示已冻结；cache/capture 故障均不阻断 M6.7/V14.3/overlay。
+- **Required**: 待 Claude Code 独立审查本未提交 P0 diff；不得运行真实 weekly 或 provider 作为本刀验收，首次受控 live canonical 启用仍须另行按桌面 P0 验收步骤执行。
+- **Verify**: `py_compile` 四个 Python 文件、PowerShell parse、`git diff --check` 均通过；核心/日期/缓存 35 OK，含周末周一 canonical/周五 price clock、缺失复权、预算前拒绝、冲突原子保留与终态不重抓；P0 聚焦包 37 OK；effect-contract + 两条 v2 pipeline 集成 18 OK；adjudication/route 40 OK。完整 `discover -s tests -p test_a_short*.py` 到 600s 未结束且输出既有大型套件 `E`，没有最终结果，**不作为通过证据**。完整 weekly guardrail 类另有 5 个动态启动用例受当前 bundled Python 缺少 `akshare/requests/tqdm/tushare` 而在 preflight exit 2；P0 静态 wiring 用例单独通过。
+- **Pre-Codex self-review**: A：覆盖 live canonical 周末/周一、历史非 forward、source/price identity、冻结重跑、预算/冲突/缺复权/终态缓存；B：重查 wrapper→cache→pre-M6.7 settle→post-publish capture 与正式结果隔离；C：新增反向拒绝和 schema/契约钉；D：无自然语言交易分类；E：仅更新 A-short owner/route/runner docs，不改 CURRENT；F：未启用实际 Tushare/账户/周流程。
+- **Next**: Claude Code：仅独立审查当前 A-short P0 diff；PASS 后提交。先核对完整 A-short 大包的环境/超时与其 `E`，不得把它写成绿灯；不要扩到 P1/P2/P5 或正式策略切换。
+
 ## 2026-07-19 — Claude Code 独立复审（US-short 结果联动 cut 1+2，a039 未提交）：PASS（4517 OK，上一版 FAIL 项全闭）
 
 - **Verdict/Action**: PASS。用户裁定范围=cut 1+2 一起复审（本 diff = holding_action〔cut1〕+ result_effects/portfolio_guard/symbol_cooldown〔cut2〕）。上一版复审 FAIL 的四项已全闭：①全量测试红→现 4517 OK（E2E 用 fail-closed 默认 `_unavailable_paper_track`=paper_evaluable:False 接新输入+真样例、非占位）②P1 `op="减仓"`→`降仓`（machine_record 206/224，+reduce_caution 机器记录测试盖盲区）③强制止损/事件被降级成观察→现即使对账不可信也放行退出（股数留空+人工核对），且坏对账行只污染自己 ticker（build_holding_action_context 逐行隔离）④P3 huge-int→`MAX_MANUAL_HOLDING_SHARES`、PIT `tp1_completed_at>as_of` 拒绝。新核 cut2 承重缝均符设计：result_effects 取最狠单一折扣不连乘/不二次扣 risk_downgrade、override 不吞持仓减清、guard fail-safe+§8 weekly_limit、cooldown fail-closed、no-dangling 反向完整性无伪造洞、设计 §6.1/§9/§13#34 同步忠实。

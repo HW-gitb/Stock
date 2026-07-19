@@ -79,6 +79,11 @@ Existing helpers:
   and writes the same schema-valid `execution_price_data` JSON. It caches the
   provider payload under `result/a_short/backtest/cache/` and still does not
   simulate fills.
+- `a_short_factor_comparison_v2_cache_build.py` - P0 private v2 cache builder;
+  only during a live canonical weekly run, it reads frozen selected-union
+  captures, incrementally requests the bounded daily/adjustment/limit window,
+  records missing adjustment provenance honestly, and atomically writes only
+  beneath the gitignored v2 root. Its failure is comparison-only and non-blocking.
 - `materialize_benchmark_monthly_returns_tushare.py` - Phase 6b benchmark
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus

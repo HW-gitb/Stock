@@ -168,13 +168,27 @@ def capture_v2_after_published_weekly(*, root: str | Path, decision_date: str, c
                                       forward_eligible: bool) -> dict:
     """Freeze the current week only after a matching M6.7 JSON/Markdown/receipt exists."""
     _private_root(root)
-    _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
-                                   decision_date=decision_date, source_identity=source_identity)
+    weekly = _verify_published_weekly_bundle(out_path=out_path, receipt_path=receipt_path,
+                                             decision_date=decision_date, source_identity=source_identity)
+    price_freshness = (weekly.get("run_lineage") or {}).get("price_freshness")
+    if not isinstance(price_freshness, dict):
+        raise ComparisonV2Error("published weekly bundle lacks price_freshness lineage")
+    run_date = str(price_freshness.get("run_date") or "")
+    price_data_through = str(price_freshness.get("price_data_through") or "")
+    if not run_date or not price_data_through:
+        raise ComparisonV2Error("published weekly price_freshness lacks run_date or price_data_through")
+    if forward_eligible:
+        if price_freshness.get("mode") != "intraday_prior_settled":
+            raise ComparisonV2Error("forward v2 capture requires the live canonical price-freshness mode")
+        accepted_prior_settled = price_freshness.get("accepted_prior_settled_date")
+        if price_data_through != str(decision_date) and str(accepted_prior_settled or "") != price_data_through:
+            raise ComparisonV2Error("forward v2 capture price_data_through lacks the official prior-settled binding")
     sanitized = [v1._safe_candidate(candidate) for candidate in candidates]
     identity = {
         "run_id": str(source_identity["run_id"]),
-        "run_date": str(decision_date),
+        "run_date": run_date,
         "source_as_of": str(decision_date),
+        "price_data_through": price_data_through,
         "candidate_digest": _digest(sanitized),
         "official_m67_digest": hashlib.sha256(Path(out_path).read_bytes()).hexdigest(),
     }
