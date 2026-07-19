@@ -230,5 +230,53 @@ class BacktestRankPhase3Tests(unittest.TestCase):
         self.assertNotIn("--allow-historical-live-l3", cmd)
 
 
+class ForwardDailyCacheAtomicWriteTests(unittest.TestCase):
+    def test_write_forward_daily_cache_uses_same_dir_temp_and_atomic_replace(self):
+        import pickle
+
+        payload = {
+            "meta": {"start_date": "20260101", "end_date": "20260131"},
+            "stocks": pd.DataFrame([{"ts_code": "000001.SZ", "trade_date": "20260101"}]),
+            "limits": pd.DataFrame(),
+            "benchmarks": {},
+        }
+        with TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            with (
+                patch.object(backtest_rank, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(backtest_rank, "BT_CACHE_DIR", cache_path.parent),
+                patch.object(backtest_rank.os, "replace", wraps=backtest_rank.os.replace) as replace_spy,
+            ):
+                backtest_rank._write_forward_daily_cache(payload)
+
+            replace_spy.assert_called_once()
+            tmp_arg, target_arg = replace_spy.call_args.args
+            self.assertEqual(Path(target_arg), cache_path)
+            self.assertEqual(Path(tmp_arg).parent, cache_path.parent)
+            self.assertTrue(Path(tmp_arg).name.startswith(".forward_daily.pkl."))
+            self.assertTrue(Path(tmp_arg).name.endswith(".tmp"))
+            self.assertFalse(Path(tmp_arg).exists())
+
+            with cache_path.open("rb") as f:
+                loaded = pickle.load(f)
+            self.assertEqual(loaded["meta"]["end_date"], "20260131")
+            self.assertEqual(list(cache_path.parent.glob(".forward_daily.pkl.*.tmp")), [])
+
+    def test_write_forward_daily_cache_preserves_existing_on_failure(self):
+        with TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            cache_path.write_bytes(b"ORIGINAL")
+            with (
+                patch.object(backtest_rank, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(backtest_rank, "BT_CACHE_DIR", cache_path.parent),
+                patch.object(backtest_rank.pickle, "dump", side_effect=RuntimeError("boom")),
+            ):
+                with self.assertRaises(RuntimeError):
+                    backtest_rank._write_forward_daily_cache({"meta": {}})
+
+            self.assertEqual(cache_path.read_bytes(), b"ORIGINAL")
+            self.assertEqual(list(cache_path.parent.glob(".forward_daily.pkl.*.tmp")), [])
+
+
 if __name__ == "__main__":
     unittest.main()

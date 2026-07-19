@@ -241,6 +241,141 @@ class ForwardTrackerCacheGuardTests(unittest.TestCase):
             self.assertEqual(tracker_path.read_text(encoding="utf-8"), "original\n")
             self.assertEqual(list(tracker_path.parent.glob(f".{tracker_path.name}.*.tmp")), [])
 
+    def test_partition_asof_coverage_classifies_ready_needs_refresh_immature(self) -> None:
+        same_anchor = pd.DataFrame([
+            {"trade_date": "20260105", "open": 3000.0, "close": 3010.0},
+            {"trade_date": "20260112", "open": 3050.0, "close": 3100.0},
+        ])
+        benchmarks = {name: same_anchor.copy() for name in forward_tracker.BENCHMARKS}
+        # 6 cached trading dates.
+        stock_dates = ["20260105", "20260106", "20260107", "20260108", "20260109", "20260112"]
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            self._write_cache(cache_path, benchmarks, stock_trade_dates=stock_dates)
+            with patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path):
+                ready, needs_refresh, immature, cached, block = forward_tracker._partition_asof_coverage(
+                    ["20260112", "20260105", "20260201"], max_window=3
+                )
+
+        self.assertIsNone(block)
+        self.assertIsNotNone(cached)
+        self.assertEqual(ready, ["20260105"])        # pos 0 + 3 < 6 -> settle now
+        self.assertEqual(immature, ["20260112"])     # pos 5 + 3 >= 6 -> not matured yet
+        self.assertEqual(needs_refresh, ["20260201"])  # absent from cache -> stale, refresh helps
+
+    def test_backfill_settles_ready_cohort_and_defers_immature_sibling(self) -> None:
+        # Regression for the all-or-nothing gate: a single not-yet-matured cohort
+        # used to block older, fully matured cohorts from settling. The matured
+        # cohort MUST settle while the young sibling is deferred.
+        stock_dates = pd.bdate_range("20260105", periods=9).strftime("%Y%m%d").tolist()
+        ready_asof, immature_asof = stock_dates[0], stock_dates[7]
+        same_anchor = pd.DataFrame([
+            {"trade_date": stock_dates[0], "open": 3000.0, "close": 3010.0},
+            {"trade_date": stock_dates[-1], "open": 3050.0, "close": 3100.0},
+        ])
+        benchmarks = {name: same_anchor.copy() for name in forward_tracker.BENCHMARKS}
+
+        seen = {}
+
+        def _attach_spy(work, windows, payload):
+            seen["as_ofs"] = sorted(work["as_of"].astype(str).unique().tolist())
+            work = work.copy()
+            work["entry_date"] = stock_dates[1]
+            work["entry_unbuyable_reason"] = pd.NA
+            for w in windows:
+                work[f"ret_{w}d_status"] = "ok"
+                work[f"ret_{w}d_t1_net"] = 0.05
+                for b in forward_tracker.BENCHMARKS:
+                    work[f"ret_{w}d_excess_{b}"] = 0.01
+            return work
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            self._write_cache(cache_path, benchmarks, stock_trade_dates=stock_dates)
+            df = pd.DataFrame([
+                _tracker_row(ready_asof, "000001.SZ"),
+                _tracker_row(immature_asof, "000002.SZ"),
+            ])
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(df)
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260301"),
+                patch.object(forward_tracker, "attach_forward_returns", side_effect=_attach_spy),
+            ):
+                rc = forward_tracker.backfill([5])
+            written = pd.read_csv(tracker_path, dtype={"as_of": str, "ts_code": str}).set_index("as_of")
+
+        self.assertEqual(rc, 0)
+        # Only the ready cohort reaches attach_forward_returns.
+        self.assertEqual(seen["as_ofs"], [ready_asof])
+        self.assertEqual(written.loc[ready_asof, "ret_5d_status"], "ok")            # settled
+        self.assertEqual(written.loc[immature_asof, "ret_5d_status"], "pending_capture")  # deferred
+
+    def test_backfill_emits_stale_banner_when_cohort_missing_from_cache(self) -> None:
+        import io
+        from contextlib import redirect_stdout
+
+        same_anchor = pd.DataFrame([
+            {"trade_date": "20260201", "open": 3000.0, "close": 3010.0},
+            {"trade_date": "20260220", "open": 3050.0, "close": 3100.0},
+        ])
+        benchmarks = {name: same_anchor.copy() for name in forward_tracker.BENCHMARKS}
+        stale_dates = pd.bdate_range("20260201", periods=15).strftime("%Y%m%d").tolist()
+
+        with tempfile.TemporaryDirectory() as tmp:
+            cache_path = Path(tmp) / "forward_daily.pkl"
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            self._write_cache(cache_path, benchmarks, stock_trade_dates=stale_dates)
+            df = pd.DataFrame([_tracker_row("20260515", "000001.SZ")])  # after the stale cache end
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(df)
+            buf = io.StringIO()
+            with (
+                patch.object(forward_tracker, "FORWARD_DAILY_CACHE", cache_path),
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
+                redirect_stdout(buf),
+            ):
+                rc = forward_tracker.backfill([5, 10, 20])
+
+        out = buf.getvalue()
+        self.assertEqual(rc, 0)
+        self.assertIn("FORWARD-TRACKER CACHE STALE", out)
+        self.assertIn("forward_tracker.py refresh", out)
+        self.assertIn("20260515", out)
+
+    def test_refresh_fetches_with_refresh_true_for_matured_cohorts(self) -> None:
+        df = pd.DataFrame([_tracker_row("20260515", "000001.SZ")])
+        fake_payload = {
+            "meta": {"start_date": "20260515", "end_date": "20260701", "stock_rows": 100, "stock_codes": 10},
+            "stocks": pd.DataFrame(), "limits": pd.DataFrame(), "benchmarks": {},
+        }
+
+        with tempfile.TemporaryDirectory() as tmp:
+            tracker_path = Path(tmp) / "forward_tracker.csv"
+            with patch.object(forward_tracker, "TRACKER_CSV", tracker_path):
+                forward_tracker._write_tracker(df)
+            with (
+                patch.object(forward_tracker, "TRACKER_CSV", tracker_path),
+                patch.object(forward_tracker, "_today_yyyymmdd", return_value="20260701"),
+                patch.object(forward_tracker, "fetch_forward_daily", return_value=fake_payload) as fetch_mock,
+                patch.object(
+                    forward_tracker, "_partition_asof_coverage",
+                    return_value=(["20260515"], [], [], fake_payload, None),
+                ),
+            ):
+                rc = forward_tracker.refresh([5, 10, 20])
+
+        self.assertEqual(rc, 0)
+        fetch_mock.assert_called_once()
+        args, kwargs = fetch_mock.call_args
+        self.assertEqual(args[0], ["20260515"])   # only the tracker's matured pending cohort
+        self.assertEqual(kwargs.get("refresh"), True)
+
 
 if __name__ == "__main__":
     unittest.main()

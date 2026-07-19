@@ -390,23 +390,33 @@ def backfill(windows: list[int]) -> int:
     print(f"[INFO] mature as_of with pending rows: {mature_as_ofs}")
 
     max_window = max(windows)
-    # Cache coverage gate: tracker is a sidebar; it must not trigger a
-    # universe-wide Tushare refetch on its own. The backtest forward_daily
-    # cache is the shared source. If the cache does not cover the tracker
-    # as_of range or lacks same-anchor benchmark open, bail with clear
-    # instructions and let the user trigger the narrowest safe refresh.
-    coverage_ok, msg = _check_cache_coverage(mature_as_ofs, max_window)
-    if not coverage_ok:
-        print(f"[SKIP] {msg}")
-        for line in _cache_refresh_hint(msg):
+    # Per-cohort coverage. The tracker is a sidebar: it must not trigger a
+    # universe-wide Tushare refetch on its own (refresh is the explicit,
+    # separate `refresh` subcommand). Here we only READ the shared cache and
+    # settle the cohorts it already covers. A single not-yet-matured cohort
+    # must not block older, fully matured cohorts from settling -- that
+    # all-or-nothing stall left the candidate-effect ledger frozen.
+    ready, needs_refresh, immature, cached, block_msg = _partition_asof_coverage(mature_as_ofs, max_window)
+    if block_msg is not None:
+        print(f"[SKIP] {block_msg}")
+        for line in _cache_refresh_hint(block_msg):
             print(line)
+        _print_cache_stale_banner(mature_as_ofs, block_msg)
+        return 0
+    if immature:
+        print(f"[INFO] {len(immature)} cohort(s) captured but not yet +{max_window} trading days old; "
+              f"will settle in a later week: {immature}")
+    if needs_refresh:
+        _print_cache_stale_banner(needs_refresh, "shared cache does not reach these matured cohorts")
+    if not ready:
+        print(f"[OK] no cohort has +{max_window} trading-day cache coverage yet; nothing to settle this run")
         return 0
 
-    payload = fetch_forward_daily(mature_as_ofs, max_window, refresh=False)
-
-    # attach_forward_returns expects samples with trade_date column;
-    # rename our as_of -> trade_date in a slim view.
-    work_mask = df["as_of"].astype(str).isin(mature_as_ofs) & _pending_backfill_mask(df, windows)
+    # Strictly cache-only: settle from the already-read cache payload; never
+    # fetch here. attach_forward_returns expects samples with a trade_date
+    # column; rename our as_of -> trade_date in a slim view.
+    payload = cached
+    work_mask = df["as_of"].astype(str).isin(ready) & _pending_backfill_mask(df, windows)
     work = df[work_mask].copy()
     if work.empty:
         return 0
@@ -420,6 +430,14 @@ def backfill(windows: list[int]) -> int:
     # Write the resulting returns back into df by (as_of, ts_code).
     work_idx = work.set_index(["as_of", "ts_code"])
     df_idx = df.set_index(["as_of", "ts_code"])
+
+    # These columns are all-NA (float64) on a fresh tracker but the write-back
+    # below assigns strings/timestamps into them; pandas 2.x rejects a
+    # string-into-float64 cell set. Coerce to object first. (This loop was dead
+    # code until the coverage gate was fixed to settle per cohort, so the
+    # dtype mismatch never surfaced in production.)
+    for _col in ("entry_date", "entry_unbuyable_reason", "backfilled_at"):
+        df_idx[_col] = df_idx[_col].astype(object)
 
     updated_keys = []
     backfilled_at = datetime.now().astimezone().isoformat(timespec="seconds")
@@ -451,7 +469,51 @@ def backfill(windows: list[int]) -> int:
 
     df_out = df_idx.reset_index()[SCHEMA_COLUMNS]
     _write_tracker(df_out)
-    print(f"[OK] backfilled {len(updated_keys)} rows across {len(mature_as_ofs)} as_of dates")
+    deferred = len(needs_refresh) + len(immature)
+    print(f"[OK] backfilled {len(updated_keys)} rows across {len(ready)} as_of date(s)"
+          + (f"; deferred {deferred} cohort(s)" if deferred else ""))
+    return 0
+
+
+def refresh(windows: list[int]) -> int:
+    """Explicit, user-triggered forward_daily cache refresh for the live tracker.
+
+    The weekly backfill stays strictly cache-only (a sidebar must not
+    self-fetch); this subcommand is the deliberate, narrowest-safe refresh the
+    backfill hint points to. It fetches forward daily for exactly the tracker's
+    matured-but-pending cohorts and rewrites the shared cache, so the next
+    weekly backfill can settle them.
+    """
+    df = _load_existing_tracker()
+    if df.empty:
+        print("[OK] tracker is empty, nothing to refresh")
+        return 0
+    today = _today_yyyymmdd()
+    mature_as_ofs = _mature_as_ofs(df, today, windows)
+    if not mature_as_ofs:
+        print(f"[OK] no matured pending cohort (today={today}); cache refresh not needed")
+        return 0
+    max_window = max(windows)
+    print(f"[REFRESH] fetching forward_daily for {len(mature_as_ofs)} matured cohort(s): {mature_as_ofs}")
+    try:
+        payload = fetch_forward_daily(mature_as_ofs, max_window, refresh=True)
+    except Exception as exc:
+        print(f"[FATAL] forward_daily refresh failed: {exc}")
+        print("[INFO] the previous cache is left intact (the cache write is atomic); "
+              "check TUSHARE_TOKEN / network and rerun.")
+        return 2
+    meta = payload.get("meta", {}) if isinstance(payload, dict) else {}
+    print(f"[OK] forward_daily cache refreshed: {meta.get('start_date')}..{meta.get('end_date')} "
+          f"stock_rows={meta.get('stock_rows')} codes={meta.get('stock_codes')}")
+    ready, needs_refresh, immature, _cached, block = _partition_asof_coverage(mature_as_ofs, max_window)
+    if block:
+        print(f"[WARN] post-refresh coverage check: {block}")
+    if ready:
+        print(f"[OK] {len(ready)} cohort(s) now covered; run the weekly (or `backfill`) to settle: {ready}")
+    if immature:
+        print(f"[INFO] {len(immature)} cohort(s) not yet +{max_window} trading days old; settle later: {immature}")
+    if needs_refresh:
+        print(f"[WARN] {len(needs_refresh)} cohort(s) still not in cache after refresh (unexpected): {needs_refresh}")
     return 0
 
 
@@ -463,32 +525,31 @@ def _cache_refresh_hint(message: str) -> list[str]:
             "       (this fetches only CSI300/CSI1000 index_daily trade_date/open/close)",
         ]
     return [
-        "[HINT] Refresh the shared forward_daily cache before backfilling. Example:",
-        "       python runners\\backtest_rank.py --mode production --stats-only \\",
-        "           --refresh-forward-daily --windows 5,10,20",
-        "       (this refetches forward daily for the backtest+tracker shared cache)",
+        "[HINT] Refresh the shared forward_daily cache for the tracker's live cohorts,",
+        "       then re-run the weekly (or `backfill`). Example:",
+        "       python runners\\forward_tracker.py refresh --windows 5,10,20",
+        "       (fetches forward daily only for the tracker's matured pending cohorts)",
     ]
 
 
-def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str]:
-    """Verify the shared backtest forward_daily cache covers tracker as_ofs.
+def _load_cache_for_coverage() -> tuple[dict | None, str]:
+    """Read the shared forward_daily cache and validate global readiness.
 
-    Returns (ok, message). Reads the pickle cache only, no fetch.
+    Global readiness = cache exists, is readable, and every benchmark frame
+    carries same-anchor trade_date/open/close. Returns (cached, "ok") on
+    success, else (None, reason). Reads the pickle only, never fetches.
     """
     if not FORWARD_DAILY_CACHE.exists():
-        return False, f"forward_daily cache not found at {FORWARD_DAILY_CACHE.relative_to(ROOT)}"
+        return None, f"forward_daily cache not found at {FORWARD_DAILY_CACHE.relative_to(ROOT)}"
     try:
         import pickle
         with FORWARD_DAILY_CACHE.open("rb") as f:
             cached = pickle.load(f)
     except Exception as e:
-        return False, f"forward_daily cache unreadable: {e}"
-    meta = cached.get("meta", {})
-    cache_start = str(meta.get("start_date", ""))
-    cache_end = str(meta.get("end_date", ""))
-    benches = cached.get("benchmarks")
+        return None, f"forward_daily cache unreadable: {e}"
+    benches = cached.get("benchmarks") if isinstance(cached, dict) else None
     if not isinstance(benches, dict):
-        return False, "forward_daily cache missing benchmark frames with trade_date/open/close fields"
+        return None, "forward_daily cache missing benchmark frames with trade_date/open/close fields"
     missing_benches = sorted(set(BENCHMARKS) - set(benches))
     close_only_benches = sorted(
         name
@@ -501,7 +562,21 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
             problems.append(f"missing benchmarks: {', '.join(missing_benches)}")
         if close_only_benches:
             problems.append(f"missing same-anchor trade_date/open/close fields: {', '.join(close_only_benches)}")
-        return False, "forward_daily cache benchmark input is not same-anchor ready (" + "; ".join(problems) + ")"
+        return None, "forward_daily cache benchmark input is not same-anchor ready (" + "; ".join(problems) + ")"
+    return cached, "ok"
+
+
+def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str]:
+    """Strict predicate: does the shared cache fully cover ALL given as_ofs?
+
+    Returns (ok, message). Reads the pickle cache only, no fetch. backfill no
+    longer gates on this (it settles the covered subset via
+    _partition_asof_coverage); kept for callers/tests that need the
+    all-covered answer.
+    """
+    cached, msg = _load_cache_for_coverage()
+    if cached is None:
+        return False, msg
 
     requested_asofs = sorted({str(as_of) for as_of in as_ofs if str(as_of).strip()})
     if not requested_asofs:
@@ -527,6 +602,9 @@ def _check_cache_coverage(as_ofs: list[str], max_window: int) -> tuple[bool, str
                 f"{as_of} needs +{max_window} trading days but cache ends at {trade_dates[-1]}"
             )
     if insufficient:
+        meta = cached.get("meta", {})
+        cache_start = str(meta.get("start_date", ""))
+        cache_end = str(meta.get("end_date", ""))
         return False, (
             "forward_daily cache trading-date coverage insufficient ("
             + "; ".join(insufficient)
@@ -542,6 +620,59 @@ def _cached_stock_trade_dates(cached: dict) -> list[str]:
     dates = stocks["trade_date"].dropna().astype(str)
     dates = dates[dates.str.fullmatch(r"\d{8}")]
     return sorted(dates.unique().tolist())
+
+
+def _partition_asof_coverage(as_ofs: list[str], max_window: int):
+    """Split matured pending as_ofs by shared-cache coverage (reads cache only).
+
+    Returns (ready, needs_refresh, immature, cached, block_msg):
+      ready         -> present with +max_window trading-day room; settle now.
+      needs_refresh -> not in the cache at all (cache is stale for it); a refresh
+                       would add it, so the caller nudges the operator.
+      immature      -> present but +max_window trading days are not yet in the
+                       cache; the cohort simply has not matured, settle later.
+      cached        -> loaded cache payload (usable directly as an
+                       attach_forward_returns payload) when block_msg is None.
+      block_msg     -> non-None when a global problem (missing/unreadable cache,
+                       benchmark not same-anchor) blocks every cohort.
+
+    Rationale: backfill must never let one not-yet-matured cohort block older,
+    fully matured cohorts from settling. The old all-or-nothing gate did exactly
+    that, freezing the candidate-effect ledger.
+    """
+    cached, msg = _load_cache_for_coverage()
+    if cached is None:
+        return [], [], [], None, msg
+    trade_dates = _cached_stock_trade_dates(cached)
+    if not trade_dates:
+        return [], [], [], None, "forward_daily cache missing stock trade_date coverage"
+    date_pos = {date: pos for pos, date in enumerate(trade_dates)}
+    ready, needs_refresh, immature = [], [], []
+    for as_of in sorted({str(a) for a in as_ofs if str(a).strip()}):
+        if as_of not in date_pos:
+            needs_refresh.append(as_of)
+        elif date_pos[as_of] + max_window >= len(trade_dates):
+            immature.append(as_of)
+        else:
+            ready.append(as_of)
+    return ready, needs_refresh, immature, cached, None
+
+
+def _print_cache_stale_banner(cohorts: list[str], reason: str) -> None:
+    """Loud, unmissable staleness banner so the operator refreshes the shared
+    forward_daily cache. The plain [SKIP] line stayed buried in the weekly log
+    for ~5 months; this box is meant to survive a long console scroll."""
+    bar = "!" * 74
+    shown = ", ".join(cohorts[:12]) + (" ..." if len(cohorts) > 12 else "")
+    print("")
+    print(bar)
+    print("!!  FORWARD-TRACKER CACHE STALE -- candidate-effect ledger is NOT advancing.")
+    print(f"!!  {len(cohorts)} matured cohort(s) cannot settle ({reason}).")
+    print(f"!!  cohorts: {shown}")
+    print("!!  ACTION: refresh the shared forward_daily cache, then re-run the weekly:")
+    print("!!      python runners\\forward_tracker.py refresh --windows 5,10,20")
+    print(bar)
+    print("")
 
 
 def _board_from_code(ts_code):
@@ -561,12 +692,14 @@ def _board_from_code(ts_code):
 # ============================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Phase 3.5 live forward tracker (capture + backfill).")
+    parser = argparse.ArgumentParser(description="Phase 3.5 live forward tracker (capture + backfill + refresh).")
     sub = parser.add_subparsers(dest="cmd", required=True)
     cap = sub.add_parser("capture", help="Append one row per candidate from result/a_short/<as_of>/analysis_input.json.")
     cap.add_argument("--as-of", required=True, help="YYYYMMDD trading day.")
-    bf = sub.add_parser("backfill", help="Fill forward returns for matured pending rows.")
+    bf = sub.add_parser("backfill", help="Fill forward returns for matured pending rows (cache-only).")
     bf.add_argument("--windows", default="5,10,20")
+    rf = sub.add_parser("refresh", help="Explicit narrowest-safe forward_daily cache refresh for matured pending cohorts.")
+    rf.add_argument("--windows", default="5,10,20")
     args = parser.parse_args()
 
     if args.cmd == "capture":
@@ -574,6 +707,9 @@ def main():
     if args.cmd == "backfill":
         windows = [int(w) for w in args.windows.split(",") if w.strip()]
         return backfill(windows)
+    if args.cmd == "refresh":
+        windows = [int(w) for w in args.windows.split(",") if w.strip()]
+        return refresh(windows)
     return 1
 
 

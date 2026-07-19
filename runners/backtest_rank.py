@@ -28,6 +28,7 @@ import os
 import pickle
 import subprocess
 import sys
+import tempfile
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta
@@ -352,6 +353,33 @@ def _normalize_benchmark_daily_frame(frame, name, ts_code):
     return out.sort_values("trade_date").drop_duplicates("trade_date", keep="last").reset_index(drop=True)
 
 
+def _write_forward_daily_cache(payload: dict) -> None:
+    """Atomically write the shared forward_daily cache (temp file + os.replace).
+
+    The pickle is large (~260MB) and the live forward tracker reads it
+    cache-only; a mid-write crash must never truncate it into an unreadable
+    stub. Mirrors runners/forward_tracker.py::_write_tracker.
+    """
+    BT_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(
+        prefix=f".{FORWARD_DAILY_CACHE.name}.",
+        suffix=".tmp",
+        dir=str(FORWARD_DAILY_CACHE.parent),
+    )
+    try:
+        with os.fdopen(fd, "wb") as f:
+            pickle.dump(payload, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp_name, FORWARD_DAILY_CACHE)
+    except Exception:
+        try:
+            os.unlink(tmp_name)
+        except OSError:
+            pass
+        raise
+
+
 def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
     """Fetch raw+adj daily prices and benchmark open/close covering the forward window.
 
@@ -459,8 +487,7 @@ def fetch_forward_daily(asof_dates, max_window, buffer_days=5, refresh=False):
             "stock_codes": int(stocks["ts_code"].nunique()),
             "limit_rows": int(len(limits))}
 
-    with FORWARD_DAILY_CACHE.open("wb") as f:
-        pickle.dump({"meta": meta, "stocks": stocks, "limits": limits, "benchmarks": benches}, f)
+    _write_forward_daily_cache({"meta": meta, "stocks": stocks, "limits": limits, "benchmarks": benches})
     print(f"[FETCH] forward_daily saved stocks={len(stocks)} codes={meta['stock_codes']} "
           f"limits={len(limits)} benchmarks={list(benches.keys())} -> {FORWARD_DAILY_CACHE.relative_to(ROOT)}")
     return {"stocks": stocks, "limits": limits, "benchmarks": benches, "meta": meta}
