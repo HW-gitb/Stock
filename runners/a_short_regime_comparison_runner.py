@@ -329,14 +329,23 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
     if action_requested:
         old_actions = load_comparison_records(str(action_records_path))
         refreshed = refresh_action_records(old_actions, out["comparison_records"])
-        current_action = build_action_record(
-            regime_record=out["comparison_record"], raw_v14_2_regime=str(raw_v14_2_regime),
-            effective_v14_2_regime=v14_2_regime,
-            m67_source=m67_provenance(str(m67_report_path), as_of=as_of),
-            forward_origin={"decision_as_of": str(action_decision_as_of),
-                            "run_date": str(action_run_date)},
-        )
-        actions = merge_action_records(refreshed, current_action)
+        existing_action = next((row for row in refreshed if str(row["as_of"]) == str(as_of)), None)
+        if existing_action is None:
+            current_action = build_action_record(
+                regime_record=out["comparison_record"], raw_v14_2_regime=str(raw_v14_2_regime),
+                effective_v14_2_regime=v14_2_regime,
+                m67_source=m67_provenance(str(m67_report_path), as_of=as_of),
+                forward_origin={"decision_as_of": str(action_decision_as_of),
+                                "run_date": str(action_run_date)},
+            )
+            actions = merge_action_records(refreshed, current_action)
+        else:
+            # A rerun on the same settled week may use a different private M6.7 artifact
+            # after account-state refresh. D2 is immutable comparison evidence, so retain
+            # the first sanctioned observation rather than treating that expected rerun as
+            # a history conflict. The engine-level merge guard remains strict for callers.
+            current_action = existing_action
+            actions = refreshed
         summary = summarize_action_records(actions)
         reminder = render_action_review_reminder(summary)
         save_action_records(actions, str(action_records_path), current_action=current_action,

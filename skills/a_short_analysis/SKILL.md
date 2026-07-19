@@ -5,7 +5,7 @@ description: Use for the A-share short-term weekly screening and M6.7 operation 
 
 # A Short Analysis
 
-This Skill is a usage guide. The unique production-facing entry is `runners/weekly_screening.ps1`, which runs screening and publishes the receipt-gated M6.7 weekly bundle.
+This Skill is a usage guide. The standard Windows production launcher is `runners/weekly_screening.cmd`; it starts the implementation `runners/weekly_screening.ps1` with a process-scoped execution-policy bypass, then runs screening and publishes the receipt-gated M6.7 weekly bundle.
 
 `runners/run_analysis_report.py` is research-only. It must not be presented as the current production-facing operation path.
 
@@ -29,7 +29,7 @@ A default run that fails preflight before canonical resolution has no as-of iden
 Run the weekly screening and M6.7 operation report:
 
 ```powershell
-.\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode pit -Account path\to\account.json
+.\runners\weekly_screening.cmd -AsOf 20260522 -L3Mode pit -Account path\to\account.json
 ```
 
 For the normal live cadence, omit `-AsOf` and `-L3Mode` so the wrapper resolves the canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.

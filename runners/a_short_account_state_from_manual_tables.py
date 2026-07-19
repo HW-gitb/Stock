@@ -554,8 +554,8 @@ def reconcile_trades_positions(trades: list, positions: list) -> list:
 
 
 # ── 薄 main：读 CSV → build → 既有 validator 兜底 → 原子写 json + lineage ──────────────
-def _read_csv_table(path: Path, name: str) -> list:
-    with open(path, encoding="utf-8-sig", newline="") as f:   # utf-8-sig：容忍用户用 Excel 存出的 BOM
+def _read_csv_table_with_encoding(path: Path, name: str, encoding: str) -> list:
+    with open(path, encoding=encoding, newline="") as f:
         reader = csv.DictReader(f)
         header = [h.strip() for h in (reader.fieldnames or [])]
         missing = [c for c in REQUIRED_COLUMNS[name] if c not in header]
@@ -565,6 +565,18 @@ def _read_csv_table(path: Path, name: str) -> list:
         for raw in reader:
             rows.append({(k.strip() if k else k): v for k, v in raw.items()})
         return rows
+
+
+def _read_csv_table(path: Path, name: str) -> list:
+    # Excel's Simplified-Chinese CSV export is often GBK-family rather than UTF-8.
+    # Keep UTF-8/BOM authoritative, then use the strict gb18030 superset only when
+    # UTF-8 decoding itself fails; all existing header and field validation remains.
+    for encoding in ("utf-8-sig", "gb18030"):
+        try:
+            return _read_csv_table_with_encoding(path, name, encoding)
+        except UnicodeDecodeError:
+            continue
+    raise ConvertError(f"{name}.csv encoding unsupported: expected UTF-8/UTF-8 BOM or gb18030")
 
 
 def _sha256(path: Path) -> str:

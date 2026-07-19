@@ -7,6 +7,60 @@
 - **Verify**: `tests.provider.test_us_short_forward_policy_corporate_action_fetch` = 7 OK（含新 `bad_port_continuation`/`non_finite_payload` 子测试，无修复则崩、有修复干净 incomplete_no_count + not_evaluable）。
 - **Pre-Codex self-review**: fast-path 自审——改动局部无签名/正常路径变化；planted-failure 双测试证明修复 load-bearing；模块 7 OK 无回归。
 - **Next**: 线闭（首次真周跑前硬化就位）
+## 2026-07-19 — Claude Code 独立复审（A-short 全量运行 6 刀：account-CSV / V14.3 same-week / crash-veto boundary / .cmd launcher / factor-comparison / SW-PIT 裁决）PASS
+
+- **Verdict/Action**: PASS + 提交（91ef 树，仅代码刀，排除 research/results 再生成产物；未 push）。6 刀=桌面 a_codex_testrun1 五问题(启动策略/crash-veto 缓存/账户编码/factor-comparison/V14.3 same-week)+SW-PIT 裁决，全 operability / comparison-only / PIT-guard，零改选股/排名/阈值/权重/veto。R-ASHORT-ACCOUNT-CSV-ENCODING、-V143-SAME-WEEK-PRIVATE-M67-RERUN、-UNCACHED-CRASH-VETO-SETTLED-BOUNDARY、-WINDOWS-RESTRICTED-POLICY-LAUNCHER、-FACTOR-COMPARISON-FUTURE-CACHE-FALSE-ALARM 均 fixed-in-slice、代码正确。
+- **Required**: 无。5 项 Codex Required:none、fixed-in-slice；register: non-material（operability + comparison-only sidecar，均未改选股/排名/veto），故 docs/system_risk_register.md 不新增条目。
+- **Verify**: review-evidence:not_available。低选股影响、无 live provider/secret/新选股 fail-closed 门 → 未起 §6a agent（按比例），整读被消费函数体+反向探针+on-data。亲跑 91ef 7 触模块 164 OK + 广域 test_a_short* discover exit 0（harness 报告）。on-data:真 20260720 analysis_input source_trade_date 单值 20260717≤as_of；run log 证 historical_as_of_requires_pit_history+104 L2 PIT 批查。泄露扫描净(cost_basis:gross 标签、action 账本 de-identified)、私密产物 gitignored。overlay_eval_summary 被隔离跑从 4 forward 观测回退到 1(提交排除、待真跑)；Cut3 反向 fail-closed 分支未逐测(非阻断)。
+- **Next**: Codex：Pass
+
+## 2026-07-18 - Codex adjudication (A-short prospective Monday SW PIT fallback)
+
+- **Verdict/Action**: no code change: the `20260720` L1-current fast-path message was the intended `historical_as_of_requires_pit_history` guard on a 2026-07-18 Saturday run. The runner correctly used 104 L2 PIT-history queries instead of applying current membership to a future Monday; the desktop issue entry was removed.
+- **Required**: none.
+- **Verify**: `logs/a_codex_testrun1_20260718.stderr.log` records the exact fallback reason and completed L2 batching; this is a no-lookahead control, not a provider failure.
+- **Pre-Codex self-review**: inspected the fast-path condition, fallback reason, actual run log, and current/historical regression coverage; no data, selection, or provider behavior changed.
+- **Next**: Claude Code: review together with the four prior unreviewed A-short repairs.
+
+## 2026-07-18 - Codex repair (A-short future factor-comparison cache false alarm)
+
+- **Verdict/Action**: `R-ASHORT-FACTOR-COMPARISON-FUTURE-CACHE-FALSE-ALARM` fixed: the cache-only settler now defers a future-dated forward cohort without opening `forward_daily.pkl`; malformed, current, or past pending snapshots still require the cache and retain the loud warning. The desktop issue entry was removed because this pre-maturity condition is expected, not a data failure.
+- **Required**: none.
+- **Verify**: `python -m unittest tests.test_a_short_factor_comparison tests.test_doc_governance_guard` passed (51 tests); `git diff --check` clean.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): current/past pending and malformed inputs stay fail-loud; future-only and no-snapshot paths avoid cache reads; the direct-script test now uses an isolated private root; no provider or account data accessed.
+- **Next**: Claude Code: review together with the four prior unreviewed A-short repairs.
+
+## 2026-07-18 - Codex repair (A-short Windows restricted-policy launcher)
+
+- **Verdict/Action**: `R-ASHORT-WINDOWS-RESTRICTED-POLICY-LAUNCHER` fixed: added `runners/weekly_screening.cmd`, which starts only the sibling weekly runner with a process-scoped policy bypass; no machine or user execution policy is changed.
+- **Required**: none.
+- **Verify**: `python -m unittest tests.phase6.test_weekly_screening_guardrails tests.test_doc_governance_guard` passed (53 tests). The cmd end-to-end guard reached preflight and the weekly pipeline under the current restricted policy, then safely stopped at the existing invalid historical-date guard; `git diff --check` clean.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): fixed target is an exact sibling path; arguments and child exit code propagate; no `Set-ExecutionPolicy`, account access, or data-provider call; operator route text updated.
+- **Next**: Claude Code: review together with the three prior unreviewed A-short repairs.
+
+## 2026-07-18 - Codex repair (A-short uncached crash-veto settled boundary)
+
+- **Verdict/Action**: `R-ASHORT-UNCACHED-CRASH-VETO-SETTLED-BOUNDARY` fixed: price refresh now uses the current official `analysis_input.json` candidate quote source date as the settled EOD boundary, so an uncached Monday pre-open run does not require a transient EGS daily pickle; missing or inconsistent provenance still fails closed.
+- **Required**: none.
+- **Verify**: `python -m unittest tests.test_a_short_crash_veto_tracker tests.test_doc_governance_guard` passed (46 tests); `git diff --check` clean.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): preserved the direct-call cache fallback; added published-provenance and forwarding regressions; no provider or account data accessed; no route-doc change.
+- **Next**: Claude Code: review together with the two prior unreviewed A-short repairs.
+
+## 2026-07-18 — Codex repair (A-short V14.3 same-settled-week rerun)
+
+- **Verdict/Action**: `R-ASHORT-V143-SAME-WEEK-PRIVATE-M67-RERUN` fixed: the runner retains the first sanctioned D2 action record for an already settled week, so a same-week private M6.7 rerun cannot overwrite it or raise an immutable-history conflict; engine-level conflict rejection remains intact.
+- **Required**: none.
+- **Verify**: `python -m unittest tests.test_a_short_regime_action_comparison tests.test_a_short_regime_comparison_runner` passed, including a same-week changed-M6.7 provenance regression.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): A-F checked; merge call-site grep complete; engine conflict guard retained; changed-provenance rerun regression added; no route-doc change; `git diff --check` clean.
+- **Next**: Claude Code: review together with the prior unreviewed account-CSV repair.
+
+## 2026-07-18 — Codex repair (A-short account CSV encoding)
+
+- **Verdict/Action**: `R-ASHORT-ACCOUNT-CSV-ENCODING` fixed: the converter keeps strict UTF-8/BOM first, then retries strict `gb18030` only after decoding fails; header, schema, and account-lineage validation are unchanged.
+- **Required**: none.
+- **Verify**: `python -m unittest tests.test_a_short_account_state_from_manual_tables` passed; the supplied private account directory directly produced a validated private bundle for `20260720`.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): A-F checked; encoding-surface grep complete; new GB18030 regression test; no route-doc change; `git diff --check` clean.
+- **Next**: Claude Code: review.
 
 ## 2026-07-18 — Claude 硬化极简模板执行：激活 + 扩 pre-commit hook（跨窗机制变更，非 Required）
 

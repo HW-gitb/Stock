@@ -352,6 +352,18 @@ class ParsingAntiCoercionTests(unittest.TestCase):
 
 
 class FileLevelTests(unittest.TestCase):
+    def test_gb18030_positions_csv_is_accepted(self):
+        with tempfile.TemporaryDirectory() as d:
+            p = Path(d) / "positions.csv"
+            p.write_text(
+                "ts_code,name,shares,avg_cost,entry_date,stop_loss,take_profit_1,"
+                "take_profit_2,last_exit_date,last_exit_reason,manual_notes\n"
+                "600000.SH,浦发银行,1000,10.0,20260601,9.0,,,,,\n",
+                encoding="gb18030",
+            )
+            rows = conv._read_csv_table(p, "positions")
+        self.assertEqual(rows[0]["name"], "浦发银行")
+
     def test_missing_required_column_fatal(self):
         with tempfile.TemporaryDirectory() as d:
             p = Path(d) / "account.csv"

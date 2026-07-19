@@ -2,11 +2,13 @@ import shutil
 import subprocess
 import sys
 import unittest
+import os
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
 SCRIPT = ROOT / "runners" / "weekly_screening.ps1"
+CMD_LAUNCHER = ROOT / "runners" / "weekly_screening.cmd"
 
 
 def _powershell_exe() -> str | None:
@@ -14,6 +16,40 @@ def _powershell_exe() -> str | None:
 
 
 class WeeklyScreeningGuardrailTest(unittest.TestCase):
+    def test_cmd_launcher_runs_under_restricted_default_policy(self) -> None:
+        cmd = os.environ.get("ComSpec") or shutil.which("cmd")
+        if cmd is None:
+            self.skipTest("cmd.exe not available")
+        command = subprocess.list2cmdline([
+            str(CMD_LAUNCHER),
+            "-AsOf", "19000101",
+            "-L3Mode", "neutralize",
+            "-SkipCanary",
+            "-SkipTracker",
+            "-SkipSemanticRisk",
+            "-PythonExe", sys.executable,
+        ])
+        result = subprocess.run(
+            [cmd, "/d", "/s", "/c", command],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            errors="replace",
+        )
+
+        self.assertEqual(result.returncode, 1, result.stdout + result.stderr)
+        output = result.stdout + result.stderr
+        self.assertIn("[OK] A-short preflight passed", output)
+        self.assertIn("=== Weekly screening pipeline ===", output)
+        self.assertIn("--as-of 19000101 is not an A-share trading day", output)
+        self.assertNotIn("禁止运行脚本", output)
+
+    def test_cmd_launcher_uses_process_scoped_bypass_only(self) -> None:
+        text = CMD_LAUNCHER.read_text(encoding="utf-8")
+        self.assertIn("-NoProfile -ExecutionPolicy Bypass -File", text)
+        self.assertIn('"%~dp0weekly_screening.ps1" %*', text)
+        self.assertNotIn("Set-ExecutionPolicy", text)
+
     def test_overlay_is_built_from_post_stage3_weekly_candidates(self) -> None:
         """M6.7 overlay must be the exact same batch as analysis_input candidates."""
         source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
