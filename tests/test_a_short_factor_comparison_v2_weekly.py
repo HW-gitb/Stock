@@ -15,7 +15,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import a_short_factor_comparison as v1  # noqa: E402
-from engine.a_short_factor_comparison_v2 import capture_v2_week  # noqa: E402
+from engine.a_short_factor_comparison_v2 import ComparisonV2Error, capture_v2_week  # noqa: E402
 from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     DAILY_CACHE_NAME,
     PUBLIC_STATUS_CURRENT,
@@ -64,6 +64,7 @@ def _candidates() -> list[dict]:
 def _identity(candidates: list[dict]) -> dict:
     return {
         "run_id": "knife3-test", "run_date": DECISION_DATE, "source_as_of": DECISION_DATE,
+        "price_data_through": DECISION_DATE,
         "candidate_digest": v1._digest([v1._safe_candidate(row) for row in candidates]),
         "official_m67_digest": "b" * 64,
     }
@@ -136,7 +137,10 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             source_identity = {"run_id": "official-run", "candidate_digest": "a" * 64}
             weekly = {
                 "as_of": DECISION_DATE,
-                "run_lineage": {"run_id": "official-run", "candidate_digest": "a" * 64},
+                "run_lineage": {
+                    "run_id": "official-run", "candidate_digest": "a" * 64,
+                    "price_freshness": {"run_date": DECISION_DATE, "price_data_through": DECISION_DATE},
+                },
                 "factor_comparison_v2": {
                     "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
                     "reminder_count": 0,
@@ -160,7 +164,102 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                 capture_v2_after_published_weekly(
                     root=root, decision_date=DECISION_DATE, candidates=candidates,
                     source_identity=source_identity, out_path=out, receipt_path=receipt_path,
-                    forward_eligible=False)
+                forward_eligible=False)
+
+    def test_weekend_canonical_capture_binds_friday_price_but_keeps_monday_decision_key(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            out = Path(tmp) / "weekly_m67.json"
+            md = out.with_suffix(".md")
+            receipt_path = out.with_suffix("").with_suffix(".receipt.json")
+            run_date, price_data_through = "20260131", "20260130"
+            candidates = _candidates()
+            for candidate in candidates:
+                candidate["price_series"] = candidate["price_series"][:-1]
+                self.assertEqual(candidate["price_series"][-1]["trade_date"], price_data_through)
+            source_identity = {"run_id": "official-run", "candidate_digest": "a" * 64}
+            weekly = {
+                "as_of": DECISION_DATE,
+                "run_lineage": {
+                    "run_id": "official-run", "candidate_digest": "a" * 64,
+                    "price_freshness": {
+                        "mode": "intraday_prior_settled", "run_date": run_date,
+                        "accepted_prior_settled_date": price_data_through,
+                        "price_data_through": price_data_through,
+                    },
+                },
+                "factor_comparison_v2": {
+                    "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
+                    "reminder_count": 0,
+                    "message": "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。",
+                    "production_unchanged": True,
+                },
+            }
+            out.write_text(json.dumps(weekly), encoding="utf-8")
+            md.write_text("weekly", encoding="utf-8")
+            receipt_path.write_text(json.dumps({
+                "stage_status": "complete", "as_of": DECISION_DATE, "run_id": "official-run",
+                "candidate_digest": "a" * 64, "outputs": [out.name, md.name],
+            }), encoding="utf-8")
+            with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=run_date):
+                result = capture_v2_after_published_weekly(
+                    root=root, decision_date=DECISION_DATE, candidates=candidates,
+                    source_identity=source_identity, out_path=out, receipt_path=receipt_path,
+                    forward_eligible=True)
+            self.assertEqual(result["status"], "captured")
+            identity = result["capture"]["payload"]["run_identity"]
+            self.assertEqual(identity["run_date"], run_date)
+            self.assertEqual(identity["price_data_through"], price_data_through)
+            self.assertEqual(result["capture"]["decision_date"], DECISION_DATE)
+
+    def test_forward_capture_rejects_forged_or_mismatched_price_freshness_lineage(self):
+        # Negative guards for the weekend/live-canonical forward binding: a forward capture must match the
+        # official M6.7 price_freshness lineage. A forged mode or an unbound price_data_through must raise
+        # (mirrors the positive weekend test above, which is the only path allowed to succeed).
+        run_date, price_data_through = "20260131", "20260130"
+        source_identity = {"run_id": "official-run", "candidate_digest": "a" * 64}
+
+        def _attempt(mode: str, accepted: str):
+            with tempfile.TemporaryDirectory() as tmp:
+                root = _root(tmp)
+                out = Path(tmp) / "weekly_m67.json"
+                md = out.with_suffix(".md")
+                receipt_path = out.with_suffix("").with_suffix(".receipt.json")
+                weekly = {
+                    "as_of": DECISION_DATE,
+                    "run_lineage": {
+                        "run_id": "official-run", "candidate_digest": "a" * 64,
+                        "price_freshness": {
+                            "mode": mode, "run_date": run_date,
+                            "accepted_prior_settled_date": accepted,
+                            "price_data_through": price_data_through,
+                        },
+                    },
+                    "factor_comparison_v2": {
+                        "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
+                        "reminder_count": 0,
+                        "message": "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。",
+                        "production_unchanged": True,
+                    },
+                }
+                out.write_text(json.dumps(weekly), encoding="utf-8")
+                md.write_text("weekly", encoding="utf-8")
+                receipt_path.write_text(json.dumps({
+                    "stage_status": "complete", "as_of": DECISION_DATE, "run_id": "official-run",
+                    "candidate_digest": "a" * 64, "outputs": [out.name, md.name],
+                }), encoding="utf-8")
+                with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=run_date):
+                    capture_v2_after_published_weekly(
+                        root=root, decision_date=DECISION_DATE, candidates=_candidates(),
+                        source_identity=source_identity, out_path=out, receipt_path=receipt_path,
+                        forward_eligible=True)
+
+        # (a) wrong price-freshness mode (not the live-canonical intraday_prior_settled) for a weekend forward capture
+        with self.assertRaisesRegex(ComparisonV2Error, "live canonical price-freshness mode"):
+            _attempt(mode="strict_as_of", accepted=price_data_through)
+        # (b) price_data_through != decision_date AND not bound to the official accepted prior-settled date
+        with self.assertRaisesRegex(ComparisonV2Error, "prior-settled binding"):
+            _attempt(mode="intraday_prior_settled", accepted="20260129")
 
 
 if __name__ == "__main__":

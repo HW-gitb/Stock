@@ -57,6 +57,7 @@ def _identity(decision_date: str = "20260202", candidates: list[dict] | None = N
     normalized = [v1._safe_candidate(row) for row in (candidates if candidates is not None else _candidates())]
     return {
         "run_id": f"offline-{decision_date}", "run_date": decision_date, "source_as_of": decision_date,
+        "price_data_through": decision_date,
         "candidate_digest": v1._digest(normalized), "official_m67_digest": "b" * 64,
     }
 
@@ -150,6 +151,11 @@ class GovernanceAndCaptureTests(unittest.TestCase):
             with self.assertRaises(ComparisonV2Error):
                 capture_v2_week(root=root, decision_date="20260202", candidates=_candidates(),
                                 run_identity=identity, forward_eligible=True)
+            missing_price_clock = _identity()
+            missing_price_clock.pop("price_data_through")
+            with self.assertRaises(ComparisonV2Error):
+                capture_v2_week(root=root, decision_date="20260202", candidates=_candidates(),
+                                run_identity=missing_price_clock, forward_eligible=False)
             future = _candidates()
             future[0]["price_series"][-1]["trade_date"] = "20260203"
             with self.assertRaises(ComparisonV2Error):
@@ -527,7 +533,7 @@ class RiskEvidenceTests(unittest.TestCase):
         arm, candidates, date_pos, lookup, dates, governance = self._single_position_inputs(
             close_path=[100.0, 130.0, 110.0] + [130.0] * 18,
         )
-        outcome, _ = _position_outcomes(arm=arm, candidates=candidates, date_pos=date_pos, dates=dates,
+        outcome, _ = _position_outcomes(arm=arm, candidates=candidates, price_data_through=dates[0], date_pos=date_pos, dates=dates,
                                         lookup=lookup, limits={}, governance=governance)
         self.assertAlmostEqual(outcome["risk_evidence"]["max_drawdown_pct"], 15.3846153846, places=8)
 
@@ -536,8 +542,8 @@ class RiskEvidenceTests(unittest.TestCase):
             close_path=[100.0] * 21,
         )
         candidates["600000.SH"]["close"] = 99.0
-        with self.assertRaisesRegex(ComparisonV2Error, "decision close drifts"):
-            _position_outcomes(arm=arm, candidates=candidates, date_pos=date_pos, dates=dates,
+        with self.assertRaisesRegex(ComparisonV2Error, "price_data_through close drifts"):
+            _position_outcomes(arm=arm, candidates=candidates, price_data_through=dates[0], date_pos=date_pos, dates=dates,
                                lookup=lookup, limits={}, governance=governance)
 
     def test_loss_distribution_is_filled_only_and_records_its_basis(self):
@@ -568,6 +574,7 @@ class RiskEvidenceTests(unittest.TestCase):
         governance["outcome_contract"]["cost_pct"] = 0.0
         outcome, counts = _position_outcomes(
             arm=arm, candidates={code: {"close": 100.0} for code in codes},
+            price_data_through=dates[0],
             date_pos={day: index for index, day in enumerate(dates)}, dates=dates,
             lookup=lookup, limits={}, governance=governance,
         )

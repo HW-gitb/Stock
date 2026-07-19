@@ -3553,6 +3553,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
                          "Use the v2 private-root flags; v1/v2 dual writes are prohibited.")
+    if args.factor_comparison_v2_root and not args.run_date:
+        raise SystemExit("[FATAL] factor-comparison v2 capture requires --run-date for source-bound date identity")
+    if args.factor_comparison_v2_forward and not args.factor_comparison_v2_root:
+        raise SystemExit("[FATAL] --factor-comparison-v2-forward requires --factor-comparison-v2-root")
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
@@ -4012,7 +4016,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                 forward_eligible=args.factor_comparison_v2_forward)
             print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
-        except Exception:
+        except Exception as exc:
+            # A changed same-canonical-week replay must leave the first source-bound capture immutable.
+            # Do not surface private candidate details; the fixed operator message is enough to distinguish
+            # the intentional freeze from an ordinary comparison-sidecar outage.
+            if "v2 capture replay input drifted" in str(exc):
+                print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
+                      "the changed replay was not written and M6.7 remains authoritative")
+                return
             print("[factor-comparison-v2] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
 

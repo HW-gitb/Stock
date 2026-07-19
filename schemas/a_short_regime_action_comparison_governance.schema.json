@@ -1,0 +1,66 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_regime_action_comparison_governance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "baseline_policy_id", "baseline_policy_epoch", "candidate_policy_id", "candidate_policy_epoch", "action_matrix", "review_gate", "candidate_effect_policy", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_regime_action_comparison_governance"},
+    "schema_version": {"const": "1.1.0"},
+    "baseline_policy_id": {"const": "v14_2_effective_action_proxy_v1"},
+    "baseline_policy_epoch": {"const": "20260714_effective_fallback_v1"},
+    "candidate_policy_id": {"const": "v14_3_documented_action_proxy_v1"},
+    "candidate_policy_epoch": {"const": "20260714_documented_matrix_v1"},
+    "action_matrix": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attack", "shock", "defense", "contraction"],
+      "properties": {
+        "attack": {"$ref": "#/definitions/allow_80"},
+        "shock": {"$ref": "#/definitions/allow_60"},
+        "defense": {"$ref": "#/definitions/forbidden"},
+        "contraction": {"$ref": "#/definitions/forbidden"}
+      }
+    },
+    "review_gate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["forward_live_weeks_min", "divergence_h10_samples_min"],
+      "properties": {"forward_live_weeks_min": {"const": 12}, "divergence_h10_samples_min": {"const": 8}}
+    },
+    "candidate_effect_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["policy_id", "policy_epoch", "state_machine_governance", "eligible_row_source", "eligible_m67_action", "primary_horizon_trading_days", "auxiliary_horizons_trading_days", "return_unit", "return_cost_basis", "benchmark", "benchmark_name", "forward_live_weeks_min", "divergence_weeks_min", "divergence_stocks_min", "practical_improvement_pp_min", "favorable_weeks_ratio_min", "historical_replay_counts", "automatic_production_switch", "baseline_description", "candidate_proxy_description"],
+      "properties": {
+        "policy_id": {"const": "v14_3_candidate_effect_proxy_v1"},
+        "policy_epoch": {"const": "20260719_p1_cut1_v1"},
+        "state_machine_governance": {"const": "a_short_v14_3_regime_governance_20260611.json"},
+        "eligible_row_source": {"const": "egs_candidate"},
+        "eligible_m67_action": {"const": "建仓"},
+        "primary_horizon_trading_days": {"const": 10},
+        "auxiliary_horizons_trading_days": {"const": [5, 20]},
+        "return_unit": {"const": "percent"},
+        "return_cost_basis": {"const": "net"},
+        "benchmark": {"const": "000852.SH"},
+        "benchmark_name": {"const": "CSI1000"},
+        "forward_live_weeks_min": {"const": 12},
+        "divergence_weeks_min": {"const": 8},
+        "divergence_stocks_min": {"const": 20},
+        "practical_improvement_pp_min": {"const": 0.5},
+        "favorable_weeks_ratio_min": {"const": 0.6},
+        "historical_replay_counts": {"const": false},
+        "automatic_production_switch": {"const": false},
+        "baseline_description": {"const": "current production build without regime-driven candidate action"},
+        "candidate_proxy_description": {"const": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"}
+      }
+    },
+    "boundary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["production", "comparison_only", "drives_m67", "automatic_production_switch"],
+      "properties": {"production": {"const": false}, "comparison_only": {"const": true}, "drives_m67": {"const": false}, "automatic_production_switch": {"const": false}}
+    }
+  },
+  "definitions": {
+    "allow_80": {"type": "object", "additionalProperties": false, "required": ["new_build", "max_exposure_pct"], "properties": {"new_build": {"const": "allow"}, "max_exposure_pct": {"const": 80}}},
+    "allow_60": {"type": "object", "additionalProperties": false, "required": ["new_build", "max_exposure_pct"], "properties": {"new_build": {"const": "allow"}, "max_exposure_pct": {"const": 60}}},
+    "forbidden": {"type": "object", "additionalProperties": false, "required": ["new_build", "max_exposure_pct"], "properties": {"new_build": {"const": "forbidden"}, "max_exposure_pct": {"const": 0}}}
+  }
+}

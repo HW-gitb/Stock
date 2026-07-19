@@ -315,6 +315,16 @@ if ($SkipTracker) {
         # tracker capture 失败不影响主流程退出码（旁路约束）。
         # 失败原因通常是 analysis_input.json 缺失或 Python 异常，不是数据问题。
         Write-Host "[WARN] forward_tracker exit $TrackerExitCode (check logs/forward_tracker.csv)" -ForegroundColor Yellow
+    } else {
+        # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
+        # weekly runner to download extra market data, and a cache gap remains advisory.
+        Write-Host "[3/4] Cache-only forward_tracker backfill (P1 candidate-effect sidecar input) ..." -ForegroundColor Yellow
+        & $PythonExe runners\forward_tracker.py backfill --windows 5,10,20
+        $TrackerBackfillExitCode = $LASTEXITCODE
+        if ($null -eq $TrackerBackfillExitCode) { $TrackerBackfillExitCode = 1 }
+        if ($TrackerBackfillExitCode -ne 0) {
+            Write-Host "[WARN] forward_tracker cache-only backfill exit $TrackerBackfillExitCode; P1 remains pending and EGS/M6.7 continue unchanged." -ForegroundColor Yellow
+        }
     }
 }
 
@@ -388,10 +398,21 @@ if ($SkipSemanticRisk) {
                 # 价格门 intraday tolerance(容忍最新已结算 bar=前一交易日);真·过去回放(as_of<运行日)保持默认
                 # strict_as_of。实际价格时钟记进 weekly_m67 lineage。
                 $M67Args += @('--price-freshness-mode', 'intraday_prior_settled')
-                # D1/D3: freeze the normalized live decision once, under the private comparison root.
-                # This is sidecar-only; it cannot alter the production EGS/M6.7 result.
-                $FactorComparisonRoot = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private'
-                $M67Args += @('--factor-comparison-root', $FactorComparisonRoot, '--factor-comparison-forward')
+                # P0 v2: first try to update the bounded private cache.  This sidecar may call the existing
+                # approved price source, but a failure only leaves v2 unavailable; M6.7 remains authoritative.
+                $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
+                $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
+                Write-Host "[ADVISORY] Updating bounded factor-comparison v2 private cache ..." -ForegroundColor Yellow
+                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate
+                $FactorComparisonCacheExitCode = $LASTEXITCODE
+                if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
+                if ($FactorComparisonCacheExitCode -ne 0) {
+                    Write-Host "[WARN] factor-comparison v2 cache unavailable (exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
+                }
+                # Freeze the normalized live decision only after M6.7 publishes its matching bundle.
+                $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
+                              '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,
+                              '--factor-comparison-v2-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             $RunM67 = $true
@@ -419,15 +440,6 @@ if ($SkipSemanticRisk) {
                     exit $M67ExitCode
                 } else {
                     Write-Host "[OPERATION] authoritative M6.7 weekly report -> $M67Out. Older analysis reports remain research-only inputs." -ForegroundColor Yellow
-                    if (-not $IsHistoricalAsOf) {
-                        # Cache-only settlement: no provider call and no blocking of the weekly path.
-                        & $PythonExe runners\a_short_factor_comparison.py settle --root $FactorComparisonRoot
-                        $FactorComparisonExitCode = $LASTEXITCODE
-                        if ($null -eq $FactorComparisonExitCode) { $FactorComparisonExitCode = 1 }
-                        if ($FactorComparisonExitCode -ne 0) {
-                            Write-Host "[WARN] factor comparison settlement exit $FactorComparisonExitCode (comparison-only; weekly output unchanged)" -ForegroundColor Yellow
-                        }
-                    }
                 }
             }
         }

@@ -225,6 +225,22 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$RegimeArgs += '--bootstrap'", text)              # absent ledger -> one-time backfill
         self.assertIn("only live runs advance the forward regime evidence", text)  # historical replay skipped
         self.assertIn("does NOT block the weekly", text)                 # non-blocking comparison-only sidecar
+        self.assertIn("forward_tracker.py backfill --windows 5,10,20", text)
+        self.assertIn("cache-only backfill", text)
+
+    def test_factor_comparison_v2_cache_is_live_only_and_never_reuses_retired_v1_wiring(self):
+        text = SCRIPT.read_text(encoding="utf-8")
+        live_block = text[text.index("if (-not $IsHistoricalAsOf) {"):text.index("if (Test-Path $OverlayPath)")]
+        self.assertIn("a_short_factor_comparison_v2_cache_build.py", live_block)
+        self.assertIn("--factor-comparison-v2-root", live_block)
+        self.assertIn("--factor-comparison-v2-daily-cache", live_block)
+        self.assertIn("--factor-comparison-v2-forward", live_block)
+        self.assertIn("M6.7/V14.3/overlay continue unchanged", live_block)
+        pipeline = (ROOT / "runners" / "a_short_weekly_pipeline.py").read_text(encoding="utf-8")
+        self.assertIn("evidence is already frozen", pipeline)
+        self.assertNotIn("--factor-comparison-root", text)
+        self.assertNotIn("--factor-comparison-forward", text)
+        self.assertNotIn("a_short_factor_comparison.py settle", text)
 
     def test_runner_readme_documents_regime_stage(self):
         # route-doc/entrypoint sync (R-V143-WEEKLYSCREENING-ROUTEDOC-STAGE5-DRIFT): the one-click operator

@@ -28,6 +28,52 @@
 - **Verify**: final `discover -s tests -p 'test_us_short*.py'` = **4553 OK (1 skipped)**; final affected regression pack = 96 OK; route-doc/README/US-short const gates = 28 OK; changed Python compiled, 9 JSON files parsed, UTF-8 BOM count 0, and `git diff --check` passed. One intermediate full run hit the existing yfinance test's random temp-path substring false positive (`404` inside a generated directory name); its exact rerun passed 1 OK and the final full run was green.
 - **Pre-Codex self-review**: A-F checked by the main-thread checklist (no sub-agent available/used; no timeout/restart). B/E evidence: bridge-schema grep for `holding_themes` = 0; machine/action/report linkage grep for `theme_context|theme_id|macro_cluster` = 50; free caller macro banner grep resolves only the structured renderer symbol/test, not an input. C reverse tests include `test_price_market_cap_is_safety_and_cross_run_digest_is_rejected`, lifecycle exit-preservation/entry-block tests, candidate/holding identity-conflict tests, macro no-compound test, and hot-excluded no-rescue/unevaluable tests. Durable route docs remain single-state: only the US-short owner design was updated; `CURRENT`/README/register were not changed.
 - **Next**: Claude Code: independently review this uncommitted Cut3 only; if PASS, commit it. Do not expand into Cut4.
+## 2026-07-19 — Claude Code 独立审查（A-short P1 Cut2：V14.3 逐股候选效果旁路，3500 未提交）：PASS（comparison-only）
+
+- **Verdict/Action**: **PASS**。按已定方案（桌面 `todo_ashort_P1_review.md` + 设计 §4-§6）逐条核实：comparison-only 旁路、不改 EGS/M6.7/仓位/veto/建仓授权。承重缝亲读全对——ledger `_atomic_write_text`(mkstemp+os.replace 原子、失败重跑不截断)、`_finite_or_none`(缺/空/非有限→None、`ret_status!=ok`→None，**不把缺失当 0 现金**)、mature-freeze(`_frozen_record_refresh`：未成熟同日 tracker 可重冻、成熟即不可覆盖→`skipped_immutable_mature_week`；M6.7 同日 SHA 漂移→non-counting warning 不覆盖)、SHA/身份绑定(m67_sha256 + candidate_set_digest + tracker run-identity)、historical 不计 forward。私有 ledger `logs/...json` **已 gitignored**、公开 summary **aggregate-only 无票名**。8 条反向测试锁死全部不变式。
+- **Required**: 无。上轮方案 4 项 Optional **全落实**：①markdown 明标"防御/收缩 cash 0% 是简化 proxy、非最终生产防御策略、无自动切换"②"baseline=当前生产建仓、无 regime-driven 动作"(不冒充 V14.2 regime-gated)③confirm-days 单源自分类器 governance(`candidate_effect_policy` 只管 eligibility/evidence 阈值、不抄 confirm-days)④weekly ps1 backfill **warn-only cache-only**(exit≠0→WARN、EGS/M6.7 继续、不碰建仓授权)。
+- **Verify**: 亲跑 **focused Cut2 包**：`test_a_short_regime_comparison_runner` **33 OK** + `test_a_short_regime*`(classifier/action) **234 OK** + `phase6/test_weekly_screening_guardrails` **19 OK** = **286 OK**。**未跑完整 `test_a_short*.py`**（含 phase5/backtest 重回测、与本 comparison-only 刀无关且当时 CPU 被并发 Codex 跑争用~40min；本刀真实 blast radius=独立 comparison runner + ps1 plug + regime engine，focused 已足覆盖，proportional-to-impact）。review-evidence:not_available（全真实工具输出）。
+- **Next**: 提交 Cut2 + 把 3500 全部未 merge（P0×2 + P1 Cut1 + 本 Cut2）并入 master；不扩 P2/生产切换/真 provider。
+
+## 2026-07-19 — Codex 执行（A-short P1 Cut2：V14.3 逐股候选效果旁路，待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已完成 Cut2：既有 V14.3 runner 读取同周 M6.7 的普通 `egs_candidate + 建仓` 行与既有 `forward_tracker`，将逐股账本原子写入 gitignored `logs/a_short_regime_candidate_effect.json`，公开 JSON/Markdown 只保留等权汇总。旧周在每次新 weekly 中仅由 tracker 缓存回填；同日身份不匹配或 M6.7 SHA 漂移不计数，tracker 替换只在未成熟时可重冻，成熟证据不可覆盖。无 EGS/M6.7/账户/正式周报/建仓授权改动。
+- **Required**: 无已知 Required；不得把 P1 proxy 或汇总 verdict 接入生产，也不得把首次真实 weekly/provider 运行当作本切片验证。
+- **Verify**: 固定 P1/regime/tracker/route 包 129 OK；Stage-5 静态接线 1 OK；`py_compile`、PowerShell parse、BOM、`git diff --check` 均通过。完整 weekly guard 有 5 个动态启动用例在 bundled Python 缺 `akshare/requests/tqdm/tushare` 的 preflight exit 2，不作为失败归因或通过证据。
+- **Pre-Codex self-review**: A：覆盖 live/历史、未成熟替换/成熟冻结、同日 SHA/身份不匹配、跨周成熟回填、零候选与 private/public 边界；B：`rg` 旧 Cut2 pending route 文本 0 hits，并核对单入口 runner→tracker→公开汇总；C：反向测试锁住“不可把缺失收益当 0、不可用晚到替换重写成熟周”；D：无自然语言交易分类；E：只更新 A-short owner/route/runner 文档，未改 CURRENT；F：日期、finite return、原子写入、PowerShell/BOM/diff 均检查。未启用子 agent（当前协作约束）。
+- **Next**: Claude Code：仅独立审查当前 A-short P1 Cut2 diff；PASS 后提交，不扩展至 P2、生产切换或真实 weekly/provider 执行。
+
+## 2026-07-19 — Claude Code 独立审查 PASS（A-short P1 Cut1 V14.3 状态机 + 逐股 candidate-effect proxy；3500 已提交）
+
+- **Verdict/Action**: PASS。纯逻辑 Cut1 忠实实现、与权威设计一致、comparison-only 隔离完好，我 review 的 3 条 Optional 全被采纳且 schema 锁死。状态机 `build_stateful_regime_history` 逐条对上设计 §4：极端 fired_rule(`iv_percentile_252d_gt_90`/`limit_down_count_ge_max_p95_100`/`broad_index_crash`)与 classifier 输出精确匹配→立即跳防御；attack 3/contraction 2/clear 2；首默 shock；分支顺序(protective 先判)正确强制"禁 contraction→attack 直跳(须先 clear 到 shock)"+"普通防御从 attack 经 shock buffer 两日确认"；数据不足→不可评估并清确认。逐股 `build/summarize_candidate_effect`：只取 egs_candidate+建仓、排除 holding/watch/veto/manual；forbidden→现金0%仅在成熟时、缺失留 null 不伪造0；操作改善=影子−baseline；先周等权再跨周(防伪重复)；12/8/20/0.50pp/60%门；4 verdict + 选股准确性另算(CSI1000 excess)；`_validate_candidate_effect_record` 复核全部算术不变式。state-machine 参数单一源自 20260611 classifier governance(Optional③)。
+- **Required**: 无。
+- **Optional（非阻断）**: verdict `ready` 耦合"所有差异周 h20 全成熟"(`h20_complete`)——活跃市场里只要最近 ~20 交易日内有差异周，ready 即翻 False，可能让 verdict 长期停在 `insufficient_data`。设计本意 h10 为主、h20 只作"不反向"守门；建议 Cut2 真攒周时观察是否照常出结论，必要时把 h10 主判与 h20-no-reversal 解耦(h20 只对成熟子集判)。comparison-only、不影响正确性(出结论时是对的)，仅影响出结论时机。
+- **Verify**: 3500 树 deps-complete。regime 全包 240 OK(features/classifier/ledger/comparison/pipeline/action_comparison/comparison_runner/v14_3_governance——含 P1 新增 101 + 既有消费者无回归)。设计意图核对:状态机规格 = design §4 逐条；Optional①proxy honesty(`candidate_proxy_description` "…not a final production V14.3 defense policy")+②baseline framing("current production build without regime-driven candidate action"，不误称 V14.2 regime-gated)均入 governance 且被 summary schema `const` 锁死。边界:无 weekly/ps1/pipeline/EGS 接线、无真实证据文件、无生产改动；V14.2 仍生产基线。
+- **Next**: Codex：Pass(本 Cut1 已审已提交 3500)。P1 Cut2 须待本 PASS + 用户明确 go 才开始(只读接 forward_tracker、写私有账本/公开汇总，不改建仓授权/EGS/M6.7/账户/正式周报)。
+
+## 2026-07-19 — A-short P1 Cut1 执行完成（待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已完成纯逻辑 Cut1；新增 V14.3 state machine、逐股 candidate-effect proxy、governance/summary schemas 与测试，未接 weekly / M6.7 / forward tracker，未写真实证据，仍 comparison-only。
+- **Required**: 无。
+- **Verify**: `.tools/run_unittest_with_repo_pythonpath.cmd` 跑 P1 regime/forward-cache/doc-route pack 309 OK；`py_compile`、UTF-8 无 BOM、旧“无状态机”活跃表述 grep=0、`git diff --check` OK。
+- **Next**: Claude Code：审查并在 PASS 后提交本 Cut1；PASS 前不得开始 P1 Cut2。
+- **Pre-Codex self-review**: A：raw/stateful 四态、逐股资格、周聚合、schema/summary 全出口覆盖；B：`rg` 活跃 route/design/module 旧“无状态机”表述 0 hits，新增函数无 weekly consumer；C：缺数断连、上涨错失、下跌规避、混合、重复键与版本漂移反向测试；E：owner design/README 已同步且 route guards OK；F：有限值/日期/跨字段、UTF-8 无 BOM、diff-check 已查。受本回合协作限制未启用独立轻量 agent，采用主线程 checklist fallback；固定包集中执行一次。
+
+## 2026-07-19 — Claude Code 独立审查 PASS（A-short P0 因子对比轨 v2 日期契约/缓存/weekly 插头；3500 已提交）
+
+- **Verdict/Action**: PASS。P0 第一刀（B 终案）忠实实现、与 owner design 一致、comparison-only 生产隔离完好；逐行核 engine/adapter/pipeline/ps1/cache_build 均符 B。日期身份：`decision_date==source_as_of`=canonical 决策锚+`weeks/<decision_date>` 冻结键、`run_date`=真实运行日、`price_data_through`=最后已结算 bar；forward 仅 live-canonical(`decision_date>=run_date`)+官方 `intraday_prior_settled`/prior-settled lineage 绑定；PIT 门(779)与结算收盘门(976)两处都锚 `price_data_through`、进场仍 canonical T+1(周二，与 forward_tracker/rank 回测一致)。防伪造链闭合(run_date/price_data_through 取已发布 M6.7 `price_freshness` lineage、`_today()==run_date`+`decision_date>=run_date`+published-bundle 校验、结算端 observed+provider_observed 二次门)。缓存诚实(缺复权→provider_missing 绝不前填成 observed、调用上限抓前拒、原子写、gitignored 私有根、token 不落盘、冲突 fail-closed 保旧)。漂移重跑不覆盖+明确冻结提示、cache/capture 故障均不阻断 M6.7。已提交 3500 工作树。
+- **Required**: 无。
+- **Optional**: ②已闭——adapter forward-lineage 拒绝路径已补反向负测(`test_forward_capture_rejects_forged_or_mismatched_price_freshness_lineage`：forged `mode` + `price_data_through`≠官方 `accepted_prior_settled` 各 assertRaisesRegex；v2_weekly 6 OK，仅测试无生产码改)。①保留为 documented residual——`a_short_factor_comparison_v2_daily_cache` 对 open/close 无数值上界；naive schema hard-bound 会让单条 glitch row reject 整份 cache 写入(availability 更差)，正解是 builder 逐行降级(非 small)，且仅 comparison 侧、够不到生产，故不做 naive 版。
+- **Verify**: 3500 树 deps-complete env(tushare/akshare/requests/tqdm 全在)。P0 全消费面 550 OK：聚焦包 v2+adjudication+v2_weekly+cache_build+weekly_pipeline+guardrails=Ran 534 OK + effect-contract hash-pin=16 OK(含周末→周一 canonical 端到端捕获成功、缺复权/预算前拒/冲突原子保旧/终态不重抓、v1 插头·settler 已删守护)。独立对抗 agent(worktree 隔离读)三条不变式(伪造/缓存/生产阻断)全 HOLD、无洞。完整 test_a_short* 全包 Ran 1706 OK(deps-complete env 跑完，unchanged 组件零回归)。secret/scope/whitespace scan 干净、无 state/ 私有缓存入库、无跨市场。
+- **Next**: Codex：无(本刀已审已提交 3500)。cherry-pick→master 与首次受控 live canonical 启用验收按桌面 P0 步骤另行。
+
+## 2026-07-19 — Codex 执行（A-short P0 因子对比轨 v2 日期契约、缓存与 weekly 插头；未提交）
+
+- **Verdict/Action**: 已实施 P0 第一刀，仍为 comparison-only：weekly wrapper 删除退役 v1 参数/settler，live canonical 时先尝试有调用上限的私有 v2 cache builder，再把 v2 root/cache/forward 传给 M6.7。cache builder 只读 frozen selected-union，单尝试调用既有 Tushare 日线/复权/涨停/日历，原子写 gitignored cache；缺失复权一律 `provider_missing`，不前填或默认。capture 的 `run_identity` 现 schema 绑定真实 `run_date`、canonical `source_as_of/decision_date` 与 `price_data_through`；周末/长周末建议的价格冻结在最后已结算 bar，收益仍从 canonical 日 T+1 open 计算。相同重跑幂等，内容漂移不覆盖，周流程明确提示已冻结；cache/capture 故障均不阻断 M6.7/V14.3/overlay。
+- **Required**: 待 Claude Code 独立审查本未提交 P0 diff；不得运行真实 weekly 或 provider 作为本刀验收，首次受控 live canonical 启用仍须另行按桌面 P0 验收步骤执行。
+- **Verify**: `py_compile` 四个 Python 文件、PowerShell parse、`git diff --check` 均通过；核心/日期/缓存 35 OK，含周末周一 canonical/周五 price clock、缺失复权、预算前拒绝、冲突原子保留与终态不重抓；P0 聚焦包 37 OK；effect-contract + 两条 v2 pipeline 集成 18 OK；adjudication/route 40 OK。完整 `discover -s tests -p test_a_short*.py` 到 600s 未结束且输出既有大型套件 `E`，没有最终结果，**不作为通过证据**。完整 weekly guardrail 类另有 5 个动态启动用例受当前 bundled Python 缺少 `akshare/requests/tqdm/tushare` 而在 preflight exit 2；P0 静态 wiring 用例单独通过。
+- **Pre-Codex self-review**: A：覆盖 live canonical 周末/周一、历史非 forward、source/price identity、冻结重跑、预算/冲突/缺复权/终态缓存；B：重查 wrapper→cache→pre-M6.7 settle→post-publish capture 与正式结果隔离；C：新增反向拒绝和 schema/契约钉；D：无自然语言交易分类；E：仅更新 A-short owner/route/runner docs，不改 CURRENT；F：未启用实际 Tushare/账户/周流程。
+- **Next**: Claude Code：仅独立审查当前 A-short P0 diff；PASS 后提交。先核对完整 A-short 大包的环境/超时与其 `E`，不得把它写成绿灯；不要扩到 P1/P2/P5 或正式策略切换。
 
 ## 2026-07-19 — Claude Code 独立复审（US-short 结果联动 cut 1+2，a039 未提交）：PASS（4517 OK，上一版 FAIL 项全闭）
 

@@ -1,8 +1,8 @@
-# A-short V14.3 市场环境(regime)分类器 — schema-first 设计提案(切片1)
+# A-short V14.3 市场环境(regime)分类器 — comparison-only 设计与实现边界
 
 **日期**: 2026-06-11
 **来源**: 用户桌面 `regime优化建议.md` + 此前多轮收敛 + Claude 简化。
-**类型**: **design-only / schema-first 提案**。**不解冻 V14.2 spec、不碰生产、不接 Phase 5、不改任何风控开关。** 本切片只产出:设计文档 + 数据契约 schema + governance artifact(钉死指标口径/阈值/状态机/下游动作矩阵/边界)+ schema 测试。**无 runner 代码**(那是切片2)。
+**类型**: comparison-only 的权威设计边界；已落地 raw classifier、daily-feature/ledger 与 P1 Cut1 纯逻辑，仍**不解冻 V14.2 spec、不碰生产、不接 Phase 5、不改任何风控开关**。当前未完成项只见 §6。
 
 ## 0. 定位与边界(最重要)
 - **V14.2 M1 仍是冻结的生产基线**;V14.3 是**并行的 comparison-only 候选分类器**,只用于打标 / 差异对比 / 面板展示 / 验证数据积累。
@@ -13,7 +13,7 @@
 ## 1. 为什么走 V14.3-comparison(而非 V14.2-原样)
 V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡非残差、阈值固定、慢阴跌盲、滞后不全。V14.3 用**可精确 PIT 计算的 晋级率 + 炸板率**替代涨停指数——**顺带解决了卡住 V14.2-原样实现的"涨停指数数据源"难题**。故 regime 这块走 V14.3-comparison 更顺。
 
-## 2. 数据层(切片2 实现;本切片只定契约)
+## 2. 数据层（实现状态见 §6）
 **`a_short_market_regime_daily`**(每交易日一行)。**简化:在 EGS run 内算**(复用内存全量日线 `all_daily` + 一个 `stk_limit` 调用 + L3/指数),落到 a_short lane 桶——**不另起独立日频管线**(同 industry_heat/overlay 的 A 方案)。
 字段:`as_of` / `limit_up_count` / `limit_down_count` / `net_limit` / `max_limit_streak` / `promotion_rate` / `failed_limit_rate` / `iv_percentile_252d` / `csi300_ret_1d` / `csi1000_ret_1d` / `pct_above_ma20` / `csi1000_below_ma20`(慢阴跌操作数:CSI1000 收盘 < 其 20d MA;指数缺失则 null + flag `csi1000_unavailable`,**schema if/then 强制**:`csi1000_below_ma20=null` 时 `data_quality_flags` 必含 `csi1000_unavailable`,不得悬空)/ `data_quality_flags`。
 **PIT 口径(硬要求,schema/governance 钉死):**
@@ -28,7 +28,7 @@ V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡�
 > **修正(原方案 bug):低风险阈值是上限不是地板** —— 跌停数用 `min(50, max(P25,10))`(上限),不能写 `max(P25,50)`(否则平静期阈值过宽)。
 **④ 震荡期 = 残差默认**(不满足①②③的一切)。**删除**旧"涨停指数跌 2-3%"窄带触发。
 
-## 4. 状态机(切片3 实现;本切片只定规格)
+## 4. 状态机（P1 Cut1 已实现纯逻辑；仍不接 weekly / M6.7 / production）
 - 极端风险(IV>90 / 跌停潮 / 宽基暴跌)**允许任意档跨级直跳防御**(风控不慢半拍)。
 - 普通防御从进攻触发 → 先降震荡,次日仍触发再转防御。
 - 收缩需连续 2 日 raw、进攻需连续 3 日 raw;防御/收缩退回震荡需连续 2 日 clear。
@@ -45,12 +45,12 @@ V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡�
 | 收缩期 | 禁止 | 0% | 降风险 | N/A | 震荡/收缩 |
 **关键未决(留给切换切片):防御期到底"禁建仓"还是"允许极小仓+严格收紧"。** v1 不裁决也不接线(comparison-only)。
 
-## 6. 简化的分阶段落地(Claude 砍法 —— 别一次性全建)
-- **切片1(本切片)**:design + schema(daily 契约 + governance)+ 测试。纯提案,零生产。
-- **切片2**:v1 comparison-only —— EGS run 内算 raw regime + 每周记一行 `v14_2 / v14_3_raw / 是否分歧 / 后续 1/3/5/10 日表现`(原始数据)+ 面板加**独立、标 comparison-only 的 regime 对比段**。**启动证据时钟。**
-  - **切片2a(已起草,2026-06-11):纯 raw-classifier 逻辑核**。`engine/a_short_regime_classifier.py` 的 `classify_raw_regime(history)` 吃 daily-feature 历史 → 出 per-day raw regime(top-down 优先级,忠实实现切片1 governance 阈值;分位 resolver 镜像 const 串并 parity-test;连续日算子遇 null 断;attack 须全满足、任一 null 即不判;窗口不足 / CSI1000 缺失诚实标 flag)。**不含状态机 / confirm-days / 评分**(切片3;但记录 per-day 命中供切片3 在其上做确认)。`build_comparison_record` = 周度 v14_2-vs-v14_3_raw + 分歧 + 前向 1/3/5/10 日收益(未到期 null,后续回填,绝不 look-ahead),契约 `schemas/a_short_regime_comparison_weekly.schema.json`。**纯逻辑、无数据抓取、无 EGS 接线、无生产改动。** **证据契约硬化(Codex 审查后):** `v14_2_regime` 钉到生产枚举 `{attack,shock,defense,contraction,unknown}`、`v14_3_fired_rule` 钉到合法规则集、**前向收益基准 const-pin** `forward_return_basis`(CSI1000 `000852.SH` / forward close-to-close simple return / h1·h3·h5·h10=1·3·5·10 交易日 / unit=percent / index_close_unadjusted / gross / market-level regime indicator —— 不混 raw/excess、decimal/percent、gross/cost);跨字段不变式(divergence==(v14_2≠v14_3_raw)、pending 恰等空值 horizon、backfill_complete==无空值、fired_rule 属对应 regime)由 `validate_comparison_record` 强制(JSON Schema 表达不了),producer 落盘前自校验。
-  - **切片2b(待 cadence 决策后起草):in-EGS daily-feature 生产 + 接线 + 面板。** **可行性缺口(切片1 未解):** §3 阈值要 **252 交易日滚动分位**,但 EGS run 是**周频**、当日只产一行,拿不到 252 日 breadth 历史。`index_daily` 取 CSI300/1000(ret_1d、MA20)+ IV(已在 market_context)是廉价的,但 **breadth 分位历史**须解决:**方案 = 持久化一个增量 daily-feature ledger(落 a_short lane,一次性回填 252 交易日,之后每周只补新增 ~5 日,252d 分位从 ledger 读)**,而非每周回算 252×(daily+stk_limit) 调用。该 ledger 是新的受管状态文件,属实质设计新增,切片2b 起草前须把它定下来并审查。另注:生产 `market_context.market_regime.status` 当前=`unknown`(EGS 未真算 V14.2 M1),故 v14_2 一侧多为 `unknown` —— 对比记录的 `v14_2_regime` 契约已允许 `unknown`,分歧统计仍有意义(V14.3 何时判防御/收缩而生产仍 unknown/震荡)。
-- **切片3**:跨周持久化状态机 + 自动评分仍推迟到有足够数据；但其最小“到点不靠人记”提醒已于 2026-07-18 接入现有 D2 action summary：达到 action review gate 时，runner 在控制台和既有 comparison panel 提示启动完整证据复核。该提示不替代状态机、评分或最终生产切换审查。
+P1 的逐股比较暂以 `defense` / `contraction` 禁止新建仓、现金 0% 作**简化代理**；它不裁决上表“普通防御”的最终生产政策，不能据此切换生产。
+
+## 6. 当前分阶段状态
+- **已完成**：schema/governance、raw classifier、daily-feature ledger/比较 runner 及其既有 market-level comparison-only 证据链；生产 `market_context.market_regime.status` 仍可能为 `unknown`，不把它误称为 V14.2 regime-gated baseline。
+- **P1 Cut1（2026-07-19）**：`build_stateful_regime_history` / `classify_stateful_regime` 已将本节状态机落为纯逻辑；`build_candidate_effect_record` / `summarize_candidate_effect_records` 以相同周等权汇总逐股净收益、CSI1000 超额与代理操作改善。数据不足输出不可评估并打断确认；历史回放、未成熟收益和 policy fingerprint 不匹配不得计数或混算。
+- **P1 Cut2（2026-07-19，待独立审查）**：已由同一 V14.3 runner 只读接入既有 `forward_tracker`，冻结 `egs_candidate + 建仓` 的 live 候选；私有逐股账本仅在 gitignored `logs/a_short_regime_candidate_effect.json`，公开聚合只写 `research/results/a_short/regime_candidate_effect_summary.{json,md}`。回填只读缓存、同日按输入身份幂等、M6.7 / tracker 身份不匹配或 M6.7 SHA 漂移不计数且不覆盖旧有效结果；不得改变新建仓授权、EGS、M6.7、账户或正式周报。
 - **切换生产(遥远)**:单独切片,动作矩阵接线 + 历史对比 + ≥12 周 forward-live + 审查 + 用户确认。
 
 ## 7. switch-candidate 提醒门槛(切片3 规格,本切片入 governance)
@@ -59,11 +59,9 @@ V14.2 M1 用含糊的"涨停指数"(3/4 档都依赖它),且收缩窄、震荡�
 **提醒文案固定**:门槛达成且审查确认后,必须向用户明确提示: **"V14.3 regime 可能优于 V14.2，是否进入生产切换审查?"**。若用户确认,再单独起 production-switch 切片;该切片才允许讨论让 V14.3 接管 production regime、接线动作矩阵、更新 EGS/analysis_input/Phase5 消费与测试。未得到用户确认前,继续 comparison-only,绝不自动替换。
 
 ## 8. 对刚完成的 overlay/面板的影响
-面板加一个**常驻、独立、明确 comparison-only 的 "Regime comparison" 段**(`Production: V14.2 X | Candidate: V14.3 Y | comparison-only | 证据 n/12 周`),**绝不**与 overlay 星级 / M6.7 动作 / 建仓结论混写。切片2 实现。
+既有面板有一个**常驻、独立、明确 comparison-only 的 "Regime comparison" 段**(`Production: V14.2 X | Candidate: V14.3 Y | comparison-only | 证据 n/12 周`)，**绝不**与 overlay 星级 / M6.7 动作 / 建仓结论混写。
 
-## 9. 本切片交付物
-- 本设计文档。
-- `schemas/a_short_market_regime_daily.schema.json`(daily 特征契约,PIT 字段)。
-- `presets/a_short_v14_3_regime_governance_20260611.json`(钉死指标口径/阈值/状态机/动作矩阵/门槛/边界)+ `schemas/a_short_v14_3_regime_governance.schema.json`(const-pin parity)。
-- `tests/test_a_short_v14_3_regime_governance.py`(schema 合法 + governance 过 schema + boundary comparison-only + 阈值/动作矩阵齐全)。
-- **无 runner / 无生产改动 / V14.2 不动。**
+## 9. 当前交付物
+- raw/stateful regime：`engine/a_short_regime_classifier.py`、daily/ledger/runner 和既有 schema/governance/test 路由见 `docs/README.md`。
+- P1 Cut1：`presets/a_short_regime_action_comparison_governance_20260714.json`、`schemas/a_short_regime_action_comparison_governance.schema.json`、`schemas/a_short_regime_candidate_effect_summary.schema.json`、`engine/a_short_regime_action_comparison.py` 与对应单测。
+- **P1 Cut2 已接入 weekly 旁路**：Stage 3 在 capture 后仅做 cache-only `forward_tracker backfill`，Stage 5 的既有 regime runner 读取同周 M6.7 / tracker 并生成旁路账本与公开汇总；失败只警告、不阻断 EGS/M6.7。逐股实证从 Cut2 PASS 后的真实 live 周开始，历史回放不计数；无生产改动，V14.2 仍为生产基线。
