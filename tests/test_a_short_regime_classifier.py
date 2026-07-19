@@ -25,6 +25,7 @@ from engine.a_short_regime_classifier import (  # noqa: E402
     classify_raw_regime, build_comparison_record, resolve_percentiles,
     validate_comparison_record, _PERCENTILE_NEEDS, RAW_REGIMES, V14_2_REGIMES,
     FIRED_RULES_BY_REGIME, FORWARD_RETURN_BASIS, _load_governance,
+    build_stateful_regime_history, classify_stateful_regime,
 )
 
 COMP_SCHEMA = ROOT / "schemas" / "a_short_regime_comparison_weekly.schema.json"
@@ -453,6 +454,71 @@ class GovernanceParityTests(unittest.TestCase):
             set(_PERCENTILE_NEEDS),
             {"limit_down_count", "failed_limit_rate", "max_limit_streak", "promotion_rate"})
         self.assertEqual(set(RAW_REGIMES), {"defense", "contraction", "attack", "shock"})
+
+
+def _state_records(raws):
+    start = date(2026, 7, 1)
+    fired = {
+        "attack": "attack_all_of", "shock": "residual", "contraction": "streak_collapse",
+        "defense": "exhaustion",
+    }
+    return [
+        {"as_of": (start + timedelta(days=i)).strftime("%Y%m%d"), "raw_regime": raw,
+         "fired_rule": fired[raw], "data_quality_flags": []}
+        for i, raw in enumerate(raws)
+    ]
+
+
+class StatefulRegimeTests(unittest.TestCase):
+    def test_first_default_and_attack_confirmation(self):
+        trace = build_stateful_regime_history(_state_records(["shock", "attack", "attack", "attack"]))
+        self.assertEqual([r["stateful_regime"] for r in trace], ["shock", "shock", "shock", "attack"])
+        self.assertEqual(trace[-1]["transition_reason"], "attack_confirmed")
+
+    def test_contraction_confirmation_and_two_day_clear_to_shock(self):
+        trace = build_stateful_regime_history(_state_records(["shock", "contraction", "contraction", "shock", "shock"]))
+        self.assertEqual([r["stateful_regime"] for r in trace], ["shock", "shock", "contraction", "contraction", "shock"])
+        self.assertEqual(trace[-1]["transition_reason"], "contraction_cleared_to_shock")
+
+    def test_extreme_defense_jumps_without_waiting(self):
+        rows = _state_records(["attack", "attack", "attack", "defense"])
+        rows[-1]["fired_rule"] = "broad_index_crash"
+        trace = build_stateful_regime_history(rows)
+        self.assertEqual(trace[-2]["stateful_regime"], "attack")
+        self.assertEqual(trace[-1]["stateful_regime"], "defense")
+        self.assertEqual(trace[-1]["transition_reason"], "extreme_defense_immediate")
+
+    def test_normal_defense_from_attack_buffers_via_shock(self):
+        trace = build_stateful_regime_history(_state_records([
+            "attack", "attack", "attack", "defense", "defense",
+        ]))
+        self.assertEqual([r["stateful_regime"] for r in trace], ["shock", "shock", "attack", "shock", "defense"])
+        self.assertEqual(trace[-2]["transition_reason"], "normal_defense_buffers_attack_via_shock")
+        self.assertEqual(trace[-1]["transition_reason"], "normal_defense_confirmed_after_shock")
+
+    def test_missing_data_breaks_confirmation_and_is_not_evaluable(self):
+        rows = _state_records(["attack", "attack", "attack", "attack"])
+        rows[1]["data_quality_flags"] = ["csi1000_unavailable"]
+        trace = build_stateful_regime_history(rows)
+        self.assertFalse(trace[1]["state_evaluable"])
+        self.assertIsNone(trace[1]["stateful_regime"])
+        self.assertEqual(trace[-1]["stateful_regime"], "shock")  # only two clean attack days after reset
+
+    def test_contraction_cannot_jump_directly_to_attack(self):
+        trace = build_stateful_regime_history(_state_records([
+            "contraction", "contraction", "attack", "attack", "attack", "attack", "attack",
+        ]))
+        states = [r["stateful_regime"] for r in trace]
+        self.assertEqual(states[:4], ["shock", "contraction", "contraction", "shock"])
+        self.assertNotEqual(states[4], "attack")
+        self.assertEqual(states[-1], "attack")
+
+    def test_wrapper_caps_as_of_and_rejects_empty(self):
+        rows = _state_records(["shock", "attack", "attack", "attack"])
+        out = classify_stateful_regime(rows, as_of=rows[2]["as_of"])
+        self.assertEqual(out["stateful_regime"], "shock")
+        with self.assertRaises(ValueError):
+            classify_stateful_regime([], as_of="20260701")
 
 
 if __name__ == "__main__":

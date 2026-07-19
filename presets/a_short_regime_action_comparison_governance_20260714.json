@@ -1,6 +1,6 @@
 {
   "schema_name": "a_short_regime_action_comparison_governance",
-  "schema_version": "1.0.0",
+  "schema_version": "1.1.0",
   "baseline_policy_id": "v14_2_effective_action_proxy_v1",
   "baseline_policy_epoch": "20260714_effective_fallback_v1",
   "candidate_policy_id": "v14_3_documented_action_proxy_v1",
@@ -12,5 +12,27 @@
     "contraction": {"new_build": "forbidden", "max_exposure_pct": 0}
   },
   "review_gate": {"forward_live_weeks_min": 12, "divergence_h10_samples_min": 8},
+  "candidate_effect_policy": {
+    "policy_id": "v14_3_candidate_effect_proxy_v1",
+    "policy_epoch": "20260719_p1_cut1_v1",
+    "state_machine_governance": "a_short_v14_3_regime_governance_20260611.json",
+    "eligible_row_source": "egs_candidate",
+    "eligible_m67_action": "建仓",
+    "primary_horizon_trading_days": 10,
+    "auxiliary_horizons_trading_days": [5, 20],
+    "return_unit": "percent",
+    "return_cost_basis": "net",
+    "benchmark": "000852.SH",
+    "benchmark_name": "CSI1000",
+    "forward_live_weeks_min": 12,
+    "divergence_weeks_min": 8,
+    "divergence_stocks_min": 20,
+    "practical_improvement_pp_min": 0.5,
+    "favorable_weeks_ratio_min": 0.6,
+    "historical_replay_counts": false,
+    "automatic_production_switch": false,
+    "baseline_description": "current production build without regime-driven candidate action",
+    "candidate_proxy_description": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"
+  },
   "boundary": {"production": false, "comparison_only": true, "drives_m67": false, "automatic_production_switch": false}
 }

@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-07-19 — Claude Code 独立审查 PASS（A-short P1 Cut1 V14.3 状态机 + 逐股 candidate-effect proxy；3500 已提交）
+
+- **Verdict/Action**: PASS。纯逻辑 Cut1 忠实实现、与权威设计一致、comparison-only 隔离完好，我 review 的 3 条 Optional 全被采纳且 schema 锁死。状态机 `build_stateful_regime_history` 逐条对上设计 §4：极端 fired_rule(`iv_percentile_252d_gt_90`/`limit_down_count_ge_max_p95_100`/`broad_index_crash`)与 classifier 输出精确匹配→立即跳防御；attack 3/contraction 2/clear 2；首默 shock；分支顺序(protective 先判)正确强制"禁 contraction→attack 直跳(须先 clear 到 shock)"+"普通防御从 attack 经 shock buffer 两日确认"；数据不足→不可评估并清确认。逐股 `build/summarize_candidate_effect`：只取 egs_candidate+建仓、排除 holding/watch/veto/manual；forbidden→现金0%仅在成熟时、缺失留 null 不伪造0；操作改善=影子−baseline；先周等权再跨周(防伪重复)；12/8/20/0.50pp/60%门；4 verdict + 选股准确性另算(CSI1000 excess)；`_validate_candidate_effect_record` 复核全部算术不变式。state-machine 参数单一源自 20260611 classifier governance(Optional③)。
+- **Required**: 无。
+- **Optional（非阻断）**: verdict `ready` 耦合"所有差异周 h20 全成熟"(`h20_complete`)——活跃市场里只要最近 ~20 交易日内有差异周，ready 即翻 False，可能让 verdict 长期停在 `insufficient_data`。设计本意 h10 为主、h20 只作"不反向"守门；建议 Cut2 真攒周时观察是否照常出结论，必要时把 h10 主判与 h20-no-reversal 解耦(h20 只对成熟子集判)。comparison-only、不影响正确性(出结论时是对的)，仅影响出结论时机。
+- **Verify**: 3500 树 deps-complete。regime 全包 240 OK(features/classifier/ledger/comparison/pipeline/action_comparison/comparison_runner/v14_3_governance——含 P1 新增 101 + 既有消费者无回归)。设计意图核对:状态机规格 = design §4 逐条；Optional①proxy honesty(`candidate_proxy_description` "…not a final production V14.3 defense policy")+②baseline framing("current production build without regime-driven candidate action"，不误称 V14.2 regime-gated)均入 governance 且被 summary schema `const` 锁死。边界:无 weekly/ps1/pipeline/EGS 接线、无真实证据文件、无生产改动；V14.2 仍生产基线。
+- **Next**: Codex：Pass(本 Cut1 已审已提交 3500)。P1 Cut2 须待本 PASS + 用户明确 go 才开始(只读接 forward_tracker、写私有账本/公开汇总，不改建仓授权/EGS/M6.7/账户/正式周报)。
+
+## 2026-07-19 — A-short P1 Cut1 执行完成（待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已完成纯逻辑 Cut1；新增 V14.3 state machine、逐股 candidate-effect proxy、governance/summary schemas 与测试，未接 weekly / M6.7 / forward tracker，未写真实证据，仍 comparison-only。
+- **Required**: 无。
+- **Verify**: `.tools/run_unittest_with_repo_pythonpath.cmd` 跑 P1 regime/forward-cache/doc-route pack 309 OK；`py_compile`、UTF-8 无 BOM、旧“无状态机”活跃表述 grep=0、`git diff --check` OK。
+- **Next**: Claude Code：审查并在 PASS 后提交本 Cut1；PASS 前不得开始 P1 Cut2。
+- **Pre-Codex self-review**: A：raw/stateful 四态、逐股资格、周聚合、schema/summary 全出口覆盖；B：`rg` 活跃 route/design/module 旧“无状态机”表述 0 hits，新增函数无 weekly consumer；C：缺数断连、上涨错失、下跌规避、混合、重复键与版本漂移反向测试；E：owner design/README 已同步且 route guards OK；F：有限值/日期/跨字段、UTF-8 无 BOM、diff-check 已查。受本回合协作限制未启用独立轻量 agent，采用主线程 checklist fallback；固定包集中执行一次。
+
 ## 2026-07-19 — Claude Code 独立审查 PASS（A-short P0 因子对比轨 v2 日期契约/缓存/weekly 插头；3500 已提交）
 
 - **Verdict/Action**: PASS。P0 第一刀（B 终案）忠实实现、与 owner design 一致、comparison-only 生产隔离完好；逐行核 engine/adapter/pipeline/ps1/cache_build 均符 B。日期身份：`decision_date==source_as_of`=canonical 决策锚+`weeks/<decision_date>` 冻结键、`run_date`=真实运行日、`price_data_through`=最后已结算 bar；forward 仅 live-canonical(`decision_date>=run_date`)+官方 `intraday_prior_settled`/prior-settled lineage 绑定；PIT 门(779)与结算收盘门(976)两处都锚 `price_data_through`、进场仍 canonical T+1(周二，与 forward_tracker/rank 回测一致)。防伪造链闭合(run_date/price_data_through 取已发布 M6.7 `price_freshness` lineage、`_today()==run_date`+`decision_date>=run_date`+published-bundle 校验、结算端 observed+provider_observed 二次门)。缓存诚实(缺复权→provider_missing 绝不前填成 observed、调用上限抓前拒、原子写、gitignored 私有根、token 不落盘、冲突 fail-closed 保旧)。漂移重跑不覆盖+明确冻结提示、cache/capture 故障均不阻断 M6.7。已提交 3500 工作树。

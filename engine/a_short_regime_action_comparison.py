@@ -10,17 +10,24 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
+from statistics import median
 from pathlib import Path
 
 import jsonschema
 
-from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS, RAW_REGIMES, V14_2_REGIMES
+from engine.a_short_regime_classifier import (
+    FORWARD_RETURN_BASIS, RAW_REGIMES, STATEFUL_REGIMES, V14_2_REGIMES,
+)
 from engine.a_short_regime_ledger import is_canonical_date
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_action_comparison_weekly.schema.json"
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_regime_action_comparison_governance_20260714.json"
+GOVERNANCE_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_action_comparison_governance.schema.json"
+CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json"
+CANDIDATE_EFFECT_HORIZONS = ("h5", "h10", "h20")
 
 
 def _load_json(path: Path) -> dict:
@@ -37,6 +44,34 @@ def action_for_regime(regime: str) -> dict:
     if regime not in actions:
         raise ValueError(f"no frozen comparison action for regime {regime!r}")
     return dict(actions[regime])
+
+
+def candidate_effect_policy() -> dict:
+    """Return the P1 Cut1 policy after schema validation.
+
+    It deliberately references the classifier governance for state-machine parameters.  This file
+    owns only candidate eligibility/evidence thresholds, so confirmation-day constants cannot
+    drift into a second source of truth.
+    """
+    gov = governance()
+    try:
+        jsonschema.validate(gov, _load_json(GOVERNANCE_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise ValueError(f"candidate-effect governance schema: {exc.message}") from exc
+    return dict(gov["candidate_effect_policy"])
+
+
+def candidate_effect_policy_fingerprint() -> str:
+    """Fingerprint every result-shaping P1 Cut1 policy component, not just its version label."""
+    gov = governance()
+    payload = {
+        "candidate_effect_policy": candidate_effect_policy(),
+        "action_matrix": gov["action_matrix"],
+        "boundary": gov["boundary"],
+    }
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def m67_provenance(path: str | Path, *, as_of: str) -> dict:
@@ -260,3 +295,294 @@ def summarize_action_records(records: list[dict]) -> dict:
         "automatic_production_switch": False,
         "scope": "market_regime_exposure_proxy_not_stock_selection_or_trade_execution",
     }
+
+
+# ---- P1 Cut1 per-stock candidate-effect comparison (pure; no weekly wiring) -----------------
+
+def candidate_effect_eligibility(candidate: dict) -> tuple[bool, str]:
+    """Return whether a public M6.7 candidate row can enter the P1 comparison.
+
+    The cut accepts only a normal EGS candidate with a final ``建仓`` action.  Position, watch,
+    veto, and manual-review rows are excluded before any return calculation; no account data is
+    consumed or persisted by this pure helper.
+    """
+    policy = candidate_effect_policy()
+    if str(candidate.get("row_source")) != policy["eligible_row_source"]:
+        return False, "row_source_not_egs_candidate"
+    if str(candidate.get("m67_action")) != policy["eligible_m67_action"]:
+        return False, "m67_action_not_build"
+    for key, reason in (
+        ("is_holding", "holding_excluded"),
+        ("is_watch", "watch_excluded"),
+        ("is_vetoed", "veto_excluded"),
+        ("manual_review", "manual_review_excluded"),
+    ):
+        if candidate.get(key) is True:
+            return False, reason
+    return True, "eligible"
+
+
+def _finite_return_map(values: dict | None, *, field: str) -> dict:
+    if not isinstance(values, dict) or set(values) != set(CANDIDATE_EFFECT_HORIZONS):
+        raise ValueError(f"{field} must contain exactly {CANDIDATE_EFFECT_HORIZONS}")
+    out = {}
+    for horizon in CANDIDATE_EFFECT_HORIZONS:
+        value = values[horizon]
+        if value is None:
+            out[horizon] = None
+        elif isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(float(value)):
+            out[horizon] = float(value)
+        else:
+            raise ValueError(f"{field}.{horizon} must be a finite number or null")
+    return out
+
+
+def build_candidate_effect_record(*, candidate: dict, stateful_regime: dict,
+                                  forward_returns: dict, evidence_origin: dict) -> dict | None:
+    """Build one P1 candidate-effect observation or return ``None`` when it is excluded.
+
+    ``forward_returns`` supplies already-measured net stock returns and CSI1000 returns in percent
+    for h5/h10/h20.  The function never reads ``forward_tracker``: Cut2 alone will map those
+    values from the existing tracker, read-only.  A forbidden candidate is modeled as cash 0% only
+    when its stock return is mature; a missing return remains null rather than being fabricated as
+    a 0% outcome.
+    """
+    eligible, _ = candidate_effect_eligibility(candidate)
+    if not eligible:
+        return None
+    policy = candidate_effect_policy()
+    as_of = str(candidate.get("as_of"))
+    ts_code = str(candidate.get("ts_code") or "")
+    if not is_canonical_date(as_of) or not ts_code:
+        raise ValueError("candidate effect requires canonical as_of and non-empty ts_code")
+    if str(stateful_regime.get("as_of")) != as_of:
+        raise ValueError("candidate effect stateful regime as_of must equal candidate as_of")
+    state = stateful_regime.get("stateful_regime")
+    state_evaluable = bool(stateful_regime.get("state_evaluable")) and state in STATEFUL_REGIMES
+    if not isinstance(evidence_origin, dict):
+        raise ValueError("candidate effect evidence_origin must be an object")
+    capture_mode = evidence_origin.get("capture_mode")
+    if capture_mode not in {"live", "historical_replay"}:
+        raise ValueError("candidate effect capture_mode must be live or historical_replay")
+    if str(evidence_origin.get("decision_as_of")) != as_of:
+        raise ValueError("candidate effect evidence_origin.decision_as_of must equal candidate as_of")
+
+    stock = _finite_return_map(forward_returns.get("stock_net_returns"), field="stock_net_returns")
+    benchmark = _finite_return_map(forward_returns.get("csi1000_returns"), field="csi1000_returns")
+    forbidden = state_evaluable and action_for_regime(state)["new_build"] == "forbidden"
+    baseline_net = dict(stock)
+    candidate_net = {}
+    for horizon in CANDIDATE_EFFECT_HORIZONS:
+        candidate_net[horizon] = (0.0 if forbidden else stock[horizon]) if stock[horizon] is not None else None
+    operation_improvement = {
+        h: (candidate_net[h] - baseline_net[h] if candidate_net[h] is not None else None)
+        for h in CANDIDATE_EFFECT_HORIZONS
+    }
+    baseline_excess = {
+        h: (baseline_net[h] - benchmark[h] if baseline_net[h] is not None and benchmark[h] is not None else None)
+        for h in CANDIDATE_EFFECT_HORIZONS
+    }
+    candidate_excess = {
+        h: (candidate_net[h] - benchmark[h] if candidate_net[h] is not None and benchmark[h] is not None else None)
+        for h in CANDIDATE_EFFECT_HORIZONS
+    }
+    return {
+        "as_of": as_of,
+        "ts_code": ts_code,
+        "row_source": policy["eligible_row_source"],
+        "m67_action": policy["eligible_m67_action"],
+        "stateful_regime": state if state_evaluable else None,
+        "state_evaluable": state_evaluable,
+        "candidate_new_build_forbidden": forbidden,
+        "evidence_origin": {"capture_mode": capture_mode, "decision_as_of": as_of},
+        "policy_id": policy["policy_id"],
+        "policy_epoch": policy["policy_epoch"],
+        "policy_fingerprint": candidate_effect_policy_fingerprint(),
+        "baseline_net_returns": baseline_net,
+        "candidate_net_returns": candidate_net,
+        "csi1000_returns": benchmark,
+        "operation_improvement_pp": operation_improvement,
+        "baseline_excess_csi1000_pp": baseline_excess,
+        "candidate_excess_csi1000_pp": candidate_excess,
+        "boundary": {"comparison_only": True, "automatic_production_switch": False},
+    }
+
+
+def _validate_candidate_effect_record(record: dict) -> None:
+    policy = candidate_effect_policy()
+    if not isinstance(record, dict):
+        raise ValueError("candidate effect record must be an object")
+    if not is_canonical_date(str(record.get("as_of"))) or not str(record.get("ts_code") or ""):
+        raise ValueError("candidate effect record requires canonical as_of and ts_code")
+    if record.get("row_source") != policy["eligible_row_source"] or record.get("m67_action") != policy["eligible_m67_action"]:
+        raise ValueError("candidate effect record violates frozen candidate eligibility")
+    if record.get("policy_id") != policy["policy_id"] or record.get("policy_epoch") != policy["policy_epoch"]:
+        raise ValueError("candidate effect record has another policy version")
+    if record.get("policy_fingerprint") != candidate_effect_policy_fingerprint():
+        raise ValueError("candidate effect record policy fingerprint does not match current policy")
+    if record.get("boundary") != {"comparison_only": True, "automatic_production_switch": False}:
+        raise ValueError("candidate effect record is not comparison-only")
+    origin = record.get("evidence_origin") or {}
+    if origin.get("capture_mode") not in {"live", "historical_replay"} or str(origin.get("decision_as_of")) != record["as_of"]:
+        raise ValueError("candidate effect record has invalid evidence origin")
+    state = record.get("stateful_regime")
+    if record.get("state_evaluable"):
+        if state not in STATEFUL_REGIMES:
+            raise ValueError("evaluable candidate effect record has invalid stateful regime")
+        expected_forbidden = action_for_regime(state)["new_build"] == "forbidden"
+        if record.get("candidate_new_build_forbidden") != expected_forbidden:
+            raise ValueError("candidate effect forbidden action contradicts stateful regime")
+    elif state is not None or record.get("candidate_new_build_forbidden"):
+        raise ValueError("non-evaluable candidate effect record must not invent a state or cash action")
+    baseline = _finite_return_map(record.get("baseline_net_returns"), field="baseline_net_returns")
+    candidate = _finite_return_map(record.get("candidate_net_returns"), field="candidate_net_returns")
+    benchmark = _finite_return_map(record.get("csi1000_returns"), field="csi1000_returns")
+    improvement = _finite_return_map(record.get("operation_improvement_pp"), field="operation_improvement_pp")
+    baseline_excess = _finite_return_map(record.get("baseline_excess_csi1000_pp"), field="baseline_excess_csi1000_pp")
+    candidate_excess = _finite_return_map(record.get("candidate_excess_csi1000_pp"), field="candidate_excess_csi1000_pp")
+    for horizon in CANDIDATE_EFFECT_HORIZONS:
+        expected = candidate[horizon] - baseline[horizon] if candidate[horizon] is not None else None
+        if improvement[horizon] != expected:
+            raise ValueError("candidate effect operation improvement contradicts returns")
+        if record.get("candidate_new_build_forbidden") and baseline[horizon] is not None and candidate[horizon] != 0.0:
+            raise ValueError("forbidden candidate must use the documented cash 0% proxy")
+        if not record.get("candidate_new_build_forbidden") and candidate[horizon] != baseline[horizon]:
+            raise ValueError("allowed or non-evaluable candidate must equal the frozen baseline return")
+        expected_baseline_excess = (
+            baseline[horizon] - benchmark[horizon]
+            if baseline[horizon] is not None and benchmark[horizon] is not None else None
+        )
+        expected_candidate_excess = (
+            candidate[horizon] - benchmark[horizon]
+            if candidate[horizon] is not None and benchmark[horizon] is not None else None
+        )
+        if baseline_excess[horizon] != expected_baseline_excess or candidate_excess[horizon] != expected_candidate_excess:
+            raise ValueError("candidate effect CSI1000 excess contradicts net returns")
+
+
+def _mean_or_none(values: list[float]) -> float | None:
+    return sum(values) / len(values) if values else None
+
+
+def summarize_candidate_effect_records(records: list[dict]) -> dict:
+    """Summarize P1 records by equal-weighted week, never by pooled individual stocks.
+
+    Missing/immature returns and historical replays remain visible in the progress counters but are
+    never coerced to zero or counted toward the forward evidence gate.
+    """
+    seen_candidate_keys = set()
+    for record in records:
+        _validate_candidate_effect_record(record)
+        key = (record["as_of"], record["ts_code"])
+        if key in seen_candidate_keys:
+            raise ValueError("candidate-effect duplicate (as_of, ts_code) cannot be counted twice")
+        seen_candidate_keys.add(key)
+    policy = candidate_effect_policy()
+    policy_groups = {(r["policy_id"], r["policy_epoch"], r["policy_fingerprint"]) for r in records}
+    if len(policy_groups) > 1:
+        raise ValueError("candidate-effect records with different policy versions/fingerprints cannot mix")
+
+    live_records = [r for r in records if r["evidence_origin"]["capture_mode"] == "live"]
+    historical_not_counted = len(records) - len(live_records)
+    live_weeks = {r["as_of"] for r in live_records}
+    divergent_h10: dict[str, list[dict]] = {}
+    immature_or_missing = 0
+    for record in live_records:
+        if not record["state_evaluable"] or not record["candidate_new_build_forbidden"]:
+            continue
+        if record["operation_improvement_pp"]["h10"] is None:
+            immature_or_missing += 1
+            continue
+        divergent_h10.setdefault(record["as_of"], []).append(record)
+
+    weekly_h10 = []
+    weekly_h20 = []
+    forbidden_h10_excess = []
+    for as_of in sorted(divergent_h10):
+        group = divergent_h10[as_of]
+        h10 = [float(r["operation_improvement_pp"]["h10"]) for r in group]
+        weekly_h10.append(sum(h10) / len(h10))
+        h20 = [r["operation_improvement_pp"]["h20"] for r in group]
+        if all(value is not None for value in h20):
+            weekly_h20.append(sum(float(value) for value in h20) / len(h20))
+        else:
+            immature_or_missing += sum(value is None for value in h20)
+        forbidden_h10_excess.extend(
+            float(r["baseline_excess_csi1000_pp"]["h10"])
+            for r in group if r["baseline_excess_csi1000_pp"]["h10"] is not None
+        )
+
+    mean_h10 = _mean_or_none(weekly_h10)
+    median_h10 = float(median(weekly_h10)) if weekly_h10 else None
+    favorable_ratio = (
+        sum(value > 0 for value in weekly_h10) / len(weekly_h10) if weekly_h10 else None
+    )
+    mean_h20 = _mean_or_none(weekly_h20)
+    h20_complete = len(weekly_h20) == len(weekly_h10) and bool(weekly_h10)
+    ready = (
+        len(live_weeks) >= policy["forward_live_weeks_min"]
+        and len(weekly_h10) >= policy["divergence_weeks_min"]
+        and sum(len(group) for group in divergent_h10.values()) >= policy["divergence_stocks_min"]
+        and h20_complete
+    )
+    if not ready:
+        verdict = "insufficient_data"
+    elif (mean_h10 >= policy["practical_improvement_pp_min"]
+          and favorable_ratio >= policy["favorable_weeks_ratio_min"]
+          and median_h10 > 0 and mean_h20 >= 0):
+        verdict = "candidate_better"
+    elif (mean_h10 <= -policy["practical_improvement_pp_min"]
+          and (1 - favorable_ratio) >= policy["favorable_weeks_ratio_min"]
+          and median_h10 < 0 and mean_h20 <= 0):
+        verdict = "baseline_better"
+    else:
+        verdict = "no_material_difference"
+
+    underperformed = sum(value < 0 for value in forbidden_h10_excess)
+    if not forbidden_h10_excess:
+        selection_status = "not_evaluable"
+    elif underperformed * 2 > len(forbidden_h10_excess):
+        selection_status = "supportive"
+    elif underperformed == 0:
+        selection_status = "not_supportive"
+    else:
+        selection_status = "mixed"
+    summary = {
+        "schema_name": "a_short_regime_candidate_effect_summary",
+        "schema_version": "1.0.0",
+        "policy": {
+            "policy_id": policy["policy_id"],
+            "policy_epoch": policy["policy_epoch"],
+            "policy_fingerprint": candidate_effect_policy_fingerprint(),
+            "baseline_description": policy["baseline_description"],
+            "candidate_proxy_description": policy["candidate_proxy_description"],
+        },
+        "evidence_progress": {
+            "forward_live_weeks": len(live_weeks),
+            "valid_divergence_weeks": len(weekly_h10),
+            "valid_divergence_stocks": sum(len(group) for group in divergent_h10.values()),
+            "historical_not_counted": historical_not_counted,
+            "immature_or_missing_not_counted": immature_or_missing,
+            "ready_for_verdict": ready,
+        },
+        "data_quality": {"policy_groups": len(policy_groups), "same_week_equal_weighting": True},
+        "operation_effect": {
+            "primary_horizon_days": policy["primary_horizon_trading_days"],
+            "weekly_mean_improvement_pp": mean_h10,
+            "weekly_median_improvement_pp": median_h10,
+            "favorable_week_ratio": favorable_ratio,
+            "auxiliary_h20_mean_improvement_pp": mean_h20,
+        },
+        "selection_accuracy": {
+            "forbidden_stock_count": len(forbidden_h10_excess),
+            "forbidden_stock_underperformed_csi1000_count": underperformed,
+            "status": selection_status,
+        },
+        "verdict": verdict,
+        "boundary": {"comparison_only": True, "automatic_production_switch": False},
+    }
+    try:
+        jsonschema.validate(summary, _load_json(CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise ValueError(f"candidate effect summary schema: {exc.message}") from exc
+    return summary

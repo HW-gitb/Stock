@@ -1,6 +1,6 @@
 """A-short V14.3 raw market-regime classifier (design slice 2a — pure logic, comparison-only).
 
-This module is the **per-day raw** classifier only: given a trailing daily-feature history
+This module starts with the **per-day raw** classifier: given a trailing daily-feature history
 (rows matching ``schemas/a_short_market_regime_daily.schema.json``), it returns the raw regime
 label for ``as_of`` by the top-down priority defense → contraction → attack → shock(residual),
 faithfully evaluating the const-pinned thresholds in
@@ -10,7 +10,9 @@ Boundary (hard): **comparison-only, non-production.** It does NOT fetch data, do
 EGS run, does NOT drive Phase 5 / veto / sizing, and does NOT auto-switch. V14.2 stays the frozen
 production baseline. The multi-day **state machine** (confirm-days, hysteresis, cross-level jumps)
 and scoring are slice 3 — this module records the per-day rule hits so slice 3 can apply
-confirmation on top, but applies none itself.
+confirmation on top, but applies none itself.  P1 Cut1 additionally provides a pure, separate
+state-machine pass over those raw records.  It is still comparison-only and deliberately has no
+weekly, M6.7, or forward-tracker wiring.
 
 Data producer (the in-EGS daily-feature materialization + the incremental 252d ledger) is slice 2b;
 this module is deliberately producer-agnostic so it can be unit-tested with synthetic history.
@@ -30,6 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GOVERNANCE_PATH = ROOT / "presets" / "a_short_v14_3_regime_governance_20260611.json"
 
 RAW_REGIMES = ("defense", "contraction", "attack", "shock")
+STATEFUL_REGIMES = RAW_REGIMES
 # V14.2 production regime labels (mirrors analysis_input market_regime.status enum, incl. 'unknown').
 V14_2_REGIMES = ("attack", "shock", "defense", "contraction", "unknown")
 # The fired-rule key each raw regime may carry — single source for classifier, validator, schema test.
@@ -386,3 +389,210 @@ def validate_comparison_record(record: dict) -> bool:
     if errs:
         raise ValueError("invalid comparison record: " + "; ".join(errs))
     return True
+
+
+# ---- P1 Cut1 state machine (pure; no weekly or production wiring) --------------------------
+
+_STATE_BLOCKING_FLAGS = {
+    "insufficient_252d_window",
+    "stk_limit_history_incomplete",
+    "stk_limit_missing",
+    "stk_limit_partial",
+    "csi300_unavailable",
+    "csi1000_unavailable",
+    "iv_unavailable",
+    "insufficient_sample",
+}
+_EXTREME_FIRED_RULES = {
+    "iv_percentile_252d_gt_90",
+    "limit_down_count_ge_max_p95_100",
+    "broad_index_crash",
+}
+
+
+def _state_machine_governance() -> dict:
+    """Load the sole source of state-machine parameters.
+
+    Candidate-effect governance may reference this file, but it must not duplicate confirmation
+    days or transition semantics.  Keeping the lookup here makes that boundary executable.
+    """
+    machine = _load_governance().get("state_machine")
+    if not isinstance(machine, dict):
+        raise ValueError("V14.3 governance is missing state_machine")
+    return machine
+
+
+def _raw_state_input_evaluable(row: dict) -> tuple[bool, str | None]:
+    raw = row.get("raw_regime")
+    if raw not in RAW_REGIMES:
+        return False, "missing_or_invalid_raw_regime"
+    if bool(row.get("insufficient_window")) or bool(row.get("history_masked")):
+        return False, "incomplete_classifier_history"
+    flags = set(row.get("data_quality_flags") or [])
+    blocked = sorted(flags & _STATE_BLOCKING_FLAGS)
+    if blocked:
+        return False, "data_quality:" + ",".join(blocked)
+    return True, None
+
+
+def build_stateful_regime_history(raw_records: Iterable[dict]) -> list[dict]:
+    """Apply the const-pinned V14.3 state machine to raw daily records.
+
+    Each input is a :func:`classify_raw_regime`-shaped dict.  A non-evaluable day emits
+    ``stateful_regime=None`` and clears every pending confirmation; it never guesses a regime or
+    lets observations on opposite sides of missing data form a synthetic streak.  The result is a
+    trace for testing/audit only and cannot drive production behavior.
+    """
+    rows = [dict(row) for row in raw_records]
+    rows.sort(key=lambda row: str(row.get("as_of", "")))
+    seen = set()
+    for row in rows:
+        as_of = str(row.get("as_of"))
+        if not is_canonical_date(as_of):
+            raise ValueError("state-machine inputs require canonical real as_of dates")
+        if as_of in seen:
+            raise ValueError(f"duplicate state-machine as_of {as_of}")
+        seen.add(as_of)
+
+    machine = _state_machine_governance()
+    first_default = machine.get("first_default")
+    attack_days = machine.get("attack_confirm_days")
+    contraction_days = machine.get("contraction_confirm_days")
+    clear_days = machine.get("clear_exit_days")
+    if (first_default not in RAW_REGIMES
+            or not all(isinstance(v, int) and v > 0 for v in (attack_days, contraction_days, clear_days))):
+        raise ValueError("V14.3 state-machine governance has invalid confirmation parameters")
+
+    state: str | None = None
+    attack_streak = 0
+    contraction_streak = 0
+    clear_streak = 0
+    normal_defense_buffered = False
+    out: list[dict] = []
+
+    for row in rows:
+        as_of = str(row["as_of"])
+        evaluable, reason = _raw_state_input_evaluable(row)
+        raw = row.get("raw_regime")
+        prior = state
+        if not evaluable:
+            state = None
+            attack_streak = contraction_streak = clear_streak = 0
+            normal_defense_buffered = False
+            out.append({
+                "as_of": as_of,
+                "raw_regime": raw if raw in RAW_REGIMES else None,
+                "stateful_regime": None,
+                "state_evaluable": False,
+                "transition_reason": reason,
+                "attack_confirm_streak": 0,
+                "contraction_confirm_streak": 0,
+                "clear_exit_streak": 0,
+                "boundary": {"comparison_only": True, "automatic_production_switch": False},
+            })
+            continue
+
+        current = state or first_default
+        fired_rule = str(row.get("fired_rule") or "")
+        extreme = fired_rule in _EXTREME_FIRED_RULES
+        transition_reason = "retain"
+
+        if extreme:
+            # Extreme risk is the one permitted cross-level jump; risk protection is never delayed.
+            state = "defense"
+            attack_streak = contraction_streak = clear_streak = 0
+            normal_defense_buffered = False
+            transition_reason = "extreme_defense_immediate"
+        elif current in {"defense", "contraction"}:
+            # These protective states must see two clear days before returning to neutral shock.
+            if raw == current:
+                state = current
+                clear_streak = 0
+                transition_reason = f"{current}_retained"
+            else:
+                clear_streak += 1
+                attack_streak = contraction_streak = 0
+                normal_defense_buffered = False
+                if clear_streak >= clear_days:
+                    state = "shock"
+                    clear_streak = 0
+                    transition_reason = f"{current}_cleared_to_shock"
+                else:
+                    state = current
+                    transition_reason = f"{current}_clear_pending"
+        elif raw == "defense":
+            if normal_defense_buffered:
+                # The second consecutive normal-defense hit after attack completes attack→shock→defense.
+                state = "defense"
+                normal_defense_buffered = False
+                transition_reason = "normal_defense_confirmed_after_shock"
+            elif current == "attack" and machine.get("normal_defense_from_attack_buffers_via_shock_first"):
+                state = "shock"
+                normal_defense_buffered = True
+                transition_reason = "normal_defense_buffers_attack_via_shock"
+            else:
+                state = "defense"
+                normal_defense_buffered = False
+                transition_reason = "normal_defense"
+            attack_streak = contraction_streak = clear_streak = 0
+        elif raw == "contraction":
+            normal_defense_buffered = False
+            attack_streak = 0
+            contraction_streak += 1
+            if contraction_streak >= contraction_days:
+                state = "contraction"
+                contraction_streak = 0
+                transition_reason = "contraction_confirmed"
+            else:
+                state = current
+                transition_reason = "contraction_confirm_pending"
+            clear_streak = 0
+        elif raw == "attack":
+            normal_defense_buffered = False
+            contraction_streak = 0
+            attack_streak += 1
+            if attack_streak >= attack_days:
+                # A current contraction never reaches this branch until its two clear days emitted shock.
+                state = "attack"
+                attack_streak = 0
+                transition_reason = "attack_confirmed"
+            else:
+                state = current
+                transition_reason = "attack_confirm_pending"
+            clear_streak = 0
+        else:  # raw shock is the residual neutral state and resets pending confirmations.
+            state = "shock"
+            attack_streak = contraction_streak = clear_streak = 0
+            normal_defense_buffered = False
+            transition_reason = "shock_residual" if prior is not None else "initial_default_shock"
+
+        out.append({
+            "as_of": as_of,
+            "raw_regime": raw,
+            "stateful_regime": state,
+            "state_evaluable": True,
+            "transition_reason": transition_reason,
+            "attack_confirm_streak": attack_streak,
+            "contraction_confirm_streak": contraction_streak,
+            "clear_exit_streak": clear_streak,
+            "boundary": {"comparison_only": True, "automatic_production_switch": False},
+        })
+    return out
+
+
+def classify_stateful_regime(raw_records: Iterable[dict], as_of: str | None = None) -> dict:
+    """Return the last state-machine trace row, optionally capped at ``as_of``.
+
+    This wrapper intentionally consumes raw classifier output instead of recomputing data features.
+    It therefore cannot fetch data, alter the raw classifier, or create a second source of state
+    parameters.
+    """
+    rows = [dict(row) for row in raw_records]
+    if as_of is not None:
+        if not is_canonical_date(str(as_of)):
+            raise ValueError("stateful regime as_of must be a canonical real date")
+        rows = [row for row in rows if str(row.get("as_of", "")) <= str(as_of)]
+    trace = build_stateful_regime_history(rows)
+    if not trace:
+        raise ValueError("classify_stateful_regime: empty history (no rows at/<= as_of)")
+    return trace[-1]
