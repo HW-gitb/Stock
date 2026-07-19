@@ -1,0 +1,15 @@
+{
+  "total_forward_weeks": 0,
+  "historical_not_counted": 1,
+  "divergent_action_weeks": 0,
+  "settled_divergence_h10": 0,
+  "favorable_exposure_proxy_h10": 0,
+  "unfavorable_exposure_proxy_h10": 0,
+  "review_gate": {
+    "forward_live_weeks_min": 12,
+    "divergence_h10_samples_min": 8
+  },
+  "status": "accumulating",
+  "automatic_production_switch": false,
+  "scope": "market_regime_exposure_proxy_not_stock_selection_or_trade_execution"
+}

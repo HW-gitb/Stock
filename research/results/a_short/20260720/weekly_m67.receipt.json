@@ -1,0 +1,13 @@
+{
+  "schema_name": "a_short_weekly_publish_receipt",
+  "schema_version": "1.0.0",
+  "as_of": "20260720",
+  "run_id": "a-short-20260720-97c019888faa4c01",
+  "candidate_digest": "97c019888faa4c014a5ba82196b3452427e6f05b9e167d5f3b46496e938173df",
+  "account_snapshot": null,
+  "stage_status": "complete",
+  "outputs": [
+    "weekly_m67.json",
+    "weekly_m67.md"
+  ]
+}

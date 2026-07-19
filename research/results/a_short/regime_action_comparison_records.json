@@ -1,0 +1,69 @@
+[
+  {
+    "schema_name": "a_short_regime_action_comparison_weekly",
+    "schema_version": "1.0.0",
+    "as_of": "20260717",
+    "raw_v14_2_regime": "unknown",
+    "effective_v14_2_regime": "shock",
+    "baseline_policy_id": "v14_2_effective_action_proxy_v1",
+    "baseline_policy_epoch": "20260714_effective_fallback_v1",
+    "candidate_v14_3_raw_regime": "defense",
+    "candidate_v14_3_fired_rule": "iv_percentile_252d_gt_90",
+    "candidate_policy_id": "v14_3_documented_action_proxy_v1",
+    "candidate_policy_epoch": "20260714_documented_matrix_v1",
+    "baseline_action": {
+      "new_build": "allow",
+      "max_exposure_pct": 60
+    },
+    "candidate_action": {
+      "new_build": "forbidden",
+      "max_exposure_pct": 0
+    },
+    "action_diverges": true,
+    "m67_provenance": {
+      "source_schema_name": "a_short_weekly_report",
+      "source_as_of": "20260720",
+      "source_sha256": "b4e20618a080be949acc0debc951fda01450077407b19edbfd09ca7f67e942ed",
+      "candidate_build_count": 0
+    },
+    "forward_origin": {
+      "decision_as_of": "20260720",
+      "run_date": "20260719"
+    },
+    "forward_eligible": false,
+    "forward_market_returns": {
+      "h1": null,
+      "h3": null,
+      "h5": null,
+      "h10": null
+    },
+    "forward_returns_pending": [
+      "h1",
+      "h3",
+      "h5",
+      "h10"
+    ],
+    "backfill_complete": false,
+    "forward_return_basis": {
+      "benchmark": "000852.SH",
+      "benchmark_name": "CSI1000",
+      "measure": "forward_close_to_close_simple_return",
+      "horizons_trading_days": {
+        "h1": 1,
+        "h3": 3,
+        "h5": 5,
+        "h10": 10
+      },
+      "unit": "percent",
+      "price_basis": "index_close_unadjusted",
+      "cost_basis": "gross",
+      "scope": "market_level_regime_indicator"
+    },
+    "boundary": {
+      "production": false,
+      "comparison_only": true,
+      "drives_m67": false,
+      "automatic_production_switch": false
+    }
+  }
+]
