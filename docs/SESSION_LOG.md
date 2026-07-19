@@ -158,6 +158,64 @@
 - **Required**: 无。`R-ASHORT-V143-ACTION-REVIEW-REMINDER` 完整边界/closure 单源见 `docs/system_risk_register.md`；两条低危 Optional（reminder 命中时 panel 双写可先 append 再单次 save / `main` 用 `summary['total_forward_weeks']` 下标安全）放行、不阻断。
 - **Verify**: 亲跑 worktree `test_a_short_regime_comparison_runner`+`test_a_short_regime_action_comparison` 32 OK（含 2 新状态矩阵 + panel 持久化 / 无最终切换问句断言）；route/readme/doc-governance guards 60 OK；guard 安全性代码核实（`summarize_action_records` 恒发 `automatic_production_switch=False`+两计数键、`main` 下标安全）；`weekly_screening.ps1:455-467` 从 `analysis_input` 取 raw regime、`unknown/读失败→shock` 同 M6.7 fail-closed。review-evidence:not_available。
 - **Next**: 待用户 `提交` → 由我 merge worktree 5756 → master；不扩展到生产切换。memory `project_regime_v14_2_sourcing_deferred` 已过时（接线已落），待更新。
+## 2026-07-18 — Claude Code solo 修 closure blocker + Optional + 自审 PASS + 整树两刀提交（R-ASHORT-NEW-ENTRY-AUTHORITY + R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION）
+
+- **Verdict/Action**: 用户授权 solo 修+审。补全第一刀漏扫（review1 test：`_engine_input` 加 `analysis_role=final`、6 处 `build_account_bundle` 加 `_CONFIG`）使 A-short 全包绿；并修 Optional（`_load_preset_config` 拒 block 内未知键、对称 `_validate_config`；真 preset + 全 caller 恰 3 键·安全）+ 加回归测试。两刀（新建仓资格 1a/1b + 单票隔离）逻辑此前已复审 sound（§6a 双 agent），本轮只补 test-sweep + 一处 fail-closed preset 硬化、零改生产选股/建仓/veto/仓位逻辑。整树 13 文件一起提交。
+- **Required**: 无。`R-ASHORT-NEW-ENTRY-AUTHORITY` 与 `R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION` → resolved（完整证据/边界/closure 单源见 `docs/system_risk_register.md`）。
+- **Verify**: 亲跑全 `test_a_short*` lane pack **1645 OK**（rule 3a、真 exit 0、closure 满足）；review1 16 OK（前 2F/6E）、account 1b 55 OK（含新 unknown-key 回归）、`static_contract_error()=None`、`py_compile`/`git diff --check` clean；cut-2 BREAK-1 repro 合树仍 clean；§6a 独立 agent 已证 1a/1b 五类不变量全 HELD、cut-2 9 场景全对。review-evidence:not_available。
+- **Next**: 无（已整树两刀提交、不 push）
+
+## 2026-07-18 — Claude Code 复审 FAIL（R-ASHORT-NEW-ENTRY-AUTHORITY；第一刀；整树两刀提交阻塞）
+
+- **Verdict/Action**: FAIL（closure blocker）。第一刀 1a/1b runner 逻辑正确、不变量在对抗测试下全 HELD（reviewer + §6a 独立 agent 双证：final-only 建仓/现金、held 例外先于 role 门、无 watch rescue、1b 全 fail-closed；生产安全——EGS 恒发 analysis_role、main 恒读真 preset）。但 sweep 不完整：`tests/test_a_short_review1_knives_1_5.py` 未随签名/门改更新，A-short 全包 RED（6 ERROR=`build_account_bundle` 缺 `config` 实参；2 FAIL=`_engine_input` 缺 `analysis_role="final"` 被新门逼成观察）。均 fail-closed·P2 test-debt·无生产风险，但 closure 条件（全包绿）未满足→整树两刀不能提交。
+- **Required**: `R-ASHORT-NEW-ENTRY-AUTHORITY` — 完整根因/证据/修法（补全 sweep 使全 `test_a_short*` 绿；class-not-instance 全扫真 build_account_bundle 调用 + build-expecting M6.7 输入）与一条 fail-safe Optional 单源见 `docs/system_risk_register.md`。第二刀（`R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION`）逻辑已复审 sound，随此 FAIL 一并挂起提交。
+- **Verify**: 亲跑 `tests.test_a_short_review1_knives_1_5` = FAILED(2F/6E) 复现 closure blocker；§6a 独立 agent（read-only 5756）复攻 1a/1b 五类全 HELD 并揪出此 blocker + 1 Optional；cut-2 BREAK-1 repro 合树仍 clean、`static_contract_error()=None`。全 `test_a_short*` lane pack 在 stable tree 跑（待完整失败集，仅 review1 预期红）。review-evidence:not_available。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Claude Code 审查 第二刀 re-review sound（R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION；整树提交推迟待第一刀）
+
+- **Verdict/Action**: 第二刀 fix 复审 sound：BREAK-1（held×已证停牌×全当前序列→整批中止）已修（排除码并入 `cand_codes`、held 只进 `candidate_exclusions` 不重入 `reports`），LOW-1/LOW-2 由 `_candidate_price_clock`（隔离前对账非停牌候选时钟）修正。按用户决定「两刀一起交付」，整树提交推迟到第一刀（`R-ASHORT-NEW-ENTRY-AUTHORITY`，另一窗口正写入本共享树）完成并交接后一起提；本轮不提交。
+- **Required**: 无（第二刀）。第一刀（analysis_role/新建仓资格）不在本轮 scope，待其定稿后另审；第二刀完整边界见 `docs/system_risk_register.md`。
+- **Verify**: 复现探针证 BREAK-1 已修（held-susp 只进 candidate_exclusions、余候选照出报告）；§6a 独立 agent 复攻 9 场景全对（fake-suspension escape / mixed-clock slip / silent-drop 均守）；整读 fix 四改点 + `static_contract_error()=None`。full pack 跑在并发动树上不可信、待 cut-1 稳定后重跑。review-evidence:not_available。
+- **Next**: 等第一刀完成 → 复审 1a + 整树两刀一起提
+
+## 2026-07-18 — Codex 修复（R-ASHORT-NEW-ENTRY-AUTHORITY；第一刀，待独立审查）
+
+- **Verdict/Action**: 第一刀两项均已按桌面方案收口：`analysis_role=final` 成为新建仓和现金分配的必要资格，`watch` 平仓候选固定显示“非 final，仅观察”且不递补；已有持仓不受该资格门影响，仍走持仓管理。手工账户转换器不再回退代码默认值，严格读取 preset 的三个 `position_management` 值并把实际值写入 lineage。
+- **Required**: 独立审查 `R-ASHORT-NEW-ENTRY-AUTHORITY` 的 final-only、held 例外、禁止 watch rescue 和 preset fail-closed 边界；详情见 `docs/system_risk_register.md`。
+- **Verify**: 先新增 watch/缺 preset 回归并得到 red（watch 曾建仓；loader 不接受测试路径）；修复后 watch/held/preset focused 5 OK，final-shortfall + effect-contract static + preset pack 18 OK、第一刀定点 24 OK、账户转换器全模块 54 OK、Phase5 + static effect-contract 142 OK；`py_compile` 与 `git diff --check` 已通过。更宽 A-short 组合包运行至 300 秒未返回最终退出码，明确不计为 PASS。
+- **Pre-Codex self-review**: A 覆盖 final/watch/held/Stage3 unlock/shortfall 及三个配置键的缺失/重复/类型/范围；B 检查 `analysis_role` 从 EGS schema/export 到 normalize/Phase5/cash 的消费者链；C 反向覆盖 held watch 不被误拦、final 不被误降、watch 不得递补；D N/A；E 只更新 active design、register 与本条 live-state；F 已跑 static effect-contract、目标回归、`py_compile`/diff 检查待最后统一执行。未使用独立子代理（当前模式禁止）。
+- **Next**: Claude Code：仅审查第一刀
+
+## 2026-07-18 — Codex 修复（R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION；BREAK-1 + Optional，待独立审查）
+
+- **Verdict/Action**: 审查的 BREAK-1、LOW-1、LOW-2 与 INFO-2 均成立并已修。已证停牌且同时为持仓的代码只保留一条 `candidate_exclusions`，不再经持仓分支重入 `reports`；非已证停牌候选先统一对账价格时钟，短历史票不能掩盖混合时钟，且 intraday 的 `as_of` 短历史票可按真实单一时钟隔离。INFO-2 只收紧文档表述，不放宽 strict 的价格/PIT 门。
+- **Required**: 代码与回归已完成；`R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION` 仍待独立审查和完整 lane 的最终退出结果，详见 `docs/system_risk_register.md`。
+- **Verify**: held×已证停牌、两条时钟 Optional 与 semantic/web 接线 30 OK；price/schema/build/validator/cash 43 OK；renderer + effect-contract 42 OK；`static_contract_error()=None`。完整 `test_a_short*` lane 运行至 600 秒未返回最终退出码，明确不计 PASS。
+- **Pre-Codex self-review**: A 持仓×排除票只在排除清单出现一次；B 所有非已证停牌候选先验混合时钟，未知/陈旧/未来/来源异常仍 fail-closed；C 无 report 与 exclusion 重叠、无持仓语义或除权事件旁路；D 无新外部调用；E 不改 EGS 排名、入场、veto、仓位或账户规则；F 已重跑相关回归与契约检查。
+- **Next**: Claude Code：仅审查第二刀 BREAK-1 + Optional
+
+## 2026-07-18 — Claude Code 审查 FAIL（R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION；第二刀）
+
+- **Verdict/Action**: FAIL。第二刀设计意图正确（两类已证单票隔离、其余整批 fail-closed），LEAKAGE/WIDENING/fail-open/未来 bar/重复 边界均守住；但一处可复现交互缺陷 BREAK-1：同时是持仓且 `known_hit` 已证停牌、价格仍返回完整当前序列的候选，被按停牌标志隔离进 `candidate_exclusions` 后又经 `_build_holdings` 以持仓身份进 `reports`，触发 `validate_weekly_report:1144` → 整批 ValueError 中止、整周无报告（回归，且正违背本刀「一个停牌票不该毁掉整周」的目的）。fail-closed 无坏数据，P2。
+- **Required**: `R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION` — BREAK-1 完整根因/复现/修复边界/闭合条件（含 held×excluded 回归测试 + rule 3a 全 lane pack）与三条 Optional（intraday 时钟参考 LOW-1/LOW-2、strict-mode 覆盖窄 INFO-2）单源见 `docs/system_risk_register.md`（本处不复述）。
+- **Verify**: 亲跑复现探针证 BREAK-1（held+known_hit-susp+full-current-series → `ValueError:…不得同时出现在 reports`；非-held 控制组干净隔离）。独立对抗 agent（read-only 5756）独立复现 BREAK-1 + 清 LEAKAGE/WIDENING/provider-fail/future-bar/duplicate + 揪 LOW-1/2·INFO-2。整读被改四处逻辑 + 设计对照，`_fetch_price_series:3289/3294` future/stale 隔离前 fail-closed、`observed_at==as_of` 真绑定。风险=§6a 最高危子集→已跑独立 agent；focused 全模块 backgrounded 非 FAIL 依据。review-evidence:not_available。
+- **Next**: Codex：修复
+
+## 2026-07-18 — Codex 修复（R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION；第二刀，待独立审查）
+
+- **Verdict/Action**: 按文档完整执行第二刀：仅隔离当轮 `known_hit` 已证停牌，或价格时钟当前但可用历史不足的单票；排除票写入既有周报 JSON/Markdown 的 `candidate_exclusions`，不会进入 M6.7 reports、现金分配、语义处理或 Phase 4 报告。没有扩大为新治理 artifact、provider 调用或通用 data-quality 框架。
+- **Required**: 无；`R-ASHORT-WEEKLY-PRICE-CANDIDATE-ISOLATION` 的完整边界与独立审查条件见 `docs/system_risk_register.md`。
+- **Verify**: 两条允许分流与三条反向批次拒跑、以及 semantic/web 接线 29 OK；price/schema/build/validator/cash 43 OK；`static_contract_error()=None`；renderer + effect-contract 42 OK。
+- **Pre-Codex self-review**: A 仅允许文档定义的两组事实形状；B 无最新 bar、陈旧历史、未知/混合时钟仍批次拒跑；C 排除票不进入 reports/现金分配/Phase 4，JSON 与 Markdown 同步；D 无新增外部调用；E 未改 EGS 排名、建仓逻辑、veto、仓位或账户配置；F 已跑聚焦回归和既有契约检查。
+- **Next**: Claude Code：仅审查第二刀
+
+## 2026-07-18 — Claude Code 独立审查 PASS（R-ASHORT-V143-ACTION-REVIEW-REMINDER；第三刀）
+
+- **Verdict/Action**: PASS。第三刀只把既有 D2 action summary 的 review 状态高亮到现有 runner 和 regime panel；仍是 comparison-only，不改 EGS、选股、M6.7、仓位、veto 或 `analysis_input.market_regime`，也不显示最终生产切换问句。
+- **Required**: 无；`R-ASHORT-V143-ACTION-REVIEW-REMINDER` 的闭环边界见 `docs/system_risk_register.md`。
+- **Verify**: runner/action 32 OK、route/readme/doc-governance guards 60 OK；candidate panel 提醒和“无最终切换问句”均已覆盖。
+- **Next**: 当前暂未提交；由 Claude Code 按项目流程提交本 PASS 覆盖的切片，不扩展到生产切换。
 
 ## 2026-07-18 — Codex 修复（R-ASHORT-V143-ACTION-REVIEW-REMINDER；待独立审查）
 

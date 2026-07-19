@@ -24,6 +24,11 @@ from engine.a_short_rule6_contract import RULE6_CHECKS, RULE6_D_TIER_REASONS  # 
 
 DECISION = "20260713"
 FACTS = "20260712"
+_CONFIG = {
+    "rule13_cooldown_calendar_days": 1,
+    "rule13_default_max_reentry_position_pct": 0.5,
+    "rule12_default_recovery_position_multiplier": 0.5,
+}
 
 
 def _clear_rule6_checks():
@@ -58,7 +63,7 @@ def _tables():
 
 class Cut1AccountBundleTests(unittest.TestCase):
     def test_stale_facts_keep_true_date_and_bundle_identity(self):
-        bundle = conv.build_account_bundle(_tables(), DECISION)
+        bundle = conv.build_account_bundle(_tables(), DECISION, _CONFIG)
         self.assertEqual(bundle["decision_as_of"], DECISION)
         self.assertEqual(bundle["facts_as_of"], FACTS)
         self.assertEqual(bundle["account"]["as_of"], FACTS)
@@ -68,7 +73,7 @@ class Cut1AccountBundleTests(unittest.TestCase):
         self.assertIs(conv.validate_account_bundle(bundle, DECISION), bundle)
 
     def test_tampered_account_cannot_reuse_old_lineage_or_digest(self):
-        bundle = conv.build_account_bundle(_tables(), DECISION)
+        bundle = conv.build_account_bundle(_tables(), DECISION, _CONFIG)
         bundle["account"]["available_cash"] += 1
         with self.assertRaises(SystemExit):
             conv.validate_account_bundle(bundle, DECISION)
@@ -81,7 +86,7 @@ class Cut1AccountBundleTests(unittest.TestCase):
             "triggered_at": FACTS,
             "cooldown_until": DECISION,
         })
-        bundle = conv.build_account_bundle(tables, DECISION)
+        bundle = conv.build_account_bundle(tables, DECISION, _CONFIG)
         self.assertEqual(bundle["account"]["as_of"], FACTS)
         self.assertEqual(bundle["account"]["rule12"]["cooldown_until"], DECISION)
         self.assertIs(conv.validate_account_bundle(bundle, DECISION), bundle)
@@ -98,6 +103,7 @@ def _prices(close=2.90):
 
 def _engine_input(stateful, cash=0.0):
     return {
+        "analysis_role": "final",
         "ts_code": "600000.SH", "name": "测试", "close": 2.90, "price_series": _prices(),
         "derived": {}, "event": {}, "liquidity": {"avg_amount_5d": 1e8},
         "rule6_checks": _clear_rule6_checks(),
@@ -116,7 +122,7 @@ class Cut2AccountFailClosedTests(unittest.TestCase):
         tables = _tables()
         tables["portfolio_rule12"] = []
         with self.assertRaises(SystemExit):
-            conv.build_account_bundle(tables, DECISION)
+            conv.build_account_bundle(tables, DECISION, _CONFIG)
 
     def test_zero_cash_keeps_existing_holding_management(self):
         tables = _tables()
@@ -126,7 +132,7 @@ class Cut2AccountFailClosedTests(unittest.TestCase):
             "entry_date": "20260701", "stop_loss": "9.2", "take_profit_1": "", "take_profit_2": "",
             "last_exit_date": "", "last_exit_reason": "", "manual_notes": "",
         }]
-        bundle = conv.build_account_bundle(tables, DECISION)
+        bundle = conv.build_account_bundle(tables, DECISION, _CONFIG)
         stateful = stateful_risk_for_candidate(bundle["account"], "600000.SH", DECISION)
         report = build_m67_report(_engine_input(stateful, cash=0.0), DECISION, "2026-07-13T08:00:00+08:00")
         self.assertEqual(report["m67"]["table"]["操作"], "持有")
@@ -137,7 +143,7 @@ class Cut2AccountFailClosedTests(unittest.TestCase):
             "trade_date": FACTS, "ts_code": "600000.SH", "name": "测试", "side": "BUY",
             "shares": "100", "price": "10", "reason": "entry", "order_manual": "TRUE", "notes": "",
         })
-        bundle = conv.build_account_bundle(tables, DECISION)
+        bundle = conv.build_account_bundle(tables, DECISION, _CONFIG)
         integrity = account_integrity_from_lineage(bundle["lineage"])
         self.assertEqual(integrity["status"], "blocked")
         stateful = stateful_risk_for_candidate(

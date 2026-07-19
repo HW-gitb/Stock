@@ -64,17 +64,17 @@ REQUIRED_COLUMNS = {
     "portfolio_rule12": ("status",),
 }
 
-# v14.2 spec defaults (single-source override-able via presets/a_short.yaml::position_management).
+# v14.2 position-management contract (single source: presets/a_short.yaml::position_management).
 #   Rule13 = 24h cooldown (v14.2 §Rule13「止损后重建仓：24h冷静期」) → +1 calendar day in the date-only model.
 #     Safety does NOT rest on the period length: an expired Rule13 cooldown advances to pending_recheck,
 #     which STILL blocks re-entry until the manual new_catalyst + M4 recheck are both true.
 #   Rule13 re-entry position cap = 50% (v14.2 §Rule13「仓位≤原50%」).
 #   Rule12 recovery first-position multiplier = 50% (v14.2 §Rule12「48h冷静期，恢复后首笔仓位≤正常50%」).
-DEFAULT_CONFIG = {
-    "rule13_cooldown_calendar_days": 1,
-    "rule13_default_max_reentry_position_pct": 0.5,
-    "rule12_default_recovery_position_multiplier": 0.5,
-}
+POSITION_MANAGEMENT_KEYS = (
+    "rule13_cooldown_calendar_days",
+    "rule13_default_max_reentry_position_pct",
+    "rule12_default_recovery_position_multiplier",
+)
 
 VALID_RULE12_STATUSES = ("inactive", "active_cooldown", "recovery_1")
 VALID_TRADE_SIDES = ("BUY", "SELL")
@@ -167,16 +167,16 @@ def _add_calendar_days(yyyymmdd: str, n: int) -> str:
 
 
 # ── 核心纯函数：tables(dict[str, list[dict]]) + decision_as_of + config → (account_state, lineage)──
-def build_account_state(tables: dict, decision_as_of: str, config: dict | None = None) -> tuple:
+def build_account_state(tables: dict, decision_as_of: str, config: dict) -> tuple:
     """Build the schema-valid account_state dict + lineage dict from already-parsed table rows.
 
     `tables` maps table name → list of raw-string row dicts (csv.DictReader output). Pure & deterministic:
     same tables + decision_as_of + config → identical output (rows sorted by ts_code; no wall-clock).
     Raises ConvertError (FATAL) on any malformed / out-of-contract input.
     """
-    cfg = dict(DEFAULT_CONFIG)
-    if config:
-        cfg.update(config)
+    if not isinstance(config, dict):
+        raise ConvertError("position_management config 缺失/非对象；不得使用代码默认值")
+    cfg = dict(config)
     _validate_config(cfg)
     decision_as_of = _parse_date(decision_as_of, "--as-of")
 
@@ -227,7 +227,7 @@ def _bundle_digest(account: dict, lineage: dict) -> str:
     return _canonical_json_sha256({"account": account, "lineage": lineage})
 
 
-def build_account_bundle(tables: dict, decision_as_of: str, config: dict | None = None,
+def build_account_bundle(tables: dict, decision_as_of: str, config: dict,
                          source_tables: list | None = None, generated_at: str | None = None) -> dict:
     """Build one atomically publishable account+lineage snapshot.
 
@@ -296,6 +296,10 @@ def validate_account_bundle(bundle: dict, decision_as_of: str) -> dict:
 
 
 def _validate_config(cfg: dict) -> None:
+    missing = [key for key in POSITION_MANAGEMENT_KEYS if key not in cfg]
+    unexpected = sorted(set(cfg) - set(POSITION_MANAGEMENT_KEYS))
+    if missing or unexpected:
+        raise ConvertError(f"position_management keys 非法: missing={missing}, unexpected={unexpected}")
     days = cfg.get("rule13_cooldown_calendar_days")
     if not isinstance(days, int) or isinstance(days, bool) or days < 0:
         raise ConvertError(f"config.rule13_cooldown_calendar_days={days!r} 须为 >=0 整数")
@@ -640,27 +644,55 @@ def main(argv=None) -> int:
     return 0
 
 
-def _load_preset_config() -> dict:
-    """Read position_management overrides from presets/a_short.yaml (single source); fall back to defaults.
+def _load_preset_config(preset_path: Path | str | None = None) -> dict:
+    """Read exactly the three authoritative position-management values, or fail closed.
 
-    Minimal YAML read (no PyYAML dependency): only the flat position_management block keys we need.
+    This intentionally remains a small flat-block reader: the production converter only needs these
+    three scalars, and may not substitute source-code defaults when its authority is absent or malformed.
     """
-    preset = ROOT / "presets" / "a_short.yaml"
-    cfg = dict(DEFAULT_CONFIG)
+    preset = Path(preset_path) if preset_path is not None else ROOT / "presets" / "a_short.yaml"
     if not preset.is_file():
-        return cfg
-    in_block = False
-    for line in preset.read_text(encoding="utf-8").splitlines():
-        if re.match(r"^\S", line):
-            in_block = line.strip().startswith("position_management:")
+        raise ConvertError(f"position_management preset 缺失: {preset}")
+    try:
+        lines = preset.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise ConvertError(f"position_management preset 无法读取: {preset}") from exc
+
+    seen, in_block, block_seen = {}, False, False
+    for line_no, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        if not line[:1].isspace():
+            if in_block:
+                in_block = False
+            if re.fullmatch(r"position_management:\s*(?:#.*)?", stripped):
+                if block_seen:
+                    raise ConvertError("position_management 区块重复")
+                in_block, block_seen = True, True
             continue
         if not in_block:
             continue
-        m = re.match(r"^\s+([a-z0-9_]+):\s*([0-9.]+)\s*(?:#.*)?$", line)
-        if m and m.group(1) in DEFAULT_CONFIG:
-            key, val = m.group(1), m.group(2)
-            cfg[key] = int(val) if key == "rule13_cooldown_calendar_days" else float(val)
-    return cfg
+        m = re.match(r"^\s+([a-z0-9_]+)\s*:\s*(.*?)\s*$", line)
+        if not m:
+            if any(stripped.startswith(key) for key in POSITION_MANAGEMENT_KEYS):
+                raise ConvertError(f"position_management 第 {line_no} 行解析失败")
+            continue
+        key, raw = m.group(1), m.group(2).split("#", 1)[0].strip()
+        if key not in POSITION_MANAGEMENT_KEYS:
+            raise ConvertError(f"position_management 含未知键 {key!r}（只允许权威三键）")
+        if key in seen:
+            raise ConvertError(f"position_management.{key} 重复")
+        try:
+            value = (int(raw) if key == "rule13_cooldown_calendar_days" else float(raw))
+        except ValueError as exc:
+            raise ConvertError(f"position_management.{key}={raw!r} 不是合法数值") from exc
+        seen[key] = value
+
+    if not block_seen:
+        raise ConvertError("position_management 区块缺失")
+    _validate_config(seen)
+    return seen
 
 
 def _print_plain_summary(account_state: dict, lineage: dict) -> None:

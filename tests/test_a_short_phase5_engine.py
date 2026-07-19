@@ -63,6 +63,7 @@ def _rule6_checks(status="pass"):
 def _good_input(**over):
     inp = {
         "ts_code": "600000.SH", "name": "测试", "close": 2.90, "price_series": _series(),
+        "analysis_role": "final",
         "esp_score": 60, "l4_score": 70,
         "overlay": {"eligible": True, "crowding_hit": False},
         "industry_trend": "neutral",
@@ -760,6 +761,27 @@ class BuildReportTests(unittest.TestCase):
     def test_buildable_m67(self):
         r = build_m67_report(_good_input(), AS_OF, "t")
         self.assertEqual(r["m67"]["table"]["操作"], "建仓")
+
+    def test_watch_candidate_is_observed_not_built(self):
+        r = build_m67_report(_good_input(analysis_role="watch"), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "观察")
+        self.assertIsNone(r["m67"]["table"]["股数"])
+        self.assertIn("非 final，仅观察", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)
+
+    def test_watch_with_large_unlock_stays_observed(self):
+        r = build_m67_report(_good_input(
+            analysis_role="watch",
+            event={"holder_reduction_active": False, "st_or_delisting": False,
+                   "regulatory_legacy_vetoed": False},
+        ), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "观察")
+        self.assertIn("非 final，仅观察", r["machine"]["entry_exit_size_star"]["reject_reason"])
+
+    def test_watch_with_existing_position_keeps_holding_management(self):
+        r = build_m67_report(_good_input(analysis_role="watch", stateful_risk=_held_state()), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["machine"]["entry_exit_size_star"]["type"], "已有持仓")
 
     def test_existing_position_yields_hold_not_new_entry(self):
         r = build_m67_report(_good_input(stateful_risk=_held_state()), AS_OF, "t")

@@ -1038,6 +1038,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     eligible = bool((inp.get("overlay") or {}).get("eligible"))
     stateful = inp.get("stateful_risk") or {}
     has_position = stateful.get("position_state") == "held"
+    analysis_role = str(inp.get("analysis_role") or "")
+    final_new_entry_eligible = analysis_role == "final"
     position = stateful.get("position") or {}
     try:
         state_size_multiplier = float(stateful.get("size_multiplier", 1.0))
@@ -1075,6 +1077,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     hard = [r for f in RISK_FAMILIES if fam[f]["action"] == "hard_veto" for r in fam[f]["reasons"]]
     downgrades = [r for f in RISK_FAMILIES if fam[f]["action"] == "downgrade" for r in fam[f]["reasons"]]
     observe = list(inp.get("observe_only") or [])     # 缺数据项(§3 层3 / §9 盘中类不在此,见 out_of_scope)
+    if not has_position and not final_new_entry_eligible:
+        observe.append("analysis_role=非 final，仅观察")
     llm_notes = list(inp.get("llm_enrichment") or []) # §10 Tier C:只解释,不改判决
     rule6_manual_review_ids = rule6_gate["manual_review_check_ids"]
     if rule6_manual_review_ids:
@@ -1114,6 +1118,8 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         action, etype = "持有", "已有持仓"
         plan, hl_reject = holding_levels(inp, ind, regime)   # S3a:系统跟踪止损/止盈(被动显示)
         reject = "已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓"
+    elif not final_new_entry_eligible:
+        action, etype, plan, reject = "观察", "N/A", None, "非 final，仅观察"
     elif rule6_manual_review_ids:
         action, etype, plan = "观察", "N/A", None
         reject = "Rule6 未完成核查，需人工复核:" + ",".join(rule6_manual_review_ids)
@@ -1204,6 +1210,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         "iv.iv_percentile_252d": "→ Rule3 IV 闸门(>90否决 / >80减半)",
         "industry_trend": "→ deterministic SW L2 headwind only: -1 star; tailwind has no bonus; unknown requires manual review",
         "industry_fundamental_trend": "→ advisory display only; no deterministic decision effect",
+        "analysis_role": "→ only analysis_role=final may produce a new-entry plan; non-final is observe-only, while existing holdings stay on holding management",
         "observe_only": "→ M6.5 观察项(不改动作);缺数据保守",
         "rule6_checks": "→ 任一失败硬否决；D-tier 仅人工核查；其余未决、缺失或漂移均需人工复核，空仓仅观察不得建仓",
         "llm_enrichment": "→ M6.7 风险摘要(不改 deterministic decision)",

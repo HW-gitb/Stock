@@ -26,6 +26,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     normalize_candidate, build_weekly_report, validate_weekly_report,
     write_weekly_report, latest_iv_percentile, latest_iv_hv, main, SCHEMA_PATH,
     _fetch_price_series, _prev_trading_day, _load_validated_overlay, MIN_PRICE_OBS, resolve_market_regime,
+    _candidate_price_clock, _candidate_price_exclusion,
     validate_account_state, stateful_risk_for_candidate, _ex_div_notices, _fetch_dividends,
     _build_exclusion_summary, _upcoming_events, _fetch_unlocks, _fetch_earnings_schedule, _attach_forward_event_impacts,
     FORWARD_EVENT_WINDOW_DAYS, _FORWARD_EVENT_SOURCE_ID, _FORWARD_EVENT_CONFIDENCE,
@@ -97,6 +98,7 @@ def _egs_candidate(ts_code="600000.SH", **over):
     # event_risk.suspension.is_suspended) — NOT the engine-input shape.
     cand = {
         "ts_code": ts_code, "name": "测试",
+        "analysis_role": "final",
         "quote": {"close": 2.90},
         "scores": {"esp_score": 60, "l4_score": 70},
         "liquidity": {"avg_amount_5d": 2e8, "avg_amount_20d": 2e8},
@@ -126,6 +128,7 @@ def _ai_candidate(ts_code="600000.SH", close=2.90, is_lock=False, suspended=Fals
     close defaults to 2.90 to align with the injected `_series()` support (低吸→建仓 path)."""
     c = copy.deepcopy(_EXAMPLE_CAND)
     c["ts_code"] = ts_code
+    c["analysis_role"] = "final"
     c["quote"]["close"] = close
     c["derived_flags"]["is_lock"] = is_lock
     c["derived_flags"]["hard_veto"] = hard_veto
@@ -246,6 +249,7 @@ class NormalizeTests(unittest.TestCase):
     def test_maps_egs_fields(self):
         n = _normalized()
         self.assertEqual(n["close"], 2.90)
+        self.assertEqual(n["analysis_role"], "final")
         self.assertEqual(n["esp_score"], 60)
         self.assertTrue(n["overlay"]["eligible"])
         self.assertEqual(n["iv"]["iv_percentile_252d"], 55.0)
@@ -264,6 +268,16 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(n["derived"]["overheat"])
         self.assertTrue(n["event"]["holder_reduction_active"])
         self.assertTrue(n["event"]["st_or_delisting"])
+
+    def test_stage3_large_unlock_watch_cannot_reenter_as_a_new_entry(self):
+        candidate = _egs_candidate(analysis_role="watch")
+        candidate["event_risk"]["unlock"] = {"large_unlock_flag": True}
+        n = normalize_candidate(candidate, _series(), _overlay_row(), 55.0,
+                                {"available_cash": 500000.0}, "震荡期")
+        from runners.a_short_phase5_engine import build_m67_report
+        report = build_m67_report(n, AS_OF, GEN)
+        self.assertEqual(report["m67"]["table"]["操作"], "观察")
+        self.assertIn("非 final，仅观察", report["machine"]["entry_exit_size_star"]["reject_reason"])
 
     def test_maps_rule6_checks_and_materializes_only_iv_from_validated_feed(self):
         cand = _egs_candidate()
@@ -657,6 +671,18 @@ class MainWiringTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             main(["--as-of", AS_OF, "--analysis-input", "missing-ai.json", "--iv-feed", "missing-feed.json",
                   "--out", "missing-weekly.json", "--factor-comparison-root", "legacy-root"])
+    def test_main_preserves_watch_as_nonfinal_observation(self):
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+        ai["candidates"][1]["analysis_role"] = "watch"
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            report = {row["ts_code"]: row for row in json.loads(out.read_text(encoding="utf-8"))["reports"]}
+        self.assertEqual(report["000001.SZ"]["m67"]["table"]["操作"], "观察")
+        self.assertIn("非 final，仅观察", report["000001.SZ"]["machine"]["entry_exit_size_star"]["reject_reason"])
 
     def test_main_accepts_legacy_v14_mixed_rank_counts_without_misreporting_them_as_l0(self):
         """Real Run-1 regression: old v1.4 mixed rank counts must not crash or become hard-veto summary rows."""
@@ -946,25 +972,132 @@ class MainWiringTests(unittest.TestCase):
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--out", str(Path(td) / "w.json")])
 
-    def test_main_empty_price_series_aborts_no_file(self):
-        # R-ASHORT-WEEKLY-PRICE-FETCH-FAIL-OPEN: missing price coverage must NOT degrade to 观察.
+    def test_main_empty_price_series_without_current_clock_aborts_no_file(self):
+        # A missing latest bar is source-ambiguous, so it remains batch fail-closed.
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             out = Path(td) / "weekly.json"
             with self.assertRaises(SystemExit):
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                      "--out", str(out)], price_provider=lambda code: [])
+                      "--out", str(out)], price_provider=lambda code: ([], None))
             self.assertFalse(out.exists())
 
-    def test_main_short_price_series_aborts_no_file(self):
+    def test_main_short_price_series_with_stale_clock_aborts_no_file(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
             out = Path(td) / "weekly.json"
             with self.assertRaises(SystemExit):
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                       "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                      "--out", str(out)], price_provider=lambda code: _series()[:MIN_PRICE_OBS - 1])
+                      "--out", str(out)],
+                     price_provider=lambda code: (_series()[:MIN_PRICE_OBS - 1], "20260608"))
+            self.assertFalse(out.exists())
+
+    def test_main_isolates_current_clock_short_history_candidate(self):
+        ai = _analysis_input(candidates=[_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")])
+
+        def _provider(code):
+            return (_series()[:MIN_PRICE_OBS - 1], AS_OF) if code == "600000.SH" else (_series(), AS_OF)
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=_provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            markdown = out.with_suffix(".md").read_text(encoding="utf-8")
+        self.assertEqual([row["ts_code"] for row in weekly["reports"]], ["000001.SZ"])
+        self.assertEqual(weekly["candidate_exclusions"], [{
+            "ts_code": "600000.SH", "name": "博杰股份",
+            "reason": "insufficient_usable_history", "source_status": "price_clock_current",
+        }])
+        self.assertIn("单票候选排除", markdown)
+        self.assertIn("insufficient_usable_history", markdown)
+
+    def test_main_isolates_current_known_suspension_only(self):
+        suspended = _ai_candidate("600000.SH")
+        suspended["event_risk"]["suspension"] = {
+            "is_suspended": True, "recent_suspension_5d": True,
+            "source_status": "known_hit", "observed_at": AS_OF,
+        }
+        ai = _analysis_input(candidates=[suspended, _ai_candidate("000001.SZ")])
+
+        def _provider(code):
+            return ([], None) if code == "600000.SH" else (_series(), AS_OF)
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=_provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual([row["ts_code"] for row in weekly["reports"]], ["000001.SZ"])
+        self.assertEqual(weekly["candidate_exclusions"], [{
+            "ts_code": "600000.SH", "name": "博杰股份",
+            "reason": "confirmed_suspension", "source_status": "known_hit",
+        }])
+
+    def test_main_held_confirmed_suspension_is_excluded_once_without_batch_abort(self):
+        suspended = _ai_candidate("600000.SH")
+        suspended["event_risk"]["suspension"] = {
+            "is_suspended": True, "recent_suspension_5d": True,
+            "source_status": "known_hit", "observed_at": AS_OF,
+        }
+        ai = _analysis_input(candidates=[suspended, _ai_candidate("000001.SZ")])
+        acct = _account()
+        acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
+                              "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            _write_account(Path(td) / "acct.json", acct)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: (_series(), AS_OF))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual([row["ts_code"] for row in weekly["reports"]], ["000001.SZ"])
+        self.assertEqual([row["ts_code"] for row in weekly["candidate_exclusions"]], ["600000.SH"])
+        self.assertNotIn("holdings_manual_review", weekly)
+
+    def test_candidate_price_clock_rejects_short_history_mixed_with_eligible_clock(self):
+        cands = [_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")]
+        prices = {
+            "600000.SH": (_series()[:MIN_PRICE_OBS - 1], "20260608"),
+            "000001.SZ": (_series(), AS_OF),
+        }
+        with self.assertRaises(SystemExit):
+            _candidate_price_clock(cands, prices, AS_OF, "20260608")
+
+    def test_candidate_price_clock_allows_asof_short_history_with_intraday_tolerance(self):
+        candidate = _ai_candidate("600000.SH")
+        prices = {"600000.SH": (_series()[:MIN_PRICE_OBS - 1], AS_OF)}
+        clock = _candidate_price_clock([candidate], prices, AS_OF, "20260608")
+        exclusion = _candidate_price_exclusion(candidate, prices["600000.SH"][0], AS_OF, clock, AS_OF)
+        self.assertEqual(clock, AS_OF)
+        self.assertEqual(exclusion["reason"], "insufficient_usable_history")
+
+    def test_main_stale_known_suspension_with_current_short_history_aborts_no_file(self):
+        suspended = _ai_candidate("600000.SH")
+        suspended["event_risk"]["suspension"] = {
+            "is_suspended": True, "recent_suspension_5d": True,
+            "source_status": "known_hit", "observed_at": "20260608",
+        }
+        ai = _analysis_input(candidates=[suspended, _ai_candidate("000001.SZ")])
+
+        def _provider(code):
+            return (_series()[:MIN_PRICE_OBS - 1], AS_OF) if code == "600000.SH" else (_series(), AS_OF)
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            out = Path(td) / "weekly.json"
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out)], price_provider=_provider)
             self.assertFalse(out.exists())
 
     def test_main_analysis_input_trade_date_mismatch_aborts(self):
@@ -1822,6 +1955,21 @@ class CashAllocationTests(unittest.TestCase):
         ops = [r["m67"]["table"]["操作"] for r in w["reports"]]
         self.assertTrue(all(o == "建仓" for o in ops))
         self.assertGreater(w["cash_allocation"]["remaining_cash"], 0)
+        validate_weekly_report(w, _feed())
+
+    def test_final_shortfall_never_promotes_watch_into_cash_allocation(self):
+        rows = self._builds()
+        rows[1]["analysis_role"] = "watch"
+        rows[2]["analysis_role"] = "watch"
+        w = build_weekly_report(rows, AS_OF, GEN, run_lineage=_sized_lineage(), available_cash=10_000_000.0)
+        by_code = {r["ts_code"]: r for r in w["reports"]}
+        self.assertEqual(by_code["600000.SH"]["m67"]["table"]["操作"], "建仓")
+        for code in ("600519.SH", "601318.SH"):
+            self.assertEqual(by_code[code]["m67"]["table"]["操作"], "观察")
+            self.assertIn("非 final，仅观察", by_code[code]["machine"]["entry_exit_size_star"]["reject_reason"])
+        allocated_codes = {r["ts_code"] for r in w["reports"]
+                           if r["m67"]["table"]["操作"] == "建仓"}
+        self.assertEqual(allocated_codes, {"600000.SH"})
         validate_weekly_report(w, _feed())
 
     def test_sized_lineage_without_cash_allocation_rejected(self):

@@ -25,7 +25,7 @@ EGS top-N(analysis_input.json)
 - **normalize 是唯一映射点,且必须用 EGS *真实* 契约键。** `normalize_candidate(...)` 把 EGS analysis_input 候选翻成引擎归一化输入。**硬风险字段按真实契约**(对齐 `A-EGS/egs_main.py` 产出):`derived_flags.is_lock`→引擎 `limit_locked`、`event_risk.suspension.is_suspended`→`suspended`、`derived_flags.hard_veto`→引擎独立硬否决输入(即使分解原因未单独命中也硬杀)、`derived_flags.{overheat_flag,chasing_high,is_breakout,has_crash_veto}` / `event_risk.{holder_reduction.active_plan, delisting.st_flag/delisting_warning}` 照映。字段缺失 → 引擎保守/observe,不抛。**突破入场(#6-ii,v14.2 spec)**:`derived_flags.is_breakout` 现为 EGS 按 v14.2 spec §M3.2 算的突破信号(站稳 MA10 + 当日量>5日均量×1.2);引擎突破入场 = `is_breakout ∧ 引擎本地复查 close≥MA10`。**`derived_flags.vol_confirm` 不再门控突破**(它是 EGS 旧量能旁证 up>dn,仅进 EGS l4_score 评分);旧「is_breakout∧站稳MA10∧vol_confirm」门已废。
 - **四道消费方/边界护栏(写入校验,不只声明):**
   - *IV feed PIT + 新鲜度*：先过 feed 一致性，再强制最新 IV 日与实际价格特征截止日完全一致；未来、陈旧、空 feed 均拒写。
-  - *价格覆盖 + PIT/新鲜度不 fail-open*:`_fetch_price_series` 用 A 股 `asset="E"`,**provider 异常 → `SystemExit` 中止**(不吞成 `[]`);**每个 `trade_date` 校历法、拒任何 `> as_of` 的未来 bar、最新 bar 必须 == `as_of`(否则数据陈旧)→ 违反即中止不写**;`main` 价格覆盖门(`MIN_PRICE_OBS=20`)对任一纳入候选缺序列即**中止不写**(不静默退化成"观察")。
+  - *价格覆盖 + PIT/新鲜度不 fail-open*:`_fetch_price_series` 用 A 股 `asset="E"`,**provider 异常 → `SystemExit` 中止**(不吞成 `[]`);**每个 `trade_date` 校历法、拒任何 `> as_of` 的未来 bar、最新 bar 必须 == `as_of`(否则数据陈旧)→ 违反即中止不写**。`main` 的 `MIN_PRICE_OBS=20` 门默认仍整批中止；仅两种已证实的单票异常可先写入 `candidate_exclusions` 并不进入 reports/现金分配：(a) 当轮 `known_hit` 且 `observed_at==as_of` 的已证停牌；(b) 最新 bar 与全体非已证停牌候选的单一价格时钟一致、但可用历史不足。无最新 bar、陈旧/混合时钟、来源未知或 provider 异常仍整批拒跑，绝不静默退化成“观察”。默认 strict 模式中，provider 对陈旧的非空序列会在隔离前拒跑；该情形不会被停牌例外放宽。
   - *输出路径边界*:`write_weekly_report` 经 `_reject_production_output_path`——**输出路径由调用方指定(约定 `research/results/`),但路径含 `result/a_short/` 即硬拒写**(诚实窄契约:不声称"只写 research/results",只保证绝不落 production 根)。
   - *overlay 消费校验*:`--overlay` 经 `_load_validated_overlay` = overlay JSON schema + `validate_overlay_summary_consistency` + `as_of == weekly.as_of`(拒未来/陈旧)。
   - 逐票 `validate_m67_consistency`(§4 不变量);`write_weekly_report` 还对每张 report 单独跑 m67 schema。**注:register 的 P2 是 *probe summary* 消费方义务;本 pipeline 读的是 IV feed 不读 probe summary,故对 feed 应用同形校验,但 P2(probe-summary reader)仍 open,未关。**
@@ -41,6 +41,8 @@ EGS top-N(analysis_input.json)
 ## 4. 边界
 - 非 production、不真钱、不 ship-gate、不接券商/不自动下单;A-short 仍 `risk_filter_only`,M6.7 为辅助建议、**edge 未验证**。
 - 不动 `egs_main` / V14.2 / final_score / tier / admission(冻结)。
+- **新建仓资格**：仅 `analysis_input.candidates[].analysis_role=final` 可进入 Phase5 新建仓和现金分配；`watch` 复用观察路径显示“非 final，仅观察”，不得递补。已有持仓仍按持仓管理输出。
+- **账户策略配置**：手工账户转换器只读取 `presets/a_short.yaml::position_management` 的三个必需值；文件、区块、键、重复键、数值类型或范围任一异常均拒跑，实际三值写入 `lineage.config`。
 - 真实前复权价抓取(`pro_bar adj=qfq`)= 用户授权 `执行`;输出路径调用方指定(约定 `research/results/`),**绝不写 production 根 `result/a_short/<date>`**(写入路径硬校验)。
 - 本切片 = 设计 + pipeline 纯核(normalize / build_weekly_report / validate_weekly_report / write_weekly_report)+ 周报 schema + `main` 执行接线 + 测试。
 - **仍未来:** 常态化每周授权 `执行` 的正式周报产出;comparison-track ≥12 周与 12 个月 ship-gate 的前向验证(纯执行,等数据)。(首次端到端授权 `执行` 已跑通并据此修复 §5 首跑缺口。)

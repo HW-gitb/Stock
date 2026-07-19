@@ -493,6 +493,7 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
     }
     return {
         "ts_code": cand.get("ts_code"), "name": cand.get("name"),
+        "analysis_role": cand.get("analysis_role"),
         "close": (cand.get("quote") or {}).get("close"),
         "price_series": list(price_series or []),
         "esp_score": sc.get("esp_score"), "l4_score": sc.get("l4_score"),
@@ -905,7 +906,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
                         portfolio_fact_overrides: dict | None = None,
                         account_positions: list[dict] | None = None,
-                        missing_holding_codes: list[str] | None = None) -> dict:
+                        missing_holding_codes: list[str] | None = None,
+                        candidate_exclusions: list[dict] | None = None) -> dict:
     from runners.a_short_phase5_engine import build_m67_report, build_holding_report
     # 持仓恒列入 S1: 标了 egs_coverage="uncovered" 的(Tier-3 粗筛未覆盖持仓)走 build_holding_report
     # (不跑 EGS 风险分类,避免在缺失数据上伪造 veto);其余(候选 / Tier-1 / Tier-2)走 build_m67_report。
@@ -950,6 +952,8 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
         "boundary": {"production": False, "real_money": False,
                      "is_validated_alpha": False, "satisfies_ship_gate": False},
     }
+    if candidate_exclusions:
+        weekly["candidate_exclusions"] = list(candidate_exclusions)
     from engine.a_short_effect_contract import build_effect_contract_ledger
     weekly["effect_contract_ledger"] = build_effect_contract_ledger(weekly)
     if crash_veto_tracking is not None:
@@ -1135,6 +1139,19 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("run_lineage=(provided,sized) 但 cash_allocation 非对象(sized 必有全局现金分配摘要)")
     if not sized and ca is not None:
         raise ValueError("run_lineage=(absent,observation_only_no_account) 但 cash_allocation 非 null(observation-only 不得有现金分配)")
+    candidate_exclusions = weekly.get("candidate_exclusions") or []
+    exclusion_codes = [str(item.get("ts_code") or "") for item in candidate_exclusions]
+    if len(exclusion_codes) != len(set(exclusion_codes)) or any(not code for code in exclusion_codes):
+        raise ValueError("candidate_exclusions 须为非空且不重复的 ts_code")
+    report_codes = {str(report.get("ts_code") or "") for report in weekly.get("reports") or []}
+    if report_codes & set(exclusion_codes):
+        raise ValueError("candidate_exclusions 不得同时出现在 reports")
+    for item in candidate_exclusions:
+        reason, source_status = item.get("reason"), item.get("source_status")
+        if ((reason, source_status) not in {
+                ("confirmed_suspension", "known_hit"),
+                ("insufficient_usable_history", "price_clock_current")}):
+            raise ValueError("candidate_exclusions reason/source_status 不匹配")
     # 4.2 Round2: exclusion_summary 一致性(counts-only 批次级,可选;无则跳过)
     es = weekly.get("exclusion_summary")
     if es is not None:
@@ -1833,6 +1850,49 @@ def validate_iv_feed_freshness(iv_feed_summary: dict, price_data_through: str) -
 
 MIN_PRICE_OBS = _WEEKLY_WINDOWS["min_price_observations"]
 EX_DIV_WINDOW_DAYS = _WEEKLY_WINDOWS["ex_div_window_days"]
+
+
+def _is_current_confirmed_suspension(candidate: dict, as_of: str) -> bool:
+    suspension = ((candidate.get("event_risk") or {}).get("suspension") or {})
+    return (suspension.get("is_suspended") is True
+            and suspension.get("source_status") == "known_hit"
+            and str(suspension.get("observed_at") or "") == str(as_of))
+
+
+def _candidate_price_clock(candidates: list[dict], price_results: dict[str, tuple], as_of: str,
+                           prior_settled: str | None) -> str:
+    """Return the one observed non-suspension clock; any mixed clock stays batch-fatal."""
+    dates = sorted({latest for candidate in candidates
+                    if not _is_current_confirmed_suspension(candidate, as_of)
+                    for _series, latest in [price_results[str(candidate["ts_code"])]]
+                    if latest})
+    if len(dates) > 1:
+        raise SystemExit(f"[FATAL] 候选价格最新 bar 日期不一致(混合时钟 {dates});不写周报"
+                         "(端点不均/部分陈旧须排查,不可静默混用不同价格日)")
+    return dates[0] if dates else str(prior_settled or as_of)
+
+
+def _candidate_price_exclusion(candidate: dict, series: list, latest_trade_date: str | None,
+                               price_clock_date: str, as_of: str) -> dict | None:
+    """Return only the two reviewed, ticker-local price exclusions; all ambiguity stays batch-fatal."""
+    suspension = ((candidate.get("event_risk") or {}).get("suspension") or {})
+    if _is_current_confirmed_suspension(candidate, as_of):
+        return {
+            "ts_code": str(candidate.get("ts_code") or ""),
+            "name": str(candidate.get("name") or ""),
+            "reason": "confirmed_suspension",
+            "source_status": "known_hit",
+        }
+    if suspension.get("is_suspended") is True:
+        return None
+    if len(series) < MIN_PRICE_OBS and str(latest_trade_date or "") == str(price_clock_date):
+        return {
+            "ts_code": str(candidate.get("ts_code") or ""),
+            "name": str(candidate.get("name") or ""),
+            "reason": "insufficient_usable_history",
+            "source_status": "price_clock_current",
+        }
+    return None
 
 
 def _ex_div_notices(code_names, as_of, dividend_provider, window_days=EX_DIV_WINDOW_DAYS):
@@ -3667,22 +3727,38 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if portfolio_risk_provider is None and pro is not None:
         portfolio_risk_provider = lambda codes, as_of: _fetch_portfolio_risk_fact_overrides(pro, as_of, codes)
-    if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
-        semantic_provider = _build_cninfo_semantic_provider(
-            weekly_candidates, args.as_of, args.cninfo_lookback_days)
-    if regulatory_confirmations and semantic_provider is None:
-        raise SystemExit("[FATAL] --regulatory-confirmations requires current official CNINFO semantic evidence")
-    # 语义 web/LLM provider(Slice 2,advisory 旁路,非阻断):注入优先;否则真 run(--confirm 且未 --skip-semantic)
-    # 自动建 DeepSeek 判官 provider(缺 key/SDK/抓取失败 → None,该层全 unknown 中性,绝不阻断周报)。
-    if web_llm_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
-        _cands = ai.get("candidates", [])
-        web_llm_provider = _build_deepseek_web_llm_provider(
-            [c.get("ts_code") for c in _cands],
-            {str(c.get("ts_code")): c.get("name", "") for c in _cands},
-            args.as_of, args.web_news_lookback_days)
     cands = ai.get("candidates", [])
+    # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
+    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
+    price_clock_date = _candidate_price_clock(cands, price_results, args.as_of, prior_settled)
+    candidate_exclusions, eligible_cands, unresolved_short = [], [], []
+    for candidate in cands:
+        code = str(candidate["ts_code"])
+        series, latest = price_results[code]
+        exclusion = _candidate_price_exclusion(candidate, series, latest, price_clock_date, args.as_of)
+        if exclusion is not None:
+            candidate_exclusions.append(exclusion)
+            continue
+        if len(series) < MIN_PRICE_OBS:
+            unresolved_short.append((code, len(series), latest))
+            continue
+        eligible_cands.append(candidate)
+    if unresolved_short:
+        raise SystemExit(f"[FATAL] 以下候选价格序列不足且非已证单票异常:{unresolved_short};"
+                         "不写周报(来源/价格时钟存疑,不可静默跳过)")
+    cands = eligible_cands
     for candidate in cands:
         candidate["_weekly_as_of"] = str(args.as_of)
+    if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
+        semantic_provider = _build_cninfo_semantic_provider(
+            [c.get("ts_code") for c in cands], args.as_of, args.cninfo_lookback_days)
+    if regulatory_confirmations and semantic_provider is None:
+        raise SystemExit("[FATAL] --regulatory-confirmations requires current official CNINFO semantic evidence")
+    if web_llm_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
+        web_llm_provider = _build_deepseek_web_llm_provider(
+            [c.get("ts_code") for c in cands],
+            {str(c.get("ts_code")): c.get("name", "") for c in cands},
+            args.as_of, args.web_news_lookback_days)
     matched_regulatory_confirmations = set()
 
     def _semantic_with_confirmation(code):
@@ -3693,9 +3769,6 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             raise SystemExit(f"[FATAL] regulatory confirmation does not match current official evidence: {exc}") from exc
         matched_regulatory_confirmations.update(matched)
         return attached
-
-    # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
-    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
     if legacy_earnings_provider is None and pro is not None:
         legacy_earnings_provider = _build_legacy_earnings_provider(
             pro, args.as_of, forecast_provider, income_provider)
@@ -3733,19 +3806,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if unmatched_regulatory_confirmations:
         raise SystemExit("[FATAL] regulatory confirmation is stale or outside the current official candidate events "
                          f"(unmatched={len(unmatched_regulatory_confirmations)})")
-    # 价格覆盖门(#2):任一被纳入候选缺足够价格 → 中止不写(不可 fail-open 成观察)
-    short = [(n["ts_code"], len(n["price_series"])) for n in normalized
-             if len(n["price_series"]) < MIN_PRICE_OBS]
-    if short:
-        raise SystemExit(f"[FATAL] 以下候选价格序列不足(<{MIN_PRICE_OBS} 交易日):{short};"
-                         "不写周报(价格抓取失败/停牌须排查,不可静默退化成观察)")
-    # 价格时钟 lineage(诚实标注 M6.7 技术指标实际用到的最新已结算 bar 日期):候选间日期不一致(端点不均/部分
-    # 陈旧)→ 中止,不静默混用;一致 → price_data_through = 该日(strict 恒 ==as_of;intraday ==as_of 或前一交易日)。
-    latest_dates = sorted({d for d in (price_results[c["ts_code"]][1] for c in cands) if d})
-    if len(latest_dates) > 1:
-        raise SystemExit(f"[FATAL] 候选价格最新 bar 日期不一致(混合时钟 {latest_dates});不写周报"
-                         "(端点不均/部分陈旧须排查,不可静默混用不同价格日)")
-    price_data_through = latest_dates[0] if latest_dates else str(args.as_of)
+    # 价格覆盖门(#2):仅两种已确认单票异常可在前段隔离；其余价格不足仍整批中止，绝不退化成观察。
+    # 价格时钟 lineage 在隔离前就由所有非已证停牌候选对账，避免短历史票掩盖混合时钟。
+    price_data_through = price_clock_date
     iv_freshness = validate_iv_feed_freshness(feed, price_data_through)
     accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
     price_freshness = {"mode": args.price_freshness_mode,
@@ -3785,8 +3848,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    "runtime_configuration": source_runtime_configuration}
     # 持仓恒列入 S1 + 语义(4.2 S2): 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 语义经持仓 provider 注入 advisory);选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
+    candidate_exclusion_codes = {str(item["ts_code"]) for item in candidate_exclusions}
     if args.account:
-        cand_codes = {str(c.get("ts_code")) for c in cands}
+        cand_codes = {str(c.get("ts_code")) for c in cands} | candidate_exclusion_codes
         # 4.2 S2: 持仓 semantic provider(全持仓覆盖,cap=持仓数 绕 Top15;real fetch 同候选 gated on --confirm + 未 --skip-semantic;
         # 注入优先用于测试)。持仓涉真实持仓 → 结果走 weekly_private 私密路由(带 --account 自动私密,见 _reject_nonprivate_account_output_path)。
         h_codes = sorted({str(p.get("ts_code")) for p in (acct.get("positions") or [])} - cand_codes)
@@ -3794,7 +3858,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             holding_semantic_provider = _build_cninfo_semantic_provider(
                 h_codes, args.as_of, args.cninfo_lookback_days, cap=len(h_codes))
         if holding_web_llm_provider is None and h_codes and args.confirm_fetch_authorized and not args.skip_semantic:
-            h_names = {str(p.get("ts_code")): str(p.get("name") or "") for p in (acct.get("positions") or [])}
+            h_names = {str(p.get("ts_code")): str(p.get("name") or "") for p in (acct.get("positions") or [])
+                       if str(p.get("ts_code")) not in candidate_exclusion_codes}
             holding_web_llm_provider = _build_deepseek_web_llm_provider(
                 h_codes, h_names, args.as_of, args.web_news_lookback_days, cap=len(h_codes))
         holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
@@ -3831,7 +3896,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  crash_veto_tracking=crash_veto_tracking,
                                  portfolio_fact_overrides=portfolio_fact_overrides,
                                  account_positions=(acct.get("positions") or []),
-                                 missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review])
+                                 missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
+                                 candidate_exclusions=candidate_exclusions)
     weekly["factor_comparison_v2"] = factor_comparison_v2
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
@@ -3853,7 +3919,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly["holdings_manual_review"] = holdings_manual_review
     # #1 除权除息提示(advisory):候选 + 账户持仓近端将除权 → 提示(PIT;不改任何决策)。
     _exdiv_codes = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
-    _exdiv_codes += [(str(p.get("ts_code")), p.get("name", "")) for p in (acct.get("positions") or [])]
+    _exdiv_codes += [(str(p.get("ts_code")), p.get("name", "")) for p in (acct.get("positions") or [])
+                     if str(p.get("ts_code")) not in candidate_exclusion_codes]
     _notices = _ex_div_notices(_exdiv_codes, args.as_of, dividend_provider)
     if _notices:
         weekly["ex_div_notices"] = _notices
@@ -3919,7 +3986,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         (ROOT / "result" / "a_short" / args.as_of / "reports" if official_input
          else Path(args.out).resolve().parent / "reports")
     )
-    _materialize_legacy_task_reports(ai, task_results_by_code, phase4_report_dir, args.as_of)
+    phase4_analysis_input = dict(ai)
+    phase4_analysis_input["candidates"] = cands
+    _materialize_legacy_task_reports(phase4_analysis_input, task_results_by_code, phase4_report_dir, args.as_of)
     md_path = os.path.splitext(args.out)[0] + ".md"
     receipt_path = publish_weekly_bundle(
         weekly, feed, args.out, md_path,
