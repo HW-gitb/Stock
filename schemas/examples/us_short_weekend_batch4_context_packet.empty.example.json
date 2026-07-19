@@ -102,7 +102,6 @@
   "sizing_per_ticker": {},
   "basket_context": {
     "per_ticker": {},
-    "holding_themes": {},
     "theme_opportunity_state": "no_strong_theme"
   },
   "cost_inputs": {},
@@ -115,8 +114,7 @@
     },
     "coverage_inputs": [],
     "core_conclusion": "empty run 占位（无候选、无持仓）",
-    "risk_downgrade_note": "无",
-    "macro_cluster_banner": ""
+    "risk_downgrade_note": "无"
   },
   "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
   "calendar_path": "presets/us_short_market_calendar_2026_2027.json",

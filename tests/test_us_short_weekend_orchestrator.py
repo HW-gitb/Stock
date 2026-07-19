@@ -54,7 +54,7 @@ def _report_context():
         "price_clock": {"price_data_through": _PRICE_BASIS, "news_window_through": "20260613",
                         "session_scope": "RTH", "decision_date": _DD},
         "coverage_inputs": [], "core_conclusion": "empty run 占位",
-        "risk_downgrade_note": "无", "macro_cluster_banner": "",
+        "risk_downgrade_note": "无",
     }
 
 
@@ -70,6 +70,7 @@ def _theme_selection_contract(tickers, *, state="no_strong_theme"):
                 "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
                 "membership_origin": "automatic_discovery", "market_confirmed": True,
                 "individual_theme_gate_passed": True, "overextension_state": "none",
+                "macro_cluster": "unclassified_conservative",
             }
             for t in tickers
         },
@@ -97,6 +98,19 @@ def _account(positions=()):
                 "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
                 "as_of": _DD, "events": []},
             "manual_order_only": True, "broker_connection_allowed": False}
+
+
+def _set_holding_themes(account, themes):
+    account["holding_theme_reconciliation"] = {
+        "schema_name": "us_short_holding_theme_reconciliation", "schema_version": "1.0.0",
+        "as_of": _DD,
+        "positions": [{
+            "ticker": ticker, "theme_id": theme_id, "theme_source": "industry_heat_v1",
+            "theme_lifecycle_state": "confirmed_active", "macro_cluster": cluster,
+            "evidence_ref": {"kind": "source_id", "value": "test:holding-theme:" + ticker, "as_of": _DD},
+        } for ticker, (theme_id, cluster) in themes.items()],
+    }
+    return account
 
 
 _FAMS = ("universe", "per_ticker_analysis", "candidate_pass2_signals", "selection_inputs")
@@ -151,7 +165,7 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
         "prior_regime": None, "prior_upgrade_count": 0,
         "sizing_context": {"short_bucket_dollars": 10000.0, "per_ticker": {}},
-        "basket_context": {"per_ticker": {}, "holding_themes": {}, "theme_opportunity_state": "no_strong_theme"},
+        "basket_context": {"per_ticker": {}, "theme_opportunity_state": "no_strong_theme"},
         "account_state": _account(),
         "paper_track": {"paper_evaluable": True, "consecutive_stops": 0, "paper_drawdown_frac": 0.0,
                         "evidence_ref": {"kind": "source_id", "value": "test:model_paper_track", "as_of": _DD}},
@@ -226,17 +240,32 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "software",
-                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                "AAPL": {"theme_probe": {"high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             self.assertEqual(len(out["machine_record"]["rows"]), 1)
+            row = out["machine_record"]["rows"][0]
+            self.assertEqual(row["theme_context"]["theme_id"], "industry:aapl")
+            self.assertEqual(row["theme_context"]["theme_source"], "industry_heat_v1")
+            self.assertEqual(row["theme_context"]["theme_lifecycle_state"], "confirmed_active")
+            self.assertEqual(row["macro_cluster"], "unclassified_conservative")
+            self.assertEqual(row["macro_cluster_warning_level"], "elevated")
             self.assertTrue(out["written"]["weekly_report_path"].exists())
             action_csv = out["written"]["action_table_path"].read_text(encoding="utf-8")
             self.assertIn("paper_or_minimal_only", action_csv)
             self.assertNotIn("full_size_eligible", action_csv)
             self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
             self.assertIn("AAPL", action_csv)
+            with out["written"]["action_table_path"].open(encoding="utf-8", newline="") as f:
+                csv_row = next(csv.DictReader(f))
+            self.assertEqual(csv_row["theme_id"], "industry:aapl")
+            self.assertEqual(csv_row["theme_source"], "industry_heat_v1")
+            self.assertEqual(csv_row["theme_lifecycle_state"], "confirmed_active")
+            self.assertEqual(csv_row["macro_cluster"], "unclassified_conservative")
+            self.assertEqual(csv_row["macro_cluster_warning_level"], "elevated")
+            report_text = out["written"]["weekly_report_path"].read_text(encoding="utf-8")
+            self.assertIn("theme=industry:aapl source=industry_heat_v1", report_text)
+            self.assertIn("macro=unclassified_conservative/elevated", report_text)
 
     def test_second_cut_event_effect_reaches_machine_csv_and_weekly_projection(self):
         with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
@@ -251,7 +280,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
                                    per_ticker_analysis={"AAPL": analysis})
             pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "software", "theme_probe": {"theme_lifecycle_state": None,
+                "AAPL": {"theme_probe": {
                     "high_confidence": False, "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             row = out["machine_record"]["rows"][0]
@@ -278,7 +307,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL")})
             pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "software", "theme_probe": {"theme_lifecycle_state": None,
+                "AAPL": {"theme_probe": {
                     "high_confidence": False, "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
             row = out["machine_record"]["rows"][0]
@@ -303,15 +332,15 @@ class EmptyRunEndToEnd(unittest.TestCase):
                 per_ticker_analysis={"AAPL": _analysis_row("AAPL"),
                                      "HLD": _analysis_row("HLD", "holding_account_only")})
             pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
-            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 50,
-                                               "avg_cost_usd": 1.0, "entry_date": "20260601"}])
+            pc["account_state"] = _set_holding_themes(
+                _account([{"ticker": "HLD", "direction": "long", "shares": 50,
+                           "avg_cost_usd": 1.0, "entry_date": "20260601"}]),
+                {"HLD": ("industry:hld", "rates_sensitive")})
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "new_theme",
-                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                "AAPL": {"theme_probe": {"high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
-            pc["basket_context"]["holding_themes"] = {"HLD": "held_theme"}
             pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
@@ -331,15 +360,15 @@ class EmptyRunEndToEnd(unittest.TestCase):
                 per_ticker_analysis={"AAPL": _analysis_row("AAPL"),
                                      "HLD": _analysis_row("HLD", "holding_account_only")})
             pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
-            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 20,
-                                               "avg_cost_usd": 1.0, "entry_date": "20260601"}])
+            pc["account_state"] = _set_holding_themes(
+                _account([{"ticker": "HLD", "direction": "long", "shares": 20,
+                           "avg_cost_usd": 1.0, "entry_date": "20260601"}]),
+                {"HLD": ("industry:aapl", "unclassified_conservative")})
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": " Software ",
-                         "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+                "AAPL": {"theme_probe": {"high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
-            pc["basket_context"]["holding_themes"] = {"HLD": "software"}
             pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
@@ -364,9 +393,10 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL", "holding_in_top15")})
             pc["data_context"]["holdings"] = [{"ticker": "AAPL", "signals": {}}]
-            pc["account_state"] = _account([{"ticker": "AAPL", "direction": "long", "shares": 100,
-                                               "avg_cost_usd": 100.0, "entry_date": "20260601"}])
-            pc["basket_context"]["holding_themes"] = {"AAPL": "software"}
+            pc["account_state"] = _set_holding_themes(
+                _account([{"ticker": "AAPL", "direction": "long", "shares": 100,
+                           "avg_cost_usd": 100.0, "entry_date": "20260601"}]),
+                {"AAPL": ("industry:aapl", "unclassified_conservative")})
             pc["report_context"]["coverage_inputs"] = [{"ticker": "AAPL", "row_source": "holding_in_top15",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
@@ -593,8 +623,7 @@ class SelectionRecordThreaded(unittest.TestCase):
                                per_ticker_analysis={"AAPL": _analysis_row("AAPL")}, **over)
         pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
         pc["basket_context"]["per_ticker"] = {
-            "AAPL": {"theme": "software",
-                     "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
+            "AAPL": {"theme_probe": {"high_confidence": False,
                                      "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
         return pc
 
@@ -623,9 +652,10 @@ class SelectionRecordThreaded(unittest.TestCase):
             reg.write_text(json.dumps(_register()), encoding="utf-8")
             pc = _pipeline_context(reg, rr, wr, per_ticker_analysis={"HLD": _analysis_row("HLD", "holding_account_only")})
             pc["data_context"]["holdings"] = [{"ticker": "HLD", "signals": {}}]
-            pc["account_state"] = _account([{"ticker": "HLD", "direction": "long", "shares": 1,
-                                               "avg_cost_usd": 100.0, "entry_date": "20260601"}])
-            pc["basket_context"]["holding_themes"] = {"HLD": "software"}
+            pc["account_state"] = _set_holding_themes(
+                _account([{"ticker": "HLD", "direction": "long", "shares": 1,
+                           "avg_cost_usd": 100.0, "entry_date": "20260601"}]),
+                {"HLD": ("industry:hld", "rates_sensitive")})
             pc["report_context"]["coverage_inputs"] = [{"ticker": "HLD", "row_source": "holding_account_only",
                 "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}]   # 1:1 coverage for the holding
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)

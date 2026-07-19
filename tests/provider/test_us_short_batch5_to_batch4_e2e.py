@@ -133,7 +133,8 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
              "per_ticker": {"AAPL": {"theme_id": "industry:aapl", "theme_source": "industry_heat_v1",
                                        "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
                                        "membership_origin": "automatic_discovery", "market_confirmed": True,
-                                       "individual_theme_gate_passed": True, "overextension_state": "none"}}},
+                                       "individual_theme_gate_passed": True, "overextension_state": "none",
+                                       "macro_cluster": "unclassified_conservative"}}},
         )
         _write_json(
             self.paths["packet"],

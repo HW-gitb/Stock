@@ -2,12 +2,14 @@
 # -*- coding: utf-8 -*-
 """US-short manual tables -> us_short_account_state.json converter (batch 1, slice 1a).
 
-Converts the user's locally maintained CSV tables (account / positions / optional trades) into
+Converts the user's locally maintained CSV tables (account / positions / optional trades / optional
+holding_themes) into
 `schemas/us_short_account_state.schema.json` v1.0.0, to be consumed (later) by the US-short
 weekly report for holdings re-evaluation. Slice 1a built the account + positions input; slice 1b
 adds the optional trades.csv (= §12 manual_actual_track / execution log) and an advisory
 trades<->positions reconcile whose WARN-only result lands in the lineage sidecar (never overrides
-positions).
+positions). Cut3 adds holding_themes.csv as the private, exact-coverage source for holding theme/lifecycle/macro
+facts; omitting it preserves protective exits but makes new theme/macro capacity unavailable.
 
 Design boundaries (us_short_system_design §3.6 / §1 / §8 / §11.6 / §18):
 - US-short OWN schema (not the A-share a_short_account_state); US tickers, NOT A-share codes; no
@@ -52,6 +54,8 @@ if str(ROOT) not in sys.path:
 
 from engine.us_short_eligibility_gate import canonical_us_ticker  # noqa: E402 — the repo's SINGLE US identity policy
 from engine.us_short_holding_action import MAX_MANUAL_HOLDING_SHARES  # noqa: E402 — shared first-cut quantity ceiling
+from engine.us_short_theme_lifecycle import THEME_STATES  # noqa: E402
+from engine.us_short_theme_selection import THEME_SOURCES  # noqa: E402
 
 ACCOUNT_SCHEMA_NAME = "us_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.0.0"
@@ -64,13 +68,15 @@ ACCOUNT_SCHEMA_PATH = ROOT / "schemas" / "us_short_account_state.schema.json"
 LINEAGE_SCHEMA_PATH = ROOT / "schemas" / "us_short_account_state_lineage.schema.json"
 
 REQUIRED_TABLES = ("account", "positions")
-OPTIONAL_TABLES = ("trades",)   # slice 1b: trades.csv (= §12 manual_actual_track / execution_log); optional
+OPTIONAL_TABLES = ("trades", "holding_themes")
 
 REQUIRED_COLUMNS = {
     "account": ("as_of", "us_market_equity", "us_short_available_cash",
                 "manual_order_only", "broker_connection_allowed"),
     "positions": ("ticker", "shares", "avg_cost_usd", "entry_date"),
     "trades": ("decision_date", "ticker", "suggested_action", "executed"),
+    "holding_themes": ("as_of", "ticker", "theme_id", "theme_source", "theme_lifecycle_state",
+                       "macro_cluster", "evidence_ref_kind", "evidence_ref_value"),
 }
 # Allowed columns (required + optional). Any column OUTSIDE this set is rejected (fail-fast, no silent
 # drop): a typo'd / out-of-contract column — e.g. `direction=short` in positions, which v1 long-only
@@ -82,6 +88,8 @@ EXPECTED_COLUMNS = {
     "positions": ("ticker", "shares", "avg_cost_usd", "entry_date", "current_stop", "notes"),
     "trades": ("decision_date", "ticker", "suggested_action", "executed",
                "fill_price", "fill_shares", "skip_reason", "manual_override", "failure_trigger"),
+    "holding_themes": ("as_of", "ticker", "theme_id", "theme_source", "theme_lifecycle_state",
+                       "macro_cluster", "evidence_ref_kind", "evidence_ref_value"),
 }
 
 # trades.suggested_action = the §9 final_action vocab (user-chosen 2026-06-20, Chinese values).
@@ -196,6 +204,60 @@ def _reject_unknown_columns(columns, name: str) -> None:
             "(fail-fast, no silent drop — e.g. positions has no `direction` column, v1 is long-only)")
 
 
+def _required_text(raw, field: str) -> str:
+    value = _opt_str(raw)
+    if value is None:
+        raise ConvertError(f"{field} must be non-blank text")
+    return value
+
+
+def _build_holding_theme_reconciliation(rows, positions, decision_as_of):
+    """Build the optional private Cut3 holding-theme reconciliation from holding_themes.csv."""
+    if not rows:
+        return None
+    position_tickers = {position["ticker"] for position in positions}
+    out, seen = [], set()
+    for raw in rows:
+        ticker = _parse_us_ticker(raw.get("ticker"), "holding_themes.ticker")
+        if ticker in seen:
+            raise ConvertError(f"holding_themes contains duplicate ticker {ticker}")
+        seen.add(ticker)
+        as_of = _parse_date(raw.get("as_of"), f"holding_themes {ticker} as_of")
+        if as_of != decision_as_of:
+            raise ConvertError(f"holding_themes {ticker} as_of must equal --as-of {decision_as_of}")
+        source = _required_text(raw.get("theme_source"), f"holding_themes {ticker} theme_source")
+        lifecycle = _required_text(
+            raw.get("theme_lifecycle_state"), f"holding_themes {ticker} theme_lifecycle_state")
+        if source not in THEME_SOURCES or lifecycle not in THEME_STATES:
+            raise ConvertError(f"holding_themes {ticker} theme_source/lifecycle is outside governance")
+        evidence_kind = _required_text(
+            raw.get("evidence_ref_kind"), f"holding_themes {ticker} evidence_ref_kind")
+        if evidence_kind not in {"provider row", "SEC filing", "source_id"}:
+            raise ConvertError(f"holding_themes {ticker} evidence_ref_kind is invalid")
+        out.append({
+            "ticker": ticker,
+            "theme_id": _required_text(raw.get("theme_id"), f"holding_themes {ticker} theme_id").casefold(),
+            "theme_source": source,
+            "theme_lifecycle_state": lifecycle,
+            "macro_cluster": _required_text(
+                raw.get("macro_cluster"), f"holding_themes {ticker} macro_cluster").casefold(),
+            "evidence_ref": {
+                "kind": evidence_kind,
+                "value": _required_text(
+                    raw.get("evidence_ref_value"), f"holding_themes {ticker} evidence_ref_value"),
+                "as_of": as_of,
+            },
+        })
+    if seen != position_tickers:
+        raise ConvertError("holding_themes.csv must cover current positions exactly once")
+    return {
+        "schema_name": "us_short_holding_theme_reconciliation",
+        "schema_version": "1.0.0",
+        "as_of": decision_as_of,
+        "positions": sorted(out, key=lambda item: item["ticker"]),
+    }
+
+
 # -- pure core: tables(dict[str, list[dict]]) + decision_as_of -> (account_state, lineage) -----------
 def build_account_state(tables: dict, decision_as_of: str) -> tuple:
     """Build a schema-valid account_state dict + lineage dict from already-parsed table rows.
@@ -204,7 +266,7 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
     ticker; no wall-clock). Raises ConvertError (FATAL) on any malformed / out-of-contract input.
     """
     decision_as_of = _parse_date(decision_as_of, "--as-of")
-    for _name in ("account", "positions", "trades"):  # strict input: reject unknown keys (pure path too)
+    for _name in ("account", "positions", "trades", "holding_themes"):  # strict input (pure path too)
         for _row in tables.get(_name, []):
             _reject_unknown_columns(_row.keys(), _name)
     facts_as_of, acct = _build_account_fields(tables["account"], decision_as_of)
@@ -215,6 +277,8 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
         tables.get("trades", []), positions, decision_as_of)
     symbol_cooldown_reconciliation = _build_symbol_cooldown_reconciliation(
         tables.get("trades", []), decision_as_of)
+    holding_theme_reconciliation = _build_holding_theme_reconciliation(
+        tables.get("holding_themes", []), positions, decision_as_of)
 
     bucket = acct["us_market_equity"] / BUCKET_DIVISOR
     if acct["us_short_available_cash"] - bucket > _REL_EPS * max(1.0, bucket):
@@ -236,6 +300,8 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }
+    if holding_theme_reconciliation is not None:
+        account_state["holding_theme_reconciliation"] = holding_theme_reconciliation
     lineage = {
         "schema_name": LINEAGE_SCHEMA_NAME,
         "schema_version": LINEAGE_SCHEMA_VERSION,
@@ -488,6 +554,16 @@ def validate_account_state(state: dict, as_of: str) -> None:
             _parse_date(event["triggered_at"], f"symbol_cooldown_reconciliation {event['ticker']} triggered_at")
             if event["triggered_at"] > state["as_of"]:
                 raise ConvertError(f"symbol_cooldown_reconciliation {event['ticker']} trigger is future")
+    theme_reconciliation = state.get("holding_theme_reconciliation")
+    if theme_reconciliation is not None:
+        if theme_reconciliation["as_of"] != state["as_of"]:
+            raise ConvertError("holding_theme_reconciliation.as_of must equal account_state.as_of")
+        theme_by_ticker = {item["ticker"]: item for item in theme_reconciliation["positions"]}
+        if set(theme_by_ticker) != seen or len(theme_by_ticker) != len(theme_reconciliation["positions"]):
+            raise ConvertError("holding_theme_reconciliation must cover account positions exactly once")
+        for ticker, item in theme_by_ticker.items():
+            if item["evidence_ref"]["as_of"] != state["as_of"]:
+                raise ConvertError(f"holding_theme_reconciliation {ticker} evidence_ref.as_of mismatch")
 
 
 # -- fail-closed privacy guard (§18.0 P0): real-holdings output must land on a gitignored path -------

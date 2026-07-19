@@ -292,7 +292,8 @@ class RiskDowngradeWiring(unittest.TestCase):
                   "per_ticker": {ticker: {"theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
                       "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
                       "membership_origin": "automatic_discovery", "market_confirmed": True,
-                      "individual_theme_gate_passed": True, "overextension_state": "none"} for ticker in per}},
+                      "individual_theme_gate_passed": True, "overextension_state": "none",
+                      "macro_cluster": "unclassified_conservative"} for ticker in per}},
               "per_ticker": per}
         ranks = {d["ticker"]: d["selection_rank"] for d in _select_top15(["AAA", "BBB"], si, decision_date="20260615")["selection_details"]}
         self.assertLess(ranks["AAA"], ranks["BBB"])   # the penalized BBB ranks AFTER the clean AAA

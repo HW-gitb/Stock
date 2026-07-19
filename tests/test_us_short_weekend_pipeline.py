@@ -19,6 +19,7 @@ if str(ROOT) not in sys.path:
 
 import engine.us_short_weekend_pipeline as wp  # noqa: E402
 from engine.us_short_eligibility_gate import load_eligibility_governance  # noqa: E402
+from engine.us_short_selection_exclusions import build_selection_exclusion_data  # noqa: E402
 
 _SESSIONS = [{"date": "20260612"}, {"date": "20260615"}, {"date": "20260616"}]  # Fri / Mon / Tue (16:00)
 _PRESET = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
@@ -74,6 +75,7 @@ def _theme_selection_contract(tickers, *, lifecycle_by_ticker=None, origin_by_ti
                 "market_confirmed": market_confirmed_by_ticker.get(ticker, True),
                 "individual_theme_gate_passed": individual_gate_by_ticker.get(ticker, True),
                 "overextension_state": overextension_by_ticker.get(ticker, "none"),
+                "macro_cluster": "unclassified_conservative",
             }
             for ticker in tickers
         },
@@ -163,6 +165,23 @@ class RunSelectionTests(unittest.TestCase):
         self.assertEqual(by_ticker["PENNY"]["category"], "价格市值")
         self.assertEqual(by_ticker["OTCX"]["category"], "停牌退市破产")
         self.assertEqual(by_ticker["MISS"]["category"], "数据unknown")
+
+    def test_real_pass1_exclusion_joins_same_run_heat_without_rescue(self):
+        contract = _theme_selection_contract(["AAPL"])
+        contract["hot_excluded_audit"] = {
+            "heat_threshold": 90.0,
+            "per_ticker": {"AAPL": 50.0, "ILLIQ": 95.0},
+        }
+        out = self._run(_dc(
+            [_univ_row("AAPL"), _univ_row("ILLIQ", adv=1.0)],
+            pass2={"AAPL": {}},
+            selection_inputs=_selection_inputs(["AAPL"], theme_selection_contract=contract),
+        ))
+        hot = build_selection_exclusion_data(out)["hot_excluded"]
+        self.assertEqual(hot["public_heat_count"], 1)
+        self.assertEqual(hot["unevaluable_count"], 0)
+        self.assertEqual(out["admitted"], ["AAPL"])
+        self.assertEqual(out["hot_excluded_audit"]["source_digest"], out["theme_contract_digest"])
 
     def test_pass2_offering_and_top15_score_reject_are_retained(self):
         tickers = ["A%02d" % i for i in range(16)] + ["OFFER"]

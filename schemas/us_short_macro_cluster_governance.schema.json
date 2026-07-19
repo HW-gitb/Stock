@@ -79,7 +79,9 @@
       "required": [
         "risk_tag",
         "lower_action_confidence",
+        "confidence_cap",
         "shrink_model_position_size",
+        "size_multiplier",
         "via_sizing_stack_step3_no_extra_compound",
         "records_macro_cluster_size_adjustment",
         "report_banner"
@@ -91,8 +93,14 @@
         "lower_action_confidence": {
           "const": true
         },
+        "confidence_cap": {
+          "const": 0.75
+        },
         "shrink_model_position_size": {
           "const": true
+        },
+        "size_multiplier": {
+          "const": 0.5
         },
         "via_sizing_stack_step3_no_extra_compound": {
           "const": true

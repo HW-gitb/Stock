@@ -19,7 +19,7 @@ fills the same seams):
   * banner ⑤ hot_excluded notice ← selection-derived exclusion_data via build_exclusion_summary(...)["public"],
     then render_hot_excluded_banner — the SINGLE source the §9 detail also uses (banner count == §11.4 detail,
     §18.1 #19; there is NO separate report_context hot-excluded summary input);
-  * banner ② macro_cluster ← report_context (optional; omitted when blank);
+  * banner ② macro_cluster ← structured machine rows (optional; omitted when no warning);
   * §11.5 持仓覆盖诚实度 (in §6) ← report_context coverage; §9 剔除摘要 (§11.4) ← actual selection rejects;
   * §12 字段·模块生命周期提醒 + the §11.2 lifecycle-count reconcile ← L readiness due scan;
   * the row sections (5 操作表 / 6 持仓复核 / 7 Top15 / 8 观察池) ← the flattened §11.3 machine rows (slice m1).
@@ -56,6 +56,7 @@ from engine.us_short_run_origin import (
 )
 from engine.us_short_selection_exclusions import build_selection_exclusion_data
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
+from engine.us_short_macro_cluster import render_macro_cluster_banner
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES
 from engine.us_short_theme_selection import THEME_SELECTION_MODES
 from engine.us_short_weekend_action_table import flatten_machine_record
@@ -68,7 +69,6 @@ from engine.us_short_weekly_report_renderer import render_weekly_report
 _REPORT_CONTEXT_KEYS = frozenset({
     "price_clock", "coverage_inputs",
     "core_conclusion", "risk_downgrade_note",
-    "macro_cluster_banner",
 })
 _OPTIONAL_REPORT_CONTEXT_KEYS = frozenset({"forward_policy_comparison_reminder"})
 # the STRUCTURED decision-stage status the §11.2 report BINDS to (no free-text status, R-USSHORT-BATCH4-OFFICIAL-
@@ -302,11 +302,15 @@ def _brief(value):
 
 def _one_glance(row):
     """§11.2 §5 精简一眼表 one-liner from a flattened §11.3 row: 操作 / 股数 / 入·盈一·盈二·损 / 类型 / 优先级."""
-    return ("%s %s | shares=%s | entry=%s tp1=%s tp2=%s stop=%s | %s | rank=%s | trigger=%s | events=%s | tags=%s"
+    return ("%s %s | shares=%s | entry=%s tp1=%s tp2=%s stop=%s | %s | rank=%s | "
+            "theme=%s source=%s lifecycle=%s macro=%s/%s | trigger=%s | events=%s | tags=%s"
             % (row.get("ticker"), row.get("final_action"), _num(row.get("recommended_action_shares")),
                _num(row.get("valid_entry_high")), _num(row.get("take_profit_reduce_price")),
                _num(row.get("take_profit_exit_price")), _num(row.get("stop_clear_price")),
                row.get("order_type") or "·", _num(row.get("action_rank")),
+               row.get("theme_id") or "·", row.get("theme_source") or "·",
+               row.get("theme_lifecycle_state") or "·", row.get("macro_cluster") or "·",
+               row.get("macro_cluster_warning_level") or "·",
                _brief(row.get("trigger_conditions")), _brief(row.get("upcoming_events")),
                _brief(row.get("risk_tags"))))
 
@@ -418,11 +422,13 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
         # ⑤ derived from the SAME validated exclusion public summary the §9 detail uses (single source) — so the
         # §11.2 banner hot count can never disagree with the §11.4 exclusion detail (§18.1 #19).
         "hot_excluded_notice": render_hot_excluded_banner(
-            {"public_heat_count": exclusion_public["hot_excluded_public_heat_count"], "holdings": []}),
+            {"public_heat_count": exclusion_public["hot_excluded_public_heat_count"],
+             "unevaluable_count": exclusion_public["hot_excluded_unevaluable_count"],
+             "holdings": []}),
     }
-    macro = report_context["macro_cluster_banner"]
-    if isinstance(macro, str) and macro.strip():
-        banner["macro_cluster_warning"] = macro.strip()                                   # ② (optional)
+    macro = render_macro_cluster_banner(rows)
+    if macro:
+        banner["macro_cluster_warning"] = macro                                           # ② (structured)
     reminder = report_context.get("forward_policy_comparison_reminder")
     if isinstance(reminder, str) and reminder.strip():
         banner["forward_policy_comparison_reminder"] = reminder.strip()

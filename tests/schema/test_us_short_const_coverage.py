@@ -46,7 +46,7 @@ EXPECTED_CONST_PATH_COUNT = {
     "us_short_field_registry_governance": 13,
     "us_short_hard_veto_governance": 8,
     "us_short_lifecycle_calibration_governance": 9,
-    "us_short_macro_cluster_governance": 13,
+    "us_short_macro_cluster_governance": 15,
     "us_short_portfolio_guard_governance": 13,
     "us_short_regime_governance": 31,
     "us_short_scoring_profile_governance": 7,

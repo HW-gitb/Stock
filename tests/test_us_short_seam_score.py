@@ -50,7 +50,8 @@ def _top15_inputs(per_ticker, state="strong"):
             "per_ticker": {ticker: {"theme_id": f"industry:{ticker.lower()}", "theme_source": "industry_heat_v1",
                                       "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
                                       "membership_origin": "automatic_discovery", "market_confirmed": True,
-                                      "individual_theme_gate_passed": True, "overextension_state": "none"}
+                                      "individual_theme_gate_passed": True, "overextension_state": "none",
+                                      "macro_cluster": "unclassified_conservative"}
                            for ticker in per_ticker},
         },
         "per_ticker": per_ticker,

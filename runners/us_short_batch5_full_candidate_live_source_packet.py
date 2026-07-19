@@ -1034,6 +1034,27 @@ def _build_theme_selection_contract(
     theme_coverage = target_theme_projection.get("coverage")
     if type(theme_values) is not dict or type(theme_coverage) is not dict:
         raise FullCandidateLiveSourcePacketError("target theme projection cannot build a selection contract")
+    parent_theme_projection = _read_json(parent_theme_projection_path)
+    audit_theme_values = parent_theme_projection.get("theme_block_by_ticker")
+    if type(audit_theme_values) is not dict or not audit_theme_values:
+        raise FullCandidateLiveSourcePacketError(
+            "parent theme projection cannot build the full-universe hot-excluded audit"
+        )
+    audit_scores: dict[str, float] = {}
+    for raw_ticker, raw_score in audit_theme_values.items():
+        ticker = canonical_us_ticker(raw_ticker)
+        if ticker is None:
+            raise FullCandidateLiveSourcePacketError("parent theme projection has an invalid audit ticker")
+        if type(raw_score) not in (int, float) or isinstance(raw_score, bool) \
+                or not math.isfinite(float(raw_score)) or float(raw_score) < 0.0:
+            raise FullCandidateLiveSourcePacketError("parent theme projection has an invalid audit score")
+        if ticker in audit_scores:
+            raise FullCandidateLiveSourcePacketError("parent theme projection has duplicate audit tickers")
+        audit_scores[ticker] = float(raw_score)
+    # Theme-block values are already 0-100 percentile scores.  The governance leaves the forward cutoff tunable;
+    # the current producer uses percentile score >=80 and binds that cutoff plus the full projection into the
+    # contract digest.  Re-percentiling these already-percentiled values would mislabel a flat 50-score week hot.
+    hot_audit_threshold = 80.0
     identities = _theme_contract_industry_ids(
         parent_theme_projection_path=parent_theme_projection_path,
         tickers=pass2_clean,
@@ -1066,12 +1087,19 @@ def _build_theme_selection_contract(
             "market_confirmed": True,
             "individual_theme_gate_passed": True,
             "overextension_state": overextension_states[ticker],
+            # No reviewed cross-industry macro mapping exists in this source packet.  Keep the source fact
+            # explicit and conservative instead of letting the bridge guess from a theme label.
+            "macro_cluster": "unclassified_conservative",
         }
     return {
         "as_of": expected_decision_date,
         "mode": "industry_heat_v1_cross_industry_disabled",
         "cross_industry_provisional_enabled": False,
         "theme_opportunity_state": theme_opportunity_state,
+        "hot_excluded_audit": {
+            "heat_threshold": hot_audit_threshold,
+            "per_ticker": audit_scores,
+        },
         "per_ticker": per_ticker,
     }
 

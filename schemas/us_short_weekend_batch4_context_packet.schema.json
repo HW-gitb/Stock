@@ -42,21 +42,35 @@
                 "mode": {"enum": ["industry_heat_v1_cross_industry_disabled", "provisional_cross_industry_enabled"]},
                 "cross_industry_provisional_enabled": {"type": "boolean"},
                 "theme_opportunity_state": {"type": "string"},
+                "hot_excluded_audit": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["heat_threshold", "per_ticker"],
+                  "properties": {
+                    "heat_threshold": {"type": "number", "minimum": 0},
+                    "per_ticker": {
+                      "type": "object",
+                      "additionalProperties": {"type": "number", "minimum": 0}
+                    }
+                  },
+                  "description": "Optional full-universe theme heat facts from the same source-bound contract. They are joined to real exclusions after selection for audit only and never affect admission."
+                },
                 "per_ticker": {
                   "type": "object",
                   "additionalProperties": {
                     "type": "object",
                     "additionalProperties": false,
-                    "required": ["theme_id", "theme_source", "theme_lifecycle_state", "theme_leader_rs", "membership_origin", "market_confirmed", "individual_theme_gate_passed", "overextension_state"],
+                    "required": ["theme_id", "theme_source", "theme_lifecycle_state", "theme_leader_rs", "membership_origin", "market_confirmed", "individual_theme_gate_passed", "overextension_state", "macro_cluster"],
                     "properties": {
                       "theme_id": {"type": "string", "minLength": 1},
-                      "theme_source": {"enum": ["industry_heat_v1", "provisional_discovered"]},
+                      "theme_source": {"enum": ["industry_heat_v1", "gics_established", "provisional_discovered"]},
                       "theme_lifecycle_state": {"enum": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
                       "theme_leader_rs": {"type": "number"},
                       "membership_origin": {"enum": ["automatic_discovery", "manual_watchlist"]},
                       "market_confirmed": {"type": "boolean"},
                       "individual_theme_gate_passed": {"type": "boolean"},
-                      "overextension_state": {"enum": ["none", "warning", "chasing_extreme"]}
+                      "overextension_state": {"enum": ["none", "warning", "chasing_extreme"]},
+                      "macro_cluster": {"type": "string", "minLength": 1}
                     }
                   },
                   "description": "Decision-date, source-bound theme identity/lifecycle/seat-composition facts consumed before Top15. The default industry_heat_v1 mode explicitly leaves cross-industry discovery disabled."
@@ -136,22 +150,20 @@
     "basket_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["per_ticker", "holding_themes", "theme_opportunity_state"],
+      "required": ["per_ticker", "theme_opportunity_state"],
       "properties": {
         "per_ticker": {
           "type": "object",
           "additionalProperties": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["theme", "theme_probe"],
+            "required": ["theme_probe"],
             "properties": {
-              "theme": {"type": "string", "minLength": 1},
               "theme_probe": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["theme_lifecycle_state", "high_confidence", "coverage_status", "no_gap_week", "entry_in_band"],
+                "required": ["high_confidence", "coverage_status", "no_gap_week", "entry_in_band"],
                 "properties": {
-                  "theme_lifecycle_state": {"type": ["string", "null"]},
                   "high_confidence": {"type": "boolean"},
                   "coverage_status": {"type": "string", "minLength": 1},
                   "no_gap_week": {"type": "boolean"},
@@ -160,10 +172,8 @@
               }
             }
           },
-          "description": "Theme and theme-probe inputs only. Symbol cooldown is derived from the private reconciliation state and may not be caller-supplied here."
+          "description": "Non-theme probe facts only. Theme identity/lifecycle is joined inside the orchestrator from theme_selection_contract or private holding reconciliation; callers may not inject it here."
         },
-        "holding_themes": {"type": "object", "additionalProperties": {"type": "string"},
-          "description": "Current holding ticker-to-theme map for the final §8 total/same-theme dollar-cap gate; runtime reconciles it to account_state.positions."},
         "theme_opportunity_state": {"type": "string"}
       }
     },
@@ -172,7 +182,7 @@
     "report_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["price_clock", "coverage_inputs", "core_conclusion", "risk_downgrade_note", "macro_cluster_banner"],
+      "required": ["price_clock", "coverage_inputs", "core_conclusion", "risk_downgrade_note"],
       "properties": {
         "price_clock": {
           "type": "object",
@@ -187,8 +197,7 @@
         },
         "coverage_inputs": {"type": "array", "items": {"type": "object"}},
         "core_conclusion": {"type": "string"},
-        "risk_downgrade_note": {"type": "string"},
-        "macro_cluster_banner": {"type": "string"},
+          "risk_downgrade_note": {"type": "string"},
         "forward_policy_comparison_reminder": {
           "type": "string",
           "minLength": 1,

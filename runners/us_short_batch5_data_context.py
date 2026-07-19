@@ -541,16 +541,19 @@ def _validated_selection_inputs(
             decision_date=expected_decision_date, theme_opportunity_state=state)
     except ThemeSelectionError as exc:
         _fail(f"theme selection contract rejected: {exc}")
+    normalized_theme_contract = {
+        "as_of": expected_decision_date,
+        "mode": theme_contract["mode"],
+        "cross_industry_provisional_enabled": (
+            theme_contract["mode"] == "provisional_cross_industry_enabled"),
+        "theme_opportunity_state": state,
+        "per_ticker": theme_contract["per_ticker"],
+    }
+    if theme_contract["hot_excluded_audit"] is not None:
+        normalized_theme_contract["hot_excluded_audit"] = theme_contract["hot_excluded_audit"]
     return {
         "theme_opportunity_state": state,
-        "theme_selection_contract": {
-            "as_of": expected_decision_date,
-            "mode": theme_contract["mode"],
-            "cross_industry_provisional_enabled": (
-                theme_contract["mode"] == "provisional_cross_industry_enabled"),
-            "theme_opportunity_state": state,
-            "per_ticker": theme_contract["per_ticker"],
-        },
+        "theme_selection_contract": normalized_theme_contract,
         "per_ticker": out_per,
     }
 

@@ -45,6 +45,9 @@ from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_result_effects import ResultEffectsError, validate_result_effects
+from engine.us_short_macro_cluster import WARNING_LEVELS
+from engine.us_short_theme_lifecycle import THEME_STATES
+from engine.us_short_theme_selection import THEME_SOURCES
 from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     require_research_live_capability,
@@ -110,7 +113,14 @@ _SPECS = {
                "field_class": "sizing", "lifecycle_item_id": 4},
     "market_risk_regime": {"owner_module": "engine.us_short_regime", "data_source": "result.regime (injected; live=batch5)",
                            "field_class": "market_risk_regime", "lifecycle_item_id": 3},
-    "theme_lifecycle_state": {"owner_module": "engine.us_short_theme_probe", "data_source": "row.theme_probe (injected; live=batch5)",
+    "theme_id": {"owner_module": "engine.us_short_theme_result_linkage",
+                 "data_source": "row.theme_context.evidence_ref",
+                 "field_class": "theme identity", "lifecycle_item_id": 1},
+    "theme_source": {"owner_module": "engine.us_short_theme_result_linkage",
+                     "data_source": "row.theme_context.evidence_ref",
+                     "field_class": "theme identity", "lifecycle_item_id": 1},
+    "theme_lifecycle_state": {"owner_module": "engine.us_short_theme_result_linkage",
+                              "data_source": "row.theme_context.evidence_ref",
                               "field_class": "theme_lifecycle_state", "lifecycle_item_id": 30},
     "theme_opportunity_state": {"owner_module": "engine.us_short_theme_probe", "data_source": "row.theme_probe (injected; live=batch5)",
                                 "field_class": "theme_opportunity_state", "lifecycle_item_id": 27},
@@ -125,6 +135,9 @@ _SPECS = {
     "overextension_state": {"owner_module": "engine.us_short_overextension",
                             "data_source": "row.overextension (injected; live=batch5)",
                             "field_class": "overextension", "lifecycle_item_id": 36},
+    "macro_cluster": {"owner_module": "engine.us_short_macro_cluster",
+                      "data_source": "row.theme_context.macro_cluster + provisional sizing exposure",
+                      "field_class": "macro cluster", "lifecycle_item_id": 31},
 }
 
 
@@ -234,6 +247,57 @@ def _formal_effect_field_records(row):
     return out
 
 
+def _theme_macro_field_records(row):
+    theme = row.get("theme_context")
+    if not isinstance(theme, dict):
+        return []
+    evidence = theme.get("evidence_ref")
+    out = [
+        _fr("theme_id", op="仅标签", terminal="theme_id",
+            disposition=_LANDED, impact_target=None, evidence_ref=evidence),
+        _fr("theme_source", op="仅标签", terminal="theme_source",
+            disposition=_LANDED, impact_target=None, evidence_ref=evidence),
+    ]
+    effects = row.get("result_effects") if isinstance(row.get("result_effects"), dict) else {}
+    refs = effects.get("evidence_refs") if isinstance(effects.get("evidence_refs"), dict) else {}
+    lifecycle_source = "theme_lifecycle:" + str(theme.get("theme_lifecycle_state"))
+    lifecycle_ref = refs.get("effect:" + lifecycle_source)
+    override = effects.get("action_override")
+    if isinstance(override, dict) and override.get("source") == lifecycle_source:
+        out.append(_fr("theme_lifecycle_state", op="调信心", terminal="final_action",
+                       disposition=_LANDED, impact_target="final_action", evidence_ref=lifecycle_ref))
+    elif any(isinstance(item, dict) and item.get("source") == lifecycle_source
+             for item in effects.get("confidence_cap_candidates", [])):
+        out.append(_fr("theme_lifecycle_state", op="调信心", terminal="action_confidence",
+                       disposition=_LANDED, impact_target="action_confidence", evidence_ref=lifecycle_ref))
+    elif lifecycle_ref is not None:
+        out.append(_fr("theme_lifecycle_state", op="仅标签", terminal="risk_tags",
+                       disposition=_LANDED, impact_target="risk_tags", evidence_ref=lifecycle_ref))
+    else:
+        out.append(_fr("theme_lifecycle_state", op="仅标签", terminal="theme_lifecycle_state",
+                       disposition=_SHADOW, impact_target=None, evidence_ref=evidence))
+
+    warning = row.get("macro_cluster_warning_level")
+    macro_source = "macro_cluster:" + str(warning)
+    macro_ref = refs.get("effect:" + macro_source) or evidence
+    if warning == "high" and row.get("macro_cluster_size_adjustment", 0) > 0 and any(
+        isinstance(item, dict) and item.get("source") == macro_source
+        for item in effects.get("size_reduction_candidates", [])
+    ):
+        out.append(_fr("macro_cluster", op="降仓", terminal="model_position_size_shares",
+                       disposition=_LANDED, impact_target="position_size", evidence_ref=macro_ref))
+    elif warning == "high":
+        out.append(_fr("macro_cluster", op="调信心", terminal="action_confidence",
+                       disposition=_LANDED, impact_target="action_confidence", evidence_ref=macro_ref))
+    elif warning == "elevated":
+        out.append(_fr("macro_cluster", op="仅标签", terminal="risk_tags",
+                       disposition=_LANDED, impact_target="risk_tags", evidence_ref=macro_ref))
+    else:
+        out.append(_fr("macro_cluster", op="仅标签", terminal="macro_cluster",
+                       disposition=_SHADOW, impact_target=None, evidence_ref=evidence))
+    return out
+
+
 def _field_records(row):
     """Assemble the §10 field_records for one finalized row, faithful to what it computed. Defensive reads
     (a malformed evidence field degrades to a conservative SHADOW, never a fabricated landing); the assembled
@@ -288,10 +352,12 @@ def _field_records(row):
     else:
         frs.append(_fr("market_risk_regime", op="仅标签", terminal=_SHADOW_TERMINAL, disposition=_SHADOW, impact_target=None))
 
-    # theme_probe rows (§8 強赛道试探) — the promoted strong-theme build was forced to a min position; both the
-    # theme_lifecycle_state and the theme_opportunity_state landed on position_size.
+    # theme_probe rows (§8 強赛道试探) — lifecycle is now source-bound through theme_context; only the
+    # opportunity-state landing remains probe-specific here.
     if isinstance(row.get("theme_probe"), dict):
-        frs.append(_fr("theme_lifecycle_state", op="降仓", terminal="model_position_size_shares", disposition=_LANDED, impact_target="position_size"))
+        if not isinstance(row.get("theme_context"), dict):
+            frs.append(_fr("theme_lifecycle_state", op="降仓", terminal="model_position_size_shares",
+                           disposition=_LANDED, impact_target="position_size"))
         frs.append(_fr("theme_opportunity_state", op="降仓", terminal="model_position_size_shares", disposition=_LANDED, impact_target="position_size"))
 
     # forward known-date event (§8.1) — v1 display-only (sizing/risk/display, never selection/veto); recorded
@@ -309,6 +375,7 @@ def _field_records(row):
                        disposition=_LANDED, impact_target=None))
 
     frs.extend(_formal_effect_field_records(row))
+    frs.extend(_theme_macro_field_records(row))
 
     return frs
 
@@ -319,11 +386,15 @@ def _decision_trace(row):
     manual_quantity = (isinstance(row.get("action_proposal"), dict)
                        and row["action_proposal"].get("reason")
                        == "mandatory_holding_exit_manual_share_confirmation")
+    theme = row.get("theme_context") if isinstance(row.get("theme_context"), dict) else {}
     return ("final_action=%s observe_reason_type=%s | selection_rank=%s (多强) vs action_group=%s "
             "action_rank=%s (先干哪个, §9 survival-first); a must-act holding exit can outrank a stronger "
-            "new 建仓 (§9 line 248). manual_share_confirmation_required=%s" % (
+            "new 建仓 (§9 line 248). theme=%s source=%s lifecycle=%s macro=%s/%s; "
+            "manual_share_confirmation_required=%s" % (
                 row.get("final_action"), row.get("observe_reason_type"), row.get("selection_rank"),
-                row.get("action_group"), row.get("action_rank"), manual_quantity))
+                row.get("action_group"), row.get("action_rank"), theme.get("theme_id"),
+                theme.get("theme_source"), theme.get("theme_lifecycle_state"), row.get("macro_cluster"),
+                row.get("macro_cluster_warning_level"), manual_quantity))
 
 
 def _finite_number(x):
@@ -353,6 +424,33 @@ def _validate_ranked_row(row, *, as_of, require_result_effects):
             validate_result_effects(row, as_of=as_of)
         except ResultEffectsError as exc:
             raise WeekendMachineRecordError(f"第二刀 result_effects 未闭环: {exc}") from exc
+
+    theme = row.get("theme_context")
+    if (require_result_effects and row.get("row_source") in {"top15_candidate", "holding_in_top15"}
+            and not isinstance(theme, dict)):
+        raise WeekendMachineRecordError("Top15 row 缺 Cut3 source-bound theme_context")
+    if theme is not None:
+        evidence = theme.get("evidence_ref") if isinstance(theme, dict) else None
+        if not (isinstance(theme, dict) and theme.get("theme_source") in THEME_SOURCES
+                and theme.get("theme_lifecycle_state") in THEME_STATES
+                and isinstance(theme.get("theme_id"), str) and theme["theme_id"].strip()
+                and isinstance(theme.get("macro_cluster"), str) and theme["macro_cluster"].strip()
+                and isinstance(evidence, dict) and set(evidence) == {"kind", "value", "as_of"}
+                and evidence.get("kind") in {"provider row", "SEC filing", "source_id"}
+                and isinstance(evidence.get("value"), str) and evidence["value"].strip()
+                and evidence.get("as_of") == as_of):
+            raise WeekendMachineRecordError("theme_context 身份/source/lifecycle/macro/evidence 非法")
+        if row.get("macro_cluster") != theme["macro_cluster"]:
+            raise WeekendMachineRecordError("macro_cluster 未从 theme_context 单源投影")
+        warning = row.get("macro_cluster_warning_level")
+        frac = row.get("macro_cluster_exposure_frac")
+        adjustment = row.get("macro_cluster_size_adjustment")
+        if warning not in WARNING_LEVELS:
+            raise WeekendMachineRecordError("macro_cluster_warning_level 非法")
+        if frac is not None and not (_finite_number(frac) and 0.0 <= float(frac) <= 1.0):
+            raise WeekendMachineRecordError("macro_cluster_exposure_frac 须为 None 或 [0,1] 有限数")
+        if not (isinstance(adjustment, int) and not isinstance(adjustment, bool) and adjustment >= 0):
+            raise WeekendMachineRecordError("macro_cluster_size_adjustment 须为非负 int 股数差")
 
     final_action = row["final_action"]
     # ranked-result fields on EVERY 4d-ii-j row: action_group must be the real §9 engine group for this action

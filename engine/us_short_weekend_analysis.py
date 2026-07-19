@@ -192,6 +192,9 @@ def _analyze_one(row, regime):
                 raise WeekendAnalysisError(
                     f"{ticker}: 选择期 core_score {sel_rec.get('core_score')!r} != 分析期 §4.2 core_score "
                     f"{score['core_score']!r}（同一 run 须单源、不可分叉）")
+    theme_context = row.get("theme_context")
+    if theme_context is not None and not isinstance(theme_context, dict):
+        raise WeekendAnalysisError("theme_context 须为 dict 或缺省")
 
     return {
         "ticker": ticker,
@@ -208,6 +211,7 @@ def _analyze_one(row, regime):
         "score": score,
         "risk_downgrade": risk_dg,   # §4.2 typed penalty (points + components), None for an unscored holding
         "selection_record": sel_rec,
+        "theme_context": dict(theme_context) if theme_context is not None else None,
         **({"holding_action_context": holding_action_context}
            if context == "holding" and "holding_action_context" in row else {}),
     }

@@ -7,8 +7,8 @@ guard) / §18.1. Governance authority = the FROZEN presets/us_short_exclusion_su
 (batch-1, design-locked v1): the 8 exclusion categories + covers_passes are read from it (single source).
 
 §11.4 splits the weekly exclusion summary by PRIVACY:
-  * PUBLIC (tracked-safe): per-category public-universe exclusion COUNTS + a hot_excluded public-universe heat
-    COUNT — numbers only, no tickers / holdings / $. The de-identification GATE is the public schema
+  * PUBLIC (tracked-safe): per-category public-universe exclusion COUNTS + hot_excluded heat and unevaluable
+    COUNTS — numbers only, no tickers / holdings / $. The de-identification GATE is the public schema
     (schemas/us_short_exclusion_summary_public.schema.json: additionalProperties:false + integer-only counts),
     exactly mirroring the lifecycle readiness artifact — so write_exclusion_public needs NO §18.0 guard (a
     provably de-identified artifact is what §11.6 lets be tracked).
@@ -208,6 +208,10 @@ def build_exclusion_summary(exclusion_data) -> dict:
     heat_count = hot.get("public_heat_count", 0)
     if not (_int_not_bool(heat_count) and heat_count >= 0):
         raise ExclusionSummaryError("hot_excluded.public_heat_count must be a NON-NEGATIVE int, got %r" % (heat_count,))
+    unevaluable_count = hot.get("unevaluable_count", 0)
+    if not (_int_not_bool(unevaluable_count) and unevaluable_count >= 0):
+        raise ExclusionSummaryError(
+            "hot_excluded.unevaluable_count must be a NON-NEGATIVE int, got %r" % (unevaluable_count,))
     hot_holdings = hot.get("holdings", [])
     if not isinstance(hot_holdings, list):
         raise ExclusionSummaryError("hot_excluded.holdings must be a list, got %r" % (type(hot_holdings).__name__,))
@@ -220,6 +224,7 @@ def build_exclusion_summary(exclusion_data) -> dict:
         "category_counts": category_counts,
         "total_excluded": sum(category_counts.values()),
         "hot_excluded_public_heat_count": heat_count,
+        "hot_excluded_unevaluable_count": unevaluable_count,
     }
     _assert_public(public)
     private = {
@@ -245,8 +250,9 @@ def render_exclusion_section(public) -> list:
     for cat in _categories():  # frozen order (single source), all 8 shown (zeros explicit — honest classification)
         lines.append("- %s：%d" % (cat, counts[cat]))
     lines.append(
-        "高热度被剔除（hot_excluded，仅审计·绝不救回 hard veto / 不改准入）：%d 只（公开 universe 计数，喂 §13 复审）。"
-        % public["hot_excluded_public_heat_count"]
+        "高热度被剔除（hot_excluded，仅审计·绝不救回 hard veto / 不改准入）：%d 只（公开 universe 计数）；"
+        "缺同轮主题热度、未能评估：%d 只（喂 §13 复审）。"
+        % (public["hot_excluded_public_heat_count"], public["hot_excluded_unevaluable_count"])
     )
     return lines
 

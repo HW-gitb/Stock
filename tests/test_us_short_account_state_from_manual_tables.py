@@ -56,6 +56,17 @@ def _trade(**o):
     return base
 
 
+def _holding_theme(ticker="AAPL", **o):
+    base = {
+        "as_of": "20260622", "ticker": ticker, "theme_id": "industry:technology",
+        "theme_source": "industry_heat_v1", "theme_lifecycle_state": "confirmed_active",
+        "macro_cluster": "ai_complex", "evidence_ref_kind": "source_id",
+        "evidence_ref_value": "manual:theme:" + ticker,
+    }
+    base.update(o)
+    return base
+
+
 def _reconcile(trades, positions=None, as_of="20260622"):
     if positions is None:
         positions = conv._build_positions([_pos()], "20260622")   # default AAPL 10 long
@@ -89,6 +100,26 @@ class BuildTests(unittest.TestCase):
         self.assertEqual(item["remaining_shares"], 10)
         self.assertFalse(item["tp1_completed"])
         self.assertIsNone(item["tp1_completed_at"])
+
+    def test_optional_holding_themes_builds_exact_private_reconciliation(self):
+        state, _ = conv.build_account_state(
+            {**_tables(), "holding_themes": [_holding_theme()]}, "20260622")
+        conv.validate_account_state(state, "20260622")
+        item = state["holding_theme_reconciliation"]["positions"][0]
+        self.assertEqual(item["ticker"], "AAPL")
+        self.assertEqual(item["theme_source"], "industry_heat_v1")
+        self.assertEqual(item["macro_cluster"], "ai_complex")
+        self.assertEqual(item["evidence_ref"]["as_of"], "20260622")
+
+    def test_provided_holding_themes_must_cover_positions_and_use_governed_source(self):
+        with self.assertRaises(CE):
+            conv.build_account_state(
+                {**_tables(positions=[_pos(ticker="AAPL"), _pos(ticker="MSFT")]),
+                 "holding_themes": [_holding_theme("AAPL")]}, "20260622")
+        with self.assertRaises(CE):
+            conv.build_account_state(
+                {**_tables(), "holding_themes": [_holding_theme(theme_source="gics_guessed")]},
+                "20260622")
 
     def test_only_executed_manual_reduce_completes_tp1(self):
         state, _ = conv.build_account_state(

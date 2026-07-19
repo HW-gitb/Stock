@@ -22,7 +22,9 @@
   "high_warning_effects": {
     "risk_tag": true,
     "lower_action_confidence": true,
+    "confidence_cap": 0.75,
     "shrink_model_position_size": true,
+    "size_multiplier": 0.50,
     "via_sizing_stack_step3_no_extra_compound": true,
     "records_macro_cluster_size_adjustment": true,
     "report_banner": true

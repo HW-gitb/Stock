@@ -15,7 +15,7 @@ cells. This slice projects the rich machine layer onto the flat §11.3 columns s
     valid_entry_high / order_type / stop_clear_price / take_profit_* / risk_reward_ratio / price_engine_used /
     price_sub_mode / …) — each key that is a frozen §11.3 column is lifted onto the row;
   * `sizing.desired_model_shares` (a real sized build) → `model_position_size_shares`.
-  Columns with NO v1 pipeline source (macro_cluster / coverage_status / …) are deliberately left EMPTY —
+  Columns with NO v1 pipeline source (coverage_status / …) are deliberately left EMPTY —
   honest, not fabricated (they land in batch5 / the §11.2 assembly / later forward calibration).
   `overextension_state` is now populated from the §4.3 tier (cut 2d) when the row carries it.
 
@@ -100,8 +100,11 @@ _SELECTION_RECORD_KEYS = frozenset({"selection_rank", "selection_bucket", "core_
 
 def _flatten_row(row, ct):
     """Project one §10 machine-record row's rich layer onto the flat §11.3 columns (keeping the rich layer +
-    field_records). Only frozen §11.3 column keys are lifted; an unsourced column is left untouched (empty)."""
+    field_records). Only frozen §11.3 column keys are lifted; source-owned theme columns are cleared first and
+    repopulated only from the validated theme_context."""
     flat = dict(row)
+    for field in ("theme_id", "theme_source", "theme_lifecycle_state", "macro_cluster"):
+        flat[field] = None
     price = row.get("price")
     if isinstance(price, dict):
         af = price.get("action_fields")
@@ -167,6 +170,26 @@ def _flatten_row(row, ct):
         flat["selection_bucket"] = sel_rec["selection_bucket"]
     elif sel_rec is not None:
         raise WeekendActionTableError(f"{ct}: 非 Top15 持仓行不得带 selection_record（伪造拒）: {sel_rec!r}")
+
+    # Cut3 source-bound theme facts and deterministic macro result.  The row remains the single source for both
+    # CSV and weekly report; renderer code never guesses a theme or lifecycle from free text.
+    theme = row.get("theme_context")
+    if theme is not None:
+        if not isinstance(theme, dict):
+            raise WeekendActionTableError(f"{ct}: theme_context 须为 dict|None")
+        source = theme.get("theme_source")
+        lifecycle = theme.get("theme_lifecycle_state")
+        cluster = theme.get("macro_cluster")
+        if source not in set(_design_enums()["theme_source"]):
+            raise WeekendActionTableError(f"{ct}: theme_source 非法: {source!r}")
+        if lifecycle not in set(_design_enums()["theme_lifecycle_state"]):
+            raise WeekendActionTableError(f"{ct}: theme_lifecycle_state 非法: {lifecycle!r}")
+        if not isinstance(cluster, str) or not cluster.strip():
+            raise WeekendActionTableError(f"{ct}: macro_cluster 缺来源事实")
+        flat["theme_id"] = theme.get("theme_id")
+        flat["theme_source"] = source
+        flat["theme_lifecycle_state"] = lifecycle
+        flat["macro_cluster"] = cluster.strip().casefold()
 
     # §4.3 overextension_state (cut 2d): lift the tier onto its §11.3 column from the row's overextension result
     # (validated at the machine-record boundary; the flattened record's design-locked-enum re-check also gates

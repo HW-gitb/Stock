@@ -28,8 +28,6 @@ from engine.us_short_run_origin import (  # noqa: E402
     require_research_live_receipt_binding,
 )
 from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
-from engine.us_short_weekend_basket import resolve_build_capacity  # noqa: E402
-from engine.us_short_weekend_cost_floor import apply_probe_cost_floor  # noqa: E402
 from engine.us_short_weekend_decision import decide_actions  # noqa: E402
 from engine.us_short_weekend_orchestrator import _build_analysis_rows  # noqa: E402
 from engine.us_short_weekend_pipeline import run_selection  # noqa: E402
@@ -64,9 +62,6 @@ _TEMPLATE_KEYS = frozenset(
 
 class Batch5ToBatch4E2EError(ValueError):
     """The local Batch5 source packet cannot be bridged into a Batch4 weekend run safely."""
-
-
-_PROBE_COST_KEYS = ("commission_round_trip", "slippage_dollars", "spread_dollars")
 
 
 def iso_now() -> str:
@@ -299,27 +294,13 @@ def _sizing_input_for_ticker(ticker: str, universe_by_ticker: dict[str, dict[str
 
 def _basket_input_for_ticker() -> dict[str, Any]:
     return {
-        "theme": "unclassified",
         "theme_probe": {
-            "theme_lifecycle_state": None,
             "high_confidence": False,
             "coverage_status": "restricted",
             "no_gap_week": False,
             "entry_in_band": False,
         },
     }
-
-
-def _cost_inputs_for_promoted_probes(basket_result: dict[str, Any]) -> dict[str, dict[str, float]]:
-    out: dict[str, dict[str, float]] = {}
-    for row in basket_result.get("rows") or []:
-        if not isinstance(row, dict) or row.get("final_action") != _BUILD_ACTION or "theme_probe" not in row:
-            continue
-        ticker = canonical_us_ticker(row.get("ticker"))
-        if ticker is None:
-            raise Batch5ToBatch4E2EError("promoted probe row has a non-canonical ticker")
-        out[ticker] = {key: 0.0 for key in _PROBE_COST_KEYS}
-    return out
 
 
 def _derive_current_action_inputs(
@@ -389,10 +370,10 @@ def _derive_current_action_inputs(
         ticker: _basket_input_for_ticker()
         for ticker in sorted(sized_build_tickers)
     }
-    basket = resolve_build_capacity(sized, basket_context=dynamic_basket)
-    cost_inputs = _cost_inputs_for_promoted_probes(basket)
-    apply_probe_cost_floor(basket, cost_inputs=cost_inputs)
-    return per_ticker_analysis, sizing_per_ticker, dynamic_basket, cost_inputs
+    # Theme identity/lifecycle is joined by the weekend orchestrator from the source-bound selection contract.
+    # This bridge only supplies the still-source-pending probe inputs; restricted coverage cannot promote a
+    # probe, so no synthetic basket pass or cost input is needed here.
+    return per_ticker_analysis, sizing_per_ticker, dynamic_basket, {}
 
 
 def _assemble_batch4_packet(

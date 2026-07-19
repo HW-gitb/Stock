@@ -41,6 +41,18 @@
         "events": {"type": "array", "items": {"$ref": "#/$defs/symbol_cooldown_reconciliation_event"}}
       }
     },
+    "holding_theme_reconciliation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_name", "schema_version", "as_of", "positions"],
+      "properties": {
+        "schema_name": {"const": "us_short_holding_theme_reconciliation"},
+        "schema_version": {"const": "1.0.0"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "positions": {"type": "array", "items": {"$ref": "#/$defs/holding_theme_reconciliation_position"}}
+      },
+      "description": "Optional private manual reconciliation. If absent for a non-empty account, protective exits remain allowed but theme/macro capacity is unavailable and new builds fail closed."
+    },
     "manual_order_only": {"const": true},
     "broker_connection_allowed": {"const": false}
   },
@@ -83,6 +95,27 @@
         "trigger": {"enum": ["filled_then_stop_loss", "filled_then_breakout_failure"]},
         "triggered_at": {"type": "string", "pattern": "^[0-9]{8}$"},
         "source_reconciliation_ref": {"type": "string", "minLength": 1}
+      }
+    },
+    "holding_theme_reconciliation_position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "theme_id", "theme_source", "theme_lifecycle_state", "macro_cluster", "evidence_ref"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+        "theme_id": {"type": "string", "minLength": 1},
+        "theme_source": {"enum": ["industry_heat_v1", "gics_established", "provisional_discovered"]},
+        "theme_lifecycle_state": {"enum": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
+        "macro_cluster": {"type": "string", "minLength": 1},
+        "evidence_ref": {
+          "type": "object", "additionalProperties": false,
+          "required": ["kind", "value", "as_of"],
+          "properties": {
+            "kind": {"enum": ["provider row", "SEC filing", "source_id"]},
+            "value": {"type": "string", "minLength": 1},
+            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        }
       }
     }
   }

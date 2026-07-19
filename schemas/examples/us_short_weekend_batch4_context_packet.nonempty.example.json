@@ -34,7 +34,8 @@
             "membership_origin": "automatic_discovery",
             "market_confirmed": true,
             "individual_theme_gate_passed": true,
-            "overextension_state": "none"
+            "overextension_state": "none",
+            "macro_cluster": "unclassified_conservative"
           }
         }
       },
@@ -275,9 +276,7 @@
   "basket_context": {
     "per_ticker": {
       "AAPL": {
-        "theme": "software",
         "theme_probe": {
-          "theme_lifecycle_state": null,
           "high_confidence": false,
           "coverage_status": "full",
           "no_gap_week": false,
@@ -285,7 +284,6 @@
         }
       }
     },
-    "holding_themes": {},
     "theme_opportunity_state": "no_strong_theme"
   },
   "cost_inputs": {},
@@ -298,8 +296,7 @@
     },
     "coverage_inputs": [],
     "core_conclusion": "nonempty 占位：单候选 AAPL，无持仓",
-    "risk_downgrade_note": "无",
-    "macro_cluster_banner": ""
+    "risk_downgrade_note": "无"
   },
   "eligibility_governance_path": "presets/us_short_eligibility_governance_20260624.json",
   "calendar_path": "presets/us_short_market_calendar_2026_2027.json",

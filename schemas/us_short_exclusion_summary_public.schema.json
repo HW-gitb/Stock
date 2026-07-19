@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "us_short_exclusion_summary_public",
-  "description": "De-identified, TRACKABLE weekly exclusion summary (docs/us_short_system_design.md §11.4): public-universe per-category exclusion counts + a hot_excluded public-universe heat count ONLY. It carries NO tickers / holdings / $ — real-holding exclusions live on the PRIVATE path (§11.6, §18.0 guard). The de-identification GATE is this schema itself: additionalProperties:false at the top level + integer-only category_counts values mean no ticker / holding / cost field can ever land on a tracked path.",
+  "description": "De-identified, TRACKABLE weekly exclusion summary (docs/us_short_system_design.md §11.4): public-universe per-category exclusion counts + hot_excluded heat and unevaluable counts ONLY. It carries NO tickers / holdings / $ — real-holding exclusions live on the PRIVATE path (§11.6, §18.0 guard). The de-identification GATE is this schema itself: additionalProperties:false at the top level + integer-only counts mean no ticker / holding / cost field can ever land on a tracked path.",
   "type": "object",
   "properties": {
     "schema_name": {"const": "us_short_exclusion_summary_public"},
@@ -19,7 +19,8 @@
       "additionalProperties": {"type": "integer", "minimum": 0}
     },
     "total_excluded": {"type": "integer", "minimum": 0},
-    "hot_excluded_public_heat_count": {"type": "integer", "minimum": 0}
+    "hot_excluded_public_heat_count": {"type": "integer", "minimum": 0},
+    "hot_excluded_unevaluable_count": {"type": "integer", "minimum": 0}
   },
   "required": [
     "schema_name",
@@ -28,7 +29,8 @@
     "covers_passes",
     "category_counts",
     "total_excluded",
-    "hot_excluded_public_heat_count"
+    "hot_excluded_public_heat_count",
+    "hot_excluded_unevaluable_count"
   ],
   "additionalProperties": false
 }

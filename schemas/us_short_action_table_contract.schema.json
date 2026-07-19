@@ -13,7 +13,7 @@
     "status": {"type": "string", "minLength": 1},
     "core_columns": {
       "description": "§11.3 完整列 — exact set AND order, const-pinned. Candidate enhancement fields are appended after these per extension_policy, never inserted/reordered.",
-      "const": ["ticker", "row_source", "selection_bucket", "theme_source", "theme_lifecycle_state", "final_action", "recommended_action_shares", "action_rank", "action_confidence", "observe_reason_type", "order_type", "entry_plan", "pullback_entry_price", "breakout_entry_price", "limit_order_price", "valid_entry_low", "valid_entry_high", "order_expiry", "gap_policy", "effective_support", "effective_resistance", "structure_quality", "stop_clear_price", "take_profit_reduce_price", "take_profit_exit_price", "event_clear_reference_price", "risk_reward_ratio", "min_rr_gate_status", "post_round_rr_status", "price_engine_used", "price_sub_mode", "model_position_size_amount", "model_position_size_shares", "live_permission_status", "live_size_warning", "cash_allocation_status", "portfolio_guard_status", "symbol_cooldown_status", "cooldown_until", "reentry_allowed_reason", "coverage_status", "coverage_gap_tags", "trigger_conditions", "invalid_conditions", "risk_tags", "overextension_state", "macro_cluster", "macro_cluster_exposure_frac", "macro_cluster_warning_level", "macro_cluster_size_adjustment", "data_quality_tags", "execution_constraints", "upcoming_events", "decision_trace"]
+      "const": ["ticker", "row_source", "selection_bucket", "theme_id", "theme_source", "theme_lifecycle_state", "final_action", "recommended_action_shares", "action_rank", "action_confidence", "observe_reason_type", "order_type", "entry_plan", "pullback_entry_price", "breakout_entry_price", "limit_order_price", "valid_entry_low", "valid_entry_high", "order_expiry", "gap_policy", "effective_support", "effective_resistance", "structure_quality", "stop_clear_price", "take_profit_reduce_price", "take_profit_exit_price", "event_clear_reference_price", "risk_reward_ratio", "min_rr_gate_status", "post_round_rr_status", "price_engine_used", "price_sub_mode", "model_position_size_amount", "model_position_size_shares", "live_permission_status", "live_size_warning", "cash_allocation_status", "portfolio_guard_status", "symbol_cooldown_status", "cooldown_until", "reentry_allowed_reason", "coverage_status", "coverage_gap_tags", "trigger_conditions", "invalid_conditions", "risk_tags", "overextension_state", "macro_cluster", "macro_cluster_exposure_frac", "macro_cluster_warning_level", "macro_cluster_size_adjustment", "data_quality_tags", "execution_constraints", "upcoming_events", "decision_trace"]
     },
     "design_locked_enums": {
       "description": "Per-column frozen vocabularies the design pins verbatim. Keys must be exactly these 14 (additionalProperties false); each value const-pinned.",
@@ -33,7 +33,7 @@
         "live_permission_status": {"const": ["paper_or_minimal_only", "not_full_size_eligible", "full_size_eligible"]},
         "coverage_status": {"const": ["full", "partial", "restricted", "blocked"]},
         "theme_lifecycle_state": {"const": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"]},
-        "theme_source": {"const": ["gics_established", "provisional_discovered"]},
+          "theme_source": {"const": ["industry_heat_v1", "gics_established", "provisional_discovered"]},
         "macro_cluster_warning_level": {"const": ["none", "elevated", "high"]}
       }
     },

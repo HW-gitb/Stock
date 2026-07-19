@@ -42,6 +42,10 @@ PORTFOLIO_CAUTION_CONFIDENCE_CAP = 0.75
 RECOVERY_MIN_CONFIDENCE = 0.90
 PORTFOLIO_GUARD_STATE_FILENAME = "portfolio_guard_state.json"
 _GUARD_STATE_KEYS = {"schema_name", "schema_version", "as_of", "state"}
+_EXTENSION_EFFECT_KEYS = {
+    "source", "evidence_ref", "risk_tags", "trigger_conditions", "invalid_conditions",
+    "size_multiplier", "confidence_cap", "action_override",
+}
 
 
 def _finite_unit(value):
@@ -345,6 +349,117 @@ def apply_result_effects(decision_result, *, portfolio_guard_result, cooldown_by
     if set(cooldown_by_ticker) != seen:
         raise ResultEffectsError("cooldown_by_ticker 须恰覆盖 decision rows")
     return {**decision_result, "rows": out, "portfolio_guard_result": portfolio_guard_result}
+
+
+def extend_result_effects(result, *, effects_by_ticker, as_of):
+    """Add later typed producers to the same Cut2 reducer without creating a second effect stack.
+
+    Every row is covered exactly once.  Each producer record carries its own source/evidence and may add an
+    action override, one sizing candidate, one confidence cap, tags, triggers, and invalid conditions.  The
+    reducer always re-selects the harshest single size multiplier and strictest confidence cap; it never
+    multiplies a new discount into an already-sized result.
+    """
+    if not (isinstance(result, dict) and isinstance(result.get("rows"), list)):
+        raise ResultEffectsError("result 须为含 rows 的 dict")
+    if not isinstance(effects_by_ticker, dict):
+        raise ResultEffectsError("effects_by_ticker 须为 dict")
+    out, seen = [], set()
+    for row in result["rows"]:
+        if not isinstance(row, dict) or not _nonblank(row.get("ticker")):
+            raise ResultEffectsError("result row 缺 ticker")
+        ticker = row["ticker"]
+        if ticker in seen or ticker not in effects_by_ticker:
+            raise ResultEffectsError("effects_by_ticker 须恰覆盖且不重复 result rows")
+        seen.add(ticker)
+        records = effects_by_ticker[ticker]
+        if not isinstance(records, list):
+            raise ResultEffectsError(f"{ticker}: extension effects 须为 list")
+        effects = row.get("result_effects")
+        if not isinstance(effects, dict):
+            raise ResultEffectsError(f"{ticker}: 缺 Cut2 result_effects")
+        # Copy every mutable child before appending so the provisional first pass stays side-effect free.
+        effects = {
+            **effects,
+            "size_reduction_candidates": list(effects.get("size_reduction_candidates") or []),
+            "confidence_cap_candidates": list(effects.get("confidence_cap_candidates") or []),
+            "risk_tags": list(effects.get("risk_tags") or []),
+            "trigger_conditions": list(effects.get("trigger_conditions") or []),
+            "invalid_conditions": list(effects.get("invalid_conditions") or []),
+            "upcoming_events": list(effects.get("upcoming_events") or []),
+            "evidence_refs": dict(effects.get("evidence_refs") or {}),
+        }
+        for idx, record in enumerate(records):
+            where = f"effects_by_ticker[{ticker}][{idx}]"
+            if not isinstance(record, dict) or set(record) != _EXTENSION_EFFECT_KEYS:
+                raise ResultEffectsError(f"{where} 须为 closed-world {sorted(_EXTENSION_EFFECT_KEYS)}")
+            source = record["source"]
+            if not _nonblank(source):
+                raise ResultEffectsError(f"{where}.source 须非空")
+            source = source.strip()
+            evidence = _evidence_ref(record["evidence_ref"], as_of=as_of, where=where)
+            source_key = "effect:" + source
+            if source_key in effects["evidence_refs"]:
+                raise ResultEffectsError(f"{ticker}: duplicate extension source {source!r}")
+            effects["evidence_refs"][source_key] = evidence
+
+            tags = record["risk_tags"]
+            triggers = record["trigger_conditions"]
+            invalid = record["invalid_conditions"]
+            if any(not isinstance(values, list) or any(not _nonblank(v) for v in values)
+                   for values in (tags, triggers, invalid)):
+                raise ResultEffectsError(f"{where} tags/conditions 须为非空 str list")
+            for tag in tags:
+                _add_tag(effects, tag.strip(), evidence_ref=evidence)
+            for value, target in ((triggers, effects["trigger_conditions"]),
+                                  (invalid, effects["invalid_conditions"])):
+                for item in value:
+                    item = item.strip()
+                    if item not in target:
+                        target.append(item)
+
+            multiplier = record["size_multiplier"]
+            if multiplier is not None:
+                _add_size_reduction(effects, source, multiplier, evidence)
+            cap = record["confidence_cap"]
+            if cap is not None:
+                _add_cap(effects, source, cap, evidence)
+            override = record["action_override"]
+            if override is not None:
+                if not (isinstance(override, dict)
+                        and set(override) == {"final_action", "observe_reason_type"}):
+                    raise ResultEffectsError(f"{where}.action_override 形状非法")
+                if effects.get("action_override") is not None:
+                    raise ResultEffectsError(f"{ticker}: multiple action overrides are not allowed")
+                if row.get("final_action") in _EXIT_OR_REDUCE:
+                    raise ResultEffectsError(f"{ticker}: protective exit/reduce action cannot be overridden")
+                err = action_reason_error(override["final_action"], override["observe_reason_type"])
+                if err:
+                    raise ResultEffectsError(err)
+                effects["action_override"] = {
+                    **override, "source": source, "evidence_ref": evidence,
+                }
+
+        override = effects.get("action_override")
+        action = override["final_action"] if isinstance(override, dict) else row.get("final_action")
+        reason = override["observe_reason_type"] if isinstance(override, dict) else row.get("observe_reason_type")
+        err = action_reason_error(action, reason)
+        if err:
+            raise ResultEffectsError(err)
+        effects = _finalize_effects(effects, action)
+        out.append({
+            **row,
+            "final_action": action,
+            "observe_reason_type": reason,
+            "result_effects": effects,
+            "action_confidence": effects["action_confidence"],
+            "risk_tags": list(effects["risk_tags"]),
+            "trigger_conditions": list(effects["trigger_conditions"]),
+            "invalid_conditions": list(effects["invalid_conditions"]),
+            "upcoming_events": list(effects["upcoming_events"]),
+        })
+    if set(effects_by_ticker) != seen:
+        raise ResultEffectsError("effects_by_ticker 须恰覆盖 result rows")
+    return {**result, "rows": out}
 
 
 def finalize_result_effects(result):

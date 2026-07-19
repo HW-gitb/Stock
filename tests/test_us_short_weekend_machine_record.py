@@ -93,7 +93,12 @@ def _second_cut_effect_row(*, forward_event=None, event_data_gap=None):
                                          "kind": "source_id", "value": "test:cooldown", "as_of": _AS_OF}}},
         as_of=_AS_OF,
     )["rows"][0]
-    return {**_row(), **effected}
+    return {**_row(), **effected,
+            "theme_context": {"theme_id": "industry:aaa", "theme_source": "industry_heat_v1",
+                              "theme_lifecycle_state": "confirmed_active", "macro_cluster": "ai_complex",
+                              "evidence_ref": {"kind": "source_id", "value": "test:theme:AAA", "as_of": _AS_OF}},
+            "macro_cluster": "ai_complex", "macro_cluster_exposure_frac": 0.1,
+            "macro_cluster_warning_level": "none", "macro_cluster_size_adjustment": 0}
 
 
 def _fr_by_id(record, field_id, ri=0):

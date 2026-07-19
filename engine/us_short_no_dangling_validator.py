@@ -104,7 +104,7 @@ def _result(violations):
 MANIFEST_FIELD_IDS = frozenset({
     "hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing",
     "theme_lifecycle_state", "theme_opportunity_state", "forward_event", "event_data_gap",
-    "portfolio_guard", "symbol_cooldown",
+    "portfolio_guard", "symbol_cooldown", "theme_id", "theme_source", "macro_cluster",
 })
 _BUILD_ACTIONS = frozenset({"建仓", "加仓"})  # a build is by contract a scored + sized candidate (§8 / machine-record)
 
@@ -129,7 +129,11 @@ def official_expected_field_ids(row):
     if isinstance(sizing, dict) and sizing.get("status") == "sized":
         expected.add("sizing")
     if isinstance(row.get("theme_probe"), dict):
-        expected.update(("theme_lifecycle_state", "theme_opportunity_state"))
+        expected.add("theme_opportunity_state")
+        if not isinstance(row.get("theme_context"), dict):
+            expected.add("theme_lifecycle_state")
+    if isinstance(row.get("theme_context"), dict):
+        expected.update(("theme_id", "theme_source", "theme_lifecycle_state", "macro_cluster"))
     if isinstance(row.get("forward_event"), dict):
         expected.add("forward_event")
     if isinstance(row.get("event_data_gap"), dict):

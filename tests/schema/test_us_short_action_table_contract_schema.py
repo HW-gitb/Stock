@@ -42,7 +42,7 @@ EXPECTED_ENUMS = {
     "live_permission_status": ["paper_or_minimal_only", "not_full_size_eligible", "full_size_eligible"],
     "coverage_status": ["full", "partial", "restricted", "blocked"],
     "theme_lifecycle_state": ["provisional_active", "confirmed_active", "cooling", "decayed", "retired"],
-    "theme_source": ["gics_established", "provisional_discovered"],            # §4.3 l148 (parenthetical convention)
+    "theme_source": ["industry_heat_v1", "gics_established", "provisional_discovered"],
     "macro_cluster_warning_level": ["none", "elevated", "high"],              # §8 l228 (labels locked; frac thresholds = §13 #31)
 }
 
@@ -77,7 +77,7 @@ class UsShortActionTableContract(unittest.TestCase):
         jsonschema.validate(self.preset, self.schema)
 
     def test_core_columns_count_and_unique(self):
-        self.assertEqual(len(self.cols), 54)
+        self.assertEqual(len(self.cols), 55)
         self.assertEqual(len(self.cols), len(set(self.cols)), "duplicate column id")
 
     def test_core_columns_byte_faithful_to_design_11_3(self):

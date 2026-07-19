@@ -57,6 +57,12 @@ from engine.us_short_result_effects import (
     load_portfolio_guard_state,
     unavailable_cooldown_records,
 )
+from engine.us_short_macro_cluster import apply_macro_cluster_two_pass
+from engine.us_short_theme_result_linkage import (
+    ThemeResultLinkageError,
+    apply_theme_lifecycle_effects,
+    bind_theme_contexts,
+)
 from engine.us_short_symbol_cooldown_state import (
     STATE_FILENAME as SYMBOL_COOLDOWN_STATE_FILENAME,
     SymbolCooldownStateError,
@@ -84,7 +90,6 @@ from engine.us_short_weekend_machine_record import assemble_machine_record
 from engine.us_short_weekend_pipeline import run_selection
 from engine.us_short_weekend_private_write import write_run_private
 from engine.us_short_weekend_report import build_weekly_report
-from engine.us_short_weekend_sizing import size_rows
 
 # the closed-world injected context for one weekend run (batch4 offline fixture; batch5 fills from provider).
 _PIPELINE_CONTEXT_KEYS = frozenset({
@@ -200,14 +205,18 @@ def _build_analysis_rows(selection, per_ticker_analysis):
     # scores) onto each admitted row so analysis → machine record → report can RECONCILE + display it
     # (R-USSHORT-BATCH4-SELECTION-TRACE-AND-RECALL-CLOSURE-GAP); a holding-only row (not in Top15) carries None.
     sel_records = {}
+    selection_themes = {}
     for d in selection.get("selection_details") or []:
-        sel_records[canonical_us_ticker(d.get("ticker"))] = {
+        ticker = canonical_us_ticker(d.get("ticker"))
+        sel_records[ticker] = {
             "selection_rank": d["selection_rank"], "selection_bucket": d["selection_bucket"],
             "core_score": d["core_score"], "theme_momentum_score": d["theme_momentum_score"]}
-    return [{**canon_map[ct], "selection_record": sel_records.get(ct)} for ct in union_order]
+        selection_themes[ticker] = dict(d["theme_selection"])
+    return [{**canon_map[ct], "selection_record": sel_records.get(ct),
+             "selection_theme": selection_themes.get(ct)} for ct in union_order]
 
 
-def _portfolio_capacity_context(selection, analysis_rows, *, account_state, basket_context, sizing_context, available_cash,
+def _portfolio_capacity_context(selection, analysis_rows, *, account_state, sizing_context, available_cash,
                                 decision_date):
     """Bind §8 dollar-cap inputs to the same account, holding rows, prices, and themes this run consumes.
 
@@ -229,10 +238,6 @@ def _portfolio_capacity_context(selection, analysis_rows, *, account_state, bask
         raise WeekendOrchestratorError("account_state.us_short_available_cash 须为非负有限数")
     if abs(float(bucket) - float(sizing_bucket)) > 1e-9 or available_cash != cash:
         raise WeekendOrchestratorError("账户 bucket/cash 与本次 sizing/cash 输入不一致（容量不得分叉）")
-    if not isinstance(basket_context, dict):
-        raise WeekendOrchestratorError("basket_context 须为 dict")
-    holding_themes = basket_context.get("holding_themes")
-
     account_positions, account_tickers = {}, set()
     for position in account_state["positions"]:
         ticker = canonical_us_ticker(position.get("ticker")) if isinstance(position, dict) else None
@@ -246,28 +251,76 @@ def _portfolio_capacity_context(selection, analysis_rows, *, account_state, bask
         raise WeekendOrchestratorError("selection holdings 与 account_state.positions 须一一对应（容量覆盖不得漏持仓）")
 
     rows_by_ticker = {row["ticker"]: row for row in analysis_rows}
-    if not isinstance(holding_themes, dict):
-        theme_by_ticker = {}
-    else:
-        theme_by_ticker = {}
-        for key, value in holding_themes.items():
-            ticker = canonical_us_ticker(key)
-            if ticker is None or ticker in theme_by_ticker:
-                theme_by_ticker = {}
-                break
-            theme_by_ticker[ticker] = value.strip().casefold() if isinstance(value, str) and value.strip() else None
-        if set(theme_by_ticker) != account_tickers:
-            theme_by_ticker = {}
-
     existing_positions = []
     for ticker in sorted(account_tickers):
         row = rows_by_ticker.get(ticker)
         price_input = row.get("price_input") if isinstance(row, dict) else None
         close = price_input.get("close") if isinstance(price_input, dict) else None
         mark = float(close) if isinstance(close, (int, float)) and not isinstance(close, bool) and math.isfinite(close) and close > 0.0 else None
+        theme = row.get("theme_context") if isinstance(row, dict) else None
+        theme_id = theme.get("theme_id") if isinstance(theme, dict) else None
         existing_positions.append({"ticker": ticker, "shares": account_positions[ticker]["shares"],
-                                   "mark_price": mark, "theme": theme_by_ticker.get(ticker)})
+                                   "mark_price": mark, "theme": theme_id})
     return {"short_bucket_dollars": float(bucket), "existing_positions": existing_positions}
+
+
+def _macro_existing_positions(account_state, analysis_rows):
+    """Private in-memory current-holding exposure for the Cut3 provisional macro pass."""
+    rows = {row["ticker"]: row for row in analysis_rows}
+    out = []
+    for position in account_state.get("positions", []):
+        ticker = canonical_us_ticker(position.get("ticker")) if isinstance(position, dict) else None
+        row = rows.get(ticker)
+        price_input = row.get("price_input") if isinstance(row, dict) else None
+        mark = price_input.get("close") if isinstance(price_input, dict) else None
+        theme = row.get("theme_context") if isinstance(row, dict) else None
+        cluster = theme.get("macro_cluster") if isinstance(theme, dict) else None
+        out.append({"ticker": ticker, "shares": position.get("shares"), "mark_price": mark,
+                    "macro_cluster": cluster})
+    return out
+
+
+def _runtime_basket_context(rows, supplied):
+    """Join source-bound theme facts to the non-theme probe inputs; callers cannot inject theme defaults."""
+    if not (isinstance(supplied, dict)
+            and set(supplied) == {"per_ticker", "theme_opportunity_state"}
+            and isinstance(supplied["per_ticker"], dict)):
+        raise WeekendOrchestratorError(
+            "basket_context 须为 {'per_ticker','theme_opportunity_state'}；theme/lifecycle 由正式行生成")
+    expected_source, by_ticker = set(), {}
+    for row in rows:
+        ticker = row["ticker"]
+        override = ((row.get("result_effects") or {}).get("action_override")
+                    if isinstance(row.get("result_effects"), dict) else None)
+        consumes_probe = row.get("final_action") == "建仓" or (
+            row.get("final_action") == "观察" and isinstance(override, dict)
+            and override.get("final_action") == "观察"
+        )
+        # A second-pass macro discount may turn a provisionally sized build into below-minimum observe.  The
+        # bridge legitimately supplied that build's probe before the internal second pass, so validate and
+        # consume the source identity without feeding an inapplicable row into the basket resolver.
+        source_supplied = consumes_probe or isinstance(row.get("sizing"), dict)
+        if source_supplied:
+            expected_source.add(ticker)
+            theme = row.get("theme_context")
+            if not isinstance(theme, dict):
+                raise WeekendOrchestratorError(f"{ticker}: build/effect-observe 缺 theme_context")
+            raw = supplied["per_ticker"].get(ticker)
+            probe = raw.get("theme_probe") if isinstance(raw, dict) else None
+            if not (isinstance(raw, dict) and set(raw) == {"theme_probe"}
+                    and isinstance(probe, dict)
+                    and set(probe) == {"high_confidence", "coverage_status", "no_gap_week", "entry_in_band"}):
+                raise WeekendOrchestratorError(f"{ticker}: basket probe source fields 非法")
+            if consumes_probe:
+                by_ticker[ticker] = {
+                    "theme": theme["theme_id"],
+                    "theme_probe": {"theme_lifecycle_state": theme["theme_lifecycle_state"], **probe},
+                }
+    if set(supplied["per_ticker"]) != expected_source:
+        raise WeekendOrchestratorError(
+            "basket_context.per_ticker 须恰覆盖 provisional build/effect-observe source rows")
+    return {"per_ticker": by_ticker, "holding_themes": {},
+            "theme_opportunity_state": supplied["theme_opportunity_state"]}
 
 
 def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", research_live_capability=None):
@@ -364,9 +417,16 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         holding_contexts = build_holding_action_context(pc["account_state"], prior_holding_state)
     except HoldingActionError:
         holding_contexts, state_writable = {}, False
+    built_rows = _build_analysis_rows(selection, pc["per_ticker_analysis"])
+    try:
+        themed_rows, _ = bind_theme_contexts(   # 2nd flag intentionally unused: missing-recon new-build block is enforced downstream by the cash-capacity stage
+
+            selection, built_rows, account_state=pc["account_state"], decision_date=decision_date,
+            selection_input_provenance=pc["run_provenance"]["families"]["selection_inputs"])
+    except ThemeResultLinkageError as exc:
+        raise WeekendOrchestratorError(f"Cut3 theme linkage rejected: {exc}") from exc
     rows = attach_holding_action_context(
-        _build_analysis_rows(selection, pc["per_ticker_analysis"]), holding_contexts,
-        price_basis_date=selection["price_basis_date"])
+        themed_rows, holding_contexts, price_basis_date=selection["price_basis_date"])
     # Second-cut account guard: the run-level status is classified from a source-bound model-paper record, not
     # copied from basket_context.  A corrupt previous private state never yields normal; the classifier receives
     # an invalid prior and therefore fails closed to caution, while the corrupt file is not overwritten.
@@ -393,15 +453,19 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         next_cooldown_state, cooldown_state_writable = None, False
         cooldown_by_ticker = unavailable_cooldown_records(rows, as_of=decision_date)
     portfolio_capacity = _portfolio_capacity_context(
-        selection, rows, account_state=pc["account_state"], basket_context=pc["basket_context"],
+        selection, rows, account_state=pc["account_state"],
         sizing_context=pc["sizing_context"], available_cash=pc["available_cash"], decision_date=decision_date)
     analysis = analyze_rows(rows, market_axis_regimes=pc["market_axis_regimes"],
                             prior_regime=pc["prior_regime"], prior_upgrade_count=pc["prior_upgrade_count"])
     decided = decide_actions(analysis)
     effected = apply_result_effects(decided, portfolio_guard_result=portfolio_guard_result,
                                     cooldown_by_ticker=cooldown_by_ticker, as_of=decision_date)
-    sized = size_rows(effected, sizing_context=pc["sizing_context"])
-    basket = resolve_build_capacity(sized, basket_context=pc["basket_context"])
+    lifecycle_effected = apply_theme_lifecycle_effects(effected, as_of=decision_date)
+    sized = apply_macro_cluster_two_pass(
+        lifecycle_effected, sizing_context=pc["sizing_context"],
+        existing_positions=_macro_existing_positions(pc["account_state"], rows), as_of=decision_date)
+    runtime_basket_context = _runtime_basket_context(sized["rows"], pc["basket_context"])
+    basket = resolve_build_capacity(sized, basket_context=runtime_basket_context)
     cost_floored = apply_probe_cost_floor(basket, cost_inputs=pc["cost_inputs"])
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"],
                                  portfolio_capacity=portfolio_capacity)

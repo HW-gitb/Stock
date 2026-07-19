@@ -39,6 +39,7 @@ _NON_EFFECT_TRANSITIVE_PATHS = frozenset({
     "engine/us_short_forward_policy_statistical_plan.py",
     "engine/us_short_private_paths.py",
     "engine/us_short_selection_exclusions.py",
+    "engine/us_short_hot_excluded.py",
 })
 
 

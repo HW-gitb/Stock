@@ -8,6 +8,8 @@ never invents a lifecycle state, a cross-industry theme, or a watchlist identity
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
@@ -18,15 +20,16 @@ THEME_SELECTION_MODES = (
     "industry_heat_v1_cross_industry_disabled",
     "provisional_cross_industry_enabled",
 )
-THEME_SOURCES = ("industry_heat_v1", "provisional_discovered")
+THEME_SOURCES = ("industry_heat_v1", "gics_established", "provisional_discovered")
 MEMBERSHIP_ORIGINS = ("automatic_discovery", "manual_watchlist")
 OVEREXTENSION_STATES = ("none", "warning", "chasing_extreme")
 _CONTRACT_KEYS = {
     "as_of", "mode", "cross_industry_provisional_enabled", "theme_opportunity_state", "per_ticker",
 }
+_AUDIT_KEYS = {"heat_threshold", "per_ticker"}
 _ROW_KEYS = {
     "theme_id", "theme_source", "theme_lifecycle_state", "theme_leader_rs", "membership_origin",
-    "market_confirmed", "individual_theme_gate_passed", "overextension_state",
+    "market_confirmed", "individual_theme_gate_passed", "overextension_state", "macro_cluster",
 }
 
 # §4.5 / §13 #29 forward priors.  These are selection rules, not execution sizing caps.
@@ -66,7 +69,7 @@ def validate_theme_selection_contract(contract, *, expected_tickers, decision_da
     Every candidate must have exactly one source-bound theme identity.  Cross-industry provisional themes are
     structurally impossible while the explicit industry-v1 mode is active.
     """
-    if not isinstance(contract, dict) or set(contract) != _CONTRACT_KEYS:
+    if not isinstance(contract, dict) or set(contract) not in (_CONTRACT_KEYS, _CONTRACT_KEYS | {"hot_excluded_audit"}):
         raise ThemeSelectionError("theme_selection_contract 顶层键漂移")
     if contract["as_of"] != decision_date:
         raise ThemeSelectionError("theme_selection_contract.as_of 必须等于本次 decision_date")
@@ -106,7 +109,8 @@ def validate_theme_selection_contract(contract, *, expected_tickers, decision_da
         if mode == "industry_heat_v1_cross_industry_disabled" and source != "industry_heat_v1":
             raise ThemeSelectionError("行业热度 v1 模式不得注入 provisional 跨行业主题")
         canonical_theme_id = _canonical_theme_id(row["theme_id"], where=f"{ticker}.theme_id")
-        theme_level_identity = (source, lifecycle, row["market_confirmed"])
+        macro_cluster = _canonical_theme_id(row["macro_cluster"], where=f"{ticker}.macro_cluster")
+        theme_level_identity = (source, lifecycle, row["market_confirmed"], macro_cluster)
         prior_identity = theme_identity.get(canonical_theme_id)
         if prior_identity is not None and prior_identity != theme_level_identity:
             raise ThemeSelectionError(
@@ -121,10 +125,33 @@ def validate_theme_selection_contract(contract, *, expected_tickers, decision_da
             "market_confirmed": row["market_confirmed"],
             "individual_theme_gate_passed": row["individual_theme_gate_passed"],
             "overextension_state": overextension,
+            "macro_cluster": macro_cluster,
         }
     if set(out) != expected:
         raise ThemeSelectionError("theme_selection_contract.per_ticker 须恰覆盖 Pass2-clean candidates")
-    return {"mode": mode, "per_ticker": out}
+    audit = None
+    if "hot_excluded_audit" in contract:
+        raw_audit = contract["hot_excluded_audit"]
+        if not isinstance(raw_audit, dict) or set(raw_audit) != _AUDIT_KEYS:
+            raise ThemeSelectionError("hot_excluded_audit 顶层键漂移")
+        threshold = _finite_number(raw_audit["heat_threshold"], where="hot_excluded_audit.heat_threshold")
+        if threshold < 0.0 or not isinstance(raw_audit["per_ticker"], dict):
+            raise ThemeSelectionError("hot_excluded_audit threshold/per_ticker 非法")
+        heat_by_ticker = {}
+        for raw_ticker, value in raw_audit["per_ticker"].items():
+            ticker = canonical_us_ticker(raw_ticker)
+            if ticker is None or ticker in heat_by_ticker:
+                raise ThemeSelectionError("hot_excluded_audit.per_ticker 含非法/重复 ticker")
+            score = _finite_number(value, where=f"hot_excluded_audit.per_ticker[{ticker}]")
+            if score < 0.0:
+                raise ThemeSelectionError("hot_excluded_audit heat score 须非负")
+            heat_by_ticker[ticker] = score
+        audit = {"heat_threshold": threshold, "per_ticker": heat_by_ticker}
+    digest = hashlib.sha256(
+        json.dumps(contract, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+    return {"mode": mode, "per_ticker": out, "contract_digest": digest,
+            "hot_excluded_audit": audit}
 
 
 def theme_seat_plan(*, metadata_by_ticker, scores_by_ticker, theme_seat_budget):

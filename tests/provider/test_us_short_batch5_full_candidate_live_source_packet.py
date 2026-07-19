@@ -365,6 +365,13 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             {row["theme_id"] for row in contract["per_ticker"].values()},
             {"industry:unclassified:aapl", "industry:unclassified:msft", "industry:unclassified:jpm"},
         )
+        self.assertEqual(contract["hot_excluded_audit"]["heat_threshold"], 80.0)
+        self.assertEqual(set(contract["hot_excluded_audit"]["per_ticker"]), {"AAPL", "MSFT", "JPM"})
+        written_context = json.loads(self.paths["output"].read_text(encoding="utf-8"))
+        self.assertEqual(
+            written_context["selection_inputs"]["theme_selection_contract"]["hot_excluded_audit"],
+            contract["hot_excluded_audit"],
+        )
 
         text = self.paths["summary"].read_text(encoding="utf-8")
         self.assertNotIn("UNIT_TEST_FMP_SECRET", text)

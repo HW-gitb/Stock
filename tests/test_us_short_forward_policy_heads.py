@@ -62,6 +62,7 @@ def _theme_selection_contract(tickers, *, state="no_strong_theme"):
                 "market_confirmed": True,
                 "individual_theme_gate_passed": True,
                 "overextension_state": "none",
+                "macro_cluster": "unclassified_conservative",
             }
             for ticker in tickers
         },

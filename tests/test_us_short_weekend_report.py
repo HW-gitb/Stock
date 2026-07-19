@@ -40,6 +40,12 @@ _HOLDING_AF = {
 }
 
 
+def _theme(ticker, cluster="ai_complex"):
+    return {"theme_id": "industry:" + ticker.lower(), "theme_source": "industry_heat_v1",
+            "theme_lifecycle_state": "confirmed_active", "macro_cluster": cluster,
+            "evidence_ref": {"kind": "source_id", "value": "test:theme:" + ticker, "as_of": _AS_OF}}
+
+
 def _candidate(ticker="AAA", final_action="建仓", observe_reason_type=None, executable=True, sized=True, af=None):
     row = {"ticker": ticker, "row_source": "top15_candidate", "final_action": final_action,
            "observe_reason_type": observe_reason_type, "row_context": "candidate", "selection_rank": 1,
@@ -49,7 +55,10 @@ def _candidate(ticker="AAA", final_action="建仓", observe_reason_type=None, ex
            "score": {"core_score": 50.0},
            "risk_downgrade": {"points": 0.0, "hard_veto": False, "components": {"history": 0.0, "current_event": 0.0, "analyst": 0.0}},
            "selection_record": {"selection_rank": 1, "selection_bucket": "core_top",   # top15_candidate = selected
-                                "core_score": 50.0, "theme_momentum_score": 0.0}}
+                                "core_score": 50.0, "theme_momentum_score": 0.0},
+           "theme_context": _theme(ticker), "macro_cluster": "ai_complex",
+           "macro_cluster_exposure_frac": 0.0, "macro_cluster_warning_level": "none",
+           "macro_cluster_size_adjustment": 0}
     if sized:
         row["sizing"] = {"status": "sized", "desired_model_shares": 10}
     return row
@@ -68,6 +77,9 @@ def _holding_in_top15(ticker="HLD", selection_rank=1):
     row["row_source"] = "holding_in_top15"
     row["selection_record"] = {"selection_rank": selection_rank, "selection_bucket": "overlap",
                                "core_score": 50.0, "theme_momentum_score": 50.0}
+    row.update({"theme_context": _theme(ticker), "macro_cluster": "ai_complex",
+                "macro_cluster_exposure_frac": 0.0, "macro_cluster_warning_level": "none",
+                "macro_cluster_size_adjustment": 0})
     return row
 
 
@@ -104,7 +116,6 @@ def _report_context(**ov):
         "coverage_inputs": [{"ticker": "HLD", "row_source": "holding_pass2_only",
                              "data_checks": {"analyst": "ok", "sec_parse": "ok", "event": "ok"}}],
         "core_conclusion": "本周核心结论占位", "risk_downgrade_note": "无重大降级",
-        "macro_cluster_banner": "",
     }
     rc.update(ov)
     return rc
@@ -126,7 +137,12 @@ def _stage_status(**ov):
 def _selection(as_of=_AS_OF, records=None):
     return {
         "decision_date": as_of,
+        "theme_contract_digest": "a" * 64,
         "exclusion_records": [] if records is None else records,
+        "hot_excluded_audit": {
+            "as_of": as_of, "source_digest": "a" * 64, "heat_threshold": None,
+            "rows": [], "unevaluable_count": 0,
+        },
         "theme_selection_mode": "industry_heat_v1_cross_industry_disabled",
         "full_analysis_leader_upgrades": [],
     }
@@ -256,9 +272,12 @@ class HappyAssembly(unittest.TestCase):
         self.assertNotIn("macro_cluster_warning", rd["banner"])   # ② omitted when blank
 
     def test_macro_cluster_banner_shown_when_present(self):
-        rd = _build_report(_machine_record(), _lifecycle_result(),
-                                    report_context=_report_context(macro_cluster_banner="3 建仓同属 AI 集群"))["report_data"]
-        self.assertEqual(rd["banner"]["macro_cluster_warning"], "3 建仓同属 AI 集群")
+        candidate = _candidate("AAA")
+        candidate.update({"macro_cluster_exposure_frac": 0.55,
+                          "macro_cluster_warning_level": "high", "risk_tags": ["macro_cluster:high"]})
+        rd = _build_report(_machine_record([candidate]), _lifecycle_result(),
+                           report_context=_report_context(coverage_inputs=[]))["report_data"]
+        self.assertIn("ai_complex=high(建仓候选1个,暴露55.0%)", rd["banner"]["macro_cluster_warning"])
 
     def test_row_sections_derive_from_machine_rows(self):
         rd = _build_report(_machine_record(), _lifecycle_result(), report_context=_report_context())["report_data"]

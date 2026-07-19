@@ -38,11 +38,12 @@ PRIVATE_RECORD_KEYS = frozenset({
     "source_context_sha256", "comparison_contract_sha256", "common_selection_pool",
     "baseline_epoch_sha256", "common_selection_pool_sha256", "selection_policies", "selection_decisions", "boundary",
 })
-SELECTION_DECISION_KEYS = frozenset({
+SELECTION_DECISION_KEYS_V1 = frozenset({
     "out_of_window", "decision_date", "price_basis_date", "run_date", "cheap_eligible", "candidates",
     "recall_available", "recall_added", "recall_excluded", "exclusion_records", "admitted",
     "selection_seats", "theme_selection_mode", "full_analysis_leader_upgrades", "selection_details", "holdings",
 })
+SELECTION_DECISION_KEYS = SELECTION_DECISION_KEYS_V1 | {"theme_contract_digest", "hot_excluded_audit"}
 BOUNDARY = {
     "track": "comparison_non_production",
     "evidence_level": "shadow_selection_only",
@@ -147,11 +148,14 @@ def _validate_decisions(decisions: object, *, decision_date: str, price_basis_da
     # frozen grid order remains carried explicitly in ``selection_policies`` and all per-head semantics are keyed.
     if not isinstance(decisions, dict) or set(decisions) != set(SELECTION_POLICY_IDS):
         raise ForwardPolicyShadowStageError("selection decisions must cover exactly the frozen immediate policy set")
+    decision_shapes = set()
     for policy_id, decision in decisions.items():
         if not isinstance(decision, dict):
             raise ForwardPolicyShadowStageError(f"{policy_id} selection decision must be a dict")
-        if set(decision) != SELECTION_DECISION_KEYS:
+        shape = frozenset(decision)
+        if shape not in {SELECTION_DECISION_KEYS_V1, SELECTION_DECISION_KEYS}:
             raise ForwardPolicyShadowStageError(f"{policy_id} selection decision shape drifted")
+        decision_shapes.add(shape)
         if decision.get("out_of_window") is not False:
             raise ForwardPolicyShadowStageError(f"{policy_id} did not materialize in the live decision window")
         if decision.get("decision_date") != decision_date or decision.get("price_basis_date") != price_basis_date:
@@ -161,6 +165,8 @@ def _validate_decisions(decisions: object, *, decision_date: str, price_basis_da
             not isinstance(ticker, str) or not ticker for ticker in admitted
         ):
             raise ForwardPolicyShadowStageError(f"{policy_id} admitted selection is not a unique ticker list")
+    if len(decision_shapes) != 1:
+        raise ForwardPolicyShadowStageError("selection decisions mix legacy/current capture shapes")
     return decisions
 
 

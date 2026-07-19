@@ -453,6 +453,7 @@ def _theme_selection_contract(tickers, *, state="strong"):
                 "theme_lifecycle_state": "confirmed_active", "theme_leader_rs": 0.0,
                 "membership_origin": "automatic_discovery", "market_confirmed": True,
                 "individual_theme_gate_passed": True, "overextension_state": "none",
+                "macro_cluster": "unclassified_conservative",
             }
             for ticker in tickers
         },

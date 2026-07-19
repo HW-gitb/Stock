@@ -100,7 +100,7 @@ def hot_excluded_summary(excluded_rows, *, heat_threshold) -> dict:
 
 def render_hot_excluded_banner(summary) -> str:
     """Render the §11.2 honest-banner ⑤ string from a ``hot_excluded_summary`` output. Returns a NON-BLANK
-    one-line string carrying ONLY the de-identified ``public_heat_count`` — the ``holdings`` (real-position
+    one-line string carrying ONLY de-identified ``public_heat_count`` + ``unevaluable_count`` — holdings (real-position
     tickers) are PRIVATE and are NEVER rendered into the tracked banner (§11.4 持仓票私密拆分; §11.6). Raises
     ``HotExcludedError`` on a malformed summary / count (a non-dict, a missing / non-int / bool / negative count)."""
     if not isinstance(summary, dict):
@@ -108,4 +108,10 @@ def render_hot_excluded_banner(summary) -> str:
     n = summary.get("public_heat_count")
     if not (isinstance(n, int) and not isinstance(n, bool) and n >= 0):
         raise HotExcludedError("public_heat_count must be a non-negative int, got %r" % (n,))
-    return "本周高热度被剔除 %d 只（公开 universe 计数，仅审计·绝不救回 hard veto / 不改准入，喂 §13 复审）。" % (n,)
+    unevaluable = summary.get("unevaluable_count", 0)
+    if not (isinstance(unevaluable, int) and not isinstance(unevaluable, bool) and unevaluable >= 0):
+        raise HotExcludedError("unevaluable_count must be a non-negative int, got %r" % (unevaluable,))
+    return (
+        "本周高热度被剔除 %d 只（公开 universe 计数，仅审计·绝不救回 hard veto / 不改准入）；"
+        "缺同轮主题热度、未能评估 %d 只（喂 §13 复审）。" % (n, unevaluable)
+    )

@@ -36,7 +36,8 @@ def _good_input(**over):
             CATS[1]: {"public_count": 1, "holdings": []},
             CATS[7]: {"public_count": 2},  # holdings omitted
         },
-        "hot_excluded": {"public_heat_count": 2, "holdings": [{"ticker": "NVDA", "reason": "liquidity_gate"}]},
+        "hot_excluded": {"public_heat_count": 2, "unevaluable_count": 1,
+                         "holdings": [{"ticker": "NVDA", "reason": "liquidity_gate"}]},
     }
     d.update(over)
     return d
@@ -59,6 +60,7 @@ class PrivacySplit(unittest.TestCase):
         self.assertEqual(pub["category_counts"][CATS[0]], 3)
         self.assertEqual(pub["total_excluded"], 3 + 1 + 2)
         self.assertEqual(pub["hot_excluded_public_heat_count"], 2)
+        self.assertEqual(pub["hot_excluded_unevaluable_count"], 1)
 
     def test_result_keys_are_only_public_private(self):  # structural: a summary producer, never an admission/veto path
         self.assertEqual(set(es.build_exclusion_summary(_good_input())), {"public", "private"})
@@ -89,6 +91,12 @@ class CountWholeClassFailsClosed(unittest.TestCase):
         for bad in (True, 1.5, "2", -1):
             with self.assertRaises(es.ExclusionSummaryError, msg=repr(bad)):
                 es.build_exclusion_summary(_good_input(hot_excluded={"public_heat_count": bad}))
+
+    def test_bad_hot_unevaluable_count_refused(self):
+        for bad in (True, 1.5, "2", -1):
+            with self.assertRaises(es.ExclusionSummaryError, msg=repr(bad)):
+                es.build_exclusion_summary(_good_input(
+                    hot_excluded={"public_heat_count": 0, "unevaluable_count": bad}))
 
     def test_zero_exclusions_valid(self):  # positive control: an empty quiet week is legitimate
         pub = es.build_exclusion_summary(_good_input(categories={}, hot_excluded={}))["public"]
@@ -173,6 +181,7 @@ class SectionRender(unittest.TestCase):
             self.assertIn(cat, joined)
         self.assertIn("本周剔除 6 只", joined)
         self.assertIn("hot_excluded", joined)
+        self.assertIn("未能评估", joined)
         self.assertIn("绝不救回", joined)  # audit-only intent surfaced (never rescues hard veto)
         for ticker in ("AAPL", "MSFT", "NVDA"):  # de-identified section
             self.assertNotIn(ticker, joined)

@@ -34,7 +34,7 @@ from engine.us_short_eligibility_gate import (
     pass2_safety_admit,
     validate_eligibility_governance,
 )
-from engine.us_short_selection_exclusions import pass1_category, pass2_category
+from engine.us_short_selection_exclusions import build_hot_excluded_audit, pass1_category, pass2_category
 from engine.us_short_dynamic_seats import strong_theme_leader_upgrade_max
 from engine.us_short_theme_selection import (
     MANUAL_WATCHLIST_MAX,
@@ -214,6 +214,8 @@ def _select_top15(admitted_candidates, selection_inputs, *, decision_date):
         details[ticker]["full_analysis_leader_upgrade"] = True
     return {"admitted": selected, "selection_seats": seats,
             "theme_selection_mode": theme_contract["mode"],
+            "theme_contract_digest": theme_contract["contract_digest"],
+            "hot_excluded_heat_audit": theme_contract["hot_excluded_audit"],
             "full_analysis_leader_upgrades": leader_upgrades,
             "selection_details": [{**details[t], "selection_rank": i}
                                   for i, t in enumerate(selected, start=1)]}
@@ -255,6 +257,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
             "recall_excluded": [],
             "exclusion_records": [],
             "admitted": [], "selection_seats": None, "theme_selection_mode": None,
+            "theme_contract_digest": None,
+            "hot_excluded_audit": None,
             "full_analysis_leader_upgrades": [], "selection_details": [], "holdings": [],
         }
 
@@ -329,6 +333,9 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
                 "stage": "top15_selection", "ticker": ticker, "category": "分不够",
                 "reasons": ["outside_top15_by_frozen_selection_rank"],
             })
+    hot_excluded_audit = build_hot_excluded_audit(
+        exclusion_records, heat_audit=top15["hot_excluded_heat_audit"],
+        as_of=canon["decision_date"], source_digest=top15["theme_contract_digest"])
 
     # Holdings forced into Pass2 (§4.0); canonicalize identity with the SAME policy as candidates
     # (no second identity space; reject invalid / A-share-code / post-canonical duplicate); veto surfaced.
@@ -358,6 +365,8 @@ def run_selection(now_et, sessions, data_context, *, eligibility_governance):
         "admitted": top15["admitted"],
         "selection_seats": top15["selection_seats"],
         "theme_selection_mode": top15["theme_selection_mode"],
+        "theme_contract_digest": top15["theme_contract_digest"],
+        "hot_excluded_audit": hot_excluded_audit,
         "full_analysis_leader_upgrades": top15["full_analysis_leader_upgrades"],
         "selection_details": top15["selection_details"],
         "holdings": holdings,
