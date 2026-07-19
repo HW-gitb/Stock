@@ -1,0 +1,34 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "us_short_holding_action_state",
+  "title": "US-short private holding TP action state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "positions"],
+  "properties": {
+    "schema_name": {"const": "us_short_holding_action_state"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "positions": {"type": "array", "items": {"$ref": "#/definitions/position"}}
+  },
+  "definitions": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "entry_date", "tp1_completed", "tp1_completed_at", "active_tp1_price", "active_tp2_price", "levels_as_of", "remaining_shares", "source_reconciliation_ref", "price_session", "price_adjustment"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9]{0,5}([.\\-][A-Z]{1,3})?$"},
+        "entry_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "tp1_completed": {"type": "boolean"},
+        "tp1_completed_at": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "active_tp1_price": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "active_tp2_price": {"type": ["number", "null"], "exclusiveMinimum": 0},
+        "levels_as_of": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+        "remaining_shares": {"type": "integer", "exclusiveMinimum": 0, "maximum": 1000000000},
+        "source_reconciliation_ref": {"type": "string", "minLength": 1},
+        "price_session": {"const": "RTH"},
+        "price_adjustment": {"const": "split_adjusted"}
+      }
+    }
+  }
+}

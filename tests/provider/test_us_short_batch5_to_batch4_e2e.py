@@ -55,6 +55,12 @@ def _empty_account() -> dict:
         "us_short_bucket_capital": 10000.0,
         "us_short_available_cash": 4000.0,
         "positions": [],
+        "holding_action_reconciliation": {
+            "schema_name": "us_short_holding_action_reconciliation", "schema_version": "1.0.0",
+            "as_of": _DECISION_DATE, "positions": []},
+        "symbol_cooldown_reconciliation": {
+            "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": _DECISION_DATE, "events": []},
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }

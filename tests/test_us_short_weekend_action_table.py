@@ -86,6 +86,7 @@ class Projection(unittest.TestCase):
     def test_sizing_shares_lifted(self):
         flat = at.flatten_machine_record(_machine_record([_candidate()]))
         self.assertEqual(flat["rows"][0]["model_position_size_shares"], 10)
+        self.assertEqual(flat["rows"][0]["recommended_action_shares"], 10)
 
     def test_selection_bucket_projected(self):
         # the preserved Top15 selection_bucket lands on its frozen §11.3 column via the threaded selection_record

@@ -129,6 +129,7 @@ class DecideActionsTests(unittest.TestCase):
     def test_emitted_vocab_within_frozen_contract(self):
         emitted = {wd._A_REJECT, wd._A_OBSERVE, wd._A_BUILD, wd._A_HOLD, wd._A_CLEAR_EVENT, wd._A_CLEAR_STOP}
         self.assertTrue(emitted <= set(wd.FINAL_ACTIONS))
+        self.assertNotIn("加仓", emitted)
         self.assertTrue({wd._R_DATA_RESTRICTED, wd._R_PRICE_NOT_EXEC} <= set(wd.OBSERVE_REASONS))
         for a in emitted:
             action_group(a)  # every emitted final_action must be rank_actions-compatible (no ValueError)

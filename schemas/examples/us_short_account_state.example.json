@@ -26,6 +26,35 @@
       "notes": null
     }
   ],
+  "holding_action_reconciliation": {
+    "schema_name": "us_short_holding_action_reconciliation",
+    "schema_version": "1.0.0",
+    "as_of": "20260622",
+    "positions": [
+      {
+        "ticker": "AAPL",
+        "entry_date": "20260601",
+        "remaining_shares": 10,
+        "tp1_completed": false,
+        "tp1_completed_at": null,
+        "source_reconciliation_ref": "example:manual_account:AAPL"
+      },
+      {
+        "ticker": "BRK.B",
+        "entry_date": "20260520",
+        "remaining_shares": 5,
+        "tp1_completed": false,
+        "tp1_completed_at": null,
+        "source_reconciliation_ref": "example:manual_account:BRK.B"
+      }
+    ]
+  },
+  "symbol_cooldown_reconciliation": {
+    "schema_name": "us_short_symbol_cooldown_reconciliation",
+    "schema_version": "1.0.0",
+    "as_of": "20260622",
+    "events": []
+  },
   "manual_order_only": true,
   "broker_connection_allowed": false
 }

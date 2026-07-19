@@ -1,5 +1,33 @@
 # Session Log
 
+## 2026-07-19 — Claude Code 独立复审（US-short 结果联动 cut 1+2，a039 未提交）：PASS（4517 OK，上一版 FAIL 项全闭）
+
+- **Verdict/Action**: PASS。用户裁定范围=cut 1+2 一起复审（本 diff = holding_action〔cut1〕+ result_effects/portfolio_guard/symbol_cooldown〔cut2〕）。上一版复审 FAIL 的四项已全闭：①全量测试红→现 4517 OK（E2E 用 fail-closed 默认 `_unavailable_paper_track`=paper_evaluable:False 接新输入+真样例、非占位）②P1 `op="减仓"`→`降仓`（machine_record 206/224，+reduce_caution 机器记录测试盖盲区）③强制止损/事件被降级成观察→现即使对账不可信也放行退出（股数留空+人工核对），且坏对账行只污染自己 ticker（build_holding_action_context 逐行隔离）④P3 huge-int→`MAX_MANUAL_HOLDING_SHARES`、PIT `tp1_completed_at>as_of` 拒绝。新核 cut2 承重缝均符设计：result_effects 取最狠单一折扣不连乘/不二次扣 risk_downgrade、override 不吞持仓减清、guard fail-safe+§8 weekly_limit、cooldown fail-closed、no-dangling 反向完整性无伪造洞、设计 §6.1/§9/§13#34 同步忠实。
+- **Required**: 无。4 项 Optional（非阻断，均设计取舍/不可达防御，非机械 bug）：TP1 减仓走往返成本偏保守 / 10% 冻结钉法 vs config 可调 / 冷静期缺状态→当周零新建 fail-safe / `_EVENT_CLAIMS` 加 `.get` 防御。逐条裁决 + 覆盖边界单源在桌面 `us_cut1_review.md`（非 repo register；无 running-system 风险）。
+- **Verify**: 亲跑全量 `discover -s tests -p test_us_short*.py` = **4517 OK**（我自跑、非采信）；亲读全部 delta（holding_action planner/隔离、decision 缝、orchestrator 接线、result_effects、machine_record、sizing/basket、context builder fail-safe）+ 自跑探针（原 `op=减仓` 崩、现 `降仓` 清）。独立对抗 agent 覆盖修复前广度（schema/account_state/固定类/测试充分性 clean）；修复后 delta 外科式只增安全、我逐条亲验+全量重跑，未在修复后重跑 agent（判不成比例，声明覆盖边界）。review-evidence:not_available（全真实工具输出）。
+- **Next**: 工程 PASS 可落地。落点 a039→wt/us-short→master 待用户令（a039 detached HEAD，不擅自 reconcile/提交）；Optional 打包 Codex 顺清、其中 10% 钉法与冷静期口径两项属用户设计决策。
+
+## 2026-07-19 — Codex repair execution (US-short result-linkage cuts 1+2; uncommitted)
+- **Verdict/Action**: Repaired every Required/P3 item in `us_cut1_review.md`, without entering cut 3: restored the batch4/batch5 source chain (`paper_track` plus both private reconciliations), made packet examples/schema consume that source contract directly, and removed the obsolete caller-supplied cooldown status. Fixed formal event records to use the legal `降仓` impact and defensive claim reads. A triggered `清仓-事件`/`清仓-止损` now remains an action with its price when share reconciliation is untrusted; its quantity stays blank and `decision_trace` requires manual share confirmation. A malformed reconciliation row is isolated to its own ticker. Added the manual-share ceiling, future-TP1-date rejection, and the intentional action-governance const golden update.
+- **Required**: No known remaining Required in the reviewed scope. This is one repair cut for the existing cut 1+2 working tree, not an implementation of cut 3.
+- **Verify**: All discovered `test_us_short*.py` modules passed when run in tool-safe groups: schema 929 + provider 776 (1 skipped) + root 2812 = **4517 passed, 0 failed/error**. Focused repair packs: batch4/batch5 entry seam 43 OK; holding/account/machine/decision 207 OK; cut-2/contract/orchestrator 263 OK. `py_compile` 35 files, JSON parse 14 files, and `git diff --check` passed (only existing CRLF conversion notices).
+- **Pre-Codex self-review**: A：覆盖原 13 条入口断链、两条 `reduce_caution` 机器记录路径、事件/止损保命出口、单行对账隔离、超大数量和未来 TP1 日期；B：核对 `paper_track`/私有对账均从正式 packet 到最终 action/机器记录，不再读取悬空 cooldown 输入；C：新增反向测试钉住“不可吞止损、不可猜股数、坏一行不拖全组合”；D：无自然语言分类；E：只更新 US-short 权威设计、contract 与本交接，不改 CURRENT；F：主线程按 checklist 自审，当前协作限制不启用子 agent。
+- **Next**: Claude Code：独立复审当前未提交 US-short 结果联动 cut 1+2 修复；PASS 后提交，勿扩到 cut 3。
+
+## 2026-07-19 — Codex execution (US-short result-linkage cut 2; uncommitted)
+- **Verdict/Action**: Implemented the second linkage cut: source-bound `result_effects` with forward/reverse no-dangling validation; event and event-data-gap effects; paper-track portfolio guard (`normal` / `caution` / `recovery` / fail-safe `data_degraded`); reconciled 20-calendar-day symbol cooldown; and machine-record-derived action table / report projections. This builds on the already-uncommitted cut 1 and does not enter cut 3/4 scope.
+- **Required**: No new known unaddressed finding. Missing or malformed paper / cooldown reconciliation data fails closed into `data_degraded` or `in_cooldown`; unfilled signals cannot create a cooldown event; re-entry requires expiry plus new catalyst and structure evidence.
+- **Verify**: Targeted linkage pack 536 OK; second-cut core regression 292 OK; schema / contract pack 127 OK; provider capstone 79 OK; final focused regression 168 OK; `py_compile`, relevant JSON parse, and `git diff --check` OK. `discover -s tests -p test_us_short*.py` exceeded 60 seconds and is not passing evidence.
+- **Next**: Claude Code: independently review the US-short result-linkage cut 2 plus its dependency on uncommitted cut 1; commit only after PASS; do not expand into macro/theme or provider/source-change work.
+
+## 2026-07-19 — Codex 执行（US-short 结果联动第一刀；待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已实现第一刀且未提交：持仓 TP1 到达上一轮私有目标价时建议减对账后剩余股数的固定 10%，TP2 建议清仓全部剩余股数；事件/止损仍优先。`recommended_action_shares` 已进入机器记录、`action_table.csv` 与周报一眼表；`model_position_size_shares` 不再被当作卖出数量。首次运行只播种私有 TP1/TP2；只有人工 `trades.csv` 的已执行`减仓`才会确认 TP1，未对账/状态损坏一律观察；不产生加仓，不做移保本、ratchet 或多日主动管理。
+- **Required**: 无新增未修复 finding。第一层刻意边界：TP1 成本输入缺失或不通过、或 10% 向下取整不足 1 股时保持且不给 0 股订单；第二层持仓管理和加仓仍按设计冻结。
+- **Verify**: 目标闭环包 411 OK（含两轮 pipeline：首次私有状态播种→下一轮 TP1=`减仓` 10 股且未伪造已执行）；no-dangling/report/action-table 201 OK；schema/contract/renderer 99 OK；doc process 60 OK；`py_compile`、JSON parse、`git diff --check` OK。`discover -s tests -p test_us_short*.py` 在 120 秒仅输出通过点位后超时，未作为通过证据。
+- **Pre-Codex self-review**: A：覆盖 TP1/TP2/事件/止损、TP1 已完成、少于 1 股、成本缺失、状态不可信、首次播种和不产生加仓；B：核对 action→价格映射、机器记录、action table、周报和私有写入同一 `action_proposal`；C：加“建议不等于成交”、TP1 不重复和 0 股禁止回归；D：无自然语言分类；E：只更新 US-short 权威设计与本交接，不改 CURRENT；F：主线程按 checklist 自审（当前协作限制不启用子 agent），固定包集中运行并完成最终 diff/编码检查。
+- **Next**: Claude Code：仅审 US-short 结果联动第一刀；PASS 后提交本切片。
+
 ## 2026-07-18 — Claude Code 修复 US-short A1 corporate-action fetch 两处硬化 Optional（用户命修，自审 PASS，提交 master）
 
 - **Verdict/Action**: 修复 producer fetch adapter 两处对畸形 provider 数据的未捕获崩溃（均 fail-closed 硬化）：`_continuation_url` 包裹 `parsed.port` → 坏端口→`unsafe_continuation`；`_fetch_family` 先算 digest 再写 raw → NaN/Inf payload→`malformed_payload` 且不写/不 brick raw。各配一 planted-failure 子测试。改动仅两函数内部、正常路径行为不变。

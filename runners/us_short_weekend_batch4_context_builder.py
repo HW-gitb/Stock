@@ -2,7 +2,7 @@
 r"""Supported offline builder for the US-short batch4 weekend context packet.
 
 Closes the second half of R-USSHORT-BATCH4-ONE-CLICK-EXECUTION-ENTRYPOINT-GAP: the runner
-(``runners/us_short_weekend_batch4.py``) consumes an 18-key closed-world context packet, but until
+ (``runners/us_short_weekend_batch4.py``) consumes a 19-key closed-world context packet, but until
 now the only thing that produced one was a test-internal helper. This builder is the documented,
 schema-first way a user assembles that packet from THREE explicit local sources:
 
@@ -17,7 +17,7 @@ writes it to a private (gitignored / external) path. A real packet carries ticke
 so the output is held to the same §18.0 P0 fail-closed private-path floor as every other US-short
 persister. This is OFFLINE only: no provider call, network, broker, order, or live authorization.
 
-``--analysis-fixture`` accepts either a bare 11-analysis-key file OR a full 18-key packet/example
+ ``--analysis-fixture`` accepts either a bare 11-analysis-key file OR a full 19-key packet/example
 template (its 7 ``*_path``/``*_root`` keys are ignored and overridden by the CLI args), so the committed
 example templates under ``schemas/examples/`` are directly consumable. Failures are REDACTED: the CLI
 prints an error code + safe path/location/counts, never a ticker / holding / account value / score /
@@ -56,9 +56,10 @@ from runners.us_short_account_state_from_manual_tables import ConvertError, vali
 
 SCHEMA_PATH = ROOT / "schemas" / "us_short_weekend_batch4_context_packet.schema.json"
 
-# the 11 batch2/3 analysis-layer keys the user supplies via --analysis-fixture; the other 7 are the
+# the 11 batch2/3 analysis-layer keys the user supplies via --analysis-fixture; ``paper_track`` is optional
+# only because this builder can inject its explicit fail-safe unavailable record. The other 7 are the
 # *_path / *_root values this builder injects from its CLI arguments. The fixture may be a bare 11-key
-# analysis file OR a full 18-key packet/example template (its path keys are IGNORED and overridden by
+# analysis file OR a full 19-key packet/example template (its path keys are IGNORED and overridden by
 # the CLI args) — so the committed example templates are directly consumable, no shape-strip helper.
 _ANALYSIS_KEYS = frozenset({
     "data_context", "per_ticker_analysis", "run_provenance", "provider_health", "market_axis_regimes",
@@ -69,7 +70,8 @@ _PATH_KEYS = frozenset({
     "eligibility_governance_path", "calendar_path", "account_state_path", "lifecycle_register_path",
     "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root",
 })
-_ALL_PACKET_KEYS = _ANALYSIS_KEYS | _PATH_KEYS
+_OPTIONAL_ANALYSIS_KEYS = frozenset({"paper_track"})
+_ALL_PACKET_KEYS = _ANALYSIS_KEYS | _OPTIONAL_ANALYSIS_KEYS | _PATH_KEYS
 
 
 class ContextBuilderError(ValueError):
@@ -139,11 +141,21 @@ def _validate_packet_schema(packet: dict) -> None:
             f"PACKET_SCHEMA_INVALID: assembled context packet 不符合 schema (at {location})")
 
 
+def _unavailable_paper_track() -> dict:
+    """Explicit producer absence, not a fabricated clean portfolio-guard business value."""
+    return {
+        "paper_evaluable": False,
+        "consecutive_stops": None,
+        "paper_drawdown_frac": None,
+        "evidence_ref": {"kind": "source_id", "value": "batch4_context:paper_track_not_supplied"},
+    }
+
+
 def build_packet(*, account_path, analysis_fixture_path, calendar_path, governance_path,
                  lifecycle_register_path, runs_private_root, weekly_private_root,
                  lifecycle_readiness_out_path=None) -> dict:
     """Combine the batch1 account + a local batch2/3 analysis fixture + reviewed paths into a
-    schema-validated 18-key packet dict. Pure (no write); raises ContextBuilderError on any invalid input."""
+    schema-validated 19-key packet dict. Pure (no write); raises ContextBuilderError on any invalid input."""
     account_abs = _abs(account_path, "--account")
     try:
         reject_nonprivate_output_path(account_abs)   # the account carries real holdings: must be a private path
@@ -157,12 +169,13 @@ def build_packet(*, account_path, analysis_fixture_path, calendar_path, governan
         raise ContextBuilderError("FIXTURE_KEYS_INVALID: analysis fixture 须为 JSON object")
     keys = set(fixture)
     missing = _ANALYSIS_KEYS - keys                    # the 11 batch2/3 analysis keys are required
-    unknown = keys - _ALL_PACKET_KEYS                  # only the 18 packet keys are allowed (path keys ignored)
+    unknown = keys - _ALL_PACKET_KEYS                  # only the 19 packet keys are allowed (path keys ignored)
     if missing or unknown:
         # safe: `missing` are our own constant key NAMES; `unknown` reported as a COUNT only (user-controlled)
         raise ContextBuilderError(
-            f"FIXTURE_KEYS_INVALID: 缺分析键 {sorted(missing)}；{len(unknown)} 个未知顶层键（仅接受 11 分析键 + 可选 7 路径键）")
+                f"FIXTURE_KEYS_INVALID: 缺分析键 {sorted(missing)}；{len(unknown)} 个未知顶层键（仅接受 11 分析键 + 可选 paper_track + 7 路径键）")
     analysis = {k: fixture[k] for k in _ANALYSIS_KEYS}  # take ONLY the analysis layer; any path keys are overridden
+    analysis["paper_track"] = fixture.get("paper_track", _unavailable_paper_track())
     _reconcile_holdings(analysis, account_tickers)
 
     packet = {
@@ -199,7 +212,7 @@ def parse_args(argv=None):
     p = argparse.ArgumentParser(description="Assemble a US-short batch4 weekend context packet (offline)")
     p.add_argument("--account", required=True, help="batch1 us_short_account_state.json (ABSOLUTE private path)")
     p.add_argument("--analysis-fixture", required=True,
-                   help="local batch2/3 fixture: bare 11-key analysis object or full 18-key packet/example")
+                    help="local batch2/3 fixture: bare 11-key analysis object or full 19-key packet/example")
     p.add_argument("--calendar", required=True, help="reviewed frozen NYSE/NASDAQ calendar artifact")
     p.add_argument("--governance", required=True, help="reviewed eligibility governance preset")
     p.add_argument("--lifecycle-register", required=True, help="private lifecycle register path")

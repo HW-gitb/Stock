@@ -169,7 +169,7 @@
         },
         {
           "number": 34,
-          "title": "`active_scale_out_candidate`（主动减仓/移保本/ratchet 持仓管理；攒持仓管理数据再决定启用）"
+          "title": "主动持仓管理的第二层：移保本、止损 ratchet、多日主动管理与任何加仓逻辑（第一层固定 TP1=10%减仓 / TP2=全清已启用；攒更多持仓管理数据再决定）"
         },
         {
           "number": 35,

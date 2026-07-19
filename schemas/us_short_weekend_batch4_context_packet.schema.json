@@ -1,14 +1,15 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "us_short_weekend_batch4_context_packet",
-  "description": "Closed-world local context packet consumed by the supported US-short batch4 weekend runner (runners/us_short_weekend_batch4.py --context). It is the documented, schema-first shape a user (or runners/us_short_weekend_batch4_context_builder.py) assembles from batch1 account state + explicitly supplied local batch2/3 fixture inputs + reviewed calendar/governance/private paths. This is an OFFLINE packet only: it carries NO provider call, network, broker, order, or live authorization, and the runner keeps live hard-blocked. STRUCTURE only — the orchestrator (engine/us_short_weekend_orchestrator.py) still enforces the deep SEMANTIC gates (PIT 来源对账, price-clock match, selection->analysis seam coverage, provider-health, run-mode/calendar). Real packets carry ticker/holding/score data and must be written to a gitignored private path (the builder enforces this); the tracked example templates are synthetic / no-secret. The 7 *_path / *_root keys point at local artifacts; the other 11 keys are the batch2/3 analysis layer.",
+  "description": "Closed-world local context packet consumed by the supported US-short batch4 weekend runner (runners/us_short_weekend_batch4.py --context). It is the documented, schema-first shape a user (or runners/us_short_weekend_batch4_context_builder.py) assembles from batch1 account state + explicitly supplied local batch2/3 fixture inputs + reviewed calendar/governance/private paths. This is an OFFLINE packet only: it carries NO provider call, network, broker, order, or live authorization, and the runner keeps live hard-blocked. STRUCTURE only — the orchestrator (engine/us_short_weekend_orchestrator.py) still enforces the deep SEMANTIC gates (PIT 来源对账, price-clock match, selection->analysis seam coverage, provider-health, run-mode/calendar). Real packets carry ticker/holding/score data and must be written to a gitignored private path (the builder enforces this); the tracked example templates are synthetic / no-secret. The 7 *_path / *_root keys point at local artifacts; the other 12 keys are the batch2/3 analysis layer plus the source-bound paper-track status.",
   "type": "object",
   "additionalProperties": false,
   "required": [
     "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
     "provider_health", "calendar_path", "account_state_path", "market_axis_regimes", "prior_regime",
     "prior_upgrade_count", "sizing_per_ticker", "basket_context", "cost_inputs", "report_context",
-    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root"
+    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root",
+    "paper_track"
   ],
   "properties": {
     "data_context": {
@@ -96,6 +97,27 @@
       "description": "Path to the reviewed frozen NYSE/NASDAQ calendar artifact."},
     "account_state_path": {"type": "string", "minLength": 1,
       "description": "Path to the private us_short_account_state.json (batch1 converter output). MUST be a provably-private/gitignored or external path — enforced by the runner/builder."},
+    "paper_track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_evaluable", "consecutive_stops", "paper_drawdown_frac", "evidence_ref"],
+      "properties": {
+        "paper_evaluable": {"type": "boolean"},
+        "consecutive_stops": {"type": ["integer", "null"], "minimum": 0},
+        "paper_drawdown_frac": {"type": ["number", "null"], "minimum": 0},
+        "evidence_ref": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "value"],
+          "properties": {
+            "kind": {"enum": ["provider row", "SEC filing", "source_id"]},
+            "value": {"type": "string", "minLength": 1},
+            "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}
+          }
+        }
+      },
+      "description": "Run-level model-paper producer packet. A missing upstream track must be expressed as paper_evaluable=false with a source_id evidence_ref, never as a fabricated normal guard status."
+    },
     "market_axis_regimes": {
       "type": "object",
       "additionalProperties": false,
@@ -114,12 +136,34 @@
     "basket_context": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["per_ticker", "holding_themes", "portfolio_guard_status", "theme_opportunity_state"],
+      "required": ["per_ticker", "holding_themes", "theme_opportunity_state"],
       "properties": {
-        "per_ticker": {"type": "object", "additionalProperties": {"type": "object"}},
+        "per_ticker": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["theme", "theme_probe"],
+            "properties": {
+              "theme": {"type": "string", "minLength": 1},
+              "theme_probe": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["theme_lifecycle_state", "high_confidence", "coverage_status", "no_gap_week", "entry_in_band"],
+                "properties": {
+                  "theme_lifecycle_state": {"type": ["string", "null"]},
+                  "high_confidence": {"type": "boolean"},
+                  "coverage_status": {"type": "string", "minLength": 1},
+                  "no_gap_week": {"type": "boolean"},
+                  "entry_in_band": {"type": "boolean"}
+                }
+              }
+            }
+          },
+          "description": "Theme and theme-probe inputs only. Symbol cooldown is derived from the private reconciliation state and may not be caller-supplied here."
+        },
         "holding_themes": {"type": "object", "additionalProperties": {"type": "string"},
           "description": "Current holding ticker-to-theme map for the final §8 total/same-theme dollar-cap gate; runtime reconciles it to account_state.positions."},
-        "portfolio_guard_status": {"type": "string"},
         "theme_opportunity_state": {"type": "string"}
       }
     },

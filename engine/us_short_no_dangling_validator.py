@@ -103,7 +103,8 @@ def _result(violations):
 # docstring forbids a hardcoded producer-vocab copy; its _valid() fixtures use arbitrary ids deliberately).
 MANIFEST_FIELD_IDS = frozenset({
     "hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing",
-    "theme_lifecycle_state", "theme_opportunity_state", "forward_event",
+    "theme_lifecycle_state", "theme_opportunity_state", "forward_event", "event_data_gap",
+    "portfolio_guard", "symbol_cooldown",
 })
 _BUILD_ACTIONS = frozenset({"建仓", "加仓"})  # a build is by contract a scored + sized candidate (§8 / machine-record)
 
@@ -131,6 +132,10 @@ def official_expected_field_ids(row):
         expected.update(("theme_lifecycle_state", "theme_opportunity_state"))
     if isinstance(row.get("forward_event"), dict):
         expected.add("forward_event")
+    if isinstance(row.get("event_data_gap"), dict):
+        expected.add("event_data_gap")
+    if "result_effects" in row:
+        expected.update(("portfolio_guard", "symbol_cooldown"))
     return expected
 
 

@@ -110,6 +110,11 @@ def _analyze_one(row, regime):
     if context == "holding":
         price = holding_exit_engine(row.get("price_input"), regime, row.get("event_reference_price"))
         sub_mode_resolved, sub_mode_downgraded, overext_forced_pullback = None, False, False
+        holding_action_context = row.get("holding_action_context")
+        if isinstance(holding_action_context, dict):
+            price_input = row.get("price_input")
+            holding_action_context = {**holding_action_context,
+                                      "price_basis_value": price_input.get("close") if isinstance(price_input, dict) else None}
     else:  # candidate
         requested_sub_mode = row["sub_mode"] if "sub_mode" in row else "pullback"   # absent → pullback default
         probe = row.get("defensive_breakout_probe_allowed", False)                 # absent → not allowed
@@ -126,6 +131,7 @@ def _analyze_one(row, regime):
         # independent of the pullback downgrade (entry mode) and the §8 size reduction (4d-ii-c).
         overext_raise_rr = (overext is not None and overext["execution_flags"].get("raise_rr_gate") is True)
         price = support_atr_engine(row.get("price_input"), regime, sub_mode_resolved, raise_rr_gate=overext_raise_rr)
+        holding_action_context = None
 
     # §8.1 forward known-date events (sizing/risk/display only — never selection, never a hard veto).
     fe = row.get("forward_event")
@@ -133,6 +139,11 @@ def _analyze_one(row, regime):
         forward = None
     elif isinstance(fe, dict):
         forward = forward_event_effect(fe.get("event_type"), fe.get("days_to_event"), fe.get("window_days"))
+        # A non-neutral calendar effect is only allowed to reach formal output with its own source reference.
+        # The pure event classifier owns direction/window; this stage merely preserves the source-bound producer
+        # input for the second-cut result-effects reducer to validate against the canonical decision date.
+        if forward["in_window"]:
+            forward = {**forward, "evidence_ref": fe.get("evidence_ref")}
     else:
         raise WeekendAnalysisError(f"forward_event 须为 dict 或缺省: {fe!r}")
 
@@ -197,6 +208,8 @@ def _analyze_one(row, regime):
         "score": score,
         "risk_downgrade": risk_dg,   # §4.2 typed penalty (points + components), None for an unscored holding
         "selection_record": sel_rec,
+        **({"holding_action_context": holding_action_context}
+           if context == "holding" and "holding_action_context" in row else {}),
     }
 
 

@@ -44,7 +44,7 @@ from engine.us_short_no_dangling_validator import validate_official_machine_reco
 from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
-from engine.us_short_weekend_decision import action_price_error, action_reason_error
+from engine.us_short_weekend_decision import action_price_error, action_quantity_error, action_reason_error
 
 # the frozen §11.3 column set (single source) — only keys that ARE a real column are lifted from the rich layer.
 _ACTION_TABLE_COLUMNS = frozenset(action_table_columns())
@@ -112,6 +112,12 @@ def _flatten_row(row, ct):
     sizing = row.get("sizing")
     if isinstance(sizing, dict) and sizing.get("status") == "sized":
         flat["model_position_size_shares"] = sizing.get("desired_model_shares")
+    proposal = row.get("action_proposal")
+    if isinstance(proposal, dict):
+        flat["recommended_action_shares"] = proposal.get("recommended_action_shares")
+    elif row.get("final_action") == "建仓" and isinstance(sizing, dict) and sizing.get("status") == "sized":
+        # New entries use the chosen model size; holding exits always use action_proposal instead.
+        flat["recommended_action_shares"] = sizing.get("desired_model_shares")
     # Batch4 has paper evidence only and live mode is hard-gated. Re-derive the official ship-gate cells from
     # the frozen engine on every projection, overwriting any caller-planted flat values. A live-normalized grant
     # belongs to the separately reviewed batch5 evidence path, never to this offline boundary.
@@ -198,6 +204,9 @@ def _validate_price_projection(row, ct):
     price_err = action_price_error(row.get("final_action"), af)
     if price_err:
         raise WeekendActionTableError(f"{ct}: {price_err}")
+    quantity_err = action_quantity_error(row.get("final_action"), row)
+    if quantity_err:
+        raise WeekendActionTableError(f"{ct}: {quantity_err}")
     for col in _NUMERIC_PRICE_COLUMNS:                       # any present price/ratio cell must be finite-or-None
         v = af.get(col)
         if v is not None and not _finite(v):

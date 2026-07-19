@@ -83,6 +83,20 @@ class BuildTests(unittest.TestCase):
         self.assertEqual([p["ticker"] for p in state["positions"]], ["AAPL", "MSFT"])
         self.assertTrue(all(p["direction"] == "long" for p in state["positions"]))
 
+    def test_holding_action_reconciliation_starts_uncompleted(self):
+        state, _ = _build()
+        item = state["holding_action_reconciliation"]["positions"][0]
+        self.assertEqual(item["remaining_shares"], 10)
+        self.assertFalse(item["tp1_completed"])
+        self.assertIsNone(item["tp1_completed_at"])
+
+    def test_only_executed_manual_reduce_completes_tp1(self):
+        state, _ = conv.build_account_state(
+            {**_tables(), "trades": [_trade(suggested_action="减仓", executed="TRUE", fill_shares="3")]}, "20260622")
+        item = state["holding_action_reconciliation"]["positions"][0]
+        self.assertTrue(item["tp1_completed"])
+        self.assertEqual(item["tp1_completed_at"], "20260601")
+
     def test_duplicate_ticker_fatal(self):
         with self.assertRaises(CE):
             _build(positions=[_pos(), _pos()])
@@ -111,6 +125,10 @@ class BuildTests(unittest.TestCase):
     def test_shares_float_rejected(self):
         with self.assertRaises(CE):
             _build(positions=[_pos(shares="10.0")])
+
+    def test_share_count_above_manual_ceiling_rejected(self):
+        with self.assertRaises(CE):
+            _build(positions=[_pos(shares=str(conv.MAX_MANUAL_HOLDING_SHARES + 1))])
 
     def test_date_coercion_rejected(self):
         with self.assertRaises(CE):
@@ -246,6 +264,14 @@ class ValidateTests(unittest.TestCase):
     def test_cash_exceeds_bucket_rejected_by_validator(self):
         state, _ = _build()
         state["us_short_available_cash"] = state["us_short_bucket_capital"] + 1.0
+        with self.assertRaises(CE):
+            conv.validate_account_state(state, "20260622")
+
+    def test_future_tp1_completion_rejected_by_validator(self):
+        state, _ = _build()
+        item = state["holding_action_reconciliation"]["positions"][0]
+        item["tp1_completed"] = True
+        item["tp1_completed_at"] = "20260623"
         with self.assertRaises(CE):
             conv.validate_account_state(state, "20260622")
 

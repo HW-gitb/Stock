@@ -68,6 +68,14 @@
       "meaning": "事件硬风险清仓参考价，标\"人工执行、非技术价\""
     }
   ],
+  "holding_action_policy": {
+    "tp1_reduce_fraction": 0.10,
+    "tp1_reduce_basis": "remaining_shares",
+    "tp2_action": "清仓-止盈",
+    "state_completion_source": "manual_executed_trade_only",
+    "add_position_enabled": false,
+    "deferred": ["move_stop_to_breakeven", "ratchet", "multi_day_active_management"]
+  },
   "action_rank_skeleton": [
     {
       "group": 1,

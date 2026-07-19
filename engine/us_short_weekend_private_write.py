@@ -34,6 +34,7 @@ import re
 from pathlib import Path
 
 from engine.us_short_action_table_renderer import write_action_table
+from engine.us_short_holding_action import STATE_FILENAME as HOLDING_ACTION_STATE_FILENAME, validate_holding_action_state
 from engine.us_short_lifecycle_readiness import _assert_readiness
 from engine.us_short_private_paths import reject_nonprivate_output_path
 from engine.us_short_provider_health import validate_provider_health_result
@@ -43,6 +44,11 @@ from engine.us_short_run_origin import (
     require_research_live_capability,
     require_research_live_provider_health_result,
     validate_run_origin,
+)
+from engine.us_short_result_effects import PORTFOLIO_GUARD_STATE_FILENAME, build_next_portfolio_guard_state
+from engine.us_short_symbol_cooldown_state import (
+    STATE_FILENAME as SYMBOL_COOLDOWN_STATE_FILENAME,
+    validate_symbol_cooldown_state,
 )
 from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekend_report import (
@@ -190,7 +196,9 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
 def write_run_private(*, decision_date, machine_record, weekly_report_md, report_data,
                       provider_health, coverage_inputs, lifecycle_result,
                       runs_private_root=None, weekly_private_root=None,
-                      run_origin=OFFLINE_TEST_RUN_ORIGIN, research_live_capability=None) -> dict:
+                      holding_action_state=None, portfolio_guard_state=None, symbol_cooldown_state=None,
+                      run_origin=OFFLINE_TEST_RUN_ORIGIN,
+                      research_live_capability=None) -> dict:
     """4d-ii-n idempotent private write. Persists the run's machine layer + §11.1 weekly_private surface to the
     gitignored private dirs, fail-closed behind the §18.0 P0 private-path guard, keyed (idempotent) by decision_date.
 
@@ -274,10 +282,37 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     runs_dir, weekly_dir = runs_root / decision_date, weekly_root / decision_date
     machine_path, action_path = runs_dir / "machine_record.json", weekly_dir / "action_table.csv"
     report_path = weekly_dir / "weekly_report.md"
+    holding_state_path = runs_root / HOLDING_ACTION_STATE_FILENAME
+    portfolio_guard_state_path = runs_root / PORTFOLIO_GUARD_STATE_FILENAME
+    cooldown_state_path = runs_root / SYMBOL_COOLDOWN_STATE_FILENAME
+    if holding_action_state is not None:
+        try:
+            validate_holding_action_state(holding_action_state, decision_date=decision_date)
+        except Exception as exc:
+            raise WeekendPrivateWriteError("holding_action_state is not a valid private TP state") from exc
+    if portfolio_guard_state is not None:
+        try:
+            # Re-use the state builder as the narrow schema/value gate without trusting a caller-provided shape.
+            if build_next_portfolio_guard_state({"state": portfolio_guard_state.get("state")}, decision_date=decision_date) != portfolio_guard_state:
+                raise ValueError("state mismatch")
+        except Exception as exc:
+            raise WeekendPrivateWriteError("portfolio_guard_state is not valid") from exc
+    if symbol_cooldown_state is not None:
+        try:
+            validate_symbol_cooldown_state(symbol_cooldown_state, decision_date=decision_date)
+        except Exception as exc:
+            raise WeekendPrivateWriteError("symbol_cooldown_state is not valid") from exc
 
     # PREFLIGHT every destination with the §18.0 P0 guard BEFORE any directory / file is created, so a mixed
     # valid/invalid set of roots leaves NO partial private run (atomic fail-closed for the guard case).
-    for p in (machine_path, action_path, report_path):
+    destinations = [machine_path, action_path, report_path]
+    if holding_action_state is not None:
+        destinations.append(holding_state_path)
+    if portfolio_guard_state is not None:
+        destinations.append(portfolio_guard_state_path)
+    if symbol_cooldown_state is not None:
+        destinations.append(cooldown_state_path)
+    for p in destinations:
         reject_nonprivate_output_path(p)
     # §11.1 only-two-files: on rerun the two official files are overwritten, but a pre-existing EXTRA file/dir in
     # weekly_private/<dd>/ (debug / summary / raw / decision-packet …) fails closed — that per-date weekly surface
@@ -293,4 +328,17 @@ def write_run_private(*, decision_date, machine_record, weekly_report_md, report
     _write_text_private(machine_path, json.dumps(flat, ensure_ascii=False, indent=2, sort_keys=True))
     write_action_table(flat, action_path, research_live_capability=research_live_capability)   # renders the flattened record + §18.0 guard + A2 research_live gate
     _write_text_private(report_path, weekly_report_md)
-    return {"machine_record_path": machine_path, "action_table_path": action_path, "weekly_report_path": report_path}
+    if holding_action_state is not None:
+        _write_text_private(holding_state_path, json.dumps(holding_action_state, ensure_ascii=False, indent=2, sort_keys=True))
+    if portfolio_guard_state is not None:
+        _write_text_private(portfolio_guard_state_path, json.dumps(portfolio_guard_state, ensure_ascii=False, indent=2, sort_keys=True))
+    if symbol_cooldown_state is not None:
+        _write_text_private(cooldown_state_path, json.dumps(symbol_cooldown_state, ensure_ascii=False, indent=2, sort_keys=True))
+    result = {"machine_record_path": machine_path, "action_table_path": action_path, "weekly_report_path": report_path}
+    if holding_action_state is not None:
+        result["holding_action_state_path"] = holding_state_path
+    if portfolio_guard_state is not None:
+        result["portfolio_guard_state_path"] = portfolio_guard_state_path
+    if symbol_cooldown_state is not None:
+        result["symbol_cooldown_state_path"] = cooldown_state_path
+    return result

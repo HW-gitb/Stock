@@ -51,6 +51,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker  # noqa: E402 — the repo's SINGLE US identity policy
+from engine.us_short_holding_action import MAX_MANUAL_HOLDING_SHARES  # noqa: E402 — shared first-cut quantity ceiling
 
 ACCOUNT_SCHEMA_NAME = "us_short_account_state"
 ACCOUNT_SCHEMA_VERSION = "1.0.0"
@@ -80,7 +81,7 @@ EXPECTED_COLUMNS = {
                 "manual_order_only", "broker_connection_allowed"),
     "positions": ("ticker", "shares", "avg_cost_usd", "entry_date", "current_stop", "notes"),
     "trades": ("decision_date", "ticker", "suggested_action", "executed",
-               "fill_price", "fill_shares", "skip_reason", "manual_override"),
+               "fill_price", "fill_shares", "skip_reason", "manual_override", "failure_trigger"),
 }
 
 # trades.suggested_action = the §9 final_action vocab (user-chosen 2026-06-20, Chinese values).
@@ -159,6 +160,8 @@ def _parse_int_shares(raw, field: str) -> int:
     v = int(s)
     if v <= 0:
         raise ConvertError(f"{field}={raw!r} must be > 0")
+    if v > MAX_MANUAL_HOLDING_SHARES:
+        raise ConvertError(f"{field} exceeds the maximum supported manual holding share count")
     return v
 
 
@@ -208,6 +211,10 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
     facts_staleness = "current" if facts_as_of == decision_as_of else "stale_warning"
     positions = _build_positions(tables["positions"], decision_as_of)
     consistency_warnings = reconcile_trades_positions(tables.get("trades", []), positions, decision_as_of)
+    holding_action_reconciliation = _build_holding_action_reconciliation(
+        tables.get("trades", []), positions, decision_as_of)
+    symbol_cooldown_reconciliation = _build_symbol_cooldown_reconciliation(
+        tables.get("trades", []), decision_as_of)
 
     bucket = acct["us_market_equity"] / BUCKET_DIVISOR
     if acct["us_short_available_cash"] - bucket > _REL_EPS * max(1.0, bucket):
@@ -224,6 +231,8 @@ def build_account_state(tables: dict, decision_as_of: str) -> tuple:
         "us_short_available_cash": acct["us_short_available_cash"],
         "portfolio_total_equity": acct["portfolio_total_equity"],
         "positions": positions,
+        "holding_action_reconciliation": holding_action_reconciliation,
+        "symbol_cooldown_reconciliation": symbol_cooldown_reconciliation,
         "manual_order_only": True,
         "broker_connection_allowed": False,
     }
@@ -338,6 +347,71 @@ def reconcile_trades_positions(trades: list, positions: list, decision_as_of: st
     return warnings
 
 
+def _build_holding_action_reconciliation(trades: list, positions: list, decision_as_of: str) -> dict:
+    """Derive TP1 completion only from an executed manual ``减仓`` record.
+
+    This does not alter positions (they remain the authoritative account snapshot) and it deliberately
+    carries no target price: the private planner sidecar owns only the prior system recommendation levels.
+    """
+    latest_reduce = {}
+    for i, row in enumerate(trades):
+        ticker = _parse_us_ticker(row.get("ticker"), f"trades[{i}].ticker")
+        action = _opt_str(row.get("suggested_action"))
+        date = _parse_date(row.get("decision_date"), f"trades[{i}].decision_date")
+        executed = _parse_bool(row.get("executed"), f"trades[{i}].executed")
+        if action == "减仓" and executed:
+            latest_reduce[ticker] = max(date, latest_reduce.get(ticker, "00000000"))
+    records = []
+    for position in positions:
+        ticker, entry_date, shares = position["ticker"], position["entry_date"], position["shares"]
+        completed_at = latest_reduce.get(ticker)
+        if completed_at is not None and completed_at < entry_date:
+            completed_at = None
+        completed = completed_at is not None
+        ref_input = {"ticker": ticker, "entry_date": entry_date, "remaining_shares": shares,
+                     "tp1_completed": completed, "tp1_completed_at": completed_at}
+        digest = hashlib.sha256(json.dumps(ref_input, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        records.append({"ticker": ticker, "entry_date": entry_date, "remaining_shares": shares,
+                        "tp1_completed": completed, "tp1_completed_at": completed_at,
+                        "source_reconciliation_ref": "manual_account:" + digest})
+    return {"schema_name": "us_short_holding_action_reconciliation", "schema_version": "1.0.0",
+            "as_of": decision_as_of, "positions": records}
+
+
+def _build_symbol_cooldown_reconciliation(trades: list, decision_as_of: str) -> dict:
+    """Project only genuine filled failures from the manual execution log.
+
+    An executed ``清仓-止损`` is a ``filled_then_stop_loss`` by default.  A user may explicitly classify the
+    same filled stop as ``filled_then_breakout_failure`` in the optional ``failure_trigger`` column.  A skipped
+    breakout, any unfilled trade, or any other action never enters the reconciliation and therefore can never
+    create a symbol cooldown.
+    """
+    latest = {}
+    allowed = {"filled_then_stop_loss", "filled_then_breakout_failure"}
+    for i, row in enumerate(trades):
+        ticker = _parse_us_ticker(row.get("ticker"), f"trades[{i}].ticker")
+        date = _parse_date(row.get("decision_date"), f"trades[{i}].decision_date")
+        action = _opt_str(row.get("suggested_action"))
+        executed = _parse_bool(row.get("executed"), f"trades[{i}].executed")
+        raw_trigger = _opt_str(row.get("failure_trigger"))
+        if raw_trigger is not None and raw_trigger not in allowed:
+            raise ConvertError(f"trades[{i}].failure_trigger={raw_trigger!r} must be one of {sorted(allowed)} or blank")
+        if raw_trigger is not None and (not executed or action != "清仓-止损"):
+            raise ConvertError("failure_trigger only applies to an executed 清仓-止损; unfilled breakout must remain blank")
+        if not executed or action != "清仓-止损":
+            continue
+        trigger = raw_trigger or "filled_then_stop_loss"
+        ref_input = {"ticker": ticker, "trigger": trigger, "triggered_at": date}
+        digest = hashlib.sha256(json.dumps(ref_input, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        event = {"ticker": ticker, "trigger": trigger, "triggered_at": date,
+                 "source_reconciliation_ref": "manual_account:" + digest}
+        old = latest.get(ticker)
+        if old is None or event["triggered_at"] >= old["triggered_at"]:
+            latest[ticker] = event
+    return {"schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": decision_as_of, "events": [latest[t] for t in sorted(latest)]}
+
+
 # -- single validation source: JSON Schema + cross-field invariants ---------------------------------
 def validate_account_state(state: dict, as_of: str) -> None:
     """The single source of truth for us_short_account_state validity. Raises ConvertError on failure.
@@ -385,6 +459,35 @@ def validate_account_state(state: dict, as_of: str) -> None:
         _parse_date(p["entry_date"], f"position {p['ticker']} entry_date")
         if p["entry_date"] > state["as_of"]:
             raise ConvertError(f"position {p['ticker']} entry_date {p['entry_date']} > as_of {state['as_of']} (future entry; PIT violation)")
+    reconciliation = state.get("holding_action_reconciliation")
+    if reconciliation is not None:
+        if reconciliation["as_of"] != state["as_of"]:
+            raise ConvertError("holding_action_reconciliation.as_of must equal account_state.as_of")
+        by_ticker = {item["ticker"]: item for item in reconciliation["positions"]}
+        if set(by_ticker) != seen or len(by_ticker) != len(reconciliation["positions"]):
+            raise ConvertError("holding_action_reconciliation must cover account positions exactly once")
+        for p in state["positions"]:
+            item = by_ticker[p["ticker"]]
+            if item["entry_date"] != p["entry_date"] or item["remaining_shares"] != p["shares"]:
+                raise ConvertError(f"holding_action_reconciliation does not match position {p['ticker']}")
+            if item["tp1_completed"] is False and item["tp1_completed_at"] is not None:
+                raise ConvertError(f"holding_action_reconciliation {p['ticker']} has an impossible TP1 completion date")
+            if item["tp1_completed"] is True:
+                _parse_date(item["tp1_completed_at"], f"holding_action_reconciliation {p['ticker']} tp1_completed_at")
+                if item["tp1_completed_at"] > state["as_of"]:
+                    raise ConvertError(f"holding_action_reconciliation {p['ticker']} TP1 completion is future")
+    cooldown_reconciliation = state.get("symbol_cooldown_reconciliation")
+    if cooldown_reconciliation is not None:
+        if cooldown_reconciliation["as_of"] != state["as_of"]:
+            raise ConvertError("symbol_cooldown_reconciliation.as_of must equal account_state.as_of")
+        cooldown_seen = set()
+        for event in cooldown_reconciliation["events"]:
+            if event["ticker"] in cooldown_seen:
+                raise ConvertError(f"symbol_cooldown_reconciliation ticker duplicate: {event['ticker']}")
+            cooldown_seen.add(event["ticker"])
+            _parse_date(event["triggered_at"], f"symbol_cooldown_reconciliation {event['ticker']} triggered_at")
+            if event["triggered_at"] > state["as_of"]:
+                raise ConvertError(f"symbol_cooldown_reconciliation {event['ticker']} trigger is future")
 
 
 # -- fail-closed privacy guard (§18.0 P0): real-holdings output must land on a gitignored path -------

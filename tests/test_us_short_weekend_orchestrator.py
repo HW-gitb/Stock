@@ -9,6 +9,7 @@ per_ticker_analysis map does not exactly cover the admitted ∪ holdings union (
 overlap and the row_source ↔ selection-membership reconciliation). Pure/offline (private writes to tempdirs); no
 provider/live; no A-share crossing.
 """
+import csv
 import json
 import sys
 import tempfile
@@ -82,9 +83,19 @@ def _selection_inputs(tickers):
 
 
 def _account(positions=()):
+    positions = list(positions)
     return {"schema_name": "us_short_account_state", "schema_version": "1.0.0", "as_of": _DD,
             "us_market_equity": 30000.0, "us_short_bucket_capital": 10000.0,
-            "us_short_available_cash": 4000.0, "positions": list(positions),
+            "us_short_available_cash": 4000.0, "positions": positions,
+            "holding_action_reconciliation": {
+                "schema_name": "us_short_holding_action_reconciliation", "schema_version": "1.0.0", "as_of": _DD,
+                "positions": [{"ticker": p["ticker"], "entry_date": p["entry_date"], "remaining_shares": p["shares"],
+                               "tp1_completed": False, "tp1_completed_at": None,
+                               "source_reconciliation_ref": "test-account:" + p["ticker"]}
+                              for p in positions]},
+            "symbol_cooldown_reconciliation": {
+                "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+                "as_of": _DD, "events": []},
             "manual_order_only": True, "broker_connection_allowed": False}
 
 
@@ -140,9 +151,10 @@ def _pipeline_context(reg_path, runs_root, weekly_root, *, universe=None, pass2=
         "market_axis_regimes": {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"},
         "prior_regime": None, "prior_upgrade_count": 0,
         "sizing_context": {"short_bucket_dollars": 10000.0, "per_ticker": {}},
-        "basket_context": {"per_ticker": {}, "holding_themes": {}, "portfolio_guard_status": "normal",
-                           "theme_opportunity_state": "no_strong_theme"},
+        "basket_context": {"per_ticker": {}, "holding_themes": {}, "theme_opportunity_state": "no_strong_theme"},
         "account_state": _account(),
+        "paper_track": {"paper_evaluable": True, "consecutive_stops": 0, "paper_drawdown_frac": 0.0,
+                        "evidence_ref": {"kind": "source_id", "value": "test:model_paper_track", "as_of": _DD}},
         "cost_inputs": {}, "available_cash": 4000.0, "report_context": _report_context(),
         "lifecycle_register_path": reg_path, "lifecycle_readiness_out_path": None,
         "runs_private_root": runs_root, "weekly_private_root": weekly_root,
@@ -214,7 +226,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "software", "symbol_cooldown_status": "none",
+                "AAPL": {"theme": "software",
                          "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
@@ -225,6 +237,60 @@ class EmptyRunEndToEnd(unittest.TestCase):
             self.assertNotIn("full_size_eligible", action_csv)
             self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
             self.assertIn("AAPL", action_csv)
+
+    def test_second_cut_event_effect_reaches_machine_csv_and_weekly_projection(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            analysis = _analysis_row("AAPL")
+            analysis["forward_event"] = {
+                "event_type": "earnings", "days_to_event": 3.0,
+                "evidence_ref": {"kind": "SEC filing", "value": "test:AAA:earnings", "as_of": _DD},
+            }
+            pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                                   per_ticker_analysis={"AAPL": analysis})
+            pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+            pc["basket_context"]["per_ticker"] = {
+                "AAPL": {"theme": "software", "theme_probe": {"theme_lifecycle_state": None,
+                    "high_confidence": False, "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            row = out["machine_record"]["rows"][0]
+            self.assertEqual((row["final_action"], row["observe_reason_type"]), ("观察", "event_window"))
+            self.assertIn("upcoming_event:earnings", row["risk_tags"])
+            event_record = next(f for f in row["field_records"] if f["field_id"] == "forward_event")
+            self.assertEqual((event_record["impact_target"], event_record["claim_type"], event_record["evidence_ref"]["kind"]),
+                             ("final_action", "临近财报", "SEC filing"))
+            with out["written"]["action_table_path"].open(encoding="utf-8", newline="") as f:
+                csv_row = next(csv.DictReader(f))
+            self.assertIn("earnings", csv_row["upcoming_events"])
+            self.assertIn("trigger=", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
+
+    def test_second_cut_private_cooldown_blocks_build_and_projects_expiry(self):
+        with tempfile.TemporaryDirectory() as d, tempfile.TemporaryDirectory() as rr, tempfile.TemporaryDirectory() as wr:
+            reg = Path(d) / "reg.json"
+            reg.write_text(json.dumps(_register()), encoding="utf-8")
+            (Path(rr) / "symbol_cooldown_state.json").write_text(json.dumps({
+                "schema_name": "us_short_symbol_cooldown_state", "schema_version": "1.0.0", "as_of": "20260601",
+                "records": [{"ticker": "AAPL", "trigger": "filled_then_stop_loss", "triggered_at": "20260601",
+                             "cooldown_until": "20260621", "source_reconciliation_ref": "test:filled-stop"}],
+            }), encoding="utf-8")
+            pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
+                                   per_ticker_analysis={"AAPL": _analysis_row("AAPL")})
+            pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
+            pc["basket_context"]["per_ticker"] = {
+                "AAPL": {"theme": "software", "theme_probe": {"theme_lifecycle_state": None,
+                    "high_confidence": False, "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
+            out = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            row = out["machine_record"]["rows"][0]
+            self.assertEqual((row["final_action"], row["observe_reason_type"], row["symbol_cooldown_status"], row["cooldown_until"]),
+                             ("观察", "risk_cooldown", "in_cooldown", "20260621"))
+            cooldown_record = next(f for f in row["field_records"] if f["field_id"] == "symbol_cooldown")
+            self.assertEqual(cooldown_record["impact_target"], "risk_tags")
+            self.assertTrue(out["written"]["symbol_cooldown_state_path"].exists())
+            self.assertTrue(out["written"]["portfolio_guard_state_path"].exists())
+            with out["written"]["action_table_path"].open(encoding="utf-8", newline="") as f:
+                csv_row = next(csv.DictReader(f))
+            self.assertEqual(csv_row["cooldown_until"], "20260621")
 
     def test_existing_holding_current_mark_reduces_total_cap_end_to_end(self):
         # The final capacity stage must use the held name's same-run price_input.close, not avg_cost, before
@@ -242,7 +308,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": "new_theme", "symbol_cooldown_status": "none",
+                "AAPL": {"theme": "new_theme",
                          "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             pc["basket_context"]["holding_themes"] = {"HLD": "held_theme"}
@@ -270,7 +336,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc["sizing_context"]["per_ticker"] = {
                 "AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
             pc["basket_context"]["per_ticker"] = {
-                "AAPL": {"theme": " Software ", "symbol_cooldown_status": "none",
+                "AAPL": {"theme": " Software ",
                          "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
                                          "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
             pc["basket_context"]["holding_themes"] = {"HLD": "software"}
@@ -298,7 +364,7 @@ class EmptyRunEndToEnd(unittest.TestCase):
             pc = _pipeline_context(reg, rr, wr, universe=[_univ_row("AAPL")], pass2={"AAPL": {}},
                                    per_ticker_analysis={"AAPL": _analysis_row("AAPL", "holding_in_top15")})
             pc["data_context"]["holdings"] = [{"ticker": "AAPL", "signals": {}}]
-            pc["account_state"] = _account([{"ticker": "AAPL", "direction": "long", "shares": 1,
+            pc["account_state"] = _account([{"ticker": "AAPL", "direction": "long", "shares": 100,
                                                "avg_cost_usd": 100.0, "entry_date": "20260601"}])
             pc["basket_context"]["holding_themes"] = {"AAPL": "software"}
             pc["report_context"]["coverage_inputs"] = [{"ticker": "AAPL", "row_source": "holding_in_top15",
@@ -307,7 +373,26 @@ class EmptyRunEndToEnd(unittest.TestCase):
             row = out["machine_record"]["rows"][0]
             self.assertEqual(row["row_source"], "holding_in_top15")
             self.assertEqual(row["final_action"], "持有")
+            self.assertTrue(out["written"]["holding_action_state_path"].exists())
+            state = json.loads(out["written"]["holding_action_state_path"].read_text(encoding="utf-8"))
+            self.assertEqual(state["positions"][0]["ticker"], "AAPL")
+            self.assertFalse(state["positions"][0]["tp1_completed"])
+            self.assertIsNotNone(state["positions"][0]["active_tp1_price"])
             self.assertIn("AAPL", out["written"]["weekly_report_path"].read_text(encoding="utf-8"))
+            # Re-run against the stored level: TP1 now becomes a real reduce action with a one-time quantity,
+            # while the private state remains uncompleted until the manual trade table confirms execution.
+            pc["per_ticker_analysis"]["AAPL"]["price_input"]["close"] = state["positions"][0]["active_tp1_price"]
+            pc["per_ticker_analysis"]["AAPL"]["holding_action_cost_input"] = {
+                "commission_round_trip": 0.0, "slippage_dollars": 0.0, "spread_dollars": 0.0}
+            out2 = orch.run_weekend_pipeline(_now("20260613", 10, 0), pc)
+            row2 = out2["machine_record"]["rows"][0]
+            self.assertEqual(row2["final_action"], "减仓")
+            self.assertEqual(row2["action_proposal"]["recommended_action_shares"], 10)
+            with out2["written"]["action_table_path"].open(encoding="utf-8", newline="") as f:
+                self.assertEqual(next(csv.DictReader(f))["recommended_action_shares"], "10")
+            self.assertIn("AAPL 减仓 | shares=10", out2["written"]["weekly_report_path"].read_text(encoding="utf-8"))
+            state2 = json.loads(out2["written"]["holding_action_state_path"].read_text(encoding="utf-8"))
+            self.assertFalse(state2["positions"][0]["tp1_completed"])
 
 
 class OutOfWindowNoEmit(unittest.TestCase):
@@ -508,7 +593,7 @@ class SelectionRecordThreaded(unittest.TestCase):
                                per_ticker_analysis={"AAPL": _analysis_row("AAPL")}, **over)
         pc["sizing_context"]["per_ticker"] = {"AAPL": {"discount_mults": [1.0], "liquidity_cap_shares": 100000}}
         pc["basket_context"]["per_ticker"] = {
-            "AAPL": {"theme": "software", "symbol_cooldown_status": "none",
+            "AAPL": {"theme": "software",
                      "theme_probe": {"theme_lifecycle_state": None, "high_confidence": False,
                                      "coverage_status": "full", "no_gap_week": False, "entry_in_band": False}}}
         return pc

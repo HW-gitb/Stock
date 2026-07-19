@@ -44,6 +44,14 @@
         "position_size": {},
         "price": {},
         "risk_tags": {"type": "array", "items": {"type": "string"}},
+        "trigger_conditions": {"type": "array", "items": {"type": "string"}},
+        "invalid_conditions": {"type": "array", "items": {"type": "string"}},
+        "upcoming_events": {"type": "array"},
+        "portfolio_guard_status": {"type": "string"},
+        "symbol_cooldown_status": {"type": "string"},
+        "cooldown_until": {"type": ["string", "null"]},
+        "reentry_allowed_reason": {"type": ["string", "null"]},
+        "result_effects": {"type": "object"},
         "decision_trace": {"type": "string"},
         "field_records": {"type": "array", "items": {"$ref": "#/definitions/field_record"}}
       }

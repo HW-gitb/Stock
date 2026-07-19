@@ -44,6 +44,7 @@ from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
+from engine.us_short_result_effects import ResultEffectsError, validate_result_effects
 from engine.us_short_run_origin import (
     OFFLINE_TEST_RUN_ORIGIN,
     require_research_live_capability,
@@ -60,6 +61,7 @@ from engine.us_short_weekend_decision import (
     validate_evidence_row,
     action_reason_error,
     action_price_error,
+    action_quantity_error,
 )
 
 _SCHEMA_NAME = "us_short_machine_record_contract"
@@ -114,6 +116,12 @@ _SPECS = {
                                 "field_class": "theme_opportunity_state", "lifecycle_item_id": 27},
     "forward_event": {"owner_module": "engine.us_short_forward_events", "data_source": "row.forward_event (injected; live=batch5)",
                       "field_class": "trigger", "lifecycle_item_id": 15},
+    "event_data_gap": {"owner_module": "engine.us_short_forward_events", "data_source": "row.event_data_gap (injected; live=batch5)",
+                       "field_class": "data quality", "lifecycle_item_id": 15},
+    "portfolio_guard": {"owner_module": "engine.us_short_portfolio_guard", "data_source": "result.portfolio_guard_result (model-paper track)",
+                        "field_class": "portfolio_guard", "lifecycle_item_id": 22},
+    "symbol_cooldown": {"owner_module": "engine.us_short_symbol_cooldown_state", "data_source": "private symbol cooldown state + manual reconciliation",
+                        "field_class": "symbol_cooldown", "lifecycle_item_id": 23},
     "overextension_state": {"owner_module": "engine.us_short_overextension",
                             "data_source": "row.overextension (injected; live=batch5)",
                             "field_class": "overextension", "lifecycle_item_id": 36},
@@ -125,7 +133,7 @@ class WeekendMachineRecordError(Exception):
     (fail-closed before the record is treated as an official output)."""
 
 
-def _fr(field_id, *, op, terminal, disposition, impact_target):
+def _fr(field_id, *, op, terminal, disposition, impact_target, claim_type=None, evidence_ref=None):
     """Build one §10 field_record (the 12 const-pinned registry keys + the runtime resolution). v1 carries no
     traceable claim offline → claim_type / evidence_ref None (the §10 reverse-traceback path is exercised by
     the batch-3 validator suite; the live provider/SEC evidence_ref is batch5)."""
@@ -139,14 +147,91 @@ def _fr(field_id, *, op, terminal, disposition, impact_target):
         "current_landing_surface": terminal,
         "terminal_surface_target": terminal,
         "operation_impact": op,
-        "evidence_ref_kind": None,
+        "evidence_ref_kind": evidence_ref["kind"] if isinstance(evidence_ref, dict) else None,
         "lifecycle_item_id": spec["lifecycle_item_id"],
         "field_class": spec["field_class"],
         "disposition": disposition,
         "impact_target": impact_target,
-        "claim_type": None,
-        "evidence_ref": None,
+        "claim_type": claim_type,
+        "evidence_ref": evidence_ref,
     }
+
+
+_EVENT_CLAIMS = {
+    "earnings": "临近财报",
+    "fda_pdufa": "FDA",
+    "index_inclusion": "新闻催化",
+    "lockup_expiry": "新闻催化",
+    "ex_dividend": "新闻催化",
+}
+
+
+def _formal_effect_field_records(row):
+    """Register second-cut producers at their actual final output landing without re-deciding them."""
+    if "result_effects" not in row:
+        return []
+    effects = row["result_effects"]
+    refs = effects["evidence_refs"]
+    out = []
+
+    guard = row["portfolio_guard_status"]
+    guard_ref = refs["portfolio_guard"]
+    if guard == "caution":
+        out.append(_fr("portfolio_guard", op="调信心", terminal="action_confidence",
+                       disposition=_LANDED, impact_target="action_confidence", evidence_ref=guard_ref))
+    elif guard == "normal":
+        out.append(_fr("portfolio_guard", op="仅标签", terminal="portfolio_guard_status",
+                       disposition=_SHADOW, impact_target=None, evidence_ref=guard_ref))
+    else:
+        out.append(_fr("portfolio_guard", op="仅标签", terminal="risk_tags",
+                       disposition=_LANDED, impact_target="risk_tags", evidence_ref=guard_ref))
+
+    cooldown = row["symbol_cooldown_status"]
+    cooldown_ref = refs["symbol_cooldown"]
+    if cooldown == "none":
+        out.append(_fr("symbol_cooldown", op="仅标签", terminal="symbol_cooldown_status",
+                       disposition=_SHADOW, impact_target=None, evidence_ref=cooldown_ref))
+    else:
+        out.append(_fr("symbol_cooldown", op="仅标签", terminal="risk_tags",
+                       disposition=_LANDED, impact_target="risk_tags", evidence_ref=cooldown_ref))
+
+    forward = row.get("forward_event")
+    if isinstance(forward, dict):
+        if forward.get("in_window") is True:
+            event_type = forward.get("event_type")
+            event_ref = refs.get("upcoming_event:" + event_type) if isinstance(event_type, str) else None
+            direction = forward.get("direction")
+            claim_type = _EVENT_CLAIMS.get(event_type)
+            if direction == "reduce_caution":
+                out.append(_fr("forward_event", op="降仓", terminal="model_position_size_shares",
+                               disposition=_LANDED, impact_target="position_size",
+                               claim_type=claim_type, evidence_ref=event_ref))
+            elif direction == "reduce_or_observe":
+                out.append(_fr("forward_event", op="调信心", terminal="final_action",
+                               disposition=_LANDED, impact_target="final_action",
+                               claim_type=claim_type, evidence_ref=event_ref))
+            else:
+                out.append(_fr("forward_event", op="仅标签", terminal="risk_tags",
+                               disposition=_LANDED, impact_target="risk_tags",
+                               claim_type=claim_type, evidence_ref=event_ref))
+        else:
+            out.append(_fr("forward_event", op="仅标签", terminal=_SHADOW_TERMINAL,
+                           disposition=_SHADOW, impact_target=None))
+
+    gap = row.get("event_data_gap")
+    if isinstance(gap, dict):
+        if gap["status"] == "reduce_caution":
+            out.append(_fr("event_data_gap", op="降仓", terminal="model_position_size_shares",
+                           disposition=_LANDED, impact_target="position_size",
+                           evidence_ref=refs.get("size:event_data_gap")))
+        elif gap["status"] in {"restricted", "tag"}:
+            out.append(_fr("event_data_gap", op="仅标签", terminal="risk_tags",
+                           disposition=_LANDED, impact_target="risk_tags",
+                           evidence_ref=refs.get("risk_tag:event_data_gap:" + gap["status"])))
+        else:
+            out.append(_fr("event_data_gap", op="仅标签", terminal=_SHADOW_TERMINAL,
+                           disposition=_SHADOW, impact_target=None))
+    return out
 
 
 def _field_records(row):
@@ -211,7 +296,7 @@ def _field_records(row):
 
     # forward known-date event (§8.1) — v1 display-only (sizing/risk/display, never selection/veto); recorded
     # as a clean shadow until the live evidence_ref traceback (provider row / SEC filing) is wired in batch5.
-    if isinstance(row.get("forward_event"), dict):
+    if "result_effects" not in row and isinstance(row.get("forward_event"), dict):
         frs.append(_fr("forward_event", op="仅标签", terminal=_SHADOW_TERMINAL, disposition=_SHADOW, impact_target=None))
 
     # §4.3 overextension_state (cut 2d) — the §4.3 tier computed at the scoring stage; its EXECUTION effect
@@ -223,17 +308,22 @@ def _field_records(row):
         frs.append(_fr("overextension_state", op="仅标签", terminal="overextension_state",
                        disposition=_LANDED, impact_target=None))
 
+    frs.extend(_formal_effect_field_records(row))
+
     return frs
 
 
 def _decision_trace(row):
     """A non-empty per-row §10 decision_trace — where the deliberate selection_rank (多强) vs action_rank
     (先干哪个) divergence is explained: a must-act holding exit can outrank a stronger new build (§9 line 248)."""
+    manual_quantity = (isinstance(row.get("action_proposal"), dict)
+                       and row["action_proposal"].get("reason")
+                       == "mandatory_holding_exit_manual_share_confirmation")
     return ("final_action=%s observe_reason_type=%s | selection_rank=%s (多强) vs action_group=%s "
             "action_rank=%s (先干哪个, §9 survival-first); a must-act holding exit can outrank a stronger "
-            "new 建仓 (§9 line 248)." % (
+            "new 建仓 (§9 line 248). manual_share_confirmation_required=%s" % (
                 row.get("final_action"), row.get("observe_reason_type"), row.get("selection_rank"),
-                row.get("action_group"), row.get("action_rank")))
+                row.get("action_group"), row.get("action_rank"), manual_quantity))
 
 
 def _finite_number(x):
@@ -244,7 +334,7 @@ def _pos_int(x):
     return isinstance(x, int) and not isinstance(x, bool) and x >= 1
 
 
-def _validate_ranked_row(row):
+def _validate_ranked_row(row, *, as_of, require_result_effects):
     """Fail-closed VALUE validation of one 4d-ii-j ranked row BEFORE its §10 field_records are emitted. The
     machine record is the OFFICIAL pre-render clean gate, so malformed carried evidence must NOT silently
     become a clean (shadow / landed) field_record — the recurring batch4 consumer-validation class. Reuses the
@@ -257,6 +347,12 @@ def _validate_ranked_row(row):
         validate_evidence_row(row)
     except WeekendDecisionError as e:
         raise WeekendMachineRecordError(f"4d-ii-a 证据非法（machine-record 边界 fail-closed）: {e}")
+
+    if require_result_effects:
+        try:
+            validate_result_effects(row, as_of=as_of)
+        except ResultEffectsError as exc:
+            raise WeekendMachineRecordError(f"第二刀 result_effects 未闭环: {exc}") from exc
 
     final_action = row["final_action"]
     # ranked-result fields on EVERY 4d-ii-j row: action_group must be the real §9 engine group for this action
@@ -278,6 +374,9 @@ def _validate_ranked_row(row):
     price_err = action_price_error(final_action, row["price"].get("action_fields"))
     if price_err:
         raise WeekendMachineRecordError(price_err)
+    quantity_err = action_quantity_error(final_action, row)
+    if quantity_err:
+        raise WeekendMachineRecordError(quantity_err)
 
     # a 建仓 is an actionable build: it must carry an EXECUTABLE price plan and a real sized position, else
     # price could be shadowed / sizing+regime fabricated onto position_size from a non-executable / unsized build.
@@ -341,7 +440,7 @@ def _validate_ranked_row(row):
 
 
 def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN_ORIGIN,
-                            research_live_capability=None):
+                            research_live_capability=None, require_result_effects=False):
     """4d-ii-k §10 machine-record assembly. Assembles the 4d-ii-j `apply_action_rank` result into the §10
     machine record and validates it with `validate_official_machine_record`, failing closed if it is not §10-clean.
 
@@ -387,7 +486,7 @@ def assemble_machine_record(ranked_result, *, as_of, run_origin=OFFLINE_TEST_RUN
         if ct in seen:
             raise WeekendMachineRecordError(f"rows 含规范化后重复 ticker（一股一行）: {ct!r}")
         seen.add(ct)
-        _validate_ranked_row(row)   # VALUE-validate carried evidence before §10 field_records are emitted
+        _validate_ranked_row(row, as_of=as_of, require_result_effects=require_result_effects)
         rows_out.append({**row, "ticker": ct, "market_risk_regime": market_risk_regime,
                          "decision_trace": _decision_trace(row), "field_records": _field_records(row)})
     # §10 field-registry 反向完整性 (R-USSHORT-BATCH4-MACHINE-REGISTRY-COMPLETENESS-GAP) is enforced by the OFFICIAL

@@ -12,6 +12,7 @@
     "status",
     "final_action_price_map",
     "holding_exit_price_fields",
+    "holding_action_policy",
     "action_rank_skeleton",
     "observe_reason_types",
     "action_rank_policy",
@@ -103,6 +104,22 @@
           "meaning": "事件硬风险清仓参考价，标\"人工执行、非技术价\""
         }
       ]
+    },
+    "holding_action_policy": {
+      "description": "First-cut §6.1 holding action policy: TP1 reduces exactly 10% of reconciled remaining shares, TP2 fully exits, and a recommendation can never mark TP1 as manually executed.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tp1_reduce_fraction", "tp1_reduce_basis", "tp2_action", "state_completion_source", "add_position_enabled", "deferred"],
+      "properties": {
+        "tp1_reduce_fraction": {"const": 0.10},
+        "tp1_reduce_basis": {"const": "remaining_shares"},
+        "tp2_action": {"const": "清仓-止盈"},
+        "state_completion_source": {"const": "manual_executed_trade_only"},
+        "add_position_enabled": {"const": false},
+        "deferred": {
+          "const": ["move_stop_to_breakeven", "ratchet", "multi_day_active_management"]
+        }
+      }
     },
     "action_rank_skeleton": {
       "description": "§9 5 组骨架（保命优先）— ordered groups; ORDER is the survival-first priority, const-pinned.",

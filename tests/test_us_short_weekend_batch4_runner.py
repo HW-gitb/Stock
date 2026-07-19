@@ -32,6 +32,12 @@ def _packet(base: Path, *, with_register=True):
         "schema_name": "us_short_account_state", "schema_version": "1.0.0", "as_of": "20260615",
         "us_market_equity": 30000.0, "us_short_bucket_capital": 10000.0,
         "us_short_available_cash": 4000.0, "positions": [],
+        "holding_action_reconciliation": {
+            "schema_name": "us_short_holding_action_reconciliation", "schema_version": "1.0.0",
+            "as_of": "20260615", "positions": []},
+        "symbol_cooldown_reconciliation": {
+            "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+            "as_of": "20260615", "events": []},
         "manual_order_only": True, "broker_connection_allowed": False,
     }), encoding="utf-8")
     packet = {

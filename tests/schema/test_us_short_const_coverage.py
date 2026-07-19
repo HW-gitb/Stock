@@ -39,7 +39,7 @@ SCHEMAS = ROOT / "schemas"
 # Generated from the reviewed batch-1 schemas. A drop = a const was weakened/removed; a rise = a const
 # was added — either way update this number deliberately (that is the whole point of the gate).
 EXPECTED_CONST_PATH_COUNT = {
-    "us_short_action_governance": 7,
+    "us_short_action_governance": 13,
     "us_short_action_table_contract": 20,
     "us_short_cash_allocation_governance": 10,
     "us_short_exclusion_summary_governance": 14,

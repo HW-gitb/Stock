@@ -90,11 +90,19 @@
   },
   "prior_regime": null,
   "prior_upgrade_count": 0,
+  "paper_track": {
+    "paper_evaluable": false,
+    "consecutive_stops": null,
+    "paper_drawdown_frac": null,
+    "evidence_ref": {
+      "kind": "source_id",
+      "value": "synthetic_fixture:paper_track_not_evaluable"
+    }
+  },
   "sizing_per_ticker": {},
   "basket_context": {
     "per_ticker": {},
     "holding_themes": {},
-    "portfolio_guard_status": "normal",
     "theme_opportunity_state": "no_strong_theme"
   },
   "cost_inputs": {},

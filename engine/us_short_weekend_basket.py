@@ -58,6 +58,7 @@ from engine.us_short_portfolio_guard import PORTFOLIO_GUARD_STATES, portfolio_gu
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_theme_probe import THEME_OPPORTUNITY_STATES, theme_probe_decision, theme_probe_seats
 from engine.us_short_weekend_decision import OBSERVE_REASONS, action_reason_error
+from engine.us_short_result_effects import RECOVERY_MIN_CONFIDENCE
 
 # §8 line 227 / §13.1 #4 forward-calibration priors (NOT frozen const): BASE per-regime weekly new-build
 # count cap + the 同主题 weekly cap. theme_probe (§8 line 229 / §13.1 #27) adds EXTRA seats beyond these.
@@ -160,12 +161,10 @@ def resolve_build_capacity(sized_result, *, basket_context):
 
     sized_result = the `size_rows` output {regime: {... market_risk_regime ...}, rows: [...]}.
     basket_context = {"per_ticker": {<canonical ticker>: {"theme": <non-blank str>,
-                                                          "symbol_cooldown_status": <frozen status>,
                                                           "theme_probe": {"theme_lifecycle_state": str|None,
                                                               "high_confidence": bool, "coverage_status": str,
                                                               "no_gap_week": bool, "entry_in_band": bool}}},  # one per 建仓
                       "holding_themes": {<canonical current holding ticker>: <non-blank str>},
-                      "portfolio_guard_status": <frozen portfolio_guard state>,                                # account-level
                       "theme_opportunity_state": <frozen theme-opportunity state>}                             # account-level
 
     Returns {"regime": <carried>, "rows": [{...row, "selection_rank": int|None, ["theme_probe": {...}],
@@ -183,13 +182,22 @@ def resolve_build_capacity(sized_result, *, basket_context):
         raise WeekendBasketError(f"market_risk_regime 非法（须 ∈ {sorted(WEEKLY_BUILD_LIMIT)}）: {regime!r}")
     weekly_limit = WEEKLY_BUILD_LIMIT[regime]
     if not (isinstance(basket_context, dict)
-            and set(basket_context) == {"per_ticker", "holding_themes", "portfolio_guard_status", "theme_opportunity_state"}
+            and set(basket_context) == {"per_ticker", "holding_themes", "theme_opportunity_state"}
             and isinstance(basket_context["per_ticker"], dict)
             and isinstance(basket_context["holding_themes"], dict)):
         raise WeekendBasketError(
-            "basket_context 顶层键须恰为 {'per_ticker','holding_themes','portfolio_guard_status','theme_opportunity_state'} 且两 map 为 dict（closed-world）")
+            "basket_context 顶层键须恰为 {'per_ticker','holding_themes','theme_opportunity_state'} 且两 map 为 dict（closed-world）")
     per_ticker = basket_context["per_ticker"]
-    guard_blocks_new = _guard_blocks_new_entry(basket_context["portfolio_guard_status"])
+    guard_result = sized_result.get("portfolio_guard_result")
+    guard_status = guard_result.get("state") if isinstance(guard_result, dict) else None
+    guard_blocks_new = _guard_blocks_new_entry(guard_status)
+    guard_effects = portfolio_guard_effects(guard_status)
+    if not all(isinstance(v, bool) for v in guard_effects.values()):
+        raise WeekendBasketError("portfolio guard effect table 非法")
+    if guard_effects["reduce_weekly_new_count"]:
+        weekly_limit = max(0, weekly_limit - 1)  # conservative v1 prior: caution removes one base new-entry slot
+    if guard_effects["only_few_high_confidence_new"]:
+        weekly_limit = min(weekly_limit, 1)
     theme_opportunity_state = basket_context["theme_opportunity_state"]
     if theme_opportunity_state not in THEME_OPPORTUNITY_STATES:
         raise WeekendBasketError(
@@ -201,7 +209,7 @@ def resolve_build_capacity(sized_result, *, basket_context):
     # own per-symbol cooldown is recorded for a risk_cooldown downgrade and is NOT collected into the rankable
     # set (a cooled-down symbol must not consume a weekly / 同主题 slot).
     ct_by_index, theme_by_index, seen = {}, {}, set()
-    builds, build_tickers, blocked_indices = [], set(), set()
+    builds, build_tickers, effect_overridden_tickers, blocked_indices = [], set(), set(), set()
     for i, row in enumerate(sized_result["rows"]):
         if not (isinstance(row, dict) and isinstance(row.get("final_action"), str)):
             raise WeekendBasketError(f"sized row 形状非法（须为 4d-ii-c 输出行）: {row!r}")
@@ -216,6 +224,15 @@ def resolve_build_capacity(sized_result, *, basket_context):
         seen.add(ct)
         ct_by_index[i] = ct
         if row["final_action"] != _BUILD:
+            effects = row.get("result_effects")
+            override = effects.get("action_override") if isinstance(effects, dict) else None
+            # A formal result effect can downgrade a would-be build before this cross-row gate.  Keep its
+            # same-run theme input admissible but never rank, size, or consume it; ordinary observes remain
+            # unable to smuggle a stale per_ticker entry through this exception.
+            if (row["final_action"] == _OBSERVE and isinstance(override, dict)
+                    and override.get("final_action") == _OBSERVE
+                    and isinstance(override.get("source"), str) and override["source"].strip()):
+                effect_overridden_tickers.add(ct)
             continue
         # rank by the PRESERVED Top15 selection_rank (slice 2a/2b: the canonical selection identity threaded from
         # _select_top15), NOT a re-derived analysis core_score — so build/cash/action priority can never silently
@@ -232,24 +249,32 @@ def resolve_build_capacity(sized_result, *, basket_context):
             raise WeekendBasketError(
                 f"建仓 行须为 4d-ii-c 真 sized build（sizing.status=='sized' + desired_model_shares≥1）: {ct!r}")
         tinfo = per_ticker.get(ct)
-        if not (isinstance(tinfo, dict) and set(tinfo) == {"theme", "symbol_cooldown_status", "theme_probe"}
+        if not (isinstance(tinfo, dict) and set(tinfo) == {"theme", "theme_probe"}
                 and isinstance(tinfo.get("theme"), str) and tinfo["theme"].strip()):
             raise WeekendBasketError(
-                f"basket_context.per_ticker[{ct!r}] 须为 {{'theme': 非空 str, 'symbol_cooldown_status', 'theme_probe'}}: {tinfo!r}")
-        scs = tinfo["symbol_cooldown_status"]
+                f"basket_context.per_ticker[{ct!r}] 须为 {{'theme': 非空 str, 'theme_probe'}}: {tinfo!r}")
+        if row.get("portfolio_guard_status") != guard_status:
+            raise WeekendBasketError(f"{ct}: row portfolio_guard_status 与 run-level guard 不一致")
+        scs = row.get("symbol_cooldown_status")
         if scs not in SYMBOL_COOLDOWN_STATUSES:
-            raise WeekendBasketError(
-                f"per_ticker[{ct!r}].symbol_cooldown_status 非法（须 ∈ {list(SYMBOL_COOLDOWN_STATUSES)}）: {scs!r}")
+            raise WeekendBasketError(f"{ct}: symbol_cooldown_status 非法（须 ∈ {list(SYMBOL_COOLDOWN_STATUSES)}）: {scs!r}")
         _validate_theme_probe_inputs(tinfo, ct)
         build_tickers.add(ct)
         theme_by_index[i] = tinfo["theme"].strip().casefold()
-        if guard_blocks_new or scs in _SYMBOL_COOLDOWN_BLOCKS_NEW:
+        confidence = row.get("action_confidence")
+        if not (isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
+                and 0.0 <= float(confidence) <= 1.0):
+            raise WeekendBasketError(f"{ct}: action_confidence 须为 [0,1] 有限数")
+        recovery_blocks = guard_effects["only_few_high_confidence_new"] and confidence < RECOVERY_MIN_CONFIDENCE
+        if guard_blocks_new or scs in _SYMBOL_COOLDOWN_BLOCKS_NEW or recovery_blocks:
             blocked_indices.add(i)            # §8 新建阻断 → risk_cooldown, removed before ranking
         else:
             builds.append((i, ct, sr, theme_by_index[i]))   # sr = preserved Top15 rank; strip+casefolded theme — spelling variants cannot dodge the cap
-    if set(per_ticker) != build_tickers:
+    expected_per_ticker = build_tickers | effect_overridden_tickers
+    if set(per_ticker) != expected_per_ticker:
         raise WeekendBasketError(
-            f"basket_context.per_ticker 须恰覆盖 建仓 ticker 集（无缺/无陈旧、canonical 键）: per_ticker={sorted(per_ticker)} builds={sorted(build_tickers)}")
+            "basket_context.per_ticker 须恰覆盖 建仓 + 正式 effect 转观察 ticker 集（无缺/无陈旧、canonical 键）: "
+            f"per_ticker={sorted(per_ticker)} expected={sorted(expected_per_ticker)}")
 
     # order the NON-blocked builds by their PRESERVED Top15 selection_rank (asc, ticker tiebreak); then apply the
     # §8 BASE weekly-limit + 同主题 cap (stripped theme) over that order. The EMITTED selection_rank is the
@@ -309,4 +334,5 @@ def resolve_build_capacity(sized_result, *, basket_context):
             build_count += 1
             out_rows.append({**capacity_row, "selection_rank": rank_by_index[i]})
     return {"regime": sized_result["regime"], "rows": out_rows,
-            "weekly_build_limit": weekly_limit, "build_count": build_count}
+            "weekly_build_limit": weekly_limit, "build_count": build_count,
+            "portfolio_guard_result": guard_result}

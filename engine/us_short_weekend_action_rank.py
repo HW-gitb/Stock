@@ -19,6 +19,7 @@ from __future__ import annotations
 
 from engine.us_short_action_rank import rank_actions
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from engine.us_short_result_effects import finalize_result_effects
 from engine.us_short_weekend_decision import action_reason_error
 
 
@@ -60,8 +61,11 @@ def apply_action_rank(cash_result):
     # §9 ranking (group-major + survival-first; rank_actions reads final_action + selection_rank, ticker-agnostic).
     rankings = rank_actions(cash_result["rows"])
 
+    finalized = finalize_result_effects(cash_result) if any(
+        isinstance(row, dict) and "result_effects" in row for row in cash_result["rows"]
+    ) else cash_result
     out_rows = []
-    for i, row in enumerate(cash_result["rows"]):
+    for i, row in enumerate(finalized["rows"]):
         out_rows.append({**row, "ticker": ct_by_index[i],
                          "action_group": rankings[i]["action_group"], "action_rank": rankings[i]["action_rank"]})
-    return {**cash_result, "rows": out_rows}
+    return {**finalized, "rows": out_rows}

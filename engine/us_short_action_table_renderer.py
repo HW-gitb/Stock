@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """US-short action_table.csv renderer (batch-3 R2a; design §11.1 / §11.3).
 
-Renders the §11.3 frozen 51-column action_table.csv FROM a machine record (design §11.1:
+Renders the §11.3 frozen 54-column action_table.csv FROM a machine record (design §11.1:
 "周报/csv 从机器层渲染、validator 在机器层焊死"). The column SET + ORDER come from the frozen
 `us_short_action_table_contract` (single source — no hardcoded copy), so the CSV can never drift from
 the contract. The renderer:
@@ -56,12 +56,12 @@ def _cell(v) -> str:
 
 
 def render_action_table(machine_record) -> dict:
-    """Return ``{'columns': [...51...], 'rows': [[cell, ...], ...]}`` for the frozen action_table.csv.
+    """Return ``{'columns': [...54...], 'rows': [[cell, ...], ...]}`` for the frozen action_table.csv.
 
     The machine record MUST be §10-clean: the §10 no-dangling validator ALWAYS runs — there is NO opt-out,
     the clean gate is welded at the machine layer (design §11.1) — and a not-clean record raises
     ``NotCleanMachineRecordError`` (the renderer never emits a CSV from an unvalidated machine layer). Each
-    row renders the 51 frozen columns in exact contract order; a column the machine row omits → empty cell.
+    row renders the 54 frozen columns in exact contract order; a column the machine row omits → empty cell.
     """
     result = validate_official_machine_record(machine_record)
     if not result["clean"]:

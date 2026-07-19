@@ -27,6 +27,7 @@ from engine.us_short_no_dangling_validator import (  # noqa: E402
     official_expected_field_ids, validate_machine_record, validate_official_machine_record)
 from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES  # noqa: E402
 from engine.us_short_regime import REGIMES  # noqa: E402
+from engine.us_short_result_effects import apply_result_effects  # noqa: E402
 
 _AS_OF = "20260112"
 
@@ -74,6 +75,25 @@ def _row(ticker="AAA", final_action="建仓", observe_reason_type=None, row_sour
 
 def _ranked(rows, regime="进攻"):
     return {"regime": {"market_risk_regime": regime}, "rows": rows, "weekly_build_limit": 3, "build_count": 1}
+
+
+def _second_cut_effect_row(*, forward_event=None, event_data_gap=None):
+    """A normal finalized build carrying real second-cut effects and evidence refs."""
+    source_row = {"ticker": "AAA", "final_action": "建仓", "observe_reason_type": None}
+    if forward_event is not None:
+        source_row["forward_event"] = forward_event
+    if event_data_gap is not None:
+        source_row["event_data_gap"] = event_data_gap
+    effected = apply_result_effects(
+        {"regime": {"market_risk_regime": "进攻", "position_cap": 1.0}, "rows": [source_row]},
+        portfolio_guard_result={"state": "normal", "evidence_ref": {
+            "kind": "source_id", "value": "test:portfolio-guard", "as_of": _AS_OF}},
+        cooldown_by_ticker={"AAA": {"status": "none", "cooldown_until": None,
+                                     "reentry_allowed_reason": None, "evidence_ref": {
+                                         "kind": "source_id", "value": "test:cooldown", "as_of": _AS_OF}}},
+        as_of=_AS_OF,
+    )["rows"][0]
+    return {**_row(), **effected}
 
 
 def _fr_by_id(record, field_id, ri=0):
@@ -202,6 +222,24 @@ class FieldRecordLandings(unittest.TestCase):
         self.assertEqual((fe["disposition"], fe["claim_type"], fe["evidence_ref"]),
                          ("shadow_record", None, None))  # v1: no fabricated offline evidence_ref
         self.assertTrue(validate_machine_record(rec)["clean"])
+
+    def test_formal_forward_reduce_caution_uses_legal_reduce_position_impact(self):
+        row = _second_cut_effect_row(forward_event={
+            "event_type": "earnings", "days_to_event": 5.0, "in_window": True,
+            "direction": "reduce_caution", "evidence_ref": {
+                "kind": "SEC filing", "value": "sec:AAA:10-Q", "as_of": _AS_OF},
+        })
+        rec = mr.assemble_machine_record(_ranked([row]), as_of=_AS_OF, require_result_effects=True)
+        field = _fr_by_id(rec, "forward_event")
+        self.assertEqual((field["operation_impact"], field["impact_target"], field["disposition"]),
+                         ("降仓", "position_size", "landed"))
+
+    def test_formal_event_gap_reduce_caution_uses_legal_reduce_position_impact(self):
+        row = _second_cut_effect_row(event_data_gap={"status": "reduce_caution"})
+        rec = mr.assemble_machine_record(_ranked([row]), as_of=_AS_OF, require_result_effects=True)
+        field = _fr_by_id(rec, "event_data_gap")
+        self.assertEqual((field["operation_impact"], field["impact_target"], field["disposition"]),
+                         ("降仓", "position_size", "landed"))
 
     def test_lifecycle_item_ids_resolve(self):
         rec = mr.assemble_machine_record(_ranked([_row(theme_probe=True, forward_event=True)]), as_of=_AS_OF)

@@ -118,6 +118,14 @@ def _size_build(row, *, bucket, position_cap, ticker, per_ticker):
             raise WeekendSizingError(f"overextension 违反 §4.3 状态/效果闭集契约: {ox!r}") from exc
     if isinstance(ox, dict) and ox["execution_flags"].get("reduce_size") is True:
         discount_mults = discount_mults + [WARNING_REDUCE_MULT]
+    # Second-cut formal effects contribute exactly ONE additional candidate to §8 step ③.  The reduction stack
+    # still takes the harshest single multiplier, so co-occurring event/portfolio risks never multiply together.
+    effects = row.get("result_effects")
+    if effects is not None:
+        multiplier = effects.get("selected_size_multiplier") if isinstance(effects, dict) else None
+        if not (_finite_number(multiplier) is not None and 0.0 <= float(multiplier) <= 1.0):
+            raise WeekendSizingError(f"{ticker}: result_effects.selected_size_multiplier 须为 [0,1] 有限数")
+        discount_mults = discount_mults + [float(multiplier)]
 
     base = risk_based_base_shares(bucket, entry, stop)
     single_ticker_cap = int(math.floor(bucket * SINGLE_TICKER_CAP_FRAC / entry))
@@ -168,6 +176,7 @@ def size_rows(decision_result, *, sizing_context):
     # cap by appearing twice) fails closed before any sizing.
     seen = set()
     build_tickers = set()
+    effect_overridden_tickers = set()
     for row in decision_result["rows"]:
         if not (isinstance(row, dict) and isinstance(row.get("final_action"), str)
                 and isinstance(row.get("price"), dict) and isinstance(row["price"].get("action_fields"), dict)):
@@ -187,7 +196,16 @@ def size_rows(decision_result, *, sizing_context):
             if row["price"].get("executable") is not True:
                 raise WeekendSizingError(f"建仓 行 price.executable 须为 True（不可执行不得定仓）: {ct!r}")
             build_tickers.add(ct)
-    if set(per_ticker) != build_tickers:
+        elif row["final_action"] == _OBSERVE:
+            effects = row.get("result_effects")
+            override = effects.get("action_override") if isinstance(effects, dict) else None
+            # A known-date event or a real symbol cooldown can turn a previously analyzed build into observe
+            # before sizing. Its per-ticker input remains a required upstream fact, but is never consumed.
+            if (isinstance(override, dict) and override.get("final_action") == _OBSERVE
+                    and isinstance(override.get("source"), str) and override["source"].strip()):
+                effect_overridden_tickers.add(ct)
+    expected_inputs = build_tickers | effect_overridden_tickers
+    if set(per_ticker) != expected_inputs:
         raise WeekendSizingError(
             f"sizing_context.per_ticker 须恰覆盖 建仓 ticker 集（无缺/无陈旧）: per_ticker={sorted(per_ticker)} builds={sorted(build_tickers)}")
 
@@ -204,4 +222,4 @@ def size_rows(decision_result, *, sizing_context):
             row, bucket=bucket, position_cap=position_cap, ticker=ct, per_ticker=per_ticker)
         sized_rows.append({**row, "ticker": ct, "final_action": final_action,
                            "observe_reason_type": observe_reason, "sizing": sizing})
-    return {"regime": decision_result["regime"], "rows": sized_rows}
+    return {**decision_result, "rows": sized_rows}

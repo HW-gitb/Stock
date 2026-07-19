@@ -107,7 +107,7 @@ load config / state / data  (+ provider 健康检查 §3.7；不健康→restric
   - `trades.csv`（= §12 `manual_actual_track` / `execution_log_private` 落地文件）：`decision_date / ticker / suggested_action / executed / fill_price / fill_shares / skip_reason / manual_override`；
   - `account.csv`：`us_market_equity` + `us_short_available_cash` + 可选 `portfolio_total_equity`（仅参考）；短线桶 = `us_market_equity ÷ 3`，系统自己算，不从含糊"总额"瞎猜。
 - **转换器 → `us_short_account_state`**（US 自有 schema，不共用 A 股）→ 周报/持仓重评/成绩单消费；公司行动录入器只在显式 `--confirm-account-read` 下读取同一私有 schema 的 `old_ticker` long 持仓，confirmed record 仅留 digest binding，实际处置票据只写 gitignored/external private path。
-- **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / decision_as_of`；trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。CSV canonical 防 Excel 强转。
+- **lineage**：每张 CSV 记 `sha256 / row_count / facts_as_of / decision_as_of`；trades↔positions 一致性对账（advisory WARN，不覆盖 positions）。转换器同时生成 `holding_action_reconciliation`：`remaining_shares / tp1_completed / tp1_completed_at / source_reconciliation_ref`；其中 `tp1_completed` 只能由人工表中已执行的`减仓`成交记录确认，建议本身绝不当作成交。CSV canonical 防 Excel 强转。
 
 ### 3.7 数据源分层健康检查（跑前必做）
 每周跑前分层探活：FMP 接口 / SEC EDGAR parser / 价格·状态·财报·事件字段够不够，并按 endpoint family 分别判 criticality，不能把同一 provider 的所有接口绑成一个硬门。当前 capstone 中 `FMP grades` 按 §3.2 为 advisory，异常时透明降级为 `usable_with_fallback`；SEC submissions 仍 critical，异常时 `restricted / blocked` 并 NO-EMIT。**未单独批准的源（yfinance / Web / X，§3 边界）：健康检查只记 `disabled_unapproved`——不探活、不调用、不参与 clean 判定**（防"健康检查"被当成调用未授权源的后门）。只查真实 weekly 会用的、已授权的接口、不打印 token、不假 OK。关键源异常 → **不许输出 clean 建仓**，只能 `restricted / observe / data_degraded`。
@@ -216,10 +216,11 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **tick 取整 + 取整后 RR 复校**：算理论价 → 按方向取整可执行价（美股 $0.01，留 sub-penny/低价例外）→ 用取整后真实价**重算 RR**，破了降观察；字段 `execution_tick / rounded_price_used / post_round_rr_status`。
 - 缺可靠 ATR/支撑压力/财报日期/持仓成本 → 降级观察或只风控。
 
-### 6.1 持仓价位映射（v1 出基础价位、只推迟主动逻辑）
-- v1 不做复杂主动持仓管理，但**必须输出基础价位映射**（满足"清仓/减仓/止盈/止损价位"原始要求）——这些价 = `holding_exit_engine` 的被动 levels：`stop_clear_price`（止损清仓价）、`take_profit_reduce_price`（盈一减仓价）、`take_profit_exit_price`（盈二/跟踪止盈价）、`event_clear_reference_price`（事件硬风险清仓参考价，标"人工执行、非技术价"）。
-- 主动 scale-out 的**逻辑**（何时减、减多少、移保本、跨周持久 ratchet）= lifecycle 候选 `active_scale_out_candidate`（`candidate_active`），攒够持仓管理数据后经 §13 #34 决定是否启用。即 v1 给价位、不给主动动态减仓逻辑。
-- **启用时直接借 A 股持仓主动管理 advisory 设计作模板**——止损只升不降 ratchet、`disposition` severity-max（只升档不降）、浮盈 ≥1R 移保本、到价提示、跨周持久化（私密 sidecar）；全 advisory、不自动下单。仍属 `active_scale_out_candidate`（§13 #34），v1 不实现。
+### 6.1 持仓价位映射与第一层行动闭环
+- `holding_exit_engine` 给基础价位：`stop_clear_price`（止损清仓价）、`take_profit_reduce_price`（盈一减仓价 / TP1）、`take_profit_exit_price`（盈二/跟踪止盈价 / TP2）、`event_clear_reference_price`（事件硬风险清仓参考价，标"人工执行、非技术价"）。
+- **第一层已启用、全 advisory、不自动下单**：正常且可信输入下优先级为 `清仓-事件` > `清仓-止损` > `清仓-止盈` > `减仓` > `持有`。TP1 到达上一轮已发布的私有目标价且未确认完成时，建议减 **剩余股数的固定 10%**；TP2 到达时建议清仓全部已对账的剩余股数。正常情况下每个减/清动作必须同时有 `final_action / recommended_action_shares / 对应价格`；**保命例外**：`清仓-事件`或`清仓-止损`已触发但本次股数对账不可信时，仍必须输出动作和对应价格，`recommended_action_shares` 留空、`decision_trace` 标记需人工核对股数，绝不猜测数量、更不能静默改成`观察`。`model_position_size_shares`只代表建仓目标仓位，不能充当一次性卖出数量。
+- 为避免“本周用本周收盘价重算目标而永远触不到目标”，私有 `runs_private/holding_action_state.json` 保存上一轮 TP1/TP2、价格日期/时段/复权口径、`tp1_completed / tp1_completed_at / remaining_shares / source_reconciliation_ref`。首次仅播种价位；建议减仓不会标记完成，只有人工 `trades.csv` 已执行`减仓`才会确认 TP1。
+- TP1 向下取整后不足 1 股，或成本地板不可验证/不通过时，不出 0 股订单，保持并记 `tp1_deferred_below_min` 或成本递延原因。加仓、移保本、主动 ratchet 和多日主动管理仍不启用。
 
 ## 7. 市场环境（两轴：风控刹车 vs 赛道机会，别只 worst_of）
 - **三类输入**：① VIX 风险温度（**目标使用 FMP `^VIX`；未过 provider 授权门（§3 边界）前禁用或标 `unapproved`**，不当已验；**VIX 未授权 / unavailable → 该轴按 unknown，`market_risk_regime` 退到 `SPY/QQQ + breadth` 并按 unknown 降级规则保守处理**）② 大盘趋势 `SPY + QQQ`（必须含 QQQ——池偏 AI/半导体/成长）③ 板块/市场广度（走基础 universe 成分股；行业 ETF 据公开档为付费、不依赖）。
@@ -261,6 +262,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 
 ## 9. 操作排名 action_rank
 - **`final_action` 词表（与 §6.1 价位一一对应，避免状态/价位脱钩）**：`建仓` / `加仓`（→ entry 价）、`减仓`（部分止盈 → `take_profit_reduce_price`）、`清仓-止损`（→ `stop_clear_price`）、`清仓-止盈`（→ `take_profit_exit_price`）、`清仓-事件`（→ `event_clear_reference_price`）、`持有`、`观察`（带 `observe_reason_type`）、`否决/避开`。
+- 第一层中持仓减/清正常均须带已对账的 `recommended_action_shares`；仅已触发的`清仓-事件`/`清仓-止损`可在对账不可信时保留动作+价格并留空数量，且必须标记人工核对。`加仓`仍是冻结词表而非可产生动作。
 - `selection_rank`（多强）与 `action_rank`（这周先干哪个）分开。
 - **5 组骨架（保命优先）**：① 持仓强制减/清（触发止损或 position veto）→ ② 可建仓新机会（过闸+可操作+触发/临近，按选股排名）→ ③ 加仓 → ④ 持有/观察 → ⑤ 否决/放弃。理由：不处理已触发止损损失会继续；错过新机会只是少赚。
 - **组内细排输入**（都有落点、不悬空）：是否持仓=主分组轴；是否触发进出=落哪组；选股名次=组②排序；可操作性=组②门槛+排序；数据质量=降 confidence/太差→blocked；风险=硬→①/⑤、软→组②往后+降仓；集中度=同主题挤→降级；未来事件(§8.1)=临近财报/解禁→降级或转观察、持仓侧并入①/③。用分组不用加权（防把必须止损的持仓排到新买点后）。
@@ -271,6 +273,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
   - **核心字段（hard veto / risk downgrade / data quality / selection / price / sizing / trigger / `market_risk_regime` / `theme_opportunity_state` / `theme_lifecycle_state`）必须影响 `final_action / action_rank / position_size / price / action_confidence / risk_tags` 至少一个**，否则转 shadow_record 或删。（`market_risk_regime` 经环境乘数+周建仓上限落地、`theme_opportunity_state` 经 §8 强赛道试探名额落地、`theme_lifecycle_state` 经席位/`theme_probe`/降仓/§9 重评落地。）
 - **反向证据反查（防造假）**：报告每个 claim（临近财报/S-3/FDA/做空报告/赛道热度/新闻催化）机器层**必须反查到 provider row / SEC filing / source_id**，查不到 → 不许输出成操作影响。
 - **完整字段 registry**：每字段登记 `field_id / owner_module / data_source / pit_basis / privacy_class / current_landing_surface / terminal_surface_target / operation_impact / evidence_ref_kind / lifecycle_item_id`。答不出"最后影响哪列/动作/价/仓/标签"→ 不进主系统。
+- **结果 effect 单源（第二刀）**：事件窗口、事件数据缺口、`portfolio_guard`、`symbol_cooldown` 不得各自留在中间对象；它们先合并为每票 `result_effects`（动作覆盖、取最严单一仓位折扣、信心上限、触发/失效条件、风险标签、事件及证据），再投影到 `final_action / action_confidence / risk_tags / trigger_conditions / invalid_conditions / upcoming_events / portfolio_guard_status / symbol_cooldown_status / cooldown_until / reentry_allowed_reason`。§10 机器记录对每个已接入 producer 发 registry record，并反向校验这些最终字段和证据；缺任一项即不生成正式结果。
 - **报告生成前必检**：每字段有落点 + 每 claim 可反查；hard veto 覆盖 final_action；risk downgrade 影响仓位/信心/标签；selection vs action_rank 差异有解释；无 dangling、无无证据 claim。失败 → 报告不 clean。
 
 ## 11. 输出
@@ -285,7 +288,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **顶部诚实横幅（借 A 股 M6.7）**：① 真/假观察拆分——把 `observe_reason_type` 按**冻结 observe_reason_type 词表全口径**聚合（含 `capacity_or_budget_deferred` = 过闸可执行但被本周建仓上限/同主题/极度防御仓位上限挤出名额、非系统不看好），其中"没账户/没现金"（`cash_or_account_missing`）那类是 sizing 假象、不是系统不看好；② 宏观集群预警（§8）——"N 个建仓同属 X 集群、合计 Y% 仓位"；③ ship-gate 进度 + 达标 lifecycle 项数量对账；④ **price clock（必显）**——`price_data_through=上周五收盘（=canonical 决策日前一已收盘交易日，逢节回退）/ news_window_through=运行时刻（决策日开盘前任意时刻；含周末+周一早间突发）/ session_scope=RTH / decision_date=canonical（即将到来的美股交易日，§2.1）`，杜绝误以为用了周一盘中价；窗口内多次跑同一 decision_date 即同一价格钟；⑤ **高热度被剔除提示**——"本周 N 只高赛道热度票被剔除（安全闸/流动性/数据），见 `hot_excluded`（§11.4）"。
 
 ### 11.3 action_table.csv（完整列）
-`ticker, row_source, selection_bucket, theme_source, theme_lifecycle_state, final_action, action_rank, action_confidence, observe_reason_type, order_type, entry_plan, pullback_entry_price, breakout_entry_price, limit_order_price, valid_entry_low, valid_entry_high, order_expiry, gap_policy, effective_support, effective_resistance, structure_quality, stop_clear_price, take_profit_reduce_price, take_profit_exit_price, event_clear_reference_price, risk_reward_ratio, min_rr_gate_status, post_round_rr_status, price_engine_used, price_sub_mode, model_position_size_amount, model_position_size_shares, live_permission_status, live_size_warning, cash_allocation_status, portfolio_guard_status, symbol_cooldown_status, coverage_status, coverage_gap_tags, trigger_conditions, invalid_conditions, risk_tags, overextension_state, macro_cluster, macro_cluster_exposure_frac, macro_cluster_warning_level, macro_cluster_size_adjustment, data_quality_tags, execution_constraints, upcoming_events, decision_trace`（+ 候选增强字段）。
+`ticker, row_source, selection_bucket, theme_source, theme_lifecycle_state, final_action, recommended_action_shares, action_rank, action_confidence, observe_reason_type, order_type, entry_plan, pullback_entry_price, breakout_entry_price, limit_order_price, valid_entry_low, valid_entry_high, order_expiry, gap_policy, effective_support, effective_resistance, structure_quality, stop_clear_price, take_profit_reduce_price, take_profit_exit_price, event_clear_reference_price, risk_reward_ratio, min_rr_gate_status, post_round_rr_status, price_engine_used, price_sub_mode, model_position_size_amount, model_position_size_shares, live_permission_status, live_size_warning, cash_allocation_status, portfolio_guard_status, symbol_cooldown_status, cooldown_until, reentry_allowed_reason, coverage_status, coverage_gap_tags, trigger_conditions, invalid_conditions, risk_tags, overextension_state, macro_cluster, macro_cluster_exposure_frac, macro_cluster_warning_level, macro_cluster_size_adjustment, data_quality_tags, execution_constraints, upcoming_events, decision_trace`（+ 候选增强字段）。`recommended_action_shares` 是本周手动动作数量：建仓=已定仓股数，持仓减/清=私有对账后的卖出股数，持有/观察/否决留空；只有已触发的事件/止损清仓在对账不可信时可留空，但动作、价格和`decision_trace`的人工核对标记必须保留。
 - **精简一眼表**（周报内 ~8 列）：操作 / 模型股数+实盘权限 / 入·盈一·盈二·损 / 类型 / 优先级 / 触发条件 / 未来大事 / 关键标签。
 
 ### 11.4 exclusion_summary（剔除摘要 + 隐私拆分）
@@ -296,7 +299,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 `row_source`（`top15_candidate / holding_in_top15 / holding_pass2_only / holding_account_only`）+ `coverage_status`（`full/partial/restricted/blocked`）+ `coverage_gap_tags`。即使强制进 Pass 2，缺分析师/SEC parse/事件数据 → 明示 partial/未核查、不写 clean。
 
 ### 11.6 输出路径护栏
-- `.gitignore` 须覆盖**所有 private 目录**：`state/*/weekly_private/`、`state/*/account_state_csv/`、`state/*/runs_private/`、`state/*/model_paper_private/`、`state/*/lifecycle/`、`state/*/shadow_compare_private/`、`state/*/capstone_checkpoints_private/`。checkpoint bundle 含 ticker 级中间产物与 digest manifest，必须与官方私密输出执行同一 `reject_nonprivate_output_path` 守卫：仓内路径须由真实 `git check-ignore` 证明，仓外绝对路径允许，未证明即在 mkdir/write 前 fail-fast；生产 `state/us_short/capstone_checkpoints_private/...` 路径由回归测试直接覆盖。
+- `.gitignore` 须覆盖**所有 private 目录**：`state/*/weekly_private/`、`state/*/account_state_csv/`、`state/*/runs_private/`（含 `holding_action_state.json`）、`state/*/model_paper_private/`、`state/*/lifecycle/`、`state/*/shadow_compare_private/`、`state/*/capstone_checkpoints_private/`。checkpoint bundle 含 ticker 级中间产物与 digest manifest，必须与官方私密输出执行同一 `reject_nonprivate_output_path` 守卫：仓内路径须由真实 `git check-ignore` 证明，仓外绝对路径允许，未证明即在 mkdir/write 前 fail-fast；生产 `state/us_short/capstone_checkpoints_private/...` 路径由回归测试直接覆盖。
 - **lifecycle / shadow 状态文件隐私规则**：含票名/表现/成交/持仓的计数（`lifecycle_register.json`、比较轨 shadow 选股明细）→ **必须 private/gitignored**；要 tracked 只能放脱敏汇总（无票名、无 $、只归一化指标）。稳定规则文字仍进 tracked `docs/system_risk_register.md`。
 - **fail-closed 护栏**：用 `git check-ignore` 真值——任何 private 输出路径落点在仓库内且未被忽略 → fail-fast 报错；绕过脚本直接调管线也拦得住。
 
@@ -385,7 +388,7 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 31. `macro_cluster` 定义 + `warning_level` 分档 + 集群暴露硬上限
 32. `provisional_theme` 公式阈值（≥3 项、各字段判定线、薄来源降权、门内连续乘子窗口/映射、`persistence_mult` 门后地板 floor）
 33. `breakout_mode` 参数（突破失效线、追价上限）
-34. `active_scale_out_candidate`（主动减仓/移保本/ratchet 持仓管理；攒持仓管理数据再决定启用）
+34. 主动持仓管理的第二层：移保本、止损 ratchet、多日主动管理与任何加仓逻辑（第一层固定 TP1=10%减仓 / TP2=全清已启用；攒更多持仓管理数据再决定）
 35. `multi_day_order_expiry_candidate`（多日 GTC 订单有效期；靠纸面成交数据决定启用）
 36. 过热分档阈值（forward prior：`overextension_warning` 的 `k1=1.75` + MA5>MA10>MA20 趋势梯；`chasing_extreme` 的 `k2=2.50`/m×ATR + 量能高潮 + 均线距离 + 回撤结构 + 多条件 AND 共现项数 K；两档互斥、绝不单条件触发）+ 选择/执行拆分影子对照（`overextension_selection_off` / 影子分支账本接通后才 second-wave-live 的 `overextension_execution_off`）
 37. 强赛道周 Top6–15 额外完整分析名额数（1–2，按 `theme_leader_rs`；确认优先，严格筛选下可含 `provisional_active`、仅最小/试探仓的纳入门）

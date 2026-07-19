@@ -300,7 +300,6 @@ def _sizing_input_for_ticker(ticker: str, universe_by_ticker: dict[str, dict[str
 def _basket_input_for_ticker() -> dict[str, Any]:
     return {
         "theme": "unclassified",
-        "symbol_cooldown_status": "none",
         "theme_probe": {
             "theme_lifecycle_state": None,
             "high_confidence": False,
@@ -432,6 +431,14 @@ def _assemble_batch4_packet(
         market_axis_regimes=market_axis_regimes,
         basket_context=basket_context,
     )
+    paper_track = copy.deepcopy(template.get("paper_track"))
+    if paper_track is None:
+        paper_track = {
+            "paper_evaluable": False,
+            "consecutive_stops": None,
+            "paper_drawdown_frac": None,
+            "evidence_ref": {"kind": "source_id", "value": "batch5_bridge:paper_track_not_supplied"},
+        }
     return {
         "data_context": data_context,
         "per_ticker_analysis": per_ticker_analysis,
@@ -452,6 +459,7 @@ def _assemble_batch4_packet(
         "eligibility_governance_path": str(governance_path.resolve()),
         "calendar_path": str(calendar_path.resolve()),
         "account_state_path": str(account_state_path.resolve()),
+        "paper_track": paper_track,
         "lifecycle_register_path": str((private_root / "lifecycle" / "lifecycle_register.json").resolve()),
         "lifecycle_readiness_out_path": None,
         "runs_private_root": str(((official_output_root or private_root) / "runs_private").resolve()),

@@ -36,7 +36,7 @@ _PACKET_KEYS = frozenset({
     "data_context", "eligibility_governance_path", "per_ticker_analysis", "run_provenance",
     "provider_health", "calendar_path", "account_state_path", "market_axis_regimes", "prior_regime",
     "prior_upgrade_count", "sizing_per_ticker", "basket_context", "cost_inputs", "report_context",
-    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root",
+    "lifecycle_register_path", "lifecycle_readiness_out_path", "runs_private_root", "weekly_private_root", "paper_track",
 })
 
 
@@ -101,7 +101,7 @@ def _load_packet(packet_path) -> tuple[dict, Path]:
     packet = _read_json(path, "batch4 context packet")
     if not isinstance(packet, dict) or set(packet) != _PACKET_KEYS:
         shape = closed_world_counts(packet, expected_keys=_PACKET_KEYS)
-        raise Batch4RunnerError(f"context packet 顶层须为 18-key closed-world object ({shape})")
+        raise Batch4RunnerError(f"context packet 顶层须为 19-key closed-world object ({shape})")
     _validate_packet_schema(packet)
     return packet, path.parent
 
@@ -157,6 +157,7 @@ def _assemble_context(packet: dict, base: Path) -> tuple[dict, dict]:
         "cost_inputs": packet["cost_inputs"],
         "available_cash": account["us_short_available_cash"],
         "account_state": account,
+        "paper_track": packet["paper_track"],
         "report_context": packet["report_context"],
         "lifecycle_register_path": _resolve_path(packet["lifecycle_register_path"], base=base,
                                                    label="lifecycle_register_path"),

@@ -291,13 +291,32 @@ def _num(v):
     return str(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else "·"
 
 
+def _brief(value):
+    """Compact projection of an existing machine-row value; it never recomputes a business conclusion."""
+    if value is None or value == []:
+        return "·"
+    if isinstance(value, list):
+        return "; ".join(str(v) for v in value) or "·"
+    return str(value)
+
+
 def _one_glance(row):
     """§11.2 §5 精简一眼表 one-liner from a flattened §11.3 row: 操作 / 股数 / 入·盈一·盈二·损 / 类型 / 优先级."""
-    return ("%s %s | shares=%s | entry=%s tp1=%s tp2=%s stop=%s | %s | rank=%s"
-            % (row.get("ticker"), row.get("final_action"), _num(row.get("model_position_size_shares")),
+    return ("%s %s | shares=%s | entry=%s tp1=%s tp2=%s stop=%s | %s | rank=%s | trigger=%s | events=%s | tags=%s"
+            % (row.get("ticker"), row.get("final_action"), _num(row.get("recommended_action_shares")),
                _num(row.get("valid_entry_high")), _num(row.get("take_profit_reduce_price")),
                _num(row.get("take_profit_exit_price")), _num(row.get("stop_clear_price")),
-               row.get("order_type") or "·", _num(row.get("action_rank"))))
+               row.get("order_type") or "·", _num(row.get("action_rank")),
+               _brief(row.get("trigger_conditions")), _brief(row.get("upcoming_events")),
+               _brief(row.get("risk_tags"))))
+
+
+def _observe_glance(row):
+    """Observation-pool projection from the same flattened row; no secondary event/risk computation."""
+    return ("%s 观察(%s) | trigger=%s | events=%s | tags=%s"
+            % (row.get("ticker"), row.get("observe_reason_type"),
+               _brief(row.get("trigger_conditions")), _brief(row.get("upcoming_events")),
+               _brief(row.get("risk_tags"))))
 
 
 def _rows_section(rows, label):
@@ -453,7 +472,7 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
                           _num((r.get("selection_record") or {}).get("core_score")),
                           _num((r.get("selection_record") or {}).get("selection_rank")), r.get("final_action"))
                           for r in candidates], "Top15 选股"),
-        8: _rows_section(["%s 观察(%s)" % (r.get("ticker"), r.get("observe_reason_type")) for r in observes], "观察池"),
+        8: _rows_section([_observe_glance(r) for r in observes], "观察池"),
         9: exclusion_lines,
         10: _as_lines(report_context["risk_downgrade_note"], "risk_downgrade_note"),
         # §3.7 provider health is the INJECTED fixture's self-report, NOT a real provider call — an offline run

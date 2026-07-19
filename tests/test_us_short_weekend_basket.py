@@ -47,7 +47,7 @@ def _brow(ticker, score, final="建仓", sizing=_DEFAULT):
             "sizing": sz}
 
 
-def _sized(rows, regime="进攻"):
+def _sized(rows, regime="进攻", guard="normal", cooldowns=None):
     # slice 2b: the basket now ranks builds by the PRESERVED Top15 selection_rank. Auto-attach a selection_record
     # to each 建仓 row (ranked by core_score desc, so the existing selection_rank-by-score expectations hold)
     # UNLESS the row already carries one — a test can inject an explicit rank to prove the basket consumes the
@@ -56,23 +56,26 @@ def _sized(rows, regime="进攻"):
                           and isinstance(r.get("score"), dict)],
                          key=lambda r: (-r["score"]["core_score"], r["ticker"]))
     auto = {r["ticker"]: i for i, r in enumerate(auto_builds, start=1)}
+    cooldowns = cooldowns or {}
     out = [({**r, "selection_record": {"selection_rank": auto[r["ticker"]], "selection_bucket": "core_top",
                                        "core_score": r["score"]["core_score"], "theme_momentum_score": 0.0}}
-            if r.get("ticker") in auto else r) for r in rows]
-    return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": out}
+            if r.get("ticker") in auto else dict(r)) for r in rows]
+    out = [{**r, "portfolio_guard_status": guard,
+            "symbol_cooldown_status": cooldowns.get(r["ticker"], "none"),
+            "action_confidence": r.get("action_confidence", 1.0)} for r in out]
+    return {"regime": {"market_risk_regime": regime, "position_cap": 1.0}, "rows": out,
+            "portfolio_guard_result": {"state": guard}}
 
 
 def _ctx(theme_map, guard="normal", cooldowns=None, opp="no_strong_theme", probes=None, holding_themes=None):
-    cooldowns = cooldowns or {}
     probes = probes or {}
-    return {"per_ticker": {t: {"theme": th, "symbol_cooldown_status": cooldowns.get(t, "none"),
-                              "theme_probe": probes.get(t, _TP_OFF)} for t, th in theme_map.items()},
-            "holding_themes": holding_themes or {}, "portfolio_guard_status": guard,
+    return {"per_ticker": {t: {"theme": th, "theme_probe": probes.get(t, _TP_OFF)} for t, th in theme_map.items()},
+            "holding_themes": holding_themes or {},
             "theme_opportunity_state": opp}
 
 
 def _resolve(rows, regime, theme_map, guard="normal", cooldowns=None, opp="no_strong_theme", probes=None):
-    return wb.resolve_build_capacity(_sized(rows, regime),
+    return wb.resolve_build_capacity(_sized(rows, regime, guard, cooldowns),
                                      basket_context=_ctx(theme_map, guard, cooldowns, opp, probes))
 
 
@@ -332,9 +335,8 @@ class ResolveBuildCapacityTests(unittest.TestCase):
     def test_bad_basket_context_raises(self):
         base = _ctx({"AAA": "t1"})
         for ctx in ({**base, "x": 1},                                          # extra top-level key
-                    {"per_ticker": "nope", "holding_themes": {}, "portfolio_guard_status": "normal",
+                    {"per_ticker": "nope", "holding_themes": {},
                      "theme_opportunity_state": "no_strong_theme"},            # per_ticker not a dict
-                    {k: v for k, v in base.items() if k != "portfolio_guard_status"},   # missing guard
                     {k: v for k, v in base.items() if k != "theme_opportunity_state"},  # missing opp state
                     {k: v for k, v in base.items() if k != "holding_themes"}):           # missing holding themes
             with self.assertRaises(wb.WeekendBasketError):
@@ -353,11 +355,13 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             _resolve([_brow("AAA", 90)], "进攻", {"AAA": "t1"}, cooldowns={"AAA": "frozen"})
 
     def test_missing_symbol_cooldown_status_raises(self):
+        sized = _sized([_brow("AAA", 90)])
+        sized["rows"][0].pop("symbol_cooldown_status")
         with self.assertRaises(wb.WeekendBasketError):
             wb.resolve_build_capacity(
-                _sized([_brow("AAA", 90)]),
+                sized,
                 basket_context={"per_ticker": {"AAA": {"theme": "t1", "theme_probe": _TP_OFF}},
-                                "holding_themes": {}, "portfolio_guard_status": "normal",
+                                "holding_themes": {},
                                 "theme_opportunity_state": "no_strong_theme"})
 
     def test_malformed_theme_probe_shape_raises(self):
@@ -365,9 +369,8 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             with self.assertRaises(wb.WeekendBasketError):
                 wb.resolve_build_capacity(
                     _sized([_brow("AAA", 90)]),
-                    basket_context={"per_ticker": {"AAA": {"theme": "t1", "symbol_cooldown_status": "none",
-                                                          "theme_probe": tp}},
-                                    "holding_themes": {}, "portfolio_guard_status": "normal",
+                    basket_context={"per_ticker": {"AAA": {"theme": "t1", "theme_probe": tp}},
+                                    "holding_themes": {},
                                     "theme_opportunity_state": "no_strong_theme"})
 
     def test_missing_build_theme_raises(self):
@@ -387,13 +390,13 @@ class ResolveBuildCapacityTests(unittest.TestCase):
             wb.resolve_build_capacity(_sized([row]), basket_context=_ctx({"AAA": "t1"}))
 
     def test_per_ticker_bad_theme_shape_raises(self):
-        for tinfo in ({"theme": "t1", "symbol_cooldown_status": "none", "theme_probe": _TP_OFF, "x": 1},  # extra key
-                      {"theme": "", "symbol_cooldown_status": "none", "theme_probe": _TP_OFF},   # blank theme
-                      {"theme": "t1", "symbol_cooldown_status": "none"}):                        # missing theme_probe
+        for tinfo in ({"theme": "t1", "theme_probe": _TP_OFF, "x": 1},  # extra key
+                      {"theme": "", "theme_probe": _TP_OFF},   # blank theme
+                      {"theme": "t1"}):                        # missing theme_probe
             with self.assertRaises(wb.WeekendBasketError):
                 wb.resolve_build_capacity(
                     _sized([_brow("AAA", 90)]),
-                    basket_context={"per_ticker": {"AAA": tinfo}, "holding_themes": {}, "portfolio_guard_status": "normal",
+                    basket_context={"per_ticker": {"AAA": tinfo}, "holding_themes": {},
                                     "theme_opportunity_state": "no_strong_theme"})
 
     def test_duplicate_build_ticker_raises(self):

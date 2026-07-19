@@ -9,7 +9,7 @@ The third batch-4 stage: consumes the 4d-ii-a analysis EVIDENCE ({regime, rows})
 ALONE (veto tier, price executable/reject, event-sensitive data gap). v1 decisions:
 
     holding:   position_hard_veto → 清仓-事件 ; price not executable → 观察(price_not_executable) ;
-               price breached → 清仓-止损 ; else → 持有
+               price breached → 清仓-止损 ; else → holding action planner (TP2 full close / TP1 10% reduce / hold)
     candidate: entry_hard_veto → 否决/避开 ; event_data_gap restricted → 观察(data_restricted) ;
                price not executable → 观察(price_not_executable) ; else → 建仓 (PROVISIONAL)
 
@@ -21,8 +21,9 @@ or an unknown `event_data_gap.status` fails closed — it must never become a cl
 A 建仓 here is PROVISIONAL: §8 sizing (below-min → 观察), the weekly build-limit / 同主题 cap /
 theme_probe, and the global cash allocation can each still downgrade it to 观察 in the later sub-slices
 (4d-ii-c sizing, 4d-ii-d basket + §9 action_rank). This stage does NO sizing / cash / ranking / machine
-record / render. It also does NOT auto-decide 加仓 (§6 holding+add dual-engine path) or 减仓 / 清仓-止盈
-(§6.1 active scale-out = §13 #34 deferred) — those vocab values exist but v1 does not emit them here.
+record / render. It does NOT auto-decide 加仓 (§6 holding+add dual-engine path). The first-cut holding planner
+may emit 减仓 (TP1 fixed 10% of reconciled shares) or 清仓-止盈 (TP2 full close); it does not implement add,
+ratchet, move-to-breakeven, or multi-day active management.
 
 `final_action` / `observe_reason_type` are emitted only from the frozen `design_locked_enums` vocab in
 the action_table contract (a triangulation test pins the emitted subset, and the emitted final_action
@@ -36,14 +37,15 @@ import math
 from pathlib import Path
 
 from engine.us_short_hard_veto import NONE as _VETO_NONE, VETO_TIERS
+from engine.us_short_holding_action import TP1_REDUCE_FRACTION, plan_holding_action
 
 _CONTRACT_PATH = Path(__file__).resolve().parent.parent / "presets" / "us_short_action_table_contract_20260620.json"
 _ENUMS = json.loads(_CONTRACT_PATH.read_text(encoding="utf-8"))["design_locked_enums"]
 FINAL_ACTIONS = tuple(_ENUMS["final_action"])           # frozen §9/§6.1 trade-action vocab (9)
 OBSERVE_REASONS = tuple(_ENUMS["observe_reason_type"])  # frozen §9 observe reasons (loaded from the contract enum)
 
-# The SUBSET this evidence-only stage emits (v1). 加仓 (§6 dual-engine) and 减仓 / 清仓-止盈 (§6.1 active
-# scale-out, §13 #34) are in the frozen vocab but NOT auto-decided here.
+# The base decision never emits 加仓. The holding planner below may additionally emit 减仓 / 清仓-止盈
+# under the governed first-cut TP policy.
 _A_REJECT, _A_OBSERVE, _A_BUILD = "否决/避开", "观察", "建仓"
 _A_HOLD, _A_CLEAR_EVENT, _A_CLEAR_STOP = "持有", "清仓-事件", "清仓-止损"
 _R_DATA_RESTRICTED, _R_PRICE_NOT_EXEC = "data_restricted", "price_not_executable"
@@ -124,6 +126,50 @@ def action_price_error(final_action, action_fields):
     return None
 
 
+def action_quantity_error(final_action, row):
+    """Validate the first-cut holding ``action → quantity → price`` closure.
+
+    ``model_position_size_shares`` is a target size for a new build and is never accepted as a one-time
+    sell quantity. Holding rows instead carry the typed ``action_proposal`` generated from reconciled shares.
+    """
+    if not isinstance(row, dict) or row.get("row_context") != "holding":
+        return None
+    proposal = row.get("action_proposal")
+    if not isinstance(proposal, dict):
+        return ("holding reduce/take-profit close lacks action_proposal (action/quantity/price closure)"
+                if final_action in (_A_REDUCE, _A_CLEAR_TP) else None)
+    shares = proposal.get("recommended_action_shares")
+    remaining = proposal.get("remaining_shares")
+    if final_action == _A_OBSERVE and remaining is None:
+        return None  # explicit fail-closed account/state observe; it must not invent a holding quantity
+    if final_action in (_A_CLEAR_STOP, _A_CLEAR_EVENT) and shares is None and remaining is None:
+        expected_field = ACTION_REQUIRED_PRICE_FIELDS[final_action][0]
+        if proposal.get("reason") != "mandatory_holding_exit_manual_share_confirmation":
+            return f"{final_action} without reconciled shares must require manual share confirmation"
+        if proposal.get("price_target_field") != expected_field:
+            return f"{final_action} action_proposal.price_target_field must be {expected_field!r}"
+        return None
+    if not (isinstance(remaining, int) and not isinstance(remaining, bool) and remaining >= 1):
+        return "holding action_proposal.remaining_shares must be a positive int"
+    if final_action in (_A_REDUCE, _A_CLEAR_STOP, _A_CLEAR_TP, _A_CLEAR_EVENT):
+        if not (isinstance(shares, int) and not isinstance(shares, bool) and 1 <= shares <= remaining):
+            return f"{final_action} requires a positive reconciled recommended_action_shares"
+        expected_field = ACTION_REQUIRED_PRICE_FIELDS[final_action][0]
+        if proposal.get("price_target_field") != expected_field:
+            return f"{final_action} action_proposal.price_target_field must be {expected_field!r}"
+        if final_action == _A_REDUCE:
+            if proposal.get("tp1_completed") is True:
+                return "TP1-completed holding may not emit another TP1 reduction"
+            expected_shares = int(remaining * TP1_REDUCE_FRACTION)
+            if expected_shares < 1 or shares != expected_shares:
+                return "TP1 reduction must equal the governed 10% of remaining shares"
+        elif shares != remaining:
+            return f"{final_action} must recommend all reconciled remaining shares"
+    elif shares is not None:
+        return f"{final_action} holding must not carry a sell quantity"
+    return None
+
+
 class WeekendDecisionError(Exception):
     """The injected analysis-evidence result is malformed (fail-closed before the decision runs)."""
 
@@ -174,7 +220,7 @@ def _decide_one(ev):
             return _A_OBSERVE, _R_PRICE_NOT_EXEC  # §6 data-degraded holding: levels not computable → not a clean hold
         if price["trace"]["breached"]:            # validated bool when an executable holding is consumed
             return _A_CLEAR_STOP, None            # §6.1 price hit the trailing stop
-        return _A_HOLD, None                      # §6.1 v1 emits base levels; active scale-out (减仓/止盈) = §13 #34
+        return _A_HOLD, None                      # the reconciled TP planner decides any first-cut reduction/TP2 exit
     # candidate
     if veto_tier == "entry_hard_veto":
         return _A_REJECT, None
@@ -204,8 +250,12 @@ def decide_actions(analysis_result):
     for ev in rows:
         validate_evidence_row(ev)
         action, reason = _decide_one(ev)
+        proposal, decided_price = None, ev["price"]
+        if ev["row_context"] == "holding":
+            action, reason, proposal, decided_price = plan_holding_action(ev, action, reason)
         err = action_reason_error(action, reason)   # producer self-check: no _decide_one path may emit a bad §9 pair
         if err:
             raise WeekendDecisionError(err)
-        decided.append({**ev, "final_action": action, "observe_reason_type": reason})
+        decided.append({**ev, "price": decided_price, "action_proposal": proposal,
+                        "final_action": action, "observe_reason_type": reason})
     return {"regime": analysis_result["regime"], "rows": decided}

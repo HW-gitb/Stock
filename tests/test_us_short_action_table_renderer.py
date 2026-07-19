@@ -57,7 +57,7 @@ def _stripped_official_record():
 class ColumnContract(unittest.TestCase):
     def test_columns_are_the_frozen_contract_set_and_order(self):
         self.assertEqual(rndr.action_table_columns(), CONTRACT["core_columns"])
-        self.assertEqual(len(rndr.action_table_columns()), 51)
+        self.assertEqual(len(rndr.action_table_columns()), 54)
 
     def test_returns_a_copy_not_the_cache(self):
         cols = rndr.action_table_columns()

@@ -58,9 +58,22 @@ def _design_price_map():
     return out
 
 
-def _design_holding_fields():
+def _design_holding_fields_legacy():
     body = _line("holding_exit_engine` 的被动 levels").split("：", 1)[1]
     return [{"field": f, "meaning": m} for f, m in re.findall(r"`([a-z_]+)`（([^）]+)）", body)]
+
+
+def _design_holding_fields():
+    body = _line("holding_exit_engine` 给基础价位")
+    expected = [
+        {"field": "stop_clear_price", "meaning": "止损清仓价"},
+        {"field": "take_profit_reduce_price", "meaning": "盈一减仓价"},
+        {"field": "take_profit_exit_price", "meaning": "盈二/跟踪止盈价"},
+        {"field": "event_clear_reference_price", "meaning": "事件硬风险清仓参考价，标\"人工执行、非技术价\""},
+    ]
+    for item in expected:
+        assert "`%s`" % item["field"] in body and item["meaning"] in body
+    return expected
 
 
 def _design_skeleton():
@@ -108,6 +121,7 @@ class UsShortActionGovernance(unittest.TestCase):
         p = self.schema["properties"]
         self.assertEqual(p["final_action_price_map"]["const"], self.pmap)
         self.assertEqual(p["holding_exit_price_fields"]["const"], self.preset["holding_exit_price_fields"])
+        self.assertEqual(p["holding_action_policy"]["properties"]["tp1_reduce_fraction"]["const"], 0.10)
         self.assertEqual(p["action_rank_skeleton"]["const"], self.preset["action_rank_skeleton"])
         self.assertEqual(p["observe_reason_types"]["const"], self.preset["observe_reason_types"])
 
@@ -116,6 +130,14 @@ class UsShortActionGovernance(unittest.TestCase):
 
     def test_holding_fields_byte_faithful_to_design_6_1(self):
         self.assertEqual(self.preset["holding_exit_price_fields"], _design_holding_fields())
+
+    def test_first_cut_holding_action_policy_is_frozen(self):
+        self.assertEqual(self.preset["holding_action_policy"], {
+            "tp1_reduce_fraction": 0.10, "tp1_reduce_basis": "remaining_shares",
+            "tp2_action": "清仓-止盈", "state_completion_source": "manual_executed_trade_only",
+            "add_position_enabled": False,
+            "deferred": ["move_stop_to_breakeven", "ratchet", "multi_day_active_management"],
+        })
 
     def test_skeleton_byte_faithful_to_design_9(self):
         self.assertEqual(self.preset["action_rank_skeleton"], _design_skeleton())
@@ -192,6 +214,9 @@ class UsShortActionGovernance(unittest.TestCase):
 
     def test_schema_rejects_holding_field_drift(self):
         self._reject(lambda d: d["holding_exit_price_fields"][0].__setitem__("field", "stop_price"))
+
+    def test_schema_rejects_tp1_fraction_drift(self):
+        self._reject(lambda d: d["holding_action_policy"].__setitem__("tp1_reduce_fraction", 0.20))
 
     def test_schema_rejects_observe_reason_drift(self):
         self._reject(lambda d: d["observe_reason_types"].__setitem__(0, "signal_ready"))

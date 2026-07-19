@@ -37,8 +37,33 @@ Pure/offline beyond the N private writes; no provider/live/network/DataHub; no b
 from __future__ import annotations
 
 import math
+from pathlib import Path
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from engine.us_short_holding_action import (
+    STATE_FILENAME,
+    HoldingActionError,
+    attach_holding_action_context,
+    build_holding_action_context,
+    build_next_holding_action_state,
+    load_holding_action_state,
+)
+from engine.us_short_result_effects import (
+    PORTFOLIO_GUARD_STATE_FILENAME,
+    ResultEffectsError,
+    apply_result_effects,
+    build_next_portfolio_guard_state,
+    build_portfolio_guard_result,
+    load_portfolio_guard_state,
+    unavailable_cooldown_records,
+)
+from engine.us_short_symbol_cooldown_state import (
+    STATE_FILENAME as SYMBOL_COOLDOWN_STATE_FILENAME,
+    SymbolCooldownStateError,
+    build_next_symbol_cooldown_state,
+    load_symbol_cooldown_state,
+    resolve_symbol_cooldowns,
+)
 from engine.us_short_market_calendar import sessions_for_window, validate_market_calendar
 from engine.us_short_provider_health import EMIT_ALLOWED_RUN_STATES, classify_provider_health
 from engine.us_short_run_origin import (
@@ -68,7 +93,7 @@ _PIPELINE_CONTEXT_KEYS = frozenset({
     "run_provenance",                                  # §2.1 PIT 来源对账（消费输入族 as_of/observed_at/price-basis/session/adjustment）
     "provider_health", "calendar",                     # §3.7 跑前健康门 + §2.1/§3.5 live 须 authoritative 日历 artifact
     "market_axis_regimes", "prior_regime", "prior_upgrade_count",   # 4d-ii-a regime
-    "sizing_context", "basket_context", "cost_inputs", "available_cash", "account_state",   # 4d-ii-c..i
+    "sizing_context", "basket_context", "cost_inputs", "available_cash", "account_state", "paper_track",   # 4d-ii-c..i
     "report_context",                                  # m2
     "lifecycle_register_path", "lifecycle_readiness_out_path",   # L
     "runs_private_root", "weekly_private_root",        # N
@@ -330,19 +355,66 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
                   "selection_inputs": pc["data_context"]["selection_inputs"],
                   "per_ticker_analysis": pc["per_ticker_analysis"]})
 
-    rows = _build_analysis_rows(selection, pc["per_ticker_analysis"])
+    # The target levels are private state, distinct from the current account snapshot. A malformed existing
+    # state is never overwritten; the planner emits observe until the manual/private state is repaired.
+    state_writable = True
+    try:
+        prior_holding_state = load_holding_action_state(
+            Path(pc["runs_private_root"]) / STATE_FILENAME, decision_date=decision_date)
+        holding_contexts = build_holding_action_context(pc["account_state"], prior_holding_state)
+    except HoldingActionError:
+        holding_contexts, state_writable = {}, False
+    rows = attach_holding_action_context(
+        _build_analysis_rows(selection, pc["per_ticker_analysis"]), holding_contexts,
+        price_basis_date=selection["price_basis_date"])
+    # Second-cut account guard: the run-level status is classified from a source-bound model-paper record, not
+    # copied from basket_context.  A corrupt previous private state never yields normal; the classifier receives
+    # an invalid prior and therefore fails closed to caution, while the corrupt file is not overwritten.
+    guard_state_writable = True
+    try:
+        prior_guard_state = load_portfolio_guard_state(
+            Path(pc["runs_private_root"]) / PORTFOLIO_GUARD_STATE_FILENAME, decision_date=decision_date)
+        prior_guard = prior_guard_state["state"]
+    except ResultEffectsError:
+        prior_guard, guard_state_writable = "__malformed__", False
+    portfolio_guard_result = build_portfolio_guard_result(
+        pc["paper_track"], prior_state=prior_guard, as_of=decision_date)
+
+    # Symbol cooldowns are private, manual-reconciliation-backed state.  Absence/corruption is conservative
+    # ``in_cooldown`` rather than the previous injected ``none`` business placeholder; no new build can pass it.
+    cooldown_state_writable = True
+    try:
+        prior_cooldown_state = load_symbol_cooldown_state(
+            Path(pc["runs_private_root"]) / SYMBOL_COOLDOWN_STATE_FILENAME, decision_date=decision_date)
+        next_cooldown_state = build_next_symbol_cooldown_state(
+            prior_cooldown_state, pc["account_state"]["symbol_cooldown_reconciliation"], decision_date=decision_date)
+        cooldown_by_ticker = resolve_symbol_cooldowns(next_cooldown_state, rows, decision_date=decision_date)
+    except (KeyError, SymbolCooldownStateError):
+        next_cooldown_state, cooldown_state_writable = None, False
+        cooldown_by_ticker = unavailable_cooldown_records(rows, as_of=decision_date)
     portfolio_capacity = _portfolio_capacity_context(
         selection, rows, account_state=pc["account_state"], basket_context=pc["basket_context"],
         sizing_context=pc["sizing_context"], available_cash=pc["available_cash"], decision_date=decision_date)
     analysis = analyze_rows(rows, market_axis_regimes=pc["market_axis_regimes"],
                             prior_regime=pc["prior_regime"], prior_upgrade_count=pc["prior_upgrade_count"])
     decided = decide_actions(analysis)
-    sized = size_rows(decided, sizing_context=pc["sizing_context"])
+    effected = apply_result_effects(decided, portfolio_guard_result=portfolio_guard_result,
+                                    cooldown_by_ticker=cooldown_by_ticker, as_of=decision_date)
+    sized = size_rows(effected, sizing_context=pc["sizing_context"])
     basket = resolve_build_capacity(sized, basket_context=pc["basket_context"])
     cost_floored = apply_probe_cost_floor(basket, cost_inputs=pc["cost_inputs"])
     cash = apply_cash_allocation(cost_floored, available_cash=pc["available_cash"],
                                  portfolio_capacity=portfolio_capacity)
     ranked = apply_action_rank(cash)
+    holding_action_state = None
+    if state_writable:
+        try:
+            holding_action_state = build_next_holding_action_state(decision_date, ranked["rows"])
+        except HoldingActionError:
+            # Do not replace a private TP state unless it was rebuilt from fully reconciled facts.
+            holding_action_state = None
+    portfolio_guard_state = (build_next_portfolio_guard_state(portfolio_guard_result, decision_date=decision_date)
+                             if guard_state_writable else None)
 
     # batch4 honesty provenance: the immutable run-origin fact (offline fixture, fully provider-derived research, or
     # receipt-bound mixed source; all operational_use=not_authorized), threaded through K/m2/N so no source mix
@@ -350,8 +422,11 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     # (R-USSHORT-BATCH4-OFFLINE-ARTIFACT-MODE-PROVENANCE-GAP). live (operationally authoritative) stays hard-gated above
     # (→ batch5), so run_origin_for_mode only returns a non-operational permitted fact here.
     run_origin = run_origin_for_mode(run_mode)
-    machine_record = assemble_machine_record(ranked, as_of=decision_date, run_origin=run_origin,   # decision_date → K as_of
-                                             research_live_capability=research_live_capability)
+    machine_record = assemble_machine_record(
+        ranked, as_of=decision_date, run_origin=run_origin,
+        research_live_capability=research_live_capability,
+        require_result_effects=True,
+    )   # decision_date → K as_of; second-cut formal factors cannot bypass the §10 gate
     lifecycle_result = run_lifecycle_eval_stage(                                  # §13: L BEFORE the m2 render
         decision_date=decision_date, register_path=pc["lifecycle_register_path"],
         readiness_out_path=pc["lifecycle_readiness_out_path"])
@@ -364,7 +439,7 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         # BINDING-GAP): provider health = the slice-1b classification; portfolio_guard + theme = the EXACT
         # basket_context the decision used — so the report can never claim normal/clean/different-theme.
         stage_status={"provider_health": provider_health,
-                      "portfolio_guard_status": pc["basket_context"]["portfolio_guard_status"],
+                      "portfolio_guard_status": portfolio_guard_result["state"],
                       "theme_opportunity_state": pc["basket_context"]["theme_opportunity_state"]},
         selection=selection)
     written = write_run_private(                                                  # decision_date → N (idempotent)
@@ -377,7 +452,10 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         provider_health=provider_health, coverage_inputs=pc["report_context"]["coverage_inputs"],
         lifecycle_result=lifecycle_result,
         runs_private_root=pc["runs_private_root"],
-        weekly_private_root=pc["weekly_private_root"], run_origin=run_origin,
+        weekly_private_root=pc["weekly_private_root"], holding_action_state=holding_action_state,
+        portfolio_guard_state=portfolio_guard_state,
+        symbol_cooldown_state=(next_cooldown_state if cooldown_state_writable else None),
+        run_origin=run_origin,
         research_live_capability=research_live_capability)
 
     return {"out_of_window": False, "emitted": True, "decision_date": decision_date,

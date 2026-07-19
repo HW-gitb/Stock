@@ -77,7 +77,7 @@ class UsShortActionTableContract(unittest.TestCase):
         jsonschema.validate(self.preset, self.schema)
 
     def test_core_columns_count_and_unique(self):
-        self.assertEqual(len(self.cols), 51)
+        self.assertEqual(len(self.cols), 54)
         self.assertEqual(len(self.cols), len(set(self.cols)), "duplicate column id")
 
     def test_core_columns_byte_faithful_to_design_11_3(self):

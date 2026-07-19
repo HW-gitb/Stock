@@ -44,9 +44,19 @@ NOW_ET = "2026-06-13T10:00:00"   # Sat 10:00 ET -> Mon 20260615 decision (matche
 
 
 def _account(positions) -> dict:
+    positions = list(positions)
     return {"schema_name": "us_short_account_state", "schema_version": "1.0.0", "as_of": "20260615",
             "us_market_equity": 30000.0, "us_short_bucket_capital": 10000.0,
             "us_short_available_cash": 4000.0, "positions": positions,
+            "holding_action_reconciliation": {
+                "schema_name": "us_short_holding_action_reconciliation", "schema_version": "1.0.0",
+                "as_of": "20260615",
+                "positions": [{"ticker": p["ticker"], "entry_date": p["entry_date"], "remaining_shares": p["shares"],
+                               "tp1_completed": False, "tp1_completed_at": None,
+                               "source_reconciliation_ref": "test-account:" + p["ticker"]} for p in positions]},
+            "symbol_cooldown_reconciliation": {
+                "schema_name": "us_short_symbol_cooldown_reconciliation", "schema_version": "1.0.0",
+                "as_of": "20260615", "events": []},
             "manual_order_only": True, "broker_connection_allowed": False}
 
 
@@ -328,7 +338,7 @@ class PublishedCommandShape(unittest.TestCase):
     def test_builder_help_advertises_direct_full_template_input(self):
         result = _run([str(BUILDER), "--help"])
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("full 18-key packet/example", result.stdout)
+        self.assertIn("full 19-key packet/example", result.stdout)
 
 
 if __name__ == "__main__":
