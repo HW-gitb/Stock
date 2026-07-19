@@ -315,6 +315,16 @@ if ($SkipTracker) {
         # tracker capture 失败不影响主流程退出码（旁路约束）。
         # 失败原因通常是 analysis_input.json 缺失或 Python 异常，不是数据问题。
         Write-Host "[WARN] forward_tracker exit $TrackerExitCode (check logs/forward_tracker.csv)" -ForegroundColor Yellow
+    } else {
+        # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
+        # weekly runner to download extra market data, and a cache gap remains advisory.
+        Write-Host "[3/4] Cache-only forward_tracker backfill (P1 candidate-effect sidecar input) ..." -ForegroundColor Yellow
+        & $PythonExe runners\forward_tracker.py backfill --windows 5,10,20
+        $TrackerBackfillExitCode = $LASTEXITCODE
+        if ($null -eq $TrackerBackfillExitCode) { $TrackerBackfillExitCode = 1 }
+        if ($TrackerBackfillExitCode -ne 0) {
+            Write-Host "[WARN] forward_tracker cache-only backfill exit $TrackerBackfillExitCode; P1 remains pending and EGS/M6.7 continue unchanged." -ForegroundColor Yellow
+        }
     }
 }
 

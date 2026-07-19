@@ -225,6 +225,8 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("$RegimeArgs += '--bootstrap'", text)              # absent ledger -> one-time backfill
         self.assertIn("only live runs advance the forward regime evidence", text)  # historical replay skipped
         self.assertIn("does NOT block the weekly", text)                 # non-blocking comparison-only sidecar
+        self.assertIn("forward_tracker.py backfill --windows 5,10,20", text)
+        self.assertIn("cache-only backfill", text)
 
     def test_factor_comparison_v2_cache_is_live_only_and_never_reuses_retired_v1_wiring(self):
         text = SCRIPT.read_text(encoding="utf-8")

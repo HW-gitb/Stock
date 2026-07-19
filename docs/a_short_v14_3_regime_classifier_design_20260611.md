@@ -50,7 +50,7 @@ P1 的逐股比较暂以 `defense` / `contraction` 禁止新建仓、现金 0% �
 ## 6. 当前分阶段状态
 - **已完成**：schema/governance、raw classifier、daily-feature ledger/比较 runner 及其既有 market-level comparison-only 证据链；生产 `market_context.market_regime.status` 仍可能为 `unknown`，不把它误称为 V14.2 regime-gated baseline。
 - **P1 Cut1（2026-07-19）**：`build_stateful_regime_history` / `classify_stateful_regime` 已将本节状态机落为纯逻辑；`build_candidate_effect_record` / `summarize_candidate_effect_records` 以相同周等权汇总逐股净收益、CSI1000 超额与代理操作改善。数据不足输出不可评估并打断确认；历史回放、未成熟收益和 policy fingerprint 不匹配不得计数或混算。
-- **P1 Cut2 仍待独立审查 PASS 后才可开始**：只读接入既有 `forward_tracker`，冻结 live 候选并写私有账本/公开汇总；不得改变新建仓授权、EGS、M6.7、账户或正式周报。
+- **P1 Cut2（2026-07-19，待独立审查）**：已由同一 V14.3 runner 只读接入既有 `forward_tracker`，冻结 `egs_candidate + 建仓` 的 live 候选；私有逐股账本仅在 gitignored `logs/a_short_regime_candidate_effect.json`，公开聚合只写 `research/results/a_short/regime_candidate_effect_summary.{json,md}`。回填只读缓存、同日按输入身份幂等、M6.7 / tracker 身份不匹配或 M6.7 SHA 漂移不计数且不覆盖旧有效结果；不得改变新建仓授权、EGS、M6.7、账户或正式周报。
 - **切换生产(遥远)**:单独切片,动作矩阵接线 + 历史对比 + ≥12 周 forward-live + 审查 + 用户确认。
 
 ## 7. switch-candidate 提醒门槛(切片3 规格,本切片入 governance)
@@ -64,4 +64,4 @@ P1 的逐股比较暂以 `defense` / `contraction` 禁止新建仓、现金 0% �
 ## 9. 当前交付物
 - raw/stateful regime：`engine/a_short_regime_classifier.py`、daily/ledger/runner 和既有 schema/governance/test 路由见 `docs/README.md`。
 - P1 Cut1：`presets/a_short_regime_action_comparison_governance_20260714.json`、`schemas/a_short_regime_action_comparison_governance.schema.json`、`schemas/a_short_regime_candidate_effect_summary.schema.json`、`engine/a_short_regime_action_comparison.py` 与对应单测。
-- **无 P1 weekly 接线、无真实逐股证据文件、无生产改动；V14.2 仍为生产基线。**
+- **P1 Cut2 已接入 weekly 旁路**：Stage 3 在 capture 后仅做 cache-only `forward_tracker backfill`，Stage 5 的既有 regime runner 读取同周 M6.7 / tracker 并生成旁路账本与公开汇总；失败只警告、不阻断 EGS/M6.7。逐股实证从 Cut2 PASS 后的真实 live 周开始，历史回放不计数；无生产改动，V14.2 仍为生产基线。

@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-19 — Claude Code 独立审查（A-short P1 Cut2：V14.3 逐股候选效果旁路，3500 未提交）：PASS（comparison-only）
+
+- **Verdict/Action**: **PASS**。按已定方案（桌面 `todo_ashort_P1_review.md` + 设计 §4-§6）逐条核实：comparison-only 旁路、不改 EGS/M6.7/仓位/veto/建仓授权。承重缝亲读全对——ledger `_atomic_write_text`(mkstemp+os.replace 原子、失败重跑不截断)、`_finite_or_none`(缺/空/非有限→None、`ret_status!=ok`→None，**不把缺失当 0 现金**)、mature-freeze(`_frozen_record_refresh`：未成熟同日 tracker 可重冻、成熟即不可覆盖→`skipped_immutable_mature_week`；M6.7 同日 SHA 漂移→non-counting warning 不覆盖)、SHA/身份绑定(m67_sha256 + candidate_set_digest + tracker run-identity)、historical 不计 forward。私有 ledger `logs/...json` **已 gitignored**、公开 summary **aggregate-only 无票名**。8 条反向测试锁死全部不变式。
+- **Required**: 无。上轮方案 4 项 Optional **全落实**：①markdown 明标"防御/收缩 cash 0% 是简化 proxy、非最终生产防御策略、无自动切换"②"baseline=当前生产建仓、无 regime-driven 动作"(不冒充 V14.2 regime-gated)③confirm-days 单源自分类器 governance(`candidate_effect_policy` 只管 eligibility/evidence 阈值、不抄 confirm-days)④weekly ps1 backfill **warn-only cache-only**(exit≠0→WARN、EGS/M6.7 继续、不碰建仓授权)。
+- **Verify**: 亲跑 **focused Cut2 包**：`test_a_short_regime_comparison_runner` **33 OK** + `test_a_short_regime*`(classifier/action) **234 OK** + `phase6/test_weekly_screening_guardrails` **19 OK** = **286 OK**。**未跑完整 `test_a_short*.py`**（含 phase5/backtest 重回测、与本 comparison-only 刀无关且当时 CPU 被并发 Codex 跑争用~40min；本刀真实 blast radius=独立 comparison runner + ps1 plug + regime engine，focused 已足覆盖，proportional-to-impact）。review-evidence:not_available（全真实工具输出）。
+- **Next**: 提交 Cut2 + 把 3500 全部未 merge（P0×2 + P1 Cut1 + 本 Cut2）并入 master；不扩 P2/生产切换/真 provider。
+
+## 2026-07-19 — Codex 执行（A-short P1 Cut2：V14.3 逐股候选效果旁路，待 Claude Code 独立审查）
+
+- **Verdict/Action**: 已完成 Cut2：既有 V14.3 runner 读取同周 M6.7 的普通 `egs_candidate + 建仓` 行与既有 `forward_tracker`，将逐股账本原子写入 gitignored `logs/a_short_regime_candidate_effect.json`，公开 JSON/Markdown 只保留等权汇总。旧周在每次新 weekly 中仅由 tracker 缓存回填；同日身份不匹配或 M6.7 SHA 漂移不计数，tracker 替换只在未成熟时可重冻，成熟证据不可覆盖。无 EGS/M6.7/账户/正式周报/建仓授权改动。
+- **Required**: 无已知 Required；不得把 P1 proxy 或汇总 verdict 接入生产，也不得把首次真实 weekly/provider 运行当作本切片验证。
+- **Verify**: 固定 P1/regime/tracker/route 包 129 OK；Stage-5 静态接线 1 OK；`py_compile`、PowerShell parse、BOM、`git diff --check` 均通过。完整 weekly guard 有 5 个动态启动用例在 bundled Python 缺 `akshare/requests/tqdm/tushare` 的 preflight exit 2，不作为失败归因或通过证据。
+- **Pre-Codex self-review**: A：覆盖 live/历史、未成熟替换/成熟冻结、同日 SHA/身份不匹配、跨周成熟回填、零候选与 private/public 边界；B：`rg` 旧 Cut2 pending route 文本 0 hits，并核对单入口 runner→tracker→公开汇总；C：反向测试锁住“不可把缺失收益当 0、不可用晚到替换重写成熟周”；D：无自然语言交易分类；E：只更新 A-short owner/route/runner 文档，未改 CURRENT；F：日期、finite return、原子写入、PowerShell/BOM/diff 均检查。未启用子 agent（当前协作约束）。
+- **Next**: Claude Code：仅独立审查当前 A-short P1 Cut2 diff；PASS 后提交，不扩展至 P2、生产切换或真实 weekly/provider 执行。
+
 ## 2026-07-19 — Claude Code 独立审查 PASS（A-short P1 Cut1 V14.3 状态机 + 逐股 candidate-effect proxy；3500 已提交）
 
 - **Verdict/Action**: PASS。纯逻辑 Cut1 忠实实现、与权威设计一致、comparison-only 隔离完好，我 review 的 3 条 Optional 全被采纳且 schema 锁死。状态机 `build_stateful_regime_history` 逐条对上设计 §4：极端 fired_rule(`iv_percentile_252d_gt_90`/`limit_down_count_ge_max_p95_100`/`broad_index_crash`)与 classifier 输出精确匹配→立即跳防御；attack 3/contraction 2/clear 2；首默 shock；分支顺序(protective 先判)正确强制"禁 contraction→attack 直跳(须先 clear 到 shock)"+"普通防御从 attack 经 shock buffer 两日确认"；数据不足→不可评估并清确认。逐股 `build/summarize_candidate_effect`：只取 egs_candidate+建仓、排除 holding/watch/veto/manual；forbidden→现金0%仅在成熟时、缺失留 null 不伪造0；操作改善=影子−baseline；先周等权再跨周(防伪重复)；12/8/20/0.50pp/60%门；4 verdict + 选股准确性另算(CSI1000 excess)；`_validate_candidate_effect_record` 复核全部算术不变式。state-machine 参数单一源自 20260611 classifier governance(Optional③)。
