@@ -250,7 +250,8 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             components = json.loads(self.paths["components"].read_text(encoding="utf-8"))
             self.assertEqual(
                 set(components),
-                {"data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis", "run_provenance"},
+                {"data_context", "score_composition", "overextension_by_ticker", "per_ticker_analysis",
+                 "result_linkage_sources", "run_provenance"},
             )
 
             report_path = private_root / "weekly_private" / _DECISION_DATE / "weekly_report.md"

@@ -301,6 +301,8 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 ### 11.5 持仓覆盖诚实度
 `row_source`（`top15_candidate / holding_in_top15 / holding_pass2_only / holding_account_only`）+ `coverage_status`（`full/partial/restricted/blocked`）+ `coverage_gap_tags`。即使强制进 Pass 2，缺分析师/SEC parse/事件数据 → 明示 partial/未核查、不写 clean。
 
+**来源到结果绑定（Cut4）**：Batch5 对每个正式分析行生成封闭的 `source_result_facts`，绑定 ticker、决策日、价格基准日、来源包 digest、各来源检查、既有 catalyst 投影、数据质量与执行约束。`coverage_status / coverage_gap_tags / data_quality_tags / execution_constraints` 只能从该事实投影到 machine row、`action_table.csv` 与周报；`report_context.coverage_inputs` 仅保留给完全 legacy fixture，不能覆盖来源行。只有同 ticker、同 price basis、同 session、同 adjustment_mode、带真实 `observed_at` 和来源 digest 的本地 OHLCV 才可进入价格引擎；只有收盘价必须转观察（`price_not_executable`），绝不伪造 ATR/支撑阻力。partial 降低置信度并保留具名缺口；restricted/blocked 禁止新建但不得吞掉已触发的持仓止损/事件清仓。该 bridge 只搬运和校验来源事实，不接收调用方写入的 `result_effects`、portfolio guard、cooldown 或最终动作。
+
 ### 11.6 输出路径护栏
 - `.gitignore` 须覆盖**所有 private 目录**：`state/*/weekly_private/`、`state/*/account_state_csv/`、`state/*/runs_private/`（含 `holding_action_state.json`）、`state/*/model_paper_private/`、`state/*/lifecycle/`、`state/*/shadow_compare_private/`、`state/*/capstone_checkpoints_private/`。checkpoint bundle 含 ticker 级中间产物与 digest manifest，必须与官方私密输出执行同一 `reject_nonprivate_output_path` 守卫：仓内路径须由真实 `git check-ignore` 证明，仓外绝对路径允许，未证明即在 mkdir/write 前 fail-fast；生产 `state/us_short/capstone_checkpoints_private/...` 路径由回归测试直接覆盖。
 - **lifecycle / shadow 状态文件隐私规则**：含票名/表现/成交/持仓的计数（`lifecycle_register.json`、比较轨 shadow 选股明细）→ **必须 private/gitignored**；要 tracked 只能放脱敏汇总（无票名、无 $、只归一化指标）。稳定规则文字仍进 tracked `docs/system_risk_register.md`。

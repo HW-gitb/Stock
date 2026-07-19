@@ -212,6 +212,15 @@ def _analyze_one(row, regime):
         "risk_downgrade": risk_dg,   # §4.2 typed penalty (points + components), None for an unscored holding
         "selection_record": sel_rec,
         "theme_context": dict(theme_context) if theme_context is not None else None,
+        # Cut4 source-bound row facts are not re-derived here.  They carry the exact Batch5 coverage, catalyst
+        # availability, and permitted price input onward to the final reducer/machine/report surfaces.
+        **({
+            "source_result_facts": row["source_result_facts"],
+            "coverage_status": row["coverage_status"],
+            "coverage_gap_tags": list(row["coverage_gap_tags"]),
+            "data_quality_tags": list(row["data_quality_tags"]),
+            "execution_constraints": list(row["execution_constraints"]),
+        } if "source_result_facts" in row else {}),
         **({"holding_action_context": holding_action_context}
            if context == "holding" and "holding_action_context" in row else {}),
     }

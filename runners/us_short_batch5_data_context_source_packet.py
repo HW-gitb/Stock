@@ -22,6 +22,10 @@ from engine.us_short_catalyst import load_catalyst_governance  # noqa: E402
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
 from engine.us_short_massive_news_catalyst import validate_resolved_news_events  # noqa: E402
 from engine.us_short_projection_binding import validate_projection_binding  # noqa: E402
+from engine.us_short_result_source_linkage import (  # noqa: E402
+    ResultSourceLinkageError,
+    build_result_source_facts,
+)
 from engine.us_short_seam_momentum import (  # noqa: E402
     COVERAGE_DISPOSITIONS as MOMENTUM_COVERAGE_DISPOSITIONS,
     DISPOSITION_SCORED as MOMENTUM_SCORED_DISPOSITION,
@@ -58,6 +62,7 @@ OPTIONAL_SOURCE_PATH_FIELDS = (
     "overextension_projection_path",
     "overextension_candidate_artifact_path",
     "yfinance_grade_actions_path",
+    "ohlcv_series_packet_path",
 )
 PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS = (
     "offering_audit_source_path",
@@ -291,6 +296,8 @@ def _validated_provider_envelope_digests(packet: dict[str, Any], paths: dict[str
     expected_fields = set(PROVIDER_ENVELOPE_DIGEST_PATH_FIELDS)
     if "yfinance_grade_actions_path" in paths:
         expected_fields.add("yfinance_grade_actions_path")
+    if "ohlcv_series_packet_path" in paths:
+        expected_fields.add("ohlcv_series_packet_path")
     if set(digests) != expected_fields:
         raise SourcePacketError(
             "source_artifact_sha256 must exactly cover the provider envelope paths selected by this packet"
@@ -715,6 +722,11 @@ def run_packet(
                 field="yfinance_grade_actions_path",
                 expected_sha256=provider_envelope_digests["yfinance_grade_actions_path"],
             )
+        if "ohlcv_series_packet_path" in paths:
+            source_payloads["ohlcv_series_packet_path"] = _source_json(
+                paths["ohlcv_series_packet_path"], field="ohlcv_series_packet_path",
+                expected_sha256=provider_envelope_digests["ohlcv_series_packet_path"],
+            )
         provider_envelope_as_of = _provider_envelope_as_of(packet["decision_clock"]["expected_decision_date"])
         _validate_resolved_offering_envelope(
             source_payloads["offering_audit_source_path"], as_of=provider_envelope_as_of
@@ -807,9 +819,33 @@ def run_packet(
                 source_ref_paths={
                     field: _repo_rel(paths[field])
                     for field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)
-                    if field in paths
+                    if field in paths and field != "ohlcv_series_packet_path"
                 },
             )
+            # Cut4: one source-bound per-ticker record owns coverage, the catalyst availability annotation,
+            # price input, and the output-visible quality/execution tags.  The existing score and price engines
+            # still do their own work; this only binds their permitted inputs to the local source packet.
+            source_digests = {
+                field: hashlib.sha256(path.read_bytes()).hexdigest()
+                for field, path in paths.items()
+                if field in (*SOURCE_PATH_FIELDS, *OPTIONAL_SOURCE_PATH_FIELDS)
+            }
+            try:
+                source_facts = build_result_source_facts(
+                    context_components=context_components,
+                    source_payloads=source_payloads,
+                    source_digests=source_digests,
+                    ohlcv_packet=source_payloads.get("ohlcv_series_packet_path"),
+                )
+            except ResultSourceLinkageError as exc:
+                raise SourcePacketError(f"Cut4 result-source linkage rejected: {exc}") from exc
+            if set(source_facts) != set(context_components["per_ticker_analysis"]):
+                raise SourcePacketError("Cut4 source facts do not exactly cover official analysis rows")
+            context_components["per_ticker_analysis"] = {
+                ticker: {**row, "source_result_facts": source_facts[ticker]}
+                for ticker, row in context_components["per_ticker_analysis"].items()
+            }
+            context_components["result_linkage_sources"] = source_facts
             data_context = context_components["data_context"]
         else:
             data_context = assemble_data_context_from_resolved_pass2_sources(
@@ -860,6 +896,9 @@ def run_packet(
             "output_path": _repo_rel(context_components_output_path) if context_components_output_path is not None else None,
             "per_ticker_analysis_count": (
                 len(context_components["per_ticker_analysis"]) if context_components is not None else 0
+            ),
+            "result_linkage_source_count": (
+                len(context_components["result_linkage_sources"]) if context_components is not None else 0
             ),
             "run_provenance_family_count": (
                 len(context_components["run_provenance"]["families"]) if context_components is not None else 0

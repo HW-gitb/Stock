@@ -53,9 +53,15 @@ from engine.us_short_result_effects import (
     ResultEffectsError,
     apply_result_effects,
     build_next_portfolio_guard_state,
+    extend_result_effects,
     build_portfolio_guard_result,
     load_portfolio_guard_state,
     unavailable_cooldown_records,
+)
+from engine.us_short_result_source_linkage import (  # Cut4 source facts → the existing Cut2 effect reducer
+    ResultSourceLinkageError,
+    bind_result_source_facts,
+    source_coverage_effect_records,
 )
 from engine.us_short_macro_cluster import apply_macro_cluster_two_pass
 from engine.us_short_theme_result_linkage import (
@@ -427,6 +433,13 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
         raise WeekendOrchestratorError(f"Cut3 theme linkage rejected: {exc}") from exc
     rows = attach_holding_action_context(
         themed_rows, holding_contexts, price_basis_date=selection["price_basis_date"])
+    try:
+        # A Batch5/Cut4 row may only use the exact source-bound price input that arrived with its own source
+        # receipt.  Legacy Batch4 fixtures without source facts keep their established offline contract.
+        rows = bind_result_source_facts(
+            rows, as_of=decision_date, price_basis_date=selection["price_basis_date"])
+    except ResultSourceLinkageError as exc:
+        raise WeekendOrchestratorError(f"Cut4 source-result linkage rejected: {exc}") from exc
     # Second-cut account guard: the run-level status is classified from a source-bound model-paper record, not
     # copied from basket_context.  A corrupt previous private state never yields normal; the classifier receives
     # an invalid prior and therefore fails closed to caution, while the corrupt file is not overwritten.
@@ -460,6 +473,12 @@ def run_weekend_pipeline(now_et, pipeline_context, *, run_mode="offline_test", r
     decided = decide_actions(analysis)
     effected = apply_result_effects(decided, portfolio_guard_result=portfolio_guard_result,
                                     cooldown_by_ticker=cooldown_by_ticker, as_of=decision_date)
+    try:
+        source_effects = source_coverage_effect_records(effected["rows"], as_of=decision_date)
+        if source_effects:
+            effected = extend_result_effects(effected, effects_by_ticker=source_effects, as_of=decision_date)
+    except (ResultSourceLinkageError, ResultEffectsError) as exc:
+        raise WeekendOrchestratorError(f"Cut4 source coverage effect rejected: {exc}") from exc
     lifecycle_effected = apply_theme_lifecycle_effects(effected, as_of=decision_date)
     sized = apply_macro_cluster_two_pass(
         lifecycle_effected, sizing_context=pc["sizing_context"],

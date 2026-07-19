@@ -45,6 +45,7 @@ from engine.us_short_position_sizing import MIN_EXECUTABLE_SHARES
 from engine.us_short_regime import REGIMES as _MARKET_RISK_REGIMES
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_result_effects import ResultEffectsError, validate_result_effects
+from engine.us_short_result_source_linkage import ResultSourceLinkageError, validate_result_source_fact
 from engine.us_short_macro_cluster import WARNING_LEVELS
 from engine.us_short_theme_lifecycle import THEME_STATES
 from engine.us_short_theme_selection import THEME_SOURCES
@@ -138,6 +139,12 @@ _SPECS = {
     "macro_cluster": {"owner_module": "engine.us_short_macro_cluster",
                       "data_source": "row.theme_context.macro_cluster + provisional sizing exposure",
                       "field_class": "macro cluster", "lifecycle_item_id": 31},
+    "source_coverage": {"owner_module": "engine.us_short_result_source_linkage",
+                        "data_source": "row.source_result_facts.coverage (Batch5 receipt-bound)",
+                        "field_class": "data quality", "lifecycle_item_id": 15},
+    "source_catalyst": {"owner_module": "engine.us_short_result_source_linkage",
+                        "data_source": "row.source_result_facts.catalyst (existing catalyst projection)",
+                        "field_class": "data quality", "lifecycle_item_id": 1},
 }
 
 
@@ -248,6 +255,26 @@ def _formal_effect_field_records(row):
 
 
 def _theme_macro_field_records(row):
+    facts = row.get("source_result_facts")
+    if facts is not None:
+        try:
+            validate_result_source_fact(
+                facts, ticker=row.get("ticker"), row_source=row.get("row_source"),
+                as_of=facts.get("as_of") if isinstance(facts, dict) else None,
+                price_basis_date=facts.get("price_basis_date") if isinstance(facts, dict) else None,
+            )
+        except ResultSourceLinkageError as exc:
+            raise WeekendMachineRecordError(f"Cut4 source_result_facts invalid: {exc}") from exc
+        projections = {
+            "coverage_status": facts["coverage"]["coverage_status"],
+            "coverage_gap_tags": facts["coverage"]["coverage_gap_tags"],
+            "data_quality_tags": facts["data_quality_tags"],
+            "execution_constraints": facts["execution_constraints"],
+        }
+        for key, expected in projections.items():
+            if row.get(key) != expected:
+                raise WeekendMachineRecordError(f"Cut4 {key} is not projected from source_result_facts")
+
     theme = row.get("theme_context")
     if not isinstance(theme, dict):
         return []
@@ -295,6 +322,24 @@ def _theme_macro_field_records(row):
     else:
         out.append(_fr("macro_cluster", op="仅标签", terminal="macro_cluster",
                        disposition=_SHADOW, impact_target=None, evidence_ref=evidence))
+    return out
+
+
+def _source_result_field_records(row):
+    """Register Cut4 receipt-bound source facts at their final result landing.
+
+    A realized catalyst already entered the existing core score and therefore traces to action_rank.  An
+    unavailable/gated catalyst is routed through the source-coverage confidence effect instead of receiving a
+    second numerical penalty.
+    """
+    facts = row.get("source_result_facts")
+    if not isinstance(facts, dict):
+        return []
+    catalyst = facts["catalyst"]
+    out = [_fr("source_coverage", op="\u4ec5\u6807\u7b7e", terminal="coverage_status",
+               disposition=_LANDED, impact_target="risk_tags", evidence_ref=facts["evidence_ref"])]
+    out.append(_fr("source_catalyst", op="\u4ec5\u6807\u7b7e", terminal="data_quality_tags",
+                   disposition=_LANDED, impact_target="risk_tags", evidence_ref=catalyst["evidence_ref"]))
     return out
 
 
@@ -376,6 +421,7 @@ def _field_records(row):
 
     frs.extend(_formal_effect_field_records(row))
     frs.extend(_theme_macro_field_records(row))
+    frs.extend(_source_result_field_records(row))
 
     return frs
 
@@ -451,6 +497,10 @@ def _validate_ranked_row(row, *, as_of, require_result_effects):
             raise WeekendMachineRecordError("macro_cluster_exposure_frac 须为 None 或 [0,1] 有限数")
         if not (isinstance(adjustment, int) and not isinstance(adjustment, bool) and adjustment >= 0):
             raise WeekendMachineRecordError("macro_cluster_size_adjustment 须为非负 int 股数差")
+
+    facts = row.get("source_result_facts")
+    if facts is not None and (not isinstance(facts, dict) or facts.get("as_of") != as_of):
+        raise WeekendMachineRecordError("Cut4 source_result_facts is not bound to this decision date")
 
     final_action = row["final_action"]
     # ranked-result fields on EVERY 4d-ii-j row: action_group must be the real §9 engine group for this action

@@ -27,6 +27,11 @@ from engine.us_short_run_origin import (  # noqa: E402
     require_research_live_provider_health,
     require_research_live_receipt_binding,
 )
+from engine.us_short_result_source_linkage import (  # noqa: E402
+    ResultSourceLinkageError,
+    bind_result_source_facts,
+    validate_result_source_fact,
+)
 from engine.us_short_weekend_analysis import analyze_rows  # noqa: E402
 from engine.us_short_weekend_decision import decide_actions  # noqa: E402
 from engine.us_short_weekend_orchestrator import _build_analysis_rows  # noqa: E402
@@ -46,6 +51,7 @@ _LEGACY_CONTEXT_COMPONENT_KEYS = frozenset({"data_context", "per_ticker_analysis
 _A1_CONTEXT_COMPONENT_KEYS = _LEGACY_CONTEXT_COMPONENT_KEYS | frozenset(
     {"score_composition", "overextension_by_ticker"}
 )
+_CUT4_CONTEXT_COMPONENT_KEYS = _A1_CONTEXT_COMPONENT_KEYS | frozenset({"result_linkage_sources"})
 
 _TEMPLATE_KEYS = frozenset(
     {
@@ -221,6 +227,9 @@ def _patched_report_context(
         "session_scope": "RTH",
         "decision_date": run_provenance["as_of"],
     }
+    # Cut4: coverage is derived from the source-bound machine rows.  A caller template may not supply a
+    # parallel coverage verdict for the same report.
+    report_context["coverage_inputs"] = []
     if forward_policy_comparison_reminder is not None:
         if not isinstance(forward_policy_comparison_reminder, str) or not forward_policy_comparison_reminder.strip():
             raise Batch5ToBatch4E2EError("forward_policy_comparison_reminder must be a non-blank string or absent")
@@ -254,6 +263,8 @@ def _universe_by_ticker(data_context: dict[str, Any]) -> dict[str, dict[str, Any
 
 def _analysis_rows_without_synthetic_price_inputs(
     per_ticker_analysis: dict[str, Any],
+    *, result_linkage_sources: dict[str, Any] | None = None,
+    as_of: str | None = None, price_basis_date: str | None = None,
 ) -> dict[str, dict[str, Any]]:
     """Preserve only source-bound price input already present on official components.
 
@@ -267,7 +278,23 @@ def _analysis_rows_without_synthetic_price_inputs(
         if ticker is None or not isinstance(row, dict):
             raise Batch5ToBatch4E2EError("per_ticker_analysis contains a non-canonical ticker or non-object row")
         out[ticker] = copy.deepcopy(row)
-    return out
+    if result_linkage_sources is None:
+        return out
+    if not (isinstance(result_linkage_sources, dict) and set(result_linkage_sources) == set(out)
+            and isinstance(as_of, str) and isinstance(price_basis_date, str)):
+        raise Batch5ToBatch4E2EError("Cut4 result linkage sources must exactly cover analysis rows")
+    try:
+        for ticker, row in out.items():
+            fact = result_linkage_sources[ticker]
+            if row.get("source_result_facts") != fact:
+                raise ResultSourceLinkageError("per_ticker source fact differs from result_linkage_sources")
+            validate_result_source_fact(fact, ticker=ticker, row_source=row.get("row_source"),
+                                        as_of=as_of, price_basis_date=price_basis_date)
+        return {row["ticker"]: row for row in bind_result_source_facts(
+            list(out.values()), as_of=as_of, price_basis_date=price_basis_date,
+        )}
+    except ResultSourceLinkageError as exc:
+        raise Batch5ToBatch4E2EError(f"Cut4 source-result bridge rejected: {exc}") from exc
 
 
 def _short_bucket_dollars(account_state_path: Path, *, required: bool) -> float:
@@ -316,7 +343,12 @@ def _derive_current_action_inputs(
 ) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]], dict[str, Any], dict[str, dict[str, float]]]:
     data_context = components["data_context"]
     universe = _universe_by_ticker(data_context)
-    per_ticker_analysis = _analysis_rows_without_synthetic_price_inputs(components["per_ticker_analysis"])
+    per_ticker_analysis = _analysis_rows_without_synthetic_price_inputs(
+        components["per_ticker_analysis"],
+        result_linkage_sources=components.get("result_linkage_sources"),
+        as_of=components.get("run_provenance", {}).get("as_of"),
+        price_basis_date=components.get("run_provenance", {}).get("price_basis_date"),
+    )
     if not per_ticker_analysis:
         basket_empty = copy.deepcopy(basket_context)
         basket_empty["per_ticker"] = {}
@@ -626,10 +658,10 @@ def run_e2e(
                 ) from exc
         components = _read_json(components_path, "context components")
         if not isinstance(components, dict) or frozenset(components) not in {
-            _LEGACY_CONTEXT_COMPONENT_KEYS, _A1_CONTEXT_COMPONENT_KEYS,
+            _LEGACY_CONTEXT_COMPONENT_KEYS, _A1_CONTEXT_COMPONENT_KEYS, _CUT4_CONTEXT_COMPONENT_KEYS,
         }:
             raise Batch5ToBatch4E2EError(
-                "context components must use the legacy or A1 source-bound closed-world shape"
+                "context components must use the legacy, A1, or Cut4 source-bound closed-world shape"
             )
         if run_mode in _PROVIDER_RECEIPT_RUN_MODES:
             try:

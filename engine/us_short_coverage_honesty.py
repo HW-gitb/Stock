@@ -28,6 +28,12 @@ _CONTRACT_PRESET = ROOT / "presets" / "us_short_action_table_contract_20260620.j
 # The §11.5 gating coverage categories (design prose — not a frozen enum). A row must report ALL of them, so it
 # can never be scored ``full`` without having actually checked analyst + SEC-parse + event data.
 _REQUIRED_COVERAGE_CATEGORIES = ("analyst", "sec_parse", "event")
+# Cut4 may add source families that are actually consumed by a row (score components / price).  The old
+# three-category holding contract stays the default; the extended vocabulary is deliberately finite so a caller
+# cannot hide an arbitrary unchecked label behind a valid-looking coverage record.
+_SUPPORTED_COVERAGE_CATEGORIES = (
+    "analyst", "sec_parse", "event", "momentum", "theme", "catalyst", "price",
+)
 # Per-category availability vocabulary → the coverage_status label it contributes (ok = fully covered).
 _CATEGORY_STATUS_TO_COVERAGE = {"ok": "full", "missing": "partial", "restricted": "restricted", "blocked": "blocked"}
 
@@ -57,7 +63,7 @@ def _nonblank_str(v) -> bool:
     return isinstance(v, str) and bool(v.strip())
 
 
-_GATING_CATEGORIES = frozenset(_REQUIRED_COVERAGE_CATEGORIES)  # {analyst, sec_parse, event}
+_GATING_CATEGORIES = frozenset(_SUPPORTED_COVERAGE_CATEGORIES)
 _GAP_STATUSES = ("missing", "restricted", "blocked")          # the non-ok category statuses that constitute a gap
 
 
@@ -67,7 +73,7 @@ def _coverage_rank(category_status) -> int:
     return _coverage_statuses().index(_CATEGORY_STATUS_TO_COVERAGE[category_status])
 
 
-def build_row_coverage(row_source, data_checks) -> dict:
+def build_row_coverage(row_source, data_checks, *, required_categories=None) -> dict:
     """Classify one row's §11.5 coverage honesty → ``{"row_source", "coverage_status", "coverage_gap_tags"}``.
 
     ``row_source`` must be one of the frozen ``design_locked_enums`` row_source values. ``data_checks`` must be a
@@ -81,18 +87,25 @@ def build_row_coverage(row_source, data_checks) -> dict:
         raise CoverageHonestyError(
             "row_source %r not in the frozen design_locked_enums row_source set %s" % (row_source, _row_sources())
         )
+    if required_categories is None:
+        required_categories = _REQUIRED_COVERAGE_CATEGORIES
+    if not isinstance(required_categories, (tuple, list)) or not required_categories:
+        raise CoverageHonestyError("required_categories must be a non-empty tuple/list")
+    if (len(required_categories) != len(set(required_categories))
+            or any(category not in _GATING_CATEGORIES for category in required_categories)):
+        raise CoverageHonestyError("required_categories contains an unsupported or duplicate category")
     if not isinstance(data_checks, dict):
         raise CoverageHonestyError("data_checks must be a dict, got %r" % (type(data_checks).__name__,))
-    if set(data_checks) != set(_REQUIRED_COVERAGE_CATEGORIES):
+    if set(data_checks) != set(required_categories):
         raise CoverageHonestyError(
             "data_checks must report EXACTLY the gating categories %s, got %s"
-            % (sorted(_REQUIRED_COVERAGE_CATEGORIES), sorted(map(str, data_checks)))
+            % (sorted(required_categories), sorted(map(str, data_checks)))
         )
 
     statuses = _coverage_statuses()
     worst_rank = 0
     gap_tags = []
-    for category in _REQUIRED_COVERAGE_CATEGORIES:  # frozen category order (stable, deterministic gap_tags)
+    for category in required_categories:  # caller-bound but fully validated order (stable, deterministic gap_tags)
         status = data_checks[category]
         if status not in _CATEGORY_STATUS_TO_COVERAGE:
             raise CoverageHonestyError(

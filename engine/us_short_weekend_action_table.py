@@ -42,6 +42,7 @@ from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_hard_veto import row_source_to_context
 from engine.us_short_no_dangling_validator import validate_official_machine_record
 from engine.us_short_overextension import validate_overextension_result
+from engine.us_short_result_source_linkage import ResultSourceLinkageError, validate_result_source_fact
 from engine.us_short_price_engine import PRICE_ENGINES, PRICE_SUB_MODES
 from engine.us_short_ship_gate_sizing import ship_gate_sizing
 from engine.us_short_weekend_decision import action_price_error, action_quantity_error, action_reason_error
@@ -98,13 +99,30 @@ _SELECTED_ROW_SOURCES = frozenset({"top15_candidate", "holding_in_top15"})
 _SELECTION_RECORD_KEYS = frozenset({"selection_rank", "selection_bucket", "core_score", "theme_momentum_score"})
 
 
-def _flatten_row(row, ct):
+def _flatten_row(row, ct, *, as_of=None):
     """Project one §10 machine-record row's rich layer onto the flat §11.3 columns (keeping the rich layer +
     field_records). Only frozen §11.3 column keys are lifted; source-owned theme columns are cleared first and
     repopulated only from the validated theme_context."""
     flat = dict(row)
     for field in ("theme_id", "theme_source", "theme_lifecycle_state", "macro_cluster"):
         flat[field] = None
+    # Cut4 source fields are cleared and rebuilt from the receipt-bound row fact, not trusted as caller-supplied
+    # flat values.  This makes CSV/report rows the projection of the same source record the price/effects chain used.
+    for field in ("coverage_status", "coverage_gap_tags", "data_quality_tags", "execution_constraints"):
+        flat[field] = None
+    facts = row.get("source_result_facts")
+    if facts is not None:
+        try:
+            validate_result_source_fact(
+                facts, ticker=ct, row_source=row.get("row_source"), as_of=as_of,
+                price_basis_date=facts.get("price_basis_date") if isinstance(facts, dict) else None,
+            )
+        except ResultSourceLinkageError as exc:
+            raise WeekendActionTableError(f"{ct}: Cut4 source-result fact is invalid") from exc
+        flat["coverage_status"] = facts["coverage"]["coverage_status"]
+        flat["coverage_gap_tags"] = list(facts["coverage"]["coverage_gap_tags"])
+        flat["data_quality_tags"] = list(facts["data_quality_tags"])
+        flat["execution_constraints"] = list(facts["execution_constraints"])
     price = row.get("price")
     if isinstance(price, dict):
         af = price.get("action_fields")
@@ -329,7 +347,7 @@ def flatten_machine_record(machine_record):
             raise WeekendActionTableError(f"rows 含规范化后重复 ticker（一股一行）: {ct!r}")
         seen.add(ct)
         _validate_price_projection(row, ct)   # §6 price contract before lifting into the official §11.3 columns
-        out_rows.append({**_flatten_row(row, ct), "ticker": ct})
+        out_rows.append({**_flatten_row(row, ct, as_of=machine_record.get("as_of")), "ticker": ct})
 
     # cross-row §4.5 selection-rank integrity: the SELECTED rows (top15_candidate / holding_in_top15) ARE the Top15
     # admitted set, so their preserved selection_rank must be EXACTLY 1..N (unique + dense + in-range) — a duplicate

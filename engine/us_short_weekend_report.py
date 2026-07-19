@@ -34,7 +34,12 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from engine.us_short_coverage_honesty import build_row_coverage, render_coverage_section
+from engine.us_short_coverage_honesty import (
+    CoverageHonestyError,
+    build_row_coverage,
+    render_coverage_section,
+    validate_row_coverage,
+)
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_exclusion_summary import build_exclusion_summary, render_exclusion_section
 from engine.us_short_hot_excluded import render_hot_excluded_banner
@@ -166,6 +171,40 @@ def reconcile_holding_coverage(holdings, coverage_inputs):
             "coverage_inputs 须一对一覆盖持仓行（无空/缺/多/重）: coverage=%s holdings=%s"
             % (sorted(cov_tickers), holding_tickers))
     return coverage_records
+
+
+def reconcile_holding_coverage_from_rows(holdings):
+    """Use the Cut4 machine-row source facts as the only coverage authority when present.
+
+    Returns ``None`` only for a wholly legacy holding set, so old offline fixtures retain their explicit
+    ``coverage_inputs`` contract.  A mixed set is an upstream seam error, never a partial fallback.
+    """
+    if not isinstance(holdings, list):
+        raise WeekendReportError("holdings must be a list")
+    has_facts = [isinstance(row, dict) and isinstance(row.get("source_result_facts"), dict) for row in holdings]
+    if not any(has_facts):
+        return None
+    if not all(has_facts):
+        raise WeekendReportError("holding coverage may not mix Cut4 source rows and legacy coverage inputs")
+    out, seen = [], set()
+    for row in holdings:
+        ticker = canonical_us_ticker(row.get("ticker"))
+        facts = row["source_result_facts"]
+        coverage = facts.get("coverage") if isinstance(facts, dict) else None
+        if ticker is None or ticker in seen or not isinstance(coverage, dict):
+            raise WeekendReportError("machine holding source coverage identity is invalid")
+        seen.add(ticker)
+        if coverage.get("row_source") != row.get("row_source"):
+            raise WeekendReportError("machine holding coverage row_source differs from its source fact")
+        try:
+            validate_row_coverage(coverage)
+        except CoverageHonestyError as exc:
+            raise WeekendReportError("machine holding source coverage is invalid") from exc
+        for key in ("coverage_status", "coverage_gap_tags"):
+            if row.get(key) != coverage.get(key):
+                raise WeekendReportError(f"machine holding {key} is not projected from source coverage")
+        out.append({key: coverage[key] for key in ("row_source", "coverage_status", "coverage_gap_tags")})
+    return out
 
 
 def _as_lines(value, where):
@@ -440,7 +479,9 @@ def build_weekly_report(machine_record, lifecycle_result, *, report_context, run
     # BATCH4-OFFICIAL-REPORT-SOURCE-BINDING-GAP) — every holding must carry exactly one coverage record; an empty
     # / missing / extra / duplicate coverage set fails closed, so a held position can never render "全 full 无
     # 缺口" with no coverage proof.
-    coverage_records = reconcile_holding_coverage(holdings, report_context["coverage_inputs"])
+    coverage_records = reconcile_holding_coverage_from_rows(holdings)
+    if coverage_records is None:
+        coverage_records = reconcile_holding_coverage(holdings, report_context["coverage_inputs"])
     coverage_lines = render_coverage_section(coverage_records)
     not_clean = [c for c in coverage_records if c["coverage_status"] != "full"]   # §13 不 clean 项 = 覆盖非 full
 

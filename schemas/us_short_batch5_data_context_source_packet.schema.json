@@ -130,6 +130,10 @@
         "yfinance_grade_actions_path": {
           "type": "string",
           "pattern": "^[0-9a-f]{64}$"
+        },
+        "ohlcv_series_packet_path": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       }
     },
@@ -174,6 +178,10 @@
           "minLength": 1
         },
         "yfinance_grade_actions_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ohlcv_series_packet_path": {
           "type": "string",
           "minLength": 1
         },

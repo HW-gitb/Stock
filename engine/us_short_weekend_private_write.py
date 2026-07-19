@@ -54,6 +54,7 @@ from engine.us_short_weekend_action_table import flatten_machine_record
 from engine.us_short_weekend_report import (
     canonical_lifecycle_section,
     reconcile_holding_coverage,
+    reconcile_holding_coverage_from_rows,
     report_row_groups,
 )
 from engine.us_short_weekly_report_renderer import render_weekly_report
@@ -183,7 +184,9 @@ def _reconcile_official_source_facts(flat, report_data, decision_date, *, provid
     # (4) coverage_non_full_count bound to validated holding coverage (coverage_inputs reconciled 1:1 to the
     # machine holding rows via the report's single-source helper, independent of report_data).
     try:
-        coverage_records = reconcile_holding_coverage(groups["holdings"], coverage_inputs)
+        coverage_records = reconcile_holding_coverage_from_rows(groups["holdings"])
+        if coverage_records is None:
+            coverage_records = reconcile_holding_coverage(groups["holdings"], coverage_inputs)
     except Exception as exc:
         raise WeekendPrivateWriteError(f"coverage 源对账失败（拒写，无落盘）: {exc}")
     non_full = sum(1 for c in coverage_records if c.get("coverage_status") != "full")

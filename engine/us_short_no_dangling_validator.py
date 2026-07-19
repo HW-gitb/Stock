@@ -105,6 +105,7 @@ MANIFEST_FIELD_IDS = frozenset({
     "hard_veto", "price", "market_risk_regime", "core_score", "risk_downgrade", "sizing",
     "theme_lifecycle_state", "theme_opportunity_state", "forward_event", "event_data_gap",
     "portfolio_guard", "symbol_cooldown", "theme_id", "theme_source", "macro_cluster",
+    "source_coverage", "source_catalyst",
 })
 _BUILD_ACTIONS = frozenset({"建仓", "加仓"})  # a build is by contract a scored + sized candidate (§8 / machine-record)
 
@@ -140,6 +141,8 @@ def official_expected_field_ids(row):
         expected.add("event_data_gap")
     if "result_effects" in row:
         expected.update(("portfolio_guard", "symbol_cooldown"))
+    if isinstance(row.get("source_result_facts"), dict):
+        expected.update(("source_coverage", "source_catalyst"))
     return expected
 
 

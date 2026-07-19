@@ -85,6 +85,7 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             "analyst": STATE_DIR / f"{self.slug}_analyst.json",
             "news": STATE_DIR / f"{self.slug}_news.json",
             "theme_contract": STATE_DIR / f"{self.slug}_theme_selection_contract.json",
+            "ohlcv": STATE_DIR / f"{self.slug}_ohlcv.json",
             "data_context": STATE_DIR / f"{self.slug}_data_context.json",
             "components": STATE_DIR / f"{self.slug}_context_components.json",
         }
@@ -277,16 +278,78 @@ class Batch5ToBatch4E2ETest(unittest.TestCase):
             self.assertTrue((private_root / "runs_private" / _DECISION_DATE / "machine_record.json").exists())
             self.assertTrue(self.paths["components"].exists())
             context_packet = json.loads(context_out.read_text(encoding="utf-8"))
-            self.assertNotIn("price_input", context_packet["per_ticker_analysis"]["AAPL"])
-            self.assertEqual(context_packet["sizing_per_ticker"], {})
-            self.assertEqual(context_packet["basket_context"]["per_ticker"], {})
-            self.assertEqual(context_packet["cost_inputs"], {})
-            machine_record = json.loads(
+            # Cut4 preserves the receipt-bound close in provenance, but never lets close-only data enter the
+            # price engine.  It therefore cannot create synthetic ATR/support geometry or a new build.
+            row = context_packet["per_ticker_analysis"]["AAPL"]
+            self.assertEqual(row["price_input"], {})
+            self.assertEqual(row["source_result_facts"]["price"]["status"], "close_only")
+            self.assertEqual(row["source_result_facts"]["price"]["input"], {"close": 200.0})
+            self.assertEqual(row["coverage_status"], "partial")
+            machine = json.loads(
                 (private_root / "runs_private" / _DECISION_DATE / "machine_record.json").read_text(encoding="utf-8")
+            )["rows"][0]
+            self.assertEqual(machine["coverage_status"], "partial")
+            self.assertEqual(machine["data_quality_tags"], row["data_quality_tags"])
+            self.assertEqual(machine["final_action"], "\u89c2\u5bdf")
+            self.assertEqual(machine["observe_reason_type"], "price_not_executable")
+            action_csv = (private_root / "weekly_private" / _DECISION_DATE / "action_table.csv").read_text(encoding="utf-8")
+            self.assertIn("coverage_status", action_csv.splitlines()[0])
+            self.assertIn("partial", action_csv.splitlines()[1])
+
+    def test_local_ohlcv_packet_is_the_only_executable_price_input(self) -> None:
+        points = [
+            {"date": f"2026-05-{idx:02d}", "high": 101.0 + idx, "low": 99.0 + idx, "close": 100.0 + idx}
+            for idx in range(1, 15)
+        ] + [{"date": "2026-06-12", "high": 116.0, "low": 114.0, "close": 115.0}]
+        _write_json(self.paths["ohlcv"], {
+            "schema_name": "us_short_batch5_full_universe_ohlcv_series_packet", "schema_version": "1.0.0",
+            "generated_at": "2026-06-15T13:00:00Z",
+            "scope": {
+                "market": "US", "lane": "us_short", "batch": "batch5_provider_live",
+                "packet_status": "full_universe_per_ticker_ohlcv_series_ready_for_local_overextension_projection",
+                "full_market_reconstruction": True, "network_access_performed_by_packet_producer": False,
+                "provider_calls_performed_by_packet_producer": False, "raw_payload_refs_gitignored": True,
+                "datahub_consumption_allowed": False, "production_storage_allowed": False,
+                "ship_gate_evidence_claimed": False, "broker_or_order_automation_allowed": False,
+                "a_share_crossing_allowed": False,
+            },
+            "decision_clock": {
+                "expected_decision_date": _DECISION_DATE, "candidate_price_basis_date": "20260612",
+                "price_basis_date": "2026-06-12", "source_as_of": "2026-06-12",
+            },
+            "series_contract": {"session": "RTH", "adjustment_mode": "adjusted", "as_of": "2026-06-12",
+                                "grouped_session_count": 15},
+            "provenance": {"provider_id": "fmp", "endpoint_or_family": "historical_price_full",
+                           "source_as_of": "2026-06-12", "observed_at": "2026-06-15T13:00:00Z",
+                           "coverage_status": "full", "parser_status": "ok"},
+            "series_by_ticker": {"AAPL": {"as_of": "2026-06-12", "session": "RTH",
+                                             "adjustment_mode": "adjusted", "points": points}},
+        })
+        packet = json.loads(self.paths["packet"].read_text(encoding="utf-8"))
+        packet["paths"]["ohlcv_series_packet_path"] = _rel(self.paths["ohlcv"])
+        packet["source_artifact_sha256"]["ohlcv_series_packet_path"] = hashlib.sha256(
+            self.paths["ohlcv"].read_bytes()
+        ).hexdigest()
+        _write_json(self.paths["packet"], packet)
+        with tempfile.TemporaryDirectory() as private_dir:
+            private_root = Path(private_dir)
+            account = _write_json(private_root / "account_state.json", _empty_account())
+            health = _write_json(private_root / "provider_health.json", {"fmp": "ok", "sec_edgar": "ok"})
+            template = _no_build_template(private_root / "batch4_template.json")
+            context_out = private_root / "context_packet.json"
+            e2e.run_e2e(
+                source_packet_path=self.paths["packet"], batch4_template_path=template,
+                account_state_path=account, provider_health_path=health, private_root=private_root,
+                now_et=datetime(2026, 6, 15, 9, 0, 0), context_components_path=self.paths["components"],
+                context_packet_path=context_out, bootstrap_lifecycle=True, generated_at="2026-06-15T13:01:00Z",
             )
-            self.assertEqual(machine_record["rows"][0]["final_action"], "观察")
-            self.assertEqual(machine_record["rows"][0]["observe_reason_type"], "price_not_executable")
-            self.assertNotIn("AAPL", json.dumps(summary, ensure_ascii=False))
+            row = json.loads(context_out.read_text(encoding="utf-8"))["per_ticker_analysis"]["AAPL"]
+            price_source = row["source_result_facts"]["price"]
+            self.assertEqual(price_source["status"], "ohlcv_ready")
+            self.assertEqual(price_source["observed_at"], "2026-06-15T13:00:00Z")
+            self.assertEqual(price_source["session"], "RTH")
+            self.assertEqual(price_source["adjustment_mode"], "adjusted")
+            self.assertEqual(len(row["price_input"]["bars"]), 15)
 
     def test_default_legacy_e2e_rejects_full_candidate_profile_without_explicit_contract(self) -> None:
         targets = ("AAPL",)
