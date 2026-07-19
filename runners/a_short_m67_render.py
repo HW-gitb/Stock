@@ -617,6 +617,13 @@ def render_weekly_markdown(weekly: dict) -> str:
         out.append(f"- **最终结论：{_cv['final_decision']['plain_text']}**")
         out.append("> 这里只给观察结论；即使显示“建议复审”，系统也不会自动改阈值或放行股票。")
     # 4.2 Round2 上游过滤批次级摘要(无 M6.7 个股行,仅计数,不含个股/持仓 → public)
+    _candidate_exclusions = weekly.get("candidate_exclusions") or []
+    if _candidate_exclusions:
+        out += ["", f"## 单票候选排除（共 {len(_candidate_exclusions)} 只）",
+                "> 仅隔离已证停牌或价格时钟当前但历史不足的单票；来源、陈旧或混合时钟存疑仍整批拒跑。",
+                "| 标的 | 名称 | 原因 | 来源状态 |", "|---|---|---|---|"]
+        out += [f"| {_cell(item.get('ts_code'))} | {_cell(item.get('name'))} | {_cell(item.get('reason'))} | "
+                f"{_cell(item.get('source_status'))} |" for item in _candidate_exclusions]
     _excl = weekly.get("exclusion_summary")
     if _excl:
         out += ["", f"## 本轮上游过滤摘要(批次级 · 无 M6.7 个股行 · 仅计数不含个股/持仓 · 共 {_excl['total_excluded']} 只)",

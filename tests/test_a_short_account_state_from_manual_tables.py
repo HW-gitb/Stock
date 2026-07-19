@@ -23,6 +23,11 @@ from runners.a_short_weekly_pipeline import validate_account_state  # noqa: E402
 
 AS_OF = "20260615"
 EXAMPLE_DIR = ROOT / "schemas" / "examples" / "a_short_account_state_csv"
+TEST_CONFIG = {
+    "rule13_cooldown_calendar_days": 1,
+    "rule13_default_max_reentry_position_pct": 0.5,
+    "rule12_default_recovery_position_multiplier": 0.5,
+}
 
 
 def _tables():
@@ -62,9 +67,80 @@ def _r13(acc):
     return {c["ts_code"]: c for c in acc["rule13_cooldowns"]}
 
 
+def _build_account_state(tables, decision_as_of=AS_OF, config=None):
+    return conv.build_account_state(tables, decision_as_of, TEST_CONFIG if config is None else config)
+
+
+class PresetConfigTests(unittest.TestCase):
+    def _load_text(self, text):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "a_short.yaml"
+            path.write_text(text, encoding="utf-8")
+            return conv._load_preset_config(path)
+
+    @staticmethod
+    def _valid_text(**over):
+        cfg = dict(TEST_CONFIG)
+        cfg.update(over)
+        return (
+            "position_management:\n"
+            f"  rule13_cooldown_calendar_days: {cfg['rule13_cooldown_calendar_days']}\n"
+            f"  rule13_default_max_reentry_position_pct: {cfg['rule13_default_max_reentry_position_pct']}\n"
+            f"  rule12_default_recovery_position_multiplier: {cfg['rule12_default_recovery_position_multiplier']}\n"
+        )
+
+    def test_missing_preset_is_fatal_not_defaulted(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(conv.ConvertError):
+                conv._load_preset_config(Path(td) / "missing.yaml")
+
+    def test_missing_block_or_any_required_key_is_fatal_not_defaulted(self):
+        with self.assertRaises(conv.ConvertError):
+            self._load_text("capital:\n  bucket: short\n")
+        for missing in TEST_CONFIG:
+            lines = ["position_management:"]
+            for key, value in TEST_CONFIG.items():
+                if key != missing:
+                    lines.append(f"  {key}: {value}")
+            with self.subTest(missing=missing), self.assertRaises(conv.ConvertError):
+                self._load_text("\n".join(lines) + "\n")
+
+    def test_unknown_key_in_block_is_fatal(self):
+        # symmetry with _validate_config's unexpected-key rejection: an unknown key inside the
+        # position_management block fails closed instead of being silently ignored.
+        with self.assertRaises(conv.ConvertError):
+            self._load_text(self._valid_text() + "  rule99_unexpected: 3\n")
+
+    def test_duplicate_nonnumeric_and_out_of_range_values_are_fatal(self):
+        duplicate = self._valid_text() + "  rule13_cooldown_calendar_days: 2\n"
+        with self.assertRaises(conv.ConvertError):
+            self._load_text(duplicate)
+        for key, value in (
+            ("rule13_cooldown_calendar_days", "1.5"),
+            ("rule13_default_max_reentry_position_pct", "not-a-number"),
+            ("rule12_default_recovery_position_multiplier", "1.1"),
+        ):
+            with self.subTest(key=key, value=value), self.assertRaises(conv.ConvertError):
+                self._load_text(self._valid_text(**{key: value}))
+
+    def test_valid_preset_values_are_exactly_the_lineage_config(self):
+        cfg = self._load_text(self._valid_text(
+            rule13_cooldown_calendar_days=2,
+            rule13_default_max_reentry_position_pct=0.4,
+            rule12_default_recovery_position_multiplier=0.6,
+        ))
+        self.assertEqual(cfg, {
+            "rule13_cooldown_calendar_days": 2,
+            "rule13_default_max_reentry_position_pct": 0.4,
+            "rule12_default_recovery_position_multiplier": 0.6,
+        })
+        _, lineage = _build_account_state(_tables(), config=cfg)
+        self.assertEqual(lineage["config"], cfg)
+
+
 class HappyPathTests(unittest.TestCase):
     def test_build_happy_path_structure(self):
-        acc, ln = conv.build_account_state(_tables(), AS_OF)
+        acc, ln = _build_account_state(_tables(), AS_OF)
         self.assertEqual(acc["as_of"], AS_OF)
         self.assertEqual(acc["available_cash"], 500000.0)
         self.assertEqual(acc["manual_order_only"], True)
@@ -79,27 +155,27 @@ class HappyPathTests(unittest.TestCase):
         self.assertEqual(ln["facts_staleness"], "current")
 
     def test_output_passes_existing_validator(self):
-        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        acc, _ = _build_account_state(_tables(), AS_OF)
         self.assertEqual(validate_account_state(acc, AS_OF), acc)
 
     def test_blank_stop_loss_optional_v110(self):
         # S3a:stop_loss 降可选(系统算止损)→ 空白合法、不再 FATAL;输出 schema_version 1.1.0、stop_loss None、过 validator。
         tables = _tables()
         tables["positions"][0]["stop_loss"] = ""
-        acc, _ = conv.build_account_state(tables, AS_OF)
+        acc, _ = _build_account_state(tables, AS_OF)
         self.assertEqual(acc["schema_version"], "1.1.0")
         self.assertIsNone(acc["positions"][0]["stop_loss"])
         self.assertEqual(validate_account_state(acc, AS_OF), acc)
 
     def test_filled_stop_loss_kept_as_manual_ref_v110(self):
         # 填了 stop 仍保留(降为手填参考),不报错;输出 1.1.0。
-        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        acc, _ = _build_account_state(_tables(), AS_OF)
         self.assertEqual(acc["schema_version"], "1.1.0")
         self.assertEqual(acc["positions"][0]["stop_loss"], 9.20)
 
     def test_no_active_cooldown_is_left_expired(self):
         # defense-in-depth invariant: converter never emits an expired active_cooldown
-        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        acc, _ = _build_account_state(_tables(), AS_OF)
         for cd in acc["rule13_cooldowns"]:
             if cd["status"] == "active_cooldown":
                 self.assertGreaterEqual(cd["cooldown_until"], AS_OF)
@@ -109,7 +185,7 @@ class HappyPathTests(unittest.TestCase):
     def test_example_csv_dir_converts_and_validates(self):
         tables = {name: conv._read_csv_table(EXAMPLE_DIR / f"{name}.csv", name)
                   for name in conv.REQUIRED_TABLES + conv.OPTIONAL_TABLES}
-        acc, ln = conv.build_account_state(tables, AS_OF, conv._load_preset_config())
+        acc, ln = _build_account_state(tables, AS_OF, conv._load_preset_config())
         validate_account_state(acc, AS_OF)
         self.assertEqual(_r13(acc)["600519.SH"]["status"], "active_cooldown")
         self.assertEqual(_r13(acc)["601318.SH"]["status"], "pending_recheck")
@@ -118,33 +194,33 @@ class HappyPathTests(unittest.TestCase):
 
 class DeterminismTests(unittest.TestCase):
     def test_byte_identical_on_repeat(self):
-        a1, _ = conv.build_account_state(_tables(), AS_OF)
-        a2, _ = conv.build_account_state(_tables(), AS_OF)
+        a1, _ = _build_account_state(_tables(), AS_OF)
+        a2, _ = _build_account_state(_tables(), AS_OF)
         self.assertEqual(json.dumps(a1, sort_keys=True), json.dumps(a2, sort_keys=True))
 
     def test_row_order_independence(self):
         base = _tables()
-        a1, _ = conv.build_account_state(base, AS_OF)
+        a1, _ = _build_account_state(base, AS_OF)
         shuffled = _tables()
         shuffled["trades"] = list(reversed(shuffled["trades"]))
         shuffled["positions"] = list(reversed(shuffled["positions"]))
-        a2, _ = conv.build_account_state(shuffled, AS_OF)
+        a2, _ = _build_account_state(shuffled, AS_OF)
         self.assertEqual(a1, a2)
 
 
 class Rule13ProgressionTests(unittest.TestCase):
     def test_active_when_within_cooldown(self):
-        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        acc, _ = _build_account_state(_tables(), AS_OF)
         self.assertEqual(_r13(acc)["600519.SH"]["status"], "active_cooldown")
 
     def test_pending_when_expired_and_unconfirmed(self):
-        acc, _ = conv.build_account_state(_tables(), AS_OF)
+        acc, _ = _build_account_state(_tables(), AS_OF)
         self.assertEqual(_r13(acc)["601318.SH"]["status"], "pending_recheck")
 
     def test_cleared_when_expired_and_both_confirmed(self):
         t = _tables()
         t["manual_controls"][0].update(new_catalyst_confirmed="TRUE", m4_recheck_passed="TRUE")
-        acc, ln = conv.build_account_state(t, AS_OF)
+        acc, ln = _build_account_state(t, AS_OF)
         self.assertEqual(_r13(acc)["601318.SH"]["status"], "cleared_for_reentry")
         prog = {c["ts_code"]: c["progressed"] for c in ln["rule13_cooldowns"]}
         self.assertEqual(prog["601318.SH"], {"from_status": "active_cooldown", "to_status": "cleared_for_reentry"})
@@ -156,7 +232,7 @@ class Rule13ProgressionTests(unittest.TestCase):
             "ts_code": "600519.SH", "new_catalyst_confirmed": "TRUE", "m4_recheck_passed": "TRUE",
             "max_reentry_position_pct": "0.5", "override_status": "", "override_reason": "",
         })
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertEqual(_r13(acc)["600519.SH"]["status"], "active_cooldown")
 
     def test_held_stock_gets_no_cooldown(self):
@@ -166,7 +242,7 @@ class Rule13ProgressionTests(unittest.TestCase):
             "entry_date": "20260606", "stop_loss": "45.0", "take_profit_1": "", "take_profit_2": "",
             "last_exit_date": "", "last_exit_reason": "", "manual_notes": "",
         })
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertNotIn("601318.SH", _r13(acc))
 
     def test_latest_sell_take_profit_means_no_cooldown(self):
@@ -175,7 +251,7 @@ class Rule13ProgressionTests(unittest.TestCase):
         t["trades"].append({"trade_date": "20260610", "ts_code": "601318.SH", "name": "中国平安",
                             "side": "SELL", "shares": "500", "price": "52.0", "reason": "take_profit",
                             "order_manual": "TRUE", "notes": ""})
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertNotIn("601318.SH", _r13(acc))
 
     def test_same_day_any_stop_loss_is_conservative(self):
@@ -183,14 +259,14 @@ class Rule13ProgressionTests(unittest.TestCase):
         t["trades"].append({"trade_date": "20260605", "ts_code": "601318.SH", "name": "中国平安",
                             "side": "SELL", "shares": "100", "price": "49.0", "reason": "take_profit",
                             "order_manual": "TRUE", "notes": "同日部分止盈"})
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertIn("601318.SH", _r13(acc))  # 同日另有 stop_loss -> 保守仍冷静
 
     def test_manual_block_only_tightens(self):
         t = _tables()
         t["manual_controls"][0].update(new_catalyst_confirmed="TRUE", m4_recheck_passed="TRUE",
                                        override_status="manual_block")
-        acc, ln = conv.build_account_state(t, AS_OF)
+        acc, ln = _build_account_state(t, AS_OF)
         self.assertEqual(_r13(acc)["601318.SH"]["status"], "pending_recheck")  # 本应 cleared，被强制阻断
         block = {c["ts_code"]: c["manual_block_applied"] for c in ln["rule13_cooldowns"]}
         self.assertTrue(block["601318.SH"])
@@ -202,7 +278,7 @@ class Rule13ProgressionTests(unittest.TestCase):
             "max_reentry_position_pct": "", "override_status": "manual_block", "override_reason": "想拉黑",
         })
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_manual_block_on_held_is_fatal(self):
         t = _tables()
@@ -211,13 +287,13 @@ class Rule13ProgressionTests(unittest.TestCase):
             "max_reentry_position_pct": "", "override_status": "manual_block", "override_reason": "",
         })
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_manual_allow_rejected(self):
         t = _tables()
         t["manual_controls"][0]["override_status"] = "manual_allow"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
 
 class Rule12Tests(unittest.TestCase):
@@ -225,20 +301,20 @@ class Rule12Tests(unittest.TestCase):
         t = _tables()
         t["portfolio_rule12"] = []
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_active_within_cooldown_stays_active(self):
         t = _tables()
         t["portfolio_rule12"][0].update(status="active_cooldown", cooldown_until="20260620",
                                         recovery_position_multiplier="")
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertEqual(acc["rule12"]["status"], "active_cooldown")
 
     def test_expired_active_auto_advances_to_recovery(self):
         t = _tables()
         t["portfolio_rule12"][0].update(status="active_cooldown", cooldown_until="20260612",
                                         recovery_position_multiplier="")
-        acc, ln = conv.build_account_state(t, AS_OF)
+        acc, ln = _build_account_state(t, AS_OF)
         self.assertEqual(acc["rule12"]["status"], "recovery_1")
         self.assertEqual(acc["rule12"]["recovery_position_multiplier"], 0.5)  # default
         self.assertEqual(ln["rule12"]["progressed"], {"from_status": "active_cooldown", "to_status": "recovery_1"})
@@ -247,56 +323,56 @@ class Rule12Tests(unittest.TestCase):
         t = _tables()
         t["portfolio_rule12"][0].update(status="active_cooldown", cooldown_until="")
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_invalid_status_fatal(self):
         t = _tables()
         t["portfolio_rule12"][0]["status"] = "inactive_typo"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_more_than_one_row_fatal(self):
         t = _tables()
         t["portfolio_rule12"].append(dict(t["portfolio_rule12"][0]))
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
 
 class AccountGateTests(unittest.TestCase):
     def test_zero_cash_allowed_for_holding_management(self):
         t = _tables()
         t["account"][0]["available_cash"] = "0"
-        acc, _ = conv.build_account_state(t, AS_OF)
+        acc, _ = _build_account_state(t, AS_OF)
         self.assertEqual(acc["available_cash"], 0.0)
 
     def test_manual_order_only_false_fatal(self):
         t = _tables()
         t["account"][0]["manual_order_only"] = "FALSE"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_broker_allowed_true_fatal(self):
         t = _tables()
         t["account"][0]["broker_connection_allowed"] = "TRUE"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_account_not_single_row_fatal(self):
         t = _tables()
         t["account"].append(dict(t["account"][0]))
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_future_facts_fatal(self):
         t = _tables()
         t["account"][0]["as_of"] = "20260616"  # > decision
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_stale_facts_warns_in_lineage(self):
         t = _tables()
         t["account"][0]["as_of"] = "20260612"  # < decision (Friday facts, Monday decision)
-        acc, ln = conv.build_account_state(t, AS_OF)
+        acc, ln = _build_account_state(t, AS_OF)
         self.assertEqual(ln["facts_staleness"], "stale_warning")
         self.assertEqual(acc["as_of"], AS_OF)
 
@@ -306,49 +382,49 @@ class ParsingAntiCoercionTests(unittest.TestCase):
         t = _tables()
         t["positions"][0]["entry_date"] = "20260601.0"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_bool_one_fatal(self):
         t = _tables()
         t["account"][0]["manual_order_only"] = "1"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_fractional_shares_fatal(self):
         t = _tables()
         t["positions"][0]["shares"] = "1000.0"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_non_main_board_ts_code_fatal(self):
         t = _tables()
         t["positions"][0]["ts_code"] = "300750.SZ"  # ChiNext
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_malformed_ts_code_fatal(self):
         t = _tables()
         t["positions"][0]["ts_code"] = "60000.SH"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_duplicate_position_fatal(self):
         t = _tables()
         t["positions"].append(dict(t["positions"][0]))
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_trade_order_manual_false_fatal(self):
         t = _tables()
         t["trades"][1]["order_manual"] = "FALSE"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
     def test_trade_bad_side_fatal(self):
         t = _tables()
         t["trades"][1]["side"] = "HOLD"
         with self.assertRaises(conv.ConvertError):
-            conv.build_account_state(t, AS_OF)
+            _build_account_state(t, AS_OF)
 
 
 class FileLevelTests(unittest.TestCase):
@@ -386,7 +462,7 @@ class ConsistencyCheckTests(unittest.TestCase):
     """4.3-D: trades-net vs positions advisory (WARN-only; never overrides positions)."""
 
     def _warns(self, tables):
-        return conv.build_account_state(tables, AS_OF)[1]["consistency_warnings"]
+        return _build_account_state(tables, AS_OF)[1]["consistency_warnings"]
 
     def test_base_example_has_no_warnings(self):
         # 600000 BUY 1000 == positions 1000; 600519/601318 are stop-loss sells (not held) → no warn
@@ -407,7 +483,7 @@ class ConsistencyCheckTests(unittest.TestCase):
         t["trades"].append({"trade_date": "20260610", "ts_code": "600000.SH", "name": "浦发银行",
                             "side": "SELL", "shares": "100", "price": "10.2", "reason": "take_profit",
                             "order_manual": "TRUE", "notes": ""})
-        acc, ln = conv.build_account_state(t, AS_OF)
+        acc, ln = _build_account_state(t, AS_OF)
         self.assertIn("shares_mismatch", [x["kind"] for x in ln["consistency_warnings"]])
         # positions stays authoritative — reconcile NEVER overrides
         self.assertEqual([p for p in acc["positions"] if p["ts_code"] == "600000.SH"][0]["shares"], 1000)
