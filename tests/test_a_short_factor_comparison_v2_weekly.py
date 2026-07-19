@@ -1,6 +1,7 @@
 """Knife-3 tests for the v2 weekly adapter; all data is synthetic and cache-only."""
 from __future__ import annotations
 
+import copy
 import json
 import sys
 import tempfile
@@ -15,7 +16,11 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine import a_short_factor_comparison as v1  # noqa: E402
-from engine.a_short_factor_comparison_v2 import ComparisonV2Error, capture_v2_week  # noqa: E402
+from engine.a_short_factor_comparison_v2 import (  # noqa: E402
+    ComparisonV2Error,
+    _validate_capture_integrity,
+    capture_v2_week,
+)
 from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     DAILY_CACHE_NAME,
     PUBLIC_STATUS_CURRENT,
@@ -177,6 +182,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             for candidate in candidates:
                 candidate["price_series"] = candidate["price_series"][:-1]
                 self.assertEqual(candidate["price_series"][-1]["trade_date"], price_data_through)
+                candidate["close"] = candidate["price_series"][-1]["close"]
             source_identity = {"run_id": "official-run", "candidate_digest": "a" * 64}
             weekly = {
                 "as_of": DECISION_DATE,
@@ -211,6 +217,15 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             self.assertEqual(identity["run_date"], run_date)
             self.assertEqual(identity["price_data_through"], price_data_through)
             self.assertEqual(result["capture"]["decision_date"], DECISION_DATE)
+            _validate_capture_integrity(result["capture"])
+
+            tampered = copy.deepcopy(result["capture"])
+            tampered["payload"]["run_identity"]["price_data_through"] = "20260129"
+            tampered["payload"]["capture_sha256"] = v1._digest({
+                key: value for key, value in tampered["payload"].items() if key != "capture_sha256"
+            })
+            with self.assertRaisesRegex(ComparisonV2Error, "does not end at frozen price_data_through"):
+                _validate_capture_integrity(tampered)
 
     def test_forward_capture_rejects_forged_or_mismatched_price_freshness_lineage(self):
         # Negative guards for the weekend/live-canonical forward binding: a forward capture must match the

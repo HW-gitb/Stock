@@ -686,11 +686,11 @@ def _validate_capture_integrity(capture: dict) -> None:
         if not code or not isinstance(series, list) or not series:
             raise ComparisonV2Error("v2 capture candidate snapshot lacks PIT price history")
         bar_dates = [_date(row.get("trade_date")) for row in series if isinstance(row, dict) and row.get("trade_date")]
-        if len(bar_dates) != len(series) or max(bar_dates) != capture["decision_date"]:
-            raise ComparisonV2Error("v2 capture candidate price history is stale or not exact-as-of")
+        if len(bar_dates) != len(series) or max(bar_dates) != identity["price_data_through"]:
+            raise ComparisonV2Error("v2 capture candidate price history does not end at frozen price_data_through")
         if not _finite(candidate.get("close")) or not _finite(series[-1].get("close")) or \
                 float(candidate["close"]) != float(series[-1]["close"]):
-            raise ComparisonV2Error("v2 capture candidate close is not bound to its exact-as-of price history")
+            raise ComparisonV2Error("v2 capture candidate close is not bound to its frozen price_data_through history")
         codes.append(code)
     if len(codes) != len(set(codes)):
         raise ComparisonV2Error("v2 capture candidate snapshot has duplicate symbols")

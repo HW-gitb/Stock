@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-19 — Claude Code 独立审查 PASS（A-short P0 factor-comparison v2 capture-integrity 日期锚修复；主树 master→提交）
+
+- **Verdict/Action**: PASS + 提交。`_validate_capture_integrity`(engine/a_short_factor_comparison_v2.py:689) 把候选价历史末根锚从 `capture["decision_date"]` 改为 `identity["price_data_through"]`，与 date-contract B 及既有完整性守卫(:782-786，本就用 price_data_through)一致。修前 689 与 784 在周末/盘前 canonical 跑相互矛盾(784 要末根=已结算周五、689 要=周一)→ 每次周末跑必崩 v2 capture。comparison-only、零改 EGS/M6.7/选股/veto/仓位。
+- **Required**: 无。
+- **Verify**: 亲读守卫全体——`price_data_through` 由 `_clean_run_identity`(:435-436) 强制 ≤decision_date 且 ≤run_date→放宽不引入 look-ahead；同类扫 `decision_date` 皆合法锚/键、689 为唯一价历史绑定、无遗漏。主树 deps-complete 亲跑 v2+v2_weekly+adjudication=**46 OK**(含新反向测试 `does not end at frozen price_data_through`，无修则崩)。live 证据:周末为 canonical 周一 20260720 跑，`state/a_short/factor_comparison_private/v2/weeks/20260720/capture.json` 已冻(私有 gitignored)、M6.7 已出、v2 fail-closed(首跑 evidence_unavailable=预期、production_unchanged)；weekly_m67 中文 UTF-8 正常(mojibake=我 console GBK 假象)。review-evidence:not_available。仅提交 engine+test；live run 产物(周报/regime/overlay)留未提交、非本刀范围。
+- **Next**: Codex：Pass
+
 ## 2026-07-19 — Claude Code 独立复审（US-short 结果联动 Cut4，master 未提交）：PASS（复审揪 2 P2→自修→快审；4558 OK）
 
 - **Verdict/Action**: **PASS**（复审→揪 2 P2→我自修→快审通过；用户授权 自修+快审+提交）。核心正确且忠实方案：新模块 `result_source_linkage` 复用 `coverage_honesty`/price engine/catalyst（describe-only 不重算），一条 closed-world `source_result_facts` per row → 走 Cut2 `result_effects`；只 full OHLCV 喂引擎、close-only→空 price_input→非可执行观察（不造 ATR）；coverage `restricted/blocked`→只覆盖 `建仓`→观察(data_restricted)、绝不吞保命出口（探针 + `extend_result_effects` 双守）；catalyst 与 `risk_downgrade` 互斥不双扣；bridge 收成纯源适配器（不注 portfolio_guard/cooldown/result_effects/final_action/macro，e2e/data-context 测试同步）。
