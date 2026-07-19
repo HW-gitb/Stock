@@ -266,6 +266,27 @@ class BootstrapPolicyTests(unittest.TestCase):
             self.assertTrue(out["action_comparison"]["records"][0]["forward_eligible"])
             self.assertTrue((base / "actions.json").exists())
 
+    def test_d2_same_settled_week_rerun_keeps_first_frozen_m67_provenance(self):
+        cal = _dates(BACKFILL_MIN_TRADING_DAYS)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            report = base / "weekly_m67.json"
+            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
+                              encoding="utf-8")
+            kw = self._kw(cal, tmp, bootstrap=True)
+            kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
+                      m67_report_path=str(report), action_records_path=str(base / "actions.json"),
+                      action_summary_path=str(base / "summary.json"), action_decision_as_of=cal[-1])
+            with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value=cal[-1]):
+                first = run_regime_step(**kw)
+                first_digest = first["action_comparison"]["records"][0]["m67_provenance"]["source_sha256"]
+                report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1],
+                                              "reports": [], "rerun_marker": "account_scope_changed"}),
+                                  encoding="utf-8")
+                second = run_regime_step(**{**kw, "bootstrap": False})
+            self.assertEqual(second["action_comparison"]["records"][0]["m67_provenance"]["source_sha256"],
+                             first_digest)
+
     def test_d2_candidate_review_reminder_is_persisted_to_comparison_panel(self):
         cal = _dates(BACKFILL_MIN_TRADING_DAYS)
         summary = {

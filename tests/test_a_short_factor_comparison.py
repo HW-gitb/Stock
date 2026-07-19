@@ -20,6 +20,7 @@ from engine.a_short_factor_comparison import (  # noqa: E402
     FACTOR_IDS, _evaluate, _holm_bonferroni, _iv_policy, _nonoverlap_blocks, build_realized_regime,
     capture_week, load_governance, settle_from_daily_payload, unavailable_realized_regime,
 )
+from runners.a_short_factor_comparison import _settlement_cache_required  # noqa: E402
 
 
 def _root(tmp: str) -> Path:
@@ -245,16 +246,49 @@ class VerdictStatisticsTests(unittest.TestCase):
 
 
 class DirectRunnerInvocationTests(unittest.TestCase):
+    def test_future_forward_snapshot_does_not_require_a_price_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            day = root / "20260720"
+            day.mkdir(parents=True)
+            (day / "manifest.json").write_text(json.dumps({
+                "decision_date": "20260720", "forward_eligible": True,
+            }), encoding="utf-8")
+            (day / "baseline_result.json").write_text(json.dumps({
+                "outcome": {"status": "pending_forward"},
+            }), encoding="utf-8")
+            required, reason = _settlement_cache_required(root, "20260718")
+            self.assertFalse(required)
+            self.assertIn("future-dated", reason)
+
+    def test_past_pending_forward_snapshot_still_requires_a_price_cache(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            day = root / "20260714"
+            day.mkdir(parents=True)
+            (day / "manifest.json").write_text(json.dumps({
+                "decision_date": "20260714", "forward_eligible": True,
+            }), encoding="utf-8")
+            (day / "baseline_result.json").write_text(json.dumps({
+                "outcome": {"status": "pending_forward"},
+            }), encoding="utf-8")
+            required, reason = _settlement_cache_required(root, "20260718")
+            self.assertTrue(required)
+            self.assertIn("may need settlement", reason)
+
     def test_settler_direct_script_invocation_bootstraps_project_root(self):
         """The weekly PowerShell entry invokes this file directly, not as -m."""
         with tempfile.TemporaryDirectory() as tmp:
             env = os.environ.copy()
             env.pop("PYTHONPATH", None)
+            root = _root(tmp)
             completed = subprocess.run(
                 [
                     sys.executable,
                     str(ROOT / "runners" / "a_short_factor_comparison.py"),
                     "settle",
+                    "--root",
+                    str(root),
                     "--cache",
                     str(Path(tmp) / "missing_forward_daily.pkl"),
                 ],
@@ -266,7 +300,7 @@ class DirectRunnerInvocationTests(unittest.TestCase):
                 check=False,
             )
         self.assertEqual(completed.returncode, 0, completed.stderr)
-        self.assertIn("cache unavailable", completed.stdout)
+        self.assertIn("no frozen comparison snapshots", completed.stdout)
 
 
 if __name__ == "__main__":

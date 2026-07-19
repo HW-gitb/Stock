@@ -14,6 +14,7 @@ from runners.a_short_crash_veto_tracker import (
     decide_design,
     detect_crash_codes,
     evaluate_cohort,
+    latest_settled_trade_date_from_analysis_input,
     latest_settled_trade_date,
     main,
     match_controls,
@@ -48,6 +49,20 @@ class CrashVetoTrackerTest(unittest.TestCase):
     def test_latest_settled_boundary_uses_egs_daily_max_not_wall_clock(self):
         daily = pd.DataFrame({"trade_date": ["20260710", "20260713", "bad", None]})
         self.assertEqual(latest_settled_trade_date(daily), "20260713")
+
+    def test_latest_settled_boundary_uses_published_quote_provenance_without_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "analysis_input.json"
+            path.write_text(json.dumps({
+                "trade_date": "20260720",
+                "candidates": [
+                    {"quote": {"source_trade_date": "20260717"}},
+                    {"quote": {"source_trade_date": "20260717"}},
+                ],
+            }), encoding="utf-8")
+            self.assertEqual(
+                latest_settled_trade_date_from_analysis_input(path, "20260720"), "20260717"
+            )
 
     def test_controls_exclude_members_and_prefer_same_l2(self):
         features = pd.DataFrame([
@@ -146,6 +161,8 @@ class CrashVetoTrackerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             state_path = Path(td) / "state.json"
             with mock.patch("runners.a_short_crash_veto_tracker.capture_official", side_effect=fake_capture), \
+                    mock.patch("runners.a_short_crash_veto_tracker.latest_settled_trade_date_from_analysis_input",
+                               return_value="20260714"), \
                     mock.patch("runners.a_short_crash_veto_tracker.refresh_prices_for_mature_cohorts",
                                side_effect=RuntimeError("provider down")):
                 with self.assertRaises(RuntimeError):
@@ -153,6 +170,18 @@ class CrashVetoTrackerTest(unittest.TestCase):
                                Path(td) / "prices.pkl", True)
             frozen = json.loads(state_path.read_text(encoding="utf-8"))
             self.assertEqual(frozen["cohorts"][0]["cohort_id"], cohort["cohort_id"])
+
+    def test_run_update_passes_published_settled_boundary_to_price_refresh(self):
+        with tempfile.TemporaryDirectory() as td:
+            state_path = Path(td) / "state.json"
+            with mock.patch("runners.a_short_crash_veto_tracker.capture_official", return_value=0), \
+                    mock.patch("runners.a_short_crash_veto_tracker.latest_settled_trade_date_from_analysis_input",
+                               return_value="20260717"), \
+                    mock.patch("runners.a_short_crash_veto_tracker.refresh_prices_for_mature_cohorts",
+                               return_value={"trade_dates": [], "stocks": pd.DataFrame()}) as refresh:
+                run_update("20260720", 5, state_path, Path(td) / "summary.json",
+                           Path(td) / "prices.pkl", True)
+            self.assertEqual(refresh.call_args.kwargs["settled_through"], "20260717")
 
 
 if __name__ == "__main__":

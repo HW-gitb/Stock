@@ -321,8 +321,38 @@ def latest_settled_trade_date(daily: pd.DataFrame) -> str:
     return str(dates.max())
 
 
+def latest_settled_trade_date_from_analysis_input(analysis_path: Path, expected_as_of: str) -> str:
+    """Read the settled EOD boundary already published by the current EGS run.
+
+    A canonical Monday pre-open run may legitimately have ``trade_date`` set to
+    Monday while every candidate quote is sourced from the preceding settled
+    Friday. This published provenance remains available when EGS request
+    caching is disabled, unlike the transient daily pickle.
+    """
+    try:
+        payload = json.loads(analysis_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise RuntimeError("official analysis_input unavailable for settled-price boundary") from exc
+    if str(payload.get("trade_date") or "") != str(expected_as_of):
+        raise RuntimeError("official analysis_input trade_date does not match crash-veto run")
+    candidates = payload.get("candidates")
+    if not isinstance(candidates, list) or not candidates:
+        raise RuntimeError("official analysis_input has no candidate quote provenance")
+    source_dates = {
+        str((candidate.get("quote") or {}).get("source_trade_date") or "")
+        for candidate in candidates if isinstance(candidate, dict)
+    }
+    if len(source_dates) != 1:
+        raise RuntimeError("official analysis_input has inconsistent candidate quote source dates")
+    settled = next(iter(source_dates))
+    if not settled.isdigit() or len(settled) != 8 or settled > str(expected_as_of):
+        raise RuntimeError("official analysis_input has invalid settled quote source date")
+    return settled
+
+
 def refresh_prices_for_mature_cohorts(state: dict, price_path: Path = PRICE_CACHE_PATH,
-                                      current_run_as_of: str | None = None) -> dict:
+                                      current_run_as_of: str | None = None,
+                                      settled_through: str | None = None) -> dict:
     eligible = [c for c in state["cohorts"] if _calendar_gap_days(c["as_of"]) >= 7]
     cache = _load_price_cache(price_path)
     if not eligible:
@@ -338,14 +368,17 @@ def refresh_prices_for_mature_cohorts(state: dict, price_path: Path = PRICE_CACH
     # 以本次 EGS daily cache 的 max(trade_date) 作为“最新已结算日”，避免把盘中日误判为到期。
     if not current_run_as_of:
         raise RuntimeError("current_run_as_of required for settled-price boundary")
-    current_daily_path = ROOT / "A-EGS" / "Result" / "egs_cache" / f"daily_all_{current_run_as_of}_60d.pkl"
-    if not current_daily_path.exists():
-        raise RuntimeError("current EGS daily cache missing; cannot determine latest settled trade date")
-    current_daily = pd.read_pickle(current_daily_path)
-    try:
-        end = latest_settled_trade_date(current_daily)
-    except ValueError as exc:
-        raise RuntimeError("current EGS daily cache has no settled trade dates") from exc
+    if settled_through:
+        end = settled_through
+    else:
+        current_daily_path = ROOT / "A-EGS" / "Result" / "egs_cache" / f"daily_all_{current_run_as_of}_60d.pkl"
+        if not current_daily_path.exists():
+            raise RuntimeError("current EGS daily cache missing; cannot determine latest settled trade date")
+        current_daily = pd.read_pickle(current_daily_path)
+        try:
+            end = latest_settled_trade_date(current_daily)
+        except ValueError as exc:
+            raise RuntimeError("current EGS daily cache has no settled trade dates") from exc
     cal = pro.trade_cal(exchange="", start_date=start, end_date=end, is_open=1, fields="cal_date,is_open")
     if cal is None or cal.empty or "cal_date" not in cal.columns:
         raise RuntimeError("Tushare trade_cal returned no open dates for crash-veto tracker")
@@ -570,8 +603,14 @@ def run_update(as_of: str, rule_days: int, state_path: Path, summary_path: Path,
     # 先冻结名单再联网补行情。即使 provider 本周失败，该批次也不会丢；下周会继续补算。
     state["updated_at"] = _now()
     _atomic_json(state_path, state)
-    cache = (refresh_prices_for_mature_cohorts(state, price_path, current_run_as_of=as_of)
-             if fetch_authorized else _load_price_cache(price_path))
+    if fetch_authorized:
+        analysis_path = ROOT / "result" / "a_short" / as_of / "analysis_input.json"
+        settled_through = latest_settled_trade_date_from_analysis_input(analysis_path, as_of)
+        cache = refresh_prices_for_mature_cohorts(
+            state, price_path, current_run_as_of=as_of, settled_through=settled_through
+        )
+    else:
+        cache = _load_price_cache(price_path)
     summary = build_summary(state, cache, as_of)
     state["updated_at"] = summary["generated_at"]
     _atomic_json(state_path, state)
