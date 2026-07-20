@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_nav_snapshot.schema.json",
+  "title": "US-short model-paper NAV snapshot",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "state_sha256",
+    "cash",
+    "market_value",
+    "nav",
+    "cumulative_realized_pnl",
+    "unrealized_pnl",
+    "total_pnl",
+    "cumulative_cost_paid",
+    "performance_status",
+    "paper_evaluable",
+    "degradation_reasons",
+    "evaluation_source_sha256",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_nav_snapshot"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"$ref": "#/definitions/date8"},
+    "state_sha256": {"$ref": "#/definitions/sha256"},
+    "cash": {"$ref": "#/definitions/money"},
+    "market_value": {"$ref": "#/definitions/money"},
+    "nav": {"$ref": "#/definitions/money"},
+    "cumulative_realized_pnl": {"$ref": "#/definitions/signed_money"},
+    "unrealized_pnl": {"$ref": "#/definitions/signed_money"},
+    "total_pnl": {"$ref": "#/definitions/signed_money"},
+    "cumulative_cost_paid": {"$ref": "#/definitions/money"},
+    "performance_status": {"enum": ["evaluable", "diagnostic_data_degraded"]},
+    "paper_evaluable": {"type": "boolean"},
+    "degradation_reasons": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1},
+      "uniqueItems": true
+    },
+    "evaluation_source_sha256": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/definitions/sha256"}]
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "money": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "signed_money": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_only", "diagnostic_when_degraded", "manual_account_isolated", "automatic_broker_execution", "ship_gate_eligible"],
+      "properties": {
+        "paper_only": {"const": true},
+        "diagnostic_when_degraded": {"const": true},
+        "manual_account_isolated": {"const": true},
+        "automatic_broker_execution": {"const": false},
+        "ship_gate_eligible": {"const": false}
+      }
+    }
+  }
+}

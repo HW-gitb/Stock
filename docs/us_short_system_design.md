@@ -351,6 +351,20 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 - **A1 现行落地链**：决策时从已抓取的全市场 OHLCV 冻结所有 Pass2-clean 候选的一套 pullback-only 价格/成本控制，后续周只成熟该私有冻结记录；私有账本的脱敏建议注入周报顶部 banner ⑥。公司行动/复权未获独立核验时必须写整周 no-count、不得推进时钟；这条提示链不阻断正式周报，也不改变 `balanced`。
 - **A1 v2.1 第 2 刀（已实现、无 provider 调用）**：成熟消费必须把当前决策时点作为绝对 `maturity_as_of` 写入 outcome/private-week；任何 H20 晚于该时点均 whole-week no-count，且成熟汇总按原因可观测。公司行动 evidence sidecar 必须同时绑定冻结决策、共同池事件范围和同一成熟 OHLCV 包 SHA256；它不凭外部文件名或“evaluable”字样放行。真实取数仍逐次授权。
 
+### 12.3 model_paper_track 周度组合记账（weekly portfolio wiring）
+
+> 2026-07-20 用户定：无实盘期，主系统按真实周自维护模拟组合（orders/positions/cash/NAV），自动结周度+累计盈亏，为日后与 comparison-only 的 paired head-to-head 留接口（本轮**只建主系统 paper 侧**，不改 §12.2 comparison-only 预注册计划）。现状缺口 = 主系统"建议 → 跨周模拟组合 → 组合 NAV"的连接层（§12.1 引擎只到单笔 fill/net、§12.2 shadow 只到 per-ticker H10；组合级 cash/持仓结转 + 未实现 mark 从未接线）。register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`；桌面完整设计（评估后修订版）= `us_short主系统模拟盘方案.md`。
+
+- **账户模式 `run_account_mode ∈ {paper_only, manual_actual, dual}`（显式、不隐式替换）**：paper state **永不**覆盖/回写/伪装成真实 `us_short_account_state`；候选分析/来源事实/价格时钟可共享，但**持仓重评、`portfolio_guard`、sizing、现金分配、action_table 必须各自消费自己的账户状态**；paper 分支产独立标记的 `paper_action_bundle`，不把真实分支 `action_table.csv` 无条件当 paper 成交。
+- **时序铁律：先成熟旧周、再冻结新周（防 look-ahead）**：决策日 `D_N`（价格基准 `P_N`）一次 run 内——① 成熟旧决策**只用日期 ≤ `P_N` 的已到达 OHLCV** 结算此前冻结 bundle 的入场/被动退出/持仓动作，**绝不消费 `D_N` 之后的 bar**；② 以 `P_N` 同源 mark 出 `nav_snapshot` → 派生 paper account adapter；③ 用该 adapter 生成 `D_N` 的私有 `paper_action_bundle`，**只冻结、不提前成交**（等下一次有相应日线的 run 再成熟）。合法 delayed materialization（决策当时已 PIT 冻结、行情后到再成熟）≠ 历史 backfill；**禁事后重建/修改当时的选择或订单**。
+- **同 `decision_date` 重跑**：同输入 digest → 幂等 no-op（不重复下单/记账）；盘前来源变更 → 只替换**尚未成熟**的 pending bundle 且留 `supersedes_digest`、不改已结算 state；目标 session 开盘后当前 bundle immutable（capstone 本就 out-of-window fail-closed）；日期乱序/缺前态/重复成熟/price receipt 不符 → 整次状态迁移拒绝、**不写半套文件**。
+- **组合会计不变式（锁死）**：$100k 名义本金**只播种一次**；金额用 canonical Decimal（禁二进制 float 跨周累积，指标层才转 float）；买入 `cash -= shares×fill_price` 且成交时一次性扣 `shares×fill_price×cost_fraction`（与 §12.1 net_result round-trip 成本一致、退出不重复扣），卖出 `cash += sold_shares×exit_price`；**`NAV = cash + Σ(remaining_shares × mark_price)`；已实现盈亏只作归因字段、绝不再加进 NAV（防双重记账）**；须满足 `NAV − initial_capital = cumulative_total_pnl`（Decimal 容差）；同 session 卖出回款不反向放大当时已冻结的新建仓 shares；任何迁移无负 cash/负 shares/重复 ticker position/无源 mark/凭空资产。
+- **持仓动作成交合同（先写死、单测；不能把"建议"当"已成交"）**：`建仓`=复用 §12.1 `simulate_fill`、仅 `first_regular_session_only`、未成交即现金不隔夜；`减仓`=只卖 `recommended_action_shares`、**仅模拟成交后**才置 `tp1_completed=true`；`清仓-止损`=卖全部 remaining、**gap-aware**（开盘穿越 stop 不得按更好 stop 价虚构成交）；`清仓-止盈`=卖全部 remaining、目标价触发/开盘越过目标的保守成交写死；`清仓-事件`=仅 source-bound 事件 + 可执行价语义齐全才成交、否则单票冻结/manual review；`持有/观察/否决`=不交易；`加仓`=当前主决策引擎不产出 → 独立多 lot/加仓合同落地前 **fail-closed**、不提前假设。v1 = **每 ticker 单一活动 lot + 一次 TP1 部分卖，不做加仓/多 lot**。
+- **诊断 NAV vs `paper_evaluable`（用户定"每周照算照显示"= 选项 A 的严格含义）**：复权三项（§12.1）未确认时可出 `diagnostic_nav` 供观察，但 canonical `paper_evaluable=false` / `paper_performance_status=data_degraded`，**不进 alpha / 策略升级 / comparison 胜负 / ship-gate**；注入 `portfolio_guard` 须守 §18.1 #7 fail-safe（不伪装 clean、默认 restricted/caution 或只做持仓风控）；后续 source-bound 证据到达只成熟当时已冻结的真实周 bundle。**选项 A 不是绕过复权硬门，而是"保留诊断数字 + 证据/风控门关闭"**。
+- **名义本金与 schema**：独立 `us_short_model_paper_portfolio_state` schema（`capital_kind=normalized_notional`、`base_currency=USD`、`initial_bucket_capital=100000`）；运行时一次性派生 adapter（`us_short_bucket_capital=100000`、`us_market_equity=300000` 仅满足现有 ÷3 不变式），**绝不持久化成用户真实美股资产或进真实账户报告**；adapter 带 source state digest + valuation date + decision date 绑定。
+- **私密存储（事务化、幂等）**：`state/us_short/model_paper_private/`（`head_manifest.json` + `weeks/<decision_date>/{decision_bundle,settlement,portfolio_state,nav_snapshot}.json`）；全 gitignored + 先过 `reject_nonprivate_output_path`；`head_manifest` 绑 `prior_state_sha256 / decision_bundle_sha256 / source_receipt_sha256 / price_packet_sha256 / valuation_as_of / status`；先写临时目录、全校验过再**原子推进** head，失败不留可消费半状态。
+- **边界**：不接券商 / 不发订单 / 不读真实券商账户 / 不自动换股或记现金或强平；不碰 A 股 / US-long；paper **永不**判 full-size ship-gate（ship-gate 仍只认 §12 `live_normalized`）。
+
 ## 13. 跨 LLM 提醒机制（硬规则）
 - 复用 `docs/system_risk_register.md` + standing reminder index；**不新造** `evidence_lifecycle_registry`。
 - **落点分离（动态计数不进 route doc）**：register 只放稳定规则+指针；可变累加器/计数放 `state/us_short/lifecycle/lifecycle_register.json`；周报对应节从状态文件渲染。含票名/表现/持仓的计数 → 该 json 走 private/gitignored（§11.6）；tracked 只放脱敏汇总。
@@ -472,6 +486,9 @@ core_score = 40% 动量·相对强度 + 35% 赛道/主题热度 + 25% 催化剂/
 28. provider 授权门（§3/§18.0，SR-PROVIDER-001）：全市场 FMP、广义 SEC parser、storage，或本轮 SEC/yfinance 入口的任何真实调用未获对应授权时 fail-closed、不全 universe 跑、不当生产数据；call budget + storage 留存须显式批准。
 29. 复权/公司行动门（§12.1）：无 `adjustment_mode` + split/dividend + 除权价位一致确认 → `paper_performance=not_evaluable/data_degraded`，不进 ship-gate/alpha 单测。
 30. `forward_universe_snapshot` artifact（§12）：forward 起点 PIT 冻结落地物——active symbol list + listing status + provider/as_of + hash + row_count + 后续 delist/halt/merger/no-trade 事件保留规则（不删除、真实捕捉）。
+
+31. model_paper 周度组合记账（§12.3，`R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`）：`D_N` run 不读/不结算 `> P_N` 的 bar（下一 run 才成熟）；同 decision_date 同 digest no-op、盘前 drift 只 supersede pending、成熟后拒覆盖；`NAV = cash + 持仓 mark` 且已实现盈亏不重复加、买卖/成本/部分卖后可从 ledger 重算；空仓首周/未成交现金/建仓/TP1 精确减股/TP2 全平/止损 gap/事件冻结/held MTM；建议未成交不得置 `tp1_completed=true`；同日卖出回款不反向放大已冻结买单、cash 永不为负；manual/paper 状态与 action bundle 互不覆盖、`paper_only` 不读真实账户；paper holdings 缺 source coverage → fail-closed 不偷数；复权未确认 → 诊断 NAV 可出但 `paper_evaluable=false`、guard 不 clean、比较/alpha/ship-gate 不推进；私密路径/digest 绑定/原子失败无残留/乱序·缺周·重复成熟拒绝；Decimal/超大数/NaN/inf/负股数/重复 ticker/错 adjustment·session/未来 observed_at 全 fail-closed。
+32. 固定上限一键（standing pre-authorized weekly Pass2 budget cap；`R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`）：§18.0 provider 门的**兼容细化、不放宽 P0**——用户可**一次性显式预授权**一个 standing 周度 Pass2 call-budget 上限（config，默认建议 ≤ 免费档日上限 ~250）；一键周跑在该上限内用 `min(preflight 预测, standing_cap)` 直接跑、**不再每周 preview + 逐次重授权**；预测 > 上限 → **fail-closed 拒跑并提示提额，绝不静默扩预算/超额**；改上限须显式改 config + 记录；standing cap **不**授权 provider selection/storage/全 universe 之外任何新边界，SR-PROVIDER-001 其余门不动。
 
 ### 18.2 实现执行顺序（并轮策略；有边界地批量化）
 

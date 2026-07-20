@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-20 — Claude Code landed US-short model-paper 刀1（design §12.3 + engine/store 地基）onto master
+
+- **Verdict/Action**: 把已复审 PASS 的 US-short model_paper_track 刀1 作为"最近的单独切片"land 到 master：`engine/us_short_model_paper_portfolio.py`（纯状态迁移）+ `_store`（私密事务）+ 5 closed-world schema + 3 test（27 OK）+ 设计 §12.3 / §18.1 #31·#32 + register 2 条。wt/us-short 其余提交（result-linkage cut1+2 等）master 已有且更全（cut3/cut4），故不整分支 merge、只 land 这一净新切片。
+- **Required**: 无。1 Optional P3（`减仓` 同 bar tp1+tp2 略高估）见 register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`。
+- **Verify**: master 亲跑 model-paper 3 模块 = 27 OK；doc-gov 守卫绿；10 文件全新增、无既有代码改。评审细节单源见 register。
+- **Next**: Codex：刀3（offline capstone 双账户分支）读 register + 桌面 §6 刀3；固定上限一键另条 register `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`。
+
 ## 2026-07-20 — Claude Code 独立审查 PASS（A-short R9：EGS qfq 价格真相；cherry-pick 落 master 7e03441c）
 
 - **Verdict/Action**: PASS + cherry-pick 落 master（`7e03441c`，在并发窗 `ef77e3f5` 之上；effect-contract 3-way auto-merge：egs `a5cca186`/`e27a1c98` 滚新 + weekly_pipeline `72b037dc` 保留）。R9 忠实实现桌面 `codex_r1.md` 第1刀：EGS 全市场日线改 provider-observed `raw×adj_factor/每股最新bar锚(≤as_of)` 派生 qfq OHLC；动量/MA10(is_breakout)/跨日高低/回撤/闪崩恢复/Rule6 跨日价格只读 qfq，涨跌停(is_limit/is_lock)、大宗折价参考 close、circ_share 仍读 raw。承重缝亲读全对：PIT 正确(as_of=trade_dates[0]=最新bar≤决策日、收益是比值→锚不变、无未来因子)；fail-closed 完整(缺因子/重复/未来/非法OHLC/非有限/覆盖不足整批 raise、无 forward-fill/默认1)；新缓存身份 qfq_v1+防篡改重算(isclose)校验+旧raw缓存不回退；候选价绑同日qfq bar(source_trade_date==qfq_source_trade_date；`df.close=qfq_close` 在锚==raw close 数值不变)；`adjustment:"qfq"` 由谎变真。

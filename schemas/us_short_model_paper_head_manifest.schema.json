@@ -1,0 +1,79 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_head_manifest.schema.json",
+  "title": "US-short private model-paper store head manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "seed_state", "current_state", "current_nav", "pending_decision", "last_settlement", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_head_manifest"},
+    "schema_version": {"const": "1.0.0"},
+    "seed_state": {"$ref": "#/definitions/ref"},
+    "current_state": {"$ref": "#/definitions/state_ref"},
+    "current_nav": {"$ref": "#/definitions/ref"},
+    "pending_decision": {"anyOf": [{"type": "null"}, {"$ref": "#/definitions/pending"}]},
+    "last_settlement": {"anyOf": [{"type": "null"}, {"$ref": "#/definitions/settlement_ref"}]},
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "relative_path": {"type": "string", "pattern": "^(seed|weeks/[0-9]{8})/[a-z_]+\\.json$"},
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256"],
+      "properties": {
+        "relative_path": {"$ref": "#/definitions/relative_path"},
+        "sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "state_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "sha256", "as_of", "last_settled_decision_date"],
+      "properties": {
+        "relative_path": {"$ref": "#/definitions/relative_path"},
+        "sha256": {"$ref": "#/definitions/sha256"},
+        "as_of": {"$ref": "#/definitions/date8"},
+        "last_settled_decision_date": {"anyOf": [{"type": "null"}, {"$ref": "#/definitions/date8"}]}
+      }
+    },
+    "pending": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_date", "relative_path", "sha256", "supersedes_sha256"],
+      "properties": {
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "relative_path": {"$ref": "#/definitions/relative_path"},
+        "sha256": {"$ref": "#/definitions/sha256"},
+        "supersedes_sha256": {"anyOf": [{"type": "null"}, {"$ref": "#/definitions/sha256"}]}
+      }
+    },
+    "settlement_ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["decision_date", "decision_sha256", "price_packet_sha256", "settlement_sha256", "state_sha256", "nav_sha256"],
+      "properties": {
+        "decision_date": {"$ref": "#/definitions/date8"},
+        "decision_sha256": {"$ref": "#/definitions/sha256"},
+        "price_packet_sha256": {"$ref": "#/definitions/sha256"},
+        "settlement_sha256": {"$ref": "#/definitions/sha256"},
+        "state_sha256": {"$ref": "#/definitions/sha256"},
+        "nav_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["private_store_only", "manual_account_isolated", "automatic_broker_execution", "provider_fetch", "ship_gate_eligible"],
+      "properties": {
+        "private_store_only": {"const": true},
+        "manual_account_isolated": {"const": true},
+        "automatic_broker_execution": {"const": false},
+        "provider_fetch": {"const": false},
+        "ship_gate_eligible": {"const": false}
+      }
+    }
+  }
+}

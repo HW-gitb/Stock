@@ -1,0 +1,95 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_portfolio_state.schema.json",
+  "title": "US-short model-paper portfolio state",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "capital_kind",
+    "base_currency",
+    "initial_bucket_capital",
+    "as_of",
+    "last_settled_decision_date",
+    "cash",
+    "cumulative_realized_pnl",
+    "cumulative_cost_paid",
+    "positions",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_portfolio_state"},
+    "schema_version": {"const": "1.0.0"},
+    "capital_kind": {"const": "normalized_notional"},
+    "base_currency": {"const": "USD"},
+    "initial_bucket_capital": {"$ref": "#/definitions/money"},
+    "as_of": {"$ref": "#/definitions/date8"},
+    "last_settled_decision_date": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/definitions/date8"}]
+    },
+    "cash": {"$ref": "#/definitions/money"},
+    "cumulative_realized_pnl": {"$ref": "#/definitions/signed_money"},
+    "cumulative_cost_paid": {"$ref": "#/definitions/money"},
+    "positions": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/position"}
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "money": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "signed_money": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticker",
+        "entry_decision_date",
+        "entry_session_date",
+        "shares",
+        "fill_price",
+        "stop_clear_price",
+        "take_profit_reduce_price",
+        "take_profit_exit_price",
+        "tp1_completed",
+        "trade_state",
+        "freeze_reason",
+        "mark_price",
+        "mark_as_of",
+        "source_decision_sha256",
+        "last_action_decision_sha256"
+      ],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "entry_decision_date": {"$ref": "#/definitions/date8"},
+        "entry_session_date": {"$ref": "#/definitions/date8"},
+        "shares": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "fill_price": {"$ref": "#/definitions/money"},
+        "stop_clear_price": {"$ref": "#/definitions/money"},
+        "take_profit_reduce_price": {"$ref": "#/definitions/money"},
+        "take_profit_exit_price": {"$ref": "#/definitions/money"},
+        "tp1_completed": {"type": "boolean"},
+        "trade_state": {"enum": ["active", "manual_review_frozen"]},
+        "freeze_reason": {"anyOf": [{"type": "null"}, {"enum": ["event_source_unbound"]}]},
+        "mark_price": {"$ref": "#/definitions/money"},
+        "mark_as_of": {"$ref": "#/definitions/date8"},
+        "source_decision_sha256": {"$ref": "#/definitions/sha256"},
+        "last_action_decision_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_only", "manual_account_isolated", "automatic_broker_execution", "ship_gate_eligible"],
+      "properties": {
+        "paper_only": {"const": true},
+        "manual_account_isolated": {"const": true},
+        "automatic_broker_execution": {"const": false},
+        "ship_gate_eligible": {"const": false}
+      }
+    }
+  }
+}

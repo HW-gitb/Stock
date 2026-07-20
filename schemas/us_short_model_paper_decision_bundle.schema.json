@@ -1,0 +1,121 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_decision_bundle.schema.json",
+  "title": "US-short model-paper decision bundle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "price_basis_date",
+    "created_at",
+    "prior_state_sha256",
+    "supersedes_sha256",
+    "source_binding",
+    "cost_prior",
+    "orders",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_decision_bundle"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"$ref": "#/definitions/date8"},
+    "price_basis_date": {"$ref": "#/definitions/date8"},
+    "created_at": {"type": "string", "format": "date-time"},
+    "prior_state_sha256": {"$ref": "#/definitions/sha256"},
+    "supersedes_sha256": {
+      "anyOf": [{"type": "null"}, {"$ref": "#/definitions/sha256"}]
+    },
+    "source_binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_kind", "source_as_of", "decision_source_sha256"],
+      "properties": {
+        "source_kind": {"const": "us_short_weekly_decision_artifact"},
+        "source_as_of": {"$ref": "#/definitions/date8"},
+        "decision_source_sha256": {"$ref": "#/definitions/sha256"}
+      }
+    },
+    "cost_prior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commission_fee", "slippage_bps", "spread_cost"],
+      "properties": {
+        "commission_fee": {"type": "number", "minimum": 0, "maximum": 0.1},
+        "slippage_bps": {"type": "number", "minimum": 0, "maximum": 1000},
+        "spread_cost": {"type": "number", "minimum": 0, "maximum": 0.1}
+      }
+    },
+    "orders": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/order"}
+    },
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nullable_price": {
+      "anyOf": [{"type": "null"}, {"type": "number", "exclusiveMinimum": 0}]
+    },
+    "order": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticker",
+        "final_action",
+        "recommended_action_shares",
+        "order_type",
+        "order_expiry",
+        "valid_entry_low",
+        "valid_entry_high",
+        "limit_order_price",
+        "breakout_entry_price",
+        "stop_clear_price",
+        "take_profit_reduce_price",
+        "take_profit_exit_price",
+        "event_clear_reference_price",
+        "event_source_ref_sha256"
+      ],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "final_action": {
+          "enum": ["建仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开", "加仓"]
+        },
+        "recommended_action_shares": {
+          "anyOf": [{"type": "null"}, {"type": "integer", "minimum": 1, "maximum": 1000000000}]
+        },
+        "order_type": {
+          "anyOf": [{"type": "null"}, {"enum": ["pullback_limit", "breakout_stop_limit"]}]
+        },
+        "order_expiry": {
+          "anyOf": [{"type": "null"}, {"const": "first_regular_session_only"}]
+        },
+        "valid_entry_low": {"$ref": "#/definitions/nullable_price"},
+        "valid_entry_high": {"$ref": "#/definitions/nullable_price"},
+        "limit_order_price": {"$ref": "#/definitions/nullable_price"},
+        "breakout_entry_price": {"$ref": "#/definitions/nullable_price"},
+        "stop_clear_price": {"$ref": "#/definitions/nullable_price"},
+        "take_profit_reduce_price": {"$ref": "#/definitions/nullable_price"},
+        "take_profit_exit_price": {"$ref": "#/definitions/nullable_price"},
+        "event_clear_reference_price": {"$ref": "#/definitions/nullable_price"},
+        "event_source_ref_sha256": {
+          "anyOf": [{"type": "null"}, {"$ref": "#/definitions/sha256"}]
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_only", "provider_fetch", "automatic_broker_execution", "manual_account_read", "ship_gate_eligible"],
+      "properties": {
+        "paper_only": {"const": true},
+        "provider_fetch": {"const": false},
+        "automatic_broker_execution": {"const": false},
+        "manual_account_read": {"const": false},
+        "ship_gate_eligible": {"const": false}
+      }
+    }
+  }
+}

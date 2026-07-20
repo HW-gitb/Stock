@@ -1,0 +1,84 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_settlement.schema.json",
+  "title": "US-short model-paper settlement",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "decision_date",
+    "maturity_as_of",
+    "prior_state_sha256",
+    "decision_bundle_sha256",
+    "price_packet_sha256",
+    "order_outcomes",
+    "post_state_sha256",
+    "nav_snapshot_sha256",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_settlement"},
+    "schema_version": {"const": "1.0.0"},
+    "decision_date": {"$ref": "#/definitions/date8"},
+    "maturity_as_of": {"$ref": "#/definitions/date8"},
+    "prior_state_sha256": {"$ref": "#/definitions/sha256"},
+    "decision_bundle_sha256": {"$ref": "#/definitions/sha256"},
+    "price_packet_sha256": {"$ref": "#/definitions/sha256"},
+    "order_outcomes": {
+      "type": "array",
+      "items": {"$ref": "#/definitions/outcome"}
+    },
+    "post_state_sha256": {"$ref": "#/definitions/sha256"},
+    "nav_snapshot_sha256": {"$ref": "#/definitions/sha256"},
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "date8": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "money": {"type": "string", "pattern": "^(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "signed_money": {"type": "string", "pattern": "^-?(0|[1-9][0-9]*)\\.[0-9]{6}$"},
+    "transaction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "session_date", "shares", "price", "cash_delta", "realized_pnl_delta", "cost_paid_delta", "reason"],
+      "properties": {
+        "kind": {"enum": ["entry", "partial_exit", "exit"]},
+        "session_date": {"$ref": "#/definitions/date8"},
+        "shares": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "price": {"$ref": "#/definitions/money"},
+        "cash_delta": {"$ref": "#/definitions/signed_money"},
+        "realized_pnl_delta": {"$ref": "#/definitions/signed_money"},
+        "cost_paid_delta": {"$ref": "#/definitions/money"},
+        "reason": {
+          "enum": ["entry_fill", "same_day_stop", "same_day_take_profit", "gap_stop", "intraday_stop", "take_profit_reduce", "take_profit_exit", "event_clear_next_open"]
+        }
+      }
+    },
+    "outcome": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "final_action", "status", "transactions"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "final_action": {"enum": ["建仓", "减仓", "清仓-止损", "清仓-止盈", "清仓-事件", "持有", "观察", "否决/避开"]},
+        "status": {
+          "enum": ["opened", "not_filled", "closed", "partially_reduced", "held", "held_action_unfilled", "no_trade", "manual_review_frozen"]
+        },
+        "transactions": {"type": "array", "items": {"$ref": "#/definitions/transaction"}}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_only", "provider_fetch", "automatic_broker_execution", "manual_account_read", "ship_gate_eligible"],
+      "properties": {
+        "paper_only": {"const": true},
+        "provider_fetch": {"const": false},
+        "automatic_broker_execution": {"const": false},
+        "manual_account_read": {"const": false},
+        "ship_gate_eligible": {"const": false}
+      }
+    }
+  }
+}
