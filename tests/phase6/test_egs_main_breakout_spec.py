@@ -41,11 +41,15 @@ def _days(code, closes_nf, amounts_nf):
             "ts_code": code,
             "trade_date": 20260612 - i,          # newest-first → 递减
             "close": close,
+            "qfq_open": close,
+            "qfq_close": close,
             "amount": float(amounts_nf[i]),
             "pct_chg": 1.0,                       # 正,避免 has_crash_veto(<−5)
             "pre_close": pre_close,
             "high": close,                       # 仅当 close==pre_close×1.1 时才成涨停
             "low": close - 0.1,
+            "qfq_high": close,
+            "qfq_low": close - 0.1,
         })
     return rows
 
