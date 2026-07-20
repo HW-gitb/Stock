@@ -413,6 +413,11 @@ if ($SkipSemanticRisk) {
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,
                               '--factor-comparison-v2-forward')
+                # P2 freezes the weekly shadow target/breakout decision only after the matching M6.7
+                # bundle publishes.  It has no price fetcher: until a reviewed execution OHLCV cache
+                # exists, its public reminder stays accumulating/unavailable and M6.7 is unchanged.
+                $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
+                $M67Args += @('--target-policy-root', $TargetPolicyLedger, '--target-policy-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             $RunM67 = $true

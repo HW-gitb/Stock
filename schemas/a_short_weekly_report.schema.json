@@ -694,6 +694,26 @@
         "production_unchanged": {"const": true}
       }
     },
+    "target_policy_comparison": {
+      "description": "P2 de-identified target-policy reminder. It is a shadow-only evidence progress surface; it must never change EGS, M6.7 action, star, sizing, ranking, stop, target, or wrapper success.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status",
+                   "target_exit", "breakout_entry", "execution_data_status", "message", "production_unchanged"],
+      "properties": {
+        "schema_name": {"const": "a_short_target_policy_comparison_summary"},
+        "schema_version": {"const": "1.0.0"},
+        "summary_id": {"const": "a_short_target_policy_comparison"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "data_through": {"type": ["string", "null"]},
+        "status": {"enum": ["not_configured", "accumulating", "review_due", "review_pass_pending_confirmation", "evidence_unavailable_or_inconclusive"]},
+        "target_exit": {"type": "object"},
+        "breakout_entry": {"type": "object"},
+        "execution_data_status": {"enum": ["unavailable", "available"]},
+        "message": {"type": "string", "minLength": 1},
+        "production_unchanged": {"const": true}
+      }
+    },
     "industry_fundamentals": {
       "type": [
         "object",

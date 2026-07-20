@@ -1,0 +1,557 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""P2 target-policy shadow accumulator.
+
+The runner owns one private ledger (the frozen per-week plans) and one
+de-identified public progress summary.  It has no provider client: execution
+prices, when they are later materialised, are passed in as an existing cache.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import inspect
+import json
+import os
+import subprocess
+from pathlib import Path
+from typing import Any
+
+import jsonschema
+
+from engine.a_short_managed_exit import CONTRACT_VERSION as EXIT_CONTRACT_VERSION
+from engine.a_short_managed_exit import evaluate_managed_exit
+from runners.a_short_phase5_engine import ATR_MULT, build_true_pressure_targets
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PRIVATE_LEDGER_DEFAULT = ROOT / "logs" / "a_short_target_policy_comparison.json"
+PUBLIC_SUMMARY_DEFAULT = ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json"
+PUBLIC_MARKDOWN_DEFAULT = ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.md"
+SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_target_policy_comparison_summary.schema.json"
+LEDGER_SCHEMA_NAME = "a_short_target_policy_comparison_ledger"
+SCHEMA_VERSION = "1.0.0"
+
+
+class TargetPolicyError(ValueError):
+    """The P2 sidecar cannot prove an immutable, isolated evidence state."""
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
+def _digest(value: Any) -> str:
+    return hashlib.sha256(_canonical(value).encode("utf-8")).hexdigest()
+
+
+def _atomic_write(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def _date(value: object) -> str:
+    text = str(value or "")
+    if len(text) != 8 or not text.isdigit():
+        raise TargetPolicyError("invalid_date")
+    return text
+
+
+def _private_path(path: str | Path) -> Path:
+    result = Path(path).resolve()
+    try:
+        relative = result.relative_to(ROOT)
+    except ValueError:
+        return result
+    try:
+        ignored = subprocess.run(
+            ["git", "-C", str(ROOT), "check-ignore", "-q", "--", str(relative)],
+            capture_output=True, text=True, check=False,
+        ).returncode == 0
+    except OSError as exc:
+        raise TargetPolicyError("cannot_prove_private_ledger_is_gitignored") from exc
+    if not ignored:
+        raise TargetPolicyError("private_ledger_is_not_gitignored")
+    return result
+
+
+def _contract_fingerprint() -> str:
+    return _digest({
+        "target_contract": "1.0.0",
+        "managed_exit_contract": EXIT_CONTRACT_VERSION,
+        "target_builder": inspect.getsource(build_true_pressure_targets),
+        "managed_exit": inspect.getsource(evaluate_managed_exit),
+        "atr_multiplier": ATR_MULT,
+        "cost_and_priority": "t1_half_then_trailing;stop_before_t1;round_trip_cost_0.16pp",
+    })
+
+
+def _new_ledger() -> dict[str, Any]:
+    return {
+        "schema_name": LEDGER_SCHEMA_NAME,
+        "schema_version": SCHEMA_VERSION,
+        "epochs": [],
+        "review_status": {"target_exit": "not_reviewed", "breakout_entry": "not_reviewed"},
+        "boundary": {"production": False, "automatic_policy_switch": False},
+    }
+
+
+def _validate_ledger(ledger: dict[str, Any]) -> None:
+    if not isinstance(ledger, dict) or ledger.get("schema_name") != LEDGER_SCHEMA_NAME or \
+            ledger.get("schema_version") != SCHEMA_VERSION or \
+            ledger.get("boundary") != {"production": False, "automatic_policy_switch": False}:
+        raise TargetPolicyError("private_ledger_contract_invalid")
+    if not isinstance(ledger.get("epochs"), list) or not isinstance(ledger.get("review_status"), dict):
+        raise TargetPolicyError("private_ledger_contract_invalid")
+    if set(ledger["review_status"]) != {"target_exit", "breakout_entry"} or \
+            any(value not in {"not_reviewed", "pass"} for value in ledger["review_status"].values()):
+        raise TargetPolicyError("private_review_status_invalid")
+    for epoch in ledger["epochs"]:
+        if not isinstance(epoch, dict) or set(epoch) != {"epoch_id", "contract_fingerprint", "records"} or \
+                not isinstance(epoch["records"], list) or epoch["epoch_id"] != epoch["contract_fingerprint"]:
+            raise TargetPolicyError("private_epoch_invalid")
+        dates = [record.get("decision_date") for record in epoch["records"] if isinstance(record, dict)]
+        if len(dates) != len(epoch["records"]) or len(set(dates)) != len(dates):
+            raise TargetPolicyError("private_record_identity_invalid")
+
+
+def _load_or_initialize(path: str | Path) -> tuple[Path, dict[str, Any]]:
+    private_path = _private_path(path)
+    if not private_path.exists():
+        return private_path, _new_ledger()
+    try:
+        ledger = json.loads(private_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TargetPolicyError("private_ledger_unreadable") from exc
+    _validate_ledger(ledger)
+    return private_path, ledger
+
+
+def _active_epoch(ledger: dict[str, Any], *, create: bool) -> dict[str, Any] | None:
+    fingerprint = _contract_fingerprint()
+    for epoch in ledger["epochs"]:
+        if epoch["contract_fingerprint"] == fingerprint:
+            return epoch
+    if not create:
+        return None
+    epoch = {"epoch_id": fingerprint, "contract_fingerprint": fingerprint, "records": []}
+    ledger["epochs"].append(epoch)
+    return epoch
+
+
+def _empty_progress(review_status: str) -> dict[str, Any]:
+    return {
+        "forward_weeks": 0,
+        "required_forward_weeks": 12,
+        "decision_difference_weeks": 0,
+        "required_decision_difference_weeks": 8,
+        "evaluable_plans": 0,
+        "required_evaluable_plans": 20,
+        "review_state": "pass_pending_confirmation" if review_status == "pass" else "not_due",
+    }
+
+
+def _progress(records: list[dict[str, Any]], track: str, review_status: str) -> dict[str, Any]:
+    progress = _empty_progress(review_status)
+    forward = [record for record in records if record.get("forward_eligible") is True]
+    progress["forward_weeks"] = len(forward)
+    if track == "target_exit":
+        different = [record for record in forward if record.get("target_difference") is True]
+        settled = [item for record in forward for item in (record.get("target_entries") or [])
+                   if item.get("changed") is True and
+                   ((item.get("outcomes") or {}).get("status") == "settled")]
+    else:
+        different = [record for record in forward if record.get("breakout_difference") is True]
+        settled = [item for record in forward for item in (record.get("breakout_entries") or [])
+                   if item.get("changed") is True and
+                   ((item.get("outcomes") or {}).get("status") == "settled")]
+    progress["decision_difference_weeks"] = len(different)
+    progress["evaluable_plans"] = len(settled)
+    enough = progress["forward_weeks"] >= 12 and progress["decision_difference_weeks"] >= 8 and \
+        progress["evaluable_plans"] >= 20
+    if review_status == "pass":
+        progress["review_state"] = "pass_pending_confirmation"
+    elif enough:
+        progress["review_state"] = "due"
+    return progress
+
+
+def _message(status: str, target: dict[str, Any], breakout: dict[str, Any]) -> str:
+    if status == "not_configured":
+        return "P2 目标策略：未配置；不读取或写入影子证据，正式 M6.7 不变。"
+    if status == "evidence_unavailable_or_inconclusive":
+        return "P2 目标策略：当前证据不可用或校验失败；不复用旧提醒，正式 M6.7 不变。"
+    if status == "review_due":
+        due = []
+        if target["review_state"] == "due":
+            due.append("P2 目标退出审查")
+        if breakout["review_state"] == "due":
+            due.append("独立突破入场审查")
+        return "P2 目标策略：数据已够，请执行" + "、".join(due) + "；不自动切换生产。"
+    if status == "review_pass_pending_confirmation":
+        return "P2 目标策略：审查已 PASS，等待独立复审和用户确认；不自动切换生产。"
+    return (
+        "P2 目标策略：累计中；目标退出 "
+        f"{target['forward_weeks']}/12 周、差异 {target['decision_difference_weeks']}/8 周、"
+        f"计划 {target['evaluable_plans']}/20；突破轨 {breakout['forward_weeks']}/12 周、"
+        f"差异 {breakout['decision_difference_weeks']}/8 周、受影响计划 {breakout['evaluable_plans']}/20。"
+    )
+
+
+def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
+    epoch = _active_epoch(ledger, create=False)
+    records = list(epoch["records"]) if epoch else []
+    target = _progress(records, "target_exit", ledger["review_status"]["target_exit"])
+    breakout = _progress(records, "breakout_entry", ledger["review_status"]["breakout_entry"])
+    if target["review_state"] == "pass_pending_confirmation" or breakout["review_state"] == "pass_pending_confirmation":
+        status = "review_pass_pending_confirmation"
+    elif target["review_state"] == "due" or breakout["review_state"] == "due":
+        status = "review_due"
+    else:
+        status = "accumulating"
+    data_through = max((record["decision_date"] for record in records), default=None)
+    execution_available = any(
+        (item.get("outcomes") or {}).get("status") == "settled"
+        for record in records
+        for collection in (record.get("target_entries") or [], record.get("breakout_entries") or [])
+        for item in collection
+    )
+    summary = {
+        "schema_name": "a_short_target_policy_comparison_summary",
+        "schema_version": SCHEMA_VERSION,
+        "summary_id": "a_short_target_policy_comparison",
+        "as_of": as_of,
+        "data_through": data_through,
+        "status": status,
+        "target_exit": target,
+        "breakout_entry": breakout,
+        "execution_data_status": "available" if execution_available else "unavailable",
+        "message": _message(status, target, breakout),
+        "production_unchanged": True,
+    }
+    validate_public_summary(summary)
+    return summary
+
+
+def _unavailable_summary(as_of: str, *, configured: bool) -> dict[str, Any]:
+    target = _empty_progress("not_reviewed")
+    breakout = _empty_progress("not_reviewed")
+    status = "evidence_unavailable_or_inconclusive" if configured else "not_configured"
+    return {
+        "schema_name": "a_short_target_policy_comparison_summary",
+        "schema_version": SCHEMA_VERSION,
+        "summary_id": "a_short_target_policy_comparison",
+        "as_of": _date(as_of),
+        "data_through": None,
+        "status": status,
+        "target_exit": target,
+        "breakout_entry": breakout,
+        "execution_data_status": "unavailable",
+        "message": _message(status, target, breakout),
+        "production_unchanged": True,
+    }
+
+
+def unavailable_public_summary(as_of: str) -> dict[str, Any]:
+    """Return the current, non-stale P2 failure reminder for a weekly consumer."""
+    return _unavailable_summary(as_of, configured=True)
+
+
+def validate_public_summary(summary: dict[str, Any]) -> None:
+    try:
+        schema = json.loads(SUMMARY_SCHEMA_PATH.read_text(encoding="utf-8"))
+        jsonschema.validate(summary, schema)
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise TargetPolicyError("public_summary_contract_invalid") from exc
+    target, breakout = summary["target_exit"], summary["breakout_entry"]
+    status = summary["status"]
+    if summary["message"] != _message(status, target, breakout):
+        raise TargetPolicyError("public_summary_message_drifted")
+    if status != "review_due" and (target["review_state"] == "due" or breakout["review_state"] == "due"):
+        raise TargetPolicyError("public_summary_review_state_drifted")
+    if status == "review_due" and not (target["review_state"] == "due" or breakout["review_state"] == "due"):
+        raise TargetPolicyError("public_summary_review_state_drifted")
+
+
+def _render_summary_markdown(summary: dict[str, Any]) -> str:
+    target, breakout = summary["target_exit"], summary["breakout_entry"]
+    return "\n".join([
+        "# A-short P2 target-policy comparison",
+        "",
+        f"- as_of: {summary['as_of']}",
+        f"- data_through: {summary['data_through'] or '无'}",
+        f"- 状态: {summary['status']}",
+        f"- {summary['message']}",
+        "",
+        "| 轨道 | forward 周 | 差异周 | 可评价计划 | 审查状态 |",
+        "|---|---:|---:|---:|---|",
+        f"| 目标退出 | {target['forward_weeks']}/12 | {target['decision_difference_weeks']}/8 | "
+        f"{target['evaluable_plans']}/20 | {target['review_state']} |",
+        f"| 突破入场 | {breakout['forward_weeks']}/12 | {breakout['decision_difference_weeks']}/8 | "
+        f"{breakout['evaluable_plans']}/20 | {breakout['review_state']} |",
+        "",
+        "> 只显示脱敏进度；不读取逐股私有账本，不改变正式 M6.7。",
+        "",
+    ])
+
+
+def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
+                         markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> None:
+    validate_public_summary(summary)
+    _atomic_write(Path(summary_path), summary)
+    Path(markdown_path).parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(markdown_path).with_name(f".{Path(markdown_path).name}.tmp")
+    temporary.write_text(_render_summary_markdown(summary), encoding="utf-8")
+    os.replace(temporary, Path(markdown_path))
+
+
+def settle_and_summarize(*, root: str | Path | None, as_of: str,
+                          daily_cache_path: str | Path | None = None,
+                          summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
+                          markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+    """Settle only existing captures, then return the current de-identified P2 reminder."""
+    if root is None:
+        return _unavailable_summary(as_of, configured=False)
+    try:
+        private_path, ledger = _load_or_initialize(root)
+        epoch = _active_epoch(ledger, create=True)
+        if daily_cache_path is not None and Path(daily_cache_path).is_file():
+            _settle_existing_records(epoch["records"], Path(daily_cache_path))
+        _validate_ledger(ledger)
+        _atomic_write(private_path, ledger)
+        summary = _summary_from_ledger(ledger, _date(as_of))
+        write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
+        return summary
+    except Exception:
+        # The weekly seam must never repeat old review_due text if this sidecar
+        # is corrupt or unavailable.  The caller keeps M6.7 authoritative.
+        return _unavailable_summary(as_of, configured=True)
+
+
+def _freeze_plan(plan: dict[str, Any], series: list[dict], decision_date: str, regime: str,
+                 *, t1: float | None, t2: float | None) -> dict[str, Any]:
+    reference = series[-1]
+    return {
+        "decision_date": decision_date,
+        "entry_low": plan["entry_low"],
+        "entry_high": plan["entry_high"],
+        "stop": plan["stop"],
+        "t1": t1,
+        "t2": t2,
+        "atr_multiplier": ATR_MULT.get(regime, 1.25),
+        "price_basis": "qfq",
+        "reference_trade_date": reference["trade_date"],
+        "reference_close": reference["close"],
+    }
+
+
+def _target_entry(candidate: dict[str, Any], official_plan: dict | None, price_data_through: str,
+                  decision_date: str) -> tuple[dict[str, Any] | None, dict[str, Any] | None, dict[str, Any]]:
+    ladder = build_true_pressure_targets(candidate, official_plan, price_data_through)
+    if not isinstance(official_plan, dict):
+        return None, None, ladder
+    series = candidate.get("price_series") or []
+    regime = str(candidate.get("market_regime") or "")
+    baseline = _freeze_plan(official_plan, series, decision_date, regime,
+                            t1=official_plan.get("t1"), t2=official_plan.get("t2"))
+    if ladder["status"] not in {"available", "trailing_only"} or ladder.get("rr_eligible") is not True:
+        return baseline, None, ladder
+    t1 = ladder["t1"]["price"] if ladder.get("t1") else None
+    t2 = ladder["t2"]["price"] if ladder.get("t2") else None
+    challenger = _freeze_plan(official_plan, series, decision_date, regime, t1=t1, t2=t2)
+    return baseline, challenger, ladder
+
+
+def _verify_published_bundle(out_path: str | Path, receipt_path: str | Path, decision_date: str,
+                             source_identity: dict[str, Any]) -> dict[str, Any]:
+    out_file, receipt_file = Path(out_path), Path(receipt_path)
+    markdown = out_file.with_suffix(".md")
+    try:
+        weekly = json.loads(out_file.read_text(encoding="utf-8"))
+        receipt = json.loads(receipt_file.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TargetPolicyError("published_bundle_unreadable") from exc
+    lineage = weekly.get("run_lineage") or {}
+    if str(weekly.get("as_of")) != str(decision_date) or lineage.get("run_id") != source_identity.get("run_id") or \
+            receipt.get("stage_status") != "complete" or receipt.get("as_of") != str(decision_date) or \
+            receipt.get("run_id") != lineage.get("run_id") or receipt.get("candidate_digest") != lineage.get("candidate_digest") or \
+            receipt.get("candidate_digest") != source_identity.get("candidate_digest") or not markdown.is_file():
+        raise TargetPolicyError("published_bundle_binding_invalid")
+    return weekly
+
+
+def capture_after_published_weekly(*, root: str | Path, decision_date: str, candidates: list[dict],
+                                   source_identity: dict[str, Any], out_path: str | Path, receipt_path: str | Path,
+                                   forward_eligible: bool,
+                                   summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
+                                   markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict[str, Any]:
+    """Freeze P2 target/breakout deltas only after the official bundle exists."""
+    decision_date = _date(decision_date)
+    private_path, ledger = _load_or_initialize(root)
+    weekly = _verify_published_bundle(out_path, receipt_path, decision_date, source_identity)
+    price_data_through = str(((weekly.get("run_lineage") or {}).get("price_freshness") or {}).get("price_data_through") or "")
+    _date(price_data_through)
+    if forward_eligible:
+        freshness = (weekly.get("run_lineage") or {}).get("price_freshness") or {}
+        if freshness.get("mode") != "intraday_prior_settled" or not freshness.get("run_date"):
+            raise TargetPolicyError("forward_capture_requires_live_price_freshness")
+    reports = {str(row.get("ts_code")): row for row in (weekly.get("reports") or []) if isinstance(row, dict)}
+    entries, breakout_entries = [], []
+    for candidate in candidates:
+        if not isinstance(candidate, dict) or not candidate.get("ts_code"):
+            continue
+        code = str(candidate["ts_code"])
+        try:
+            report = reports.get(code)
+            official_plan = (((report or {}).get("machine") or {}).get("entry_exit_size_star") or {}).get("plan")
+            baseline, challenger, ladder = _target_entry(candidate, official_plan, price_data_through, decision_date)
+        except Exception:
+            # A malformed shadow-only candidate must become its own no-count
+            # row.  It cannot discard all other same-week P2 evidence or
+            # affect the already-published M6.7 bundle.
+            official_plan = None
+            baseline, challenger = None, None
+            ladder = {
+                "status": "unavailable",
+                "reason": "candidate_input_invalid",
+                "momentum_confirmed": False,
+                "true_breakout": False,
+            }
+        changed = bool(baseline is not None and challenger is not None and baseline["t1"] != challenger["t1"])
+        entries.append({
+            "ts_code": code,
+            "target_status": ladder["status"],
+            "target_reason": ladder.get("reason"),
+            "baseline_t1_basis": (
+                str(official_plan.get("t1_basis"))
+                if isinstance(official_plan, dict) and official_plan.get("t1_basis") in
+                {"structural_resistance", "rr_floor_fallback"}
+                else "unspecified_legacy"
+            ),
+            "baseline": baseline,
+            "challenger": challenger,
+            "changed": changed,
+            "ladder": ladder,
+            "outcomes": None,
+        })
+        old_momentum = bool(ladder["momentum_confirmed"])
+        new_true_breakout = bool(ladder["true_breakout"])
+        breakout_entries.append({"ts_code": code, "old_momentum_confirmed": old_momentum,
+                                 "true_breakout": new_true_breakout,
+                                 "changed": old_momentum != new_true_breakout,
+                                 # Breakout evidence isolates the entry qualification:
+                                 # whichever side is ineligible is cash at 0% through H20;
+                                 # the eligible side uses the same frozen official exit plan.
+                                 # It must not depend on whether the target challenger differs.
+                                 "entry_plan": baseline,
+                                 "outcomes": None})
+    record = {
+        "decision_date": decision_date,
+        "forward_eligible": bool(forward_eligible),
+        "source_identity": {"run_id": str(source_identity["run_id"]),
+                            "candidate_digest": str(source_identity["candidate_digest"]),
+                            "official_m67_sha256": hashlib.sha256(Path(out_path).read_bytes()).hexdigest(),
+                            "price_data_through": price_data_through},
+        "target_entries": entries,
+        "breakout_entries": breakout_entries,
+        "target_difference": any(entry["changed"] for entry in entries),
+        "breakout_difference": any(entry["changed"] for entry in breakout_entries),
+    }
+    record["capture_sha256"] = _digest(record)
+    epoch = _active_epoch(ledger, create=True)
+    existing = next((item for item in epoch["records"] if item["decision_date"] == decision_date), None)
+    if existing is not None:
+        if existing.get("capture_sha256") != record["capture_sha256"]:
+            raise TargetPolicyError("p2_capture_replay_input_drifted")
+        return {"status": "idempotent", "record": existing}
+    epoch["records"].append(record)
+    epoch["records"].sort(key=lambda item: item["decision_date"])
+    _validate_ledger(ledger)
+    _atomic_write(private_path, ledger)
+    summary = _summary_from_ledger(ledger, decision_date)
+    write_public_summary(summary, summary_path=summary_path, markdown_path=markdown_path)
+    return {"status": "captured", "record": record}
+
+
+def _load_execution_cache(path: Path) -> dict[str, list[dict[str, Any]]]:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TargetPolicyError("execution_cache_unreadable") from exc
+    rows = payload.get("rows") if isinstance(payload, dict) else None
+    if not isinstance(rows, list):
+        raise TargetPolicyError("execution_cache_contract_invalid")
+    by_code: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        if not isinstance(row, dict) or not row.get("ts_code"):
+            raise TargetPolicyError("execution_cache_contract_invalid")
+        by_code.setdefault(str(row["ts_code"]), []).append({key: value for key, value in row.items() if key != "ts_code"})
+    return by_code
+
+
+def _settle_existing_records(records: list[dict[str, Any]], daily_cache_path: Path) -> None:
+    by_code = _load_execution_cache(daily_cache_path)
+    for record in records:
+        for entry in record.get("target_entries") or []:
+            if entry.get("changed") is not True:
+                continue
+            baseline, challenger = entry.get("baseline"), entry.get("challenger")
+            if not isinstance(baseline, dict) or not isinstance(challenger, dict):
+                continue
+            rows = by_code.get(str(entry.get("ts_code")))
+            if not rows:
+                continue
+            old = evaluate_managed_exit(baseline, rows)
+            new = evaluate_managed_exit(challenger, rows)
+            if old["status"] == "settled" and new["status"] == "settled":
+                entry["outcomes"] = {"status": "settled", "baseline": old, "challenger": new,
+                                     "net_delta_pct": round(new["net_return_pct"] - old["net_return_pct"], 8)}
+            elif old["reason"] == "price_basis_mismatch" or new["reason"] == "price_basis_mismatch":
+                entry["outcomes"] = {"status": "no_count", "reason": "price_basis_mismatch"}
+            else:
+                entry["outcomes"] = {"status": "pending", "baseline_status": old["status"],
+                                     "challenger_status": new["status"]}
+        for breakout in record.get("breakout_entries") or []:
+            if breakout.get("changed") is not True:
+                continue
+            plan = breakout.get("entry_plan")
+            rows = by_code.get(str(breakout.get("ts_code")))
+            if not isinstance(plan, dict) or not rows:
+                continue
+            managed = evaluate_managed_exit(plan, rows)
+            if managed["status"] == "settled":
+                managed_return = managed["net_return_pct"]
+                old_eligible = bool(breakout.get("old_momentum_confirmed"))
+                new_eligible = bool(breakout.get("true_breakout"))
+                breakout["outcomes"] = {
+                    "status": "settled",
+                    "old_entry_eligible": old_eligible,
+                    "new_entry_eligible": new_eligible,
+                    "old_h20_net_return_pct": managed_return if old_eligible else 0.0,
+                    "new_h20_net_return_pct": managed_return if new_eligible else 0.0,
+                    "managed_exit": managed,
+                }
+            else:
+                breakout["outcomes"] = {"status": "pending", "managed_status": managed["status"],
+                                         "reason": managed.get("reason")}
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description="A-short P2 target-policy shadow accumulator (no provider calls)")
+    parser.add_argument("command", choices=["refresh", "settle"])
+    parser.add_argument("--root", default=str(PRIVATE_LEDGER_DEFAULT))
+    parser.add_argument("--as-of", required=True)
+    parser.add_argument("--daily-cache")
+    parser.add_argument("--summary-out", default=str(PUBLIC_SUMMARY_DEFAULT))
+    parser.add_argument("--markdown-out", default=str(PUBLIC_MARKDOWN_DEFAULT))
+    args = parser.parse_args(argv)
+    summary = settle_and_summarize(root=args.root, as_of=args.as_of, daily_cache_path=args.daily_cache,
+                                   summary_path=args.summary_out, markdown_path=args.markdown_out)
+    print(summary["message"])
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

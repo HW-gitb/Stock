@@ -432,6 +432,9 @@ def render_weekly_markdown(weekly: dict) -> str:
     comparison_v2 = weekly.get("factor_comparison_v2")
     if comparison_v2:
         out.append("**Comparison v2**: " + str(comparison_v2.get("message", "")))
+    target_policy = weekly.get("target_policy_comparison")
+    if target_policy:
+        out.append("**P2 目标策略**: " + str(target_policy.get("message", "")))
     out += _render_portfolio_risk(weekly)
     out += _render_effect_contract_ledger(weekly)
     out += ["", "## 一览",

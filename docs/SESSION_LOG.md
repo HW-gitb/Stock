@@ -56,6 +56,48 @@
 - **Verify**: final `discover -s tests -p 'test_us_short*.py'` = **4553 OK (1 skipped)**; final affected regression pack = 96 OK; route-doc/README/US-short const gates = 28 OK; changed Python compiled, 9 JSON files parsed, UTF-8 BOM count 0, and `git diff --check` passed. One intermediate full run hit the existing yfinance test's random temp-path substring false positive (`404` inside a generated directory name); its exact rerun passed 1 OK and the final full run was green.
 - **Pre-Codex self-review**: A-F checked by the main-thread checklist (no sub-agent available/used; no timeout/restart). B/E evidence: bridge-schema grep for `holding_themes` = 0; machine/action/report linkage grep for `theme_context|theme_id|macro_cluster` = 50; free caller macro banner grep resolves only the structured renderer symbol/test, not an input. C reverse tests include `test_price_market_cap_is_safety_and_cross_run_digest_is_rejected`, lifecycle exit-preservation/entry-block tests, candidate/holding identity-conflict tests, macro no-compound test, and hot-excluded no-rescue/unevaluable tests. Durable route docs remain single-state: only the US-short owner design was updated; `CURRENT`/README/register were not changed.
 - **Next**: Claude Code: independently review this uncommitted Cut3 only; if PASS, commit it. Do not expand into Cut4.
+## 2026-07-20 — Claude Code 审查 PASS (A-short P2 第一刀复审 / R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT)
+- **Verdict/Action**: PASS + 提交并入 master。Codex 采纳推荐 A：官方 M6.7 取价恢复固定 120d(`price_provider`)，P2 影子 450d 独立取(`target_policy_price_provider`)、仅发布后由 `_p2_shadow_candidates` 在 `dict()` 副本消费，holdings/candidates 仍走 120d → 三处真钱面(持仓 stop/t1/t2/breached、停牌复牌 manual_review 归属、候选 run-abort)全恢复 pre-P2；O1/O2/O3 已修。
+- **Required**: 无。R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT → resolved（3 条 LOW 非阻断 Optional：derived 浅拷贝硬化建议 / banner 一周滞后 cosmetic / unavailable_public_summary 前置保护），单源见 `docs/system_risk_register.md`。
+- **Verify**: review-evidence:2b83b90cdcc0。整读隔离缝(官方 120/影子 450 分离+`dict()` 副本+发布后、holdings/candidates 走 120、`test_p2_long_window_isolated_from_official_m67_series` 钉 reports 逐字节不变)+ huge-int 探针(managed_exit→no_count / builder→domain ValueError 经 runner 逐票隔离)+ 独立对抗 agent(worktree 隔离)5 轴全 CLEAN；Codex focused 199 OK。完整 `test_a_short*` 用户明令免测(「别测了」)未跑；官方路径恢复 pre-P2(master 侧 R9 已录 1698 绿)+ P2 隔离 + focused/isolation 回归为闭合依据。
+- **Next**: Codex：Pass(本刀已复审已并入 master)。
+
+## 2026-07-20 — Codex 修复（A-short P2 第一刀 / R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT；待独立复审）
+
+- **Verdict/Action**: 采纳推荐 A。正式 M6.7 取价恢复为固定 `as_of-120` 日；只有 P2 已配置且正式 JSON/Markdown/receipt 成功发布后，才另取 `as_of-450` 日影子序列给 P2。影子失败仅成为 P2 单票 no-count，绝不回流候选/持仓正式序列；因此持仓 trailing stop/T1/T2/breached、长期停牌复牌的 manual_review 归属及候选短历史中止语义恢复为 P2 前边界。同步修完 O1（huge-int + 单票隔离）、O2（P2 摘要漂移非阻断）和 O3（v2 replay drift 不跳过 P2）。未提交、未运行 provider 或真实 weekly。
+- **Required**: `R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT` 仍为 `in_progress`，须 Claude Code 只审此修复的当前 diff；PASS 后依项目流程提交。不得扩展 P3/P4/P5、生产切换、provider 或真实 weekly。
+- **Verify**: 直接受影响包 **199 OK**：`tests.test_a_short_target_policy_comparison` + Phase 5 + M6.7 render + effect contract + P2/v2 weekly wiring；新增实际授权路径钉住两次正式 120d 与两次 P2 450d，另钉住 450d 影子序列不改变正式 reports、P2 摘要非法降为当前 unavailable、v2 replay drift 后 P2 仍捕获。完整 `discover -s tests -p test_a_short*.py` 已尝试：1758 ran，15 个既有 semantic-risk-probe 用例因 bundled Python 缺 `requests` 而 `ModuleNotFoundError`，不计为通过也非 P2 失败。
+- **Pre-Codex self-review**: A：正式/影子取价、P2 后发布顺序、O1/O2/O3 均有正反向回归；B：450d 仅由 `_p2_shadow_candidates` 在 publish 后消费，正式 `normalized`/M6.7 未接收；C：钉住窗口、报告不变、坏单票不拖累同周、非法摘要不阻断、v2 drift 不饿死 P2；D：未引入自然语言分类；E：README 与 weekly owner doc 已同步不变式，实时 gate 只在本条与 register；F：未触发 provider/真实 weekly，effect-contract 指纹已由测试验证。
+- **Next**: Claude Code：独立审查并按 PASS 流程提交当前 A-short P2 修复；不扩展范围。
+
+## 2026-07-20 — Claude Code 审查 FAIL (A-short P2 第一刀 / R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT)
+- **Verdict/Action**: FAIL(narrow)。P2 sidecar(共用托管退出器/真实压力阶梯/影子账本/脱敏提醒/隔离缝)本身忠实且 comparison-only,但 weekly_pipeline 把**共用**取价窗 120→450 天,改到正式 M6.7 真钱面:持仓跟踪止损+t1/t2/breached 变、长期停牌复牌持仓 manual_review 归属翻、同类候选 run-abort 翻;候选打分窗口不敏感(已验)。未提交、未 merge。
+- **Required**: R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT — 三机制/边界/两条修法(A 隔离窗[荐] / B 授权+回归钉+改诚实声明)/Optional/closure 完整见 `docs/system_risk_register.md`(单一来源)。
+- **Verify**: 3500 树 Python313 deps-complete;全 `test_a_short*` = Ran 1752 OK(0 回归,但注入序列不覆盖 450 取数→测不到本 drift);focused P2+effect_contract 34 OK;我自跑探针复算 holding stop 11.38→13.38;独立对抗 agent(worktree 隔离)确认同根因第二机制(资格门 :414/:3762)+ 泄露/PIT/exit 数学/候选面全 CLEAN;review-evidence:not_available(全真实工具输出)。
+- **Next**: Codex:修复 R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT + 顺修 O1/O2/O3;勿扩 P3/P4/P5/生产切换/provider/真实 weekly。
+
+## 2026-07-19 — Codex 执行（A-short P2 第一刀：真实压力、共用退出、影子提醒；待独立审查）
+
+- **Verdict/Action**: 已完成 P2 当前刀：`build_true_pressure_targets` 在 PIT 价格窗内生成真实压力 T1/T2、`engine/a_short_managed_exit.py` 成为 P2/P3 唯一共用的纯托管退出器；每周在正式 bundle 成功发布后冻结旧/新目标和旧动量/真实突破差异，私有账本只写 gitignored `logs/a_short_target_policy_comparison.json`，公开 JSON/Markdown 只显示脱敏进度。目标退出与突破入场是两条独立时钟：前者仅计实际 T1/fallback/trailing 变化，后者以同一冻结退出计划单独比较旧动量可入场与真实突破排除后的 H20 现金 0%。正式 EGS/M6.7 的动作、星级、仓位、排序、止损止盈和 wrapper 成功语义均未改变；未运行 provider 或真实 weekly。
+- **Required**: 无。当前尚无受审的既有 `raw×adj_factor` 执行 OHLCV 缓存，故 live wrapper 只冻结每周计划，公开摘要的可评价计划保持 0/20 并自动提示“累计中”；它不额外抓数，也不把缺失伪装成收益。
+- **Verify**: `tests.test_a_short_target_policy_comparison` 18 OK；P2 目标测试 + 两条 `MainWiringTests` + README route + route-doc ledger 45 OK；`tests.test_a_short_phase5_engine` + `tests.test_a_short_m67_render` + `tests.test_a_short_effect_contract` 171 OK；`py_compile`、PowerShell parse、私有账本 gitignore、UTF-8 无 BOM、`git diff --check` 通过。完整 `tests.test_a_short_weekly_pipeline` 与受影响分组各在 300s 超时且无最终结果，均不作为 PASS 证据（输出仅有既有 ResourceWarning）。
+- **Pre-Codex self-review**: A：完整 P2 出口为真实压力 ladder、共用 exit、目标退出时钟、突破入场时钟、公开摘要/Markdown/weekly banner；两轨均 schema-valid 且 `production_unchanged=true`。B：`rg -n "target_outcome_status" engine runners schemas tests docs` = 0，主动接线引用 32 处且仅为 P2 sidecar。C：新增“决策前 ATR 生效”“突破轨不依赖目标变化”“H5/H10 诊断”“成交限制/跳空/换算”和“阈值/epoch”反向测试，缺缓存/价格尺度不一致均为 `no_count` 或当前不可用。D：不做自然语言分类。E：README 新增薄路由，实时审查 gate 只在本条 SESSION_LOG。F：日期/PIT、有限值、版本 fingerprint、私有 gitignore、PowerShell/UTF-8/diff 已查；未启用子 agent（当前协作约束）。
+- **Next**: Claude Code：仅独立审查当前 A-short P2 第一刀 diff；PASS 后按项目流程提交，不扩展至 P3/P4/P5、生产切换、provider 或真实 weekly。
+
+## 2026-07-19 — Codex 文档执行（桌面 A-short P4/P5 干净最终方案）
+
+- **Verdict/Action**: 已按上一轮 Required 重写桌面 `todo_ashort.md` 的 P4/P5：删除 Claude 审查/对比附录，只保留最终方案；P4 保留自动裁判/人工生产切换两刀，P5 改为“P5a 先建可信捕获与自动提醒、P5b 数据够后再建裁判”两刀。两轨统一正式选择器、全部有效政策周/差异周双时钟、v2 不可被饿死的缓存调度、精确数值门与 `(active_profile, overlay_contract)` epoch 绑定。
+- **Required**: `R-ASHORT-P5-EXECUTION-CONTRACT-GAPS` 的设计修正已写入桌面最终稿；业务实现和合同测试尚未开始，不能宣称 P4/P5 证据时钟已启动或裁判可用。
+- **Verify**: 覆盖后桌面文件与校验副本 SHA256 一致；P4/P5 各只有一个最终章节，相关 Claude/审查附录为 0，P4 前原文逐字未变，UTF-8 replacement character 为 0。未改业务代码、未运行 provider 或真实 weekly。
+- **Next**: Codex：待用户明确授权后从 P5a 开始执行；不先做 P4a/P5b/生产切换。
+
+## 2026-07-19 — Codex 审查（A-short 桌面 P5 执行方案及其对 P4 的影响）：FAIL
+
+- **Verdict/Action**: **FAIL**。P5 的独立账本、固定槽位、多重比较校正、comparison-only 方向成立；但正式 watch-pool 复现、主样本口径、共享缓存预算和裁决定义仍有 4 个阻断缺口。P4 先前的大部分意见仍成立，但须同步修正主样本口径与 profile/overlay 绑定规则。
+- **Required**: 见 `docs/system_risk_register.md` 的 `R-ASHORT-P5-EXECUTION-CONTRACT-GAPS`：先修正式 watch-pool 复现、双时钟统计、共享缓存预算隔离、冻结完整裁决定义；修正前不得执行 P5 或宣称 P5 forward clock 已启动。
+- **Verify**: 亲读桌面 P4/P5 原文并核对 live selector、行业比较模块及 P0 v2 cache/adjudicator；当前 worktree 两份候选缓存均不存在，builder 仍是 v2-only 且按默认 91-call 前置硬拒。此轮仅审设计并落审查记录，未改业务代码、未运行策略测试。
+- **Next**: Codex：按 Required 修正 P5 最终方案；保留 P4 两刀，但同步修正样本口径和 profile 绑定后再执行。
+
 ## 2026-07-19 — Claude Code 独立审查（A-short P1 Cut2：V14.3 逐股候选效果旁路，3500 未提交）：PASS（comparison-only）
 
 - **Verdict/Action**: **PASS**。按已定方案（桌面 `todo_ashort_P1_review.md` + 设计 §4-§6）逐条核实：comparison-only 旁路、不改 EGS/M6.7/仓位/veto/建仓授权。承重缝亲读全对——ledger `_atomic_write_text`(mkstemp+os.replace 原子、失败重跑不截断)、`_finite_or_none`(缺/空/非有限→None、`ret_status!=ok`→None，**不把缺失当 0 现金**)、mature-freeze(`_frozen_record_refresh`：未成熟同日 tracker 可重冻、成熟即不可覆盖→`skipped_immutable_mature_week`；M6.7 同日 SHA 漂移→non-counting warning 不覆盖)、SHA/身份绑定(m67_sha256 + candidate_set_digest + tracker run-identity)、historical 不计 forward。私有 ledger `logs/...json` **已 gitignored**、公开 summary **aggregate-only 无票名**。8 条反向测试锁死全部不变式。
