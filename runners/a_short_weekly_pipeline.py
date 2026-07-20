@@ -79,6 +79,10 @@ HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.p
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
 PRICE_FETCH_MAX_ATTEMPTS = 3
 PRICE_FETCH_RETRY_BACKOFF_SECONDS = 0.5
+# The official M6.7 path is frozen to this historical fetch boundary.  P2
+# requests its longer shadow window only after a successful official publish.
+PRODUCTION_PRICE_FETCH_CALENDAR_DAYS = 120
+P2_SHADOW_PRICE_FETCH_CALENDAR_DAYS = 450
 
 
 def _industry_trend_for_candidate(cand: dict, expected_as_of: str) -> tuple[str, dict]:
@@ -3349,6 +3353,28 @@ def _price_provider_result(provider, code: str, as_of: str) -> tuple:
     return list(res), str(as_of)
 
 
+def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
+                          price_data_through: str) -> list[dict]:
+    """Attach P2-only price series after M6.7 publishes.
+
+    Every malformed, stale, or provider-failed shadow series becomes an empty
+    per-candidate input for the P2 capture's no-count isolation.  The official
+    price series and all M6.7 decisions remain exactly on their 120-day path.
+    """
+    shadow_candidates = []
+    for candidate in candidates:
+        shadow = dict(candidate)
+        try:
+            series, latest = _price_provider_result(provider, str(candidate["ts_code"]), as_of)
+            if str(latest or "") != str(price_data_through):
+                raise ValueError("p2_shadow_price_clock_mismatch")
+            shadow["price_series"] = series
+        except (Exception, SystemExit):
+            shadow["price_series"] = []
+        shadow_candidates.append(shadow)
+    return shadow_candidates
+
+
 def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None, cap=None):
     """非阻断 cninfo official provider(advisory 旁路),**复用 summary 已审门**——不另写薄版:
     `build_summary_from_fetches` 内含 `main_board_top15`(只取/喂主板 Top15)+ 缺码→unknown + 批量空响应门
@@ -3505,7 +3531,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
          earnings_provider=None, dragon_list_provider=None, dragon_list_days=None,
          dragon_list_inst_provider=None, block_trade_provider=None, daily_close_provider=None,
          forecast_provider=None, income_provider=None, balancesheet_provider=None,
-         portfolio_risk_provider=None, legacy_earnings_provider=None):
+         portfolio_risk_provider=None, legacy_earnings_provider=None,
+         target_policy_price_provider=None):
     from datetime import datetime, timedelta
     from runners.a_short_iv_feed_probe import init_tushare_pro, _is_valid_yyyymmdd
     from engine.data.analysis_input_contract import validate_analysis_input_file
@@ -3549,6 +3576,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing v2 daily_cache.json under the private v2 root; never fetches data")
     p.add_argument("--factor-comparison-v2-forward", action="store_true",
                    help="mark this current v2 snapshot as a live forward observation; historical replay stays non-counting")
+    p.add_argument("--target-policy-root", default=None,
+                   help="private P2 ledger, normally logs/a_short_target_policy_comparison.json")
+    p.add_argument("--target-policy-daily-cache", default=None,
+                   help="existing P2 execution OHLCV cache; never fetches data")
+    p.add_argument("--target-policy-forward", action="store_true",
+                   help="mark this P2 snapshot as a forward observation; historical replay stays non-counting")
     args = p.parse_args(argv)
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
@@ -3557,6 +3590,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] factor-comparison v2 capture requires --run-date for source-bound date identity")
     if args.factor_comparison_v2_forward and not args.factor_comparison_v2_root:
         raise SystemExit("[FATAL] --factor-comparison-v2-forward requires --factor-comparison-v2-root")
+    if args.target_policy_root and not args.run_date:
+        raise SystemExit("[FATAL] P2 target-policy capture requires --run-date for source-bound date identity")
+    if args.target_policy_forward and not args.target_policy_root:
+        raise SystemExit("[FATAL] --target-policy-forward requires --target-policy-root")
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
@@ -3687,14 +3724,24 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             raise SystemExit("[FATAL] 需 --confirm-fetch-authorized:周末 run 会抓前复权价")
         import tushare as ts
         pro = pro_factory() if pro_factory else init_tushare_pro(os.environ["TUSHARE_TOKEN"])
-        start = (datetime.strptime(args.as_of, "%Y%m%d") - timedelta(days=120)).strftime("%Y%m%d")
+        production_start = (datetime.strptime(args.as_of, "%Y%m%d") -
+                            timedelta(days=PRODUCTION_PRICE_FETCH_CALENDAR_DAYS)).strftime("%Y%m%d")
+        p2_shadow_start = (datetime.strptime(args.as_of, "%Y%m%d") -
+                           timedelta(days=P2_SHADOW_PRICE_FETCH_CALENDAR_DAYS)).strftime("%Y%m%d")
         # 显式 intraday_prior_settled 模式(已 guard as_of>=run_date)→ 价格门容忍最新 bar==前一交易日
         # (as_of 当日 EOD 未发布的实盘当天/前瞻 canonical);strict_as_of → prior_settled=None → 严格 == as_of。仅放前一交易日,
         # 更早(真陈旧)仍拒、未来恒拒;实际接受的最新日期记进 run_lineage.price_freshness。
         prior_settled = (_prev_trading_day(pro, args.as_of)
                          if args.price_freshness_mode == "intraday_prior_settled" else None)
-        price_provider = lambda code: _fetch_price_series(ts, pro, code, start, args.as_of,
+        # The official M6.7 series keeps its historical 120-day fetch scope.
+        # P2's 450-day source is an independently fetched post-publish
+        # sidecar; it is never handed to candidate/holding consumers.
+        price_provider = lambda code: _fetch_price_series(ts, pro, code, production_start, args.as_of,
                                                           accept_prior_settled_date=prior_settled)
+        if args.target_policy_root and target_policy_price_provider is None:
+            target_policy_price_provider = lambda code: _fetch_price_series(
+                ts, pro, code, p2_shadow_start, args.as_of,
+                accept_prior_settled_date=prior_settled)
         # #1 除权除息提示真 provider(advisory 旁路;注入优先用于测试):同一已授权 fetch 上下文。
         if dividend_provider is None:
             dividend_provider = lambda code: _fetch_dividends(pro, code)
@@ -3727,6 +3774,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 4.2 财报质量趋势 ④资产负债表 provider(同上下文;pro.balancesheet report_type=1 合并报表,仓库未测真接口,gated --confirm)。
         if balancesheet_provider is None:
             balancesheet_provider = lambda code: _fetch_balancesheet(pro, code)
+    if args.target_policy_root and target_policy_price_provider is None:
+        # Tests or offline callers that inject the official provider may elect
+        # to inject a longer P2 provider separately.  Reusing their injected
+        # provider is comparison-only and never changes M6.7 consumption.
+        target_policy_price_provider = price_provider
     # 语义官方层 provider(advisory 旁路,非阻断):注入优先(测试);否则真 run(--confirm 且未 --skip-semantic)
     # 时自动 cninfo 取数。取数失败 → None(语义全 unknown 中性)。语义只融进非生产 M6.7,不碰确定性 base 决策外的逻辑。
     if portfolio_risk_provider is None and pro is not None:
@@ -3893,6 +3945,30 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
     factor_comparison_v2 = settle_and_summarize_v2_weekly(
         root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache)
+    # P2 is another non-blocking, no-provider evidence sidecar.  Missing or
+    # malformed execution data produces a fresh unavailable reminder, never a
+    # stale review_due message and never a changed M6.7 decision.
+    target_policy_comparison = None
+    if args.target_policy_root:
+        from runners.a_short_target_policy_comparison_runner import (
+            settle_and_summarize as settle_target_policy,
+            unavailable_public_summary,
+            validate_public_summary,
+        )
+        target_policy_comparison = settle_target_policy(
+            root=args.target_policy_root, as_of=args.as_of, daily_cache_path=args.target_policy_daily_cache)
+        try:
+            validate_public_summary(target_policy_comparison)
+        except Exception:
+            # A P2 schema/message drift is a sidecar outage, never a reason to
+            # reject an otherwise valid official M6.7 publication.  Replace
+            # it with a fresh current-unavailable reminder; if even that
+            # cannot validate, omit only this optional banner.
+            target_policy_comparison = unavailable_public_summary(args.as_of)
+            try:
+                validate_public_summary(target_policy_comparison)
+            except Exception:
+                target_policy_comparison = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -3903,6 +3979,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
                                  candidate_exclusions=candidate_exclusions)
     weekly["factor_comparison_v2"] = factor_comparison_v2
+    if target_policy_comparison is not None:
+        weekly["target_policy_comparison"] = target_policy_comparison
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}
@@ -4005,6 +4083,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
     # The terminal and Markdown consume the same de-identified pre-M6.7 reminder summary.
     print(f"[factor-comparison-v2] {factor_comparison_v2['message']}")
+    if target_policy_comparison is not None:
+        print(f"[target-policy-p2] {target_policy_comparison['message']}")
     # Freeze current-week evidence only after the complete official JSON/Markdown/receipt bundle exists.
     # Capture remains comparison-only and non-blocking, but cannot create a false forward week on
     # a failed M6.7 publication because this block is reached only after publish_weekly_bundle returns.
@@ -4023,8 +4103,25 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             if "v2 capture replay input drifted" in str(exc):
                 print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
                       "the changed replay was not written and M6.7 remains authoritative")
+            else:
+                print("[factor-comparison-v2] current-week capture unavailable; "
+                      "M6.7 output remains authoritative and unchanged")
+    if args.target_policy_root:
+        try:
+            from runners.a_short_target_policy_comparison_runner import capture_after_published_weekly
+            p2_candidates = _p2_shadow_candidates(
+                normalized, target_policy_price_provider, args.as_of, price_data_through)
+            target_capture = capture_after_published_weekly(
+                root=args.target_policy_root, decision_date=args.as_of, candidates=p2_candidates,
+                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                forward_eligible=args.target_policy_forward)
+            print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
+        except Exception as exc:
+            if "p2_capture_replay_input_drifted" in str(exc):
+                print(f"[target-policy-p2] decision {args.as_of} evidence is already frozen; "
+                      "the changed replay was not written and M6.7 remains authoritative")
                 return
-            print("[factor-comparison-v2] current-week capture unavailable; "
+            print("[target-policy-p2] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
 
 

@@ -653,6 +653,157 @@ class MainWiringTests(unittest.TestCase):
             self.assertTrue((root / "weeks" / AS_OF / "capture.json").is_file())
             self.assertFalse((root.parent / "ledger.json").exists())  # no legacy v1 dual write
 
+    def test_p2_target_policy_is_pre_publish_summary_then_post_publish_capture(self):
+        from runners.a_short_target_policy_comparison_runner import settle_and_summarize
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            root = Path(td) / "logs" / "a_short_target_policy_comparison.json"
+            summary = settle_and_summarize(root=None, as_of=AS_OF)
+            with patch("runners.a_short_target_policy_comparison_runner.settle_and_summarize",
+                       return_value=summary) as settle, \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          return_value={"status": "captured"}) as capture:
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF, "--target-policy-root", str(root)],
+                     price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            self.assertEqual(weekly["target_policy_comparison"], summary)
+            self.assertIn(summary["message"], out.with_suffix(".md").read_text(encoding="utf-8"))
+            settle.assert_called_once()
+            capture.assert_called_once()
+
+    def test_p2_target_policy_is_absent_without_its_private_root(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=lambda code: _series())
+            self.assertNotIn("target_policy_comparison", json.loads(out.read_text(encoding="utf-8")))
+
+    def test_p2_long_window_isolated_from_official_m67_series(self):
+        from runners.a_short_target_policy_comparison_runner import settle_and_summarize
+
+        production_series = _series()
+        dates = pd.bdate_range(end=pd.Timestamp(AS_OF), periods=253).strftime("%Y%m%d").tolist()
+        shadow_series = [
+            {"trade_date": trade_date, "high": 2.92, "low": 2.88, "close": 2.90}
+            for trade_date in dates
+        ]
+        shadow_series[-30:] = [dict(row, trade_date=trade_date)
+                               for row, trade_date in zip(_series(), dates[-30:])]
+        summary = settle_and_summarize(root=None, as_of=AS_OF)
+        captured = []
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            baseline_out, p2_out = Path(td) / "baseline.json", Path(td) / "p2.json"
+            common = ["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json")]
+            main(common + ["--out", str(baseline_out)], price_provider=lambda code: production_series)
+            with patch("runners.a_short_target_policy_comparison_runner.settle_and_summarize",
+                       return_value=summary), \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          side_effect=lambda **kwargs: captured.append(kwargs["candidates"]) or {"status": "captured"}):
+                main(common + ["--out", str(p2_out), "--run-date", AS_OF,
+                               "--target-policy-root", str(Path(td) / "logs" / "p2.json")],
+                     price_provider=lambda code: production_series,
+                     target_policy_price_provider=lambda code: shadow_series)
+            baseline = json.loads(baseline_out.read_text(encoding="utf-8"))
+            p2_weekly = json.loads(p2_out.read_text(encoding="utf-8"))
+        def _without_generated_at(value):
+            if isinstance(value, dict):
+                return {key: _without_generated_at(item) for key, item in value.items()
+                        if key != "generated_at"}
+            if isinstance(value, list):
+                return [_without_generated_at(item) for item in value]
+            return value
+
+        self.assertEqual(_without_generated_at(p2_weekly["reports"]),
+                         _without_generated_at(baseline["reports"]))
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(all(len(candidate["price_series"]) == 253 for candidate in captured[0]))
+
+    def test_authorized_fetch_keeps_official_120d_and_p2_450d_separate(self):
+        import runners.a_short_weekly_pipeline as wp
+
+        starts = []
+        dates = pd.bdate_range(end=pd.Timestamp(AS_OF), periods=30).strftime("%Y%m%d").tolist()
+        dated_series = [dict(row, trade_date=trade_date)
+                        for row, trade_date in zip(_series(), dates)]
+
+        def _spy(ts, pro, code, start, end, accept_prior_settled_date=None):
+            starts.append(start)
+            return dated_series, end
+
+        class _Pro:
+            pass
+
+        old_ts = sys.modules.get("tushare")
+        original_fetch = wp._fetch_price_series
+        sys.modules["tushare"] = object()
+        wp._fetch_price_series = _spy
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                self._write_inputs(td)
+                with patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                           return_value={"status": "captured"}):
+                    main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                          "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                          "--out", str(Path(td) / "weekly.json"), "--run-date", AS_OF,
+                          "--confirm-fetch-authorized", "--skip-semantic",
+                          "--target-policy-root", str(Path(td) / "logs" / "p2.json")],
+                         pro_factory=lambda: _Pro(), semantic_provider=lambda code: None,
+                         web_llm_provider=lambda code: None)
+        finally:
+            wp._fetch_price_series = original_fetch
+            if old_ts is not None:
+                sys.modules["tushare"] = old_ts
+            else:
+                sys.modules.pop("tushare", None)
+
+        self.assertIn("20260209", starts)
+        self.assertIn("20250316", starts)
+        self.assertEqual(starts.count("20260209"), 2)
+        self.assertEqual(starts.count("20250316"), 2)
+
+    def test_invalid_p2_summary_becomes_nonfatal_current_unavailable_banner(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            with patch("runners.a_short_target_policy_comparison_runner.settle_and_summarize",
+                       return_value={"not": "a summary"}), \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          return_value={"status": "captured"}):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--target-policy-root", str(Path(td) / "logs" / "p2.json")],
+                     price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual(weekly["target_policy_comparison"]["status"], "evidence_unavailable_or_inconclusive")
+        self.assertEqual(weekly["target_policy_comparison"]["production_unchanged"], True)
+
+    def test_v2_replay_drift_does_not_skip_p2_capture(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            v2_root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
+            p2_root = Path(td) / "logs" / "a_short_target_policy_comparison.json"
+            with patch("engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly",
+                       side_effect=ValueError("v2 capture replay input drifted")), \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          return_value={"status": "captured"}) as p2_capture:
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--factor-comparison-v2-root", str(v2_root),
+                      "--target-policy-root", str(p2_root)],
+                     price_provider=lambda code: _series())
+        p2_capture.assert_called_once()
+
     def test_v2_capture_is_not_reached_when_official_publish_fails(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)

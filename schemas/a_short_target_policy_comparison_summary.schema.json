@@ -1,0 +1,64 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_target_policy_comparison_summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "summary_id",
+    "as_of",
+    "data_through",
+    "status",
+    "target_exit",
+    "breakout_entry",
+    "execution_data_status",
+    "message",
+    "production_unchanged"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_target_policy_comparison_summary"},
+    "schema_version": {"const": "1.0.0"},
+    "summary_id": {"const": "a_short_target_policy_comparison"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "data_through": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "status": {
+      "enum": [
+        "not_configured",
+        "accumulating",
+        "review_due",
+        "review_pass_pending_confirmation",
+        "evidence_unavailable_or_inconclusive"
+      ]
+    },
+    "target_exit": {"$ref": "#/definitions/progress"},
+    "breakout_entry": {"$ref": "#/definitions/progress"},
+    "execution_data_status": {"enum": ["unavailable", "available"]},
+    "message": {"type": "string", "minLength": 1},
+    "production_unchanged": {"const": true}
+  },
+  "definitions": {
+    "progress": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "forward_weeks",
+        "required_forward_weeks",
+        "decision_difference_weeks",
+        "required_decision_difference_weeks",
+        "evaluable_plans",
+        "required_evaluable_plans",
+        "review_state"
+      ],
+      "properties": {
+        "forward_weeks": {"type": "integer", "minimum": 0},
+        "required_forward_weeks": {"const": 12},
+        "decision_difference_weeks": {"type": "integer", "minimum": 0},
+        "required_decision_difference_weeks": {"const": 8},
+        "evaluable_plans": {"type": "integer", "minimum": 0},
+        "required_evaluable_plans": {"const": 20},
+        "review_state": {"enum": ["not_due", "due", "pass_pending_confirmation"]}
+      }
+    }
+  }
+}

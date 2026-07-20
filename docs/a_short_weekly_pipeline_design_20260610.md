@@ -28,8 +28,8 @@ EGS top-N(analysis_input.json)
   - *价格覆盖 + PIT/新鲜度不 fail-open*:`_fetch_price_series` 用 A 股 `asset="E"`,**provider 异常 → `SystemExit` 中止**(不吞成 `[]`);**每个 `trade_date` 校历法、拒任何 `> as_of` 的未来 bar、最新 bar 必须 == `as_of`(否则数据陈旧)→ 违反即中止不写**。`main` 的 `MIN_PRICE_OBS=20` 门默认仍整批中止；仅两种已证实的单票异常可先写入 `candidate_exclusions` 并不进入 reports/现金分配：(a) 当轮 `known_hit` 且 `observed_at==as_of` 的已证停牌；(b) 最新 bar 与全体非已证停牌候选的单一价格时钟一致、但可用历史不足。无最新 bar、陈旧/混合时钟、来源未知或 provider 异常仍整批拒跑，绝不静默退化成“观察”。默认 strict 模式中，provider 对陈旧的非空序列会在隔离前拒跑；该情形不会被停牌例外放宽。
   - *输出路径边界*:`write_weekly_report` 经 `_reject_production_output_path`——**输出路径由调用方指定(约定 `research/results/`),但路径含 `result/a_short/` 即硬拒写**(诚实窄契约:不声称"只写 research/results",只保证绝不落 production 根)。
   - *overlay 消费校验*:`--overlay` 经 `_load_validated_overlay` = overlay JSON schema + `validate_overlay_summary_consistency` + `as_of == weekly.as_of`(拒未来/陈旧)。
-  - 逐票 `validate_m67_consistency`(§4 不变量);`write_weekly_report` 还对每张 report 单独跑 m67 schema。**注:register 的 P2 是 *probe summary* 消费方义务;本 pipeline 读的是 IV feed 不读 probe summary,故对 feed 应用同形校验,但 P2(probe-summary reader)仍 open,未关。**
-- **价格抓取在执行期。** 纯核(normalize / build / validate / write)合成 fixture 全可测;`main` 薄层读 artifacts + 抓前复权价(`--confirm-fetch-authorized`,可注入 `price_provider` 供测试),不在引擎/纯核里碰网络。
+  - 逐票 `validate_m67_consistency`(§4 不变量);`write_weekly_report` 还对每张 report 单独跑 m67 schema。P2 公共摘要在 `main` 组装前由其专属校验器检查；若 schema 或消息漂移，则替换为当周的“证据不可用”摘要（再无法校验则只省略 P2 banner），不得阻断正式 M6.7 发布。
+- **价格抓取在执行期。** 纯核(normalize / build / validate / write)合成 fixture 全可测;`main` 薄层读 artifacts + 抓前复权价(`--confirm-fetch-authorized`,可注入 `price_provider` 供测试),不在引擎/纯核里碰网络。正式 M6.7 候选与持仓固定使用 `as_of-120` 日窗口；只有启用 P2 且正式 JSON/Markdown/receipt 已成功发布后，P2 才独立请求 `as_of-450` 日影子序列。该影子请求失败只形成 P2 单票 no-count，绝不改变正式价格序列、持仓止损/归属或候选中止语义。
 
 ## 3. 输出契约(周报)
 

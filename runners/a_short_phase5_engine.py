@@ -225,6 +225,182 @@ def compute_indicators(series: list) -> dict:
             "recent_high_20": recent_high_20}
 
 
+# ── P2 shadow-only true-pressure ladder ────────────────────────────────────
+def _p2_price_series(series: list, price_data_through: str) -> list[dict]:
+    """Validate a dated, PIT-bounded series before the P2 shadow calculator reads it."""
+    if not isinstance(series, list) or not series:
+        raise ValueError("P2 price series unavailable")
+    through = str(price_data_through or "")
+    if len(through) != 8 or not through.isdigit():
+        raise ValueError("P2 price_data_through invalid")
+    clean, previous = [], ""
+    for raw in series:
+        if not isinstance(raw, dict):
+            raise ValueError("P2 price row invalid")
+        trade_date = str(raw.get("trade_date") or "")
+        if len(trade_date) != 8 or not trade_date.isdigit() or trade_date <= previous:
+            raise ValueError("P2 price dates invalid")
+        if trade_date > through:
+            raise ValueError("P2 future price bar")
+        row = {"trade_date": trade_date}
+        for key in ("high", "low", "close"):
+            value = raw.get(key)
+            if isinstance(value, bool):
+                raise ValueError("P2 price non-finite")
+            try:
+                value = float(value)
+            except (TypeError, ValueError, OverflowError) as exc:
+                raise ValueError("P2 price non-finite") from exc
+            if not math.isfinite(value) or value <= 0:
+                raise ValueError("P2 price non-finite")
+            row[key] = value
+        if row["low"] > row["high"]:
+            raise ValueError("P2 price high/low invalid")
+        clean.append(row)
+        previous = trade_date
+    return clean
+
+
+def _p2_despiked_window_high(series: list, atr: float | None) -> tuple[float, str, str]:
+    """Use the current resistance anti-spike rule without changing its M6.7 branch."""
+    highs = sorted(series, key=lambda row: row["high"], reverse=True)
+    raw = highs[0]
+    if atr is None or atr <= 0 or len(highs) < 2:
+        return raw["high"], raw["trade_date"], "fallback_extreme"
+    second = highs[1]
+    if raw["high"] - second["high"] > SR_SPIKE_ATR * atr:
+        return second["high"], second["trade_date"], "weak"
+    return raw["high"], raw["trade_date"], "strong"
+
+
+def _p2_confirmed_swings(series: list) -> list[dict]:
+    """Return only highs with two fully observed bars on both sides."""
+    swings = []
+    for index in range(2, len(series) - 2):
+        high = series[index]["high"]
+        left = [series[index - 2]["high"], series[index - 1]["high"]]
+        right = [series[index + 1]["high"], series[index + 2]["high"]]
+        if high >= max(left + right) and (high > max(left) or high > max(right)):
+            swings.append({"price": high, "source_date": series[index]["trade_date"],
+                           "source_kind": "confirmed_swing_high"})
+    return swings
+
+
+def _p2_cluster_pressure(candidates: list[dict], atr: float | None) -> list[dict]:
+    """Merge close pressure levels; the lower side is the executable representative."""
+    if not candidates:
+        return []
+    ordered = sorted(candidates, key=lambda row: (row["price"], row["source_date"], row["source_kind"]))
+    groups: list[list[dict]] = []
+    for candidate in ordered:
+        if not groups:
+            groups.append([candidate])
+            continue
+        previous = groups[-1][-1]
+        threshold = max(0.5 * (atr or 0.0), candidate["price"] * 0.01)
+        if candidate["price"] - previous["price"] <= threshold:
+            groups[-1].append(candidate)
+        else:
+            groups.append([candidate])
+    zones = []
+    for group in groups:
+        representative = min(group, key=lambda row: (row["price"], row["source_date"]))
+        has_window = any(row["source_kind"] == "window_high" for row in group)
+        swing_dates = {row["source_date"] for row in group if row["source_kind"] == "confirmed_swing_high"}
+        zones.append({
+            "price": representative["price"],
+            "price_basis": "qfq",
+            "source_date": representative["source_date"],
+            "source_kind": representative["source_kind"],
+            "formal": has_window or len(swing_dates) >= 2,
+            "cluster_sources": group,
+        })
+    return zones
+
+
+def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_through: str) -> dict:
+    """Build P2's shadow T1/T2 ladder without touching the official M6.7 plan.
+
+    The signal-day bar is deliberately excluded from all resistance baselines.
+    Returned values retain enough private provenance for later capture; callers
+    decide whether to expose a de-identified summary.
+    """
+    series = _p2_price_series((inp or {}).get("price_series") or [], price_data_through)
+    signal = series[-1]
+    prior = series[:-1]
+    indicators = compute_indicators(series)
+    prior_atr = atr14(prior)
+    momentum_confirmed = bool(((inp or {}).get("derived") or {}).get("breakout")) and \
+        indicators.get("ma10") is not None and signal["close"] >= indicators["ma10"]
+    if len(prior) >= RESISTANCE_LOOKBACK:
+        prior_resistance, _, _ = effective_resistance(prior[-RESISTANCE_LOOKBACK:], prior_atr)
+        true_breakout = bool(momentum_confirmed and prior_resistance is not None and
+                             signal["close"] > prior_resistance)
+    else:
+        prior_resistance = None
+        true_breakout = False
+
+    candidates = []
+    for window in (20, 60, 120, 252):
+        if len(prior) < window:
+            continue
+        price, source_date, quality = _p2_despiked_window_high(prior[-window:], prior_atr)
+        candidates.append({"price": price, "source_date": source_date, "source_kind": "window_high",
+                           "window": window, "quality": quality})
+    candidates.extend(_p2_confirmed_swings(prior))
+    zones = _p2_cluster_pressure(candidates, prior_atr)
+
+    result = {
+        "target_contract_version": "1.0.0",
+        "price_basis": "qfq",
+        "price_data_through": str(price_data_through),
+        "history_bars": len(prior),
+        "momentum_confirmed": momentum_confirmed,
+        "true_breakout": true_breakout,
+        "prior_20_effective_resistance": prior_resistance,
+        "status": "unavailable",
+        "reason": None,
+        "t1": None,
+        "t2": None,
+        "zones": zones,
+        "rr_at_entry_high": None,
+        "rr_floor": None,
+        "rr_eligible": None,
+    }
+    if not isinstance(entry_plan, dict):
+        result["reason"] = "missing_official_entry_plan"
+        return result
+    try:
+        entry_high = float(entry_plan["entry_high"])
+        stop = float(entry_plan["stop"])
+    except (KeyError, TypeError, ValueError, OverflowError):
+        result["reason"] = "invalid_official_entry_plan"
+        return result
+    if not (math.isfinite(entry_high) and math.isfinite(stop) and stop < entry_high):
+        result["reason"] = "invalid_official_entry_plan"
+        return result
+    formal_above = [zone for zone in zones if zone["formal"] and zone["price"] > entry_high]
+    if formal_above:
+        result["t1"] = formal_above[0]
+        result["t2"] = formal_above[1] if len(formal_above) > 1 else None
+        regime = str((inp or {}).get("market_regime") or "")
+        rr_floor = RR_FLOOR.get(regime, 1.5) + (BREAKOUT_RR_BONUS if momentum_confirmed else 0.0)
+        rr = (formal_above[0]["price"] - entry_high) / (entry_high - stop)
+        result.update(status="available", rr_at_entry_high=round(rr, 6), rr_floor=rr_floor,
+                      rr_eligible=rr >= rr_floor)
+        if rr < rr_floor:
+            result["status"] = "observe"
+            result["reason"] = "real_t1_rr_below_current_gate"
+        return result
+    if true_breakout and len(prior) >= 252:
+        result.update(status="trailing_only", reason="true_breakout_no_formal_upper_pressure",
+                      rr_eligible=True)
+        return result
+    result["reason"] = ("insufficient_history_to_clear_upper_pressure" if len(prior) < 252
+                        else "no_formal_upper_pressure_without_true_breakout")
+    return result
+
+
 # ── 语义官方层消费方校验(fail-closed,单一来源)────────────────────────────────
 _SEM_STATUSES = ("risk", "clear", "unknown")
 _SEM_SEVERITIES = ("high", "medium", "low")
