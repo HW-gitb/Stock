@@ -411,6 +411,11 @@ class BuildWeeklyTests(unittest.TestCase):
             rep = _weekly([_normalized(**over)])["reports"][0]
             self.assertNotEqual(rep["m67"]["table"]["操作"], "建仓", over)
 
+    def test_account_position_coverage_rejects_missing_output_landing(self):
+        with self.assertRaises(ValueError):
+            build_weekly_report([_normalized("600000.SH")], AS_OF, GEN,
+                                account_positions=[{"ts_code": "600001.SH"}])
+
 
 class ValidateWeeklyTests(unittest.TestCase):
     def test_good_passes(self):
@@ -450,6 +455,12 @@ class ValidateWeeklyTests(unittest.TestCase):
 
     def test_rejects_duplicate_ts_code(self):
         w = _weekly([_normalized("600000.SH"), _normalized("600000.SH")])
+        with self.assertRaises(ValueError):
+            validate_weekly_report(w, _feed())
+
+    def test_rejects_manual_review_duplicate_report_landing(self):
+        w = _weekly()
+        w["holdings_manual_review"] = [{"ts_code": "600000.SH", "name": "测试", "reason": "无价"}]
         with self.assertRaises(ValueError):
             validate_weekly_report(w, _feed())
 
@@ -1198,7 +1209,7 @@ class MainWiringTests(unittest.TestCase):
             "reason": "confirmed_suspension", "source_status": "known_hit",
         }])
 
-    def test_main_held_confirmed_suspension_is_excluded_once_without_batch_abort(self):
+    def test_main_held_confirmed_suspension_routes_to_manual_review_once(self):
         suspended = _ai_candidate("600000.SH")
         suspended["event_risk"]["suspension"] = {
             "is_suspended": True, "recent_suspension_5d": True,
@@ -1208,6 +1219,15 @@ class MainWiringTests(unittest.TestCase):
         acct = _account()
         acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
                               "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
+        semantic_seen, news_seen = [], []
+
+        def _semantic(code):
+            semantic_seen.append(code)
+            return {"status": "clear"}
+
+        def _news(code):
+            news_seen.append(code)
+            return {"status": "risk"}
 
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td, ai=ai)
@@ -1215,11 +1235,47 @@ class MainWiringTests(unittest.TestCase):
             out = Path(td) / "weekly.json"
             main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
                   "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
-                  "--out", str(out)], price_provider=lambda code: (_series(), AS_OF))
+                  "--out", str(out)], price_provider=lambda code: (_series(), AS_OF),
+                 holding_semantic_provider=_semantic, holding_web_llm_provider=_news,
+                 dividend_provider=lambda code: ([{"ann_date": "20260601", "ex_date": "20260615"}]
+                                                 if code == "600000.SH" else []),
+                 unlock_provider=lambda code: ([{"ann_date": "20260601", "float_date": "20260615"}]
+                                               if code == "600000.SH" else []))
             weekly = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual([row["ts_code"] for row in weekly["reports"]], ["000001.SZ"])
         self.assertEqual([row["ts_code"] for row in weekly["candidate_exclusions"]], ["600000.SH"])
-        self.assertNotIn("holdings_manual_review", weekly)
+        self.assertEqual([row["ts_code"] for row in weekly["holdings_manual_review"]], ["600000.SH"])
+        reason = weekly["holdings_manual_review"][0]["reason"]
+        self.assertIn("confirmed_suspension", reason)
+        self.assertIn("官方语义=clear", reason)
+        self.assertIn("新闻=risk", reason)
+        self.assertIn("未来已知事件", reason)
+        self.assertEqual(semantic_seen, ["600000.SH"])
+        self.assertEqual(news_seen, ["600000.SH"])
+        self.assertEqual([notice["ts_code"] for notice in weekly["ex_div_notices"]], ["600000.SH"])
+        self.assertEqual([event["ts_code"] for event in weekly["upcoming_events"]["events"]], ["600000.SH"])
+
+    def test_main_held_current_short_history_routes_to_manual_review_once(self):
+        short_history = _ai_candidate("600000.SH")
+        ai = _analysis_input(candidates=[short_history, _ai_candidate("000001.SZ")])
+        acct = _account()
+        acct["positions"] = [{"ts_code": "600000.SH", "name": "测试", "shares": 1000,
+                              "avg_cost": 2.70, "entry_date": "20260601", "stop_loss": 2.55}]
+
+        def _provider(code):
+            return (_series()[:MIN_PRICE_OBS - 1], AS_OF) if code == "600000.SH" else (_series(), AS_OF)
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td, ai=ai)
+            _write_account(Path(td) / "acct.json", acct)
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out)], price_provider=_provider)
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        self.assertEqual([row["ts_code"] for row in weekly["reports"]], ["000001.SZ"])
+        self.assertEqual([row["ts_code"] for row in weekly["holdings_manual_review"]], ["600000.SH"])
+        self.assertIn("insufficient_usable_history", weekly["holdings_manual_review"][0]["reason"])
 
     def test_candidate_price_clock_rejects_short_history_mixed_with_eligible_clock(self):
         cands = [_ai_candidate("600000.SH"), _ai_candidate("000001.SZ")]

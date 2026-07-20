@@ -291,6 +291,13 @@ class RenderHoldingsSectionTests(unittest.TestCase):
         self.assertIn("对账(4.3-D)", md)
         self.assertIn("净额 200 股", md)
 
+    def test_consistency_warning_rendered_for_held_topn_candidate(self):
+        candidate = _min_report("600000.SH", row_source="egs_candidate_with_position",
+                                cons="600000.SH:positions 300 股 vs trades 净额 200 股")
+        md = render_weekly_markdown(_weekly_dict([candidate]))
+        self.assertEqual(md.count("对账(4.3-D)"), 1)
+        self.assertIn("净额 200 股", md)
+
     def test_manual_review_section(self):
         md = render_weekly_markdown(_weekly_dict(
             [_min_report("600000.SH", action="观察", row_source="egs_candidate", position_state="flat")],
@@ -342,6 +349,16 @@ class MainIntegrationTests(unittest.TestCase):
         # 候选行不变 + 打 egs_candidate;无持仓注入、无 manual_review
         self.assertEqual(w["n_stocks"], 2)
         self.assertTrue(all(r["row_source"] == "egs_candidate" for r in w["reports"]))
+        self.assertNotIn("holdings_manual_review", w)
+
+    def test_held_topn_candidate_has_one_candidate_row(self):
+        with tempfile.TemporaryDirectory() as td:
+            acct = _held_acct([("600000.SH", 300)])
+            self._write(td, acct)
+            w = self._run(td, acct)
+        matches = [r for r in w["reports"] if r["ts_code"] == "600000.SH"]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["row_source"], "egs_candidate_with_position")
         self.assertNotIn("holdings_manual_review", w)
 
 
