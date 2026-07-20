@@ -53,6 +53,26 @@ class PromptHookInjectionTests(unittest.TestCase):
         self.assertIn("full_pack_ledger.py check", out)  # tiering STEP-0 injected
 
 
+class StdinEncodingTests(unittest.TestCase):
+    def test_stdin_read_decodes_utf8_regardless_of_locale(self):
+        # A locale (gbk) stdin would mangle a Chinese 审查 prompt so the hook never fires; the reader
+        # must decode UTF-8 from the raw byte buffer.
+        import io
+        import sys as _sys
+        gate = _load_review_gate()
+
+        class _FakeStdin:
+            buffer = io.BytesIO('{"prompt":"审查当前 diff"}'.encode("utf-8"))
+
+        orig = _sys.stdin
+        _sys.stdin = _FakeStdin()
+        try:
+            raw = gate._read_stdin_utf8()
+        finally:
+            _sys.stdin = orig
+        self.assertIn("审查当前", raw)
+
+
 class PreCommitReminderTests(unittest.TestCase):
     def setUp(self):
         self.hook = (ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")

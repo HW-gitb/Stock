@@ -265,19 +265,32 @@ def handle_stop_hook(*, root: Path = ROOT, state_dir: Path = STATE_DIR) -> int:
     return 0
 
 
+def _read_stdin_utf8() -> str:
+    # Claude Code pipes UTF-8 JSON; a locale (gbk) stdin would mangle a Chinese 审查 prompt so the
+    # hook silently never fires. Read raw bytes and decode UTF-8 to stay locale-independent.
+    data = sys.stdin.buffer.read()
+    return data.decode("utf-8", errors="replace") if data else ""
+
+
+def _write_stdout_utf8(text: str) -> None:
+    # The injected context carries Chinese; write UTF-8 bytes so a gbk stdout cannot corrupt/crash it.
+    sys.stdout.buffer.write(text.encode("utf-8"))
+    sys.stdout.buffer.flush()
+
+
 def main(argv: list[str]) -> int:
     mode = argv[1] if len(argv) > 1 else "prompt-hook"
     if mode == "prompt-hook":
-        out = handle_prompt_hook(sys.stdin.read())
+        out = handle_prompt_hook(_read_stdin_utf8())
         if out:
-            sys.stdout.write(out)
+            _write_stdout_utf8(out)
         return 0
     if mode == "stop-hook":
-        sys.stdin.read()
+        _read_stdin_utf8()
         return handle_stop_hook()
     if mode == "collect-context":
         prompt = " ".join(argv[2:])
-        sys.stdout.write(_format_snapshot_context(collect_review_snapshot(prompt=prompt)))
+        _write_stdout_utf8(_format_snapshot_context(collect_review_snapshot(prompt=prompt)))
         return 0
     if mode == "validate-session-log":
         if len(argv) != 3:
