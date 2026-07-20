@@ -186,7 +186,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("EGS")
 
-EGS_VERSION = "v7.11"
+EGS_VERSION = "v7.12"
 ANALYSIS_INPUT_SCHEMA_VERSION = "1.2.0"
 SUSPEND_DAILY_COVERAGE_LOG_SCHEMA_VERSION = "1.0.0"
 _LAST_SUSPEND_DAILY_COVERAGE_OBSERVATION = None
@@ -210,7 +210,7 @@ def _record_hard_veto_source(name, status, observed_at=None, **details):
 # backtest_rank's data_lineage) read one truth via _current_egs_api_families()
 # regex parsing. When adding a new Tushare call, update this list.
 EGS_API_FAMILIES = [
-    "daily", "daily_basic", "fina_indicator", "index_daily",
+    "daily", "adj_factor", "daily_basic", "fina_indicator", "index_daily",
     "moneyflow", "moneyflow_hsgt", "margin_detail",
     "share_float", "stk_holdertrade", "balancesheet", "block_trade", "stock_basic", "namechange", "trade_cal",
     "index_member_all", "index_member", "index_classify",
@@ -2312,37 +2312,215 @@ def _daily_cache_days(df):
     if df is None or df.empty or "trade_date" not in df.columns: return 0
     return int(df["trade_date"].nunique())
 
+
+# EGS used to cache raw ``pro.daily`` bars and then label the resulting
+# cross-day indicators as qfq.  Keep the raw columns for exchange-mechanism
+# checks, but make every cross-day price statistic consume this explicit,
+# as-of-anchored qfq view.
+DAILY_ALL_QFQ_CACHE_VERSION = "qfq_v1"
+DAILY_ALL_RAW_OHLC_COLUMNS = ("open", "high", "low", "close")
+DAILY_ALL_QFQ_OHLC_COLUMNS = tuple(f"qfq_{column}" for column in DAILY_ALL_RAW_OHLC_COLUMNS)
+
+
+def _daily_all_qfq_cache_key(as_of):
+    return f"daily_all_qfq_{as_of}_60d_{DAILY_ALL_QFQ_CACHE_VERSION}"
+
+
+def _date8(value, label):
+    text = str(value).strip()
+    if not re.fullmatch(r"\d{8}", text):
+        raise RuntimeError(f"{label} must be YYYYMMDD")
+    return text
+
+
+def _validate_ohlc(frame, columns, label):
+    for column in columns:
+        frame[column] = pd.to_numeric(frame[column], errors="coerce")
+    values = frame[list(columns)].to_numpy(dtype=float)
+    if not np.isfinite(values).all() or (values <= 0).any():
+        raise RuntimeError(f"{label} contains non-finite or non-positive OHLC")
+    if (frame[columns["high"]] < frame[[columns["open"], columns["close"]]].max(axis=1)).any():
+        raise RuntimeError(f"{label} high is below open/close")
+    if (frame[columns["low"]] > frame[[columns["open"], columns["close"]]].min(axis=1)).any():
+        raise RuntimeError(f"{label} low is above open/close")
+
+
+def _normalize_daily_all_raw(frame, as_of, expected_dates):
+    required = {"ts_code", "trade_date", *DAILY_ALL_RAW_OHLC_COLUMNS, "pre_close", "pct_chg", "vol", "amount"}
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        raise RuntimeError("daily price payload is empty")
+    missing = required - set(frame.columns)
+    if missing:
+        raise RuntimeError(f"daily price payload missing required fields: {sorted(missing)}")
+    result = frame.copy()
+    result["ts_code"] = result["ts_code"].astype(str).str.strip()
+    if result["ts_code"].eq("").any():
+        raise RuntimeError("daily price payload contains blank ts_code")
+    result["trade_date"] = result["trade_date"].map(lambda value: _date8(value, "daily trade_date"))
+    if (result["trade_date"] > as_of).any() or set(result["trade_date"]) - set(expected_dates):
+        raise RuntimeError("daily price payload contains a future or unexpected trade_date")
+    if result.duplicated(["ts_code", "trade_date"]).any():
+        raise RuntimeError("daily price payload contains duplicate ts_code/trade_date")
+    _validate_ohlc(result, {
+        "open": "open", "high": "high", "low": "low", "close": "close",
+    }, "daily price payload")
+    for column in ("pre_close", "pct_chg", "vol", "amount"):
+        result[column] = pd.to_numeric(result[column], errors="coerce")
+    return result
+
+
+def _normalize_adj_factors(frame, as_of, expected_dates):
+    required = {"ts_code", "trade_date", "adj_factor"}
+    if not isinstance(frame, pd.DataFrame) or frame.empty:
+        raise RuntimeError("adj_factor payload is empty")
+    missing = required - set(frame.columns)
+    if missing:
+        raise RuntimeError(f"adj_factor payload missing required fields: {sorted(missing)}")
+    result = frame.copy()
+    result["ts_code"] = result["ts_code"].astype(str).str.strip()
+    if result["ts_code"].eq("").any():
+        raise RuntimeError("adj_factor payload contains blank ts_code")
+    result["trade_date"] = result["trade_date"].map(lambda value: _date8(value, "adj_factor trade_date"))
+    if (result["trade_date"] > as_of).any() or set(result["trade_date"]) - set(expected_dates):
+        raise RuntimeError("adj_factor payload contains a future or unexpected trade_date")
+    if result.duplicated(["ts_code", "trade_date"]).any():
+        raise RuntimeError("adj_factor payload contains duplicate ts_code/trade_date")
+    if result["adj_factor"].map(lambda value: isinstance(value, (bool, np.bool_))).any():
+        raise RuntimeError("adj_factor payload contains boolean factor")
+    result["adj_factor"] = pd.to_numeric(result["adj_factor"], errors="coerce")
+    factors = result["adj_factor"].to_numpy(dtype=float)
+    if not np.isfinite(factors).all() or (factors <= 0).any():
+        raise RuntimeError("adj_factor payload contains non-finite or non-positive factor")
+    return result
+
+
+def _build_qfq_daily_all(daily_frames, factor_frames, as_of, expected_dates):
+    """Join provider-observed factors and derive one qfq view anchored at ``as_of``.
+
+    Every returned factor is tied to the same stock/date key as a raw bar.  No
+    forward-fill, default factor, or future factor may enter the EGS batch.
+    """
+    as_of = _date8(as_of, "daily qfq as_of")
+    expected_dates = [_date8(value, "expected trade_date") for value in expected_dates]
+    if not expected_dates or len(daily_frames) != len(expected_dates) or len(factor_frames) != len(expected_dates):
+        raise RuntimeError("daily qfq coverage is incomplete")
+    raw = _normalize_daily_all_raw(pd.concat(daily_frames, ignore_index=True), as_of, expected_dates)
+    factors = _normalize_adj_factors(pd.concat(factor_frames, ignore_index=True), as_of, expected_dates)
+    if set(raw["trade_date"]) != set(expected_dates):
+        raise RuntimeError("daily price coverage does not match the requested trade-date window")
+    if set(factors["trade_date"]) != set(expected_dates):
+        raise RuntimeError("adj_factor coverage does not match the requested trade-date window")
+    result = raw.merge(factors, on=["ts_code", "trade_date"], how="left", validate="one_to_one")
+    if result["adj_factor"].isna().any():
+        missing = result.loc[result["adj_factor"].isna(), ["ts_code", "trade_date"]].head(3).to_dict("records")
+        raise RuntimeError(f"adj_factor coverage missing for daily price rows: {missing}")
+    anchors = (
+        result.sort_values(["ts_code", "trade_date"])
+        .groupby("ts_code", as_index=False)
+        .tail(1)[["ts_code", "trade_date", "adj_factor"]]
+        .rename(columns={"trade_date": "qfq_anchor_trade_date", "adj_factor": "qfq_anchor_factor"})
+    )
+    result = result.merge(anchors, on="ts_code", how="left", validate="many_to_one")
+    if (result["qfq_anchor_trade_date"] > as_of).any():
+        raise RuntimeError("qfq anchor uses a future factor")
+    for raw_column, qfq_column in zip(DAILY_ALL_RAW_OHLC_COLUMNS, DAILY_ALL_QFQ_OHLC_COLUMNS):
+        result[qfq_column] = result[raw_column] * result["adj_factor"] / result["qfq_anchor_factor"]
+    _validate_ohlc(result, {
+        "open": "qfq_open", "high": "qfq_high", "low": "qfq_low", "close": "qfq_close",
+    }, "qfq daily price payload")
+    result = result.sort_values(["ts_code", "trade_date"], ascending=[True, False]).reset_index(drop=True)
+    result["qfq_pre_close"] = result.groupby("ts_code")["qfq_close"].shift(-1)
+    result["qfq_pct_chg"] = (result["qfq_close"] / result["qfq_pre_close"] - 1.0) * 100.0
+    result["adj_factor_observed"] = True
+    result["adj_factor_source"] = "tushare.adj_factor"
+    result["qfq_price_basis"] = "qfq_anchored_as_of"
+    result["qfq_as_of"] = as_of
+    return result
+
+
+def _validate_cached_qfq_daily_all(cached, as_of, expected_dates):
+    required = {
+        "ts_code", "trade_date", "adj_factor", "adj_factor_observed", "adj_factor_source",
+        "qfq_anchor_trade_date", "qfq_anchor_factor", "qfq_pre_close", "qfq_pct_chg",
+        "qfq_price_basis", "qfq_as_of", *DAILY_ALL_RAW_OHLC_COLUMNS, *DAILY_ALL_QFQ_OHLC_COLUMNS,
+    }
+    if not isinstance(cached, pd.DataFrame):
+        raise RuntimeError("daily qfq cache is not a DataFrame")
+    missing = required - set(cached.columns)
+    if missing:
+        raise RuntimeError(f"daily qfq cache lacks required fields: {sorted(missing)}")
+    result = _normalize_daily_all_raw(cached, as_of, expected_dates)
+    _normalize_adj_factors(result[["ts_code", "trade_date", "adj_factor"]], as_of, expected_dates)
+    _validate_ohlc(result, {
+        "open": "qfq_open", "high": "qfq_high", "low": "qfq_low", "close": "qfq_close",
+    }, "daily qfq cache")
+    if set(result["trade_date"]) != set(expected_dates):
+        raise RuntimeError("daily qfq cache coverage does not match the requested trade-date window")
+    if (result["qfq_as_of"].astype(str) != as_of).any() or (result["qfq_price_basis"] != "qfq_anchored_as_of").any():
+        raise RuntimeError("daily qfq cache identity does not match this as_of")
+    if not result["adj_factor_observed"].eq(True).all() or not result["adj_factor_source"].eq("tushare.adj_factor").all():
+        raise RuntimeError("daily qfq cache contains non-observed adjustment factors")
+    result["qfq_anchor_trade_date"] = result["qfq_anchor_trade_date"].map(
+        lambda value: _date8(value, "daily qfq cache anchor trade_date")
+    )
+    result["qfq_anchor_factor"] = pd.to_numeric(result["qfq_anchor_factor"], errors="coerce")
+    anchors = result["qfq_anchor_factor"].to_numpy(dtype=float)
+    if not np.isfinite(anchors).all() or (anchors <= 0).any():
+        raise RuntimeError("daily qfq cache contains invalid anchor factor")
+    if (result["qfq_anchor_trade_date"] > as_of).any():
+        raise RuntimeError("daily qfq cache contains future anchors")
+    anchor_keys = result[["ts_code", "qfq_anchor_trade_date", "qfq_anchor_factor"]].drop_duplicates()
+    observed_anchor = result[["ts_code", "trade_date", "adj_factor"]].rename(
+        columns={"trade_date": "qfq_anchor_trade_date", "adj_factor": "observed_anchor_factor"}
+    )
+    anchor_check = anchor_keys.merge(observed_anchor, on=["ts_code", "qfq_anchor_trade_date"], how="left")
+    if (len(anchor_check) != len(anchor_keys) or anchor_check["observed_anchor_factor"].isna().any()
+            or not np.isclose(
+                anchor_check["qfq_anchor_factor"].to_numpy(dtype=float),
+                anchor_check["observed_anchor_factor"].to_numpy(dtype=float),
+                rtol=1e-12, atol=1e-12,
+            ).all()):
+        raise RuntimeError("daily qfq cache anchor does not match an observed factor")
+    for raw_column, qfq_column in zip(DAILY_ALL_RAW_OHLC_COLUMNS, DAILY_ALL_QFQ_OHLC_COLUMNS):
+        expected = result[raw_column] * result["adj_factor"] / result["qfq_anchor_factor"]
+        if not np.isclose(result[qfq_column].to_numpy(dtype=float), expected.to_numpy(dtype=float),
+                          rtol=1e-12, atol=1e-12).all():
+            raise RuntimeError("daily qfq cache price does not match observed adjustment factors")
+    expected_pre_close = result.groupby("ts_code")["qfq_close"].shift(-1)
+    expected_pct_chg = (result["qfq_close"] / expected_pre_close - 1.0) * 100.0
+    if (not np.isclose(result["qfq_pre_close"].to_numpy(dtype=float), expected_pre_close.to_numpy(dtype=float),
+                       rtol=1e-12, atol=1e-12, equal_nan=True).all()
+            or not np.isclose(result["qfq_pct_chg"].to_numpy(dtype=float), expected_pct_chg.to_numpy(dtype=float),
+                              rtol=1e-12, atol=1e-12, equal_nan=True).all()):
+        raise RuntimeError("daily qfq cache cross-day fields are inconsistent")
+    return result
+
+
 def get_daily_all(trade_dates):
-    key = f"daily_all_{trade_dates[0]}_60d"
+    if not trade_dates:
+        raise RuntimeError("daily qfq fetch requires trade dates")
+    n_days = min(60, len(trade_dates))
+    expected_dates = [str(value) for value in trade_dates[:n_days]]
+    as_of = _date8(expected_dates[0], "daily qfq as_of")
+    key = _daily_all_qfq_cache_key(as_of)
     cached = load_cache(key)
     if cached is not None:
-        n = _daily_cache_days(cached)
-        if n >= 55:
-            return cached
-        log.info(f"日线行情缓存仅{n}日（不足55），清除重新拉取")
-    # 降级：命中 v7.4 旧格式缓存，仅当日数足够时复用
-    old_key = f"daily_all_{trade_dates[0]}"
-    old_cached = load_cache(old_key)
-    if old_cached is not None:
-        n_old = _daily_cache_days(old_cached)
-        if n_old >= 55:
-            log.info(f"日线行情：命中兼容缓存（{n_old}日），直接复用")
-            save_cache(key, old_cached)
-            return old_cached
-        log.info(f"日线行情：兼容缓存仅{n_old}日，需重新拉取60日数据")
-    n_days = min(60, len(trade_dates))
-    log.info(f"拉取日线行情（近{n_days}交易日）...")
-    frames = []
-    for d in tqdm(trade_dates[:n_days], desc="日线行情"):
+        try:
+            return _validate_cached_qfq_daily_all(cached, as_of, expected_dates)
+        except RuntimeError as exc:
+            log.warning(f"日线 qfq 缓存不可用，将重新拉取：{exc}")
+    log.info(f"拉取日线和 provider-observed 复权因子（近{n_days}交易日）...")
+    daily_frames, factor_frames = [], []
+    for d in tqdm(expected_dates, desc="日线/复权因子"):
         df = safe_api(pro.daily, trade_date=d,
                       fields="ts_code,trade_date,open,high,low,close,pre_close,pct_chg,vol,amount")
-        if df is not None and len(df) > 0: frames.append(df)
-    if not frames:
-        log.error("日线行情全部拉取失败，all_daily 为空；后续统计量计算将中止")
-        return pd.DataFrame()
-    result = pd.concat(frames, ignore_index=True)
-    for col in ["open","high","low","close","pre_close","pct_chg","vol","amount"]:
-        if col in result.columns: result[col] = pd.to_numeric(result[col], errors="coerce")
+        factor = safe_api(getattr(pro, "adj_factor", None), trade_date=d,
+                          fields="ts_code,trade_date,adj_factor")
+        if df is None or df.empty or factor is None or factor.empty:
+            raise RuntimeError(f"daily qfq coverage unavailable for {d}; aborting entire EGS batch")
+        daily_frames.append(df)
+        factor_frames.append(factor)
+    result = _build_qfq_daily_all(daily_frames, factor_frames, as_of, expected_dates)
     save_cache(key, result)
     return result
 
@@ -2808,8 +2986,13 @@ def _rule6_date8(value):
     return text if re.fullmatch(r"\d{8}", text) else None
 
 
-def _rule6_daily_rows(all_daily, ts_code, dates):
+def _rule6_daily_rows(all_daily, ts_code, dates, *, price_basis="raw"):
     if all_daily is None or all_daily.empty or not {"ts_code", "trade_date"}.issubset(all_daily.columns):
+        return []
+    if price_basis not in {"raw", "qfq"}:
+        raise ValueError(f"unsupported Rule6 price basis: {price_basis}")
+    qfq_required = {"qfq_high", "qfq_low", "qfq_close", "qfq_pct_chg"}
+    if price_basis == "qfq" and not qfq_required.issubset(all_daily.columns):
         return []
     rows = []
     for trade_date in dates:
@@ -2817,7 +3000,15 @@ def _rule6_daily_rows(all_daily, ts_code, dates):
                           & (all_daily["trade_date"].astype(str) == str(trade_date))]
         if len(match) != 1:
             return []
-        rows.append(match.iloc[0].to_dict())
+        row = match.iloc[0].to_dict()
+        if price_basis == "qfq":
+            row.update({
+                "high": row["qfq_high"],
+                "low": row["qfq_low"],
+                "close": row["qfq_close"],
+                "pct_chg": row["qfq_pct_chg"],
+            })
+        rows.append(row)
     return rows
 
 
@@ -2926,7 +3117,7 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
     margin_eligible_codes = _clean_margin_ts_codes(margin_df) if margin_universe_present else None
     evaluations_by_code = {}
     for code in codes:
-        daily_11 = _rule6_daily_rows(all_daily, code, trade_dates[:11])
+        daily_11 = _rule6_daily_rows(all_daily, code, trade_dates[:11], price_basis="qfq")
         daily_6 = daily_11[:6] if len(daily_11) >= 6 else []
         latest_daily = daily_11[0] if len(daily_11) == 11 else {}
         oldest_daily = daily_11[10] if len(daily_11) == 11 else {}
@@ -2950,7 +3141,7 @@ def _collect_rule6_evaluations(watch_df, all_daily, margin_df, trade_dates, red_
                 block_records[str(trade_date)] = None
                 continue
             candidate_rows = []
-            daily_row = _rule6_daily_rows(all_daily, code, [trade_date])
+            daily_row = _rule6_daily_rows(all_daily, code, [trade_date], price_basis="raw")
             close = _json_float(daily_row[0].get("close")) if daily_row else None
             for item in source_rows:
                 if not isinstance(item, dict) or str(item.get("ts_code")) != code:
@@ -3167,6 +3358,14 @@ def precompute_stock_stats(codes, all_daily):
             f"daily_stats_min_rows={min_rows}; abort to avoid neutral pass-through stats"
         )
 
+    qfq_required = {"qfq_open", "qfq_high", "qfq_low", "qfq_close"}
+    missing_qfq = qfq_required - set(all_daily.columns)
+    if missing_qfq:
+        raise RuntimeError(
+            f"daily stats require qfq OHLC; missing {sorted(missing_qfq)}; "
+            "refusing raw-price fallback"
+        )
+
     ad = all_daily[all_daily["ts_code"].isin(codes)].copy()
     if len(ad) < min_rows:
         raise RuntimeError(
@@ -3178,7 +3377,7 @@ def precompute_stock_stats(codes, all_daily):
     rows = []
     for code, grp in tqdm(ad.groupby("ts_code"), desc="全市场量能预计算"):
         grp    = grp.reset_index(drop=True)
-        closes = grp["close"].dropna()
+        closes = grp["qfq_close"].dropna()
         if len(closes) < 1: continue
 
         pct_20d = float((closes.iloc[0] / closes.iloc[min(19, len(closes)-1)] - 1) * 100) if len(closes) >= 2 else np.nan
@@ -3197,6 +3396,8 @@ def precompute_stock_stats(codes, all_daily):
         else:
             vol_confirm = bool(up_amt > dn_amt)
 
+        # Exchange mechanisms remain on raw daily prices.  qfq is only for
+        # cross-day price structures below; it must not redefine limit-up.
         grp["limit_price"] = (grp["pre_close"] * 1.10).round(2)
         grp["is_limit"]    = (np.abs(grp["close"] - grp["limit_price"]) < 0.01) & (grp["high"] == grp["close"])
         is_lock     = len(grp) >= 2 and bool(grp.loc[0,"is_limit"]) and bool(grp.loc[1,"is_limit"])
@@ -3221,27 +3422,31 @@ def precompute_stock_stats(codes, all_daily):
         # 行为由 tests/phase6/test_egs_main_board_and_holder_pit.py::HasCrashVetoSpecDeviationTest 钉住。
         has_crash_veto = False
         for i in range(1, min(6, len(grp))):
-            day_chg = grp.iloc[i].get("pct_chg", 0)
+            # A corporate action must not look like a crash.  The threshold
+            # and recovery comparison are therefore derived from qfq bars.
+            day_chg = (closes.iloc[i] / closes.iloc[i + 1] - 1.0) * 100 if i + 1 < len(closes) else np.nan
             if day_chg < -5:
-                high_p  = grp.iloc[i].get("high",  0)
-                low_p   = grp.iloc[i].get("low",   0)
-                close_p = grp.iloc[i].get("close", 0)
+                high_p  = grp.iloc[i].get("qfq_high",  0)
+                low_p   = grp.iloc[i].get("qfq_low",   0)
+                close_p = grp.iloc[i].get("qfq_close", 0)
                 if high_p > low_p and (close_p - low_p) / (high_p - low_p) <= 0.2:
-                    pre_c        = grp.iloc[i].get("pre_close", 1)
+                    pre_c        = grp.iloc[i + 1].get("qfq_close", np.nan)
                     recover_line = (pre_c + close_p) / 2.0
-                    next_close   = grp.iloc[i-1].get("close", 0)
+                    next_close   = grp.iloc[i-1].get("qfq_close", 0)
                     if next_close < recover_line:
                         has_crash_veto = True
                         break
 
-        high_20d    = grp.head(20)["high"].max() if "high" in grp.columns else np.nan
-        low_20d     = grp.head(20)["low"].min() if "low" in grp.columns else np.nan
+        high_20d    = grp.head(20)["qfq_high"].max()
+        low_20d     = grp.head(20)["qfq_low"].min()
         drawdown_20d = float((closes.iloc[0] / high_20d - 1) * 100) if (
             not pd.isna(high_20d) and high_20d > 0 and not pd.isna(closes.iloc[0])
         ) else np.nan
 
         rows.append({
             "ts_code":        code,
+            "qfq_close":      float(grp.iloc[0]["qfq_close"]),
+            "qfq_source_trade_date": str(grp.iloc[0]["trade_date"]),
             "pct_20d":        pct_20d,
             "pct_5d":         pct_5d,
             "pct_60d":        pct_60d,
@@ -3319,14 +3524,29 @@ def build_master(df_l0, stats_df, df_db, df_fin, sw_map, red_dict):
     if not df_db.empty:
         cols = [c for c in ["ts_code","close","pe","pe_ttm","pb","roe",
                              "turnover_rate","total_mv","circ_mv","source_trade_date"] if c in df_db.columns]
-        df = df.merge(df_db[cols], on="ts_code", how="left")
+        daily_basic = df_db[cols].copy().rename(columns={"close": "raw_close"})
+        df = df.merge(daily_basic, on="ts_code", how="left")
 
     if not stats_df.empty:
         st_cols = [c for c in ["ts_code","avg_amount_5d","vol_confirm","limit_20d","limit_10d",
                                 "is_lock","is_breakout","limit_breakout_legacy","high_20d","low_20d","pct_5d","pct_60d",
-                                "drawdown_20d","has_crash_veto"]
+                                "drawdown_20d","has_crash_veto","qfq_close","qfq_source_trade_date"]
                    if c in stats_df.columns]
         df = df.merge(stats_df[st_cols], on="ts_code", how="left")
+
+    required_price_binding = {"raw_close", "source_trade_date", "qfq_close", "qfq_source_trade_date"}
+    missing_price_binding = required_price_binding - set(df.columns)
+    if missing_price_binding:
+        raise RuntimeError(
+            f"master table lacks raw/qfq price binding fields: {sorted(missing_price_binding)}"
+        )
+    if df[list(required_price_binding)].isna().any().any():
+        raise RuntimeError("master table lacks a same-day raw/qfq candidate price")
+    if (df["source_trade_date"].astype(str) != df["qfq_source_trade_date"].astype(str)).any():
+        raise RuntimeError("daily_basic raw quote date does not match qfq candidate price date")
+    df["close"] = pd.to_numeric(df["qfq_close"], errors="coerce")
+    if not np.isfinite(df["close"].to_numpy(dtype=float)).all() or (df["close"] <= 0).any():
+        raise RuntimeError("master table qfq candidate price is non-finite or non-positive")
 
     for bool_col in ["is_lock","is_breakout","limit_breakout_legacy","has_crash_veto"]:
         if bool_col in df.columns:
@@ -4215,7 +4435,9 @@ def run_egs(backtest_mode=False, output_root=None):
 
     # ── 上期候选股追踪（v7.5扩展：周内高低点、最大收益/回撤、是否仍在池）──────────
     import json as _json
-    _LAST_SEL_FILE = _rp("egs_last_selection.json")
+    # The former tracker persisted raw closes.  Do not compare those legacy
+    # records with the qfq production series after this price-basis migration.
+    _LAST_SEL_FILE = _rp("egs_last_selection_qfq_v1.json")
     _last_sel_raw   = []
     _last_sel_report = []
     if (not backtest_mode) and os.path.exists(_LAST_SEL_FILE):
@@ -4229,10 +4451,10 @@ def run_egs(backtest_mode=False, output_root=None):
                     if _latest_day.empty and len(trade_dates) > 1:
                         _latest_day = all_daily[all_daily["trade_date"] == trade_dates[1]]
                 _cur_prices = {}
-                if not _latest_day.empty and "close" in _latest_day.columns:
+                if not _latest_day.empty and "qfq_close" in _latest_day.columns:
                     _cur_prices = dict(zip(
                         _latest_day["ts_code"],
-                        pd.to_numeric(_latest_day["close"], errors="coerce")
+                        pd.to_numeric(_latest_day["qfq_close"], errors="coerce")
                     ))
                 for _item in _last_sel_raw:
                     _code      = _item.get("ts_code", "")
@@ -4253,8 +4475,8 @@ def run_egs(backtest_mode=False, output_root=None):
                             (all_daily["trade_date"] > _run_date) &
                             (all_daily["trade_date"] <= latest_td)
                         ]
-                    _week_high_p = float(_week_data["high"].max()) if not _week_data.empty and "high" in _week_data.columns else None
-                    _week_low_p  = float(_week_data["low"].min())  if not _week_data.empty and "low"  in _week_data.columns else None
+                    _week_high_p = float(_week_data["qfq_high"].max()) if not _week_data.empty and "qfq_high" in _week_data.columns else None
+                    _week_low_p  = float(_week_data["qfq_low"].min())  if not _week_data.empty and "qfq_low"  in _week_data.columns else None
                     if _ref_price and _week_high_p:
                         _max_gain = f"{(_week_high_p/_ref_price-1)*100:+.2f}%"
                     else:
@@ -4634,10 +4856,10 @@ def run_egs(backtest_mode=False, output_root=None):
         if _save_day.empty and len(trade_dates) > 1:
             _save_day = all_daily[all_daily["trade_date"] == trade_dates[1]]
         _save_prices = {}
-        if not _save_day.empty and "close" in _save_day.columns:
+        if not _save_day.empty and "qfq_close" in _save_day.columns:
             _save_prices = dict(zip(
                 _save_day["ts_code"],
-                pd.to_numeric(_save_day["close"], errors="coerce")
+                pd.to_numeric(_save_day["qfq_close"], errors="coerce")
             ))
         # 本次Top15的ts_code集合，用于标注"是否仍在池"
         _this_pool = set(watch_df["ts_code"].tolist()) if "ts_code" in watch_df.columns else set()
@@ -4655,6 +4877,7 @@ def run_egs(backtest_mode=False, output_root=None):
                 "entry_flag":    str(_row.get("entry_flag", "")),
                 "cninfo_flag":   str(_row.get("cninfo_flag", "未检查")),
                 "close":         float(_close) if _close is not None and not pd.isna(_close) else None,
+                "price_basis":   "qfq_anchored_as_of",
                 "run_date":      TODAY,
                 "still_in_pool": True,
             })

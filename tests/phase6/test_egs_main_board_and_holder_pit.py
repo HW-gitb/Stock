@@ -292,13 +292,17 @@ class HasCrashVetoSpecDeviationTest(unittest.TestCase):
         # 3 日 chronological;precompute 按 trade_date DESC 排 → iloc[1]=0528(暴跌日)、iloc[0]=0529(次日)。
         # 暴跌日:high10/low9/close9(收在下 20%:(9−9)/(10−9)=0)/pre_close10 → recover_line=(10+9)/2=9.5;
         # 次日 close=after_close(<9.5=不修复→触发 / >9.5=修复→不触发);crash_pct = 暴跌日 pct_chg 字段。
+        qfq_crash_close = 10.0 * (1.0 + crash_pct / 100.0)
         return [
             {"ts_code": code, "trade_date": "20260527", "open": 10.0, "high": 10.2, "low": 9.9,
-             "close": 10.0, "pre_close": 10.0, "pct_chg": 0.0, "vol": 1000.0, "amount": 200000.0},
+             "close": 10.0, "qfq_open": 10.0, "qfq_high": 10.2, "qfq_low": 9.9, "qfq_close": 10.0,
+             "pre_close": 10.0, "pct_chg": 0.0, "vol": 1000.0, "amount": 200000.0},
             {"ts_code": code, "trade_date": "20260528", "open": 10.0, "high": 10.0, "low": 9.0,
-             "close": 9.0, "pre_close": 10.0, "pct_chg": crash_pct, "vol": 1000.0, "amount": 200000.0},
+             "close": 9.0, "qfq_open": 10.0, "qfq_high": 10.0, "qfq_low": qfq_crash_close, "qfq_close": qfq_crash_close,
+             "pre_close": 10.0, "pct_chg": crash_pct, "vol": 1000.0, "amount": 200000.0},
             {"ts_code": code, "trade_date": "20260529", "open": 9.0, "high": after_close + 0.2, "low": 8.8,
-             "close": after_close, "pre_close": 9.0, "pct_chg": 0.0, "vol": 1000.0, "amount": 200000.0},
+             "close": after_close, "qfq_open": 9.0, "qfq_high": after_close + 0.2, "qfq_low": 8.8, "qfq_close": after_close,
+             "pre_close": 9.0, "pct_chg": 0.0, "vol": 1000.0, "amount": 200000.0},
         ]
 
     def test_crash_veto_caliber_threshold_and_recovery_gates(self) -> None:
@@ -322,13 +326,16 @@ class HasCrashVetoSpecDeviationTest(unittest.TestCase):
             rows.append({
                 "ts_code": code, "trade_date": trade_date,
                 "open": 10.0, "high": 10.2, "low": 9.8,
-                "close": 10.0, "pre_close": 10.0, "pct_chg": 0.0,
+                "close": 10.0, "qfq_open": 10.0, "qfq_high": 10.2, "qfq_low": 9.8, "qfq_close": 10.0,
+                "pre_close": 10.0, "pct_chg": 0.0,
                 "vol": 1000.0, "amount": 200000.0,
             })
 
         crash_index = next(i for i, row in enumerate(rows) if row["trade_date"] == crash_date)
-        rows[crash_index].update({"high": 10.0, "low": 9.0, "close": 9.0, "pct_chg": -10.0})
-        rows[crash_index + 1].update({"high": 9.2, "low": 8.8, "close": 9.0, "pre_close": 9.0})
+        rows[crash_index].update({"high": 10.0, "low": 9.0, "close": 9.0,
+                                  "qfq_high": 10.0, "qfq_low": 9.0, "qfq_close": 9.0, "pct_chg": -10.0})
+        rows[crash_index + 1].update({"high": 9.2, "low": 8.8, "close": 9.0,
+                                      "qfq_high": 9.2, "qfq_low": 8.8, "qfq_close": 9.0, "pre_close": 9.0})
         return rows
 
     def test_crash_veto_scans_five_confirmed_days_not_six(self) -> None:

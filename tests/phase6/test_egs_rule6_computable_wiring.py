@@ -54,7 +54,8 @@ class EgsRule6ComputableWiringTests(unittest.TestCase):
         dates = [f"202607{day:02d}" for day in range(14, 3, -1)]
         daily = pd.DataFrame([
             {"ts_code": code, "trade_date": date, "vol": 100.0,
-             "pct_chg": 1.0, "high": 11.0, "low": 9.0, "close": 10.0}
+             "pct_chg": 1.0, "high": 11.0, "low": 9.0, "close": 10.0,
+             "qfq_high": 11.0, "qfq_low": 9.0, "qfq_close": 10.0, "qfq_pct_chg": 1.0}
             for date in dates
         ])
         margin = pd.DataFrame([
