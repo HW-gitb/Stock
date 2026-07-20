@@ -376,9 +376,56 @@ def stateful_risk_for_candidate(account: dict | None, ts_code: str, as_of: str,
     return ctx
 
 
-def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, regime,
+def _candidate_exclusion_manual_reviews(acct: dict, candidate_exclusions: list[dict]) -> list[dict]:
+    """Keep price-isolated real positions visible without turning them into holding conclusions.
+
+    Candidate price exclusions are public selection facts.  When the same code is
+    a real account position, it must instead use the private manual-management
+    outlet: the system has no valid price basis for a holding/stop conclusion.
+    """
+    positions_by_code = {
+        str(position.get("ts_code") or ""): position
+        for position in (acct.get("positions") or [])
+    }
+    manual_review = []
+    for exclusion in candidate_exclusions:
+        code = str(exclusion.get("ts_code") or "")
+        position = positions_by_code.get(code)
+        if position is None:
+            continue
+        manual_review.append({
+            "ts_code": code,
+            "name": str(position.get("name") or exclusion.get("name") or ""),
+            "reason": ("候选价格隔离(" + str(exclusion.get("reason") or "unknown") + "/" +
+                       str(exclusion.get("source_status") or "unknown") + ")；真实持仓不做系统持有/"
+                       "止损结论，须人工管理"),
+        })
+    return manual_review
+
+
+def _append_manual_review_advisories(manual_review: list[dict], semantic_provider=None,
+                                     web_llm_provider=None) -> None:
+    """Consume advisory semantic/news coverage for price-isolated positions without a decision claim."""
+    for item in manual_review:
+        statuses = []
+        for label, provider in (("官方语义", semantic_provider), ("新闻", web_llm_provider)):
+            if provider is None:
+                continue
+            try:
+                result = provider(item["ts_code"])
+            except Exception:
+                result = None
+            status = (str(result.get("status") or "unknown")
+                      if isinstance(result, dict) else "unavailable")
+            statuses.append(f"{label}={status}")
+        if statuses:
+            item["reason"] += "；语义/新闻 advisory 已检索(" + ", ".join(statuses) + ")，不改人工管理"
+
+
+def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, account, regime,
                     regime_fallback, price_data_through, egs_full=None, iv_value=None, hv_value=None,
-                    semantic_provider=None, web_llm_provider=None, account_integrity=None):
+                    semantic_provider=None, web_llm_provider=None, account_integrity=None,
+                    manual_review_codes=None):
     """持仓恒列入 S1: 为"持仓 ∖ top-N"构造 M6.7 待分析行(Tier 路由)。**不改 egs_main / 选股 / 语义 /
     user-stop**。返回 (holding_normalized, holding_meta, manual_review):
     - Tier-2(在 `egs_full`): 复用 egs_full 的 EGS 分/风险;**现价取 price provider 最新 bar**(非 egs_full
@@ -391,7 +438,11 @@ def _build_holdings(acct, cand_codes, as_of, price_provider, iv_pct, account, re
     4.2 S2: 持仓 semantic 经 semantic_provider/web_llm_provider 注入(全持仓覆盖、绕 Top15 cap);
     provider 为 None → semantic=None(S1 向后兼容,build_holding_report 保持「未核查」)。"""
     from engine.a_short_egs_full_adapter import load_egs_full, egs_full_row_to_candidate
-    positions = [p for p in (acct.get("positions") or []) if str(p.get("ts_code")) not in cand_codes]
+    candidate_codes = {str(code) for code in (candidate_codes or [])}
+    manual_review_codes = {str(code) for code in (manual_review_codes or [])}
+    positions = [p for p in (acct.get("positions") or [])
+                 if str(p.get("ts_code")) not in candidate_codes
+                 and str(p.get("ts_code")) not in manual_review_codes]
     if not positions:
         return [], {}, []
     if egs_full is None:                      # 测试可注入;生产从 A-EGS/Result/egs_full_<as_of>.csv 读
@@ -901,6 +952,32 @@ def _validate_crash_veto_tracking_summary(payload: dict, expected_as_of: str | N
         raise ValueError(f"crash-veto summary as_of {payload.get('as_of')} != weekly as_of {expected_as_of}")
 
 
+def _validate_account_position_coverage(account_positions: list[dict] | None, reports: list[dict],
+                                        manual_review_codes: list[str] | None) -> None:
+    """Require every private account position to land exactly once in the weekly output.
+
+    The account snapshot itself stays out of the public report shape.  This
+    pre-publication invariant uses it only to prove that each held code is
+    either a report row or a price-isolated manual-review row, never both.
+    """
+    if account_positions is None:
+        return
+    expected_codes = [str(position.get("ts_code") or "") for position in account_positions]
+    report_codes = [str(report.get("ts_code") or "") for report in reports]
+    manual_codes = [str(code or "") for code in (manual_review_codes or [])]
+    if (not all(expected_codes) or len(expected_codes) != len(set(expected_codes)) or
+            not all(report_codes) or len(report_codes) != len(set(report_codes)) or
+            not all(manual_codes) or len(manual_codes) != len(set(manual_codes))):
+        raise ValueError("账户持仓覆盖不变量输入含空/重复 ts_code")
+    landing_codes = report_codes + manual_codes
+    if len(landing_codes) != len(set(landing_codes)):
+        raise ValueError("账户持仓覆盖不变量失败：reports 与 holdings_manual_review 重复 ts_code")
+    expected, landed = set(expected_codes), set(landing_codes)
+    missing = sorted(expected - landed)
+    if missing:
+        raise ValueError(f"账户持仓覆盖不变量失败：missing={missing}")
+
+
 def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
                         iv_feed_ref: str = "", run_lineage: dict = None, available_cash=None,
                         new_exposure_capacity=None, crash_veto_tracking: dict | None = None,
@@ -914,6 +991,7 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     reports = [(build_holding_report(n, as_of, generated_at)
                 if n.get("egs_coverage") == "uncovered" else build_m67_report(n, as_of, generated_at))
                for n in normalized_list]
+    _validate_account_position_coverage(account_positions, reports, missing_holding_codes)
     from engine.a_short_portfolio_risk import build_context
     portfolio_context = build_context(
         normalized_list, as_of, fact_overrides=portfolio_fact_overrides,
@@ -1144,6 +1222,12 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     if len(exclusion_codes) != len(set(exclusion_codes)) or any(not code for code in exclusion_codes):
         raise ValueError("candidate_exclusions 须为非空且不重复的 ts_code")
     report_codes = {str(report.get("ts_code") or "") for report in weekly.get("reports") or []}
+    manual_review = weekly.get("holdings_manual_review") or []
+    manual_codes = [str(item.get("ts_code") or "") for item in manual_review]
+    if len(manual_codes) != len(set(manual_codes)) or any(not code for code in manual_codes):
+        raise ValueError("holdings_manual_review 须为非空且不重复的 ts_code")
+    if report_codes & set(manual_codes):
+        raise ValueError("holdings_manual_review 不得同时出现在 reports")
     if report_codes & set(exclusion_codes):
         raise ValueError("candidate_exclusions 不得同时出现在 reports")
     for item in candidate_exclusions:
@@ -3846,27 +3930,39 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                      "fallback_active": bool(regime_fallback)},
                    "price_freshness": price_freshness,
                    "runtime_configuration": source_runtime_configuration}
-    # 持仓恒列入 S1 + 语义(4.2 S2): 注入"持仓 ∖ top-N"(Tier 路由 / 价格门旁路 / 语义经持仓 provider 注入 advisory);选股、引擎决策、user-stop 不变。
+    # 持仓恒列入 S1 + 语义(4.2 S2): 先以有效候选、普通持仓、候选价格隔离持仓建立互斥出口。后者
+    # 不伪造持有/止损结论，直接 private manual-review；选股、引擎决策、user-stop 不变。
     holding_normalized, holding_meta, holdings_manual_review = ([], {}, [])
-    candidate_exclusion_codes = {str(item["ts_code"]) for item in candidate_exclusions}
+    candidate_codes = {str(candidate.get("ts_code")) for candidate in cands}
     if args.account:
-        cand_codes = {str(c.get("ts_code")) for c in cands} | candidate_exclusion_codes
+        # ``candidate_codes`` means only the valid M6.7 candidate pool.  A price-isolated candidate which is
+        # actually held has its own manual-management outlet; it must not be silently folded into this set.
+        holdings_manual_review = _candidate_exclusion_manual_reviews(acct, candidate_exclusions)
+        manual_review_codes = {str(item["ts_code"]) for item in holdings_manual_review}
+        position_codes = {str(position.get("ts_code")) for position in (acct.get("positions") or [])}
         # 4.2 S2: 持仓 semantic provider(全持仓覆盖,cap=持仓数 绕 Top15;real fetch 同候选 gated on --confirm + 未 --skip-semantic;
         # 注入优先用于测试)。持仓涉真实持仓 → 结果走 weekly_private 私密路由(带 --account 自动私密,见 _reject_nonprivate_account_output_path)。
-        h_codes = sorted({str(p.get("ts_code")) for p in (acct.get("positions") or [])} - cand_codes)
+        # 这里保留候选价格隔离的真实持仓，避免它们在语义/新闻 advisory 覆盖链再次消失；它们不会被
+        # _build_holdings 重算成 report 行。
+        h_codes = sorted(position_codes - candidate_codes)
         if holding_semantic_provider is None and h_codes and args.confirm_fetch_authorized and not args.skip_semantic:
             holding_semantic_provider = _build_cninfo_semantic_provider(
                 h_codes, args.as_of, args.cninfo_lookback_days, cap=len(h_codes))
         if holding_web_llm_provider is None and h_codes and args.confirm_fetch_authorized and not args.skip_semantic:
             h_names = {str(p.get("ts_code")): str(p.get("name") or "") for p in (acct.get("positions") or [])
-                       if str(p.get("ts_code")) not in candidate_exclusion_codes}
+                       if str(p.get("ts_code")) in h_codes}
             holding_web_llm_provider = _build_deepseek_web_llm_provider(
                 h_codes, h_names, args.as_of, args.web_news_lookback_days, cap=len(h_codes))
-        holding_normalized, holding_meta, holdings_manual_review = _build_holdings(
-            acct, cand_codes, args.as_of, price_provider, iv_pct, account, regime,
+        _append_manual_review_advisories(
+            holdings_manual_review, holding_semantic_provider, holding_web_llm_provider)
+        holding_normalized, holding_meta, price_manual_review = _build_holdings(
+            acct, candidate_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
             semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider,
-            account_integrity=account_integrity)
+            account_integrity=account_integrity, manual_review_codes=manual_review_codes)
+        _append_manual_review_advisories(
+            price_manual_review, holding_semantic_provider, holding_web_llm_provider)
+        holdings_manual_review.extend(price_manual_review)
     portfolio_normalized = normalized + holding_normalized
     portfolio_codes = [str(item.get("ts_code")) for item in portfolio_normalized if item.get("ts_code")]
     portfolio_fact_overrides = None
@@ -3895,7 +3991,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  new_exposure_capacity=new_exposure_capacity,
                                  crash_veto_tracking=crash_veto_tracking,
                                  portfolio_fact_overrides=portfolio_fact_overrides,
-                                 account_positions=(acct.get("positions") or []),
+                                 account_positions=((acct.get("positions") or []) if args.account else None),
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
                                  candidate_exclusions=candidate_exclusions)
     weekly["factor_comparison_v2"] = factor_comparison_v2
@@ -3917,16 +4013,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             rep["consistency_warning"] = cons_by[code]
     if holdings_manual_review:
         weekly["holdings_manual_review"] = holdings_manual_review
-    # #1 除权除息提示(advisory):候选 + 账户持仓近端将除权 → 提示(PIT;不改任何决策)。
-    _exdiv_codes = [(str(c.get("ts_code")), c.get("name", "")) for c in cands]
-    _exdiv_codes += [(str(p.get("ts_code")), p.get("name", "")) for p in (acct.get("positions") or [])
-                     if str(p.get("ts_code")) not in candidate_exclusion_codes]
-    _notices = _ex_div_notices(_exdiv_codes, args.as_of, dividend_provider)
+    # #1 除权除息 / forward events advisory: valid candidates plus the full account-position union, including
+    # candidate-price-isolated manual-review holdings.  The provider output remains private with --account and
+    # does not alter the public P1-P5 comparison tracks or any M6.7 decision.
+    _advisory_names = {str(candidate.get("ts_code")): candidate.get("name", "") for candidate in cands}
+    for position in (acct.get("positions") or []):
+        _advisory_names.setdefault(str(position.get("ts_code")), position.get("name", ""))
+    _advisory_codes = sorted(_advisory_names.items())
+    _notices = _ex_div_notices(_advisory_codes, args.as_of, dividend_provider)
     if _notices:
         weekly["ex_div_notices"] = _notices
     # 4.2 forward_events 第1刀: 未来已知事件日历(analysis-only advisory;候选+持仓近端限售解禁)。恒 set(checked/unknown)——
     # unknown-not-clear: unlock_provider 不可用(无 --confirm/未授权)→ status=unknown_or_unavailable(绝不当「无未来事件」)。
-    weekly["upcoming_events"] = _upcoming_events(_exdiv_codes, args.as_of, unlock_provider, earnings_provider)
+    weekly["upcoming_events"] = _upcoming_events(_advisory_codes, args.as_of, unlock_provider, earnings_provider)
     # 4.2 forward_events row landing: upcoming events 按 ts_code 落到对应 report 逐票 operation_impact + 风控触发文本(advisory,不改决策)。
     _attach_forward_event_impacts(weekly, args.as_of)
     # 4.2 Round5 龙虎榜(comparison-only):候选近 N 交易日上榜对照 → 板块资金事件 + operation_impact(不改决策/EGS/选股/TopN/股数)。

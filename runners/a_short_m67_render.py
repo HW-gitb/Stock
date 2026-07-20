@@ -216,6 +216,12 @@ def _ratchet_line(r: dict):
     return "- 跨周 ratchet:" + "；".join(bits) + "（advisory,不自动卖出 / 不自动改止损）"
 
 
+def _consistency_warning_line(report: dict):
+    """Render one private account-reconciliation warning identically on every card type."""
+    warning = report.get("consistency_warning")
+    return f"- ⚠️ 对账(4.3-D):{warning}" if warning else None
+
+
 def _render_holdings_section(holding_reports: list, manual_review: list) -> list:
     """持仓恒列入 S1:渲染"账户持仓(非本周候选)"段 + "需人工管理(无价/停牌)"段。与"本周 EGS 候选"
     分区显示,避免把账户持仓误读成本周选中;partial 覆盖行显式标 EGS 未覆盖、不伪造安全。"""
@@ -260,8 +266,9 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
                 out.append(_semantic_line(r))
             else:
                 out.append("- ⚠️ **语义/新闻未核查(S1)**:本周未对该持仓自动核查 ST / 重大利空 / 监管 / 减持;请人工核查(S2 接入)。")
-            if r.get("consistency_warning"):
-                out.append(f"- ⚠️ 对账(4.3-D):{r['consistency_warning']}")
+            _consistency_warning = _consistency_warning_line(r)
+            if _consistency_warning:
+                out.append(_consistency_warning)
             out.append(f"- 执行清单(系统位):损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} / 盈二 {_cell(t['盈二'])}"
                        "(止损无条件、盘中由你手动;系统跟踪止损=近20日高−ATR×倍数)")
             out.append(f"- **操作建议**:{r['m67']['精简结论区'].get('操作建议', '')}")
@@ -269,7 +276,7 @@ def _render_holdings_section(holding_reports: list, manual_review: list) -> list
             out.append("")
     if manual_review:
         out += ["", "## 账户持仓·需人工管理(无价/停牌/价格陈旧)",
-                "> 以下持仓本周**抓不到一致的最新价**(停牌/无价/价格陈旧),系统**不下任何持有/止损结论**,请人工管理。",
+                "> 以下持仓本周价格被隔离(停牌/无价/价格陈旧/候选价格隔离),系统**不下任何持有/止损结论**,请人工管理。",
                 "| 票 | 名称 | 原因 |", "|---|---|---|"]
         for h in manual_review:
             out.append(f"| {_cell(h.get('ts_code'))} | {_cell(h.get('name'))} | {_cell(h.get('reason'))} |")
@@ -470,6 +477,9 @@ def render_weekly_markdown(weekly: dict) -> str:
         _rl = _ratchet_line(r)              # S3b R4b: 跨周持久收紧 ratchet(held 候选)
         if _rl:
             out.append(_rl)
+        _consistency_warning = _consistency_warning_line(r)
+        if _consistency_warning:
+            out.append(_consistency_warning)
         if t["操作"] == "建仓":
             out.append(f"- 执行清单:入 {_cell(t['入'])} / 损 {_cell(t['损'])} / 盈一 {_cell(t['盈一'])} "
                        f"/ 盈二 {_cell(t['盈二'])} / 股数 {_cell(t['股数'])}")
