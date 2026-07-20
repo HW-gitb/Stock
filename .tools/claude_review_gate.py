@@ -78,11 +78,13 @@ def _run(args: list[str], *, root: Path) -> dict:
             args,
             cwd=str(root),
             text=True,
+            encoding="utf-8",
+            errors="replace",
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             timeout=20,
         )
-        output = result.stdout
+        output = result.stdout or ""
         rc = result.returncode
     except Exception as exc:  # pragma: no cover - defensive for hook runtime only
         output = f"{type(exc).__name__}: {exc}"

@@ -39,6 +39,20 @@ class ReviewContextTieringTests(unittest.TestCase):
         self.assertFalse(gate.is_review_prompt("讨论审查 workflow"))
 
 
+class PromptHookInjectionTests(unittest.TestCase):
+    def test_review_prompt_injects_tiering_end_to_end(self):
+        # Full path: git snapshot collection (git output carries non-ASCII commit text that a locale
+        # gbk decode would choke on — `_run` must decode UTF-8/replace) THEN the tiering STEP-0.
+        import json
+        import tempfile
+        gate = _load_review_gate()
+        with tempfile.TemporaryDirectory() as td:
+            out = gate.handle_prompt_hook(
+                json.dumps({"prompt": "审查当前 diff"}), root=ROOT, state_dir=Path(td))
+        self.assertIn("REVIEW EVIDENCE SNAPSHOT", out)   # snapshot injected (no encoding crash)
+        self.assertIn("full_pack_ledger.py check", out)  # tiering STEP-0 injected
+
+
 class PreCommitReminderTests(unittest.TestCase):
     def setUp(self):
         self.hook = (ROOT / ".githooks" / "pre-commit").read_text(encoding="utf-8")
