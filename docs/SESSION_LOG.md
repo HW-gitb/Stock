@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-20 — Claude Code 建 verification-tiering 硬提醒（prompt-hook 扩 _review_context + pre-commit warn；主树 master→提交）
+
+- **机制**: 扩 `.tools/claude_review_gate.py::_review_context()`（已在 UserPromptSubmit 上注入审查提醒）加验证分级 STEP-0（跑全量前先 `full_pack_ledger.py check` 引用绿别重跑 / 全量只在 PASS·合并跑一次 / FAIL 实测坐实先报不等全量 / 独立 agent 只在真钱·选股·安全·大而绕才起且只起一个），让 AGENTS §Verification tiering rule 3/4/6 每次审查自动进 context、不靠记忆。另 `.githooks/pre-commit` 加 warn-only 块：提交 a-short 生产码却无 ledger green 时提醒（绝不拦、fail-open、无 exit 1）。
+- **不做硬门（诚实边界）**: ledger 是每-worktree gitignored + diff-from-HEAD 指纹，跨树/merge 会误伤（合并到 master 那步换棵树看不到绿记录），故 git 层只 warn；真硬门需把 ledger 改成入库+按 commit 记（单独一刀）。判断类行为（是否起 agent / FAIL 先报）无产物可校验，只能靠注入提醒+人监督，非 hook 能强制。
+- **Verify**: `tests/test_review_tiering_enforcement.py` 4 OK（锁 `_review_context` 含分级关键词 + pre-commit 块 warn-only·scoped·无 exit 1）；`_review_context()` 实调含 `full_pack_ledger.py check`；pre-commit warn 块双分支（a-short 生产码 staged 且无绿→提醒 / 非生产→静默）均 exit 0；主树 pre-commit（route-doc+doc-gov guard）过。
+- **Next**: 无（本机制刀已建）。提醒只在已接 UserPromptSubmit→claude_review_gate 的 worktree 触发（主树已接；本轮补接 a-short-3 的 settings.local.json，其余树各自接）。
+
 ## 2026-07-19 — Claude Code 独立审查 PASS（A-short P0 factor-comparison v2 capture-integrity 日期锚修复；主树 master→提交）
 
 - **Verdict/Action**: PASS + 提交。`_validate_capture_integrity`(engine/a_short_factor_comparison_v2.py:689) 把候选价历史末根锚从 `capture["decision_date"]` 改为 `identity["price_data_through"]`，与 date-contract B 及既有完整性守卫(:782-786，本就用 price_data_through)一致。修前 689 与 784 在周末/盘前 canonical 跑相互矛盾(784 要末根=已结算周五、689 要=周一)→ 每次周末跑必崩 v2 capture。comparison-only、零改 EGS/M6.7/选股/veto/仓位。

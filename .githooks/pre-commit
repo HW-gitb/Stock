@@ -57,4 +57,22 @@ if [ "$?" -ne 0 ]; then
   echo "register (no double-write of finding detail). Move detail to system_risk_register.md, then re-commit." 1>&2
   exit 1
 fi
+
+# ── Verification-tiering reminder (advisory, NEVER blocks) — AGENTS.md §Verification tiering rule 3/4 ──
+# If this commit changes the a-short PRODUCTION surface but no full-pack GREEN is recorded for this
+# exact code state, print a reminder so the reviewer runs the pack ONCE at the PASS/merge gate and
+# cites the ledger instead of re-running mid-review. It NEVER blocks: the ledger is per-worktree and
+# advisory (fingerprint = diff-from-HEAD), so a real hard gate would need a tracked, commit-keyed
+# ledger — a separate slice. This branch only warns to stderr; it never blocks the commit.
+if [ -n "$PY" ]; then
+  prod_changed="$(git diff --cached --name-only | grep -E '^(A-EGS/|runners/a_short_|engine/a_short_|engine/egs_|schemas/a_short_|presets/a_short_|presets/egs_)' || true)"
+  if [ -n "$prod_changed" ] && ! "$PY" .tools/full_pack_ledger.py check a_short >/dev/null 2>&1; then
+    echo "" 1>&2
+    echo "pre-commit REMINDER (advisory, does NOT block): this commit changes a-short production code but no" 1>&2
+    echo "full-pack GREEN is recorded for this code state (AGENTS.md §Verification tiering rule 3/4)." 1>&2
+    echo "At the PASS/merge gate run the a_short full pack ONCE, then record it:" 1>&2
+    echo "  python .tools/full_pack_ledger.py record a_short <count>" 1>&2
+    echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
+  fi
+fi
 exit 0
