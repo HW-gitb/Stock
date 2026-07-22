@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_aggregate_report/1.1.5/schema.json",
+  "$id": "https://stock.local/schemas/execution_aggregate_report/1.1.6/schema.json",
   "title": "Execution Aggregate Report",
-  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.3.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. Full-size permission requires production-mode inputs plus a reviewed forward-live evidence source; smoke aggregates and bare forward-live month values remain diagnostic. Version 1.1.1 excludes zero-trade input reports with null total_return from monthly return, t-stat, and Sharpe statistics unless a reviewed future rule emits an explicit numeric cash return. Version 1.1.2 keeps full_size_allowed false / not_evaluable while input execution reports are serialized and do not model concurrent open positions or cash locks; return metrics remain diagnostic, not capacity/concurrency-adjusted ship-gate evidence. Version 1.1.3 binds --forward-live-evidence-ref to schemas/forward_live_evidence.schema.json v1.0.0 instead of accepting an ad hoc two-field JSON. Version 1.1.4 requires forward-live evidence to match aggregate capital context, requires its source_window to cover claimed months, and records matched monthly alpha observation count so ship-gate metric pass/fail cannot be satisfied by fewer than the required live months. Version 1.1.5 binds aggregate input references to execution_backtest_report v1.3.0 so the L3 source and completeness lineage cannot be lost at aggregation.",
+  "description": "Phase 5 multi-period aggregation contract for execution_backtest_report v1.4.0 outputs. It aggregates bucket-aware A-short execution reports for ship-gate evidence without changing the single-run execution report contract. Benchmark-aware alpha remains nullable until an explicit benchmark-excess series is supplied. Full-size permission requires production-mode inputs plus a reviewed forward-live evidence source; smoke aggregates and bare forward-live month values remain diagnostic. Version 1.1.1 excludes zero-trade input reports with null total_return from monthly return, t-stat, and Sharpe statistics unless a reviewed future rule emits an explicit numeric cash return. Version 1.1.2 keeps full_size_allowed false / not_evaluable while input execution reports are serialized and do not model concurrent open positions or cash locks; return metrics remain diagnostic, not capacity/concurrency-adjusted ship-gate evidence. Version 1.1.3 binds --forward-live-evidence-ref to schemas/forward_live_evidence.schema.json v1.0.0 instead of accepting an ad hoc two-field JSON. Version 1.1.4 requires forward-live evidence to match aggregate capital context, requires its source_window to cover claimed months, and records matched monthly alpha observation count so ship-gate metric pass/fail cannot be satisfied by fewer than the required live months. Version 1.1.5 binds aggregate input references to execution_backtest_report v1.3.0 so the L3 source and completeness lineage cannot be lost at aggregation. Version 1.1.6 binds aggregate input references to execution_backtest_report v1.4.0 so the legacy Rule6-versus-M6.7 interpretation boundary is retained at aggregation.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -25,7 +25,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.1.5"
+      "const": "1.1.6"
     },
     "generated_at": {
       "type": "string",
@@ -137,7 +137,7 @@
         },
         "schema_version": {
           "type": "string",
-          "const": "1.3.0"
+          "const": "1.4.0"
         },
         "preset": {
           "type": "string",

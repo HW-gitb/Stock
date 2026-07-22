@@ -34,6 +34,12 @@ REPORT_SCHEMA_PATH = ROOT / "schemas" / "execution_backtest_report.schema.json"
 PRICE_DATA_SCHEMA_PATH = ROOT / "schemas" / "execution_price_data.schema.json"
 PORTFOLIO_ALLOCATION_SCHEMA_PATH = ROOT / "schemas" / "portfolio_allocation.schema.json"
 CASH_BUFFER_STATE_SCHEMA_PATH = ROOT / "schemas" / "cash_buffer_state.schema.json"
+EXECUTION_REPORT_SCHEMA_VERSION = "1.4.0"
+LEGACY_RULE6_M67_LIMITATION = (
+    "This legacy Rule6 hard-veto execution backtest does not represent M6.7 actual "
+    "recommendation performance: overheat and chasing_high are hard-vetoed here but "
+    "only downgraded by M6.7."
+)
 DEFAULT_INPUT_ROOT = ROOT / "result" / "a_short"
 DEFAULT_OUT_DIR = ROOT / "result" / "a_short" / "backtest" / "execution"
 DEFAULT_PRESET_PATH = ROOT / "presets" / "a_short.yaml"
@@ -710,6 +716,12 @@ def build_execution_assumptions(
             "enabled": False,
             "event_code": "cooldown_block",
         },
+        "candidate_semantics": {
+            "candidate_gate": "legacy_rule6_hard_veto",
+            "m67_semantics_aligned": False,
+            "production_proxy": False,
+            "differing_rules": ["overheat", "chasing_high"],
+        },
         "event_log": {
             "required": True,
             "event_codes": [
@@ -853,6 +865,7 @@ def empty_simulation_result(
             "Candidates that pass analyzer replay are skipped as missing_stop until deterministic stop rules are wired.",
             "No execution price fetch, limit-up matching, order fill, portfolio accounting, or exit simulation is implemented yet.",
             "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report.",
+            LEGACY_RULE6_M67_LIMITATION,
         ],
     }
 
@@ -1211,6 +1224,7 @@ def simulate_execution(
             "Portfolio circuit breaker and cooldown controls are not simulated and are not safety evidence in this report.",
             "total_return is ending marked-to-market equity divided by initial bucket_capital minus one; no annualized return is emitted yet.",
             "All generated actions are backtest events only; manual-order-only boundary remains in force.",
+            LEGACY_RULE6_M67_LIMITATION,
         ],
     }
 
@@ -1336,7 +1350,7 @@ def build_report(
 
     return {
         "schema_name": "execution_backtest_report",
-        "schema_version": "1.3.0",
+        "schema_version": EXECUTION_REPORT_SCHEMA_VERSION,
         "generated_at": generated_at or iso_now(),
         "preset": str(capital_context["preset"]),
         "mode": args.mode,

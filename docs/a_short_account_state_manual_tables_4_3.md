@@ -1,4 +1,4 @@
-# A-short 4.3：手工持仓表格 → account_state.json（模板 + 列映射 + 边界）
+# A-short 4.3：手工持仓表格 → a_short_account_bundle（模板 + 列映射 + 边界）
 
 **owner**：A-short 4.3 持仓后管理自动化切片的 in-repo 设计 + 列映射文档（Slice 4.3-A）。
 **scope**：4.3-A（模板/映射/样例/边界）+ 4.3-B（转换器 + lineage schema + 测试）+ 4.3-C（M6.7 渲染微调：一览表加「持仓/冷静」列 + 逐票说明,纯渲染派生自 `machine.stateful_risk`,见 §10）+ 4.3-D（trades↔positions 一致性提示,advisory WARN-only,见 §11）已交付。（实时 review/commit gate 见 `docs/SESSION_LOG.md` 顶部,不在本文件。）

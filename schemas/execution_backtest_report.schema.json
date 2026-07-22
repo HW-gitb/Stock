@@ -1,8 +1,8 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "https://stock.local/schemas/execution_backtest_report/1.3.0/schema.json",
+  "$id": "https://stock.local/schemas/execution_backtest_report/1.4.0/schema.json",
   "title": "Execution Backtest Report",
-  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.3.0 adds explicit L3 provider and completeness lineage on top of the v1.2.0 ship-gate and capital-context outputs. The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
+  "description": "Phase 5 machine-readable contract for execution-level backtest reports. Version 1.3.0 adds explicit L3 provider and completeness lineage on top of the v1.2.0 ship-gate and capital-context outputs. Version 1.4.0 requires a machine-readable legacy Rule6 candidate-gate marker so the report cannot be mistaken for an M6.7 recommendation-performance or production proxy. The v1.x execution report contract remains unfrozen while there is no production consumer; required field additions may use v1.x minor bumps until the first production consumer is frozen, after which breaking changes require v2.0.0. event_log.event_codes is grow-only within v1.x; consumers should handle unknown event codes gracefully.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -29,7 +29,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "1.3.0"
+      "const": "1.4.0"
     },
     "generated_at": {
       "type": "string",
@@ -173,6 +173,7 @@
         "position_sizing",
         "portfolio_circuit_breaker",
         "cooldown",
+        "candidate_semantics",
         "event_log"
       ],
       "properties": {
@@ -355,6 +356,53 @@
             "event_code": {
               "type": "string",
               "const": "cooldown_block"
+            }
+          }
+        },
+        "candidate_semantics": {
+          "type": "object",
+          "description": "Required interpretation boundary for the legacy Rule6 execution candidate universe. It is not an M6.7 recommendation-performance or production proxy.",
+          "additionalProperties": false,
+          "required": [
+            "candidate_gate",
+            "m67_semantics_aligned",
+            "production_proxy",
+            "differing_rules"
+          ],
+          "properties": {
+            "candidate_gate": {
+              "type": "string",
+              "const": "legacy_rule6_hard_veto"
+            },
+            "m67_semantics_aligned": {
+              "type": "boolean",
+              "const": false
+            },
+            "production_proxy": {
+              "type": "boolean",
+              "const": false
+            },
+            "differing_rules": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "enum": ["overheat", "chasing_high"]
+              },
+              "minItems": 2,
+              "maxItems": 2,
+              "uniqueItems": true,
+              "allOf": [
+                {
+                  "contains": {
+                    "const": "overheat"
+                  }
+                },
+                {
+                  "contains": {
+                    "const": "chasing_high"
+                  }
+                }
+              ]
             }
           }
         },

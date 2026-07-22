@@ -238,6 +238,36 @@
 - **Verify**: 目标闭环包 411 OK（含两轮 pipeline：首次私有状态播种→下一轮 TP1=`减仓` 10 股且未伪造已执行）；no-dangling/report/action-table 201 OK；schema/contract/renderer 99 OK；doc process 60 OK；`py_compile`、JSON parse、`git diff --check` OK。`discover -s tests -p test_us_short*.py` 在 120 秒仅输出通过点位后超时，未作为通过证据。
 - **Pre-Codex self-review**: A：覆盖 TP1/TP2/事件/止损、TP1 已完成、少于 1 股、成本缺失、状态不可信、首次播种和不产生加仓；B：核对 action→价格映射、机器记录、action table、周报和私有写入同一 `action_proposal`；C：加“建议不等于成交”、TP1 不重复和 0 股禁止回归；D：无自然语言分类；E：只更新 US-short 权威设计与本交接，不改 CURRENT；F：主线程按 checklist 自审（当前协作限制不启用子 agent），固定包集中运行并完成最终 diff/编码检查。
 - **Next**: Claude Code：仅审 US-short 结果联动第一刀；PASS 后提交本切片。
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第六刀 R11：execution backtest 解释边界；c237 已提交，未 merge）
+
+- **Verdict/Action**: PASS + 提交（c237 `f7626a54`=第五刀 之上，第六刀文件）。纯加解释边界、零改决策：execution_backtest_report 加 schema-required `candidate_semantics` marker（4 const：legacy_rule6_hard_veto / m67_aligned=false / proxy=false / differing_rules=[overheat,chasing_high]）+ 两路径同 human limitation；报告 v1.4.0、aggregate v1.1.6 只收 v1.4.0 input（下游保边界）。不改 Rule6/M6.7/候选宇宙/模拟/ship-gate。register `R-ASHORT-EXECUTION-BACKTEST-M67-INTERPRETATION-DRIFT`→resolved。
+- **Required**: 无。
+- **Verify**: 亲跑定向 5 execution 包 = 59 例通过。marker 单源自 `build_execution_assumptions`（grep 证唯一 emit 点、两路径共用）；skeleton `empty_simulation_result` + 完整 `simulate_execution` + tushare materialize 三路径都断言 marker+limitation+v1.4.0；mutation 回归证 schema 拒缺 marker / 拒 `m67_semantics_aligned=true` 假对齐。整读两 schema + 两 runner diff、逐行确认全 additive。零 live 选股/veto/仓位/PIT/真钱影响、无 provider/secret/fail-closed 选股门 → 按项目标准未起子 agent、未跑全量。
+- **Next**: Codex：Pass。codex_r1.md 六刀全审毕；cherry-pick→master 待命令。
+
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第五刀 R8/R7：周跑时区预检 + 账户 bundle 入口就绪性；c237 已提交，未 merge）
+
+- **Verdict/Action**: PASS + 提交（c237 `5f532602` 之上，仅第五刀 13 文件；第六刀 R11 execution-backtest code/schema/tests 留未提交待其独立审查）。R8：preflight 加 `tzdata` + `timezone_capability()` 真调 `ZoneInfo("Asia/Shanghai")`（非 `find_spec`）→fail、dependencies/timezone 分记、canonical resolver 前 fail-fast。R7：所有活跃 A-short 操作面改指向 CSV→转换器→`a_short_account_bundle`→`-Account`、删裸 `account_state.json` 教学 + 静态 entry-surface guard。register `R-ASHORT-WEEKLY-ENTRY-READINESS-DRIFT`→resolved（`docs/system_risk_register.md`）。
+- **Required**: 无。
+- **Verify**: 亲跑定向 `test_a_short_preflight`+`test_weekly_screening_guardrails` = 27 例通过（4 新 preflight：tzdata 进 missing / tzdata 缺→fail / ZoneInfo 不可用→fail 带 error_type / 正常→pass；新 entry-surface guard 静态拒裸账户教学）。整读 preflight 函数体；整类扫 A-short 操作面无 `account_state.json` 残留（仅剩 us_short 另一 lane、非本 scope）。零选股/veto/仓位/PIT/真钱影响、无 provider/secret/新选股 fail-closed 门 → 按项目标准未起子 agent、未跑全量（proportional-to-impact）。
+- **Next**: Codex：Pass。第六刀（execution-backtest 解释边界）留下轮独立审查、勿把其 code 并进本刀；cherry-pick→master 待命令。
+
+## 2026-07-22 — Codex 修复（A-short 第六刀 R11：execution backtest 与 M6.7 解释边界，待独立审查）
+
+- **Verdict/Action**: 第六刀已实现：保留 legacy Rule6 对 `overheat` / `chasing_high` 的 hard veto，不静默改写为 M6.7 downgrade；两条 execution report 路径均输出 schema-required 的 legacy 候选语义标记和同一条限制说明，并同步升级下游 aggregate input binding。
+- **Required**: `R-ASHORT-EXECUTION-BACKTEST-M67-INTERPRETATION-DRIFT` 为 in_progress P2，完整风险、边界与关闭条件见 register `docs/system_risk_register.md`；需独立审查后再提交。
+- **Verify**: execution skeleton / full simulation、report schema、aggregate schema / consumer、price-data materializer 与 route-doc guard 定向包 119 OK；回归覆盖缺失机器标记和伪造 M6.7 对齐均被 schema 拒绝。
+- **Pre-Codex self-review**: 本刀只增加解释契约和下游版本绑定，未改变 Rule6 或 M6.7 的真实决策规则、回测候选宇宙、交易模拟、provider、账户、仓位或 ship gate；未来 M6.7 对齐回测必须新模式、新产物并保留 legacy 基线。
+- **Next**: Claude Code：独立审查本 A-short 第六刀；不将 legacy execution result 解释为 M6.7 或 production 表现。
+
+## 2026-07-22 — Codex 修复（A-short 第五刀 R8/R7：周跑时区预检与账户 bundle 入口，待独立审查）
+
+- **Verdict/Action**: 第五刀已实现：预检新增 `tzdata` 和真实 `ZoneInfo("Asia/Shanghai")` 能力门，二者分开记录且均在 canonical resolver 前失败；所有活跃 A-short 操作入口改为五张 CSV → 转换器 → 摘要绑定 `a_short_account_bundle` → `-Account`。
+- **Required**: `R-ASHORT-WEEKLY-ENTRY-READINESS-DRIFT` 为 in_progress P2，完整风险、边界与关闭条件见 register `docs/system_risk_register.md`；需独立审查后再提交。
+- **Verify**: `tests.test_a_short_preflight` + `tests.phase6.test_weekly_screening_guardrails` 27 OK（含 tzdata 缺失、ZoneInfo 失败、正常能力和入口静态守卫）。
+- **Pre-Codex self-review**: 预检仍不解析 requirements 或触发 provider；缺依赖与时区失败均不能越过 resolver；bundle 提示不复述字段，统一指向 CSV 转换器和权威账户文档；无账户 observation-only 语义不变。
+- **Next**: Claude Code: review
+
 ## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第四刀 R5：候选/私有持仓监管确认分域安全闭环；c237 已提交，未 merge）
 
 - **Verdict/Action**: PASS + 提交（c237 `801dd61c`=第三刀 之上，16 文件；用户令"提交不 merge"）。候选/持仓确认两不可换域（distinct schema 身份）；持仓域绑 account_snapshot_digest+holding_universe_digest+event fingerprint、须 `--account`、输入强制 gitignored 私密；confirmed-material 仅产 clear_review advisory，非 EGS/Rule6/veto/sizing/order。缺文件→pending 不阻断；坏/schema/stale/错账户/错集合/universe 外/跨域/unmatched/无 CNINFO 全发布前 FATAL。

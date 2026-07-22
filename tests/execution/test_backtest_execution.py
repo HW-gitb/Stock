@@ -75,7 +75,7 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
 
             self.assertEqual(errors, [])
             self.assertEqual(report["schema_name"], "execution_backtest_report")
-            self.assertEqual(report["schema_version"], "1.3.0")
+            self.assertEqual(report["schema_version"], "1.4.0")
             self.assertEqual(report["settings"]["primary_input"], "analysis_input")
             self.assertFalse(report["settings"]["deterministic_report_required"])
             self.assertEqual(report["settings"]["initial_capital"], 116666.55)
@@ -100,10 +100,37 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertFalse(circuit["new_entries_blocked"])
             self.assertEqual(circuit["existing_positions_action"], "not_implemented")
             self.assertFalse(report["execution_assumptions"]["cooldown"]["enabled"])
+            self.assertEqual(
+                report["execution_assumptions"]["candidate_semantics"],
+                {
+                    "candidate_gate": "legacy_rule6_hard_veto",
+                    "m67_semantics_aligned": False,
+                    "production_proxy": False,
+                    "differing_rules": ["overheat", "chasing_high"],
+                },
+            )
             declared_event_codes = report["execution_assumptions"]["event_log"]["event_codes"]
             self.assertNotIn("circuit_breaker", declared_event_codes)
             self.assertNotIn("cooldown_block", declared_event_codes)
             self.assertIn("not safety evidence", " ".join(report["limitations"]))
+            self.assertIn(
+                "does not represent M6.7 actual recommendation performance",
+                " ".join(report["limitations"]),
+            )
+            missing_candidate_semantics = deepcopy(report)
+            del missing_candidate_semantics["execution_assumptions"]["candidate_semantics"]
+            self.assertTrue(
+                list(Draft7Validator(schema).iter_errors(missing_candidate_semantics)),
+                "schema must reject a report without the required legacy candidate semantics",
+            )
+            falsely_m67_aligned = deepcopy(report)
+            falsely_m67_aligned["execution_assumptions"]["candidate_semantics"][
+                "m67_semantics_aligned"
+            ] = True
+            self.assertTrue(
+                list(Draft7Validator(schema).iter_errors(falsely_m67_aligned)),
+                "schema must reject a report that claims M6.7 semantic alignment",
+            )
             self.assertEqual(report["metrics"]["candidate_count"], 2)
             self.assertEqual(report["metrics"]["trade_count"], 0)
             self.assertEqual(report["metrics"]["skipped_count"], 2)
@@ -250,6 +277,19 @@ class BacktestExecutionSmokeTest(unittest.TestCase):
             self.assertIsNotNone(drawdown_result["passed"])
             self.assertIn("mark-to-market", drawdown_result["reason"])
             self.assertIn("not safety evidence", " ".join(report["limitations"]))
+            self.assertEqual(
+                report["execution_assumptions"]["candidate_semantics"],
+                {
+                    "candidate_gate": "legacy_rule6_hard_veto",
+                    "m67_semantics_aligned": False,
+                    "production_proxy": False,
+                    "differing_rules": ["overheat", "chasing_high"],
+                },
+            )
+            self.assertIn(
+                "does not represent M6.7 actual recommendation performance",
+                " ".join(report["limitations"]),
+            )
             self.assertIsNone(
                 report["ship_gate_evaluation"]["metric_results"]["monthly_alpha_t_stat"]["passed"]
             )

@@ -400,7 +400,7 @@ class TushareExecutionPriceDataTest(unittest.TestCase):
             report = json.loads((out_dir / "execution_report.json").read_text(encoding="utf-8"))
 
         self.assertEqual(rc, 0)
-        self.assertEqual(report["schema_version"], "1.3.0")
+        self.assertEqual(report["schema_version"], "1.4.0")
         self.assertEqual(report["metrics"]["trade_count"], 0)
         self.assertFalse(report["ship_gate_evaluation"]["full_size_allowed"])
         self.assertEqual(

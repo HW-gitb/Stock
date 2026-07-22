@@ -18,9 +18,9 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
 
         Draft7Validator.check_schema(schema)
-        self.assertIn("/1.1.5/", schema["$id"])
+        self.assertIn("/1.1.6/", schema["$id"])
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_aggregate_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.5")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.1.6")
         self.assertIn("multi-period aggregation", schema["description"])
         self.assertIn("reviewed forward-live evidence", schema["description"])
         self.assertIn("zero-trade", schema["description"])
@@ -74,6 +74,15 @@ class ExecutionAggregateReportSchemaTest(unittest.TestCase):
             schema["$defs"]["shipGateMetricResult"]["properties"]["passed"]["type"],
             ["boolean", "null"],
         )
+
+    def test_schema_binds_input_reports_to_legacy_boundary_version(self) -> None:
+        schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
+        self.assertEqual(
+            schema["$defs"]["executionReportRef"]["properties"]["schema_version"]["const"],
+            "1.4.0",
+        )
+        self.assertIn("legacy Rule6-versus-M6.7", schema["description"])
 
     def test_monthly_series_is_report_return_not_alpha(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))

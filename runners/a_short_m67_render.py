@@ -397,7 +397,7 @@ def render_weekly_markdown(weekly: dict) -> str:
     if rl.get("sizing_mode") and rl.get("sizing_mode") != "sized":
         out.append("> ⚠️ **无账户(account_status=" + str(rl.get("account_status", "?")) +
                    "):仓位 sizing N/A —— 建仓候选会渲染为「观察」(可建股数/金额不足),这是 **sizing 假象、非真 avoid 信号**;"
-                   "传 `--account` / `-Account`(account-state JSON: cash/positions/Rule12/Rule13)以获真 sizing/持仓判断。**")
+                   "传 `--account` / `-Account`(手工 CSV 转换器生成的 a_short_account_bundle)以获真 sizing/持仓判断。**")
     if rl:
         out.append("**lineage**:analysis_input=`" + str(rl.get("analysis_input", "?")) + "` | iv_feed=`" +
                    str(rl.get("iv_feed", "?")) + "` | account=" + str(rl.get("account_status", "?")) +

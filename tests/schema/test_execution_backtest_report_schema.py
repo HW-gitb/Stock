@@ -19,7 +19,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
 
         Draft7Validator.check_schema(schema)
         self.assertEqual(schema["properties"]["schema_name"]["const"], "execution_backtest_report")
-        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.3.0")
+        self.assertEqual(schema["properties"]["schema_version"]["const"], "1.4.0")
         self.assertIn("contract remains unfrozen", schema["description"])
         self.assertFalse(schema["additionalProperties"])
         self.assertEqual(
@@ -66,6 +66,7 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
                 "position_sizing",
                 "portfolio_circuit_breaker",
                 "cooldown",
+                "candidate_semantics",
                 "event_log",
             ],
         )
@@ -97,6 +98,19 @@ class ExecutionBacktestReportSchemaTest(unittest.TestCase):
         position_sizing = assumptions["properties"]["position_sizing"]
         self.assertEqual(position_sizing["properties"]["capital_basis"]["enum"], ["bucket_capital"])
         self.assertIn("bucket_ceiling_pct", position_sizing["required"])
+
+        candidate_semantics = assumptions["properties"]["candidate_semantics"]
+        self.assertEqual(candidate_semantics["properties"]["candidate_gate"]["const"], "legacy_rule6_hard_veto")
+        self.assertFalse(candidate_semantics["properties"]["m67_semantics_aligned"]["const"])
+        self.assertFalse(candidate_semantics["properties"]["production_proxy"]["const"])
+        differing_rules = candidate_semantics["properties"]["differing_rules"]
+        self.assertEqual(differing_rules["minItems"], 2)
+        self.assertEqual(differing_rules["maxItems"], 2)
+        self.assertTrue(differing_rules["uniqueItems"])
+        self.assertEqual(
+            [item["contains"]["const"] for item in differing_rules["allOf"]],
+            ["overheat", "chasing_high"],
+        )
 
     def test_lineage_string_lists_are_non_empty(self) -> None:
         schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))

@@ -165,6 +165,38 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
         self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
 
+    def test_account_operator_entrypoints_require_generated_bundle(self) -> None:
+        # R7: active operator surfaces must not teach a bare account-state file as -Account input.
+        surfaces = {
+            "runners/weekly_screening.ps1": (
+                "a_short_account_bundle",
+                "a_short_account_state_from_manual_tables.py",
+            ),
+            "state/a_short/README.md": (
+                "a_short_account_bundle",
+                "a_short_account_state_from_manual_tables.py",
+            ),
+            "skills/a_short_analysis/SKILL.md": (
+                "a_short_account_bundle",
+                "a_short_account_state_from_manual_tables.py",
+            ),
+            "runners/a_short_weekly_pipeline.py": ("a_short_account_bundle",),
+            "runners/a_short_m67_render.py": ("a_short_account_bundle",),
+            "runners/README.md": ("a_short_account_bundle",),
+            "docs/a_short_account_state_manual_tables_4_3.md": ("a_short_account_bundle",),
+            "docs/a_short_holdings_in_m67_design.md": ("a_short_account_bundle",),
+            "docs/CURRENT.md": ("a_short_account_bundle",),
+        }
+        for relative, required_tokens in surfaces.items():
+            text = (ROOT / relative).read_text(encoding="utf-8")
+            self.assertNotIn(
+                "account_state.json",
+                text,
+                f"{relative} still teaches a bare account state JSON as an operator input",
+            )
+            for token in required_tokens:
+                self.assertIn(token, text, f"{relative} omits bundle workflow token {token!r}")
+
     def test_m67_stage_exactly_forwards_optional_confirmation_files(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("[string]$RegulatoryConfirmations", text)
