@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-20 — Claude Code 独立审查 A-short codex_r1.md 第2刀（R4/R10 持仓分区互斥出口 + 逐票对账警告共享渲染）PASS → landed onto master (af390a64)
+
+- **Verdict/Action**: 独立复审 codex_r1.md 第2刀（Codex db32e5f2）PASS，按第1刀（R9）先例 cherry-pick 到 master（af390a64，仅 6 个 a_short 文件）。分区以账户快照∩有效候选池按 `ts_code` 去重、互斥且穷尽：有效候选留一行（持仓则标 `egs_candidate_with_position`）、非候选池持仓走 holding、候选价格隔离的真实持仓进 `holdings_manual_review`；`candidate_exclusion_codes` 不再混入 `cand_codes`；覆盖不变量保证每个持仓代码恰好落 `reports` 或 `manual_review` 一次；R10 逐票对账警告抽出共享 `_consistency_warning_line`，候选卡与 holding 卡共用、无重复渲染。
+- **Required**: 无。
+- **Verify**: review-evidence:4c2fd703c2ac；cherry-pick 为 3-way 合并叠加在已并 P2 first cut 之上，net-diff vs HEAD 逐文件确认只含已复审 R4/R10 delta（无游离 hunk）；effect_contract 三个 predicate 哈希 + weekly_report.schema 输出哈希按合并后 on-disk 文件重算，`static_contract_error()`→None；focused：`test_a_short_effect_contract` + `test_a_short_holdings_in_m67` = 52 OK，master pre-commit hook 跑 holdings 14 OK + `test_a_short_weekly_pipeline` 35 OK（R4 覆盖不变量 / manual-review 路由回归）；`py_compile` OK。按用户指令未跑全量。独立对抗 agent（worktree 隔离）CLEAR。
+- **Next**: 第3刀（Runtime policy 单一真相源，R6）待排。
+
 ## 2026-07-20 — Claude Code landed US-short model-paper 刀1（design §12.3 + engine/store 地基）onto master
 
 - **Verdict/Action**: 把已复审 PASS 的 US-short model_paper_track 刀1 作为"最近的单独切片"land 到 master：`engine/us_short_model_paper_portfolio.py`（纯状态迁移）+ `_store`（私密事务）+ 5 closed-world schema + 3 test（27 OK）+ 设计 §12.3 / §18.1 #31·#32 + register 2 条。wt/us-short 其余提交（result-linkage cut1+2 等）master 已有且更全（cut3/cut4），故不整分支 merge、只 land 这一净新切片。
