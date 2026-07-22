@@ -57,6 +57,9 @@ from engine.a_short_observability import safe_exception_summary  # noqa: E402
 
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
+_PORTFOLIO_RISK_POLICY = _RUNTIME_CONFIGURATION["m67"]["portfolio_risk"]
+SMALL_FLOAT_MV_RMB = _PORTFOLIO_RISK_POLICY["small_float_mv_rmb"]
+HIGH_RISK_HOLDING_CAP_MULTIPLIER = _PORTFOLIO_RISK_POLICY["high_risk_holding_cap_multiplier"]
 
 SCHEMA_NAME = "a_short_weekly_report"
 SCHEMA_VERSION = "1.0.0"
@@ -844,7 +847,7 @@ def _holding_adds_portfolio_risk(fact: dict, summary: dict) -> bool:
     if (by_factor.get("large_index_component_pct") or {}).get("over_threshold") and fact.get("is_large_index_component"):
         return True
     return bool((by_factor.get("small_float_mv_pct") or {}).get("over_threshold")
-                and isinstance(fact.get("circ_mv_rmb"), (int, float)) and fact["circ_mv_rmb"] < 8_000_000_000.0)
+                and isinstance(fact.get("circ_mv_rmb"), (int, float)) and fact["circ_mv_rmb"] < SMALL_FLOAT_MV_RMB)
 
 
 def _apply_portfolio_risk_results(reports: list, context: dict, as_of: str) -> dict:
@@ -1079,8 +1082,11 @@ def _validate_portfolio_risk(weekly: dict) -> None:
             raise ValueError(f"{code} portfolio manual review lacks missing fields")
     summary = risk["summary"]
     if risk.get("status") == "factor_resonance_high_risk":
-        if summary.get("daily_manual_review_required") is not True or summary.get("holding_single_position_cap_multiplier") != 0.8:
-            raise ValueError("portfolio high-risk status must require daily review and 20% holding-cap reduction")
+        if (summary.get("daily_manual_review_required") is not True
+                or summary.get("holding_single_position_cap_multiplier") != HIGH_RISK_HOLDING_CAP_MULTIPLIER):
+            reduction_pct = (1.0 - HIGH_RISK_HOLDING_CAP_MULTIPLIER) * 100.0
+            raise ValueError("portfolio high-risk status must require daily review and "
+                             f"{reduction_pct:g}% holding-cap reduction")
     if risk.get("status") == "manual_review_required" and not summary.get("missing_fields"):
         raise ValueError("portfolio manual-review status lacks missing facts")
 

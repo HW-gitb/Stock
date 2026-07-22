@@ -2,20 +2,28 @@
 from __future__ import annotations
 
 import copy
+import importlib.util
+import json
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_portfolio_risk import (  # noqa: E402
+    HIGH_RISK_HOLDING_CAP_MULTIPLIER,
     build_context, evaluate_candidate, commit_candidate, final_summary, fact_from_normalized,
 )
+from engine.a_short_runtime_config import load_runtime_configuration  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from runners.a_short_weekly_pipeline import (  # noqa: E402
-    _fetch_portfolio_risk_fact_overrides, build_weekly_report, validate_weekly_report,
+    _fetch_portfolio_risk_fact_overrides, _holding_adds_portfolio_risk,
+    build_weekly_report, validate_weekly_report,
 )
 from tests.test_a_short_weekly_pipeline import (  # noqa: E402
     AS_OF, GEN, _feed, _normalized, _sized_lineage,
@@ -165,7 +173,7 @@ class PortfolioRiskPureTests(unittest.TestCase):
         summary = final_summary(ctx)
         self.assertEqual(summary["status"], "factor_resonance_high_risk")
         self.assertTrue(summary["daily_manual_review_required"])
-        self.assertEqual(summary["holding_single_position_cap_multiplier"], 0.8)
+        self.assertEqual(summary["holding_single_position_cap_multiplier"], HIGH_RISK_HOLDING_CAP_MULTIPLIER)
 
     def test_provider_empty_endpoint_is_unverified_not_silently_zero(self):
         class Frame:
@@ -195,6 +203,93 @@ class PortfolioRiskPureTests(unittest.TestCase):
         fact = _fetch_portfolio_risk_fact_overrides(Provider(), AS_OF, ["600000.SH"])["600000.SH"]
         self.assertIsNone(fact["circ_mv_rmb"])
         self.assertEqual(fact["source"], "tushare:daily_basic+margin_detail+hk_hold+index_member")
+
+
+class PortfolioRiskRuntimePolicyTests(unittest.TestCase):
+    @staticmethod
+    def _mutated_configuration():
+        """Build a hermetic 80亿→60亿、0.8→0.7 policy snapshot."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            shutil.copytree(ROOT / "presets", root / "presets")
+            policy_path = root / "presets" / "a_short_m67_runtime_policy_20260715.json"
+            payload = json.loads(policy_path.read_text(encoding="utf-8"))
+            portfolio = payload["portfolio_risk"]
+            portfolio["small_float_mv_rmb"] = 6_000_000_000.0
+            portfolio["high_risk_holding_cap_multiplier"] = 0.7
+            policy_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            return load_runtime_configuration(root=root)
+
+    @staticmethod
+    def _load_consumer(rel: str, module_name: str, configuration: dict):
+        spec = importlib.util.spec_from_file_location(module_name, ROOT / rel)
+        if spec is None or spec.loader is None:
+            raise RuntimeError(f"cannot load isolated consumer {rel}")
+        module = importlib.util.module_from_spec(spec)
+        with patch("engine.a_short_runtime_config.load_runtime_configuration", return_value=configuration):
+            spec.loader.exec_module(module)
+        return module
+
+    def _high_risk_weekly(self):
+        first = _normal("000001.SZ", "bank", held_shares=20_000)
+        second = _normal("600000.SH", "tech", held_shares=20_000)
+        facts = {
+            "000001.SZ": _facts("000001.SZ", "bank", north=20.0, margin=12.0),
+            "600000.SH": _facts("600000.SH", "tech", north=20.0, margin=12.0),
+        }
+        positions = [
+            {"ts_code": "000001.SZ", "shares": 20_000, "avg_cost": 2.7,
+             "entry_date": "20260601", "stop_loss": 2.5},
+            {"ts_code": "600000.SH", "shares": 20_000, "avg_cost": 2.7,
+             "entry_date": "20260601", "stop_loss": 2.5},
+        ]
+        return build_weekly_report([first, second], AS_OF, GEN, run_lineage=_sized_lineage(),
+                                   available_cash=1_000_000.0, portfolio_fact_overrides=facts,
+                                   account_positions=positions)
+
+    def test_isolated_policy_mutant_reloads_all_portfolio_consumers(self):
+        configuration = self._mutated_configuration()
+        portfolio = self._load_consumer("engine/a_short_portfolio_risk.py", "_portfolio_policy_mutant", configuration)
+        weekly = self._load_consumer("runners/a_short_weekly_pipeline.py", "_weekly_policy_mutant", configuration)
+
+        self.assertEqual(portfolio.SMALL_FLOAT_MV_RMB, 6_000_000_000.0)
+        self.assertEqual(portfolio.HIGH_RISK_HOLDING_CAP_MULTIPLIER, 0.7)
+        self.assertNotEqual(configuration["lineage"]["configuration_fingerprint"],
+                            load_runtime_configuration()["lineage"]["configuration_fingerprint"])
+
+        small_float_breach = {
+            "status": "factor_resonance",
+            "industry_exposures": [],
+            "factor_exposures": [{"factor": "small_float_mv_pct", "over_threshold": True}],
+        }
+        fact = {"circ_mv_rmb": 7_000_000_000.0}
+        self.assertTrue(_holding_adds_portfolio_risk(fact, small_float_breach))
+        self.assertFalse(weekly._holding_adds_portfolio_risk(fact, small_float_breach))
+
+        first = _normal("000001.SZ", "bank", held_shares=20_000)
+        second = _normal("600000.SH", "tech", held_shares=20_000)
+        context = portfolio.build_context([first, second], AS_OF, fact_overrides={
+            "000001.SZ": _facts("000001.SZ", "bank", north=20.0, margin=12.0),
+            "600000.SH": _facts("600000.SH", "tech", north=20.0, margin=12.0),
+        })
+        summary = portfolio.final_summary(context)
+        self.assertEqual(summary["status"], "factor_resonance_high_risk")
+        self.assertEqual(summary["holding_single_position_cap_multiplier"], 0.7)
+        self.assertIn("小流通市值(<60亿元)",
+                      next(row[1] for row in portfolio._FACTOR_SPECS if row[0] == "small_float_mv_pct"))
+        self.assertIn("下调30%", summary["reasons"][0])
+
+        report = self._high_risk_weekly()
+        self.assertEqual(report["portfolio_risk"]["status"], "factor_resonance_high_risk")
+        report["portfolio_risk"]["summary"] = copy.deepcopy(summary)
+        report["run_lineage"]["runtime_configuration"] = copy.deepcopy(configuration["lineage"])
+        weekly.validate_runtime_configuration_lineage = lambda lineage: (
+            None if lineage == configuration["lineage"] else (_ for _ in ()).throw(ValueError("mutant lineage mismatch"))
+        )
+        weekly.validate_weekly_report(report, _feed())
+        markdown = render_weekly_markdown(report)
+        self.assertIn("小流通市值(<60亿元)", markdown)
+        self.assertIn("下调30%", markdown)
 
 
 class PortfolioRiskM67IntegrationTests(unittest.TestCase):

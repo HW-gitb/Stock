@@ -408,15 +408,15 @@
     "A-EGS/egs_main.py": "a5cca1860438644259b25894c449511fac302d262fd8480a5d40dfcee8b48cbc",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "909b1e4911b975bf4ce2eed5afc4713595c4e1299c6466bc7e334c0b93608970",
-    "runners/a_short_weekly_pipeline.py": "c6033f0ae0faf15ee94667c50758591e88af15976a3077a0a4e462749bfa70dd",
+    "runners/a_short_weekly_pipeline.py": "a5a9c5bbcb0d3a064ddc172cafa4ac8e31a15f69acefa3c2ffef55cf33e89655",
     "runners/a_short_m67_render.py": "472c2bd0abb870b90dae3a6665b7e650f5cffbe9ef8bc40ce57c90bb18a44e37",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
-    "engine/a_short_effect_contract.py": "3f32e734c47fe84eb01d403cc3343cee2d427c83c3359cc0bcdd2df37b171af5"
+    "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
   },
   "runtime_constants_sha256": {
     "A-EGS/egs_main.py": "e27a1c982e33c98df8038d881a82ff5d0f0125ab5ca2395857d8746c4ba5f8b0",
     "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
-    "engine/a_short_portfolio_risk.py": "0e49fe267566d8ee2608fb99ac3cbd37c1ddaae027633d791a194fc2e38761ae"
+    "engine/a_short_portfolio_risk.py": "d823756ca1142d648747401ad750c53a2439bcc3cbaaddf0521ac8eafb3dbd94"
   },
   "runtime_policy_paths_sha256": "a164e3baffe8bcb8f82d07549ffc343213e9832f129178527113abc55bfcca53",
   "runtime_policy_sha256": {
@@ -428,7 +428,7 @@
     "schemas/a_short_screening_threshold_governance.schema.json": "6a517050ead73ebb4d939c236224d3776fc5be1ff3dc67453303c7329f276217",
     "schemas/a_short_m67_runtime_policy.schema.json": "682f1e490a20f4b30186bf50431ae19d5d03ab7aea3314f652f70d0d62bebf00"
   },
-  "runtime_policy_leaf_readers_sha256": "9a2c54dd61df5518fb62f18445aebe3ed78cfea423e51672d4a454f43c07288e",
+  "runtime_policy_leaf_readers_sha256": "bebccc98eff1eeb86ec0e11990dd3543e982c647becfb069d61b35e11d28cb09",
   "runtime_policy_bindings": [
     {
       "id": "screening_thresholds",
@@ -466,9 +466,13 @@
       "id": "portfolio_risk_thresholds",
       "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
       "source_prefixes": [
-        "portfolio_risk"
+        "portfolio_risk.same_sw_l2_threshold_pct",
+        "portfolio_risk.northbound_threshold_pct",
+        "portfolio_risk.margin_threshold_pct",
+        "portfolio_risk.large_index_threshold_pct",
+        "portfolio_risk.small_float_mv_threshold_pct"
       ],
-      "source_paths_sha256": "c10f308fc2e07dac98c289123a75910f71949cec479eb0b2d8ef7089e56e9c60",
+      "source_paths_sha256": "992534e67ef7b1619c31178d28269198facfffd4865cd14cfa9021730f330d1d",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.portfolio_risk",
@@ -477,6 +481,25 @@
       ],
       "consumer_refs": [
         "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY"
+      ]
+    },
+    {
+      "id": "portfolio_risk_runtime_consumers",
+      "policy_path": "presets/a_short_m67_runtime_policy_20260715.json",
+      "source_prefixes": [
+        "portfolio_risk.small_float_mv_rmb",
+        "portfolio_risk.high_risk_holding_cap_multiplier"
+      ],
+      "source_paths_sha256": "428e55f19f11d30e3b64d852ee477f3e85cced9472bf189b8b902142a9d214d0",
+      "policy": "must_affect_result",
+      "terminal_surfaces": [
+        "weekly.portfolio_risk risk action and high-risk cap",
+        "weekly portfolio-risk validator",
+        "weekly JSON and Markdown portfolio-risk labels"
+      ],
+      "consumer_refs": [
+        "engine/a_short_portfolio_risk.py imports _PORTFOLIO_POLICY",
+        "runners/a_short_weekly_pipeline.py imports _PORTFOLIO_RISK_POLICY"
       ]
     },
     {

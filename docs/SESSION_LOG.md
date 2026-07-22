@@ -179,6 +179,37 @@
 - **Verify**: 目标闭环包 411 OK（含两轮 pipeline：首次私有状态播种→下一轮 TP1=`减仓` 10 股且未伪造已执行）；no-dangling/report/action-table 201 OK；schema/contract/renderer 99 OK；doc process 60 OK；`py_compile`、JSON parse、`git diff --check` OK。`discover -s tests -p test_us_short*.py` 在 120 秒仅输出通过点位后超时，未作为通过证据。
 - **Pre-Codex self-review**: A：覆盖 TP1/TP2/事件/止损、TP1 已完成、少于 1 股、成本缺失、状态不可信、首次播种和不产生加仓；B：核对 action→价格映射、机器记录、action table、周报和私有写入同一 `action_proposal`；C：加“建议不等于成交”、TP1 不重复和 0 股禁止回归；D：无自然语言分类；E：只更新 US-short 权威设计与本交接，不改 CURRENT；F：主线程按 checklist 自审（当前协作限制不启用子 agent），固定包集中运行并完成最终 diff/编码检查。
 - **Next**: Claude Code：仅审 US-short 结果联动第一刀；PASS 后提交本切片。
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第三刀 R6：runtime portfolio-policy 单一真相源；c237 已提交）
+
+- **Verdict/Action**: PASS + 提交（c237 树 `db32e5f2`=第2刀 之上，7 文件）。忠实实现方案且**行为等价的 literal-dedup 重构**：`small_float_mv_rmb`/`high_risk_holding_cap_multiplier` 从同一 `load_runtime_configuration()` 校验快照流入 engine `_PORTFOLIO_POLICY`(portfolio_risk) 与 weekly `_PORTFOLIO_RISK_POLICY`；`_holding_adds_portfolio_risk`(小流通阈值)、`_validate_portfolio_risk`(cap)、`final_summary`(cap+标签)、JSON·MD 标签全去死值动态生成；新 effect-contract binding `portfolio_risk_runtime_consumers` 绑两 leaf 到两消费者；portfolio_risk 7 key = 5(thresholds binding)+2(runtime_consumers binding) 完整无孤儿。
+- **零静默改动实证**: loader `small_float_mv_rmb=8e9`==删掉的 `8_000_000_000.0`、`high_risk_holding_cap_multiplier=0.8`==删掉的 `0.8`；动态标签 `_format_rmb_yi(8e9)`="小流通市值(<80亿元)"、`_high_risk_cap_reduction_pct()`="20"→"下调20%"==旧死标签；engine cap==weekly cap（同 loader 精确相等，validator 不误 raise）。整类扫描 `_candidate_increases_high_risk`(已消失)/`8e9`/`80亿`/`0.8`/`20%` 硬编码残留在 engine·runners·A-EGS **全 0**。mutant 用 temp-dir 拷贝、不碰正式 policy。
+- **Required**: 无。
+- **Optional（非阻断、非 material）**: 静态守卫 `_runtime_portfolio_policy_literal_violations` 对 `high_risk_holding_cap_multiplier` 的 value 消费者有盲点——validator `summary.get(... ) != HIGH_RISK...` 走 `.get()`(Call 非 Subscript)、守卫 `reads_field` 认不出；engine `final_summary` `0.8 if high` 静态层完全不检测（对抗探针实证：weekly validator 再写死→literal 守卫 miss〔仅被 hash 门 "decision predicate changed" 兜〕、engine final_summary 再写死→`static_contract_error()=None`）。三种再写死均被 mutant 测试 `test_isolated_policy_mutant_reloads_all_portfolio_consumers` 抓（断言 cap=0.7 / validator 接受 0.7 / reasons 下调30%）→当前行为正确、回归有行为测试兜底，仅"静态守卫防重写死"声明对此 leaf 不完整。修法：守卫 `reads_field` 加认 `.get(field)` Call + 检 `final_summary` cap value；或接受 mutant 测试为足。
+- **Verify**: 亲跑聚焦验收包 `test_a_short_portfolio_risk`(含 mutant)+`test_a_short_effect_contract`(含双守卫测试 StaticTests+RuntimeTests)+`test_a_short_runtime_configuration`+`test_a_short_m67_render` = **61 OK**；`static_contract_error()=None`、`git diff --check` exit 0。未跑全量 `test_a_short*`（proportional-to-change）：本刀值实证==policy、行为等价、blast radius 恰为上述消费者+contract+标签（phase5/backtest 不消费两 leaf/标签）；weekly 两改函数已被 mutant 测试直接调用（`weekly._holding_adds_portfolio_risk`+`weekly.validate_weekly_report`→`_validate_portfolio_risk`）+import 期模块级加载已被 pack1 import 证过，故不另跑整个 `test_a_short_weekly_pipeline` 模块。未起独立对抗 agent：A-short 行为等价重构、无 provider/secret/新 fail-closed 门，按比例整读被消费函数体+亲跑对抗探针（值相等/守卫盲点/整类残留）已足，声明此覆盖边界。review-evidence:not_available（全真实工具输出）。
+- **Next**: Codex：Pass（第三刀已审已提交 c237）。cherry-pick→master 待 master 树 clean（现有并发窗 US-short 未提交活，勿在脏 master 落）。Optional 简单可打包顺清；勿扩 codex_r1.md 第4–6 刀。
+
+## 2026-07-22 - Codex repair (A-short R6/P2 third blade: runtime portfolio-policy single source)
+- **Verdict/Action**: small_float_mv_rmb and high_risk_holding_cap_multiplier now flow from the one validated M6.7 runtime-policy snapshot into portfolio risk, the weekly holding-add action, high-risk validator, and user-visible JSON/Markdown labels. The effect contract separately binds these two leaves to both concrete consumers; a static guard rejects renewed numeric checks or fixed 80亿/20% labels.
+- **Required**: Independent review before commit. This slice does not modify the formal policy JSON, account data, providers, ranking, or Phase 5 rules.
+- **Verify**: isolated 80亿→60亿 and 0.8→0.7 policy fixture reload proves risk action, holding cap, validator, JSON/Markdown labels, and runtime fingerprint move together; tests.test_a_short_portfolio_risk 12 OK; EffectContractStaticTests 17 OK; EffectContractRuntimeTests 3 OK; static_contract_error() is None; git diff --check clean.
+- **Pre-Codex self-review**: main-thread checklist fallback (delegation disabled): verified both result-shaping consumers read the loaded snapshot, the default formal policy remains untouched, 7-billion holding behavior flips only under the isolated 60-billion fixture, validator and rendered output consume the same changed summary, and source-mutation tests reject restored literals/labels.
+- **Next**: Claude Code: review
+
+## 2026-07-20 — Codex 修复（A-short R4/R10：第二刀持仓分区与逐票警告，待独立审查）
+
+- **Verdict/Action**: 周报以有效候选、普通持仓、候选价格隔离持仓建立互斥出口。真实持仓若因已证停牌或短历史被候选价格门隔离，必进私密 `holdings_manual_review`，不再混入 `cand_codes` 或消失；账户快照中的每个持仓代码在 `reports`/人工管理中恰好一次。该人工路径仍消费语义、新闻、除权和未来事件 advisory，但不生成系统持有/止损结论，也未改 P1–P5 公开对比轨。候选持仓的 `egs_candidate_with_position` 卡片与普通 holding 卡片复用同一对账警告渲染函数。
+- **Required**: 独立审查后再提交。联合相关模块包在 180 秒上限前跑出 89 个无失败项但未返回最终退出码，不能作为 PASS 证据；未改账户数据、交易阈值、选股/排名、provider 授权或 P1–P5。
+- **Verify**: R4/R10 定向 + 持仓集成/渲染 16 OK；覆盖不变量 validator 2 OK；`tests.test_a_short_m67_render` + holding render 37 OK；`tests.test_a_short_effect_contract` + `tests.test_a_short_runtime_configuration` 22 OK；`static_contract_error() is None`；`py_compile` 与 `git diff --check` clean。
+- **Pre-Codex self-review**: main-thread checklist fallback（delegation disabled）：A 覆盖有效候选持仓、非候选持仓、停牌/短历史价格隔离持仓、人工管理及两类逐票卡片；B 执行 `rg -n 'candidate_exclusion_codes|_exdiv_codes' ...`，0 hits；C 反向验证候选/持仓重复 landing 被拒、合法重叠只留一行；E 仅新增本条 live-state 交接。
+- **Next**: Claude Code：review
+
+## 2026-07-20 — Codex 修复（A-short R9：EGS qfq 价格真相，待独立审查）
+
+- **Verdict/Action**: `A-EGS/egs_main.py` 的全市场日线改为同日 `pro.daily` + provider-observed `adj_factor` 的 qfq OHLC；动量、MA10、跨日高低点/回撤、闪崩恢复和 Rule6 跨日价格判断只读 qfq，涨跌停、解禁分母和大宗交易折价仍读 raw。新缓存身份含 `qfq_as_of`、锚定因子和来源；缺因子、重复键、未来日期、非法 OHLC、旧 raw 缓存或篡改 qfq 缓存均 fail-closed。候选 `quote.close` 与同日 qfq bar 绑定，旧 raw 候选追踪账本不再复用。
+- **Required**: 独立审查后再提交。`discover -s tests -p 'test_a_short*.py'` 两次均未在等待窗口内给出最终退出码，不能作为全量 PASS 证据；本次未改生产账户、仓位、阈值或 provider 授权。
+- **Verify**: qfq/技术统计/Rule6 定向包 31 OK（1 skipped）；`tests/phase6/test_egs*.py` 71 OK（1 skipped）；`tests.test_a_short_effect_contract` 16 OK；`tests.test_a_short_runtime_configuration` 6 OK；`static_contract_error() is None`；`git diff --check` clean。
+- **Pre-Codex self-review**: main-thread checklist fallback（delegation disabled）：A 覆盖 raw/qfq、缓存、候选报价、Rule6、历史追踪全部消费出口；B 确认 EGS 不再读取旧 `daily_all_<as_of>` 缓存键；C 以缺/重/未来因子、除权跳变、篡改缓存和 raw/qfq 日期错配反向测试；E 仅新增本条 live-state 交接。
+- **Next**: Claude Code：review
 
 ## 2026-07-18 — Claude Code 修复 US-short A1 corporate-action fetch 两处硬化 Optional（用户命修，自审 PASS，提交 master）
 

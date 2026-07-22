@@ -23,11 +23,20 @@ SMALL_FLOAT_MV_THRESHOLD_PCT = _PORTFOLIO_POLICY["small_float_mv_threshold_pct"]
 SMALL_FLOAT_MV_RMB = _PORTFOLIO_POLICY["small_float_mv_rmb"]
 HIGH_RISK_HOLDING_CAP_MULTIPLIER = _PORTFOLIO_POLICY["high_risk_holding_cap_multiplier"]
 
+
+def _format_rmb_yi(value: float) -> str:
+    return f"{float(value) / 100_000_000.0:g}亿元"
+
+
+def _high_risk_cap_reduction_pct() -> str:
+    return f"{(1.0 - HIGH_RISK_HOLDING_CAP_MULTIPLIER) * 100.0:g}"
+
+
 _FACTOR_SPECS = (
     ("northbound_holding_ratio_pct", "北向持股比例", NORTHBOUND_THRESHOLD_PCT),
     ("margin_balance_to_float_mv_pct", "融资余额/流通市值", MARGIN_THRESHOLD_PCT),
     ("large_index_component_pct", "50ETF/沪深300成分股", LARGE_INDEX_THRESHOLD_PCT),
-    ("small_float_mv_pct", "小流通市值(<80亿元)", SMALL_FLOAT_MV_THRESHOLD_PCT),
+    ("small_float_mv_pct", f"小流通市值(<{_format_rmb_yi(SMALL_FLOAT_MV_RMB)})", SMALL_FLOAT_MV_THRESHOLD_PCT),
 )
 _REQUIRED_FACT_FIELDS = (
     "sw_l2_key",
@@ -332,7 +341,7 @@ def final_summary(context: dict) -> dict:
         "industry_exposures": industries, "factor_exposures": factors, "missing_fields": [],
         "daily_manual_review_required": high,
         "holding_single_position_cap_multiplier": HIGH_RISK_HOLDING_CAP_MULTIPLIER if high else 1.0,
-        "reasons": (["两项及以上因子超线：组合因子共振高危，持仓单只上限临时下调20%，每日人工复核"] if high
+        "reasons": ([f"两项及以上因子超线：组合因子共振高危，持仓单只上限临时下调{_high_risk_cap_reduction_pct()}%，每日人工复核"] if high
                     else (["存在单项因子超线：不新增同方向暴露"] if breaches
                           else (["存在SW L2集中度超线：不新增同业暴露"] if over_industries
                                 else ["组合集中度与四项因子均未超线"]))),
