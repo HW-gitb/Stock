@@ -32,6 +32,9 @@ class ReviewContextTieringTests(unittest.TestCase):
         self.assertIn("全量", text)
         # ④ the independent agent is gated, not a default
         self.assertIn("agent", text)
+        # ⑤ scope tests to changed symbols, not changed files (no whole-module tax)
+        self.assertIn("全模块税", text)
+        self.assertIn("改动的函数", text)
 
     def test_review_prompt_detection_unchanged(self):
         gate = _load_review_gate()

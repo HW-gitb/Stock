@@ -13,6 +13,11 @@
 - **Required**: 无。1 Optional P3（`减仓` 同 bar tp1+tp2 略高估）见 register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`。
 - **Verify**: master 亲跑 model-paper 3 模块 = 27 OK；doc-gov 守卫绿；10 文件全新增、无既有代码改。评审细节单源见 register。
 - **Next**: Codex：刀3（offline capstone 双账户分支）读 register + 桌面 §6 刀3；固定上限一键另条 register `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`。
+## 2026-07-22 — Claude Code 收紧 verification-tiering 硬提醒（prompt-hook `_review_context` 加规则⑤：测试范围跟改动符号走不跟文件走）
+
+- **机制**: 给 `.tools/claude_review_gate.py::_review_context()`(每 审查 prompt 自动注入)加规则⑤——测试范围跟「改动的**函数/符号**」走、不跟「改动的**文件**」走:已选/已跑的 targeted 测试若已直接调用该改动函数即为覆盖、别再加跑该文件整测试模块(全模块税);也别在第一个测试包结果回来前投机并起第二个全模块包。堵本会话第三刀 R6 审查里的复发浪费(weekly 只改 `_holding_adds_portfolio_risk`/`_validate_portfolio_risk` 两函数、mutant 测试已 import+调用二者,却又反射式并起整个 `test_a_short_weekly_pipeline` 的几百无关用例)。同步收紧 memory `feedback_verification_proportional_to_change`。
+- **Verify**: `tests/test_review_tiering_enforcement.py` 6 OK(新增锁 `全模块税`/`改动的函数` 两关键词、防 ⑤ 静默回退);end-to-end `handle_prompt_hook('审查…')` 注入 out 实含 ⑤。
+- **Next**: 无。本树(a-short-3)hook 即刻生效;master 及其余树的 `_review_context` 副本待随常规 merge 同步。
 
 ## 2026-07-20 — Claude Code 独立审查 PASS（A-short R9：EGS qfq 价格真相；cherry-pick 落 master 7e03441c）
 
