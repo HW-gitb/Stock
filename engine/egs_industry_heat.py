@@ -163,6 +163,83 @@ def selection_diff(df: pd.DataFrame, base_weights: dict, cand_weights: dict) -> 
 
 
 COMPARISON_TOP_N = 15           # 每 variant 输出的 top-N 清单长度(对齐 EGS watch_n;comparison-only)
+PROFILE_WATCH_POOL_TOP_N = 15   # P5 唯一正式观察池的固定槽位数
+
+
+def select_profile_watch_pool(scored_df: pd.DataFrame, top_n: int = PROFILE_WATCH_POOL_TOP_N) -> pd.DataFrame:
+    """Return the one governed Tier1 watch-pool selection for a scored profile.
+
+    This is the production selection shape extracted from ``score_l5``: only
+    Tier1 rows, deterministic score ordering, the existing oversized-L2
+    truncation, then the existing incremental L1/L2 concentration checks.
+    It deliberately leaves a short pool short rather than filling it with
+    Tier2 rows.  P5 must use this exact function for production balanced and
+    every comparison profile.
+    """
+    if isinstance(top_n, bool) or not isinstance(top_n, int) or top_n <= 0:
+        raise ValueError("top_n 必须为正整数")
+    required = {"tier", "final_score", "l4_score", "pct_20d_n", "l1_name", "l2_name"}
+    missing = sorted(required - set(scored_df.columns))
+    if missing:
+        raise ValueError(f"profile watch pool 缺少字段: {','.join(missing)}")
+
+    tier1 = scored_df[scored_df["tier"] == "Tier1"].sort_values(
+        ["final_score", "l4_score", "pct_20d_n"], ascending=[False, False, False]
+    )
+
+    # Keep the existing production rule byte-for-byte in behavior: a very
+    # large L2 first releases room for other industries before concentration
+    # selection begins.
+    l2_counts = tier1["l2_name"].value_counts()
+    overflow = set(l2_counts[l2_counts > 20].index)
+    if overflow:
+        l2_seen: dict[object, int] = {}
+        kept_rows = []
+        for _, row in tier1.iterrows():
+            l2 = row["l2_name"]
+            count = l2_seen.get(l2, 0)
+            if l2 in overflow and count >= 15:
+                continue
+            kept_rows.append(row)
+            l2_seen[l2] = count + 1
+        tier1 = pd.DataFrame(kept_rows, columns=scored_df.columns)
+
+    selected_rows = []
+    l1_counts: dict[object, int] = {}
+    l2_selected_counts: dict[object, int] = {}
+    for _, row in tier1.iterrows():
+        l1, l2 = row["l1_name"], row["l2_name"]
+        l1_key = l2 if l1 == UNKNOWN_INDUSTRY else l1
+        denominator = max(len(selected_rows), 1)
+        if l1_counts.get(l1_key, 0) / denominator > 0.4:
+            continue
+        if l2_selected_counts.get(l2, 0) / denominator > 0.3:
+            continue
+        selected_rows.append(row)
+        l1_counts[l1_key] = l1_counts.get(l1_key, 0) + 1
+        l2_selected_counts[l2] = l2_selected_counts.get(l2, 0) + 1
+
+    return pd.DataFrame(selected_rows, columns=scored_df.columns).head(top_n)
+
+
+def _watch_pool_rows(scored_df: pd.DataFrame) -> list[dict]:
+    """Render a P5 selector result without altering its selection semantics."""
+    rows = []
+    for _, row in scored_df.iterrows():
+        rows.append({
+            "ts_code": str(row.get("ts_code", row.name)),
+            "final_score": float(row["final_score"]),
+            "l4_score": float(row["l4_score"]),
+            "pct_20d_n": float(row["pct_20d_n"]),
+            "tier": str(row["tier"]),
+            "l1_name": str(row["l1_name"]),
+            "l2_name": str(row["l2_name"]),
+            "industry_heat_score": (None if pd.isna(row.get("industry_heat_score"))
+                                    else float(row["industry_heat_score"])),
+            "overheat_flag": bool(row.get("overheat_flag", False)),
+            "chasing_high": bool(row.get("chasing_high", False)),
+        })
+    return rows
 
 
 def _profile_top_n(df: pd.DataFrame, weights: dict, top_n: int) -> list:
@@ -197,6 +274,12 @@ def build_weight_comparison(full_df: pd.DataFrame, gov_path: str = GOV_PATH,
     legacy_vs = {name: selection_diff(df, legacy_w, w)
                  for name, w in gov["profiles"].items() if name != "legacy"}
     variant_top_n = {name: _profile_top_n(df, w, top_n) for name, w in gov["profiles"].items()}
+    profile_watch_pool_top15 = {}
+    for name, weights in gov["profiles"].items():
+        scored, _ = final_score_and_tier(df, weights)
+        profile_watch_pool_top15[name] = _watch_pool_rows(
+            select_profile_watch_pool(scored, top_n=PROFILE_WATCH_POOL_TOP_N)
+        )
     return {
         "schema_name": "egs_weight_comparison", "schema_version": "1.0.0",
         "as_of": (None if as_of is None else str(as_of)),
@@ -208,6 +291,13 @@ def build_weight_comparison(full_df: pd.DataFrame, gov_path: str = GOV_PATH,
                        "profile only; do NOT trade a non-active variant's list"),
             "top_n": top_n,
             "profiles": variant_top_n,
+        },
+        "profile_watch_pool_top15": {
+            "_label": ("P5 governed watch-pool selector output. It is the only profile-list shape "
+                       "allowed for future P5 evidence capture; it is comparison-only and cannot trade "
+                       "or alter the active profile."),
+            "top_n": PROFILE_WATCH_POOL_TOP_N,
+            "profiles": profile_watch_pool_top15,
         },
         "note": ("non-production cross-sectional Tier1 diff + per-profile top-N lists (no forward "
                  "returns); forward-return scoreboard + promotion auto-flag = register forward-item follow-up"),

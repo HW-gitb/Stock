@@ -54,7 +54,7 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         """M6.7 overlay must be the exact same batch as analysis_input candidates."""
         source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
         stage3_pos = source.index("tier1_final, cninfo_checked = stage3_ai_clearing")
-        watch_pos = source.index("watch_df  = top50.head(watch_n).copy()")
+        watch_pos = source.index("watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)")
         self.assertIn("_ov_pool = watch_df[[", source)
         overlay_pos = source.index("_ov_pool = watch_df[[")
 

@@ -116,7 +116,7 @@ from engine.a_short_observability import safe_exception_summary
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.egs_industry_heat import (
     compute_industry_heat_score, get_active_weights, final_score_and_tier,
-    write_weight_comparison, load_governance,
+    select_profile_watch_pool, write_weight_comparison, load_governance,
 )
 from engine.a_short_industry_theme import (
     classify_industry_trend, taxonomy_by_code, unavailable_theme_taxonomy,
@@ -4194,39 +4194,10 @@ def score_l5(df, sw_map):
             lambda r: _join_reasons([r.get("downgrade_reasons"), "esp_raw_non_positive"]), axis=1)
     df.loc[df["low_base_growth_flag"], "score_penalty_reasons"] = "esp_raw_cap_200"
 
-    tier1 = df[df["tier"] == "Tier1"].sort_values(
-        ["final_score", "l4_score", "pct_20d_n"],
-        ascending=[False, False, False]
-    )
-
-    # v7.3 第二级漏斗：单一 l2 行业 > 20 只时截断至15只，释放配额给其他行业递补
-    def _cap_l2(t1_df, cap=15, threshold=20):
-        l2_counts = t1_df["l2_name"].value_counts()
-        overflow  = set(l2_counts[l2_counts > threshold].index)
-        if not overflow: return t1_df
-        l2_seen = {}
-        keep = []
-        for _, row in t1_df.iterrows():
-            l2  = row["l2_name"]
-            cnt = l2_seen.get(l2, 0)
-            if l2 in overflow and cnt >= cap: continue
-            keep.append(row)
-            l2_seen[l2] = cnt + 1
-        return pd.DataFrame(keep)
-    tier1 = _cap_l2(tier1)
-
-    selected, l1c, l2c = [], {}, {}
-    for _, row in tier1.iterrows():
-        l1, l2 = row["l1_name"], row["l2_name"]
-        l1_key = l2 if l1 == "未知" else l1
-        n = max(len(selected), 1)
-        if l1c.get(l1_key, 0) / n > 0.4: continue
-        if l2c.get(l2,     0) / n > 0.3: continue
-        selected.append(row)
-        l1c[l1_key] = l1c.get(l1_key, 0) + 1
-        l2c[l2]     = l2c.get(l2,     0) + 1
-
-    top_df = pd.DataFrame(selected, columns=df.columns).head(CONF["top_n"])
+    # One governed selector serves production and all future P5 arms.  It
+    # preserves the prior Tier1/order/concentration behavior while preventing
+    # a comparison-only profile from silently using a different pool shape.
+    top_df = select_profile_watch_pool(df, top_n=CONF["top_n"])
     return df, top_df
 
 
@@ -4628,7 +4599,7 @@ def run_egs(backtest_mode=False, output_root=None):
 
     # ── Top 15 候选观察池 ─────────────────────────────────────────────────────
     watch_n   = CONF["watch_n"]
-    watch_df  = top50.head(watch_n).copy()
+    watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)
     watch_eligible_count = int(len(top50))
 
     # backtest 模式下，若 Tier1 候选不足 watch_n（常见于 esp 准入硬条件激活时），

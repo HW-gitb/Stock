@@ -1,5 +1,18 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 第一刀：统一观察池选择器 select_profile_watch_pool)
+- **Verdict/Action**: PASS(未提交/未 merge,按用户本轮指示)。P5a 从 `score_l5` 抽出的 `select_profile_watch_pool` 是忠实、行为保持的生产选股提取:Tier1+三键排序+L2>20→15+递进 L1≤0.4/L2≤0.3+`.head(top_n)` 与原内联逐行一致(`UNKNOWN_INDUSTRY="未知"` 核过、`df_full,top50=score_l5(df_l4)` 同源→新 `watch_df=select(df_full,15)`==旧 `top50.head(15)`,由 head-等价测试钉死);四臂+生产 balanced 共用同一函数,`variant_top_n` 降为非证据。effect_contract egs_main 用 AST 结构哈希已正确重钉(早先字节哈希 MISMATCH 是 CRLF/字节法误报)。
+- **Required**: 无(P5a selector)。旁记 pre-existing 非本刀 `R-ASHORT-RUNNERS-README-REGIME-RUNNER-DRIFT`(master 既存红 guard)+ 2 Optional(effect_contract 未钉 egs_industry_heat / 不变量测试偏自证+缺集中度用例),单源见 `system_risk_register.md`。
+- **Verify**: review-evidence:not_available(全真实工具输出)。整读提取缝+`趋势期` grep=0+`UNKNOWN_INDUSTRY="未知"`+`df_full` 同源;亲跑 egs 选股包 `test_egs_industry_heat`(26+新 selector 单测)+`phase6.test_egs_sw_industry_and_watch_pool_health`+`test_weekly_screening_guardrails`=54 OK,唯一失败 `test_runner_readme_documents_regime_stage` 经 `git show HEAD:` 核为 base 5fc45f3f 既存(非本刀);`test_a_short_effect_contract` 17 OK。按 rule 6 比例(忠实提取、变更符号被选股包覆盖)未起独立 agent、未跑全 a_short 量。
+- **Next**: Codex：Pass
+
+## 2026-07-22 — Codex 执行（A-short P5a 第一刀：统一观察池；待独立审查）
+
+- **Action**: 已从 `score_l5` 抽出唯一 `select_profile_watch_pool`：只留 Tier1、按正式三键排序、保留既有 L2 超量截断与递进 L1/L2 集中度规则、不足 15 不以 Tier2 补位。正式 `top50`、live `watch_df` 及 legacy/balanced/aggressive/theme_double 四臂的新增 `profile_watch_pool_top15` 全部复用它；旧 `variant_top_n` 保留为仅供查看的非证据清单。
+- **Required**: Claude Code 只审当前 P5a selector diff。此刀未建 P5 governance/schema、共享价格缓存调度、capture/settle/progress 或 P5b；不得宣称 P5 证据时钟启动，不得运行 provider 或真实 weekly。
+- **Verify**: `tests.test_egs_industry_heat` 26 OK（含 active balanced 与正式观察池同 universe、同成员、同顺序不变量）；受影响的 weekly 静态守卫 1 OK；`validate_static_contract()` OK。未运行 provider、真实 weekly 或历史回放。
+- **Next**: Claude Code：独立审查当前 A-short P5a selector 第一刀；PASS 后按流程提交，后续另刀才做缓存与 capture。
+
 ## 2026-07-20 — Claude Code 独立审查 A-short codex_r1.md 第2刀（R4/R10 持仓分区互斥出口 + 逐票对账警告共享渲染）PASS → landed onto master (af390a64)
 
 - **Verdict/Action**: 独立复审 codex_r1.md 第2刀（Codex db32e5f2）PASS，按第1刀（R9）先例 cherry-pick 到 master（af390a64，仅 6 个 a_short 文件）。分区以账户快照∩有效候选池按 `ts_code` 去重、互斥且穷尽：有效候选留一行（持仓则标 `egs_candidate_with_position`）、非候选池持仓走 holding、候选价格隔离的真实持仓进 `holdings_manual_review`；`candidate_exclusion_codes` 不再混入 `cand_codes`；覆盖不变量保证每个持仓代码恰好落 `reports` 或 `manual_review` 一次；R10 逐票对账警告抽出共享 `_consistency_warning_line`，候选卡与 holding 卡共用、无重复渲染。
