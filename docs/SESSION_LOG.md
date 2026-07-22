@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 采纳 Codex 一键模拟盘 spec 优化（同意 + 3 收紧）→ 落权威文档，路由 Codex 接线
+
+- **Verdict/Action**: 用户问"是否同意 Codex 对一键模拟盘方案的优化"。我亲验代码/设计后**同意全部 5 条方向 + 补 3 收紧**（加固非分歧），按分工把批准的设计落权威文档（§12.3 新增"一键操作路径" bullet + §18.1 #32 改 auto-derive + register 两条）；**代码接线交 Codex**、我复审。doc-only，未改业务代码、未提交、未跑 provider。
+- **诊断（亲验）**: 需求1设计本就对（§12.3 已锁"$100k 只播种一次 / NAV=cash+Σmark / NAV−100k=累计盈亏"），bug 在代码——`us_short_paper_one_click.py:86-96` 每 run 硬写空仓 $100k+不读 head_manifest；`us_short_weekly_capstone.py::default_pipeline()` 15 stage 无 model_paper 组合驱动。跨周引擎其实已建好且 correct（`us_short_model_paper_weekly.py` seed-once+成熟→结转→冻结）→ 缺的只是 last-mile 接线。需求2：一键 code 已 `auto_authorize_pass2_budget=True` 自动派生，Codex 区分（删"用户填的预算数字"、留 provider 限流/防无限重试）正确。
+- **3 收紧**: (R2) 五周验收=offline fixture 连跑、非等 5 真日历周；(R3) 每周账户输入取成熟后 adapter（结转 cash+持仓）、非硬写空仓；(R1) 留一个用户永不填的硬编码内部安全天花板（=免费档日上限~250）作 fail-closed 兜底 + 显式"一键命令=授权动作"、不放宽 §18.0 P0。下游（非本轮）：comparison-only NAV 口径待对齐（memory `project_us_short_comparison_nav_caliber_alignment`）。
+- **Required**: 无（本轮 doc-only）。接线 Required checklist 单源 = register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`（刀3/刀4 一键接线 6 条）+ `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`（§18.1 #32 refined）。
+- **Verify**: doc-only、无代码/测试改动；git status 未变（untracked model_paper WIP 未动）；设计/register 亲改并自检术语与既有 §12.3/#31/#32 一致。review-evidence:not_available。
+- **Next**: Codex：执行刀3/刀4 一键接线（读上述两条 register + 设计 §12.3 "一键操作路径" / §18.1 #32；跨周引擎已建，last-mile 接线非从头造）。
+
 ## 2026-07-20 — Claude Code landed US-short model-paper 刀1（design §12.3 + engine/store 地基）onto master
 
 - **Verdict/Action**: 把已复审 PASS 的 US-short model_paper_track 刀1 作为"最近的单独切片"land 到 master：`engine/us_short_model_paper_portfolio.py`（纯状态迁移）+ `_store`（私密事务）+ 5 closed-world schema + 3 test（27 OK）+ 设计 §12.3 / §18.1 #31·#32 + register 2 条。wt/us-short 其余提交（result-linkage cut1+2 等）master 已有且更全（cut3/cut4），故不整分支 merge、只 land 这一净新切片。
