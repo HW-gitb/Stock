@@ -408,7 +408,7 @@
     "A-EGS/egs_main.py": "a5cca1860438644259b25894c449511fac302d262fd8480a5d40dfcee8b48cbc",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "909b1e4911b975bf4ce2eed5afc4713595c4e1299c6466bc7e334c0b93608970",
-    "runners/a_short_weekly_pipeline.py": "a5a9c5bbcb0d3a064ddc172cafa4ac8e31a15f69acefa3c2ffef55cf33e89655",
+    "runners/a_short_weekly_pipeline.py": "a06d26acdb427bdc721771fb4ad8810f01cb561d42ef7c7cfa6c68742905e0ec",
     "runners/a_short_m67_render.py": "472c2bd0abb870b90dae3a6665b7e650f5cffbe9ef8bc40ce57c90bb18a44e37",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"

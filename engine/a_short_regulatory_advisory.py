@@ -16,6 +16,8 @@ from typing import Any
 
 SCHEMA_NAME = "a_short_regulatory_advisory_confirmation"
 SCHEMA_VERSION = "1.0.0"
+HOLDING_SCHEMA_NAME = "a_short_regulatory_holding_confirmation"
+HOLDING_SCHEMA_VERSION = "1.0.0"
 DECISIONS = frozenset({"confirmed_material", "confirmed_not_material", "needs_more_information"})
 EVENT_KEYS = ("source", "title", "category", "disclosure_date", "url_or_pdf", "risk_type", "severity")
 
@@ -37,17 +39,7 @@ def event_fingerprint(ts_code: str, event: dict[str, Any]) -> str:
     ).hexdigest()
 
 
-def validate_confirmation_document(payload: Any, as_of: str, candidate_digest: str) -> dict[tuple[str, str], dict[str, str]]:
-    """Validate the local manual-confirmation document after JSON-Schema validation."""
-    if not isinstance(payload, dict):
-        raise RegulatoryAdvisoryContractError("confirmation document must be an object")
-    if payload.get("schema_name") != SCHEMA_NAME or payload.get("schema_version") != SCHEMA_VERSION:
-        raise RegulatoryAdvisoryContractError("unsupported confirmation schema identity")
-    if str(payload.get("as_of")) != str(as_of):
-        raise RegulatoryAdvisoryContractError("confirmation as_of does not match weekly as_of")
-    if str(payload.get("candidate_digest")) != str(candidate_digest):
-        raise RegulatoryAdvisoryContractError("confirmation candidate_digest does not match analysis_input")
-
+def _validated_confirmation_records(payload: dict[str, Any]) -> dict[tuple[str, str], dict[str, str]]:
     mapped: dict[tuple[str, str], dict[str, str]] = {}
     for index, item in enumerate(payload.get("confirmations") or []):
         if not isinstance(item, dict):
@@ -75,6 +67,54 @@ def validate_confirmation_document(payload: Any, as_of: str, candidate_digest: s
         if key in mapped:
             raise RegulatoryAdvisoryContractError("duplicate confirmation for one official event")
         mapped[key] = {"decision": decision, "reviewed_at": reviewed_at, "note": note}
+    return mapped
+
+
+def validate_confirmation_document(payload: Any, as_of: str, candidate_digest: str) -> dict[tuple[str, str], dict[str, str]]:
+    """Validate a candidate-pool confirmation document after JSON-Schema validation."""
+    if not isinstance(payload, dict):
+        raise RegulatoryAdvisoryContractError("confirmation document must be an object")
+    if payload.get("schema_name") != SCHEMA_NAME or payload.get("schema_version") != SCHEMA_VERSION:
+        raise RegulatoryAdvisoryContractError("unsupported confirmation schema identity")
+    if str(payload.get("as_of")) != str(as_of):
+        raise RegulatoryAdvisoryContractError("confirmation as_of does not match weekly as_of")
+    if str(payload.get("candidate_digest")) != str(candidate_digest):
+        raise RegulatoryAdvisoryContractError("confirmation candidate_digest does not match analysis_input")
+    return _validated_confirmation_records(payload)
+
+
+def holding_universe_digest(positions: list[dict[str, Any]] | tuple[dict[str, Any], ...]) -> str:
+    """Fingerprint the exact sorted account-position universe without copying account facts."""
+    codes = [str(position.get("ts_code") or "") for position in positions if isinstance(position, dict)]
+    if len(codes) != len(positions) or not all(codes) or len(set(codes)) != len(codes):
+        raise RegulatoryAdvisoryContractError("holding universe must contain one non-empty ts_code per position")
+    return hashlib.sha256(
+        json.dumps(sorted(codes), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def validate_holding_confirmation_document(
+    payload: Any,
+    as_of: str,
+    account_snapshot_digest: str,
+    expected_holding_universe_digest: str,
+    holding_codes: set[str],
+) -> dict[tuple[str, str], dict[str, str]]:
+    """Validate a private holding confirmation bound to one account bundle and holding universe."""
+    if not isinstance(payload, dict):
+        raise RegulatoryAdvisoryContractError("holding confirmation document must be an object")
+    if payload.get("schema_name") != HOLDING_SCHEMA_NAME or payload.get("schema_version") != HOLDING_SCHEMA_VERSION:
+        raise RegulatoryAdvisoryContractError("unsupported holding confirmation schema identity")
+    if str(payload.get("as_of")) != str(as_of):
+        raise RegulatoryAdvisoryContractError("holding confirmation as_of does not match weekly as_of")
+    if str(payload.get("account_snapshot_digest")) != str(account_snapshot_digest):
+        raise RegulatoryAdvisoryContractError("holding confirmation account snapshot does not match --account")
+    if str(payload.get("holding_universe_digest")) != str(expected_holding_universe_digest):
+        raise RegulatoryAdvisoryContractError("holding confirmation universe does not match --account positions")
+    mapped = _validated_confirmation_records(payload)
+    outside = sorted({code for code, _ in mapped if code not in holding_codes})
+    if outside:
+        raise RegulatoryAdvisoryContractError("holding confirmation contains ts_code outside the bound holding universe")
     return mapped
 
 

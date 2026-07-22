@@ -1,0 +1,22 @@
+{
+  "schema_name": "a_short_regulatory_holding_confirmation",
+  "schema_version": "1.0.0",
+  "as_of": "20260714",
+  "account_snapshot_digest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "holding_universe_digest": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "confirmations": [
+    {
+      "ts_code": "600000.SH",
+      "event_fingerprint": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "decision": "confirmed_material",
+      "reviewed_at": "2026-07-14T09:30:00+08:00",
+      "note": "Checked the official notice manually."
+    }
+  ],
+  "boundary": {
+    "advisory_only": true,
+    "modifies_egs_or_rule6": false,
+    "automates_order": false,
+    "private_account_only": true
+  }
+}

@@ -2,7 +2,7 @@
 
 ## Scope
 
-This is an advisory workflow for already-fetched `official_structured` CNINFO events. It does not fetch a source by itself and does not alter production EGS screening, Rule6, historical backtests, position sizing, broker access, or orders.
+This is the **candidate-domain** advisory workflow for already-fetched `official_structured` CNINFO events. It does not fetch a source by itself and does not alter production EGS screening, Rule6, historical backtests, position sizing, broker access, or orders. It never binds or reads an account bundle; private holding confirmation is a separate contract at `docs/a_short_regulatory_holding_confirmation_contract.md`.
 
 The official-source fetch remains explicitly authorized by the existing weekly-pipeline `--confirm-fetch-authorized` gate. A fetch failure remains `unknown`; it is never interpreted as a clean regulatory result.
 
@@ -16,7 +16,9 @@ The official-source fetch remains explicitly authorized by the existing weekly-p
 
 ## Operation
 
-Use the existing approved weekly command and append `--regulatory-confirmations <local-confirmation.json>` only when the run also has current official CNINFO semantic evidence. The confirmation file should be local operational input; the supplied schema example is illustrative only and must not be reused against a live event.
+Use the existing approved weekly command and append `--regulatory-confirmations <local-confirmation.json>` only when the run also has current official CNINFO semantic evidence. The standard `weekly_screening.ps1` wrapper forwards this optional argument exactly. The confirmation file should be local operational input; the supplied schema example is illustrative only and must not be reused against a live event.
+
+Do not use this candidate-digest document for a holding, including a Top-N holding. A holding needs the separate private account-snapshot and holding-universe binding; if that separate document is supplied for a candidate-domain event, the run rejects it as unmatched rather than reusing it across domains.
 
 ## Non-negotiable boundary
 

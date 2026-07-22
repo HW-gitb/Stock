@@ -6,8 +6,10 @@ from engine.a_short_regulatory_advisory import (
     RegulatoryAdvisoryContractError,
     attach_confirmations,
     event_fingerprint,
+    holding_universe_digest,
     resolve_regulatory_advisory,
     validate_confirmation_document,
+    validate_holding_confirmation_document,
 )
 
 
@@ -138,6 +140,48 @@ class RegulatoryAdvisoryContractTests(unittest.TestCase):
         payload["confirmations"].append(dict(payload["confirmations"][0]))
         with self.assertRaises(RegulatoryAdvisoryContractError):
             validate_confirmation_document(payload, AS_OF, DIGEST)
+
+    def test_holding_confirmation_binds_account_snapshot_universe_and_event(self):
+        positions = [{"ts_code": TS_CODE}, {"ts_code": "000001.SZ"}]
+        universe_digest = holding_universe_digest(positions)
+        event = _event()
+        fingerprint = event_fingerprint(TS_CODE, event)
+        payload = {
+            "schema_name": "a_short_regulatory_holding_confirmation",
+            "schema_version": "1.0.0",
+            "as_of": AS_OF,
+            "account_snapshot_digest": DIGEST,
+            "holding_universe_digest": universe_digest,
+            "confirmations": [{
+                "ts_code": TS_CODE,
+                "event_fingerprint": fingerprint,
+                **_record("confirmed_material"),
+            }],
+            "boundary": {
+                "advisory_only": True,
+                "modifies_egs_or_rule6": False,
+                "automates_order": False,
+                "private_account_only": True,
+            },
+        }
+        mapped = validate_holding_confirmation_document(
+            payload, AS_OF, DIGEST, universe_digest, {TS_CODE, "000001.SZ"}
+        )
+        self.assertEqual(mapped[(TS_CODE, fingerprint)]["decision"], "confirmed_material")
+        self.assertEqual(holding_universe_digest(list(reversed(positions))), universe_digest)
+        with self.assertRaises(RegulatoryAdvisoryContractError):
+            validate_holding_confirmation_document(
+                payload, AS_OF, "b" * 64, universe_digest, {TS_CODE, "000001.SZ"}
+            )
+        with self.assertRaises(RegulatoryAdvisoryContractError):
+            validate_holding_confirmation_document(
+                payload, AS_OF, DIGEST, "0" * 64, {TS_CODE, "000001.SZ"}
+            )
+        payload["confirmations"][0]["ts_code"] = "600001.SH"
+        with self.assertRaises(RegulatoryAdvisoryContractError):
+            validate_holding_confirmation_document(
+                payload, AS_OF, DIGEST, universe_digest, {TS_CODE, "000001.SZ"}
+            )
 
 
 if __name__ == "__main__":

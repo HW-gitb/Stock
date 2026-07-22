@@ -22,7 +22,7 @@ from engine.a_short_egs_full_adapter import (load_egs_full, egs_full_row_to_cand
 from runners.a_short_weekly_pipeline import (_build_holdings, main,  # noqa: E402
                                              _reject_nonprivate_account_output_path,
                                              _is_account_output_git_ignored)
-from engine.a_short_regulatory_advisory import event_fingerprint  # noqa: E402
+from engine.a_short_regulatory_advisory import event_fingerprint, holding_universe_digest  # noqa: E402
 import os  # noqa: E402
 from runners.a_short_m67_render import render_weekly_markdown  # noqa: E402
 from tests.test_a_short_weekly_pipeline import (AS_OF, _analysis_input, _ai_candidate,  # noqa: E402
@@ -55,6 +55,30 @@ def _held_acct(codes_shares):
                        "take_profit_2": None, "last_exit_date": None, "last_exit_reason": None}
                       for c, s in codes_shares]
     return a
+
+
+def _holding_confirmation(bundle, ts_code, event, *, snapshot_digest=None, universe_digest=None):
+    positions = bundle["account"]["positions"]
+    return {
+        "schema_name": "a_short_regulatory_holding_confirmation",
+        "schema_version": "1.0.0",
+        "as_of": AS_OF,
+        "account_snapshot_digest": snapshot_digest or bundle["snapshot_digest"],
+        "holding_universe_digest": universe_digest or holding_universe_digest(positions),
+        "confirmations": [{
+            "ts_code": ts_code,
+            "event_fingerprint": event_fingerprint(ts_code, event),
+            "decision": "confirmed_material",
+            "reviewed_at": "2026-06-09T09:30:00+08:00",
+            "note": "Official holding event checked manually.",
+        }],
+        "boundary": {
+            "advisory_only": True,
+            "modifies_egs_or_rule6": False,
+            "automates_order": False,
+            "private_account_only": True,
+        },
+    }
 
 
 # ── egs_full adapter ──────────────────────────────────────────────────────────
@@ -361,6 +385,117 @@ class MainIntegrationTests(unittest.TestCase):
         self.assertEqual(matches[0]["row_source"], "egs_candidate_with_position")
         self.assertNotIn("holdings_manual_review", w)
 
+    def test_holding_confirmation_applies_only_to_bound_non_topn_holding(self):
+        event = {"source": "cninfo", "title": "official notice", "category": "regulatory",
+                 "disclosure_date": AS_OF, "url_or_pdf": "https://example.invalid/notice.pdf",
+                 "risk_type": "investigation", "severity": "high"}
+        with tempfile.TemporaryDirectory() as td:
+            acct = _held_acct([("603667.SH", 300)])
+            self._write(td, acct)
+            bundle = json.loads((Path(td) / "acct.json").read_text(encoding="utf-8"))
+            confirmation_path = Path(td) / "holding-confirmation.json"
+            confirmation_path.write_text(
+                json.dumps(_holding_confirmation(bundle, "603667.SH", event)), encoding="utf-8"
+            )
+            out = Path(td) / "weekly.json"
+            main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                  "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                  "--out", str(out), "--holding-regulatory-confirmations", str(confirmation_path)],
+                 price_provider=lambda code: _series(),
+                 holding_semantic_provider=lambda code: (
+                     {"status": "risk", "had_pit_announcements": True, "events": [event]}
+                     if code == "603667.SH" else None
+                 ))
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+        holding = {row["ts_code"]: row for row in weekly["reports"]}["603667.SH"]
+        impacts = [impact for impact in holding["machine"]["operation_impact"]
+                   if impact["source_field"] == "semantic_official_high_confirmed"]
+        self.assertTrue(impacts)
+        self.assertEqual(impacts[0]["holding_effect"], "clear_review")
+
+    def test_holding_confirmation_missing_path_fails_without_default_blocker(self):
+        # Existing no-confirmation integration tests remain the default-path proof; an explicitly supplied
+        # missing private file is instead a pre-publish FATAL.
+        with tempfile.TemporaryDirectory() as td:
+            self._write(td, _held_acct([("603667.SH", 300)]))
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(Path(td) / "weekly.json"),
+                     "--holding-regulatory-confirmations", str(Path(td) / "missing.json")],
+                     price_provider=lambda code: (_ for _ in ()).throw(AssertionError("must not fetch")))
+
+    def test_holding_confirmation_requires_account_before_any_input_read(self):
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "missing-ai.json"),
+                      "--iv-feed", str(Path(td) / "missing-feed.json"), "--out", str(Path(td) / "weekly.json"),
+                      "--holding-regulatory-confirmations", str(Path(td) / "holding-confirmation.json")],
+                     price_provider=lambda code: (_ for _ in ()).throw(AssertionError("must not fetch")))
+
+    def test_holding_confirmation_wrong_account_or_universe_fails_before_fetch(self):
+        event = {"source": "cninfo", "title": "official notice", "category": "regulatory",
+                 "disclosure_date": AS_OF, "url_or_pdf": "https://example.invalid/notice.pdf",
+                 "risk_type": "investigation", "severity": "high"}
+        for field, replacement in (("snapshot", "0" * 64), ("universe", "1" * 64)):
+            with self.subTest(field=field), tempfile.TemporaryDirectory() as td:
+                self._write(td, _held_acct([("603667.SH", 300)]))
+                bundle = json.loads((Path(td) / "acct.json").read_text(encoding="utf-8"))
+                confirmation = _holding_confirmation(
+                    bundle,
+                    "603667.SH",
+                    event,
+                    snapshot_digest=(replacement if field == "snapshot" else None),
+                    universe_digest=(replacement if field == "universe" else None),
+                )
+                confirmation_path = Path(td) / "holding-confirmation.json"
+                confirmation_path.write_text(json.dumps(confirmation), encoding="utf-8")
+                with self.assertRaises(SystemExit):
+                    main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                          "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                          "--out", str(Path(td) / "weekly.json"),
+                          "--holding-regulatory-confirmations", str(confirmation_path)],
+                         price_provider=lambda code: (_ for _ in ()).throw(AssertionError("must not fetch")))
+
+    def test_holding_confirmation_stale_event_and_candidate_domain_are_rejected(self):
+        event = {"source": "cninfo", "title": "official notice", "category": "regulatory",
+                 "disclosure_date": AS_OF, "url_or_pdf": "https://example.invalid/notice.pdf",
+                 "risk_type": "investigation", "severity": "high"}
+        with tempfile.TemporaryDirectory() as td:
+            self._write(td, _held_acct([("603667.SH", 300)]))
+            bundle = json.loads((Path(td) / "acct.json").read_text(encoding="utf-8"))
+            stale = _holding_confirmation(bundle, "603667.SH", event)
+            stale["confirmations"][0]["event_fingerprint"] = "0" * 64
+            confirmation_path = Path(td) / "holding-confirmation.json"
+            confirmation_path.write_text(json.dumps(stale), encoding="utf-8")
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(Path(td) / "weekly.json"),
+                      "--holding-regulatory-confirmations", str(confirmation_path)],
+                     price_provider=lambda code: _series(),
+                     holding_semantic_provider=lambda code: (
+                         {"status": "risk", "had_pit_announcements": True, "events": [event]}
+                         if code == "603667.SH" else None
+                     ))
+        with tempfile.TemporaryDirectory() as td:
+            self._write(td, _held_acct([("600000.SH", 300)]))
+            bundle = json.loads((Path(td) / "acct.json").read_text(encoding="utf-8"))
+            confirmation_path = Path(td) / "holding-confirmation.json"
+            confirmation_path.write_text(
+                json.dumps(_holding_confirmation(bundle, "600000.SH", event)), encoding="utf-8"
+            )
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(Path(td) / "weekly.json"),
+                      "--holding-regulatory-confirmations", str(confirmation_path)],
+                     price_provider=lambda code: _series(),
+                     holding_semantic_provider=lambda code: (
+                         {"status": "risk", "had_pit_announcements": True, "events": [event]}
+                         if code == "600000.SH" else None
+                     ))
+
 
 class PrivacyGuardTests(unittest.TestCase):
     """持仓恒列入隐私护栏(固化):带 --account 的报告含真实持仓 → 绝不能落仓库内非私密目录。
@@ -385,6 +520,18 @@ class PrivacyGuardTests(unittest.TestCase):
     def test_override_allows_nonprivate(self):
         _reject_nonprivate_account_output_path(self.INSIDE_NONPRIVATE, has_account=True,
                                                allow_override=True)                          # 显式放行
+
+    def test_holding_confirmation_path_cannot_use_output_override(self):
+        # The weekly report's explicit output override cannot turn a private account-bound confirmation
+        # into a tracked repository file.
+        with tempfile.TemporaryDirectory() as td:
+            with self.assertRaises(SystemExit):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "missing-ai.json"),
+                      "--iv-feed", str(Path(td) / "missing-feed.json"),
+                      "--account", str(Path(td) / "missing-account.json"),
+                      "--out", str(Path(td) / "weekly.json"), "--allow-nonprivate-account-out",
+                      "--holding-regulatory-confirmations", self.INSIDE_NONPRIVATE],
+                     price_provider=lambda code: (_ for _ in ()).throw(AssertionError("must not fetch")))
 
     def test_main_account_nonprivate_out_refused_before_fetch(self):
         # 集成:main() 带 --account + 仓库内非私密 --out → 取数/读文件前就 fail-fast(故 ai/feed 不存在也无妨)
