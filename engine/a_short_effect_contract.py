@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import re
 from pathlib import Path
 
 
@@ -195,6 +196,43 @@ def _governed_python_literal_names(source: str, rel: str) -> list[str]:
             if isinstance(value, ast.Constant) and isinstance(value.value, (int, float)):
                 offenders.extend(target.id for target in targets if isinstance(target, ast.Name) and target.id in names)
     return sorted(set(offenders))
+
+
+def _runtime_portfolio_policy_literal_violations(portfolio_source: str, weekly_source: str) -> list[str]:
+    """Reject literal copies in the two result-shaping portfolio consumers."""
+    violations = []
+    for label, pattern in (
+            ("small_float_label", r"小流通市值\(<\d+(?:\.\d+)?亿元\)"),
+            ("high_risk_cap_reduction_label", r"持仓单只上限临时下调\d+(?:\.\d+)?%")):
+        if re.search(pattern, portfolio_source):
+            violations.append(f"engine/a_short_portfolio_risk.py:{label}")
+
+    tree = ast.parse(weekly_source)
+    checks = (
+        ("_holding_adds_portfolio_risk", "circ_mv_rmb", "small_float_mv_rmb"),
+        ("_validate_portfolio_risk", "holding_single_position_cap_multiplier", "high_risk_holding_cap_multiplier"),
+    )
+    for function_name, field, policy_key in checks:
+        function = _function_by_name(tree, function_name)
+        if function is None:
+            violations.append(f"runners/a_short_weekly_pipeline.py:{policy_key}_consumer_missing")
+            continue
+        for comparison in (node for node in ast.walk(function) if isinstance(node, ast.Compare)):
+            operands = [comparison.left, *comparison.comparators]
+            reads_field = any(
+                isinstance(node, ast.Subscript) and isinstance(node.slice, ast.Constant)
+                and node.slice.value == field
+                for operand in operands for node in ast.walk(operand)
+            )
+            has_numeric_literal = any(
+                isinstance(operand, ast.Constant) and isinstance(operand.value, (int, float))
+                and not isinstance(operand.value, bool)
+                for operand in operands
+            )
+            if reads_field and has_numeric_literal:
+                violations.append(f"runners/a_short_weekly_pipeline.py:{policy_key}")
+                break
+    return sorted(violations)
 
 
 def _policy_leaf_paths(rel: str, payload: dict) -> list[str]:
@@ -383,13 +421,23 @@ def _runtime_policy_leaf_readers(policy_paths: dict[str, list[str]], sources: di
                             f'runners/a_short_phase5_engine.py::_PHASE5_POLICY["{key}"]',
                         ]
                 elif section == "portfolio_risk":
+                    portfolio_reader = _policy_value_reaches_result(
+                        trees["engine/a_short_portfolio_risk.py"], "_PORTFOLIO_POLICY", key)
+                    weekly_reader = _policy_value_reaches_result(
+                        trees["runners/a_short_weekly_pipeline.py"], "_PORTFOLIO_RISK_POLICY", key)
+                    weekly_consumer_keys = {
+                        "small_float_mv_rmb", "high_risk_holding_cap_multiplier",
+                    }
                     if (key in declared["portfolio_risk"]
                             and _loader_reads_key(trees[_RUNTIME_CONFIG_FILE], "_validate_m67", "portfolio", key, dynamic=True)
-                            and _policy_value_reaches_result(trees["engine/a_short_portfolio_risk.py"], "_PORTFOLIO_POLICY", key)):
+                            and portfolio_reader
+                            and (key not in weekly_consumer_keys or weekly_reader)):
                         refs = [
                             f'{_RUNTIME_CONFIG_FILE}::_PORTFOLIO_KEYS/{key}->portfolio[key]',
                             f'engine/a_short_portfolio_risk.py::_PORTFOLIO_POLICY["{key}"]',
                         ]
+                        if key in weekly_consumer_keys:
+                            refs.append(f'runners/a_short_weekly_pipeline.py::_PORTFOLIO_RISK_POLICY["{key}"]')
                 elif section == "weekly_windows":
                     if (key in declared["weekly_windows"]
                             and _loader_reads_key(trees[_RUNTIME_CONFIG_FILE], "_validate_m67", "windows", key, dynamic=True)
@@ -482,6 +530,7 @@ def static_inventory(*, source_overrides: dict[str, str] | None = None,
         "governed_python_literal_names": {
             rel: _governed_python_literal_names(sources[rel], rel) for rel in _GOVERNED_LITERAL_FILES
         } | {"A-EGS/egs_main.py": _governed_python_literal_names(sources["A-EGS/egs_main.py"], "A-EGS/egs_main.py")},
+        "runtime_portfolio_policy_literal_violations": _runtime_portfolio_policy_literal_violations(portfolio, weekly),
         "runtime_policy_paths": policy_paths,
         "runtime_policy_paths_sha256": _hash(policy_paths),
         "runtime_policy_sha256": policy_hashes,
@@ -575,6 +624,9 @@ def static_contract_error(contract: dict | None = None, *, inventory: dict | Non
         return f"effect contract analysis_input coverage invalid: uncovered={uncovered[:4]}, duplicate={duplicate[:4]}"
     if contract.get("analysis_input_all_paths_sha256") != _hash(paths):
         return "analysis_input schema changed without effect contract update"
+    if inventory["runtime_portfolio_policy_literal_violations"]:
+        return ("runtime portfolio policy literal returned to result consumers: "
+                f"{inventory['runtime_portfolio_policy_literal_violations']}")
     bindings = contract.get("runtime_policy_bindings")
     if not isinstance(bindings, list) or not bindings:
         return "effect contract runtime_policy_bindings missing"

@@ -70,6 +70,20 @@ class EffectContractStaticTests(unittest.TestCase):
         error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={rel: source}))
         self.assertIn("governed business threshold literal returned to Python", error)
 
+    def test_runtime_portfolio_policy_literal_cannot_return_to_result_consumers(self):
+        weekly_rel = "runners/a_short_weekly_pipeline.py"
+        weekly = (ROOT / weekly_rel).read_text(encoding="utf-8").replace(
+            'fact["circ_mv_rmb"] < SMALL_FLOAT_MV_RMB', 'fact["circ_mv_rmb"] < 8_000_000_000.0', 1)
+        error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={weekly_rel: weekly}))
+        self.assertIn("runtime portfolio policy literal returned to result consumers", error)
+        self.assertIn("small_float_mv_rmb", error)
+
+        portfolio_rel = "engine/a_short_portfolio_risk.py"
+        portfolio = (ROOT / portfolio_rel).read_text(encoding="utf-8") + '\n_POLICY_LABEL_PROBE = "小流通市值(<80亿元)"\n'
+        error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={portfolio_rel: portfolio}))
+        self.assertIn("runtime portfolio policy literal returned to result consumers", error)
+        self.assertIn("small_float_label", error)
+
     def test_new_runtime_policy_field_cannot_escape_consumer_registration(self):
         rel = "presets/a_short_m67_runtime_policy_20260715.json"
         policy = (ROOT / rel).read_text(encoding="utf-8").replace(
