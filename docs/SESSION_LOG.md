@@ -7,7 +7,7 @@
 - **安全时序钉死**: §12.3 铁律 = 先成熟旧周（只用 ≤ P_N bar）→ 派生 post-maturity adapter → 生成本周计划 → 冻结新周；已建引擎 `run_paper_weekly_transition` 即此序；本周 sizing 必须用成熟完上周 fill/exit 后的账户，不得成熟前用旧账户生成本周计划。
 - **Required**: 无（doc-only）。接线单源仍 = `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`（刀3/刀4）+ `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`（§18.1 #32 final no-cap）。
 - **Verify**: doc-only、无代码改动；git 证据 `git branch --contains 42a2dd2` = 仅 wt/us-short、c52c 停 `7fbe1ab9`。review-evidence:not_available。
-- **Next**: Codex（切到 wt/us-short 后）：执行刀3/刀4 一键接线，收敛到本权威树文本、丢弃 c52c 分叉。
+- **Next（给 Codex 的完整命令）**: 在 `D:\cnhea\Stock-wt\us-short`（branch `wt/us-short` @ 最新 commit；**不在 c52c/master 工作**、丢弃 c52c 分叉 doc）执行 US-short model_paper 一键接线。先读 `AGENTS.md` + `docs/CURRENT.md` + 本 SESSION_LOG 顶部 2 条 + register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`（刀3/刀4 一键接线 6 条 checklist）+ `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`（§18.1 #32 no-cap）+ 设计 §12.3「一键操作路径」/§18.1 #32；再按 Cut plan 执行**刀3**（offline capstone 双账户分支，纯 fixture、零 provider）→ 通过后**刀4**（gated weekly + 首真实周，用户跑一键命令即授权、no-cap auto-derive）。跨周引擎已建（`engine/us_short_model_paper_weekly.py` + `runners/us_short_model_paper_weekly_capstone.py`，untracked），本轮=last-mile 接线非从头造。边界：US-short-only / 不碰 A 股·US-long / paper 永不 ship-gate / 刀3 零 provider / never 自动下单。**刀3 验收**：offline fixture 连跑 5 周，week5 `cumulative_pnl = NAV − 100000` 且中途无重新初始化。实现 + offline 测完**留给 Claude 独立复审**（不 merge master、不自行并入主树——提交/merge 是复审后我的步）。
 
 ## 2026-07-22 — Claude Code 采纳 Codex 一键模拟盘 spec 优化（同意 + 3 收紧）→ 落权威文档，路由 Codex 接线
 
