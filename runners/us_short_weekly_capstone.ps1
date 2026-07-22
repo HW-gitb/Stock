@@ -42,7 +42,7 @@ param(
     [switch]$PrepareBudget,
     [int]$Pass2Budget = 0,
     [int]$MomentumTopK = 0,
-    [string]$PythonExe = "python",
+    [string]$PythonExe = "",
     [string[]]$ExtraArgs = @()
 )
 
@@ -54,6 +54,8 @@ $runner = Join-Path $repo "runners\us_short_weekly_capstone.py"
 if (-not (Test-Path $runner)) {
     throw "找不到 capstone runner: $runner"
 }
+. (Join-Path $repo ".tools\Resolve-AshortPython.ps1")
+$PythonExe = Resolve-AshortPython -Requested $PythonExe
 
 if ($Live -and $PrepareBudget) {
     throw "-Live 与 -PrepareBudget 互斥:先 -PrepareBudget 算预算并独立授权,再单独 -Live -Pass2Budget N。"

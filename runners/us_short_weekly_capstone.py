@@ -95,6 +95,8 @@ class CapstoneContext:
     max_retries_per_call: int = 0
     retry_backoff_seconds: float = 0.0
     max_total_http_attempts: int | None = None
+    model_paper_store_root: Path | None = None
+    model_paper_run_account_mode: str | None = None
     state_dir: Path = STATE_DIR
     sample_root: Path = ROOT   # repo root that the runners' provider_samples/ allowlists resolve against (tests inject a tempdir)
     research_live_capability: Any = None   # A1: minted by run_weekly_capstone ONLY for a genuine production run — never by resolve_capstone_context / a caller
@@ -207,6 +209,58 @@ class CapstoneContext:
             f"us_short_batch5_capstone_{self.decision_date}_vix_regime_summary.json"
 
 
+def _model_paper_enabled(ctx: CapstoneContext) -> bool:
+    return ctx.model_paper_store_root is not None
+
+
+def _write_private_json(path: Path, value: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text(json.dumps(value, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    temporary.replace(path)
+
+
+def _run_model_paper_adapter(ctx: CapstoneContext) -> dict[str, Any]:
+    """Local pre-plan seam: mature in memory, then replace the generated paper account with its adapter."""
+    if not _model_paper_enabled(ctx):
+        return {"model_paper_enabled": False, "provider_calls_performed": False}
+    from runners.us_short_model_paper_weekly_capstone import prepare_offline_model_paper_adapter
+
+    preview = prepare_offline_model_paper_adapter(
+        store_root=str(ctx.model_paper_store_root), decision_date=ctx.decision_date,
+        price_basis_date=ctx.price_basis_date,
+        arrived_ohlcv_packet=json.loads(ctx.ohlcv_series_packet_path.read_text(encoding="utf-8")),
+    )
+    _write_private_json(ctx.account_state_path, preview.pop("account_state"))
+    return preview
+
+
+def _run_model_paper_weekly(ctx: CapstoneContext) -> dict[str, Any]:
+    """Terminal local seam: bind the emitted machine record, atomically mature/freeze, then add seven report facts."""
+    if not _model_paper_enabled(ctx):
+        return {"model_paper_enabled": False, "provider_calls_performed": False}
+    from runners.us_short_model_paper_weekly_capstone import (
+        append_fixed_weekly_portfolio_section,
+        fixed_weekly_portfolio_metrics,
+        paper_plan_factory_from_machine_record,
+        run_offline_model_paper_capstone,
+    )
+
+    root = ctx.official_output_root or ctx.private_root
+    machine_path = root / "runs_private" / ctx.decision_date / "machine_record.json"
+    report_path = root / "weekly_private" / ctx.decision_date / "weekly_report.md"
+    result = run_offline_model_paper_capstone(
+        run_account_mode=ctx.model_paper_run_account_mode or "paper_only",
+        store_root=str(ctx.model_paper_store_root), decision_date=ctx.decision_date,
+        price_basis_date=ctx.price_basis_date, created_at=ctx.generated_at,
+        arrived_ohlcv_packet=json.loads(ctx.ohlcv_series_packet_path.read_text(encoding="utf-8")),
+        paper_plan_factory=paper_plan_factory_from_machine_record(machine_path),
+    )
+    metrics = fixed_weekly_portfolio_metrics(store_root=str(ctx.model_paper_store_root))
+    append_fixed_weekly_portfolio_section(report_path, metrics)
+    return {**result, "model_paper_enabled": True, "weekly_portfolio_metrics": metrics}
+
+
 def _tz_aware_et_or_fail(now_et: datetime) -> datetime:
     """Attach America/New_York to a naive ET wall-clock, failing closed on a DST transition (F6 completeness).
 
@@ -241,6 +295,8 @@ def resolve_capstone_context(
     max_retries_per_call: int = 0,
     retry_backoff_seconds: float = 0.0,
     max_total_http_attempts: int | None = None,
+    model_paper_store_root: Path | None = None,
+    model_paper_run_account_mode: str | None = None,
     state_dir: Path = STATE_DIR,
     sample_root: Path = ROOT,
 ) -> CapstoneContext:
@@ -279,6 +335,8 @@ def resolve_capstone_context(
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
         max_total_http_attempts=max_total_http_attempts,
+        model_paper_store_root=Path(model_paper_store_root) if model_paper_store_root is not None else None,
+        model_paper_run_account_mode=model_paper_run_account_mode,
         state_dir=Path(state_dir),
         sample_root=Path(sample_root),
     )
@@ -304,17 +362,21 @@ class Stage:
     reuse_policy: str = "never"
 
 
-def default_pipeline() -> list[Stage]:
+def default_pipeline(*, include_model_paper: bool = False) -> list[Stage]:
     """The weekly pipeline in dependency order. Each `run` adapter calls the corresponding real runner
     with dates/paths from the context (imported lazily so an offline dry-run / a stage-injected test never imports a
     provider runner it will not call)."""
     from runners import us_short_weekly_capstone_stages as st  # thin adapters over the real runners
-    return [
+    stages = [
         Stage("universe_fetch", True, lambda c: [], lambda c: [c.candidate_path], st.run_universe,
               contract_version="1.0.0", reuse_policy="refresh_then_reuse_if_equivalent"),
         Stage("momentum_fetch", True, lambda c: [c.candidate_path],
               lambda c: [c.series_packet_path, c.ohlcv_series_packet_path], st.run_momentum_fetch,
               contract_version="1.0.0", reuse_policy="frozen_inputs"),
+        Stage("model_paper_adapter", False,
+              lambda c: [c.ohlcv_series_packet_path] if _model_paper_enabled(c) else [],
+              lambda c: [c.account_state_path] if _model_paper_enabled(c) else [], _run_model_paper_adapter,
+              contract_version="1.0.0", reuse_policy="never"),
         Stage("overextension_producer", False, lambda c: [c.candidate_path, c.ohlcv_series_packet_path],
               lambda c: [c.overextension_projection_path], st.run_overextension_producer,
               contract_version="1.0.0", reuse_policy="frozen_inputs"),
@@ -352,7 +414,15 @@ def default_pipeline() -> list[Stage]:
         Stage("forward_policy_maturity", False, lambda c: [c.ohlcv_series_packet_path], lambda c: [],
               st.run_forward_policy_maturity, best_effort=True),
         Stage("weekly_bridge", False, lambda c: [c.source_packet_path], _official_output_paths, st.run_weekly_bridge),
+        Stage("model_paper_weekly", False,
+              lambda c: ([c.ohlcv_series_packet_path, _official_output_paths(c)[0], _official_output_paths(c)[2]]
+                         if _model_paper_enabled(c) else []),
+              lambda c: [_official_output_paths(c)[0]] if _model_paper_enabled(c) else [], _run_model_paper_weekly,
+              contract_version="1.0.0", reuse_policy="never"),
     ]
+    if include_model_paper:
+        return stages
+    return [stage for stage in stages if stage.name not in {"model_paper_adapter", "model_paper_weekly"}]
 
 
 def _official_output_paths(ctx: CapstoneContext) -> list[Path]:
@@ -457,9 +527,15 @@ def _input_readable(path: Path) -> bool:
 
 def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, Any]]):
     """Build the A1 receipt from exact completed stages and their provider-call evidence."""
-    required_results = tuple(item for item in results if not item.get("best_effort", False))
+    required_results = tuple(
+        item for item in results
+        if not item.get("best_effort", False) and item.get("name") != "model_paper_adapter"
+    )
     completed = tuple(item.get("name") for item in required_results)
-    expected = tuple(stage.name for stage in default_pipeline()[:-1] if not stage.best_effort)
+    expected = tuple(
+        stage.name for stage in default_pipeline()
+        if stage.name not in {"weekly_bridge", "model_paper_adapter", "model_paper_weekly"} and not stage.best_effort
+    )
     if completed != expected:
         raise WeeklyCapstoneError("research_live receipt requires the exact completed pre-bridge stage sequence")
     by_name = {item["name"]: item.get("result") for item in required_results}
@@ -969,6 +1045,9 @@ def run_weekly_capstone(
     sample_root: Path = ROOT,
     resume_from: Path | None = None,
     prepare_pass2_budget: bool = False,
+    auto_authorize_pass2_budget: bool = False,
+    model_paper_store_root: Path | None = None,
+    model_paper_run_account_mode: str | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
@@ -979,16 +1058,28 @@ def run_weekly_capstone(
         raise WeeklyCapstoneError(
             "max_total_http_attempts must be explicit whenever live 429 retries are enabled"
         )
+    if auto_authorize_pass2_budget and dry_run:
+        raise WeeklyCapstoneError("auto Pass2 budget authorization is available only for an executing paper run")
+    if auto_authorize_pass2_budget and prepare_pass2_budget:
+        raise WeeklyCapstoneError("auto Pass2 budget authorization cannot be combined with --prepare-pass2-budget")
+    if auto_authorize_pass2_budget and stages is not None:
+        raise WeeklyCapstoneError("auto Pass2 budget authorization is available only on the default pipeline")
+    if auto_authorize_pass2_budget and authorized_pass2_call_budget is not None:
+        raise WeeklyCapstoneError("auto Pass2 budget authorization must derive the budget; do not supply one")
+    if auto_authorize_pass2_budget and resume_from is not None:
+        raise WeeklyCapstoneError("auto Pass2 budget authorization cannot resume a pre-budget checkpoint")
     ctx = resolve_capstone_context(
         now_et=now_et, private_root=private_root, batch4_template_path=batch4_template_path,
         account_state_path=account_state_path, calendar_path=calendar_path,
         authorized_momentum_top_k=authorized_momentum_top_k,
         authorized_pass2_call_budget=authorized_pass2_call_budget,
-        pass2_budget_preview=prepare_pass2_budget,
+        pass2_budget_preview=prepare_pass2_budget or auto_authorize_pass2_budget,
         catalyst_recall_tickers=catalyst_recall_tickers,
         confirm_user_authorization=confirm_user_authorization, provider_pace_seconds=provider_pace_seconds,
         max_retries_per_call=max_retries_per_call, retry_backoff_seconds=retry_backoff_seconds,
         max_total_http_attempts=max_total_http_attempts, state_dir=state_dir,
+        model_paper_store_root=model_paper_store_root,
+        model_paper_run_account_mode=model_paper_run_account_mode,
         sample_root=sample_root,
     )
     if prepare_pass2_budget and dry_run:
@@ -997,12 +1088,12 @@ def run_weekly_capstone(
         )
     if prepare_pass2_budget and stages is not None:
         raise WeeklyCapstoneError("--prepare-pass2-budget is available only on the real default capstone pipeline")
-    full_pipeline = stages if stages is not None else default_pipeline()
+    full_pipeline = stages if stages is not None else default_pipeline(include_model_paper=_model_paper_enabled(ctx))
     pipeline = full_pipeline
     if prepare_pass2_budget:
         preflight_indexes = [i for i, stage in enumerate(full_pipeline) if stage.name == "pass2_preflight"]
-        if preflight_indexes != [7]:
-            raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight at stage 8")
+        if len(preflight_indexes) != 1:
+            raise WeeklyCapstoneError("default capstone pipeline must contain exactly one pass2_preflight")
         pipeline = full_pipeline[:preflight_indexes[0] + 1]
     if any(stage.best_effort and stage.name not in {
         "forward_policy_shadow", "forward_policy_corporate_actions", "forward_policy_maturity",
@@ -1028,6 +1119,7 @@ def run_weekly_capstone(
             "the plan first")
 
     production_run = (stages is None) and (ctx.confirm_user_authorization is True) and not prepare_pass2_budget
+    auto_budget_run = auto_authorize_pass2_budget and production_run
     budget_preview_run = (stages is None) and (ctx.confirm_user_authorization is True) and prepare_pass2_budget
     if resume_from is not None and not production_run:
         raise WeeklyCapstoneError("--resume is available only on the real default capstone pipeline")
@@ -1041,7 +1133,7 @@ def run_weekly_capstone(
         and not isinstance(ctx.authorized_pass2_call_budget, bool)
         and ctx.authorized_pass2_call_budget >= 1
     )
-    if production_run and (not k_is_valid or not budget_is_valid):
+    if production_run and (not k_is_valid or (not budget_is_valid and not auto_budget_run)):
         raise WeeklyCapstoneError(
             "live default pipeline requires independently authorized momentum_top_k (1..250) and positive exact Pass2 "
             "call budget; first run --prepare-pass2-budget with the same K to derive the forecast, then independently "
@@ -1052,7 +1144,7 @@ def run_weekly_capstone(
             "--prepare-pass2-budget requires independently authorized momentum_top_k (1..250) and no Pass2 call budget; "
             "it derives, but never accepts or grants, the exact execution budget"
         )
-    if production_run or budget_preview_run:
+    if (production_run or budget_preview_run) and not _model_paper_enabled(ctx):
         from runners.us_short_account_state_from_manual_tables import validate_account_state
 
         account_state = json.loads(ctx.account_state_path.read_text(encoding="utf-8"))
@@ -1080,7 +1172,11 @@ def run_weekly_capstone(
             raise WeeklyCapstoneError(f"resume checkpoint rejected: {exc}") from exc
     checkpoint_manifest_path = None
     checkpoint_manifest = None
-    if production_run:
+    # The checkpoint schema binds the exact Pass2 budget at creation time.
+    # Auto-budget mode learns that integer at pass2_preflight, so it runs
+    # without a resumable checkpoint; the ordinary manually budget-authorized
+    # production path keeps the checkpoint unchanged.
+    if production_run and not auto_budget_run:
         try:
             checkpoint_manifest_path, checkpoint_manifest = checkpoint_store.create_manifest(
                 private_root=ctx.private_root,
@@ -1158,8 +1254,11 @@ def run_weekly_capstone(
                         private_root=ctx.forward_policy_comparison_ledger_path.parent,
                     ),
                 )
-            if stage.name == "weekly_bridge":
-                receipt = _provider_execution_receipt(ctx, results) if production_run else None
+            if stage.name in {"weekly_bridge", "model_paper_weekly"}:
+                # Both stages operate on this transaction's unpublished official
+                # artifacts.  Only the bridge consumes the provider receipt;
+                # model-paper terminal merely reads the bridge outputs.
+                receipt = _provider_execution_receipt(ctx, results) if production_run and stage.name == "weekly_bridge" else None
                 stage_ctx = replace(
                     ctx,
                     research_live_capability=receipt,
@@ -1288,6 +1387,40 @@ def run_weekly_capstone(
                     continue
                 raise WeeklyCapstoneError(
                     f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}")
+            if auto_budget_run and stage.name == "pass2_preflight":
+                try:
+                    forecast = result["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
+                    target_count = result["pass2_target_universe"]["target_count"]
+                    gate = result["execution_gate"]
+                except (KeyError, TypeError) as exc:
+                    raise WeeklyCapstoneError(
+                        "auto Pass2 budget authorization received an incomplete preflight forecast"
+                    ) from exc
+                if type(forecast) is not int or isinstance(forecast, bool) or forecast < 1:
+                    raise WeeklyCapstoneError(
+                        "auto Pass2 budget authorization received a non-positive exact call forecast"
+                    )
+                if type(target_count) is not int or isinstance(target_count, bool) or target_count < 1:
+                    raise WeeklyCapstoneError(
+                        "auto Pass2 budget authorization received an invalid Pass2 target count"
+                    )
+                if not isinstance(gate, dict) or gate.get("ready_to_run_full_candidate_live_packet") is not False:
+                    raise WeeklyCapstoneError(
+                        "auto Pass2 budget authorization requires the preflight to remain blocked before the derived budget"
+                    )
+                # The one-click paper launcher authorizes exactly the same
+                # budget produced by this run's frozen preflight.  No second
+                # provider pass or operator copy/paste is needed.
+                ctx = replace(ctx, authorized_pass2_call_budget=forecast, pass2_budget_preview=False)
+                print(
+                    f"[US-SHORT AUTO-BUDGET] target_count={target_count} exact_pass2_calls={forecast}",
+                    file=sys.stderr,
+                )
+            if stage.name == "model_paper_adapter" and _model_paper_enabled(ctx):
+                holdings = result.get("frozen_holding_tickers") if isinstance(result, dict) else None
+                if not isinstance(holdings, list) or any(not isinstance(ticker, str) for ticker in holdings):
+                    raise WeeklyCapstoneError("model-paper adapter did not return canonical holding tickers")
+                ctx = replace(ctx, frozen_holding_tickers=tuple(holdings))
             execution_mode = "executed"
             if resume_manifest is not None and stage.reuse_policy == "refresh_then_reuse_if_equivalent":
                 try:
@@ -1308,7 +1441,7 @@ def run_weekly_capstone(
                 stage, result, execution_mode=execution_mode,
                 stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
             )
-            if production_run and stage.name != "weekly_bridge":
+            if checkpoint_manifest_path is not None and stage.name != "weekly_bridge":
                 try:
                     checkpoint_manifest = checkpoint_store.record_stage(
                         manifest_path=checkpoint_manifest_path, manifest=checkpoint_manifest, stage=stage,
@@ -1337,6 +1470,8 @@ def run_weekly_capstone(
         "operational_use": "not_authorized",
         "decision_date": ctx.decision_date,
         "price_basis_date": ctx.price_basis_date,
+        "authorized_momentum_top_k": ctx.authorized_momentum_top_k,
+        "authorized_pass2_call_budget": ctx.authorized_pass2_call_budget,
         "emitted": True,
         "emitted_report": _rel(ctx.private_root / "weekly_private" / ctx.decision_date / "weekly_report.md"),
         "stages": results,
@@ -1397,6 +1532,14 @@ def main(argv: list[str] | None = None) -> int:
             "does not authorize or execute yfinance, Pass2, VIX, or the weekly bridge"
         ),
     )
+    parser.add_argument(
+        "--auto-pass2-budget",
+        action="store_true",
+        help=(
+            "derive and apply the exact Pass2 call budget from this same run's preflight; intended for the "
+            "one-click paper launcher and cannot be combined with --prepare-pass2-budget or a supplied budget"
+        ),
+    )
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
     parser.add_argument("--max-retries-per-call", type=int, default=0)
     parser.add_argument("--retry-backoff-seconds", type=float, default=2.0)
@@ -1418,6 +1561,7 @@ def main(argv: list[str] | None = None) -> int:
             max_total_http_attempts=args.max_total_http_attempts,
             resume_from=args.resume,
             prepare_pass2_budget=args.prepare_pass2_budget,
+            auto_authorize_pass2_budget=args.auto_pass2_budget,
         )
     except WeeklyCapstoneError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)

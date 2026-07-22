@@ -15,6 +15,7 @@ SCHEMAS = [
     "us_short_model_paper_settlement.schema.json",
     "us_short_model_paper_nav_snapshot.schema.json",
     "us_short_model_paper_head_manifest.schema.json",
+    "us_short_model_paper_account_adapter.schema.json",
 ]
 
 
@@ -45,6 +46,23 @@ class ModelPaperSchemaTest(unittest.TestCase):
             forged = copy.deepcopy(artifact)
             forged["unexpected"] = True
             self.assertTrue(list(validator.iter_errors(forged)))
+
+    def test_adapter_validates_and_rejects_manual_boundary_drift(self) -> None:
+        from engine.us_short_model_paper_portfolio import build_nav_snapshot, seed_portfolio_state
+        from engine.us_short_model_paper_weekly import build_paper_account_adapter
+
+        state = seed_portfolio_state("20260717")
+        nav = build_nav_snapshot(
+            state,
+            {"paper_evaluable": False, "status": "not_evaluable", "degradation_reasons": ["seed_state"], "source_sha256": None},
+        )
+        adapter = build_paper_account_adapter(state, nav, decision_date="20260720")
+        schema = json.loads((ROOT / "schemas" / SCHEMAS[-1]).read_text(encoding="utf-8"))
+        validator = Draft7Validator(schema)
+        self.assertEqual([], list(validator.iter_errors(adapter)))
+        forged = copy.deepcopy(adapter)
+        forged["boundary"]["manual_account_read"] = True
+        self.assertTrue(list(validator.iter_errors(forged)))
 
 
 if __name__ == "__main__":

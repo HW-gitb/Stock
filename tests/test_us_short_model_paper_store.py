@@ -17,6 +17,7 @@ from engine.us_short_model_paper_portfolio import (
 from engine.us_short_model_paper_store import (
     ModelPaperStoreError,
     commit_settlement,
+    commit_settlement_and_freeze_next,
     freeze_decision_bundle,
     initialize_store,
     load_current_state,
@@ -137,6 +138,33 @@ class ModelPaperStoreTest(unittest.TestCase):
         with self.assertRaisesRegex(Exception, "private"):
             initialize_store(unignored, self.seed, self.seed_nav)
         self.assertFalse(unignored.exists())
+
+    def test_combined_maturity_and_next_freeze_keeps_old_head_on_head_publish_failure(self) -> None:
+        decision, settlement, state, nav = self._mature()
+        freeze_decision_bundle(self.root, decision)
+        next_decision = _decision(state, [_order(action="持有", shares=None)], date="20260727")
+        from engine import us_short_model_paper_store as store
+
+        real_replace = store._replace_path
+
+        def fail_head_once(source: Path, destination: Path) -> None:
+            if destination.name == "head_manifest.json":
+                raise OSError("injected final head crash")
+            real_replace(source, destination)
+
+        with mock.patch.object(store, "_replace_path", side_effect=fail_head_once):
+            with self.assertRaisesRegex(ModelPaperStoreError, "combined head publish failed"):
+                commit_settlement_and_freeze_next(self.root, decision, settlement, state, nav, next_decision)
+        old_head = load_head(self.root)
+        self.assertEqual("20260720", old_head["pending_decision"]["decision_date"])
+        self.assertIsNone(old_head["last_settlement"])
+        self.assertEqual(
+            "settled_and_frozen",
+            commit_settlement_and_freeze_next(self.root, decision, settlement, state, nav, next_decision),
+        )
+        head = load_head(self.root)
+        self.assertEqual("20260720", head["last_settlement"]["decision_date"])
+        self.assertEqual("20260727", head["pending_decision"]["decision_date"])
 
 
 if __name__ == "__main__":

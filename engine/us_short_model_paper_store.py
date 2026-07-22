@@ -248,6 +248,31 @@ def load_current_state(root: str | Path) -> dict:
     return state
 
 
+def load_current_nav(root: str | Path) -> dict:
+    """Load the head-bound diagnostic NAV without exposing store internals to callers."""
+    store_root = _store_root(root)
+    head = load_head(store_root)
+    nav = _load_ref(store_root, head["current_nav"])
+    _wrap_portfolio_error("current NAV", validate_nav_snapshot, nav)
+    if nav["state_sha256"] != head["current_state"]["sha256"]:
+        raise ModelPaperStoreError("current NAV does not bind current state")
+    return nav
+
+
+def load_pending_decision(root: str | Path) -> dict | None:
+    """Load the one immutable pending decision, if any, with its head digest rechecked."""
+    store_root = _store_root(root)
+    head = load_head(store_root)
+    pending = head["pending_decision"]
+    if pending is None:
+        return None
+    decision, digest = _read_digest(_resolve_relative(store_root, pending["relative_path"]))
+    if digest != pending["sha256"]:
+        raise ModelPaperStoreError("pending decision digest mismatch")
+    _wrap_portfolio_error("pending decision", validate_decision_bundle, decision)
+    return decision
+
+
 def initialize_store(root: str | Path, seed_state: dict, seed_nav: dict) -> str:
     store_root = _store_root(root)
     _wrap_portfolio_error("seed state", validate_portfolio_state, seed_state)
@@ -479,11 +504,87 @@ def commit_settlement(root: str | Path, decision_bundle: dict, settlement: dict,
     return "committed"
 
 
+def commit_settlement_and_freeze_next(
+    root: str | Path,
+    decision_bundle: dict,
+    settlement: dict,
+    state: dict,
+    nav: dict,
+    next_decision_bundle: dict,
+) -> str:
+    """Atomically advance a matured week and publish the next pending decision in one head update.
+
+    The immutable artifacts may be written before the head.  Until the final head write they are unreachable,
+    so a capstone failure cannot expose a settled old week without its already-derived current decision.
+    An identical retry after a failed head write is safe because all artifact paths are digest-immutable.
+    """
+    store_root = _store_root(root)
+    _validate_commit_bundle(decision_bundle, settlement, state, nav)
+    _wrap_portfolio_error("next decision bundle", validate_decision_bundle, next_decision_bundle)
+    if next_decision_bundle["prior_state_sha256"] != artifact_sha256(state):
+        raise ModelPaperStoreError("next decision prior_state_sha256 does not bind matured state")
+    if next_decision_bundle["price_basis_date"] != state["as_of"]:
+        raise ModelPaperStoreError("next decision price_basis_date does not bind matured state")
+    if next_decision_bundle["decision_date"] <= decision_bundle["decision_date"]:
+        raise ModelPaperStoreError("next decision date must follow the matured decision")
+
+    head = load_head(store_root)
+    pending = head["pending_decision"]
+    if pending is None or pending["decision_date"] != decision_bundle["decision_date"] \
+            or pending["sha256"] != artifact_sha256(decision_bundle):
+        raise ModelPaperStoreError("combined commit requires the exact pending matured decision")
+    if settlement["prior_state_sha256"] != head["current_state"]["sha256"]:
+        raise ModelPaperStoreError("combined commit prior state does not match store head")
+
+    settled_paths = _week_paths(store_root, decision_bundle["decision_date"])
+    next_paths = _week_paths(store_root, next_decision_bundle["decision_date"])
+    stored_decision, stored_digest = _read_digest(settled_paths["decision"])
+    if stored_digest != pending["sha256"] or stored_decision != decision_bundle:
+        raise ModelPaperStoreError("pending decision file does not match head")
+
+    try:
+        _publish_immutable(settled_paths["settlement"], settlement)
+        _publish_immutable(settled_paths["state"], state)
+        _publish_immutable(settled_paths["nav"], nav)
+        _publish_immutable(next_paths["decision"], next_decision_bundle)
+    except (OSError, ModelPaperPortfolioError, ModelPaperStoreError) as exc:
+        raise ModelPaperStoreError(f"combined transaction artifact publish failed: {exc}") from exc
+
+    digests = {
+        "settlement": artifact_sha256(settlement),
+        "state": artifact_sha256(state),
+        "nav": artifact_sha256(nav),
+    }
+    updated = copy.deepcopy(head)
+    updated["current_state"] = _state_ref(
+        f"weeks/{decision_bundle['decision_date']}/portfolio_state.json", state)
+    updated["current_nav"] = _ref(f"weeks/{decision_bundle['decision_date']}/nav_snapshot.json", nav)
+    updated["pending_decision"] = _pending_ref(next_decision_bundle)
+    updated["last_settlement"] = {
+        "decision_date": decision_bundle["decision_date"],
+        "decision_sha256": artifact_sha256(decision_bundle),
+        "price_packet_sha256": settlement["price_packet_sha256"],
+        "settlement_sha256": digests["settlement"],
+        "state_sha256": digests["state"],
+        "nav_sha256": digests["nav"],
+    }
+    _validate_head(updated)
+    try:
+        _atomic_write(_head_path(store_root), updated)
+    except (OSError, ModelPaperPortfolioError, ModelPaperStoreError) as exc:
+        raise ModelPaperStoreError(
+            f"combined head publish failed after immutable artifacts; identical retry will recover: {exc}") from exc
+    return "settled_and_frozen"
+
+
 __all__ = [
     "ModelPaperStoreError",
     "commit_settlement",
     "freeze_decision_bundle",
     "initialize_store",
+    "load_current_nav",
+    "load_pending_decision",
     "load_current_state",
     "load_head",
+    "commit_settlement_and_freeze_next",
 ]
