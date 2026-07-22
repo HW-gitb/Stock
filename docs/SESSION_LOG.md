@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第四刀 R5：候选/私有持仓监管确认分域安全闭环；c237 已提交，未 merge）
+
+- **Verdict/Action**: PASS + 提交（c237 `801dd61c`=第三刀 之上，16 文件；用户令"提交不 merge"）。候选/持仓确认两不可换域（distinct schema 身份）；持仓域绑 account_snapshot_digest+holding_universe_digest+event fingerprint、须 `--account`、输入强制 gitignored 私密；confirmed-material 仅产 clear_review advisory，非 EGS/Rule6/veto/sizing/order。缺文件→pending 不阻断；坏/schema/stale/错账户/错集合/universe 外/跨域/unmatched/无 CNINFO 全发布前 FATAL。
+- **Required**: 无（1 项 agent-判-非-actionable 观察：held-且-candidate 码走通用 unmatched FATAL 而非上游专门报错——故意域分离、已测、fail-closed；见 register 与桌面 `codex_r1.md`）。register `R-ASHORT-REGULATORY-ADVISORY-HUMAN-CONFIRMATION` 由 in_progress→resolved（`docs/system_risk_register.md`）。
+- **Verify**: 亲跑变更符号验收包（regulatory_advisory + holdings_in_m67 之 main() 集成 + holding schema + weekly guardrails + effect_contract）= 88 例全过；`static_contract_error()` 返回 None、`git diff --check` 干净、py_compile 与两新 JSON 均过。整读被消费函数体 + 亲验六不变式；独立对抗 agent 读 c237 未提交树、六不变式全 clean、无 P1/P2/P3（并核 `except Exception` 不吞 wrapper SystemExit、hard_veto 门 `not has_position`→holding 确认不产 veto）。未跑全量（proportional-to-change，变更符号已被上述包直接覆盖）。
+- **Next**: Codex：Pass（第四刀已审已提交 c237，未 merge）。cherry-pick→master 待 master 树 clean（现有并发窗 US-short 未提交活）。Optional 简单可顺清；勿扩 codex_r1.md 第5–6 刀。
+
+## 2026-07-22 — Codex 修复（A-short R5/P2：候选/私有持仓监管确认分域，待独立审查）
+
+- **Verdict/Action**: 第四刀已完成本地实现。标准 `weekly_screening.ps1` 现在精确转发可选候选确认和私有持仓确认文件；未提供任一文件时周跑维持原有 `pending_confirmation` 行为。候选确认继续只绑定 `candidate_digest`；新增持仓确认只可与 `--account` 使用，绑定 `as_of`、账户 `snapshot_digest`、完整排序持仓集合 digest、代码与当前官方事件指纹。持仓确认只在持仓语义链路 attach，任何显式缺文件、schema/账户/集合/事件不匹配或候选/持仓域串用都在发布前 FATAL。
+- **Required**: `R-ASHORT-REGULATORY-ADVISORY-HUMAN-CONFIRMATION` 仍为 in_progress P2，详见 `docs/system_risk_register.md`；需独立审查后再提交。本刀不改 EGS、Rule6、排名、阈值、回测、仓位规则、provider 授权或下单边界。
+- **Verify**: 确认单元/schema、wrapper 精确转发、effect-contract、文档治理和 runtime-config 89 OK；完整持仓/M6.7 集成与私密路径包 42 OK（正确绑定产生 existing-holding `clear_review` advisory；缺省不阻断；显式坏路径、无账户、错账户、错集合、陈旧事件、候选域串用与输出 override 均拒）。`py_compile`、两个新 JSON 的语法校验、`static_contract_error() is None` 与 `git diff --check` 均通过。
+- **Pre-Codex self-review**: main-thread checklist fallback（delegation disabled）：候选和持仓 map 绝不共用，持仓确认读取前先要求账户且仓库内路径必须 Git 忽略；完整持仓集合而非 Top-N 子集进入 digest；确认只在 holding semantic provider 后 attach，并以 unmatched 拒绝跨域/陈旧复用。确认仍只触发既有非生产 semantic advisory，未读取真实账户或发起 provider 调用。
+- **Next**: Claude Code: review
+
 ## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第三刀 R6：runtime portfolio-policy 单一真相源；c237 已提交）
 
 - **Verdict/Action**: PASS + 提交（c237 树 `db32e5f2`=第2刀 之上，7 文件）。忠实实现方案且**行为等价的 literal-dedup 重构**：`small_float_mv_rmb`/`high_risk_holding_cap_multiplier` 从同一 `load_runtime_configuration()` 校验快照流入 engine `_PORTFOLIO_POLICY`(portfolio_risk) 与 weekly `_PORTFOLIO_RISK_POLICY`；`_holding_adds_portfolio_risk`(小流通阈值)、`_validate_portfolio_risk`(cap)、`final_summary`(cap+标签)、JSON·MD 标签全去死值动态生成；新 effect-contract binding `portfolio_risk_runtime_consumers` 绑两 leaf 到两消费者；portfolio_risk 7 key = 5(thresholds binding)+2(runtime_consumers binding) 完整无孤儿。

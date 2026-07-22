@@ -50,7 +50,9 @@ from engine.a_short_rule6_evaluation import materialize_50etf_iv_rule6_check
 from engine.a_short_regulatory_advisory import (
     RegulatoryAdvisoryContractError,
     attach_confirmations,
+    holding_universe_digest,
     validate_confirmation_document,
+    validate_holding_confirmation_document,
 )
 from engine.a_short_tushare_client import is_retryable_tushare_error
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
@@ -77,6 +79,9 @@ HOLDING_RATCHET_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.pa
 CRASH_VETO_TRACKING_SCHEMA_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                                "schemas", "a_short_crash_veto_tracking.schema.json")
 REGULATORY_CONFIRMATION_SCHEMA_PATH = ROOT / "schemas" / "a_short_regulatory_advisory_confirmation.schema.json"
+HOLDING_REGULATORY_CONFIRMATION_SCHEMA_PATH = (
+    ROOT / "schemas" / "a_short_regulatory_holding_confirmation.schema.json"
+)
 # S3b R4b: 跨周持久收紧 ratchet sidecar 默认路径(gitignored 私密 `state/a_short/holding_ratchet/`;含真实持仓 → 写前过私密路径守门)。
 HOLDING_RATCHET_DEFAULT_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                                             "state", "a_short", "holding_ratchet", "ratchet_state.json")
@@ -3623,6 +3628,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="跳过语义官方层自动取数(advisory;不影响 M6.7 确定性 base)")
     p.add_argument("--regulatory-confirmations",
                    help="人工确认的官方监管 advisory JSON；必须绑定本次 as_of、候选池和官方事件指纹")
+    p.add_argument("--holding-regulatory-confirmations",
+                   help="私有持仓监管确认 JSON；仅可与 --account 同用，必须绑定账户快照、完整持仓集合和官方事件指纹")
     p.add_argument("--allow-nonprivate-account-out", action="store_true",
                    help="显式放行:带 --account 时允许输出落仓库内非私密目录(默认拒,防真实持仓被 git 提交泄漏)")
     p.add_argument("--ratchet-path", default=HOLDING_RATCHET_DEFAULT_PATH,
@@ -3663,6 +3670,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # state/*/*.json 忽略而放行,但 .md 不被同一规则覆盖、会落未忽略路径泄漏 → 必须用同守门先校验(fail-fast,早于任何写盘)。
     _reject_nonprivate_account_output_path(os.path.splitext(args.out)[0] + ".md", bool(args.account),
                                            args.allow_nonprivate_account_out)
+    if args.holding_regulatory_confirmations:
+        if not args.account:
+            raise SystemExit("[FATAL] --holding-regulatory-confirmations requires --account")
+        _reject_nonprivate_account_output_path(
+            args.holding_regulatory_confirmations, True, allow_override=False
+        )
 
     def _load(path):
         with open(path, encoding="utf-8") as f:
@@ -3709,8 +3722,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         source_identity = build_a_short_run_identity(args.as_of, ai.get("candidates") or [])
     regulatory_confirmations = {}
     if args.regulatory_confirmations:
-        confirmation_payload = _load(args.regulatory_confirmations)
         try:
+            confirmation_payload = _load(args.regulatory_confirmations)
             with open(REGULATORY_CONFIRMATION_SCHEMA_PATH, encoding="utf-8") as handle:
                 jsonschema.validate(confirmation_payload, json.load(handle))
             regulatory_confirmations = validate_confirmation_document(
@@ -3735,6 +3748,24 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         acct, account_lineage, account_bundle = load_account_bundle(args.account, args.as_of)
     else:
         acct, account_lineage, account_bundle = {}, {}, {}
+    holding_regulatory_confirmations = {}
+    if args.holding_regulatory_confirmations:
+        try:
+            holding_confirmation_payload = _load(args.holding_regulatory_confirmations)
+            with open(HOLDING_REGULATORY_CONFIRMATION_SCHEMA_PATH, encoding="utf-8") as handle:
+                jsonschema.validate(holding_confirmation_payload, json.load(handle))
+            positions = acct.get("positions") or []
+            holding_regulatory_confirmations = validate_holding_confirmation_document(
+                holding_confirmation_payload,
+                args.as_of,
+                account_bundle["snapshot_digest"],
+                holding_universe_digest(positions),
+                {str(position.get("ts_code")) for position in positions},
+            )
+        except (OSError, json.JSONDecodeError, jsonschema.ValidationError, RegulatoryAdvisoryContractError) as exc:
+            raise SystemExit(
+                f"[FATAL] invalid/stale --holding-regulatory-confirmations: {type(exc).__name__}"
+            ) from exc
     account_integrity = account_integrity_from_lineage(account_lineage)
     # 市场 regime 只取自 analysis_input(EGS 分类)。unknown/missing 不允许被账户配置覆盖成进攻期;
     # 按 2026-06-14 用户决策:unknown → 震荡期 + 降级 + 保守减半 + M6.7 明确提示。
@@ -3959,16 +3990,48 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                        if str(p.get("ts_code")) in h_codes}
             holding_web_llm_provider = _build_deepseek_web_llm_provider(
                 h_codes, h_names, args.as_of, args.web_news_lookback_days, cap=len(h_codes))
+        if holding_regulatory_confirmations and holding_semantic_provider is None:
+            raise SystemExit(
+                "[FATAL] --holding-regulatory-confirmations requires current official CNINFO holding evidence"
+            )
+        matched_holding_regulatory_confirmations = set()
+        holding_semantic_cache = {}
+
+        def _holding_semantic_with_confirmation(code):
+            if code in holding_semantic_cache:
+                return holding_semantic_cache[code]
+            semantic = holding_semantic_provider(code) if holding_semantic_provider else None
+            try:
+                attached, matched = attach_confirmations(
+                    semantic, code, holding_regulatory_confirmations
+                )
+            except RegulatoryAdvisoryContractError as exc:
+                raise SystemExit(
+                    "[FATAL] holding regulatory confirmation does not match current official evidence: "
+                    f"{exc}"
+                ) from exc
+            matched_holding_regulatory_confirmations.update(matched)
+            holding_semantic_cache[code] = attached
+            return attached
         _append_manual_review_advisories(
-            holdings_manual_review, holding_semantic_provider, holding_web_llm_provider)
+            holdings_manual_review, _holding_semantic_with_confirmation, holding_web_llm_provider)
         holding_normalized, holding_meta, price_manual_review = _build_holdings(
             acct, candidate_codes, args.as_of, price_provider, iv_pct, account, regime,
             regime_fallback, price_data_through, iv_value=iv_value, hv_value=hv_value,
-            semantic_provider=holding_semantic_provider, web_llm_provider=holding_web_llm_provider,
+            semantic_provider=_holding_semantic_with_confirmation, web_llm_provider=holding_web_llm_provider,
             account_integrity=account_integrity, manual_review_codes=manual_review_codes)
         _append_manual_review_advisories(
-            price_manual_review, holding_semantic_provider, holding_web_llm_provider)
+            price_manual_review, _holding_semantic_with_confirmation, holding_web_llm_provider)
         holdings_manual_review.extend(price_manual_review)
+        unmatched_holding_regulatory_confirmations = (
+            set(holding_regulatory_confirmations) - matched_holding_regulatory_confirmations
+        )
+        if unmatched_holding_regulatory_confirmations:
+            raise SystemExit(
+                "[FATAL] holding regulatory confirmation is stale, outside the current holding events, "
+                "or belongs to the candidate domain "
+                f"(unmatched={len(unmatched_holding_regulatory_confirmations)})"
+            )
     portfolio_normalized = normalized + holding_normalized
     portfolio_codes = [str(item.get("ts_code")) for item in portfolio_normalized if item.get("ts_code")]
     portfolio_fact_overrides = None

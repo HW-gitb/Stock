@@ -33,6 +33,8 @@
 #   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 跳过【整个】M6.7 operation 周报(IV/价/account/语义全跳;非仅 semantic — Slice 3b-2 起语义已行内化)
 #   .\runners\weekly_screening.ps1 -Account path\to\account.json      # M6.7 account-state JSON (cash/positions/Rule12/Rule13); omit = no-sizing observation only
 #                                                                     # 带 -Account 报告含真实持仓 → 自动落 gitignored 私密目录 state\a_short\weekly_private\<as_of>\(防提交泄漏);无 -Account 走标准 research lane
+#   .\runners\weekly_screening.ps1 -RegulatoryConfirmations path\to\candidate.json # 可选候选域监管确认；精确转发至 M6.7
+#   .\runners\weekly_screening.ps1 -Account path\to\account.json -HoldingRegulatoryConfirmations path\to\holding.json # 可选私有持仓域确认
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -L3Mode neutralize  # historical replay guard
 #
 # 运行 cadence(A-short 周实盘;用户 2026-06-15 定方向 / 2026-06-22 加 canonical 解析器放宽窗口):
@@ -63,6 +65,8 @@ param(
     [string]$CachePolicy = 'enabled',
     [string]$PythonExe = '',
     [string]$Account = $null,
+    [string]$RegulatoryConfirmations = $null,
+    [string]$HoldingRegulatoryConfirmations = $null,
     [switch]$AllowHistoricalOverwrite,
     [switch]$SkipCanary,
     [switch]$SkipTracker,
@@ -394,6 +398,12 @@ if ($SkipSemanticRisk) {
                 $M67Args += @('--factor-comparison-root', $FactorComparisonRoot, '--factor-comparison-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
+            if (-not [string]::IsNullOrWhiteSpace($RegulatoryConfirmations)) {
+                $M67Args += @('--regulatory-confirmations', $RegulatoryConfirmations)
+            }
+            if (-not [string]::IsNullOrWhiteSpace($HoldingRegulatoryConfirmations)) {
+                $M67Args += @('--holding-regulatory-confirmations', $HoldingRegulatoryConfirmations)
+            }
             $RunM67 = $true
             if ($Account) {
                 if (Test-Path $Account) {

@@ -165,6 +165,15 @@ class WeeklyScreeningGuardrailTest(unittest.TestCase):
         self.assertIn("a_short_weekly_pipeline.py", text)                # the one-click stage IS the M6.7 pipeline
         self.assertNotIn("a_short_semantic_risk_summary.py", text)       # standalone summary CLI no longer invoked
 
+    def test_m67_stage_exactly_forwards_optional_confirmation_files(self) -> None:
+        text = SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("[string]$RegulatoryConfirmations", text)
+        self.assertIn("[string]$HoldingRegulatoryConfirmations", text)
+        self.assertIn("@('--regulatory-confirmations', $RegulatoryConfirmations)", text)
+        self.assertIn("@('--holding-regulatory-confirmations', $HoldingRegulatoryConfirmations)", text)
+        self.assertNotIn("Test-Path $RegulatoryConfirmations", text)
+        self.assertNotIn("Test-Path $HoldingRegulatoryConfirmations", text)
+
     def test_requested_m67_failures_are_receipted_and_nonzero(self) -> None:
         text = SCRIPT.read_text(encoding="utf-8")
         self.assertIn("Write-M67FailureReceipt", text)

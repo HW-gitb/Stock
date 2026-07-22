@@ -1,0 +1,48 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short private official-regulatory holding confirmation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "as_of",
+    "account_snapshot_digest",
+    "holding_universe_digest",
+    "confirmations",
+    "boundary"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_regulatory_holding_confirmation"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "account_snapshot_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "holding_universe_digest": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "confirmations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "event_fingerprint", "decision", "reviewed_at", "note"],
+        "properties": {
+          "ts_code": {"type": "string", "pattern": "^[0-9]{6}\\.(SH|SZ)$"},
+          "event_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "decision": {"enum": ["confirmed_material", "confirmed_not_material", "needs_more_information"]},
+          "reviewed_at": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T", "minLength": 1},
+          "note": {"type": "string", "minLength": 1, "maxLength": 1000}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["advisory_only", "modifies_egs_or_rule6", "automates_order", "private_account_only"],
+      "properties": {
+        "advisory_only": {"const": true},
+        "modifies_egs_or_rule6": {"const": false},
+        "automates_order": {"const": false},
+        "private_account_only": {"const": true}
+      }
+    }
+  }
+}
