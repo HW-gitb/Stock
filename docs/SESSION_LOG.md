@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-22 — Codex 自审 PASS（A-short P5a 后续加固：README 路由 + selector 指纹/黄金回归）
+
+- **Verdict/Action**: PASS。已独立于已合并 P5a 修复 master 既存的 V14.3 regime runner README 路由漂移；并将 `engine/egs_industry_heat.py` 纳入 decision-predicate 指纹，补 L2 `>20→15` 与递进 L1/L2 集中度 golden 回归。P5a 的生产选择逻辑、P5 cache/capture 和任何正式周运行均未改变。
+- **Required**: 无。
+- **Verify**: README guard、selector 六项测试（含两项 golden）、effect-contract selector mutation 测试均通过；随后重跑完整 industry-heat/effect-contract/doc guard 与静态契约检查。无 provider、真实 weekly 或历史回放。
+- **Next**: 无；后续仍按 P5a 剩余缓存/capture 方案另开切片。
+
 ## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 第一刀：统一观察池选择器 select_profile_watch_pool)
 - **Verdict/Action**: PASS(未提交/未 merge,按用户本轮指示)。P5a 从 `score_l5` 抽出的 `select_profile_watch_pool` 是忠实、行为保持的生产选股提取:Tier1+三键排序+L2>20→15+递进 L1≤0.4/L2≤0.3+`.head(top_n)` 与原内联逐行一致(`UNKNOWN_INDUSTRY="未知"` 核过、`df_full,top50=score_l5(df_l4)` 同源→新 `watch_df=select(df_full,15)`==旧 `top50.head(15)`,由 head-等价测试钉死);四臂+生产 balanced 共用同一函数,`variant_top_n` 降为非证据。effect_contract egs_main 用 AST 结构哈希已正确重钉(早先字节哈希 MISMATCH 是 CRLF/字节法误报)。
 - **Required**: 无(P5a selector)。旁记 pre-existing 非本刀 `R-ASHORT-RUNNERS-README-REGIME-RUNNER-DRIFT`(master 既存红 guard)+ 2 Optional(effect_contract 未钉 egs_industry_heat / 不变量测试偏自证+缺集中度用例),单源见 `system_risk_register.md`。

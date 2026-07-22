@@ -406,6 +406,7 @@
   ],
   "decision_predicate_sha256": {
     "A-EGS/egs_main.py": "d608499b127d73416f60d9eb30843e4cccc6447120cd164ac735ba264ec3004a",
+    "engine/egs_industry_heat.py": "6a7595f03078ddd634dc22c3df9d3201c05a03598f8de87cfa8c268664c831f4",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "98bf902c4dbb25bd429f82a4ef3adc1cc5462694d19f57f3e966c47e33febed4",
     "runners/a_short_weekly_pipeline.py": "46e7b4730d2dba80cbde1f58f4f44dd6c47f37ced33c4403baca64b10e96182b",

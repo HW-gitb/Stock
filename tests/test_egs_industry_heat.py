@@ -226,6 +226,50 @@ class ProfileWatchPoolTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "l1_name"):
             select_profile_watch_pool(_universe().drop(columns=["l1_name"]))
 
+    def test_l2_overflow_cap_golden(self):
+        rows = []
+        rank = 1000.0
+        for big_index in range(21):
+            rows.append({
+                "ts_code": f"BIG{big_index:02}.SH", "tier": "Tier1",
+                "final_score": rank, "l4_score": 0.0, "pct_20d_n": 0.0,
+                "l1_name": f"L1_BIG_{big_index:02}", "l2_name": "L2_BIG",
+            })
+            rank -= 1.0
+            for peer_index in range(3):
+                rows.append({
+                    "ts_code": f"PEER{big_index:02}_{peer_index}.SH", "tier": "Tier1",
+                    "final_score": rank, "l4_score": 0.0, "pct_20d_n": 0.0,
+                    "l1_name": f"L1_PEER_{big_index:02}_{peer_index}",
+                    "l2_name": f"L2_PEER_{big_index:02}_{peer_index}",
+                })
+                rank -= 1.0
+
+        pool = select_profile_watch_pool(_df(rows), top_n=100)
+        self.assertEqual(
+            pool.loc[pool["l2_name"] == "L2_BIG", "ts_code"].tolist(),
+            [f"BIG{index:02}.SH" for index in range(15)],
+        )
+
+    def test_incremental_concentration_golden(self):
+        pool = select_profile_watch_pool(_df([
+            {"ts_code": "A0.SH", "tier": "Tier1", "final_score": 100.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_A", "l2_name": "L2_A"},
+            {"ts_code": "B0.SH", "tier": "Tier1", "final_score": 99.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_B", "l2_name": "L2_B"},
+            {"ts_code": "A1.SH", "tier": "Tier1", "final_score": 98.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_A", "l2_name": "L2_A"},
+            {"ts_code": "C0.SH", "tier": "Tier1", "final_score": 97.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_C", "l2_name": "L2_C"},
+            {"ts_code": "A2.SH", "tier": "Tier1", "final_score": 96.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_A", "l2_name": "L2_A"},
+            {"ts_code": "D0.SH", "tier": "Tier1", "final_score": 95.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_D", "l2_name": "L2_D"},
+            {"ts_code": "A3.SH", "tier": "Tier1", "final_score": 94.0, "l4_score": 0.0,
+             "pct_20d_n": 0.0, "l1_name": "L1_A", "l2_name": "L2_A"},
+        ]), top_n=15)
+        self.assertEqual(pool["ts_code"].tolist(), ["A0.SH", "B0.SH", "C0.SH", "D0.SH", "A3.SH"])
+
     def test_egs_uses_the_same_selector_for_top_pool_and_production_watch(self):
         source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
         self.assertIn('top_df = select_profile_watch_pool(df, top_n=CONF["top_n"])', source)
