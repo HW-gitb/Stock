@@ -1199,6 +1199,50 @@ def _apply_holding_disposition(report):
     return report
 
 
+def model_build_eligible(inp: dict, ind: dict, rule6_gate: dict, *, regime: str,
+                         extra_halve: bool, halve_reason: str,
+                         high_material: list[dict], web: dict,
+                         web_status: str, web_downgrade: bool) -> bool:
+    """Return P3's account-independent, comparison-only model-selection flag.
+
+    The public strategy checks stay intact, while current holdings, account
+    integrity/cooldowns and cash allocation are deliberately removed.  The
+    official M6.7 action remains authoritative and can still be ``观察``.
+    """
+    model_inp = dict(inp)
+    model_inp["stateful_risk"] = {"position_state": "flat"}
+    # Synthetic capital removes only account-capacity gating. Liquidity and
+    # impact limits still have to produce a valid minimum-size plan.
+    model_inp["account"] = {
+        "available_cash": 1_000_000_000_000_000.0,
+        "bucket_capital": 1_000_000_000_000_000.0,
+        "new_exposure_capacity": 1_000_000_000_000_000.0,
+    }
+    families = classify_risk_families(model_inp, ind, rule6_gate=rule6_gate)
+    if high_material:
+        families["semantic_official"].update(
+            hit=True, action="hard_veto",
+            reasons=[f"语义官方:{event['risk_type']}(high,人工确认,{ADVISORY_VETO_TAG})"
+                     for event in high_material],
+        )
+    if web_downgrade:
+        families["semantic_web_llm"].update(
+            hit=True, action="downgrade",
+            reasons=[f"语义web/LLM:{web_status}({web.get('risk_level')})"],
+        )
+    if any(families[family]["action"] == "hard_veto" for family in RISK_FAMILIES):
+        return False
+    if str(model_inp.get("analysis_role") or "") != "final":
+        return False
+    if rule6_gate.get("manual_review_check_ids"):
+        return False
+    etype, _ = entry_type(model_inp, ind)
+    if etype == "观察":
+        return False
+    plan, _ = exit_and_size(model_inp, ind, regime, etype, extra_halve, halve_reason)
+    return plan is not None
+
+
 def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     ind = compute_indicators(inp.get("price_series", []))
     rule6_gate = assess_rule6_checks(inp.get("rule6_checks"))
@@ -1286,6 +1330,11 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         halve_reasons.append("regime unknown→震荡期保守减半")
     extra_halve = bool(halve_reasons)
     halve_reason = "；".join(halve_reasons)
+    model_eligible = model_build_eligible(
+        inp, ind, rule6_gate, regime=regime, extra_halve=extra_halve,
+        halve_reason=halve_reason, high_material=high_material, web=web,
+        web_status=web_status, web_downgrade=web_downgrade,
+    )
 
     # 决策
     if hard:
@@ -1504,6 +1553,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
             "entry_exit_size_star": {"action": action, "type": etype if action != "否决" else "N/A",
                                      "star": star, "cash_allocation_star": allocation_star,
                                      "plan": plan, "reject_reason": reject},
+            "model_build_eligible": model_eligible,
             "iv_gate": {"iv_percentile_252d": iv_pct, "halve": iv_halve, "status": iv_status,
                         "iv_value": (inp.get("iv") or {}).get("iv_value"),
                         "hv_value": (inp.get("iv") or {}).get("hv_value"),
@@ -1903,6 +1953,8 @@ def validate_m67_consistency(report: dict) -> None:
     m67 = report["m67"]
     tbl = m67["table"]
     action = mc["entry_exit_size_star"]["action"]
+    if "model_build_eligible" in mc and not isinstance(mc["model_build_eligible"], bool):
+        raise ValueError("machine.model_build_eligible 必须为布尔值")
     rule6_gate = mc.get("rule6_gate")
     if action != "持有" and not isinstance(rule6_gate, dict):
         raise ValueError("候选报告缺 Rule6 completion gate")

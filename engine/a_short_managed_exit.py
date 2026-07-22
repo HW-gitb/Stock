@@ -21,6 +21,23 @@ class ManagedExitError(ValueError):
     """A frozen plan or execution-price input cannot prove a valid outcome."""
 
 
+def net_excess_after_round_trip_cost_pct(gross_excess_pct: object) -> float:
+    """Return strategy net excess over a passive benchmark in percentage points.
+
+    ``gross_excess_pct`` is the strategy gross return minus the benchmark
+    return.  The benchmark is not charged the strategy's trading cost.
+    """
+    if isinstance(gross_excess_pct, bool):
+        raise ManagedExitError("non_finite_return")
+    try:
+        gross_excess = float(gross_excess_pct)
+    except (TypeError, ValueError, OverflowError) as exc:
+        raise ManagedExitError("non_finite_return") from exc
+    if not math.isfinite(gross_excess):
+        raise ManagedExitError("non_finite_return")
+    return gross_excess - ROUND_TRIP_COST_FRACTION * 100.0
+
+
 def _finite_price(value: object) -> float:
     if isinstance(value, bool):
         raise ManagedExitError("non_finite_price")

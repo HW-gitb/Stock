@@ -675,6 +675,29 @@ class MainWiringTests(unittest.TestCase):
             settle.assert_called_once()
             capture.assert_called_once()
 
+    def test_p3_final_action_is_pre_publish_summary_then_post_publish_capture(self):
+        from runners.a_short_final_action_validation_runner import unavailable_public_summary
+
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            root = Path(td) / "logs" / "a_short_final_action_validation.json"
+            summary = unavailable_public_summary(AS_OF)
+            with patch("runners.a_short_final_action_validation_runner.settle_and_summarize",
+                       return_value=summary) as settle, \
+                    patch("runners.a_short_final_action_validation_runner.capture_after_published_weekly",
+                          return_value={"status": "captured"}) as capture:
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--final-action-validation-root", str(root)], price_provider=lambda code: _series())
+            weekly = json.loads(out.read_text(encoding="utf-8"))
+            self.assertIn("a_short_evidence_reminders", weekly)
+            self.assertIn(summary["message"], out.with_suffix(".md").read_text(encoding="utf-8"))
+            self.assertEqual(weekly["a_short_evidence_reminders"]["production_unchanged"], True)
+            settle.assert_called_once()
+            capture.assert_called_once()
+
     def test_p2_target_policy_is_absent_without_its_private_root(self):
         with tempfile.TemporaryDirectory() as td:
             self._write_inputs(td)
