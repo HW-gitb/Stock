@@ -1,0 +1,80 @@
+{
+  "admission": {
+    "schema_name": "a_short_experiment_admission",
+    "schema_version": "1.0.0",
+    "program_id": "a_short_industry_weight_comparison_v1",
+    "experiment_id": "a_short_industry_weight_balanced_vs_legacy",
+    "track_mode": "switchable",
+    "component_id": "industry_weight_profile",
+    "effect_surface": "industry_weight_profile",
+    "baseline": {
+      "arm_id": "legacy",
+      "definition": {"profile_id": "legacy", "weights": {"esp": 0.2, "category": 0.3, "l4": 0.5, "industry_heat": 0.0}},
+      "definition_sha256": "e12339de34e78b48a20f50890adf3858de6fc3ebdf0afa39922919f7d58cb7e4"
+    },
+    "candidate": {
+      "arm_id": "balanced",
+      "definition": {"profile_id": "balanced", "weights": {"esp": 0.2, "category": 0.25, "l4": 0.4, "industry_heat": 0.15}},
+      "definition_sha256": "96dae8b97ecc547fd02d9a918822b3bdf4b04ea98571f56c18df804452f68b0f"
+    },
+    "one_change_only": {
+      "changed_component_ids": ["industry_weight_profile"],
+      "unchanged_contract_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "proof_sha256": "440d382cc637523976ace77ea346123201838d5616639b4c42a64730c82d3cd0"
+    },
+    "pit_forward_contract": {
+      "contract_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "pit_as_of_required": true,
+      "forward_only": true,
+      "historical_replay_counts_as_forward": false
+    },
+    "statistical_contract": {
+      "definition": {"primary_horizon": "h10", "checkpoints": [12, 24, 36], "multiplicity": "holm_bonferroni"},
+      "definition_sha256": "38e5faf3861f16c1482da6a7a868ac7534456b8a3d736e6af22eaa4de96551ed"
+    },
+    "dependency_components": [
+      {"component_id": "profile_watch_pool_selector", "baseline_definition_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"}
+    ],
+    "dependent_experiment_ids": ["a_short_overlay_top5_on_balanced_profile"],
+    "epoch_restart_conditions": {
+      "baseline_definition_change": true,
+      "candidate_definition_change": true,
+      "pit_forward_contract_change": true,
+      "statistical_contract_change": true,
+      "dependency_component_baseline_change": true
+    },
+    "allowed_configuration_path": "presets/egs_industry_heat_governance_20260611.json#/active_profile",
+    "identity_sha256": "ace0cf80a4564d1b7f10893867086e94db1605a6d242f1af3828862baf12c67c",
+    "boundary": {
+      "comparison_only": true,
+      "automatic_adjudication_recommendation_only": true,
+      "automatic_production_config_write": false,
+      "shared_business_ledger": false
+    }
+  },
+  "receipt": {
+    "schema_name": "a_short_experiment_decision_receipt",
+    "schema_version": "1.0.0",
+    "receipt_id": "receipt-industry-weight-balanced-20260722",
+    "experiment_id": "a_short_industry_weight_balanced_vs_legacy",
+    "admission_identity_sha256": "ace0cf80a4564d1b7f10893867086e94db1605a6d242f1af3828862baf12c67c",
+    "component_id": "industry_weight_profile",
+    "candidate_arm_id": "balanced",
+    "adjudication_sha256": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "decision": "accepted",
+    "decision_kind": "promote",
+    "user_decided_at": "20260722T120000Z",
+    "decision_canonical_week": "20260720",
+    "effective_from_canonical_week": "20260727",
+    "old_baseline_definition_sha256": "e12339de34e78b48a20f50890adf3858de6fc3ebdf0afa39922919f7d58cb7e4",
+    "new_baseline_definition_sha256": "96dae8b97ecc547fd02d9a918822b3bdf4b04ea98571f56c18df804452f68b0f",
+    "allowed_configuration_path": "presets/egs_industry_heat_governance_20260611.json#/active_profile",
+    "supersedes_receipt_id": null,
+    "receipt_sha256": "ffded157f337773ebaa5a442eb5d3f722fb9d2949316bfb7e4731db1172f5862",
+    "boundary": {
+      "automatic_adjudication_recommendation_only": true,
+      "automatic_production_config_write": false,
+      "historical_evidence_rewrite": false
+    }
+  }
+}

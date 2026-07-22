@@ -1,0 +1,105 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short unified experiment identity and admission contract",
+  "description": "A schema-first, comparison-only identity contract. It does not create a common ledger, write a production configuration, or authorize a runtime switch.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "experiment_id", "track_mode", "component_id", "effect_surface", "baseline", "candidate", "one_change_only", "pit_forward_contract", "statistical_contract", "dependency_components", "dependent_experiment_ids", "epoch_restart_conditions", "allowed_configuration_path", "identity_sha256", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_experiment_admission"},
+    "schema_version": {"const": "1.0.0"},
+    "program_id": {"$ref": "#/$defs/nonEmptyString"},
+    "experiment_id": {"type": "string", "pattern": "^a_short_[a-z0-9_]+$"},
+    "track_mode": {"enum": ["switchable", "diagnostic_only"]},
+    "component_id": {"$ref": "#/$defs/identifier"},
+    "effect_surface": {"$ref": "#/$defs/identifier"},
+    "baseline": {"$ref": "#/$defs/armDefinition"},
+    "candidate": {"$ref": "#/$defs/armDefinition"},
+    "one_change_only": {"$ref": "#/$defs/oneChangeOnly"},
+    "pit_forward_contract": {"$ref": "#/$defs/pitForwardContract"},
+    "statistical_contract": {"$ref": "#/$defs/digestedDefinition"},
+    "dependency_components": {"type": "array", "items": {"$ref": "#/$defs/dependencyComponent"}},
+    "dependent_experiment_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "pattern": "^a_short_[a-z0-9_]+$"}},
+    "epoch_restart_conditions": {"$ref": "#/$defs/epochRestartConditions"},
+    "allowed_configuration_path": {"type": "string", "pattern": "^(?:presets|A-EGS)/[A-Za-z0-9_./-]+#/[A-Za-z0-9_./-]+$"},
+    "identity_sha256": {"$ref": "#/$defs/sha256"},
+    "boundary": {"$ref": "#/$defs/boundary"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "nonEmptyString": {"type": "string", "minLength": 1},
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "digestedDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definition", "definition_sha256"],
+      "properties": {
+        "definition": {"type": "object"},
+        "definition_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "armDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["arm_id", "definition", "definition_sha256"],
+      "properties": {
+        "arm_id": {"$ref": "#/$defs/identifier"},
+        "definition": {"type": "object"},
+        "definition_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "oneChangeOnly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["changed_component_ids", "unchanged_contract_sha256", "proof_sha256"],
+      "properties": {
+        "changed_component_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
+        "unchanged_contract_sha256": {"$ref": "#/$defs/sha256"},
+        "proof_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "pitForwardContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contract_sha256", "pit_as_of_required", "forward_only", "historical_replay_counts_as_forward"],
+      "properties": {
+        "contract_sha256": {"$ref": "#/$defs/sha256"},
+        "pit_as_of_required": {"const": true},
+        "forward_only": {"const": true},
+        "historical_replay_counts_as_forward": {"const": false}
+      }
+    },
+    "dependencyComponent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component_id", "baseline_definition_sha256"],
+      "properties": {
+        "component_id": {"$ref": "#/$defs/identifier"},
+        "baseline_definition_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "epochRestartConditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline_definition_change", "candidate_definition_change", "pit_forward_contract_change", "statistical_contract_change", "dependency_component_baseline_change"],
+      "properties": {
+        "baseline_definition_change": {"const": true},
+        "candidate_definition_change": {"const": true},
+        "pit_forward_contract_change": {"const": true},
+        "statistical_contract_change": {"const": true},
+        "dependency_component_baseline_change": {"const": true}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparison_only", "automatic_adjudication_recommendation_only", "automatic_production_config_write", "shared_business_ledger"],
+      "properties": {
+        "comparison_only": {"const": true},
+        "automatic_adjudication_recommendation_only": {"const": true},
+        "automatic_production_config_write": {"const": false},
+        "shared_business_ledger": {"const": false}
+      }
+    }
+  }
+}

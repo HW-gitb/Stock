@@ -7,6 +7,39 @@
 - **Verify**: 固定主 Python 离线回归 136 OK，含存在但非固定的 override、PATH 污染、A/US runtest source-root/PATH、pre-commit fake-PATH、codex/offline fail-closed 与活跃文档裸 `python` 守卫；无 provider、真实 weekly 或账户访问。
 - **Proof-of-use**: 已逐项读 resolver、所有 runtest、hook 和 active usage，反向测试先暴露 PATH/helper 与编码兼容问题后最小修复并复跑；当前等待独立审查结论后才提交。
 - **Next**: Codex：独立审查
+## 2026-07-22 — Codex 自审 PASS（A-short experiment-governance 两项 Optional 收口）
+
+- **Verdict/Action**: PASS。下游 dependent experiment 自引用现被 admission validator 拒绝；新增必填 `track_mode`，`diagnostic_only` 只能生成诊断建议且不能构造或验证 baseline activation plan。仍为纯内存合同，无配置写入、共享 ledger、P4b/P5b、provider、账户或券商接线。
+- **Required**: 无；两项 Optional closure 见 `system_risk_register.md` 的 `R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP`。
+- **Verify**: governance/v2/doc-governance pack 85 OK；schema/fixture validation、`py_compile`、`git diff --check` 均 OK。
+- **Next**: Codex：提交、快进 merge 到 master 后删除 2fdd 工作树。
+
+## 2026-07-22 — Claude Code 独立复审 PASS (A-short experiment-governance receipt 合同绑定收口 / R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP)
+- **Verdict/Action**: PASS(未提交/未 merge,按用户指示)。Codex 修复正确且类完整:receipt schema 加 `admission_identity_sha256`(必填,经 `_receipt_payload` 纳入 `receipt_sha256` 覆盖、不可伪造)+ `validate_user_decision_receipt`:157 对所有 receipt 在字段/臂检查前先核 `== admission.identity_sha256`;合同任一维漂移(arms 不变)→ validate 与 plan 双拒。新回归钉住 statistical/PIT/dependency 三维漂移。
+- **Required**: R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP → resolved。2 minor Optional 仍 open 非阻断,单源见 `system_risk_register.md`。
+- **Verify**: review-evidence:f605079c76ab。整读修复缝(schema 加字段+`_receipt_payload` 覆盖+engine:157 前置核+新回归);复现原探针 `holm_bonferroni` true→false → 现 validate+plan 双拒;另探 Codex 未测维度 `effect_surface` 漂移 → 亦双拒(证 umbrella identity 绑定覆盖全维);正控(身份匹配)仍通过;`test_a_short_experiment_governance` 8 OK。按 rule 3/⑤ 小修复未起 agent、未跑全量。
+- **Next**: Codex：Pass
+
+## 2026-07-22 — Codex 修复（A-short experiment-governance receipt contract binding；未提交）
+
+- **Verdict/Action**: 已修复 `R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP`：user receipt 新增并 hash 绑定 `admission_identity_sha256`，验证时必须与当前 admission 完整 identity 相等；统计、PIT、依赖合同任一重封漂移均不能再生成 activation plan。未接入生产配置、P4b/P5b、共享 ledger、provider、账户或券商。
+- **Required**: Claude Code 仅独立复审此 Required 修复；完整 Required 见 `system_risk_register.md` 的 `R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP`。
+- **Verify**: `tests.test_a_short_experiment_governance` + v2 + doc-governance pack 83 OK；schema/fixture validation、`py_compile`、`git diff --check` 均 OK。
+- **Pre-Codex self-review**: 三种 drift 均保持 baseline/candidate 定义不变，分别在 direct receipt validation 与 activation-plan builder 前被 `admission_identity_sha256` equality gate 拒绝。
+- **Next**: Claude Code：独立复审当前 Required 修复；PASS 后按流程提交。
+
+## 2026-07-22 — Claude Code 独立审查 FAIL (A-short 统一实验身份证/回执/生效周两刀 / R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP)
+- **Verdict/Action**: FAIL(narrow)。纯离线 governance 模块整体扎实(身份/单变化/防篡改指纹、forward-only 无回填、单组件 plan、advisory-only 无自动写配置、无共享 ledger、纯内存不写盘),但**用户回执不绑合同 hash**:receipt 只绑 experiment_id+arm 定义 sha+verdict hash+path,不绑 `admission.identity_sha256`→统计/PIT/依赖合同漂移(arms 不变)时 v1 回执仍通过并产出 activation plan,违背其自身 `epoch_restart_conditions`(statistical_contract_change→新 epoch)与设计 C/E。未提交、未 merge。
+- **Required**: R-ASHORT-EXPERIMENT-GOVERNANCE-RECEIPT-CONTRACT-BINDING-GAP — 完整 defect/探针/修法/2 Optional/sound 边界见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:86c9974e7cac。整读 engine(324)+admission/receipt 两 schema+test+fixture;亲跑 `test_a_short_experiment_governance` 7 OK;自跑探针坐实旁路:翻 `statistical_contract.holm_bonferroni` true→false 重封(identity+stat sha 变、arms 同)→v1 receipt 仍 validate 且产 plan。按 rule 3/⑤ 未跑全量(新孤立模块零生产接线);FAIL 经探针坐实,未起独立 agent。
+- **Next**: Codex：修复
+
+## 2026-07-22 — Codex 执行完成（A-short 统一实验身份证/准入 + 用户回执生效周基线合同；未提交）
+
+- **Action**: 新增纯离线 admission identity / user decision receipt schema、fixture、validator 与 activation-plan 逻辑：实验只绑定一个 component/effect surface，baseline/candidate/PIT-forward/统计/依赖/epoch 重启均 hash 绑定；裁决仅输出建议，已接受的用户回执才生成从 future canonical week 生效的单 component plan。旧 baseline 作为 shadow 保留、依赖实验必须新开 epoch、历史证据不回写；不读写实际配置、不建共享 ledger、不接 P2/P3/P4a/P4b/P5b、EGS/M6.7/cache/provider/account/broker。
+- **Required**: Claude Code 仅独立审查当前共同治理合同 diff，重点复核 digest 篡改、第二 component、effective week、重复/回滚回执、依赖 epoch 重启与自动写配置边界；PASS 后由 Claude Code 提交。
+- **Verify**: `tests.test_a_short_experiment_governance` 7 OK；`tests.test_a_short_factor_comparison_v2` + `tests.test_a_short_factor_comparison_v2_adjudication` 40 OK；两 schema 元校验 + fixture validation、`py_compile`、`git diff --check` 均 OK。
+- **Next**: Claude Code：独立审查当前共同治理合同 diff；PASS 后按流程提交。
 
 ## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 剩余切片：industry-weight capture/settle/共享缓存 / R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS)
 - **Verdict/Action**: PASS(未提交/未 merge,按用户指示;comparison-only)。P5 capture/settle/progress 引擎深度 fail-closed 忠实设计;egs_main +51 生产安全(非生产 sidecar 挪进官方事务+加性 marker、`build_weight_comparison` 走 `df.copy()` 不动 df_full→不改选股);v2 缓存未回归(v2 优先+P5 延期);weekly 非阻断;effect_contract 重钉+P5 intentionally_independent。§6a 独立 agent 六不变式全 HELD。

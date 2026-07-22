@@ -1,0 +1,63 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short user decision receipt for a component baseline change",
+  "description": "A user-signed decision binding an advisory adjudication to exactly one admitted component. It is not an executable production-configuration write.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "receipt_id", "experiment_id", "admission_identity_sha256", "component_id", "candidate_arm_id", "adjudication_sha256", "decision", "decision_kind", "user_decided_at", "decision_canonical_week", "effective_from_canonical_week", "old_baseline_definition_sha256", "new_baseline_definition_sha256", "allowed_configuration_path", "supersedes_receipt_id", "receipt_sha256", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_experiment_decision_receipt"},
+    "schema_version": {"const": "1.0.0"},
+    "receipt_id": {"type": "string", "pattern": "^receipt-[a-z0-9-]+$"},
+    "experiment_id": {"type": "string", "pattern": "^a_short_[a-z0-9_]+$"},
+    "admission_identity_sha256": {"$ref": "#/$defs/sha256"},
+    "component_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "candidate_arm_id": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+    "adjudication_sha256": {"$ref": "#/$defs/sha256"},
+    "decision": {"enum": ["accepted", "rejected", "deferred"]},
+    "decision_kind": {"enum": ["promote", "rollback", "no_change"]},
+    "user_decided_at": {"type": "string", "pattern": "^[0-9]{8}T[0-9]{6}Z$"},
+    "decision_canonical_week": {"$ref": "#/$defs/canonicalWeek"},
+    "effective_from_canonical_week": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
+    "old_baseline_definition_sha256": {"$ref": "#/$defs/sha256"},
+    "new_baseline_definition_sha256": {"$ref": "#/$defs/sha256"},
+    "allowed_configuration_path": {"type": "string", "pattern": "^(?:presets|A-EGS)/[A-Za-z0-9_./-]+#/[A-Za-z0-9_./-]+$"},
+    "supersedes_receipt_id": {"type": ["string", "null"], "pattern": "^receipt-[a-z0-9-]+$"},
+    "receipt_sha256": {"$ref": "#/$defs/sha256"},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["automatic_adjudication_recommendation_only", "automatic_production_config_write", "historical_evidence_rewrite"],
+      "properties": {
+        "automatic_adjudication_recommendation_only": {"const": true},
+        "automatic_production_config_write": {"const": false},
+        "historical_evidence_rewrite": {"const": false}
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"decision": {"const": "accepted"}}},
+      "then": {
+        "properties": {
+          "decision_kind": {"enum": ["promote", "rollback"]},
+          "effective_from_canonical_week": {"$ref": "#/$defs/canonicalWeek"}
+        }
+      }
+    },
+    {
+      "if": {"properties": {"decision": {"enum": ["rejected", "deferred"]}}},
+      "then": {
+        "properties": {
+          "decision_kind": {"const": "no_change"},
+          "effective_from_canonical_week": {"const": null},
+          "supersedes_receipt_id": {"const": null}
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "canonicalWeek": {"type": "string", "pattern": "^[0-9]{8}$"}
+  }
+}
