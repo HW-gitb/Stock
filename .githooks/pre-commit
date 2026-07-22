@@ -8,36 +8,16 @@
 root="$(git rev-parse --show-toplevel)" || exit 1
 cd "$root" || exit 1
 
-# Git's hook shell on Windows runs with a MINIMAL PATH that usually lacks the user's Python, so PATH
-# lookup alone is unreliable (it would block every commit). Discover a real interpreter: PATH first,
-# then known Windows install locations resolved via LOCALAPPDATA / USERPROFILE (Git preserves these).
-find_python() {
-  for c in python python3 py; do
-    if command -v "$c" >/dev/null 2>&1; then printf '%s' "$c"; return 0; fi
-  done
-  # Git's hook shell has a minimal PATH and its env vars may not point at the real profile, AND Claude
-  # vs Codex run with DIFFERENT interpreters (Claude: AppData\Local\Programs\Python\Python*; Codex:
-  # .cache\codex-runtimes\*\dependencies\python). Search BOTH, across all user profiles (single-user
-  # local repo) plus env-var bases, so the guard actually runs in either environment.
-  for exe in \
-    /c/Users/*/.cache/codex-runtimes/*/dependencies/python/python.exe \
-    /c/Users/*/AppData/Local/Programs/Python/Python*/python.exe \
-    "$HOME"/.cache/codex-runtimes/*/dependencies/python/python.exe \
-    "$HOME"/AppData/Local/Programs/Python/Python*/python.exe \
-    "$LOCALAPPDATA"/Programs/Python/Python*/python.exe \
-    "$USERPROFILE"/AppData/Local/Programs/Python/Python*/python.exe ; do
-    [ -x "$exe" ] && { printf '%s' "$exe"; return 0; }
-  done
-  return 1
-}
-
-PY="$(find_python)"
-if [ -z "$PY" ]; then
-  # Fail OPEN (do not brick commits) but loudly — the tracked test is the primary defense.
-  echo "pre-commit WARNING: no Python found on PATH or in known Windows locations; route-doc guard NOT run." 1>&2
-  echo "Run 'python -m unittest tests.test_route_doc_ledger_status_consistency' manually before committing." 1>&2
-  exit 0
+# Codex commits must run the same dependency-complete host Python as formal
+# project commands. Do not discover or fall back to PATH, bundled, or another
+# user's interpreter: a missing pin blocks the commit rather than testing in a
+# different environment.
+PINNED_STOCK_PY="/c/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe"
+if [ ! -x "$PINNED_STOCK_PY" ]; then
+  echo "pre-commit BLOCKED: pinned Stock Python was not found: $PINNED_STOCK_PY" 1>&2
+  exit 1
 fi
+PY="$PINNED_STOCK_PY"
 
 "$PY" -m unittest tests.test_route_doc_ledger_status_consistency 1>&2
 if [ "$?" -ne 0 ]; then
@@ -71,7 +51,7 @@ if [ -n "$PY" ]; then
     echo "pre-commit REMINDER (advisory, does NOT block): this commit changes a-short production code but no" 1>&2
     echo "full-pack GREEN is recorded for this code state (AGENTS.md §Verification tiering rule 3/4)." 1>&2
     echo "At the PASS/merge gate run the a_short full pack ONCE, then record it:" 1>&2
-    echo "  python .tools/full_pack_ledger.py record a_short <count>" 1>&2
+    echo "  .tools\\codex_main_python.ps1 .tools\\full_pack_ledger.py record a_short <count>" 1>&2
     echo "(If focused tests bound the impact per rule 6, ignore this.)" 1>&2
   fi
 fi

@@ -23,10 +23,9 @@ example templates under ``schemas/examples/`` are directly consumable. Failures 
 prints an error code + safe path/location/counts, never a ticker / holding / account value / score /
 raw invalid value.
 
-PowerShell copy/paste sequence (set the first two variables for your machine):
-    $PythonExe = 'C:\Path\To\python.exe'
+PowerShell copy/paste sequence (set the private-root value for your machine):
     $PrivateRoot = 'C:\Path\To\private\us_short'
-    & $PythonExe runners/us_short_weekend_batch4_context_builder.py `
+    & .\tools\codex_main_python.ps1 runners/us_short_weekend_batch4_context_builder.py `
         --account "$PrivateRoot\us_short_account_state.json" `
         --analysis-fixture schemas/examples/us_short_weekend_batch4_context_packet.empty.example.json `
         --calendar presets/us_short_market_calendar_2026_2027.json `
@@ -34,7 +33,7 @@ PowerShell copy/paste sequence (set the first two variables for your machine):
         --lifecycle-register "$PrivateRoot\lifecycle\lifecycle_register.json" `
         --runs-private-root "$PrivateRoot\runs_private" --weekly-private-root "$PrivateRoot\weekly_private" `
         --out "$PrivateRoot\packet.json"
-    & $PythonExe runners/us_short_weekend_batch4.py --context "$PrivateRoot\packet.json" `
+    & .\tools\codex_main_python.ps1 runners/us_short_weekend_batch4.py --context "$PrivateRoot\packet.json" `
         --now-et 2026-06-13T10:00:00 --bootstrap-lifecycle --dry-run
 """
 from __future__ import annotations

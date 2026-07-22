@@ -329,10 +329,11 @@ class FailClosedAndRedaction(unittest.TestCase):
 
 
 class PublishedCommandShape(unittest.TestCase):
-    def test_builder_docstring_uses_powershell_syntax_and_configurable_python(self):
+    def test_builder_docstring_uses_powershell_syntax_and_pinned_codex_python(self):
         source = BUILDER.read_text(encoding="utf-8")
-        self.assertIn("$PythonExe", source)
-        self.assertIn("& $PythonExe", source)
+        self.assertNotIn("$PythonExe", source)
+        self.assertIn(r"& .\tools\codex_main_python.ps1", source)
+        self.assertNotIn(r"C:\Path\To\python.exe", source)
         self.assertNotIn(" \\\n", source)
 
     def test_builder_help_advertises_direct_full_template_input(self):

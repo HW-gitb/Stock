@@ -24,25 +24,21 @@ coverage. Formal EGS runs also publish
 
 Validation environment:
 
-- `runners\weekly_screening.cmd` is the standard Windows entrypoint: it launches only the sibling `weekly_screening.ps1` with a process-scoped execution-policy bypass, without changing machine or user policy. `runners\weekly_screening.ps1` resolves `-PythonExe`, `STOCK_PYTHON`,
-  PATH, or a standard Windows Python install in that order, then runs the
-  offline dependency preflight before any provider or private-state access.
+- `runners\weekly_screening.cmd` is the standard Windows entrypoint: it launches only the sibling `weekly_screening.ps1` with a process-scoped execution-policy bypass, without changing machine or user policy. Its resolver validates any legacy interpreter value but always returns the pinned host Python, then runs the offline dependency preflight before any provider or private-state access. It never selects the Codex bundled/PATH Python.
 - Run the complete offline A-short check with one command:
   `.\runners\a_short_offline_check.ps1`. Missing dependencies are listed
   together; install them once with
-  `python -m pip install -r requirements-a-short.txt`, then rerun the command.
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .tools\codex_main_python.ps1 -m pip install -r requirements-a-short.txt`, then rerun the command.
 - Install mandatory runtime validation dependencies with:
-  `python -m pip install -r requirements.txt`.
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .tools\codex_main_python.ps1 -m pip install -r requirements.txt`.
 - Install development / test dependencies with:
-  `python -m pip install -r requirements-dev.txt`.
-- The Codex bundled Python runtime is acceptable for syntax checks and unit
-  tests only after `requirements.txt` is installed there; do not treat bundled
-  runtime packages as the project's dependency source.
+  `powershell -NoProfile -ExecutionPolicy Bypass -File .tools\codex_main_python.ps1 -m pip install -r requirements-dev.txt`.
+- Codex must invoke the pinned host interpreter through `.tools\codex_main_python.ps1` (or the test launcher below). The Codex bundled Python is not an accepted project runtime, even if it can import a subset of packages.
 
 Existing helpers:
 
 - `backtest_rank.py` — Phase 2 rank 回测入口；smoke-mode historical `today` L3 generation explicitly passes `--allow-historical-live-l3`, while production defaults to L3 neutralization.
-- `a_short_preflight.py` / `a_short_offline_check.ps1` - resolve one explicit or standard project Python, report every missing A-short dependency and actual `Asia/Shanghai` timezone capability in one offline pass, then run the fixed offline test pack without provider or private-account access.
+- `a_short_preflight.py` / `a_short_offline_check.ps1` - validate the one pinned host Python (an explicit value is validation-only), report every missing A-short dependency and actual `Asia/Shanghai` timezone capability in one offline pass, then run the fixed offline test pack without provider or private-account access.
 - `a_short_entry_funnel_calibration.py` - local-only, source-hash-bound evaluator for the preregistered A-short funnel / IV / overlay seen sample; it cannot search or change production thresholds and keeps future confirmatory observations separate.
 - `backtest_execution.py` - Phase 5 execution backtest runner; reads
   `analysis_input.json`, can validate/reference an existing `execution_price_data`

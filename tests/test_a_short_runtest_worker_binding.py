@@ -9,6 +9,7 @@ from tempfile import TemporaryDirectory
 
 
 ROOT = Path(__file__).resolve().parents[1]
+PINNED_STOCK_PYTHON = r"C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe"
 
 
 class AShortRuntestWorkerBindingTests(unittest.TestCase):
@@ -22,11 +23,7 @@ class AShortRuntestWorkerBindingTests(unittest.TestCase):
         self.runners.mkdir(parents=True)
         (self.source_root / ".tools").mkdir()
         (self.source_root / ".tools" / "Resolve-AshortPython.ps1").write_text(
-            """function Resolve-AshortPython {
-    param([string]$Requested)
-    return $Requested
-}
-""",
+            "throw 'Foreign SourceRoot resolver must never be loaded.'\n",
             encoding="utf-8",
         )
         (self.runners / "runtest_capsule.py").write_text(
@@ -98,12 +95,12 @@ if command == "create":
                     f"-SourceRoot '{escaped(self.source_root)}'",
                     f"-CapsuleRoot '{escaped(capsule_root)}'",
                     f"-RunId 'worker-binding-{name}'",
-                    f"-PythonExe '{escaped(Path(sys.executable))}'",
                 ]
                 for value in extra_args:
                     command_parts.append(str(value) if str(value).startswith("-") else f"'{escaped(value)}'")
                 environment = os.environ.copy()
                 environment["RUNTEST_TEST_CAPTURE_PATH"] = str(capture)
+                environment["PATH"] = r"C:\not-a-python-path"
                 result = subprocess.run(
                     [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", " ".join(command_parts)],
                     cwd=ROOT,
@@ -119,7 +116,7 @@ if command == "create":
                 self.assertEqual(captured["canary_source"], "")
                 self.assertEqual(captured["l3_mode"], "today")
                 self.assertEqual(captured["cache_policy"], "disabled")
-                self.assertEqual(captured["python_exe"], sys.executable)
+                self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
                 expected_account = str(capsule / "private_inputs" / expected_account_leaf) if expected_account_leaf else ""
                 self.assertEqual(captured["account"], expected_account)
 
@@ -132,10 +129,9 @@ if command == "create":
         source_root = str(self.source_root).replace("'", "''")
         capsule_root = self.base / "rejected_extra_args"
         escaped_capsule_root = str(capsule_root).replace("'", "''")
-        escaped_python = str(Path(sys.executable)).replace("'", "''")
         command = (
             f"& '{script}' -ConfirmRuntest -SourceRoot '{source_root}' "
-            f"-CapsuleRoot '{escaped_capsule_root}' -PythonExe '{escaped_python}' "
+            f"-CapsuleRoot '{escaped_capsule_root}' "
             "-ExtraArgs @('--cache-policy', 'enabled')"
         )
         result = subprocess.run(

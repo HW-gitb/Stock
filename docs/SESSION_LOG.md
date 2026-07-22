@@ -1,5 +1,13 @@
 # Session Log
 
+## 2026-07-22 — Codex 修复（固定主 Python；待独立审查）
+
+- **Action**: 按用户授权，将 Codex 正式命令、A/US runtest、测试 launcher 与已启用 pre-commit hook 统一固定到 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；非固定的 `-PythonExe`、`STOCK_PYTHON`、`STOCK_TEST_PYTHON` 均 fail-closed，任何 PATH/bundled/扫描 fallback 均不被接受。
+- **Required**: 已修复五轮独立审查指出的 resolver/launcher、文档、runtest、hook 与反向测试缺口；无 Optional。
+- **Verify**: 固定主 Python 离线回归 136 OK，含存在但非固定的 override、PATH 污染、A/US runtest source-root/PATH、pre-commit fake-PATH、codex/offline fail-closed 与活跃文档裸 `python` 守卫；无 provider、真实 weekly 或账户访问。
+- **Proof-of-use**: 已逐项读 resolver、所有 runtest、hook 和 active usage，反向测试先暴露 PATH/helper 与编码兼容问题后最小修复并复跑；当前等待独立审查结论后才提交。
+- **Next**: Codex：独立审查
+
 ## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 剩余切片：industry-weight capture/settle/共享缓存 / R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS)
 - **Verdict/Action**: PASS(未提交/未 merge,按用户指示;comparison-only)。P5 capture/settle/progress 引擎深度 fail-closed 忠实设计;egs_main +51 生产安全(非生产 sidecar 挪进官方事务+加性 marker、`build_weight_comparison` 走 `df.copy()` 不动 df_full→不改选股);v2 缓存未回归(v2 优先+P5 延期);weekly 非阻断;effect_contract 重钉+P5 intentionally_independent。§6a 独立 agent 六不变式全 HELD。
 - **Required**: 无。4 项 Optional/watch(非阻断,单源见 register `R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS`):weekly:4182 unavailable 分支未包 try/except · balanced==official 首跑核 · validate_weekly_report 内校验 · ps1 源路径核。

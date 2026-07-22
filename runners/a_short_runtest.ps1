@@ -23,12 +23,13 @@ if (-not $ConfirmRuntest) {
     throw 'Runtest is intentionally explicit. Re-run with -ConfirmRuntest; this creates a new isolated capsule and may call data providers.'
 }
 
+$RuntimeRoot = Split-Path -Parent $PSScriptRoot
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $Manager = Join-Path $SourceRoot 'runners\runtest_capsule.py'
 if (-not (Test-Path -LiteralPath $Manager -PathType Leaf)) {
     throw "Missing runtest capsule manager: $Manager"
 }
-. (Join-Path $SourceRoot '.tools\Resolve-AshortPython.ps1')
+. (Join-Path $RuntimeRoot '.tools\Resolve-AshortPython.ps1')
 $PythonExe = Resolve-AshortPython -Requested $PythonExe
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = "a_short_$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))_$PID"

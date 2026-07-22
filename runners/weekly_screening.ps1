@@ -27,7 +27,7 @@
 #   .\runners\weekly_screening.ps1                                   # 省略 -AsOf = 自动解析 canonical(即将到来/当前未收盘的交易日)
 #   .\runners\weekly_screening.ps1 -AsOf 20260522                    # 显式决策日(前瞻 live 或真·过去 historical)
 #   .\runners\weekly_screening.ps1 -AsOf 20260522 -CanarySource em
-#   .\runners\weekly_screening.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
+#   .\runners\weekly_screening.ps1 -PythonExe C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe   # 可省略；传值仅校验固定主 Python
 #   .\runners\weekly_screening.ps1 -SkipCanary                        # 只跑选股
 #   .\runners\weekly_screening.ps1 -SkipTracker                       # 不跑 forward tracker capture
 #   .\runners\weekly_screening.ps1 -SkipSemanticRisk                  # 跳过【整个】M6.7 operation 周报(IV/价/account/语义全跳;非仅 semantic — Slice 3b-2 起语义已行内化)

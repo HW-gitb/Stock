@@ -264,13 +264,13 @@
 
 ```powershell
 # 24 月 production rank 回测
-python runners\backtest_rank.py --mode production --periods 24 --freq monthly --end-date 20260301 --split-date 20250101 --refresh-forward-daily
+.\tools\codex_main_python.ps1 runners\backtest_rank.py --mode production --periods 24 --freq monthly --end-date 20260301 --split-date 20250101 --refresh-forward-daily
 
 # Stats-only 重统计
-python runners\backtest_rank.py --stats-only --mode production --periods 24 --freq monthly --end-date 20260301
+.\tools\codex_main_python.ps1 runners\backtest_rank.py --stats-only --mode production --periods 24 --freq monthly --end-date 20260301
 
 # 每周五实时选股
-python A-EGS\egs_main.py --as-of <YYYYMMDD>
+.\tools\codex_main_python.ps1 A-EGS\egs_main.py --as-of <YYYYMMDD>
 
 # 周五一键
 .\runners\weekly_screening.ps1 -AsOf 20260530 -L3Mode neutralize

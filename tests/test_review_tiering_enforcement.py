@@ -92,6 +92,16 @@ class PreCommitReminderTests(unittest.TestCase):
         block = self.hook[self.hook.index(marker):]
         self.assertNotIn("exit 1", block)
 
+    def test_hook_uses_only_the_pinned_stock_python(self):
+        self.assertIn(
+            'PINNED_STOCK_PY="/c/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe"',
+            self.hook,
+        )
+        self.assertIn('PY="$PINNED_STOCK_PY"', self.hook)
+        self.assertNotIn("find_python", self.hook)
+        self.assertNotIn("command -v", self.hook)
+        self.assertNotIn("codex-runtimes", self.hook)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -11,6 +11,7 @@ from tempfile import TemporaryDirectory
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "runners" / "runtest_capsule.py"
+PINNED_STOCK_PYTHON = r"C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe"
 
 
 def _load_module():
@@ -310,13 +311,13 @@ if command == \"create\":
                     f"-SourceRoot '{escaped(source_root)}'",
                     f"-CapsuleRoot '{escaped(capsule_root)}'",
                     f"-RunId 'worker-binding-{name}'",
-                    f"-PythonExe '{escaped(Path(sys.executable))}'",
                     "-NowEt '2026-07-21T08:00:00'",
                 ]
                 for value in extra_args:
                     command_parts.append(str(value) if str(value).startswith("-") else f"'{escaped(value)}'")
                 environment = os.environ.copy()
                 environment["RUNTEST_TEST_CAPTURE_PATH"] = str(capture)
+                environment["PATH"] = r"C:\not-a-python-path"
                 result = subprocess.run(
                     [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", " ".join(command_parts)],
                     cwd=ROOT,
@@ -330,7 +331,7 @@ if command == \"create\":
                 capsule = capsule_root / "us_short" / f"worker-binding-{name}"
                 self.assertEqual(captured["now_et"], "2026-07-21T08:00:00")
                 self.assertEqual(captured["private_root"], str(capsule / "private" / "us_short"))
-                self.assertEqual(captured["python_exe"], sys.executable)
+                self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
                 self.assertEqual(captured["batch_template"], str(capsule / "private_inputs" / "us_batch_template") if expected["live"] or expected["prepare_budget"] else "")
                 self.assertEqual(captured["account_state"], str(capsule / "private_inputs" / "us_account_state") if expected["live"] or expected["prepare_budget"] else "")
                 for key, value in expected.items():

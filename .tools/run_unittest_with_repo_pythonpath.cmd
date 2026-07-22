@@ -4,6 +4,9 @@ setlocal
 set "REPO_ROOT=%~dp0.."
 for %%I in ("%REPO_ROOT%") do set "REPO_ROOT=%%~fI"
 set "REPO_PYTHON_LIBS=%REPO_ROOT%\.tools\python_libs"
+set "PINNED_PYTHON=C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe"
+set "PYTHON_EXE="
+set "PIN_VALIDATOR=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
 
 if not exist "%REPO_PYTHON_LIBS%\jsonschema" (
     echo Missing repo-local jsonschema package under "%REPO_PYTHON_LIBS%" 1>&2
@@ -13,49 +16,28 @@ if not exist "%REPO_PYTHON_LIBS%\jsonschema" (
 set "ORIGINAL_PYTHONPATH=%PYTHONPATH%"
 
 if defined PYTHONPATH (
-    echo ;%PYTHONPATH%; | find /I ";%REPO_PYTHON_LIBS%;" >nul
-    if errorlevel 1 set "PYTHONPATH=%REPO_PYTHON_LIBS%;%PYTHONPATH%"
+    set "PYTHONPATH=%REPO_PYTHON_LIBS%;%PYTHONPATH%"
 ) else (
     set "PYTHONPATH=%REPO_PYTHON_LIBS%"
 )
 
-if defined STOCK_TEST_PYTHON (
-    set "PYTHON_EXE=%STOCK_TEST_PYTHON%"
-) else (
-    for %%P in (python py python3) do (
-        if not defined PYTHON_EXE (
-            where %%P >nul 2>nul
-            if not errorlevel 1 set "PYTHON_EXE=%%P"
-        )
-    )
-)
-
-if not defined PYTHON_EXE (
-    for /d %%D in ("%LOCALAPPDATA%\Programs\Python\Python*") do (
-        if not defined PYTHON_EXE if exist "%%~fD\python.exe" set "PYTHON_EXE=%%~fD\python.exe"
-    )
-)
-
-if not defined PYTHON_EXE if exist "%LOCALAPPDATA%\Programs\Python\Launcher\py.exe" (
-    set "PYTHON_EXE=%LOCALAPPDATA%\Programs\Python\Launcher\py.exe"
-)
-
-if not defined PYTHON_EXE (
-    for /d %%D in ("%ProgramFiles%\Python*") do (
-        if not defined PYTHON_EXE if exist "%%~fD\python.exe" set "PYTHON_EXE=%%~fD\python.exe"
-    )
-)
-
-if not defined PYTHON_EXE if defined ProgramFiles(x86) (
-    for /d %%D in ("%ProgramFiles(x86)%\Python*") do (
-        if not defined PYTHON_EXE if exist "%%~fD\python.exe" set "PYTHON_EXE=%%~fD\python.exe"
-    )
-)
-
-if not defined PYTHON_EXE (
-    echo No Python executable found. Install Python or set STOCK_TEST_PYTHON to a python.exe path. 1>&2
+if not exist "%PINNED_PYTHON%" (
+    echo Pinned Stock Python was not found: "%PINNED_PYTHON%" 1>&2
     exit /b 1
 )
+if not exist "%PIN_VALIDATOR%" (
+    echo Pinned Stock Python validation requires Windows PowerShell: "%PIN_VALIDATOR%" 1>&2
+    exit /b 1
+)
+"%PIN_VALIDATOR%" -NoProfile -Command "$ErrorActionPreference = 'Stop'; . '%REPO_ROOT%\.tools\Resolve-AshortPython.ps1'; Resolve-AshortPython | Out-Null"
+if errorlevel 1 (
+    echo A legacy interpreter override does not equal the pinned Stock Python. 1>&2
+    exit /b 1
+)
+set "PYTHON_EXE=%PINNED_PYTHON%"
+rem Validation above rejects poisoned legacy overrides; clear accepted values for child processes.
+set "STOCK_PYTHON="
+set "STOCK_TEST_PYTHON="
 
 "%PYTHON_EXE%" -c "import jsonschema" >nul 2>&1
 if errorlevel 1 (
@@ -67,8 +49,8 @@ if errorlevel 1 (
     )
     "%PYTHON_EXE%" -c "import jsonschema" >nul 2>&1
     if errorlevel 1 (
-        echo jsonschema is not importable from either "%REPO_PYTHON_LIBS%" or STOCK_TEST_PYTHON. 1>&2
-        echo The repository copy needs its matching rpds compiled extension. Install jsonschema for STOCK_TEST_PYTHON 1>&2
+        echo jsonschema is not importable from either "%REPO_PYTHON_LIBS%" or the pinned Stock Python. 1>&2
+        echo The repository copy needs its matching rpds compiled extension. Install jsonschema for the pinned Stock Python 1>&2
         echo ^(for example, "%PYTHON_EXE%" -m pip install jsonschema^) and rerun; this launcher will use that copy. 1>&2
         exit /b 1
     )
@@ -76,6 +58,13 @@ if errorlevel 1 (
 
 pushd "%REPO_ROOT%" >nul
 if errorlevel 1 exit /b 1
+
+rem Prove the selected interpreter has the full A-short runtime before tests.
+"%PYTHON_EXE%" runners\a_short_preflight.py
+if errorlevel 1 (
+    echo The selected Stock Python failed the full A-short dependency preflight. 1>&2
+    exit /b 2
+)
 
 if "%~1"=="" (
     "%PYTHON_EXE%" -m unittest discover -s tests

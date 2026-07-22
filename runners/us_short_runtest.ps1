@@ -17,7 +17,7 @@ param(
     [string]$CapsuleRoot = 'D:\cnhea\Stock_runtest_private',
     [string]$Commit = 'HEAD',
     [string]$RunId = '',
-    [string]$PythonExe = 'python',
+    [string]$PythonExe = '',
     [switch]$ConfirmRuntest
 )
 
@@ -40,11 +40,14 @@ if (($Live -or $PrepareBudget) -and ([string]::IsNullOrWhiteSpace($BatchTemplate
     throw 'A live or budget runtest requires explicit -BatchTemplate and -AccountState so no source-repo private input is reused.'
 }
 
+$RuntimeRoot = Split-Path -Parent $PSScriptRoot
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $Manager = Join-Path $SourceRoot 'runners\runtest_capsule.py'
 if (-not (Test-Path -LiteralPath $Manager -PathType Leaf)) {
     throw "Missing runtest capsule manager: $Manager"
 }
+. (Join-Path $RuntimeRoot '.tools\Resolve-AshortPython.ps1')
+$PythonExe = Resolve-AshortPython -Requested $PythonExe
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = "us_short_$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))_$PID"
 }

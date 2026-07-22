@@ -22,7 +22,7 @@
 #   .\runners\us_short_weekly_capstone.ps1 -NowEt 2026-07-20T08:00:00   # 覆盖决策时刻(naive ET)
 #   .\runners\us_short_weekly_capstone.ps1 -PrepareBudget -MomentumTopK 200  # 跑上游漏斗算 Pass2 精确预算(联网、不出报告)
 #   .\runners\us_short_weekly_capstone.ps1 -Live -MomentumTopK 200 -Pass2Budget 137   # 真跑(需已独立授权 K + 预算)
-#   .\runners\us_short_weekly_capstone.ps1 -PythonExe C:\Path\To\python.exe   # python 不在 PATH 时
+#   .\runners\us_short_weekly_capstone.ps1 -PythonExe C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe   # 可省略；传值仅校验固定主 Python
 #   .\runners\us_short_weekly_capstone.ps1 -PrivateRoot D:\external\private   # 覆盖私密输出根(仓外亦可)
 #   .\runners\us_short_weekly_capstone.ps1 -ExtraArgs '--provider-pace-seconds','2.0'   # 透传其余 runner 参数
 #

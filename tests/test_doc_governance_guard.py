@@ -1197,31 +1197,37 @@ class DocGovernanceGuard(unittest.TestCase):
             "PYTHONPATH",
             ".tools/python_libs",
             "jsonschema",
-            "STOCK_TEST_PYTHON",
-            "%LOCALAPPDATA%/Programs/Python/Python*",
-            "%LOCALAPPDATA%/Programs/Python/Launcher/py.exe",
+            "PINNED_PYTHON",
+            "PIN_VALIDATOR",
+            "Resolve-AshortPython.ps1",
+            "C:/Users/cnhea/AppData/Local/Programs/Python/Python313/python.exe",
             "-m unittest",
         ):
             self.assertIn(anchor, normalized_script, f"wrapper lost required test-runtime anchor: {anchor}")
+        for forbidden in ("where %%P", "if defined STOCK_TEST_PYTHON", "if defined STOCK_PYTHON"):
+            self.assertNotIn(forbidden, launcher_script,
+                             f"strict Codex launcher must not select another interpreter: {forbidden}")
+        self.assertIn('set "STOCK_TEST_PYTHON="', launcher_script,
+                      "strict launcher must clear an inherited test-interpreter override")
+        self.assertIn("legacy interpreter override does not equal the pinned Stock Python", launcher_script,
+                      "strict launcher must reject rather than silently ignore a legacy interpreter override")
 
         agents = AGENTS.read_text(encoding="utf-8").replace("\\", "/")
         self.assertIn(".tools/run_unittest_with_repo_pythonpath.cmd", agents,
                       "AGENTS must name the canonical unittest wrapper launcher")
         self.assertIn(".tools/python_libs", agents,
                       "AGENTS must name the repo-local Python dependency directory")
-        self.assertIn("STOCK_TEST_PYTHON", agents,
-                      "AGENTS must document the explicit Python override for environments without python on PATH")
-        self.assertIn("%LOCALAPPDATA%/Programs/Python/Python*", agents,
-                      "AGENTS must document the common Windows user-install Python fallback")
+        self.assertIn(".tools/codex_main_python.ps1", agents,
+                      "AGENTS must document the strict Codex host-Python entrypoint")
+        self.assertIn("Python313/python.exe", agents,
+                      "AGENTS must document the pinned Codex host Python")
         self.assertIn("do not accept silent schema-skip behavior", agents,
                       "AGENTS lost the no-silent-schema-skip rule")
 
-        env = os.environ.copy()
-        env["STOCK_TEST_PYTHON"] = sys.executable
         result = subprocess.run(
             [str(launcher), "tests.test_doc_governance_guard.JsonschemaImportSmoke"],
             cwd=str(ROOT),
-            env=env,
+            env=os.environ.copy(),
             text=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,

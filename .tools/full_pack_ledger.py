@@ -8,8 +8,8 @@ prints the cached count when a re-run would be redundant, so the reviewer cites 
 instead of re-running a multi-minute pack for a number they already have.
 
 Usage:
-  python .tools/full_pack_ledger.py record <lane> <count>   # right after a REAL green full run
-  python .tools/full_pack_ledger.py check  <lane>           # before considering a (re-)run
+   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py record <lane> <count>   # right after a REAL green full run
+   .\tools\codex_main_python.ps1 .tools\full_pack_ledger.py check  <lane>           # before considering a (re-)run
 
 `check` exit code: 0 = cached green on the current exact code state (do NOT re-run; cite it);
 1 = no cached green for the current code state (a full run is warranted only if tiering rule 3

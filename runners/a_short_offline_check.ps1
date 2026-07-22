@@ -10,9 +10,8 @@ try {
 }
 
 & $PythonExe (Join-Path $PSScriptRoot 'a_short_preflight.py')
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if ($null -eq $LASTEXITCODE -or $LASTEXITCODE -ne 0) { exit 1 }
 
-$env:STOCK_TEST_PYTHON = $PythonExe
 & (Join-Path $ProjectRoot '.tools\run_unittest_with_repo_pythonpath.cmd') `
     tests.test_a_short_preflight `
     tests.test_a_short_entry_funnel_calibration `
@@ -24,4 +23,5 @@ $env:STOCK_TEST_PYTHON = $PythonExe
     tests.execution.test_materialize_execution_price_data `
     tests.execution.test_materialize_execution_price_data_tushare `
     tests.execution.test_aggregate_execution_reports
-exit $LASTEXITCODE
+if ($null -eq $LASTEXITCODE -or $LASTEXITCODE -ne 0) { exit 1 }
+exit 0

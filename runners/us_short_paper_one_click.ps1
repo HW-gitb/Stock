@@ -1,6 +1,7 @@
 # US-short paper-account full-system one-click launcher.
 # The sibling .cmd supplies a process-scoped ExecutionPolicy bypass; this
-# script resolves the project's primary Python and invokes one Python process.
+# script validates the pinned host Python and invokes one Python process; a
+# caller cannot redirect it to PATH, bundled, or another interpreter.
 
 [CmdletBinding()]
 param(

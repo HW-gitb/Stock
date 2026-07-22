@@ -10,11 +10,11 @@
 
 本节是执行/修复时的默认节奏,用于避免把时间耗在环境探测、重复验证和卡住的独立自审上;不改变 A-F 设计闭环要求。
 
-1. **先固定测试 Python,再跑测试**:进入执行/修复后先用本地 runtime 定位 Python,设置当前 shell 的 `STOCK_TEST_PYTHON`,再通过 `.tools/run_unittest_with_repo_pythonpath.cmd` 跑测试;不要先试裸 `python`/`py` 导致无效失败。不得把 Codex/Claude 私有 runtime 路径写入 tracked wrapper。
+1. **先固定测试 Python,再跑测试**:进入执行/修复后只用固定主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；测试通过 `.tools/run_unittest_with_repo_pythonpath.cmd`，其他项目命令通过 `.tools\codex_main_python.ps1`。不要试裸 `python`/`py`，不要设置 `STOCK_TEST_PYTHON`，也不得回退到 Codex bundled/PATH runtime。
 2. **红绿节奏保持窄**:先写能复现 Required 的 focused 红测,最小修复到 focused 绿;所有 docs/register/SESSION_LOG 写完后再跑一次对应固定包。固定包层级、full-lane 触发条件及 reviewer 的独立复跑义务只以 `AGENTS.md §Verification tiering and one-full-run rule` 为准。除非后续代码/契约又变了,不要因为只补交接文字反复跑同一大包。
 3. **独立自审默认轻量**:交审前的独立 agent 只给当前 diff、当前 requirement、same-class closure 和必要文件清单;默认 `fork_context=false`,不 fork 完整历史,不让它 repo-wide 发散。
 4. **self-review anti-hang contract**:独立自审 prompt 必须硬限制为 `current-diff-only`(只审当前 diff + 当前 requirement + same-class closure),输出只允许 `PASS / FAIL` 或 `FAIL: <must-fix list>`;明确 `do not run big packs`,固定包测试证据由主线程负责。prompt 里要列明本 slice 文件清单,并写清 `unrelated dirty files` 不属于当前审查范围,避免子 agent 因混批犹豫。
-5. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`;`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有拿到同一 `STOCK_TEST_PYTHON` 时才跑测试;否则只做逻辑/契约审查。
+5. **独立自审限时**:轻量自审 `2-3 minutes`(2-3 分钟)无结果即 `close and restart once`;`second timeout` 仍无结果时 `do not keep waiting`,停止等待并在 SESSION_LOG 说明 timeout。此时走 `main-thread checklist fallback`:主线程按 A-F/B2 自查 + 已跑固定验证包作测试证据,不得无限等 agent。子 agent 只有通过上述固定主 Python launcher 且获批准的 host-process execution 时才跑测试;否则只做逻辑/契约审查。
 6. **Proof-of-use 必写速度证据**:SESSION_LOG 的 `Pre-Codex self-review` 行要写明是否使用轻量自审、是否发生 timeout/重启、是否触发 main-thread checklist fallback、固定包是否集中一次跑完;这样未来审查能看见是否又退回慢路径。
 
 ## A. 类不修实例(class-not-instance)
