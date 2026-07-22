@@ -20,19 +20,20 @@ A default run that fails preflight before canonical resolution has no as-of iden
 ## Inputs
 
 - `result/a_short/<as_of>/analysis_input.json`
-- `state/a_short/*.json`
+- Optional private `state/a_short/account_bundle.json` (`a_short_account_bundle` generated from manual CSV tables)
 - `schemas/deterministic_report.schema.json`
 - Optional: user-provided current news, regulatory, industry, or cross-market context for LLM enrichment
 
 ## Quick Start
 
-Run the weekly screening and M6.7 operation report:
+First convert the five manually maintained CSV tables into one private atomic bundle, then run the weekly screening and M6.7 operation report:
 
 ```powershell
-.\runners\weekly_screening.cmd -AsOf 20260522 -L3Mode pit -Account path\to\account.json
+.\runners\a_short_account_state_from_manual_tables.py --input-dir state\a_short\account_state_csv --as-of 20260522 --out state\a_short\account_bundle.json
+.\runners\weekly_screening.cmd -AsOf 20260522 -L3Mode pit -Account state\a_short\account_bundle.json
 ```
 
-For the normal live cadence, omit `-AsOf` and `-L3Mode` so the wrapper resolves the canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.
+Do not hand-author a bare account JSON for `-Account`; the converter's output is the required `a_short_account_bundle`. CSV columns and boundary details belong to `docs/a_short_account_state_manual_tables_4_3.md`. For the normal live cadence, omit `-AsOf` and `-L3Mode` so the wrapper resolves the canonical decision date. Use `runners/run_analysis_report.py` only for explicit research/replay work.
 
 State replay is deterministic by default: circuit-breaker expiry is evaluated at the as-of A-share close timestamp. Pass `--state-now <ISO timestamp>` only when intentionally replaying a different state evaluation time.
 

@@ -213,7 +213,7 @@ def validate_account_state(account: dict, as_of: str) -> dict:
         raise SystemExit(f"[FATAL] --account as_of {account.get('as_of')} != --as-of {as_of}(账户状态错批/陈旧/未来)")
 
     # A-short 主板边界(消费真相源处强制,P1 修复):converter 输入层已校 is_a_share_main_board,但手写/外部生成的
-    # account_state.json 可绕过 converter → 在此对 positions/rule13 的 ts_code 同样校验,拒 B股/非主板/畸形码进持仓状态。
+    # 外部生成的账户状态仍可能绕过 converter → 在此对 positions/rule13 的 ts_code 同样校验,拒 B股/非主板/畸形码进持仓状态。
     from engine.data.a_share_board_scope import is_a_share_main_board
     seen_pos = set()
     for idx, pos in enumerate(account.get("positions") or []):
@@ -3610,7 +3610,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--iv-feed", required=True, help="a_short_iv_feed.json")
     p.add_argument("--crash-veto-summary", help="闪崩否决 5/10 日 comparison-only 摘要(可选；只进周报、不改决策)")
     p.add_argument("--overlay", help="overlay artifact(可选)")
-    p.add_argument("--account", help="账户状态 JSON(available_cash / positions / rule12 / rule13_cooldowns)")
+    p.add_argument(
+        "--account",
+        help="由 a_short_account_state_from_manual_tables.py 生成的 a_short_account_bundle JSON",
+    )
     p.add_argument("--out", required=True)
     p.add_argument("--phase4-report-dir", default=None,
                    help="deterministic Phase 4 report directory (default: result/a_short/<as_of>/reports)")

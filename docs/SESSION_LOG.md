@@ -1,5 +1,28 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第五刀 R8/R7：周跑时区预检 + 账户 bundle 入口就绪性；c237 已提交，未 merge）
+
+- **Verdict/Action**: PASS + 提交（c237 `5f532602` 之上，仅第五刀 13 文件；第六刀 R11 execution-backtest code/schema/tests 留未提交待其独立审查）。R8：preflight 加 `tzdata` + `timezone_capability()` 真调 `ZoneInfo("Asia/Shanghai")`（非 `find_spec`）→fail、dependencies/timezone 分记、canonical resolver 前 fail-fast。R7：所有活跃 A-short 操作面改指向 CSV→转换器→`a_short_account_bundle`→`-Account`、删裸 `account_state.json` 教学 + 静态 entry-surface guard。register `R-ASHORT-WEEKLY-ENTRY-READINESS-DRIFT`→resolved（`docs/system_risk_register.md`）。
+- **Required**: 无。
+- **Verify**: 亲跑定向 `test_a_short_preflight`+`test_weekly_screening_guardrails` = 27 例通过（4 新 preflight：tzdata 进 missing / tzdata 缺→fail / ZoneInfo 不可用→fail 带 error_type / 正常→pass；新 entry-surface guard 静态拒裸账户教学）。整读 preflight 函数体；整类扫 A-short 操作面无 `account_state.json` 残留（仅剩 us_short 另一 lane、非本 scope）。零选股/veto/仓位/PIT/真钱影响、无 provider/secret/新选股 fail-closed 门 → 按项目标准未起子 agent、未跑全量（proportional-to-impact）。
+- **Next**: Codex：Pass。第六刀（execution-backtest 解释边界）留下轮独立审查、勿把其 code 并进本刀；cherry-pick→master 待命令。
+
+## 2026-07-22 — Codex 修复（A-short 第六刀 R11：execution backtest 与 M6.7 解释边界，待独立审查）
+
+- **Verdict/Action**: 第六刀已实现：保留 legacy Rule6 对 `overheat` / `chasing_high` 的 hard veto，不静默改写为 M6.7 downgrade；两条 execution report 路径均输出 schema-required 的 legacy 候选语义标记和同一条限制说明，并同步升级下游 aggregate input binding。
+- **Required**: `R-ASHORT-EXECUTION-BACKTEST-M67-INTERPRETATION-DRIFT` 为 in_progress P2，完整风险、边界与关闭条件见 register `docs/system_risk_register.md`；需独立审查后再提交。
+- **Verify**: execution skeleton / full simulation、report schema、aggregate schema / consumer、price-data materializer 与 route-doc guard 定向包 119 OK；回归覆盖缺失机器标记和伪造 M6.7 对齐均被 schema 拒绝。
+- **Pre-Codex self-review**: 本刀只增加解释契约和下游版本绑定，未改变 Rule6 或 M6.7 的真实决策规则、回测候选宇宙、交易模拟、provider、账户、仓位或 ship gate；未来 M6.7 对齐回测必须新模式、新产物并保留 legacy 基线。
+- **Next**: Claude Code：独立审查本 A-short 第六刀；不将 legacy execution result 解释为 M6.7 或 production 表现。
+
+## 2026-07-22 — Codex 修复（A-short 第五刀 R8/R7：周跑时区预检与账户 bundle 入口，待独立审查）
+
+- **Verdict/Action**: 第五刀已实现：预检新增 `tzdata` 和真实 `ZoneInfo("Asia/Shanghai")` 能力门，二者分开记录且均在 canonical resolver 前失败；所有活跃 A-short 操作入口改为五张 CSV → 转换器 → 摘要绑定 `a_short_account_bundle` → `-Account`。
+- **Required**: `R-ASHORT-WEEKLY-ENTRY-READINESS-DRIFT` 为 in_progress P2，完整风险、边界与关闭条件见 register `docs/system_risk_register.md`；需独立审查后再提交。
+- **Verify**: `tests.test_a_short_preflight` + `tests.phase6.test_weekly_screening_guardrails` 27 OK（含 tzdata 缺失、ZoneInfo 失败、正常能力和入口静态守卫）。
+- **Pre-Codex self-review**: 预检仍不解析 requirements 或触发 provider；缺依赖与时区失败均不能越过 resolver；bundle 提示不复述字段，统一指向 CSV 转换器和权威账户文档；无账户 observation-only 语义不变。
+- **Next**: Claude Code: review
+
 ## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第四刀 R5：候选/私有持仓监管确认分域安全闭环；c237 已提交，未 merge）
 
 - **Verdict/Action**: PASS + 提交（c237 `801dd61c`=第三刀 之上，16 文件；用户令"提交不 merge"）。候选/持仓确认两不可换域（distinct schema 身份）；持仓域绑 account_snapshot_digest+holding_universe_digest+event fingerprint、须 `--account`、输入强制 gitignored 私密；confirmed-material 仅产 clear_review advisory，非 EGS/Rule6/veto/sizing/order。缺文件→pending 不阻断；坏/schema/stale/错账户/错集合/universe 外/跨域/unmatched/无 CNINFO 全发布前 FATAL。

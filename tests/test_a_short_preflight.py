@@ -7,6 +7,7 @@ import types
 import unittest
 from pathlib import Path
 from unittest import mock
+from zoneinfo import ZoneInfoNotFoundError
 
 from runners import a_short_preflight
 from runners import backtest_rank
@@ -19,13 +20,59 @@ class AShortPreflightTests(unittest.TestCase):
     def test_preflight_lists_every_missing_dependency_in_one_result(self) -> None:
         present = {"jsonschema", "numpy"}
         result = a_short_preflight.build_result(
-            find_spec=lambda name: object() if name in present else None
+            find_spec=lambda name: object() if name in present else None,
+            timezone_loader=lambda _name: object(),
         )
         self.assertEqual(result["status"], "fail")
         self.assertEqual(
             [item["module"] for item in result["missing"]],
-            ["akshare", "openpyxl", "pandas", "requests", "tqdm", "tushare"],
+            ["akshare", "openpyxl", "pandas", "requests", "tqdm", "tushare", "tzdata"],
         )
+        self.assertEqual(result["dependencies"]["status"], "fail")
+        self.assertEqual(result["timezone_capability"]["status"], "pass")
+
+    def test_preflight_fails_when_tzdata_is_missing(self) -> None:
+        result = a_short_preflight.build_result(
+            find_spec=lambda name: None if name == "tzdata" else object(),
+            timezone_loader=lambda _name: object(),
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["dependencies"]["status"], "fail")
+        self.assertEqual(result["dependencies"]["missing"], [
+            {"module": "tzdata", "package": "tzdata"},
+        ])
+        self.assertEqual(result["timezone_capability"]["status"], "pass")
+
+    def test_preflight_fails_when_asia_shanghai_zoneinfo_is_unavailable(self) -> None:
+        def unavailable(_name: str) -> object:
+            raise ZoneInfoNotFoundError("timezone database unavailable")
+
+        result = a_short_preflight.build_result(
+            find_spec=lambda _name: object(),
+            timezone_loader=unavailable,
+        )
+
+        self.assertEqual(result["status"], "fail")
+        self.assertEqual(result["dependencies"]["status"], "pass")
+        self.assertEqual(result["timezone_capability"], {
+            "timezone": "Asia/Shanghai",
+            "status": "fail",
+            "error_type": "ZoneInfoNotFoundError",
+        })
+
+    def test_preflight_records_normal_timezone_capability(self) -> None:
+        result = a_short_preflight.build_result(
+            find_spec=lambda _name: object(),
+            timezone_loader=lambda name: object() if name == "Asia/Shanghai" else None,
+        )
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["dependencies"]["status"], "pass")
+        self.assertEqual(result["timezone_capability"], {
+            "timezone": "Asia/Shanghai",
+            "status": "pass",
+        })
 
     def test_a_short_provider_initializers_pass_token_without_set_token(self) -> None:
         class _FakeDataApi:

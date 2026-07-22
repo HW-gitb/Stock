@@ -5,7 +5,7 @@
 
 ## 1. 背景与目的
 
-4.3(手工持仓 CSV → `account_state.json` → 周报 M6.7 `--account`)已上线,但 M6.7 是**候选股为中心**(`a_short_weekly_pipeline.py::main` 只遍历 `analysis_input.candidates` = EGS top-N)。持仓只在"恰好进 top-N"时才显示。实测用户真实持仓 `601138.SH`/`603667.SH` 都不在本周 top15 → M6.7 完全看不到它们。
+4.3(手工持仓 CSV → `a_short_account_bundle` → 周报 M6.7 `--account`)已上线,但 M6.7 是**候选股为中心**(`a_short_weekly_pipeline.py::main` 只遍历 `analysis_input.candidates` = EGS top-N)。持仓只在"恰好进 top-N"时才显示。实测用户真实持仓 `601138.SH`/`603667.SH` 都不在本周 top15 → M6.7 完全看不到它们。
 
 **目的**:账户每只持仓都恒进 M6.7,诚实标明 EGS 覆盖度;最终(S3)由系统算止盈/止损/加仓/动作,用户只填事实。**EGS top-N admission 完全不变**(持仓是额外行,不进选股、不占名额)。
 
