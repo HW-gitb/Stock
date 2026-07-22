@@ -62,26 +62,36 @@ def _atomic_write(path: Path, payload: dict) -> None:
     os.replace(temporary, path)
 
 
+def _empty_cache() -> dict:
+    return {
+        "schema_name": "a_short_factor_comparison_v2_daily_cache",
+        "schema_version": "1.1.0",
+        "stocks": [],
+        "limits": [],
+        "rows": [],
+        "meta": {
+            "cache_kind": "a_short_shared_incremental",
+            "source": "tushare:daily+adj_factor+stk_limit",
+        },
+    }
+
+
 def _load_existing_cache(root: Path) -> dict:
     path = root / DAILY_CACHE_NAME
     if not path.exists():
-        return {
-            "schema_name": "a_short_factor_comparison_v2_daily_cache",
-            "schema_version": "1.1.0",
-            "stocks": [],
-            "limits": [],
-            "rows": [],
-            "meta": {
-                "cache_kind": "a_short_shared_incremental",
-                "source": "tushare:daily+adj_factor+stk_limit",
-            },
-        }
+        return _empty_cache()
     try:
         document = _load_json(path)
         schema = _load_json(DAILY_CACHE_SCHEMA_PATH)
         jsonschema.validate(document, schema)
     except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
         raise ComparisonV2Error("v2 existing daily cache violates its frozen contract") from exc
+    if document["schema_version"] == "1.0.0":
+        # Version 1.0.0 lacks the execution columns required by 1.1.0.  Do
+        # not mix those rows into a 1.1.0 payload: rebuild only the currently
+        # frozen consumer windows and leave the on-disk cache untouched until
+        # the replacement has passed validation and is atomically written.
+        return _empty_cache()
     return document
 
 

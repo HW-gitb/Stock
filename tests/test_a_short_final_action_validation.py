@@ -74,6 +74,17 @@ def _execution_rows() -> list[dict]:
     return rows
 
 
+def _execution_rows_with_stale_unverified_action() -> list[dict]:
+    stale = {"trade_date": "20251130", "open": None, "high": None, "low": None, "close": None,
+             "volume": 1000, "raw_close": None, "adj_factor": None, "up_limit": None, "down_limit": None}
+    history = [
+        {"trade_date": f"202512{day:02d}", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.0,
+         "volume": 1000, "raw_close": 10.0, "adj_factor": 1.0, "up_limit": 11.0, "down_limit": 9.0}
+        for day in range(1, 21)
+    ]
+    return [stale, *history, *_execution_rows()]
+
+
 class FinalActionValidationTests(unittest.TestCase):
     def _bundle(self, directory: Path) -> tuple[Path, Path, list[dict]]:
         weekly = {
@@ -117,7 +128,8 @@ class FinalActionValidationTests(unittest.TestCase):
             self.assertNotIn("600001.SH", public.read_text(encoding="utf-8"))
 
             cache = directory / "execution_cache.json"
-            cache.write_text(json.dumps({"rows": [dict(row, ts_code="600000.SH") for row in _execution_rows()]}),
+            cache.write_text(json.dumps({"rows": [dict(row, ts_code="600000.SH")
+                                                   for row in _execution_rows_with_stale_unverified_action()]}),
                              encoding="utf-8")
             settled = settle_and_summarize(root=ledger, as_of=AS_OF, tracker_path=tracker,
                                            daily_cache_path=cache, summary_path=public, markdown_path=markdown)

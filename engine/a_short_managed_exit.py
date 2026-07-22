@@ -12,9 +12,11 @@ from typing import Any
 from runners.a_short_phase5_engine import atr14, tick_up
 
 
-CONTRACT_VERSION = "1.0.0"
+CONTRACT_VERSION = "1.1.0"
 HORIZON_TRADING_DAYS = 20
 ROUND_TRIP_COST_FRACTION = 0.0016
+ATR_PERIOD = 14
+ATR_HISTORY_ROWS = ATR_PERIOD + 1
 
 
 class ManagedExitError(ValueError):
@@ -103,6 +105,44 @@ def _normalise_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 row[key] = None
         normalized.append(row)
     return normalized
+
+
+def _plan_window_rows(plan: dict[str, Any], execution_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Retain only rows needed to evaluate one frozen H20 plan.
+
+    A shared cache accumulates prior plans.  Its older corporate-action gaps
+    must not invalidate this plan, while the reference bar, 15 completed rows
+    for ATR14, and every row through H20 remain fail-closed inputs.
+    """
+    if not isinstance(plan, dict):
+        raise ManagedExitError("invalid_frozen_plan")
+    decision_date = _date(plan.get("decision_date"))
+    if not isinstance(execution_rows, list) or not execution_rows:
+        raise ManagedExitError("execution_prices_unavailable")
+    dated_rows: list[tuple[dict[str, Any], str]] = []
+    previous_date = ""
+    for source in execution_rows:
+        if not isinstance(source, dict):
+            raise ManagedExitError("invalid_execution_row")
+        trade_date = _date(source.get("trade_date"))
+        if trade_date <= previous_date:
+            raise ManagedExitError("execution_dates_not_strictly_increasing")
+        previous_date = trade_date
+        dated_rows.append((source, trade_date))
+
+    first_horizon_index = next((index for index, (_row, trade_date) in enumerate(dated_rows)
+                                if trade_date > decision_date), None)
+    if first_horizon_index is None:
+        return [row for row, _trade_date in dated_rows]
+    last_horizon_index = min(len(dated_rows) - 1, first_horizon_index + HORIZON_TRADING_DAYS - 1)
+    selected = set(range(max(0, first_horizon_index - ATR_HISTORY_ROWS), last_horizon_index + 1))
+    if plan.get("price_basis") == "qfq":
+        reference_date = _date(plan.get("reference_trade_date"))
+        reference_index = next((index for index, (_row, trade_date) in enumerate(dated_rows)
+                                if trade_date == reference_date), None)
+        if reference_index is not None:
+            selected.add(reference_index)
+    return [row for index, (row, _trade_date) in enumerate(dated_rows) if index in selected]
 
 
 def _is_one_price_limit(row: dict[str, Any], limit_key: str) -> bool:
@@ -215,7 +255,7 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
     a missing adjustment factor, fillability state, or price basis.
     """
     try:
-        rows = _normalise_rows(execution_rows)
+        rows = _normalise_rows(_plan_window_rows(plan, execution_rows))
         frozen = _convert_plan(plan, rows)
         horizon_indices = [
             index
@@ -245,7 +285,7 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
             # historical execution rows before the decision date rather than
             # waiting fourteen post-decision sessions to become available.
             prior_rows = rows[:index]
-            atr = atr14(prior_rows)
+            atr = atr14(prior_rows, n=ATR_PERIOD)
             post_entry_high = max(item["high"] for item in rows[entry_index:index])
             if atr is not None and atr > 0:
                 candidate = tick_up(post_entry_high - atr * frozen["atr_multiplier"])

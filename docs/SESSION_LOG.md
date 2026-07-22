@@ -40,6 +40,13 @@
 - **Required**: Claude Code 仅独立审查当前共同治理合同 diff，重点复核 digest 篡改、第二 component、effective week、重复/回滚回执、依赖 epoch 重启与自动写配置边界；PASS 后由 Claude Code 提交。
 - **Verify**: `tests.test_a_short_experiment_governance` 7 OK；`tests.test_a_short_factor_comparison_v2` + `tests.test_a_short_factor_comparison_v2_adjudication` 40 OK；两 schema 元校验 + fixture validation、`py_compile`、`git diff --check` 均 OK。
 - **Next**: Claude Code：独立审查当前共同治理合同 diff；PASS 后按流程提交。
+## 2026-07-22 — Codex 修复 F1 + Obs2（A-short shared-cache 迁移 + managed-exit 计划窗口）
+
+- **Verdict/Action**: 在已提交 shared-cache writer `21be1d8f` 之上修复 F1 + Obs2：`1.0.0` cache 仅在内存中重置并经原子重建；managed-exit v1.1.0 只读每个 plan 的 reference/ATR14/H20 必需窗口，窗口内仍 fail-closed。P2/P3 因 evaluator 指纹改变各自新开 epoch，旧 evidence 不回算。
+- **Required**: 无新增；F1、Obs2 均已实现，P5b/provider/live/production 未做。
+- **Verify**: 项目 Python313 跑 F1/Obs2 cache/P2/P3 43 OK、weekly-guardrails 21 OK、preflight 17 OK、doc-governance 35 OK、route-doc 25 OK；`py_compile` 与 `git diff --check` 通过；无 provider、真实 weekly 或 live capture。
+- **Pre-Codex self-review**: main-thread A--F 完成（无独立 agent）：A 覆盖 `1.0.0` 重建、`1.1.0` 复用与 P2/P3 两消费者；B 当前 owner/register/code 无旧 legacy-merge/whole-history 口径残留；C 覆盖旧行动在计划前与 H20 后均可结算、计划内仍 no-count、以及 F1 provider 失败原文件不变；E 只更新 owner design/register/log；F 统一测试、编译、编码和 diff 通过。
+- **Next**: 无；本修复不授权 Obs2 之外的结算口径、P5b、provider、live 或生产切换。
 
 ## 2026-07-22 — Claude Code 独立审查 PASS (A-short shared-cache：v2/P5/P2/P3 单 writer 接线 / R-ASHORT-P5-EXECUTION-CONTRACT-GAPS)
 - **Verdict/Action**: PASS(comparison-only,提交本切片)。cache_build 扩为 v2/P5/P2/P3 单日线 writer,忠实设计、承重缝全亲读:8 类安全全 HOLD(无造复权价/无未来函数——每日自因子、未验证 adj 跳变→null→no_count;P2·P3 window PIT 正确 decision>run 与 settled 均剔;v2 预算不可饿死、symbol_capacity 精确;`rows`↔`evaluate_managed_exit` 字段契约精确同名;secret/raw 私有 gitignored;production 隔离、weekly 非阻断 sidecar);docs(design/register/README)与设计意图一致、无漂移。

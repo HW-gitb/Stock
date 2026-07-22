@@ -39,6 +39,17 @@ def _root(tmp: str) -> Path:
     return Path(tmp) / "state" / "a_short" / "factor_comparison_private" / "v2"
 
 
+def _legacy_cache() -> dict:
+    return {
+        "schema_name": "a_short_factor_comparison_v2_daily_cache", "schema_version": "1.0.0",
+        "stocks": [{"ts_code": "600000.SH", "trade_date": DECISION_DATE, "open": 99.0, "close": 10.5,
+                    "adj_factor": 2.0, "adj_factor_observed": True,
+                    "adj_factor_source": "provider_observed", "corporate_action_verified": False}],
+        "limits": [],
+        "meta": {"cache_kind": "a_short_factor_comparison_v2_incremental", "source": "tushare:daily+adj_factor+stk_limit"},
+    }
+
+
 def _trading_dates(start: date, count: int) -> list[str]:
     result = []
     current = start
@@ -432,26 +443,36 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
                                                   target_policy_root=p2, pro=provider)
             self.assertEqual(provider.calls, [])
 
-    def test_conflicting_provider_row_preserves_the_existing_cache_atomically(self):
+    def test_legacy_1_0_cache_is_discarded_and_rebuilt_as_1_1(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
             _capture(root)
             root.mkdir(parents=True, exist_ok=True)
-            original = {
-                "schema_name": "a_short_factor_comparison_v2_daily_cache", "schema_version": "1.0.0",
-                "stocks": [{"ts_code": "600000.SH", "trade_date": DECISION_DATE, "open": 99.0, "close": 10.5,
-                            "adj_factor": 2.0, "adj_factor_observed": True,
-                            "adj_factor_source": "provider_observed", "corporate_action_verified": False}],
-                "limits": [],
-                "meta": {"cache_kind": "a_short_factor_comparison_v2_incremental", "source": "tushare:daily+adj_factor+stk_limit"},
-            }
             path = root / "daily_cache.json"
-            path.write_text(json.dumps(original), encoding="utf-8")
+            path.write_text(json.dumps(_legacy_cache()), encoding="utf-8")
             provider = FakeTushare()
             with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
-                with self.assertRaisesRegex(ComparisonV2Error, "conflicting duplicate"):
+                result = materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=provider)
+            rebuilt = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(result["status"], "cache_updated")
+            self.assertEqual(rebuilt["schema_version"], "1.1.0")
+            self.assertTrue(rebuilt["rows"])
+            self.assertTrue(all(row["open"] != 99.0 for row in rebuilt["stocks"]))
+
+    def test_legacy_1_0_cache_is_unchanged_when_rebuild_fails(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _capture(root)
+            root.mkdir(parents=True, exist_ok=True)
+            path = root / "daily_cache.json"
+            original = json.dumps(_legacy_cache())
+            path.write_text(original, encoding="utf-8")
+            provider = FakeTushare()
+            with mock.patch.object(provider, "daily", side_effect=RuntimeError("provider unavailable")), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                with self.assertRaises(RuntimeError):
                     materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=provider)
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), original)
+            self.assertEqual(path.read_text(encoding="utf-8"), original)
 
 
 if __name__ == "__main__":

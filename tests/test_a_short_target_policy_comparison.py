@@ -76,6 +76,17 @@ def _execution_rows(*, stop_on_day: int | None = None) -> list[dict]:
     return rows
 
 
+def _execution_rows_with_stale_unverified_action() -> list[dict]:
+    stale = {"trade_date": "20251130", "open": None, "high": None, "low": None, "close": None,
+             "volume": 1000, "raw_close": None, "adj_factor": None, "up_limit": None, "down_limit": None}
+    history = [
+        {"trade_date": f"202512{day:02d}", "open": 10.0, "high": 10.2, "low": 9.8, "close": 10.0,
+         "volume": 1000, "raw_close": 10.0, "adj_factor": 1.0, "up_limit": 11.0, "down_limit": 9.0}
+        for day in range(1, 21)
+    ]
+    return [stale, *history, *_execution_rows()]
+
+
 def _managed_plan() -> dict:
     return {"decision_date": "20260101", "entry_low": 9.9, "entry_high": 10.5, "stop": 9.0,
             "t1": 12.0, "t2": 14.0, "atr_multiplier": 1.25, "price_basis": "qfq",
@@ -127,6 +138,26 @@ class TruePressureTests(unittest.TestCase):
 
 
 class ManagedExitTests(unittest.TestCase):
+    def test_unverified_action_outside_plan_window_does_not_block_settlement(self):
+        result = evaluate_managed_exit(_managed_plan(), _execution_rows_with_stale_unverified_action())
+        self.assertEqual(result["status"], "settled")
+        self.assertEqual(result["entry_date"], "20260102")
+
+    def test_unverified_action_inside_plan_window_remains_no_count(self):
+        rows = _execution_rows()
+        rows[-1].update(open=None, high=None, low=None, close=None, raw_close=None, adj_factor=None)
+        result = evaluate_managed_exit(_managed_plan(), rows)
+        self.assertEqual((result["status"], result["reason"]), ("no_count", "non_finite_price"))
+
+    def test_unverified_action_after_h20_does_not_block_settlement(self):
+        rows = _execution_rows()
+        rows.append({"trade_date": "20260201", "open": None, "high": None, "low": None, "close": None,
+                     "volume": 1000, "raw_close": None, "adj_factor": None,
+                     "up_limit": None, "down_limit": None})
+        result = evaluate_managed_exit(_managed_plan(), rows)
+        self.assertEqual(result["status"], "settled")
+        self.assertEqual(result["h20_date"], "20260121")
+
     def test_t1_half_then_h20_mark_and_single_cost(self):
         result = evaluate_managed_exit(_managed_plan(), _execution_rows())
         self.assertEqual(result["status"], "settled")
@@ -272,7 +303,8 @@ class TargetLedgerTests(unittest.TestCase):
                     summary_path=public, markdown_path=markdown)
 
             cache = directory / "execution_cache.json"
-            cache.write_text(json.dumps({"rows": [dict(row, ts_code="600000.SH") for row in _execution_rows()]}),
+            cache.write_text(json.dumps({"rows": [dict(row, ts_code="600000.SH")
+                                                   for row in _execution_rows_with_stale_unverified_action()]}),
                              encoding="utf-8")
             refreshed = settle_and_summarize(root=ledger, as_of=as_of, daily_cache_path=cache,
                                               summary_path=public, markdown_path=markdown)

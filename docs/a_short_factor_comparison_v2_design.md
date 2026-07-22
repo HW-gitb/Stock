@@ -73,6 +73,10 @@ state/a_short/factor_comparison_private/v2/
 
 同一原子文件内，`stocks/limits` 保存一次 provider 原始事实，`rows` 由它们确定性投影为 P2/P3 共用的 adjusted execution OHLCV；P5 继续只消费原始 observed-adjustment 面。这不是第二个 cache，也没有第二个 fetcher。未核验的 adjustment-factor 跳变会使对应 execution row 不可评价，从而让 managed exit `no_count`，不能穿过公司行动门。weekly 将同一路径同时传给 v2、P5、P2 和 P3；四条 program 仍使用各自 capture/ledger、epoch、maturity 和 verdict。随后 `runners/a_short_weekly_pipeline.py` 只读缓存，没有 provider 参数或联网 fallback，也不能从本周 M6.7 价格序列伪造 adjustment evidence。builder 失败只令 comparison evidence 暂不可用，M6.7、V14.3、overlay 继续；P5 capture/settle/progress 已由其独立合并切片实现，P5b 仍未实现。
 
+若检测到旧 `1.0.0` cache，writer 不会把缺 execution 字段的旧行混入 `1.1.0` 输出：仅在内存中将其重置为空，并按当前冻结窗口和原有 91-call 预算重新积累；只有完整新 payload 通过 schema 校验后才原子替换旧文件。重建失败时旧文件保持不变。
+
+P2/P3 的 managed-exit evaluator v1.1.0 不再把整个、持续增长的 symbol 历史直接作一次 OHLCV 校验。每个冻结 plan 只消费其 reference bar、ATR14 所需的 15 个紧邻已完成 bar，以及 decision 后前 20 个交易日；计划窗口外的未核验公司行动不再污染该计划。窗口内任何缺价、未核验跳变、停牌或不可成交状态仍严格 `no_count`。该 evaluator 变更会令 P2/P3 各自开始新的 evidence epoch，既有生产建议、M6.7、EGS、P5 和 v2 均不改变。
+
 每次 weekly 运行按如下单一顺序执行：先用私密既有缓存结算历史 capture，再重算 ledger 与离线裁决，并由裁决器原子重写 `reminder.json`；之后才构造、校验和发布官方 M6.7 JSON/Markdown/receipt。周报顶部与终端都只消费同一份脱敏 summary（状态、提醒计数、固定文字），不包含 ticker、arm、回执 hash、私密路径、收益或仓位。缓存缺失、私密 root/ledger/receipt 损坏、解析失败或任何完整性检查失败时，周报明确显示“证据不可用或结论未定”、提醒计数归零，绝不复用旧的成功提醒；M6.7 仍保持权威且不受改变。
 
 只有 `publish_weekly_bundle` 成功返回后，接线才回读同一份 JSON、Markdown 和匹配 receipt，核对 `as_of`、run id、候选摘要与输出集合，并从其 `price_freshness` lineage 取真实 `run_date` 和 `price_data_through`，再以实际已发布 JSON 的 SHA-256 作为 `official_m67_digest` 冻结本周 v2 capture。发布异常时控制流到不了 capture，因此不会生成假前向周；capture 自身失败只在终端明确提示，绝不回写或否定已发布 M6.7。`--factor-comparison-v2-forward` 受真实本地日期和 live canonical/prior-settled source binding 双门约束；历史重放保持非计数。
