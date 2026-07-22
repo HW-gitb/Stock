@@ -1,0 +1,71 @@
+{
+  "schema_name": "a_short_industry_weight_comparison_governance",
+  "schema_version": "1.0.0",
+  "program_id": "a_short_industry_weight_comparison_v1",
+  "contract_version": "1.0.0",
+  "profile_governance_path": "presets/egs_industry_heat_governance_20260611.json",
+  "profiles": {
+    "legacy": {"esp": 0.20, "cat": 0.30, "l4": 0.50, "industry_heat": 0.00},
+    "balanced": {"esp": 0.20, "cat": 0.25, "l4": 0.40, "industry_heat": 0.15},
+    "aggressive": {"esp": 0.15, "cat": 0.25, "l4": 0.40, "industry_heat": 0.20},
+    "theme_double": {"esp": 0.15, "cat": 0.35, "l4": 0.35, "industry_heat": 0.15}
+  },
+  "questions": [
+    {"question_id": "balanced_vs_legacy", "baseline": "legacy", "challenger": "balanced", "positive_permission": "retain_balanced_only", "negative_permission": "manual_rollback_review_only"},
+    {"question_id": "aggressive_vs_balanced", "baseline": "balanced", "challenger": "aggressive", "positive_permission": "next_reviewed_candidate_only", "negative_permission": "do_not_promote"},
+    {"question_id": "theme_double_vs_balanced", "baseline": "balanced", "challenger": "theme_double", "positive_permission": "next_reviewed_candidate_only", "negative_permission": "do_not_promote"}
+  ],
+  "selection_contract": {
+    "selector": "engine.egs_industry_heat.select_profile_watch_pool",
+    "slots": 15,
+    "tier": "Tier1_only",
+    "sort": ["final_score_desc", "l4_score_desc", "pct_20d_n_desc"],
+    "l2_overflow_if_gt": 20,
+    "l2_overflow_keep": 15,
+    "l1_incremental_cap_pct": 40.0,
+    "l2_incremental_cap_pct": 30.0,
+    "short_pool_is_cash": true
+  },
+  "outcome_contract": {
+    "entry": "t_plus_1_open",
+    "exits": "horizon_close",
+    "horizons_trading_days": [5, 10, 20],
+    "primary_horizon": 10,
+    "price_basis": "provider_observed_qfq_only",
+    "round_trip_cost_pct": 0.16,
+    "fixed_slots": 15,
+    "cash_for_empty_or_unfilled_slot": true,
+    "close_based_drawdown": true
+  },
+  "clock_contract": {
+    "eligible_policy_weeks": "live_canonical_h10_mature_identity_and_qfq_complete",
+    "same_list_effect": "eligible_with_zero_whole_policy_effect",
+    "difference_weeks": "diagnostic_only",
+    "no_count_denominator": "h10_mature_opportunities",
+    "checkpoints": [12, 24, 36],
+    "difference_minimums": [6, 12, 18],
+    "non_overlap": "decision_date_strictly_after_prior_h10_exit"
+  },
+  "risk_and_statistics_contract": {
+    "multiplicity_family": "three_questions",
+    "formal_alpha_two_sided": 0.025,
+    "holm_bonferroni": true,
+    "preliminary_mean_effect_pct": 0.25,
+    "preliminary_block_win_rate_pct": 55.0,
+    "bad_ticket_h10_max_pct": 35.0,
+    "bad_ticket_h10_threshold_pct": -5.0,
+    "tail_loss_h10_min_pct": -10.0,
+    "max_drawdown_close_based_max_pct": 15.0,
+    "max_relative_drawdown_worsening_pct": 2.0,
+    "no_count_rate_max_pct": 20.0,
+    "adjustment_coverage_required_pct": 100.0
+  },
+  "epoch_rule": "profile_weights_industry_heat_selector_sw_level_slots_outcome_cost_risk_or_statistics_change_starts_new_epoch",
+  "boundary": {
+    "comparison_only": true,
+    "automatic_policy_switch": false,
+    "reads_account_or_holdings": false,
+    "allows_historical_backfill": false,
+    "p5b_implemented": false
+  }
+}

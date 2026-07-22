@@ -85,7 +85,12 @@ Existing helpers:
   only during a live canonical weekly run, it reads frozen selected-union
   captures, incrementally requests the bounded daily/adjustment/limit window,
   records missing adjustment provenance honestly, and atomically writes only
-  beneath the gitignored v2 root. Its failure is comparison-only and non-blocking.
+  beneath the gitignored v2 root. It schedules v2 missing rows before P5
+  industry-weight requests; P5 overflow is deferred, not allowed to starve v2.
+  Its failure is comparison-only and non-blocking.
+- `a_short_industry_weight_comparison.py` - P5a thin private capture / existing-cache
+  settlement / de-identified progress entry. It never calls a provider, reads an
+  account, backfills historical evidence, or changes the active EGS profile.
 - `materialize_benchmark_monthly_returns_tushare.py` - Phase 6b benchmark
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus

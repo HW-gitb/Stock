@@ -405,12 +405,12 @@
     }
   ],
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "d608499b127d73416f60d9eb30843e4cccc6447120cd164ac735ba264ec3004a",
-    "engine/egs_industry_heat.py": "6a7595f03078ddd634dc22c3df9d3201c05a03598f8de87cfa8c268664c831f4",
+    "A-EGS/egs_main.py": "f432760a42222f7de252aaf413d53fe8d7845ab8b053598b61d05cc48700e434",
+    "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "98bf902c4dbb25bd429f82a4ef3adc1cc5462694d19f57f3e966c47e33febed4",
-    "runners/a_short_weekly_pipeline.py": "46e7b4730d2dba80cbde1f58f4f44dd6c47f37ced33c4403baca64b10e96182b",
-    "runners/a_short_m67_render.py": "7b5652061ff1c42b56811567702a7f81330c5e3502a64d36176065ab8e7465fc",
+    "runners/a_short_weekly_pipeline.py": "9eee09c3f83231d910a3b6399a5c9492829f1a6a0786ccb7eba7ae61bdaffc18",
+    "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
   },
@@ -600,6 +600,19 @@
         "logs/a_short_final_action_validation.json",
         "research/results/a_short/final_action_validation_summary.json"
       ]
+    },
+    {
+      "id": "industry_weight_comparison_p5",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_industry_weight_comparison_progress_summary.schema.json",
+      "schema_sha256": "3d14a0aa766542f35af306788f00bda5a2f3b0b14c903a48e6e6487acecb8497",
+      "reason": "P5a records cache-only, source-bound profile-weight evidence progress and a P5b build reminder. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
+      "owner": "engine/a_short_industry_weight_comparison.py + runners/a_short_industry_weight_comparison.py",
+      "review_ref": "P5b may be implemented only after the frozen eligible/difference-week trigger; every policy change remains separately reviewed and user-gated.",
+      "consumer_refs": [
+        "research/results/a_short/industry_weight_comparison_summary.json",
+        "research/results/a_short/industry_weight_comparison_summary.md"
+      ]
     }
   ],
   "operation_impact_sources": [
@@ -627,7 +640,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "ffa677036b8cece8f03d541173f349c9bd4dcf7209373faae7f3d981c3476a74",
+    "schemas/a_short_weekly_report.schema.json": "45d8e979efc49fe0b4906a15027cb1245172ff7c92562f95cba7c608bd972cb7",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

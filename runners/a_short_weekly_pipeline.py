@@ -1162,6 +1162,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     if weekly.get("factor_comparison_v2") is not None:
         from engine.a_short_factor_comparison_v2_weekly import validate_v2_public_summary
         validate_v2_public_summary(weekly["factor_comparison_v2"])
+    if weekly.get("industry_weight_comparison") is not None:
+        from engine.a_short_industry_weight_comparison import validate_public_progress
+        validate_public_progress(weekly["industry_weight_comparison"])
     # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
     if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
         raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
@@ -3710,6 +3713,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing v2 daily_cache.json under the private v2 root; never fetches data")
     p.add_argument("--factor-comparison-v2-forward", action="store_true",
                    help="mark this current v2 snapshot as a live forward observation; historical replay stays non-counting")
+    p.add_argument("--industry-weight-comparison-root", default=None,
+                   help="private P5 root ending state/a_short/industry_weight_comparison_private/v1")
+    p.add_argument("--industry-weight-comparison-daily-cache", default=None,
+                   help="existing shared P0 v2 daily_cache.json; P5 never fetches data")
+    p.add_argument("--industry-weight-comparison-source", default=None,
+                   help="same-run result/a_short/<as_of>/egs_weight_comparison.json")
+    p.add_argument("--industry-weight-comparison-forward", action="store_true",
+                   help="freeze P5 only after this live canonical weekly bundle publishes")
     p.add_argument("--target-policy-root", default=None,
                    help="private P2 ledger, normally logs/a_short_target_policy_comparison.json")
     p.add_argument("--target-policy-daily-cache", default=None,
@@ -3732,6 +3743,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] factor-comparison v2 capture requires --run-date for source-bound date identity")
     if args.factor_comparison_v2_forward and not args.factor_comparison_v2_root:
         raise SystemExit("[FATAL] --factor-comparison-v2-forward requires --factor-comparison-v2-root")
+    if args.industry_weight_comparison_root and not args.run_date:
+        raise SystemExit("[FATAL] P5 industry-weight capture requires --run-date for source-bound identity")
+    if args.industry_weight_comparison_forward and (not args.industry_weight_comparison_root or
+                                                    not args.industry_weight_comparison_source):
+        raise SystemExit("[FATAL] --industry-weight-comparison-forward requires root and same-run comparison source")
     if args.target_policy_root and not args.run_date:
         raise SystemExit("[FATAL] P2 target-policy capture requires --run-date for source-bound date identity")
     if args.target_policy_forward and not args.target_policy_root:
@@ -4159,6 +4175,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
     factor_comparison_v2 = settle_and_summarize_v2_weekly(
         root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache)
+    industry_weight_comparison = None
+    if args.industry_weight_comparison_root:
+        from engine.a_short_industry_weight_comparison import (settle_and_summarize_weekly,
+                                                               unavailable_public_progress, write_public_progress)
+        if args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
+            industry_weight_comparison = unavailable_public_progress(args.as_of)
+            write_public_progress(industry_weight_comparison)
+        else:
+            industry_weight_comparison = settle_and_summarize_weekly(
+                root=args.industry_weight_comparison_root,
+                daily_cache_path=args.industry_weight_comparison_daily_cache,
+                as_of=args.as_of,
+            )
     # P2 is another non-blocking, no-provider evidence sidecar.  Missing or
     # malformed execution data produces a fresh unavailable reminder, never a
     # stale review_due message and never a changed M6.7 decision.
@@ -4208,6 +4237,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
                                  candidate_exclusions=candidate_exclusions)
     weekly["factor_comparison_v2"] = factor_comparison_v2
+    if industry_weight_comparison is not None:
+        weekly["industry_weight_comparison"] = industry_weight_comparison
     if target_policy_comparison is not None:
         weekly["target_policy_comparison"] = target_policy_comparison
     evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation)
@@ -4318,6 +4349,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     print(f"[weekly] n={weekly['n_stocks']} actions={actions} iv_pct={iv_pct} -> {args.out} (+ {md_path}; receipt={receipt_path})")
     # The terminal and Markdown consume the same de-identified pre-M6.7 reminder summary.
     print(f"[factor-comparison-v2] {factor_comparison_v2['message']}")
+    if industry_weight_comparison is not None:
+        print(f"[industry-weight-p5] {industry_weight_comparison['message']}")
     if target_policy_comparison is not None:
         print(f"[target-policy-p2] {target_policy_comparison['message']}")
     if final_action_validation is not None:
@@ -4343,6 +4376,27 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             else:
                 print("[factor-comparison-v2] current-week capture unavailable; "
                       "M6.7 output remains authoritative and unchanged")
+    if args.industry_weight_comparison_root:
+        try:
+            from engine.a_short_industry_weight_comparison import capture_after_published_weekly, settle_and_summarize_weekly
+            p5_capture = capture_after_published_weekly(
+                root=args.industry_weight_comparison_root, decision_date=args.as_of, run_date=args.run_date,
+                analysis_input_path=args.analysis_input, weight_comparison_path=args.industry_weight_comparison_source,
+                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                forward_eligible=args.industry_weight_comparison_forward)
+            # The signed weekly JSON remains immutable after publication.  Refresh the separate
+            # de-identified P5 progress artifact immediately so the first capture is never lost.
+            settle_and_summarize_weekly(root=args.industry_weight_comparison_root,
+                                        daily_cache_path=args.industry_weight_comparison_daily_cache,
+                                        as_of=args.as_of)
+            print(f"[industry-weight-p5] capture={p5_capture['status']} (production unchanged)")
+        except Exception:
+            from engine.a_short_industry_weight_comparison import unavailable_public_progress, write_public_progress
+            try:
+                write_public_progress(unavailable_public_progress(args.as_of))
+            except Exception:
+                pass
+            print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
     if args.target_policy_root:
         try:
             from runners.a_short_target_policy_comparison_runner import capture_after_published_weekly

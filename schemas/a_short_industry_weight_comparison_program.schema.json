@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short industry-weight comparison P5a governance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "contract_version", "profile_governance_path", "profiles", "questions", "selection_contract", "outcome_contract", "clock_contract", "risk_and_statistics_contract", "epoch_rule", "boundary"],
+  "properties": {
+    "schema_name": {"const": "a_short_industry_weight_comparison_governance"},
+    "schema_version": {"const": "1.0.0"},
+    "program_id": {"const": "a_short_industry_weight_comparison_v1"},
+    "contract_version": {"const": "1.0.0"},
+    "profile_governance_path": {"const": "presets/egs_industry_heat_governance_20260611.json"},
+    "profiles": {"type": "object"},
+    "questions": {"type": "array", "minItems": 3, "maxItems": 3},
+    "selection_contract": {"type": "object"},
+    "outcome_contract": {"type": "object"},
+    "clock_contract": {"type": "object"},
+    "risk_and_statistics_contract": {"type": "object"},
+    "epoch_rule": {"type": "string", "minLength": 1},
+    "boundary": {"type": "object", "additionalProperties": false,
+      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings", "allows_historical_backfill", "p5b_implemented"],
+      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "allows_historical_backfill": {"const": false}, "p5b_implemented": {"const": false}}}
+  }
+}

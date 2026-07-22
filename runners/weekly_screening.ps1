@@ -406,8 +406,10 @@ if ($SkipSemanticRisk) {
                 # approved price source, but a failure only leaves v2 unavailable; M6.7 remains authoritative.
                 $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
                 $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
+                $IndustryWeightP5Root = Join-Path $ProjectRoot 'state\a_short\industry_weight_comparison_private\v1'
+                $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
                 Write-Host "[ADVISORY] Updating bounded factor-comparison v2 private cache ..." -ForegroundColor Yellow
-                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate
+                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root
                 $FactorComparisonCacheExitCode = $LASTEXITCODE
                 if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
                 if ($FactorComparisonCacheExitCode -ne 0) {
@@ -417,6 +419,12 @@ if ($SkipSemanticRisk) {
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,
                               '--factor-comparison-v2-forward')
+                # P5a reuses the same cache but has an independent private ledger and public
+                # de-identified progress summary.  Its failure is a sidecar outage only.
+                $M67Args += @('--industry-weight-comparison-root', $IndustryWeightP5Root,
+                              '--industry-weight-comparison-daily-cache', $FactorComparisonV2Cache,
+                              '--industry-weight-comparison-source', $IndustryWeightSource,
+                              '--industry-weight-comparison-forward')
                 # P2 freezes the weekly shadow target/breakout decision only after the matching M6.7
                 # bundle publishes.  It has no price fetcher: until a reviewed execution OHLCV cache
                 # exists, its public reminder stays accumulating/unavailable and M6.7 is unchanged.
