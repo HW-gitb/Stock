@@ -1,5 +1,42 @@
 # Session Log
 
+## 2026-07-22 — Codex 修复 US-short model_paper one-click review P1-A/P1-B/P1-C（wt/us-short；未提交）
+
+- **Action**: 复审意见正确。`run_weekly_capstone` 的 auto-budget log 已移回 `pass2_preflight` 赋值块；receipt 只在 `weekly_bridge` 构建。terminal 与 bridge 均使用同一 transaction staging root，避免 terminal 读取尚未 publish 的正式路径；stage 层未改。
+- **Coverage**: 新增主循环集成回归，production-shaped `run_weekly_capstone` + `model_paper_store_root` + fixture-only stages，断言 adapter→preflight→bridge→terminal、receipt 恰一次、首周冻结/head pending、周报七固定字段。
+- **Verify**: relevant offline `model_paper + capstone + provider-contract + schema` pack **126 OK**；无 provider 调用、无首真实周、未提交/未 merge。
+- **Next**: Claude Code 独立复审当前 wt/us-short P1 repair；通过后再决定提交/land。
+
+## 2026-07-22 — Claude Code 独立复审 PASS（US-short model_paper 刀3/刀4 一键接线收口；提交 wt/us-short）
+
+- **Verdict/Action**: PASS + 提交 wt/us-short。首轮 FAIL 的 2 P1 Codex 已修，三修亲验均正确；stage 层上轮已验、本轮未动；land 到 master 待做。
+- **Required**: 无。
+- **Verify**: review-evidence:fbdc7c738f48。三修行号亲读 + ps1 helper `-Requested` 无缺；Focused 91 OK 亲跑；全包免（tiering rule 6：功能 delta=2 行、blast radius=model_paper 路径全在 focused）。细节单源见 register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`。
+- **Next**: land wt/us-short 刀3/刀4 到干净 master。
+
+## 2026-07-22 — Claude Code 主树整合：master 清回 af390a64（删竞争一键 launcher + churn，wt/us-short 为唯一权威）
+
+- **Action**: 用户定"一切以 wt/us-short 为主、重叠冲突的 us-short model_paper 代码可删则删"。主树 `D:/cnhea/Stock` 之前前移到 `e74f32bc "Add one-click US-short paper launcher"`（用户今天自提的**竞争**一键 launcher：`us_short_paper_one_click.*` + 64 行 capstone + test + README，另捎带 a-short `.tools/Resolve-AshortPython.ps1`）+ 一批未提交 churn（"刀2 offline-only" 驱动 untracked、fork docs、一键文件 `D` 删）。已 `git -C D:/cnhea/Stock reset --hard af390a64`（保留 刀1 `bd89b4f0`）+ 清 churn；master 现干净、status 空。
+- **全可恢复**（stash 跨 worktree 共享、按 message 找不按 index）：e74f32bc 整条存分支 `wip/master-model-paper-preclean-20260722`（含 `.tools` a-short helper，要就 cherry-pick）；master churn 存 stash『master model_paper churn superseded by wt/us-short 2026-07-22』；c52c offline-only 分叉存 stash『c52c offline-only model_paper fork superseded by wt/us-short 2026-07-22』。要彻底 drop 这些恢复 ref 再说一句。
+- **残留清理（2026-07-22）**：master 旧 stash『c52c-pre-sync-duplicate-model-paper-knife1』（27 行 fork 文档）已 drop；c52c worktree（`.codex/worktrees/c52c/Stock`）未提交分叉已 stash → 清回干净 `7fbe1ab9`（未删 worktree 本体、保留 infra）。其余 worktree（3500/c237/20fb/f62f/a-short-3 等他 lane）+ 无关 stash『codex-cat4-rebase-backup-20260711』未碰。
+- **现状**：master = 干净 af390a64（含 刀1）；wt/us-short = 3fd8c9c 唯一权威（刀3/刀4 接线待 Codex 修 2 P1 后复审→PASS 再 land）；wt/us-short 未受影响。
+- **Next**: Codex：修复 wt/us-short 的 2 P1（见下条 FAIL）。
+
+## 2026-07-22 — Claude Code 独立复审 FAIL（US-short model_paper 刀3/刀4 一键接线；wt/us-short 未提交）
+
+- **Verdict/Action**: FAIL（2 P1，集成层）。stage 函数层全对；但接进 `run_weekly_capstone` 主循环的集成层有 2 P1、第一次真实一键跑必崩，且无测试驱动该循环开 model_paper。未提交、未 land。
+- **Required**: 见 register `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING` FAIL 块：P1-A（`:1417` UnboundLocalError 误置 print）+ P1-B（`:1257` receipt 误杀 model_paper_weekly）+ P1-C（补集成测试）。
+- **Verify**: review-evidence:89a462a331fb。亲读确切行号坐实两 P1 + grep 证无测试驱动 model_paper 主循环；独立对抗 agent 同结论；stage 层探针 + 全包 4598 OK。细节见 register。
+- **Next**: Codex：修复（P1-A/B/C 一并；stage 层别返工）。
+
+## 2026-07-22 — Codex：US-short model_paper 一键模拟盘刀3/刀4接线完成，待 Claude 独立复审
+
+- **Verdict/Action**: 已把双阶段 paper 接线放进 `runners/us_short_weekly_capstone.py::default_pipeline()`：`momentum_fetch` 后 `model_paper_adapter` 仅在内存成熟旧周并派生结转 cash/持仓 adapter；`weekly_bridge` emitted 后 `model_paper_weekly` 才绑定同周 machine record、原子结算旧周并冻结新 bundle，再把 `initial_capital/current_cash/holdings_market_value/current_nav/cumulative_pnl/cumulative_return_pct/consecutive_weeks` 写入私密周报。NO-EMIT 不触 terminal paper stage，不会伪造成交。`us_short_paper_one_click.py` 不再每周重写空 $100k 账户；只保留 adapter slot，store head 不存在时由 terminal transition 首次播种，之后续仓。auto Pass2 budget 仍由同 run preflight 派生，未加内部 cap/用户预算数字。
+- **Required**: Claude 独立复审此当前 diff；未提交、未合并、未跑 provider 或首真实周。
+- **Verify**: 项目 Python 固定包 = 136 OK（`model_paper_weekly/capstone_wiring/one_click/store/schema` + capstone checkpoint/provider + route guards，离线）；含 5 周 fixture：仅首周 seed、week5 `cumulative_pnl=current_nav-100000`、`consecutive_weeks=5`；默认 pipeline 顺序、adapter 写入和 terminal freeze 各有夹具覆盖。
+- **Pre-Codex self-review**: A-F checked / N-A。A：adapter preview 与 terminal transition 共用 store/portfolio 单源，五周/首周/成熟/持仓转换均覆盖。B：`rg 'model_paper_(adapter|weekly)|auto_authorize_pass2_budget' runners engine tests` 复核消费者与旧空仓路径；无 c52c/master 业务改动。C：NO-EMIT 不进 terminal、缺持仓 source 覆盖/错 clock 均拒绝，first seed 只在无 head。E：register 只记 settled implementation + closure criterion，当前 review gate 只在本条。F：UTF-8、`py_compile`、`git diff --check` 已绿；固定包集中一次完成。
+- **Next**: Claude：审查
+
 ## 2026-07-22 — Claude Code：一键预算最终定为 no-cap（去内部天花板）+ 澄清 Codex 读到旧树
 
 - **Verdict/Action**: 用户定"一键运行无需额外操作"→ 评估后**去掉 §18.1 #32 的内部安全天花板**（改 no-cap）：`top_k`(≤250、默认200、代码强制) 已结构性把 FMP grades 压在免费日上限内 → 天花板冗余；grades 已 advisory(2026-07-10) → 耗尽应中性照跑非拒跑 → 天花板会误挡；去掉消实现歧义 + 更简单 + 零一键破坏风险。一键唯一边界 = `top_k` + provider 自身限流 + 诚实降级。已改 §18.1 #32 + register Design/invariant。

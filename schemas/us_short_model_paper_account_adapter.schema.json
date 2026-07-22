@@ -1,0 +1,54 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stock.local/schemas/us_short_model_paper_account_adapter.schema.json",
+  "title": "US-short model-paper account adapter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "source_state_sha256", "valuation_as_of", "decision_date", "capital_kind", "us_market_equity", "us_short_bucket_capital", "us_short_available_cash", "positions", "paper_track", "boundary"],
+  "properties": {
+    "schema_name": {"const": "us_short_model_paper_account_adapter"},
+    "schema_version": {"const": "1.0.0"},
+    "source_state_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "valuation_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "capital_kind": {"const": "normalized_notional"},
+    "us_market_equity": {"const": 300000.0},
+    "us_short_bucket_capital": {"const": 100000.0},
+    "us_short_available_cash": {"type": "number", "minimum": 0, "maximum": 100000.0},
+    "positions": {"type": "array", "items": {"$ref": "#/definitions/position"}},
+    "paper_track": {"$ref": "#/definitions/paper_track"},
+    "boundary": {"$ref": "#/definitions/boundary"}
+  },
+  "definitions": {
+    "position": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticker", "shares", "avg_cost_usd", "entry_date", "current_stop", "tp1_completed"],
+      "properties": {
+        "ticker": {"type": "string", "pattern": "^[A-Z][A-Z0-9.-]{0,14}$"},
+        "shares": {"type": "integer", "minimum": 1},
+        "avg_cost_usd": {"type": "number", "exclusiveMinimum": 0},
+        "entry_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "current_stop": {"type": "number", "exclusiveMinimum": 0},
+        "tp1_completed": {"type": "boolean"}
+      }
+    },
+    "paper_track": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paper_evaluable", "consecutive_stops", "paper_drawdown_frac", "evidence_ref"],
+      "properties": {
+        "paper_evaluable": {"type": "boolean"},
+        "consecutive_stops": {"type": "null"},
+        "paper_drawdown_frac": {"type": "null"},
+        "evidence_ref": {"type": "object", "additionalProperties": false, "required": ["kind", "value"], "properties": {"kind": {"const": "source_id"}, "value": {"type": "string", "minLength": 1}}}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["manual_account_read", "automatic_broker_execution", "ship_gate_eligible"],
+      "properties": {"manual_account_read": {"const": false}, "automatic_broker_execution": {"const": false}, "ship_gate_eligible": {"const": false}}
+    }
+  }
+}
