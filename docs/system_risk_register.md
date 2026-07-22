@@ -33,12 +33,12 @@ Status:
 
 ## Hot Queue
 
-### R-ASHORT-RUNNERS-README-REGIME-RUNNER-DRIFT - runners/README.md omits a_short_regime_comparison_runner.py while weekly_screening.ps1 wires it (pre-existing failing route-doc guard on master; NOT the P5a cut)
+### R-ASHORT-RUNNERS-README-REGIME-RUNNER-DRIFT - runners/README.md omitted a_short_regime_comparison_runner.py while weekly_screening.ps1 wired it (pre-existing master route-doc guard)
 
-- **Status / severity**: **open — P3 (pre-existing route-doc drift on master 5fc45f3f; failing guard; surfaced during the A-short P5a 第一刀 review 2026-07-22, NOT caused by it; not committed).**
+- **Status / severity**: **resolved — P3 (pre-existing route-doc drift on master 5fc45f3f; user-authorized self-review PASS, route-doc guard green).**
 - **Defect**: at base 5fc45f3f `runners/weekly_screening.ps1` references `a_short_regime_comparison_runner.py` (2×) but `runners/README.md` documents it 0× → `tests/phase6/test_weekly_screening_guardrails.py::test_runner_readme_documents_regime_stage` FAILS (verified with `git show HEAD:` on both files + the test existing at base). The P5a selector cut did not touch README or the ps1 regime wiring; its only edit to that test file correctly re-pointed a DIFFERENT test's `watch_df` source-grep to the new selector line.
-- **Fix**: add one line documenting `a_short_regime_comparison_runner.py` (P1 V14.3 逐股 regime comparison runner) to `runners/README.md`'s helper/runner list; rerun the guard. Master-level hygiene, separate slice from P5a.
-- **P5a-review Optionals (non-blocking, related)**: (a) the watch-pool selection logic moved from the effect-contract-pinned `A-EGS/egs_main.py` into the UNPINNED `engine/egs_industry_heat.py` (which already owns `final_score_and_tier`), so silent changes to `select_profile_watch_pool` are no longer caught by `decision_predicate_sha256` — consider adding `egs_industry_heat.py` to the pinned set. (b) The design's P5.3 "balanced == live watch_df" invariant test (`test_active_balanced_profile_pool_matches_the_formal_watch_pool`) compares the new selector to itself (both call it) rather than to a pre-refactor production golden, and no new unit test exercises the L2>20→15 truncation or the L1≤0.4/L2≤0.3 concentration caps; behavior IS preserved (integral read + selection-health tests) but a golden/concentration regression would harden it.
+- **Fix**: `runners/README.md` now names the live-only, `-SkipRegime` / first-run `--bootstrap`, comparison-only and non-blocking V14.3 runner path; the guard is rerun in this separate hygiene slice.
+- **P5a-review Optionals (implemented in the same hygiene slice)**: (a) `engine/egs_industry_heat.py` is now in `decision_predicate_sha256`, with a mutation test for the L2 cap predicate; it catches changes to selector decision predicates, though it is not a whole-source hash. (b) the existing balanced/live shared-selector invariant remains, and independent golden regressions now pin L2 `>20 → 15` plus the sequential L1/L2 concentration behavior.
 - **Closure**: README updated + guard green; P5a-review Optionals accepted or dispositioned. Not closed by intent.
 
 ### R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING - main-system model_paper_track has fill/scorecard engines but no weekly PORTFOLIO driver: nothing applies the weekly action table to a persistent simulated portfolio + cumulative NAV

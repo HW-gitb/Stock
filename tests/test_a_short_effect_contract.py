@@ -56,6 +56,16 @@ class EffectContractStaticTests(unittest.TestCase):
         error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={rel: source}))
         self.assertEqual(error, "decision predicate changed without effect contract update")
 
+    def test_watch_pool_selector_predicate_cannot_escape_registration(self):
+        rel = "engine/egs_industry_heat.py"
+        source = (ROOT / rel).read_text(encoding="utf-8").replace(
+            "if l2 in overflow and count >= 15:",
+            "if l2 in overflow and count >= 16:",
+            1,
+        )
+        error = static_contract_error(self.contract, inventory=static_inventory(source_overrides={rel: source}))
+        self.assertEqual(error, "decision predicate changed without effect contract update")
+
     def test_changed_runtime_threshold_cannot_escape_registration(self):
         rel = "presets/a_short_m67_runtime_policy_20260715.json"
         policy = (ROOT / rel).read_text(encoding="utf-8").replace(

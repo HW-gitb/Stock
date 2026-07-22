@@ -19,6 +19,7 @@ CONTRACT_PATH = ROOT / "schemas" / "a_short_m67_effect_contract.json"
 ANALYSIS_INPUT_SCHEMA_PATH = ROOT / "schemas" / "analysis_input.schema.json"
 _DECISION_FILES = (
     "A-EGS/egs_main.py",
+    "engine/egs_industry_heat.py",
     "engine/a_short_industry_theme.py",
     "runners/a_short_phase5_engine.py",
     "runners/a_short_weekly_pipeline.py",
