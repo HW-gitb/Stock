@@ -17,6 +17,8 @@ HORIZON_TRADING_DAYS = 20
 ROUND_TRIP_COST_FRACTION = 0.0016
 ATR_PERIOD = 14
 ATR_HISTORY_ROWS = ATR_PERIOD + 1
+DEFAULT_POLICY_VERSION = "p2_p3_v1"
+OFFICIAL_POLICY_VERSION = "official_m67_v1"
 
 
 class ManagedExitError(ValueError):
@@ -145,6 +147,15 @@ def _plan_window_rows(plan: dict[str, Any], execution_rows: list[dict[str, Any]]
     return [row for index, (row, _trade_date) in enumerate(dated_rows) if index in selected]
 
 
+def managed_exit_evidence_window(plan: dict[str, Any], execution_rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return the exact normalized inputs a managed-exit evaluation is allowed to use.
+
+    This public helper prevents decision-level evidence lanes from inventing a
+    second windowing rule merely to fingerprint their terminal H20 result.
+    """
+    return _normalise_rows(_plan_window_rows(plan, execution_rows))
+
+
 def _is_one_price_limit(row: dict[str, Any], limit_key: str) -> bool:
     limit = row.get(limit_key)
     return limit is not None and _same_price(row["high"], row["low"]) and _same_price(row["close"], limit)
@@ -248,14 +259,17 @@ def _diagnostic_snapshot(*, horizon: list[dict[str, Any]], entry_horizon_index: 
     }
 
 
-def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, Any]]) -> dict[str, Any]:
+def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, Any]], *,
+                          policy_version: str = DEFAULT_POLICY_VERSION) -> dict[str, Any]:
     """Evaluate one frozen P2/P3 plan on pre-existing execution-basis OHLCV.
 
     A result is either a settled H20 return or ``no_count``.  It never guesses
     a missing adjustment factor, fillability state, or price basis.
     """
+    if policy_version not in {DEFAULT_POLICY_VERSION, OFFICIAL_POLICY_VERSION}:
+        return _result_no_count("unknown_managed_exit_policy")
     try:
-        rows = _normalise_rows(_plan_window_rows(plan, execution_rows))
+        rows = managed_exit_evidence_window(plan, execution_rows)
         frozen = _convert_plan(plan, rows)
         horizon_indices = [
             index
@@ -265,8 +279,14 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
         horizon = [rows[index] for index in horizon_indices]
         if len(horizon) < HORIZON_TRADING_DAYS:
             return _result_no_count("h20_not_available")
-        entry_horizon_index = next((idx for idx, row in enumerate(horizon) if _buyable(row)), None)
+        entry_horizon_index = next((
+            idx for idx, row in enumerate(horizon)
+            if _buyable(row) and (policy_version != OFFICIAL_POLICY_VERSION or
+                                  frozen["entry_low"] <= row["open"] <= frozen["entry_high"])
+        ), None)
         if entry_horizon_index is None:
+            if policy_version == OFFICIAL_POLICY_VERSION and any(_buyable(row) for row in horizon):
+                return _result_no_count("entry_outside_frozen_range")
             return _result_no_count("entry_unfillable")
         entry_index = horizon_indices[entry_horizon_index]
         entry_row = rows[entry_index]
@@ -275,6 +295,8 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
         t1_done = frozen["t1"] is None
         trailing = frozen["stop"]
         fills: list[dict[str, Any]] = []
+        same_bar_both_triggered = False
+        same_bar_profit_trigger_count = 0
 
         # Entry day itself cannot be sold under A-share T+1.  The horizon is
         # anchored to decision T+1, so a late first fill never extends H20.
@@ -295,16 +317,31 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
                 continue
             # Conservative priority: a stop/trailing breach consumes all
             # remaining shares before a same-day T1 touch can be credited.
-            if row["low"] <= trailing:
+            stop_hit = row["low"] <= trailing
+            t1_hit = not t1_done and frozen["t1"] is not None and row["high"] >= frozen["t1"]
+            t2_hit = (policy_version == OFFICIAL_POLICY_VERSION and t1_done and
+                      frozen["t2"] is not None and row["high"] >= frozen["t2"])
+            if stop_hit and (t1_hit or t2_hit):
+                same_bar_both_triggered = True
+            if (t1_hit and frozen["t2"] is not None and row["high"] >= frozen["t2"]):
+                # Intrabar order between two targets is not observable from OHLC.
+                # Credit only TP1 on that bar; the remaining shares stay exposed.
+                same_bar_profit_trigger_count += 1
+            if stop_hit:
                 fills.append({"kind": "stop_or_trailing", "trade_date": row["trade_date"],
                               "price": _stop_fill(row, trailing), "weight": remaining_weight})
                 remaining_weight = 0.0
                 break
-            if not t1_done and frozen["t1"] is not None and row["high"] >= frozen["t1"]:
+            if t1_hit:
                 fills.append({"kind": "t1", "trade_date": row["trade_date"],
                               "price": _t1_fill(row, frozen["t1"]), "weight": 0.5})
                 remaining_weight -= 0.5
                 t1_done = True
+            elif t2_hit:
+                fills.append({"kind": "t2", "trade_date": row["trade_date"],
+                              "price": _t1_fill(row, frozen["t2"]), "weight": remaining_weight})
+                remaining_weight = 0.0
+                break
 
         h20 = horizon[-1]
         unrealized_at_h20 = remaining_weight > 0
@@ -313,7 +350,7 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
                           "price": h20["close"], "weight": remaining_weight})
         gross_return = sum(fill["weight"] * (fill["price"] / entry_price - 1.0) for fill in fills)
         net_return = gross_return - ROUND_TRIP_COST_FRACTION
-        return {
+        result = {
             "contract_version": CONTRACT_VERSION,
             "status": "settled",
             "reason": None,
@@ -338,5 +375,26 @@ def evaluate_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, A
             },
             "events": fills,
         }
+        if policy_version == OFFICIAL_POLICY_VERSION:
+            observed = horizon[entry_horizon_index:]
+            result["official_path"] = {
+                "policy_version": OFFICIAL_POLICY_VERSION,
+                "same_bar_both_triggered": same_bar_both_triggered,
+                "execution_path_ambiguous": same_bar_both_triggered or same_bar_profit_trigger_count > 0,
+                "same_bar_profit_trigger_count": same_bar_profit_trigger_count,
+                "mfe_pct": round((max(row["high"] for row in observed) / entry_price - 1.0) * 100.0, 8),
+                "mae_pct": round((min(row["low"] for row in observed) / entry_price - 1.0) * 100.0, 8),
+            }
+        return result
     except ManagedExitError as exc:
         return _result_no_count(str(exc))
+
+
+def evaluate_official_managed_exit(plan: dict[str, Any], execution_rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """Evaluate a frozen official M6.7 plan through the shared exit core.
+
+    P2/P3 retain their byte-compatible default policy.  The formal-operation
+    evidence lane only adds its explicitly frozen TP2 and ambiguity observability
+    through this wrapper; it does not own a second OHLC evaluator.
+    """
+    return evaluate_managed_exit(plan, execution_rows, policy_version=OFFICIAL_POLICY_VERSION)

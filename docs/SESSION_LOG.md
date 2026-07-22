@@ -1,5 +1,35 @@
 # Session Log
 
+## 2026-07-22 — Codex independent strict re-review PASS (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
+
+- **Verdict/Action**: PASS; the repaired A/B/C second knife is approved and committed on top of capture-only knife `760b5a72`.
+- **Required**: None; full scope, closure evidence, and durable boundary are in `docs/system_risk_register.md` under `R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS`.
+- **Verify**: Required project Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran the official/cache/P2/P3/weekly/doc/route pack: 139 OK; `py_compile` and `git diff --check` OK.
+- **Next**: User-authorized merge of the reviewed first and second knives remains with the primary task.
+
+## 2026-07-22 — Codex repair (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
+
+- **Verdict/Action**: Implemented the three Required repairs in the current uncommitted second knife: real managed-exit capture-to-cache contract, terminal-result/window immutability, and QFQ conversion plus official entry-range gate.
+- **Required**: `R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS`; detailed repaired behavior and boundaries are in `docs/system_risk_register.md`.
+- **Verify**: Required project Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran the official/cache/P2/P3/weekly/doc/route pack: 139 OK; `py_compile` and `git diff --check` OK.
+- **Pre-Codex self-review**: Re-read source → frozen capture → actual shared-cache builder → shared evaluator → terminal ledger chain; terminal drift remains fail-closed, ordinary cache growth is not a conflict, and the new official policy is isolated from P2/P3 defaults.
+- **Next**: Claude Code: independently review the repaired current second-knife diff; PASS then commit only, with merge subject to the user's existing authorization.
+
+## 2026-07-22 — Codex 独立审查 FAIL (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
+
+- **Verdict/Action**: FAIL；第二刀的正式操作结果闭环尚不可提交，第一刀 `760b5a72` 不在本审查 Required 范围内。
+- **Required**: `R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS`；完整 A/B/C cache-contract、terminal-progress、price/fill-basis 缺口与修复边界见 `docs/system_risk_register.md`。
+- **Verify**: Pinned Python offline pack 136 OK、`py_compile`/`git diff --check` OK；实测 actual request→normalizer 缺 `price_data_through` 拒绝、terminal later-week 重试冲突、10.0–10.5 建议被 20.0 开盘错误计为 settled。
+- **Next**: Codex：修复
+
+## 2026-07-22 — Codex execution: A-short official operation outcome / ledger / cohort (uncommitted)
+
+- **Action**: Implemented dsa_codex A-short second knife. The existing receipt-bound capture now freezes a prospective new-build managed-exit policy input; `a_short_factor_comparison_v2_cache_build.py` accepts it as the lowest-priority consumer of the one v2/P5/P2/P3 cache; `a_short_official_operation_evidence.py` advances only decision-level `live_normalized` pending/settled/no-count outcomes, immutable terminal conflict hashes, private progress ledger, and a de-identified minimum-cohort summary. Official TP2 and same-bar stop-first observability are explicit policy additions inside the one `engine/a_short_managed_exit.py` core; P2/P3 keep the default policy.
+- **Required**: Independent review must confirm: no second writer/evaluator or account simulation; new-build plan scale agrees with the shared adjusted execution projection; existing-holding/manual-actual paths remain no-count/separate; terminal outcome conflict and public privacy guards fail closed. No provider, real weekly, account, order, P4/P5b, V14.3, or production-rule change was run.
+- **Verify**: Project Python launcher `.tools\run_unittest_with_repo_pythonpath.cmd`: 136 OK (`official_operation_evidence`, cache builder, P2, P3, weekly guardrails, README/doc/route guards); `py_compile` and `git diff --check` OK. Added offline TP2, stop-first ambiguity, private-ledger/no-simulated-account, same-scale candidate plan, and late shared-cache-consumer tests.
+- **Pre-Codex self-review**: Capture remains the only official source; cache request is priority 3 after v2/P5/P2/P3; no `portfolio_state`, cash, positions, NAV, head manifest, manual fill inference, fetcher, or order API exists in the new program. Small cohorts withhold metrics.
+- **Next**: Claude Code: independently review only this second-knife diff; PASS then commit this worktree, no merge unless separately authorized.
+
 ## 2026-07-22 — Codex 审查 PASS (A-short official M6.7 operation-evidence capture)
 
 - **Verdict/Action**: PASS。最高风险切片（新增私有写入与 fail-closed capture）已全读 source→publish→capture→schema→wrapper 链；用户提供的 Claude 终端记录显示独立 §6a 对抗 agent PASS，当前复核另做 receipt/路径/不可变 replay 反向检查。

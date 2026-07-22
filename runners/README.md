@@ -82,16 +82,16 @@ Existing helpers:
   captures, incrementally requests the bounded daily/adjustment/limit window,
   records missing adjustment provenance honestly, and atomically writes only
   beneath the gitignored v2 root. It schedules v2 missing rows first, then P5
-  industry-weight requests, then P2/P3 execution requests; overflow is deferred
-  and never allowed to starve v2 or P5.
+  industry-weight requests, then P2/P3 and formal-operation execution requests;
+  overflow is deferred and never allowed to starve v2 or P5.
   Its failure is comparison-only and non-blocking.
 - `a_short_industry_weight_comparison.py` - P5a thin private capture / existing-cache
   settlement / de-identified progress entry. It never calls a provider, reads an
   account, backfills historical evidence, or changes the active EGS profile.
-- `a_short_official_operation_evidence.py` - private, append-only capture of the
-  already-published formal M6.7 display. It revalidates the matching complete receipt
-  and M6.7 source, records no outcome or fill, never reads P2/P3/P5 cache/ledgers, and
-  cannot change the weekly bundle, selection, ranking, or order flow.
+- `a_short_official_operation_evidence.py` - private, append-only capture plus
+  decision-level `live_normalized` progress for the already-published M6.7 display.
+  It consumes only the P5a shared execution cache and shared managed-exit core; it
+  cannot create a portfolio, cash, positions, NAV, manual fill, M6.7, ranking, or order flow.
 - `materialize_benchmark_monthly_returns_tushare.py` - Phase 6b benchmark
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus
@@ -114,5 +114,5 @@ Existing helpers:
 - `diagnose_tier1_bad_signals.py` — Phase 3.2 Tier1 坏票特征诊断；只读现有 `rank_samples.csv` 和 generated full-rank CSV，不重跑 EGS
 - `run_analysis_report.py` — Phase 4 单票 deterministic report runner；读取 `analysis_input.json`，调用 analyzer/state，默认用 as-of A 股收盘时间评估 JSON state（可用 `--state-now` 覆盖），输出 schema-validated JSON + Markdown 到 `result/a_short/<as_of>/reports/`
 - `data_canary.py` — Phase 2.6 advisory-only 旁路跨源对账（Tushare vs akshare）；exit 0 / warning 不能当作 data_passed、alpha、production-readiness 或 ship-gate evidence。
-- `weekly_screening.cmd` / `weekly_screening.ps1` — 周实盘一键入口及实现：依次跑 EGS、canary、forward capture + cache-only backfill、唯一操作输出 M6.7、V14.3 comparison sidecar。live canonical 周先由唯一 cache writer 把 v2/P5/P2/P3 缺失窗口按固定优先级原子合并进同一私密 `daily_cache.json`，并把同一路径交给四个只读 consumer；各轨 capture/ledger/verdict 不合并，失败不阻断 M6.7。live 周另调用 `a_short_regime_comparison_runner.py`；可用 `-SkipRegime` 跳过，首次无账本时用 `--bootstrap`，全程 comparison-only、非阻断。`-Account` 只接受五张手工 CSV 经转换器生成、摘要绑定的 `a_short_account_bundle`；确认文件精确转发，持仓确认必须与账户 bundle 同用并在私有路径验证。请求后 M6.7 输入失败会写 failed receipt 并非零退出；语义和 V14.3 仍是 advisory/comparison-only，不改生产评分、veto 或建仓授权。historical `-AsOf` 必须显式 `-L3Mode pit|neutralize`。
+- `weekly_screening.cmd` / `weekly_screening.ps1` — 周实盘一键入口及实现：依次跑 EGS、canary、forward capture + cache-only backfill、唯一操作输出 M6.7、V14.3 comparison sidecar。live canonical 周先由唯一 cache writer 把 v2/P5/P2/P3/正式操作证据缺失窗口按固定优先级原子合并进同一私密 `daily_cache.json`，并把同一路径交给各只读 consumer；各轨 capture/ledger/verdict 不合并，失败不阻断 M6.7。live 周另调用 `a_short_regime_comparison_runner.py`；可用 `-SkipRegime` 跳过，首次无账本时用 `--bootstrap`，全程 comparison-only、非阻断。`-Account` 只接受五张手工 CSV 经转换器生成、摘要绑定的 `a_short_account_bundle`；确认文件精确转发，持仓确认必须与账户 bundle 同用并在私有路径验证。请求后 M6.7 输入失败会写 failed receipt 并非零退出；语义和 V14.3 仍是 advisory/comparison-only，不改生产评分、veto 或建仓授权。historical `-AsOf` 必须显式 `-L3Mode pit|neutralize`。
 - `a_short_runtest.ps1` / `us_short_runtest.ps1` — 仅测试用全量入口：每次在 `Stock_runtest_private` 下新建 detached clone，强制无 EGS cache/无 US resume，并把所有固定输出留在胶囊；用法与安全删除见 `docs/runtest_capsule.md`。不得把其产物当正式周报或 ship-gate 证据。

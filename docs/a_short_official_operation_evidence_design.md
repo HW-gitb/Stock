@@ -2,28 +2,30 @@
 
 ## 定位
 
-本程序把已经发布的 `weekly_m67.json` 所代表的正式 M6.7 操作建议，冻结为私有、不可变的事实记录。它服务于以后对建议与实际进展的对照；本阶段不判断建议对错，也不产生交易或业绩结论。
+该 program 评价用户已经看到的、账户约束后的正式 M6.7 建议后来在统一日线规则下会怎样；它不是账户驾驶模拟器，也不证明用户实际成交。正式建议的唯一真相源仍是完整发布的 `weekly_m67.json` 与匹配 receipt。
 
-## 可信来源与触发
+## 冻结与来源
 
-- 只消费同一目录下、状态为 `complete` 的 `weekly_m67.receipt.json` 所绑定的 `weekly_m67.json` 和 Markdown；缺文件、名称、`as_of`、`run_id`、候选摘要或账户快照不一致即拒绝。
-- capture 再校验 weekly schema、每张 M6.7 schema 与 `validate_m67_consistency`，所以不能由中间 dataframe、P3 模型集、缓存或重跑分析近似生成建议。
-- `weekly_screening.ps1` 只在 live canonical 周把私有 root 传给 weekly pipeline；pipeline 只在 bundle 与 receipt 发布成功后调用 capture。sidecar 异常不影响已发布的 M6.7。
+- 只接受同目录、`complete` receipt 绑定的 JSON/Markdown bundle；capture 再校验 weekly/M6.7 schema 与 `validate_m67_consistency`。
+- 每条已展示建议以 `run_id`、`as_of`、候选摘要、账户快照摘要、M6.7/receipt hash 及「主动作 + 持仓处置」生成稳定 `decision_id`；capture 不重算或覆盖 M6.7。
+- 新建仓计划冻结 QFQ 的入场/止损/TP1/TP2、当周 regime 的 ATR 参数、`price_data_through` 与 M6.7 的 QFQ 入场参考价；共享核心只在同一缓存能证明该参考日 `raw × observed adj_factor` 时换算到 execution scale。缺参考、缺复权或参考不一致均 `no_count`；既有持仓没有独立冻结入场基础也诚实 `no_count`，绝不伪造账户成本或仓位。
+- `weekly_screening.ps1` 仅在 live canonical 周接线，且仅在 bundle 成功发布后 capture；sidecar 失败不影响已发布 M6.7。
 
-## 冻结内容
+## 结果、cache 与唯一评价核心
 
-每条正式显示行以 `run_id`、`as_of`、候选摘要、账户快照摘要、股票、scope 与“最终操作 + 持仓处置”生成稳定 `decision_id`。capture 保存原始显示表和以下已发布事实：
+- P5a 的 `a_short_factor_comparison_v2_cache_build.py` 是唯一日线 writer。正式建议是其最低优先级 consumer，不得挤占 v2/P5/P2/P3 的预算、不得自建 fetcher 或联网回退。
+- 结果只读取 P5a 同一份 `daily_cache.json` 的 execution projection，并只调用 `engine/a_short_managed_exit.py`。official policy 仅显式增加 TP2、TP1 后剩余仓位和同根歧义可观测性；P2/P3 默认 policy 的输入输出保持不变。
+- H20 未成熟或共享行情尚未取得时为 `pending`；价格、复权或公司行动无法证明时为 `no_count`；正式建议仅在可买且开盘价落入冻结入场区间时才记为成交，区间外一路空过为 `no_count`；同根止损与止盈并发按 stop-first，并记录 `same_bar_both_triggered` 与 `execution_path_ambiguous`。
+- 每个 `decision_id + live_normalized + policy_version` 最多一个终态结果。pending 可推进；后续周的 progress 日期或整份 cache digest 增长不改变终态，只有冻结来源、H20 输入窗口或结果本身漂移才写 hash conflict 并 fail closed。
 
-- 新候选、既有持仓或纯组合层 scope；最终操作与持仓处置独立保存；禁止加仓、硬否决、advisory 降级及组合阻断分别留痕。
-- 进场区间、止损、TP1/TP2、持仓减仓/清仓路径、建议股数、现金使用与已发布组合风险结果。
-- 正式市场环境、风险族、覆盖度、stateful risk、ratchet；V14.3 字段只在官方 bundle 已提供时原样记录。
-- `live_normalized` 初始为 `capture_pending`；`manual_actual` 只能在后续事件引用中记录，不能伪造成交。
+## ledger、cohort 与隐私
 
-若官方 bundle 没有个股报告但存在组合风险阻断，才允许 `portfolio_only`；该记录没有股票、进场、止损、止盈或建议股数。
+- 私有 `ledger.json` 只记录 capture/pending/maturity/no-count/结果 hash 的决策级进度；它不是 `portfolio_state`、positions、cash、NAV、head manifest 或资金流水。
+- 私有逐笔 outcome 与 tracked 脱敏汇总分离。汇总按 scope、动作/处置、入场类型、regime、V14.3、风险/覆盖、阻断、成交与同根歧义切分；小于 5 个可评价样本的 cohort 只显示计数。
+- `live_normalized` 与未来 `manual_actual` 永远分列。没有独立人工账户事件账本时不得从建议推断真实成交、费用或账户盈亏。
 
-## 私密与不可变边界
+## 硬边界
 
-- 全字段写入 gitignored `state/a_short/operation_evidence_private/v1/weeks/<as_of>/capture.json`。repo 内 root 必须由 `git check-ignore` 证明已忽略；tracked 只包含代码、schema、测试与此设计。
-- 同一来源重跑完全幂等；同一周既有 capture 与新内容不同会写入只含摘要哈希的私有 conflict 记录，并拒绝覆盖原始 capture。
-- 本程序没有 outcome、账本、cohort、缓存读取或价格抓取接口。后续结算只能按 `decision_id` 另存引用，不能修改 capture；P2/P3/P5 ledger 与 verdict 也不复用。
-- capture 不改选股、排名、M6.7、展示、receipt、账户状态或下单行为；所有 boundary 由私有 schema const-pin。
+- 不创建或维护跨周现金、持仓、NAV、名义本金、账户盈亏、自动调仓或券商下单。
+- 不修改 selection、排序、M6.7、receipt、P2/P3/P4/P5 ledger/verdict、V14.3 或生产参数。
+- 完成本 program 仅开始积累前向证据；不得自动改变止损、止盈、股数、regime 或任何生产动作。

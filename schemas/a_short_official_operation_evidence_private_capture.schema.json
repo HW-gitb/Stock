@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_name": {"const": "a_short_official_operation_evidence_private_capture"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "record_type": {"const": "decision_capture"},
     "program_id": {"const": "a_short_official_operation_evidence"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
@@ -26,6 +26,7 @@
       "additionalProperties": false,
       "required": [
         "as_of",
+        "price_data_through",
         "run_id",
         "candidate_digest",
         "official_m67_sha256",
@@ -39,6 +40,7 @@
       ],
       "properties": {
         "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"},
         "run_id": {"type": "string", "minLength": 1},
         "candidate_digest": {"type": "string", "minLength": 1},
         "official_m67_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},

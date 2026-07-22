@@ -24,6 +24,7 @@ from runners.a_short_final_action_validation_runner import (  # noqa: E402
     _load_execution_cache as load_p3_cache,
 )
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
+from runners.a_short_official_operation_evidence import _boundary, _digest  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
     _active_epoch as active_p2_epoch,
     _load_execution_cache as load_p2_cache,
@@ -37,6 +38,43 @@ RUN_DATE = "20260227"
 
 def _root(tmp: str) -> Path:
     return Path(tmp) / "state" / "a_short" / "factor_comparison_private" / "v2"
+
+
+def _official_operation_root(tmp: str) -> Path:
+    return Path(tmp) / "state" / "a_short" / "operation_evidence_private" / "v1"
+
+
+def _write_official_operation_capture(root: Path) -> None:
+    source = {
+        "as_of": DECISION_DATE, "price_data_through": DECISION_DATE,
+        "run_id": "official-operation-cache-test", "candidate_digest": "a" * 64,
+        "official_m67_sha256": "b" * 64, "official_receipt_sha256": "c" * 64,
+        "account_snapshot_digest": None, "weekly_schema_version": "1.0.0",
+        "m67_schema_versions": ["1.0.0"],
+        "runtime_configuration": {"schema_name": "test", "schema_version": "1",
+                                  "configuration_fingerprint": "d", "policies": []},
+        "rule_parameter_versions": {}, "effect_contract_ledger_sha256": "d" * 64,
+    }
+    decision = {
+        "decision_id": "e" * 64, "symbol": "600300.SH", "scope": "new_candidate",
+        "final_action": "建仓", "holding_disposition": None, "display": {}, "constraints": {},
+        "prices": {"managed_exit_plan": {
+            "decision_date": DECISION_DATE, "entry_low": 10.0, "entry_high": 10.5,
+            "stop": 9.0, "t1": 12.0, "t2": 13.0, "atr_multiplier": 1.0,
+            "price_basis": "qfq", "reference_trade_date": DECISION_DATE,
+            "reference_close": 10.5, "policy_version": "official_m67_v1",
+        }, "managed_exit_plan_unavailable_reason": None},
+        "sizing": {}, "portfolio": {}, "environment": {}, "evidence_modes": {},
+    }
+    capture = {
+        "schema_name": "a_short_official_operation_evidence_private_capture", "schema_version": "1.1.0",
+        "record_type": "decision_capture", "program_id": "a_short_official_operation_evidence",
+        "as_of": DECISION_DATE, "source_identity": source, "decisions": [decision], "boundary": _boundary(),
+    }
+    capture["capture_sha256"] = _digest(capture)
+    path = root / "weeks" / DECISION_DATE / "capture.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(capture), encoding="utf-8")
 
 
 def _legacy_cache() -> dict:
@@ -289,6 +327,26 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             self.assertFalse(sample["suspended"])
             self.assertEqual(load_p2_cache(root / "daily_cache.json"),
                              load_p3_cache(root / "daily_cache.json"))
+
+    def test_official_operation_evidence_is_a_late_shared_cache_consumer_not_a_writer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            root.mkdir(parents=True)
+            official_root = _official_operation_root(tmp)
+            _write_official_operation_capture(official_root)
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, pro=provider,
+                    official_operation_evidence_root=official_root,
+                )
+            self.assertEqual(result["status"], "cache_updated")
+            self.assertEqual(result["consumers"], ["official_operation_evidence"])
+            cache = json.loads((root / "daily_cache.json").read_text(encoding="utf-8"))
+            self.assertEqual({row["ts_code"] for row in cache["rows"]}, {"600300.SH"})
+            self.assertTrue(all(key in cache["rows"][0] for key in ("high", "low", "volume", "down_limit")))
+            daily_call = next(kwargs for name, kwargs in provider.calls if name == "daily")
+            self.assertLess(daily_call["start_date"], DECISION_DATE)
 
     def test_v2_missing_symbols_are_scheduled_before_p2_under_the_shared_budget(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "a_short_factor_comparison_v2_daily_cache",
   "title": "A-short shared private daily cache",
-  "description": "Single-writer cache used by factor-comparison v2 and the P2/P3 managed-exit consumers. Provider truth is stored once in stocks/limits; rows is a deterministic adjusted execution projection from the same atomic payload.",
+  "description": "Single-writer cache used by factor-comparison v2, P5, P2/P3, and formal-operation managed-exit consumers. Provider truth is stored once in stocks/limits; rows is a deterministic adjusted execution projection from the same atomic payload.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "stocks", "limits", "meta"],
@@ -79,7 +79,7 @@
         "last_run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
         "consumers": {
           "type": "array",
-          "items": {"enum": ["v2_factor_comparison", "p5_industry_weight", "p2_target_policy", "p3_final_action_validation"]},
+          "items": {"enum": ["v2_factor_comparison", "p5_industry_weight", "p2_target_policy", "p3_final_action_validation", "official_operation_evidence"]},
           "uniqueItems": true
         },
         "provider_call_ceiling": {"type": "integer", "minimum": 1},

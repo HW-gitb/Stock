@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short official operation evidence private outcome",
+  "description": "One append-only normalized outcome for one frozen official M6.7 decision. It is not an account, portfolio, or manual-fill record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "program_id", "decision_id", "evaluation_mode", "policy_version", "capture_sha256", "source_as_of", "settled_through", "cache_sha256", "evaluation_window_sha256", "status", "reason", "metrics", "path", "boundary", "outcome_sha256"],
+  "properties": {
+    "schema_name": {"const": "a_short_official_operation_evidence_private_outcome"},
+    "schema_version": {"const": "1.1.0"},
+    "program_id": {"const": "a_short_official_operation_evidence"},
+    "decision_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "evaluation_mode": {"const": "live_normalized"},
+    "policy_version": {"const": "official_m67_v1"},
+    "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "settled_through": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "cache_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "evaluation_window_sha256": {"type": ["string", "null"], "pattern": "^[a-f0-9]{64}$"},
+    "status": {"enum": ["pending", "settled", "no_count"]},
+    "reason": {"type": ["string", "null"]},
+    "metrics": {"type": ["object", "null"]},
+    "path": {"type": ["object", "null"]},
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["program_progress_ledger_only", "portfolio_state_created", "cash_or_positions_created", "nav_or_head_manifest_created", "automatic_order_execution", "manual_actual_inferred"],
+      "properties": {
+        "program_progress_ledger_only": {"const": true},
+        "portfolio_state_created": {"const": false},
+        "cash_or_positions_created": {"const": false},
+        "nav_or_head_manifest_created": {"const": false},
+        "automatic_order_execution": {"const": false},
+        "manual_actual_inferred": {"const": false}
+      }
+    },
+    "outcome_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

@@ -3737,6 +3737,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="mark this P3 snapshot as live forward evidence; historical replay stays non-counting")
     p.add_argument("--official-operation-evidence-root", default=None,
                    help="private formal M6.7 capture root ending state/a_short/operation_evidence_private/v1")
+    p.add_argument("--official-operation-evidence-daily-cache", default=None,
+                   help="existing P5a shared daily_cache.json for formal-operation settlement; never fetches data")
     args = p.parse_args(argv)
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
@@ -4365,13 +4367,23 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # a sidecar failure may not rewrite, delay, or invalidate the official weekly bundle.
     if args.official_operation_evidence_root:
         try:
-            from runners.a_short_official_operation_evidence import capture_after_published_weekly
+            from runners.a_short_official_operation_evidence import (
+                capture_after_published_weekly,
+                settle_and_summarize as settle_official_operation_evidence,
+            )
             capture = capture_after_published_weekly(
                 root=args.official_operation_evidence_root,
                 out_path=args.out,
                 receipt_path=receipt_path,
             )
             print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
+            settlement = settle_official_operation_evidence(
+                root=args.official_operation_evidence_root,
+                as_of=args.as_of,
+                daily_cache_path=args.official_operation_evidence_daily_cache,
+            )
+            print(f"[official-operation-evidence] settlement={settlement['status']} "
+                  "(shared cache only; no portfolio state)")
         except Exception:
             print("[official-operation-evidence] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")

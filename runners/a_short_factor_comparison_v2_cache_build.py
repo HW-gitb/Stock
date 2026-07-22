@@ -48,6 +48,7 @@ CONSUMER_PRIORITY = {
     "p5_industry_weight": 1,
     "p2_target_policy": 2,
     "p3_final_action_validation": 2,
+    "official_operation_evidence": 3,
 }
 
 
@@ -171,7 +172,7 @@ def _frozen_windows(root: Path, run_date: str) -> list[dict]:
 
 
 def _normalize_captured_windows(requests: list[dict], *, consumer: str, label: str) -> list[dict]:
-    """Accept the frozen v2/P5 request shape at the provider seam, including test fixtures."""
+    """Accept captured-start and managed-exit frozen requests at the provider seam."""
     windows = []
     for request in requests:
         if not isinstance(request, dict):
@@ -182,14 +183,23 @@ def _normalize_captured_windows(requests: list[dict], *, consumer: str, label: s
         symbols = request.get("symbols") or []
         if not isinstance(symbols, list) or not all(str(symbol) for symbol in symbols):
             raise ComparisonV2Error(f"{label} cache request has no valid symbols")
-        windows.append({
+        mode = str(request.get("window_mode") or "captured_start")
+        if mode not in {"captured_start", "managed_exit"}:
+            raise ComparisonV2Error(f"{label} cache request has an invalid window_mode")
+        window = {
             "consumer": consumer,
             "decision_date": _string_date(request.get("decision_date"), f"{label} decision_date"),
             "price_data_through": _string_date(request.get("price_data_through"), f"{label} price_data_through"),
-            "window_mode": "captured_start",
+            "window_mode": mode,
             "horizon_days": int(request.get("horizon_days") or max(HORIZONS)),
             "symbols": [str(symbol) for symbol in symbols],
-        })
+        }
+        if mode == "managed_exit":
+            pre_history_days = request.get("pre_history_days")
+            if not isinstance(pre_history_days, int) or isinstance(pre_history_days, bool) or pre_history_days < 0:
+                raise ComparisonV2Error(f"{label} cache request has an invalid pre_history_days")
+            window["pre_history_days"] = pre_history_days
+        windows.append(window)
     return windows
 
 
@@ -300,6 +310,19 @@ def _p3_windows(path: str | Path | None, run_date: str) -> list[dict]:
     return windows
 
 
+def _official_operation_windows(root: str | Path | None, run_date: str) -> list[dict]:
+    """Read frozen formal-operation requests; this provider seam does not settle them."""
+    if root is None:
+        return []
+    try:
+        from runners.a_short_official_operation_evidence import cache_consumer_windows
+        requests = cache_consumer_windows(root=root, run_date=run_date)
+    except Exception as exc:
+        raise ComparisonV2Error("official operation evidence private capture is invalid") from exc
+    return _normalize_captured_windows(requests, consumer="official_operation_evidence",
+                                       label="official operation evidence")
+
+
 def _calendar_start_hint(windows: list[dict]) -> str:
     hints: list[str] = []
     for window in windows:
@@ -308,6 +331,8 @@ def _calendar_start_hint(windows: list[dict]) -> str:
             continue
         decision = datetime.strptime(str(window["decision_date"]), "%Y%m%d")
         hints.append((decision - timedelta(days=60)).strftime("%Y%m%d"))
+        if window.get("price_data_through"):
+            hints.append(str(window["price_data_through"]))
     return min(hints)
 
 
@@ -329,6 +354,11 @@ def _needed_dates_by_symbol(
             start_index = date_pos[start]
         else:
             start_index = max(0, date_pos[decision] - int(window.get("pre_history_days") or 0))
+            reference_date = window.get("price_data_through")
+            if reference_date is not None:
+                if reference_date not in date_pos:
+                    raise ComparisonV2Error("shared cache builder cannot prove a managed-exit price reference date")
+                start_index = min(start_index, date_pos[reference_date])
         end_index = min(len(trading_dates) - 1, date_pos[decision] + int(window["horizon_days"]))
         wanted = set(trading_dates[start_index:end_index + 1])
         wanted = {day for day in wanted if day <= run_date}
@@ -480,7 +510,7 @@ def _missing_symbols(
     missing: set[str] = set()
     for symbol, dates in needed.items():
         execution_required = bool(consumers.get(symbol, set()) & {
-            "p2_target_policy", "p3_final_action_validation",
+            "p2_target_policy", "p3_final_action_validation", "official_operation_evidence",
         })
         stock_fields = {"open", "close", "adj_factor", "adj_factor_observed", "adj_factor_source"}
         limit_fields = {"up_limit"}
@@ -541,8 +571,9 @@ def materialize_incremental_cache(
     pro: Any | None = None, industry_weight_root: str | Path | None = None,
     target_policy_root: str | Path | None = None,
     final_action_validation_root: str | Path | None = None,
+    official_operation_evidence_root: str | Path | None = None,
 ) -> dict:
-    """Fetch frozen v2/P5/P2/P3 windows into one atomic private cache."""
+    """Fetch frozen v2/P5/P2/P3/official windows into one atomic private cache."""
     private_root = _private_root(root)
     run_date = _string_date(run_date, "run_date")
     if run_date != _today():
@@ -555,10 +586,12 @@ def materialize_incremental_cache(
     p5_windows = _p5_frozen_windows(industry_weight_root, run_date)
     p2_windows = _p2_windows(target_policy_root, run_date)
     p3_windows = _p3_windows(final_action_validation_root, run_date)
-    windows = [*v2_windows, *p5_windows, *p2_windows, *p3_windows]
+    official_windows = _official_operation_windows(official_operation_evidence_root, run_date)
+    windows = [*v2_windows, *p5_windows, *p2_windows, *p3_windows, *official_windows]
     if not windows:
         return {"status": ("no_frozen_v2_captures" if industry_weight_root is None and
-                           target_policy_root is None and final_action_validation_root is None
+                           target_policy_root is None and final_action_validation_root is None and
+                           official_operation_evidence_root is None
                            else "no_frozen_consumer_captures"), "provider_calls": 0,
                 "p5_deferred_due_to_budget": 0, "production_unchanged": True}
     requested_symbols = {symbol for window in windows for symbol in window["symbols"]}
@@ -591,6 +624,7 @@ def materialize_incremental_cache(
         "p5_industry_weight": p5_windows,
         "p2_target_policy": p2_windows,
         "p3_final_action_validation": p3_windows,
+        "official_operation_evidence": official_windows,
     }
     missing_by_consumer: dict[str, set[str]] = {}
     missing_order: dict[str, tuple[int, str, str]] = {}
@@ -643,7 +677,8 @@ def materialize_incremental_cache(
                                                             daily=daily, adj=adj, limits=limits,
                                                             require_execution_fields=any(
                                                                 symbol in missing_by_consumer[consumer]
-                                                                for consumer in ("p2_target_policy", "p3_final_action_validation")
+                                                                for consumer in ("p2_target_policy", "p3_final_action_validation",
+                                                                                 "official_operation_evidence")
                                                             ))
         new_stocks.extend(stock_rows)
         new_limits.extend(limit_rows)
@@ -682,7 +717,7 @@ def materialize_incremental_cache(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Materialize frozen private A-short v2/P5/P2/P3 windows into one cache.")
+    parser = argparse.ArgumentParser(description="Materialize frozen private A-short v2/P5/P2/P3/official windows into one cache.")
     parser.add_argument("--root", required=True, help="gitignored state/a_short/factor_comparison_private/v2 root")
     parser.add_argument("--run-date", required=True, help="actual local run date YYYYMMDD")
     parser.add_argument("--max-provider-calls", type=int, default=DEFAULT_MAX_PROVIDER_CALLS)
@@ -690,6 +725,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
                         help="optional gitignored P5 state/a_short/industry_weight_comparison_private/v1 root")
     parser.add_argument("--target-policy-root", help="existing gitignored P2 private ledger")
     parser.add_argument("--final-action-validation-root", help="existing gitignored P3 private ledger")
+    parser.add_argument("--official-operation-evidence-root",
+                        help="gitignored formal-operation capture root; consumes no provider outside this writer")
     return parser.parse_args(argv)
 
 
@@ -699,7 +736,8 @@ def main(argv: list[str] | None = None) -> int:
                                            max_provider_calls=args.max_provider_calls,
                                            industry_weight_root=args.industry_weight_root,
                                            target_policy_root=args.target_policy_root,
-                                           final_action_validation_root=args.final_action_validation_root)
+                                           final_action_validation_root=args.final_action_validation_root,
+                                           official_operation_evidence_root=args.official_operation_evidence_root)
     print(f"[a-short-shared-daily-cache] {result['status']} (production unchanged)")
     return 0
 

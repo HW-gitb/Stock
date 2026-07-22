@@ -14,6 +14,7 @@ import argparse
 import copy
 import hashlib
 import json
+import math
 import os
 import subprocess
 import sys
@@ -30,10 +31,17 @@ if str(ROOT) not in sys.path:
 
 PROGRAM_ID = "a_short_official_operation_evidence"
 SCHEMA_PATH = ROOT / "schemas" / "a_short_official_operation_evidence_private_capture.schema.json"
+OUTCOME_SCHEMA_PATH = ROOT / "schemas" / "a_short_official_operation_evidence_private_outcome.schema.json"
+LEDGER_SCHEMA_PATH = ROOT / "schemas" / "a_short_official_operation_evidence_ledger.schema.json"
 WEEKLY_SCHEMA_PATH = ROOT / "schemas" / "a_short_weekly_report.schema.json"
 M67_SCHEMA_PATH = ROOT / "schemas" / "a_short_m67_report.schema.json"
 PRIVATE_ROOT_SUFFIX = ("state", "a_short", "operation_evidence_private", "v1")
 PRIVATE_ROOT_DEFAULT = ROOT.joinpath(*PRIVATE_ROOT_SUFFIX)
+PUBLIC_SUMMARY_DEFAULT = ROOT / "research" / "results" / "a_short" / "official_operation_evidence_summary.json"
+PUBLIC_MARKDOWN_DEFAULT = ROOT / "research" / "results" / "a_short" / "official_operation_evidence_summary.md"
+EVALUATION_MODE = "live_normalized"
+OFFICIAL_POLICY_VERSION = "official_m67_v1"
+MIN_PUBLIC_COHORT_SIZE = 5
 
 
 class OfficialOperationEvidenceError(ValueError):
@@ -167,8 +175,15 @@ def _load_official_bundle(*, out_path: str | Path, receipt_path: str | Path) -> 
 
 def _source_identity(weekly: dict, output: Path, receipt_file: Path) -> dict:
     lineage = weekly["run_lineage"]
+    as_of = _calendar_date(weekly.get("as_of"), "as_of")
     account_snapshot = lineage.get("account_snapshot")
     account_digest = account_snapshot.get("snapshot_digest") if isinstance(account_snapshot, dict) else None
+    price_freshness = lineage.get("price_freshness")
+    if not isinstance(price_freshness, dict):
+        raise OfficialOperationEvidenceError("official_operation_capture_price_freshness_unbound")
+    price_data_through = _calendar_date(price_freshness.get("price_data_through"), "price_data_through")
+    if price_data_through > as_of:
+        raise OfficialOperationEvidenceError("official_operation_capture_price_data_through_after_as_of")
     runtime_configuration = copy.deepcopy(lineage.get("runtime_configuration") or {})
     if not isinstance(runtime_configuration, dict) or not all(
             isinstance(runtime_configuration.get(field), str) and runtime_configuration[field]
@@ -178,7 +193,8 @@ def _source_identity(weekly: dict, output: Path, receipt_file: Path) -> dict:
     if account_snapshot is not None and not isinstance(account_digest, str):
         raise OfficialOperationEvidenceError("official_operation_capture_account_snapshot_digest_unbound")
     return {
-        "as_of": str(weekly["as_of"]),
+        "as_of": as_of,
+        "price_data_through": price_data_through,
         "run_id": str(lineage["run_id"]),
         "candidate_digest": str(lineage["candidate_digest"]),
         "official_m67_sha256": _file_digest(output),
@@ -222,6 +238,53 @@ def _portfolio_row(weekly: dict, symbol: str) -> dict | None:
     return copy.deepcopy(matches[0]) if matches else None
 
 
+def _frozen_managed_exit_plan(weekly: dict, report: dict, plan: dict, *, scope: str,
+                              final_action: str | None) -> tuple[dict | None, str | None]:
+    """Freeze only a provable prospective M6.7 entry plan for later cache settlement.
+
+    This is deliberately part of the immutable decision capture.  A later
+    result never re-reads a current regime or recomputes prices.  Existing
+    holdings are not silently normalized into a synthetic account position:
+    without an independently frozen entry basis they remain no-count.
+    """
+    if scope != "new_candidate" or final_action != "建仓" or not isinstance(plan, dict):
+        return None, None
+    try:
+        from runners.a_short_phase5_engine import ATR_MULT
+        regime = ((weekly.get("run_lineage") or {}).get("market_regime") or {}).get("effective_regime")
+        atr_multiplier = ATR_MULT[str(regime)]
+        levels = {key: float(plan[key]) for key in ("entry_low", "entry_high", "stop", "t1")}
+        reference_close = float(plan["entry"])
+        price_freshness = (weekly.get("run_lineage") or {}).get("price_freshness") or {}
+        reference_trade_date = _calendar_date(price_freshness.get("price_data_through"), "price_data_through")
+        t2 = plan.get("t2")
+        if t2 is not None:
+            levels["t2"] = float(t2)
+        if (atr_multiplier <= 0 or reference_close <= 0 or any(value <= 0 for value in levels.values()) or
+                levels["stop"] >= levels["entry_high"] or levels["t1"] <= levels["entry_high"] or
+                (levels.get("t2") is not None and levels["t2"] <= levels["t1"])):
+            return None, "frozen_qfq_conversion_reference_unavailable"
+    except (KeyError, TypeError, ValueError, OfficialOperationEvidenceError):
+        return None, "frozen_qfq_conversion_reference_unavailable"
+    return {
+        "decision_date": _calendar_date(weekly.get("as_of"), "as_of"),
+        "entry_low": levels["entry_low"],
+        "entry_high": levels["entry_high"],
+        "stop": levels["stop"],
+        "t1": levels["t1"],
+        "t2": levels.get("t2"),
+        "atr_multiplier": float(atr_multiplier),
+        # M6.7 displays QFQ plan levels. The cache uses raw * observed adj
+        # execution values, so the captured plan must bind a contemporaneous
+        # QFQ reference. The shared exit core derives the conversion and fails
+        # closed if the cache cannot prove this exact reference row.
+        "price_basis": "qfq",
+        "reference_trade_date": reference_trade_date,
+        "reference_close": reference_close,
+        "policy_version": "official_m67_v1",
+    }, None
+
+
 def _decision_from_report(weekly: dict, source: dict, report: dict) -> dict:
     table = report["m67"]["table"]
     summary = report["m67"]["精简结论区"]
@@ -235,6 +298,9 @@ def _decision_from_report(weekly: dict, source: dict, report: dict) -> dict:
     portfolio_row = _portfolio_row(weekly, symbol)
     portfolio_status = ((weekly.get("portfolio_risk") or {}).get("summary") or {}).get("status")
     plan = (machine.get("entry_exit_size_star") or {}).get("plan") or {}
+    frozen_plan, frozen_plan_unavailable_reason = _frozen_managed_exit_plan(
+        weekly, report, plan, scope=scope, final_action=final_action
+    )
     return {
         "decision_id": _decision_id(source, symbol, scope, final_action, holding_disposition),
         "symbol": symbol,
@@ -276,6 +342,8 @@ def _decision_from_report(weekly: dict, source: dict, report: dict) -> dict:
             "holding_reduce_price": table.get("减仓价"),
             "holding_clear_price": table.get("清仓价"),
             "holding_reduce_ratio": table.get("减仓比例"),
+            "managed_exit_plan": frozen_plan,
+            "managed_exit_plan_unavailable_reason": frozen_plan_unavailable_reason,
             "validity": {
                 "as_of": report.get("as_of"),
                 "price_freshness": copy.deepcopy(((weekly.get("run_lineage") or {}).get("price_freshness"))),
@@ -362,7 +430,7 @@ def _capture_record(weekly: dict, output: Path, receipt_file: Path) -> dict:
             decisions.append(portfolio_only)
     record = {
         "schema_name": "a_short_official_operation_evidence_private_capture",
-        "schema_version": "1.0.0",
+        "schema_version": "1.1.0",
         "record_type": "decision_capture",
         "program_id": PROGRAM_ID,
         "as_of": as_of,
@@ -403,25 +471,441 @@ def capture_after_published_weekly(*, root: str | Path, out_path: str | Path, re
         existing = _load_json(path)
         _validate_private_capture(existing)
         if existing == record:
+            _refresh_private_ledger(private_root)
             return {"status": "idempotent_existing_capture", "decision_count": len(record["decisions"]),
                     "production_unchanged": True}
         _write_conflict(private_root, record["as_of"], existing, record)
         raise OfficialOperationEvidenceError("official_operation_capture_source_conflict")
     _atomic_write(path, record)
+    _refresh_private_ledger(private_root)
     return {"status": "captured", "decision_count": len(record["decisions"]), "production_unchanged": True}
+
+
+def _outcome_path(root: Path, decision_id: str) -> Path:
+    return root / "outcomes" / f"{decision_id}.json"
+
+
+def _load_capture_records(root: Path) -> list[dict]:
+    records: list[dict] = []
+    weeks = root / "weeks"
+    if not weeks.exists():
+        return records
+    for directory in sorted(path for path in weeks.iterdir() if path.is_dir() and path.name.isdigit()):
+        capture_path = directory / "capture.json"
+        if not capture_path.is_file():
+            continue
+        capture = _load_json(capture_path)
+        _validate_private_capture(capture)
+        if capture.get("as_of") != directory.name:
+            raise OfficialOperationEvidenceError("official_operation_capture_directory_identity_drift")
+        records.append(capture)
+    return records
+
+
+def _validate_private_outcome(record: dict) -> None:
+    try:
+        jsonschema.validate(record, _load_schema(OUTCOME_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise OfficialOperationEvidenceError("official_operation_outcome_private_schema_invalid") from exc
+    expected = _digest({key: value for key, value in record.items() if key != "outcome_sha256"})
+    if record.get("outcome_sha256") != expected:
+        raise OfficialOperationEvidenceError("official_operation_outcome_digest_invalid")
+
+
+def _load_outcome(path: Path) -> dict:
+    outcome = _load_json(path)
+    _validate_private_outcome(outcome)
+    return outcome
+
+
+def _finite_number(value: object) -> float | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+    return result if math.isfinite(result) else None
+
+
+def _outcome_terminal(status: str) -> bool:
+    return status in {"settled", "no_count"}
+
+
+def cache_consumer_windows(*, root: str | Path, run_date: str) -> list[dict]:
+    """Expose only frozen official plans to P5a's one shared cache writer."""
+    private_root = _private_root(root)
+    run_date = _calendar_date(run_date, "run_date")
+    windows: list[dict] = []
+    for capture in _load_capture_records(private_root):
+        if capture["as_of"] > run_date or (private_root / "conflicts" / f"{capture['as_of']}.json").exists():
+            continue
+        symbols: list[str] = []
+        for decision in capture["decisions"]:
+            decision_id = str(decision.get("decision_id") or "")
+            existing_path = _outcome_path(private_root, decision_id)
+            if existing_path.is_file() and _outcome_terminal(str(_load_outcome(existing_path).get("status"))):
+                continue
+            plan = ((decision.get("prices") or {}).get("managed_exit_plan"))
+            if (isinstance(plan, dict) and plan.get("policy_version") == OFFICIAL_POLICY_VERSION and
+                    isinstance(decision.get("symbol"), str) and decision["symbol"]):
+                symbols.append(decision["symbol"])
+        if symbols:
+            windows.append({
+                "consumer": "official_operation_evidence",
+                "decision_date": capture["as_of"],
+                "price_data_through": capture["source_identity"]["price_data_through"],
+                "window_mode": "managed_exit",
+                "pre_history_days": 20,
+                "horizon_days": 20,
+                "symbols": sorted(set(symbols)),
+            })
+    return windows
+
+
+def _execution_rows_by_symbol(daily_payload: dict | None) -> dict[str, list[dict]] | None:
+    if not isinstance(daily_payload, dict) or not isinstance(daily_payload.get("rows"), list):
+        return None
+    result: dict[str, list[dict]] = {}
+    for raw in daily_payload["rows"]:
+        if not isinstance(raw, dict) or not isinstance(raw.get("ts_code"), str) or not raw["ts_code"]:
+            return None
+        row = {key: value for key, value in raw.items() if key != "ts_code"}
+        result.setdefault(raw["ts_code"], []).append(row)
+    for rows in result.values():
+        rows.sort(key=lambda row: str(row.get("trade_date") or ""))
+    return result
+
+
+def _pending_result(reason: str) -> dict:
+    return {"status": "pending", "reason": reason, "metrics": None, "path": None}
+
+
+def _no_count_result(reason: str) -> dict:
+    return {"status": "no_count", "reason": reason, "metrics": None, "path": None}
+
+
+def _normalized_result(decision: dict, rows: dict[str, list[dict]] | None) -> dict:
+    """Classify one frozen recommendation without an account, position, or second evaluator."""
+    plan = ((decision.get("prices") or {}).get("managed_exit_plan"))
+    if not isinstance(plan, dict):
+        scope = str(decision.get("scope") or "")
+        unavailable_reason = (decision.get("prices") or {}).get("managed_exit_plan_unavailable_reason")
+        return _no_count_result("existing_holding_entry_basis_unavailable" if scope == "existing_holding"
+                                else str(unavailable_reason or "frozen_managed_exit_plan_unavailable"))
+    if rows is None:
+        return _pending_result("shared_execution_cache_unavailable")
+    symbol = str(decision.get("symbol") or "")
+    execution_rows = rows.get(symbol)
+    if not execution_rows:
+        return _pending_result("shared_execution_rows_pending")
+    from engine.a_short_managed_exit import evaluate_official_managed_exit, managed_exit_evidence_window
+    managed = evaluate_official_managed_exit(plan, execution_rows)
+    try:
+        evidence_window_sha256 = _digest(managed_exit_evidence_window(plan, execution_rows))
+    except Exception:
+        evidence_window_sha256 = None
+    if managed.get("status") == "settled":
+        path = managed.get("official_path") or {}
+        gross = _finite_number(managed.get("gross_return_pct"))
+        net = _finite_number(managed.get("net_return_pct"))
+        cost = _finite_number(managed.get("round_trip_cost_pct"))
+        if gross is None or net is None or cost is None:
+            return _no_count_result("managed_exit_metric_invalid")
+        return {
+            "status": "settled",
+            "reason": None,
+            "metrics": {
+                "gross_return_pct": gross,
+                "cost_total_pct": cost,
+                "net_return_pct": net,
+                "normalized_capital_employed_fraction": 1.0,
+                "mfe_pct": _finite_number(path.get("mfe_pct")),
+                "mae_pct": _finite_number(path.get("mae_pct")),
+                "filled": True,
+                "same_bar_both_triggered": bool(path.get("same_bar_both_triggered")),
+                "execution_path_ambiguous": bool(path.get("execution_path_ambiguous")),
+            },
+            "path": managed,
+            "evaluation_window_sha256": evidence_window_sha256,
+        }
+    reason = str(managed.get("reason") or "managed_exit_unavailable")
+    if reason in {"h20_not_available", "execution_prices_unavailable"}:
+        return _pending_result(reason)
+    result = _no_count_result(reason)
+    result["evaluation_window_sha256"] = evidence_window_sha256
+    return result
+
+
+def _outcome_from_decision(*, capture: dict, decision: dict, as_of: str,
+                           daily_payload: dict | None, rows: dict[str, list[dict]] | None) -> dict:
+    result = _normalized_result(decision, rows)
+    record = {
+        "schema_name": "a_short_official_operation_evidence_private_outcome",
+        "schema_version": "1.1.0",
+        "program_id": PROGRAM_ID,
+        "decision_id": decision["decision_id"],
+        "evaluation_mode": EVALUATION_MODE,
+        "policy_version": OFFICIAL_POLICY_VERSION,
+        "capture_sha256": capture["capture_sha256"],
+        "source_as_of": capture["as_of"],
+        "settled_through": as_of,
+        "cache_sha256": _digest(daily_payload) if daily_payload is not None else None,
+        "evaluation_window_sha256": result.get("evaluation_window_sha256"),
+        "status": result["status"],
+        "reason": result["reason"],
+        "metrics": result["metrics"],
+        "path": result["path"],
+        "boundary": {
+            "program_progress_ledger_only": True,
+            "portfolio_state_created": False,
+            "cash_or_positions_created": False,
+            "nav_or_head_manifest_created": False,
+            "automatic_order_execution": False,
+            "manual_actual_inferred": False,
+        },
+    }
+    record["outcome_sha256"] = _digest(record)
+    _validate_private_outcome(record)
+    return record
+
+
+def _write_outcome_conflict(root: Path, decision_id: str, existing: dict, incoming: dict) -> None:
+    _atomic_write(root / "conflicts" / f"outcome_{decision_id}.json", {
+        "schema_name": "a_short_official_operation_evidence_conflict",
+        "schema_version": "1.0.0",
+        "program_id": PROGRAM_ID,
+        "decision_id": decision_id,
+        "reason": "immutable_outcome_content_conflict",
+        "existing_outcome_sha256": existing.get("outcome_sha256"),
+        "incoming_outcome_sha256": incoming.get("outcome_sha256"),
+    })
+
+
+def _terminal_evidence(record: dict) -> dict:
+    """The immutable decision result, excluding a growing cache/progress clock."""
+    return {
+        key: record.get(key)
+        for key in (
+            "schema_name", "schema_version", "program_id", "decision_id", "evaluation_mode",
+            "policy_version", "capture_sha256", "source_as_of", "status", "reason", "metrics",
+            "path", "evaluation_window_sha256", "boundary",
+        )
+    }
+
+
+def _write_or_advance_outcome(root: Path, incoming: dict) -> bool:
+    path = _outcome_path(root, incoming["decision_id"])
+    if not path.exists():
+        _atomic_write(path, incoming)
+        return True
+    existing = _load_outcome(path)
+    if (existing.get("decision_id"), existing.get("evaluation_mode"), existing.get("policy_version"),
+            existing.get("capture_sha256")) != (incoming["decision_id"], incoming["evaluation_mode"],
+                                                  incoming["policy_version"], incoming["capture_sha256"]):
+        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming)
+        raise OfficialOperationEvidenceError("official_operation_outcome_identity_conflict")
+    if _outcome_terminal(str(existing.get("status"))):
+        # A later weekly run naturally has a later progress date and a larger
+        # whole-cache digest. Neither changes this decision's frozen H20 input
+        # window. Cache absence is likewise not a source conflict after a
+        # terminal result has already been proved.
+        if not _outcome_terminal(str(incoming.get("status"))) or \
+                _terminal_evidence(existing) == _terminal_evidence(incoming):
+            return False
+        _write_outcome_conflict(root, incoming["decision_id"], existing, incoming)
+        raise OfficialOperationEvidenceError("official_operation_outcome_terminal_conflict")
+    if existing == incoming:
+        return False
+    _atomic_write(path, incoming)
+    return True
+
+
+def _cohort_key(capture: dict, decision: dict, outcome: dict) -> dict:
+    environment = decision.get("environment") or {}
+    constraints = decision.get("constraints") or {}
+    prices = decision.get("prices") or {}
+    risk_families = environment.get("risk_families") or {}
+    active_risk_families = sorted(
+        str(name) for name, value in risk_families.items()
+        if isinstance(value, dict) and value.get("hit") is True
+    ) if isinstance(risk_families, dict) else []
+    metrics = outcome.get("metrics") or {}
+    fill_status = ("filled" if metrics.get("filled") is True else
+                   "unfilled" if outcome.get("reason") in {"entry_unfillable", "entry_outside_frozen_range"}
+                   else "not_evaluable")
+    return {
+        "scope": decision.get("scope"),
+        "final_action": decision.get("final_action"),
+        "holding_disposition": decision.get("holding_disposition"),
+        "entry_type": prices.get("entry_type"),
+        "production_regime": (environment.get("production_regime") or {}).get("effective_regime"),
+        "v14_3_comparison_label": (environment.get("v14_3_comparison") or {}).get("status"),
+        "risk_families": active_risk_families,
+        "coverage": (environment.get("coverage") or {}).get("coverage_status"),
+        "account_or_portfolio_blocked": bool((constraints.get("account_or_portfolio_blockage") or {}).get("portfolio_status")
+                                              not in {None, "clear", "not_applicable"}),
+        "outcome_status": outcome.get("status"),
+        "fill_status": fill_status,
+        "same_bar_ambiguity": bool(((outcome.get("metrics") or {}).get("same_bar_both_triggered"))),
+    }
+
+
+def _refresh_private_ledger(root: Path) -> dict:
+    rows: list[dict] = []
+    for capture in _load_capture_records(root):
+        for decision in capture["decisions"]:
+            path = _outcome_path(root, decision["decision_id"])
+            outcome = _load_outcome(path) if path.is_file() else None
+            rows.append({
+                "decision_id": decision["decision_id"], "capture_as_of": capture["as_of"],
+                "capture_sha256": capture["capture_sha256"], "evaluation_mode": EVALUATION_MODE,
+                "policy_version": OFFICIAL_POLICY_VERSION,
+                "status": outcome.get("status") if outcome else "capture_pending",
+                "reason": outcome.get("reason") if outcome else None,
+                "outcome_sha256": outcome.get("outcome_sha256") if outcome else None,
+            })
+    if len({(row["decision_id"], row["evaluation_mode"], row["policy_version"]) for row in rows}) != len(rows):
+        raise OfficialOperationEvidenceError("official_operation_ledger_duplicate_decision")
+    ledger = {
+        "schema_name": "a_short_official_operation_evidence_ledger", "schema_version": "1.0.0",
+        "program_id": PROGRAM_ID, "records": sorted(rows, key=lambda row: (row["capture_as_of"], row["decision_id"])),
+        "boundary": {"program_progress_ledger_only": True, "portfolio_state_created": False,
+                     "cash_or_positions_created": False, "nav_or_head_manifest_created": False,
+                     "automatic_order_execution": False},
+    }
+    try:
+        jsonschema.validate(ledger, _load_schema(LEDGER_SCHEMA_PATH))
+    except jsonschema.ValidationError as exc:
+        raise OfficialOperationEvidenceError("official_operation_progress_ledger_invalid") from exc
+    _atomic_write(root / "ledger.json", ledger)
+    return ledger
+
+
+def build_public_summary(*, root: str | Path, as_of: str) -> dict:
+    """Return a de-identified cohort report; small cohorts expose counts only."""
+    private_root, as_of = _private_root(root), _calendar_date(as_of, "as_of")
+    grouped: dict[str, dict] = {}
+    totals = {"capture_pending": 0, "pending": 0, "settled": 0, "no_count": 0, "ambiguous": 0, "unfilled": 0}
+    for capture in _load_capture_records(private_root):
+        if capture["as_of"] > as_of:
+            continue
+        for decision in capture["decisions"]:
+            path = _outcome_path(private_root, decision["decision_id"])
+            outcome = _load_outcome(path) if path.is_file() else {"status": "capture_pending", "metrics": None}
+            status = str(outcome["status"])
+            totals[status] = totals.get(status, 0) + 1
+            metrics = outcome.get("metrics") or {}
+            if metrics.get("same_bar_both_triggered"):
+                totals["ambiguous"] += 1
+            if status == "no_count" and outcome.get("reason") in {"entry_unfillable", "entry_outside_frozen_range"}:
+                totals["unfilled"] += 1
+            key = _canonical(_cohort_key(capture, decision, outcome))
+            bucket = grouped.setdefault(key, {"cohort": _cohort_key(capture, decision, outcome), "records": []})
+            bucket["records"].append(outcome)
+    cohorts = []
+    for bucket in grouped.values():
+        records = bucket["records"]
+        settled = [row for row in records if row.get("status") == "settled"]
+        row = {"cohort": bucket["cohort"], "record_count": len(records), "evaluable_count": len(settled),
+               "no_count_count": sum(item.get("status") == "no_count" for item in records),
+               "ambiguous_count": sum(bool((item.get("metrics") or {}).get("same_bar_both_triggered")) for item in records),
+               "metrics_withheld_for_small_cohort": len(settled) < MIN_PUBLIC_COHORT_SIZE}
+        if len(settled) >= MIN_PUBLIC_COHORT_SIZE:
+            for name in ("gross_return_pct", "cost_total_pct", "net_return_pct", "mfe_pct", "mae_pct"):
+                values = [float(item["metrics"][name]) for item in settled if item["metrics"].get(name) is not None]
+                row[name + "_mean"] = round(sum(values) / len(values), 8) if values else None
+        cohorts.append(row)
+    return {
+        "schema_name": "a_short_official_operation_evidence_summary", "schema_version": "1.0.0",
+        "program_id": PROGRAM_ID, "as_of": as_of, "evaluation_mode": EVALUATION_MODE,
+        "minimum_metric_cohort_size": MIN_PUBLIC_COHORT_SIZE, "totals": totals,
+        "cohorts": sorted(cohorts, key=lambda row: _canonical(row["cohort"])),
+        "boundary": {"deidentified_aggregate_only": True, "contains_symbols": False,
+                     "contains_account_balances": False, "automatic_policy_change": False},
+    }
+
+
+def write_public_summary(summary: dict, *, json_path: str | Path, markdown_path: str | Path) -> None:
+    encoded = _canonical(summary).lower()
+    for prohibited in ("ts_code", "account_snapshot", "suggested_shares", "expected_cash_usage"):
+        if prohibited in encoded:
+            raise OfficialOperationEvidenceError("official_operation_public_summary_privacy_violation")
+    _atomic_write(Path(json_path), summary)
+    totals = summary["totals"]
+    lines = ["# A-short 正式操作建议证据进度", "", "仅统计已冻结建议的规范化前向结果；不是模拟账户，不代表实际成交。", "",
+             "| 已冻结 | 待成熟 | 已结算 | no-count | 同根歧义 | 未成交 |", "|---:|---:|---:|---:|---:|---:|",
+             f"| {totals.get('capture_pending', 0)} | {totals.get('pending', 0)} | {totals.get('settled', 0)} | {totals.get('no_count', 0)} | {totals.get('ambiguous', 0)} | {totals.get('unfilled', 0)} |",
+             "", "小于最小 cohort 的结果只显示计数；不输出股票、账户、持仓、成本或实际成交。"]
+    path = Path(markdown_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(f".{path.name}.tmp")
+    temporary.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    os.replace(temporary, path)
+
+
+def settle_and_summarize(*, root: str | Path, as_of: str, daily_cache_path: str | Path | None = None,
+                          public_json_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
+                          public_markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> dict:
+    """Advance only the private decision-progress ledger from the shared cache."""
+    private_root, as_of = _private_root(root), _calendar_date(as_of, "as_of")
+    daily_payload = None
+    if daily_cache_path is not None and Path(daily_cache_path).is_file():
+        daily_payload = _load_json(Path(daily_cache_path))
+    rows = _execution_rows_by_symbol(daily_payload)
+    if rows is not None:
+        # A cache may retain later runs for other consumers. A decision-side
+        # settlement can never consume a bar after its own canonical as-of.
+        rows = {
+            symbol: [row for row in execution_rows if str(row.get("trade_date") or "") <= as_of]
+            for symbol, execution_rows in rows.items()
+        }
+    changed = 0
+    for capture in _load_capture_records(private_root):
+        if capture["as_of"] > as_of:
+            continue
+        if (private_root / "conflicts" / f"{capture['as_of']}.json").exists():
+            continue
+        for decision in capture["decisions"]:
+            changed += int(_write_or_advance_outcome(
+                private_root,
+                _outcome_from_decision(capture=capture, decision=decision, as_of=as_of,
+                                       daily_payload=daily_payload, rows=rows),
+            ))
+    ledger = _refresh_private_ledger(private_root)
+    summary = build_public_summary(root=private_root, as_of=as_of)
+    write_public_summary(summary, json_path=public_json_path, markdown_path=public_markdown_path)
+    return {"status": "settled_from_existing_shared_cache", "outcomes_updated": changed,
+            "ledger_record_count": len(ledger["records"]), "summary": summary,
+            "production_unchanged": True}
 
 
 def main(argv: list[str] | None = None) -> None:
     parser = argparse.ArgumentParser(description="Capture an already-published A-short M6.7 bundle as private evidence")
-    parser.add_argument("capture", nargs="?", choices=["capture"], default="capture")
+    parser.add_argument("command", nargs="?", choices=["capture", "settle"], default="capture")
     parser.add_argument("--root", default=str(PRIVATE_ROOT_DEFAULT),
                         help="private root ending state/a_short/operation_evidence_private/v1")
-    parser.add_argument("--weekly", required=True, help="official published weekly_m67.json")
-    parser.add_argument("--receipt", required=True, help="matching official weekly_m67.receipt.json")
+    parser.add_argument("--weekly", help="official published weekly_m67.json (required for capture)")
+    parser.add_argument("--receipt", help="matching official weekly_m67.receipt.json (required for capture)")
+    parser.add_argument("--as-of", help="settlement date YYYYMMDD (required for settle)")
+    parser.add_argument("--daily-cache", help="existing P5a shared daily_cache.json; never fetches")
+    parser.add_argument("--summary-out", default=str(PUBLIC_SUMMARY_DEFAULT))
+    parser.add_argument("--summary-markdown-out", default=str(PUBLIC_MARKDOWN_DEFAULT))
     args = parser.parse_args(argv)
-    result = capture_after_published_weekly(root=args.root, out_path=args.weekly, receipt_path=args.receipt)
-    print(f"[official-operation-evidence] capture={result['status']} decisions={result['decision_count']} "
-          "(M6.7 unchanged; no outcome settlement)")
+    if args.command == "capture":
+        if not args.weekly or not args.receipt:
+            parser.error("capture requires --weekly and --receipt")
+        result = capture_after_published_weekly(root=args.root, out_path=args.weekly, receipt_path=args.receipt)
+        print(f"[official-operation-evidence] capture={result['status']} decisions={result['decision_count']} "
+              "(M6.7 unchanged; no outcome settlement)")
+        return
+    if not args.as_of:
+        parser.error("settle requires --as-of")
+    result = settle_and_summarize(root=args.root, as_of=args.as_of, daily_cache_path=args.daily_cache,
+                                  public_json_path=args.summary_out,
+                                  public_markdown_path=args.summary_markdown_out)
+    print(f"[official-operation-evidence] settlement={result['status']} "
+          f"updated={result['outcomes_updated']} (no portfolio state)")
 
 
 if __name__ == "__main__":
