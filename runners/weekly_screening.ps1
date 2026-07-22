@@ -402,18 +402,21 @@ if ($SkipSemanticRisk) {
                 # 价格门 intraday tolerance(容忍最新已结算 bar=前一交易日);真·过去回放(as_of<运行日)保持默认
                 # strict_as_of。实际价格时钟记进 weekly_m67 lineage。
                 $M67Args += @('--price-freshness-mode', 'intraday_prior_settled')
-                # P0 v2: first try to update the bounded private cache.  This sidecar may call the existing
-                # approved price source, but a failure only leaves v2 unavailable; M6.7 remains authoritative.
+                # One bounded private cache serves v2/P5/P2/P3. The existing P0 writer remains the sole provider
+                # seam; it loads cached rows before applying the reviewed budget: v2 first, then P5, then P2/P3.
+                # Any failure leaves only comparison evidence unavailable; M6.7 remains authoritative.
                 $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
                 $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
                 $IndustryWeightP5Root = Join-Path $ProjectRoot 'state\a_short\industry_weight_comparison_private\v1'
                 $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
-                Write-Host "[ADVISORY] Updating bounded factor-comparison v2 private cache ..." -ForegroundColor Yellow
-                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root
+                $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
+                $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
+                Write-Host "[ADVISORY] Updating bounded A-short shared private cache ..." -ForegroundColor Yellow
+                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger
                 $FactorComparisonCacheExitCode = $LASTEXITCODE
                 if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
                 if ($FactorComparisonCacheExitCode -ne 0) {
-                    Write-Host "[WARN] factor-comparison v2 cache unavailable (exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
+                    Write-Host "[WARN] A-short shared comparison cache unavailable (exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
                 }
                 # Freeze the normalized live decision only after M6.7 publishes its matching bundle.
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
@@ -422,20 +425,17 @@ if ($SkipSemanticRisk) {
                 # P5a reuses the same cache but has an independent private ledger and public
                 # de-identified progress summary.  Its failure is a sidecar outage only.
                 $M67Args += @('--industry-weight-comparison-root', $IndustryWeightP5Root,
-                              '--industry-weight-comparison-daily-cache', $FactorComparisonV2Cache,
-                              '--industry-weight-comparison-source', $IndustryWeightSource,
-                              '--industry-weight-comparison-forward')
-                # P2 freezes the weekly shadow target/breakout decision only after the matching M6.7
-                # bundle publishes.  It has no price fetcher: until a reviewed execution OHLCV cache
-                # exists, its public reminder stays accumulating/unavailable and M6.7 is unchanged.
-                $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
-                $M67Args += @('--target-policy-root', $TargetPolicyLedger, '--target-policy-forward')
-                # P3 freezes only the already-published M6.7 model-selection set and reads the
-                # existing forward tracker.  No execution cache or provider is added here; until a
-                # reviewed cache is supplied, managed-exit evidence remains an honest no-count.
-                $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
+                               '--industry-weight-comparison-daily-cache', $FactorComparisonV2Cache,
+                               '--industry-weight-comparison-source', $IndustryWeightSource,
+                               '--industry-weight-comparison-forward')
+                # P2/P3 freeze only after the matching M6.7 publishes. They read the same cache projection;
+                # neither runner owns a fetcher or a second cache, and their ledgers/verdicts remain separate.
+                $M67Args += @('--target-policy-root', $TargetPolicyLedger,
+                              '--target-policy-daily-cache', $FactorComparisonV2Cache,
+                              '--target-policy-forward')
                 $ForwardTracker = Join-Path $ProjectRoot 'logs\forward_tracker.csv'
                 $M67Args += @('--final-action-validation-root', $FinalActionLedger,
+                              '--final-action-validation-daily-cache', $FactorComparisonV2Cache,
                               '--final-action-validation-tracker', $ForwardTracker,
                               '--final-action-validation-forward')
             }

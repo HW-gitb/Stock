@@ -41,6 +41,12 @@
 - **Verify**: `tests.test_a_short_experiment_governance` 7 OK；`tests.test_a_short_factor_comparison_v2` + `tests.test_a_short_factor_comparison_v2_adjudication` 40 OK；两 schema 元校验 + fixture validation、`py_compile`、`git diff --check` 均 OK。
 - **Next**: Claude Code：独立审查当前共同治理合同 diff；PASS 后按流程提交。
 
+## 2026-07-22 — Claude Code 独立审查 PASS (A-short shared-cache：v2/P5/P2/P3 单 writer 接线 / R-ASHORT-P5-EXECUTION-CONTRACT-GAPS)
+- **Verdict/Action**: PASS(comparison-only,提交本切片)。cache_build 扩为 v2/P5/P2/P3 单日线 writer,忠实设计、承重缝全亲读:8 类安全全 HOLD(无造复权价/无未来函数——每日自因子、未验证 adj 跳变→null→no_count;P2·P3 window PIT 正确 decision>run 与 settled 均剔;v2 预算不可饿死、symbol_capacity 精确;`rows`↔`evaluate_managed_exit` 字段契约精确同名;secret/raw 私有 gitignored;production 隔离、weekly 非阻断 sidecar);docs(design/register/README)与设计意图一致、无漂移。
+- **Required**: 无。2 Optional 非阻断,单源 register `R-ASHORT-P5-EXECUTION-CONTRACT-GAPS`:F1 schema 1.0.0→1.1.0 迁移缺口(旧盘缓存首写 raise、fail-closed WARN、comparison-only;实测三树均无旧缓存故当前未触发,建议 merge 前加版本重置/回填);Obs2 `corporate_action_verified` 恒 False×整史喂 evaluator→覆盖率随缓存增长衰减(by-design,建议按 plan 窗切片)。
+- **Verify**: review-evidence:not_available(全真实工具输出)。项目 Python313(akshare/tushare)亲跑 scoped 验收包 121 OK(cache_build 直测+P2+P3+P5 消费者+weekly_guardrails+preflight+doc-gov+readme-route);独立对抗 agent(只读 20fb 工作树)8 类全 HOLD 且独立复现 F1;按 rule ⑤/⑥ 未跑 weekly_pipeline 全量(非本刀改动面、rows 消费已由 P2/P3 直测覆盖)。
+- **Next**: Codex：Pass
+
 ## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 剩余切片：industry-weight capture/settle/共享缓存 / R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS)
 - **Verdict/Action**: PASS(未提交/未 merge,按用户指示;comparison-only)。P5 capture/settle/progress 引擎深度 fail-closed 忠实设计;egs_main +51 生产安全(非生产 sidecar 挪进官方事务+加性 marker、`build_weight_comparison` 走 `df.copy()` 不动 df_full→不改选股);v2 缓存未回归(v2 优先+P5 延期);weekly 非阻断;effect_contract 重钉+P5 intentionally_independent。§6a 独立 agent 六不变式全 HELD。
 - **Required**: 无。4 项 Optional/watch(非阻断,单源见 register `R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS`):weekly:4182 unavailable 分支未包 try/except · balanced==official 首跑核 · validate_weekly_report 内校验 · ps1 源路径核。
@@ -53,6 +59,13 @@
 - **Required**: Claude Code 只独立审查本 P5a 完整 diff（重点：官方 bundle/marker 绑定、同名单/无效分母、P0 cache 优先/延期、公共脱敏、weekly 非阻断）。P5b 统计裁决未实现；不得运行 provider、真实 weekly 或宣称已开始正式 forward 周数。
 - **Verify**: 新增 `tests.test_a_short_industry_weight_comparison` 8 OK（合同 parity、capture 幂等/冲突、官方 marker、H5/H10/H20 qfq、同名单零差、无 adjustment no_count、v2 优先延期、脱敏/P5b 提醒、weekly 无影响）；`tests.test_egs_industry_heat`、`tests.test_a_short_factor_comparison_v2_cache_build`、`tests.test_a_short_effect_contract`、`tests.test_readme_route_row_length` 通过；`static_contract_error()` = None、`py_compile` 与 `git diff --check` 通过。`phase6.test_weekly_screening_guardrails` 的 5 个 launcher 失败仅因当前 bundled Python 缺 akshare/requests/tqdm/tushare，返回 preflight exit 2 而非该测试预期的历史参数 exit 1；其余 27 项通过，非本刀代码失败。
 - **Next**: Claude Code：独立审查当前完整 P5a diff；PASS 后按流程提交/merge。
+## 2026-07-22 — Codex 执行（A-short shared-cache：P5a 兼容的 v2/P5/P2/P3 接线；未提交）
+
+- **Verdict/Action**: 已把旧的 v2/P2/P3 cache 改动迁到已合并 P5a 之上：`a_short_factor_comparison_v2_cache_build.py` 仍是唯一 writer，固定 v2 首位、P5 次位、P2/P3 末位，在原 91-call ceiling 下按真实缺口调度并逐 consumer 记录延期；同一原子 `daily_cache.json` 同时保留 observed-adjustment 原始面和 P2/P3 execution projection。weekly 把同一路径交给 v2/P5/P2/P3，各自 capture/ledger/epoch/verdict 仍完全独立。未改 EGS、M6.7、账户、仓位、active_profile 或生产参数。
+- **Required**: Claude Code 仅独立审查当前 shared-cache extension；P5a 本身已合并并 PASS，P5b、任何生产切换和 dsa 第1刀 official M6.7 operation capture 均不在本切片。
+- **Verify**: 项目主 Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`（`akshare 1.18.63`、`tushare 1.4.29`）运行离线 P5/cache/P2/P3 包 **47 OK**；另运行 weekly 静态接线、解释器、effect-contract 与 route guard 包，无失败。新增回归锁住 v2 固定预留、P5 位于 P2 之前、P2/P3 同文件 projection、未核验 adjustment jump → managed-exit no-count。`py_compile` 与 `git diff --check` 通过；无 provider、真实 weekly 或 live capture。
+- **Pre-Codex self-review**: P5 的 source request、v2-first/P5-second 预算、无 P2/P3 时的 v2 状态名和 P5 fake-provider 契约均保留；P2/P3 仅消费同一 cache，不能新建 fetcher 或挤掉 P5。`.tools/Resolve-AshortPython.ps1` 已改为本机项目 Python 优先，`AGENTS.md` 与回归测试锁住不得误用 Codex bundled Python。
+- **Next**: Claude Code：仅独立审查当前 `codex/a-short-p5a-shared-cache` diff；PASS 后按项目流程提交，不扩 P5b/P4/production/provider/live。之后下一授权刀才是 dsa 第1刀 official M6.7 operation capture。
 
 ## 2026-07-22 — Codex 自审 PASS（A-short P5a 后续加固：README 路由 + selector 指纹/黄金回归）
 

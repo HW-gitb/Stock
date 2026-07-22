@@ -91,6 +91,10 @@
 
 ## Reference framework policy
 
+### A-short test Python
+
+- Run A-short tests, offline checks, and runner verification with the local project Python resolved by `.tools/Resolve-AshortPython.ps1`, or pass `-PythonExe` / `STOCK_TEST_PYTHON` explicitly. Do not use Codex's bundled Python, which may lack `akshare` or `tushare`; confirm the resolved interpreter path before executing.
+
 - `skills/a_short_analysis/reference/` 下的 Markdown 是 **A 股短线分析框架参考源**，其中 `v14.2_spec.md` 是规格说明书，不是运行时提示词。
 - `skills/us_short_analysis/reference/` 下的两个 Markdown 是 **美股短线选股框架** 与 **美股短线分析框架参考源**。
 - A 股短线框架与美股短线框架虽然都可能使用 `v14.x` 版本号，但它们是两套独立框架；不是前后版本关系，也不能把一个市场的 v14.x 当作另一个市场的升级版或替代版。

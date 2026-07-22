@@ -148,6 +148,7 @@ class AShortPreflightTests(unittest.TestCase):
         text = (ROOT / ".tools" / "Resolve-AshortPython.ps1").read_text(encoding="utf-8")
         self.assertNotIn("codex-runtimes", text.lower())
         self.assertNotIn("claude", text.lower())
+        self.assertLess(text.index("$env:LOCALAPPDATA"), text.index("foreach ($Name in @('python', 'python3', 'py'))"))
 
     def test_tracked_python_resolver_is_strictly_pinned(self) -> None:
         text = (ROOT / ".tools" / "Resolve-AshortPython.ps1").read_text(encoding="utf-8")

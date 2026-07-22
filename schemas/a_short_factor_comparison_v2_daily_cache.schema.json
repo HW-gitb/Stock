@@ -1,14 +1,14 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "a_short_factor_comparison_v2_daily_cache",
-  "title": "A-short comparison-track v2 private existing daily cache",
-  "description": "Knife 3 cache-only input. It is read from beneath the gitignored v2 private root; this contract is deliberately unable to request or describe a provider fetch.",
+  "title": "A-short shared private daily cache",
+  "description": "Single-writer cache used by factor-comparison v2 and the P2/P3 managed-exit consumers. Provider truth is stored once in stocks/limits; rows is a deterministic adjusted execution projection from the same atomic payload.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_name", "schema_version", "stocks", "limits", "meta"],
   "properties": {
     "schema_name": {"const": "a_short_factor_comparison_v2_daily_cache"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"enum": ["1.0.0", "1.1.0"]},
     "stocks": {
       "type": "array",
       "items": {
@@ -19,7 +19,11 @@
           "ts_code": {"type": "string", "minLength": 1},
           "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
           "open": {"type": ["number", "null"]},
+          "high": {"type": ["number", "null"]},
+          "low": {"type": ["number", "null"]},
           "close": {"type": ["number", "null"]},
+          "vol": {"type": ["number", "null"]},
+          "suspended": {"type": "boolean"},
           "adj_factor": {"type": ["number", "null"]},
           "adj_factor_observed": {"type": ["boolean", "null"]},
           "adj_factor_source": {"type": ["string", "null"]},
@@ -36,7 +40,31 @@
         "properties": {
           "ts_code": {"type": "string", "minLength": 1},
           "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
-          "up_limit": {"type": ["number", "null"]}
+          "up_limit": {"type": ["number", "null"]},
+          "down_limit": {"type": ["number", "null"]}
+        }
+      }
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["ts_code", "trade_date", "open", "high", "low", "close", "volume", "suspended", "up_limit", "down_limit", "raw_close", "adj_factor", "corporate_action_verified"],
+        "properties": {
+          "ts_code": {"type": "string", "minLength": 1},
+          "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+          "open": {"type": ["number", "null"]},
+          "high": {"type": ["number", "null"]},
+          "low": {"type": ["number", "null"]},
+          "close": {"type": ["number", "null"]},
+          "volume": {"type": ["number", "null"]},
+          "suspended": {"type": "boolean"},
+          "up_limit": {"type": ["number", "null"]},
+          "down_limit": {"type": ["number", "null"]},
+          "raw_close": {"type": ["number", "null"]},
+          "adj_factor": {"type": ["number", "null"]},
+          "corporate_action_verified": {"type": "boolean"}
         }
       }
     },
@@ -46,8 +74,33 @@
       "required": ["cache_kind", "source"],
       "properties": {
         "cache_kind": {"type": "string", "minLength": 1},
-        "source": {"type": "string", "minLength": 1}
+        "source": {"type": "string", "minLength": 1},
+        "writer": {"type": "string", "minLength": 1},
+        "last_run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "consumers": {
+          "type": "array",
+          "items": {"enum": ["v2_factor_comparison", "p5_industry_weight", "p2_target_policy", "p3_final_action_validation"]},
+          "uniqueItems": true
+        },
+        "provider_call_ceiling": {"type": "integer", "minimum": 1},
+        "deferred_due_to_budget": {
+          "type": "object",
+          "additionalProperties": {"type": "integer", "minimum": 0}
+        }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": "1.1.0"}}},
+      "then": {
+        "required": ["rows"],
+        "properties": {
+          "stocks": {"items": {"required": ["high", "low", "vol", "suspended"]}},
+          "limits": {"items": {"required": ["down_limit"]}},
+          "meta": {"required": ["writer", "last_run_date", "consumers", "provider_call_ceiling", "deferred_due_to_budget"]}
+        }
+      }
+    }
+  ]
 }

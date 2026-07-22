@@ -17,7 +17,18 @@ if str(ROOT) not in sys.path:
 
 from engine import a_short_factor_comparison as v1  # noqa: E402
 from engine.a_short_factor_comparison_v2 import ComparisonV2Error, capture_v2_week  # noqa: E402
+from engine.a_short_managed_exit import evaluate_managed_exit  # noqa: E402
+from runners.a_short_final_action_validation_runner import (  # noqa: E402
+    _active_epoch as active_p3_epoch,
+    _initial_ledger as new_p3_ledger,
+    _load_execution_cache as load_p3_cache,
+)
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
+from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
+    _active_epoch as active_p2_epoch,
+    _load_execution_cache as load_p2_cache,
+    _new_ledger as new_p2_ledger,
+)
 
 
 DECISION_DATE = "20260202"
@@ -69,8 +80,9 @@ def _capture(root: Path) -> dict:
 
 
 class FakeTushare:
-    def __init__(self, *, missing_adj: bool = False):
+    def __init__(self, *, missing_adj: bool = False, adjustment_jump: bool = False):
         self.missing_adj = missing_adj
+        self.adjustment_jump = adjustment_jump
         self.calls: list[tuple[str, dict]] = []
 
     @staticmethod
@@ -91,24 +103,44 @@ class FakeTushare:
     def daily(self, **kwargs):
         self.calls.append(("daily", kwargs))
         return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day, "open": 10.0,
-                               "close": 10.5 } for day in self._days(kwargs["start_date"], kwargs["end_date"])])
+                               "high": 10.8, "low": 9.8, "close": 10.5, "vol": 1000.0 }
+                             for day in self._days(kwargs["start_date"], kwargs["end_date"])])
 
     def adj_factor(self, **kwargs):
         self.calls.append(("adj_factor", kwargs))
         dates = self._days(kwargs["start_date"], kwargs["end_date"])
         if self.missing_adj:
             dates = dates[1:]
-        return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day, "adj_factor": 2.0 }
-                             for day in dates])
+        midpoint = len(dates) // 2
+        return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day,
+                               "adj_factor": 3.0 if self.adjustment_jump and index >= midpoint else 2.0 }
+                             for index, day in enumerate(dates)])
 
     def stk_limit(self, **kwargs):
         self.calls.append(("stk_limit", kwargs))
-        return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day, "up_limit": 11.0 }
+        return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day,
+                               "up_limit": 11.0, "down_limit": 9.0 }
                              for day in self._days(kwargs["start_date"], kwargs["end_date"])])
 
 
 def datetime_from(value: str) -> date:
     return date(int(value[:4]), int(value[4:6]), int(value[6:]))
+
+
+def _write_p2_ledger(path: Path, record: dict) -> None:
+    ledger = new_p2_ledger()
+    epoch = active_p2_epoch(ledger, create=True)
+    assert epoch is not None
+    epoch["records"].append(record)
+    path.write_text(json.dumps(ledger), encoding="utf-8")
+
+
+def _write_p3_ledger(path: Path, record: dict) -> None:
+    ledger = new_p3_ledger()
+    epoch = active_p3_epoch(ledger, create=True)
+    assert epoch is not None
+    epoch["records"].append(record)
+    path.write_text(json.dumps(ledger), encoding="utf-8")
 
 
 class ComparisonV2CacheBuildTests(unittest.TestCase):
@@ -174,16 +206,231 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             self.assertTrue(all(row["adj_factor_observed"] is False for row in first_by_symbol.values()))
             self.assertTrue(all(row["adj_factor_source"] == "provider_missing" for row in first_by_symbol.values()))
 
-    def test_budget_failure_happens_before_any_provider_call_or_cache_write(self):
+    def test_empty_cache_cannot_defer_v2_fixed_reservation(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)
             _capture(root)
             provider = FakeTushare()
             with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
-                with self.assertRaisesRegex(ComparisonV2Error, "budget exceeded"):
-                    materialize_incremental_cache(root=root, run_date=RUN_DATE, max_provider_calls=1, pro=provider)
+                with self.assertRaisesRegex(ComparisonV2Error, "v2 cache builder provider-call budget exceeded"):
+                    materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                                  max_provider_calls=1, pro=provider)
             self.assertEqual(provider.calls, [])
             self.assertFalse((root / "daily_cache.json").exists())
+
+    def test_existing_complete_cache_is_checked_before_symbol_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _capture(root)
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                materialize_incremental_cache(root=root, run_date=RUN_DATE, pro=FakeTushare())
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                result = materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                                       max_provider_calls=1, pro=provider)
+            self.assertEqual(result["status"], "cache_current")
+            self.assertEqual([name for name, _kwargs in provider.calls], ["trade_cal"])
+
+    def test_p2_and_p3_share_the_same_cache_and_execution_projection(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            root.mkdir(parents=True)
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p3 = Path(tmp) / "logs" / "a_short_final_action_validation.json"
+            p2.parent.mkdir(parents=True)
+            _write_p2_ledger(p2, {
+                "decision_date": DECISION_DATE,
+                "forward_eligible": True,
+                "source_identity": {"price_data_through": DECISION_DATE},
+                "target_entries": [{
+                    "ts_code": "600100.SH", "changed": True,
+                    "baseline": {"reference_trade_date": DECISION_DATE},
+                    "challenger": {"reference_trade_date": DECISION_DATE},
+                    "outcomes": {"status": "pending"},
+                }],
+                "breakout_entries": [],
+            })
+            _write_p3_ledger(p3, {
+                "decision_date": DECISION_DATE,
+                "forward_eligible": True,
+                "selected_codes": ["600200.SH"],
+                "managed_plans": {"600200.SH": {"reference_trade_date": DECISION_DATE}},
+                "full_edge_result": {"status": "no_count", "reason": "execution_cache_unavailable"},
+            })
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, pro=provider,
+                    target_policy_root=p2, final_action_validation_root=p3,
+                )
+            self.assertEqual(result["status"], "cache_updated")
+            self.assertEqual(result["consumers"], ["p2_target_policy", "p3_final_action_validation"])
+            cache = json.loads((root / "daily_cache.json").read_text(encoding="utf-8"))
+            self.assertEqual({row["ts_code"] for row in cache["rows"]}, {"600100.SH", "600200.SH"})
+            sample = cache["rows"][0]
+            self.assertEqual(sample["raw_close"], 10.5)
+            self.assertEqual(sample["close"], 21.0)
+            self.assertEqual(sample["high"], 21.6)
+            self.assertEqual(sample["low"], 19.6)
+            self.assertEqual(sample["up_limit"], 22.0)
+            self.assertEqual(sample["down_limit"], 18.0)
+            self.assertEqual(sample["volume"], 1000.0)
+            self.assertFalse(sample["suspended"])
+            self.assertEqual(load_p2_cache(root / "daily_cache.json"),
+                             load_p3_cache(root / "daily_cache.json"))
+
+    def test_v2_missing_symbols_are_scheduled_before_p2_under_the_shared_budget(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            capture = _capture(root)["capture"]
+            v2_symbols = sorted({code for question in capture["payload"]["questions"]
+                                 for arm in question["arms"] for code in arm["selected_symbols"]})
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p2.parent.mkdir(parents=True)
+            _write_p2_ledger(p2, {
+                "decision_date": DECISION_DATE, "forward_eligible": True,
+                "target_entries": [{
+                        "ts_code": f"601{index:03}.SH", "changed": True,
+                        "baseline": {"reference_trade_date": DECISION_DATE},
+                        "challenger": {"reference_trade_date": DECISION_DATE},
+                        "outcomes": {"status": "pending"},
+                } for index in range(10)],
+                "breakout_entries": [],
+            })
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, pro=provider,
+                    target_policy_root=p2, max_provider_calls=1 + 3 * len(v2_symbols),
+                )
+            self.assertEqual(result["status"], "cache_updated_with_deferrals")
+            fetched = sorted(call[1]["ts_code"] for call in provider.calls if call[0] == "daily")
+            self.assertEqual(fetched, v2_symbols)
+            self.assertEqual(result["deferred_symbols_by_consumer"]["p2_target_policy"], 10)
+
+    def test_p5_is_scheduled_after_v2_and_before_p2(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            capture = _capture(root)["capture"]
+            v2_symbols = sorted({code for question in capture["payload"]["questions"]
+                                 for arm in question["arms"] for code in arm["selected_symbols"]})
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p2.parent.mkdir(parents=True)
+            _write_p2_ledger(p2, {
+                "decision_date": DECISION_DATE, "forward_eligible": True,
+                "target_entries": [{
+                    "ts_code": "601001.SH", "changed": True,
+                    "baseline": {"reference_trade_date": DECISION_DATE},
+                    "challenger": {"reference_trade_date": DECISION_DATE},
+                    "outcomes": {"status": "pending"},
+                }],
+                "breakout_entries": [],
+            })
+            p5_window = [{
+                "consumer": "p5_industry_weight", "decision_date": DECISION_DATE,
+                "price_data_through": DECISION_DATE, "window_mode": "captured_start",
+                "horizon_days": 20, "symbols": ["600500.SH"],
+            }]
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._p5_frozen_windows", return_value=p5_window):
+                result = materialize_incremental_cache(
+                    root=root, run_date=RUN_DATE, pro=provider,
+                    industry_weight_root=Path(tmp) / "p5", target_policy_root=p2,
+                    max_provider_calls=1 + 3 * (len(v2_symbols) + 1),
+                )
+            fetched = sorted(call[1]["ts_code"] for call in provider.calls if call[0] == "daily")
+            self.assertEqual(fetched, sorted([*v2_symbols, "600500.SH"]))
+            self.assertEqual(result["p5_deferred_due_to_budget"], 0)
+            self.assertEqual(result["deferred_symbols_by_consumer"]["p2_target_policy"], 1)
+
+    def test_unverified_adjustment_jump_cannot_become_a_managed_exit_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            root.mkdir(parents=True)
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p2.parent.mkdir(parents=True)
+            _write_p2_ledger(p2, {
+                "decision_date": DECISION_DATE, "forward_eligible": True,
+                "target_entries": [{
+                        "ts_code": "600100.SH", "changed": True,
+                        "baseline": {"reference_trade_date": DECISION_DATE},
+                        "challenger": {"reference_trade_date": DECISION_DATE},
+                        "outcomes": {"status": "pending"},
+                }],
+                "breakout_entries": [],
+            })
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                              target_policy_root=p2,
+                                              pro=FakeTushare(adjustment_jump=True))
+            rows = load_p2_cache(root / "daily_cache.json")["600100.SH"]
+            self.assertTrue(any(row["adj_factor"] is None for row in rows))
+            result = evaluate_managed_exit({
+                "decision_date": DECISION_DATE,
+                "entry_low": 20.0, "entry_high": 21.0, "stop": 18.0,
+                "t1": 23.0, "t2": 25.0, "atr_multiplier": 1.25,
+                "price_basis": "qfq", "reference_trade_date": DECISION_DATE,
+                "reference_close": 21.0,
+            }, rows)
+            self.assertEqual(result["status"], "no_count")
+
+    def test_stale_p2_epoch_cannot_request_provider_rows(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            root.mkdir(parents=True)
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p2.parent.mkdir(parents=True)
+            ledger = new_p2_ledger()
+            active = active_p2_epoch(ledger, create=True)
+            assert active is not None
+            active["records"].append({
+                "decision_date": DECISION_DATE, "forward_eligible": True,
+                "target_entries": [{
+                    "ts_code": "600100.SH", "changed": True,
+                    "baseline": {}, "challenger": {}, "outcomes": {"status": "pending"},
+                }],
+                "breakout_entries": [],
+            })
+            ledger["epochs"].append({
+                "epoch_id": "stale", "contract_fingerprint": "stale",
+                "records": [{
+                    "decision_date": "20260105", "forward_eligible": True,
+                    "target_entries": [{
+                        "ts_code": "600999.SH", "changed": True,
+                        "baseline": {}, "challenger": {}, "outcomes": {"status": "pending"},
+                    }],
+                    "breakout_entries": [],
+                }],
+            })
+            p2.write_text(json.dumps(ledger), encoding="utf-8")
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                              target_policy_root=p2, pro=provider)
+            fetched = {call[1]["ts_code"] for call in provider.calls if call[0] == "daily"}
+            self.assertEqual(fetched, {"600100.SH"})
+
+    def test_tampered_non_main_board_consumer_symbol_fails_before_provider_access(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            root.mkdir(parents=True)
+            p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
+            p2.parent.mkdir(parents=True)
+            _write_p2_ledger(p2, {
+                "decision_date": DECISION_DATE, "forward_eligible": True,
+                "target_entries": [{
+                    "ts_code": "300001.SZ", "changed": True,
+                    "baseline": {}, "challenger": {}, "outcomes": {"status": "pending"},
+                }],
+                "breakout_entries": [],
+            })
+            provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE):
+                with self.assertRaisesRegex(ComparisonV2Error, "non-main-board"):
+                    materialize_incremental_cache(root=root, run_date=RUN_DATE,
+                                                  target_policy_root=p2, pro=provider)
+            self.assertEqual(provider.calls, [])
 
     def test_conflicting_provider_row_preserves_the_existing_cache_atomically(self):
         with tempfile.TemporaryDirectory() as tmp:
