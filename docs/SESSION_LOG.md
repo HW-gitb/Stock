@@ -122,6 +122,34 @@
 - **Verify**: final `discover -s tests -p 'test_us_short*.py'` = **4553 OK (1 skipped)**; final affected regression pack = 96 OK; route-doc/README/US-short const gates = 28 OK; changed Python compiled, 9 JSON files parsed, UTF-8 BOM count 0, and `git diff --check` passed. One intermediate full run hit the existing yfinance test's random temp-path substring false positive (`404` inside a generated directory name); its exact rerun passed 1 OK and the final full run was green.
 - **Pre-Codex self-review**: A-F checked by the main-thread checklist (no sub-agent available/used; no timeout/restart). B/E evidence: bridge-schema grep for `holding_themes` = 0; machine/action/report linkage grep for `theme_context|theme_id|macro_cluster` = 50; free caller macro banner grep resolves only the structured renderer symbol/test, not an input. C reverse tests include `test_price_market_cap_is_safety_and_cross_run_digest_is_rejected`, lifecycle exit-preservation/entry-block tests, candidate/holding identity-conflict tests, macro no-compound test, and hot-excluded no-rescue/unevaluable tests. Durable route docs remain single-state: only the US-short owner design was updated; `CURRENT`/README/register were not changed.
 - **Next**: Claude Code: independently review this uncommitted Cut3 only; if PASS, commit it. Do not expand into Cut4.
+## 2026-07-22 — Claude Code 独立复审 PASS (A-short P3 第一刀 / R-ASHORT-P3-FROZEN-ATR-MULTIPLIER-WRONG-VOCAB)
+- **Verdict/Action**: PASS。Codex 窄修 3 项全对且忠实:Required ATR 倍数改为单一真相源 `ATR_MULT.get(str(regime),1.25)`(内联 `趋势期` 幽灵档已删 grep=0、四档全对、镜像 P2);O1 CSI1000 净超额走新共享 helper `net_excess_after_round_trip_cost_pct`(gross−0.16pp、被动指数不扣成本→`csi_value=I`);O2 `ROUND_TRIP_COST_PCT` 派生自 `ROUND_TRIP_COST_FRACTION`。managed_exit +17 纯加性(仅新 helper、`evaluate_managed_exit` 不改)、P2 runner 零改、effect_contract 决策谓词不受影响;comparison-only 未碰正式 M6.7/选股/仓位。
+- **Required**: R-ASHORT-P3-FROZEN-ATR-MULTIPLIER-WRONG-VOCAB → resolved(Required+O1+O2 全修);单源见 `system_risk_register.md`。
+- **Verify**: review-evidence:417a504ff2d4。整读修复缝(ATR import+get、`趋势期` grep=0、O1 helper+`_horizon`/`_aggregate` 推导 `csi=I`、O2 派生常量、managed_exit 纯加性、P2 runner git status 零改)+ 亲跑变更符号覆盖测试 `test_a_short_final_action_validation` = **5 OK**(含两条新回归:四档 `ATR_MULT` P2==P3 冻结计划逐值相等且 atr==ATR_MULT[regime]、净超额 3.0→2.84 且非有限 fail-closed)。按 rule 6 比例(comparison-only 常量/纯加性 helper 修复、变更符号被该 targeted 测试直接覆盖)未起独立 agent、未跑全量。
+- **Next**: Codex：Pass
+
+## 2026-07-22 — Codex 修复（A-short P3 第一刀审查 Required + Optional；未提交）
+
+- **Verdict/Action**: 采纳审查意见并完成窄修：P3 冻结计划改为直接消费 Phase5 单一来源 `ATR_MULT`，与 P2 相同；CSI1000 比较改为策略净收益相对被动指数毛收益，使用共用退出模块的净超额 helper 只扣一次策略成本；P3 成本显示也从 `ROUND_TRIP_COST_FRACTION` 派生。未改正式 M6.7、选股、排序、仓位、止损止盈、wrapper 成功语义或任何 provider 行为。
+- **Required**: `R-ASHORT-P3-FROZEN-ATR-MULTIPLIER-WRONG-VOCAB` 修复待 Claude Code 独立复审；register 已记录 Required 与两项 Optional 都已随本刀处理。不得扩展 P3b/HAC/生产切换/真实数据运行。
+- **Verify**: P3 + P2 直接回归 26 OK；受影响 Phase5/effect-contract/weekly 接线包无失败完成；`py_compile` 与 effect-contract 通过。新增四档 runtime regime 的 P2/P3 冻结计划逐值相等、CSI1000 净超额扣 0.16pp、非有限输入 fail-closed 的回归。
+- **Pre-Codex self-review**: ATR 和成本只从现有单一来源导入；被动 CSI1000 未被虚构扣成本；共享 helper 对非有限输入 fail closed；P3 合同 fingerprint 自然滚动新 epoch，零真实累计记录不需迁移；未触发 provider、真实 weekly 或生产切换。
+- **Next**: Claude Code：仅独立复审当前 A-short P3 修复 diff；PASS 后按项目流程提交，不扩展范围。
+
+## 2026-07-22 — Claude Code 审查 FAIL (A-short P3 最终建议验证第一刀 / R-ASHORT-P3-FROZEN-ATR-MULTIPLIER-WRONG-VOCAB)
+- **Verdict/Action**: FAIL(narrow)。P3 comparison-only 旁路本身忠实(去账户化 `model_build_eligible` 加性无泄漏、fail-closed 不阻断 M6.7、forward 仅 live 分支、私有账本 gitignored/公开摘要脱敏、effect_contract 正确重钉+注册 intentionally_independent),但 `_freeze_plan:231` 冻结的托管退出 ATR 倍数用错档:内联 `{趋势期,震荡期,收缩期}` 非单一真相源 `phase5_engine.ATR_MULT`,进攻/防御/收缩三档全错、"趋势期"是幽灵键,与 P2 同输入不一致。未提交、未 merge。
+- **Required**: R-ASHORT-P3-FROZEN-ATR-MULTIPLIER-WRONG-VOCAB — 完整 defect/边界/修法/2 Optional(CSI1000 净超额给基准加了 0.16pp 假成本 · 0.16 重复常量)/closure 见 `system_risk_register.md`(单一来源)。
+- **Verify**: review-evidence:not_available(全真实工具输出)。亲跑 focused 验收包 27 OK(`test_a_short_final_action_validation`3 + `test_a_short_effect_contract` + phase5 `Rule6CompletionGateTests`;effect_contract 绿=重钉哈希对上磁盘、Rule6 断言官方 操作 不变=无 mutation leak);ATR bug 整读+grep 坐实(全树 `趋势期` 仅此 runner、P2 用 `ATR_MULT.get`);按 rule 6 比例(comparison-only、生产符号 build_m67_report 受 effect_contract+phase5 约束)未跑全量;§6a agent 因 CPU 争用挂死已杀,FAIL 不需它。
+- **Next**: Codex：修复
+
+## 2026-07-22 — Codex 执行（A-short P3 最终建议验证第一刀；未提交）
+
+- **Verdict/Action**: 已实现 P3 comparison-only 旁路：M6.7 新增去账户化 `machine.model_build_eligible`；正式 bundle 发布后冻结 `row_source=egs_candidate` 的选择集、完整 forward cohort、receipt/hash/date 身份与可选受管退出计划。私有账本位于 gitignored `logs/a_short_final_action_validation.json`；公开 JSON/Markdown 和周报 `a_short_evidence_reminders` 仅显示脱敏进度。P3 复用 P2 唯一托管退出器；无执行缓存、未成交、价格/身份冲突或无选择均为 no-count，绝不写作零收益或改变正式 M6.7。
+- **Required**: 无已知实现缺口；独立审查须核对 P3 与桌面 `todo_ashort.md` 的完整 receipt/候选池/等权/成本/epoch/reminder 合同，以及私有输出隔离。
+- **Verify**: `tests.test_a_short_final_action_validation` + model-eligibility + P3 weekly 接线共 5 OK；P2/Phase5 受影响回归 152 OK；文档守卫 60 OK；effect-contract、schema 和 `py_compile` 通过；未运行 provider、真实 weekly 或生产切换。
+- **Pre-Codex self-review**: P3 选择字段只重跑公开策略/RR/入场/止损检查并去除账户与持仓状态；公开摘要未含代码、账户、价格或私有路径；未来 P3b 仅在 P3 已有公开 verdict 且另有两份满足身份/证据字段的外部公开 verdict 摘要时自动提醒；P3 失败/重跑不会阻断已发布 M6.7，成熟身份漂移停止计数。
+- **Next**: Claude Code：仅独立审查当前 A-short P3 第一刀 diff；PASS 后按项目流程提交，不扩展 P3b/HAC 裁决/生产切换/真实数据运行。
+
 ## 2026-07-20 — Claude Code 审查 PASS (A-short P2 第一刀复审 / R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT)
 - **Verdict/Action**: PASS + 提交并入 master。Codex 采纳推荐 A：官方 M6.7 取价恢复固定 120d(`price_provider`)，P2 影子 450d 独立取(`target_policy_price_provider`)、仅发布后由 `_p2_shadow_candidates` 在 `dict()` 副本消费，holdings/candidates 仍走 120d → 三处真钱面(持仓 stop/t1/t2/breached、停牌复牌 manual_review 归属、候选 run-abort)全恢复 pre-P2；O1/O2/O3 已修。
 - **Required**: 无。R-ASHORT-P2-SHARED-FETCH-WINDOW-PRODUCTION-DRIFT → resolved（3 条 LOW 非阻断 Optional：derived 浅拷贝硬化建议 / banner 一周滞后 cosmetic / unavailable_public_summary 前置保护），单源见 `docs/system_risk_register.md`。

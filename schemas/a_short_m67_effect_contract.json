@@ -407,9 +407,9 @@
   "decision_predicate_sha256": {
     "A-EGS/egs_main.py": "a5cca1860438644259b25894c449511fac302d262fd8480a5d40dfcee8b48cbc",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "909b1e4911b975bf4ce2eed5afc4713595c4e1299c6466bc7e334c0b93608970",
-    "runners/a_short_weekly_pipeline.py": "a06d26acdb427bdc721771fb4ad8810f01cb561d42ef7c7cfa6c68742905e0ec",
-    "runners/a_short_m67_render.py": "472c2bd0abb870b90dae3a6665b7e650f5cffbe9ef8bc40ce57c90bb18a44e37",
+    "runners/a_short_phase5_engine.py": "98bf902c4dbb25bd429f82a4ef3adc1cc5462694d19f57f3e966c47e33febed4",
+    "runners/a_short_weekly_pipeline.py": "46e7b4730d2dba80cbde1f58f4f44dd6c47f37ced33c4403baca64b10e96182b",
+    "runners/a_short_m67_render.py": "7b5652061ff1c42b56811567702a7f81330c5e3502a64d36176065ab8e7465fc",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
   },
@@ -586,6 +586,19 @@
         "logs/a_short_target_policy_comparison.json",
         "research/results/a_short/target_policy_comparison_summary.json"
       ]
+    },
+    {
+      "id": "final_action_validation",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_final_action_validation_summary.schema.json",
+      "schema_sha256": "8703f1350e5fa787f966cffe1a6acf561dc9e434ecafd150b200735846943283",
+      "reason": "P3 freezes an account-independent model-selection comparison and optional shared managed-exit evidence. Before future threshold reviews, independent re-review, and explicit user confirmation, it is prohibited from changing EGS, formal M6.7 action, star, sizing, cash allocation, stop, target, veto, or any production policy.",
+      "owner": "runners/a_short_final_action_validation_runner.py + engine/a_short_managed_exit.py",
+      "review_ref": "P3 forward review only after public reminder thresholds; HAC, P3b and production switching remain separately gated",
+      "consumer_refs": [
+        "logs/a_short_final_action_validation.json",
+        "research/results/a_short/final_action_validation_summary.json"
+      ]
     }
   ],
   "operation_impact_sources": [
@@ -613,8 +626,8 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "6daf845b595489c5b4710a5bf37c8d2dfa3bd0e13157a82b7832bdcee83890f6",
-    "schemas/a_short_m67_report.schema.json": "99b61cac33f606fdb5e0105aded8f0d74419bd4720751684e1f7fef3b578d34a"
+    "schemas/a_short_weekly_report.schema.json": "ffa677036b8cece8f03d541173f349c9bd4dcf7209373faae7f3d981c3476a74",
+    "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [
     "account_context.available_cash",

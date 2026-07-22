@@ -3470,6 +3470,40 @@ def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
     return shadow_candidates
 
 
+def _build_evidence_reminders(as_of: str, target_policy: dict | None,
+                              final_action: dict | None) -> dict | None:
+    """Render the P2/P3 public progress into one no-private weekly surface."""
+    items = []
+    if target_policy is not None:
+        raw = str(target_policy.get("status") or "")
+        status = "review_due" if raw == "review_due" else (
+            "unavailable" if raw in {"not_configured", "evidence_unavailable_or_inconclusive"} else "accumulating")
+        items.append({"track": "p2_target_policy", "status": status,
+                      "message": str(target_policy.get("message") or "P2 目标策略证据不可用")})
+    if final_action is not None:
+        final_status = str(final_action.get("status") or "unavailable")
+        if final_status not in {"accumulating", "review_due", "unavailable"}:
+            final_status = "unavailable"
+        items.append({"track": "p3_final_action_validation", "status": final_status,
+                      "message": str(final_action.get("message") or "P3 证据不可用")})
+        for reminder in final_action.get("reminders") or []:
+            if not isinstance(reminder, dict):
+                continue
+            status = str(reminder.get("status") or "unavailable")
+            if status not in {"accumulating", "review_due", "unavailable"}:
+                status = "unavailable"
+            items.append({"track": "p3_" + str(reminder.get("reminder_id") or "unknown"), "status": status,
+                          "message": str(reminder.get("message") or "P3 证据不可用")})
+    if not items:
+        return None
+    overall = "review_due" if any(item["status"] == "review_due" for item in items) else (
+        "unavailable" if all(item["status"] == "unavailable" for item in items) else "accumulating")
+    return {"schema_name": "a_short_evidence_reminders", "schema_version": "1.0.0", "as_of": str(as_of),
+            "status": overall, "reminders": items,
+            "message": "A-short P2/P3 证据提醒：comparison-only；正式 M6.7 不变。",
+            "production_unchanged": True}
+
+
 def _build_cninfo_semantic_provider(codes, as_of, lookback_days, fetcher=None, cap=None):
     """非阻断 cninfo official provider(advisory 旁路),**复用 summary 已审门**——不另写薄版:
     `build_summary_from_fetches` 内含 `main_board_top15`(只取/喂主板 Top15)+ 缺码→unknown + 批量空响应门
@@ -3682,6 +3716,14 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing P2 execution OHLCV cache; never fetches data")
     p.add_argument("--target-policy-forward", action="store_true",
                    help="mark this P2 snapshot as a forward observation; historical replay stays non-counting")
+    p.add_argument("--final-action-validation-root", default=None,
+                   help="private P3 final-action validation ledger; it never changes official M6.7")
+    p.add_argument("--final-action-validation-daily-cache", default=None,
+                   help="existing P3 execution OHLCV cache; never fetches data")
+    p.add_argument("--final-action-validation-tracker", default=None,
+                   help="existing forward_tracker.csv; never fetches data")
+    p.add_argument("--final-action-validation-forward", action="store_true",
+                   help="mark this P3 snapshot as live forward evidence; historical replay stays non-counting")
     args = p.parse_args(argv)
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
@@ -3694,6 +3736,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] P2 target-policy capture requires --run-date for source-bound date identity")
     if args.target_policy_forward and not args.target_policy_root:
         raise SystemExit("[FATAL] --target-policy-forward requires --target-policy-root")
+    if args.final_action_validation_root and not args.run_date:
+        raise SystemExit("[FATAL] P3 final-action capture requires --run-date for source-bound date identity")
+    if args.final_action_validation_forward and not args.final_action_validation_root:
+        raise SystemExit("[FATAL] --final-action-validation-forward requires --final-action-validation-root")
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
@@ -4137,6 +4183,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 validate_public_summary(target_policy_comparison)
             except Exception:
                 target_policy_comparison = None
+    final_action_validation = None
+    if args.final_action_validation_root:
+        from runners.a_short_final_action_validation_runner import (
+            settle_and_summarize as settle_final_action_validation,
+            validate_public_summary as validate_final_action_summary,
+            unavailable_public_summary as unavailable_final_action_summary,
+        )
+        final_action_validation = settle_final_action_validation(
+            root=args.final_action_validation_root, as_of=args.as_of,
+            tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")),
+            daily_cache_path=args.final_action_validation_daily_cache)
+        try:
+            validate_final_action_summary(final_action_validation)
+        except Exception:
+            final_action_validation = unavailable_final_action_summary(args.as_of)
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -4149,6 +4210,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     weekly["factor_comparison_v2"] = factor_comparison_v2
     if target_policy_comparison is not None:
         weekly["target_policy_comparison"] = target_policy_comparison
+    evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation)
+    if evidence_reminders is not None:
+        weekly["a_short_evidence_reminders"] = evidence_reminders
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。
     held_codes_all = {str(p.get("ts_code")) for p in (acct.get("positions") or [])}
     cons_by = account_consistency_warnings_by_code(account_lineage) if args.account else {}
@@ -4256,6 +4320,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     print(f"[factor-comparison-v2] {factor_comparison_v2['message']}")
     if target_policy_comparison is not None:
         print(f"[target-policy-p2] {target_policy_comparison['message']}")
+    if final_action_validation is not None:
+        print(f"[final-action-p3] {final_action_validation['message']}")
     # Freeze current-week evidence only after the complete official JSON/Markdown/receipt bundle exists.
     # Capture remains comparison-only and non-blocking, but cannot create a false forward week on
     # a failed M6.7 publication because this block is reached only after publish_weekly_bundle returns.
@@ -4294,6 +4360,22 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 return
             print("[target-policy-p2] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
+    if args.final_action_validation_root:
+        try:
+            from runners.a_short_final_action_validation_runner import capture_after_published_weekly
+            p3_capture = capture_after_published_weekly(
+                root=args.final_action_validation_root, decision_date=args.as_of, candidates=normalized,
+                source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
+                forward_eligible=args.final_action_validation_forward,
+                tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
+            print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
+        except Exception as exc:
+            if "mature_source_identity_changed" in str(exc):
+                print(f"[final-action-p3] decision {args.as_of} has an immutable mature identity conflict; "
+                      "the observation is not counted and M6.7 remains authoritative")
+            else:
+                print("[final-action-p3] current-week capture unavailable; "
+                      "M6.7 output remains authoritative and unchanged")
 
 
 if __name__ == "__main__":

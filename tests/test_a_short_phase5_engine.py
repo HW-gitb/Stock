@@ -132,6 +132,14 @@ class IndicatorTests(unittest.TestCase):
 
 
 class Rule6CompletionGateTests(unittest.TestCase):
+    def test_model_build_eligibility_ignores_account_cash_but_keeps_public_plan_checks(self):
+        cashless = build_m67_report(_good_input(account={"available_cash": 0.0}), AS_OF, "t")
+        funded = build_m67_report(_good_input(account={"available_cash": 500000.0}), AS_OF, "t")
+        self.assertEqual(cashless["machine"]["model_build_eligible"],
+                         funded["machine"]["model_build_eligible"])
+        self.assertTrue(cashless["machine"]["model_build_eligible"])
+        self.assertEqual(cashless["m67"]["table"]["操作"], "观察")
+
     def test_d_tier_banner_is_persistent_and_clear_machine_checks_can_build(self):
         report = build_m67_report(_good_input(rule6_checks=_rule6_checks()), AS_OF, "t")
         self.assertEqual(report["m67"]["table"]["操作"], "建仓")

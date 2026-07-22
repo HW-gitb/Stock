@@ -422,6 +422,14 @@ if ($SkipSemanticRisk) {
                 # exists, its public reminder stays accumulating/unavailable and M6.7 is unchanged.
                 $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
                 $M67Args += @('--target-policy-root', $TargetPolicyLedger, '--target-policy-forward')
+                # P3 freezes only the already-published M6.7 model-selection set and reads the
+                # existing forward tracker.  No execution cache or provider is added here; until a
+                # reviewed cache is supplied, managed-exit evidence remains an honest no-count.
+                $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
+                $ForwardTracker = Join-Path $ProjectRoot 'logs\forward_tracker.csv'
+                $M67Args += @('--final-action-validation-root', $FinalActionLedger,
+                              '--final-action-validation-tracker', $ForwardTracker,
+                              '--final-action-validation-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             if (-not [string]::IsNullOrWhiteSpace($RegulatoryConfirmations)) {

@@ -78,6 +78,7 @@
         "risk_families": {"type": "object"},
         "layer": {"type": "object"},
         "entry_exit_size_star": {"type": "object"},
+        "model_build_eligible": {"type": "boolean", "description": "P3 comparison-only model selection after public strategy/veto/RR/entry/stop checks and before current-holding or account-capacity disposition; it never changes official M6.7 action, sizing, or allocation."},
         "iv_gate": {"type": "object"},
         "consumption": {"type": "object"},
         "holding_management_signal": {"enum": ["hold", "hold_watch", "reduce_review", "clear_review", "manual_review", "none"],
