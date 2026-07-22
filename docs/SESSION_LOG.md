@@ -1,5 +1,14 @@
 # Session Log
 
+## 2026-07-22 — Claude Code：一键预算最终定为 no-cap（去内部天花板）+ 澄清 Codex 读到旧树
+
+- **Verdict/Action**: 用户定"一键运行无需额外操作"→ 评估后**去掉 §18.1 #32 的内部安全天花板**（改 no-cap）：`top_k`(≤250、默认200、代码强制) 已结构性把 FMP grades 压在免费日上限内 → 天花板冗余；grades 已 advisory(2026-07-10) → 耗尽应中性照跑非拒跑 → 天花板会误挡；去掉消实现歧义 + 更简单 + 零一键破坏风险。一键唯一边界 = `top_k` + provider 自身限流 + 诚实降级。已改 §18.1 #32 + register Design/invariant。
+- **澄清（多树可见性）**: Codex 上轮"#32/register 仍写旧固定上限"的观察**只对它站的 c52c@`7fbe1ab9` 成立**（在我 spec 改动 `42a2dd2` 之前）；权威树 wt/us-short 早已改。非我设计错误，是两树未同步。用户已定 **Codex 切到 wt/us-short**（本权威树）→ canonical 无歧义；c52c 分叉 §12.1.1 + `…SETTLEMENT-WIRING-GAP` 按 register 早定"待丢弃"。
+- **安全时序钉死**: §12.3 铁律 = 先成熟旧周（只用 ≤ P_N bar）→ 派生 post-maturity adapter → 生成本周计划 → 冻结新周；已建引擎 `run_paper_weekly_transition` 即此序；本周 sizing 必须用成熟完上周 fill/exit 后的账户，不得成熟前用旧账户生成本周计划。
+- **Required**: 无（doc-only）。接线单源仍 = `R-USSHORT-MODEL-PAPER-WEEKLY-PORTFOLIO-WIRING`（刀3/刀4）+ `R-USSHORT-CAPSTONE-STANDING-PASS2-BUDGET-CAP-ONECLICK`（§18.1 #32 final no-cap）。
+- **Verify**: doc-only、无代码改动；git 证据 `git branch --contains 42a2dd2` = 仅 wt/us-short、c52c 停 `7fbe1ab9`。review-evidence:not_available。
+- **Next**: Codex（切到 wt/us-short 后）：执行刀3/刀4 一键接线，收敛到本权威树文本、丢弃 c52c 分叉。
+
 ## 2026-07-22 — Claude Code 采纳 Codex 一键模拟盘 spec 优化（同意 + 3 收紧）→ 落权威文档，路由 Codex 接线
 
 - **Verdict/Action**: 用户问"是否同意 Codex 对一键模拟盘方案的优化"。我亲验代码/设计后**同意全部 5 条方向 + 补 3 收紧**（加固非分歧），按分工把批准的设计落权威文档（§12.3 新增"一键操作路径" bullet + §18.1 #32 改 auto-derive + register 两条）；**代码接线交 Codex**、我复审。doc-only，未改业务代码、未提交、未跑 provider。
