@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第六刀 R11：execution backtest 解释边界；c237 已提交，未 merge）
+
+- **Verdict/Action**: PASS + 提交（c237 `f7626a54`=第五刀 之上，第六刀文件）。纯加解释边界、零改决策：execution_backtest_report 加 schema-required `candidate_semantics` marker（4 const：legacy_rule6_hard_veto / m67_aligned=false / proxy=false / differing_rules=[overheat,chasing_high]）+ 两路径同 human limitation；报告 v1.4.0、aggregate v1.1.6 只收 v1.4.0 input（下游保边界）。不改 Rule6/M6.7/候选宇宙/模拟/ship-gate。register `R-ASHORT-EXECUTION-BACKTEST-M67-INTERPRETATION-DRIFT`→resolved。
+- **Required**: 无。
+- **Verify**: 亲跑定向 5 execution 包 = 59 例通过。marker 单源自 `build_execution_assumptions`（grep 证唯一 emit 点、两路径共用）；skeleton `empty_simulation_result` + 完整 `simulate_execution` + tushare materialize 三路径都断言 marker+limitation+v1.4.0；mutation 回归证 schema 拒缺 marker / 拒 `m67_semantics_aligned=true` 假对齐。整读两 schema + 两 runner diff、逐行确认全 additive。零 live 选股/veto/仓位/PIT/真钱影响、无 provider/secret/fail-closed 选股门 → 按项目标准未起子 agent、未跑全量。
+- **Next**: Codex：Pass。codex_r1.md 六刀全审毕；cherry-pick→master 待命令。
+
 ## 2026-07-22 — Claude Code 独立审查 PASS（A-short 第五刀 R8/R7：周跑时区预检 + 账户 bundle 入口就绪性；c237 已提交，未 merge）
 
 - **Verdict/Action**: PASS + 提交（c237 `5f532602` 之上，仅第五刀 13 文件；第六刀 R11 execution-backtest code/schema/tests 留未提交待其独立审查）。R8：preflight 加 `tzdata` + `timezone_capability()` 真调 `ZoneInfo("Asia/Shanghai")`（非 `find_spec`）→fail、dependencies/timezone 分记、canonical resolver 前 fail-fast。R7：所有活跃 A-short 操作面改指向 CSV→转换器→`a_short_account_bundle`→`-Account`、删裸 `account_state.json` 教学 + 静态 entry-surface guard。register `R-ASHORT-WEEKLY-ENTRY-READINESS-DRIFT`→resolved（`docs/system_risk_register.md`）。

@@ -93,7 +93,7 @@
   - drawdown state
   - last update metadata
   - 必须沿用现有 state manager pattern 做 atomic JSON write
-- `schemas/execution_backtest_report.schema.json`：本次回测的资金上下文快照；当前 v1.3.0 还承载 preliminary ship-gate evaluation 与 L3 来源/完整性 lineage。
+- `schemas/execution_backtest_report.schema.json`：本次回测的资金上下文快照；当前 v1.4.0 还承载 preliminary ship-gate evaluation、L3 来源/完整性 lineage，以及 legacy Rule6 hard-veto 候选宇宙标记（不是 M6.7 建议表现或 production proxy）。
   - `capital_context` 只记录本次 run 使用的 capital context。
   - 它不能成为资金政策源头。
 - `presets/*.yaml`：preset 身份和静态 bucket ceiling reference。
