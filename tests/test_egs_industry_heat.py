@@ -26,7 +26,8 @@ import tempfile  # noqa: E402
 
 from engine.egs_industry_heat import (  # noqa: E402
     compute_industry_heat_score, load_governance, get_active_weights, egs_base,
-    final_score_and_tier, selection_diff, build_weight_comparison, write_weight_comparison, GOV_PATH,
+    final_score_and_tier, select_profile_watch_pool, selection_diff,
+    build_weight_comparison, write_weight_comparison, GOV_PATH,
 )
 
 GOV_SCHEMA = ROOT / "schemas" / "egs_industry_heat_governance.schema.json"
@@ -52,6 +53,7 @@ def _universe():
     for ind, p20, p60 in spec:
         for i in range(4):
             rows.append({"ts_code": f"{ind}{i}.SH", "l2_name": ind,
+                         "l1_name": f"L1_{ind}",
                          "pct_20d_n": p20 + i * 0.1, "pct_60d_n": p60 + i * 0.1,
                          "esp_score": 60.0, "cat_score": 60.0, "l4_score": 60.0,
                          "q0_dt_yoy": 10.0})
@@ -200,6 +202,54 @@ class SelectionDiffTests(unittest.TestCase):
         self.assertIsInstance(d["added"], list)
 
 
+class ProfileWatchPoolTests(unittest.TestCase):
+    def test_tier1_only_score_order_and_short_pool(self):
+        df = _df([
+            {"ts_code": "T2.SH", "tier": "Tier2", "final_score": 99.0, "l4_score": 99.0,
+             "pct_20d_n": 99.0, "l1_name": "L1_A", "l2_name": "L2_A", "cat_score": 50},
+            {"ts_code": "A.SH", "tier": "Tier1", "final_score": 90.0, "l4_score": 8.0,
+             "pct_20d_n": 4.0, "l1_name": "L1_A", "l2_name": "L2_A", "cat_score": 50},
+            {"ts_code": "B.SH", "tier": "Tier1", "final_score": 80.0, "l4_score": 9.0,
+             "pct_20d_n": 3.0, "l1_name": "L1_B", "l2_name": "L2_B", "cat_score": 50},
+            {"ts_code": "C.SH", "tier": "Tier1", "final_score": 70.0, "l4_score": 7.0,
+             "pct_20d_n": 5.0, "l1_name": "L1_C", "l2_name": "L2_C", "cat_score": 50},
+        ])
+        pool = select_profile_watch_pool(df, top_n=15)
+        self.assertEqual(pool["ts_code"].tolist(), ["A.SH", "B.SH", "C.SH"])
+        self.assertTrue((pool["tier"] == "Tier1").all())
+        self.assertEqual(
+            select_profile_watch_pool(df, top_n=50).head(15)["ts_code"].tolist(),
+            pool["ts_code"].tolist(),
+        )
+
+    def test_required_selection_fields_fail_closed(self):
+        with self.assertRaisesRegex(ValueError, "l1_name"):
+            select_profile_watch_pool(_universe().drop(columns=["l1_name"]))
+
+    def test_egs_uses_the_same_selector_for_top_pool_and_production_watch(self):
+        source = (ROOT / "A-EGS" / "egs_main.py").read_text(encoding="utf-8")
+        self.assertIn('top_df = select_profile_watch_pool(df, top_n=CONF["top_n"])', source)
+        self.assertIn("watch_df  = select_profile_watch_pool(df_full, top_n=watch_n)", source)
+
+    def test_active_balanced_profile_pool_matches_the_formal_watch_pool(self):
+        df = _universe()
+        # score_l5 calculates the production industry heat before it applies
+        # the active profile; build_weight_comparison must receive that same
+        # frozen run universe rather than derive a different cross-section.
+        df["industry_heat_score"] = compute_industry_heat_score(df)
+        active_profile, active_weights = get_active_weights()
+        self.assertEqual(active_profile, "balanced")
+        formal_scored, _ = final_score_and_tier(df, active_weights)
+        formal_codes = select_profile_watch_pool(formal_scored, top_n=15)["ts_code"].tolist()
+
+        comparison = build_weight_comparison(df)
+        comparison_codes = [
+            row["ts_code"]
+            for row in comparison["profile_watch_pool_top15"]["profiles"][active_profile]
+        ]
+        self.assertEqual(comparison_codes, formal_codes)
+
+
 class WeightComparisonTests(unittest.TestCase):
     def test_build_covers_all_nonlegacy_variants(self):
         df = _universe()
@@ -221,6 +271,15 @@ class WeightComparisonTests(unittest.TestCase):
         # comparison-only labelling must be present + variant lists explicitly non-tradeable
         self.assertIn("NOT tradeable", vt["_label"])
         self.assertFalse(out["boundary"]["variant_lists_are_tradeable"])
+
+    def test_p5_watch_pool_lists_all_profiles_via_tier1_selector(self):
+        out = build_weight_comparison(_universe())
+        pools = out["profile_watch_pool_top15"]
+        self.assertEqual(pools["top_n"], 15)
+        self.assertEqual(set(pools["profiles"]), {"legacy", "balanced", "aggressive", "theme_double"})
+        for rows in pools["profiles"].values():
+            self.assertLessEqual(len(rows), 15)
+            self.assertTrue(all(row["tier"] == "Tier1" for row in rows))
 
     def test_write_roundtrip_with_as_of(self):
         df = _universe()
