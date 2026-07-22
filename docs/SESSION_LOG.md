@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-22 — Codex 审查 PASS (A-short official M6.7 operation-evidence capture)
+
+- **Verdict/Action**: PASS。最高风险切片（新增私有写入与 fail-closed capture）已全读 source→publish→capture→schema→wrapper 链；用户提供的 Claude 终端记录显示独立 §6a 对抗 agent PASS，当前复核另做 receipt/路径/不可变 replay 反向检查。
+- **Required**: 无（Register: non-material；仓外绝对 private root 是既有、显式调用者选择，默认 weekly wrapper 只传已 `git check-ignore` 证明的仓内 root）。
+- **Verify**: `review-evidence:not_available`；`.tools\\run_unittest_with_repo_pythonpath.cmd` 已通过 pinned-Python preflight 并完成 capture/effect-contract/wrapper/route-doc focused suite；`py_compile`、`git diff --check`、仓内 private-root `git check-ignore` 均通过；未复核真实 weekly/provider/account/order，残余风险限于未经授权的直接 CLI/仓外路径调用。
+- **Next**: 下一授权刀：A-short 正式操作结果、ledger 与 cohort 闭环。
+
+## 2026-07-22 — Codex execution: A-short official M6.7 operation-evidence capture (uncommitted)
+
+- **Action**: Added the first formal-operation evidence seam: only a complete published `weekly_m67.json` + matching receipt may create an append-only private capture under `state/a_short/operation_evidence_private/v1/`. Each row freezes source hashes, account snapshot digest, runtime rule/parameter bindings, final action and holding disposition separately, constraints, price/sizing/portfolio facts, and pending evidence modes. The live canonical wrapper enables it only after the official bundle publishes; it reads no P5/P2/P3 cache or ledger and cannot change M6.7, selection, display, receipt, or orders.
+- **Required**: None added. Outcome settlement, cohorts, manual fill events, cache use, P5b/provider/live execution, and production policy changes remain outside this capture-only slice.
+- **Verify**: Project Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: final capture/effect-contract/wrapper/route-doc pack 77 OK; `py_compile` and `git diff --check` OK. Offline fixtures cover source-bound idempotency, source-byte conflict fail-close, receipt-account mismatch, missing runtime binding, existing-holding final-action/disposition coexistence, blocked-add/advisory capture, portfolio-only no-fabricated trade fields, private-root ignore proof, and post-publish live-only wiring. No provider, real weekly, private account, or order action ran.
+- **Pre-Codex self-review**: A-F checked / main-thread only. A: all three formal scopes and separate action/disposition fields are covered; B: `rg` confirmed the new program is isolated from P2/P3/P5/cache paths and route/docs point to one owner spec; C: mismatched receipt/config and immutable replay drift are reject paths; E: `docs/a_short_official_operation_evidence_design.md` is the contract owner and README is a thin pointer; F: schema const-pins the capture-only boundary, UTF-8/Python compile and whitespace checks passed.
+- **Next**: Claude Code: independently review only this official-operation capture diff; do not add outcome settlement or provider/live work.
+
 ## 2026-07-22 — Codex 修复（固定主 Python；待独立审查）
 
 - **Action**: 按用户授权，将 Codex 正式命令、A/US runtest、测试 launcher 与已启用 pre-commit hook 统一固定到 `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`；非固定的 `-PythonExe`、`STOCK_PYTHON`、`STOCK_TEST_PYTHON` 均 fail-closed，任何 PATH/bundled/扫描 fallback 均不被接受。

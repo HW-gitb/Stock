@@ -63,6 +63,9 @@ state/*/lifecycle/
 state/*/shadow_compare_private/
 state/*/factor_comparison_private/
 state/*/industry_weight_comparison_private/
+# Formal M6.7 recommendation captures may contain real holdings, sizing, prices, and cash usage.
+# They are append-only private evidence, never tracked output.
+state/*/operation_evidence_private/
 state/*/capstone_checkpoints_private/
 
 # --- A-short M6.7 weekly validation 执行 byproducts (one-off, research lane, regenerable via 执行) ---

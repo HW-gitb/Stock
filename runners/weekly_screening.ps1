@@ -411,6 +411,7 @@ if ($SkipSemanticRisk) {
                 $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
                 $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
                 $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
+                $OfficialOperationEvidenceRoot = Join-Path $ProjectRoot 'state\a_short\operation_evidence_private\v1'
                 Write-Host "[ADVISORY] Updating bounded A-short shared private cache ..." -ForegroundColor Yellow
                 & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger
                 $FactorComparisonCacheExitCode = $LASTEXITCODE
@@ -438,6 +439,9 @@ if ($SkipSemanticRisk) {
                               '--final-action-validation-daily-cache', $FactorComparisonV2Cache,
                               '--final-action-validation-tracker', $ForwardTracker,
                               '--final-action-validation-forward')
+                # Freeze the formal, account-constrained M6.7 display only after the weekly
+                # bundle/receipt publish. It is private fact capture, not a cache consumer or settlement lane.
+                $M67Args += @('--official-operation-evidence-root', $OfficialOperationEvidenceRoot)
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             if (-not [string]::IsNullOrWhiteSpace($RegulatoryConfirmations)) {

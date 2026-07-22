@@ -88,6 +88,10 @@ Existing helpers:
 - `a_short_industry_weight_comparison.py` - P5a thin private capture / existing-cache
   settlement / de-identified progress entry. It never calls a provider, reads an
   account, backfills historical evidence, or changes the active EGS profile.
+- `a_short_official_operation_evidence.py` - private, append-only capture of the
+  already-published formal M6.7 display. It revalidates the matching complete receipt
+  and M6.7 source, records no outcome or fill, never reads P2/P3/P5 cache/ledgers, and
+  cannot change the weekly bundle, selection, ranking, or order flow.
 - `materialize_benchmark_monthly_returns_tushare.py` - Phase 6b benchmark
   evidence helper; fetches Tushare `index_daily` for CSI1000 / CSI300 and writes
   `YYYYMM -> return` JSON files for `aggregate_execution_reports.py`, plus

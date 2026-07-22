@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_official_operation_evidence_private_capture",
+  "description": "Private, append-only capture of an already-published A-short M6.7 recommendation bundle. This is fact recording only: no outcome, order, account mutation, or M6.7 recomputation.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_type",
+    "program_id",
+    "as_of",
+    "source_identity",
+    "decisions",
+    "boundary",
+    "capture_sha256"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_official_operation_evidence_private_capture"},
+    "schema_version": {"const": "1.0.0"},
+    "record_type": {"const": "decision_capture"},
+    "program_id": {"const": "a_short_official_operation_evidence"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "source_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "as_of",
+        "run_id",
+        "candidate_digest",
+        "official_m67_sha256",
+        "official_receipt_sha256",
+        "account_snapshot_digest",
+        "weekly_schema_version",
+        "m67_schema_versions",
+        "runtime_configuration",
+        "rule_parameter_versions",
+        "effect_contract_ledger_sha256"
+      ],
+      "properties": {
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "run_id": {"type": "string", "minLength": 1},
+        "candidate_digest": {"type": "string", "minLength": 1},
+        "official_m67_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "official_receipt_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "account_snapshot_digest": {"type": ["string", "null"]},
+        "weekly_schema_version": {"type": "string", "minLength": 1},
+        "m67_schema_versions": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+        "runtime_configuration": {"type": "object"},
+        "rule_parameter_versions": {"type": "object"},
+        "effect_contract_ledger_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision_id",
+          "symbol",
+          "scope",
+          "final_action",
+          "holding_disposition",
+          "display",
+          "constraints",
+          "prices",
+          "sizing",
+          "portfolio",
+          "environment",
+          "evidence_modes"
+        ],
+        "properties": {
+          "decision_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "symbol": {"type": ["string", "null"]},
+          "scope": {"enum": ["new_candidate", "existing_holding", "portfolio_only"]},
+          "final_action": {"type": ["string", "null"]},
+          "holding_disposition": {"type": ["string", "null"]},
+          "display": {"type": "object"},
+          "constraints": {"type": "object"},
+          "prices": {"type": "object"},
+          "sizing": {"type": "object"},
+          "portfolio": {"type": "object"},
+          "environment": {"type": "object"},
+          "evidence_modes": {"type": "object"}
+        }
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "fact_capture_only",
+        "outcome_settlement_implemented",
+        "modifies_m67",
+        "modifies_selection_or_ranking",
+        "automatic_order_execution",
+        "shared_business_ledger"
+      ],
+      "properties": {
+        "fact_capture_only": {"const": true},
+        "outcome_settlement_implemented": {"const": false},
+        "modifies_m67": {"const": false},
+        "modifies_selection_or_ranking": {"const": false},
+        "automatic_order_execution": {"const": false},
+        "shared_business_ledger": {"const": false}
+      }
+    },
+    "capture_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+  }
+}

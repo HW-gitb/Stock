@@ -3735,6 +3735,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="existing forward_tracker.csv; never fetches data")
     p.add_argument("--final-action-validation-forward", action="store_true",
                    help="mark this P3 snapshot as live forward evidence; historical replay stays non-counting")
+    p.add_argument("--official-operation-evidence-root", default=None,
+                   help="private formal M6.7 capture root ending state/a_short/operation_evidence_private/v1")
     args = p.parse_args(argv)
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
@@ -4358,6 +4360,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # Freeze current-week evidence only after the complete official JSON/Markdown/receipt bundle exists.
     # Capture remains comparison-only and non-blocking, but cannot create a false forward week on
     # a failed M6.7 publication because this block is reached only after publish_weekly_bundle returns.
+    # Formal operation evidence is a private, append-only fact capture of the already-published
+    # user-visible M6.7 surface.  It is deliberately independent of P2/P3/P5/cache settlement:
+    # a sidecar failure may not rewrite, delay, or invalidate the official weekly bundle.
+    if args.official_operation_evidence_root:
+        try:
+            from runners.a_short_official_operation_evidence import capture_after_published_weekly
+            capture = capture_after_published_weekly(
+                root=args.official_operation_evidence_root,
+                out_path=args.out,
+                receipt_path=receipt_path,
+            )
+            print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
+        except Exception:
+            print("[official-operation-evidence] current-week capture unavailable; "
+                  "M6.7 output remains authoritative and unchanged")
     if args.factor_comparison_v2_root:
         try:
             from engine.a_short_factor_comparison_v2_weekly import capture_v2_after_published_weekly
