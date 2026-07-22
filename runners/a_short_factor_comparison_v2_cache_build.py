@@ -1,9 +1,10 @@
 """Incrementally materialise the private A-short factor-comparison v2 cache.
 
-This is the sole P0 provider seam for v2.  It reads only frozen private
-captures, requests only their selected symbols and still-needed settlement
-windows, and writes an atomic, schema-valid cache.  It never changes M6.7
-selection or treats a missing adjustment factor as observed evidence.
+This is the sole P0 provider seam for v2 and the shared cache seam for P5.
+It reads only frozen private consumer captures, requests only selected symbols
+and still-needed settlement windows, and writes an atomic, schema-valid cache.
+v2 has a fixed first reservation; P5 overflow is deferred.  It never changes
+M6.7 selection or treats a missing adjustment factor as observed evidence.
 """
 from __future__ import annotations
 
@@ -228,45 +229,96 @@ def _provider_rows_for_symbol(*, symbol: str, wanted_dates: set[str], daily: pd.
     return stocks, limit_rows
 
 
+def _p5_frozen_windows(industry_weight_root: str | Path | None, run_date: str) -> list[dict]:
+    """Read P5's explicit consumer requests only; this builder never reads its ledger/outcomes."""
+    if industry_weight_root is None:
+        return []
+    from engine.a_short_industry_weight_comparison import cache_consumer_windows
+    return cache_consumer_windows(root=industry_weight_root, run_date=run_date)
+
+
+def _missing_needed(needed: dict[str, set[str]], existing_stocks: dict[tuple[str, str], dict]) -> dict[str, set[str]]:
+    return {symbol: dates for symbol, dates in needed.items()
+            if any((symbol, day) not in existing_stocks for day in dates)}
+
+
 def materialize_incremental_cache(*, root: str | Path, run_date: str, max_provider_calls: int = DEFAULT_MAX_PROVIDER_CALLS,
-                                  pro: Any | None = None) -> dict:
-    """Fetch only frozen v2 selected windows and atomically merge truthful rows."""
+                                  pro: Any | None = None, industry_weight_root: str | Path | None = None) -> dict:
+    """Materialize one truthful cache with v2-first/P5-deferred scheduling.
+
+    Call accounting is still one shared calendar call plus three calls per fetched
+    symbol.  Existing rows are loaded before the budget is calculated.  v2 is
+    non-starvable; P5 symbols beyond the remaining capacity are deferred rather
+    than turning an advisory evidence request into a v2/M6.7 failure.
+    """
     private_root = _private_root(root)
     run_date = _string_date(run_date, "run_date")
     if run_date != _today():
         raise ComparisonV2Error("v2 cache builder requires the real local run_date")
     if not isinstance(max_provider_calls, int) or isinstance(max_provider_calls, bool) or max_provider_calls < 1:
         raise ComparisonV2Error("v2 cache builder max_provider_calls must be a positive integer")
-    windows = _frozen_windows(private_root, run_date)
-    if not windows:
-        return {"status": "no_frozen_v2_captures", "provider_calls": 0, "production_unchanged": True}
-    symbols = sorted({symbol for window in windows for symbol in window["symbols"]})
-    upper_bound_calls = 1 + 3 * len(symbols)
-    if upper_bound_calls > max_provider_calls:
-        raise ComparisonV2Error(
-            f"v2 cache builder provider-call budget exceeded before fetch: {upper_bound_calls}>{max_provider_calls}"
-        )
+    v2_windows = _frozen_windows(private_root, run_date)
+    p5_windows = _p5_frozen_windows(industry_weight_root, run_date)
+    if not v2_windows and not p5_windows:
+        return {"status": ("no_frozen_v2_captures" if industry_weight_root is None else "no_frozen_consumer_captures"),
+                "provider_calls": 0, "production_unchanged": True,
+                "p5_deferred_due_to_budget": 0}
     existing = _load_existing_cache(private_root)
     existing_stocks = _dedupe_rows(existing["stocks"], key_names=("ts_code", "trade_date"), label="existing stocks")
     existing_limits = _dedupe_rows(existing["limits"], key_names=("ts_code", "trade_date"), label="existing limits")
-    calendar_start = min(window["price_data_through"] for window in windows)
+    # With no existing row at all, every frozen v2 symbol necessarily needs a
+    # three-call symbol batch.  Fail before even the calendar call if v2 alone
+    # cannot fit; once a cache exists, the later date-level calculation is the
+    # authority and may prove that most/all symbols are already current.
+    if not existing_stocks:
+        empty_cache_v2_symbols = {symbol for window in v2_windows for symbol in window["symbols"]}
+        if 1 + 3 * len(empty_cache_v2_symbols) > max_provider_calls:
+            raise ComparisonV2Error(
+                "v2 cache builder provider-call budget exceeded after existing-cache check: "
+                f"{1 + 3 * len(empty_cache_v2_symbols)}>{max_provider_calls}"
+            )
+    calendar_start = min(window["price_data_through"] for window in [*v2_windows, *p5_windows])
     if pro is None:
         token = os.environ.get("TUSHARE_TOKEN")
         if not token:
             raise ComparisonV2Error("TUSHARE_TOKEN is required to materialize the private v2 cache")
         pro = init_tushare_pro(token)
     trading_dates = _single_attempt_trade_calendar(pro, calendar_start, run_date)
-    needed = _needed_dates_by_symbol(windows, trading_dates, run_date)
-    missing = {
-        symbol: dates
-        for symbol, dates in needed.items()
-        if any((symbol, day) not in existing_stocks for day in dates)
-    }
-    if not missing:
-        return {"status": "cache_current", "provider_calls": 1, "production_unchanged": True}
+    v2_needed = _needed_dates_by_symbol(v2_windows, trading_dates, run_date) if v2_windows else {}
+    p5_needed = _needed_dates_by_symbol(p5_windows, trading_dates, run_date) if p5_windows else {}
+    v2_missing = _missing_needed(v2_needed, existing_stocks)
+    v2_calls = 1 + 3 * len(v2_missing)
+    if v2_calls > max_provider_calls:
+        raise ComparisonV2Error(
+            f"v2 cache builder provider-call budget exceeded after existing-cache check: {v2_calls}>{max_provider_calls}"
+        )
+    remaining_symbols = (max_provider_calls - v2_calls) // 3
+    selected_needed = {symbol: set(days) for symbol, days in v2_missing.items()}
+    p5_deferred = []
+    # P5 ordering: already/soonest maturity (older decision) then stable symbol.
+    p5_symbol_dates: dict[str, set[str]] = {}
+    p5_symbol_due: dict[str, str] = {}
+    for window in p5_windows:
+        for symbol in window["symbols"]:
+            p5_symbol_dates.setdefault(symbol, set()).update(p5_needed.get(symbol, set()))
+            p5_symbol_due[symbol] = min(p5_symbol_due.get(symbol, window["decision_date"]), window["decision_date"])
+    for symbol in sorted(p5_symbol_dates, key=lambda code: (p5_symbol_due[code], code)):
+        missing_dates = {day for day in p5_symbol_dates[symbol] if (symbol, day) not in existing_stocks}
+        if not missing_dates:
+            continue
+        if symbol in selected_needed:
+            selected_needed[symbol].update(missing_dates)
+        elif remaining_symbols > 0:
+            selected_needed[symbol] = set(missing_dates)
+            remaining_symbols -= 1
+        else:
+            p5_deferred.append(symbol)
+    if not selected_needed:
+        return {"status": "cache_current", "provider_calls": 1, "production_unchanged": True,
+                "p5_deferred_due_to_budget": len(p5_deferred)}
     new_stocks, new_limits = [], []
-    for symbol in sorted(missing):
-        wanted_dates = needed[symbol]
+    for symbol in sorted(selected_needed):
+        wanted_dates = selected_needed[symbol]
         daily, adj, limits = _single_attempt_symbol_frames(pro, symbol, min(wanted_dates), max(wanted_dates))
         stock_rows, limit_rows = _provider_rows_for_symbol(symbol=symbol, wanted_dates=wanted_dates,
                                                             daily=daily, adj=adj, limits=limits)
@@ -291,8 +343,9 @@ def materialize_incremental_cache(*, root: str | Path, run_date: str, max_provid
     _atomic_write(private_root / DAILY_CACHE_NAME, payload)
     return {
         "status": "cache_updated",
-        "provider_calls": 1 + 3 * len(missing),
-        "symbols_updated": sorted(missing),
+        "provider_calls": 1 + 3 * len(selected_needed),
+        "symbols_updated": sorted(selected_needed),
+        "p5_deferred_due_to_budget": len(p5_deferred),
         "production_unchanged": True,
     }
 
@@ -302,13 +355,16 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--root", required=True, help="gitignored state/a_short/factor_comparison_private/v2 root")
     parser.add_argument("--run-date", required=True, help="actual local run date YYYYMMDD")
     parser.add_argument("--max-provider-calls", type=int, default=DEFAULT_MAX_PROVIDER_CALLS)
+    parser.add_argument("--industry-weight-root", default=None,
+                        help="optional gitignored P5 state/a_short/industry_weight_comparison_private/v1 root")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     result = materialize_incremental_cache(root=args.root, run_date=args.run_date,
-                                           max_provider_calls=args.max_provider_calls)
+                                           max_provider_calls=args.max_provider_calls,
+                                           industry_weight_root=args.industry_weight_root)
     print(f"[factor-comparison-v2-cache] {result['status']} (production unchanged)")
     return 0
 

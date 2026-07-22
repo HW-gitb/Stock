@@ -694,6 +694,23 @@
         "production_unchanged": {"const": true}
       }
     },
+    "industry_weight_comparison": {
+      "description": "P5a de-identified industry-weight evidence progress. It is cache-only/comparison-only and never changes EGS, M6.7, selection, sizing, account state, or active_profile.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "message", "production_unchanged"],
+      "properties": {
+        "schema_name": {"const": "a_short_industry_weight_comparison_progress_summary"},
+        "schema_version": {"const": "1.0.0"},
+        "summary_id": {"const": "a_short_industry_weight_comparison"},
+        "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+        "status": {"enum": ["not_configured", "accumulating", "p5b_build_due", "evidence_unavailable_or_inconclusive"]},
+        "questions": {"type": "array", "minItems": 3, "maxItems": 3},
+        "p5b_build_due": {"type": "boolean"},
+        "message": {"type": "string", "minLength": 1},
+        "production_unchanged": {"const": true}
+      }
+    },
     "target_policy_comparison": {
       "description": "P2 de-identified target-policy reminder. It is a shadow-only evidence progress surface; it must never change EGS, M6.7 action, star, sizing, ranking, stop, target, or wrapper success.",
       "type": "object",

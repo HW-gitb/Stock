@@ -1,5 +1,18 @@
 # Session Log
 
+## 2026-07-22 — Claude Code 独立审查 PASS (A-short P5a 剩余切片：industry-weight capture/settle/共享缓存 / R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS)
+- **Verdict/Action**: PASS(未提交/未 merge,按用户指示;comparison-only)。P5 capture/settle/progress 引擎深度 fail-closed 忠实设计;egs_main +51 生产安全(非生产 sidecar 挪进官方事务+加性 marker、`build_weight_comparison` 走 `df.copy()` 不动 df_full→不改选股);v2 缓存未回归(v2 优先+P5 延期);weekly 非阻断;effect_contract 重钉+P5 intentionally_independent。§6a 独立 agent 六不变式全 HELD。
+- **Required**: 无。4 项 Optional/watch(非阻断,单源见 register `R-ASHORT-P5A-REMAINING-REVIEW-FOLLOWUPS`):weekly:4182 unavailable 分支未包 try/except · balanced==official 首跑核 · validate_weekly_report 内校验 · ps1 源路径核。
+- **Verify**: review-evidence:not_available(全真实工具输出)。整读 P5 引擎+全 diff+governance;受影响包 68 OK(含 `test_a_short_factor_comparison_v2_cache_build` v2 无回归)、effect_contract 18 OK;独立对抗 agent 六轴 HELD。phase6 4 失败经 traceback+`git diff --name-only` 核为 `test_audit_candidate_universe_overlap_tushare` 既存 analysis_input `source`-required fixture 不匹配(字节同 base、非本刀)。按 rule 3/⑤ 未跑全量。
+- **Next**: Codex：Pass
+
+## 2026-07-22 — Codex 执行完成（A-short P5a 剩余完整切片；待独立审查）
+
+- **Action**: 已在同一 P5a 切片完成版本化治理/四 profile 三问题合同、gitignored 私有 capture/outcome/ledger、公开脱敏进度 JSON/Markdown、P5b 的 12 eligible + 6 difference 自动提醒、H5/H10/H20 cache-only 结算、同名单周零 whole-policy effect、qfq/固定 15 槽/0.16% 成本/无 adjustment 即 no_count，以及 P0 v2-first 的共享缓存调度（P5 超预算确定性延期）。capture 只在匹配 M6.7 JSON/Markdown/receipt 与 EGS 官方 publish marker 同时精确绑定本周 `analysis_input` / `egs_weight_comparison` 字节后发生；P5 旁路失败写 fresh unavailable 摘要，不改正式周报、EGS、M6.7、账户、仓位或 active_profile。
+- **Required**: Claude Code 只独立审查本 P5a 完整 diff（重点：官方 bundle/marker 绑定、同名单/无效分母、P0 cache 优先/延期、公共脱敏、weekly 非阻断）。P5b 统计裁决未实现；不得运行 provider、真实 weekly 或宣称已开始正式 forward 周数。
+- **Verify**: 新增 `tests.test_a_short_industry_weight_comparison` 8 OK（合同 parity、capture 幂等/冲突、官方 marker、H5/H10/H20 qfq、同名单零差、无 adjustment no_count、v2 优先延期、脱敏/P5b 提醒、weekly 无影响）；`tests.test_egs_industry_heat`、`tests.test_a_short_factor_comparison_v2_cache_build`、`tests.test_a_short_effect_contract`、`tests.test_readme_route_row_length` 通过；`static_contract_error()` = None、`py_compile` 与 `git diff --check` 通过。`phase6.test_weekly_screening_guardrails` 的 5 个 launcher 失败仅因当前 bundled Python 缺 akshare/requests/tqdm/tushare，返回 preflight exit 2 而非该测试预期的历史参数 exit 1；其余 27 项通过，非本刀代码失败。
+- **Next**: Claude Code：独立审查当前完整 P5a diff；PASS 后按流程提交/merge。
+
 ## 2026-07-22 — Codex 自审 PASS（A-short P5a 后续加固：README 路由 + selector 指纹/黄金回归）
 
 - **Verdict/Action**: PASS。已独立于已合并 P5a 修复 master 既存的 V14.3 regime runner README 路由漂移；并将 `engine/egs_industry_heat.py` 纳入 decision-predicate 指纹，补 L2 `>20→15` 与递进 L1/L2 集中度 golden 回归。P5a 的生产选择逻辑、P5 cache/capture 和任何正式周运行均未改变。

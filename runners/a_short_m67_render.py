@@ -439,6 +439,9 @@ def render_weekly_markdown(weekly: dict) -> str:
     comparison_v2 = weekly.get("factor_comparison_v2")
     if comparison_v2:
         out.append("**Comparison v2**: " + str(comparison_v2.get("message", "")))
+    industry_weight = weekly.get("industry_weight_comparison")
+    if industry_weight:
+        out.append("**P5 行业权重**: " + str(industry_weight.get("message", "")))
     target_policy = weekly.get("target_policy_comparison")
     if target_policy and not weekly.get("a_short_evidence_reminders"):
         out.append("**P2 目标策略**: " + str(target_policy.get("message", "")))

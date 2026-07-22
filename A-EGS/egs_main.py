@@ -4553,19 +4553,11 @@ def run_egs(backtest_mode=False, output_root=None):
             f"duplicate_codes={rank_reconciliation['duplicate_code_count']}"
         )
 
-    # 行业热度权重各 variant vs legacy 的选股 diff(每周自动记录 → 防遗忘;不改生产选股)。
-    # 从**本次 run 的 output_root 派生**,落到与 analysis_input 同一个 run 桶
-    # <output_root>/<as_of>/(见 engine/a_short_run_paths;与 export_analysis_input 落点一致)。
-    # 失败绝不影响生产 run。前向收益记分牌 = register forward-item 后续件。
+    # The comparison sidecar is written later inside the final official-output
+    # transaction.  A failed sidecar must not block EGS, but it must also never
+    # be accidentally bound into a fresh official publish marker as stale bytes.
     comparison_sidecar_warnings = []
-    try:
-        _wc_path = weight_comparison_path(TODAY, output_root=output_root)
-        write_weight_comparison(df_full, _wc_path, as_of=TODAY)
-        log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
-    except Exception as _wc_exc:  # noqa: BLE001 (non-production side output must never break the run)
-        _wc_warning = _comparison_sidecar_warning("weight_variant", _wc_exc)
-        comparison_sidecar_warnings.append(_wc_warning)
-        log.warning(_wc_warning["message"])
+    _weight_comparison_published = False
 
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
@@ -4752,6 +4744,7 @@ def run_egs(backtest_mode=False, output_root=None):
         os.path.join(official_dir, "snapshot.json"),
         os.path.join(official_dir, "candidates.csv"),
         os.path.join(official_dir, "data_health.json"),
+        weight_comparison_path(TODAY, output_root=CONF.get("output_root")),
         rank_reconciliation_path,
         os.path.join(official_dir, "official_publish.json"),
     ]
@@ -4785,6 +4778,17 @@ def run_egs(backtest_mode=False, output_root=None):
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
         log.info(f"[OK] candidates saved to {candidates_path}")
+        # Same output transaction as analysis_input and its final marker: P5 may
+        # later consume this file only when the marker binds these exact bytes.
+        try:
+            _wc_path = weight_comparison_path(TODAY, output_root=CONF.get("output_root"))
+            write_weight_comparison(df_full, _wc_path, as_of=TODAY)
+            _weight_comparison_published = True
+            log.info(f"egs 权重 variant 对比 diff 已写(非生产）：{_wc_path}")
+        except Exception as _wc_exc:  # noqa: BLE001 (sidecar remains non-blocking for EGS/M6.7)
+            _wc_warning = _comparison_sidecar_warning("weight_variant", _wc_exc)
+            comparison_sidecar_warnings.append(_wc_warning)
+            log.warning(_wc_warning["message"])
         if backtest_mode:
             log.info("[BACKTEST] skip egs_last_selection tracking state")
             return tier1_final
@@ -4805,18 +4809,23 @@ def run_egs(backtest_mode=False, output_root=None):
             sidecar_warnings=comparison_sidecar_warnings,
         )
         log_data_health_summary(health_path, health)
+        _published_files = {
+            "analysis_input": analysis_path,
+            "snapshot": snapshot_path,
+            "candidates": candidates_path,
+            "data_health": health_path,
+            "tier1_csv": tier1_csv_path,
+            "full_rank": full_csv_path,
+            "rank_universe_reconciliation": rank_reconciliation_path,
+        }
+        if _weight_comparison_published:
+            _published_files["egs_weight_comparison"] = weight_comparison_path(
+                TODAY, output_root=CONF.get("output_root")
+            )
         marker_path, _manifest = publish_egs_run_manifest(
             analysis_input,
             health,
-            {
-                "analysis_input": analysis_path,
-                "snapshot": snapshot_path,
-                "candidates": candidates_path,
-                "data_health": health_path,
-                "tier1_csv": tier1_csv_path,
-                "full_rank": full_csv_path,
-                "rank_universe_reconciliation": rank_reconciliation_path,
-            },
+            _published_files,
         )
     log.info(f"[OK] official EGS publish marker saved to {marker_path}")
     log.info(f"[OK] 结果已保存至 {tier1_csv_path} / {tier1_xlsx_path} / {full_csv_path}")

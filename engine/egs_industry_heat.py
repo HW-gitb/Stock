@@ -20,6 +20,8 @@ industry_heat 0 = 改前原式)**仅作一键回滚锚 + 回归基准**(把 `act
 from __future__ import annotations
 
 import json
+import hashlib
+import inspect
 import os
 
 import numpy as np
@@ -242,6 +244,45 @@ def _watch_pool_rows(scored_df: pd.DataFrame) -> list[dict]:
     return rows
 
 
+def _canonical_digest(value) -> str:
+    """Stable JSON digest for a P5 source-bound EGS universe artifact."""
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True,
+                                    separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
+def _digest_scalar(value):
+    if value is None or (not isinstance(value, (str, bytes)) and pd.isna(value)):
+        return None
+    if isinstance(value, (np.integer, int)) and not isinstance(value, bool):
+        return int(value)
+    if isinstance(value, (np.floating, float)) and not isinstance(value, bool):
+        return float(value)
+    if isinstance(value, (np.bool_, bool)):
+        return bool(value)
+    return str(value)
+
+
+def _full_universe_digest(df: pd.DataFrame) -> str:
+    """Fingerprint every scored-universe value in deterministic code/column order.
+
+    It is deliberately separate from the candidate digest: P5 must be able to
+    prove that all four profile pools came from one complete scored universe.
+    """
+    columns = sorted(str(column) for column in df.columns)
+    records = []
+    for _, row in df.sort_values("ts_code", kind="mergesort").iterrows():
+        records.append({column: _digest_scalar(row[column]) for column in columns})
+    return _canonical_digest({"columns": columns, "rows": records})
+
+
+def _p5_source_fingerprint() -> str:
+    return _canonical_digest({
+        "selector": inspect.getsource(select_profile_watch_pool),
+        "scoring": inspect.getsource(final_score_and_tier),
+        "industry_heat": inspect.getsource(compute_industry_heat_score),
+    })
+
+
 def _profile_top_n(df: pd.DataFrame, weights: dict, top_n: int) -> list:
     """某 profile 下按 final_score 降序的 top-N 选股清单(comparison-only,非生产、不可照做)。"""
     scored, _ = final_score_and_tier(df, weights)
@@ -280,9 +321,15 @@ def build_weight_comparison(full_df: pd.DataFrame, gov_path: str = GOV_PATH,
         profile_watch_pool_top15[name] = _watch_pool_rows(
             select_profile_watch_pool(scored, top_n=PROFILE_WATCH_POOL_TOP_N)
         )
+    governance_path = os.path.abspath(gov_path)
+    with open(governance_path, "rb") as _governance_handle:
+        governance_sha256 = hashlib.sha256(_governance_handle.read()).hexdigest()
     return {
         "schema_name": "egs_weight_comparison", "schema_version": "1.0.0",
         "as_of": (None if as_of is None else str(as_of)),
+        "universe_digest": _full_universe_digest(df),
+        "governance_sha256": governance_sha256,
+        "source_fingerprint": _p5_source_fingerprint(),
         "active_profile": gov["active_profile"], "universe_n": int(len(df)),
         "legacy_vs": legacy_vs,
         "variant_top_n": {
