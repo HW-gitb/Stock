@@ -57,6 +57,26 @@ def _private_root(path: Path) -> Path:
     return path.resolve()
 
 
+def _canonical_source_state_dir(path: Path) -> Path:
+    """Keep provider-backed source artifacts in this checkout's canonical state root.
+
+    ``private_root`` is the isolation boundary for the paper account and weekly
+    outputs.  It is deliberately *not* the source-artifact root: the universe
+    runner binds its candidate artifact to ``state/us_short`` of the active
+    checkout before any provider request.  A runtest capsule gets that
+    canonical path from its cloned checkout automatically; callers must not
+    repoint it at the private capsule directory.
+    """
+    expected = DEFAULT_STATE_DIR.resolve()
+    actual = Path(path).resolve()
+    if actual != expected:
+        raise PaperOneClickError(
+            "state-dir must be this checkout's canonical state/us_short root; "
+            "use --private-root to isolate paper outputs in a runtest capsule"
+        )
+    return expected
+
+
 def _write_json(path: Path, value: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(value, ensure_ascii=False, indent=2) + "\n"
@@ -97,11 +117,11 @@ def run_one_click(
     provider_pace_seconds: float = 1.0,
 ) -> dict:
     private_root = _private_root(private_root)
-    state_dir = state_dir.resolve()
     if type(momentum_top_k) is not int or not 1 <= momentum_top_k <= 250:
         raise PaperOneClickError("momentum-top-k must be an integer from 1 through 250")
     if provider_pace_seconds < 0:
         raise PaperOneClickError("provider-pace-seconds must be nonnegative")
+    state_dir = _canonical_source_state_dir(state_dir)
 
     # Resolve the canonical week before writing any generated input.  This is
     # the same resolver used by the capstone, so the wrapper cannot drift to a
@@ -159,7 +179,10 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="US-short weekly one-click paper-account runner")
     parser.add_argument("--now-et", type=_parse_now_et, default=None)
     parser.add_argument("--private-root", type=Path, default=DEFAULT_PRIVATE_ROOT)
-    parser.add_argument("--state-dir", type=Path, default=DEFAULT_STATE_DIR)
+    parser.add_argument(
+        "--state-dir", type=Path, default=DEFAULT_STATE_DIR,
+        help="must remain this checkout's canonical state/us_short root; use --private-root for isolation",
+    )
     parser.add_argument("--momentum-top-k", type=int, default=200)
     parser.add_argument("--provider-pace-seconds", type=float, default=1.0)
     args = parser.parse_args(argv)

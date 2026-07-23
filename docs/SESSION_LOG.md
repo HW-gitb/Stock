@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-23 — Codex self-review PASS (US-short paper capsule canonical source-state guard)
+
+- **Verdict/Action**: PASS; the one-click runner now rejects any noncanonical `--state-dir` before a provider stage, while `--private-root` remains the isolated paper-output boundary and the active checkout's `state/us_short` remains the provider-source root.
+- **Required**: None for this repaired invocation defect. A fresh capsule run crossed the former path failure, completed SEC ticker retrieval (7642), then stopped at the independent Massive grouped-daily HTTP 403; that provider-fetch failure is recorded in the authorized Desktop test log and was not hidden or worked around.
+- **Verify**: Required project Python ran `tests.test_us_short_paper_one_click tests.test_us_short_model_paper_capstone_wiring`: 8 OK; canonical/noncanonical and private-root-to-source-root separation are directly covered; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
+
 ## 2026-07-22 — Codex independent strict re-review PASS (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
 
 - **Verdict/Action**: PASS; the repaired A/B/C second knife is approved and committed on top of capture-only knife `760b5a72`.
