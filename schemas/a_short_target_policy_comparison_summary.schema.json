@@ -13,6 +13,7 @@
     "target_exit",
     "breakout_entry",
     "execution_data_status",
+    "admissions",
     "message",
     "production_unchanged"
   ],
@@ -34,6 +35,9 @@
     "target_exit": {"$ref": "#/definitions/progress"},
     "breakout_entry": {"$ref": "#/definitions/progress"},
     "execution_data_status": {"enum": ["unavailable", "available"]},
+    "admissions": {"type": "object", "minProperties": 2, "additionalProperties": {"type": "object", "additionalProperties": false,
+      "required": ["experiment_id", "component_id", "track_mode", "identity_sha256", "statistical_contract_sha256", "pit_forward_contract_sha256", "dependency_components"],
+      "properties": {"experiment_id": {"type": "string"}, "component_id": {"type": "string"}, "track_mode": {"enum": ["switchable", "diagnostic_only"]}, "identity_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "statistical_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "pit_forward_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "dependency_components": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["component_id", "baseline_definition_sha256"], "properties": {"component_id": {"type": "string"}, "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}}}},
     "message": {"type": "string", "minLength": 1},
     "production_unchanged": {"const": true}
   },

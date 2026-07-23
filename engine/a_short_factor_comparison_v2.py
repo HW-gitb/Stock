@@ -32,6 +32,7 @@ PROGRAM_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_program.s
 WEEKLY_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_weekly.schema.json"
 LEDGER_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_ledger.schema.json"
 RECEIPT_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_decision_receipt.schema.json"
+PUBLIC_PROGRESS_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_public_progress.schema.json"
 BATCH_REGISTRY_PATH = "experiment_batches.json"
 
 PROGRAM_ID = "a_short_factor_comparison_v2"
@@ -219,6 +220,14 @@ def _canonical_contracts(governance: dict) -> dict:
                 for arm in question["arms"]
             ],
         })
+    from engine.a_short_experiment_admission_registry import admission_snapshot, admissions
+    registered = admissions()
+    admission_ids = tuple(
+        f"p0_{question['question_id']}_{arm['arm_id']}"
+        for question in governance["questions"]
+        for arm in question["arms"] if arm["kind"] == "challenger" and
+        f"p0_{question['question_id']}_{arm['arm_id']}" in registered
+    )
     return {
         "decision_delta_contract": _digest({
             "questions": question_arms,
@@ -243,6 +252,21 @@ def _canonical_contracts(governance: dict) -> dict:
                 _settle_question, _position_outcomes, _maximum_drawdown, _loss_distribution_metrics,
             ),
         }),
+        # Capture, cache materialisation and settlement are one evidence
+        # pipeline.  Any executable change to these local seams opens a new
+        # epoch instead of allowing old forward rows to keep counting.
+        "runtime_wiring_contract": _digest({
+            "v2_engine": _file_digest(Path(__file__)),
+            "weekly_capture": _file_digest(ROOT / "engine" / "a_short_factor_comparison_v2_weekly.py"),
+            "adjudication": _file_digest(ROOT / "engine" / "a_short_factor_comparison_v2_adjudication.py"),
+            "shared_cache_builder": _file_digest(ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py"),
+            "weekly_schema": _file_digest(WEEKLY_SCHEMA_PATH),
+            "daily_cache_schema": _file_digest(ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"),
+        }),
+        # This is intentionally part of the epoch signature.  A statistical,
+        # PIT, arm, dependency or one-change admission drift opens a new v2
+        # epoch; older captures are never rewritten or re-counted.
+        "admission_bindings": admission_snapshot(*admission_ids),
     }
 
 
@@ -664,12 +688,20 @@ def _validate_capture_integrity(capture: dict) -> None:
     required = {
         "capture_sha256", "forward_eligible", "run_identity", "candidate_universe",
         "candidate_universe_digest", "canonical_baseline", "governance_sha256",
-        "v1_comparison_governance_sha256", "common_pool", "questions",
+        "v1_comparison_governance_sha256", "common_pool", "questions", "admission_bindings",
+        "orthogonality_signature",
     }
-    if set(payload) != required:
+    # Pre-admission captures remain readable only as diagnostic history; they
+    # deliberately lack both bindings and cannot satisfy is_current...
+    legacy_required = required - {"admission_bindings", "orthogonality_signature"}
+    if set(payload) != required and set(payload) != legacy_required:
         raise ComparisonV2Error("v2 capture payload keys drifted")
     if payload["capture_sha256"] != _capture_payload_digest(payload):
         raise ComparisonV2Error("v2 capture content no longer matches its sha256")
+    if "admission_bindings" in payload and not isinstance(payload["admission_bindings"], dict):
+        raise ComparisonV2Error("v2 capture admission binding is malformed")
+    if "orthogonality_signature" in payload and not isinstance(payload["orthogonality_signature"], dict):
+        raise ComparisonV2Error("v2 capture epoch signature is malformed")
     identity = _clean_run_identity(payload["run_identity"], capture["decision_date"])
     candidates = payload["candidate_universe"]
     if not isinstance(candidates, list) or not candidates:
@@ -723,6 +755,14 @@ def _validate_capture_integrity(capture: dict) -> None:
                 raise ComparisonV2Error("v2 arm definition sha256 drifted")
 
 
+def is_current_governed_capture(capture: dict, *, governance: dict | None = None) -> bool:
+    """Whether a capture belongs to the active admission epoch, not a legacy diagnostic epoch."""
+    payload = capture.get("payload") if isinstance(capture, dict) else None
+    signature = _canonical_contracts(governance or load_v2_governance())
+    return isinstance(payload, dict) and payload.get("admission_bindings") == signature["admission_bindings"] and \
+        payload.get("orthogonality_signature") == signature
+
+
 def _validate_source_receipt(root: Path, capture: dict, receipt: dict) -> None:
     _validate_capture_integrity(capture)
     validate_v2_weekly_record(receipt)
@@ -734,6 +774,13 @@ def _validate_source_receipt(root: Path, capture: dict, receipt: dict) -> None:
     if len(matches) != 1:
         raise ComparisonV2Error("v2 capture epoch identity is unavailable or ambiguous")
     signature = matches[0].get("orthogonality_signature")
+    signature_admissions = signature.get("admission_bindings") if isinstance(signature, dict) else None
+    capture_admissions = capture["payload"].get("admission_bindings")
+    if signature_admissions is None:
+        if capture_admissions is not None:
+            raise ComparisonV2Error("legacy v2 epoch cannot carry a later admission binding")
+    elif capture_admissions != signature_admissions:
+        raise ComparisonV2Error("v2 capture admission identity/statistical/PIT/dependency binding drifted")
     expected = {
         "capture_sha256": capture["payload"]["capture_sha256"],
         "run_identity": capture["payload"]["run_identity"],
@@ -810,6 +857,11 @@ def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[di
         "v1_comparison_governance_sha256": _digest(v1_governance),
         "common_pool": common_pool,
         "questions": questions,
+        "admission_bindings": epoch["orthogonality_signature"]["admission_bindings"],
+        # A capture carries the whole epoch contract, not merely its admission
+        # snapshot.  This keeps an old runtime/statistical source seam from
+        # silently counting after a new governed epoch starts.
+        "orthogonality_signature": epoch["orthogonality_signature"],
     }
     capture_payload["capture_sha256"] = _capture_payload_digest(capture_payload)
     capture = {
@@ -1189,6 +1241,8 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
         capture = _load_json(capture_path)
         receipt = _load_json(receipt_path)
         _validate_source_receipt(root, capture, receipt)
+        if not is_current_governed_capture(capture, governance=governance):
+            continue
         outcome_payload = _outcome_payload(capture, dates=dates, lookup=lookup, limits=limits, governance=governance)
         outcome = {
             "schema_name": "a_short_factor_comparison_v2_weekly",
@@ -1233,3 +1287,62 @@ def settle_v2_from_daily_payload(*, root: str | Path, daily_payload: dict, gover
         _upsert_ledger(root, capture, outcome, governance)
         updated.append(day.name)
     return {"status": "settled_from_existing_cache", "updated_dates": updated, "production_unchanged": True}
+
+
+def build_v2_public_progress(*, root: str | Path | None, as_of: str,
+                             governance: dict | None = None) -> dict:
+    """Build P0's de-identified public progress; private symbols, prices and inputs never leave the ledger."""
+    governance = copy.deepcopy(governance or load_v2_governance())
+    validate_v2_governance(governance)
+    as_of = _date(as_of)
+    from engine.a_short_experiment_admission_registry import admission_snapshot, admissions
+    registry = admissions()
+    admission_questions = {
+        f"p0_{question['question_id']}_{arm['arm_id']}": question["question_id"]
+        for question in governance["questions"] for arm in question["arms"]
+        if arm["kind"] == "challenger" and f"p0_{question['question_id']}_{arm['arm_id']}" in registry
+    }
+    admission_ids = tuple(admission_questions)
+    signature = _canonical_contracts(governance)
+    epoch_id, entries = None, []
+    if root is not None:
+        private_root = _private_root(root)
+        ledger_path, epochs_path = private_root / "ledger.json", private_root / "epochs.json"
+        if ledger_path.exists() and epochs_path.exists():
+            ledger = _load_json(ledger_path)
+            validate_v2_ledger(ledger)
+            current = next((row for row in reversed(_load_json(epochs_path).get("epochs", []))
+                            if row.get("orthogonality_signature") == signature), None)
+            if current is not None:
+                epoch_id = current["epoch_id"]
+                entries = [row for row in ledger["entries"] if row["epoch_id"] == epoch_id and
+                           row["forward_eligible"] and row["decision_date"] <= as_of]
+    evidence = []
+    for admission_id in admission_ids:
+        admission = registry[admission_id]
+        question_id = admission_questions[admission_id]
+        rows = [row for row in entries if row["question_id"] == question_id]
+        evidence.append({
+            "admission_id": admission_id, "component_id": admission["component_id"],
+            "baseline_arm_id": admission["baseline"]["arm_id"],
+            "baseline_definition_sha256": admission["baseline"]["definition_sha256"],
+            "candidate_arm_id": admission["candidate"]["arm_id"],
+            "candidate_definition_sha256": admission["candidate"]["definition_sha256"],
+            "forward_weeks": len({row["decision_date"] for row in rows}),
+            "settled_weeks": len({row["decision_date"] for row in rows if row["outcome_status"] == "settled"}),
+            "no_count_weeks": len({row["decision_date"] for row in rows if row["outcome_status"] == "no_count"}),
+            "verdict": "not_adjudicated", "activation_permitted": False,
+        })
+    summary = {
+        "schema_name": "a_short_factor_comparison_v2_public_progress", "schema_version": "1.0.0",
+        "as_of": as_of, "current_epoch_id": epoch_id, "admissions": admission_snapshot(*admission_ids),
+        "evidence": evidence,
+        "source_hash": _digest([{key: row[key] for key in ("decision_date", "question_id", "epoch_id", "capture_sha256", "outcome_sha256")}
+                                for row in entries]),
+        "production_unchanged": True,
+    }
+    try:
+        _validate_with_schema(summary, PUBLIC_PROGRESS_SCHEMA_PATH)
+    except Exception as exc:
+        raise ComparisonV2Error("v2 public progress schema invalid") from exc
+    return summary

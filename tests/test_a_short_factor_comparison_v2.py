@@ -19,7 +19,7 @@ if str(ROOT) not in sys.path:
 from engine import a_short_factor_comparison as v1  # noqa: E402
 from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     ComparisonV2Error, _immutable_common_pool, _materialize_question, _maximum_drawdown, _position_outcomes, _resolve_epoch,
-    capture_v2_week, load_v2_governance,
+    build_v2_public_progress, capture_v2_week, is_current_governed_capture, load_v2_governance,
     settle_v2_from_daily_payload, validate_v2_decision_receipt, validate_v2_governance,
 )
 from engine.a_short_factor_comparison_v2_adjudication import adjudicate_v2_from_private_ledger  # noqa: E402
@@ -349,17 +349,40 @@ class EpochTests(unittest.TestCase):
             _capture(root)
             governance = load_v2_governance()
             original = __import__("engine.a_short_factor_comparison_v2", fromlist=["_canonical_contracts"])._canonical_contracts(governance)
-            for field in ("decision_delta_contract", "immutable_common_pool_contract", "outcome_contract"):
+            for field in ("decision_delta_contract", "immutable_common_pool_contract", "outcome_contract",
+                          "runtime_wiring_contract"):
                 changed = copy.deepcopy(original)
                 changed[field] = "f" * 64
                 with mock.patch("engine.a_short_factor_comparison_v2._canonical_contracts", return_value=changed):
                     epoch = _resolve_epoch(root, governance, "20260302")
                 self.assertEqual(epoch["reason"], "nonorthogonal_contract_change")
             epochs = json.loads((root / "epochs.json").read_text(encoding="utf-8"))["epochs"]
-            self.assertEqual(len(epochs), 4)
+            self.assertEqual(len(epochs), 5)
 
 
 class CacheOutcomeTests(unittest.TestCase):
+    def test_public_progress_has_only_epoch_arm_hashes_and_no_private_capture_fields(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _capture(root)
+            settle_v2_from_daily_payload(root=root, daily_payload=_daily_payload())
+            summary = build_v2_public_progress(root=root, as_of="20260306")
+            self.assertIsNotNone(summary["current_epoch_id"])
+            self.assertTrue(summary["evidence"])
+            self.assertTrue(all(row["activation_permitted"] is False and row["verdict"] == "not_adjudicated"
+                                for row in summary["evidence"]))
+            public_text = json.dumps(summary, ensure_ascii=False).lower()
+            for forbidden in ("ts_code", "price_series", "close", "account", "holding"):
+                self.assertNotIn(forbidden, public_text)
+
+    def test_runtime_epoch_signature_drift_excludes_old_capture_from_current_settlement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            capture = _capture(root)["capture"]
+            self.assertTrue(is_current_governed_capture(capture))
+            capture["payload"]["orthogonality_signature"]["runtime_wiring_contract"] = "0" * 64
+            self.assertFalse(is_current_governed_capture(capture))
+
     def test_settlement_rehashes_capture_and_rejects_tampered_payload(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)

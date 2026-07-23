@@ -20,6 +20,7 @@ from engine.a_short_regime_classifier import (
     FORWARD_RETURN_BASIS, RAW_REGIMES, STATEFUL_REGIMES, V14_2_REGIMES,
 )
 from engine.a_short_regime_ledger import is_canonical_date
+from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +62,32 @@ def candidate_effect_policy() -> dict:
     return dict(gov["candidate_effect_policy"])
 
 
+def _runtime_policy_source_fingerprint() -> str:
+    """Pin every P1 result-shaping source, including its upstream cohort and returns."""
+    paths = (
+        Path(__file__),
+        ROOT / "runners" / "a_short_regime_comparison_runner.py",
+        ROOT / "runners" / "forward_tracker.py",
+        ROOT / "runners" / "a_short_weekly_pipeline.py",
+        ROOT / "runners" / "a_short_phase5_engine.py",
+        ROOT / "A-EGS" / "egs_main.py",
+        ROOT / "engine" / "a_short_regime_classifier.py",
+        ROOT / "engine" / "a_short_regime_ledger.py",
+        ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json",
+        ROOT / "schemas" / "a_short_weekly_report.schema.json",
+        ROOT / "schemas" / "a_short_m67_effect_contract.json",
+        GOVERNANCE_SCHEMA_PATH,
+        CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH,
+    )
+    try:
+        payload = {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in paths}
+    except OSError as exc:
+        raise ValueError("candidate effect runtime source is unavailable") from exc
+    return hashlib.sha256(
+        json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
 def candidate_effect_policy_fingerprint() -> str:
     """Fingerprint every result-shaping P1 Cut1 policy component, not just its version label."""
     gov = governance()
@@ -68,6 +95,8 @@ def candidate_effect_policy_fingerprint() -> str:
         "candidate_effect_policy": candidate_effect_policy(),
         "action_matrix": gov["action_matrix"],
         "boundary": gov["boundary"],
+        "runtime_source_fingerprint": _runtime_policy_source_fingerprint(),
+        "admission_binding": admission_snapshot("p1_regime_action_proxy"),
     }
     return hashlib.sha256(
         json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
@@ -398,6 +427,7 @@ def build_candidate_effect_record(*, candidate: dict, stateful_regime: dict,
         "policy_id": policy["policy_id"],
         "policy_epoch": policy["policy_epoch"],
         "policy_fingerprint": candidate_effect_policy_fingerprint(),
+        "admission_binding": admission_snapshot("p1_regime_action_proxy"),
         "baseline_net_returns": baseline_net,
         "candidate_net_returns": candidate_net,
         "csi1000_returns": benchmark,
@@ -420,6 +450,8 @@ def _validate_candidate_effect_record(record: dict) -> None:
         raise ValueError("candidate effect record has another policy version")
     if record.get("policy_fingerprint") != candidate_effect_policy_fingerprint():
         raise ValueError("candidate effect record policy fingerprint does not match current policy")
+    if record.get("admission_binding") != admission_snapshot("p1_regime_action_proxy"):
+        raise ValueError("candidate effect record admission binding does not match current policy")
     if record.get("boundary") != {"comparison_only": True, "automatic_production_switch": False}:
         raise ValueError("candidate effect record is not comparison-only")
     origin = record.get("evidence_origin") or {}
@@ -557,6 +589,7 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
             "baseline_description": policy["baseline_description"],
             "candidate_proxy_description": policy["candidate_proxy_description"],
         },
+        "admission": admission_snapshot("p1_regime_action_proxy"),
         "evidence_progress": {
             "forward_live_weeks": len(live_weeks),
             "valid_divergence_weeks": len(weekly_h10),
@@ -581,8 +614,17 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
         "verdict": verdict,
         "boundary": {"comparison_only": True, "automatic_production_switch": False},
     }
+    validate_candidate_effect_summary(summary)
+    return summary
+
+
+def validate_candidate_effect_summary(summary: dict) -> None:
+    """Fail closed before public P1 JSON or Markdown is written."""
     try:
         jsonschema.validate(summary, _load_json(CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH))
     except jsonschema.ValidationError as exc:
         raise ValueError(f"candidate effect summary schema: {exc.message}") from exc
-    return summary
+    if summary.get("admission") != admission_snapshot("p1_regime_action_proxy"):
+        raise ValueError("candidate effect summary admission binding does not match current policy")
+    if (summary.get("policy") or {}).get("policy_fingerprint") != candidate_effect_policy_fingerprint():
+        raise ValueError("candidate effect summary policy fingerprint does not match current policy")

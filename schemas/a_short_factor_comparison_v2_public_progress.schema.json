@@ -1,0 +1,17 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short P0 de-identified factor-v2 progress",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "current_epoch_id", "admissions", "evidence", "source_hash", "production_unchanged"],
+  "properties": {
+    "schema_name": {"const": "a_short_factor_comparison_v2_public_progress"}, "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "current_epoch_id": {"type": ["string", "null"], "pattern": "^epoch-[a-f0-9]{12}$"},
+    "admissions": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": false,
+      "required": ["experiment_id", "component_id", "track_mode", "identity_sha256", "statistical_contract_sha256", "pit_forward_contract_sha256", "dependency_components"],
+      "properties": {"experiment_id": {"type": "string"}, "component_id": {"type": "string"}, "track_mode": {"const": "switchable"}, "identity_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "statistical_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "pit_forward_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "dependency_components": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["component_id", "baseline_definition_sha256"], "properties": {"component_id": {"type": "string"}, "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}}}},
+    "evidence": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+      "required": ["admission_id", "component_id", "baseline_arm_id", "baseline_definition_sha256", "candidate_arm_id", "candidate_definition_sha256", "forward_weeks", "settled_weeks", "no_count_weeks", "verdict", "activation_permitted"],
+      "properties": {"admission_id": {"type": "string"}, "component_id": {"type": "string"}, "baseline_arm_id": {"type": "string"}, "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "candidate_arm_id": {"type": "string"}, "candidate_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "forward_weeks": {"type": "integer", "minimum": 0}, "settled_weeks": {"type": "integer", "minimum": 0}, "no_count_weeks": {"type": "integer", "minimum": 0}, "verdict": {"const": "not_adjudicated"}, "activation_permitted": {"const": false}}}},
+    "source_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "production_unchanged": {"const": true}
+  }
+}

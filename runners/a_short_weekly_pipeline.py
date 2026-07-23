@@ -4178,7 +4178,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # handle and suppresses stale reminders whenever cache/private integrity is not provable.
     from engine.a_short_factor_comparison_v2_weekly import settle_and_summarize_v2_weekly
     factor_comparison_v2 = settle_and_summarize_v2_weekly(
-        root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache)
+        root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of)
     industry_weight_comparison = None
     if args.industry_weight_comparison_root:
         from engine.a_short_industry_weight_comparison import (settle_and_summarize_weekly,

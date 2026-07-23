@@ -27,6 +27,7 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
+import inspect
 import json
 import math
 import os
@@ -53,9 +54,10 @@ from engine.a_short_regime_action_comparison import (
     build_action_record, m67_provenance, merge_action_records, refresh_action_records,
     summarize_action_records, validate_action_record, build_candidate_effect_record,
     candidate_effect_policy, candidate_effect_policy_fingerprint,
-    summarize_candidate_effect_records,
+    summarize_candidate_effect_records, validate_candidate_effect_summary,
 )
 from engine.data.a_share_board_scope import is_a_share_main_board
+from engine.a_short_experiment_admission_registry import admission_snapshot
 
 RECORDS_FILENAME = "regime_comparison_records.json"
 PANEL_FILENAME = "regime_comparison_panel.md"
@@ -309,7 +311,15 @@ def _sha256_bytes(raw: bytes) -> str:
 
 
 def _candidate_effect_policy_key() -> str:
-    return candidate_effect_policy_fingerprint()
+    # The candidate universe is defined by the actual M6.7 projection and
+    # tracker-cohort readers, not by row_source/action labels alone.
+    selector_contract = hashlib.sha256(
+        (inspect.getsource(_m67_build_candidates) + inspect.getsource(_tracker_rows_for_week)).encode("utf-8")
+    ).hexdigest()
+    return hashlib.sha256(
+        json.dumps({"policy": candidate_effect_policy_fingerprint(), "selector_contract": selector_contract},
+                   sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
 
 
 def _empty_candidate_effect_ledger() -> dict:
@@ -343,7 +353,11 @@ def _new_candidate_effect_group() -> dict:
             "policy_id": policy["policy_id"],
             "policy_epoch": policy["policy_epoch"],
             "policy_fingerprint": fingerprint,
+            "selector_contract_sha256": hashlib.sha256(
+                (inspect.getsource(_m67_build_candidates) + inspect.getsource(_tracker_rows_for_week)).encode("utf-8")
+            ).hexdigest(),
         },
+        "admission_binding": admission_snapshot("p1_regime_action_proxy"),
         "weeks": {},
         "records": [],
     }
@@ -604,7 +618,8 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     ledger = _load_candidate_effect_ledger(ledger_path)
     policy_key = _candidate_effect_policy_key()
     group = ledger["policy_groups"].setdefault(policy_key, _new_candidate_effect_group())
-    if group.get("policy") != _new_candidate_effect_group()["policy"]:
+    if group.get("policy") != _new_candidate_effect_group()["policy"] or \
+            group.get("admission_binding") != _new_candidate_effect_group()["admission_binding"]:
         raise ValueError("candidate-effect current policy group identity is inconsistent")
     if not isinstance(group.get("weeks"), dict) or not isinstance(group.get("records"), list):
         raise ValueError("candidate-effect policy group is malformed")
@@ -659,6 +674,9 @@ def run_candidate_effect_sidecar(*, decision_as_of: str, regime_ledger: dict, m6
     # The active summary is one policy cohort.  Expose the total isolated groups as a data-quality
     # count, never by pooling old and new policy records.
     summary["data_quality"]["policy_groups"] = len(ledger["policy_groups"])
+    # The policy-group count is added by the runner after aggregation, so
+    # validate the final exact public object before either paired artifact.
+    validate_candidate_effect_summary(summary)
     _write_json(ledger, ledger_path)
     _write_json(summary, summary_path)
     _atomic_write_text(_render_candidate_effect_summary(summary), markdown_path)

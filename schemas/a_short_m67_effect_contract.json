@@ -408,7 +408,7 @@
     "A-EGS/egs_main.py": "f432760a42222f7de252aaf413d53fe8d7845ab8b053598b61d05cc48700e434",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "98bf902c4dbb25bd429f82a4ef3adc1cc5462694d19f57f3e966c47e33febed4",
+    "runners/a_short_phase5_engine.py": "8d83edbd66493db216e0e0aee1f5651e2033022d0647e9584a5299d8dca51f1c",
     "runners/a_short_weekly_pipeline.py": "1f6058c51bd5bd27125e20c861e37061d33eac1d51232d3ad559ba6d295dc840",
     "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
@@ -579,7 +579,7 @@
       "id": "target_policy_comparison",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_target_policy_comparison_summary.schema.json",
-      "schema_sha256": "ce815b7f05a8209a9a82f103f353c25530d629da71c9101b14307a9411b41273",
+      "schema_sha256": "6e024b1a80d53a83eeb4acecf44908a738b61a0b6a283ef2d92861c096484400",
       "reason": "P2 freezes a shadow-only target and breakout comparison. Before separate future reviews, independent re-review, and explicit user confirmation, it is prohibited from changing formal M6.7 target, entry eligibility, star, risk, action, sizing, cash allocation, or veto.",
       "owner": "runners/a_short_target_policy_comparison_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P2 forward review only after the public summary reaches its frozen minimum data thresholds",
@@ -592,7 +592,7 @@
       "id": "final_action_validation",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_final_action_validation_summary.schema.json",
-      "schema_sha256": "8703f1350e5fa787f966cffe1a6acf561dc9e434ecafd150b200735846943283",
+      "schema_sha256": "614075759ccc1b87ea4b0975923f870e8c486993cf4b0efe3c5302f0c5f14069",
       "reason": "P3 freezes an account-independent model-selection comparison and optional shared managed-exit evidence. Before future threshold reviews, independent re-review, and explicit user confirmation, it is prohibited from changing EGS, formal M6.7 action, star, sizing, cash allocation, stop, target, veto, or any production policy.",
       "owner": "runners/a_short_final_action_validation_runner.py + engine/a_short_managed_exit.py",
       "review_ref": "P3 forward review only after public reminder thresholds; HAC, P3b and production switching remain separately gated",
@@ -605,7 +605,7 @@
       "id": "industry_weight_comparison_p5",
       "policy": "intentionally_independent",
       "schema_path": "schemas/a_short_industry_weight_comparison_progress_summary.schema.json",
-      "schema_sha256": "3d14a0aa766542f35af306788f00bda5a2f3b0b14c903a48e6e6487acecb8497",
+      "schema_sha256": "edcf868936ff5fd50cec72b788fcf6f8249bbde2de4952a8cf31f0c4373d1740",
       "reason": "P5a records cache-only, source-bound profile-weight evidence progress and a P5b build reminder. It is prohibited from changing active_profile, EGS, formal M6.7 action, star, sizing, cash allocation, veto, stop, target, account state, or any production policy.",
       "owner": "engine/a_short_industry_weight_comparison.py + runners/a_short_industry_weight_comparison.py",
       "review_ref": "P5b may be implemented only after the frozen eligible/difference-week trigger; every policy change remains separately reviewed and user-gated.",
@@ -640,7 +640,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "45d8e979efc49fe0b4906a15027cb1245172ff7c92562f95cba7c608bd972cb7",
+    "schemas/a_short_weekly_report.schema.json": "6f259a6ae082bb7b2a4959ac32cc884c94a126f7b7e868e6fb9cd1648d51cb3c",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

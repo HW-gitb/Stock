@@ -51,11 +51,13 @@
     "oneChangeOnly": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["changed_component_ids", "unchanged_contract_sha256", "proof_sha256"],
+      "required": ["changed_component_ids", "unchanged_contract_sha256", "frozen_baseline_definition_sha256", "frozen_candidate_definition_sha256", "proof_sha256"],
       "properties": {
         "changed_component_ids": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/identifier"}},
         "unchanged_contract_sha256": {"$ref": "#/$defs/sha256"},
-        "proof_sha256": {"$ref": "#/$defs/sha256"}
+        "proof_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen_baseline_definition_sha256": {"$ref": "#/$defs/sha256"},
+        "frozen_candidate_definition_sha256": {"$ref": "#/$defs/sha256"}
       }
     },
     "pitForwardContract": {

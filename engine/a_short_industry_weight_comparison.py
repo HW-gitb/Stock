@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,7 @@ DEFAULT_PUBLIC_MD = ROOT / "research" / "results" / "a_short" / "industry_weight
 HORIZONS = (5, 10, 20)
 PROFILE_IDS = ("legacy", "balanced", "aggressive", "theme_double")
 QUESTION_IDS = ("balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced")
+ADMISSION_IDS = tuple(f"p5_{question_id}" for question_id in QUESTION_IDS)
 CACHE_NAME = "daily_cache.json"
 
 
@@ -147,11 +149,31 @@ def _source_fingerprint() -> str:
     })
 
 
+def _runtime_source_fingerprint() -> str:
+    """Pin every local P5 capture/settlement dependency that can shape forward evidence."""
+    paths = (
+        Path(__file__),
+        ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py",
+        ROOT / "engine" / "egs_industry_heat.py",
+        ROOT / "engine" / "a_short_experiment_admission_registry.py",
+        PRIVATE_SCHEMA,
+        LEDGER_SCHEMA,
+        PROGRAM_SCHEMA,
+    )
+    try:
+        payload = {str(path.relative_to(ROOT)): _file_digest(path) for path in paths}
+    except OSError as exc:
+        raise IndustryWeightComparisonError("P5 runtime source fingerprint is unavailable") from exc
+    return _digest(payload)
+
+
 def _contract_fingerprint(governance: dict) -> str:
     return _digest({
         "governance": governance,
         "profile_governance_sha256": _file_digest(PROFILE_GOVERNANCE_PATH),
         "source_fingerprint": _source_fingerprint(),
+        "runtime_source_fingerprint": _runtime_source_fingerprint(),
+        "admission_bindings": admission_snapshot(*ADMISSION_IDS),
     })
 
 
@@ -166,6 +188,21 @@ def _validate_private_record(record: dict) -> None:
         raise IndustryWeightComparisonError("P5 private record violates its schema") from exc
     if record.get("program_id") != PROGRAM_ID or record.get("boundary") != _boundary():
         raise IndustryWeightComparisonError("P5 private record crossed its comparison-only boundary")
+    if record.get("record_type") == "capture" and \
+            record.get("contract_fingerprint") == _contract_fingerprint(load_governance()) and \
+            record.get("payload", {}).get("admission_bindings") != admission_snapshot(*ADMISSION_IDS):
+        raise IndustryWeightComparisonError("P5 current-epoch admission binding drifted")
+    if record.get("record_type") == "capture":
+        payload = record.get("payload") or {}
+        expected_epoch = _epoch_id(str(record.get("contract_fingerprint") or ""))
+        if payload.get("contract_fingerprint") != record.get("contract_fingerprint") or \
+                record.get("epoch_id") != expected_epoch:
+            raise IndustryWeightComparisonError("P5 capture epoch binding drifted")
+        payload_sha256 = payload.get("capture_payload_sha256")
+        expected_payload_sha256 = _digest({key: value for key, value in payload.items()
+                                           if key != "capture_payload_sha256"})
+        if payload_sha256 != expected_payload_sha256:
+            raise IndustryWeightComparisonError("P5 capture payload integrity drifted")
 
 
 def _weekly_paths(root: Path, decision_date: str) -> tuple[Path, Path]:
@@ -289,7 +326,7 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysi
         })
     price_freshness = (weekly.get("run_lineage") or {}).get("price_freshness") or {}
     price_data_through = _date(price_freshness.get("price_data_through"), "price_data_through")
-    return {
+    payload = {
         "run_date": run_date,
         "run_id": str(run_identity.get("run_id")),
         "input_pit_identity": copy.deepcopy(run_identity),
@@ -301,6 +338,7 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysi
         "profile_governance_sha256": _file_digest(PROFILE_GOVERNANCE_PATH),
         "source_fingerprint": _source_fingerprint(),
         "contract_fingerprint": contract_fingerprint,
+        "admission_bindings": admission_snapshot(*ADMISSION_IDS),
         "price_request": {"consumer_id": "p5_industry_weight", "price_data_through": price_data_through,
                           "horizons_trading_days": list(HORIZONS), "cache_status": "pending"},
         "profiles": {name: {"profile_weights": copy.deepcopy(governance["profiles"][name]),
@@ -313,6 +351,8 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysi
         "difference_week": "pending_h10",
         "no_count_reason": None,
     }
+    payload["capture_payload_sha256"] = _digest(payload)
+    return payload
 
 
 def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_date: str,
@@ -384,12 +424,21 @@ def _capture_records(root: Path) -> list[dict]:
     return records
 
 
+def _current_admission_capture_records(root: Path) -> list[dict]:
+    """Return only the active governed epoch; older P5a captures stay read-only diagnostic."""
+    fingerprint = _contract_fingerprint(load_governance())
+    binding = admission_snapshot(*ADMISSION_IDS)
+    return [record for record in _capture_records(root)
+            if record.get("contract_fingerprint") == fingerprint and
+            record.get("payload", {}).get("admission_bindings") == binding]
+
+
 def cache_consumer_windows(*, root: str | Path, run_date: str) -> list[dict]:
     """Expose P5's frozen cache requests to the shared P0 builder; no provider is touched."""
     private_root = _private_root(root)
     run_date = _date(run_date, "run_date")
     windows = []
-    for capture in _capture_records(private_root):
+    for capture in _current_admission_capture_records(private_root):
         payload = capture["payload"]
         if not payload.get("forward_eligible") or capture["decision_date"] > run_date:
             continue
@@ -486,7 +535,7 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
     dates = [day for day in all_dates if day <= as_of]
     date_pos = {day: index for index, day in enumerate(dates)}
     changed = 0
-    for capture in _capture_records(private_root):
+    for capture in _current_admission_capture_records(private_root):
         decision_date = capture["decision_date"]
         if decision_date > as_of:
             continue
@@ -519,7 +568,7 @@ def settle_from_daily_payload(*, root: str | Path, daily_payload: dict, as_of: s
 
 def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
     eligible = difference = mature = no_count = 0
-    for capture in _capture_records(root):
+    for capture in _current_admission_capture_records(root):
         if capture["decision_date"] > as_of:
             continue
         _, outcome_path = _weekly_paths(root, capture["decision_date"])
@@ -555,7 +604,8 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
         summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
                    "summary_id": "a_short_industry_weight_comparison", "as_of": as_of, "status": "not_configured",
                    "questions": [_question_progress_placeholder(question_id) for question_id in QUESTION_IDS],
-                   "p5b_build_due": False, "message": "P5 行业权重对比：未配置；生产结论不变。", "production_unchanged": True}
+                   "p5b_build_due": False, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
+                   "message": "P5 行业权重对比：未配置；生产结论不变。", "production_unchanged": True}
     else:
         private_root = _private_root(root)
         rows = [_question_progress(private_root, question_id, as_of) for question_id in QUESTION_IDS] if private_root.exists() else [
@@ -564,6 +614,7 @@ def build_public_progress(*, root: str | Path | None, as_of: str) -> dict:
         summary = {"schema_name": "a_short_industry_weight_comparison_progress_summary", "schema_version": "1.0.0",
                    "summary_id": "a_short_industry_weight_comparison", "as_of": as_of,
                    "status": "p5b_build_due" if due else "accumulating", "questions": rows, "p5b_build_due": due,
+                   "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
                    "message": ("P5 行业权重对比：已达到 P5b 自动裁判实现/审查触发条件；若到 24/36 周，正式门与失败门仍须由尚未实现的 P5b 计算；不自动改动生产权重。" if due else
                                "P5 行业权重对比：证据积累中；未自动改动生产权重。"), "production_unchanged": True}
     validate_public_progress(summary)
@@ -576,7 +627,7 @@ def unavailable_public_progress(as_of: str) -> dict:
                "summary_id": "a_short_industry_weight_comparison", "as_of": _date(as_of, "as_of"),
                "status": "evidence_unavailable_or_inconclusive",
                "questions": [_question_progress_placeholder(question_id) for question_id in QUESTION_IDS],
-               "p5b_build_due": False,
+               "p5b_build_due": False, "admission_binding": _digest(admission_snapshot(*ADMISSION_IDS)),
                "message": "P5 行业权重对比：证据不可用或不完整；不显示旧提醒，生产结论不变。",
                "production_unchanged": True}
     validate_public_progress(summary)
@@ -598,6 +649,8 @@ def validate_public_progress(summary: dict) -> None:
     if tuple(row["question_id"] for row in summary["questions"]) != QUESTION_IDS or \
             summary["p5b_build_due"] != any(row["p5b_build_due"] for row in summary["questions"]):
         raise IndustryWeightComparisonError("P5 public progress is internally inconsistent")
+    if summary.get("admission_binding") != _digest(admission_snapshot(*ADMISSION_IDS)):
+        raise IndustryWeightComparisonError("P5 public progress admission binding drifted")
     encoded = _canonical(summary).lower()
     for prohibited in ("ts_code", "selected", "price", "account", "holding", "private", "return_pct", "sha256"):
         if prohibited in encoded:

@@ -73,6 +73,8 @@ def _one_change_proof_payload(admission: dict) -> dict:
         "effect_surface": admission["effect_surface"],
         "changed_component_ids": admission["one_change_only"]["changed_component_ids"],
         "unchanged_contract_sha256": admission["one_change_only"]["unchanged_contract_sha256"],
+        "frozen_baseline_definition_sha256": admission["one_change_only"].get("frozen_baseline_definition_sha256"),
+        "frozen_candidate_definition_sha256": admission["one_change_only"].get("frozen_candidate_definition_sha256"),
         "baseline_definition_sha256": admission["baseline"]["definition_sha256"],
         "candidate_definition_sha256": admission["candidate"]["definition_sha256"],
         "pit_forward_contract_sha256": admission["pit_forward_contract"]["contract_sha256"],
@@ -93,11 +95,49 @@ def _receipt_payload(receipt: dict) -> dict:
     return payload
 
 
+def _validate_trusted_arm_inventory(admission: dict) -> None:
+    """Bind active admissions to their reviewed source inventory, not caller input.
+
+    Generic draft fixtures intentionally have no registry entry.  Every active
+    P0/P1/P2/P3/P5 experiment does: its two arm digests must match the
+    separately reviewed registry inventory before it can be sealed or used.
+    This prevents a caller from changing both an arm and its in-payload
+    ``frozen_*`` anchor, then laundering the change by resealing.
+    """
+    try:
+        from engine.a_short_experiment_admission_registry import trusted_arm_inventory
+    except ImportError as exc:
+        raise ExperimentGovernanceError("trusted admission inventory is unavailable") from exc
+    expected = trusted_arm_inventory(admission.get("experiment_id"))
+    if expected is None:
+        return
+    baseline_expected, candidate_expected = expected
+    if (admission["baseline"]["definition_sha256"], admission["candidate"]["definition_sha256"]) != expected:
+        raise ExperimentGovernanceError("one-change-only reviewed arm inventory drifted")
+    anchors = admission["one_change_only"]
+    if (anchors["frozen_baseline_definition_sha256"], anchors["frozen_candidate_definition_sha256"]) != (
+            baseline_expected, candidate_expected):
+        raise ExperimentGovernanceError("one-change-only reviewed inventory anchors drifted")
+
+
 def seal_experiment_admission(admission: dict) -> dict:
     """Return a signed copy for fixtures and pre-admission construction only."""
     sealed = copy.deepcopy(admission)
     sealed["baseline"]["definition_sha256"] = _definition_digest(sealed["baseline"]["definition"])
     sealed["candidate"]["definition_sha256"] = _definition_digest(sealed["candidate"]["definition"])
+    one_change = sealed["one_change_only"]
+    # The arm inventory is set in the reviewed source admission, never by the
+    # public resealing helper.  Otherwise an edited admission could delete the
+    # anchors, reseal itself, and launder a second component change as a fresh
+    # one-change contract.
+    try:
+        _require_sha256(one_change["frozen_baseline_definition_sha256"],
+                        "one-change-only frozen baseline inventory")
+        _require_sha256(one_change["frozen_candidate_definition_sha256"],
+                        "one-change-only frozen candidate inventory")
+    except (KeyError, TypeError) as exc:
+        raise ExperimentGovernanceError("one-change-only pre-frozen arm inventory is required before sealing") from exc
+    _validate_trusted_arm_inventory(sealed)
     sealed["statistical_contract"]["definition_sha256"] = _definition_digest(
         sealed["statistical_contract"]["definition"]
     )
@@ -128,6 +168,13 @@ def validate_experiment_admission(admission: dict) -> None:
     changed_components = admission["one_change_only"]["changed_component_ids"]
     if changed_components != [admission["component_id"]]:
         raise ExperimentGovernanceError("one-change-only proof must name exactly one component")
+    frozen_baseline = admission["one_change_only"]["frozen_baseline_definition_sha256"]
+    frozen_candidate = admission["one_change_only"]["frozen_candidate_definition_sha256"]
+    if frozen_baseline != admission["baseline"]["definition_sha256"]:
+        raise ExperimentGovernanceError("one-change-only baseline inventory drifted")
+    if frozen_candidate != admission["candidate"]["definition_sha256"]:
+        raise ExperimentGovernanceError("one-change-only candidate inventory drifted")
+    _validate_trusted_arm_inventory(admission)
     expected_proof = _digest(_one_change_proof_payload(admission))
     if admission["one_change_only"]["proof_sha256"] != expected_proof:
         raise ExperimentGovernanceError("one-change-only proof sha256 drifted")

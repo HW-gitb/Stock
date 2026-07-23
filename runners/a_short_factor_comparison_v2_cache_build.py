@@ -31,6 +31,7 @@ from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     _load_json,
     _private_root,
     _validate_source_receipt,
+    is_current_governed_capture,
     validate_v2_weekly_record,
 )
 from engine.a_short_tushare_client import init_tushare_pro  # noqa: E402
@@ -140,6 +141,10 @@ def _frozen_windows(root: Path, run_date: str) -> list[dict]:
         _validate_source_receipt(root, capture, receipt)
         if capture.get("record_type") != "capture":
             raise ComparisonV2Error(f"{week.name}: cache source is not a capture")
+        if not is_current_governed_capture(capture):
+            # Old epoch evidence remains on disk for diagnosis but must not
+            # consume fresh cache/provider budget or enter this admission's clock.
+            continue
         outcome_path = week / "outcome.json"
         if outcome_path.exists():
             outcome = _load_json(outcome_path)
@@ -223,10 +228,15 @@ def _p2_active_records(payload: dict) -> list[dict]:
     try:
         from runners.a_short_target_policy_comparison_runner import _active_epoch, _validate_ledger
         _validate_ledger(payload)
-        epoch = _active_epoch(payload, create=False)
+        target_epoch = _active_epoch(payload, create=False, track="target_exit")
+        breakout_epoch = _active_epoch(payload, create=False, track="breakout_entry")
     except Exception as exc:
         raise ComparisonV2Error("P2 target-policy private ledger contract is invalid") from exc
-    return list(epoch["records"]) if epoch is not None else []
+    target_records = list((target_epoch or {}).get("records", []))
+    breakout_records = list((breakout_epoch or {}).get("records", []))
+    # Keep component evidence separate: a target epoch reset must not relay an
+    # older breakout record (or the reverse) into a fresh cache request.
+    return [*target_records, *breakout_records]
 
 
 def _p3_active_records(payload: dict) -> list[dict]:

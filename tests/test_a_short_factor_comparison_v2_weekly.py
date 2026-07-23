@@ -19,15 +19,18 @@ from engine import a_short_factor_comparison as v1  # noqa: E402
 from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     ComparisonV2Error,
     _validate_capture_integrity,
+    build_v2_public_progress,
     capture_v2_week,
 )
 from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     DAILY_CACHE_NAME,
     PUBLIC_STATUS_CURRENT,
     PUBLIC_STATUS_UNAVAILABLE,
+    _admission_binding,
     capture_v2_after_published_weekly,
     load_v2_daily_cache,
     settle_and_summarize_v2_weekly,
+    validate_v2_public_summary,
 )
 
 
@@ -91,6 +94,10 @@ def _daily_cache() -> dict:
     }
 
 
+def _public_progress() -> dict:
+    return build_v2_public_progress(root=None, as_of=DECISION_DATE)
+
+
 class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
     def _capture(self, root: Path) -> list[dict]:
         candidates = _candidates()
@@ -104,10 +111,21 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             root = _root(tmp)
             self._capture(root)
             (root / DAILY_CACHE_NAME).write_text(json.dumps(_daily_cache()), encoding="utf-8")
-            summary = settle_and_summarize_v2_weekly(root=root)
+            summary = settle_and_summarize_v2_weekly(root=root, as_of=DECISION_DATE)
             self.assertEqual(summary["status"], PUBLIC_STATUS_CURRENT)
             self.assertEqual(summary["reminder_count"], 0)
             self.assertTrue((root / "reminder.json").is_file())
+            self.assertIn("current_epoch_id", summary["public_progress"])
+            rendered = json.dumps(summary["public_progress"], ensure_ascii=False).lower()
+            self.assertFalse(any(f'"{field}"' in rendered for field in ("ts_code", "account", "holding", "price")))
+            leaked = copy.deepcopy(summary)
+            leaked["public_progress"]["evidence"][0]["ts_code"] = "600000.SH"
+            with self.assertRaises(ComparisonV2Error):
+                validate_v2_public_summary(leaked)
+            leaked = copy.deepcopy(summary)
+            leaked["public_progress"]["admissions"][next(iter(leaked["public_progress"]["admissions"]))]["dependency_components"][0]["ts_code"] = "600000.SH"
+            with self.assertRaises(ComparisonV2Error):
+                validate_v2_public_summary(leaked)
 
     def test_missing_cache_never_relays_a_stale_reminder(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -118,7 +136,7 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                 "program_id": "a_short_factor_comparison_v2", "reminders": [{"private": "stale"}],
                 "production_unchanged": True,
             }), encoding="utf-8")
-            summary = settle_and_summarize_v2_weekly(root=root)
+            summary = settle_and_summarize_v2_weekly(root=root, as_of=DECISION_DATE)
             self.assertEqual(summary["status"], PUBLIC_STATUS_UNAVAILABLE)
             self.assertEqual(summary["reminder_count"], 0)
             self.assertNotIn("stale", summary["message"])
@@ -149,6 +167,8 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                 "factor_comparison_v2": {
                     "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
                     "reminder_count": 0,
+                    "admission_binding": _admission_binding(),
+                    "public_progress": _public_progress(),
                     "message": "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。",
                     "production_unchanged": True,
                 },
@@ -197,6 +217,8 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                 "factor_comparison_v2": {
                     "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
                     "reminder_count": 0,
+                    "admission_binding": _admission_binding(),
+                    "public_progress": _public_progress(),
                     "message": "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。",
                     "production_unchanged": True,
                 },
@@ -253,6 +275,8 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
                     "factor_comparison_v2": {
                         "summary_id": "a_short_factor_comparison_v2", "status": "not_configured",
                         "reminder_count": 0,
+                        "admission_binding": _admission_binding(),
+                        "public_progress": _public_progress(),
                         "message": "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。",
                         "production_unchanged": True,
                     },

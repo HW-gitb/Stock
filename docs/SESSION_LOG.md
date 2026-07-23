@@ -1,5 +1,75 @@
 # Session Log
 
+## 2026-07-23 - Codex first-knife self-repair and final independent adversarial re-review PASS
+
+- **Verdict/Action**: PASS. The first-knife P0/P1/P2/P3/P5 control-plane scope is complete: reviewed one-change arm inventory, full current-epoch binding, P2 target/breakout isolation, old-epoch diagnostic-only treatment, and schema-closed public summaries. A final P2 weekly-schema/effect-contract seam found by the acceptance run was repaired before this re-review.
+- **Required**: None.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: final P2 + weekly MainWiring + P0/P1/P3/admission pack 124 OK; direct modified-anchor and P2 isolation probes passed; final independent read-only adversarial review PASS. No Tier-3 trigger: no provider/credential/account data, production entrypoint, order, or multi-lane shared production change; no full A-short lane run.
+- **Next**: Claude Code: review and commit
+
+## 2026-07-23 - Codex first-knife repair implementation complete; independent review required
+
+- **Verdict/Action**: Completed the remaining first-knife implementation: P0/P3/P5 full epoch binding, P1 selector-contract binding and admission privacy validation, P0 schema-pinned de-identified progress, and tracked P1/P2 public admission snapshots.
+- **Required**: Independent reviewer must re-check the complete current diff against the two first-knife P1 register entries and P2 Required F; no commit or second knife before PASS.
+- **Verify**: Pinned Python P0/P1 focused pack 47 OK; P2/P3/P5/shared-cache focused subset re-ran. `git diff --check` passed; current P1/P2 tracked public summaries validate against local contracts. No provider, live weekly, account, order, production configuration, P4a, P3 HAC/P3b, or P5b work.
+- **Next**: Claude Code: review
+
+## 2026-07-23 - Codex partial repair (first-knife semantic admission / P2 Required F; still in progress)
+
+- **Verdict/Action**: Repaired P2 Required F by binding the shared phase5 `ATR_MULT` module attribute into both component fingerprints; added a re-sealed undeclared-candidate-rule rejection anchor to admissions. Current-epoch and public-summary Required items remain open.
+- **Required**: Continue `R-ASHORT-FIRST-KNIFE-SEMANTIC-ADMISSION-AND-EPOCH-BOUNDARY-GAPS` Required B and all public-summary Required items; independent review is not requested yet.
+- **Verify**: Pinned Python admission/P0/P2 pack 75 OK, including shared-ATR and re-sealed extra-rule rejection. No provider, live weekly, account, order, production configuration, P4a, P3 HAC/P3b, or P5b work.
+- **Next**: Codex: repair
+
+## 2026-07-23 - Codex slice-complete re-review FAIL (A-short first governance knife, current 8398 diff)
+
+- **Verdict/Action**: FAIL — 风险分级 P1：统一 admission 的 one-change-only 仍只是声明，P0/P2/P3/P5 的当前 epoch / runtime 绑定仍可让旧证据在新合同下计数，且公开摘要合同/隐私闭包未完成。§6a 独立只读对抗 agent 结论同为 FAIL；未运行 provider、live weekly、账户、订单或生产配置。
+- **Required**: 修复 `R-ASHORT-FIRST-KNIFE-SEMANTIC-ADMISSION-AND-EPOCH-BOUNDARY-GAPS`、`R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING` Required F、`R-ASHORT-FIRST-KNIFE-PUBLIC-SUMMARY-CONTRACT-AND-PRIVACY-GAPS`；完整分项、闭合测试和首刀 authority 对照均在 register。
+- **Verify**: 锁定主 Python 的 P0-P5/weekly/governance/doc 定向包完成且 preflight 通过；`py_compile`、`git diff --check`、one-change/P0-runtime/P2-ATR/P1-public-schema 反向探针亲跑。全量 ledger 无缓存；按 tier-3 未改 production top-level、无 provider/credential/account，故不跑 full lane。未逐行审无关 A/US lanes；残余风险限当前 first-knife control plane。
+- **Next**: Codex: 修复
+
+## 2026-07-23 - Codex repair (R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING Required E; pending independent review)
+
+- **Verdict/Action**: Replaced P2's one-hop source lists with a recursive project-function/global semantic closure. It now follows target, breakout, and shared evaluator dependencies to their referenced helpers and frozen constants; the closure correctly treats `SR_SPIKE_ATR`, MA construction, and managed-exit `tick_up` as shared.
+- **Required**: Independent re-review of Required E and the same-class P0/P1/P3/P5 runtime-source hardening below; no old epoch may count after a source/constant/evaluator drift.
+- **Verify**: Pinned Python: P2 27 OK, including target/breakout wrapper, target-only `RR_FLOOR`, shared resistance/spike/MA/`tick_up` mutations. No provider, live weekly, account, order, production configuration, P4a, P3 HAC/P3b, or P5b work.
+- **Next**: Claude Code: review
+
+## 2026-07-23 — Codex strict re-review FAIL (R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING Required E)
+
+- **Verdict/Action**: FAIL — P1 Required E: the D repair binds direct wrappers but not the full transitive semantic closure; shared `SR_SPIKE_ATR`, shared `ma`, and managed-exit `tick_up` can change without opening every affected P2 epoch.
+- **Required**: Derive and bind the complete target/breakout/shared dependency closure, then add mutation coverage for each repaired missing edge. Full scope and closure conditions are in the register.
+- **Verify**: §6a agent passed the direct-D probes; reviewer found E with fixed-Python mutations. Focused P2/cache/Phase5/weekly/doc pack and `py_compile` completed; public summary remains de-identified. No full lane, provider, live weekly, account, or order path ran.
+- **Next**: Codex：修复
+
+## 2026-07-23 - Codex repair (R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING Required D; pending independent review)
+
+- **Verdict/Action**: Repaired only Required D: P2 now executes separate target-exit and breakout-entry wrappers, and each component fingerprint closes over its executed wrapper plus transitive semantic dependencies. Shared input/resistance dependencies restart both components; target-only RR/pressure dependencies restart target only.
+- **Required**: Independent re-review of Required D. The A/B/C record, cache, and epoch-verdict protections remain unchanged.
+- **Verify**: Pinned Python: P2/cache/Phase5 172 OK (including wrapper, target-only constant, and shared resistance mutation probes); P0 46 OK; P1 33 OK; P3 18 OK; P5 8 OK; governance/weekly/doc/effect-contract 98 OK. No provider, live weekly, account, order, production configuration, P4a, P3 HAC/P3b, or P5b work.
+- **Next**: Claude Code: review
+
+## 2026-07-23 — Codex strict re-review FAIL (A-short first governance knife: P0/P1/P2/P3/P5 admission wiring)
+
+- **Verdict/Action**: FAIL — P1 `R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING` remains open: P2’s executed target wrapper is absent from the component epoch identity, so target-only behavior can mix with old target evidence.
+- **Required**: Bind every executed target/breakout dependency to its exact component or shared surface; add wrapper/transitive-dependency mutation coverage before closing the P2 epoch risk. Full repair detail is in the register.
+- **Verify**: §6a control-plane review; independent read-only agent and reviewer probes reproduced the unpinned wrapper/dependency bypass, while A/B/C and public privacy passed. Fixed-Python focused P0–P5 pack and `py_compile` completed; no full lane, provider, live weekly, account, or order path ran.
+- **Next**: Codex：修复
+
+## 2026-07-23 - Codex repair (R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING; pending independent review)
+
+- **Verdict/Action**: Repaired only the P2 Required A/B/C scope: component-specific target/breakout fingerprints, exact current-epoch record/capture binding, component-separated cache consumption, and epoch-bound review state. No P4a, P3 HAC/P3b, P5b, provider, live weekly, account, order, or production-policy work.
+- **Required**: Independent review of `R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING`; old epochs remain diagnostic and cannot count into a current component epoch or relay a stale pass state.
+- **Verify**: Pinned Python: P2 26 OK; shared-cache 15 OK; P0 v2/adjudication/weekly 46 OK; Phase5 130 OK; static effect-contract positive control 1 OK; repaired files `py_compile` OK.
+- **Next**: Claude Code: review
+
+## 2026-07-23 — Codex independent adversarial review FAIL (A-short first governance knife: P0/P1/P2/P3/P5 admission wiring)
+
+- **Verdict/Action**: FAIL — P1 `R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING`; §6a control-plane gate triggered one independent read-only adversarial review. Scope: changed P0–P5 admission/public-summary chain; no provider, live weekly, account, order, or full-lane pack.
+- **Required**: `R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING` — repair component fingerprint isolation, current-epoch record/capture binding, and epoch-bound verdict state; details and closure tests are in the register.
+- **Verify**: Fixed-Python focused P0–P5 pack and agent registry/P2 pack (30 OK) completed. Probes reproduced cross-reset, current-epoch unbound counts, and stale `pass`; injected ticker/account/price stayed out of the public summary. `git diff --check` OK.
+- **Next**: Codex：修复
+
 ## 2026-07-22 — Codex independent strict re-review PASS (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
 
 - **Verdict/Action**: PASS; the repaired A/B/C second knife is approved and committed on top of capture-only knife `760b5a72`.

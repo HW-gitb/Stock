@@ -318,28 +318,39 @@ def _p2_cluster_pressure(candidates: list[dict], atr: float | None) -> list[dict
     return zones
 
 
-def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_through: str) -> dict:
-    """Build P2's shadow T1/T2 ladder without touching the official M6.7 plan.
-
-    The signal-day bar is deliberately excluded from all resistance baselines.
-    Returned values retain enough private provenance for later capture; callers
-    decide whether to expose a de-identified summary.
-    """
-    series = _p2_price_series((inp or {}).get("price_series") or [], price_data_through)
-    signal = series[-1]
-    prior = series[:-1]
-    indicators = compute_indicators(series)
-    prior_atr = atr14(prior)
-    momentum_confirmed = bool(((inp or {}).get("derived") or {}).get("breakout")) and \
+def _p2_breakout_qualification(inp: dict, signal: dict, prior: list[dict], indicators: dict,
+                               prior_atr: float | None) -> dict:
+    """Freeze P2 breakout-entry eligibility independently of the target ladder."""
+    momentum_confirmed = bool((inp.get("derived") or {}).get("breakout")) and \
         indicators.get("ma10") is not None and signal["close"] >= indicators["ma10"]
-    if len(prior) >= RESISTANCE_LOOKBACK:
-        prior_resistance, _, _ = effective_resistance(prior[-RESISTANCE_LOOKBACK:], prior_atr)
-        true_breakout = bool(momentum_confirmed and prior_resistance is not None and
-                             signal["close"] > prior_resistance)
-    else:
-        prior_resistance = None
-        true_breakout = False
+    if len(prior) < RESISTANCE_LOOKBACK:
+        return {"momentum_confirmed": momentum_confirmed, "true_breakout": False,
+                "prior_20_effective_resistance": None}
+    prior_resistance, _, _ = effective_resistance(prior[-RESISTANCE_LOOKBACK:], prior_atr)
+    return {"momentum_confirmed": momentum_confirmed,
+            "true_breakout": bool(momentum_confirmed and prior_resistance is not None and
+                                   signal["close"] > prior_resistance),
+            "prior_20_effective_resistance": prior_resistance}
 
+
+def _p2_target_ladder_signal(inp: dict, signal: dict, prior: list[dict], indicators: dict,
+                             prior_atr: float | None) -> dict:
+    """Target-exit's own frozen signal dependency; it does not share the breakout component surface."""
+    momentum_confirmed = bool((inp.get("derived") or {}).get("breakout")) and \
+        indicators.get("ma10") is not None and signal["close"] >= indicators["ma10"]
+    if len(prior) < RESISTANCE_LOOKBACK:
+        return {"momentum_confirmed": momentum_confirmed, "true_breakout": False,
+                "prior_20_effective_resistance": None}
+    prior_resistance, _, _ = effective_resistance(prior[-RESISTANCE_LOOKBACK:], prior_atr)
+    return {"momentum_confirmed": momentum_confirmed,
+            "true_breakout": bool(momentum_confirmed and prior_resistance is not None and
+                                   signal["close"] > prior_resistance),
+            "prior_20_effective_resistance": prior_resistance}
+
+
+def _p2_target_pressure_ladder(inp: dict, entry_plan: dict | None, price_data_through: str,
+                               prior: list[dict], prior_atr: float | None, target_signal: dict) -> dict:
+    """Build only the P2 target-exit pressure ladder from its independently frozen signal input."""
     candidates = []
     for window in (20, 60, 120, 252):
         if len(prior) < window:
@@ -349,23 +360,11 @@ def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_t
                            "window": window, "quality": quality})
     candidates.extend(_p2_confirmed_swings(prior))
     zones = _p2_cluster_pressure(candidates, prior_atr)
-
     result = {
-        "target_contract_version": "1.0.0",
-        "price_basis": "qfq",
-        "price_data_through": str(price_data_through),
-        "history_bars": len(prior),
-        "momentum_confirmed": momentum_confirmed,
-        "true_breakout": true_breakout,
-        "prior_20_effective_resistance": prior_resistance,
-        "status": "unavailable",
-        "reason": None,
-        "t1": None,
-        "t2": None,
-        "zones": zones,
-        "rr_at_entry_high": None,
-        "rr_floor": None,
-        "rr_eligible": None,
+        "target_contract_version": "1.0.0", "price_basis": "qfq",
+        "price_data_through": str(price_data_through), "history_bars": len(prior),
+        "status": "unavailable", "reason": None, "t1": None, "t2": None, "zones": zones,
+        "rr_at_entry_high": None, "rr_floor": None, "rr_eligible": None,
     }
     if not isinstance(entry_plan, dict):
         result["reason"] = "missing_official_entry_plan"
@@ -383,8 +382,8 @@ def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_t
     if formal_above:
         result["t1"] = formal_above[0]
         result["t2"] = formal_above[1] if len(formal_above) > 1 else None
-        regime = str((inp or {}).get("market_regime") or "")
-        rr_floor = RR_FLOOR.get(regime, 1.5) + (BREAKOUT_RR_BONUS if momentum_confirmed else 0.0)
+        rr_floor = RR_FLOOR.get(str(inp.get("market_regime") or ""), 1.5) + \
+            (BREAKOUT_RR_BONUS if target_signal["momentum_confirmed"] else 0.0)
         rr = (formal_above[0]["price"] - entry_high) / (entry_high - stop)
         result.update(status="available", rr_at_entry_high=round(rr, 6), rr_floor=rr_floor,
                       rr_eligible=rr >= rr_floor)
@@ -392,12 +391,46 @@ def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_t
             result["status"] = "observe"
             result["reason"] = "real_t1_rr_below_current_gate"
         return result
-    if true_breakout and len(prior) >= 252:
-        result.update(status="trailing_only", reason="true_breakout_no_formal_upper_pressure",
-                      rr_eligible=True)
+    if target_signal["true_breakout"] and len(prior) >= 252:
+        result.update(status="trailing_only", reason="true_breakout_no_formal_upper_pressure", rr_eligible=True)
         return result
     result["reason"] = ("insufficient_history_to_clear_upper_pressure" if len(prior) < 252
                         else "no_formal_upper_pressure_without_true_breakout")
+    return result
+
+
+def _p2_shadow_context(inp: dict, price_data_through: str) -> tuple[list[dict], dict, list[dict], dict, float | None]:
+    """Freeze the PIT-bounded inputs shared by P2's two independent components."""
+    series = _p2_price_series((inp or {}).get("price_series") or [], price_data_through)
+    return series, series[-1], series[:-1], compute_indicators(series), atr14(series[:-1])
+
+
+def build_p2_target_ladder(inp: dict, entry_plan: dict | None, price_data_through: str) -> dict:
+    """Build the target-exit component without executing breakout-entry policy."""
+    series, signal, prior, indicators, prior_atr = _p2_shadow_context(inp, price_data_through)
+    del series  # the component consumes only the frozen signal/prior split below
+    target_signal = _p2_target_ladder_signal(inp or {}, signal, prior, indicators, prior_atr)
+    return _p2_target_pressure_ladder(inp or {}, entry_plan, price_data_through, prior, prior_atr, target_signal)
+
+
+def build_p2_breakout_qualification(inp: dict, price_data_through: str) -> dict:
+    """Build the breakout-entry component without executing target-ladder policy."""
+    series, signal, prior, indicators, prior_atr = _p2_shadow_context(inp, price_data_through)
+    del series
+    return _p2_breakout_qualification(inp or {}, signal, prior, indicators, prior_atr)
+
+
+def build_true_pressure_targets(inp: dict, entry_plan: dict | None, price_data_through: str) -> dict:
+    """Build P2's shadow T1/T2 ladder without touching the official M6.7 plan.
+
+    The signal-day bar is deliberately excluded from all resistance baselines.
+    Returned values retain enough private provenance for later capture; callers
+    decide whether to expose a de-identified summary.
+    """
+    # Compatibility facade for direct callers.  The P2 runner invokes the two
+    # component wrappers separately so their epoch identities remain isolated.
+    result = build_p2_target_ladder(inp, entry_plan, price_data_through)
+    result.update(build_p2_breakout_qualification(inp, price_data_through))
     return result
 
 

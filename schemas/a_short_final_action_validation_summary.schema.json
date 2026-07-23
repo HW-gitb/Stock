@@ -3,7 +3,7 @@
   "title": "a_short_final_action_validation_summary",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status", "comparison_only", "automatic_policy_switch", "verdict", "evidence_epoch_fingerprint", "latest_evidence_as_of", "source_hash", "round_trip_cost_pct", "hold_based_forward_weeks", "full_edge_forward_weeks", "hold_based", "full_edge", "first_forward_live_as_of", "reminders", "message", "production_unchanged"],
+  "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status", "comparison_only", "automatic_policy_switch", "verdict", "evidence_epoch_fingerprint", "latest_evidence_as_of", "source_hash", "admissions", "round_trip_cost_pct", "hold_based_forward_weeks", "full_edge_forward_weeks", "hold_based", "full_edge", "first_forward_live_as_of", "reminders", "message", "production_unchanged"],
   "properties": {
     "schema_name": {"const": "a_short_final_action_validation_summary"},
     "schema_version": {"const": "1.0.0"},
@@ -17,6 +17,7 @@
     "evidence_epoch_fingerprint": {"type": ["string", "null"]},
     "latest_evidence_as_of": {"type": ["string", "null"]},
     "source_hash": {"type": ["string", "null"]},
+    "admissions": {"type": "object", "minProperties": 3},
     "round_trip_cost_pct": {"const": 0.16},
     "hold_based_forward_weeks": {"type": "integer", "minimum": 0},
     "full_edge_forward_weeks": {"type": "integer", "minimum": 0},

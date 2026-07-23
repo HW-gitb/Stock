@@ -20,16 +20,20 @@ from engine.a_short_factor_comparison_v2 import ComparisonV2Error, capture_v2_we
 from engine.a_short_managed_exit import evaluate_managed_exit  # noqa: E402
 from runners.a_short_final_action_validation_runner import (  # noqa: E402
     _active_epoch as active_p3_epoch,
+    _capture_digest as p3_capture_digest,
     _initial_ledger as new_p3_ledger,
     _load_execution_cache as load_p3_cache,
 )
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
 from runners.a_short_official_operation_evidence import _boundary, _digest  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
+    TRACK_ADMISSIONS,
     _active_epoch as active_p2_epoch,
+    _capture_digest as p2_capture_digest,
     _load_execution_cache as load_p2_cache,
     _new_ledger as new_p2_ledger,
 )
+from engine.a_short_experiment_admission_registry import admission_snapshot  # noqa: E402
 
 
 DECISION_DATE = "20260202"
@@ -178,9 +182,29 @@ def datetime_from(value: str) -> date:
 
 def _write_p2_ledger(path: Path, record: dict) -> None:
     ledger = new_p2_ledger()
-    epoch = active_p2_epoch(ledger, create=True)
-    assert epoch is not None
-    epoch["records"].append(record)
+    decision_date = record["decision_date"]
+    source = {
+        "run_id": "cache-build-test", "candidate_digest": "a" * 64,
+        "official_m67_sha256": "b" * 64, "price_data_through": decision_date,
+        **(record.get("source_identity") or {}),
+    }
+    for track, entry_key, difference_key in (
+            ("target_exit", "target_entries", "target_difference"),
+            ("breakout_entry", "breakout_entries", "breakout_difference")):
+        entries = record.get(entry_key) or []
+        if not entries:
+            continue
+        epoch = active_p2_epoch(ledger, create=True, track=track)
+        assert epoch is not None
+        current = {
+            "decision_date": decision_date, "forward_eligible": bool(record.get("forward_eligible")),
+            "source_identity": source, "component_id": track,
+            "admission_binding": admission_snapshot(TRACK_ADMISSIONS[track]),
+            "component_epoch_fingerprint": epoch["contract_fingerprint"],
+            entry_key: entries, difference_key: bool(record.get(difference_key, True)),
+        }
+        current["capture_sha256"] = p2_capture_digest(current)
+        epoch["records"].append(current)
     path.write_text(json.dumps(ledger), encoding="utf-8")
 
 
@@ -188,7 +212,13 @@ def _write_p3_ledger(path: Path, record: dict) -> None:
     ledger = new_p3_ledger()
     epoch = active_p3_epoch(ledger, create=True)
     assert epoch is not None
-    epoch["records"].append(record)
+    current = dict(record)
+    current["epoch_fingerprint"] = epoch["contract_fingerprint"]
+    current["admission_bindings"] = admission_snapshot(
+        "p3_selected_vs_candidate_pool", "p3_selected_vs_csi1000", "p3_managed_exit_vs_hold"
+    )
+    current["capture_sha256"] = p3_capture_digest(current)
+    epoch["records"].append(current)
     path.write_text(json.dumps(ledger), encoding="utf-8")
 
 
@@ -450,17 +480,14 @@ class ComparisonV2CacheBuildTests(unittest.TestCase):
             root.mkdir(parents=True)
             p2 = Path(tmp) / "logs" / "a_short_target_policy_comparison.json"
             p2.parent.mkdir(parents=True)
-            ledger = new_p2_ledger()
-            active = active_p2_epoch(ledger, create=True)
-            assert active is not None
-            active["records"].append({
+            _write_p2_ledger(p2, {
                 "decision_date": DECISION_DATE, "forward_eligible": True,
                 "target_entries": [{
                     "ts_code": "600100.SH", "changed": True,
                     "baseline": {}, "challenger": {}, "outcomes": {"status": "pending"},
                 }],
-                "breakout_entries": [],
             })
+            ledger = json.loads(p2.read_text(encoding="utf-8"))
             ledger["epochs"].append({
                 "epoch_id": "stale", "contract_fingerprint": "stale",
                 "records": [{

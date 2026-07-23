@@ -1,12 +1,14 @@
+import copy
 import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from engine.a_short_regime_action_comparison import (
     build_action_record, m67_provenance, merge_action_records, summarize_action_records,
     validate_action_record, candidate_effect_eligibility, build_candidate_effect_record,
-    summarize_candidate_effect_records,
+    summarize_candidate_effect_records, candidate_effect_policy_fingerprint, validate_candidate_effect_summary,
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
 
@@ -120,6 +122,18 @@ def _candidate_record(as_of, ts_code, stock, *, h20=None, mode="live", regime="d
 
 
 class CandidateEffectTests(unittest.TestCase):
+    def test_public_admission_rejects_private_or_result_payload_fields(self):
+        summary = summarize_candidate_effect_records([])
+        for field in ("ts_code", "account", "holding", "price", "return"):
+            bad = copy.deepcopy(summary)
+            bad["admission"]["p1_regime_action_proxy"][field] = "private"
+            with self.assertRaises(ValueError):
+                validate_candidate_effect_summary(bad)
+        stale = copy.deepcopy(summary)
+        stale["policy"]["policy_fingerprint"] = "0" * 64
+        with self.assertRaises(ValueError):
+            validate_candidate_effect_summary(stale)
+
     def _twelve_weeks(self, stock, *, h20=None):
         start = __import__("datetime").date(2026, 7, 6)
         rows = []
@@ -203,6 +217,12 @@ class CandidateEffectTests(unittest.TestCase):
         rows[-1]["policy_fingerprint"] = "0" * 64
         with self.assertRaises(ValueError):
             summarize_candidate_effect_records(rows)
+
+    def test_runtime_source_drift_changes_p1_policy_fingerprint(self):
+        baseline = candidate_effect_policy_fingerprint()
+        with patch("engine.a_short_regime_action_comparison._runtime_policy_source_fingerprint",
+                   return_value="runtime-source-drift"):
+            self.assertNotEqual(candidate_effect_policy_fingerprint(), baseline)
 
     def test_duplicate_asof_and_stock_cannot_double_count(self):
         row = _candidate_record("20260706", "000001.SZ", -1.0)

@@ -4,7 +4,7 @@
   "description": "P1 V14.3 per-stock candidate-effect aggregate. It is comparison-only evidence: the baseline is the current build without regime-driven candidate action; defense/contraction cash 0% is a simplified proxy, not a final production defense policy.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "policy", "evidence_progress", "data_quality", "operation_effect", "selection_accuracy", "verdict", "boundary"],
+  "required": ["schema_name", "schema_version", "policy", "admission", "evidence_progress", "data_quality", "operation_effect", "selection_accuracy", "verdict", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_regime_candidate_effect_summary"},
     "schema_version": {"const": "1.0.0"},
@@ -17,6 +17,13 @@
         "policy_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
         "baseline_description": {"const": "current production build without regime-driven candidate action"},
         "candidate_proxy_description": {"const": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"}
+      }
+    },
+    "admission": {
+      "type": "object", "additionalProperties": false,
+      "required": ["p1_regime_action_proxy"],
+      "properties": {
+        "p1_regime_action_proxy": {"$ref": "#/definitions/admission_snapshot"}
       }
     },
     "evidence_progress": {
@@ -46,5 +53,28 @@
     "selection_accuracy": {"type": "object", "additionalProperties": false, "required": ["forbidden_stock_count", "forbidden_stock_underperformed_csi1000_count", "status"], "properties": {"forbidden_stock_count": {"type": "integer", "minimum": 0}, "forbidden_stock_underperformed_csi1000_count": {"type": "integer", "minimum": 0}, "status": {"enum": ["not_evaluable", "supportive", "not_supportive", "mixed"]}}},
     "verdict": {"enum": ["candidate_better", "baseline_better", "no_material_difference", "insufficient_data"]},
     "boundary": {"type": "object", "additionalProperties": false, "required": ["comparison_only", "automatic_production_switch"], "properties": {"comparison_only": {"const": true}, "automatic_production_switch": {"const": false}}}
+  },
+  "definitions": {
+    "admission_snapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["experiment_id", "component_id", "track_mode", "identity_sha256", "statistical_contract_sha256", "pit_forward_contract_sha256", "dependency_components"],
+      "properties": {
+        "experiment_id": {"const": "a_short_p1_regime_action_proxy"},
+        "component_id": {"const": "regime_action_proxy_policy"},
+        "track_mode": {"const": "diagnostic_only"},
+        "identity_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "statistical_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "pit_forward_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "dependency_components": {
+          "type": "array", "minItems": 1,
+          "items": {"type": "object", "additionalProperties": false,
+            "required": ["component_id", "baseline_definition_sha256"],
+            "properties": {
+              "component_id": {"type": "string", "minLength": 1},
+              "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            }}
+        }
+      }
+    }
   }
 }

@@ -20,8 +20,11 @@ from engine.a_short_managed_exit import (  # noqa: E402
     net_excess_after_round_trip_cost_pct,
 )
 from runners.a_short_final_action_validation_runner import (  # noqa: E402
+    FinalActionValidationError,
     ROUND_TRIP_COST_PCT,
+    _contract_fingerprint,
     _freeze_plan as freeze_p3_plan,
+    _load_or_initialize,
     capture_after_published_weekly,
     settle_and_summarize,
     validate_public_summary,
@@ -86,6 +89,18 @@ def _execution_rows_with_stale_unverified_action() -> list[dict]:
 
 
 class FinalActionValidationTests(unittest.TestCase):
+    def test_forward_tracker_runtime_drift_opens_a_new_epoch(self):
+        baseline = _contract_fingerprint()
+        tracker_source = ROOT / "runners" / "forward_tracker.py"
+        original_read_bytes = Path.read_bytes
+
+        def changed_read_bytes(path: Path) -> bytes:
+            content = original_read_bytes(path)
+            return content + b"\n# adversarial forward-tracker semantic drift\n" if path == tracker_source else content
+
+        with patch.object(Path, "read_bytes", changed_read_bytes):
+            self.assertNotEqual(_contract_fingerprint(), baseline)
+
     def _bundle(self, directory: Path) -> tuple[Path, Path, list[dict]]:
         weekly = {
             "as_of": AS_OF,
@@ -176,6 +191,35 @@ class FinalActionValidationTests(unittest.TestCase):
                                             summary_path=directory / "summary.json", markdown_path=directory / "summary.md")
             self.assertEqual(summary["hold_based"]["forward_weeks"], 0)
 
+    def test_old_epoch_is_diagnostic_only_and_rebound_capture_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            directory = Path(td)
+            out, receipt, candidates = self._bundle(directory)
+            tracker = directory / "forward_tracker.csv"
+            _tracker(tracker)
+            ledger, public, markdown = directory / "ledger.json", directory / "summary.json", directory / "summary.md"
+            capture_after_published_weekly(
+                root=ledger, decision_date=AS_OF, candidates=candidates, source_identity=IDENTITY,
+                out_path=out, receipt_path=receipt, forward_eligible=True, tracker_path=tracker,
+                summary_path=public, markdown_path=markdown)
+            original = json.loads(ledger.read_text(encoding="utf-8"))
+            rebound = json.loads(json.dumps(original))
+            rebound["epochs"][0]["contract_fingerprint"] = "f" * 64
+            rebound["epochs"][0]["records"][0]["epoch_fingerprint"] = "f" * 64
+            # The copied evidence cannot be made current merely by changing its
+            # public epoch fields: capture_sha256 binds the original epoch input.
+            ledger.write_text(json.dumps(rebound), encoding="utf-8")
+            with patch("runners.a_short_final_action_validation_runner._contract_fingerprint", return_value="f" * 64):
+                with self.assertRaises(FinalActionValidationError):
+                    _load_or_initialize(ledger)
+
+            ledger.write_text(json.dumps(original), encoding="utf-8")
+            with patch("runners.a_short_final_action_validation_runner._contract_fingerprint", return_value="e" * 64):
+                summary = settle_and_summarize(root=ledger, as_of=AS_OF, tracker_path=tracker,
+                                                summary_path=public, markdown_path=markdown)
+            self.assertEqual(summary["hold_based"]["forward_weeks"], 0)
+            self.assertEqual(summary["full_edge"]["forward_weeks"], 0)
+
     def test_p3b_reminder_counts_only_complete_external_public_verdicts(self):
         with tempfile.TemporaryDirectory() as td:
             directory = Path(td)
@@ -191,4 +235,4 @@ class FinalActionValidationTests(unittest.TestCase):
             with patch("runners.a_short_final_action_validation_runner.P3B_EXTERNAL_PUBLIC_SUMMARIES",
                        (invalid, valid)):
                 from runners.a_short_final_action_validation_runner import _valid_external_public_verdicts
-                self.assertEqual(_valid_external_public_verdicts(), 1)
+                self.assertEqual(_valid_external_public_verdicts(), 0)

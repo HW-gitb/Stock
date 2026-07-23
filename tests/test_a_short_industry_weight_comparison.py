@@ -18,10 +18,12 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
-    PROGRAM_ID, _boundary, _digest, build_public_progress, cache_consumer_windows,
+    ADMISSION_IDS, PROGRAM_ID, _boundary, _contract_fingerprint, _digest, _epoch_id, _runtime_source_fingerprint,
+    build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
 )
+from engine.a_short_experiment_admission_registry import admission_snapshot  # noqa: E402
 from engine.egs_industry_heat import build_weight_comparison  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
 
@@ -157,6 +159,13 @@ class IndustryWeightComparisonTests(unittest.TestCase):
         self.assertTrue(governance["boundary"]["comparison_only"])
         self.assertFalse(governance["boundary"]["automatic_policy_switch"])
 
+    def test_runtime_source_drift_changes_p5_contract_fingerprint(self):
+        governance = load_governance()
+        baseline = _contract_fingerprint(governance)
+        with mock.patch("engine.a_short_industry_weight_comparison._runtime_source_fingerprint",
+                        return_value="runtime-source-drift"):
+            self.assertNotEqual(_contract_fingerprint(governance), baseline)
+
     def test_capture_is_source_bound_idempotent_and_drift_becomes_private_conflict(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _p5_root(tmp)
@@ -225,12 +234,16 @@ class IndustryWeightComparisonTests(unittest.TestCase):
     def test_public_summary_is_deidentified_and_p5b_trigger_is_data_derived(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _p5_root(tmp); root.mkdir(parents=True)
-            fingerprint, epoch = "a" * 64, "b" * 64
+            fingerprint = _contract_fingerprint(load_governance())
+            epoch = _epoch_id(fingerprint)
             for index in range(36):
                 decision = (date(2026, 1, 1) + timedelta(days=index)).strftime("%Y%m%d")
+                capture_payload = {"admission_bindings": admission_snapshot(*ADMISSION_IDS),
+                                   "contract_fingerprint": fingerprint}
+                capture_payload["capture_payload_sha256"] = _digest(capture_payload)
                 capture = {"schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
                     "record_type": "capture", "program_id": PROGRAM_ID, "decision_date": decision, "epoch_id": epoch,
-                    "contract_fingerprint": fingerprint, "payload": {}, "boundary": _boundary()}
+                    "contract_fingerprint": fingerprint, "payload": capture_payload, "boundary": _boundary()}
                 outcome = {"schema_name": "a_short_industry_weight_comparison_private_record", "schema_version": "1.0.0",
                     "record_type": "outcome", "program_id": PROGRAM_ID, "decision_date": decision, "epoch_id": epoch,
                     "contract_fingerprint": fingerprint, "payload": {"questions": [{"question_id": question,

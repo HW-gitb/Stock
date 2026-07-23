@@ -24,6 +24,60 @@
     "review_state": "not_due"
   },
   "execution_data_status": "unavailable",
+  "admissions": {
+    "p2_target_exit_policy": {
+      "experiment_id": "a_short_p2_target_exit_policy",
+      "component_id": "target_exit_policy",
+      "track_mode": "switchable",
+      "identity_sha256": "46b2c6e79e27d2c60b64a1ad08a7f7f6ac220dfe639ae034f88e89c10f6247fa",
+      "statistical_contract_sha256": "abbf0752bcafc9d9982dbdbf1fb3b99e90c9354412875e2fb0e0ea55e6c83c57",
+      "pit_forward_contract_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
+      "dependency_components": [
+        {
+          "component_id": "published_m67_bundle",
+          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04"
+        },
+        {
+          "component_id": "target_exit_baseline",
+          "baseline_definition_sha256": "a83ab238fb48dd581b5e3d1e83efac8721af24e6158289b6c1e62589a2b0b9cc"
+        },
+        {
+          "component_id": "managed_exit_contract",
+          "baseline_definition_sha256": "ccd0bc0b5044a1abf196d607d5491c1785a4f33e89d920be362d2326c45c5734"
+        },
+        {
+          "component_id": "qfq_price_identity",
+          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81"
+        }
+      ]
+    },
+    "p2_breakout_entry_policy": {
+      "experiment_id": "a_short_p2_breakout_entry_policy",
+      "component_id": "breakout_entry_policy",
+      "track_mode": "switchable",
+      "identity_sha256": "10a0934e69865bb8f57108a12f8f2deaaf936f4351cf2c5908e2f7df09027979",
+      "statistical_contract_sha256": "3f5ac25c8825ddef03d64bdb0e31b07bcf8cc571ba11a70988202ec3c5a49126",
+      "pit_forward_contract_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81",
+      "dependency_components": [
+        {
+          "component_id": "published_m67_bundle",
+          "baseline_definition_sha256": "a4f4d943692080d94c4dee578ce3647617a107ef59428952234a92ff45addf04"
+        },
+        {
+          "component_id": "breakout_entry_baseline",
+          "baseline_definition_sha256": "1e1bf158d2d60209a23371ae6189d4a3bb890b3e1872351b6c1fdc591b9cd856"
+        },
+        {
+          "component_id": "managed_exit_contract",
+          "baseline_definition_sha256": "2bde5e31db84c69ff1cda2947eed0fb7970996aa32d9cbbffc1e22e64a0eef37"
+        },
+        {
+          "component_id": "qfq_price_identity",
+          "baseline_definition_sha256": "efc617895a669ddd2235aa0068336805f135e892e46ffe9814001376342d8c81"
+        }
+      ]
+    }
+  },
   "message": "P2 目标策略：累计中；目标退出 0/12 周、差异 0/8 周、计划 0/20；突破轨 0/12 周、差异 0/8 周、受影响计划 0/20。",
   "production_unchanged": true
 }

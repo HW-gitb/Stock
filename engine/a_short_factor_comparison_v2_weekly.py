@@ -21,10 +21,13 @@ from engine.a_short_factor_comparison_v2 import (
     ROOT,
     _digest,
     _private_root,
+    PUBLIC_PROGRESS_SCHEMA_PATH,
+    build_v2_public_progress,
     capture_v2_week,
     settle_v2_from_daily_payload,
 )
 from engine.a_short_factor_comparison_v2_adjudication import adjudicate_v2_from_private_ledger
+from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
 DAILY_CACHE_SCHEMA_PATH = ROOT / "schemas" / "a_short_factor_comparison_v2_daily_cache.schema.json"
@@ -34,7 +37,21 @@ PUBLIC_STATUS_CURRENT = "evidence_current"
 PUBLIC_STATUS_UNAVAILABLE = "evidence_unavailable_or_inconclusive"
 
 
-def _public_summary(status: str, reminder_count: int = 0) -> dict:
+def _admission_binding() -> str:
+    ids = ("p0_d1_entry_anchor_entry_ma_pullback", "p0_d1_entry_anchor_entry_range_pullback",
+           "p0_d3_iv_policy_iv_step_down", "p0_d3_iv_policy_iv_joint_stress")
+    return _digest(admission_snapshot(*ids))
+
+
+def _public_admission_snapshot() -> dict:
+    return admission_snapshot(
+        "p0_d1_entry_anchor_entry_ma_pullback", "p0_d1_entry_anchor_entry_range_pullback",
+        "p0_d3_iv_policy_iv_step_down", "p0_d3_iv_policy_iv_joint_stress",
+    )
+
+
+def _public_summary(status: str, reminder_count: int = 0, *, root: str | Path | None,
+                    as_of: str) -> dict:
     if status == PUBLIC_STATUS_NOT_CONFIGURED:
         message = "对比轨 v2：未配置；未读取或写入对比证据，生产结论不变。"
     elif status == PUBLIC_STATUS_CURRENT:
@@ -43,10 +60,13 @@ def _public_summary(status: str, reminder_count: int = 0) -> dict:
         message = "对比轨 v2：证据不可用或结论未定；不显示旧提醒，生产结论不变。"
     else:
         raise ComparisonV2Error("v2 public summary status is unknown")
+    progress = build_v2_public_progress(root=root, as_of=as_of)
     return {
         "summary_id": "a_short_factor_comparison_v2",
         "status": status,
         "reminder_count": reminder_count,
+        "admission_binding": _admission_binding(),
+        "public_progress": progress,
         "message": message,
         "production_unchanged": True,
     }
@@ -55,18 +75,27 @@ def _public_summary(status: str, reminder_count: int = 0) -> dict:
 def validate_v2_public_summary(summary: dict) -> None:
     """Reject a weekly surface that could relay a stale or private reminder."""
     if not isinstance(summary, dict) or set(summary) != {
-            "summary_id", "status", "reminder_count", "message", "production_unchanged"}:
+            "summary_id", "status", "reminder_count", "admission_binding", "public_progress", "message",
+            "production_unchanged"}:
         raise ComparisonV2Error("v2 public weekly summary shape drifted")
     status = summary.get("status")
     count = summary.get("reminder_count")
     if summary.get("summary_id") != "a_short_factor_comparison_v2" or \
             status not in {PUBLIC_STATUS_NOT_CONFIGURED, PUBLIC_STATUS_CURRENT, PUBLIC_STATUS_UNAVAILABLE} or \
             not isinstance(count, int) or isinstance(count, bool) or count < 0 or \
-            summary.get("production_unchanged") is not True:
+            summary.get("production_unchanged") is not True or summary.get("admission_binding") != _admission_binding():
         raise ComparisonV2Error("v2 public weekly summary fields are invalid")
+    try:
+        jsonschema.validate(summary["public_progress"], json.loads(PUBLIC_PROGRESS_SCHEMA_PATH.read_text(encoding="utf-8")))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, jsonschema.ValidationError) as exc:
+        raise ComparisonV2Error("v2 public progress is invalid or contains a private field") from exc
+    if summary["public_progress"].get("admissions") != _public_admission_snapshot():
+        raise ComparisonV2Error("v2 public progress admission binding drifted")
     if status != PUBLIC_STATUS_CURRENT and count != 0:
         raise ComparisonV2Error("unavailable v2 weekly summary must not carry a stale reminder count")
-    if summary != _public_summary(status, count):
+    expected_message = _public_summary(status, count, root=None,
+                                       as_of=summary["public_progress"]["as_of"])["message"]
+    if summary["message"] != expected_message:
         raise ComparisonV2Error("v2 public weekly summary message drifted")
 
 
@@ -102,7 +131,7 @@ def load_v2_daily_cache(*, root: str | Path, daily_cache_path: str | Path | None
 
 
 def settle_and_summarize_v2_weekly(*, root: str | Path | None,
-                                   daily_cache_path: str | Path | None = None) -> dict:
+                                   daily_cache_path: str | Path | None = None, as_of: str) -> dict:
     """Settle then adjudicate before M6.7, returning only a de-identified current summary.
 
     An unavailable cache, corrupt private state, or any integrity failure intentionally
@@ -110,32 +139,32 @@ def settle_and_summarize_v2_weekly(*, root: str | Path | None,
     a fresh M6.7 report.
     """
     if root is None:
-        return _public_summary(PUBLIC_STATUS_NOT_CONFIGURED)
+        return _public_summary(PUBLIC_STATUS_NOT_CONFIGURED, root=None, as_of=as_of)
     try:
         private_root = _private_root(root)
         if not private_root.exists():
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
         payload = load_v2_daily_cache(root=private_root, daily_cache_path=daily_cache_path)
         settlement = settle_v2_from_daily_payload(root=private_root, daily_payload=payload)
         if settlement.get("status") != "settled_from_existing_cache":
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
         adjudication = adjudicate_v2_from_private_ledger(root=private_root)
         if adjudication.get("status") != "adjudicated_private_v2":
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
         reminder_path = private_root / "reminder.json"
         reminder = json.loads(reminder_path.read_text(encoding="utf-8"))
         if reminder != adjudication.get("reminder") or \
                 reminder.get("schema_name") != "a_short_factor_comparison_v2_reminder" or \
                 reminder.get("production_unchanged") is not True or \
                 not isinstance(reminder.get("reminders"), list):
-            return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
-        return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]))
+            return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=private_root, as_of=as_of)
+        return _public_summary(PUBLIC_STATUS_CURRENT, len(reminder["reminders"]), root=private_root, as_of=as_of)
     except Exception:
         # Production seam: the comparison track must NEVER block the weekly run, so this
         # catches any Exception (not a fixed tuple) — a future latent uncaught type in
         # settle/adjudicate still degrades to "unavailable", never propagates. BaseException
         # (KeyboardInterrupt/SystemExit) is intentionally not caught.
-        return _public_summary(PUBLIC_STATUS_UNAVAILABLE)
+        return _public_summary(PUBLIC_STATUS_UNAVAILABLE, root=root, as_of=as_of)
 
 
 def _verify_published_weekly_bundle(*, out_path: str | Path, receipt_path: str | Path,

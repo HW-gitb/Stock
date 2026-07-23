@@ -4,9 +4,24 @@
   "policy": {
     "policy_id": "v14_3_candidate_effect_proxy_v1",
     "policy_epoch": "20260719_p1_cut1_v1",
-    "policy_fingerprint": "42ff2e3b49bc38bad52070352d518b9f6d306d7c373209af2692bd68567487eb",
+    "policy_fingerprint": "709e7a1f63598406fa602571ae3b3453465af5d5720b43579fb371d857749a04",
     "baseline_description": "current production build without regime-driven candidate action",
     "candidate_proxy_description": "comparison-only simplified proxy: defense and contraction forbid a new build and use cash return 0%; this is not a final production V14.3 defense policy"
+  },
+  "admission": {
+    "p1_regime_action_proxy": {
+      "experiment_id": "a_short_p1_regime_action_proxy",
+      "component_id": "regime_action_proxy_policy",
+      "track_mode": "diagnostic_only",
+      "identity_sha256": "179e45e8ccb467f0efd752e3c148fb613cf2b6be607fe040ed7f8a292b8129b6",
+      "statistical_contract_sha256": "a3853e363d60a03c575a5a59f4edcec0a85dc7cf0521aecc53c0f36ecccd61aa",
+      "pit_forward_contract_sha256": "f85e198d077bddef21f2afca46eeecb2913fbfd39978caa77b1395e8acc51e23",
+      "dependency_components": [
+        {"component_id": "v14_2_baseline_policy", "baseline_definition_sha256": "20b87e99a82105fdf34a5ab3044ba57765d9896d1354158ce39d95443345471f"},
+        {"component_id": "candidate_universe", "baseline_definition_sha256": "f5fb8f054b0ed91148eabd35292ddc8e76fd79e15de2f3274ec6af5bff74f979"},
+        {"component_id": "csi1000_benchmark", "baseline_definition_sha256": "90d34753795cd08ee452031ff3ad2186c95c9a4a05581da29198c0a36e341ed3"}
+      ]
+    }
   },
   "evidence_progress": {
     "forward_live_weeks": 0,

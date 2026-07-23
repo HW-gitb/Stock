@@ -30,6 +30,7 @@ from engine.a_short_managed_exit import (
     net_excess_after_round_trip_cost_pct,
 )
 from runners.a_short_phase5_engine import ATR_MULT
+from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -46,6 +47,7 @@ HOLD_REVIEW_WEEKS = 12
 FULL_EDGE_REVIEW_WEEKS = 12
 HAC_REVIEW_WEEKS = 26
 HAC_MIN_PLANS = 20
+ADMISSION_IDS = ("p3_selected_vs_candidate_pool", "p3_selected_vs_csi1000", "p3_managed_exit_vs_hold")
 P3B_EXTERNAL_PUBLIC_SUMMARIES = (
     ROOT / "research" / "results" / "a_short" / "regime_candidate_effect_summary.json",
     ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json",
@@ -95,7 +97,13 @@ def _contract_fingerprint() -> str:
         Path(__file__),
         ROOT / "engine" / "a_short_managed_exit.py",
         ROOT / "runners" / "a_short_phase5_engine.py",
+        ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py",
+        ROOT / "runners" / "forward_tracker.py",
+        ROOT / "runners" / "a_short_weekly_pipeline.py",
+        ROOT / "schemas" / "a_short_weekly_report.schema.json",
+        ROOT / "schemas" / "a_short_m67_effect_contract.json",
         ROOT / "presets" / "a_short_m67_runtime_policy_20260715.json",
+        SCHEMA_PATH,
     )
     chunks: list[bytes] = []
     for path in paths:
@@ -103,7 +111,8 @@ def _contract_fingerprint() -> str:
             chunks.append(path.read_bytes())
         except OSError as exc:
             raise FinalActionValidationError("contract_fingerprint_unavailable") from exc
-    return hashlib.sha256(b"\0".join(chunks)).hexdigest()
+    return _digest({"source_sha256": hashlib.sha256(b"\0".join(chunks)).hexdigest(),
+                    "admission_bindings": admission_snapshot(*ADMISSION_IDS)})
 
 
 def _initial_ledger() -> dict[str, Any]:
@@ -114,6 +123,12 @@ def _initial_ledger() -> dict[str, Any]:
     }
 
 
+def _capture_digest(record: dict[str, Any]) -> str:
+    """Bind immutable capture input while allowing later settlement/conflict annotations."""
+    return _digest({key: value for key, value in record.items()
+                    if key not in {"capture_sha256", "hold_result", "full_edge_result", "conflict"}})
+
+
 def _validate_ledger(ledger: dict[str, Any]) -> None:
     if not isinstance(ledger, dict) or ledger.get("schema_name") != "a_short_final_action_validation_private_ledger":
         raise FinalActionValidationError("private_ledger_contract_invalid")
@@ -121,6 +136,8 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
     if not isinstance(epochs, list):
         raise FinalActionValidationError("private_ledger_contract_invalid")
     fingerprints: set[str] = set()
+    current_fingerprint = _contract_fingerprint()
+    current_admissions = admission_snapshot(*ADMISSION_IDS)
     for epoch in epochs:
         if not isinstance(epoch, dict) or not isinstance(epoch.get("contract_fingerprint"), str):
             raise FinalActionValidationError("private_ledger_contract_invalid")
@@ -128,10 +145,18 @@ def _validate_ledger(ledger: dict[str, Any]) -> None:
         if fingerprint in fingerprints or not isinstance(epoch.get("records"), list):
             raise FinalActionValidationError("private_ledger_contract_invalid")
         fingerprints.add(fingerprint)
+        is_current_epoch = fingerprint == current_fingerprint
+        if is_current_epoch and epoch.get("admission_bindings") != current_admissions:
+            raise FinalActionValidationError("private_ledger_admission_binding_drifted")
         dates: set[str] = set()
         for record in epoch["records"]:
             if not isinstance(record, dict):
                 raise FinalActionValidationError("private_ledger_contract_invalid")
+            if is_current_epoch and (
+                    record.get("epoch_fingerprint") != fingerprint or
+                    record.get("admission_bindings") != current_admissions or
+                    record.get("capture_sha256") != _capture_digest(record)):
+                raise FinalActionValidationError("private_record_epoch_binding_drifted")
             decision_date = _date(record.get("decision_date"))
             if decision_date in dates:
                 raise FinalActionValidationError("private_ledger_duplicate_week")
@@ -155,7 +180,7 @@ def _active_epoch(ledger: dict[str, Any], *, create: bool) -> dict[str, Any] | N
     existing = next((epoch for epoch in ledger["epochs"] if epoch["contract_fingerprint"] == fingerprint), None)
     if existing is not None or not create:
         return existing
-    epoch = {"contract_fingerprint": fingerprint, "records": []}
+    epoch = {"contract_fingerprint": fingerprint, "records": [], "admission_bindings": admission_snapshot(*ADMISSION_IDS)}
     ledger["epochs"].append(epoch)
     return epoch
 
@@ -298,14 +323,15 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, cand
                 "ts_code": row["ts_code"], "run_id": row["run_id"], "candidate_digest": row["candidate_digest"],
             } for row in tracker_rows]),
         },
+        "admission_bindings": admission_snapshot(*ADMISSION_IDS),
+        "epoch_fingerprint": _contract_fingerprint(),
         "pool_codes": pool_codes,
         "selected_codes": selected_codes,
         "managed_plans": managed_plans,
         "hold_result": {"status": "pending"},
         "full_edge_result": {"status": "pending"},
     }
-    record["capture_sha256"] = _digest({key: value for key, value in record.items()
-                                        if key not in {"hold_result", "full_edge_result"}})
+    record["capture_sha256"] = _capture_digest(record)
     epoch = _active_epoch(ledger, create=True)
     assert epoch is not None
     existing = next((item for item in epoch["records"] if item["decision_date"] == decision_date), None)
@@ -463,6 +489,26 @@ def _is_sha256(value: object) -> bool:
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
+def _is_current_external_public_summary(path: Path, payload: dict[str, Any]) -> bool:
+    """Accept only a named current-epoch lane summary, never a hash-shaped stand-in."""
+    try:
+        if path.name == "regime_candidate_effect_summary.json":
+            from engine.a_short_regime_action_comparison import validate_candidate_effect_summary
+            validate_candidate_effect_summary(payload)
+            return True
+        if path.name == "target_policy_comparison_summary.json":
+            from runners.a_short_target_policy_comparison_runner import validate_public_summary
+            validate_public_summary(payload)
+            return True
+        if path.name == "industry_weight_comparison_progress_summary.json":
+            from engine.a_short_industry_weight_comparison import validate_public_progress
+            validate_public_progress(payload)
+            return True
+    except Exception:
+        return False
+    return False
+
+
 def _valid_external_public_verdicts() -> int:
     """Count only future public tracks with a complete, independently auditable verdict surface."""
     count = 0
@@ -470,6 +516,8 @@ def _valid_external_public_verdicts() -> int:
         try:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(payload, dict) or not _is_current_external_public_summary(path, payload):
             continue
         verdict = payload.get("verdict")
         progress = payload.get("evidence_progress") or payload.get("progress")
@@ -543,6 +591,7 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         "evidence_epoch_fingerprint": epoch_fingerprint,
         "latest_evidence_as_of": max((record["decision_date"] for record in valid), default=None),
         "source_hash": latest_source_hash,
+        "admissions": admission_snapshot(*ADMISSION_IDS),
         "round_trip_cost_pct": ROUND_TRIP_COST_PCT,
         "hold_based_forward_weeks": len(holds),
         "full_edge_forward_weeks": len(edges),
@@ -576,6 +625,7 @@ def unavailable_public_summary(as_of: str) -> dict[str, Any]:
         "first_forward_live_as_of": None,
         "verdict": "not_adjudicated", "evidence_epoch_fingerprint": None,
         "latest_evidence_as_of": None, "source_hash": None,
+        "admissions": admission_snapshot(*ADMISSION_IDS),
         "hold_based_forward_weeks": 0, "full_edge_forward_weeks": 0,
         "reminders": [_reminder("p3_evidence_unavailable", "unavailable", 0, HOLD_REVIEW_WEEKS,
                                 "P3 证据不可用；不复用旧提醒，正式 M6.7 不变。")],
@@ -594,6 +644,8 @@ def validate_public_summary(summary: dict[str, Any]) -> None:
     if summary.get("comparison_only") is not True or summary.get("automatic_policy_switch") is not False or \
             summary.get("production_unchanged") is not True:
         raise FinalActionValidationError("public_summary_boundary_invalid")
+    if summary.get("admissions") != admission_snapshot(*ADMISSION_IDS):
+        raise FinalActionValidationError("public_summary_admission_binding_drifted")
 
 
 def _render_summary_markdown(summary: dict[str, Any]) -> str:

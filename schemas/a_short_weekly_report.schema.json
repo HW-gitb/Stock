@@ -685,11 +685,13 @@
       "description": "Knife 3 de-identified comparison-track v2 weekly summary. It is produced before M6.7 from only the freshly rewritten private reminder; no ticker, arm, receipt hash, private path, return, or selection data may appear here. It never changes M6.7/EGS/TopN/sizing/action/veto.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["summary_id", "status", "reminder_count", "message", "production_unchanged"],
+      "required": ["summary_id", "status", "reminder_count", "admission_binding", "public_progress", "message", "production_unchanged"],
       "properties": {
         "summary_id": {"const": "a_short_factor_comparison_v2"},
         "status": {"enum": ["not_configured", "evidence_current", "evidence_unavailable_or_inconclusive"]},
         "reminder_count": {"type": "integer", "minimum": 0},
+        "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "public_progress": {"type": "object", "description": "Validated by engine.a_short_factor_comparison_v2_weekly against the closed de-identified progress schema."},
         "message": {"type": "string", "minLength": 1},
         "production_unchanged": {"const": true}
       }
@@ -698,7 +700,7 @@
       "description": "P5a de-identified industry-weight evidence progress. It is cache-only/comparison-only and never changes EGS, M6.7, selection, sizing, account state, or active_profile.",
       "type": "object",
       "additionalProperties": false,
-      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "message", "production_unchanged"],
+      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "admission_binding", "message", "production_unchanged"],
       "properties": {
         "schema_name": {"const": "a_short_industry_weight_comparison_progress_summary"},
         "schema_version": {"const": "1.0.0"},
@@ -707,6 +709,7 @@
         "status": {"enum": ["not_configured", "accumulating", "p5b_build_due", "evidence_unavailable_or_inconclusive"]},
         "questions": {"type": "array", "minItems": 3, "maxItems": 3},
         "p5b_build_due": {"type": "boolean"},
+        "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
         "message": {"type": "string", "minLength": 1},
         "production_unchanged": {"const": true}
       }
@@ -716,17 +719,18 @@
       "type": "object",
       "additionalProperties": false,
       "required": ["schema_name", "schema_version", "summary_id", "as_of", "data_through", "status",
-                   "target_exit", "breakout_entry", "execution_data_status", "message", "production_unchanged"],
+                   "target_exit", "breakout_entry", "execution_data_status", "admissions", "message", "production_unchanged"],
       "properties": {
         "schema_name": {"const": "a_short_target_policy_comparison_summary"},
         "schema_version": {"const": "1.0.0"},
         "summary_id": {"const": "a_short_target_policy_comparison"},
         "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "data_through": {"type": ["string", "null"]},
+        "data_through": {"type": ["string", "null"], "pattern": "^[0-9]{8}$"},
         "status": {"enum": ["not_configured", "accumulating", "review_due", "review_pass_pending_confirmation", "evidence_unavailable_or_inconclusive"]},
-        "target_exit": {"type": "object"},
-        "breakout_entry": {"type": "object"},
+        "target_exit": {"type": "object", "additionalProperties": false, "required": ["forward_weeks", "required_forward_weeks", "decision_difference_weeks", "required_decision_difference_weeks", "evaluable_plans", "required_evaluable_plans", "review_state"], "properties": {"forward_weeks": {"type": "integer", "minimum": 0}, "required_forward_weeks": {"const": 12}, "decision_difference_weeks": {"type": "integer", "minimum": 0}, "required_decision_difference_weeks": {"const": 8}, "evaluable_plans": {"type": "integer", "minimum": 0}, "required_evaluable_plans": {"const": 20}, "review_state": {"enum": ["not_due", "due", "pass_pending_confirmation"]}}},
+        "breakout_entry": {"type": "object", "additionalProperties": false, "required": ["forward_weeks", "required_forward_weeks", "decision_difference_weeks", "required_decision_difference_weeks", "evaluable_plans", "required_evaluable_plans", "review_state"], "properties": {"forward_weeks": {"type": "integer", "minimum": 0}, "required_forward_weeks": {"const": 12}, "decision_difference_weeks": {"type": "integer", "minimum": 0}, "required_decision_difference_weeks": {"const": 8}, "evaluable_plans": {"type": "integer", "minimum": 0}, "required_evaluable_plans": {"const": 20}, "review_state": {"enum": ["not_due", "due", "pass_pending_confirmation"]}}},
         "execution_data_status": {"enum": ["unavailable", "available"]},
+        "admissions": {"type": "object", "minProperties": 2, "additionalProperties": {"type": "object", "additionalProperties": false, "required": ["experiment_id", "component_id", "track_mode", "identity_sha256", "statistical_contract_sha256", "pit_forward_contract_sha256", "dependency_components"], "properties": {"experiment_id": {"type": "string"}, "component_id": {"type": "string"}, "track_mode": {"enum": ["switchable", "diagnostic_only"]}, "identity_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "statistical_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "pit_forward_contract_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "dependency_components": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["component_id", "baseline_definition_sha256"], "properties": {"component_id": {"type": "string"}, "baseline_definition_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}}}}},
         "message": {"type": "string", "minLength": 1},
         "production_unchanged": {"const": true}
       }

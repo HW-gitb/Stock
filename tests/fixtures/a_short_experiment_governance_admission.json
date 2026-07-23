@@ -20,6 +20,8 @@
     "one_change_only": {
       "changed_component_ids": ["industry_weight_profile"],
       "unchanged_contract_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "frozen_baseline_definition_sha256": "e12339de34e78b48a20f50890adf3858de6fc3ebdf0afa39922919f7d58cb7e4",
+      "frozen_candidate_definition_sha256": "96dae8b97ecc547fd02d9a918822b3bdf4b04ea98571f56c18df804452f68b0f",
       "proof_sha256": "440d382cc637523976ace77ea346123201838d5616639b4c42a64730c82d3cd0"
     },
     "pit_forward_contract": {

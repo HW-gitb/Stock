@@ -3,7 +3,7 @@
   "title": "A-short industry-weight comparison de-identified P5a progress",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "message", "production_unchanged"],
+  "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "questions", "p5b_build_due", "admission_binding", "message", "production_unchanged"],
   "properties": {
     "schema_name": {"const": "a_short_industry_weight_comparison_progress_summary"},
     "schema_version": {"const": "1.0.0"},
@@ -15,6 +15,7 @@
         "required": ["question_id", "eligible_policy_weeks", "difference_weeks", "mature_opportunities", "no_count_weeks", "p5b_build_due", "remaining_eligible_to_p5b", "remaining_difference_to_p5b", "p5b_checkpoint_notice"],
         "properties": {"question_id": {"enum": ["balanced_vs_legacy", "aggressive_vs_balanced", "theme_double_vs_balanced"]}, "eligible_policy_weeks": {"type": "integer", "minimum": 0}, "difference_weeks": {"type": "integer", "minimum": 0}, "mature_opportunities": {"type": "integer", "minimum": 0}, "no_count_weeks": {"type": "integer", "minimum": 0}, "p5b_build_due": {"type": "boolean"}, "remaining_eligible_to_p5b": {"type": "integer", "minimum": 0}, "remaining_difference_to_p5b": {"type": "integer", "minimum": 0}, "p5b_checkpoint_notice": {"enum": ["accumulating", "p5b_implementation_due_at_12", "p5b_formal_checkpoint_24_not_implemented", "p5b_terminal_checkpoint_36_not_implemented"]}}}},
     "p5b_build_due": {"type": "boolean"},
+    "admission_binding": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "message": {"type": "string", "minLength": 1},
     "production_unchanged": {"const": true}
   }

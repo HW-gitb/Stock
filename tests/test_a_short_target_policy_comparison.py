@@ -16,9 +16,16 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_managed_exit import evaluate_managed_exit  # noqa: E402
+from engine import a_short_managed_exit as managed_exit  # noqa: E402
+from runners import a_short_phase5_engine as phase5_engine  # noqa: E402
 from runners.a_short_phase5_engine import build_true_pressure_targets  # noqa: E402
 from runners.a_short_target_policy_comparison_runner import (  # noqa: E402
     TargetPolicyError,
+    _active_epoch,
+    _contract_fingerprint,
+    _new_ledger,
+    _summary_from_ledger,
+    _validate_ledger,
     capture_after_published_weekly,
     settle_and_summarize,
     validate_public_summary,
@@ -255,7 +262,7 @@ class TargetLedgerTests(unittest.TestCase):
     def _published_bundle(self, directory: Path, as_of: str) -> tuple[Path, Path, dict, list[dict]]:
         series = _dated_series()
         candidate = _candidate(series)
-        candidate_digest = "candidate-digest"
+        candidate_digest = "a" * 64
         weekly = {
             "as_of": as_of,
             "run_lineage": {"run_id": "run-1", "candidate_digest": candidate_digest,
@@ -288,6 +295,10 @@ class TargetLedgerTests(unittest.TestCase):
             self.assertEqual(first["record"]["target_entries"][0]["baseline_t1_basis"], "rr_floor_fallback")
             summary = json.loads(public.read_text(encoding="utf-8"))
             validate_public_summary(summary)
+            leaked = copy.deepcopy(summary)
+            leaked["admissions"]["p2_target_exit_policy"]["dependency_components"][0]["ts_code"] = "600000.SH"
+            with self.assertRaises(TargetPolicyError):
+                validate_public_summary(leaked)
             self.assertEqual(summary["target_exit"]["forward_weeks"], 1)
             second = capture_after_published_weekly(
                 root=ledger, decision_date=as_of, candidates=candidates, source_identity=identity,
@@ -354,9 +365,11 @@ class TargetLedgerTests(unittest.TestCase):
                 root=ledger, decision_date=as_of, candidates=candidates, source_identity=identity,
                 out_path=out, receipt_path=receipt, forward_eligible=True,
                 summary_path=public, markdown_path=markdown)
-            captured = json.loads(ledger.read_text(encoding="utf-8"))["epochs"][0]["records"][0]
-            self.assertFalse(captured["target_difference"])
-            self.assertTrue(captured["breakout_difference"])
+            epochs = json.loads(ledger.read_text(encoding="utf-8"))["epochs"]
+            target = next(epoch for epoch in epochs if epoch["component_id"] == "target_exit")["records"][0]
+            breakout = next(epoch for epoch in epochs if epoch["component_id"] == "breakout_entry")["records"][0]
+            self.assertFalse(target["target_difference"])
+            self.assertTrue(breakout["breakout_difference"])
 
             rows = _execution_rows()
             rows[0].update(close=10.1, raw_close=10.1)
@@ -367,7 +380,8 @@ class TargetLedgerTests(unittest.TestCase):
                                               summary_path=public, markdown_path=markdown)
             self.assertEqual(refreshed["target_exit"]["evaluable_plans"], 0)
             self.assertEqual(refreshed["breakout_entry"]["evaluable_plans"], 1)
-            settled = json.loads(ledger.read_text(encoding="utf-8"))["epochs"][0]["records"][0]["breakout_entries"][0]
+            settled = next(epoch for epoch in json.loads(ledger.read_text(encoding="utf-8"))["epochs"]
+                           if epoch["component_id"] == "breakout_entry")["records"][0]["breakout_entries"][0]
             self.assertEqual(settled["outcomes"]["status"], "settled")
             self.assertGreater(settled["outcomes"]["old_h20_net_return_pct"], 0)
             self.assertEqual(settled["outcomes"]["new_h20_net_return_pct"], 0.0)
@@ -393,10 +407,127 @@ class TargetLedgerTests(unittest.TestCase):
                     out_path=out, receipt_path=receipt, forward_eligible=True,
                     summary_path=directory / "public.json", markdown_path=directory / "public.md")
             epochs = json.loads(ledger.read_text(encoding="utf-8"))["epochs"]
-            self.assertEqual([epoch["epoch_id"] for epoch in epochs], ["a" * 64, "b" * 64])
-            self.assertEqual([len(epoch["records"]) for epoch in epochs], [1, 1])
+            self.assertEqual([epoch["epoch_id"] for epoch in epochs], ["a" * 64, "a" * 64, "b" * 64, "b" * 64])
+            self.assertEqual([epoch["component_id"] for epoch in epochs],
+                             ["target_exit", "breakout_entry", "target_exit", "breakout_entry"])
+            self.assertEqual([len(epoch["records"]) for epoch in epochs], [1, 1, 1, 1])
 
-    def test_public_reminder_turns_due_only_at_both_track_thresholds(self):
+    def test_component_specific_and_shared_contract_surfaces_restart_only_affected_epochs(self):
+        target, breakout = _contract_fingerprint("target_exit"), _contract_fingerprint("breakout_entry")
+        with patch("runners.a_short_target_policy_comparison_runner._target_contract_surface",
+                   return_value={"target_only": "changed"}):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertEqual(_contract_fingerprint("breakout_entry"), breakout)
+        with patch("runners.a_short_target_policy_comparison_runner._breakout_contract_surface",
+                   return_value={"breakout_only": "changed"}):
+            self.assertEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+        with patch("runners.a_short_target_policy_comparison_runner._shared_contract_surface",
+                   return_value={"shared": "changed"}):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+    def test_executed_wrappers_and_transitive_constants_restart_only_affected_component(self):
+        target, breakout = _contract_fingerprint("target_exit"), _contract_fingerprint("breakout_entry")
+
+        def target_wrapper_change(*_args, **_kwargs):
+            return None, None, {"status": "observe"}
+
+        with patch("runners.a_short_target_policy_comparison_runner._target_entry", target_wrapper_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def target_ladder_wrapper_change(*_args, **_kwargs):
+            return {"status": "observe"}
+
+        with patch.object(phase5_engine, "build_p2_target_ladder", target_ladder_wrapper_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def breakout_wrapper_change(*_args, **_kwargs):
+            return None, {"true_breakout": False, "momentum_confirmed": False}
+
+        with patch("runners.a_short_target_policy_comparison_runner._breakout_entry", breakout_wrapper_change):
+            self.assertEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def breakout_qualification_wrapper_change(*_args, **_kwargs):
+            return {"true_breakout": False, "momentum_confirmed": False}
+
+        with patch.object(phase5_engine, "build_p2_breakout_qualification", breakout_qualification_wrapper_change):
+            self.assertEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        with patch.object(phase5_engine, "RR_FLOOR", {"changed_target_rule": 9.0}):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertEqual(_contract_fingerprint("breakout_entry"), breakout)
+        with patch.object(phase5_engine, "RESISTANCE_LOOKBACK", phase5_engine.RESISTANCE_LOOKBACK + 1):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        with patch.object(phase5_engine, "SR_SPIKE_ATR", phase5_engine.SR_SPIKE_ATR + 1.0):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def ma_change(values, _window):
+            return None if not values else values[-1]
+
+        with patch.object(phase5_engine, "ma", ma_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def tick_up_change(value):
+            return value
+
+        with patch.object(managed_exit, "tick_up", tick_up_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        with patch.object(phase5_engine, "ATR_MULT", {"shared_exit_multiplier": 9.0}):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+    def test_settlement_semantics_restart_only_the_affected_component_epoch(self):
+        target, breakout = _contract_fingerprint("target_exit"), _contract_fingerprint("breakout_entry")
+
+        def target_settlement_change(*_args, **_kwargs):
+            return None
+
+        with patch("runners.a_short_target_policy_comparison_runner._settle_target_records", target_settlement_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def breakout_settlement_change(*_args, **_kwargs):
+            return None
+
+        with patch("runners.a_short_target_policy_comparison_runner._settle_breakout_records", breakout_settlement_change):
+            self.assertEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+        def cache_loader_change(*_args, **_kwargs):
+            return {}
+
+        with patch("runners.a_short_target_policy_comparison_runner._load_execution_cache", cache_loader_change):
+            self.assertNotEqual(_contract_fingerprint("target_exit"), target)
+            self.assertNotEqual(_contract_fingerprint("breakout_entry"), breakout)
+
+    def test_current_epoch_rejects_unbound_records_and_stale_epoch_pass(self):
+        ledger = _new_ledger()
+        epoch = _active_epoch(ledger, create=True, track="target_exit")
+        assert epoch is not None
+        epoch["records"].append({"decision_date": "20260101", "forward_eligible": True})
+        with self.assertRaises(TargetPolicyError):
+            _validate_ledger(ledger)
+
+        ledger = _new_ledger()
+        epoch = _active_epoch(ledger, create=True, track="target_exit")
+        assert epoch is not None
+        ledger["review_status_by_epoch"]["target_exit"][epoch["epoch_id"]] = "pass"
+        with patch("runners.a_short_target_policy_comparison_runner._contract_fingerprint",
+                   side_effect=lambda track=None: ("next-" + str(track)) if track else "next-all"):
+            self.assertEqual(_summary_from_ledger(ledger, "20260101")["status"], "accumulating")
+
+    def test_legacy_records_and_top_level_pass_never_enter_current_admission_progress(self):
         with tempfile.TemporaryDirectory() as td:
             directory = Path(td)
             ledger = directory / "p2.json"
@@ -425,16 +556,16 @@ class TargetLedgerTests(unittest.TestCase):
             summary = settle_and_summarize(root=ledger, as_of=dates[-1],
                                             summary_path=directory / "public.json",
                                             markdown_path=directory / "public.md")
-            self.assertEqual(summary["status"], "review_due")
-            self.assertEqual(summary["target_exit"]["evaluable_plans"], 20)
-            self.assertEqual(summary["breakout_entry"]["evaluable_plans"], 20)
+            self.assertEqual(summary["status"], "accumulating")
+            self.assertEqual(summary["target_exit"]["forward_weeks"], 0)
+            self.assertEqual(summary["breakout_entry"]["forward_weeks"], 0)
             private = json.loads(ledger.read_text(encoding="utf-8"))
             private["review_status"] = {"target_exit": "pass", "breakout_entry": "pass"}
             ledger.write_text(json.dumps(private), encoding="utf-8")
             confirmed = settle_and_summarize(root=ledger, as_of=dates[-1],
                                               summary_path=directory / "public.json",
                                               markdown_path=directory / "public.md")
-            self.assertEqual(confirmed["status"], "review_pass_pending_confirmation")
+            self.assertEqual(confirmed["status"], "accumulating")
 
 
 class WeeklySurfaceTests(unittest.TestCase):
