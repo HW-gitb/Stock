@@ -83,6 +83,11 @@ param(
 # $PSScriptRoot is the directory of THIS .ps1 file (runners/), so the
 # project root is one level up. If this script is ever moved, update
 # both the path math and the python invocations below.
+$Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+$OutputEncoding = $Utf8NoBom
+[Console]::OutputEncoding = $Utf8NoBom
+[Environment]::SetEnvironmentVariable('PYTHONIOENCODING', 'utf-8', 'Process')
+[Environment]::SetEnvironmentVariable('PYTHONUTF8', '1', 'Process')
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
 . (Join-Path $ProjectRoot '.tools\Resolve-AshortPython.ps1')
 try {

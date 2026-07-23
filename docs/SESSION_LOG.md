@@ -1,5 +1,40 @@
 # Session Log
 
+## 2026-07-23 - Codex adversarial re-review PASS (R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT)
+
+- **Verdict/Action**: PASS; `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` is resolved on the final reviewed code state.
+- **Required**: None; closure evidence and boundary are in `docs/system_risk_register.md`.
+- **Verify**: Pinned-main-Python focused acceptance pack passed; mocked bootstrap source-binding probe passed; `py_compile` and `git diff --check` clean; final-diff full A-short discovery 8051 green, cached by `full_pack_ledger`; highest-risk agent gate not triggered (no provider/secret/new substantial fail-closed gate).
+- **Next**: Codex: Pass
+
+## 2026-07-23 - Codex crash-veto bootstrap residual repair PASS
+
+- **Verdict/Action**: PASS; the remaining legacy bootstrap feature-source defect is resolved.
+- **Required**: None. Both capture paths use reconciliation features and fail closed on missing veto members.
+- **Verify**: Main Python regression 39 OK; static effect contract, compile check, and `git diff --check` clean.
+- **Next**: Claude Code: review and commit
+
+## 2026-07-23 - Codex adversarial re-review FAIL (crash-veto bootstrap feature-source residual)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` remains open because `bootstrap_legacy()` still derives veto-member metadata and controls from `egs_full` alone.
+- **Required**: `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` — full repair and closure conditions are in `docs/system_risk_register.md`.
+- **Verify**: Pinned-main-Python mocked replay produced `legacy_official_4d` member `VETO` with blank name/L1/L2 and fallback control `CTRL` when reconciliation supplied the member but `full_rank` did not. The in-flight full pack was stopped after this material FAIL and has no terminal PASS result; it is not closure evidence.
+- **Next**: Codex: repair
+
+## 2026-07-23 - Codex crash-veto uncached feature-source repair PASS
+
+- **Verdict/Action**: PASS; the uncached crash-veto control-cohort drift is resolved.
+- **Required**: None. Reconciliation preserves pre-L2 fields; the tracker combines veto members with ranked controls and fails closed if a member is missing.
+- **Verify**: Main Python focused regression 37 OK; effect contract, compile check, and `git diff --check` clean.
+- **Next**: Claude Code: review and commit
+
+## 2026-07-23 - Codex adversarial review FAIL (A-short desktop runtest repairs: crash-veto/cache/UTF-8)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` leaves the uncached crash-veto comparison cohort with arbitrary, not matched, controls.
+- **Required**: `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` — full defect, repair boundary, and closure test are in `docs/system_risk_register.md`.
+- **Verify**: Pinned Python black-box probe reproduced missing-member fallback `['A', 'B', 'C']`; direct focused package was run but its terminal tail was not observable. One full unittest run was launched under the entrypoint-change tier, then stopped after this material FAIL was reproduced; it is not PASS evidence and must not be re-run for this failing review. No §6a agent (no provider/secret/new substantial fail-closed gate). `git diff --check` clean.
+- **Next**: Codex: repair
+
 ## 2026-07-23 - Codex P4a second-knife strict repair and final independent adversarial re-review PASS
 
 - **Verdict/Action**: PASS. P4a remains comparison-only: published EGS Stage3 source bytes now bind the exact screening runtime recipe as well as profile bytes; capture, settlement, and public summary use one epoch context, so a changed recipe opens a new epoch and old evidence cannot count.

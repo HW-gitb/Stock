@@ -64,9 +64,18 @@ foreach ($Name in @('TEMP', 'TMP', 'XDG_CACHE_HOME', 'PYTHONPYCACHEPREFIX')) {
     $PreviousEnvironment[$Name] = [Environment]::GetEnvironmentVariable($Name, 'Process')
     [Environment]::SetEnvironmentVariable($Name, $CapsuleTemp, 'Process')
 }
+$PreviousEnvironment['PYTHONIOENCODING'] = [Environment]::GetEnvironmentVariable('PYTHONIOENCODING', 'Process')
+$PreviousEnvironment['PYTHONUTF8'] = [Environment]::GetEnvironmentVariable('PYTHONUTF8', 'Process')
+$PreviousOutputEncoding = $OutputEncoding
+$PreviousConsoleOutputEncoding = [Console]::OutputEncoding
 
 $RunExitCode = 1
 try {
+    $Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+    $OutputEncoding = $Utf8NoBom
+    [Console]::OutputEncoding = $Utf8NoBom
+    [Environment]::SetEnvironmentVariable('PYTHONIOENCODING', 'utf-8', 'Process')
+    [Environment]::SetEnvironmentVariable('PYTHONUTF8', '1', 'Process')
     $Worker = Join-Path $CapsuleRepo 'runners\weekly_screening.ps1'
     # A PowerShell script worker requires a hashtable splat.  An array splat
     # passes these tokens positionally, so the forced runtest gates can bind
@@ -95,6 +104,8 @@ try {
     foreach ($Name in $PreviousEnvironment.Keys) {
         [Environment]::SetEnvironmentVariable($Name, $PreviousEnvironment[$Name], 'Process')
     }
+    $OutputEncoding = $PreviousOutputEncoding
+    [Console]::OutputEncoding = $PreviousConsoleOutputEncoding
     & $PythonExe $Manager '--capsule-root' $CapsuleRoot 'finish' '--capsule' $Capsule '--exit-code' $RunExitCode
     if ($LASTEXITCODE -ne 0) { $RunExitCode = 2 }
 }

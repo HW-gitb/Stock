@@ -134,7 +134,26 @@ def _find_cache(pattern: str) -> Path:
     return matches[-1]
 
 
-def _load_capture_frames(as_of: str, full: pd.DataFrame) -> pd.DataFrame:
+def _load_capture_frames(as_of: str, full: pd.DataFrame,
+                         reconciliation: pd.DataFrame | None = None) -> pd.DataFrame:
+    # The reconciliation carries the pre-L2 feature surface for veto members;
+    # the ranked artifact carries the matching control pool.  Combine both so
+    # an uncached runtest does not depend on transient egs_cache pickles.
+    required_full_columns = {
+        "ts_code", "name", "l1_name", "l2_name", "total_mv", "pct_20d", "avg_amount_20d",
+    }
+    if required_full_columns.issubset(full.columns):
+        fresh_frames = [full[list(required_full_columns)].copy()]
+        if reconciliation is not None and required_full_columns.issubset(reconciliation.columns):
+            fresh_frames.insert(0, reconciliation[list(required_full_columns)].copy())
+        fresh = pd.concat(fresh_frames, ignore_index=True)
+        fresh["ts_code"] = fresh["ts_code"].astype(str)
+        if not fresh["ts_code"].duplicated().any():
+            return fresh.set_index("ts_code", drop=False)
+        if reconciliation is not None and required_full_columns.issubset(reconciliation.columns):
+            fresh = fresh.drop_duplicates("ts_code", keep="first")
+            return fresh.set_index("ts_code", drop=False)
+
     cache_dir = ROOT / "A-EGS" / "Result" / "egs_cache"
     daily = pd.read_pickle(cache_dir / f"daily_all_{as_of}_60d.pkl")
     stocks = pd.read_pickle(_find_cache(f"stock_list_{as_of}*.pkl"))
@@ -160,6 +179,10 @@ def _load_capture_frames(as_of: str, full: pd.DataFrame) -> pd.DataFrame:
     base = base.merge(stats, on="ts_code", how="left")
     full_features = full[[c for c in ("ts_code", "name", "l1_name", "l2_name", "total_mv",
                                       "pct_20d", "avg_amount_20d") if c in full.columns]].copy()
+    if reconciliation is not None:
+        recon_features = reconciliation[[c for c in ("ts_code", "name", "l1_name", "l2_name", "total_mv",
+                                                      "pct_20d", "avg_amount_20d") if c in reconciliation.columns]].copy()
+        full_features = pd.concat([recon_features, full_features], ignore_index=True)
     combined = pd.concat([full_features, base], ignore_index=True)
     combined["ts_code"] = combined["ts_code"].astype(str)
     return combined.drop_duplicates("ts_code", keep="first").set_index("ts_code", drop=False)
@@ -259,7 +282,10 @@ def capture_official(state: dict, as_of: str, rule_days: int) -> int:
     marker, recon, full = _official_inputs(as_of)
     members = sorted(recon.loc[recon["reason"] == "l2_crash_veto", "ts_code"].astype(str).unique())
     controls = sorted(recon.loc[recon["outcome"] == "ranked", "ts_code"].astype(str).unique())
-    features = _load_capture_frames(as_of, full)
+    features = _load_capture_frames(as_of, full, recon)
+    if not set(members).issubset(features.index):
+        missing = sorted(set(members) - set(features.index))
+        raise ValueError(f"crash-veto capture feature source missing members: {missing}")
     cohort = _make_cohort(as_of, marker, "official_all_crash_veto", rule_days, members, controls, features,
                           source="official_publish_hashed_reconciliation")
     _upsert_cohort(state, cohort)
@@ -278,7 +304,10 @@ def bootstrap_legacy(state: dict, as_of: str, official_days: int, active_days: i
         raise ValueError(f"legacy replay mismatch: official={len(old_members)} replay={len(old_shadow)}")
     added_all = active_shadow - old_shadow
     added_rank_impact = sorted(added_all & ranked)
-    features = _load_capture_frames(as_of, full)
+    features = _load_capture_frames(as_of, full, recon)
+    if not set(old_members).issubset(features.index):
+        missing = sorted(set(old_members) - set(features.index))
+        raise ValueError(f"legacy crash-veto feature source missing members: {missing}")
     old = _make_cohort(as_of, marker, "legacy_official_4d", official_days, old_members, sorted(ranked), features,
                        source="official_publish_hashed_reconciliation", locked=True,
                        notes={"purpose": "freeze_original_245_without_future_rule_drift"})

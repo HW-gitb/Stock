@@ -229,6 +229,9 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("L3Mode = 'today'", a_short)
         self.assertIn("CachePolicy = 'disabled'", a_short)
         self.assertIn("PythonExe = $PythonExe", a_short)
+        self.assertIn("PYTHONIOENCODING", a_short)
+        self.assertIn("PYTHONUTF8", a_short)
+        self.assertIn("[Console]::OutputEncoding", a_short)
         self.assertIn("if (-not [string]::IsNullOrWhiteSpace($AsOf))", a_short)
         self.assertIn("$WorkerParams.AsOf = $AsOf", a_short)
         self.assertIn("if (-not [string]::IsNullOrWhiteSpace($Account))", a_short)
@@ -246,6 +249,9 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("& $Worker @WorkerParams", us_short)
         self.assertIn("[string]$CachePolicy = 'enabled'", weekly)
         self.assertIn("'--cache-policy', $CachePolicy", weekly)
+        self.assertIn("PYTHONIOENCODING", weekly)
+        self.assertIn("PYTHONUTF8", weekly)
+        self.assertIn("[Console]::OutputEncoding", weekly)
 
     def test_us_launcher_rejects_raw_private_root_override_before_creating_capsule(self) -> None:
         powershell = shutil.which("powershell") or shutil.which("pwsh")

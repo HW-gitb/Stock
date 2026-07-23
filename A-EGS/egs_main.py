@@ -980,6 +980,18 @@ def build_rank_universe_reconciliation(df_l0, stages, sources):
         {"ts_code": ts_code, **terminal[ts_code]}
         for ts_code in sorted(terminal)
     ], columns=["ts_code", "outcome", "terminal_stage", "reason"])
+    # Preserve the pre-filter feature surface for comparison-only consumers.
+    # The ranked CSV intentionally excludes l2_crash_veto members, so it cannot
+    # be the sole source for later matched-control evidence.
+    feature_columns = [
+        "name", "l1_name", "l2_name", "total_mv", "pct_20d", "avg_amount_20d",
+    ]
+    if isinstance(df_l0, pd.DataFrame) and "ts_code" in df_l0.columns:
+        available = [column for column in feature_columns if column in df_l0.columns]
+        if available:
+            l0_features = df_l0[["ts_code", *available]].copy()
+            l0_features["ts_code"] = l0_features["ts_code"].astype(str)
+            detail = detail.merge(l0_features.drop_duplicates("ts_code"), on="ts_code", how="left")
 
     source_coverage = {}
     source_coverage_failure_count = 0
@@ -1905,6 +1917,9 @@ def set_asof(date_str):
 
     TODAY = date_str
     TODAY_DT = asof_dt
+    if CONF.get("cache_policy") == "disabled":
+        log.info(f"[ASOF] running EGS as of {TODAY}; cache_policy=disabled; cache_ttl=ignored")
+        return
     CONF["cache_ttl"] = BACKTEST_CACHE_TTL
     log.info(f"[ASOF] running EGS as of {TODAY}; cache_ttl={CONF['cache_ttl']}s")
 

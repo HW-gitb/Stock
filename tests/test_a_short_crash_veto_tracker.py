@@ -10,6 +10,7 @@ import jsonschema
 import pandas as pd
 
 from runners.a_short_crash_veto_tracker import (
+    _load_capture_frames,
     build_summary,
     decide_design,
     detect_crash_codes,
@@ -28,6 +29,89 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class CrashVetoTrackerTest(unittest.TestCase):
+    def test_capture_features_use_fresh_official_full_output_without_egs_cache(self):
+        full = pd.DataFrame([
+            {
+                "ts_code": "000001.SZ", "name": "测试股", "l1_name": "一级", "l2_name": "二级",
+                "total_mv": 100.0, "pct_20d": 3.0, "avg_amount_20d": 2000.0,
+            },
+        ])
+        with mock.patch("runners.a_short_crash_veto_tracker.pd.read_pickle") as read_pickle:
+            features = _load_capture_frames("20260723", full)
+
+        read_pickle.assert_not_called()
+        self.assertEqual(features.at["000001.SZ", "l2_name"], "二级")
+        self.assertEqual(features.at["000001.SZ", "avg_amount_20d"], 2000.0)
+
+    def test_capture_features_combine_reconciliation_veto_member_with_ranked_controls(self):
+        full = pd.DataFrame([{
+            "ts_code": "CONTROL.SZ", "name": "control", "l1_name": "L1", "l2_name": "L2",
+            "total_mv": 101.0, "pct_20d": 2.0, "avg_amount_20d": 2000.0,
+        }])
+        reconciliation = pd.DataFrame([{
+            "ts_code": "VETO.SZ", "name": "veto", "l1_name": "L1", "l2_name": "L2",
+            "total_mv": 100.0, "pct_20d": 1.0, "avg_amount_20d": 1900.0,
+        }])
+        with mock.patch("runners.a_short_crash_veto_tracker.pd.read_pickle") as read_pickle:
+            features = _load_capture_frames("20260723", full, reconciliation)
+
+        read_pickle.assert_not_called()
+        self.assertIn("VETO.SZ", features.index)
+        matched = match_controls(["VETO.SZ"], ["VETO.SZ", "CONTROL.SZ"], features, count=1)
+        self.assertEqual(matched["VETO.SZ"], ["CONTROL.SZ"])
+
+    def test_capture_fails_closed_when_veto_member_feature_is_unavailable(self):
+        marker = {"run_id": "run-1"}
+        reconciliation = pd.DataFrame([
+            {"ts_code": "VETO.SZ", "outcome": "excluded", "reason": "l2_crash_veto"},
+            {"ts_code": "CONTROL.SZ", "outcome": "ranked", "reason": "ranked"},
+        ])
+        full = pd.DataFrame([{
+            "ts_code": "CONTROL.SZ", "name": "control", "l1_name": "L1", "l2_name": "L2",
+            "total_mv": 101.0, "pct_20d": 2.0, "avg_amount_20d": 2000.0,
+        }])
+        with mock.patch("runners.a_short_crash_veto_tracker._official_inputs",
+                        return_value=(marker, reconciliation, full)), \
+             mock.patch("runners.a_short_crash_veto_tracker._load_capture_frames",
+                        return_value=full.set_index("ts_code", drop=False)):
+            with self.assertRaisesRegex(ValueError, "missing members"):
+                from runners.a_short_crash_veto_tracker import capture_official
+                capture_official({"cohorts": []}, "20260723", 5)
+
+    def test_bootstrap_legacy_uses_reconciliation_features_and_fails_closed(self):
+        from runners.a_short_crash_veto_tracker import bootstrap_legacy
+
+        marker = {"run_id": "run-1"}
+        reconciliation = pd.DataFrame([
+            {"ts_code": "VETO.SZ", "outcome": "excluded", "terminal_stage": "l2_quality_risk",
+             "reason": "l2_crash_veto"},
+            {"ts_code": "CONTROL.SZ", "outcome": "ranked", "terminal_stage": "l5_rank",
+             "reason": "ranked"},
+        ])
+        full = pd.DataFrame([{
+            "ts_code": "CONTROL.SZ", "name": "control", "l1_name": "L1", "l2_name": "L2",
+            "total_mv": 101.0, "pct_20d": 2.0, "avg_amount_20d": 2000.0,
+        }])
+        features = pd.DataFrame([
+            {"ts_code": "VETO.SZ", "name": "veto", "l1_name": "L1", "l2_name": "L2",
+             "total_mv": 100.0, "pct_20d": 1.0, "avg_amount_20d": 1900.0},
+            full.iloc[0].to_dict(),
+        ]).set_index("ts_code", drop=False)
+        daily = pd.DataFrame({"ts_code": ["VETO.SZ", "CONTROL.SZ"], "trade_date": ["20260722", "20260722"]})
+        with mock.patch("runners.a_short_crash_veto_tracker._official_inputs",
+                        return_value=(marker, reconciliation, full)), \
+             mock.patch("runners.a_short_crash_veto_tracker.pd.read_pickle", return_value=daily), \
+             mock.patch("runners.a_short_crash_veto_tracker.detect_crash_codes",
+                        side_effect=[{"VETO.SZ"}, {"VETO.SZ"}]), \
+             mock.patch("runners.a_short_crash_veto_tracker._load_capture_frames",
+                        return_value=features):
+            state = {"cohorts": []}
+            bootstrap_legacy(state, "20260723", 4, 5)
+            legacy_member = next(member for cohort in state["cohorts"] for member in cohort["members"]
+                                 if member["ts_code"] == "VETO.SZ")
+            self.assertEqual(legacy_member["name"], "veto")
+            self.assertEqual(legacy_member["controls"], ["CONTROL.SZ"])
+
     def test_confirmed_day_window_includes_fifth_but_not_sixth(self):
         dates = [f"202607{14-i:02d}" for i in range(7)]
 

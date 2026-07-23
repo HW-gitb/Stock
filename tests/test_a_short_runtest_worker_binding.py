@@ -64,6 +64,9 @@ if command == "create":
     cache_policy = $CachePolicy
     python_exe = $PythonExe
     account = $Account
+    python_io_encoding = $env:PYTHONIOENCODING
+    python_utf8 = $env:PYTHONUTF8
+    console_encoding = [Console]::OutputEncoding.WebName
 } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:RUNTEST_TEST_CAPTURE_PATH -Encoding utf8
 """,
             encoding="utf-8",
@@ -117,6 +120,9 @@ if command == "create":
                 self.assertEqual(captured["l3_mode"], "today")
                 self.assertEqual(captured["cache_policy"], "disabled")
                 self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
+                self.assertEqual(captured["python_io_encoding"], "utf-8")
+                self.assertEqual(captured["python_utf8"], "1")
+                self.assertEqual(captured["console_encoding"], "utf-8")
                 expected_account = str(capsule / "private_inputs" / expected_account_leaf) if expected_account_leaf else ""
                 self.assertEqual(captured["account"], expected_account)
 

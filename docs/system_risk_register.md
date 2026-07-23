@@ -2,6 +2,14 @@
 
 Status: Active
 
+### R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT - uncached tracker loses veto-member matching features and produces arbitrary controls
+
+- **Status / severity**: **resolved P2** (comparison-evidence correctness / A-short only; Codex adversarial re-review 2026-07-23).
+- **Finding**: The new uncached fast path in `runners/a_short_crash_veto_tracker.py::_load_capture_frames()` returns only `egs_full_<as_of>.csv` when it has the seven requested columns. That file is `df_full`, which is written after `score_l2()` removes every `has_crash_veto` row, while `capture_official()` builds members from reconciliation rows where `reason == "l2_crash_veto"`. Thus each official veto member is absent from `features`; `_make_cohort()` freezes blank name/L1/L2 fields and `match_controls()` takes the missing-member fallback `controls[:3]`, rather than matching same-industry size/momentum/liquidity controls. This is not merely an observability degradation: the comparison-only H5/H10 evidence can be materially mispaired and later support an invalid crash-veto design conclusion.
+- **Required repair**: Preserve a source-bound feature surface that covers both the `l2_crash_veto` members and the ranked-control pool before L2 filtering, or make uncached capture fail closed/non-evaluable. Do not use `egs_full` alone as the member feature source. Add a capture-level regression with a reconciliation containing a veto member absent from `full_rank`; it must prove that member metadata and nearest controls are sourced correctly, and must reject/mark unavailable if the promised complete feature source is absent.
+- **Closure evidence**: `build_rank_universe_reconciliation()` now preserves the source-bound pre-L2 feature surface; both `capture_official()` and `bootstrap_legacy()` combine it with the ranked controls and reject a missing veto member. The pinned-main-Python focused acceptance pack passed, a mocked bootstrap replay proved the veto member retains name/L1/L2 and matches `CTRL`, and `py_compile` / `git diff --check` passed. The required final-diff full A-short discovery completed 8051 tests green and is recorded by `.tools/full_pack_ledger.py check a_short` for the exact code state.
+- **Boundary**: No formal EGS selection, ranking, veto, sizing, provider authorization, live weekly run, account, order, or broker behavior changed in this reviewed slice; the defect is confined to the comparison-only crash-veto tracker and its future evidence interpretation.
+
 ### R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP - unified Pass2 approval can be bypassed and manual resume loses it
 
 - **Status / severity**: **resolved P1** — closed by the immutable approval binding and direct live-boundary enforcement.

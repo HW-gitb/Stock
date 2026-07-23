@@ -86,6 +86,28 @@ class EgsMainL3GuardTest(unittest.TestCase):
             self.egs_main.CONF.clear()
             self.egs_main.CONF.update(original_conf)
 
+    def test_disabled_cache_explicit_asof_logs_ttl_as_ignored(self) -> None:
+        original_conf = dict(self.egs_main.CONF)
+        original_today = self.egs_main.TODAY
+        original_today_dt = self.egs_main.TODAY_DT
+        try:
+            self.egs_main.CONF["cache_policy"] = "disabled"
+            self.egs_main.CONF["cache_ttl"] = 123
+            calendar = pd.DataFrame([{"cal_date": "20260723", "is_open": 1}])
+            with patch.object(self.egs_main, "safe_api", return_value=calendar), \
+                    patch.object(self.egs_main.log, "info") as info:
+                self.egs_main.set_asof("20260723")
+
+            self.assertEqual(self.egs_main.CONF["cache_ttl"], 123)
+            info.assert_called_once_with(
+                "[ASOF] running EGS as of 20260723; cache_policy=disabled; cache_ttl=ignored"
+            )
+        finally:
+            self.egs_main.CONF.clear()
+            self.egs_main.CONF.update(original_conf)
+            self.egs_main.TODAY = original_today
+            self.egs_main.TODAY_DT = original_today_dt
+
     def test_today_l3_uses_complete_hithink_graph_and_persists_coverage_receipt(self) -> None:
         graph = HiThinkL3Graph(
             concepts_df=pd.DataFrame([
