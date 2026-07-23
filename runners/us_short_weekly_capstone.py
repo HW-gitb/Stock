@@ -68,6 +68,20 @@ class WeeklyCapstoneError(RuntimeError):
     """Any capstone-orchestration failure (canonical resolution, a missing prerequisite, a stage abort)."""
 
 
+def _emit_diagnostic_event(
+    diagnostic_event: Callable[[dict[str, Any]], None] | None,
+    event: str,
+    **details: Any,
+) -> None:
+    """Observability is best-effort and must never change a capstone decision."""
+    if diagnostic_event is None:
+        return
+    try:
+        diagnostic_event({"event": event, **details})
+    except Exception:
+        return
+
+
 # ---------------------------------------------------------------------------
 # Canonical anchoring (§2.1) + the run context that threads dates/paths through every stage
 # ---------------------------------------------------------------------------
@@ -1048,6 +1062,7 @@ def run_weekly_capstone(
     auto_authorize_pass2_budget: bool = False,
     model_paper_store_root: Path | None = None,
     model_paper_run_account_mode: str | None = None,
+    diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
     full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
@@ -1081,6 +1096,12 @@ def run_weekly_capstone(
         model_paper_store_root=model_paper_store_root,
         model_paper_run_account_mode=model_paper_run_account_mode,
         sample_root=sample_root,
+    )
+    _emit_diagnostic_event(
+        diagnostic_event,
+        "capstone_context_resolved",
+        decision_date=ctx.decision_date,
+        price_basis_date=ctx.price_basis_date,
     )
     if prepare_pass2_budget and dry_run:
         raise WeeklyCapstoneError(
@@ -1264,6 +1285,13 @@ def run_weekly_capstone(
                     research_live_capability=receipt,
                     official_output_root=transaction.staging_root,
                 )
+            _emit_diagnostic_event(
+                diagnostic_event,
+                "stage_started",
+                stage=stage.name,
+                gated=stage.gated,
+                best_effort=stage.best_effort,
+            )
             # Pre-stage input gate: a stage's declared inputs (prior stages' outputs, or pre-existing external files)
             # must be readable BEFORE it starts — else fail fast with the stage name instead of letting the stage crash
             # deeper on a stale/missing/cross-run input. Existence+readability only; each runner still owns its own
@@ -1278,7 +1306,21 @@ def run_weekly_capstone(
                     f"{[_rel(p) for p in unreadable_inputs]}")
                 if stage.best_effort:
                     record_shadow_capture_failure(stage, unreadable)
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_failed",
+                        stage=stage.name,
+                        failure_kind="input_gate",
+                        error_type=type(unreadable).__name__,
+                    )
                     continue
+                _emit_diagnostic_event(
+                    diagnostic_event,
+                    "stage_failed",
+                    stage=stage.name,
+                    failure_kind="input_gate",
+                    error_type=type(unreadable).__name__,
+                )
                 raise unreadable
             expected_outputs = [Path(p) for p in stage.outputs(stage_ctx)]
             if resume_manifest is not None and stage.reuse_policy == "frozen_inputs":
@@ -1310,6 +1352,12 @@ def run_weekly_capstone(
                         )
                     except checkpoint_store.CapstoneCheckpointError as exc:
                         raise WeeklyCapstoneError(f"cannot persist reused stage '{stage.name}': {exc}") from exc
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_completed",
+                        stage=stage.name,
+                        execution_mode="reused",
+                    )
                     continue
             before = {str(path.resolve()): _output_fingerprint(path) for path in expected_outputs}
             try:
@@ -1317,7 +1365,21 @@ def run_weekly_capstone(
             except Exception as exc:  # noqa: BLE001 — re-wrap with the stage label so a failure is never anonymous
                 if stage.best_effort:
                     record_shadow_capture_failure(stage, exc)
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "stage_failed",
+                        stage=stage.name,
+                        failure_kind="stage_run",
+                        error_type=type(exc).__name__,
+                    )
                     continue
+                _emit_diagnostic_event(
+                    diagnostic_event,
+                    "stage_failed",
+                    stage=stage.name,
+                    failure_kind="stage_run",
+                    error_type=type(exc).__name__,
+                )
                 raise WeeklyCapstoneError(f"stage '{stage.name}' failed: {type(exc).__name__}: {exc}") from exc
             # The terminal bridge legitimately writes NO weekly_report.md on an HONEST no-emit (intraday out-of-window
             # or a non-clean provider_health, design §3.2 — e.g. the free-tier FMP-429 case): that is a correct outcome,
@@ -1328,6 +1390,12 @@ def run_weekly_capstone(
                 append_stage_result(
                     stage, result, execution_mode="executed",
                     stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+                )
+                _emit_diagnostic_event(
+                    diagnostic_event,
+                    "stage_completed",
+                    stage=stage.name,
+                    execution_mode="executed",
                 )
                 _abort_current_output_transaction(transaction)
                 summary = {
@@ -1440,6 +1508,12 @@ def run_weekly_capstone(
             append_stage_result(
                 stage, result, execution_mode=execution_mode,
                 stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
+            )
+            _emit_diagnostic_event(
+                diagnostic_event,
+                "stage_completed",
+                stage=stage.name,
+                execution_mode=execution_mode,
             )
             if checkpoint_manifest_path is not None and stage.name != "weekly_bridge":
                 try:

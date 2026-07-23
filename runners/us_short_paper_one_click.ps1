@@ -38,5 +38,11 @@ if (-not [string]::IsNullOrWhiteSpace($PrivateRoot)) {
 
 Write-Host "[US-SHORT PAPER] one-click full system" -ForegroundColor Cyan
 Write-Host "[US-SHORT PAPER] python = $PythonExe" -ForegroundColor DarkGray
-& $PythonExe @cliArgs
+# The Python runner deliberately writes normal run metadata to stderr.  With
+# ErrorActionPreference=Stop, Windows PowerShell 5.1 turns any native stderr
+# into a terminating RemoteException before redirection can help.  Start the
+# same pinned Python with a tiny bootstrap that redirects Python's stderr to
+# stdout before the runner loads; the native exit code remains authoritative.
+$stderrToStdoutBootstrap = "import runpy, sys; sys.stderr = sys.stdout; script = sys.argv[1]; sys.argv = sys.argv[1:]; runpy.run_path(script, run_name='__main__')"
+& $PythonExe "-c" $stderrToStdoutBootstrap @cliArgs
 exit $LASTEXITCODE

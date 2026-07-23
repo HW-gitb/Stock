@@ -69,6 +69,26 @@
 - **Required**: `R-ASHORT-P2-COMPONENT-EPOCH-ISOLATION-AND-OLD-EVIDENCE-COUNTING` — repair component fingerprint isolation, current-epoch record/capture binding, and epoch-bound verdict state; details and closure tests are in the register.
 - **Verify**: Fixed-Python focused P0–P5 pack and agent registry/P2 pack (30 OK) completed. Probes reproduced cross-reset, current-epoch unbound counts, and stale `pass`; injected ticker/account/price stayed out of the public summary. `git diff --check` OK.
 - **Next**: Codex：修复
+## 2026-07-23 — Codex self-review PASS (US-short paper launcher native-stderr guard)
+
+- **Verdict/Action**: PASS; the PowerShell one-click launcher now starts the same pinned Python through a bootstrap that maps Python stderr to stdout before the runner loads, so ordinary Python status lines cannot become Windows PowerShell 5.1 `RemoteException` failures. Python's exit code remains the only success/failure signal.
+- **Required**: None for the false-failure wrapper defect. The independent Massive grouped-daily HTTP 403 remains a provider-access failure outside this launcher-only repair.
+- **Verify**: Required project Python ran `tests.test_us_short_paper_one_click tests.test_us_short_model_paper_capstone_wiring`: 9 OK; the real PowerShell regression proves stderr+exit 0 succeeds without `RemoteException`/`NativeCommandError`, stderr+exit 17 returns 17, and the existing CLI argument sequence is preserved; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
+
+## 2026-07-23 — Codex self-review PASS (runtest capsule Windows checkout-path guard)
+
+- **Verdict/Action**: PASS; a capsule now resolves the requested commit, measures its tracked checkout paths before creating a target, and rejects an unsafe Windows destination before `git clone`; clone uses `--no-checkout` so it cannot first materialize an unchecked default-branch worktree. Failed setup reuses the read-only-safe capsule cleanup path.
+- **Required**: None for the long-path/partial-cleanup defect. The independent Massive grouped-daily HTTP 403 remains a provider-access failure outside this tool-only repair.
+- **Verify**: Required project Python ran `tests.test_runtest_capsule`: 11 OK; a real 346-character checkout probe returned the explicit preflight error with exit 2 and created no capsule directory; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
+
+## 2026-07-23 — Codex self-review PASS (US-short paper capsule canonical source-state guard)
+
+- **Verdict/Action**: PASS; the one-click runner now rejects any noncanonical `--state-dir` before a provider stage, while `--private-root` remains the isolated paper-output boundary and the active checkout's `state/us_short` remains the provider-source root.
+- **Required**: None for this repaired invocation defect. A fresh capsule run crossed the former path failure, completed SEC ticker retrieval (7642), then stopped at the independent Massive grouped-daily HTTP 403; that provider-fetch failure is recorded in the authorized Desktop test log and was not hidden or worked around.
+- **Verify**: Required project Python ran `tests.test_us_short_paper_one_click tests.test_us_short_model_paper_capstone_wiring`: 8 OK; canonical/noncanonical and private-root-to-source-root separation are directly covered; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
 
 ## 2026-07-22 — Codex independent strict re-review PASS (R-ASHORT-OFFICIAL-OPERATION-EVIDENCE-MATURITY-CONTRACT-GAPS)
 

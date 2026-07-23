@@ -32,6 +32,10 @@ MANIFEST_NAME = "runtest_manifest.json"
 ACTIVE_MARKER_NAME = ".runtest_active.json"
 MANIFEST_SCHEMA = "stock_runtest_capsule"
 MANIFEST_VERSION = "1.0.0"
+# Git for Windows can still encounter legacy path limits even when Python can
+# address the path.  Keep a small margin below MAX_PATH for Git's checkout
+# machinery instead of creating a partial capsule and failing mid-checkout.
+WINDOWS_CHECKOUT_PATH_LIMIT = 240
 DEFAULT_CAPSULE_ROOT = Path(
     os.environ.get("STOCK_RUNTEST_CAPSULE_ROOT", r"D:\cnhea\Stock_runtest_private")
 )
@@ -119,6 +123,35 @@ def _resolve_commit(source_root: Path, commit_ref: str) -> str:
     if not commit_ref or commit_ref.startswith("-"):
         raise CapsuleError("commit ref is required and cannot start with '-'")
     return _run_git(["-C", str(source_root), "rev-parse", "--verify", f"{commit_ref}^{{commit}}"])
+
+
+def _tracked_checkout_paths(source_root: Path, commit: str) -> list[Path]:
+    output = _run_git(["-C", str(source_root), "ls-tree", "-r", "-z", "--name-only", commit])
+    paths: list[Path] = []
+    for raw_path in output.split("\0"):
+        if not raw_path:
+            continue
+        relative = Path(raw_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            raise CapsuleError("tracked checkout path is not a safe relative path")
+        paths.append(relative)
+    return paths
+
+
+def _preflight_windows_checkout_paths(source_root: Path, commit: str, repo: Path) -> None:
+    """Reject a capsule destination Git for Windows cannot safely check out."""
+    if os.name != "nt":
+        return
+    longest = max(
+        (len(str(repo / relative)) for relative in _tracked_checkout_paths(source_root, commit)),
+        default=len(str(repo)),
+    )
+    if longest > WINDOWS_CHECKOUT_PATH_LIMIT:
+        raise CapsuleError(
+            "capsule root is too long for this checkout on Windows "
+            f"(longest tracked path would be {longest} characters; limit {WINDOWS_CHECKOUT_PATH_LIMIT}); "
+            "choose a shorter --capsule-root or --run-id"
+        )
 
 
 def _iter_guarded_files(source_root: Path) -> Iterable[tuple[str, int, int]]:
@@ -272,6 +305,16 @@ def _copy_inputs(capsule: Path, copy_inputs: dict[str, Path | str] | None) -> li
     return sorted(copied)
 
 
+def _remove_capsule_tree(target: Path) -> None:
+    """Remove one already-validated disposable capsule, including read-only Git files."""
+    def _clear_readonly_and_retry(function, path, exception) -> None:
+        del exception
+        os.chmod(path, stat.S_IWRITE)
+        function(path)
+
+    shutil.rmtree(target, onexc=_clear_readonly_and_retry)
+
+
 def create_capsule(
     *,
     source_root: Path | str,
@@ -293,11 +336,12 @@ def create_capsule(
     if target.exists():
         raise CapsuleError("capsule already exists; every runtest requires a new run_id")
     commit = _resolve_commit(source, commit_ref)
+    repo = target / "repo"
+    _preflight_windows_checkout_paths(source, commit, repo)
     key = _load_or_create_key(key_path, root)
     target.parent.mkdir(parents=True, exist_ok=True)
-    repo = target / "repo"
     try:
-        _run_git(["clone", "--no-local", "--no-hardlinks", str(source), str(repo)])
+        _run_git(["clone", "--no-checkout", "--no-local", "--no-hardlinks", str(source), str(repo)])
         _run_git(["-C", str(repo), "checkout", "--detach", commit])
         _run_git(["-C", str(repo), "clean", "-ffdx"])
         copied_input_labels = _copy_inputs(target, copy_inputs)
@@ -324,7 +368,7 @@ def create_capsule(
         _write_manifest(repo, manifest, key)
     except Exception:
         if target.exists():
-            shutil.rmtree(target)
+            _remove_capsule_tree(target)
         raise
     return {"capsule": str(target), "repo": str(repo), "manifest": str(repo / MANIFEST_NAME)}
 
@@ -394,13 +438,7 @@ def delete_capsule(
         raise CapsuleError("refusing to delete capsule with unknown status")
     # The layout and signed identity have both been checked immediately before
     # this operation.  This is the only recursive deletion in the subsystem.
-    # Local Git clones can inherit a read-only pack/index bit on Windows.
-    def _clear_readonly_and_retry(function, path, exception) -> None:
-        del exception
-        os.chmod(path, stat.S_IWRITE)
-        function(path)
-
-    shutil.rmtree(target, onexc=_clear_readonly_and_retry)
+    _remove_capsule_tree(target)
 
 
 def _parse_copy_inputs(values: list[str]) -> dict[str, str]:
