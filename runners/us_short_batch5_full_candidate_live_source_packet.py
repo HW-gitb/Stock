@@ -313,7 +313,24 @@ def _validate_json_schema(payload: Any, schema_path: Path, *, label: str) -> Non
         raise FullCandidateLiveSourcePacketError(f"{label} failed schema validation: {joined}")
 
 
-def _load_ready_preflight(preflight_summary_path: Path, expected_total_call_budget: int) -> dict[str, Any]:
+def _approval_binding(approval: Any) -> dict[str, Any]:
+    from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+    if not isinstance(approval, Pass2BudgetApproval):
+        raise FullCandidateLiveSourcePacketError("finalized Pass2 budget approval is required")
+    try:
+        return Pass2BudgetApproval.validate_binding_summary(approval.binding_summary())
+    except (TypeError, ValueError) as exc:
+        raise FullCandidateLiveSourcePacketError(str(exc)) from exc
+
+
+def _load_ready_preflight(
+    preflight_summary_path: Path,
+    expected_total_call_budget: int,
+    budget_approval: Any = None,
+    *,
+    require_budget_approval: bool = True,
+) -> dict[str, Any]:
     if type(expected_total_call_budget) is not int or expected_total_call_budget <= 0:
         raise FullCandidateLiveSourcePacketError("expected_total_call_budget must be a positive integer")
     preflight = _read_json(preflight_summary_path)
@@ -349,6 +366,22 @@ def _load_ready_preflight(preflight_summary_path: Path, expected_total_call_budg
         raise FullCandidateLiveSourcePacketError(
             f"expected call budget must match preflight forecast: {expected_total_call_budget} != {forecast}"
         )
+    actual_binding = gate.get("approval_binding")
+    if require_budget_approval and budget_approval is None:
+        raise FullCandidateLiveSourcePacketError(
+            "finalized preflight requires the matching Pass2 budget approval before any provider request"
+        )
+    if budget_approval is not None:
+        expected_binding = _approval_binding(budget_approval)
+        if actual_binding != expected_binding:
+            raise FullCandidateLiveSourcePacketError(
+                "preflight approval binding does not match the stage context approval"
+            )
+        if expected_binding["exact_pass2_calls"] != expected_total_call_budget:
+            raise FullCandidateLiveSourcePacketError(
+                "budget exceeded before provider request: approved budget "
+                f"{expected_binding['exact_pass2_calls']}, stage requires {expected_total_call_budget}"
+            )
     return preflight
 
 
@@ -407,7 +440,9 @@ def _assert_endpoint_budget(records: list[sample_validation.FetchRecord], max_to
     try:
         sample_validation.assert_endpoint_budget_available(records, max_total_endpoint_calls)
     except RuntimeError as exc:
-        raise FullCandidateLiveSourcePacketError(str(exc)) from exc
+        raise FullCandidateLiveSourcePacketError(
+            f"budget exceeded before provider request: approved budget {max_total_endpoint_calls}; {exc}"
+        ) from exc
 
 
 def _fmp_stable_url(path_template: str, symbol: str, api_key: str) -> str:
@@ -479,7 +514,17 @@ def _fetch_live_records(
     max_retries_per_call: int,
     retry_backoff_seconds: float,
     fetch_fmp_grades: bool,
+    budget_approval: Any = None,
+    require_budget_approval: bool = True,
 ) -> tuple[list[sample_validation.FetchRecord], dict[str, str], int, int]:
+    binding = None
+    if require_budget_approval or budget_approval is not None:
+        binding = _approval_binding(budget_approval)
+        if binding["exact_pass2_calls"] != max_total_endpoint_calls:
+            raise FullCandidateLiveSourcePacketError(
+                "budget exceeded before provider request: approved budget "
+                f"{binding['exact_pass2_calls']}, stage requires {max_total_endpoint_calls}"
+            )
     records: list[sample_validation.FetchRecord] = []
     retry_stats = {"used": 0}
     attempt_budget = HttpAttemptBudget(max_total_http_attempts=max_total_http_attempts)
@@ -1692,6 +1737,7 @@ def run_full_candidate_live_source_packet(
     source_artifact_prefix: Path = SOURCE_ARTIFACT_PREFIX,
     summary_path: Path = SUMMARY_PATH,
     raw_root: Path = RAW_SAMPLE_ROOT,
+    budget_approval: Any = None,
     client: sample_validation.JsonHttpClient | None = None,
     confirm_user_authorization: bool = False,
     run_data_context: bool = False,
@@ -1754,7 +1800,12 @@ def run_full_candidate_live_source_packet(
     if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
         raise FullCandidateLiveSourcePacketError("generated_at and observed_at must be timezone-aware RFC3339 instants")
     preflight_path = _validate_preflight_path(preflight_summary_path)
-    preflight = _load_ready_preflight(preflight_path, expected_total_call_budget)
+    preflight = _load_ready_preflight(
+        preflight_path,
+        expected_total_call_budget,
+        budget_approval,
+        require_budget_approval=execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
+    )
     if max_total_http_attempts is None:
         if max_retries_per_call:
             raise FullCandidateLiveSourcePacketError(
@@ -1892,6 +1943,8 @@ def run_full_candidate_live_source_packet(
         max_retries_per_call=max_retries_per_call,
         retry_backoff_seconds=retry_backoff_seconds,
         fetch_fmp_grades=yfinance_actions_path is None,
+        budget_approval=budget_approval,
+        require_budget_approval=execution_mode == _EXECUTION_MODE_LIVE_PROVIDER_FETCH,
     )
     resolved_sources = _resolved_source_artifacts(
         selected_symbols=selected_symbols,

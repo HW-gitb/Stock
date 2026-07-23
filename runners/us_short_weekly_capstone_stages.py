@@ -105,6 +105,25 @@ def _account_holding_tickers(ctx) -> list[str]:
 
 
 def _require_frozen_funnel_authorization(ctx, *, allow_budget_preview: bool = False) -> None:
+    approval = getattr(ctx, "budget_approval", None)
+    if approval is not None:
+        try:
+            approval_budget = approval.exact_pass2_calls
+            approval_k = approval.momentum_top_k
+        except AttributeError as exc:
+            raise PermissionError("Pass2 budget approval is malformed") from exc
+        if (
+            type(approval_budget) is not int
+            or isinstance(approval_budget, bool)
+            or approval_budget < 1
+            or type(approval_k) is not int
+            or isinstance(approval_k, bool)
+            or not 1 <= approval_k <= 250
+            or ctx.authorized_pass2_call_budget != approval_budget
+            or ctx.authorized_momentum_top_k != approval_k
+        ):
+            raise PermissionError("Pass2 budget approval does not match the frozen K and exact call budget")
+        return
     k_is_valid = (
         type(getattr(ctx, "authorized_momentum_top_k", None)) is int
         and not isinstance(ctx.authorized_momentum_top_k, bool)
@@ -115,16 +134,21 @@ def _require_frozen_funnel_authorization(ctx, *, allow_budget_preview: bool = Fa
         and not isinstance(ctx.authorized_pass2_call_budget, bool)
         and ctx.authorized_pass2_call_budget >= 1
     )
-    if k_is_valid and budget_is_valid:
+    if allow_budget_preview and k_is_valid and (budget_is_valid or getattr(ctx, "pass2_budget_preview", False) is True):
         return
-    if (
-        allow_budget_preview
-        and k_is_valid
-        and getattr(ctx, "pass2_budget_preview", False) is True
-        and getattr(ctx, "authorized_pass2_call_budget", None) is None
-    ):
-        return
-    raise PermissionError("Pass2 stages require a frozen K and positive exact call budget in the run context")
+    raise PermissionError("Pass2 stages require the single frozen Pass2 budget approval (frozen K and exact call budget)")
+
+
+def _require_budget_approval(ctx):
+    approval = getattr(ctx, "budget_approval", None)
+    from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+    if not isinstance(approval, Pass2BudgetApproval):
+        raise PermissionError(
+            "downstream Pass2 stages require the finalized Pass2 budget approval (frozen K and exact call budget)"
+        )
+    _require_frozen_funnel_authorization(ctx)
+    return approval
 
 
 # --- GATED stages (live provider fetch; SR-PROVIDER-001) ---
@@ -165,11 +189,12 @@ def run_sic_fetch(ctx) -> dict[str, Any]:
 
 def run_pass2_fetch(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
-    _require_frozen_funnel_authorization(ctx)
+    approval = _require_budget_approval(ctx)
     summary = _pass2.run_full_candidate_live_source_packet(
         preflight_summary_path=ctx.preflight_summary_path,
-        expected_total_call_budget=ctx.authorized_pass2_call_budget,
-        authorized_momentum_top_k=ctx.authorized_momentum_top_k,
+        expected_total_call_budget=approval.exact_pass2_calls,
+        authorized_momentum_top_k=approval.momentum_top_k,
+        budget_approval=approval,
         source_artifact_prefix=ctx.source_artifact_prefix,
         context_components_output_path=ctx.context_components_path,
         output_data_context_path=ctx.data_context_path,   # decision-date-keyed (else the runner default is a stale 20260706 name)
@@ -193,8 +218,10 @@ def run_pass2_fetch(ctx) -> dict[str, Any]:
 
 def run_yfinance_grades_fetch(ctx) -> dict[str, Any]:
     _require_ctx_authorization(ctx)
+    approval = _require_budget_approval(ctx)
     return _yfinance_grades.run_yfinance_grades_fetch(
         preflight_summary_path=ctx.preflight_summary_path,
+        budget_approval=approval,
         output_source_package_path=ctx.yfinance_grade_source_package_path,
         output_resolved_actions_path=ctx.yfinance_grade_actions_path,
         summary_path=_stage_summary_targets(ctx)["yfinance_grades_fetch"],

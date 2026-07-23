@@ -218,6 +218,27 @@ class FullCandidateFakeClient:
 
 
 class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
+    def _finalize_manual_approval(self, preflight_path: Path):
+        from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+        summary = json.loads(preflight_path.read_text(encoding="utf-8"))
+        approval = Pass2BudgetApproval(
+            decision_date=summary["decision_clock"]["expected_decision_date"],
+            candidate_price_basis_date=summary["decision_clock"]["candidate_price_basis_date"],
+            candidate_artifact_sha256=summary["candidate_universe"]["candidate_artifact_sha256"],
+            momentum_top_k=summary["pass2_target_universe"]["momentum_top_k"],
+            target_count=summary["pass2_target_universe"]["target_count"],
+            exact_pass2_calls=summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+            authorization_mode="manual",
+            authorization_ref="manual:test_fixture",
+            generated_at=summary["generated_at"],
+        )
+        preflight_runner.finalize_preflight_from_existing_derivation(
+            preflight_summary_path=preflight_path,
+            approval_binding=approval.binding_summary(),
+        )
+        return approval
+
     def setUp(self):
         self.slug = f"fc_live_{os.getpid()}_{abs(hash(self._testMethodName)) % 100000}"
         self.raw_root = SAMPLE_DIR / self.slug / "raw"
@@ -259,6 +280,48 @@ class UsShortBatch5FullCandidateLiveSourcePacketTest(unittest.TestCase):
             authorized_total_call_budget=16,
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
+        )
+        self.fixture_approval = self._finalize_manual_approval(self.paths["preflight"])
+        original_live_run = runner.run_full_candidate_live_source_packet
+
+        def run_with_fixture_approval(*args, **kwargs):
+            if kwargs.get("budget_approval") is None:
+                preflight_path = kwargs["preflight_summary_path"]
+                if preflight_path != self.paths["preflight"] or self._testMethodName == (
+                    "test_invalid_calendar_decision_date_raises_typed_error_before_network"
+                ):
+                    kwargs["budget_approval"] = self.fixture_approval
+                else:
+                    try:
+                        kwargs["budget_approval"] = self._finalize_manual_approval(preflight_path)
+                    except preflight_runner.FullCandidatePass2PreflightError:
+                        # Some hostile fixtures deliberately violate a preflight
+                        # readiness invariant to exercise a later independent
+                        # pre-network guard. Bind their explicit test approval
+                        # without claiming that the production finalizer accepts
+                        # that invalid derivation.
+                        summary = json.loads(preflight_path.read_text(encoding="utf-8"))
+                        from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+                        approval = Pass2BudgetApproval(
+                            decision_date=summary["decision_clock"]["expected_decision_date"],
+                            candidate_price_basis_date=summary["decision_clock"]["candidate_price_basis_date"],
+                            candidate_artifact_sha256=summary["candidate_universe"]["candidate_artifact_sha256"],
+                            momentum_top_k=summary["pass2_target_universe"]["momentum_top_k"],
+                            target_count=summary["pass2_target_universe"]["target_count"],
+                            exact_pass2_calls=summary["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+                            authorization_mode="manual",
+                            authorization_ref="manual:test_fixture_hostile",
+                            generated_at=summary["generated_at"],
+                        )
+                        summary["execution_gate"]["approval_binding"] = approval.binding_summary()
+                        _write_json(preflight_path, summary)
+                        kwargs["budget_approval"] = approval
+            return original_live_run(*args, **kwargs)
+
+        runner.run_full_candidate_live_source_packet = run_with_fixture_approval
+        self.addCleanup(
+            setattr, runner, "run_full_candidate_live_source_packet", original_live_run
         )
 
     def tearDown(self):

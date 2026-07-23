@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-07-23 - Codex self-review PASS (US-short Pass2 budget approval)
+
+- **Verdict/Action**: PASS; `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` is closed in `docs/system_risk_register.md`.
+- **Required**: None; closure details are in `docs/system_risk_register.md`.
+- **Verify**: Main Python focused approval/preflight/capstone/yfinance/Pass2/checkpoint/schema/offline-E2E pack and full `test_us_short*.py` discovery passed; `git diff --check` passed; no provider/network/full-market execution.
+- **Next**: User-authorized commit and merge.
+
+## 2026-07-23 - Codex re-review FAIL (US-short Pass2 budget approval)
+
+- **Verdict/Action**: FAIL; `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` remains open.
+- **Required**: `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` — see `docs/system_risk_register.md`.
+- **Verify**: Reviewer reproduced `LEGACY_READY_PREFLIGHT_BYPASS_CONFIRMED` without network; `git diff --check` passed.
+- **Next**: Codex: repair
+
+## 2026-07-23 — Codex repair (US-short Pass2 budget approval binding and resume)
+
+- **Verdict/Action**: Repaired the same-class gaps: finalized preflight approval is required at both direct provider boundaries; forged/conflicting bindings are rejected; manual checkpoint resume restores the same immutable approval. Current worktree remains uncommitted and pending independent review.
+- **Required**: Independent review of the current diff; Codex did not commit.
+- **Verify**: Project main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: targeted approval tests 11 OK; fixed US-short schema/preflight/capstone/yfinance/Pass2/replay regression pack 153 OK; no provider call, network, full-market fetch, or full capstone execution.
+- **Pre-Codex self-review**: A-F checked / N-A for unrelated lanes; same-class boundary grep and reverse checks covered direct loaders, finalization conflicts, candidate mutation, forged fingerprints, and manual checkpoint restore; route docs and `docs/CURRENT.md` were not changed; deleted SESSION_LOG history restored.
+- **Next**: Claude Code: review current US-short Pass2 budget-approval diff; PASS then commit
+
 ## 2026-07-23 - Codex first-knife self-repair and final independent adversarial re-review PASS
 
 - **Verdict/Action**: PASS. The first-knife P0/P1/P2/P3/P5 control-plane scope is complete: reviewed one-change arm inventory, full current-epoch binding, P2 target/breakout isolation, old-epoch diagnostic-only treatment, and schema-closed public summaries. A final P2 weekly-schema/effect-contract seam found by the acceptance run was repaired before this re-review.

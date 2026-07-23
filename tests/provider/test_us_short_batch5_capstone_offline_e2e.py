@@ -23,6 +23,7 @@ from runners import us_short_batch5_full_candidate_live_source_packet as funnel 
 from runners import us_short_batch5_full_candidate_pass2_preflight as preflight_runner  # noqa: E402
 from runners import us_short_batch5_to_batch4_weekend_e2e as e2e  # noqa: E402
 from runners import us_short_yfinance_grades_fetch as yfinance_fetch  # noqa: E402
+from runners.us_short_weekly_capstone import Pass2BudgetApproval  # noqa: E402
 from engine.us_short_yfinance_analyst_grades import resolve_yfinance_grade_actions  # noqa: E402
 from tests.provider.test_us_short_batch5_data_context import (  # noqa: E402
     _DECISION_DATE,
@@ -119,6 +120,22 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
             confirm_user_authorization=True,
             generated_at="2026-07-06T12:00:00+00:00",
         )
+        preflight = json.loads(self.paths["preflight"].read_text(encoding="utf-8"))
+        self.budget_approval = Pass2BudgetApproval(
+            decision_date=preflight["decision_clock"]["expected_decision_date"],
+            candidate_price_basis_date=preflight["decision_clock"]["candidate_price_basis_date"],
+            candidate_artifact_sha256=preflight["candidate_universe"]["candidate_artifact_sha256"],
+            momentum_top_k=preflight["pass2_target_universe"]["momentum_top_k"],
+            target_count=preflight["pass2_target_universe"]["target_count"],
+            exact_pass2_calls=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+            authorization_mode="manual",
+            authorization_ref="manual:test_fixture",
+            generated_at=preflight["generated_at"],
+        )
+        preflight_runner.finalize_preflight_from_existing_derivation(
+            preflight_summary_path=self.paths["preflight"],
+            approval_binding=self.budget_approval.binding_summary(),
+        )
 
     def _source_artifact_paths(self) -> list[Path]:
         prefix = self.paths["prefix"]
@@ -205,6 +222,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -278,6 +296,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -353,6 +372,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -429,6 +449,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
     def test_yfinance_resolver_rejection_and_fmp_grades_down_still_emit_with_neutral_grades(self) -> None:
         yfinance_summary = yfinance_fetch.run_yfinance_grades_fetch(
             preflight_summary_path=self.paths["preflight"],
+            budget_approval=self.budget_approval,
             output_source_package_path=self.paths["yfinance_source"],
             output_resolved_actions_path=self.paths["yfinance"],
             summary_path=self.paths["yfinance_summary"],
@@ -447,6 +468,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -503,6 +525,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],
@@ -612,6 +635,7 @@ class CapstoneOfflineE2ETest(unittest.TestCase):
         ):
             funnel_summary = funnel.run_full_candidate_live_source_packet(
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 expected_total_call_budget=16,
                 output_data_context_path=self.paths["output"],
                 context_components_output_path=self.paths["components"],

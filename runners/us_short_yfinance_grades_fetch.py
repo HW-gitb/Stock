@@ -202,13 +202,41 @@ def _validate_json_schema(payload: Any, schema_path: Path, *, label: str) -> Non
         raise YFinanceGradesFetchError(f"{label} failed schema validation: {joined}")
 
 
-def _load_ready_preflight(path: Path) -> tuple[dict[str, Any], str, str, list[str]]:
+def _approval_binding(approval: Any) -> dict[str, Any]:
+    from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+    if not isinstance(approval, Pass2BudgetApproval):
+        raise YFinanceGradesFetchError("finalized Pass2 budget approval is required")
+    try:
+        return Pass2BudgetApproval.validate_binding_summary(approval.binding_summary())
+    except (TypeError, ValueError) as exc:
+        raise YFinanceGradesFetchError(str(exc)) from exc
+
+
+def _load_ready_preflight(
+    path: Path,
+    budget_approval: Any = None,
+    *,
+    require_budget_approval: bool = True,
+) -> tuple[dict[str, Any], str, str, list[str]]:
     preflight = _read_json(path)
     _validate_json_schema(preflight, PREFLIGHT_SCHEMA_PATH, label="full-candidate preflight summary")
     if (preflight.get("scope") or {}).get("status") != "ready_for_reviewed_live_execution":
         raise YFinanceGradesFetchError("preflight summary is not ready for reviewed live execution")
     if (preflight.get("execution_gate") or {}).get("ready_to_run_full_candidate_live_packet") is not True:
         raise YFinanceGradesFetchError("preflight execution gate is not ready")
+    actual_binding = (preflight.get("execution_gate") or {}).get("approval_binding")
+    if require_budget_approval and budget_approval is None:
+        raise YFinanceGradesFetchError(
+            "finalized preflight requires the matching Pass2 budget approval before any yfinance client/provider request"
+        )
+    if budget_approval is not None:
+        expected_binding = _approval_binding(budget_approval)
+        if actual_binding != expected_binding:
+            raise YFinanceGradesFetchError("preflight approval binding does not match the stage context approval")
+        forecast = (preflight.get("endpoint_call_forecast") or {}).get("total_calls_for_pass2_target_cut")
+        if expected_binding["exact_pass2_calls"] != forecast:
+            raise YFinanceGradesFetchError("Pass2 approval exact call budget does not match the preflight forecast")
     decision_date = preflight["decision_clock"]["expected_decision_date"]
     source_as_of = _date8_to_ymd(decision_date)
     target_symbols = (preflight.get("pass2_target_universe") or {}).get("target_symbols")
@@ -763,6 +791,7 @@ def run_yfinance_grades_fetch(
     output_resolved_actions_path: Path = RESOLVED_ACTIONS_PATH,
     summary_path: Path = SUMMARY_PATH,
     raw_root: Path = RAW_ROOT,
+    budget_approval: Any = None,
     client: Any = None,
     importer=importlib.import_module,
     confirm_user_authorization: bool = False,
@@ -779,7 +808,7 @@ def run_yfinance_grades_fetch(
     if not _valid_observed_at(generated_at) or not _valid_observed_at(observed_at):
         raise YFinanceGradesFetchError("generated_at and observed_at must be timezone-aware RFC3339 instants")
     preflight_path = _validate_preflight_path(preflight_summary_path)
-    _, decision_date, source_as_of, target_symbols = _load_ready_preflight(preflight_path)
+    _, decision_date, source_as_of, target_symbols = _load_ready_preflight(preflight_path, budget_approval)
     source_package_path = _validate_state_json_path(output_source_package_path, field="output_source_package_path")
     resolved_actions_path = _validate_state_json_path(output_resolved_actions_path, field="output_resolved_actions_path")
     raw_root_resolved = _validate_raw_root(raw_root)
@@ -825,14 +854,20 @@ def run_default(
     dry_run: bool = True,
     confirm_user_authorization: bool = False,
     preflight_summary_path: Path = PREFLIGHT_SUMMARY_PATH,
+    budget_approval: Any = None,
     importer=importlib.import_module,
 ) -> dict[str, Any]:
     preflight_path = _validate_preflight_path(preflight_summary_path)
-    _, _, _, target_symbols = _load_ready_preflight(preflight_path)
+    _, _, _, target_symbols = _load_ready_preflight(
+        preflight_path,
+        budget_approval,
+        require_budget_approval=not dry_run,
+    )
     if dry_run:
         return _dry_run_result(preflight_path, len(target_symbols))
     return run_yfinance_grades_fetch(
         preflight_summary_path=preflight_path,
+        budget_approval=budget_approval,
         importer=importer,
         confirm_user_authorization=confirm_user_authorization,
     )

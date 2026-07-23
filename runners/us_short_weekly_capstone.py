@@ -36,6 +36,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import sys
 from dataclasses import dataclass, field, replace
@@ -66,6 +67,110 @@ _PREFLIGHT_SAMPLE_REL_ROOT = Path("provider_samples") / "us_short_batch5_full_ca
 
 class WeeklyCapstoneError(RuntimeError):
     """Any capstone-orchestration failure (canonical resolution, a missing prerequisite, a stage abort)."""
+
+
+@dataclass(frozen=True)
+class Pass2BudgetApproval:
+    """The one immutable Pass2 approval shared by every downstream stage in a run.
+
+    The approval binds only safe run facts.  It never carries candidate symbols,
+    provider credentials, URLs, or raw provider payloads; the preflight summary
+    remains the derived audit artifact and this object is the execution binding.
+    """
+
+    decision_date: str
+    candidate_price_basis_date: str
+    candidate_artifact_sha256: str
+    momentum_top_k: int
+    target_count: int
+    exact_pass2_calls: int
+    authorization_mode: str
+    authorization_ref: str
+    generated_at: str
+
+    def __post_init__(self) -> None:
+        for field_name in ("decision_date", "candidate_price_basis_date"):
+            value = getattr(self, field_name)
+            if type(value) is not str or not re.fullmatch(r"[0-9]{8}", value):
+                raise ValueError(f"{field_name} must be ASCII YYYYMMDD")
+            try:
+                datetime.strptime(value, "%Y%m%d")
+            except ValueError as exc:
+                raise ValueError(f"{field_name} must be a real calendar date") from exc
+        if type(self.candidate_artifact_sha256) is not str or not re.fullmatch(
+            r"[0-9a-f]{64}", self.candidate_artifact_sha256
+        ):
+            raise ValueError("candidate_artifact_sha256 must be a lowercase SHA-256 fingerprint")
+        for field_name in ("momentum_top_k", "target_count", "exact_pass2_calls"):
+            value = getattr(self, field_name)
+            if type(value) is not int or isinstance(value, bool) or value < 1:
+                raise ValueError(f"{field_name} must be a positive exact int")
+        if not (1 <= self.momentum_top_k <= 250):
+            raise ValueError("momentum_top_k must be in [1, 250]")
+        if self.authorization_mode not in {"manual", "one_click_test"}:
+            raise ValueError("authorization_mode must be manual or one_click_test")
+        if type(self.authorization_ref) is not str or not self.authorization_ref.strip():
+            raise ValueError("authorization_ref must be a non-empty safe reference")
+        lower_ref = self.authorization_ref.lower()
+        if any(fragment in lower_ref for fragment in ("http://", "https://", "api_key", "token=", "raw_payload")):
+            raise ValueError("authorization_ref must not contain secrets, URLs, or raw payload references")
+        if type(self.generated_at) is not str:
+            raise ValueError("generated_at must be a timezone-aware RFC3339 instant")
+        try:
+            generated = datetime.fromisoformat(self.generated_at.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("generated_at must be a timezone-aware RFC3339 instant") from exc
+        if generated.tzinfo is None:
+            raise ValueError("generated_at must be a timezone-aware RFC3339 instant")
+
+    def _fingerprint_payload(self) -> dict[str, Any]:
+        return {
+            "decision_date": self.decision_date,
+            "candidate_price_basis_date": self.candidate_price_basis_date,
+            "candidate_artifact_sha256": self.candidate_artifact_sha256,
+            "momentum_top_k": self.momentum_top_k,
+            "target_count": self.target_count,
+            "exact_pass2_calls": self.exact_pass2_calls,
+            "authorization_mode": self.authorization_mode,
+            "authorization_ref": self.authorization_ref,
+            "generated_at": self.generated_at,
+        }
+
+    @property
+    def fingerprint(self) -> str:
+        encoded = json.dumps(
+            self._fingerprint_payload(), ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        return hashlib.sha256(encoded).hexdigest()
+
+    def binding_summary(self) -> dict[str, Any]:
+        return {**self._fingerprint_payload(), "fingerprint": self.fingerprint}
+
+    @classmethod
+    def validate_binding_summary(cls, binding: Any) -> dict[str, Any]:
+        """Validate both the closed binding shape and its content-derived fingerprint."""
+        fields = (
+            "decision_date",
+            "candidate_price_basis_date",
+            "candidate_artifact_sha256",
+            "momentum_top_k",
+            "target_count",
+            "exact_pass2_calls",
+            "authorization_mode",
+            "authorization_ref",
+            "generated_at",
+        )
+        if type(binding) is not dict or set(binding) != set(fields) | {"fingerprint"}:
+            raise ValueError("Pass2 budget approval binding has an unexpected shape")
+        if type(binding["fingerprint"]) is not str or not re.fullmatch(r"[0-9a-f]{64}", binding["fingerprint"]):
+            raise ValueError("Pass2 budget approval fingerprint is invalid")
+        try:
+            approval = cls(**{field: binding[field] for field in fields})
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Pass2 budget approval binding is invalid") from exc
+        if approval.fingerprint != binding["fingerprint"]:
+            raise ValueError("Pass2 budget approval fingerprint does not match its binding fields")
+        return dict(binding)
 
 
 def _emit_diagnostic_event(
@@ -102,6 +207,7 @@ class CapstoneContext:
     authorized_momentum_top_k: int = 200
     authorized_pass2_call_budget: int | None = None
     pass2_budget_preview: bool = False
+    budget_approval: Pass2BudgetApproval | None = None
     catalyst_recall_tickers: tuple[str, ...] = ()
     frozen_holding_tickers: tuple[str, ...] | None = None
     confirm_user_authorization: bool = False
@@ -476,9 +582,12 @@ def _plan(ctx: CapstoneContext, stages: list[Stage], *, resume_from: Path | None
 
 def _checkpoint_run_contract(ctx: CapstoneContext) -> dict[str, Any]:
     """Non-file inputs that can change frozen-stage output despite identical artifact SHA-256s."""
+    approval = ctx.budget_approval
     return {
         "authorized_momentum_top_k": ctx.authorized_momentum_top_k,
-        "authorized_pass2_call_budget": ctx.authorized_pass2_call_budget,
+        "authorized_pass2_call_budget": (
+            approval.exact_pass2_calls if approval is not None else ctx.authorized_pass2_call_budget
+        ),
         "catalyst_recall_tickers": list(ctx.catalyst_recall_tickers),
         "frozen_holding_tickers": list(ctx.frozen_holding_tickers or ()),
     }
@@ -517,6 +626,104 @@ def _sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def _build_pass2_budget_approval(
+    ctx: CapstoneContext,
+    preflight: dict[str, Any],
+    *,
+    authorization_mode: str,
+) -> Pass2BudgetApproval:
+    """Mint the single approval from the already-written preflight derivation."""
+    try:
+        candidate = preflight["candidate_universe"]
+        clock = preflight["decision_clock"]
+        targets = preflight["pass2_target_universe"]
+        forecast = preflight["endpoint_call_forecast"]
+        candidate_sha = candidate["candidate_artifact_sha256"]
+        derived = {
+            "decision_date": clock["expected_decision_date"],
+            "candidate_price_basis_date": clock["candidate_price_basis_date"],
+            "momentum_top_k": targets["momentum_top_k"],
+            "target_count": targets["target_count"],
+            "exact_pass2_calls": forecast["total_calls_for_pass2_target_cut"],
+        }
+    except (KeyError, TypeError) as exc:
+        raise WeeklyCapstoneError("pass2 preflight lacks the immutable approval derivation fields") from exc
+    if derived["decision_date"] != ctx.decision_date:
+        raise WeeklyCapstoneError("Pass2 budget approval decision_date does not match the capstone context")
+    if derived["candidate_price_basis_date"] != ctx.price_basis_date:
+        raise WeeklyCapstoneError("Pass2 budget approval candidate price basis date does not match the capstone context")
+    if type(candidate_sha) is not str or candidate_sha != _sha256_file(ctx.candidate_path):
+        raise WeeklyCapstoneError("Pass2 budget approval candidate artifact fingerprint does not match current bytes")
+    if derived["momentum_top_k"] != ctx.authorized_momentum_top_k:
+        raise WeeklyCapstoneError("Pass2 budget approval momentum_top_k does not match the capstone context")
+    if type(ctx.authorized_pass2_call_budget) is int and not isinstance(ctx.authorized_pass2_call_budget, bool):
+        if ctx.authorized_pass2_call_budget != derived["exact_pass2_calls"]:
+            raise WeeklyCapstoneError(
+                "Pass2 budget approval exact call budget does not match the existing preflight derivation: "
+                f"approved {ctx.authorized_pass2_call_budget}, derived {derived['exact_pass2_calls']}"
+            )
+    approval = Pass2BudgetApproval(
+        **derived,
+        candidate_artifact_sha256=candidate_sha,
+        authorization_mode=authorization_mode,
+        authorization_ref=f"{authorization_mode}:{ctx.decision_date}:{ctx.generated_at}",
+        generated_at=ctx.generated_at,
+    )
+    return approval
+
+
+def _restore_pass2_budget_approval(ctx: CapstoneContext, preflight: dict[str, Any]) -> Pass2BudgetApproval:
+    """Restore the immutable manual approval from a finalized checkpointed preflight."""
+    if not isinstance(preflight, dict):
+        raise WeeklyCapstoneError("checkpointed Pass2 preflight result is not an object")
+    gate = preflight.get("execution_gate")
+    binding = gate.get("approval_binding") if isinstance(gate, dict) else None
+    try:
+        binding = Pass2BudgetApproval.validate_binding_summary(binding)
+    except (TypeError, ValueError) as exc:
+        raise WeeklyCapstoneError(f"checkpointed Pass2 preflight approval binding is invalid: {exc}") from exc
+    if binding["authorization_mode"] != "manual":
+        raise WeeklyCapstoneError("only a manually authorized Pass2 checkpoint may be resumed")
+    if preflight.get("scope", {}).get("status") != "ready_for_reviewed_live_execution":
+        raise WeeklyCapstoneError("checkpointed Pass2 preflight is not finalized for execution")
+    if gate.get("ready_to_run_full_candidate_live_packet") is not True or gate.get("block_reasons") != []:
+        raise WeeklyCapstoneError("checkpointed Pass2 preflight execution gate is not finalized")
+    candidate = preflight.get("candidate_universe")
+    clock = preflight.get("decision_clock")
+    targets = preflight.get("pass2_target_universe")
+    forecast = preflight.get("endpoint_call_forecast")
+    if not all(isinstance(value, dict) for value in (candidate, clock, targets, forecast)):
+        raise WeeklyCapstoneError("checkpointed Pass2 preflight lacks approval binding inputs")
+    checks = (
+        ("decision_date", ctx.decision_date, clock.get("expected_decision_date"), binding["decision_date"]),
+        ("candidate_price_basis_date", ctx.price_basis_date, clock.get("candidate_price_basis_date"), binding["candidate_price_basis_date"]),
+        ("momentum_top_k", ctx.authorized_momentum_top_k, targets.get("momentum_top_k"), binding["momentum_top_k"]),
+        ("target_count", targets.get("target_count"), binding["target_count"], binding["target_count"]),
+        ("exact_pass2_calls", forecast.get("total_calls_for_pass2_target_cut"), binding["exact_pass2_calls"], binding["exact_pass2_calls"]),
+        ("generated_at", preflight.get("generated_at"), binding["generated_at"], binding["generated_at"]),
+    )
+    for field, context_value, derived_value, binding_value in checks:
+        if context_value != derived_value or derived_value != binding_value:
+            raise WeeklyCapstoneError(f"checkpointed Pass2 approval {field} does not match current run")
+    candidate_sha = candidate.get("candidate_artifact_sha256")
+    if candidate_sha != binding["candidate_artifact_sha256"] or candidate_sha != _sha256_file(ctx.candidate_path):
+        raise WeeklyCapstoneError("checkpointed Pass2 approval candidate artifact fingerprint does not match current bytes")
+    if gate.get("authorized_momentum_top_k") != binding["momentum_top_k"]:
+        raise WeeklyCapstoneError("checkpointed Pass2 approval momentum_top_k is not authorized in the gate")
+    if gate.get("authorized_total_call_budget") != binding["exact_pass2_calls"]:
+        raise WeeklyCapstoneError("checkpointed Pass2 approval call budget is not authorized in the gate")
+    if ctx.authorized_pass2_call_budget != binding["exact_pass2_calls"]:
+        raise WeeklyCapstoneError("checkpointed Pass2 approval call budget does not match the current run")
+    return Pass2BudgetApproval(**{
+        field: binding[field]
+        for field in (
+            "decision_date", "candidate_price_basis_date", "candidate_artifact_sha256",
+            "momentum_top_k", "target_count", "exact_pass2_calls", "authorization_mode",
+            "authorization_ref", "generated_at",
+        )
+    })
 
 
 def _output_fingerprint(path: Path):
@@ -1338,6 +1545,28 @@ def run_weekly_capstone(
                     raise WeeklyCapstoneError(f"resume checkpoint restore failed at stage '{stage.name}': {exc}") from exc
                 if restored is not None:
                     result, stage_generated_at, stage_observed_at = restored
+                    if production_run and stage.name == "pass2_preflight":
+                        try:
+                            approval = _restore_pass2_budget_approval(ctx, result)
+                        except Exception as exc:  # noqa: BLE001 - preserve fail-closed resume boundary
+                            _emit_diagnostic_event(
+                                diagnostic_event,
+                                "budget_approval_resume_rejected",
+                                error_type=type(exc).__name__,
+                            )
+                            raise WeeklyCapstoneError(
+                                f"Pass2 budget approval could not be restored from checkpoint: {type(exc).__name__}: {exc}"
+                            ) from exc
+                        ctx = replace(ctx, budget_approval=approval, pass2_budget_preview=False)
+                        _emit_diagnostic_event(
+                            diagnostic_event,
+                            "budget_approval_restored",
+                            authorization_mode=approval.authorization_mode,
+                            authorization_ref=approval.authorization_ref,
+                            target_count=approval.target_count,
+                            exact_pass2_calls=approval.exact_pass2_calls,
+                            approval_fingerprint=approval.fingerprint,
+                        )
                     append_stage_result(
                         stage, result, execution_mode="reused",
                         stage_generated_at=stage_generated_at, stage_observed_at=stage_observed_at,
@@ -1455,35 +1684,55 @@ def run_weekly_capstone(
                     continue
                 raise WeeklyCapstoneError(
                     f"stage '{stage.name}' completed but did not produce a fresh output this run: {[_rel(p) for p in missing]}")
-            if auto_budget_run and stage.name == "pass2_preflight":
+            if production_run and stage.name == "pass2_preflight":
+                authorization_mode = "one_click_test" if auto_budget_run else "manual"
                 try:
-                    forecast = result["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"]
-                    target_count = result["pass2_target_universe"]["target_count"]
-                    gate = result["execution_gate"]
-                except (KeyError, TypeError) as exc:
+                    approval = _build_pass2_budget_approval(
+                        ctx, result, authorization_mode=authorization_mode)
+                    from runners import us_short_batch5_full_candidate_pass2_preflight as _preflight
+
+                    result = _preflight.finalize_preflight_from_existing_derivation(
+                        preflight_summary_path=ctx.preflight_summary_path,
+                        approval_binding=approval.binding_summary(),
+                    )
+                except Exception as exc:  # noqa: BLE001 - preserve fail-closed approval boundary
+                    _emit_diagnostic_event(
+                        diagnostic_event,
+                        "budget_approval_mismatch",
+                        error_type=type(exc).__name__,
+                        approved_budget=ctx.authorized_pass2_call_budget,
+                        derived_budget=(
+                            result.get("endpoint_call_forecast", {}).get("total_calls_for_pass2_target_cut")
+                            if isinstance(result, dict) else None
+                        ),
+                    )
                     raise WeeklyCapstoneError(
-                        "auto Pass2 budget authorization received an incomplete preflight forecast"
+                        f"Pass2 budget approval could not finalize the existing preflight: {type(exc).__name__}: {exc}"
                     ) from exc
-                if type(forecast) is not int or isinstance(forecast, bool) or forecast < 1:
-                    raise WeeklyCapstoneError(
-                        "auto Pass2 budget authorization received a non-positive exact call forecast"
-                    )
-                if type(target_count) is not int or isinstance(target_count, bool) or target_count < 1:
-                    raise WeeklyCapstoneError(
-                        "auto Pass2 budget authorization received an invalid Pass2 target count"
-                    )
-                if not isinstance(gate, dict) or gate.get("ready_to_run_full_candidate_live_packet") is not False:
-                    raise WeeklyCapstoneError(
-                        "auto Pass2 budget authorization requires the preflight to remain blocked before the derived budget"
-                    )
-                # The one-click paper launcher authorizes exactly the same
-                # budget produced by this run's frozen preflight.  No second
-                # provider pass or operator copy/paste is needed.
-                ctx = replace(ctx, authorized_pass2_call_budget=forecast, pass2_budget_preview=False)
-                print(
-                    f"[US-SHORT AUTO-BUDGET] target_count={target_count} exact_pass2_calls={forecast}",
-                    file=sys.stderr,
+                # The one-click paper launcher and the manual path both carry
+                # this same frozen object into every downstream stage. The
+                # finalized summary is the derived audit view, not a second
+                # editable authorization.
+                ctx = replace(
+                    ctx,
+                    budget_approval=approval,
+                    authorized_pass2_call_budget=approval.exact_pass2_calls,
+                    pass2_budget_preview=False,
                 )
+                _emit_diagnostic_event(
+                    diagnostic_event,
+                    "budget_approval_created",
+                    authorization_mode=approval.authorization_mode,
+                    authorization_ref=approval.authorization_ref,
+                    target_count=approval.target_count,
+                    exact_pass2_calls=approval.exact_pass2_calls,
+                    approval_fingerprint=approval.fingerprint,
+                )
+                if auto_budget_run:
+                    print(
+                        f"[US-SHORT AUTO-BUDGET] target_count={approval.target_count} exact_pass2_calls={approval.exact_pass2_calls}",
+                        file=sys.stderr,
+                    )
             if stage.name == "model_paper_adapter" and _model_paper_enabled(ctx):
                 holdings = result.get("frozen_holding_tickers") if isinstance(result, dict) else None
                 if not isinstance(holdings, list) or any(not isinstance(ticker, str) for ticker in holdings):

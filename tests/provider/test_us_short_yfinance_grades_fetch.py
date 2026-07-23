@@ -133,6 +133,24 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             confirm_user_authorization=True,
             generated_at="2026-07-10T12:00:00+00:00",
         )
+        from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+        preflight = _read_json(self.paths["preflight"])
+        self.budget_approval = Pass2BudgetApproval(
+            decision_date=preflight["decision_clock"]["expected_decision_date"],
+            candidate_price_basis_date=preflight["decision_clock"]["candidate_price_basis_date"],
+            candidate_artifact_sha256=preflight["candidate_universe"]["candidate_artifact_sha256"],
+            momentum_top_k=preflight["pass2_target_universe"]["momentum_top_k"],
+            target_count=preflight["pass2_target_universe"]["target_count"],
+            exact_pass2_calls=preflight["endpoint_call_forecast"]["total_calls_for_pass2_target_cut"],
+            authorization_mode="manual",
+            authorization_ref="manual:test_fixture",
+            generated_at=preflight["generated_at"],
+        )
+        preflight_runner.finalize_preflight_from_existing_derivation(
+            preflight_summary_path=self.paths["preflight"],
+            approval_binding=self.budget_approval.binding_summary(),
+        )
 
     def tearDown(self):
         for path in self.paths.values():
@@ -161,6 +179,7 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             "generated_at": "2026-07-10T12:00:00+00:00",
             "observed_at": "2026-06-15T08:00:00-04:00",
             "pace_seconds": 0,
+            "budget_approval": self.budget_approval,
         }
         options.update(kwargs)
         return runner.run_yfinance_grades_fetch(**options)
@@ -212,6 +231,7 @@ class UsShortYFinanceGradesFetchTest(unittest.TestCase):
             runner.run_default(
                 dry_run=False,
                 preflight_summary_path=self.paths["preflight"],
+                budget_approval=self.budget_approval,
                 importer=lambda name: imports.append(name),
             )
         self.assertEqual(imports, [])
