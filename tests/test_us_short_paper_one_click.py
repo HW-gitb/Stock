@@ -12,6 +12,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from runners import us_short_paper_one_click as one_click
 from runners.us_short_paper_one_click import (
     DEFAULT_STATE_DIR,
     PaperOneClickError,
@@ -68,6 +69,44 @@ class USShortPaperOneClickTest(unittest.TestCase):
         kwargs = run_capstone.call_args.kwargs
         self.assertEqual(private_root.resolve(), kwargs["private_root"])
         self.assertEqual(DEFAULT_STATE_DIR.resolve(), kwargs["state_dir"])
+
+    @mock.patch(
+        "runners.us_short_paper_one_click.resolve_capstone_context",
+        return_value=SimpleNamespace(decision_date="20260723", price_basis_date="20260722"),
+    )
+    @mock.patch("runners.us_short_paper_one_click.run_weekly_capstone")
+    def test_unexpected_failure_writes_redacted_private_diagnostics(self, run_capstone, _context) -> None:
+        secret = "LEAK_DIAGNOSTICS_SENTINEL"
+        run_capstone.side_effect = RuntimeError(f"provider process stopped: {secret}")
+        old = os.environ.get("US_SHORT_DIAGNOSTICS_TEST_TOKEN")
+        os.environ["US_SHORT_DIAGNOSTICS_TEST_TOKEN"] = secret
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                private_root = Path(td) / "private"
+                rc = one_click.main([
+                    "--now-et", "2026-07-23T08:00:00",
+                    "--private-root", str(private_root),
+                ])
+                diagnostics_root = private_root / "weekly_private" / "_run_diagnostics"
+                sessions = list(diagnostics_root.iterdir())
+                self.assertEqual(rc, 1)
+                self.assertEqual(len(sessions), 1)
+                session = sessions[0]
+                failure = json.loads((session / "failure.json").read_text(encoding="utf-8"))
+                heartbeat = json.loads((session / "heartbeat.json").read_text(encoding="utf-8"))
+                events = [json.loads(line) for line in (session / "events.jsonl").read_text(encoding="utf-8").splitlines()]
+                self.assertEqual(failure["error_type"], "RuntimeError")
+                self.assertNotIn(secret, json.dumps(failure, ensure_ascii=False))
+                self.assertNotIn(secret, (session / "stderr.log").read_text(encoding="utf-8"))
+                self.assertTrue((session / "stdout.log").is_file())
+                self.assertEqual(events[-1]["event"], "runner_failed")
+                self.assertEqual(heartbeat["event"], "runner_failed")
+                self.assertIn("capstone_started", [event["event"] for event in events])
+        finally:
+            if old is None:
+                os.environ.pop("US_SHORT_DIAGNOSTICS_TEST_TOKEN", None)
+            else:
+                os.environ["US_SHORT_DIAGNOSTICS_TEST_TOKEN"] = old
 
     def test_cmd_entrypoint_handles_execution_policy_in_process(self) -> None:
         text = (Path(__file__).parents[1] / "runners" / "us_short_paper_one_click.cmd").read_text(

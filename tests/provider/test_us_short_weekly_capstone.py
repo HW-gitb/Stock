@@ -486,6 +486,26 @@ class CapstoneFakeChainTest(unittest.TestCase):
         self.assertIn("momentum_fetch", str(cm.exception))
         self.assertEqual(order, ["universe_fetch", "momentum_fetch"])   # fail-fast, no further stages
 
+    def test_diagnostic_events_pin_the_last_stage_and_failure_class(self):
+        order: list[str] = []
+        events: list[dict] = []
+        with self.assertRaisesRegex(WeeklyCapstoneError, "momentum_fetch"):
+            self._run(
+                order,
+                stages=self._fake_stages(order, break_stage="momentum_fetch"),
+                diagnostic_event=events.append,
+            )
+        self.assertIn(
+            {"event": "stage_completed", "stage": "universe_fetch", "execution_mode": "executed"},
+            [{key: item[key] for key in ("event", "stage", "execution_mode")} for item in events
+             if item["event"] == "stage_completed"],
+        )
+        self.assertIn(
+            {"event": "stage_failed", "stage": "momentum_fetch", "failure_kind": "stage_run", "error_type": "ValueError"},
+            [{key: item[key] for key in ("event", "stage", "failure_kind", "error_type")} for item in events
+             if item["event"] == "stage_failed"],
+        )
+
     def test_bridge_no_emit_is_honest_success_not_failure(self):
         # design §3.2: a non-clean provider_health (e.g. free-tier FMP-429) → the bridge honestly writes NO
         # weekly_report.md. That must be a clean no-emit result, NOT a "missing output" hard failure.
