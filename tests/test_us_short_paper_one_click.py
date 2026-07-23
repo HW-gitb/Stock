@@ -1,6 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from datetime import datetime
@@ -70,6 +74,64 @@ class USShortPaperOneClickTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("-ExecutionPolicy Bypass", text)
+
+    @unittest.skipUnless(os.name == "nt", "PowerShell native-stderr behavior is a Windows contract")
+    def test_powershell_launcher_routes_stderr_without_changing_python_exit_code(self) -> None:
+        powershell = shutil.which("powershell") or shutil.which("pwsh")
+        if powershell is None:
+            self.skipTest("PowerShell executable not available")
+        source = Path(__file__).parents[1] / "runners" / "us_short_paper_one_click.ps1"
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td) / "repo"
+            runners = repo / "runners"
+            tools = repo / ".tools"
+            runners.mkdir(parents=True)
+            tools.mkdir()
+            (runners / "us_short_paper_one_click.ps1").write_text(
+                source.read_text(encoding="utf-8"), encoding="utf-8"
+            )
+            python_path = str(Path(sys.executable)).replace("'", "''")
+            (tools / "Resolve-AshortPython.ps1").write_text(
+                "function Resolve-AshortPython { param([string]$Requested); return '"
+                + python_path
+                + "' }\n",
+                encoding="utf-8",
+            )
+            for expected_exit in (0, 17):
+                with self.subTest(expected_exit=expected_exit):
+                    (runners / "us_short_paper_one_click.py").write_text(
+                        "import sys\n"
+                        "expected = ['--now-et', '2026-07-23T08:00:00', '--momentum-top-k', '200', "
+                        "'--provider-pace-seconds', '1']\n"
+                        "if sys.argv[1:] != expected: raise SystemExit(91)\n"
+                        "print('normal stdout summary')\n"
+                        "print('normal stderr status', file=sys.stderr)\n"
+                        f"raise SystemExit({expected_exit})\n",
+                        encoding="utf-8",
+                    )
+                    result = subprocess.run(
+                        [
+                            powershell,
+                            "-NoProfile",
+                            "-ExecutionPolicy",
+                            "Bypass",
+                            "-File",
+                            str(runners / "us_short_paper_one_click.ps1"),
+                            "-NowEt",
+                            "2026-07-23T08:00:00",
+                        ],
+                        cwd=repo,
+                        text=True,
+                        capture_output=True,
+                        errors="replace",
+                    )
+
+                    combined = result.stdout + result.stderr
+                    self.assertEqual(result.returncode, expected_exit, combined)
+                    self.assertIn("normal stdout summary", combined)
+                    self.assertIn("normal stderr status", combined)
+                    self.assertNotIn("RemoteException", combined)
+                    self.assertNotIn("NativeCommandError", combined)
 
 
 if __name__ == "__main__":

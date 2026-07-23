@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-23 — Codex self-review PASS (US-short paper launcher native-stderr guard)
+
+- **Verdict/Action**: PASS; the PowerShell one-click launcher now starts the same pinned Python through a bootstrap that maps Python stderr to stdout before the runner loads, so ordinary Python status lines cannot become Windows PowerShell 5.1 `RemoteException` failures. Python's exit code remains the only success/failure signal.
+- **Required**: None for the false-failure wrapper defect. The independent Massive grouped-daily HTTP 403 remains a provider-access failure outside this launcher-only repair.
+- **Verify**: Required project Python ran `tests.test_us_short_paper_one_click tests.test_us_short_model_paper_capstone_wiring`: 9 OK; the real PowerShell regression proves stderr+exit 0 succeeds without `RemoteException`/`NativeCommandError`, stderr+exit 17 returns 17, and the existing CLI argument sequence is preserved; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
+
 ## 2026-07-23 — Codex self-review PASS (runtest capsule Windows checkout-path guard)
 
 - **Verdict/Action**: PASS; a capsule now resolves the requested commit, measures its tracked checkout paths before creating a target, and rejects an unsafe Windows destination before `git clone`; clone uses `--no-checkout` so it cannot first materialize an unchecked default-branch worktree. Failed setup reuses the read-only-safe capsule cleanup path.
