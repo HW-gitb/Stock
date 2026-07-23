@@ -962,10 +962,11 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
     }
 
     def _ctx(self, *, authorized):
-        from runners.us_short_weekly_capstone import resolve_capstone_context
+        from dataclasses import replace
+        from runners.us_short_weekly_capstone import Pass2BudgetApproval, resolve_capstone_context
         tmp = Path(tempfile.mkdtemp(prefix="cap_auth_"))
         self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
-        return resolve_capstone_context(
+        ctx = resolve_capstone_context(
             now_et=datetime(2026, 7, 9, 8, 0, 0),
             private_root=tmp / "priv",
             batch4_template_path=tmp / "template.json",
@@ -976,6 +977,20 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             confirm_user_authorization=authorized,
             state_dir=tmp / "state",
             sample_root=tmp,
+        )
+        return replace(
+            ctx,
+            budget_approval=Pass2BudgetApproval(
+                decision_date=ctx.decision_date,
+                candidate_price_basis_date=ctx.price_basis_date,
+                candidate_artifact_sha256="0" * 64,
+                momentum_top_k=200,
+                target_count=3,
+                exact_pass2_calls=16,
+                authorization_mode="manual",
+                authorization_ref="test:capstone",
+                generated_at=ctx.generated_at,
+            ),
         )
 
     def test_gated_adapter_refuses_unauthorized_ctx_before_calling_runner(self):
@@ -1007,6 +1022,9 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
                         self.assertEqual(m.call_args.kwargs["momentum_top_k" if adapter == "run_pass2_preflight" else "authorized_momentum_top_k"], 200)
                     if adapter == "run_pass2_fetch":
                         self.assertEqual(m.call_args.kwargs["expected_total_call_budget"], 16)
+                        self.assertIs(m.call_args.kwargs["budget_approval"], ctx.budget_approval)
+                    if adapter == "run_yfinance_grades_fetch":
+                        self.assertIs(m.call_args.kwargs["budget_approval"], ctx.budget_approval)
                     if adapter == "run_pass2_preflight":
                         self.assertEqual(m.call_args.kwargs["authorized_total_call_budget"], 16)
 
@@ -1027,7 +1045,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
     def test_pass2_adapters_reject_missing_frozen_budget_before_wrapped_runner(self):
         from dataclasses import replace
         from runners import us_short_weekly_capstone_stages as st
-        ctx = replace(self._ctx(authorized=True), authorized_pass2_call_budget=None)
+        ctx = replace(self._ctx(authorized=True), authorized_pass2_call_budget=None, budget_approval=None)
         for adapter in (st.run_pass2_preflight, st.run_pass2_fetch):
             with mock.patch.object(
                 st._preflight if adapter is st.run_pass2_preflight else st._pass2,
@@ -1044,6 +1062,7 @@ class CapstoneStageAuthAndSourceBindingTest(unittest.TestCase):
             self._ctx(authorized=True),
             authorized_pass2_call_budget=None,
             pass2_budget_preview=True,
+            budget_approval=None,
         )
         with mock.patch.object(st, "_account_holding_tickers", return_value=[]), \
              mock.patch.object(st._preflight, "run_preflight", return_value={"ok": True}) as preflight:
@@ -1414,8 +1433,9 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
         self.assertIs(run_fetch.call_args.kwargs["scan_bankruptcy_for_eligible"], True)
 
     def test_capstone_adapters_thread_same_window_ohlcv_to_projection_and_pass2(self):
+        from dataclasses import replace
         from runners import us_short_weekly_capstone_stages as st
-        from runners.us_short_weekly_capstone import resolve_capstone_context
+        from runners.us_short_weekly_capstone import Pass2BudgetApproval, resolve_capstone_context
 
         with tempfile.TemporaryDirectory() as root:
             root_path = Path(root)
@@ -1429,6 +1449,20 @@ class CapstoneAdapterSignatureTest(unittest.TestCase):
                 confirm_user_authorization=True,
                 state_dir=root_path / "state",
                 sample_root=root_path,
+            )
+            ctx = replace(
+                ctx,
+                budget_approval=Pass2BudgetApproval(
+                    decision_date=ctx.decision_date,
+                    candidate_price_basis_date=ctx.price_basis_date,
+                    candidate_artifact_sha256="0" * 64,
+                    momentum_top_k=200,
+                    target_count=3,
+                    exact_pass2_calls=16,
+                    authorization_mode="manual",
+                    authorization_ref="test:capstone",
+                    generated_at=ctx.generated_at,
+                ),
             )
             ctx.preflight_summary_path.parent.mkdir(parents=True, exist_ok=True)
             ctx.preflight_summary_path.write_text(

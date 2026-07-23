@@ -105,6 +105,7 @@
           "not": { "pattern": "\\.\\." }
         },
         "candidate_artifact_path_gitignored": { "const": true },
+        "candidate_artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "row_count": { "type": "integer", "minimum": 1 },
         "eligible_count": { "type": "integer", "minimum": 1 },
         "eligible_symbol_sample": {
@@ -284,6 +285,34 @@
         "authorized_momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
         "authorized_total_call_budget": { "type": "integer", "minimum": 1 },
         "authorized_budget_matches_rederived_forecast": { "type": "boolean" },
+        "approval_binding": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "decision_date",
+            "candidate_price_basis_date",
+            "candidate_artifact_sha256",
+            "momentum_top_k",
+            "target_count",
+            "exact_pass2_calls",
+            "authorization_mode",
+            "authorization_ref",
+            "generated_at",
+            "fingerprint"
+          ],
+          "properties": {
+            "decision_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+            "candidate_price_basis_date": { "type": "string", "pattern": "^[0-9]{8}$" },
+            "candidate_artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+            "momentum_top_k": { "type": "integer", "minimum": 1, "maximum": 250 },
+            "target_count": { "type": "integer", "minimum": 1 },
+            "exact_pass2_calls": { "type": "integer", "minimum": 1 },
+            "authorization_mode": { "enum": ["manual", "one_click_test"] },
+            "authorization_ref": { "type": "string", "minLength": 1 },
+            "generated_at": { "type": "string", "minLength": 1 },
+            "fingerprint": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+          }
+        },
         "provider_selection_claimed": { "const": false },
         "corporate_action_reconciliation_claimed": { "const": false },
         "datahub_or_production_allowed": { "const": false },

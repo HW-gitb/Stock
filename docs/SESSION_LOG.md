@@ -20,6 +20,27 @@
 - **Required**: Independent reviewer must check the current P4a diff against `todo_ashort_remaining_20260722.md`: official baseline parity, same-pool-only overlay, forward/PIT/receipt binding, cache priority/budget, all statistical and risk gates, privacy, and no M6.7/Top5/config write path. Do not commit or begin P4b before PASS.
 - **Verify**: Required project Python: P4a/admission/governance/EGS/shared-cache/P5 focused pack 27 OK, plus post-wiring P4a/EGS→weekly 9 OK (including P4 sidecar unavailable → `not_live_canonical_no_capture`, M6.7 unchanged); official EGS marker byte-binding and P4 single-component activation-plan/restart are covered. Static effect-contract and modified-file `py_compile` OK; `git diff --check` OK. No provider, live weekly, account, broker, order, or production configuration action ran.
 - **Next**: Claude Code: review
+## 2026-07-23 - Codex self-review PASS (US-short Pass2 budget approval)
+
+- **Verdict/Action**: PASS; `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` is closed in `docs/system_risk_register.md`.
+- **Required**: None; closure details are in `docs/system_risk_register.md`.
+- **Verify**: Main Python focused approval/preflight/capstone/yfinance/Pass2/checkpoint/schema/offline-E2E pack and full `test_us_short*.py` discovery passed; `git diff --check` passed; no provider/network/full-market execution.
+- **Next**: User-authorized commit and merge.
+
+## 2026-07-23 - Codex re-review FAIL (US-short Pass2 budget approval)
+
+- **Verdict/Action**: FAIL; `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` remains open.
+- **Required**: `R-USSHORT-PASS2-BUDGET-APPROVAL-BINDING-AND-RESUME-GAP` — see `docs/system_risk_register.md`.
+- **Verify**: Reviewer reproduced `LEGACY_READY_PREFLIGHT_BYPASS_CONFIRMED` without network; `git diff --check` passed.
+- **Next**: Codex: repair
+
+## 2026-07-23 — Codex repair (US-short Pass2 budget approval binding and resume)
+
+- **Verdict/Action**: Repaired the same-class gaps: finalized preflight approval is required at both direct provider boundaries; forged/conflicting bindings are rejected; manual checkpoint resume restores the same immutable approval. Current worktree remains uncommitted and pending independent review.
+- **Required**: Independent review of the current diff; Codex did not commit.
+- **Verify**: Project main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`: targeted approval tests 11 OK; fixed US-short schema/preflight/capstone/yfinance/Pass2/replay regression pack 153 OK; no provider call, network, full-market fetch, or full capstone execution.
+- **Pre-Codex self-review**: A-F checked / N-A for unrelated lanes; same-class boundary grep and reverse checks covered direct loaders, finalization conflicts, candidate mutation, forged fingerprints, and manual checkpoint restore; route docs and `docs/CURRENT.md` were not changed; deleted SESSION_LOG history restored.
+- **Next**: Claude Code: review current US-short Pass2 budget-approval diff; PASS then commit
 
 ## 2026-07-23 - Codex first-knife self-repair and final independent adversarial re-review PASS
 

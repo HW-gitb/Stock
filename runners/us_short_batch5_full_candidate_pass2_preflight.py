@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import json
 import subprocess
 import sys
@@ -466,6 +467,7 @@ def _build_summary(
         "candidate_universe": {
             "candidate_artifact_path": _repo_rel(candidate_path),
             "candidate_artifact_path_gitignored": _git_ignored(candidate_path),
+            "candidate_artifact_sha256": file_sha256(candidate_path),
             "row_count": len(artifact["rows"]),
             "eligible_count": candidate_count,
             "eligible_symbol_sample": eligible[:10],
@@ -519,6 +521,91 @@ def _build_summary(
             "Automated broader peer-theme discovery remains separate; this preflight only verifies whether the provided local theme projection already covers all candidates.",
         ],
     }
+
+
+def _validate_approval_binding(binding: Any) -> dict[str, Any]:
+    try:
+        from runners.us_short_weekly_capstone import Pass2BudgetApproval
+
+        return Pass2BudgetApproval.validate_binding_summary(binding)
+    except (ImportError, TypeError, ValueError) as exc:
+        raise FullCandidatePass2PreflightError(str(exc)) from exc
+
+
+def finalize_preflight_from_existing_derivation(
+    *,
+    preflight_summary_path: Path,
+    approval_binding: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Atomically finalize one already-derived preflight without re-running its budget or funnel logic."""
+    if approval_binding is None:
+        raise FullCandidatePass2PreflightError("Pass2 budget approval is required to finalize preflight")
+    binding = _validate_approval_binding(approval_binding)
+    summary_resolved = _validate_summary_path(preflight_summary_path)
+    summary = _read_json(summary_resolved)
+    _validate_summary_against_schema(summary)
+    candidate = summary.get("candidate_universe") or {}
+    clock = summary.get("decision_clock") or {}
+    targets = summary.get("pass2_target_universe") or {}
+    forecast = summary.get("endpoint_call_forecast") or {}
+    gate = summary.get("execution_gate") or {}
+    local = summary.get("local_input_coverage") or {}
+    if candidate.get("candidate_artifact_sha256") != binding["candidate_artifact_sha256"]:
+        raise FullCandidatePass2PreflightError("Pass2 budget approval candidate artifact fingerprint does not match preflight")
+    candidate_path = _existing_state_json(
+        candidate.get("candidate_artifact_path"), field="candidate_artifact_path"
+    )
+    if file_sha256(candidate_path) != binding["candidate_artifact_sha256"]:
+        raise FullCandidatePass2PreflightError("current candidate artifact fingerprint does not match budget approval")
+    expected_pairs = (
+        ("decision_date", clock.get("expected_decision_date")),
+        ("candidate_price_basis_date", clock.get("candidate_price_basis_date")),
+        ("momentum_top_k", targets.get("momentum_top_k")),
+        ("target_count", targets.get("target_count")),
+        ("exact_pass2_calls", forecast.get("total_calls_for_pass2_target_cut")),
+        ("generated_at", summary.get("generated_at")),
+    )
+    for field, derived in expected_pairs:
+        if binding[field] != derived:
+            raise FullCandidatePass2PreflightError(f"Pass2 budget approval {field} does not match existing preflight derivation")
+    if not (
+        local.get("all_required_local_inputs_cover_candidates") is True
+        and type(targets.get("target_count")) is int
+        and targets["target_count"] > 0
+        and targets.get("fmp_grade_calls_within_free_daily_cap") is True
+        and type(forecast.get("total_calls_for_pass2_target_cut")) is int
+        and forecast["total_calls_for_pass2_target_cut"] > 0
+        and gate.get("authorized_momentum_top_k") == binding["momentum_top_k"]
+    ):
+        raise FullCandidatePass2PreflightError("existing preflight derivation is not ready for Pass2 execution")
+    block_reasons = gate.get("block_reasons")
+    if type(block_reasons) is not list:
+        raise FullCandidatePass2PreflightError("existing preflight block_reasons is invalid")
+    allowed_preview_blocks = {
+        "pass2_call_budget_not_yet_authorized",
+        "authorized_call_budget_does_not_match_rederived_target_forecast",
+    }
+    if any(reason not in allowed_preview_blocks for reason in block_reasons):
+        raise FullCandidatePass2PreflightError("existing preflight has a non-budget blocking reason")
+    existing_budget = gate.get("authorized_total_call_budget")
+    if existing_budget is not None and existing_budget != binding["exact_pass2_calls"]:
+        raise FullCandidatePass2PreflightError(
+            "existing preflight authorized budget conflicts with the finalized Pass2 approval"
+        )
+    existing_binding = gate.get("approval_binding")
+    if existing_binding is not None and _validate_approval_binding(existing_binding) != binding:
+        raise FullCandidatePass2PreflightError(
+            "existing preflight approval binding conflicts with the finalized Pass2 approval"
+        )
+    finalized = copy.deepcopy(summary)
+    finalized["scope"]["status"] = "ready_for_reviewed_live_execution"
+    finalized["execution_gate"]["ready_to_run_full_candidate_live_packet"] = True
+    finalized["execution_gate"]["block_reasons"] = []
+    finalized["execution_gate"]["authorized_total_call_budget"] = binding["exact_pass2_calls"]
+    finalized["execution_gate"]["authorized_budget_matches_rederived_forecast"] = True
+    finalized["execution_gate"]["approval_binding"] = dict(binding)
+    _write_summary_validated(finalized, summary_resolved)
+    return finalized
 
 
 def _validate_summary_against_schema(summary: dict[str, Any]) -> None:
