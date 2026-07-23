@@ -7,6 +7,7 @@ import sys
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest import mock
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,6 +99,51 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertEqual(manifest["source_guard_before"], before)
         self.assertTrue(self.key.is_file())
         self.assertFalse(str(self.key).startswith(str(self.root)))
+
+    def test_windows_path_preflight_stops_before_clone_creates_a_partial_capsule(self) -> None:
+        calls: list[list[str]] = []
+
+        def fake_git(args: list[str], *, cwd=None) -> str:
+            del cwd
+            calls.append(args)
+            if "rev-parse" in args:
+                return "a" * 40
+            if "ls-tree" in args:
+                return "x" * (capsule.WINDOWS_CHECKOUT_PATH_LIMIT + 1)
+            self.fail(f"checkout path preflight must reject before git {' '.join(args)}")
+
+        with mock.patch.object(capsule.os, "name", "nt"):
+            with mock.patch.object(capsule, "_run_git", side_effect=fake_git):
+                with self.assertRaisesRegex(capsule.CapsuleError, "capsule root is too long"):
+                    self._create("path-budget")
+
+        target = self.root / "a_short" / "path-budget"
+        self.assertFalse(target.exists())
+        self.assertFalse(any(args and args[0] == "clone" for args in calls))
+
+    def test_failed_create_reuses_readonly_safe_capsule_cleanup(self) -> None:
+        target = self.root / "a_short" / "clone-failure"
+        repo = target / "repo"
+
+        def fake_git(args: list[str], *, cwd=None) -> str:
+            del cwd
+            if "rev-parse" in args:
+                return "a" * 40
+            if "ls-tree" in args:
+                return "runners/entry.py"
+            if args and args[0] == "clone":
+                repo.mkdir(parents=True)
+                read_only = repo / "read_only_git_file"
+                read_only.write_text("partial clone", encoding="utf-8")
+                os.chmod(read_only, 0o444)
+                raise capsule.CapsuleError("git clone failed")
+            self.fail(f"unexpected git call: {' '.join(args)}")
+
+        with mock.patch.object(capsule, "_run_git", side_effect=fake_git):
+            with self.assertRaisesRegex(capsule.CapsuleError, "git clone failed"):
+                self._create("clone-failure")
+
+        self.assertFalse(target.exists())
 
     def test_private_input_is_copied_only_under_capsule_and_not_written_to_manifest(self) -> None:
         private_input = self.base / "manual_account.json"

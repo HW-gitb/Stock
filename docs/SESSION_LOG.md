@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-23 — Codex self-review PASS (runtest capsule Windows checkout-path guard)
+
+- **Verdict/Action**: PASS; a capsule now resolves the requested commit, measures its tracked checkout paths before creating a target, and rejects an unsafe Windows destination before `git clone`; clone uses `--no-checkout` so it cannot first materialize an unchecked default-branch worktree. Failed setup reuses the read-only-safe capsule cleanup path.
+- **Required**: None for the long-path/partial-cleanup defect. The independent Massive grouped-daily HTTP 403 remains a provider-access failure outside this tool-only repair.
+- **Verify**: Required project Python ran `tests.test_runtest_capsule`: 11 OK; a real 346-character checkout probe returned the explicit preflight error with exit 2 and created no capsule directory; `py_compile` and `git diff --check` passed.
+- **Next**: User-authorized commit and fast-forward merge.
+
 ## 2026-07-23 — Codex self-review PASS (US-short paper capsule canonical source-state guard)
 
 - **Verdict/Action**: PASS; the one-click runner now rejects any noncanonical `--state-dir` before a provider stage, while `--private-root` remains the isolated paper-output boundary and the active checkout's `state/us_short` remains the provider-source root.
