@@ -3479,8 +3479,9 @@ def _p2_shadow_candidates(candidates: list[dict], provider, as_of: str,
 
 
 def _build_evidence_reminders(as_of: str, target_policy: dict | None,
-                              final_action: dict | None) -> dict | None:
-    """Render the P2/P3 public progress into one no-private weekly surface."""
+                              final_action: dict | None,
+                              overlay_adjudication: dict | None = None) -> dict | None:
+    """Render P2/P3/P4a progress and the P4b manual gate into one public surface."""
     items = []
     if target_policy is not None:
         raw = str(target_policy.get("status") or "")
@@ -3502,6 +3503,20 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
                 status = "unavailable"
             items.append({"track": "p3_" + str(reminder.get("reminder_id") or "unknown"), "status": status,
                           "message": str(reminder.get("message") or "P3 证据不可用")})
+    if overlay_adjudication is not None:
+        adjudication = overlay_adjudication.get("adjudication") or {}
+        verdict = str(adjudication.get("verdict") or "")
+        if verdict == "candidate_for_manual_promotion":
+            p4_status = "review_due"
+            p4_message = ("P4a 已达到 P4b 人工升级审查条件；仍需独立最高风险审查 PASS 和用户明确批准，"
+                          "不会自动切换 Top5。")
+        elif overlay_adjudication.get("status") == "evidence_unavailable_or_inconclusive":
+            p4_status = "unavailable"
+            p4_message = "P4b 当前证据不可用；不得沿用旧的人工升级提醒。"
+        else:
+            p4_status = "accumulating"
+            p4_message = "P4a 证据仍在积累；P4b 尚未具备人工升级审查条件。"
+        items.append({"track": "p4b_manual_promotion", "status": p4_status, "message": p4_message})
     if not items:
         return None
     overall = "review_due" if any(item["status"] == "review_due" for item in items) else (
@@ -4291,7 +4306,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly["target_policy_comparison"] = target_policy_comparison
     if overlay_adjudication is not None:
         weekly["overlay_adjudication"] = overlay_adjudication
-    evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation)
+    evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation,
+                                                    overlay_adjudication)
     if evidence_reminders is not None:
         weekly["a_short_evidence_reminders"] = evidence_reminders
     # S1: 每行打 row_source / coverage_status;持仓行挂 4.3-D 对账警告;无价/停牌持仓单列 manual_review。

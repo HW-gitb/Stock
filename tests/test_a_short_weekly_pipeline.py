@@ -37,7 +37,7 @@ from runners.a_short_weekly_pipeline import (  # noqa: E402
     _fetch_daily_close, _attach_block_discount,
     _financial_trends, _fetch_forecast, _fetch_income, _fetch_balancesheet, _attach_financial_trend_impacts,
     _forecast_red_flags, _income_red_flags, _balancesheet_red_flags, _industry_fundamentals, _FIN_STATEMENT_MARKER,
-    _attach_holding_disposition, _factor_comparison_realized_regime,
+    _attach_holding_disposition, _factor_comparison_realized_regime, _build_evidence_reminders,
 )
 from runners.a_short_account_state_from_manual_tables import _bundle_digest  # noqa: E402
 from engine.a_short_runtime_config import (  # noqa: E402
@@ -685,6 +685,20 @@ class MainWiringTests(unittest.TestCase):
             self.assertIn(summary["message"], out.with_suffix(".md").read_text(encoding="utf-8"))
             settle.assert_called_once()
             capture.assert_called_once()
+
+    def test_p4b_manual_promotion_reminder_is_advisory_and_fail_closed(self):
+        candidate = {"status": "manual_promotion_candidate", "adjudication": {
+            "verdict": "candidate_for_manual_promotion", "automatic_policy_switch": False}}
+        reminders = _build_evidence_reminders(AS_OF, None, None, candidate)
+        item = next(row for row in reminders["reminders"] if row["track"] == "p4b_manual_promotion")
+        self.assertEqual(item["status"], "review_due")
+        self.assertIn("独立最高风险审查", item["message"])
+        self.assertTrue(reminders["production_unchanged"])
+
+        unavailable = _build_evidence_reminders(
+            AS_OF, None, None, {"status": "evidence_unavailable_or_inconclusive", "adjudication": {}})
+        item = next(row for row in unavailable["reminders"] if row["track"] == "p4b_manual_promotion")
+        self.assertEqual(item["status"], "unavailable")
 
     def test_p3_final_action_is_pre_publish_summary_then_post_publish_capture(self):
         from runners.a_short_final_action_validation_runner import unavailable_public_summary
