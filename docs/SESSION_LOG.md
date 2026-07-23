@@ -1,5 +1,26 @@
 # Session Log
 
+## 2026-07-23 - Codex P4a second-knife strict repair and final independent adversarial re-review PASS
+
+- **Verdict/Action**: PASS. P4a remains comparison-only: published EGS Stage3 source bytes now bind the exact screening runtime recipe as well as profile bytes; capture, settlement, and public summary use one epoch context, so a changed recipe opens a new epoch and old evidence cannot count.
+- **Required**: None. Do not activate P4b or any policy from this advisory track.
+- **Verify**: Required Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; final independent P4a re-review PASS; focused P4a 23 OK, EGS-to-weekly 9 OK, transaction 19 OK, effect static `None`; exact-final-diff full A-short lane 8034 OK, recorded as cached green by `.tools\full_pack_ledger.py check a_short`.
+- **Next**: Claude Code: review and commit
+
+## 2026-07-23 - Codex P4a second-knife strict repair and re-review: full-lane gate remains FAIL
+
+- **Verdict/Action**: FAIL (closure gate only); details in register `R-ASHORT-P4A-STAGE3-RANK-SOURCE-EVIDENCE-AND-FORMAL-ISOLATION`.
+- **Required**: `R-ASHORT-P4A-STAGE3-RANK-SOURCE-EVIDENCE-AND-FORMAL-ISOLATION` — see register; no P4b or activation.
+- **Verify**: Pinned Python: P4 focused pack passed; stale audit fixture reproduced `FEE.F` from missing `source`.
+- **Next**: Codex: repair
+
+## 2026-07-23 - Codex P4a second-knife implementation; independent review required
+
+- **Verdict/Action**: Implemented only P4a: a switchable `stage3_rank_source` admission; same-run official Stage3 snapshot plus a separately frozen Stage3-pool overlay scorer; private source-bound capture, cache-only fixed-slot qfq settlement with CSI1000/CSI300, de-identified weekly summary, non-overlapping H10 blocks, and advisory-only automatic adjudication. P4b and all production activation remain out of scope.
+- **Required**: Independent reviewer must check the current P4a diff against `todo_ashort_remaining_20260722.md`: official baseline parity, same-pool-only overlay, forward/PIT/receipt binding, cache priority/budget, all statistical and risk gates, privacy, and no M6.7/Top5/config write path. Do not commit or begin P4b before PASS.
+- **Verify**: Required project Python: P4a/admission/governance/EGS/shared-cache/P5 focused pack 27 OK, plus post-wiring P4a/EGS→weekly 9 OK (including P4 sidecar unavailable → `not_live_canonical_no_capture`, M6.7 unchanged); official EGS marker byte-binding and P4 single-component activation-plan/restart are covered. Static effect-contract and modified-file `py_compile` OK; `git diff --check` OK. No provider, live weekly, account, broker, order, or production configuration action ran.
+- **Next**: Claude Code: review
+
 ## 2026-07-23 - Codex first-knife self-repair and final independent adversarial re-review PASS
 
 - **Verdict/Action**: PASS. The first-knife P0/P1/P2/P3/P5 control-plane scope is complete: reviewed one-change arm inventory, full current-epoch binding, P2 target/breakout isolation, old-epoch diagnostic-only treatment, and schema-closed public summaries. A final P2 weekly-schema/effect-contract seam found by the acceptance run was repaired before this re-review.

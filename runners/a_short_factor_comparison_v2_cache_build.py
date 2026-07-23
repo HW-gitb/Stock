@@ -50,6 +50,7 @@ CONSUMER_PRIORITY = {
     "p2_target_policy": 2,
     "p3_final_action_validation": 2,
     "official_operation_evidence": 3,
+    "p4_overlay_adjudication": 4,
 }
 
 
@@ -70,10 +71,11 @@ def _empty_cache() -> dict:
         "schema_version": "1.1.0",
         "stocks": [],
         "limits": [],
+        "benchmarks": [],
         "rows": [],
         "meta": {
             "cache_kind": "a_short_shared_incremental",
-            "source": "tushare:daily+adj_factor+stk_limit",
+            "source": "tushare:daily+adj_factor+stk_limit+index_daily",
         },
     }
 
@@ -333,6 +335,18 @@ def _official_operation_windows(root: str | Path | None, run_date: str) -> list[
                                        label="official operation evidence")
 
 
+def _p4_windows(root: str | Path | None, run_date: str) -> list[dict]:
+    """P4a is deliberately last: it cannot starve formal/P0/P5/P2/P3 consumers."""
+    if root is None:
+        return []
+    try:
+        from engine.a_short_overlay_adjudication import cache_consumer_windows
+        requests = cache_consumer_windows(root=root, run_date=run_date)
+    except Exception as exc:
+        raise ComparisonV2Error("P4a overlay-adjudication private capture is invalid") from exc
+    return _normalize_captured_windows(requests, consumer="p4_overlay_adjudication", label="P4a overlay adjudication")
+
+
 def _calendar_start_hint(windows: list[dict]) -> str:
     hints: list[str] = []
     for window in windows:
@@ -424,6 +438,22 @@ def _single_attempt_symbol_frames(pro: Any, symbol: str, start_date: str, end_da
     return (daily if daily is not None else pd.DataFrame(),
             adjustment if adjustment is not None else pd.DataFrame(),
             limits if limits is not None else pd.DataFrame())
+
+
+def _single_attempt_benchmark_frame(pro: Any, symbol: str, start_date: str, end_date: str) -> pd.DataFrame:
+    """One provider-observed index range; P4a never invents or adjusts a benchmark."""
+    frame = ts_call(pro.index_daily, retries=1, ts_code=symbol, start_date=start_date, end_date=end_date,
+                    fields="ts_code,trade_date,open,close")
+    return frame if frame is not None else pd.DataFrame()
+
+
+def _provider_benchmark_rows(*, symbol: str, wanted_dates: set[str], frame: pd.DataFrame) -> list[dict]:
+    rows = _frame_records(frame, ("ts_code", "trade_date", "open", "close"), "index_daily")
+    return [{"ts_code": symbol, "trade_date": day,
+             "open": _optional_number(rows.get((symbol, day), {}).get("open")),
+             "close": _optional_number(rows.get((symbol, day), {}).get("close")),
+             "provider_observed": (symbol, day) in rows}
+            for day in sorted(wanted_dates)]
 
 
 def _provider_rows_for_symbol(*, symbol: str, wanted_dates: set[str], daily: pd.DataFrame,
@@ -520,7 +550,7 @@ def _missing_symbols(
     missing: set[str] = set()
     for symbol, dates in needed.items():
         execution_required = bool(consumers.get(symbol, set()) & {
-            "p2_target_policy", "p3_final_action_validation", "official_operation_evidence",
+            "p2_target_policy", "p3_final_action_validation", "official_operation_evidence", "p4_overlay_adjudication",
         })
         stock_fields = {"open", "close", "adj_factor", "adj_factor_observed", "adj_factor_source"}
         limit_fields = {"up_limit"}
@@ -582,6 +612,7 @@ def materialize_incremental_cache(
     target_policy_root: str | Path | None = None,
     final_action_validation_root: str | Path | None = None,
     official_operation_evidence_root: str | Path | None = None,
+    overlay_adjudication_root: str | Path | None = None,
 ) -> dict:
     """Fetch frozen v2/P5/P2/P3/official windows into one atomic private cache."""
     private_root = _private_root(root)
@@ -597,11 +628,12 @@ def materialize_incremental_cache(
     p2_windows = _p2_windows(target_policy_root, run_date)
     p3_windows = _p3_windows(final_action_validation_root, run_date)
     official_windows = _official_operation_windows(official_operation_evidence_root, run_date)
-    windows = [*v2_windows, *p5_windows, *p2_windows, *p3_windows, *official_windows]
+    p4_windows = _p4_windows(overlay_adjudication_root, run_date)
+    windows = [*v2_windows, *p5_windows, *p2_windows, *p3_windows, *official_windows, *p4_windows]
     if not windows:
         return {"status": ("no_frozen_v2_captures" if industry_weight_root is None and
                            target_policy_root is None and final_action_validation_root is None and
-                           official_operation_evidence_root is None
+                           official_operation_evidence_root is None and overlay_adjudication_root is None
                            else "no_frozen_consumer_captures"), "provider_calls": 0,
                 "p5_deferred_due_to_budget": 0, "production_unchanged": True}
     requested_symbols = {symbol for window in windows for symbol in window["symbols"]}
@@ -610,6 +642,7 @@ def materialize_incremental_cache(
     existing = _load_existing_cache(private_root)
     existing_stocks = _dedupe_rows(existing["stocks"], key_names=("ts_code", "trade_date"), label="existing stocks")
     existing_limits = _dedupe_rows(existing["limits"], key_names=("ts_code", "trade_date"), label="existing limits")
+    existing_benchmarks = _dedupe_rows(existing.get("benchmarks") or [], key_names=("ts_code", "trade_date"), label="existing benchmarks")
     # With no existing row at all, every frozen v2 symbol necessarily needs a
     # three-call symbol batch.  Fail before even the calendar call if v2 alone
     # cannot fit; once a cache exists, the later date-level calculation is the
@@ -635,6 +668,7 @@ def materialize_incremental_cache(
         "p2_target_policy": p2_windows,
         "p3_final_action_validation": p3_windows,
         "official_operation_evidence": official_windows,
+        "p4_overlay_adjudication": p4_windows,
     }
     missing_by_consumer: dict[str, set[str]] = {}
     missing_order: dict[str, tuple[int, str, str]] = {}
@@ -658,7 +692,9 @@ def materialize_incremental_cache(
             f"v2 cache builder provider-call budget exceeded after existing-cache check: {v2_calls}>{max_provider_calls}"
         )
     missing_symbols = set(missing_order)
-    if not missing_symbols:
+    p4_symbols = {symbol for window in p4_windows for symbol in window["symbols"]}
+    p4_needed_dates = set().union(*(needed.get(symbol, set()) for symbol in p4_symbols)) if p4_symbols else set()
+    if not missing_symbols and not p4_windows:
         return {"status": "cache_current", "provider_calls": 1, "consumers": consumer_names,
                 "p5_deferred_due_to_budget": 0,
                 "production_unchanged": True}
@@ -671,7 +707,7 @@ def materialize_incremental_cache(
         consumer: sum(symbol in missing_by_consumer[consumer] for symbol in deferred)
         for consumer in consumer_names
     }
-    if not scheduled:
+    if not scheduled and not p4_symbols:
         return {
             "status": "deferred_due_to_budget", "provider_calls": 1,
             "consumers": consumer_names,
@@ -688,17 +724,39 @@ def materialize_incremental_cache(
                                                             require_execution_fields=any(
                                                                 symbol in missing_by_consumer[consumer]
                                                                 for consumer in ("p2_target_policy", "p3_final_action_validation",
-                                                                                 "official_operation_evidence")
+                                                                                 "official_operation_evidence", "p4_overlay_adjudication")
                                                             ))
         new_stocks.extend(stock_rows)
         new_limits.extend(limit_rows)
+    # Benchmarks are requested only if P4's already-low-priority stock work fitted.
+    # They are two existing-writer calls, inside the unchanged 91-call ceiling;
+    # otherwise P4 simply remains deferred/no-count and no older consumer loses a slot.
+    p4_stock_deferred = bool(p4_symbols & set(deferred))
+    benchmark_codes = ("000852.SH", "000300.SH")
+    benchmark_missing = [code for code in benchmark_codes if any(
+        (code, day) not in existing_benchmarks or existing_benchmarks[(code, day)].get("provider_observed") is not True
+        for day in p4_needed_dates
+    )]
+    benchmark_calls = 0
+    new_benchmarks: list[dict] = []
+    if p4_symbols and not p4_stock_deferred and benchmark_missing:
+        available_calls = max_provider_calls - (1 + 3 * len(scheduled))
+        if available_calls >= len(benchmark_missing):
+            for code in benchmark_missing:
+                frame = _single_attempt_benchmark_frame(pro, code, min(p4_needed_dates), max(p4_needed_dates))
+                new_benchmarks.extend(_provider_benchmark_rows(symbol=code, wanted_dates=p4_needed_dates, frame=frame))
+            benchmark_calls = len(benchmark_missing)
+        else:
+            deferred_by_consumer["p4_overlay_adjudication"] = deferred_by_consumer.get("p4_overlay_adjudication", 0) + len(p4_symbols)
     merged_stocks = _merge_partial_rows(existing_stocks, new_stocks, label="stocks")
     merged_limits = _merge_partial_rows(existing_limits, new_limits, label="limits")
+    merged_benchmarks = _merge_partial_rows(existing_benchmarks, new_benchmarks, label="benchmarks")
     payload = {
         "schema_name": "a_short_factor_comparison_v2_daily_cache",
         "schema_version": "1.1.0",
         "stocks": [merged_stocks[key] for key in sorted(merged_stocks)],
         "limits": [merged_limits[key] for key in sorted(merged_limits)],
+        "benchmarks": [merged_benchmarks[key] for key in sorted(merged_benchmarks)],
         "rows": _execution_projection(merged_stocks, merged_limits),
         "meta": {
             "cache_kind": "a_short_shared_incremental",
@@ -716,8 +774,8 @@ def materialize_incremental_cache(
         raise ComparisonV2Error("shared cache builder produced an invalid private cache") from exc
     _atomic_write(private_root / DAILY_CACHE_NAME, payload)
     return {
-        "status": "cache_updated_with_deferrals" if deferred else "cache_updated",
-        "provider_calls": 1 + 3 * len(scheduled),
+        "status": "cache_updated_with_deferrals" if any(payload["meta"]["deferred_due_to_budget"].values()) else "cache_updated",
+        "provider_calls": 1 + 3 * len(scheduled) + benchmark_calls,
         "symbols_updated": scheduled,
         "consumers": consumer_names,
         "deferred_symbols_by_consumer": payload["meta"]["deferred_due_to_budget"],
@@ -737,6 +795,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--final-action-validation-root", help="existing gitignored P3 private ledger")
     parser.add_argument("--official-operation-evidence-root",
                         help="gitignored formal-operation capture root; consumes no provider outside this writer")
+    parser.add_argument("--overlay-adjudication-root",
+                        help="gitignored P4a state/a_short/overlay_adjudication_private/v1 root; lowest-priority consumer")
     return parser.parse_args(argv)
 
 
@@ -747,7 +807,8 @@ def main(argv: list[str] | None = None) -> int:
                                            industry_weight_root=args.industry_weight_root,
                                            target_policy_root=args.target_policy_root,
                                            final_action_validation_root=args.final_action_validation_root,
-                                           official_operation_evidence_root=args.official_operation_evidence_root)
+                                           official_operation_evidence_root=args.official_operation_evidence_root,
+                                           overlay_adjudication_root=args.overlay_adjudication_root)
     print(f"[a-short-shared-daily-cache] {result['status']} (production unchanged)")
     return 0
 

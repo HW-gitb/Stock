@@ -714,6 +714,15 @@
         "production_unchanged": {"const": true}
       }
     },
+    "overlay_adjudication": {
+      "description": "P4a de-identified Stage3 rank-source evidence summary. It is a cache-only comparison sidecar and never changes official Top5, EGS, M6.7, sizing, holdings, exits, or configuration.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "eligible_policy_weeks", "difference_weeks", "nonoverlap_blocks", "mature_opportunities", "no_count_weeks", "h5_coverage_status", "h20_coverage_status", "epoch_id", "checkpoints", "checkpoint_progress", "failing_risk_or_statistical_gates", "adjudication", "message", "production_unchanged"],
+      "properties": {
+        "schema_name": {"const": "a_short_overlay_adjudication_summary"}, "schema_version": {"const": "1.0.0"}, "summary_id": {"const": "a_short_p4_stage3_rank_source"}, "as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "status": {"type": "string"}, "eligible_policy_weeks": {"type": "integer", "minimum": 0}, "difference_weeks": {"type": "integer", "minimum": 0}, "nonoverlap_blocks": {"type": "integer", "minimum": 0}, "mature_opportunities": {"type": "integer", "minimum": 0}, "no_count_weeks": {"type": "integer", "minimum": 0}, "h5_coverage_status": {"type": "string"}, "h20_coverage_status": {"type": "string"}, "epoch_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"}, "checkpoints": {"type": "object"}, "checkpoint_progress": {"type": "object"}, "failing_risk_or_statistical_gates": {"type": "array"}, "adjudication": {"type": "object"}, "message": {"type": "string", "minLength": 1}, "production_unchanged": {"const": true}
+      }
+    },
     "target_policy_comparison": {
       "description": "P2 de-identified target-policy reminder. It is a shadow-only evidence progress surface; it must never change EGS, M6.7 action, star, sizing, ranking, stop, target, or wrapper success.",
       "type": "object",

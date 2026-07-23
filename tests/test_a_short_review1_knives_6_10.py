@@ -209,6 +209,19 @@ class RunIdentityAndPublishTest(unittest.TestCase):
             for path in paths:
                 self.assertEqual(path.read_text(encoding="utf-8"), "old:" + path.name)
 
+    def test_p4_sidecar_and_old_marker_bytes_restore_when_later_publish_fails(self) -> None:
+        em = HardVetoSourceAndCalendarTest.em
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = [Path(tmp) / "stage3_overlay_score.json", Path(tmp) / "official_publish.json"]
+            for path in paths:
+                path.write_bytes(("old:" + path.name).encode("utf-8"))
+            with self.assertRaisesRegex(RuntimeError, "later formal publish failure"):
+                with em.official_output_transaction(paths):
+                    paths[0].write_bytes(b"new-p4-sidecar-bytes")
+                    raise RuntimeError("later formal publish failure")
+            self.assertEqual(paths[0].read_bytes(), b"old:stage3_overlay_score.json")
+            self.assertEqual(paths[1].read_bytes(), b"old:official_publish.json")
+
     def test_weekly_consumer_rejects_analysis_bytes_not_bound_by_marker(self) -> None:
         identity = {"run_id": "a-short-20260105-" + "a" * 16, "candidate_digest": "a" * 64}
         with tempfile.TemporaryDirectory() as tmp:

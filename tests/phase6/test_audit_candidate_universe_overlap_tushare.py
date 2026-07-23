@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import tempfile
 import unittest
+from copy import deepcopy
 from pathlib import Path
 from unittest import mock
 
@@ -26,6 +27,7 @@ from runners.audit_candidate_universe_overlap_tushare import (
     output_path,
 )
 from runners.backtest_execution import ROOT
+from tests.support.analysis_input_payload import cloned_minimal_analysis_input_payload
 
 
 class FakeIndexWeightPro:
@@ -62,28 +64,25 @@ class CandidateUniverseOverlapAuditTest(unittest.TestCase):
         trade_date: str = "20260621",
         symbols: list[str] | None = None,
     ) -> None:
+        payload = cloned_minimal_analysis_input_payload()
+        payload["generated_at"] = "2026-06-21T15:30:00+08:00"
+        payload["trade_date"] = trade_date
+        requested_symbols = (
+            ["600000.SH", "600001.SH", "600002.SH", "600000.SH"]
+            if symbols is None
+            else symbols
+        )
+        template = payload["candidates"][0]
+        payload["candidates"] = []
+        for rank, symbol in enumerate(requested_symbols, start=1):
+            candidate = deepcopy(template)
+            candidate["ts_code"] = symbol
+            candidate["name"] = symbol
+            candidate["selection"]["rank"] = rank
+            payload["candidates"].append(candidate)
+
         path.write_text(
-            json.dumps(
-                {
-                    "schema_name": "analysis_input",
-                    "schema_version": "1.1.0",
-                    "generated_at": "2026-06-21T15:30:00+08:00",
-                    "trade_date": trade_date,
-                    "preset": "a_short",
-                    "market": "A",
-                    "horizon": "short",
-                    "candidates": [
-                        {"ts_code": symbol, "name": symbol}
-                        for symbol in (
-                            ["600000.SH", "600001.SH", "600002.SH", "600000.SH"]
-                            if symbols is None
-                            else symbols
-                        )
-                    ],
-                },
-                ensure_ascii=False,
-                indent=2,
-            )
+            json.dumps(payload, ensure_ascii=False, indent=2)
             + "\n",
             encoding="utf-8",
         )

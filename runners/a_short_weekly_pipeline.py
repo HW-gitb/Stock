@@ -24,6 +24,7 @@ import re
 import sys
 import tempfile
 import time
+from datetime import datetime
 from pathlib import Path
 
 # Ensure the project root is importable when run directly as `python runners\<this>.py`
@@ -1165,6 +1166,9 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     if weekly.get("industry_weight_comparison") is not None:
         from engine.a_short_industry_weight_comparison import validate_public_progress
         validate_public_progress(weekly["industry_weight_comparison"])
+    if weekly.get("overlay_adjudication") is not None:
+        from engine.a_short_overlay_adjudication import validate_public_summary
+        validate_public_summary(weekly["overlay_adjudication"])
     # 跨-as_of PIT:feed 不得来自周报 as_of 之后(否则用了未来波动率)
     if str(iv_feed_summary.get("as_of")) > weekly["as_of"]:
         raise ValueError(f"IV feed as_of {iv_feed_summary.get('as_of')} 晚于周报 as_of {weekly['as_of']}(未来 feed)")
@@ -1850,6 +1854,7 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "as_of": weekly["as_of"],
         "run_id": lineage["run_id"],
         "candidate_digest": lineage["candidate_digest"],
+        "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "account_snapshot": lineage.get("account_snapshot"),
         "stage_status": "complete",
         "outputs": [os.path.basename(out_path), os.path.basename(md_path)],
@@ -3739,6 +3744,22 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                    help="private formal M6.7 capture root ending state/a_short/operation_evidence_private/v1")
     p.add_argument("--official-operation-evidence-daily-cache", default=None,
                    help="existing P5a shared daily_cache.json for formal-operation settlement; never fetches data")
+    p.add_argument("--overlay-adjudication-root", default=None,
+                   help="private P4a root ending state/a_short/overlay_adjudication_private/v1")
+    p.add_argument("--overlay-adjudication-daily-cache", default=None,
+                   help="existing shared daily cache; P4a never fetches data")
+    p.add_argument("--overlay-adjudication-stage3-snapshot", default=None,
+                   help="same-run EGS stage3_selection_snapshot.json")
+    p.add_argument("--overlay-adjudication-overlay-source", default=None,
+                   help="same-run overlay scorer artifact covering the frozen Stage3 eligible pool")
+    p.add_argument("--overlay-adjudication-egs-publish-marker", default=None,
+                   help="same-run official_publish.json binding the P4a sidecar bytes")
+    p.add_argument("--overlay-adjudication-public-json", default=None,
+                   help="optional de-identified P4a public-summary JSON path")
+    p.add_argument("--overlay-adjudication-public-markdown", default=None,
+                   help="optional de-identified P4a public-summary Markdown path")
+    p.add_argument("--overlay-adjudication-forward", action="store_true",
+                   help="freeze only a live canonical P4a observation after M6.7 publication")
     args = p.parse_args(argv)
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
@@ -3760,6 +3781,13 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit("[FATAL] P3 final-action capture requires --run-date for source-bound date identity")
     if args.final_action_validation_forward and not args.final_action_validation_root:
         raise SystemExit("[FATAL] --final-action-validation-forward requires --final-action-validation-root")
+    if args.overlay_adjudication_root and not args.run_date:
+        raise SystemExit("[FATAL] P4a capture requires --run-date for source-bound identity")
+    if args.overlay_adjudication_forward and (not args.overlay_adjudication_root or
+                                              not args.overlay_adjudication_stage3_snapshot or
+                                              not args.overlay_adjudication_overlay_source or
+                                              not args.overlay_adjudication_egs_publish_marker):
+        raise SystemExit("[FATAL] --overlay-adjudication-forward requires root, same-run Stage3 snapshot, scorer source and official EGS publish marker")
     if not _is_valid_yyyymmdd(args.as_of):
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
@@ -4231,6 +4259,22 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             validate_final_action_summary(final_action_validation)
         except Exception:
             final_action_validation = unavailable_final_action_summary(args.as_of)
+    overlay_adjudication = None
+    if args.overlay_adjudication_root:
+        overlay_public_paths = {}
+        if args.overlay_adjudication_public_json:
+            overlay_public_paths["public_json_path"] = args.overlay_adjudication_public_json
+        if args.overlay_adjudication_public_markdown:
+            overlay_public_paths["public_markdown_path"] = args.overlay_adjudication_public_markdown
+        try:
+            from engine.a_short_overlay_adjudication import settle_and_summarize_weekly as settle_overlay_adjudication
+            overlay_adjudication = settle_overlay_adjudication(root=args.overlay_adjudication_root,
+                daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
+        except Exception:
+            # P4a is an optional comparison sidecar.  An import or settlement
+            # outage must neither fail the formal weekly run nor retain a stale
+            # P4a conclusion in the new official report.
+            overlay_adjudication = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -4245,6 +4289,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         weekly["industry_weight_comparison"] = industry_weight_comparison
     if target_policy_comparison is not None:
         weekly["target_policy_comparison"] = target_policy_comparison
+    if overlay_adjudication is not None:
+        weekly["overlay_adjudication"] = overlay_adjudication
     evidence_reminders = _build_evidence_reminders(args.as_of, target_policy_comparison, final_action_validation)
     if evidence_reminders is not None:
         weekly["a_short_evidence_reminders"] = evidence_reminders
@@ -4359,6 +4405,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         print(f"[target-policy-p2] {target_policy_comparison['message']}")
     if final_action_validation is not None:
         print(f"[final-action-p3] {final_action_validation['message']}")
+    if overlay_adjudication is not None:
+        print(f"[overlay-adjudication-p4a] {overlay_adjudication['message']}")
     # Freeze current-week evidence only after the complete official JSON/Markdown/receipt bundle exists.
     # Capture remains comparison-only and non-blocking, but cannot create a false forward week on
     # a failed M6.7 publication because this block is reached only after publish_weekly_bundle returns.
@@ -4459,6 +4507,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             else:
                 print("[final-action-p3] current-week capture unavailable; "
                       "M6.7 output remains authoritative and unchanged")
+    if args.overlay_adjudication_root:
+        try:
+            from engine.a_short_overlay_adjudication import capture_after_published_weekly, settle_and_summarize_weekly
+            p4_capture = capture_after_published_weekly(root=args.overlay_adjudication_root, decision_date=args.as_of,
+                run_date=args.run_date, stage3_snapshot_path=args.overlay_adjudication_stage3_snapshot,
+                overlay_path=args.overlay_adjudication_overlay_source, out_path=args.out, receipt_path=receipt_path,
+                egs_publish_marker_path=args.overlay_adjudication_egs_publish_marker,
+                source_identity=source_identity, forward_eligible=args.overlay_adjudication_forward)
+            settle_and_summarize_weekly(root=args.overlay_adjudication_root,
+                daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
+            print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
+        except Exception:
+            print("[overlay-adjudication-p4a] current-week capture unavailable; "
+                  "M6.7 output remains authoritative and unchanged")
 
 
 if __name__ == "__main__":

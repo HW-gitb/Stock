@@ -1,9 +1,11 @@
 import importlib.util
+import inspect
 import json
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 import pandas as pd
 
@@ -139,6 +141,35 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
             self.assertEqual(checks[check_id]["status"], "unknown")
             self.assertEqual(checks[check_id]["severity"], "watch")
 
+    def test_p4_stage3_snapshot_is_a_non_mutating_same_run_selection_receipt(self) -> None:
+        rows = pd.DataFrame([{
+            "ts_code": f"60000{i}.SH", "final_score": float(100 - i),
+            "l1_name": f"L1-{i}", "l2_name": f"L2-{i}", "tier": "Tier1",
+            "overheat_flag": False, "chasing_high": False,
+        } for i in range(1, 7)])
+        official = rows.iloc[:5].copy()
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            path = self.egs_main.export_stage3_selection_snapshot(
+                rows, official, "20260522", {"run_id": "a-short-20260522-probe", "candidate_digest": "a" * 64},
+                {"veto_10d": {"600003.SH"}}, {"600004.SH"}, output_root=tmp)
+            snapshot = json.loads(Path(path).read_text(encoding="utf-8"))
+        self.assertEqual(snapshot["run_id"], "a-short-20260522-probe")
+        self.assertEqual(snapshot["candidate_digest"], "a" * 64)
+        self.assertIn("active_industry_weight_profile", snapshot)
+        self.assertIn("screening_runtime_recipe", snapshot)
+        self.assertEqual(set(snapshot["screening_runtime_recipe"]), {"policy_id", "schema_version", "path", "sha256"})
+        self.assertEqual([row["ts_code"] for row in snapshot["top50"]], list(rows["ts_code"]))
+        self.assertEqual([row["ts_code"] for row in snapshot["stage3_eligible_pool"]],
+                         ["600001.SH", "600002.SH", "600005.SH", "600006.SH"])
+        self.assertEqual([row["ts_code"] for row in snapshot["official_tier1_final"]], list(official["ts_code"]))
+        self.assertTrue(snapshot["boundary"]["changes_official_top5"] is False)
+
+    def test_p4_sidecar_failures_cannot_enter_formal_data_health(self) -> None:
+        source = inspect.getsource(self.egs_main.run_egs)
+        self.assertNotIn("comparison_sidecar_warnings.append(_p4_warning)", source)
+        self.assertIn("P4a Stage3 overlay sidecar unavailable; formal EGS output unchanged", source)
+        self.assertLess(source.index("with publish_context:"), source.index("with official_output_transaction([_p4_overlay_target]):"))
+
     def test_example_rule6_fixture_has_no_legacy_pending_status(self) -> None:
         fixture = json.loads((ROOT / "schemas" / "examples" / "analysis_input.example.json").read_text(encoding="utf-8"))
         checks = fixture["candidates"][0]["event_risk"]["rule6_checks"]
@@ -176,15 +207,46 @@ class EgsMainAnalysisInputContractTest(unittest.TestCase):
                 tmp, latest_td=as_of, rank_reconciliation=reconciliation)
             feed_path = Path(tmp) / "feed.json"
             out_path = Path(tmp) / "weekly.json"
+            p4_root = Path(tmp) / "state" / "a_short" / "overlay_adjudication_private" / "v1"
+            p4_summary = Path(tmp) / "p4-summary.json"
+            p4_markdown = Path(tmp) / "p4-summary.md"
             feed_path.write_text(json.dumps(feed), encoding="utf-8")
             weekly_main(["--as-of", as_of, "--analysis-input", str(analysis_path),
-                         "--iv-feed", str(feed_path), "--out", str(out_path)],
+                         "--iv-feed", str(feed_path), "--out", str(out_path), "--run-date", as_of,
+                         "--overlay-adjudication-root", str(p4_root),
+                         "--overlay-adjudication-public-json", str(p4_summary),
+                         "--overlay-adjudication-public-markdown", str(p4_markdown)],
                         price_provider=lambda _code: prices)
             weekly = json.loads(out_path.read_text(encoding="utf-8"))
             self.assertTrue(out_path.exists())
         self.assertEqual(payload["universe_summary"]["rank_exclusion_counts"]["l1_industry_leader"], 601)
         self.assertNotIn("l1_industry_leader", payload["universe_summary"]["excluded_counts"])
         self.assertNotIn("exclusion_summary", weekly)  # no L0 count in this fixture; rank counts are not hard vetoes
+
+    def test_p4_import_failure_cannot_fail_or_mutate_the_formal_weekly_output(self) -> None:
+        """P4 is optional: even importing its sidecar must not change M6.7 publication."""
+        from runners.a_short_weekly_pipeline import main as weekly_main
+
+        as_of = "20260522"
+        reconciliation = {"l0_count": 3, "unexpected_stage_change_count": 0, "stage_counts": []}
+        feed = {"as_of": as_of, "n_days": 5, "series": [
+            {"trade_date": day, "iv_value": 0.20, "iv_percentile_252d": 50.0, "hv_value": 0.18}
+            for day in ["20260518", "20260519", "20260520", "20260521", as_of]
+        ]}
+        prices = [{"high": 10.2, "low": 9.8, "close": 10.0} for _ in range(30)]
+        with tempfile.TemporaryDirectory(dir=str(ROOT)) as tmp:
+            analysis_path, _, _, _ = self._export(tmp, latest_td=as_of, rank_reconciliation=reconciliation)
+            feed_path, out_path = Path(tmp) / "feed.json", Path(tmp) / "weekly.json"
+            feed_path.write_text(json.dumps(feed), encoding="utf-8")
+            p4_root = Path(tmp) / "state" / "a_short" / "overlay_adjudication_private" / "v1"
+            with patch.dict(sys.modules, {"engine.a_short_overlay_adjudication": None}):
+                weekly_main(["--as-of", as_of, "--analysis-input", str(analysis_path), "--iv-feed", str(feed_path),
+                             "--out", str(out_path), "--run-date", as_of,
+                             "--overlay-adjudication-root", str(p4_root)],
+                            price_provider=lambda _code: prices)
+            weekly = json.loads(out_path.read_text(encoding="utf-8"))
+            self.assertTrue(out_path.exists())
+            self.assertNotIn("overlay_adjudication", weekly)
 
     def _export(self, output_root: str, latest_td: str, rank_reconciliation=None):
         df = pd.DataFrame([{

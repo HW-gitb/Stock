@@ -1,0 +1,24 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short P4a de-identified Stage3 rank-source summary",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "summary_id", "as_of", "status", "eligible_policy_weeks", "difference_weeks", "nonoverlap_blocks", "mature_opportunities", "no_count_weeks", "h5_coverage_status", "h20_coverage_status", "epoch_id", "checkpoints", "checkpoint_progress", "failing_risk_or_statistical_gates", "adjudication", "message", "production_unchanged"],
+  "properties": {
+    "schema_name": {"const": "a_short_overlay_adjudication_summary"}, "schema_version": {"const": "1.0.0"},
+    "summary_id": {"const": "a_short_p4_stage3_rank_source"}, "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "status": {"enum": ["not_configured", "accumulating", "preliminary_review", "manual_promotion_candidate", "do_not_promote", "retired_for_epoch", "evidence_unavailable_or_inconclusive"]},
+    "eligible_policy_weeks": {"type": "integer", "minimum": 0}, "difference_weeks": {"type": "integer", "minimum": 0}, "nonoverlap_blocks": {"type": "integer", "minimum": 0}, "mature_opportunities": {"type": "integer", "minimum": 0}, "no_count_weeks": {"type": "integer", "minimum": 0},
+    "h5_coverage_status": {"enum": ["not_due", "pending_h5_coverage", "complete"]},
+    "h20_coverage_status": {"enum": ["not_due", "pending_h20_coverage", "complete"]},
+    "epoch_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "checkpoints": {"type": "object", "additionalProperties": false, "required": ["12", "24", "36"], "properties": {"12": {"enum": ["available", "deficient"]}, "24": {"enum": ["available", "deficient"]}, "36": {"enum": ["available", "deficient"]}}},
+    "checkpoint_progress": {"type": "object", "additionalProperties": false, "required": ["12", "24", "36"], "properties": {"12": {"$ref": "#/$defs/checkpointProgress"}, "24": {"$ref": "#/$defs/checkpointProgress"}, "36": {"$ref": "#/$defs/checkpointProgress"}}},
+    "failing_risk_or_statistical_gates": {"type": "array", "uniqueItems": true, "items": {"enum": ["candidate_excess_vs_benchmarks", "close_drawdown", "bad_ticket_rate", "tail_h10", "false_negative_rate", "cash_or_unfilled", "h5_coverage", "h20_coverage", "h5_h20_adverse", "mean_delta", "nonoverlap_block_win_rate", "block_bootstrap_lower", "block_signflip", "monthly_cluster_coverage", "monthly_cluster_t", "no_count_rate"]}},
+    "adjudication": {"type": "object", "additionalProperties": false, "required": ["verdict", "advisory_only", "user_decision_required", "automatic_policy_switch", "automatic_production_config_write"], "properties": {"verdict": {"type": "string"}, "advisory_only": {"const": true}, "user_decision_required": {"type": "boolean"}, "automatic_policy_switch": {"const": false}, "automatic_production_config_write": {"const": false}}},
+    "message": {"type": "string", "minLength": 1}, "production_unchanged": {"const": true}
+  },
+  "$defs": {
+    "checkpointProgress": {"type": "object", "additionalProperties": false, "required": ["remaining_eligible_weeks", "remaining_difference_weeks", "remaining_nonoverlap_blocks"], "properties": {"remaining_eligible_weeks": {"type": "integer", "minimum": 0}, "remaining_difference_weeks": {"type": "integer", "minimum": 0}, "remaining_nonoverlap_blocks": {"type": "integer", "minimum": 0}}}
+  }
+}

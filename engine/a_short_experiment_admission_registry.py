@@ -32,6 +32,7 @@ _TRUSTED_ARM_INVENTORY: dict[str, tuple[str, str]] = {
     "a_short_p3_managed_exit_vs_hold": ("2d7c929ba2de0054b6e53638227760cad68f5928693f111c06d5024325ae789c", "68fd825ee08a4280127f67dda2d9574b98dcc82df35954fcfbd4d5a3cfd4fdde"),
     "a_short_p3_selected_vs_candidate_pool": ("80af1ea097f8a5be1289d4b782a0f3ae91afc5e5953afcaa3ca6a721d908e3d8", "48a46e61c850f36cf1b55b3c3640619b3f0ecf37c4d811e0f97327d18331458c"),
     "a_short_p3_selected_vs_csi1000": ("c205915ae1d658065b9f7939f8fb3bbb897e31f51ee8a70e1b977c4a03df5bf1", "7e40434737a0493e8ab0dbc91f55ebe16e3936fa57791719a851bccc63081f23"),
+    "a_short_p4_stage3_rank_source": ("c7813e9a08fdbda17bacb4cca362dec909a35c64c9c1282cbc1370191508f982", "dde389285ed91cbb6815b6fbdc1660a89b54f7d27c679f4f03b26802ed2cf7f9"),
     "a_short_p5_aggressive_vs_balanced": ("1712bfa088135fdc2b165e19b747f0cc0ae7ed05e2c3051dd46d23dabd4e90fe", "6d6b2cc0196f85885c6dfd65a236cdf20fd712c029a4a45161ffc863f453810b"),
     "a_short_p5_balanced_vs_legacy": ("c2c6994835b3396f4a06b69aa249125279b2731de643f5bfe117af87b0db098e", "1712bfa088135fdc2b165e19b747f0cc0ae7ed05e2c3051dd46d23dabd4e90fe"),
     "a_short_p5_theme_double_vs_balanced": ("1712bfa088135fdc2b165e19b747f0cc0ae7ed05e2c3051dd46d23dabd4e90fe", "ed94724306ac3f62925cce0dba3ff77ac681b746f5fb602a165ab05de71a1e2a"),
@@ -272,10 +273,79 @@ def _p5_admissions() -> dict[str, dict]:
     return admissions
 
 
+def _p4_admission() -> dict:
+    """The P4a rank-source comparison is one switchable, bounded component.
+
+    It deliberately does not reuse the older overlay sidecar's evidence.  The
+    P4a runner binds a newly published EGS/Stage3/M6.7 bundle before it starts
+    a fresh epoch, while this registry seals the business boundary that makes
+    that runner's evidence interpretable.
+    """
+    outcome = {
+        "entry": "t_plus_1_open", "windows": [5, 10, 20], "primary_window": "h10",
+        "price_basis": "qfq_provider_observed", "round_trip_cost_pct": 0.16,
+        "fixed_slots": 5, "equal_slot_pct": 20.0, "cash_not_reallocated": True,
+        "benchmarks": ["csi1000", "csi300"],
+    }
+    statistical = {
+        "eligible_checkpoints": [12, 24, 36], "difference_minimums": {"12": 6, "24": 12, "36": 18},
+        "nonoverlap": {"window": "h10", "strict_entry_after_prior_exit": True},
+        "preliminary": {"mean_delta_pp_min": 0.25, "block_win_rate_min": 0.55,
+                          "negative_mean_delta_pp_max": -0.25},
+        "promotion": {"mean_delta_pp_min": 0.25, "bootstrap_lower_pp_min": 0.25,
+                      "signflip_p_max": 0.025, "monthly_cluster_t_min": 2.0,
+                      "minimum_months": 6, "adjustment_coverage_pct": 100.0,
+                      "no_count_rate_pct_max": 20.0, "h20_required_at_24_36": True},
+        "risk": {"close_drawdown_pct_max": 15.0, "drawdown_worsening_pp_max": 2.0,
+                 "bad_ticket_rate_pct_max": 35.0, "bad_ticket_delta_pp_max": 5.0,
+                 "tail_h10_pct_min": -10.0, "tail_worsening_pp_max": 2.0,
+                 "false_negative_delta_pp_max": 5.0, "cash_drag_pct_max": 50.0,
+                 "unfilled_rate_pct_max": 50.0},
+        "negative_at_36": {"mean_delta_pp_max": -0.25, "bootstrap_upper_pp_max": 0.0},
+        "automatic_production_write": False,
+    }
+    governance_path = ROOT / "presets" / "egs_industry_heat_governance_20260611.json"
+    governance = _load(governance_path)
+    try:
+        active_profile = str(governance["active_profile"])
+        active_weights = governance["profiles"][active_profile]
+    except (KeyError, TypeError) as exc:
+        raise AdmissionRegistryError("P4 active industry profile is malformed") from exc
+    if not isinstance(active_weights, dict) or not active_weights:
+        raise AdmissionRegistryError("P4 active industry profile weights are malformed")
+    active_profile_dependency = {
+        "governance_path": str(governance_path.relative_to(ROOT)),
+        "governance_sha256": hashlib.sha256(governance_path.read_bytes()).hexdigest(),
+        "active_profile": active_profile,
+        "weights": active_weights,
+    }
+    dependencies = [
+        _dependency("active_industry_weight_profile", active_profile_dependency),
+        _dependency("official_watch_pool_selector", "engine.egs_industry_heat.select_profile_watch_pool"),
+        _dependency("stage3_eligibility_builder", "A-EGS/egs_main.py#stage3_ai_clearing_pre_rank_filters"),
+        _dependency("stage3_l1_l2_concentration", {"l1_max": 0.4, "l2_max": 0.3, "top_k": 5}),
+        _dependency("top5_selector", "A-EGS/egs_main.py#stage3_ai_clearing._finalize_stage3"),
+        _dependency("overlay_scorer_contract", "schemas/a_short_theme_overlay_comparison.schema.json@1.0.0"),
+        _dependency("pit_qfq_price_identity", outcome),
+    ]
+    return _admission(
+        program_id="a_short_overlay_adjudication_p4a", experiment_id="a_short_p4_stage3_rank_source",
+        track_mode="switchable", component_id="stage3_rank_source", effect_surface="official_stage3_top5_rank_source",
+        baseline={"arm_id": "final_score", "rank_source": "final_score", "selector": "frozen_stage3_top5"},
+        candidate={"arm_id": "overlay_score", "rank_source": "overlay_score", "selector": "frozen_stage3_top5"},
+        pit_forward={"live_canonical_only": True, "official_egs_publish_marker_required": True,
+                     "official_m67_publish_receipt_required": True, "same_run_stage3_snapshot_required": True,
+                     "forward_only": True, "outcome": outcome},
+        statistical=statistical, dependencies=dependencies, dependents=["a_short_p4b_portfolio_overlay_activation"],
+        allowed_path="A-EGS/egs_main.py#/stage3_rank_source",
+    )
+
+
 def admissions() -> dict[str, dict]:
-    """Return every active P0/P1/P2/P3/P5 admission, fully revalidated."""
+    """Return every active P0/P1/P2/P3/P4/P5 admission, fully revalidated."""
     out = {}
-    for source in (_p0_admissions(), {"p1_regime_action_proxy": _p1_admission()}, _p2_admissions(), _p3_admissions(), _p5_admissions()):
+    for source in (_p0_admissions(), {"p1_regime_action_proxy": _p1_admission()}, _p2_admissions(), _p3_admissions(),
+                   {"p4_stage3_rank_source": _p4_admission()}, _p5_admissions()):
         overlap = set(out) & set(source)
         if overlap:
             raise AdmissionRegistryError(f"duplicate admission id: {sorted(overlap)}")

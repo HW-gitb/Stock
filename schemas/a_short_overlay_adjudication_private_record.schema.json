@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "A-short P4a private Stage3 rank-source record",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "record_type", "program_id", "decision_date", "epoch_id", "contract_fingerprint", "payload", "boundary", "record_sha256"],
+  "properties": {
+    "schema_name": {"const": "a_short_overlay_adjudication_private_record"},
+    "schema_version": {"const": "1.0.0"},
+    "record_type": {"enum": ["capture", "outcome", "conflict"]},
+    "program_id": {"const": "a_short_overlay_adjudication_p4a"},
+    "decision_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "epoch_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "contract_fingerprint": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "record_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "payload": {"type": "object"},
+    "boundary": {"type": "object", "additionalProperties": false,
+      "required": ["comparison_only", "automatic_policy_switch", "reads_account_or_holdings", "p4b_implemented"],
+      "properties": {"comparison_only": {"const": true}, "automatic_policy_switch": {"const": false}, "reads_account_or_holdings": {"const": false}, "p4b_implemented": {"const": false}}}
+  }
+}

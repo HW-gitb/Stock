@@ -1228,6 +1228,77 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     return analysis_path, snapshot_path, candidates_path, analysis_input
 
 
+def export_stage3_selection_snapshot(top50, tier1_final, latest_td, run_identity,
+                                     red_dict, unlock_set, output_root=None):
+    """Write the same-run P4a source proof without changing official selection.
+
+    P4a must compare only the already formed Stage3 pool.  This sidecar records
+    the pre-rank eligible pool after the two production Stage3 exclusions and
+    the actual short ``tier1_final`` output.  It does not rerun a veto, add a
+    candidate, alter Top5, or affect the EGS publish decision.
+    """
+    project_root = os.path.dirname(SCRIPT_DIR)
+    base_root = (output_root if output_root and os.path.isabs(output_root) else
+                 os.path.join(project_root, output_root) if output_root else
+                 os.path.join(project_root, "result", "a_short"))
+    out_path = os.path.join(base_root, latest_td, "stage3_selection_snapshot.json")
+    required = ("ts_code", "final_score", "l1_name", "l2_name", "tier", "overheat_flag", "chasing_high")
+
+    def _rows(frame, label):
+        if frame is None:
+            frame = pd.DataFrame()
+        missing = [column for column in required if column not in frame.columns]
+        if missing:
+            raise ValueError(f"P4a {label} snapshot missing columns: {','.join(missing)}")
+        rows = []
+        for _, row in frame.iterrows():
+            score = pd.to_numeric(row.get("final_score"), errors="coerce")
+            if pd.isna(score) or not str(row.get("ts_code") or ""):
+                raise ValueError(f"P4a {label} snapshot has invalid score/code")
+            rows.append({"ts_code": str(row["ts_code"]), "final_score": float(score),
+                         "l1_name": str(row.get("l1_name")), "l2_name": str(row.get("l2_name")),
+                         "tier": str(row.get("tier")), "overheat_flag": bool(row.get("overheat_flag", False)),
+                         "chasing_high": bool(row.get("chasing_high", False))})
+        if len({row["ts_code"] for row in rows}) != len(rows):
+            raise ValueError(f"P4a {label} snapshot has duplicate ts_code")
+        return rows
+
+    top50_rows = _rows(top50, "top50")
+    veto_10d = set((red_dict or {}).get("veto_10d", set()))
+    eligible_rows = [row for row in top50_rows if row["ts_code"] not in veto_10d and row["ts_code"] not in set(unlock_set or set())]
+    import hashlib
+    governance_path = os.path.join(project_root, "presets", "egs_industry_heat_governance_20260611.json")
+    governance = load_governance()
+    active_profile = str(governance.get("active_profile") or "")
+    active_weights = (governance.get("profiles") or {}).get(active_profile)
+    if not active_profile or not isinstance(active_weights, dict) or not active_weights:
+        raise ValueError("P4a Stage3 snapshot requires a valid active industry profile")
+    with open(governance_path, "rb") as _governance_handle:
+        governance_sha256 = hashlib.sha256(_governance_handle.read()).hexdigest()
+    runtime_lineage = runtime_configuration_lineage(_RUNTIME_CONFIGURATION)
+    screening_policies = [policy for policy in runtime_lineage.get("policies", [])
+                          if policy.get("schema_name") == "a_short_screening_runtime_policy"]
+    if len(screening_policies) != 1 or any(not isinstance(screening_policies[0].get(key), str) or not screening_policies[0][key]
+                                           for key in ("policy_id", "schema_version", "path", "sha256")):
+        raise ValueError("P4a Stage3 snapshot requires one complete screening runtime recipe")
+    screening_runtime_recipe = {key: screening_policies[0][key]
+                                for key in ("policy_id", "schema_version", "path", "sha256")}
+    payload = {"schema_name": "a_short_p4_stage3_selection_snapshot", "schema_version": "1.0.0",
+               "as_of": latest_td, "run_id": str((run_identity or {}).get("run_id") or ""),
+               "candidate_digest": str((run_identity or {}).get("candidate_digest") or ""),
+               "active_industry_weight_profile": {"active_profile": active_profile, "weights": active_weights,
+                                                   "governance_sha256": governance_sha256},
+               "screening_runtime_recipe": screening_runtime_recipe,
+               "top50": top50_rows, "stage3_eligible_pool": eligible_rows,
+               "official_tier1_final": _rows(tier1_final, "tier1_final"),
+               "boundary": {"comparison_only": True, "changes_final_score_or_tier": False,
+                            "changes_official_top5": False, "automatic_promotion": False}}
+    if not payload["run_id"] or not payload["candidate_digest"]:
+        raise ValueError("P4a Stage3 snapshot requires complete EGS run identity")
+    write_json_atomic(out_path, payload)
+    return out_path
+
+
 DATA_HEALTH_SCHEMA_VERSION = "1.5.0"
 DATA_HEALTH_SCHEMA_PATH = os.path.join(PROJECT_ROOT, "schemas", "data_health.schema.json")
 
@@ -4558,6 +4629,8 @@ def run_egs(backtest_mode=False, output_root=None):
     # be accidentally bound into a fresh official publish marker as stale bytes.
     comparison_sidecar_warnings = []
     _weight_comparison_published = False
+    _p4_overlay_score_path = None
+    _p4_overlay_inputs = None
 
     tier1_final, cninfo_checked = stage3_ai_clearing(top50, red_dict, unlock_set, backtest_mode=backtest_mode)
     env_report  = market_environment(trade_dates, stats_df)
@@ -4640,6 +4713,19 @@ def run_egs(backtest_mode=False, output_root=None):
             _ov_gen = datetime.now().astimezone().isoformat(timespec="seconds")
             _ov_written = emit_overlay(CONF.get("l3_mode"), _ov_pool, all_daily, _l3, sw_map,
                                        TODAY, _ov_gen, overlay_path(TODAY, output_root=output_root))
+            # P4a needs scores for the immutable Stage3-eligible pool, not the
+            # Top15 watch pool consumed by M6.7.  Prepare the comparison-only
+            # inputs now, but write no P4 file until the official-output
+            # transaction has started below.
+            try:
+                _p4_eligible = top50[(~top50["ts_code"].isin(set((red_dict or {}).get("veto_10d", set())))) &
+                                      (~top50["ts_code"].isin(set(unlock_set or set())))].copy()
+                _p4_pool = _p4_eligible[["ts_code", "esp_score", "l4_score", "overheat_flag", "chasing_high"]].copy()
+                _p4_pool["baseline_rank"] = range(1, len(_p4_pool) + 1)
+                _p4_overlay_inputs = (_p4_pool, _l3, _ov_gen)
+            except Exception as _p4_overlay_exc:
+                log.warning("P4a Stage3 overlay inputs unavailable; formal EGS output unchanged: %s",
+                            safe_exception_summary(_p4_overlay_exc))
             # Preserve comparison metrics with the governed taxonomy for the
             # later forward evaluator. This never feeds ranking or M6.7.
             with open(_ov_written, encoding="utf-8") as _ov_handle:
@@ -4742,6 +4828,8 @@ def run_egs(backtest_mode=False, output_root=None):
         full_csv_path,
         os.path.join(official_dir, "analysis_input.json"),
         os.path.join(official_dir, "snapshot.json"),
+        os.path.join(official_dir, "stage3_selection_snapshot.json"),
+        os.path.join(official_dir, "stage3_overlay_score.json"),
         os.path.join(official_dir, "candidates.csv"),
         os.path.join(official_dir, "data_health.json"),
         weight_comparison_path(TODAY, output_root=CONF.get("output_root")),
@@ -4778,6 +4866,38 @@ def run_egs(backtest_mode=False, output_root=None):
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
         log.info(f"[OK] candidates saved to {candidates_path}")
+        _p4_stage3_snapshot_path = None
+        try:
+            _p4_stage3_snapshot_path = export_stage3_selection_snapshot(
+                top50, tier1_final, latest_td,
+                (analysis_input.get("source") or {}).get("run_identity") or {},
+                red_dict, unlock_set, output_root=CONF.get("output_root"),
+            )
+            log.info(f"[OK] P4a Stage3 snapshot saved to {_p4_stage3_snapshot_path}")
+        except Exception as _p4_snapshot_exc:  # comparison evidence cannot mutate EGS output
+            _p4_warning = _comparison_sidecar_warning("p4_stage3_snapshot", _p4_snapshot_exc)
+            log.warning(_p4_warning["message"])
+        # P4's marker may bind its scorer only together with the matching
+        # Stage3 selection receipt.  A failed snapshot therefore suppresses
+        # the scorer sidecar rather than publishing a one-sided bundle.
+        if _p4_stage3_snapshot_path is not None and _p4_overlay_inputs is not None:
+            _p4_pool, _p4_l3, _p4_generated_at = _p4_overlay_inputs
+            _p4_overlay_target = os.path.join(official_dir, "stage3_overlay_score.json")
+            try:
+                # The nested transaction makes a failed P4 sidecar restore its
+                # own prior bytes; a rollback failure propagates to the outer
+                # formal transaction rather than leaving an unbound artifact.
+                with official_output_transaction([_p4_overlay_target]):
+                    _p4_overlay_score_path = emit_overlay(
+                        CONF.get("l3_mode"), _p4_pool, all_daily, _p4_l3, sw_map,
+                        TODAY, _p4_generated_at, _p4_overlay_target,
+                    )
+            except Exception as _p4_overlay_exc:  # P4a must not alter official output bytes on failure.
+                _p4_overlay_score_path = None
+                if "rollback was incomplete" in str(_p4_overlay_exc):
+                    raise
+                log.warning("P4a Stage3 overlay sidecar unavailable; formal EGS output unchanged: %s",
+                            safe_exception_summary(_p4_overlay_exc))
         # Same output transaction as analysis_input and its final marker: P5 may
         # later consume this file only when the marker binds these exact bytes.
         try:
@@ -4818,6 +4938,10 @@ def run_egs(backtest_mode=False, output_root=None):
             "full_rank": full_csv_path,
             "rank_universe_reconciliation": rank_reconciliation_path,
         }
+        if _p4_stage3_snapshot_path:
+            _published_files["p4_stage3_selection_snapshot"] = _p4_stage3_snapshot_path
+        if _p4_overlay_score_path:
+            _published_files["p4_stage3_overlay_score"] = _p4_overlay_score_path
         if _weight_comparison_published:
             _published_files["egs_weight_comparison"] = weight_comparison_path(
                 TODAY, output_root=CONF.get("output_root")

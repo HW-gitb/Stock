@@ -405,11 +405,11 @@
     }
   ],
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "f432760a42222f7de252aaf413d53fe8d7845ab8b053598b61d05cc48700e434",
+    "A-EGS/egs_main.py": "3365a52b8260a57d4a690a65d5082830ce213c072ebdf45be8e2b686c9d7dca7",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
     "runners/a_short_phase5_engine.py": "8d83edbd66493db216e0e0aee1f5651e2033022d0647e9584a5299d8dca51f1c",
-    "runners/a_short_weekly_pipeline.py": "1f6058c51bd5bd27125e20c861e37061d33eac1d51232d3ad559ba6d295dc840",
+    "runners/a_short_weekly_pipeline.py": "8b570274f02c38015bc9abe0ac72a5ef81dfb0d4a540aebefbb843f3fd373830",
     "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
@@ -613,6 +613,19 @@
         "research/results/a_short/industry_weight_comparison_summary.json",
         "research/results/a_short/industry_weight_comparison_summary.md"
       ]
+    },
+    {
+      "id": "overlay_adjudication_p4a",
+      "policy": "intentionally_independent",
+      "schema_path": "schemas/a_short_overlay_adjudication_summary.schema.json",
+      "schema_sha256": "c134fb685dec293ab59f087e5816dc66520984b4ba5772e5d00f94951545b3e8",
+      "reason": "P4a freezes a post-publication Stage3 Top5 rank-source comparison. Before a separately reviewed user receipt with a future effective week, it is prohibited from changing official Top5, EGS, M6.7 action, star, sizing, cash allocation, holdings, exit, veto, or production configuration.",
+      "owner": "engine/a_short_overlay_adjudication.py + runners/a_short_overlay_adjudication.py",
+      "review_ref": "P4a automatic adjudication is advisory-only; P4b and activation remain separately gated.",
+      "consumer_refs": [
+        "research/results/a_short/overlay_adjudication_summary.json",
+        "research/results/a_short/overlay_adjudication_summary.md"
+      ]
     }
   ],
   "operation_impact_sources": [
@@ -640,7 +653,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "6f259a6ae082bb7b2a4959ac32cc884c94a126f7b7e868e6fb9cd1648d51cb3c",
+    "schemas/a_short_weekly_report.schema.json": "d1bbaec0fca7968fcdd7459d7a123de025fbf9a8bc9ac9d282e11810ab074899",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

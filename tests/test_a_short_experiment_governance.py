@@ -23,6 +23,7 @@ from engine.a_short_experiment_governance import (  # noqa: E402
     validate_receipt_collection,
     validate_user_decision_receipt,
 )
+from engine.a_short_experiment_admission_registry import get_admission  # noqa: E402
 
 
 FIXTURE_PATH = ROOT / "tests" / "fixtures" / "a_short_experiment_governance_admission.json"
@@ -125,6 +126,33 @@ class ExperimentAdmissionTests(unittest.TestCase):
         receipt = seal_user_decision_receipt(receipt)
         with self.assertRaisesRegex(ExperimentGovernanceError, "after decision_canonical_week"):
             validate_user_decision_receipt(receipt, admission=admission)
+
+    def test_p4_activation_plan_is_single_rank_source_and_restarts_only_p4b(self) -> None:
+        admission = get_admission("p4_stage3_rank_source")
+        _, receipt = _fixture()
+        receipt.update({
+            "receipt_id": "receipt-p4-stage3-overlay-score-20260801",
+            "experiment_id": admission["experiment_id"],
+            "admission_identity_sha256": admission["identity_sha256"],
+            "component_id": admission["component_id"],
+            "candidate_arm_id": admission["candidate"]["arm_id"],
+            "decision_canonical_week": "20260727",
+            "effective_from_canonical_week": "20260803",
+            "old_baseline_definition_sha256": admission["baseline"]["definition_sha256"],
+            "new_baseline_definition_sha256": admission["candidate"]["definition_sha256"],
+            "allowed_configuration_path": admission["allowed_configuration_path"],
+        })
+        receipt = seal_user_decision_receipt(receipt)
+        current = {"stage3_rank_source": {"arm_id": "final_score",
+                                             "definition_sha256": admission["baseline"]["definition_sha256"]},
+                   "top5_selector": {"arm_id": "frozen", "definition_sha256": "f" * 64}}
+        plan = build_baseline_activation_plan(admission, receipt, current_baselines=current, prior_receipts=[])
+        validate_baseline_activation_plan(plan, admission=admission, receipt=receipt)
+        self.assertEqual(plan["component_replacement"]["component_id"], "stage3_rank_source")
+        self.assertEqual(plan["unchanged_component_baselines"], {"top5_selector": current["top5_selector"]})
+        self.assertEqual(plan["epoch_restarts"], [{"experiment_id": "a_short_p4b_portfolio_overlay_activation",
+                                                     "reason": "upstream_component_baseline_changed"}])
+        self.assertFalse(plan["configuration_change"]["automatic_write"])
 
     def test_duplicate_receipt_is_rejected(self) -> None:
         admission, receipt = _fixture()

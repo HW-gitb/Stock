@@ -175,6 +175,12 @@ class FakeTushare:
                                "up_limit": 11.0, "down_limit": 9.0 }
                              for day in self._days(kwargs["start_date"], kwargs["end_date"])])
 
+    def index_daily(self, **kwargs):
+        self.calls.append(("index_daily", kwargs))
+        return pd.DataFrame([{ "ts_code": kwargs["ts_code"], "trade_date": day,
+                               "open": 100.0, "close": 101.0 }
+                             for day in self._days(kwargs["start_date"], kwargs["end_date"])])
+
 
 def datetime_from(value: str) -> date:
     return date(int(value[:4]), int(value[4:6]), int(value[6:]))
@@ -223,6 +229,21 @@ def _write_p3_ledger(path: Path, record: dict) -> None:
 
 
 class ComparisonV2CacheBuildTests(unittest.TestCase):
+    def test_p4_is_last_and_gets_provider_observed_benchmarks_only_when_budget_remains(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp); provider = FakeTushare()
+            with mock.patch("runners.a_short_factor_comparison_v2_cache_build._today", return_value=RUN_DATE), \
+                    mock.patch("runners.a_short_factor_comparison_v2_cache_build._p4_windows", return_value=[{
+                        "consumer": "p4_overlay_adjudication", "decision_date": DECISION_DATE,
+                        "price_data_through": DECISION_DATE, "window_mode": "managed_exit", "pre_history_days": 0,
+                        "horizon_days": 20, "symbols": ["600777.SH"],
+                    }]):
+                result = materialize_incremental_cache(root=root, run_date=RUN_DATE, max_provider_calls=20, pro=provider,
+                                                       overlay_adjudication_root=Path(tmp) / "p4")
+            self.assertEqual(result["provider_calls"], 6)
+            self.assertEqual([kind for kind, _ in provider.calls].count("index_daily"), 2)
+            cache = json.loads((root / "daily_cache.json").read_text(encoding="utf-8"))
+            self.assertEqual({row["ts_code"] for row in cache["benchmarks"]}, {"000852.SH", "000300.SH"})
     def test_no_frozen_capture_makes_no_provider_call_or_empty_success_cache(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = _root(tmp)

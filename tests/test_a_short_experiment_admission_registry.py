@@ -30,6 +30,7 @@ class AdmissionRegistryTests(unittest.TestCase):
                 "p0_d3_iv_policy_iv_step_down", "p0_d3_iv_policy_iv_joint_stress",
                 "p1_regime_action_proxy", "p2_target_exit_policy", "p2_breakout_entry_policy",
                 "p3_selected_vs_candidate_pool", "p3_selected_vs_csi1000", "p3_managed_exit_vs_hold",
+                "p4_stage3_rank_source",
                 "p5_balanced_vs_legacy", "p5_aggressive_vs_balanced", "p5_theme_double_vs_balanced",
             },
         )
@@ -50,6 +51,10 @@ class AdmissionRegistryTests(unittest.TestCase):
         self.assertTrue(all(registry[key]["track_mode"] == "diagnostic_only" for key in registry if key.startswith("p3_")))
         self.assertEqual(registry["p2_target_exit_policy"]["component_id"], "target_exit_policy")
         self.assertEqual(registry["p2_breakout_entry_policy"]["component_id"], "breakout_entry_policy")
+        self.assertEqual(registry["p4_stage3_rank_source"]["component_id"], "stage3_rank_source")
+        self.assertEqual(registry["p4_stage3_rank_source"]["track_mode"], "switchable")
+        self.assertEqual(registry["p4_stage3_rank_source"]["allowed_configuration_path"],
+                         "A-EGS/egs_main.py#/stage3_rank_source")
         self.assertNotEqual(registry["p2_target_exit_policy"]["dependency_components"],
                             registry["p2_breakout_entry_policy"]["dependency_components"])
         p5 = [registry[key] for key in registry if key.startswith("p5_")]

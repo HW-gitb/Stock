@@ -45,6 +45,12 @@
         }
       }
     },
+    "benchmarks": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": false,
+        "required": ["ts_code", "trade_date", "open", "close", "provider_observed"],
+        "properties": {"ts_code": {"type": "string", "minLength": 1}, "trade_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "open": {"type": ["number", "null"]}, "close": {"type": ["number", "null"]}, "provider_observed": {"type": "boolean"}}}
+    },
     "rows": {
       "type": "array",
       "items": {
@@ -79,7 +85,7 @@
         "last_run_date": {"type": "string", "pattern": "^[0-9]{8}$"},
         "consumers": {
           "type": "array",
-          "items": {"enum": ["v2_factor_comparison", "p5_industry_weight", "p2_target_policy", "p3_final_action_validation", "official_operation_evidence"]},
+          "items": {"enum": ["v2_factor_comparison", "p5_industry_weight", "p2_target_policy", "p3_final_action_validation", "official_operation_evidence", "p4_overlay_adjudication"]},
           "uniqueItems": true
         },
         "provider_call_ceiling": {"type": "integer", "minimum": 1},
