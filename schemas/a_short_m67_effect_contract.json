@@ -413,7 +413,7 @@
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
       "runners/a_short_phase5_engine.py": "6f8a297f64df719652a20ad1b1e3d80996c70f182e4c070a148c6399cdb8f3fd",
-      "runners/a_short_weekly_pipeline.py": "daf15f79c131b0cc97c2dae2403c2ed05a0db55aa4be5cb5ef0782bb97ec8054",
+      "runners/a_short_weekly_pipeline.py": "aaeb061c67af2ed9d906b890d5e95ac63fdefe49ab550fd5b0d8c773a900aaa9",
     "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
@@ -657,7 +657,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "b677b9908030f82aa241324d3f8e1292032bae26cb7cc9c54a8dfd1122dd1617",
+    "schemas/a_short_weekly_report.schema.json": "8918389b93263588aa76db98a703a9e843b6e2f13b8cf61eb097e5f69f53d7e8",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

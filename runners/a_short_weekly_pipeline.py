@@ -3540,6 +3540,12 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
             p4_status = "review_due"
             p4_message = ("P4a 已达到 P4b 人工升级审查条件；仍需独立最高风险审查 PASS 和用户明确批准，"
                           "不会自动切换 Top5。")
+        elif verdict == "do_not_promote":
+            p4_status = "retain_baseline"
+            p4_message = "P4a 终局裁决为 do_not_promote：保留现有基线，不替换；不会自动改 production 配置。"
+        elif verdict == "inconclusive_retired_for_epoch":
+            p4_status = "retired_for_epoch"
+            p4_message = "P4a 终局裁决为 inconclusive_retired_for_epoch：本 epoch 已结束，需新预注册/新 epoch 才能重开；不会自动改 production 配置。"
         elif overlay_adjudication.get("status") == "evidence_unavailable_or_inconclusive":
             p4_status = "unavailable"
             p4_message = "P4b 当前证据不可用；不得沿用旧的人工升级提醒。"
@@ -3549,8 +3555,10 @@ def _build_evidence_reminders(as_of: str, target_policy: dict | None,
         items.append({"track": "p4b_manual_promotion", "status": p4_status, "message": p4_message})
     if not items:
         return None
-    overall = "review_due" if any(item["status"] == "review_due" for item in items) else (
-        "unavailable" if all(item["status"] == "unavailable" for item in items) else "accumulating")
+    statuses = [item["status"] for item in items]
+    overall = "review_due" if "review_due" in statuses else (
+        "closed" if statuses and all(status in {"retain_baseline", "retired_for_epoch"} for status in statuses) else (
+            "unavailable" if all(status == "unavailable" for status in statuses) else "accumulating"))
     return {"schema_name": "a_short_evidence_reminders", "schema_version": "1.0.0", "as_of": str(as_of),
             "status": overall, "reminders": items,
             "message": "A-short P2/P3 证据提醒：comparison-only；正式 M6.7 不变。",
@@ -4346,7 +4354,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             # P4a is an optional comparison sidecar.  An import or settlement
             # outage must neither fail the formal weekly run nor retain a stale
             # P4a conclusion in the new official report.
-            overlay_adjudication = None
+            from engine.a_short_overlay_adjudication import unavailable_public_summary
+            overlay_adjudication = unavailable_public_summary(args.as_of)
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -4595,8 +4604,16 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
             print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
         except Exception:
+            # A failed post-publish capture must replace any prior public P4
+            # promotion/retirement reminder with an explicit unavailable
+            # summary. The signed M6.7 bundle is already immutable here.
+            try:
+                from engine.a_short_overlay_adjudication import unavailable_public_summary, write_public_summary
+                write_public_summary(unavailable_public_summary(args.as_of), **overlay_public_paths)
+            except Exception:
+                pass
             print("[overlay-adjudication-p4a] current-week capture unavailable; "
-                  "M6.7 output remains authoritative and unchanged")
+                  "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
 
 
 if __name__ == "__main__":

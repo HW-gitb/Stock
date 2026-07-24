@@ -1,5 +1,37 @@
 # Session Log
 
+## 2026-07-24 - Claude Code re-review PASS (A-short fourth knife: effect-contract reseal)
+
+- **Verdict/Action**: PASS; `R-ASHORT-FOURTH-KNIFE-P4-FULL-CHAIN-AND-FINAL-VERDICT` resolved (detail in `docs/system_risk_register.md`). Reseal is hash-only, no wiring/mapping/fail-closed/privacy change; #7 launcher wiring + #8 terminal verdict closed, P4 comparison-only. Reviewer auto-commits per project flow.
+- **Required**: None.
+- **Verify**: review-evidence:63d8790a7b2a. Pinned main Python; effect-contract `git diff` = only the two stale hashes (no predicate/policy change); behavioral mapping probe re-ran identically; reverse probe `tests.test_a_short_effect_contract` + `tests.test_a_short_weekly_pipeline.MainWiringTests` = 75 OK (UNITTEST_EXIT=0), prior 29 errors cleared. No agent/full lane; no provider/account/order. Detail in `docs/system_risk_register.md`.
+- **Next**: 第四刀代码收口并提交；第五刀=前向证据（非代码）。
+
+## 2026-07-24 - Codex repair (A-short fourth knife effect-contract reseal)
+
+- **Verdict/Action**: Regenerated the effect-contract fingerprints required by the fourth-knife review; no fourth-knife wiring or verdict logic changed. Independent review is required before commit.
+- **Required**: `R-ASHORT-FOURTH-KNIFE-P4-FULL-CHAIN-AND-FINAL-VERDICT` remains open pending reviewer confirmation of the resealed contract and the bounded test evidence.
+- **Verify**: 主 Python effect-contract 18 OK；第四刀 static/P4/terminal/render + 真实 `main()` 场景 7 OK；改动文件可编译，diff 检查仅有仓库换行警告。完整 `MainWiringTests` 运行 4 分钟无失败输出后停止，未宣称 PASS。无 provider、live weekly、account、order、broker。
+- **Pre-Codex self-review**: Recomputed the current inventory read-only, changed only the weekly-pipeline decision hash and weekly-report output-schema hash in `schemas/a_short_m67_effect_contract.json`, and confirmed the renderer hash was already current.
+- **Proof-of-use**: `static_contract_error()` is clear through the 18-test effect-contract pack; focused P4 behavior remains green after the contract-only change.
+- **Next**: Claude Code：仅复审第四刀 effect-contract reseal；PASS 后按项目流程提交，不扩展第五刀或 P4b 生产切换。
+
+## 2026-07-24 - Claude Code review FAIL (A-short fourth knife: P4 full-chain)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-FOURTH-KNIFE-P4-FULL-CHAIN-AND-FINAL-VERDICT` stays open. Launcher wiring, verdict mapping, live-only flag, fail-closed fallback, and privacy are correct. Sole defect: knife 4 changed protected files without regenerating `schemas/a_short_m67_effect_contract.json`, so the guard fires.
+- **Required**: Regenerate the effect-contract hashes for the knife-4-changed pinned files (decision predicate for weekly_pipeline + m67_render; output schema for weekly_report). No logic change. Detail + closure in `docs/system_risk_register.md`.
+- **Verify**: 主 Python effect-contract FAILED（3 failures + 2 errors，均为 stale-hash）；`MainWiringTests` 有 29 个同类错误。P4 行为探针映射正确。未跑 full lane；无 provider、account、order。
+- **Next**: Codex: 修复（仅重生成 effect-contract 哈希，不动逻辑）
+
+## 2026-07-24 - Codex repair (A-short fourth knife: P4 full-chain wiring and terminal verdict)
+
+- **Verdict/Action**: Implemented the fourth-knife P4 repair; independent review is required before commit.
+- **Required**: `R-ASHORT-FOURTH-KNIFE-P4-FULL-CHAIN-AND-FINAL-VERDICT` remains open; review the standard launcher wiring, fail-closed sidecar fallback, terminal reminder mapping, schema, and de-identified public summary boundary.
+- **Verify**: Pinned main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; fourth-knife/P4/cache/reminder pack: 46 OK; changed Python files compiled; `git diff --check` has only repository LF/CRLF warnings. The full weekly module was not claimed: its slow run was stopped after more than three minutes without output. No provider, live weekly, account, order, or broker execution ran.
+- **Pre-Codex self-review**: Re-read desktop `codex_r1.md` fourth-knife requirements and current P4/weekly/cache paths; checked same-`as_of` result binding, live-only forward flag, post-publish capture ordering, terminal statuses, and unavailable fallback.
+- **Proof-of-use**: New static wiring and schema tests cover the standard P4 root/cache/result/public paths and terminal status acceptance; focused P4 engine and shared-cache regressions passed.
+- **Next**: Claude Code：仅审查当前第四刀 diff；PASS 后按项目流程提交，不扩展第五刀、P4b 生产切换、provider 或真实 weekly。
+
 ## 2026-07-24 - Claude Code re-review PASS (A-short second knife follow-up: advice idempotency)
 
 - **Verdict/Action**: PASS; `R-ASHORT-M67-SECOND-KNIFE-HOLDING-DISPOSITION-AND-ENTRY-RR-TRUTH` is resolved; advice and table disposition are now single-source.
