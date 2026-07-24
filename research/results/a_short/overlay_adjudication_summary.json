@@ -1,0 +1,47 @@
+{
+  "schema_name": "a_short_overlay_adjudication_summary",
+  "schema_version": "1.0.0",
+  "summary_id": "a_short_p4_stage3_rank_source",
+  "as_of": "20260727",
+  "status": "accumulating",
+  "eligible_policy_weeks": 0,
+  "difference_weeks": 0,
+  "nonoverlap_blocks": 0,
+  "mature_opportunities": 0,
+  "no_count_weeks": 0,
+  "h5_coverage_status": "not_due",
+  "h20_coverage_status": "not_due",
+  "epoch_id": "576d2d5319f9f47e03f3016136503c5f8258f127f0e5dd048d548897aef6c569",
+  "checkpoints": {
+    "12": "deficient",
+    "24": "deficient",
+    "36": "deficient"
+  },
+  "checkpoint_progress": {
+    "12": {
+      "remaining_eligible_weeks": 12,
+      "remaining_difference_weeks": 6,
+      "remaining_nonoverlap_blocks": 6
+    },
+    "24": {
+      "remaining_eligible_weeks": 24,
+      "remaining_difference_weeks": 12,
+      "remaining_nonoverlap_blocks": 12
+    },
+    "36": {
+      "remaining_eligible_weeks": 36,
+      "remaining_difference_weeks": 18,
+      "remaining_nonoverlap_blocks": 12
+    }
+  },
+  "failing_risk_or_statistical_gates": [],
+  "adjudication": {
+    "verdict": "continue_accumulating",
+    "advisory_only": true,
+    "user_decision_required": false,
+    "automatic_policy_switch": false,
+    "automatic_production_config_write": false
+  },
+  "message": "P4a Stage3 排名源比较仅积累旁路证据；不改变正式 Top5、EGS、M6.7、仓位或退出。",
+  "production_unchanged": true
+}

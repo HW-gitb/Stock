@@ -1,0 +1,159 @@
+{
+  "schema_name": "a_short_final_action_validation_summary",
+  "schema_version": "1.0.0",
+  "summary_id": "a_short_final_action_validation",
+  "as_of": "20260727",
+  "data_through": "20260727",
+  "status": "accumulating",
+  "comparison_only": true,
+  "automatic_policy_switch": false,
+  "verdict": "not_adjudicated",
+  "evidence_epoch_fingerprint": "62c5808aaa44c813542bf75d2f8d9d47f7112fbac975044daa3bfa4818eb495a",
+  "latest_evidence_as_of": "20260727",
+  "source_hash": "7dcf1c4b6eefb8611c93bf1f02e512159ae4a868d10ea54eba336a25cdf69fca",
+  "admissions": {
+    "p3_selected_vs_candidate_pool": {
+      "experiment_id": "a_short_p3_selected_vs_candidate_pool",
+      "component_id": "model_selection_policy",
+      "track_mode": "diagnostic_only",
+      "identity_sha256": "1ccbe4aec344ca90bab24d26da7aad04bc8afd9271a9531a47925d24bae68a91",
+      "statistical_contract_sha256": "77b5500bcc9a79a0d6de7dbc90c5fb3eae81d4b1a0e08ef0b9323e53ceb4f537",
+      "pit_forward_contract_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902",
+      "dependency_components": [
+        {
+          "component_id": "model_selection_definition",
+          "baseline_definition_sha256": "e1dfd86386385a24aad0c69f0e637a6bbd96a1350222294a4848fc7bad58f0e9"
+        },
+        {
+          "component_id": "candidate_cohort",
+          "baseline_definition_sha256": "c3e8b49e80f983aa33b2fa605570ee685b063614ee44cfc551a7b69cb2a829ac"
+        },
+        {
+          "component_id": "qfq_price_identity",
+          "baseline_definition_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902"
+        }
+      ]
+    },
+    "p3_selected_vs_csi1000": {
+      "experiment_id": "a_short_p3_selected_vs_csi1000",
+      "component_id": "model_selection_policy",
+      "track_mode": "diagnostic_only",
+      "identity_sha256": "859d1f305a8189839f467f3036089c3ef5140b849593286186523cde117a5a0b",
+      "statistical_contract_sha256": "77b5500bcc9a79a0d6de7dbc90c5fb3eae81d4b1a0e08ef0b9323e53ceb4f537",
+      "pit_forward_contract_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902",
+      "dependency_components": [
+        {
+          "component_id": "model_selection_definition",
+          "baseline_definition_sha256": "e1dfd86386385a24aad0c69f0e637a6bbd96a1350222294a4848fc7bad58f0e9"
+        },
+        {
+          "component_id": "candidate_cohort",
+          "baseline_definition_sha256": "c3e8b49e80f983aa33b2fa605570ee685b063614ee44cfc551a7b69cb2a829ac"
+        },
+        {
+          "component_id": "qfq_price_identity",
+          "baseline_definition_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902"
+        }
+      ]
+    },
+    "p3_managed_exit_vs_hold": {
+      "experiment_id": "a_short_p3_managed_exit_vs_hold",
+      "component_id": "managed_exit_policy",
+      "track_mode": "diagnostic_only",
+      "identity_sha256": "462fba7efb623f6b5d30d9715dd7dcb44c70eae6c88e8cd023783f5b72939c9d",
+      "statistical_contract_sha256": "77b5500bcc9a79a0d6de7dbc90c5fb3eae81d4b1a0e08ef0b9323e53ceb4f537",
+      "pit_forward_contract_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902",
+      "dependency_components": [
+        {
+          "component_id": "model_selection_definition",
+          "baseline_definition_sha256": "e1dfd86386385a24aad0c69f0e637a6bbd96a1350222294a4848fc7bad58f0e9"
+        },
+        {
+          "component_id": "candidate_cohort",
+          "baseline_definition_sha256": "c3e8b49e80f983aa33b2fa605570ee685b063614ee44cfc551a7b69cb2a829ac"
+        },
+        {
+          "component_id": "qfq_price_identity",
+          "baseline_definition_sha256": "007359f94f10a632a807e72e66c392b44d29d4a4b637a78b0cafba0d2f6ca902"
+        }
+      ]
+    }
+  },
+  "round_trip_cost_pct": 0.16,
+  "hold_based_forward_weeks": 0,
+  "full_edge_forward_weeks": 0,
+  "hold_based": {
+    "forward_weeks": 0,
+    "review_threshold_weeks": 12,
+    "selection_minus_pool": {
+      "mean_pct": null,
+      "median_pct": null,
+      "favorable_ratio": null
+    },
+    "selection_minus_csi1000": {
+      "mean_pct": null,
+      "median_pct": null,
+      "favorable_ratio": null
+    }
+  },
+  "full_edge": {
+    "forward_weeks": 0,
+    "review_threshold_weeks": 12,
+    "managed_plan_count": 0,
+    "managed_minus_simple_hold": {
+      "mean_pct": null,
+      "median_pct": null,
+      "favorable_ratio": null
+    },
+    "managed_minus_csi1000": {
+      "mean_pct": null,
+      "median_pct": null,
+      "favorable_ratio": null
+    }
+  },
+  "first_forward_live_as_of": "20260727",
+  "reminders": [
+    {
+      "reminder_id": "hold_based_midterm_review",
+      "status": "accumulating",
+      "current": 0,
+      "threshold": 12,
+      "message": "模型选择与市场基准证据积累中",
+      "automatic_policy_switch": false
+    },
+    {
+      "reminder_id": "full_edge_integrity_review",
+      "status": "accumulating",
+      "current": 0,
+      "threshold": 12,
+      "message": "共享受管退出完整 edge 证据积累中",
+      "automatic_policy_switch": false
+    },
+    {
+      "reminder_id": "hac_and_cumulative_judgement",
+      "status": "accumulating",
+      "current": 0,
+      "threshold": 26,
+      "message": "待满 26 周且至少 20 个受管计划后提醒 HAC/累计判断",
+      "automatic_policy_switch": false
+    },
+    {
+      "reminder_id": "ship_gate_calendar_review",
+      "status": "accumulating",
+      "current": 1,
+      "threshold": 1,
+      "message": "尚未达到从首个有效 forward-live 样本起 12 个自然月",
+      "automatic_policy_switch": false
+    },
+    {
+      "reminder_id": "P3b_overview_review_due",
+      "status": "accumulating",
+      "current": 0,
+      "threshold": 3,
+      "message": "等待 P3 有效公开裁决及另外两条完整公开裁决后再建设 P3b 总览",
+      "automatic_policy_switch": false
+    }
+  ],
+  "message": "P3 最终建议验证：仅累计脱敏 forward 证据；不改变正式 M6.7。",
+  "production_unchanged": true
+}

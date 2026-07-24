@@ -1,0 +1,17 @@
+{
+  "schema_name": "a_short_weekly_publish_receipt",
+  "schema_version": "1.0.0",
+  "as_of": "20260727",
+  "decision_as_of": "20260727",
+  "run_date": "20260724",
+  "price_data_through": "20260724",
+  "run_id": "a-short-20260727-52dd7994f7242f73",
+  "candidate_digest": "52dd7994f7242f737a32b1034a78d35e935d02dd679b8bbc87788ec662f1602e",
+  "published_at": "2026-07-24T20:59:23+08:00",
+  "account_snapshot": null,
+  "stage_status": "complete",
+  "outputs": [
+    "weekly_m67.json",
+    "weekly_m67.md"
+  ]
+}

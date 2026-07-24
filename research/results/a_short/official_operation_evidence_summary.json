@@ -1,0 +1,96 @@
+{
+  "schema_name": "a_short_official_operation_evidence_summary",
+  "schema_version": "1.0.0",
+  "program_id": "a_short_official_operation_evidence",
+  "as_of": "20260727",
+  "evaluation_mode": "live_normalized",
+  "minimum_metric_cohort_size": 5,
+  "totals": {
+    "capture_pending": 0,
+    "pending": 0,
+    "settled": 0,
+    "no_count": 15,
+    "ambiguous": 0,
+    "unfilled": 0
+  },
+  "cohorts": [
+    {
+      "cohort": {
+        "scope": "new_candidate",
+        "final_action": "否决",
+        "holding_disposition": null,
+        "entry_type": "N/A",
+        "production_regime": "震荡期",
+        "v14_3_comparison_label": null,
+        "risk_families": [
+          "market_regime",
+          "negative_event",
+          "semantic_web_llm"
+        ],
+        "coverage": "full",
+        "account_or_portfolio_blocked": false,
+        "outcome_status": "no_count",
+        "fill_status": "not_evaluable",
+        "same_bar_ambiguity": false
+      },
+      "record_count": 1,
+      "evaluable_count": 0,
+      "no_count_count": 1,
+      "ambiguous_count": 0,
+      "metrics_withheld_for_small_cohort": true
+    },
+    {
+      "cohort": {
+        "scope": "new_candidate",
+        "final_action": "否决",
+        "holding_disposition": null,
+        "entry_type": "N/A",
+        "production_regime": "震荡期",
+        "v14_3_comparison_label": null,
+        "risk_families": [
+          "market_regime",
+          "negative_event"
+        ],
+        "coverage": "full",
+        "account_or_portfolio_blocked": false,
+        "outcome_status": "no_count",
+        "fill_status": "not_evaluable",
+        "same_bar_ambiguity": false
+      },
+      "record_count": 1,
+      "evaluable_count": 0,
+      "no_count_count": 1,
+      "ambiguous_count": 0,
+      "metrics_withheld_for_small_cohort": true
+    },
+    {
+      "cohort": {
+        "scope": "new_candidate",
+        "final_action": "观察",
+        "holding_disposition": null,
+        "entry_type": "N/A",
+        "production_regime": "震荡期",
+        "v14_3_comparison_label": null,
+        "risk_families": [
+          "market_regime"
+        ],
+        "coverage": "full",
+        "account_or_portfolio_blocked": false,
+        "outcome_status": "no_count",
+        "fill_status": "not_evaluable",
+        "same_bar_ambiguity": false
+      },
+      "record_count": 13,
+      "evaluable_count": 0,
+      "no_count_count": 13,
+      "ambiguous_count": 0,
+      "metrics_withheld_for_small_cohort": true
+    }
+  ],
+  "boundary": {
+    "deidentified_aggregate_only": true,
+    "contains_symbols": false,
+    "contains_account_balances": false,
+    "automatic_policy_change": false
+  }
+}

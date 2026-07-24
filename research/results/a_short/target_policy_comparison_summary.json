@@ -2,11 +2,11 @@
   "schema_name": "a_short_target_policy_comparison_summary",
   "schema_version": "1.0.0",
   "summary_id": "a_short_target_policy_comparison",
-  "as_of": "20260609",
-  "data_through": null,
+  "as_of": "20260727",
+  "data_through": "20260727",
   "status": "accumulating",
   "target_exit": {
-    "forward_weeks": 0,
+    "forward_weeks": 1,
     "required_forward_weeks": 12,
     "decision_difference_weeks": 0,
     "required_decision_difference_weeks": 8,
@@ -15,7 +15,7 @@
     "review_state": "not_due"
   },
   "breakout_entry": {
-    "forward_weeks": 0,
+    "forward_weeks": 1,
     "required_forward_weeks": 12,
     "decision_difference_weeks": 0,
     "required_decision_difference_weeks": 8,
@@ -78,6 +78,6 @@
       ]
     }
   },
-  "message": "P2 目标策略：累计中；目标退出 0/12 周、差异 0/8 周、计划 0/20；突破轨 0/12 周、差异 0/8 周、受影响计划 0/20。",
+  "message": "P2 目标策略：累计中；目标退出 1/12 周、差异 0/8 周、计划 0/20；突破轨 1/12 周、差异 0/8 周、受影响计划 0/20。",
   "production_unchanged": true
 }
