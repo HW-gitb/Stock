@@ -183,9 +183,14 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     $Resolved = Get-Content -Raw -Encoding UTF8 $ResolveOut | ConvertFrom-Json
     Remove-Item -Force $ResolveOut -ErrorAction SilentlyContinue
     $AsOf = [string]$Resolved.as_of
+    $PriceAsOf = [string]$Resolved.last_settled
     $IsHistoricalAsOf = $false   # canonical = 即将到来/当前未收盘的交易日,按定义恒 live(as_of>=run_date)
     if ([string]::IsNullOrWhiteSpace($AsOf)) {
         Write-Host "[FATAL] canonical resolver returned an empty as_of." -ForegroundColor Red
+        exit 1
+    }
+    if ([string]::IsNullOrWhiteSpace($PriceAsOf)) {
+        Write-Host "[FATAL] canonical resolver returned no officially settled price date." -ForegroundColor Red
         exit 1
     }
     Write-Host "[CANONICAL] as_of=$AsOf (resolved)  run_date=$RunDate  mode=live  last_settled=$($Resolved.last_settled)" -ForegroundColor Cyan
@@ -194,6 +199,7 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
     # as_of < 今天 = historical(真·过去回放,须显式 -L3Mode pit/neutralize);as_of >= 今天 = live(今日/前瞻交易日)。
     # as_of 交易日有效性由 egs_main.set_asof 兜底(拒非交易日);与 egs/pipeline 的 as_of>=run_date live 判据一致。
     $IsHistoricalAsOf = ([string]::Compare([string]$AsOf, [string]$RunDate, [System.StringComparison]::Ordinal) -lt 0)
+    $PriceAsOf = $AsOf
 }
 $EffectiveL3Mode = $L3Mode
 
@@ -262,7 +268,7 @@ Write-Host "skip semantic: $SkipSemanticRisk"
 Write-Host ""
 
 # --- Stage 1: egs_main (the HiThink L3 graph is fetched and verified in-process) ---
-$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy)
+$EgsArgs = @('A-EGS\egs_main.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--l3-mode', $EffectiveL3Mode, '--cache-policy', $CachePolicy)
 if ($EffectiveL3Mode -eq 'pit') {
     $EgsArgs += '--l3-pit-strict'
 }
@@ -400,7 +406,7 @@ if ($SkipSemanticRisk) {
             Write-Host "[FATAL] M6.7 requested but IV feed build failed (exit $IvExitCode)" -ForegroundColor Red
             exit 22
         } else {
-            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
+            $M67Args = @('runners\a_short_weekly_pipeline.py', '--as-of', $AsOf, '--price-as-of', $PriceAsOf, '--run-date', $RunDate, '--analysis-input', $SemAnalysisInput, '--iv-feed', $IvFeed, '--out', $M67Out, '--confirm-fetch-authorized')
             if ($CrashVetoSummaryReady) { $M67Args += @('--crash-veto-summary', $CrashVetoSummary) }
             if (-not $IsHistoricalAsOf) {
                 # live 运行(as_of>=运行日:今日 或 前瞻 canonical 周一):as_of 当日 EOD 盘中/盘前尚未发布 → 显式启用

@@ -183,7 +183,9 @@ class ReduceDeductImpactTests(unittest.TestCase):
         # R-ASHORT-GAP42-ROUND1-HOLDING-SCOPE-DRIFT: 持仓+减持仍走既有 hard_veto→否决,但 Round 1 不发
         # operation_impact(持仓的结构化减仓/清仓处置属 S3b,不能在 Round 1 误标 already_structured)
         r = build_m67_report(_reduce_input(stateful_risk=_held_state()), AS_OF, "t")
-        self.assertEqual(r["m67"]["table"]["操作"], "否决")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["machine"]["holding_management_signal"], "clear_review")
+        self.assertTrue(r["machine"]["blocked_add_required"])
         self.assertNotIn("operation_impact", r["machine"])
         validate_m67_consistency(r)
 
@@ -895,9 +897,11 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         self.assertTrue(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
         r["machine"]["operation_impact"] = [self._imp("reduce_review", blocked=True)]
         _apply_holding_disposition(r)
-        self.assertIn("减仓价", r["m67"]["table"])
-        self.assertIsNone(r["m67"]["table"]["减仓价"])
-        self.assertEqual(r["m67"]["table"]["减仓比例"], _REDUCE_RATIO_ADVISORY)
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertEqual(r["machine"]["holding_management_signal"], "clear_review")
+        self.assertEqual(r["m67"]["table"]["清仓价"], plan["stop"])
+        self.assertNotIn("减仓价", r["m67"]["table"])
+        self.assertNotIn("减仓比例", r["m67"]["table"])
         validate_m67_consistency(r)
 
     def test_r3_validator_rejects_wrong_disposition_price(self):
@@ -1052,7 +1056,8 @@ class HoldingDispositionS3bTests(unittest.TestCase):
         # 默认 held(破位)→ 三字段就位;hold disposition → price_cross none;avg_cost<plan.stop(破位)→ 移保本不触发
         r = build_m67_report(self._breached_held_inp(), AS_OF, "t")
         self.assertIn("current_close", r["machine"])
-        self.assertEqual(r["machine"]["price_cross"], "none")
+        self.assertEqual(r["machine"]["price_cross"], "clear_price_reached")
+        self.assertEqual(r["machine"]["holding_management_signal"], "clear_review")
         self.assertEqual(r["machine"]["move_to_breakeven"], {"triggered": False, "breakeven_price": None})
         validate_m67_consistency(r)
         jsonschema.validate(r, _load(M67_SCHEMA))

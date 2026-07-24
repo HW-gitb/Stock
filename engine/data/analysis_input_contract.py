@@ -90,6 +90,22 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
     trade_date = _parse_date8(payload.get("trade_date"), "trade_date", label)
 
     source = payload.get("source") or {}
+    decision_as_of = payload.get("decision_as_of")
+    if decision_as_of is not None and _parse_date8(decision_as_of, "decision_as_of", label) != trade_date:
+        raise AnalysisInputContractError(f"{label} decision_as_of must equal trade_date")
+    clocks = source.get("clocks") or {}
+    if clocks:
+        clock_decision = _parse_date8(clocks.get("decision_as_of"), "source.clocks.decision_as_of", label)
+        clock_run = _parse_date8(clocks.get("run_date"), "source.clocks.run_date", label)
+        clock_price = _parse_date8(clocks.get("price_data_through"), "source.clocks.price_data_through", label)
+        if clock_decision != trade_date or clock_price > trade_date:
+            raise AnalysisInputContractError(f"{label} source clock binding is inconsistent")
+        if payload.get("run_date") not in (None, clock_run) or payload.get("price_data_through") not in (None, clock_price):
+            raise AnalysisInputContractError(f"{label} top-level clocks do not match source.clocks")
+    price_data_through = _parse_date8(
+        payload.get("price_data_through") or clocks.get("price_data_through") or payload.get("trade_date"),
+        "price_data_through", label,
+    )
     hard_sources = source.get("hard_veto_source_health")
     if hard_sources is not None:
         for name in ("suspension", "unlock", "holder_reduction"):
@@ -220,10 +236,10 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
             parsed_source_date = _parse_date8(
                 source_date, f"candidates[{index}].quote.source_trade_date", label
             )
-            if parsed_source_date > trade_date:
+            if parsed_source_date > price_data_through:
                 raise AnalysisInputContractError(
                     f"{label} PIT validation failed: candidates[{index}].quote.source_trade_date "
-                    f"{parsed_source_date} is after trade_date {trade_date}"
+                    f"{parsed_source_date} is after price_data_through {price_data_through}"
                 )
             calendar = ((payload.get("market_context") or {}).get("trade_calendar") or {})
             recent_dates = calendar.get("recent_trade_dates")
@@ -269,7 +285,7 @@ def _validate_pit_invariants(payload: dict[str, Any], label: str) -> None:
             _validate_candidate_date(
                 industry_signal.get("source_as_of"),
                 f"candidates[{index}].industry.industry_trend_signal.source_as_of",
-                trade_date,
+                price_data_through,
                 label,
             )
             if (industry_signal.get("classification") != industry_signal.get("industry_trend")

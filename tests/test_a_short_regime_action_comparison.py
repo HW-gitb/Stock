@@ -24,8 +24,22 @@ class RegimeActionComparisonTests(unittest.TestCase):
     def _source(self):
         return {"source_schema_name": "a_short_weekly_report", "source_as_of": "20260714", "source_sha256": "a" * 64, "candidate_build_count": 2}
 
-    def _origin(self, *, decision_as_of="20260714", run_date=None):
-        return {"decision_as_of": decision_as_of, "run_date": run_date or decision_as_of}
+    def _origin(self, *, decision_as_of="20260714", run_date=None, **overrides):
+        origin = {"decision_as_of": decision_as_of, "run_date": run_date or decision_as_of}
+        origin.update(overrides)
+        return origin
+
+    def test_sunday_to_monday_canonical_is_forward_when_friday_is_latest_settled_price(self):
+        row = build_action_record(
+            regime_record=_regime_record(), raw_v14_2_regime="shock",
+            effective_v14_2_regime="shock", m67_source=self._source(),
+            forward_origin=self._origin(
+                decision_as_of="20260720", run_date="20260719",
+                price_data_through="20260717", capture_mode="live",
+                source_receipt_complete=True, price_day_latest_settled=True,
+            ),
+        )
+        self.assertTrue(row["forward_eligible"])
 
     def test_freezes_unknown_raw_and_effective_fallback_separately(self):
         row = build_action_record(regime_record=_regime_record(), raw_v14_2_regime="unknown", effective_v14_2_regime="shock", m67_source=self._source(), forward_origin=self._origin())

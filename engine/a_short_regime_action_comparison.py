@@ -162,9 +162,21 @@ def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
     run_date = str(forward_origin.get("run_date"))
     if not is_canonical_date(decision_as_of) or not is_canonical_date(run_date):
         raise ValueError("forward origin requires real decision_as_of and run_date")
-    # This is derived by the runner from its actual invocation date.  Callers cannot
-    # self-label a historical replay as forward evidence with a Boolean flag.
-    forward_eligible = decision_as_of == run_date
+    capture_mode = str(forward_origin.get("capture_mode") or
+                       ("live" if decision_as_of >= run_date else "historical_replay"))
+    price_data_through = str(forward_origin.get("price_data_through") or decision_as_of)
+    if not is_canonical_date(price_data_through) or price_data_through > decision_as_of:
+        raise ValueError("forward origin price_data_through must be a settled date <= decision_as_of")
+    source_receipt_complete = bool(forward_origin.get("source_receipt_complete", True))
+    price_day_latest_settled = bool(forward_origin.get("price_day_latest_settled", True))
+    # A prospective canonical decision (Sunday->Monday) is live evidence when
+    # the source receipt and the independently bound settled-price clock are complete.
+    forward_eligible = (
+        capture_mode == "live"
+        and decision_as_of >= run_date
+        and source_receipt_complete
+        and price_day_latest_settled
+    )
     candidate = str(regime_record.get("v14_3_raw_regime"))
     if candidate not in RAW_REGIMES:
         raise ValueError("regime record missing valid V14.3 raw label")
@@ -191,7 +203,14 @@ def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
         "candidate_action": candidate_action,
         "action_diverges": baseline_action != candidate_action,
         "m67_provenance": dict(m67_source),
-        "forward_origin": {"decision_as_of": decision_as_of, "run_date": run_date},
+        "forward_origin": {
+            "decision_as_of": decision_as_of,
+            "run_date": run_date,
+            "capture_mode": capture_mode,
+            "price_data_through": price_data_through,
+            "source_receipt_complete": source_receipt_complete,
+            "price_day_latest_settled": price_day_latest_settled,
+        },
         "forward_eligible": forward_eligible,
         "forward_market_returns": returns,
         "forward_returns_pending": pending,
@@ -217,7 +236,19 @@ def validate_action_record(record: dict) -> None:
     run_date = str(origin.get("run_date"))
     if not is_canonical_date(decision_as_of) or not is_canonical_date(run_date):
         raise ValueError("action comparison forward origin is invalid")
-    if record.get("forward_eligible") != (decision_as_of == run_date):
+    capture_mode = origin.get("capture_mode")
+    price_data_through = str(origin.get("price_data_through") or "")
+    if capture_mode not in {"live", "historical_replay"} or not is_canonical_date(price_data_through):
+        raise ValueError("action comparison forward origin clock is invalid")
+    if price_data_through > decision_as_of:
+        raise ValueError("action comparison price_data_through is after decision_as_of")
+    expected_forward = (
+        capture_mode == "live"
+        and decision_as_of >= run_date
+        and origin.get("source_receipt_complete") is True
+        and origin.get("price_day_latest_settled") is True
+    )
+    if record.get("forward_eligible") != expected_forward:
         raise ValueError("action comparison forward eligibility must be derived from its run origin")
     expected_pending = [h for h in ("h1", "h3", "h5", "h10")
                         if (record.get("forward_market_returns") or {}).get(h) is None]

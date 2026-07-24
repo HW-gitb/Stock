@@ -31,10 +31,10 @@
 - **§2.1 post-tick 不变式(Codex Required,关键)**:tick 是**最终执行价**——所有建仓决策 / RR 校验 / 持仓位用**取整后**价,不用 raw。side-aware 取整可能收窄风险结构,故取整后**必须重校验**,任一破即转观察 / 走 breached:`risk = entry_for_risk − stop` 有限且 > 0;`stop < entry_for_risk`;`t1 > entry_for_risk`;`t2 >= t1`;`rr_at_entry_high = (t1 − entry_high)/(entry_high − stop) >= rr_floor`(**用取整后价复算**)。建仓任一不满足 → 转「观察」(reject 写"取整后 RR/结构失效")。**S3a 持仓**:取整后 `stop >= close`(跟踪止损越过现价)→ 走 §7 / S3a 的 **breached** 路径(t1/t2=None、标已破位),不当正常止盈。对抗测试:raw 合格、仅取整后失效 → 正确转观察 / breached。
 
 ## 3. Slice — 入场区间 + 最不利价 RR 门(= master §4 + §11.2)
-- `entry_ref=tick(close)` / `entry_low` / `entry_high` / `entry_type`(低吸·突破)/ `entry_invalid_reason`;区间无效(`low>high`)退回单点不伪造。
+- `entry_low` / `entry_high` / `entry_type`(低吸·突破)/ `entry_invalid_reason`;区间无效(`low>high`)退回单点不伪造。**唯一可执行决策价=`entry=entry_high`**；`tick(close)` 只保留为原始参考上下文，不得成为 table/plan/advice/RR 的操作价。
 - **低吸(精确公式,Codex Required)**:`entry_ref=close`;`entry_low=max(support, close−0.5×ATR)`(floor:不追到支撑下方);**`entry_high=close`**(cap:低吸不追到现价上方,等回落到 `entry_low–close` 区间吸)→ 区间 `[entry_low, close]` 非退化(只要 `support<=close` 即低吸正常触发态)。**raw 兜底**:`entry_low>entry_high`(即 `support>close`,现价已破支撑)→ 退单点 `entry_ref` + `entry_invalid_reason`。**post-tick 兜底**:取整后(entry_low 向上取、entry_high 向下取)若 `entry_low>entry_high` → 同退单点。突破:`entry_high=close+0.3×ATR`、`chase_invalid_above=close+0.5×ATR`。
 - **RR 用 entry_high 重算**:`risk_at_entry_high=entry_high−stop`、`rr_at_entry_high=(t1−entry_high)/risk_at_entry_high`;**`rr_at_entry_high>=rr_floor` 才输出建仓**,否则收窄区间或转观察(master §11.2)。machine plan 存 `entry_for_risk/risk_at_entry_high/rr_at_entry_high`。
-- 落点:`table.入=entry_ref`;操作建议写 `entry_low–entry_high`+`rr_at_entry_high`+突破"超过 chase_invalid_above 不追"+区间失效条件;第一版不扩 schema(render 测试强制文案含 entry_low/high/chase),或可选 `m67.execution_guidance.entry_range`。
+- 落点:`table.入=plan.entry=entry_high`;操作建议写 `entry_low–entry_high`+同一 `rr`/`rr_at_entry_high`+突破"超过 chase_invalid_above 不追"+区间失效条件;第一版不扩 schema(render 测试强制文案含 entry_low/high/chase),或可选 `m67.execution_guidance.entry_range`。
 
 ## 4. Slice — 组合级现金分配(修真·超配 bug,= master §5 + §11.3/11.4)
 - 出全部 action 后、只对 `建仓` 票:逐票出 raw plan → 排序 → 逐票消耗 `remaining_cash`(初值 `available_cash`)。

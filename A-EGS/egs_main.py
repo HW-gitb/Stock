@@ -220,6 +220,12 @@ REALTIME_CACHE_TTL = CONF["cache_ttl"]
 BACKTEST_CACHE_TTL = 10 * 365 * 24 * 3600
 TODAY = a_share_market_date()
 TODAY_DT = a_share_market_wall_time()
+# Third-knife clock split: TODAY is the decision/PIT clock; price features use
+# the explicitly confirmed latest settled session.  The default is same-day so
+# historical callers retain their old semantics until a launcher supplies the
+# canonical prior session.
+PRICE_AS_OF = TODAY
+PRICE_AS_OF_DT = TODAY_DT
 
 
 # ═══════════════════════════════════════════════════
@@ -532,7 +538,8 @@ def _rule6_evaluated_check(check_id, name, group, evaluations):
 
 
 def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended_set,
-                        industry_heat_governance=None, rule6_evaluations=None):
+                        industry_heat_governance=None, rule6_evaluations=None,
+                        industry_expected_as_of=None):
     ts_code = str(_row_get(row, "ts_code", ""))
     exchange = ts_code.split(".")[-1] if "." in ts_code else "SZ"
     close = _json_float(_row_get(row, "close"))
@@ -594,7 +601,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
         sw_l2_code=_row_get(row, "l2_code"),
         sw_l2_name=_row_get(row, "l2_name"),
         source_as_of=quote_source_date,
-        expected_as_of=latest_td,
+        expected_as_of=industry_expected_as_of or latest_td,
         governance=industry_heat_governance or load_governance(),
     )
     theme_taxonomy = _row_get(row, "theme_taxonomy")
@@ -1067,7 +1074,8 @@ def _rank_stage_excluded_count(rank_reconciliation, stage_name):
 def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates,
                           unlock_set, suspended_set, relisted_set, red_dict,
                           tier1_csv_path, full_csv_path, output_root=None,
-                          rank_reconciliation=None, rule6_evaluations_by_code=None):
+                          rank_reconciliation=None, rule6_evaluations_by_code=None,
+                          price_data_through=None, run_date=None):
     import json as _json
 
     project_root = os.path.dirname(SCRIPT_DIR)
@@ -1075,6 +1083,8 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         base_root = output_root if os.path.isabs(output_root) else os.path.join(project_root, output_root)
     else:
         base_root = os.path.join(project_root, "result", "a_short")
+    price_data_through = str(price_data_through or latest_td)
+    run_date = str(run_date or a_share_market_date())
     out_dir = os.path.join(base_root, latest_td)
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1087,6 +1097,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
             row, rank, final_codes, latest_td, unlock_set, suspended_set,
             industry_heat_governance,
             rule6_evaluations=(rule6_evaluations_by_code or {}).get(str(_row_get(row, "ts_code", ""))),
+            industry_expected_as_of=price_data_through,
         )
         for rank, (_, row) in enumerate(watch_df.iterrows(), start=1)
     ]
@@ -1097,6 +1108,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         "schema_version": ANALYSIS_INPUT_SCHEMA_VERSION,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "trade_date": latest_td,
+        "decision_as_of": latest_td,
+        "run_date": run_date,
+        "price_data_through": price_data_through,
         "preset": "a_short",
         "market": "A",
         "horizon": "short",
@@ -1117,6 +1131,11 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
                 for name in ("suspension", "unlock", "holder_reduction")
             },
             "run_identity": run_identity,
+            "clocks": {
+                "decision_as_of": latest_td,
+                "run_date": run_date,
+                "price_data_through": price_data_through,
+            },
             "input_files": [
                 {"role": "watch_pool", "path": os.path.relpath(tier1_csv_path, project_root), "sha256": None},
                 {"role": "full_rank", "path": os.path.relpath(full_csv_path, project_root), "sha256": None},
@@ -1157,7 +1176,7 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         },
         "market_context": {
             "trade_calendar": {
-                "latest_trade_date": latest_td,
+                "latest_trade_date": price_data_through,
                 "next_trade_date": None,
                 "calendar_source": "tushare.trade_cal",
                 "recent_trade_dates": list(trade_dates),
@@ -1221,7 +1240,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
     write_json_atomic(analysis_path, analysis_input)
 
     candidates_df = watch_df.copy()
-    candidates_df["run_date"] = latest_td
+    candidates_df["decision_as_of"] = latest_td
+    candidates_df["run_date"] = run_date
+    candidates_df["price_data_through"] = price_data_through
     candidates_df["run_id"] = run_identity["run_id"]
     candidates_df["candidate_digest"] = run_identity["candidate_digest"]
     write_csv_atomic(candidates_df, candidates_path, index=False, encoding="utf-8-sig")
@@ -1231,6 +1252,9 @@ def export_analysis_input(df_full, watch_df, tier1_final, latest_td, trade_dates
         "schema_version": "1.0.0",
         "generated_at": analysis_input["generated_at"],
         "trade_date": latest_td,
+        "decision_as_of": latest_td,
+        "run_date": run_date,
+        "price_data_through": price_data_through,
         "preset": "a_short",
         "analysis_input": os.path.relpath(analysis_path, project_root),
         "candidates": os.path.relpath(candidates_path, project_root),
@@ -1745,6 +1769,9 @@ def publish_egs_run_manifest(analysis_input, health, paths):
         "schema_version": "1.0.0",
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "trade_date": analysis_input["trade_date"],
+        "decision_as_of": analysis_input.get("decision_as_of", analysis_input["trade_date"]),
+        "run_date": analysis_input.get("run_date"),
+        "price_data_through": analysis_input.get("price_data_through"),
         "run_id": run_identity["run_id"],
         "candidate_digest": run_identity["candidate_digest"],
         "stage_status": "complete",
@@ -1904,8 +1931,8 @@ def _catalog_codes_from_snapshot(concepts_df):
     return set(concepts_df["code"].dropna().astype(str))
 
 
-def set_asof(date_str):
-    global TODAY, TODAY_DT
+def set_asof(date_str, price_as_of=None):
+    global TODAY, TODAY_DT, PRICE_AS_OF, PRICE_AS_OF_DT
     try:
         asof_dt = datetime.strptime(date_str, "%Y%m%d")
     except ValueError as exc:
@@ -1922,8 +1949,28 @@ def set_asof(date_str):
     if cal is None or cal.empty:
         raise ValueError(f"--as-of {date_str} is not an A-share trading day")
 
+    price_date = str(price_as_of or date_str)
+    try:
+        price_dt = datetime.strptime(price_date, "%Y%m%d")
+    except ValueError as exc:
+        raise ValueError("--price-as-of must use YYYYMMDD format") from exc
+    if price_dt > asof_dt:
+        raise ValueError(f"--price-as-of {price_date} is after decision --as-of {date_str}")
+    price_cal = safe_api(
+        pro.trade_cal,
+        exchange="SSE",
+        start_date=price_date,
+        end_date=price_date,
+        is_open="1",
+        fields="cal_date,is_open",
+    )
+    if price_cal is None or price_cal.empty:
+        raise ValueError(f"--price-as-of {price_date} is not an officially settled A-share trading day")
+
     TODAY = date_str
     TODAY_DT = asof_dt
+    PRICE_AS_OF = price_date
+    PRICE_AS_OF_DT = price_dt
     if CONF.get("cache_policy") == "disabled":
         log.info(f"[ASOF] running EGS as of {TODAY}; cache_policy=disabled; cache_ttl=ignored")
         return
@@ -1952,6 +1999,9 @@ def _guard_historical_asof_l3_mode(as_of, l3_mode, allow_historical_live_l3=Fals
 def dstr(days_ago=0):
     return (TODAY_DT - timedelta(days=days_ago)).strftime("%Y%m%d")
 
+def price_dstr(days_ago=0):
+    return (PRICE_AS_OF_DT - timedelta(days=days_ago)).strftime("%Y%m%d")
+
 def dfuture(days_ahead=30):
     return (TODAY_DT + timedelta(days=days_ahead)).strftime("%Y%m%d")
 
@@ -1962,13 +2012,16 @@ def to_chunks(lst, size):
 # ═══════════════════════════════════════════════════
 # §2 数据拉取
 # ═══════════════════════════════════════════════════
-def get_trade_dates(n=25):
-    key = f"trade_dates_{TODAY}_official_v2"
+def get_trade_dates(n=25, price_as_of=None):
+    price_date = _date8(price_as_of or PRICE_AS_OF, "price_data_through")
+    price_dt = datetime.strptime(price_date, "%Y%m%d")
+    key = f"trade_dates_{price_date}_official_v3"
     cached = load_cache(key)
     if cached is not None and len(cached) >= n:
         return cached[:n]
     # 缓存不存在或数量不足 n，重新拉取；dstr(100) 覆盖约70个交易日
-    df = safe_api(pro.trade_cal, exchange="SSE", start_date=dstr(100), end_date=TODAY,
+    df = safe_api(pro.trade_cal, exchange="SSE",
+                  start_date=(price_dt - timedelta(days=100)).strftime("%Y%m%d"), end_date=price_date,
                   is_open="1", fields="cal_date")
     if df is None or df.empty:
         raise RuntimeError("official trade calendar source unavailable; refusing weekday fallback")
@@ -1981,7 +2034,7 @@ def get_trade_dates(n=25):
             parsed = datetime.strptime(value, "%Y%m%d")
         except ValueError as exc:
             raise RuntimeError(f"official trade calendar contains invalid cal_date {value!r}") from exc
-        if parsed > TODAY_DT:
+        if parsed > price_dt:
             raise RuntimeError(f"official trade calendar contains future cal_date {value!r}")
         dates.append(value)
     dates = sorted(set(dates), reverse=True)[:max(n, 70)]
@@ -2607,12 +2660,16 @@ def _validate_cached_qfq_daily_all(cached, as_of, expected_dates):
     return result
 
 
-def get_daily_all(trade_dates):
+def get_daily_all(trade_dates, price_as_of=None):
     if not trade_dates:
         raise RuntimeError("daily qfq fetch requires trade dates")
     n_days = min(60, len(trade_dates))
     expected_dates = [str(value) for value in trade_dates[:n_days]]
-    as_of = _date8(expected_dates[0], "daily qfq as_of")
+    as_of = _date8(price_as_of or expected_dates[0], "daily qfq price_data_through")
+    if expected_dates[0] != as_of:
+        raise RuntimeError(
+            f"daily qfq trade-date window starts at {expected_dates[0]}, not price_data_through {as_of}"
+        )
     key = _daily_all_qfq_cache_key(as_of)
     cached = load_cache(key)
     if cached is not None:
@@ -4510,7 +4567,7 @@ def market_environment(trade_dates, stats_df):
 # ═══════════════════════════════════════════════════
 # §9 主引擎
 # ═══════════════════════════════════════════════════
-def run_egs(backtest_mode=False, output_root=None):
+def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
     if output_root:
         CONF["output_root"] = output_root
         # Isolate intermediate egs_tier1/egs_full CSV+XLSX artifacts to the backtest
@@ -4525,13 +4582,20 @@ def run_egs(backtest_mode=False, output_root=None):
     log.info(f"  EGS {EGS_VERSION} 量化选股框架 — 周频增强版")
     log.info("═" * 60)
 
-    trade_dates = get_trade_dates(65)   # v7.5: 需要60日数据支持pct_60d
+    price_data_through = _date8(price_as_of or PRICE_AS_OF, "price_data_through")
+    if price_data_through > TODAY:
+        raise RuntimeError(
+            f"price_data_through {price_data_through} is after decision_as_of {TODAY}"
+        )
+    trade_dates = get_trade_dates(65, price_as_of=price_data_through)
     latest_td   = trade_dates[0]
+    decision_as_of = TODAY
+    run_date = a_share_market_date()
 
     df_stocks  = get_stock_list()
     sw_map     = get_sw_industry_map()
     csi300_ret = get_csi300_return(trade_dates)
-    all_daily  = get_daily_all(trade_dates)
+    all_daily  = get_daily_all(trade_dates, price_as_of=price_data_through)
 
     # ── 上期候选股追踪（v7.5扩展：周内高低点、最大收益/回撤、是否仍在池）──────────
     import json as _json
@@ -4876,7 +4940,7 @@ def run_egs(backtest_mode=False, output_root=None):
         else os.path.join(project_root, configured_root) if configured_root
         else os.path.join(project_root, "result", "a_short")
     )
-    official_dir = os.path.join(base_root, latest_td)
+    official_dir = os.path.join(base_root, decision_as_of)
     rank_reconciliation_path = os.path.join(
         official_dir, "rank_universe_reconciliation.csv"
     )
@@ -4909,7 +4973,7 @@ def run_egs(backtest_mode=False, output_root=None):
             df_full=df_full,
             watch_df=watch_df,
             tier1_final=tier1_final,
-            latest_td=latest_td,
+            latest_td=decision_as_of,
             trade_dates=trade_dates,
             unlock_set=unlock_set,
             suspended_set=suspended_set,
@@ -4920,6 +4984,8 @@ def run_egs(backtest_mode=False, output_root=None):
             output_root=CONF.get("output_root"),
             rank_reconciliation=rank_reconciliation,
             rule6_evaluations_by_code=rule6_evaluations_by_code,
+            price_data_through=price_data_through,
+            run_date=run_date,
         )
         log.info(f"[OK] analysis_input saved to {analysis_path}")
         log.info(f"[OK] snapshot saved to {snapshot_path}")
@@ -4927,7 +4993,7 @@ def run_egs(backtest_mode=False, output_root=None):
         _p4_stage3_snapshot_path = None
         try:
             _p4_stage3_snapshot_path = export_stage3_selection_snapshot(
-                top50, tier1_final, latest_td,
+                top50, tier1_final, decision_as_of,
                 (analysis_input.get("source") or {}).get("run_identity") or {},
                 red_dict, unlock_set, output_root=CONF.get("output_root"),
             )
@@ -4975,7 +5041,7 @@ def run_egs(backtest_mode=False, output_root=None):
             watch_df=watch_df,
             tier1_final=tier1_final,
             analysis_input=analysis_input,
-            latest_td=latest_td,
+            latest_td=decision_as_of,
             analysis_path=analysis_path,
             snapshot_path=snapshot_path,
             candidates_path=candidates_path,
@@ -5074,6 +5140,10 @@ def run_egs(backtest_mode=False, output_root=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="EGS A-share short-term screener")
     parser.add_argument("--as-of", dest="as_of", help="Run as of an A-share trading date, format YYYYMMDD")
+    parser.add_argument(
+        "--price-as-of", dest="price_as_of",
+        help="Latest officially settled price/technical date; defaults to --as-of for historical replay",
+    )
     parser.add_argument("--backtest-mode", action="store_true", help="Skip mutable tracking state for historical batch runs")
     parser.add_argument(
         "--cache-policy", choices=["enabled", "disabled"], default="enabled",
@@ -5128,8 +5198,11 @@ if __name__ == "__main__":
         )
 
     if args.as_of:
-        set_asof(args.as_of)
+        set_asof(args.as_of, price_as_of=args.price_as_of)
+    elif args.price_as_of:
+        parser.error("--price-as-of requires --as-of")
     else:
         CONF["cache_ttl"] = REALTIME_CACHE_TTL
 
-    run_egs(backtest_mode=args.backtest_mode, output_root=args.output_root)
+    run_egs(backtest_mode=args.backtest_mode, output_root=args.output_root,
+            price_as_of=args.price_as_of)

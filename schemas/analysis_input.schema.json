@@ -36,6 +36,18 @@
     "trade_date": {
       "$ref": "#/$defs/date8"
     },
+    "decision_as_of": {
+      "$ref": "#/$defs/date8"
+    },
+    "run_date": {
+      "anyOf": [
+        {"$ref": "#/$defs/date8"},
+        {"type": "null"}
+      ]
+    },
+    "price_data_through": {
+      "$ref": "#/$defs/date8"
+    },
     "preset": {
       "type": "string",
       "enum": [
@@ -204,6 +216,16 @@
             }
           },
           "description": "Complete-catalog receipt. A board may be skipped only when the API explicitly returned an empty item list."
+        },
+        "clocks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decision_as_of", "run_date", "price_data_through"],
+          "properties": {
+            "decision_as_of": {"$ref": "#/$defs/date8"},
+            "run_date": {"$ref": "#/$defs/date8"},
+            "price_data_through": {"$ref": "#/$defs/date8"}
+          }
         },
         "hard_veto_source_health": {
           "type": "object",

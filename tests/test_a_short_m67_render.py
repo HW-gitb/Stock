@@ -73,6 +73,17 @@ class RenderTests(unittest.TestCase):
         self.assertIn("已有持仓:按持仓管理输出", md)
         self.assertNotIn("执行清单:入", md)
 
+    def test_holding_disposition_and_clear_price_render_with_same_table_truth(self):
+        held = _report("600000.SH", "持有", 类型="已有持仓", 优先级="—",
+                       触发条件="持仓管理", 持仓处置="建议清仓复核", 禁止加仓=True,
+                       清仓价=2.55, 损=2.55)
+        held["m67"]["精简结论区"]["操作建议"] = (
+            "已有持仓。持仓处置=建议清仓复核（清仓价=2.55；advisory复核建议,不自动卖出）。")
+        md = render_weekly_markdown(_weekly([held]))
+        self.assertIn("持仓处置:建议清仓复核（禁止加仓:是）", md)
+        self.assertIn("清仓价(=系统止损):2.55", md)
+        self.assertIn("持仓处置=建议清仓复核", md)
+
     def test_empty(self):
         md = render_weekly_markdown(_weekly([]))
         self.assertIn("共 0 只", md)

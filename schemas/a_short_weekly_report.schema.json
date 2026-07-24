@@ -31,6 +31,18 @@
       "type": "string",
       "pattern": "^[0-9]{8}$"
     },
+    "decision_as_of": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
+    "run_date": {
+      "type": ["string", "null"],
+      "pattern": "^[0-9]{8}$"
+    },
+    "price_data_through": {
+      "type": "string",
+      "pattern": "^[0-9]{8}$"
+    },
     "iv_feed_ref": {
       "type": "string"
     },
@@ -1011,6 +1023,14 @@
         },
         "stage_status": {
           "const": "complete"
+        },
+        "decision_as_of": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
+        },
+        "price_data_through": {
+          "type": "string",
+          "pattern": "^[0-9]{8}$"
         },
         "analysis_input": {
           "type": "string"
