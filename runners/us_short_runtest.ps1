@@ -1,16 +1,17 @@
 # Disposable US-short full-flow runtest launcher.
 #
-# It intentionally preserves the existing capstone gates (including -Live's
-# per-run confirmation) while rooting every mutable path in a fresh capsule.
+# It intentionally preserves the existing capstone gates while rooting every
+# mutable path in a fresh capsule; an explicit -Live command is the run authorization.
+# Use -AsOf YYYYMMDD to bind the test date; private inputs are auto-selected
+# from state\us_short\weekly_private\_run_inputs when omitted.
 
 [CmdletBinding()]
 param(
     [string]$NowEt = '',
+    [string]$AsOf = '',
     [string]$BatchTemplate = '',
     [string]$AccountState = '',
     [switch]$Live,
-    [switch]$PrepareBudget,
-    [int]$Pass2Budget = 0,
     [int]$MomentumTopK = 0,
     [string[]]$ExtraArgs = @(),
     [string]$SourceRoot = (Split-Path -Parent $PSScriptRoot),
@@ -26,9 +27,6 @@ $ErrorActionPreference = 'Stop'
 if (-not $ConfirmRuntest) {
     throw 'Runtest is intentionally explicit. Re-run with -ConfirmRuntest; this creates a new isolated capsule and may call providers under the existing US-short gates.'
 }
-if ($Live -and $PrepareBudget) {
-    throw '-Live and -PrepareBudget remain mutually exclusive inside runtest.'
-}
 if ($ExtraArgs.Count -gt 0) {
     # The ordinary launcher intentionally exposes raw pass-through.  A capsule
     # cannot: argparse accepts the last duplicate, so any forwarded authority
@@ -36,10 +34,6 @@ if ($ExtraArgs.Count -gt 0) {
     # live/budget gate.  Add future knobs as explicit audited wrapper params.
     throw 'Runtest does not forward -ExtraArgs; it rejects all raw runner flags so capsule paths and authorization gates cannot be overridden.'
 }
-if (($Live -or $PrepareBudget) -and ([string]::IsNullOrWhiteSpace($BatchTemplate) -or [string]::IsNullOrWhiteSpace($AccountState))) {
-    throw 'A live or budget runtest requires explicit -BatchTemplate and -AccountState so no source-repo private input is reused.'
-}
-
 $RuntimeRoot = Split-Path -Parent $PSScriptRoot
 $SourceRoot = (Resolve-Path -LiteralPath $SourceRoot).Path
 $Manager = Join-Path $SourceRoot 'runners\runtest_capsule.py'
@@ -48,8 +42,33 @@ if (-not (Test-Path -LiteralPath $Manager -PathType Leaf)) {
 }
 . (Join-Path $RuntimeRoot '.tools\Resolve-AshortPython.ps1')
 $PythonExe = Resolve-AshortPython -Requested $PythonExe
+if (-not [string]::IsNullOrWhiteSpace($AsOf)) {
+    if (-not [string]::IsNullOrWhiteSpace($NowEt)) {
+        throw '-AsOf and -NowEt are mutually exclusive; the specified date automatically uses the ET pre-open clock.'
+    }
+    try {
+        $asOfDate = [DateTime]::ParseExact($AsOf, 'yyyyMMdd', [Globalization.CultureInfo]::InvariantCulture)
+    } catch {
+        throw '-AsOf must be a valid YYYYMMDD date.'
+    }
+    $NowEt = $asOfDate.ToString('yyyy-MM-ddT08:00:00')
+}
 if ([string]::IsNullOrWhiteSpace($RunId)) {
     $RunId = "us_short_$([DateTime]::UtcNow.ToString('yyyyMMddTHHmmssZ'))_$PID"
+}
+
+$RunInputs = Join-Path $SourceRoot 'state\us_short\weekly_private\_run_inputs'
+if ([string]::IsNullOrWhiteSpace($BatchTemplate)) {
+    $BatchTemplate = Get-ChildItem -LiteralPath $RunInputs -Recurse -File -Filter '*batch*template*.json' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+}
+if ([string]::IsNullOrWhiteSpace($AccountState)) {
+    $AccountState = Get-ChildItem -LiteralPath $RunInputs -Recurse -File -Filter '*account*state*.json' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1 -ExpandProperty FullName
+}
+
+if ($Live -and ([string]::IsNullOrWhiteSpace($BatchTemplate) -or [string]::IsNullOrWhiteSpace($AccountState))) {
+    throw 'A live runtest could not find a batch template and account state under state\us_short\weekly_private\_run_inputs; add the private facts there or pass explicit input paths.'
 }
 
 $CopyArgs = @()
@@ -89,7 +108,7 @@ try {
     $PrivateRoot = Join-Path $Capsule 'private\us_short'
     # Script parameters require a hashtable splat.  An array splat passes
     # these tokens positionally, so named values can bind to the wrong worker
-    # parameters (for example PythonExe to Pass2Budget).
+    # parameters (for example PythonExe to an integer worker parameter).
     $WorkerParams = @{
         PrivateRoot = $PrivateRoot
         PythonExe = $PythonExe
@@ -102,8 +121,6 @@ try {
         $WorkerParams.AccountState = Join-Path $Capsule 'private_inputs\us_account_state'
     }
     if ($Live) { $WorkerParams.Live = $true }
-    if ($PrepareBudget) { $WorkerParams.PrepareBudget = $true }
-    if ($Pass2Budget -gt 0) { $WorkerParams.Pass2Budget = $Pass2Budget }
     if ($MomentumTopK -gt 0) { $WorkerParams.MomentumTopK = $MomentumTopK }
     Write-Host "[RUNTEST] US-short full flow is isolated in $Capsule" -ForegroundColor Cyan
     Push-Location $CapsuleRepo

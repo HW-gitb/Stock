@@ -74,6 +74,12 @@ def _reconcile(trades, positions=None, as_of="20260622"):
 
 
 class BuildTests(unittest.TestCase):
+    def test_older_serialized_state_cannot_be_used_as_target_date_state(self):
+        state, _ = _build(as_of="20260622")
+
+        with self.assertRaisesRegex(CE, "20260622 != run --as-of 20260723"):
+            conv.validate_account_state(state, "20260723")
+
     def test_happy_build_validates(self):
         state, lineage = _build()
         conv.validate_account_state(state, "20260622")   # must not raise

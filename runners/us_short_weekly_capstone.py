@@ -13,9 +13,9 @@ bridge). Today a weekly run means invoking ~7 commands by hand. This capstone ch
     thread the SAME dates through every stage; an intraday `now_et` fails closed (OutOfWindowError → no run).
   * A working offline DRY-RUN: print the full plan (every stage, gated-vs-offline, the exact input/output artifact
     paths, and which stages will hit a provider) WITHOUT any fetch — so the operator sees the gated boundary first.
-  * GATED-stage authorization: provider stages (universe / momentum-fetch / SIC-fetch / yfinance / Pass2 / VIX)
-    run live ONLY
-    with an explicit per-execution `confirm_user_authorization` (the one-click run's single SR-PROVIDER-001 auth);
+  * GATED-stage execution: provider stages (universe / momentum-fetch / SIC-fetch / yfinance / Pass2 / VIX)
+    run live only after the user explicitly selects `--live`; the one-click wrapper derives the Pass2 budget in that
+    same run while the exact approval remains bound through every downstream stage;
     they run SEQUENTIALLY (§18.3 Batch II "do not parallelize provider/live execution"). This is the RUN-TIME
     closure of the one-click goal, distinct from the BUILD-TIME per-cut review discipline.
   * FAIL-FAST with a stage label + no silent partial success; a gated stage that returns DEGRADED coverage
@@ -1272,8 +1272,8 @@ def run_weekly_capstone(
     diagnostic_event: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Orchestrate the weekly one-click path. `dry_run=True` (default) resolves the canonical dates and returns the
-    full plan WITHOUT any fetch. A live run (`dry_run=False`) requires `confirm_user_authorization` (else it refuses
-    before touching a provider), then runs each stage in order, validating each stage's declared inputs are readable
+    full plan WITHOUT any fetch. A live run (`dry_run=False`) is authorized by the explicit live/budget command, then
+    runs each stage in order, validating each stage's declared inputs are readable
     before it starts and its declared outputs exist after, aborting fast (with the stage name) on the first failure.
     `stages` is injectable for offline testing."""
     if max_retries_per_call and max_total_http_attempts is None:
@@ -1281,7 +1281,7 @@ def run_weekly_capstone(
             "max_total_http_attempts must be explicit whenever live 429 retries are enabled"
         )
     if auto_authorize_pass2_budget and dry_run:
-        raise WeeklyCapstoneError("auto Pass2 budget authorization is available only for an executing paper run")
+        raise WeeklyCapstoneError("auto Pass2 budget authorization is available only for an executing default run")
     if auto_authorize_pass2_budget and prepare_pass2_budget:
         raise WeeklyCapstoneError("auto Pass2 budget authorization cannot be combined with --prepare-pass2-budget")
     if auto_authorize_pass2_budget and stages is not None:
@@ -1333,8 +1333,8 @@ def run_weekly_capstone(
 
     # C3 footgun guard: reject an operator input colocated under the per-decision output dir a live run archives,
     # before any fetch (dry-run too, so the plan preview catches it). See _assert_input_outside_archived_outputs.
-    for _input_path, _input_label in ((account_state_path, "--account-state-path"),
-                                      (batch4_template_path, "--batch4-template-path")):
+    for _input_path, _input_label in ((ctx.account_state_path, "--account-state-path"),
+                                      (ctx.batch4_template_path, "--batch4-template-path")):
         _assert_input_outside_archived_outputs(ctx, Path(_input_path), _input_label)
 
     if dry_run:
@@ -1344,7 +1344,8 @@ def run_weekly_capstone(
         raise WeeklyCapstoneError(
             "a live weekly run performs gated provider fetches (universe / momentum / SIC / Pass2 / VIX) and requires "
             "explicit per-execution authorization (confirm_user_authorization=True); re-run with --dry-run to review "
-            "the plan first")
+            "the plan first"
+        )
 
     production_run = (stages is None) and (ctx.confirm_user_authorization is True) and not prepare_pass2_budget
     auto_budget_run = auto_authorize_pass2_budget and production_run
@@ -1363,14 +1364,14 @@ def run_weekly_capstone(
     )
     if production_run and (not k_is_valid or (not budget_is_valid and not auto_budget_run)):
         raise WeeklyCapstoneError(
-            "live default pipeline requires independently authorized momentum_top_k (1..250) and positive exact Pass2 "
-            "call budget; first run --prepare-pass2-budget with the same K to derive the forecast, then independently "
-            "authorize and re-run with --pass2-call-budget N (the preview never authorizes execution)"
+            "live default pipeline requires momentum_top_k (1..250) and a positive exact Pass2 call budget; "
+            "first run --prepare-pass2-budget with the same K to derive the forecast, then re-run with "
+            "--pass2-call-budget N"
         )
     if budget_preview_run and (not k_is_valid or ctx.authorized_pass2_call_budget is not None):
         raise WeeklyCapstoneError(
-            "--prepare-pass2-budget requires independently authorized momentum_top_k (1..250) and no Pass2 call budget; "
-            "it derives, but never accepts or grants, the exact execution budget"
+            "--prepare-pass2-budget requires momentum_top_k (1..250) and no Pass2 call budget; "
+            "it derives the exact execution budget"
         )
     if (production_run or budget_preview_run) and not _model_paper_enabled(ctx):
         from runners.us_short_account_state_from_manual_tables import validate_account_state
@@ -1845,7 +1846,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--pass2-call-budget", type=int)
     parser.add_argument("--catalyst-recall-ticker", action="append", default=[])
     parser.add_argument("--calendar-path", type=Path, default=CALENDAR_PRESET)
-    parser.add_argument("--confirm-user-authorization", action="store_true")
+    parser.add_argument("--confirm-user-authorization", action="store_true",
+                        help="required with --live; the reviewed PowerShell -Live entrypoint supplies it")
     parser.add_argument("--live", action="store_true", help="execute (default is a dry-run plan only)")
     parser.add_argument(
         "--prepare-pass2-budget",

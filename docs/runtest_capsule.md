@@ -47,12 +47,12 @@ Use a committed revision explicitly when reproducibility matters.  Omit
 .\runners\us_short_runtest.ps1 -ConfirmRuntest -Commit <full-commit-sha>
 ```
 
-The US-short command above is the safe dry-run plan.  A provider/budget/live
-runtest still requires the ordinary existing inputs and gates; for example,
-after the separate Pass2 budget authorization:
+The US-short command above is the safe dry-run plan.  A provider/live runtest
+still requires the ordinary existing inputs and gates; the Pass2 call budget
+is derived and frozen inside the same run:
 
 ```powershell
-.\runners\us_short_runtest.ps1 -ConfirmRuntest -Live -Commit <full-commit-sha> -BatchTemplate <private-template.json> -AccountState <private-account.json> -MomentumTopK <K> -Pass2Budget <N>
+.\runners\us_short_runtest.ps1 -ConfirmRuntest -Live -Commit <full-commit-sha> -BatchTemplate <private-template.json> -AccountState <private-account.json> -MomentumTopK <K>
 ```
 
 The wrappers create no production result directory and do not relax provider,

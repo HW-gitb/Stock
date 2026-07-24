@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-24 - Codex repair (US-short runtest auto-budget / account-state preparation)
+
+- **Verdict/Action**: Implemented `R-USSHORT-RUNTEST-AUTO-BUDGET-AUTH-AND-ACCOUNT-FACT-REWRITE`; independent review is required before commit.
+- **Required**: Verify unconfirmed direct live calls reject before a stage/provider seam, `-Live` still passes explicit authorization plus same-run auto-derived Pass2 approval, and an older account JSON cannot be relabelled as target-date state.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` focused capstone/account-state/runtest pack: 172 OK. No provider, full runtest, or full suite ran.
+- **Pre-Codex self-review**: A-F checked for this narrow US-short slice; removed stale `roll_forward_account_state` references, retained the converter as the only target-date preparation path, and kept user-facing budget derivation plus 429/physical-attempt controls intact.
+- **Next**: Claude Code: review
+
+## 2026-07-24 - Codex quick review FAIL (US-short runtest auto-budget / account-state preparation)
+
+- **Verdict/Action**: FAIL; `R-USSHORT-RUNTEST-AUTO-BUDGET-AUTH-AND-ACCOUNT-FACT-REWRITE` is open.
+- **Required**: Preserve direct live authorization before any stage and replace the stale JSON `as_of` rewrite with a genuine target-date manual-table preparation path or fail-closed. Details and closure tests are in `docs/system_risk_register.md`.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran the focused capstone/account-state/runtest pack: 172 OK; it does not cover the changed authorization assertion because the existing broad exception is satisfied later by the missing-budget error. `git diff --check` is clean. No provider, full runtest, or full test suite ran.
+- **Next**: Codex: repair
+
 ## 2026-07-23 - Codex adversarial re-review PASS (R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT)
 
 - **Verdict/Action**: PASS; `R-ASHORT-CRASH-VETO-UNCACHED-CONTROL-COHORT-DRIFT` is resolved on the final reviewed code state.

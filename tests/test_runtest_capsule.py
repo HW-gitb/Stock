@@ -246,12 +246,22 @@ class RuntestCapsuleTest(unittest.TestCase):
         self.assertIn("$WorkerParams = @{", us_short)
         self.assertIn("PrivateRoot = $PrivateRoot", us_short)
         self.assertIn("PythonExe = $PythonExe", us_short)
+        self.assertNotIn("[switch]$PrepareBudget", us_short)
+        self.assertNotIn("[int]$Pass2Budget", us_short)
         self.assertIn("& $Worker @WorkerParams", us_short)
         self.assertIn("[string]$CachePolicy = 'enabled'", weekly)
         self.assertIn("'--cache-policy', $CachePolicy", weekly)
         self.assertIn("PYTHONIOENCODING", weekly)
         self.assertIn("PYTHONUTF8", weekly)
         self.assertIn("[Console]::OutputEncoding", weekly)
+
+    def test_us_weekly_launcher_auto_derives_budget_and_rejects_manual_budget_flags(self) -> None:
+        weekly_capstone = (ROOT / "runners" / "us_short_weekly_capstone.ps1").read_text(encoding="utf-8")
+        self.assertIn('@("--live", "--confirm-user-authorization", "--auto-pass2-budget")', weekly_capstone)
+        self.assertIn("同次运行自动派生 Pass2 预算", weekly_capstone)
+        self.assertIn("--prepare-pass2-budget", weekly_capstone)
+        self.assertIn("--pass2-call-budget", weekly_capstone)
+        self.assertIn("用户侧入口已改为同次运行自动派生 Pass2 预算", weekly_capstone)
 
     def test_us_launcher_rejects_raw_private_root_override_before_creating_capsule(self) -> None:
         powershell = shutil.which("powershell") or shutil.which("pwsh")
@@ -313,8 +323,6 @@ if command == \"create\":
     [string]$BatchTemplate = '',
     [string]$AccountState = '',
     [switch]$Live,
-    [switch]$PrepareBudget,
-    [int]$Pass2Budget = 0,
     [int]$MomentumTopK = 0,
     [string]$PythonExe = ''
 )
@@ -325,8 +333,6 @@ if command == \"create\":
     batch_template = $BatchTemplate
     account_state = $AccountState
     live = [bool]$Live
-    prepare_budget = [bool]$PrepareBudget
-    pass2_budget = $Pass2Budget
     momentum_top_k = $MomentumTopK
     python_exe = $PythonExe
 } | ConvertTo-Json -Compress | Set-Content -LiteralPath $env:RUNTEST_TEST_CAPTURE_PATH -Encoding utf8
@@ -341,16 +347,11 @@ if command == \"create\":
         script = ROOT / "runners" / "us_short_runtest.ps1"
         escaped = lambda path: str(path).replace("'", "''")
         cases = (
-            ("dry_run", (), {"live": False, "prepare_budget": False, "pass2_budget": 0, "momentum_top_k": 0}),
+            ("dry_run", (), {"live": False, "momentum_top_k": 0}),
             (
                 "live",
-                ("-BatchTemplate", batch_template, "-AccountState", account_state, "-Live", "-Pass2Budget", "137", "-MomentumTopK", "200"),
-                {"live": True, "prepare_budget": False, "pass2_budget": 137, "momentum_top_k": 200},
-            ),
-            (
-                "prepare_budget",
-                ("-BatchTemplate", batch_template, "-AccountState", account_state, "-PrepareBudget", "-Pass2Budget", "89", "-MomentumTopK", "150"),
-                {"live": False, "prepare_budget": True, "pass2_budget": 89, "momentum_top_k": 150},
+                ("-BatchTemplate", batch_template, "-AccountState", account_state, "-Live", "-MomentumTopK", "200"),
+                {"live": True, "momentum_top_k": 200},
             ),
         )
         for name, extra_args, expected in cases:
@@ -384,7 +385,7 @@ if command == \"create\":
                 self.assertEqual(captured["now_et"], "2026-07-21T08:00:00")
                 self.assertEqual(captured["private_root"], str(capsule / "private" / "us_short"))
                 self.assertEqual(captured["python_exe"].casefold(), PINNED_STOCK_PYTHON.casefold())
-                self.assertEqual(captured["batch_template"], str(capsule / "private_inputs" / "us_batch_template") if expected["live"] or expected["prepare_budget"] else "")
-                self.assertEqual(captured["account_state"], str(capsule / "private_inputs" / "us_account_state") if expected["live"] or expected["prepare_budget"] else "")
+                self.assertEqual(captured["batch_template"], str(capsule / "private_inputs" / "us_batch_template") if expected["live"] else "")
+                self.assertEqual(captured["account_state"], str(capsule / "private_inputs" / "us_account_state") if expected["live"] else "")
                 for key, value in expected.items():
                     self.assertEqual(captured[key], value)

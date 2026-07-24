@@ -121,7 +121,7 @@ class CapstoneDryRunTest(unittest.TestCase):
             self._run(datetime(2026, 7, 9, 11, 0, 0), dry_run=True)
 
     def test_live_run_requires_authorization(self):
-        with self.assertRaises(WeeklyCapstoneError):
+        with self.assertRaisesRegex(WeeklyCapstoneError, "explicit per-execution authorization"):
             self._run(datetime(2026, 7, 9, 8, 0, 0), dry_run=False, confirm_user_authorization=False)
 
     def test_live_run_without_budget_explains_the_budget_preview_then_exact_rerun(self):
