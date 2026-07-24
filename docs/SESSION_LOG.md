@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-24 - Claude Code finding (A-short crash-veto tracker: recon feature-surface starves capture) → Codex
+
+- **Verdict/Action**: New finding from the desktop full no-cache live testrun `a_cc_testrun1.md` (P1 there), routed to Codex. Opened `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` in `docs/system_risk_register.md` with whole-class Required + 8 closure tests. Comparison-only crash-veto forward-evidence tracker fails every live run (exit 2); EGS selection/veto/sizing/M6.7 unaffected.
+- **Required**: egs_main `build_rank_universe_reconciliation` (:997-1008) merges the matched-control feature surface from `df_l0`, which lacks l1_name/l2_name/total_mv, and the `if col in df_l0.columns` filter silently drops them → recon starves the tracker → 0/442 l2_crash_veto members resolvable. Source that merge from `df_master` (has all 6 for all post-L0 codes) + fail-loud guard; cover both capture_official and bootstrap_legacy; work under `--cache-policy disabled`. Full spec + closure in register.
+- **Verify**: Root cause confirmed against 20260727 — recon cols=`[ts_code,outcome,terminal_stage,reason,name,pct_20d,avg_amount_20d]`; 442 l2_crash_veto; 0/442 in egs_full(740); the 3 dropped cols feed `match_controls` (not dead). Read-only investigation this turn; no code change, no provider/account/order. Detail in register.
+- **Next**: Codex：执行 R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE（整类修 + 8 项 closure）。
+
 ## 2026-07-24 - Claude Code review PASS (A-short fifth knife: forward-evidence epoch freeze — step only)
 
 - **Verdict/Action**: PASS (freeze-packet step only; `R-ASHORT-FIFTH-KNIFE-FORWARD-EVIDENCE-EPOCH` stays OPEN pending real ≥12-month forward evidence + ship-gate). The epoch-freeze artifact is correct, integrity-verified, and machine-forbidden from overclaiming; disposition stays `risk_filter_only`. Detail in `docs/system_risk_register.md`.
