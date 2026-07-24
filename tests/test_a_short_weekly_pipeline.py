@@ -269,6 +269,20 @@ class NormalizeTests(unittest.TestCase):
         self.assertTrue(n["event"]["holder_reduction_active"])
         self.assertTrue(n["event"]["st_or_delisting"])
 
+    def test_unknown_delisting_field_fails_closed_into_phase5_veto(self):
+        candidate = _egs_candidate(
+            event_risk={
+                "holder_reduction": {"active_plan": False},
+                "suspension": {"is_suspended": False},
+                "delisting": {"st_flag": False, "delisting_warning": None},
+            }
+        )
+        n = normalize_candidate(candidate, _series(), _overlay_row(), 55.0, {}, "震荡期")
+        self.assertTrue(n["event"]["st_or_delisting"])
+        from runners.a_short_phase5_engine import build_m67_report
+        report = build_m67_report(n, AS_OF, GEN)
+        self.assertEqual(report["m67"]["table"]["操作"], "否决")
+
     def test_stage3_large_unlock_watch_cannot_reenter_as_a_new_entry(self):
         candidate = _egs_candidate(analysis_role="watch")
         candidate["event_risk"]["unlock"] = {"large_unlock_flag": True}
