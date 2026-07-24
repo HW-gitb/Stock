@@ -418,13 +418,19 @@ if ($SkipSemanticRisk) {
                 # Any failure leaves only comparison evidence unavailable; M6.7 remains authoritative.
                 $FactorComparisonV2Root = Join-Path $ProjectRoot 'state\a_short\factor_comparison_private\v2'
                 $FactorComparisonV2Cache = Join-Path $FactorComparisonV2Root 'daily_cache.json'
+                $OverlayAdjudicationRoot = Join-Path $ProjectRoot 'state\a_short\overlay_adjudication_private\v1'
+                $OverlayAdjudicationStage3 = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_selection_snapshot.json"
+                $OverlayAdjudicationSource = Join-Path $ProjectRoot "result\a_short\$AsOf\stage3_overlay_score.json"
+                $OverlayAdjudicationMarker = Join-Path $ProjectRoot "result\a_short\$AsOf\official_publish.json"
+                $OverlayAdjudicationPublicJson = Join-Path $ProjectRoot 'research\results\a_short\overlay_adjudication_summary.json'
+                $OverlayAdjudicationPublicMarkdown = Join-Path $ProjectRoot 'research\results\a_short\overlay_adjudication_summary.md'
                 $IndustryWeightP5Root = Join-Path $ProjectRoot 'state\a_short\industry_weight_comparison_private\v1'
                 $IndustryWeightSource = Join-Path $ProjectRoot "result\a_short\$AsOf\egs_weight_comparison.json"
                 $TargetPolicyLedger = Join-Path $ProjectRoot 'logs\a_short_target_policy_comparison.json'
                 $FinalActionLedger = Join-Path $ProjectRoot 'logs\a_short_final_action_validation.json'
                 $OfficialOperationEvidenceRoot = Join-Path $ProjectRoot 'state\a_short\operation_evidence_private\v1'
                 Write-Host "[ADVISORY] Updating bounded A-short shared private cache ..." -ForegroundColor Yellow
-                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger --official-operation-evidence-root $OfficialOperationEvidenceRoot
+                & $PythonExe runners\a_short_factor_comparison_v2_cache_build.py --root $FactorComparisonV2Root --run-date $RunDate --industry-weight-root $IndustryWeightP5Root --target-policy-root $TargetPolicyLedger --final-action-validation-root $FinalActionLedger --official-operation-evidence-root $OfficialOperationEvidenceRoot --overlay-adjudication-root $OverlayAdjudicationRoot
                 $FactorComparisonCacheExitCode = $LASTEXITCODE
                 if ($null -eq $FactorComparisonCacheExitCode) { $FactorComparisonCacheExitCode = 1 }
                 if ($FactorComparisonCacheExitCode -ne 0) {
@@ -455,6 +461,16 @@ if ($SkipSemanticRisk) {
                 # only keeps decision-level progress; it never becomes a simulated account.
                 $M67Args += @('--official-operation-evidence-root', $OfficialOperationEvidenceRoot,
                                '--official-operation-evidence-daily-cache', $FactorComparisonV2Cache)
+                # P4a shares the existing P0 daily cache and binds the live
+                # capture to this same as_of/result bucket. It is advisory only.
+                $M67Args += @('--overlay-adjudication-root', $OverlayAdjudicationRoot,
+                               '--overlay-adjudication-daily-cache', $FactorComparisonV2Cache,
+                               '--overlay-adjudication-stage3-snapshot', $OverlayAdjudicationStage3,
+                               '--overlay-adjudication-overlay-source', $OverlayAdjudicationSource,
+                               '--overlay-adjudication-egs-publish-marker', $OverlayAdjudicationMarker,
+                               '--overlay-adjudication-public-json', $OverlayAdjudicationPublicJson,
+                               '--overlay-adjudication-public-markdown', $OverlayAdjudicationPublicMarkdown,
+                               '--overlay-adjudication-forward')
             }
             if (Test-Path $OverlayPath) { $M67Args += @('--overlay', $OverlayPath) }
             if (-not [string]::IsNullOrWhiteSpace($RegulatoryConfirmations)) {

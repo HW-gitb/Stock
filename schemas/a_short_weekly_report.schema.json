@@ -765,7 +765,7 @@
         "schema_name": {"const": "a_short_evidence_reminders"},
         "schema_version": {"const": "1.0.0"},
         "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
-        "status": {"enum": ["accumulating", "review_due", "unavailable"]},
+        "status": {"enum": ["accumulating", "review_due", "unavailable", "closed"]},
         "reminders": {
           "type": "array",
           "minItems": 1,
@@ -775,7 +775,7 @@
             "required": ["track", "status", "message"],
             "properties": {
               "track": {"type": "string", "minLength": 1},
-              "status": {"enum": ["accumulating", "review_due", "unavailable"]},
+              "status": {"enum": ["accumulating", "review_due", "unavailable", "retain_baseline", "retired_for_epoch"]},
               "message": {"type": "string", "minLength": 1}
             }
           }

@@ -714,6 +714,37 @@ class MainWiringTests(unittest.TestCase):
         item = next(row for row in unavailable["reminders"] if row["track"] == "p4b_manual_promotion")
         self.assertEqual(item["status"], "unavailable")
 
+    def test_p4_terminal_verdicts_are_not_rendered_as_accumulating(self):
+        do_not_promote = _build_evidence_reminders(
+            AS_OF, None, None,
+            {"status": "do_not_promote", "adjudication": {"verdict": "do_not_promote"}},
+        )
+        p4_item = next(row for row in do_not_promote["reminders"] if row["track"] == "p4b_manual_promotion")
+        self.assertEqual(p4_item["status"], "retain_baseline")
+        self.assertEqual(do_not_promote["status"], "closed")
+        self.assertIn("保留现有基线", p4_item["message"])
+        self.assertIn("不会自动改 production 配置", p4_item["message"])
+
+        retired = _build_evidence_reminders(
+            AS_OF, None, None,
+            {"status": "retired_for_epoch", "adjudication": {"verdict": "inconclusive_retired_for_epoch"}},
+        )
+        p4_item = next(row for row in retired["reminders"] if row["track"] == "p4b_manual_promotion")
+        self.assertEqual(p4_item["status"], "retired_for_epoch")
+        self.assertEqual(retired["status"], "closed")
+        self.assertIn("新预注册/新 epoch", p4_item["message"])
+
+    def test_p4_reminder_markdown_uses_the_unified_p2_p3_p4_heading(self):
+        rendered = render_weekly_markdown({
+            "a_short_evidence_reminders": _build_evidence_reminders(
+                AS_OF, None, None,
+                {"status": "do_not_promote", "adjudication": {"verdict": "do_not_promote"}},
+            ),
+            "reports": [],
+            "n_stocks": 0,
+        })
+        self.assertIn("P2/P3/P4", rendered)
+
     def test_p3_final_action_is_pre_publish_summary_then_post_publish_capture(self):
         from runners.a_short_final_action_validation_runner import unavailable_public_summary
 
