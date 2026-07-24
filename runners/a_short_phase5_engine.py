@@ -20,6 +20,7 @@ import argparse
 import json
 import math
 import os
+import re
 
 import jsonschema
 from decimal import Decimal, ROUND_HALF_UP, ROUND_UP, ROUND_DOWN
@@ -692,7 +693,11 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     rr_eh = (t1_t - entry_high) / risk_eh
     if rr_eh < rr_floor:
         return None, f"最不利价(区间上沿)盈亏比 {rr_eh:.2f} < {rr_floor}"
-    rr_ref = (t1_t - entry_t) / (entry_t - stop_t)        # 参考价 RR(展示用)
+    # The upper edge is the executable decision price. Keep gate, plan,
+    # sizing, table, advice, and displayed RR on this one post-tick value.
+    entry_t = entry_high
+    if not (stop_t < entry_t and t1_t > entry_t):
+        return None, "最不利价取整后结构失效(止损≥入/止盈≤入)"
     # 仓位:单只上限 + 冲击成本 + 100股 + 试探仓 + IV 减半;股数/最小金额/现金上限按**最不利买入价 entry_high** 计(§11.3)。
     cap_pct = SINGLE_CAP_PCT.get(regime, 0.40)
     if cap_pct <= 0:
@@ -729,7 +734,7 @@ def exit_and_size(inp: dict, ind: dict, regime: str, etype: str = "低吸", extr
     return {"entry": entry_t, "entry_low": entry_low, "entry_high": entry_high,
             "entry_type": etype, "entry_for_risk": entry_high, "chase_invalid_above": chase,
             "entry_invalid_reason": entry_invalid_reason, "stop": stop_t, "t1": t1_t, "t2": t2_t,
-            "rr": round(rr_ref, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
+            "rr": round(rr_eh, 3), "rr_at_entry_high": round(rr_eh, 3), "rr_floor": rr_floor,
             "support": sup, "support_quality": ind.get("support_quality"),   # #5 stop 的结构支撑基准 + 质量
             "resistance": res, "resistance_quality": ind.get("resistance_quality"),   # #6 t1/RR 的结构阻力基准 + 质量
             "t1_basis": t1_basis,   # #6:t1 来源(structural_resistance / rr_floor_fallback)——决定 advice 目标基准文案是否标结构阻力
@@ -1043,12 +1048,14 @@ def _is_held_signal(imp):
             and imp.get("privacy_class") in ("private_account", "secret_or_raw_provider"))
 
 
-def _merge_holding_disposition(op_impacts):
+def _merge_holding_disposition(op_impacts, *, plan=None, hard_veto=False):
     """S3b R1+R2 合并引擎:从持仓 machine.operation_impact 合成 (holding_management_signal, blocked_add_required)。
     **仅 _is_held_signal(持仓侧 shape/scope/私密)的 impact 参与**(scope fail-closed;候选/公开 shape 即便带 holding_effect/blocked 也忽略)。
     signal = 各合法 impact 的 holding_effect 取 **severity-max**(clear_review>reduce_review>manual_review>hold_watch>hold;none/缺省不计;
     全无 → 默认 'hold'=持有)——severity-max 即 **anti-rescue**(正面/低信号不能压低高信号)。
-    blocked_add_required = 各合法 impact 的 blocked_add_required **OR**。op_impacts 缺省/空/无持仓侧信号 → ('hold', False)。"""
+    blocked_add_required = 各合法 impact 的 blocked_add_required **OR**；系统计划破位或持仓命中明确硬风险
+    也会在这里作为最高级 `clear_review` 输入。这样 build、pipeline 重算和 validator 共享同一处置真值，
+    而不把持仓降级成候选式否决、丢掉已有退出计划。"""
     best, blocked = "hold", False
     for imp in (op_impacts or []):
         if not _is_held_signal(imp):
@@ -1058,6 +1065,10 @@ def _merge_holding_disposition(op_impacts):
         eff = imp.get("holding_effect")
         if eff in _HOLDING_SEVERITY and _HOLDING_SEVERITY.index(eff) < _HOLDING_SEVERITY.index(best):
             best = eff
+    if hard_veto:
+        best, blocked = "clear_review", True
+    if isinstance(plan, dict) and plan.get("breached"):
+        best = "clear_review"
     return best, blocked
 
 
@@ -1203,7 +1214,11 @@ def _apply_holding_disposition(report):
     if tbl.get("操作") != "持有":
         return report
     mc = report.get("machine") or {}
-    sig, blocked = _merge_holding_disposition(mc.get("operation_impact") or [])
+    plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+    sig, blocked = _merge_holding_disposition(
+        mc.get("operation_impact") or [], plan=plan,
+        hard_veto=bool((mc.get("layer") or {}).get("hard_veto")),
+    )
     mc["holding_management_signal"] = sig
     mc["blocked_add_required"] = blocked
     tbl["持仓处置"] = _HOLDING_DISPOSITION_LABEL[sig]
@@ -1211,7 +1226,6 @@ def _apply_holding_disposition(report):
     # S3b R3: 减仓价/清仓价/减仓比例 = **advisory 价位**,复用 S3a holding_levels(plan.stop=损 / plan.t1=盈一),仅 reduce/clear disposition;
     # **不自动执行**(到价提示/移保本=R4a within-week advisory;跨周持久收紧 ratchet=R4b)。S3a 未算出/破位(plan 缺或对应位 None)→ 价位 None(诚实不伪造)。pop-then-set 保持幂等
     # (signal 在 pipeline attach 后可能变,清旧价位防残留)。与 S3a 损/盈一/盈二(table 已显)是同值引用、两维共存,不重算。
-    plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
     for _k in ("减仓价", "清仓价", "减仓比例"):
         tbl.pop(_k, None)
     for _k in ("reduce_price", "clear_price", "reduce_ratio"):
@@ -1229,6 +1243,24 @@ def _apply_holding_disposition(report):
         plan.get("stop"), ((mc.get("stateful_risk") or {}).get("position") or {}).get("avg_cost"))
     mc["price_cross"] = pc
     mc["move_to_breakeven"] = mtb
+    # Keep the primary user instruction aligned with the structured table and
+    # machine disposition. The renderer repeats the same table value.
+    label = _HOLDING_DISPOSITION_LABEL[sig]
+    conclusion = ((report.get("m67") or {}).get("精简结论区") or {})
+    advice = str(conclusion.get("操作建议") or "")
+    # Replace any prior disposition sentence before appending the current one.
+    # The pipeline may add a late holding impact and call this function again;
+    # changing the structured disposition must not leave stale advice behind.
+    advice = re.sub(r"\s*持仓处置=[^。]*。", "", advice).strip()
+    cause = ("现价已跌破系统止损" if plan.get("breached") else
+             ("命中硬风控" if (mc.get("layer") or {}).get("hard_veto") else "持仓风险合并"))
+    if sig == "clear_review":
+        detail = f"{cause}；清仓价={mc.get('clear_price') if mc.get('clear_price') is not None else '未算出'}"
+    elif sig == "reduce_review":
+        detail = f"减仓价={mc.get('reduce_price') if mc.get('reduce_price') is not None else '未算出'}；减仓比例={mc.get('reduce_ratio')}"
+    else:
+        detail = cause
+    conclusion["操作建议"] = advice + f" 持仓处置={label}（{detail}；advisory复核建议,不自动卖出）。"
     return report
 
 
@@ -1370,12 +1402,13 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
     )
 
     # 决策
-    if hard:
-        action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
-    elif has_position:
+    if has_position:
         action, etype = "持有", "已有持仓"
         plan, hl_reject = holding_levels(inp, ind, regime)   # S3a:系统跟踪止损/止盈(被动显示)
-        reject = "已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓"
+        reject = ("已有持仓:按持仓管理输出,不按新开仓处理;禁止自动加仓"
+                  + (f";命中硬风控:{'|'.join(hard)}" if hard else ""))
+    elif hard:
+        action, etype, plan, reject = "否决", "N/A", None, "|".join(hard)
     elif not final_new_entry_eligible:
         action, etype, plan, reject = "观察", "N/A", None, "非 final，仅观察"
     elif rule6_manual_review_ids:
@@ -1403,7 +1436,7 @@ def build_m67_report(inp: dict, as_of: str, generated_at: str) -> dict:
         iv_caveat = "" if iv_known else " **IV feed 缺失,未执行 IV 风控,仓位已保守再减半**。"
         regime_caveat = (" **EGS regime unknown,按震荡期保守降级并减半**。"
                          if regime_unknown_fallback else "")
-        rng = (f"**挂单区间 {plan['entry_low']}–{plan['entry_high']}**(参考价 {plan['entry']}、最不利价盈亏比 {plan['rr_at_entry_high']})"
+        rng = (f"**挂单区间 {plan['entry_low']}–{plan['entry_high']}**(决策价 {plan['entry']}、盈亏比 {plan['rr']})"
                + (f";突破追价超过 {plan['chase_invalid_above']} 不追" if plan.get("chase_invalid_above") is not None else "")
                + (f";{plan['entry_invalid_reason']}" if plan.get("entry_invalid_reason") else ""))
         # #6-i RR 门槛文案 type-aware:仅突破标「突破型更严」,低吸不带(否则低吸行误看成也被加严)。
@@ -2008,7 +2041,7 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError("Rule6 D-tier 人工核查横幅与 completion gate 不一致")
     # held-state 不变式(P1 修复 R-ASHORT-M67-HELD-STATE-ACTION-BIND):action=持有 必须真持仓(stateful_risk.position_state==held
     # + position 非空且 ts_code 与 report 一致),防 flat 候选冒充持仓行过 validator(候选/持仓串线);建仓/观察 反向必非 held;
-    # 否决可 held+hard-veto(其 S3b 持仓字段由下方非持有 guard 另禁)。正常 builder 已满足(build_m67/holding 据 position_state 分流)。
+    # held+hard-veto 仍必须走持仓管理：硬风险进入 clear_review/blocked_add，但不抹掉 S3a plan。
     _sr = mc.get("stateful_risk") or {}
     _ps, _pos = _sr.get("position_state"), (_sr.get("position") or None)
     if action == "持有":
@@ -2026,9 +2059,10 @@ def validate_m67_consistency(report: dict) -> None:
     for f, v in mc["risk_families"].items():
         if v["hit"] and v["action"] not in ("hard_veto", "downgrade"):
             raise ValueError(f"风险族 {f} 命中但 action 非法")
-    # 热度不覆盖硬风控:有 hard_veto → 必否决
-    if mc["layer"]["hard_veto"] and action != "否决":
-        raise ValueError("存在 hard_veto 却未否决(热度/分数不得救回硬风控)")
+    # 热度不覆盖硬风控。已有持仓的硬风险只能升级持仓处置为 clear_review，不能抹掉持仓计划。
+    if mc["layer"]["hard_veto"] and not (
+            action == "否决" or (action == "持有" and _ps == "held")):
+        raise ValueError("存在 hard_veto 却未否决或进入持仓清仓复核(热度/分数不得救回硬风控)")
     # table 操作必须 == machine action
     if tbl["操作"] != action:
         raise ValueError("M6.7 table 操作 与 machine action 不一致")
@@ -2069,6 +2103,23 @@ def validate_m67_consistency(report: dict) -> None:
                 or abs(tbl["盈二"] - plan.get("t2", -1)) > 1e-9
                 or abs(tbl["损"] - plan.get("stop", -1)) > 1e-9):
             raise ValueError("M6.7 table 数值与 machine plan 不一致(股数/入/盈一/盈二/损)")
+        # 唯一可执行决策价必须是最不利价 entry_high；table/plan/advice/RR 不得回到参考 close。
+        if abs(plan.get("entry", -1) - plan.get("entry_high", -2)) > 1e-9:
+            raise ValueError("建仓 plan.entry 必须等于唯一决策价 entry_high")
+        if not (plan.get("entry_low") <= plan.get("entry") <= plan.get("entry_high")):
+            raise ValueError("建仓 plan.entry 必须落在 entry_low–entry_high 区间内")
+        _rr_risk = plan.get("entry") - plan.get("stop")
+        if _rr_risk <= 0:
+            raise ValueError("建仓 plan.entry/stop 无有效风险距离")
+        _rr_from_plan = (plan.get("t1") - plan.get("entry")) / _rr_risk
+        if abs(plan.get("rr", -1) - round(_rr_from_plan, 3)) > 1e-9:
+            raise ValueError("建仓 plan.rr 与唯一决策价重算结果不一致")
+        if abs(plan.get("rr_at_entry_high", -1) - plan.get("rr", -2)) > 1e-9:
+            raise ValueError("建仓 rr_at_entry_high 与展示 rr 不一致")
+        if plan.get("rr") < plan.get("rr_floor"):
+            raise ValueError("建仓展示 rr 低于当前 RR 门槛")
+        if f"盈亏比 {plan['rr']}" not in adv:
+            raise ValueError("建仓 advice 缺精确展示盈亏比短语(不得低于/偏离 RR 门槛口径)")
         # #4 no-dangling(价格提案 §8 + R-ASHORT-M67-PRICE-NODANGLE-SUBSTRING-FALSE-NEGATIVE):机器算的入场区间
         # 必须以**精确带标签短语**出现在 advice。松散 `str(x) in adv` 会被子串碰撞放过(如 entry_low=10.0 是
         # entry_high=110.0 的子串),无法证明 low 真被展示。故按 build_m67_report 生成口径精确匹配
@@ -2154,7 +2205,11 @@ def validate_m67_consistency(report: dict) -> None:
         # S3b R1+R2: 持仓处置/禁止加仓 结构化列一致性 —— **独立重算** _merge_holding_disposition(不信任 builder),比对
         # machine.holding_management_signal/blocked_add_required + table.持仓处置/禁止加仓(映射)。持仓行(操作=持有)必带这 4 字段。
         # 与 S3a holding_levels(被动止损/止盈价位:损/盈一/盈二,上方已校)是两个维度——持仓处置=advisory 处置档;R3 价位见下(引用 S3a 同值)。
-        _sig, _blk = _merge_holding_disposition(mc.get("operation_impact") or [])
+        _plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
+        _sig, _blk = _merge_holding_disposition(
+            mc.get("operation_impact") or [], plan=_plan,
+            hard_veto=bool(mc.get("layer", {}).get("hard_veto")),
+        )
         if mc.get("holding_management_signal") != _sig:
             raise ValueError(f"持有 machine.holding_management_signal={mc.get('holding_management_signal')!r} != 合并重算 {_sig!r}")
         if bool(mc.get("blocked_add_required")) != _blk:
@@ -2163,10 +2218,12 @@ def validate_m67_consistency(report: dict) -> None:
             raise ValueError(f"持有 table.持仓处置={tbl.get('持仓处置')!r} != machine.holding_management_signal 映射 {_HOLDING_DISPOSITION_LABEL[_sig]!r}")
         if "禁止加仓" not in tbl or bool(tbl["禁止加仓"]) != _blk:
             raise ValueError("持有 table.禁止加仓 缺失或 != machine.blocked_add_required")
+        _advice_dispositions = re.findall(r"持仓处置=([^（。]+)（", adv)
+        if len(_advice_dispositions) != 1 or _advice_dispositions[0] != tbl["持仓处置"]:
+            raise ValueError("持有 advice 的持仓处置必须恰好一条且与 table.持仓处置一致")
         # S3b R3: 减仓价/清仓价/减仓比例 = advisory 价位,仅 reduce/clear disposition 带。**显式 null no-dangling**(区分键缺失 vs 显式 null;
         # R-ASHORT-S3B-R3-EXPLICIT-NULL-PRICE-GUARD-GAP):按 disposition 焊死 table+machine **恰好这组键存在**(S3a 未算出也须显式 null 键、不得省略、
         # 不得多带);值独立比对 S3a plan(清仓价==损 plan.stop、减仓价==盈一 plan.t1,含显式 None,不信任 builder/不重算 S3a)+ machine↔table 一致。不产自动执行(到价提示/移保本=R4a advisory;跨周 ratchet=R4b)。
-        _plan = (mc.get("entry_exit_size_star") or {}).get("plan") or {}
         if _sig == "clear_review":
             _exp_tbl, _exp_mc = {"清仓价"}, {"clear_price"}
         elif _sig == "reduce_review":

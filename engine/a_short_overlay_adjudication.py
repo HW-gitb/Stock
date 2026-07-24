@@ -422,6 +422,9 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
     # be judged against this one immutable configuration read.
     epoch_context = _epoch_context()
     weekly = _verify_weekly_receipt(out_path, receipt_path, decision_date, run_date, source_identity)
+    price_data_through = str(((weekly.get("run_lineage") or {}).get("price_freshness") or {}).get("price_data_through") or "")
+    if not price_data_through:
+        raise OverlayAdjudicationError("P4a M6.7 bundle lacks the canonical price_data_through clock")
     marker = _verify_egs_publish_marker(egs_publish_marker_path, stage3_snapshot_path, overlay_path,
                                         decision_date, source_identity, weekly, run_date)
     top50, eligible, baseline, candidate_data = _stage3_payload(
@@ -442,7 +445,7 @@ def capture_after_published_weekly(*, root: str | Path, decision_date: str, run_
                 "active_industry_weight_profile": epoch_context["active_profile_binding"],
                "screening_runtime_recipe": epoch_context["screening_runtime_recipe"],
                "captured_contract_fingerprint": fingerprint, "captured_epoch_id": epoch,
-               "price_request": {"price_data_through": decision_date, "qfq_provider_observed_only": True,
+               "price_request": {"price_data_through": price_data_through, "qfq_provider_observed_only": True,
                                  "benchmarks": list(BENCHMARKS)},
                "capture_payload_sha256": ""}
     payload["capture_payload_sha256"] = _digest({key: value for key, value in payload.items() if key != "capture_payload_sha256"})

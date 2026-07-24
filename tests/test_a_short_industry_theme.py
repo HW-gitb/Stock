@@ -112,6 +112,17 @@ class IndustryTrendTests(unittest.TestCase):
         self.assertEqual(normalized["industry_trend_detail"]["effect_reason"],
                          "source_as_of_mismatch")
 
+    def test_monday_decision_accepts_friday_price_clock_industry_signal(self):
+        signal = self._signal(20.0, source_as_of="20260717", expected_as_of="20260717")
+        normalized = normalize_candidate(
+            {"ts_code": "000001.SZ", "_weekly_as_of": "20260717",
+             "quote": {"source_trade_date": "20260717"}, "scores": {"industry_heat_score": 20.0},
+             "industry": {"sw_l2_code": "801080", "sw_l2_name": "industry",
+                          "industry_trend": "headwind", "industry_trend_signal": signal}},
+            [], None, None, {}, "neutral",
+        )
+        self.assertEqual(normalized["industry_trend"], "headwind")
+
     def test_weekly_recomputes_score_classification_before_m67_consumes_signal(self):
         for score, forged_label in ((50.0, "headwind"), (10.0, "tailwind")):
             with self.subTest(score=score, forged_label=forged_label):

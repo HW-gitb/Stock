@@ -761,12 +761,38 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
         refreshed = refresh_action_records(old_actions, out["comparison_records"])
         existing_action = next((row for row in refreshed if str(row["as_of"]) == str(as_of)), None)
         if existing_action is None:
+            m67_source = m67_provenance(str(m67_report_path), as_of=as_of)
+            m67_doc = json.loads(Path(m67_report_path).read_text(encoding="utf-8"))
+            m67_lineage = m67_doc.get("run_lineage") or {}
+            # Legacy fixtures had no three-clock fields.  They remain readable for
+            # historical tests; every new weekly artifact must carry a complete receipt.
+            legacy_clockless = not (m67_doc.get("price_data_through") or m67_lineage.get("price_data_through"))
+            source_price_data_through = str(
+                m67_doc.get("price_data_through")
+                or m67_lineage.get("price_data_through")
+                or (action_decision_as_of if legacy_clockless else as_of)
+            )
+            receipt_path = Path(m67_report_path).with_name("weekly_m67.receipt.json")
+            source_receipt_complete = legacy_clockless
+            if receipt_path.is_file():
+                receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+                source_receipt_complete = (
+                    receipt.get("stage_status") == "complete"
+                    and receipt.get("as_of") == as_of
+                    and receipt.get("run_id") == m67_source.get("run_id")
+                    and receipt.get("candidate_digest") == m67_source.get("candidate_digest")
+                )
             current_action = build_action_record(
                 regime_record=out["comparison_record"], raw_v14_2_regime=str(raw_v14_2_regime),
                 effective_v14_2_regime=v14_2_regime,
-                m67_source=m67_provenance(str(m67_report_path), as_of=as_of),
+                m67_source=m67_source,
                 forward_origin={"decision_as_of": str(action_decision_as_of),
-                                "run_date": str(action_run_date)},
+                                "run_date": str(action_run_date),
+                                "capture_mode": ("live" if str(action_decision_as_of) >= str(action_run_date)
+                                                 else "historical_replay"),
+                                "price_data_through": source_price_data_through,
+                                "source_receipt_complete": source_receipt_complete,
+                                "price_day_latest_settled": source_price_data_through <= str(action_decision_as_of)},
             )
             actions = merge_action_records(refreshed, current_action)
         else:

@@ -4848,9 +4848,12 @@ class LoadPublishedBundleTests(unittest.TestCase):
     def _bundle(self, root, *, dir_name="20260622", stage_status="complete", tamper=None):
         d = Path(root) / dir_name
         d.mkdir(parents=True, exist_ok=True)
-        weekly = {"as_of": "20260622",
-                  "run_lineage": {"run_id": "a-short-20260622-01", "candidate_digest": "b" * 64}}
+        weekly = {"as_of": "20260622", "decision_as_of": "20260622", "run_date": "20260622",
+                  "price_data_through": "20260622",
+                  "run_lineage": {"run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
+                                   "decision_as_of": "20260622", "price_data_through": "20260622"}}
         receipt = {"schema_name": "a_short_weekly_publish_receipt", "as_of": "20260622",
+                   "decision_as_of": "20260622", "run_date": "20260622", "price_data_through": "20260622",
                    "run_id": "a-short-20260622-01", "candidate_digest": "b" * 64,
                    "stage_status": stage_status, "outputs": ["weekly_m67.json", "weekly_m67.md"]}
         if tamper:

@@ -20,7 +20,7 @@
     "candidate_action": {"$ref": "#/definitions/action"},
     "action_diverges": {"type": "boolean"},
     "m67_provenance": {"type": "object", "additionalProperties": false, "required": ["source_schema_name", "source_as_of", "source_sha256", "candidate_build_count"], "properties": {"source_schema_name": {"type": "string", "minLength": 1}, "source_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "source_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "candidate_build_count": {"type": "integer", "minimum": 0}}},
-    "forward_origin": {"type": "object", "additionalProperties": false, "required": ["decision_as_of", "run_date"], "properties": {"decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"}}},
+    "forward_origin": {"type": "object", "additionalProperties": false, "required": ["decision_as_of", "run_date", "capture_mode", "price_data_through", "source_receipt_complete", "price_day_latest_settled"], "properties": {"decision_as_of": {"type": "string", "pattern": "^[0-9]{8}$"}, "run_date": {"type": "string", "pattern": "^[0-9]{8}$"}, "capture_mode": {"enum": ["live", "historical_replay"]}, "price_data_through": {"type": "string", "pattern": "^[0-9]{8}$"}, "source_receipt_complete": {"type": "boolean"}, "price_day_latest_settled": {"type": "boolean"}}},
     "forward_eligible": {"type": "boolean"},
     "forward_market_returns": {"$ref": "#/definitions/returns"},
     "forward_returns_pending": {"type": "array", "items": {"enum": ["h1", "h3", "h5", "h10"]}, "uniqueItems": true},

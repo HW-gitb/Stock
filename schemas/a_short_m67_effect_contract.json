@@ -1,7 +1,7 @@
 {
   "schema_name": "a_short_m67_effect_contract",
   "schema_version": "1.0.0",
-  "analysis_input_all_paths_sha256": "9e25c52757851ff43dcdf02ca02e10f9934669e7e5e858c75c80a1061782363a",
+  "analysis_input_all_paths_sha256": "a9aaeca317daad60bbbd808c5a20660c44c28b578a0b73b4b6731dbbb124d188",
   "groups": [
     {
       "id": "lineage_metadata",
@@ -27,6 +27,9 @@
       "id": "identity_batch_gate",
       "source_prefixes": [
         "trade_date",
+        "decision_as_of",
+        "run_date",
+        "price_data_through",
         "preset",
         "market",
         "horizon",
@@ -39,9 +42,10 @@
         "source.l3_snapshot_date",
         "source.hard_veto_source_health",
         "source.run_identity",
+        "source.clocks",
         "state_refs"
       ],
-      "source_paths_sha256": "c02249555b43a7a57519172d918b5f07cfafd235177aa62c6a1c703f22f057db",
+      "source_paths_sha256": "ee93f6b099e2d80954c45bdf83da5a7d9d52d2abe892ad2243ede546db4fe3a1",
       "policy": "must_affect_result",
       "terminal_surfaces": [
         "weekly.effect_contract_ledger",
@@ -405,17 +409,17 @@
     }
   ],
   "decision_predicate_sha256": {
-    "A-EGS/egs_main.py": "7fdec6fb9405a0072a2ec93ce72138978c6d5d32c710984c20b25c71db91e738",
+    "A-EGS/egs_main.py": "0cd129c1bc7624be2ae9e336ee6ee4275748285f6cc30466061f4dae9c992b6c",
     "engine/egs_industry_heat.py": "79d8cddefdabb21fa8effd677f320a8e44d86782688f4449145c8789469700b3",
     "engine/a_short_industry_theme.py": "6a10200f80b3c0d301efc8af1561b53ef2578e1cd26eea7976188dd57b7b6b2b",
-    "runners/a_short_phase5_engine.py": "8d83edbd66493db216e0e0aee1f5651e2033022d0647e9584a5299d8dca51f1c",
-    "runners/a_short_weekly_pipeline.py": "8dfc0913d4a11117f626b4b3afe135e6dd71cc91f1f751e6cc07a5088cf2805b",
+      "runners/a_short_phase5_engine.py": "6f8a297f64df719652a20ad1b1e3d80996c70f182e4c070a148c6399cdb8f3fd",
+      "runners/a_short_weekly_pipeline.py": "daf15f79c131b0cc97c2dae2403c2ed05a0db55aa4be5cb5ef0782bb97ec8054",
     "runners/a_short_m67_render.py": "070bcd409b5e4d30bcf5462e3f49081205799028f9aa12059b554db7ba39b67a",
     "engine/a_short_portfolio_risk.py": "6dbb9c0ddb8319c79315d97f798911220580681fa3cb9664b1085b403d941e45",
     "engine/a_short_effect_contract.py": "9f203f087a0c8b95fce97c7c4934b01d1ad4b72b9a582c1ec1db2e272186c8df"
   },
   "runtime_constants_sha256": {
-    "A-EGS/egs_main.py": "e27a1c982e33c98df8038d881a82ff5d0f0125ab5ca2395857d8746c4ba5f8b0",
+    "A-EGS/egs_main.py": "16714f65c6c1bb952b6754ac0e8d622c42dc81122a4a5a07461a733b084ad6e8",
     "runners/a_short_phase5_engine.py": "537f47a9e7443e638b675cc7349b7e551eb926f2dd00267f6085433a680d1f3b",
     "engine/a_short_portfolio_risk.py": "d823756ca1142d648747401ad750c53a2439bcc3cbaaddf0521ac8eafb3dbd94"
   },
@@ -653,7 +657,7 @@
     "small_float_mv_pct"
   ],
   "output_schema_sha256": {
-    "schemas/a_short_weekly_report.schema.json": "f8269628fd2cf3bd77ee17c1c655e37fce3aa100961cd1504979d1e107401dea",
+    "schemas/a_short_weekly_report.schema.json": "b677b9908030f82aa241324d3f8e1292032bae26cb7cc9c54a8dfd1122dd1617",
     "schemas/a_short_m67_report.schema.json": "9e74525507e9731031b90fdd0add1be74b28afcd78210ff78533070a6946c23c"
   },
   "analysis_input_paths": [

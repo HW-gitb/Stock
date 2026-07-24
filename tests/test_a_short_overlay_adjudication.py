@@ -126,6 +126,33 @@ class OverlayAdjudicationTests(unittest.TestCase):
                 egs_publish_marker_path=marker, source_identity=identity, forward_eligible=False)
             self.assertEqual(result["status"], "not_live_canonical_no_capture")
 
+    def test_future_price_request_uses_settled_price_clock_not_decision_date(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp)
+            for path in (stage3, overlay):
+                doc = json.loads(path.read_text(encoding="utf-8")); doc["as_of"] = "20260720"
+                path.write_text(json.dumps(doc), encoding="utf-8")
+            weekly_doc = json.loads(weekly.read_text(encoding="utf-8"))
+            weekly_doc["as_of"] = "20260720"
+            weekly_doc["run_lineage"]["price_freshness"] = {
+                "mode": "intraday_prior_settled", "run_date": "20260720", "price_data_through": "20260717"
+            }
+            weekly.write_text(json.dumps(weekly_doc), encoding="utf-8")
+            receipt_doc = json.loads(receipt.read_text(encoding="utf-8")); receipt_doc.update(
+                {"as_of": "20260720", "published_at": "2026-07-20T10:00:00+08:00"})
+            receipt.write_text(json.dumps(receipt_doc), encoding="utf-8")
+            marker_doc = json.loads(marker.read_text(encoding="utf-8")); marker_doc.update(
+                {"trade_date": "20260720", "published_at": "2026-07-20T09:00:00+08:00"})
+            marker_doc["files"]["p4_stage3_selection_snapshot"]["sha256"] = hashlib.sha256(stage3.read_bytes()).hexdigest()
+            marker_doc["files"]["p4_stage3_overlay_score"]["sha256"] = hashlib.sha256(overlay.read_bytes()).hexdigest()
+            marker.write_text(json.dumps(marker_doc), encoding="utf-8")
+            with mock.patch("engine.a_short_overlay_adjudication._today", return_value="20260720"):
+                capture_after_published_weekly(root=root, decision_date="20260720", run_date="20260720",
+                    stage3_snapshot_path=stage3, overlay_path=overlay, out_path=weekly, receipt_path=receipt,
+                    egs_publish_marker_path=marker, source_identity=identity, forward_eligible=True)
+            capture = json.loads((root / "weeks" / "20260720" / "capture.json").read_text(encoding="utf-8"))
+            self.assertEqual(capture["payload"]["price_request"]["price_data_through"], "20260717")
+
     def test_same_week_replay_is_idempotent_but_content_drift_cannot_overwrite(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = self._capture(tmp)

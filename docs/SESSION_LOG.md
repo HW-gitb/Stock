@@ -1,5 +1,48 @@
 # Session Log
 
+## 2026-07-24 - Claude Code re-review PASS (A-short second knife follow-up: advice idempotency)
+
+- **Verdict/Action**: PASS; `R-ASHORT-M67-SECOND-KNIFE-HOLDING-DISPOSITION-AND-ENTRY-RR-TRUTH` is resolved; advice and table disposition are now single-source.
+- **Required**: None; closure detail is in `docs/system_risk_register.md`.
+- **Verify**: review-evidence:ed81faf08bfe; pinned main Python; reverse escalation probe and duplicate/mismatch validator probes passed; targeted Phase5/render/gap pack: 334 OK. No provider/account/order.
+- **Next**: Codex：提交
+
+## 2026-07-24 - Claude Code review PASS (A-short third knife: three-clock contract)
+
+- **Verdict/Action**: PASS; `R-ASHORT-THIRD-KNIFE-THREE-CLOCK-CONTRACT` is correct and fail-closed.
+- **Required**: None; optional F1/F2 and closure detail are in `docs/system_risk_register.md`.
+- **Verify**: Pinned main Python; focused three-clock/industry/V14.3/P4 pack: 61 OK; anti-forgery and look-ahead probes passed. No provider/account/order.
+- **Next**: Codex: 提交
+
+## 2026-07-24 - Codex repair (A-short Phase5 second knife follow-up)
+
+- **Verdict/Action**: Implemented the required idempotent held-disposition advice repair; independent review is required before commit.
+- **Required**: Repeated `_apply_holding_disposition` calls must leave exactly one `持仓处置=` advice phrase, and its label must equal `table.持仓处置`; validator rejects duplicate or mismatched advice text.
+- **Verify**: Pinned main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; Phase5/render/gap pack: 334 OK; effect-contract pack: 18 OK; changed Phase5/weekly files compile; `git diff --check` has only repository LF/CRLF warnings. No provider, live weekly, account, order, or broker execution ran.
+- **Next**: Claude Code: review
+
+## 2026-07-24 - Codex repair (A-short third knife: three-clock contract)
+
+- **Verdict/Action**: Implemented the A-short three-clock contract; independent review is required before commit.
+- **Required**: Bind `decision_as_of`, `run_date`, and settled `price_data_through` through EGS, weekly M6.7, industry signals, V14.3 forward eligibility, and P4 future-price requests; preserve canonical Sunday→Monday as decision Monday / settled price Friday; fail closed on missing or mismatched clocks.
+- **Verify**: Pinned main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; third-knife/Phase5/M6.7/V14.3/P4 pack: 426 OK; schema/effect/route gates: 69 OK; weekly main-chain/effect-contract subset: 77 OK; changed Python files compile. No provider, live weekly, account, order, or broker execution ran.
+- **Next**: Claude Code: review
+
+## 2026-07-24 - Claude Code review FAIL (A-short Phase5 second knife)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-M67-SECOND-KNIFE-HOLDING-DISPOSITION-AND-ENTRY-RR-TRUTH` stayed open because escalation left two advice disposition phrases.
+- **Required**: Make the advice disposition idempotent and bind it in `validate_m67_consistency`; full detail is in `docs/system_risk_register.md`.
+- **Verify**: Pinned main Python reproduced build → portfolio-risk escalation → re-apply with two phrases and validator PASS. No provider/account/order.
+- **Next**: Codex: 修复
+
+## 2026-07-24 - Codex repair (A-short Phase5 second knife)
+
+- **Verdict/Action**: Implemented `R-ASHORT-M67-SECOND-KNIFE-HOLDING-DISPOSITION-AND-ENTRY-RR-TRUTH`; independent review is required before commit.
+- **Required**: Keep breached holdings at `clear_review` with `plan.stop`, translate held hard vetoes to `clear_review + blocked_add` without erasing the plan, keep missing stop levels null, and bind new-entry table/plan/advice/RR/sizing to `entry_high`.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran the focused Phase5/render/gap pack: 332 OK; effect-contract pack: 18 OK. No provider, live weekly, account, order, or broker execution ran.
+- **Pre-Codex self-review**: A-F checked for this narrow A-short slice; re-read `codex_r1.md`, checked holding/build/render/validator same-class surfaces, updated the effect-contract hash, and ran `git diff --check` (only repository LF/CRLF normalization warnings).
+- **Next**: Claude Code: review
+
 ## 2026-07-24 - Codex re-review PASS (US-short SEC SIC industry snapshot reuse)
 
 - **Verdict/Action**: PASS; `R-USSHORT-SEC-SIC-SNAPSHOT-REUSE-STILL-REFETCHES-CIK-AND-TRUSTS-UNBOUND-CACHE` is resolved.

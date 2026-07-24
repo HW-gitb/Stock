@@ -199,7 +199,9 @@ class Rule6CompletionGateTests(unittest.TestCase):
         failure.update(status="fail", severity="hard_veto", notes="holder stake below threshold")
         report = build_m67_report(
             _good_input(rule6_checks=checks, stateful_risk=_held_state()), AS_OF, "t")
-        self.assertEqual(report["m67"]["table"]["操作"], "否决")
+        self.assertEqual(report["m67"]["table"]["操作"], "持有")
+        self.assertEqual(report["m67"]["table"]["持仓处置"], "建议清仓复核")
+        self.assertTrue(report["m67"]["table"]["禁止加仓"])
         self.assertTrue(any("rule6_holder_below_5pct" in reason
                             for reason in report["machine"]["layer"]["decision_reasons"]["hard_veto"]))
         validate_m67_consistency(report)
@@ -664,10 +666,24 @@ class EntryRangeTests(unittest.TestCase):
         self.assertEqual(plan["entry_high"], 10.30)        # tick_down(10+0.3×1)
         self.assertEqual(plan["chase_invalid_above"], 10.50)   # close+0.5×ATR
         self.assertEqual(plan["entry_for_risk"], 10.30)    # RR 用区间上沿
-        self.assertLessEqual(plan["rr_at_entry_high"], plan["rr"])   # 上沿 RR ≤ 参考价 RR
+        self.assertEqual(plan["entry"], plan["entry_high"])         # 唯一决策价=最不利价
+        self.assertEqual(plan["rr_at_entry_high"], plan["rr"])      # gate/display RR 同源
+
+    def test_half_cent_uses_entry_high_for_entry_and_rr(self):
+        # R-ASHORT-M67-ENTRY-RR-TRUTH: 10.005 must not produce entry=10.01
+        # while the worst-case gate uses entry_high=10.00.
+        plan, rej = exit_and_size(
+            _good_input(close=10.005),
+            {"support": 9.5, "resistance": 15.0, "atr14": 0.4},
+            "震荡期", etype="低吸",
+        )
+        self.assertIsNone(rej)
+        self.assertEqual(plan["entry"], 10.00)
+        self.assertEqual(plan["entry_high"], 10.00)
+        self.assertEqual(plan["rr"], plan["rr_at_entry_high"])
 
     def test_breakout_worst_case_rr_gate_rejects(self):
-        # 参考价 RR 够(≈2.14 ≥ 突破门 2.0)但区间上沿 RR<门(≈1.68)→ 拒(不输出按上沿成交其实不够 RR 的建仓)。
+        # 原始 close 参考 RR 够(≈2.14 ≥ 突破门 2.0)但区间上沿 RR<门(≈1.68)→ 拒(不输出按上沿成交其实不够 RR 的建仓)。
         # (#6 后突破门=2.0,故用更大 ATR 拉开 close↔entry_high 间距来隔离最不利价门,而非参考价门。)
         ind = {"support": 9.0, "resistance": 17.5, "atr14": 2.0}
         plan, rej = exit_and_size(_good_input(close=10.00), ind, "震荡期", etype="突破")
@@ -698,6 +714,22 @@ class EntryRangeTests(unittest.TestCase):
         r["m67"]["精简结论区"]["操作建议"] = "试探仓建仓,止损纪律,edge未验证;参考价位 110.0"
         with self.assertRaises(ValueError):
             validate_m67_consistency(r)
+
+    def test_entry_and_displayed_rr_are_bound_to_executable_truth(self):
+        r = build_m67_report(_good_input(), AS_OF, "t")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        plan["entry_low"] = plan["entry"] + 0.01
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+        r2 = build_m67_report(_good_input(), AS_OF, "t")
+        plan2 = r2["machine"]["entry_exit_size_star"]["plan"]
+        adv = r2["m67"]["精简结论区"]["操作建议"]
+        r2["m67"]["精简结论区"]["操作建议"] = adv.replace(
+            f"盈亏比 {plan2['rr']}", "盈亏比 0.1"
+        )
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r2)
 
     def test_breakout_build_report_chase_phrase_validates(self):
         # 突破建仓端到端正向:build_m67_report 生成的 advice 含精确「突破追价超过 {chase}」短语,validate 必过
@@ -803,20 +835,74 @@ class BuildReportTests(unittest.TestCase):
         validate_m67_consistency(r)
         jsonschema.validate(r, json.loads(SCHEMA_PATH.read_text(encoding="utf-8")))
 
-    def test_existing_position_with_hard_veto_is_denied_not_held(self):
+    def test_existing_position_with_hard_veto_keeps_plan_and_clear_review(self):
         r = build_m67_report(_good_input(
             stateful_risk=_held_state(),
             event={"holder_reduction_active": False,
                    "st_or_delisting": True,
                    "regulatory_legacy_vetoed": False},
         ), AS_OF, "t")
-        self.assertEqual(r["m67"]["table"]["操作"], "否决")
-        self.assertNotEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIsNotNone(r["machine"]["entry_exit_size_star"]["plan"])
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "建议清仓复核")
+        self.assertTrue(r["m67"]["table"]["禁止加仓"])
+        self.assertEqual(r["m67"]["table"]["清仓价"], r["m67"]["table"]["损"])
+        self.assertIn("持仓处置=建议清仓复核", r["m67"]["精简结论区"]["操作建议"])
         self.assertIn("ST/退市", "|".join(r["machine"]["layer"]["hard_veto"]))
-        self.assertIn("已有持仓也不得加仓", r["m67"]["精简结论区"]["操作建议"])
-        self.assertIn("手动执行", r["m67"]["精简结论区"]["操作建议"])
-        for k in ("股数", "入", "盈一", "盈二", "损"):
-            self.assertIsNone(r["m67"]["table"][k])
+        self.assertIn("无条件", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)
+
+    def test_breached_holding_becomes_clear_review_and_price_cross(self):
+        r = build_m67_report(_good_input(close=2.80, stateful_risk=_held_state()), AS_OF, "t")
+        plan = r["machine"]["entry_exit_size_star"]["plan"]
+        self.assertTrue(plan["breached"])
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "建议清仓复核")
+        self.assertEqual(r["m67"]["table"]["清仓价"], plan["stop"])
+        self.assertEqual(r["machine"]["price_cross"], "clear_price_reached")
+        self.assertIn("持仓处置=建议清仓复核", r["m67"]["精简结论区"]["操作建议"])
+        validate_m67_consistency(r)
+
+    def test_normal_holding_does_not_escalate_to_clear_review(self):
+        r = build_m67_report(_good_input(close=3.08, stateful_risk=_held_state()), AS_OF, "t")
+        self.assertFalse(r["machine"]["entry_exit_size_star"]["plan"]["breached"])
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "持有")
+        self.assertNotIn("清仓价", r["m67"]["table"])
+        validate_m67_consistency(r)
+
+    def test_holding_disposition_advice_replaces_stale_label_on_reapply(self):
+        from runners.a_short_phase5_engine import _apply_holding_disposition
+        from runners.a_short_weekly_pipeline import _append_portfolio_risk_impact
+        r = build_m67_report(_good_input(close=3.08, stateful_risk=_held_state()), AS_OF, "t")
+        _append_portfolio_risk_impact(r, AS_OF, is_holding=True, effect="hold_watch",
+                                      reason="组合风险", blocked_add=True)
+        _apply_holding_disposition(r)
+        advice = r["m67"]["精简结论区"]["操作建议"]
+        self.assertEqual(advice.count("持仓处置="), 1)
+        self.assertIn("持仓处置=持有警戒", advice)
+        self.assertNotIn("持仓处置=持有（", advice)
+        validate_m67_consistency(r)
+
+    def test_holding_disposition_validator_rejects_duplicate_advice_phrase(self):
+        r = build_m67_report(_good_input(close=3.08, stateful_risk=_held_state()), AS_OF, "t")
+        r["m67"]["精简结论区"]["操作建议"] += " 持仓处置=持有（伪造）。"
+        with self.assertRaises(ValueError):
+            validate_m67_consistency(r)
+
+    def test_hard_veto_without_system_plan_is_manual_clear_review_without_price(self):
+        no_manual_stop = _held_state()
+        no_manual_stop["position"]["stop_loss"] = None
+        r = build_m67_report(_good_input(
+            price_series=_series()[:3], stateful_risk=no_manual_stop,
+            event={"holder_reduction_active": False, "st_or_delisting": True,
+                   "regulatory_legacy_vetoed": False},
+        ), AS_OF, "t")
+        self.assertEqual(r["m67"]["table"]["操作"], "持有")
+        self.assertIsNone(r["machine"]["entry_exit_size_star"]["plan"])
+        self.assertEqual(r["m67"]["table"]["持仓处置"], "建议清仓复核")
+        self.assertIsNone(r["m67"]["table"]["清仓价"])
+        self.assertIn("清仓价=未算出", r["m67"]["精简结论区"]["操作建议"])
+        self.assertIn("无可执行止损位", r["m67"]["精简结论区"]["操作建议"])
         validate_m67_consistency(r)
 
     def test_existing_position_with_market_veto_stays_held_not_denied(self):

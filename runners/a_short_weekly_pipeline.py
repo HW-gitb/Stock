@@ -168,6 +168,10 @@ def _validate_official_publish_marker(analysis_path: str | Path, marker: dict,
             marker.get("run_id") != source_identity.get("run_id") or \
             marker.get("candidate_digest") != source_identity.get("candidate_digest"):
         raise SystemExit("[FATAL] official publish marker does not match analysis_input run identity")
+    analysis = json.loads(Path(analysis_path).read_text(encoding="utf-8"))
+    for field in ("decision_as_of", "run_date", "price_data_through"):
+        if field in marker and marker.get(field) != analysis.get(field):
+            raise SystemExit(f"[FATAL] official publish marker {field} does not match analysis_input")
     file_ref = ((marker.get("files") or {}).get("analysis_input") or {})
     path = Path(analysis_path)
     actual_sha = hashlib.sha256(path.read_bytes()).hexdigest()
@@ -1036,6 +1040,9 @@ def build_weekly_report(normalized_list: list, as_of: str, generated_at: str,
     weekly = {
         "schema_name": SCHEMA_NAME, "schema_version": SCHEMA_VERSION,
         "generated_at": generated_at, "as_of": as_of,
+        "decision_as_of": as_of,
+        "run_date": (lineage.get("price_freshness") or {}).get("run_date"),
+        "price_data_through": (lineage.get("price_freshness") or {}).get("price_data_through", as_of),
         "iv_feed_ref": iv_feed_ref, "n_stocks": len(reports), "reports": reports,
         "cash_allocation": cash_summary,
         "portfolio_risk": portfolio_risk,
@@ -1151,6 +1158,16 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
     """关闭 P2:消费方校验它读入的 IV feed + 每张 M6.7。"""
     from datetime import datetime
     from runners.a_short_iv_feed_build import validate_feed_summary_consistency
+    decision_as_of = str(weekly.get("decision_as_of") or weekly["as_of"])
+    price_data_through = str(weekly.get("price_data_through") or weekly["as_of"])
+    if decision_as_of != str(weekly["as_of"]):
+        raise ValueError("weekly decision_as_of must equal as_of")
+    try:
+        datetime.strptime(price_data_through, "%Y%m%d")
+    except ValueError:
+        raise ValueError("weekly price_data_through is not a real date")
+    if price_data_through > decision_as_of:
+        raise ValueError("weekly price_data_through is after decision_as_of")
     from runners.a_short_phase5_engine import validate_m67_consistency
     # weekly as_of 必须是合法日历日(空报告时也要校验;schema 的 ^\d{8}$ 不查历法,20260631 会漏过)
     try:
@@ -1221,6 +1238,12 @@ def validate_weekly_report(weekly: dict, iv_feed_summary: dict) -> None:
         raise ValueError("无账户 observation-only 报告不得带 account_snapshot")
     ivf = rl.get("iv_freshness")
     pf = rl.get("price_freshness") or {}
+    if pf.get("price_data_through") != price_data_through:
+        raise ValueError("weekly price_data_through is not bound to run_lineage.price_freshness")
+    if rl.get("decision_as_of") not in (None, decision_as_of):
+        raise ValueError("run_lineage.decision_as_of is not bound to weekly decision_as_of")
+    if rl.get("price_data_through") not in (None, price_data_through):
+        raise ValueError("run_lineage.price_data_through is not bound to weekly price_data_through")
     if ivf is not None:
         if ivf.get("status") != "aligned" or ivf.get("iv_data_through") != pf.get("price_data_through") or \
                 ivf.get("price_data_through") != pf.get("price_data_through"):
@@ -1852,6 +1875,9 @@ def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md
         "schema_name": "a_short_weekly_publish_receipt",
         "schema_version": "1.0.0",
         "as_of": weekly["as_of"],
+        "decision_as_of": weekly.get("decision_as_of", weekly["as_of"]),
+        "run_date": weekly.get("run_date"),
+        "price_data_through": weekly.get("price_data_through"),
         "run_id": lineage["run_id"],
         "candidate_digest": lineage["candidate_digest"],
         "published_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -1889,8 +1915,12 @@ def load_published_weekly_bundle(out_path: str) -> dict:
     lineage = weekly.get("run_lineage") or {}
     if receipt.get("stage_status") != "complete":
         raise ValueError("weekly receipt is not complete")
-    for field in ("as_of", "run_id", "candidate_digest"):
+    for field in ("as_of", "decision_as_of", "run_date", "price_data_through", "run_id", "candidate_digest"):
         expected = weekly.get(field) if field == "as_of" else lineage.get(field)
+        if field in {"decision_as_of", "run_date", "price_data_through"}:
+            expected = weekly.get(field)
+        if field == "run_date" and expected is None and receipt.get(field) is None:
+            continue
         if not expected or receipt.get(field) != expected:
             raise ValueError(f"weekly receipt {field} does not match artifact")
     expected_outputs = {output.name, output.with_suffix(".md").name}
@@ -3707,6 +3737,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--web-news-lookback-days", type=int, default=30,
                    help="web_llm em 资讯新鲜度窗(天,默认 30;只把近 N 天新闻喂判官)")
     p.add_argument("--run-date", help="实际运行日 YYYYMMDD(记进 run_lineage;intraday_prior_settled 模式要求存在且 <= --as-of)")
+    p.add_argument("--price-as-of", help="latest officially settled price/technical date; must be <= --as-of")
     p.add_argument("--price-freshness-mode", choices=["strict_as_of", "intraday_prior_settled"],
                    default="strict_as_of",
                    help="价格新鲜度模式(显式,记进 run_lineage.price_freshness):strict_as_of(默认,最新 bar 必须 ==as_of);"
@@ -3807,6 +3838,10 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         raise SystemExit(f"[FATAL] --as-of {args.as_of} 不是合法日历日期")
     if args.run_date and not _is_valid_yyyymmdd(args.run_date):
         raise SystemExit(f"[FATAL] --run-date {args.run_date} 不是合法日历日期")
+    if args.price_as_of and not _is_valid_yyyymmdd(args.price_as_of):
+        raise SystemExit(f"[FATAL] --price-as-of {args.price_as_of} is not a valid YYYYMMDD")
+    if args.price_as_of and str(args.price_as_of) > str(args.as_of):
+        raise SystemExit("[FATAL] --price-as-of must not be after --as-of")
     # intraday tolerance is an EXPLICIT mode, not inferred; valid when as_of's own EOD may not be published
     # yet — i.e. as_of is today (run_date==as_of) OR a prospective canonical session (as_of>run_date, e.g.
     # weekly canonical 解析器把周末/周一盘前运行解析成「即将到来的周一」as_of)。两者最新已结算 bar 都 ==
@@ -3848,6 +3883,18 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     if str(ai.get("trade_date")) != args.as_of:
         raise SystemExit(f"[FATAL] analysis_input.trade_date {ai.get('trade_date')} != --as-of {args.as_of}"
                          "(批次错配/未来/陈旧,拒跑周报)")
+    ai_clock = (ai.get("source") or {}).get("clocks") or {}
+    ai_clock_explicit = bool(ai.get("price_data_through") or ai_clock.get("price_data_through"))
+    ai_price_data_through = str(ai.get("price_data_through") or
+                                ai_clock.get("price_data_through") or args.as_of)
+    price_data_through = str(args.price_as_of or ai_price_data_through)
+    clock_explicit = bool(args.price_as_of or ai_clock_explicit)
+    if clock_explicit and ai_price_data_through != price_data_through:
+        raise SystemExit(
+            f"[FATAL] analysis_input.price_data_through {ai_price_data_through} != --price-as-of {price_data_through}"
+        )
+    if price_data_through > str(args.as_of):
+        raise SystemExit("[FATAL] price_data_through is after decision_as_of")
     from engine.data.analysis_input_contract import build_a_short_run_identity
     source_section = ai.get("source") or {}
     source_identity = dict((source_section.get("run_identity") or {}))
@@ -3964,16 +4011,19 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         # 显式 intraday_prior_settled 模式(已 guard as_of>=run_date)→ 价格门容忍最新 bar==前一交易日
         # (as_of 当日 EOD 未发布的实盘当天/前瞻 canonical);strict_as_of → prior_settled=None → 严格 == as_of。仅放前一交易日,
         # 更早(真陈旧)仍拒、未来恒拒;实际接受的最新日期记进 run_lineage.price_freshness。
-        prior_settled = (_prev_trading_day(pro, args.as_of)
-                         if args.price_freshness_mode == "intraday_prior_settled" else None)
+        prior_settled = (
+            price_data_through if clock_explicit
+            else (_prev_trading_day(pro, args.as_of)
+                  if args.price_freshness_mode == "intraday_prior_settled" else None)
+        )
         # The official M6.7 series keeps its historical 120-day fetch scope.
         # P2's 450-day source is an independently fetched post-publish
         # sidecar; it is never handed to candidate/holding consumers.
-        price_provider = lambda code: _fetch_price_series(ts, pro, code, production_start, args.as_of,
+        price_provider = lambda code: _fetch_price_series(ts, pro, code, production_start, price_data_through,
                                                           accept_prior_settled_date=prior_settled)
         if args.target_policy_root and target_policy_price_provider is None:
             target_policy_price_provider = lambda code: _fetch_price_series(
-                ts, pro, code, p2_shadow_start, args.as_of,
+                ts, pro, code, p2_shadow_start, price_data_through,
                 accept_prior_settled_date=prior_settled)
         # #1 除权除息提示真 provider(advisory 旁路;注入优先用于测试):同一已授权 fetch 上下文。
         if dividend_provider is None:
@@ -4018,7 +4068,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         portfolio_risk_provider = lambda codes, as_of: _fetch_portfolio_risk_fact_overrides(pro, as_of, codes)
     cands = ai.get("candidates", [])
     # capture (series, latest_trade_date) per candidate so the artifact can record the real price clock
-    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], args.as_of) for c in cands}
+    price_results = {c["ts_code"]: _price_provider_result(price_provider, c["ts_code"], price_data_through) for c in cands}
     price_clock_date = _candidate_price_clock(cands, price_results, args.as_of, prior_settled)
     candidate_exclusions, eligible_cands, unresolved_short = [], [], []
     for candidate in cands:
@@ -4037,7 +4087,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          "不写周报(来源/价格时钟存疑,不可静默跳过)")
     cands = eligible_cands
     for candidate in cands:
-        candidate["_weekly_as_of"] = str(args.as_of)
+        candidate["_weekly_as_of"] = price_data_through
     if semantic_provider is None and args.confirm_fetch_authorized and not args.skip_semantic:
         semantic_provider = _build_cninfo_semantic_provider(
             [c.get("ts_code") for c in cands], args.as_of, args.cninfo_lookback_days)
@@ -4097,7 +4147,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                          f"(unmatched={len(unmatched_regulatory_confirmations)})")
     # 价格覆盖门(#2):仅两种已确认单票异常可在前段隔离；其余价格不足仍整批中止，绝不退化成观察。
     # 价格时钟 lineage 在隔离前就由所有非已证停牌候选对账，避免短历史票掩盖混合时钟。
-    price_data_through = price_clock_date
+    if clock_explicit and price_clock_date != price_data_through:
+        raise SystemExit(
+            f"[FATAL] observed candidate price clock {price_clock_date} != price_data_through {price_data_through}"
+        )
+    if not clock_explicit:
+        price_data_through = price_clock_date
     iv_freshness = validate_iv_feed_freshness(feed, price_data_through)
     accepted_psd = str(prior_settled) if (prior_settled is not None and price_data_through == str(prior_settled)) else None
     price_freshness = {"mode": args.price_freshness_mode,
@@ -4134,6 +4189,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                      "effective_regime": regime,
                                      "fallback_active": bool(regime_fallback)},
                    "price_freshness": price_freshness,
+                   "decision_as_of": str(args.as_of),
+                   "price_data_through": price_data_through,
                    "runtime_configuration": source_runtime_configuration}
     # 持仓恒列入 S1 + 语义(4.2 S2): 先以有效候选、普通持仓、候选价格隔离持仓建立互斥出口。后者
     # 不伪造持有/止损结论，直接 private manual-review；选股、引擎决策、user-stop 不变。
@@ -4299,6 +4356,9 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                  account_positions=((acct.get("positions") or []) if args.account else None),
                                  missing_holding_codes=[item.get("ts_code") for item in holdings_manual_review],
                                  candidate_exclusions=candidate_exclusions)
+    weekly["decision_as_of"] = str(args.as_of)
+    weekly["run_date"] = str(args.run_date) if args.run_date else None
+    weekly["price_data_through"] = price_data_through
     weekly["factor_comparison_v2"] = factor_comparison_v2
     if industry_weight_comparison is not None:
         weekly["industry_weight_comparison"] = industry_weight_comparison
