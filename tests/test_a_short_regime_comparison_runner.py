@@ -115,15 +115,25 @@ def _write_tracker(path: Path, as_of: str, *, digest: str, values: dict[str, flo
 
 
 def _write_m67(path: Path, as_of: str, *, digest: str, codes: list[str]) -> None:
+    run_id = f"a-short-{as_of}-0123456789abcdef"
     path.write_text(json.dumps({
         "schema_name": "a_short_weekly_report", "as_of": as_of,
-        "run_lineage": {"candidate_digest": digest, "run_id": f"a-short-{as_of}-0123456789abcdef"},
+        "run_lineage": {
+            "candidate_digest": digest, "run_id": run_id,
+            "price_freshness": {"mode": "strict_as_of", "run_date": as_of,
+                                 "price_data_through": as_of},
+        },
         "reports": [{
             "ts_code": code, "row_source": "egs_candidate",
             "m67": {"table": {"操作": "建仓"}},
             "machine": {"stateful_risk": {"position_state": "flat"},
                         "rule6_gate": {"disposition": "clear"}, "layer": {"hard_veto": []}},
         } for code in codes],
+    }, ensure_ascii=False), encoding="utf-8")
+    path.with_name("weekly_m67.receipt.json").write_text(json.dumps({
+        "schema_name": "a_short_weekly_publish_receipt", "schema_version": "1.0.0",
+        "as_of": as_of, "run_id": run_id, "candidate_digest": digest,
+        "stage_status": "complete",
     }, ensure_ascii=False), encoding="utf-8")
 
 
@@ -481,8 +491,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             report = base / "weekly_m67.json"
-            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
-                              encoding="utf-8")
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
                       m67_report_path=str(report), action_records_path=str(base / "actions.json"),
@@ -499,8 +508,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             report = base / "weekly_m67.json"
-            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
-                              encoding="utf-8")
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
                       m67_report_path=str(report), action_records_path=str(base / "actions.json"),
@@ -526,8 +534,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             report = base / "weekly_m67.json"
-            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
-                              encoding="utf-8")
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown",
                       m67_report_path=str(report), action_records_path=str(base / "actions.json"),
@@ -546,8 +553,12 @@ class BootstrapPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             report = base / "weekly_m67.json"
-            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
-                              encoding="utf-8")
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
+            historical_source = json.loads(report.read_text(encoding="utf-8"))
+            historical_source["run_lineage"]["price_freshness"] = {
+                "mode": "strict_as_of", "run_date": cal[-2], "price_data_through": cal[-2],
+            }
+            report.write_text(json.dumps(historical_source), encoding="utf-8")
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
                       action_records_path=str(base / "actions.json"),
@@ -563,8 +574,7 @@ class BootstrapPolicyTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             base = Path(tmp)
             report = base / "weekly_m67.json"
-            report.write_text(json.dumps({"schema_name": "a_short_weekly_report", "as_of": cal[-1], "reports": []}),
-                              encoding="utf-8")
+            _write_m67(report, cal[-1], digest="a" * 64, codes=[])
             kw = self._kw(cal, tmp, bootstrap=True)
             kw.update(v14_2_regime="shock", raw_v14_2_regime="unknown", m67_report_path=str(report),
                       action_records_path=str(base / "actions.json"),
@@ -585,7 +595,9 @@ class BootstrapPolicyTests(unittest.TestCase):
             regime_record=regime, raw_v14_2_regime="shock", effective_v14_2_regime="shock",
             m67_source={"source_schema_name": "a_short_weekly_report", "source_as_of": "20230102",
                         "source_sha256": "a" * 64, "candidate_build_count": 0},
-            forward_origin={"decision_as_of": "20230102", "run_date": "20230102"})
+            forward_origin={"decision_as_of": "20230102", "run_date": "20230102",
+                            "capture_mode": "live", "price_data_through": "20230102",
+                            "source_receipt_complete": True, "price_day_latest_settled": True})
         self.assertTrue(forged["forward_eligible"])
         with tempfile.TemporaryDirectory() as tmp:
             with patch("runners.a_short_regime_comparison_runner._current_run_date", return_value="20260716"):

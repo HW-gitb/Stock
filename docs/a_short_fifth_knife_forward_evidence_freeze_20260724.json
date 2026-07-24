@@ -4,7 +4,7 @@
   "freeze_id": "a_short_fifth_knife_20260724_v1",
   "freeze_date": "20260724",
   "source_revision": {
-    "git_commit": "f163dea08986313945a85a72866ba3153a028db6",
+    "git_commit": "a40c2fc1005efb8b8c1241a81a92e3458587ab3c",
     "scope": "fourth_knife_passed_code_and_contracts_before_this_freeze_packet"
   },
   "evidence_epoch": {
@@ -14,14 +14,14 @@
     "parameter_change_policy": "new_epoch_required_no_post_hoc_threshold_changes"
   },
   "frozen_contracts": [
-    {"name": "a_short_screening_runtime_policy", "path": "presets/a_short_screening_threshold_governance_20260602.json", "sha256": "5ad73dd09a100175f4d1b7317a5b1f730c8955a58ad81567f87d0964121eb500", "semantic_fingerprint": "935abac736f77a65390c22b71b2351258cbc36a80c7dd044ffca90531a9474e7"},
-    {"name": "a_short_m67_runtime_policy", "path": "presets/a_short_m67_runtime_policy_20260715.json", "sha256": "98230b31802d465cbe932b6de3e9f85d82078277074dd768d1a01eb7c253e3a0"},
-    {"name": "v14_3_action_comparison_governance", "path": "presets/a_short_regime_action_comparison_governance_20260714.json", "sha256": "17d8969c72706e7b80a10565110c7777c4595cd92ed07ecc8278f91ed987093d", "semantic_fingerprint": "f7d2f6f208c737a5b4bb01603ce7f59d4f3d11d513124948c29a5968fab8db69"},
-    {"name": "v14_3_action_comparison_schema", "path": "schemas/a_short_regime_action_comparison_governance.schema.json", "sha256": "eca9464cce833143b8d5871922111f1eb30615365b2ca704c50dd63fa2167194"},
-    {"name": "v14_3_weekly_capture_schema", "path": "schemas/a_short_regime_action_comparison_weekly.schema.json", "sha256": "e3b0fa87ae8594d90f2276f98b085c7ceb94292276c620ddb62e4e82c14e11e4"},
-    {"name": "p4a_overlay_epoch", "path": "engine/a_short_overlay_adjudication.py", "sha256": "8fd84a37a3718d92404b1c991d9cc9bcf9cc8d1e5ac8bcf03a8b9a7c0da4a160", "semantic_fingerprint": "49a1f30e7ab964fea434f28fa2aae1cb4aa39e6d9d6fde4b064f5fc20a324838"},
-    {"name": "m67_effect_contract", "path": "schemas/a_short_m67_effect_contract.json", "sha256": "44c8dcbbb5fafe106e586df5af7aee453c59c7587ca0e6cd4da054fd2e02f233"},
-    {"name": "weekly_report_schema", "path": "schemas/a_short_weekly_report.schema.json", "sha256": "7064569f4dca787e21254f7b3ae424ffba24020e888ec661569a45fce80bfb04"}
+    {"name": "a_short_screening_runtime_policy", "path": "presets/a_short_screening_threshold_governance_20260602.json", "sha256": "aeccfa2636685f395442a23892d9d816d22fcf50271b0fe7dbc13bf72cffce9d", "semantic_fingerprint": "935abac736f77a65390c22b71b2351258cbc36a80c7dd044ffca90531a9474e7"},
+    {"name": "a_short_m67_runtime_policy", "path": "presets/a_short_m67_runtime_policy_20260715.json", "sha256": "2af7fc3e59fa891a63afbe312ebe41dda77ee967965a980b10cc9dad1969ed49"},
+    {"name": "v14_3_action_comparison_governance", "path": "presets/a_short_regime_action_comparison_governance_20260714.json", "sha256": "ab550a035e6873873809d91a20bd2a8a81d7dec234545a6e98b2548d0f9a4afc", "semantic_fingerprint": "f7d2f6f208c737a5b4bb01603ce7f59d4f3d11d513124948c29a5968fab8db69"},
+    {"name": "v14_3_action_comparison_schema", "path": "schemas/a_short_regime_action_comparison_governance.schema.json", "sha256": "6491f3ba61134e5e443935f6ebdfd9d42dd171e2e5fa8fa6ca4e2bfd67fcfb3d"},
+    {"name": "v14_3_weekly_capture_schema", "path": "schemas/a_short_regime_action_comparison_weekly.schema.json", "sha256": "4b6691022b0a230578530a177533e12130c28e74c9f2e3555bca4d989a877574"},
+    {"name": "p4a_overlay_epoch", "path": "engine/a_short_overlay_adjudication.py", "sha256": "2b495f20695e6b126f3927a2931ee3ef061e7f15f91d59da7fd3f8c85addb8ba", "semantic_fingerprint": "49a1f30e7ab964fea434f28fa2aae1cb4aa39e6d9d6fde4b064f5fc20a324838"},
+    {"name": "m67_effect_contract", "path": "schemas/a_short_m67_effect_contract.json", "sha256": "330bb40602f201ead99b0f350760b27ffc199c8959faf6cac8c9c31246286da3"},
+    {"name": "weekly_report_schema", "path": "schemas/a_short_weekly_report.schema.json", "sha256": "8918389b93263588aa76db98a703a9e843b6e2f13b8cf61eb097e5f69f53d7e8"}
   ],
   "tracks": [
     {"track_id": "main_baseline", "role": "main_system", "rule_change_policy": "fixed_for_epoch", "production_effect": "no_automatic_switch_and_no_full_size_promotion"},
@@ -75,5 +75,5 @@
     "production_promotion_allowed": false
   },
   "status": "frozen_not_started",
-  "record_sha256": "b185b5552cbc8152ad9b2ebfd18a56c188b559a03c259c9a63c5d9c60a10b166"
+  "record_sha256": "0f16ec9b499284a0e0a610c9a2700d45e73398f8caac3ac701cc769b444134fd"
 }

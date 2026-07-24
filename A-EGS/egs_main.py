@@ -923,7 +923,7 @@ def _code_set(value):
     }
 
 
-def build_rank_universe_reconciliation(df_l0, stages, sources):
+def build_rank_universe_reconciliation(df_l0, stages, sources, *, feature_source):
     """Account for every post-L0 symbol and expose source truncation.
 
     ``stages`` entries are ``(name, dataframe, expected_exclusion, reason)``.
@@ -931,7 +931,20 @@ def build_rank_universe_reconciliation(df_l0, stages, sources):
     becomes a publish-blocking error instead of disappearing silently.
     ``sources`` entries are ``(requested, available, min_coverage)``.
     """
+    if not isinstance(feature_source, pd.DataFrame) or "ts_code" not in feature_source.columns:
+        raise RuntimeError("rank reconciliation feature source must be a dataframe with ts_code")
+    if feature_source["ts_code"].duplicated().any():
+        raise RuntimeError("rank reconciliation feature source has duplicate ts_code")
+
     l0_codes = _code_set(df_l0)
+    feature_codes = _code_set(feature_source)
+    if feature_codes != l0_codes:
+        missing = sorted(l0_codes - feature_codes)
+        extra = sorted(feature_codes - l0_codes)
+        raise RuntimeError(
+            "rank reconciliation feature source coverage mismatch: "
+            f"missing={missing[:10]} extra={extra[:10]}"
+        )
     l0_duplicate_count = (
         int(df_l0["ts_code"].duplicated().sum())
         if isinstance(df_l0, pd.DataFrame) and "ts_code" in df_l0.columns else 0
@@ -1000,12 +1013,15 @@ def build_rank_universe_reconciliation(df_l0, stages, sources):
     feature_columns = [
         "name", "l1_name", "l2_name", "total_mv", "pct_20d", "avg_amount_20d",
     ]
-    if isinstance(df_l0, pd.DataFrame) and "ts_code" in df_l0.columns:
-        available = [column for column in feature_columns if column in df_l0.columns]
-        if available:
-            l0_features = df_l0[["ts_code", *available]].copy()
-            l0_features["ts_code"] = l0_features["ts_code"].astype(str)
-            detail = detail.merge(l0_features.drop_duplicates("ts_code"), on="ts_code", how="left")
+    missing_columns = [column for column in feature_columns if column not in feature_source.columns]
+    if missing_columns:
+        raise RuntimeError(
+            "rank reconciliation feature source missing columns: "
+            f"{missing_columns}"
+        )
+    source_features = feature_source[["ts_code", *feature_columns]].copy()
+    source_features["ts_code"] = source_features["ts_code"].astype(str)
+    detail = detail.merge(source_features, on="ts_code", how="left", validate="one_to_one")
 
     source_coverage = {}
     source_coverage_failure_count = 0
@@ -4722,6 +4738,7 @@ def run_egs(backtest_mode=False, output_root=None, price_as_of=None):
 
     rank_reconciliation, rank_reconciliation_detail = build_rank_universe_reconciliation(
         df_l0=df_l0,
+        feature_source=df_master,
         stages=[
             ("master_join", df_master, False, "master_join_loss"),
             ("l1_industry_leader", df_l1, True, l1_exclusion_reasons),

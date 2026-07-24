@@ -1,7 +1,7 @@
 [
   {
     "schema_name": "a_short_regime_action_comparison_weekly",
-    "schema_version": "1.0.0",
+    "schema_version": "1.1.0",
     "as_of": "20260717",
     "raw_v14_2_regime": "unknown",
     "effective_v14_2_regime": "shock",
@@ -28,9 +28,13 @@
     },
     "forward_origin": {
       "decision_as_of": "20260720",
-      "run_date": "20260719"
+      "run_date": "20260719",
+      "capture_mode": "live",
+      "price_data_through": "20260717",
+      "source_receipt_complete": true,
+      "price_day_latest_settled": true
     },
-    "forward_eligible": false,
+    "forward_eligible": true,
     "forward_market_returns": {
       "h1": null,
       "h3": null,

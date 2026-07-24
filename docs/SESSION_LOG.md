@@ -1,5 +1,54 @@
 # Session Log
 
+## 2026-07-24 - Claude Code re-review PASS + freeze reseal + commit (A-short P1 crash-veto + P2 V14.3 action)
+
+- **Verdict/Action**: PASS both, committed to master. P1 `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` + P2 `R-ASHORT-REGIME-ACTION-LEGACY-CLOCK-MIGRATION-DRIFT` resolved (Codex rework R1-R3 verified; P2 honest source-bound migration reproduced == on-disk row). Detail in register.
+- **Required**: None open. Fifth-knife freeze `R-ASHORT-FIFTH-KNIFE-FORWARD-EVIDENCE-EPOCH` reconciled: 8 frozen_contracts resealed LF-canonical, git_commit→a40c2fc1, record_sha256 re-derived, + a frozen-contract guard test (0 evidence → same-epoch re-freeze). Detail in register.
+- **Verify**: review-evidence:eb46e837544f. Pinned main Python: P1 pack OK; P2 pack 57 OK; fifth-knife freeze 3 OK; P2 migration reproduced == on-disk row. No agent/full lane (comparison-only, not §6a/entrypoint). No provider/account/order.
+- **Next**: 无（已闭并合并 master）。
+
+## 2026-07-24 - Claude Code review FAIL (A-short V14.3 action legacy-clock migration)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-REGIME-ACTION-LEGACY-CLOCK-MIGRATION-DRIFT` stays open. P2 code CORRECT + honestly verified (source-bound migration reproduced == on-disk row; build_action_record rejects missing clocks; runner hardened; schema 1.1.0; 57 OK). Sole gap: the changed action schema is a fifth-knife frozen contract, freeze packet not resealed. Detail in register.
+- **Required**: Reseal the fifth-knife freeze for the changed action schema + re-derive record_sha256 + add a frozen-contracts machine guard (none exists → silent break); reseal-to-corrected-schema (0 evidence, not a new epoch); coordinate with P1's m67_effect_contract. Keep all P2 code. Detail + closure in register.
+- **Verify**: review-evidence:not_available (hook did not arm; evidence = real tool results). No agent/full lane — comparison-only sidecar, not §6a/entrypoint. Integral-read + reproduction probe + reverse-probe-via-tests + 57 OK. No provider/account/order.
+- **Next**: Codex：修复
+
+## 2026-07-24 - Codex rework (A-short P1 crash-veto reconciliation after review FAIL)
+
+- **Verdict/Action**: Narrowed `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` per the FAIL review; independent re-review required before commit. Detail in register.
+- **Required**: Systematic producer-contract guards remain publish-blocking. Per-member null/invalid `total_mv` and partial-industry values are now tolerated so one comparison-only sidecar gap cannot abort the whole EGS publish; consumer matching keeps its sentinel/missing-value fallback. The test now covers reachable real-L2/unknown-L1 and null-`total_mv` crash-veto rows.
+- **Verify**: Pinned main Python; reconciliation pack 10 OK plus crash-veto/effect-contract pack 34 OK; changed files compile; `git diff --check` clean (repository line-ending warnings only). No provider, live run, account, order, or broker execution.
+- **Next**: Claude Code：复审本 P1 修复后再提交。
+
+## 2026-07-24 - Codex repair (A-short V14.3 action legacy-clock migration)
+
+- **Verdict/Action**: Implemented the optimized P2 repair for `R-ASHORT-REGIME-ACTION-LEGACY-CLOCK-MIGRATION-DRIFT`; independent review is required before commit.
+- **Required**: Action records now require six forward-origin fields and schema `1.1.0`; missing clocks cannot default to live evidence. The tracked 20260720 row was source-bound migrated from its published M6.7 report and complete receipt, preserving the canonical Monday decision / prior settled Friday clock and setting `forward_eligible=true`.
+- **Verify**: Pinned main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; action-engine and comparison-runner pack: 57 OK; adjacent regime pipeline/ledger/governance pack: 78 OK; changed Python files compile; `git diff --check` clean (repository line-ending warnings only). No provider, live weekly, account, order, or broker execution.
+- **Next**: Claude Code：独立复审本 P2 修复后再提交。
+
+## 2026-07-24 - Claude Code review FAIL (A-short crash-veto reconciliation feature surface)
+
+- **Verdict/Action**: FAIL; `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` stays open. The df_master wiring resolves the 0/442 starvation + guards 1-5 hold, but two NEW per-member guards (partial-industry XOR; total_mv finite/>0) abort the ENTIRE weekly EGS publish on reachable states — a comparison-only sidecar issue taking down core selection. Detail in register.
+- **Required**: Narrow fail-loud to systematic starvation (keep column/coverage/dup guards); make the two per-member value checks non-fatal; align producer with the 未知/total_mv tolerance match_controls gained same-commit; fix the test which pins the IMPOSSIBLE real-L1+未知-L2 direction (reachable is real-L2+未知-L1). R1-R3 + closure in register.
+- **Verify**: review-evidence:not_available (hook did not arm; evidence = real tool results). Independent adversarial agent + reviewer probe reproduced BOTH aborts on the real function; acceptance pack 44 OK; real 20260727: 0 members hit either guard (latent). No full lane (FAIL). No provider/account/order. Detail in register.
+- **Next**: Codex：修复
+
+## 2026-07-24 - Codex repair (A-short crash-veto reconciliation feature surface)
+
+- **Verdict/Action**: Implemented the optimized P1 repair for `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE`; independent review remains required before commit.
+- **Required**: `feature_source` is explicit and bound to `df_master`; duplicate/non-exact post-L0 coverage, missing six-column surface, invalid crash-veto market value, and partial industry assignment fail closed. Tracker treats `""`/`未知`/`nan`/`None` as unavailable and avoids an unknown-only peer pool when valid fallback rows are sufficient. Bootstrap's legacy daily replay dependency remains explicit.
+- **Verify**: Pinned main Python targeted reconciliation/crash-veto/effect-contract pack = 43 OK; changed Python files compile; `git diff --check` clean. No provider, live run, account, order, or broker execution.
+- **Next**: Claude Code：独立复审本修复后再提交。
+
+## 2026-07-24 - Codex plan review (A-short testrun P1 crash-veto reconciliation)
+
+- **Verdict/Action**: Core P1 repair direction is sound; added three mandatory plan hardenings to `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE`.
+- **Required**: Require explicit `df_master` feature-source binding and one-to-one/full-code coverage; treat unavailable industry sentinels as missing rather than a fake peer pool; separate normal no-cache capture closure from bootstrap's independent daily-replay cache dependency.
+- **Verify**: Read-only code/contract review of producer, sole production call, both tracker consumers, matching fallback, no-cache policy, existing tests, and 20260727 artifacts. No code, provider, account, order, or generated result changed.
+- **Next**: Codex：按优化后的 register 方案执行 P1。
+
 ## 2026-07-24 - Claude Code finding (A-short crash-veto tracker: recon feature-surface starves capture) → Codex
 
 - **Verdict/Action**: New finding from the desktop full no-cache live testrun `a_cc_testrun1.md` (P1 there), routed to Codex. Opened `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` in `docs/system_risk_register.md` with whole-class Required + 8 closure tests. Comparison-only crash-veto forward-evidence tracker fails every live run (exit 2); EGS selection/veto/sizing/M6.7 unaffected.

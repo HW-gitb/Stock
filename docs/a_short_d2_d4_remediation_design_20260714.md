@@ -12,7 +12,7 @@
 - 这两个环境各自对应的固定 policy id / epoch；旧的 unknown-only V14.3 记录不进入新账本。
 - V14.3 原始环境及其触发规则；两边的冻结建议仅为 `allow/forbidden + 0/60/80%` 市场风险暴露代理。
 - 同周 M6.7 的 SHA-256 和候选建仓数量，不保存持仓或逐票内容；盘前的周一决策允许绑定上一已结算交易日，但相差超过 7 天必须失败。
-- 每条 action record 必须冻结 `forward_origin.decision_as_of` 和 runner 自取、不可由调用方传入的 `forward_origin.run_date`；`forward_eligible` 只能由两者相等推导，且决策日与 settled 环境日相差不得超过 7 天。写入器只可追加本次 runner 记录；其他周只能做已审计前瞻收益回填，不能改决策或新造历史周。汇总还要求每个有效记录来自不同 runner 日期，同一天堆多条一律拒绝。历史回放或未来日期即使有完整 h10，也只能标为不计入；汇总的 12 周和 8 个已到期分歧样本只数 live forward 记录。
+- 每条 action record 必须冻结完整的三钟：`forward_origin.decision_as_of`、runner 自取且不可由调用方传入的 `forward_origin.run_date`，以及 M6.7 来源绑定的 `forward_origin.price_data_through`；同时记录 `capture_mode`、`source_receipt_complete`、`price_day_latest_settled`。`forward_eligible` 只能由这些字段在代码中推导：`capture_mode=live`、决策日不早于 runner 日、来源 receipt 完整、价格日已结算且不晚于决策日。盘前的周一决策允许绑定上一已结算交易日；历史回放、缺时钟或来源未对账一律不计入，即使有完整 h10 也不能标为 live forward。写入器只可追加本次 runner 记录；其他周只能做已审计前瞻收益回填，不能改决策或新造历史周。汇总还要求每个有效记录来自不同 runner 日期，同一天堆多条一律拒绝。汇总的 12 周和 8 个已到期分歧样本只数 live forward 记录。
 - 已审计的 CSI1000 h1/h3/h5/h10 前瞻收益。它只衡量环境建议的风险开关方向，不能冒充选股收益。
 
 结论只在至少 12 个 forward 周、且至少 8 个有分歧并到期 h10 周后才可从“积累中”变成“需人工审查”。无论结果如何，禁止自动切生产；用户确认后还必须另起生产变更切片。

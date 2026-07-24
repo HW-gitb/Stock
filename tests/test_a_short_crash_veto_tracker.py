@@ -160,6 +160,18 @@ class CrashVetoTrackerTest(unittest.TestCase):
         self.assertEqual(set(matched["M"]), {"A", "B", "C"})
         self.assertNotIn("M", matched["M"])
 
+    def test_unknown_industry_sentinels_never_form_a_peer_pool(self):
+        features = pd.DataFrame([
+            {"ts_code": "M", "l1_name": "未知", "l2_name": "未知", "total_mv": 100, "pct_20d": 1, "avg_amount_20d": 1000},
+            {"ts_code": "U1", "l1_name": "未知", "l2_name": "未知", "total_mv": 101, "pct_20d": 1, "avg_amount_20d": 1000},
+            {"ts_code": "L1", "l1_name": "L1", "l2_name": "L2", "total_mv": 99, "pct_20d": 1, "avg_amount_20d": 1000},
+            {"ts_code": "L2", "l1_name": "L1", "l2_name": "L2", "total_mv": 102, "pct_20d": 1, "avg_amount_20d": 1000},
+            {"ts_code": "L3", "l1_name": "L1", "l2_name": "L2", "total_mv": 103, "pct_20d": 1, "avg_amount_20d": 1000},
+        ]).set_index("ts_code", drop=False)
+        matched = match_controls(["M"], ["M", "U1", "L1", "L2", "L3"], features)
+        self.assertEqual(set(matched["M"]), {"L1", "L2", "L3"})
+        self.assertNotIn("U1", matched["M"])
+
     @staticmethod
     def _price_cache(codes):
         dates = [f"202607{d:02d}" for d in range(1, 12)]

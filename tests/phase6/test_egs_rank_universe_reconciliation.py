@@ -31,6 +31,18 @@ def _frame(*codes):
     return pd.DataFrame({"ts_code": list(codes)})
 
 
+def _feature_frame(*codes, total_mv=100.0, l1_name="行业A", l2_name="行业B"):
+    return pd.DataFrame({
+        "ts_code": list(codes),
+        "name": [f"name-{code}" for code in codes],
+        "l1_name": [l1_name] * len(codes),
+        "l2_name": [l2_name] * len(codes),
+        "total_mv": [total_mv] * len(codes),
+        "pct_20d": [1.0] * len(codes),
+        "avg_amount_20d": [1000.0] * len(codes),
+    })
+
+
 class RankUniverseReconciliationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -39,6 +51,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
     def test_expected_l1_l2_exclusions_are_accounted_per_symbol(self) -> None:
         summary, detail = self.egs_main.build_rank_universe_reconciliation(
             df_l0=_frame("A", "B", "C", "D"),
+            feature_source=_feature_frame("A", "B", "C", "D"),
             stages=[
                 ("master_join", _frame("A", "B", "C", "D"), False, "master_join_loss"),
                 ("l1_industry_leader", _frame("A", "C", "D"), True, "l1_industry_leader_elim"),
@@ -81,6 +94,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
     def test_truncated_critical_source_fails_reconciliation(self) -> None:
         summary, _detail = self.egs_main.build_rank_universe_reconciliation(
             df_l0=_frame("A", "B", "C"),
+            feature_source=_feature_frame("A", "B", "C"),
             stages=[
                 ("master_join", _frame("A", "B", "C"), False, "master_join_loss"),
                 ("l5_rank", _frame("A", "B", "C"), False, "l5_unexpected_row_loss"),
@@ -97,6 +111,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
     def test_unexpected_loss_in_scoring_only_stage_fails_reconciliation(self) -> None:
         summary, detail = self.egs_main.build_rank_universe_reconciliation(
             df_l0=_frame("A", "B"),
+            feature_source=_feature_frame("A", "B"),
             stages=[
                 ("master_join", _frame("A", "B"), False, "master_join_loss"),
                 ("l3_scoring", _frame("A"), False, "l3_unexpected_row_loss"),
@@ -148,6 +163,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
     def test_small_but_reconciled_rank_pool_does_not_trigger_legacy_1000_warning(self) -> None:
         summary, _detail = self.egs_main.build_rank_universe_reconciliation(
             df_l0=_frame("A", "B", "C"),
+            feature_source=_feature_frame("A", "B", "C"),
             stages=[
                 ("l1_industry_leader", _frame("A", "B"), True, "l1_industry_leader_elim"),
                 ("l5_rank", _frame("A", "B"), False, "l5_unexpected_row_loss"),
@@ -168,6 +184,7 @@ class RankUniverseReconciliationTest(unittest.TestCase):
     def test_source_coverage_failure_is_a_data_health_error(self) -> None:
         summary, _detail = self.egs_main.build_rank_universe_reconciliation(
             df_l0=_frame("A", "B"),
+            feature_source=_feature_frame("A", "B"),
             stages=[("l5_rank", _frame("A", "B"), False, "l5_unexpected_row_loss")],
             sources={"financial_l0": (_frame("A", "B"), _frame("A"), 1.0)},
         )
@@ -176,6 +193,62 @@ class RankUniverseReconciliationTest(unittest.TestCase):
 
         self.assertEqual(health["overall_status"], "error")
         self.assertIn("rank_source_coverage", {item["check"] for item in health["errors"]})
+
+    def test_feature_source_is_explicit_and_must_cover_post_l0_exactly(self) -> None:
+        with self.assertRaisesRegex(RuntimeError, "coverage mismatch"):
+            self.egs_main.build_rank_universe_reconciliation(
+                df_l0=_frame("A", "B"),
+                feature_source=_feature_frame("A"),
+                stages=[("l5_rank", _frame("A", "B"), False, "l5_unexpected_row_loss")],
+                sources={},
+            )
+
+        duplicate_source = pd.concat([_feature_frame("A"), _feature_frame("A")], ignore_index=True)
+        with self.assertRaisesRegex(RuntimeError, "duplicate ts_code"):
+            self.egs_main.build_rank_universe_reconciliation(
+                df_l0=_frame("A"),
+                feature_source=duplicate_source,
+                stages=[("l5_rank", _frame("A"), False, "l5_unexpected_row_loss")],
+                sources={},
+            )
+
+    def test_production_call_binds_df_master_as_feature_source(self) -> None:
+        source = EGS_SCRIPT.read_text(encoding="utf-8")
+        call_start = source.index("rank_reconciliation, rank_reconciliation_detail = build_rank_universe_reconciliation(")
+        call_end = source.index("    )", call_start)
+        self.assertIn("feature_source=df_master", source[call_start:call_end])
+
+    def test_feature_source_missing_required_column_fails_loudly(self) -> None:
+        source = _feature_frame("A", "B").drop(columns=["l2_name"])
+        with self.assertRaisesRegex(RuntimeError, "missing columns"):
+            self.egs_main.build_rank_universe_reconciliation(
+                df_l0=_frame("A", "B"),
+                feature_source=source,
+                stages=[("l5_rank", _frame("A", "B"), False, "l5_unexpected_row_loss")],
+                sources={},
+            )
+
+    def test_crash_veto_member_quality_gaps_do_not_abort_publish(self) -> None:
+        for source, label in (
+            (_feature_frame("A", total_mv=None), "null total_mv"),
+            (_feature_frame("A", l1_name="未知", l2_name="行业B"), "real L2 with unknown L1"),
+        ):
+            with self.subTest(label=label):
+                summary, detail = self.egs_main.build_rank_universe_reconciliation(
+                    df_l0=_frame("A"),
+                    feature_source=source,
+                    stages=[
+                        ("master_join", _frame("A"), False, "master_join_loss"),
+                        ("l2_quality_risk", _frame(), True, {"A": "l2_crash_veto"}),
+                    ],
+                    sources={},
+                )
+                self.assertEqual(summary["status"], "pass")
+                row = detail.set_index("ts_code").loc["A"]
+                self.assertEqual(row["reason"], "l2_crash_veto")
+                self.assertIn("total_mv", detail.columns)
+                self.assertIn("l1_name", detail.columns)
+                self.assertIn("l2_name", detail.columns)
 
 
 if __name__ == "__main__":

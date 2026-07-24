@@ -6,7 +6,7 @@
   "required": ["schema_name", "schema_version", "as_of", "raw_v14_2_regime", "effective_v14_2_regime", "baseline_policy_id", "baseline_policy_epoch", "candidate_v14_3_raw_regime", "candidate_v14_3_fired_rule", "candidate_policy_id", "candidate_policy_epoch", "baseline_action", "candidate_action", "action_diverges", "m67_provenance", "forward_origin", "forward_eligible", "forward_market_returns", "forward_returns_pending", "backfill_complete", "forward_return_basis", "boundary"],
   "properties": {
     "schema_name": {"const": "a_short_regime_action_comparison_weekly"},
-    "schema_version": {"const": "1.0.0"},
+    "schema_version": {"const": "1.1.0"},
     "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
     "raw_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction", "unknown"]},
     "effective_v14_2_regime": {"enum": ["attack", "shock", "defense", "contraction"]},

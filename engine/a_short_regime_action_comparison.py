@@ -29,6 +29,11 @@ GOVERNANCE_PATH = ROOT / "presets" / "a_short_regime_action_comparison_governanc
 GOVERNANCE_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_action_comparison_governance.schema.json"
 CANDIDATE_EFFECT_SUMMARY_SCHEMA_PATH = ROOT / "schemas" / "a_short_regime_candidate_effect_summary.schema.json"
 CANDIDATE_EFFECT_HORIZONS = ("h5", "h10", "h20")
+ACTION_RECORD_SCHEMA_VERSION = "1.1.0"
+ACTION_FORWARD_ORIGIN_FIELDS = frozenset({
+    "decision_as_of", "run_date", "capture_mode", "price_data_through",
+    "source_receipt_complete", "price_day_latest_settled",
+})
 
 
 def _load_json(path: Path) -> dict:
@@ -158,17 +163,23 @@ def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
         raise ValueError("effective V14.2 regime must be a concrete fail-closed label")
     if not isinstance(forward_origin, dict):
         raise ValueError("forward origin must be an object")
+    missing_origin_fields = sorted(ACTION_FORWARD_ORIGIN_FIELDS - set(forward_origin))
+    if missing_origin_fields:
+        raise ValueError(f"forward origin missing required fields: {missing_origin_fields}")
     decision_as_of = str(forward_origin.get("decision_as_of"))
     run_date = str(forward_origin.get("run_date"))
     if not is_canonical_date(decision_as_of) or not is_canonical_date(run_date):
         raise ValueError("forward origin requires real decision_as_of and run_date")
-    capture_mode = str(forward_origin.get("capture_mode") or
-                       ("live" if decision_as_of >= run_date else "historical_replay"))
-    price_data_through = str(forward_origin.get("price_data_through") or decision_as_of)
+    capture_mode = forward_origin.get("capture_mode")
+    if capture_mode not in {"live", "historical_replay"}:
+        raise ValueError("forward origin capture_mode is invalid")
+    price_data_through = str(forward_origin.get("price_data_through"))
     if not is_canonical_date(price_data_through) or price_data_through > decision_as_of:
         raise ValueError("forward origin price_data_through must be a settled date <= decision_as_of")
-    source_receipt_complete = bool(forward_origin.get("source_receipt_complete", True))
-    price_day_latest_settled = bool(forward_origin.get("price_day_latest_settled", True))
+    source_receipt_complete = forward_origin.get("source_receipt_complete")
+    price_day_latest_settled = forward_origin.get("price_day_latest_settled")
+    if not isinstance(source_receipt_complete, bool) or not isinstance(price_day_latest_settled, bool):
+        raise ValueError("forward origin evidence fields must be booleans")
     # A prospective canonical decision (Sunday->Monday) is live evidence when
     # the source receipt and the independently bound settled-price clock are complete.
     forward_eligible = (
@@ -189,7 +200,7 @@ def build_action_record(*, regime_record: dict, raw_v14_2_regime: str,
     candidate_action = action_for_regime(candidate)
     record = {
         "schema_name": "a_short_regime_action_comparison_weekly",
-        "schema_version": "1.0.0",
+        "schema_version": ACTION_RECORD_SCHEMA_VERSION,
         "as_of": as_of,
         "raw_v14_2_regime": raw_v14_2_regime,
         "effective_v14_2_regime": effective_v14_2_regime,
@@ -264,6 +275,74 @@ def validate_action_record(record: dict) -> None:
         raise ValueError("baseline action does not match its frozen regime matrix")
     if candidate != action_for_regime(record["candidate_v14_3_raw_regime"]):
         raise ValueError("candidate action does not match its frozen regime matrix")
+
+
+def migrate_action_record_from_published_m67(record: dict, *, m67_path: str | Path,
+                                             receipt_path: str | Path) -> dict:
+    """Migrate one pre-clock action row using its hash-bound published M6.7 source.
+
+    This is an explicit one-time data migration, not a runtime legacy fallback.  It refuses
+    to invent clock fields, and it verifies the source receipt identity before deriving the
+    new forward eligibility.
+    """
+    if not isinstance(record, dict):
+        raise ValueError("action record migration requires an object")
+    origin = record.get("forward_origin") or {}
+    if ACTION_FORWARD_ORIGIN_FIELDS.issubset(origin):
+        migrated = dict(record)
+        validate_action_record(migrated)
+        return migrated
+    m67_file = Path(m67_path)
+    receipt_file = Path(receipt_path)
+    raw = m67_file.read_bytes()
+    source_sha256 = hashlib.sha256(raw).hexdigest()
+    expected_sha256 = str((record.get("m67_provenance") or {}).get("source_sha256") or "")
+    if source_sha256 != expected_sha256:
+        raise ValueError("action migration source SHA does not match m67_provenance")
+    m67 = json.loads(raw.decode("utf-8"))
+    lineage = m67.get("run_lineage") or {}
+    source_as_of = str((record.get("m67_provenance") or {}).get("source_as_of") or "")
+    if str(m67.get("as_of") or "") != source_as_of:
+        raise ValueError("action migration M6.7 as_of does not match m67_provenance")
+    receipt = _load_json(receipt_file)
+    if (
+        receipt.get("stage_status") != "complete"
+        or str(receipt.get("as_of")) != source_as_of
+        or receipt.get("run_id") != lineage.get("run_id")
+        or receipt.get("candidate_digest") != lineage.get("candidate_digest")
+    ):
+        raise ValueError("action migration receipt is not bound to the published M6.7 source")
+    freshness = lineage.get("price_freshness") or {}
+    capture_mode = "live" if str(origin.get("decision_as_of")) >= str(origin.get("run_date")) else "historical_replay"
+    price_data_through = str(freshness.get("price_data_through") or "")
+    source_receipt_complete = True
+    if freshness.get("mode") == "intraday_prior_settled":
+        price_day_latest_settled = (
+            str(freshness.get("accepted_prior_settled_date") or "") == price_data_through
+            and price_data_through < str(origin.get("decision_as_of"))
+        )
+    elif freshness.get("mode") == "strict_as_of":
+        price_day_latest_settled = price_data_through == str(origin.get("decision_as_of"))
+    else:
+        raise ValueError("action migration M6.7 price freshness mode is unsupported")
+    migrated = dict(record)
+    migrated["schema_version"] = ACTION_RECORD_SCHEMA_VERSION
+    migrated["forward_origin"] = {
+        "decision_as_of": str(origin.get("decision_as_of")),
+        "run_date": str(origin.get("run_date")),
+        "capture_mode": capture_mode,
+        "price_data_through": price_data_through,
+        "source_receipt_complete": source_receipt_complete,
+        "price_day_latest_settled": price_day_latest_settled,
+    }
+    migrated["forward_eligible"] = (
+        capture_mode == "live"
+        and migrated["forward_origin"]["decision_as_of"] >= migrated["forward_origin"]["run_date"]
+        and source_receipt_complete
+        and price_day_latest_settled
+    )
+    validate_action_record(migrated)
+    return migrated
 
 
 def merge_action_records(existing: list[dict], current: dict) -> list[dict]:

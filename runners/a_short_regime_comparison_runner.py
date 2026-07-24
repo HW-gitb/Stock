@@ -764,24 +764,28 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
             m67_source = m67_provenance(str(m67_report_path), as_of=as_of)
             m67_doc = json.loads(Path(m67_report_path).read_text(encoding="utf-8"))
             m67_lineage = m67_doc.get("run_lineage") or {}
-            # Legacy fixtures had no three-clock fields.  They remain readable for
-            # historical tests; every new weekly artifact must carry a complete receipt.
-            legacy_clockless = not (m67_doc.get("price_data_through") or m67_lineage.get("price_data_through"))
-            source_price_data_through = str(
-                m67_doc.get("price_data_through")
-                or m67_lineage.get("price_data_through")
-                or (action_decision_as_of if legacy_clockless else as_of)
-            )
+            price_freshness = m67_lineage.get("price_freshness") or {}
+            source_price_data_through = str(price_freshness.get("price_data_through") or "")
+            if price_freshness.get("mode") not in {"strict_as_of", "intraday_prior_settled"} \
+                    or not source_price_data_through:
+                raise ValueError("D2 M6.7 source lacks a complete price freshness clock")
             receipt_path = Path(m67_report_path).with_name("weekly_m67.receipt.json")
-            source_receipt_complete = legacy_clockless
+            source_receipt_complete = False
             if receipt_path.is_file():
                 receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
                 source_receipt_complete = (
                     receipt.get("stage_status") == "complete"
                     and receipt.get("as_of") == as_of
-                    and receipt.get("run_id") == m67_source.get("run_id")
-                    and receipt.get("candidate_digest") == m67_source.get("candidate_digest")
+                    and receipt.get("run_id") == m67_lineage.get("run_id")
+                    and receipt.get("candidate_digest") == m67_lineage.get("candidate_digest")
                 )
+            if price_freshness.get("mode") == "intraday_prior_settled":
+                price_day_latest_settled = (
+                    str(price_freshness.get("accepted_prior_settled_date") or "") == source_price_data_through
+                    and source_price_data_through < str(action_decision_as_of)
+                )
+            else:
+                price_day_latest_settled = source_price_data_through == str(action_decision_as_of)
             current_action = build_action_record(
                 regime_record=out["comparison_record"], raw_v14_2_regime=str(raw_v14_2_regime),
                 effective_v14_2_regime=v14_2_regime,
@@ -792,7 +796,7 @@ def run_regime_step(*, as_of: str, trade_calendar, v14_2_regime: str,
                                                  else "historical_replay"),
                                 "price_data_through": source_price_data_through,
                                 "source_receipt_complete": source_receipt_complete,
-                                "price_day_latest_settled": source_price_data_through <= str(action_decision_as_of)},
+                                "price_day_latest_settled": price_day_latest_settled},
             )
             actions = merge_action_records(refreshed, current_action)
         else:

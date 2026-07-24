@@ -210,10 +210,27 @@ def detect_crash_codes(daily: pd.DataFrame, codes: set[str], confirmed_days: int
     return hits
 
 
+def _has_real_industry_value(value) -> bool:
+    if value is None or pd.isna(value):
+        return False
+    return str(value).strip().lower() not in {"", "未知", "nan", "none", "null", "na"}
+
+
+def _normalize_industry_value(value):
+    if not _has_real_industry_value(value):
+        return pd.NA
+    return str(value).strip()
+
+
 def match_controls(member_codes: list[str], control_codes: list[str], features: pd.DataFrame,
                    count: int = CONTROL_COUNT) -> dict[str, list[str]]:
     """Deterministic nearest controls: L2 first, then L1, then the full ranked pool."""
     frame = features.copy()
+    for col in ("l1_name", "l2_name"):
+        if col not in frame.columns:
+            frame[col] = pd.NA
+        else:
+            frame[col] = frame[col].map(_normalize_industry_value)
     for col in ("total_mv", "pct_20d", "avg_amount_20d"):
         frame[col] = pd.to_numeric(frame.get(col), errors="coerce")
     transformed = pd.DataFrame(index=frame.index)
@@ -233,9 +250,28 @@ def match_controls(member_codes: list[str], control_codes: list[str], features: 
             result[code] = controls[:count]
             continue
         l2, l1 = frame.at[code, "l2_name"], frame.at[code, "l1_name"]
-        l2_pool = [c for c in controls if frame.at[c, "l2_name"] == l2 and pd.notna(l2)]
-        l1_pool = [c for c in controls if frame.at[c, "l1_name"] == l1 and pd.notna(l1)]
-        pool = l2_pool if len(l2_pool) >= count else (l1_pool if len(l1_pool) >= count else controls)
+        l2_pool = [
+            c for c in controls
+            if _has_real_industry_value(l2)
+            and _has_real_industry_value(frame.at[c, "l2_name"])
+            and frame.at[c, "l2_name"] == l2
+        ]
+        l1_pool = [
+            c for c in controls
+            if _has_real_industry_value(l1)
+            and _has_real_industry_value(frame.at[c, "l1_name"])
+            and frame.at[c, "l1_name"] == l1
+        ]
+        valid_controls = [
+            c for c in controls
+            if _has_real_industry_value(frame.at[c, "l1_name"])
+            or _has_real_industry_value(frame.at[c, "l2_name"])
+        ]
+        pool = l2_pool if len(l2_pool) >= count else (
+            l1_pool if len(l1_pool) >= count else (
+                valid_controls if len(valid_controls) >= count else controls
+            )
+        )
         target = transformed.loc[code].to_numpy(dtype=float)
         ranked = sorted(((float(np.linalg.norm(transformed.loc[c].to_numpy(dtype=float) - target)), c)
                          for c in pool), key=lambda item: (item[0], item[1]))

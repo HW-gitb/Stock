@@ -9,8 +9,12 @@ from engine.a_short_regime_action_comparison import (
     build_action_record, m67_provenance, merge_action_records, summarize_action_records,
     validate_action_record, candidate_effect_eligibility, build_candidate_effect_record,
     summarize_candidate_effect_records, candidate_effect_policy_fingerprint, validate_candidate_effect_summary,
+    migrate_action_record_from_published_m67, ACTION_RECORD_SCHEMA_VERSION,
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def _regime_record(*, as_of="20260714", raw="defense", returns=None):
@@ -25,7 +29,15 @@ class RegimeActionComparisonTests(unittest.TestCase):
         return {"source_schema_name": "a_short_weekly_report", "source_as_of": "20260714", "source_sha256": "a" * 64, "candidate_build_count": 2}
 
     def _origin(self, *, decision_as_of="20260714", run_date=None, **overrides):
-        origin = {"decision_as_of": decision_as_of, "run_date": run_date or decision_as_of}
+        actual_run_date = run_date or decision_as_of
+        origin = {
+            "decision_as_of": decision_as_of,
+            "run_date": actual_run_date,
+            "capture_mode": "live" if decision_as_of >= actual_run_date else "historical_replay",
+            "price_data_through": decision_as_of,
+            "source_receipt_complete": True,
+            "price_day_latest_settled": True,
+        }
         origin.update(overrides)
         return origin
 
@@ -63,6 +75,59 @@ class RegimeActionComparisonTests(unittest.TestCase):
         row["forward_eligible"] = True
         with self.assertRaises(ValueError):
             validate_action_record(row)
+
+    def test_build_rejects_missing_clock_fields_instead_of_defaulting_evidence_true(self):
+        origin = self._origin()
+        origin.pop("source_receipt_complete")
+        with self.assertRaisesRegex(ValueError, "missing required fields"):
+            build_action_record(
+                regime_record=_regime_record(), raw_v14_2_regime="shock",
+                effective_v14_2_regime="shock", m67_source=self._source(),
+                forward_origin=origin,
+            )
+
+    def test_tracked_legacy_action_row_migrates_from_hash_bound_m67_source(self):
+        records_path = ROOT / "research" / "results" / "a_short" / "regime_action_comparison_records.json"
+        m67_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json"
+        receipt_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.receipt.json"
+        records = json.loads(records_path.read_text(encoding="utf-8"))
+        legacy = next(row for row in records if row["as_of"] == "20260717")
+        legacy = dict(legacy)
+        legacy["schema_version"] = "1.0.0"
+        legacy["forward_origin"] = {"decision_as_of": "20260720", "run_date": "20260719"}
+        migrated = migrate_action_record_from_published_m67(
+            legacy, m67_path=m67_path, receipt_path=receipt_path
+        )
+        self.assertEqual(migrated["schema_version"], ACTION_RECORD_SCHEMA_VERSION)
+        self.assertEqual(migrated["forward_origin"], {
+            "decision_as_of": "20260720", "run_date": "20260719", "capture_mode": "live",
+            "price_data_through": "20260717", "source_receipt_complete": True,
+            "price_day_latest_settled": True,
+        })
+        self.assertTrue(migrated["forward_eligible"])
+        validate_action_record(migrated)
+
+    def test_legacy_migration_rejects_source_or_receipt_mismatch(self):
+        records_path = ROOT / "research" / "results" / "a_short" / "regime_action_comparison_records.json"
+        m67_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.json"
+        receipt_path = ROOT / "research" / "results" / "a_short" / "20260720" / "weekly_m67.receipt.json"
+        records = json.loads(records_path.read_text(encoding="utf-8"))
+        legacy = dict(next(row for row in records if row["as_of"] == "20260717"))
+        legacy["schema_version"] = "1.0.0"
+        legacy["forward_origin"] = {"decision_as_of": "20260720", "run_date": "20260719"}
+        bad_source = dict(legacy)
+        bad_source["m67_provenance"] = dict(legacy["m67_provenance"], source_sha256="0" * 64)
+        with self.assertRaisesRegex(ValueError, "source SHA"):
+            migrate_action_record_from_published_m67(bad_source, m67_path=m67_path, receipt_path=receipt_path)
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_m67 = Path(tmp) / "weekly_m67.json"
+            tmp_receipt = Path(tmp) / "weekly_m67.receipt.json"
+            tmp_m67.write_bytes(m67_path.read_bytes())
+            receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+            receipt["candidate_digest"] = "0" * 64
+            tmp_receipt.write_text(json.dumps(receipt), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "receipt"):
+                migrate_action_record_from_published_m67(legacy, m67_path=tmp_m67, receipt_path=tmp_receipt)
 
     def test_same_week_conflict_is_rejected(self):
         a = build_action_record(regime_record=_regime_record(), raw_v14_2_regime="shock", effective_v14_2_regime="shock", m67_source=self._source(), forward_origin=self._origin())
