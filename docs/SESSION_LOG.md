@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-24 - Claude Code review PASS (A-short fifth knife: forward-evidence epoch freeze — step only)
+
+- **Verdict/Action**: PASS (freeze-packet step only; `R-ASHORT-FIFTH-KNIFE-FORWARD-EVIDENCE-EPOCH` stays OPEN pending real ≥12-month forward evidence + ship-gate). The epoch-freeze artifact is correct, integrity-verified, and machine-forbidden from overclaiming; disposition stays `risk_filter_only`. Detail in `docs/system_risk_register.md`.
+- **Required**: None for this step.
+- **Verify**: Pinned main Python; `git_commit`==HEAD `f163dea…`; all 8 `frozen_contracts` sha256 recompute-match the real files; `record_sha256` self-hash OK; schema pins the honesty flags as consts (`additionalProperties:false`) so it cannot overclaim; freeze schema test = 2 OK; no leak. No agent/full lane (schema-first no-code). No provider/live-capture/account/order. Detail in register.
+- **Next**: 冻结包已闭并提交；R-ASHORT-FIFTH-KNIFE 仍开 = 攒 ≥12 月前向证据 + ship-gate 判（非代码；何时起时钟由用户定）。
+
+## 2026-07-24 - Codex repair (A-short fifth knife: forward-evidence epoch freeze)
+
+- **Verdict/Action**: Frozen the post-fourth-knife forward-evidence epoch as a schema-validated, self-hashed packet; this is the non-code first step of knife 5. The live disposition remains `risk_filter_only`; no effectiveness or ship-gate claim is made.
+- **Required**: The packet remains open until at least 12 months of immutable live forward captures/outcomes are accumulated. Historical replay is audit-only and cannot be mixed into this epoch; parameter changes require a new epoch.
+- **Verify**: Pinned main Python; freeze schema/self-hash test plus V14.3/P4/effect-contract/route-doc regressions = 79 OK; PowerShell parse and `git diff --check` passed. No provider, live capture, account, order, broker, or automatic switch ran.
+- **Artifact**: `docs/a_short_fifth_knife_forward_evidence_freeze_20260724.json`; schema `schemas/a_short_fifth_knife_forward_evidence_freeze.schema.json`; test `tests/schema/test_a_short_fifth_knife_forward_evidence_freeze_schema.py`.
+- **Next**: Claude Code：复审第五刀冻结包；PASS 后按项目流程提交。前向周跑继续受该 epoch、canonical cohort、三时钟、成本/未成交/cash drag/退出/基准和 regime/month/industry 记录约束。
+
 ## 2026-07-24 - Claude Code re-review PASS (A-short fourth knife: effect-contract reseal)
 
 - **Verdict/Action**: PASS; `R-ASHORT-FOURTH-KNIFE-P4-FULL-CHAIN-AND-FINAL-VERDICT` resolved (detail in `docs/system_risk_register.md`). Reseal is hash-only, no wiring/mapping/fail-closed/privacy change; #7 launcher wiring + #8 terminal verdict closed, P4 comparison-only. Reviewer auto-commits per project flow.

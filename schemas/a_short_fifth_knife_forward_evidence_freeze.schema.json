@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "a_short_fifth_knife_forward_evidence_freeze",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name",
+    "schema_version",
+    "freeze_id",
+    "freeze_date",
+    "source_revision",
+    "evidence_epoch",
+    "frozen_contracts",
+    "tracks",
+    "capture_contract",
+    "ship_gate",
+    "boundary",
+    "status",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_fifth_knife_forward_evidence_freeze"},
+    "schema_version": {"const": "1.0.0"},
+    "freeze_id": {"const": "a_short_fifth_knife_20260724_v1"},
+    "freeze_date": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "source_revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["git_commit", "scope"],
+      "properties": {
+        "git_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "scope": {"const": "fourth_knife_passed_code_and_contracts_before_this_freeze_packet"}
+      }
+    },
+    "evidence_epoch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["epoch_id", "opened_by", "prior_evidence_policy", "parameter_change_policy"],
+      "properties": {
+        "epoch_id": {"const": "a_short_fifth_knife_20260724_v1"},
+        "opened_by": {"const": "fourth_knife_p4_pass"},
+        "prior_evidence_policy": {"const": "audit_only_not_mixed_with_this_epoch"},
+        "parameter_change_policy": {"const": "new_epoch_required_no_post_hoc_threshold_changes"}
+      }
+    },
+    "frozen_contracts": {
+      "type": "array",
+      "minItems": 8,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "path", "sha256"],
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+          "semantic_fingerprint": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+        }
+      }
+    },
+    "tracks": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["track_id", "role", "rule_change_policy", "production_effect"],
+        "properties": {
+          "track_id": {"enum": ["main_baseline", "v14_3_comparison", "p4_comparison"]},
+          "role": {"enum": ["main_system", "comparison_only"]},
+          "rule_change_policy": {"const": "fixed_for_epoch"},
+          "production_effect": {"const": "no_automatic_switch_and_no_full_size_promotion"}
+        }
+      }
+    },
+    "capture_contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canonical_cohort_policy",
+        "capture_mode",
+        "historical_replay_counts_as_forward",
+        "clock_contract",
+        "outcome_horizons_trading_days",
+        "benchmarks",
+        "required_capture_fields",
+        "immutability_policy"
+      ],
+      "properties": {
+        "canonical_cohort_policy": {"const": "one_canonical_cohort_per_settled_trading_week"},
+        "capture_mode": {"const": "live_only"},
+        "historical_replay_counts_as_forward": {"const": false},
+        "clock_contract": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["decision_as_of", "price_data_through", "outcome_as_of"],
+          "properties": {
+            "decision_as_of": {"const": "selection_decision_date"},
+            "price_data_through": {"const": "official_last_settled_price_date"},
+            "outcome_as_of": {"const": "actual_settlement_date_for_each_horizon"}
+          }
+        },
+        "outcome_horizons_trading_days": {
+          "type": "array",
+          "const": [5, 10, 20]
+        },
+        "benchmarks": {
+          "type": "array",
+          "const": ["csi1000", "csi300"]
+        },
+        "required_capture_fields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string"},
+          "minItems": 10
+        },
+        "immutability_policy": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["weekly_capture", "outcome_update", "epoch_mixing"],
+          "properties": {
+            "weekly_capture": {"const": "immutable_after_publish"},
+            "outcome_update": {"const": "append_only_settlement_update_bound_to_capture"},
+            "epoch_mixing": {"const": "reject"}
+          }
+        }
+      }
+    },
+    "ship_gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "monthly_alpha_t_stat_min", "sharpe_min", "max_drawdown_pct_max", "forward_live_months_min", "observed_forward_live_months"],
+      "properties": {
+        "status": {"const": "not_evaluable_forward_evidence_insufficient"},
+        "monthly_alpha_t_stat_min": {"const": 2.0},
+        "sharpe_min": {"const": 1.0},
+        "max_drawdown_pct_max": {"const": 15.0},
+        "forward_live_months_min": {"const": 12},
+        "observed_forward_live_months": {"const": 0}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["effectiveness_claimed", "current_disposition", "provider_calls_performed", "live_capture_performed", "automatic_orders_allowed", "production_promotion_allowed"],
+      "properties": {
+        "effectiveness_claimed": {"const": false},
+        "current_disposition": {"const": "risk_filter_only"},
+        "provider_calls_performed": {"const": false},
+        "live_capture_performed": {"const": false},
+        "automatic_orders_allowed": {"const": false},
+        "production_promotion_allowed": {"const": false}
+      }
+    },
+    "status": {"const": "frozen_not_started"},
+    "record_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

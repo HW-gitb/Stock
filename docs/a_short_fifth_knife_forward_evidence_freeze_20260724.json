@@ -1,0 +1,79 @@
+{
+  "schema_name": "a_short_fifth_knife_forward_evidence_freeze",
+  "schema_version": "1.0.0",
+  "freeze_id": "a_short_fifth_knife_20260724_v1",
+  "freeze_date": "20260724",
+  "source_revision": {
+    "git_commit": "f163dea08986313945a85a72866ba3153a028db6",
+    "scope": "fourth_knife_passed_code_and_contracts_before_this_freeze_packet"
+  },
+  "evidence_epoch": {
+    "epoch_id": "a_short_fifth_knife_20260724_v1",
+    "opened_by": "fourth_knife_p4_pass",
+    "prior_evidence_policy": "audit_only_not_mixed_with_this_epoch",
+    "parameter_change_policy": "new_epoch_required_no_post_hoc_threshold_changes"
+  },
+  "frozen_contracts": [
+    {"name": "a_short_screening_runtime_policy", "path": "presets/a_short_screening_threshold_governance_20260602.json", "sha256": "5ad73dd09a100175f4d1b7317a5b1f730c8955a58ad81567f87d0964121eb500", "semantic_fingerprint": "935abac736f77a65390c22b71b2351258cbc36a80c7dd044ffca90531a9474e7"},
+    {"name": "a_short_m67_runtime_policy", "path": "presets/a_short_m67_runtime_policy_20260715.json", "sha256": "98230b31802d465cbe932b6de3e9f85d82078277074dd768d1a01eb7c253e3a0"},
+    {"name": "v14_3_action_comparison_governance", "path": "presets/a_short_regime_action_comparison_governance_20260714.json", "sha256": "17d8969c72706e7b80a10565110c7777c4595cd92ed07ecc8278f91ed987093d", "semantic_fingerprint": "f7d2f6f208c737a5b4bb01603ce7f59d4f3d11d513124948c29a5968fab8db69"},
+    {"name": "v14_3_action_comparison_schema", "path": "schemas/a_short_regime_action_comparison_governance.schema.json", "sha256": "eca9464cce833143b8d5871922111f1eb30615365b2ca704c50dd63fa2167194"},
+    {"name": "v14_3_weekly_capture_schema", "path": "schemas/a_short_regime_action_comparison_weekly.schema.json", "sha256": "e3b0fa87ae8594d90f2276f98b085c7ceb94292276c620ddb62e4e82c14e11e4"},
+    {"name": "p4a_overlay_epoch", "path": "engine/a_short_overlay_adjudication.py", "sha256": "8fd84a37a3718d92404b1c991d9cc9bcf9cc8d1e5ac8bcf03a8b9a7c0da4a160", "semantic_fingerprint": "49a1f30e7ab964fea434f28fa2aae1cb4aa39e6d9d6fde4b064f5fc20a324838"},
+    {"name": "m67_effect_contract", "path": "schemas/a_short_m67_effect_contract.json", "sha256": "44c8dcbbb5fafe106e586df5af7aee453c59c7587ca0e6cd4da054fd2e02f233"},
+    {"name": "weekly_report_schema", "path": "schemas/a_short_weekly_report.schema.json", "sha256": "7064569f4dca787e21254f7b3ae424ffba24020e888ec661569a45fce80bfb04"}
+  ],
+  "tracks": [
+    {"track_id": "main_baseline", "role": "main_system", "rule_change_policy": "fixed_for_epoch", "production_effect": "no_automatic_switch_and_no_full_size_promotion"},
+    {"track_id": "v14_3_comparison", "role": "comparison_only", "rule_change_policy": "fixed_for_epoch", "production_effect": "no_automatic_switch_and_no_full_size_promotion"},
+    {"track_id": "p4_comparison", "role": "comparison_only", "rule_change_policy": "fixed_for_epoch", "production_effect": "no_automatic_switch_and_no_full_size_promotion"}
+  ],
+  "capture_contract": {
+    "canonical_cohort_policy": "one_canonical_cohort_per_settled_trading_week",
+    "capture_mode": "live_only",
+    "historical_replay_counts_as_forward": false,
+    "clock_contract": {
+      "decision_as_of": "selection_decision_date",
+      "price_data_through": "official_last_settled_price_date",
+      "outcome_as_of": "actual_settlement_date_for_each_horizon"
+    },
+    "outcome_horizons_trading_days": [5, 10, 20],
+    "benchmarks": ["csi1000", "csi300"],
+    "required_capture_fields": [
+      "candidate_snapshot",
+      "blocked_reasons",
+      "recommended_action",
+      "unfilled_status",
+      "cash_drag",
+      "exit_results",
+      "benchmark_returns",
+      "costs",
+      "slippage",
+      "source_receipts",
+      "regime_month_industry_keys"
+    ],
+    "immutability_policy": {
+      "weekly_capture": "immutable_after_publish",
+      "outcome_update": "append_only_settlement_update_bound_to_capture",
+      "epoch_mixing": "reject"
+    }
+  },
+  "ship_gate": {
+    "status": "not_evaluable_forward_evidence_insufficient",
+    "monthly_alpha_t_stat_min": 2.0,
+    "sharpe_min": 1.0,
+    "max_drawdown_pct_max": 15.0,
+    "forward_live_months_min": 12,
+    "observed_forward_live_months": 0
+  },
+  "boundary": {
+    "effectiveness_claimed": false,
+    "current_disposition": "risk_filter_only",
+    "provider_calls_performed": false,
+    "live_capture_performed": false,
+    "automatic_orders_allowed": false,
+    "production_promotion_allowed": false
+  },
+  "status": "frozen_not_started",
+  "record_sha256": "b185b5552cbc8152ad9b2ebfd18a56c188b559a03c259c9a63c5d9c60a10b166"
+}
