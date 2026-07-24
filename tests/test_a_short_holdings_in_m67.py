@@ -110,6 +110,14 @@ class EgsFullAdapterTests(unittest.TestCase):
     def test_row_to_candidate_derives_st_and_suspension(self):
         st = egs_full_row_to_candidate(_egs_full_row(name="ST 某某"))
         self.assertTrue(st["event_risk"]["delisting"]["st_flag"])
+        delisted = egs_full_row_to_candidate(_egs_full_row(name="康美退"))
+        self.assertTrue(delisted["event_risk"]["delisting"]["delisting_warning"])
+        ordinary = egs_full_row_to_candidate(_egs_full_row(name="退货公司"))
+        self.assertFalse(ordinary["event_risk"]["delisting"]["delisting_warning"])
+        historical = egs_full_row_to_candidate(
+            _egs_full_row(name="康美股份", list_status="D"), historical=True
+        )
+        self.assertFalse(historical["event_risk"]["delisting"]["delisting_warning"])
         susp = egs_full_row_to_candidate(_egs_full_row(list_status="P"))
         self.assertTrue(susp["event_risk"]["suspension"]["is_suspended"])
         reduce = egs_full_row_to_candidate(_egs_full_row(reduce_deduct="-3"))

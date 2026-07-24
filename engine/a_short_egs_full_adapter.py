@@ -20,6 +20,8 @@ from __future__ import annotations
 import csv
 from pathlib import Path
 
+from engine.a_short_delisting import derive_delisting_flags
+
 ROOT = Path(__file__).resolve().parents[1]
 
 # 必需表头(adapter 映射依赖的列);缺任一 → 视为 egs_full 契约漂移,显式失败而非静默错位。
@@ -75,7 +77,7 @@ def _b(row: dict, key: str) -> bool:
     return (row.get(key) or "").strip().lower() == "true"
 
 
-def egs_full_row_to_candidate(row: dict) -> dict:
+def egs_full_row_to_candidate(row: dict, *, historical: bool = False) -> dict:
     """把一行 egs_full 映射成 normalize_candidate 能消费的候选 dict。
 
     只映射含义明确的列。**不映射的字段一律不写入**(下游按缺失/保守处理),不伪造"安全":
@@ -83,12 +85,10 @@ def egs_full_row_to_candidate(row: dict) -> dict:
     - `industry_trend`(顺/逆风)egs_full 无此判定 → 不在此给出(由调用方按 neutral 默认,非本 adapter 伪造)。
     """
     name = (row.get("name") or "").strip()
-    # ST/退市名:A 股 ST/退市在证券简称里(ST/*ST/退),egs_full 无独立 st_flag 列 → 从 name 派生(可靠)。
-    st_flag = ("ST" in name.upper()) or ("退" in name)
+    delisting_flags = derive_delisting_flags(row, historical=historical)
     # 停牌/退市:list_status L=上市、P=暂停、D=退市;非 L 即非正常交易。
     list_status = (row.get("list_status") or "").strip().upper()
     is_suspended = list_status not in ("", "L")
-    delist_warning = list_status == "D" or bool((row.get("delist_date") or "").strip())
     # 减持:egs_full `reduce_deduct` 非 0 视为有减持扣分信号(best-effort;无独立 active_plan 列)。
     reduce_deduct = _f(row, "reduce_deduct")
     holder_reduction_active = bool(reduce_deduct)
@@ -104,7 +104,8 @@ def egs_full_row_to_candidate(row: dict) -> dict:
                           "is_breakout": _b(row, "is_breakout"), "vol_confirm": _b(row, "vol_confirm"),
                           "has_crash_veto": _b(row, "has_crash_veto"), "is_lock": _b(row, "is_lock")},
         "event_risk": {"holder_reduction": {"active_plan": holder_reduction_active},
-                       "delisting": {"st_flag": st_flag, "delisting_warning": delist_warning},
+                       "delisting": {"st_flag": delisting_flags["st_flag"],
+                                      "delisting_warning": delisting_flags["delisting_warning"]},
                        "suspension": {"is_suspended": is_suspended}},
         "liquidity": {"avg_amount_5d": _f(row, "avg_amount_5d"), "avg_amount_20d": _f(row, "avg_amount_20d")},
         # 行业上下文(供展示;industry_trend 顺逆风 egs_full 无,不在此伪造)

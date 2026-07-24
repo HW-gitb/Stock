@@ -147,6 +147,7 @@ from engine.a_short_rule6_evaluation import (
     evaluate_short_selling_surge,
     evaluate_volume_stall,
 )
+from engine.a_short_delisting import derive_delisting_flags
 
 TOKEN = os.environ.get("TUSHARE_TOKEN")
 if not TOKEN and not any(arg in ("-h", "--help") for arg in sys.argv[1:]):
@@ -483,6 +484,11 @@ def _row_get(row, key, default=None):
     value = _json_value(row.get(key))
     return default if value is None else value
 
+
+def _historical_replay_mode():
+    """Whether the current EGS invocation is replaying an as-of date."""
+    return TODAY < a_share_market_date()
+
 def _board_from_code(ts_code):
     symbol = str(ts_code).split(".")[0]
     if symbol.startswith(("300", "301")):
@@ -546,6 +552,7 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
     suspension_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("suspension") or {})
     unlock_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("unlock") or {})
     reduction_health = dict(_LAST_HARD_VETO_SOURCE_HEALTH.get("holder_reduction") or {})
+    delisting_flags = derive_delisting_flags(row, historical=_historical_replay_mode())
 
     rule6_checks = [
         _rule_check(
@@ -817,8 +824,8 @@ def _candidate_from_row(row, rank, final_codes, latest_td, unlock_set, suspended
                 "observed_at": suspension_health.get("observed_at"),
             },
             "delisting": {
-                "st_flag": False,
-                "delisting_warning": False,
+                "st_flag": delisting_flags["st_flag"],
+                "delisting_warning": delisting_flags["delisting_warning"],
                 "non_standard_audit": None,
                 "negative_net_asset": None,
             },
@@ -2054,7 +2061,7 @@ def get_stock_list():
     """
     # Historical rows have PIT-replaced names; current rows deliberately keep
     # stock_basic names.  They must never share a cache entry.
-    mode = "hist" if TODAY < a_share_market_date() else "cur"
+    mode = "hist" if _historical_replay_mode() else "cur"
     key = f"stock_list_{TODAY}_v4_{mode}"
     cached = load_cache(key)
     if cached is not None:
@@ -2069,12 +2076,30 @@ def get_stock_list():
     if not frames:
         raise RuntimeError("股票总表获取失败")
     df = pd.concat(frames, ignore_index=True)
+    required_columns = {"ts_code", "name", "list_date", "delist_date", "list_status"}
+    missing_columns = sorted(required_columns - set(df.columns))
+    if missing_columns:
+        raise RuntimeError(
+            "stock_basic payload missing delisting-safety columns: " + ",".join(missing_columns)
+        )
+    # Tushare can expose the same code in multiple status queries.  Prefer the
+    # most restrictive status before applying the as-of date filter, otherwise
+    # the initial L row can hide a D/P row and let a delisting escape L0.
+    status_priority = {"D": 0, "P": 1, "L": 2}
+    df["_status_priority"] = (
+        df["list_status"].fillna("").astype(str).str.upper().map(status_priority).fillna(-1)
+    )
+    df = (
+        df.sort_values(["ts_code", "_status_priority"], kind="stable")
+        .drop_duplicates(subset=["ts_code"], keep="first")
+        .drop(columns=["_status_priority"])
+        .reset_index(drop=True)
+    )
     if "list_date" in df.columns:
         df = df[df["list_date"].fillna("") <= TODAY].copy()
     if "delist_date" in df.columns:
         delist = df["delist_date"].fillna("")
         df = df[(delist == "") | (delist > TODAY)].copy()
-    df = df.drop_duplicates(subset=["ts_code"], keep="first").reset_index(drop=True)
     if mode == "hist":
         historical_names = _historical_name_map(df)
         df["name"] = df["ts_code"].map(historical_names)
@@ -3561,6 +3586,9 @@ def precompute_stock_stats(codes, all_daily):
 # §4 L0 过滤
 # ═══════════════════════════════════════════════════
 def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted_set):
+    missing_columns = sorted({"ts_code", "name"} - set(df_stocks.columns))
+    if missing_columns:
+        raise RuntimeError("L0 input missing delisting-safety columns: " + ",".join(missing_columns))
     df = df_stocks.copy()
     n0 = len(df)
 
@@ -3569,7 +3597,22 @@ def filter_l0(df_stocks, stats_df, unlock_set, red_dict, suspended_set, relisted
     # **B股(沪900·深200)**/畸形码——比逐个加排除前缀(原 `~startswith(300/301/688/689/920/900/200)`)更彻底:
     # 畸形码(如 600ABC.SH)、未来新非主板前缀都拒,_board_from_code 之后只会见到主板码。
     df = df[df["ts_code"].map(is_a_share_main_board)].copy()
-    df = df[~df["name"].str.contains(r"ST|退市|暂停", na=False, case=False, regex=True)].copy()
+    delisting = df.apply(
+        lambda row: derive_delisting_flags(row, historical=_historical_replay_mode()),
+        axis=1,
+        result_type="expand",
+    )
+    # Unknown status is never a safe pass-through.  Historical rows use only
+    # the already PIT-resolved name; live rows additionally require list_status.
+    safe_status = (
+        delisting["known"].astype(bool)
+        & ~delisting["st_flag"].fillna(True).astype(bool)
+        & ~delisting["delisting_warning"].fillna(True).astype(bool)
+    )
+    df = df[safe_status].copy()
+    df = df[~df["name"].fillna("").astype(str).str.contains("暂停上市", regex=False)].copy()
+    if not _historical_replay_mode() and "list_status" in df.columns:
+        df = df[df["list_status"].fillna("").astype(str).str.upper().ne("P")].copy()
 
     if suspended_set: df = df[~df["ts_code"].isin(suspended_set)].copy()
     if relisted_set:  df = df[~df["ts_code"].isin(relisted_set)].copy()

@@ -57,6 +57,7 @@ from engine.a_short_regulatory_advisory import (
 )
 from engine.a_short_tushare_client import is_retryable_tushare_error
 from engine.a_short_observability import safe_exception_summary  # noqa: E402
+from engine.a_share_market_clock import a_share_market_date  # noqa: E402
 
 _RUNTIME_CONFIGURATION = load_runtime_configuration()
 _WEEKLY_WINDOWS = _RUNTIME_CONFIGURATION["m67"]["weekly_windows"]
@@ -483,7 +484,10 @@ def _build_holdings(acct, candidate_codes, as_of, price_provider, iv_pct, accoun
             continue
         row = egs_full.get(code)
         if row is not None:
-            cand = egs_full_row_to_candidate(row)                 # Tier-2: 复用本轮 EGS 评分/风险
+            cand = egs_full_row_to_candidate(
+                row,
+                historical=str(as_of) < str(a_share_market_date()),
+            )                                                        # Tier-2: 复用本轮 EGS 评分/风险
             rs = "account_position_egs_full"
         else:
             cand = {"ts_code": code, "name": str(p.get("name") or "")}  # Tier-3: 粗筛未覆盖,无 EGS 数据
@@ -576,8 +580,16 @@ def normalize_candidate(cand: dict, price_series: list, overlay_row: dict, iv_pc
                     "suspended": bool(susp.get("is_suspended")), "hard_veto": bool(d.get("hard_veto"))},
         # regulatory_legacy_vetoed 恒 False:EGS Stage3 CNINFO REGULATOR-VETO 在上游已剔除被否票
         # (§10),analysis_input 里的票均已过 cninfo;契约无顶层 veto 字段,pipeline 不再二次硬杀。
+        # Nullable delisting fields represent unknown source facts.  Unknown
+        # remains dangerous at this second line of defense: an L0-bypassing
+        # candidate must not become safe because bool(None) is false.
         "event": {"holder_reduction_active": bool(hr.get("active_plan")),
-                  "st_or_delisting": bool(delist.get("st_flag") or delist.get("delisting_warning")),
+                  "st_or_delisting": (
+                      True
+                      if delist.get("st_flag") is None
+                      or delist.get("delisting_warning") is None
+                      else bool(delist.get("st_flag") or delist.get("delisting_warning"))
+                  ),
                   "regulatory_legacy_vetoed": False},
         "rule6_checks": materialize_50etf_iv_rule6_check(ev.get("rule6_checks"), iv_pct),
         "liquidity": {"avg_amount_5d": liq.get("avg_amount_5d"), "avg_amount_20d": liq.get("avg_amount_20d")},

@@ -60,14 +60,14 @@ class FilterL0BoardScopeTest(unittest.TestCase):
 
     def test_filter_l0_excludes_b_shares_and_other_non_main_boards(self) -> None:
         df_stocks = pd.DataFrame([
-            {"ts_code": "600000.SH", "symbol": "600000", "name": "浦发银行"},   # 主板 SSE → 保留
-            {"ts_code": "000001.SZ", "symbol": "000001", "name": "平安银行"},   # 主板 SZSE → 保留
-            {"ts_code": "900901.SH", "symbol": "900901", "name": "外高B股"},    # 沪 B 股 → 排除
-            {"ts_code": "200011.SZ", "symbol": "200011", "name": "深中冠B"},    # 深 B 股 → 排除
-            {"ts_code": "300750.SZ", "symbol": "300750", "name": "某创业板"},   # 创业板 → 排除
-            {"ts_code": "688981.SH", "symbol": "688981", "name": "某科创板"},   # 科创板 → 排除
-            {"ts_code": "920001.BJ", "symbol": "920001", "name": "某北交所"},   # 北交所 → 排除
-            {"ts_code": "600ABC.SH", "symbol": "600ABC", "name": "畸形码"},     # 非 6 位数字 → strict inclusion 排除
+            {"ts_code": "600000.SH", "symbol": "600000", "name": "浦发银行", "list_status": "L"},   # 主板 SSE → 保留
+            {"ts_code": "000001.SZ", "symbol": "000001", "name": "平安银行", "list_status": "L"},   # 主板 SZSE → 保留
+            {"ts_code": "900901.SH", "symbol": "900901", "name": "外高B股", "list_status": "L"},    # 沪 B 股 → 排除
+            {"ts_code": "200011.SZ", "symbol": "200011", "name": "深中冠B", "list_status": "L"},    # 深 B 股 → 排除
+            {"ts_code": "300750.SZ", "symbol": "300750", "name": "某创业板", "list_status": "L"},   # 创业板 → 排除
+            {"ts_code": "688981.SH", "symbol": "688981", "name": "某科创板", "list_status": "L"},   # 科创板 → 排除
+            {"ts_code": "920001.BJ", "symbol": "920001", "name": "某北交所", "list_status": "L"},   # 北交所 → 排除
+            {"ts_code": "600ABC.SH", "symbol": "600ABC", "name": "畸形码", "list_status": "L"},     # 非 6 位数字 → strict inclusion 排除
         ])
         # 空 stats(有列无行)→ filter_l0 跳过量能/涨跌过滤,只看板块 + 名称,使板块过滤单独可测。
         stats_df = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
@@ -77,6 +77,63 @@ class FilterL0BoardScopeTest(unittest.TestCase):
         self.assertNotIn("900901.SH", kept)   # 沪 B 股不再漏排
         self.assertNotIn("200011.SZ", kept)   # 深 B 股不再漏排
         self.assertNotIn("600ABC.SH", kept)   # 畸形码不再漏排(strict is_a_share_main_board inclusion)
+
+    def test_live_delisting_suffix_and_explicit_risk_names_are_excluded(self) -> None:
+        em = self.egs_main
+        stocks = pd.DataFrame([
+            {"ts_code": "600001.SH", "name": "康美退", "list_status": "L"},
+            {"ts_code": "600002.SH", "name": "长油退", "list_status": "L"},
+            {"ts_code": "600003.SH", "name": "退市风险警示", "list_status": "L"},
+            {"ts_code": "600004.SH", "name": "中国平安", "list_status": "L"},
+            {"ts_code": "600005.SH", "name": "正常名称", "list_status": "D"},
+            {"ts_code": "600006.SH", "name": "正常名称但状态缺失"},
+            {"ts_code": "600007.SH", "name": "暂停上市", "list_status": "L"},
+        ])
+        stats = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
+        out = em.filter_l0(stocks, stats, set(), {}, set(), set())
+        self.assertEqual(set(out["ts_code"]), {"600004.SH"})
+
+    def test_analysis_input_delisting_fields_use_row_truth(self) -> None:
+        em = self.egs_main
+        bad = em._candidate_from_row(
+            pd.Series({"ts_code": "600001.SH", "name": "康美退", "list_status": "D", "close": 10.0}),
+            1, {"600001.SH"}, "20260714", set(), set(),
+        )
+        good = em._candidate_from_row(
+            pd.Series({"ts_code": "600002.SH", "name": "中国平安", "list_status": "L", "close": 10.0}),
+            1, {"600002.SH"}, "20260714", set(), set(),
+        )
+        self.assertTrue(bad["event_risk"]["delisting"]["delisting_warning"])
+        self.assertFalse(good["event_risk"]["delisting"]["delisting_warning"])
+
+    def test_missing_live_status_is_unknown_not_safe_false(self) -> None:
+        em = self.egs_main
+        stocks = pd.DataFrame([{"ts_code": "600008.SH", "name": "正常名称"}])
+        stats = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
+        out = em.filter_l0(stocks, stats, set(), {}, set(), set())
+        self.assertTrue(out.empty)
+
+    def test_sst_and_s_star_st_prefixes_are_excluded_but_s_controls_survive(self) -> None:
+        em = self.egs_main
+        stocks = pd.DataFrame([
+            {"ts_code": "600009.SH", "name": "SST某", "list_status": "L"},
+            {"ts_code": "600010.SH", "name": "S*ST某", "list_status": "L"},
+            {"ts_code": "600011.SH", "name": "S公司", "list_status": "L"},
+            {"ts_code": "600012.SH", "name": "某ST公司", "list_status": "L"},
+        ])
+        stats = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
+        for historical in (False, True):
+            with patch.object(em, "_historical_replay_mode", return_value=historical):
+                out = em.filter_l0(stocks, stats, set(), {}, set(), set())
+            self.assertEqual(set(out["ts_code"]), {"600011.SH", "600012.SH"})
+
+    def test_unknown_status_keeps_name_signal_and_unknown_marker(self) -> None:
+        flags = self.egs_main.derive_delisting_flags(
+            {"name": "康美退", "list_status": ""}, historical=False
+        )
+        self.assertIsNone(flags["st_flag"])
+        self.assertTrue(flags["delisting_warning"])
+        self.assertFalse(flags["known"])
 
 
 class HistoricalNamePitTest(unittest.TestCase):
@@ -234,6 +291,78 @@ class HistoricalNamePitTest(unittest.TestCase):
 
         self.assertFalse(namechange_called)
         self.assertEqual(set(stocks["name"]), {"当前正常名"})
+
+    def test_duplicate_status_rows_prefer_delisted_before_date_filter(self):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20260714", datetime(2026, 7, 14)
+
+        def stock_basic(**kwargs):
+            if kwargs["list_status"] == "L":
+                return pd.DataFrame([{
+                    "ts_code": "600001.SH", "symbol": "600001", "name": "正常名称",
+                    "list_date": "20100101", "delist_date": "", "market": "主板", "list_status": "L",
+                }])
+            if kwargs["list_status"] == "D":
+                return pd.DataFrame([{
+                    "ts_code": "600001.SH", "symbol": "600001", "name": "正常名称",
+                    "list_date": "20100101", "delist_date": "20260701", "market": "主板", "list_status": "D",
+                }])
+            return pd.DataFrame()
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic)
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                stocks = em.get_stock_list()
+                self.assertTrue(stocks.empty)
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+
+    def _historical_delisting_case(self, active_name: str):
+        em = self.egs_main
+        old_today, old_dt, old_pro = em.TODAY, em.TODAY_DT, em.pro
+        em.TODAY, em.TODAY_DT = "20200115", datetime(2020, 1, 15)
+
+        def stock_basic(**kwargs):
+            if kwargs["list_status"] == "D":
+                return pd.DataFrame([{
+                    "ts_code": "600001.SH", "symbol": "600001", "name": "康美退",
+                    "list_date": "20100101", "delist_date": "20201231",
+                    "market": "主板", "list_status": "D",
+                }])
+            return pd.DataFrame()
+
+        def namechange(**kwargs):
+            return pd.DataFrame([{
+                "ts_code": "600001.SH", "name": active_name,
+                "start_date": "20100101", "end_date": "",
+                "change_reason": "历史名称",
+            }])
+
+        try:
+            em.pro = SimpleNamespace(stock_basic=stock_basic, namechange=namechange)
+            with patch.object(em, "load_cache", return_value=None), \
+                 patch.object(em, "save_cache"), \
+                 patch.object(em, "a_share_market_date", return_value="20260714"), \
+                 patch.object(em, "safe_api", side_effect=lambda fn, *a, **kw: fn(*a, **kw)):
+                stocks = em.get_stock_list()
+                stats = pd.DataFrame(columns=["ts_code", "avg_amount_20d", "pct_20d"])
+                kept = em.filter_l0(stocks, stats, set(), {}, set(), set())
+        finally:
+            em.TODAY, em.TODAY_DT, em.pro = old_today, old_dt, old_pro
+        return stocks, kept
+
+    def test_historical_as_of_before_delisting_uses_pit_name_and_keeps_stock(self):
+        stocks, kept = self._historical_delisting_case("康美股份")
+        self.assertEqual(dict(zip(stocks["ts_code"], stocks["name"]))["600001.SH"], "康美股份")
+        self.assertEqual(set(kept["ts_code"]), {"600001.SH"})
+
+    def test_historical_as_of_in_delisting_period_excludes_pit_suffix_name(self):
+        _stocks, kept = self._historical_delisting_case("康美退")
+        self.assertTrue(kept.empty)
 
 
 class HolderReductionPitTest(unittest.TestCase):

@@ -20,6 +20,38 @@
 - **Required**: A fresh fully covered industry snapshot must bypass every SEC call, and snapshot identity/key binding must be fail-closed. Details and closure tests are in `docs/system_risk_register.md`.
 - **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran `tests.provider.test_us_short_batch5_full_universe_sec_sic_classification_fetch`: 13 OK. The current reuse test injects the CIK seam, so it does not prove zero real provider calls; no provider or full suite ran.
 - **Next**: Codex: repair
+## 2026-07-24 - Claude Code 审查 PASS (A-short first-knife re-review: delisting safety chain)
+- **Verdict/Action**: PASS; `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` resolved。MF1（`_name_flags` 补 `SST`/`S*ST` 前缀）+ MF2（未知状态保留 name 信号 + `normalize` None→True fail-closed）已修复并独立验证。
+- **Required**: None；closure 证据/边界见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:8ffa53e2b87f；整读 `a_short_delisting.py` + 消费点 diff + 亲跑 planted probe（pinned main Python）坐实 `S*ST某`/`SST前锋` st_flag=True·L0 KEPT=False、正常 S/含 ST 名不误伤、`康美退`+空 status→warning=True·consumer None→True；`phase5:534` 唯一 veto sink 无绕过；`static_contract_error()`=None；`discover -s tests` 跑 6000+ tests 零 FAILED/ERROR、MF1/MF2 closure 全绿（含 Phase5 端到端否决），剩余 us_short/a_long 独立 lane 零 blast radius 按 hook⑤/rule6 未干等；未 record ledger（未跑满 8051）。
+- **Next**: Codex：Pass
+
+## 2026-07-24 - Codex repair (A-short delisting re-review MF1/MF2)
+
+- **Verdict/Action**: Repaired `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` MF1/MF2; current worktree is uncommitted and requires independent review before commit.
+- **Required**: Review `SST`/`S*ST` live+historical rejection, unknown-status propagation, and the Phase5 hard-veto consumer. P2/P3/P5 remain out of scope.
+- **Verify**: Main Python focused A-short pack 224 OK; final affected L0/normalize/Tier-2 pack 31 OK; `py_compile`, `git diff --check` clean; effect-contract re-pinned; no provider/live run.
+- **Next**: Claude Code: review
+
+## 2026-07-24 - Claude Code 审查 FAIL (A-short first-knife re-review: delisting safety chain)
+- **Verdict/Action**: FAIL; `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` 仍 open。两个 must-fix（MF1 S*ST/SST、MF2 未知状态 fail-open）本轮**都没修**——`engine/a_short_delisting.py` 与首刀逐字节相同。Codex 本轮只加了 `get_stock_list` D/P/L duplicate-status 去重（正确的额外加固，但不 close MF1/MF2）。
+- **Required**: `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` — 完整 must-fix/边界/closure test 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:d43deafdcefa；reviewer 整读 `a_short_delisting.py` 全文（byte-identical）+ egs_main/消费点 diff + 亲跑 planted probe（pinned main Python）坐实当前态 `S*ST某` L0 KEPT=True、`康美退`+空 status→`{None,None,known:False}`→`bool` False；未修复故未起 agent、未跑 full（FAIL 直接出）。
+- **Next**: Codex：修复
+
+## 2026-07-24 - Claude Code 审查 FAIL (A-short first knife: delisting safety chain)
+- **Verdict/Action**: FAIL; `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` open. 两 material must-fix：(1) `_name_flags` startswith 漏判 `S*ST`/`SST` 风险简称（probe 坐实 live `filter_l0` KEPT=True，旧 `contains` 会拦）；(2) 未知状态 `derive` 丢 name 信号→`None`，消费点 `weekly_pipeline.py:584` `bool(None or None)=False`，register 声称的 Phase5 下游防御对 unknown fail-open。L0 fail-closed 成立、无 P1。
+- **Required**: `R-ASHORT-DELISTING-STATUS-CHAIN-GAP` — 完整 must-fix/边界/closure test 见 `docs/system_risk_register.md`（单一来源）。
+- **Verify**: review-evidence:dda3691da2e5；分级=高危子集（新 fail-closed engine + veto + PIT 进选股）故起 1 独立对抗 agent（read-only 958e）+ reviewer 亲跑 planted probe（pinned main Python）坐实 `S*ST某` L0 bypass 与 `康美退`+空 status→None→`bool` False；测试盲区：新增测试无 S*ST/SST、unknown 只验 L0 剔除未验 Phase5 第二道防线；未跑 full lane（FAIL 打回，全量只在 PASS/合并按 rule 3 跑）。
+- **Next**: Codex：修复
+
+## 2026-07-24 - Codex repair (A-short first knife: delisting safety chain)
+
+- **Verdict/Action**: Implemented `R-ASHORT-DELISTING-STATUS-CHAIN-GAP`; current worktree is uncommitted and requires independent review before commit.
+- **Required**: Review the shared delisting helper, duplicate `L/D/P` status precedence, live/historical PIT behavior, L0 fail-closed status handling, analysis_input/Tier-2 propagation, Phase5 hard-veto output, and effect-contract re-pin. Details and closure tests are in `docs/system_risk_register.md`.
+- **Verify**: Fixed main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; final L0/PIT+effect pack 34 OK, Phase5 130 OK, Tier-2/holdings/effect pack 31 OK, end-to-end normalization/final-veto 3 OK; `static_contract_error()` = None, `py_compile` and `git diff --check` clean. No provider/live run.
+- **Pre-Codex self-review**: A-F checked for the complete delisting class: live suffix/explicit names, current D/P/missing status, historical namechange PIT clear/hit, analysis_input, Tier-2 adapter, and Phase5 hard-veto consumer; reverse normal-name and pre-delisting historical cases are covered.
+- **Next**: Claude Code: review
 
 ## 2026-07-24 - Codex repair (US-short runtest auto-budget / account-state preparation)
 
