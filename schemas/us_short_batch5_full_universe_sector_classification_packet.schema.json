@@ -17,7 +17,7 @@
   ],
   "properties": {
     "schema_name": { "const": "us_short_batch5_full_universe_sector_classification_packet" },
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "enum": ["1.0.0", "1.1.0"] },
     "generated_at": { "type": "string", "minLength": 1 },
     "scope": {
       "type": "object",
@@ -68,7 +68,9 @@
       "required": ["classification_source", "as_of"],
       "properties": {
         "classification_source": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,31}$" },
-        "as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" }
+        "as_of": { "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$" },
+        "cache_identity": { "const": "immutable_cik_snapshot" },
+        "cache_freshness_days": { "const": 90 }
       }
     },
     "provenance": {
@@ -95,6 +97,33 @@
       "type": "object",
       "minProperties": 1,
       "additionalProperties": { "type": "string", "minLength": 1, "maxLength": 128 }
+    },
+    "provenance_by_ticker": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["cik", "snapshot_id", "source_as_of", "observed_at", "cache_reused"],
+        "properties": {
+          "cik": {"type": "integer", "minimum": 1},
+          "snapshot_id": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "source_as_of": {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"},
+          "observed_at": {"type": "string", "minLength": 1},
+          "cache_reused": {"type": "boolean"}
+        }
+      }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": "1.1.0"}}, "required": ["schema_version"]},
+      "then": {
+        "required": ["provenance_by_ticker"],
+        "properties": {
+          "classification_contract": {"required": ["cache_identity", "cache_freshness_days"]}
+        }
+      }
+    }
+  ]
 }

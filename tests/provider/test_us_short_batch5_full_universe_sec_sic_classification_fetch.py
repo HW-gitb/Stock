@@ -60,6 +60,15 @@ def _fake_source(sic_map=None):
     return source
 
 
+def _fake_cik_source(cik_map=None):
+    data = dict(cik_map or {ticker: index + 1 for index, ticker in enumerate(_ALL_ELIGIBLE)})
+
+    def source(eligible):
+        return {ticker: data[ticker] for ticker in eligible if ticker in data}
+
+    return source
+
+
 class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
     def setUp(self):
         self.slug = f"test_sec_sic_fetch_{os.getpid()}_{self._testMethodName}"
@@ -69,6 +78,7 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.series = STATE_DIR / f"{self.slug}_series.json"
         self.theme_projection = STATE_DIR / f"{self.slug}_theme.json"
         self.theme_summary = THEME_SAMPLE_ROOT / self.slug / "summary.json"
+        self.snapshot_root = STATE_DIR / "sec_sic_classification_snapshots" / self.slug
         for p in (self.candidate, self.packet, self.series, self.theme_projection):
             p.unlink(missing_ok=True)
         _write_json(self.candidate, _candidate_artifact(_ALL_ELIGIBLE))
@@ -84,6 +94,14 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
                     elif item.is_dir():
                         item.rmdir()
                 root.rmdir()
+        if self.snapshot_root.exists():
+            for item in sorted(self.snapshot_root.rglob("*"), reverse=True):
+                if item.is_file():
+                    item.unlink()
+                elif item.is_dir():
+                    item.rmdir()
+            self.snapshot_root.rmdir()
+            self.snapshot_root.parent.rmdir()
 
     def _run(self, **overrides):
         kwargs = {
@@ -93,6 +111,8 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
             "generated_at": "2026-06-15T12:00:00+00:00",
             "confirm_user_authorization": True,
             "sic_source": _fake_source(),
+            "cik_source": _fake_cik_source(),
+            "snapshot_root": self.snapshot_root,
             "interval_seconds": 0,
         }
         kwargs.update(overrides)
@@ -108,6 +128,7 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.assertEqual(summary["classification"]["sector_group_count"], 3)  # 35, 60, 59
         self.assertEqual(summary["provider_call_evidence"]["actual_total_calls"], 0)
         self.assertFalse(summary["provider_call_evidence"]["provider_calls_performed"])
+        self.assertEqual(summary["classification"]["cache_refreshed_count"], 5)
 
         packet = _read_json(self.packet)
         self.assertEqual(packet["schema_name"], "us_short_batch5_full_universe_sector_classification_packet")
@@ -117,6 +138,99 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
         self.assertEqual(packet["decision_clock"]["price_basis_date"], "2026-06-12")
         self.assertEqual(packet["sector_by_ticker"],
                          {"AAPL": "35", "MSFT": "35", "GOOG": "35", "JPM": "60", "AMZN": "59"})
+        self.assertEqual(packet["classification_contract"]["cache_freshness_days"], 90)
+        self.assertTrue(all(not item["cache_reused"] for item in packet["provenance_by_ticker"].values()))
+
+    def test_reuses_fresh_cik_snapshot_without_second_submissions_fetch(self):
+        first = self._run()
+        mod = _fetch()
+        with patch.dict(os.environ, {"SEC_USER_AGENT": ""}), \
+                patch.object(mod.universe_fetch, "fetch_sec_tickers", side_effect=AssertionError("must not fetch ticker map")) as ticker_ref, \
+                patch.object(mod.universe_fetch, "_sec_get", side_effect=AssertionError("must not fetch submissions")) as submissions:
+            second = self._run(sic_source=None, cik_source=None, confirm_user_authorization=False)
+        self.assertEqual(first["classification"]["cache_refreshed_count"], 5)
+        self.assertEqual(second["classification"]["cache_reused_count"], 5)
+        self.assertEqual(second["classification"]["cache_refreshed_count"], 0)
+        self.assertFalse(second["scope"]["network_access_performed"])
+        self.assertEqual(second["provider_call_evidence"]["actual_total_calls"], 0)
+        ticker_ref.assert_not_called()
+        submissions.assert_not_called()
+        packet = _read_json(self.packet)
+        self.assertTrue(all(item["cache_reused"] for item in packet["provenance_by_ticker"].values()))
+
+    def test_partial_cache_fetches_reference_once_and_only_unresolved_submission(self):
+        partial_sic = {ticker: sic for ticker, sic in _SIC.items() if ticker != "AMZN"}
+        self._run(sic_source=_fake_source(partial_sic))
+        mod = _fetch()
+        ticker_map = {ticker: {"cik": index + 1, "exchange": "NASDAQ"}
+                      for index, ticker in enumerate(_ALL_ELIGIBLE)}
+        submission_urls = []
+
+        def submission(url, sec_ua):
+            submission_urls.append(url)
+            return {"sic": _SIC["AMZN"]}
+
+        with patch.dict(os.environ, {"SEC_USER_AGENT": "ua@test"}), \
+                patch.object(mod.universe_fetch, "fetch_sec_tickers", return_value=ticker_map) as ticker_ref, \
+                patch.object(mod.universe_fetch, "_sec_get", side_effect=submission):
+            summary = self._run(sic_source=None, cik_source=None)
+        ticker_ref.assert_called_once_with("ua@test")
+        self.assertEqual(len(submission_urls), 1)
+        self.assertTrue(submission_urls[0].endswith("0000000005.json"))
+        self.assertEqual(summary["classification"]["cache_reused_count"], 4)
+        self.assertEqual(summary["classification"]["cache_refreshed_count"], 1)
+        self.assertEqual(summary["provider_call_evidence"]["actual_total_calls"], 2)
+
+    def test_tampered_snapshot_digest_rejects_before_provider_seam(self):
+        self._run()
+        snapshot = next(self.snapshot_root.glob("*.json"))
+        payload = _read_json(snapshot)
+        payload["entries"]["1"]["sector"] = "60"
+        _write_json(snapshot, payload)
+        mod = _fetch()
+        with patch.object(mod.universe_fetch, "fetch_sec_tickers", side_effect=AssertionError("provider seam reached")), \
+                patch.object(mod.universe_fetch, "_sec_get", side_effect=AssertionError("provider seam reached")):
+            with self.assertRaisesRegex(mod.FullUniverseSecSicClassificationFetchError, "digest mismatch"):
+                self._run(sic_source=None, cik_source=None, confirm_user_authorization=False)
+
+    def test_miskeyed_snapshot_entry_rejects_before_provider_seam(self):
+        self._run()
+        mod = _fetch()
+        snapshot = next(self.snapshot_root.glob("*.json"))
+        payload = _read_json(snapshot)
+        payload["entries"]["1"]["cik"] = 999
+        payload["snapshot_id"] = mod._snapshot_digest(payload)
+        _write_json(snapshot, payload)
+        with patch.object(mod.universe_fetch, "fetch_sec_tickers", side_effect=AssertionError("provider seam reached")), \
+                patch.object(mod.universe_fetch, "_sec_get", side_effect=AssertionError("provider seam reached")):
+            with self.assertRaisesRegex(mod.FullUniverseSecSicClassificationFetchError, "does not match"):
+                self._run(sic_source=None, cik_source=None, confirm_user_authorization=False)
+
+    def test_duplicate_ticker_to_different_cik_snapshot_rejects_before_provider_seam(self):
+        self._run()
+        mod = _fetch()
+        conflicting = mod._snapshot_payload(
+            generated_at="2026-06-14T12:00:00+00:00", source_as_of="2026-06-14",
+            entries={999: {"cik": 999, "tickers": ["AAPL"], "sector": "35"}},
+        )
+        mod._write_snapshot(self.snapshot_root, conflicting)
+        with patch.object(mod.universe_fetch, "fetch_sec_tickers", side_effect=AssertionError("provider seam reached")), \
+                patch.object(mod.universe_fetch, "_sec_get", side_effect=AssertionError("provider seam reached")):
+            with self.assertRaisesRegex(mod.FullUniverseSecSicClassificationFetchError, "different CIKs"):
+                self._run(sic_source=None, cik_source=None, confirm_user_authorization=False)
+
+    def test_snapshot_after_target_or_over_90_days_is_not_reused(self):
+        self._run(generated_at="2026-03-15T12:00:00+00:00")
+        calls = []
+
+        def refreshed(eligible):
+            calls.append(tuple(eligible))
+            return dict(_SIC)
+
+        summary = self._run(generated_at="2026-06-15T12:00:00+00:00", sic_source=refreshed)
+        self.assertEqual(summary["classification"]["cache_reused_count"], 0)
+        self.assertEqual(summary["classification"]["cache_refreshed_count"], 5)
+        self.assertEqual(calls, [tuple(_ALL_ELIGIBLE)])
 
     def test_packet_feeds_theme_producer_end_to_end(self):
         self._run()
@@ -179,13 +293,11 @@ class FullUniverseSecSicClassificationFetchTest(unittest.TestCase):
                 raise OSError("provider failure still counts as an attempted call")
             return {"sic": "3571"}
 
-        with patch.object(mod.universe_fetch, "fetch_sec_tickers", return_value=ticker_map), \
-             patch.object(mod.universe_fetch, "_sec_get", side_effect=submission):
-            source = mod._real_sic_source("ua@test", interval_seconds=0, stats_out=stats)
+        with patch.object(mod.universe_fetch, "_sec_get", side_effect=submission):
+            source = mod._real_sic_source("ua@test", {ticker: rec["cik"] for ticker, rec in ticker_map.items()},
+                                          interval_seconds=0, stats_out=stats)
             out = source(list(_ALL_ELIGIBLE))
-        self.assertEqual(stats["ticker_reference_calls"], 1)
         self.assertEqual(stats["submissions_calls"], len(_ALL_ELIGIBLE))
-        self.assertEqual(stats["actual_total_calls"], 1 + len(_ALL_ELIGIBLE))
         self.assertEqual(len(out), len(_ALL_ELIGIBLE) - 1)
 
     def test_zero_classified_fails_closed(self):

@@ -20,7 +20,7 @@
   ],
   "properties": {
     "schema_name": { "const": "us_short_batch5_full_universe_sec_sic_classification_fetch_summary" },
-    "schema_version": { "const": "1.0.0" },
+    "schema_version": { "enum": ["1.0.0", "1.1.0"] },
     "schema_ref": { "const": "schemas/us_short_batch5_full_universe_sec_sic_classification_fetch_summary.schema.json" },
     "generated_at": { "type": "string", "minLength": 1 },
     "scope": {
@@ -98,7 +98,12 @@
         "eligible_count": { "type": "integer", "minimum": 0 },
         "sic_resolved_count": { "type": "integer", "minimum": 0 },
         "sic_missing_count": { "type": "integer", "minimum": 0 },
-        "sector_group_count": { "type": "integer", "minimum": 0 }
+        "sector_group_count": { "type": "integer", "minimum": 0 },
+        "cache_identity": { "const": "immutable_cik_snapshot" },
+        "cache_freshness_days": { "const": 90 },
+        "cache_reused_count": { "type": "integer", "minimum": 0 },
+        "cache_refreshed_count": { "type": "integer", "minimum": 0 },
+        "cache_snapshot_count": { "type": "integer", "minimum": 0 }
       }
     },
     "provider_call_evidence": {
@@ -188,5 +193,15 @@
       "minItems": 1,
       "items": { "type": "string", "minLength": 1 }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"schema_version": {"const": "1.1.0"}}, "required": ["schema_version"]},
+      "then": {
+        "properties": {
+          "classification": {"required": ["cache_identity", "cache_freshness_days", "cache_reused_count", "cache_refreshed_count", "cache_snapshot_count"]}
+        }
+      }
+    }
+  ]
 }

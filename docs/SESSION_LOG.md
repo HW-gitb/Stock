@@ -1,5 +1,26 @@
 # Session Log
 
+## 2026-07-24 - Codex re-review PASS (US-short SEC SIC industry snapshot reuse)
+
+- **Verdict/Action**: PASS; `R-USSHORT-SEC-SIC-SNAPSHOT-REUSE-STILL-REFETCHES-CIK-AND-TRUSTS-UNBOUND-CACHE` is resolved.
+- **Required**: None; closure details are in `docs/system_risk_register.md` under `R-USSHORT-SEC-SIC-SNAPSHOT-REUSE-STILL-REFETCHES-CIK-AND-TRUSTS-UNBOUND-CACHE`.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran `tests.provider.test_us_short_batch5_full_universe_sec_sic_classification_fetch tests.provider.test_us_short_weekly_capstone`: 97 OK. Snapshot digest/key/alias conflicts reject before either provider seam; `git diff --check` passed. No provider, full runtest, or full suite ran.
+- **Next**: Codex: Pass
+
+## 2026-07-24 - Codex repair (US-short SEC SIC industry snapshot reuse)
+
+- **Verdict/Action**: Implemented `R-USSHORT-SEC-SIC-SNAPSHOT-REUSE-STILL-REFETCHES-CIK-AND-TRUSTS-UNBOUND-CACHE`; no subagent or full runtest was started.
+- **Required**: None for this repair slice.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran `tests.provider.test_us_short_batch5_full_universe_sec_sic_classification_fetch tests.provider.test_us_short_weekly_capstone`: 97 OK. The fixture-only CLI usage messages are expected negative-path test output. No provider call, full US-short runtest, or full suite ran.
+- **Next**: User direction
+
+## 2026-07-24 - Codex quick review FAIL (US-short SEC SIC industry snapshot reuse)
+
+- **Verdict/Action**: FAIL; `R-USSHORT-SEC-SIC-SNAPSHOT-REUSE-STILL-REFETCHES-CIK-AND-TRUSTS-UNBOUND-CACHE` is open.
+- **Required**: A fresh fully covered industry snapshot must bypass every SEC call, and snapshot identity/key binding must be fail-closed. Details and closure tests are in `docs/system_risk_register.md`.
+- **Verify**: Required main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe` ran `tests.provider.test_us_short_batch5_full_universe_sec_sic_classification_fetch`: 13 OK. The current reuse test injects the CIK seam, so it does not prove zero real provider calls; no provider or full suite ran.
+- **Next**: Codex: repair
+
 ## 2026-07-24 - Codex repair (US-short runtest auto-budget / account-state preparation)
 
 - **Verdict/Action**: Implemented `R-USSHORT-RUNTEST-AUTO-BUDGET-AUTH-AND-ACCOUNT-FACT-REWRITE`; independent review is required before commit.

@@ -803,15 +803,32 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
 
     sic = _result("sic_fetch")
     sic_scope = sic.get("scope", {})
-    if sic_scope.get("network_access_performed") is not True \
-            or sic_scope.get("provider_calls_performed") is not True \
-            or sic.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
-        raise WeeklyCapstoneError("SIC fetch lacks source-bound provider-call evidence")
     sic_evidence = sic.get("provider_call_evidence", {})
-    if sic_evidence.get("network_access_performed") is not True \
-            or sic_evidence.get("provider_calls_performed") is not True:
-        raise WeeklyCapstoneError("SIC fetch lacks explicit provider-call evidence")
     sic_calls = sic_evidence.get("actual_total_calls")
+    sic_cache = sic.get("classification", {})
+    sic_cache_only = (
+        sic_scope.get("network_access_performed") is False
+        and sic_scope.get("provider_calls_performed") is False
+        and sic_evidence.get("network_access_performed") is False
+        and sic_evidence.get("provider_calls_performed") is False
+        and sic_calls == 0
+        and sic_cache.get("cache_identity") == "immutable_cik_snapshot"
+        and type(sic_cache.get("cache_reused_count")) is int
+        and sic_cache.get("cache_reused_count") == sic_cache.get("sic_resolved_count")
+        and sic_cache.get("sic_resolved_count", 0) > 0
+        and sic_cache.get("cache_refreshed_count") == 0
+        and sic_cache.get("cache_snapshot_count", 0) > 0
+    )
+    sic_same_run_provider = (
+        sic_scope.get("network_access_performed") is True
+        and sic_scope.get("provider_calls_performed") is True
+        and sic_evidence.get("network_access_performed") is True
+        and sic_evidence.get("provider_calls_performed") is True
+        and type(sic_calls) is int and sic_calls > 0
+    )
+    if not (sic_cache_only or sic_same_run_provider) \
+            or sic.get("decision_clock", {}).get("expected_decision_date") != ctx.decision_date:
+        raise WeeklyCapstoneError("SIC fetch lacks verified cache provenance or same-run provider-call evidence")
 
     pass2 = _result("pass2_fetch")
     pass2_scope = pass2.get("scope", {})
@@ -848,7 +865,8 @@ def _provider_execution_receipt(ctx: CapstoneContext, results: list[dict[str, An
         ("universe_fetch", universe_calls), ("momentum_fetch", momentum_calls),
         ("sic_fetch", sic_calls), ("pass2_fetch", pass2_calls),
     )
-    if any(type(count) is not int or count < 1 for _, count in call_counts):
+    if any(type(count) is not int or count < (0 if name == "sic_fetch" and sic_cache_only else 1)
+           for name, count in call_counts):
         raise WeeklyCapstoneError("every required provider stage must prove at least one call")
     evidence = {
         name: {

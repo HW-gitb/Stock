@@ -43,6 +43,7 @@ result/*/backtest/**/_intermediate/
 # --- Local live state ---
 state/*/*.json
 state/*/*.csv
+state/*/sec_sic_classification_snapshots/
 # 4.3 manual position tables: the user's REAL holdings/trades — never commit (private financial data).
 # Committed reference templates live under schemas/examples/a_short_account_state_csv/.
 state/*/account_state_csv/
