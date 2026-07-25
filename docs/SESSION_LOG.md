@@ -1,5 +1,21 @@
 # Session Log
 
+## 2026-07-25 - Claude Code review PASS (US-short cross-industry theme machine v1 first knife: offline LLM discovery producer)
+
+- **Verdict/Action**: PASS. `runners/us_short_llm_theme_discovery.py` + `schemas/us_short_llm_theme_discovery.schema.json` + 2 tests are clean and **inert** — the offline producer freezes a PIT/source-bound provisional theme artifact and hard-`const`-pins every guardrail in BOTH artifact and schema (`scoring_eligible`/`top15_effect_enabled`/`operation_advice_effect_enabled`/`dynamic_seats_enabled`/`theme_probe_enabled`/`lifecycle_actions_enabled`=false; `status`=provisional_discovered; `market_confirmation_status`/`cross_industry_validation_status`=not_run). No provider/network/scoring/Top15/seat/probe/lifecycle effect; no consumer exists yet → zero selection impact. Intent-conforms to the finalized design (desktop §八; built before that稿 existed, so alignment is intent-level).
+- **Required**: None for this knife.
+- **Carry-forward (later knives — layering choices here, not first-knife defects; but §八 intent must land somewhere)**: (1) **不杀全批 (§八 8.4)** — ingest raises on any malformed member (rejects whole artifact); OK only if the live-fetch knife drops-bad-keeps-good + records the drop before feeding a clean packet here; decide where drop-bad lives. (2) **≥3 member floor (`min_theme_members=3`, design §4.3)** — this knife allows ≥1 member; the ≥3 filter must be enforced at the scoring/consumption knife. (3) **Universe intersection** — members bound to canonical ticker FORMAT only (`canonical_us_ticker`), not universe membership; the scoring knife must intersect the real active universe.
+- **Verify**: Ran the 11 tests myself in this worktree (fixed main Python313, `-m unittest tests.provider.test_us_short_llm_theme_discovery tests.schema.test_us_short_llm_theme_discovery_schema -v`) → **11/11 OK** (did not rely on the prior transcript); read all four untracked bodies (git-diff blind). Confirmed PIT cutoff = before decision-open 09:30 ET fail-closed (test present), A-share `000001.SZ` rejected (test present, §17), operational-key/secret-like/unbound-source injection rejected (tests present), schema const-pins effect flags + status. Proportionate: inert + no-provider + no-scoring surface → no independent adversarial agent/full lane. No provider/live/account/order touched.
+- **Next**: 第一刀 PASS,未提交(仅落本树 SESSION_LOG,不 sweep Codex 未提交活)。live 抓取刀(DeepSeek+Tavily / Grok)、≤5 分打分刀、提醒/文档同步刀均未建(Codex 正确留后);上述 3 条 carry-forward 待并入桌面 §八。
+
+## 2026-07-24 - Codex execution (US-short cross-industry theme machine v1 first knife: offline LLM discovery producer)
+
+- **Verdict/Action**: Implemented the offline local-input LLM theme discovery artifact, schema, producer, and focused regressions. It freezes source-bound provisional theme/member evidence only; no provider/network/LLM call, scoring, Top15, operation advice, dynamic seats, theme probe, or lifecycle action changed.
+- **Required**: None for this first knife. The ≤5 soft-score route and reminder/document synchronization remain separate later knives and were not implemented.
+- **Verify**: Fixed main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; `py_compile` plus `tests.provider.test_us_short_llm_theme_discovery tests.schema.test_us_short_llm_theme_discovery_schema` = 11 OK; `git diff --check` and UTF-8/BOM/trailing-whitespace scan clean.
+- **Pre-Codex self-review**: A-F checked / N-A for classifier and route-doc changes; covered schema consts, per-theme/member/source validation, PIT cutoff, identity rejection, secret-like text rejection, operational-field injection rejection, reverse controls, and no route-doc drift. No independent agent/full lane was run; no provider/live/account/order/broker work.
+- **Next**: Claude Code：仅审查第一刀当前 diff；不扩展 ≤5 软加分、Top15/操作意见接线、提醒或文档同步。
+
 ## 2026-07-24 - Claude Code finding (A-short crash-veto tracker: recon feature-surface starves capture) → Codex
 
 - **Verdict/Action**: New finding from the desktop full no-cache live testrun `a_cc_testrun1.md` (P1 there), routed to Codex. Opened `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` in `docs/system_risk_register.md` with whole-class Required + 8 closure tests. Comparison-only crash-veto forward-evidence tracker fails every live run (exit 2); EGS selection/veto/sizing/M6.7 unaffected.
