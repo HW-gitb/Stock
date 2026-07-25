@@ -35,6 +35,61 @@ DAILY_CACHE_NAME = "daily_cache.json"
 PUBLIC_STATUS_NOT_CONFIGURED = "not_configured"
 PUBLIC_STATUS_CURRENT = "evidence_current"
 PUBLIC_STATUS_UNAVAILABLE = "evidence_unavailable_or_inconclusive"
+CAPTURE_REPLAY_DRIFT_MESSAGE = "v2 capture replay input drifted"
+CAPTURE_ERROR_CODES = frozenset({
+    "bundle_binding", "price_clock", "candidate_shape", "price_nonfinite", "bar_count",
+    "last_date", "last_close", "state_contract", "materialization", "write_failed", "unknown",
+})
+
+
+def _safe_exception_text(exc: BaseException) -> str:
+    try:
+        return str(exc)
+    except Exception:
+        return ""
+
+
+def is_capture_replay_drift(exc: BaseException) -> bool:
+    """Identify the immutable same-week replay branch without exposing exception text."""
+    if not isinstance(exc, ValueError):
+        return False
+    message = _safe_exception_text(exc)
+    return message == CAPTURE_REPLAY_DRIFT_MESSAGE or message.endswith(": " + CAPTURE_REPLAY_DRIFT_MESSAGE)
+
+
+def capture_error_code(exc: BaseException) -> str:
+    """Return a de-identified, allowlisted operator code for a failed v2 capture."""
+    if is_capture_replay_drift(exc):
+        return "unknown"
+    if isinstance(exc, OSError):
+        return "write_failed"
+    message = _safe_exception_text(exc)
+    markers = (
+        ("published weekly bundle", "bundle_binding"),
+        ("receipt", "bundle_binding"),
+        ("price-freshness", "price_clock"),
+        ("price_data_through", "price_clock"),
+        ("invalid price_series row", "price_nonfinite"),
+        ("requires ts_code and finite close", "price_nonfinite"),
+        ("price_series has fewer than 20 bars", "bar_count"),
+        ("last_date mismatch", "last_date"),
+        ("last_close mismatch", "last_close"),
+        ("candidate close is not bound", "last_close"),
+        ("candidate", "candidate_shape"),
+        ("partial v2", "state_contract"),
+        ("private root", "state_contract"),
+        ("program", "state_contract"),
+        ("epoch", "state_contract"),
+        ("experiment", "state_contract"),
+        ("arm", "materialization"),
+        ("question", "materialization"),
+    )
+    for marker, code in markers:
+        if marker == "candidate" and not isinstance(exc, ValueError):
+            continue
+        if marker in message:
+            return code if code in CAPTURE_ERROR_CODES else "unknown"
+    return "unknown"
 
 
 def _admission_binding() -> str:

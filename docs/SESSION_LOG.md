@@ -1,5 +1,20 @@
 # Session Log
 
+## 2026-07-25 - Claude Code review PASS + commit (A-short P3 factor-comparison-v2 capture)
+
+- **Verdict/Action**: PASS, committed to master. P3 (`R-ASHORT-FACTOR-COMPARISON-V2-CAPTURE-FLOAT-DRIFT`) resolved — v2 capture's exact float close `!=` (both integrity + capture paths) replaced with `math.isclose(rel_tol=0, abs_tol=1e-8)` matching settlement; v2 handler emits de-identified allowlisted `error_code`. Comparison-only. Detail in register.
+- **Required**: None open. Excluded the unrelated `target_policy_comparison_summary.*` test-run regression (reverted to HEAD; Codex self-review claimed 'excluded' but they were modified). Detail in register.
+- **Verify**: review-evidence:not_available (hook did not arm; evidence = real tool results). Pinned main Python: `_price_close_matches` unit-verified (noise accept / real-diff+nan+None reject); both `!=` sites replaced; tests assert no `600598.SH` leak + no traceback + M6.7 non-blocking; focused pack 28 OK. No agent/full lane (comparison-only). No provider/account/order.
+- **Next**: 无（P3 已闭并合并 master）。
+
+## 2026-07-25 - Codex repair (A-short P3 factor-comparison-v2 capture)
+
+- **Verdict/Action**: Implemented the desktop P3 repair. The v2 capture and integrity paths now compare frozen close values with the existing `rel_tol=0, abs_tol=1e-8` contract, so binary float representation drift no longer blocks a valid capture. The v2 weekly handler now emits only allowlisted, de-identified `error_code` values; replay-freeze behavior and non-blocking M6.7 semantics remain unchanged. Other sidecars were not changed.
+- **Required**: None for this repair slice; the P3 desktop finding is closed in code. No selection, M6.7 decision, account, order, provider, or production behavior changed.
+- **Verify**: Pinned main Python `C:\Users\cnhea\AppData\Local\Programs\Python\Python313\python.exe`; v2 weekly/core + pipeline P3 regression = 11 OK, v2 core = 27 OK, effect-contract/launcher guards = 39 OK; changed files compile; `static_contract_error()` is `None`; `git diff --check` passes. The regression covers float drift acceptance, material close rejection, replay with date-prefixed message, no secret/path/traceback output, M6.7 non-blocking, and P2 continuation. No provider/live weekly/account/order run.
+- **Pre-Codex self-review**: A-F checked for this narrow v2 slice; B grep confirmed both exact close comparisons were replaced and no other sidecar handler changed; C reverse tests cover real price drift rejection and replay immutability; E effect-contract hash resealed; generated P2 summaries restored and excluded from the diff.
+- **Next**: Claude Code：独立复审本 P3 修复后再提交。
+
 ## 2026-07-24 - Claude Code re-review PASS + freeze reseal + commit (A-short P1 crash-veto + P2 V14.3 action)
 
 - **Verdict/Action**: PASS both, committed to master. P1 `R-ASHORT-CRASH-VETO-RECON-FEATURE-SURFACE-STARVES-CAPTURE` + P2 `R-ASHORT-REGIME-ACTION-LEGACY-CLOCK-MIGRATION-DRIFT` resolved (Codex rework R1-R3 verified; P2 honest source-bound migration reproduced == on-disk row). Detail in register.

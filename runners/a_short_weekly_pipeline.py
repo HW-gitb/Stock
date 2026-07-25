@@ -4534,7 +4534,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                   "M6.7 output remains authoritative and unchanged")
     if args.factor_comparison_v2_root:
         try:
-            from engine.a_short_factor_comparison_v2_weekly import capture_v2_after_published_weekly
+            from engine.a_short_factor_comparison_v2_weekly import (
+                capture_v2_after_published_weekly,
+                capture_error_code,
+                is_capture_replay_drift,
+            )
             comparison = capture_v2_after_published_weekly(
                 root=args.factor_comparison_v2_root, decision_date=args.as_of, candidates=normalized,
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
@@ -4544,11 +4548,12 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             # A changed same-canonical-week replay must leave the first source-bound capture immutable.
             # Do not surface private candidate details; the fixed operator message is enough to distinguish
             # the intentional freeze from an ordinary comparison-sidecar outage.
-            if "v2 capture replay input drifted" in str(exc):
+            if is_capture_replay_drift(exc):
                 print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
                       "the changed replay was not written and M6.7 remains authoritative")
             else:
-                print("[factor-comparison-v2] current-week capture unavailable; "
+                print(f"[factor-comparison-v2] current-week capture unavailable "
+                      f"(error_code={capture_error_code(exc)}); "
                       "M6.7 output remains authoritative and unchanged")
     if args.industry_weight_comparison_root:
         try:

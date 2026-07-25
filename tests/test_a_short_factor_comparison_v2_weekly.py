@@ -19,6 +19,7 @@ from engine import a_short_factor_comparison as v1  # noqa: E402
 from engine.a_short_factor_comparison_v2 import (  # noqa: E402
     ComparisonV2Error,
     _validate_capture_integrity,
+    _price_close_matches,
     build_v2_public_progress,
     capture_v2_week,
 )
@@ -28,6 +29,8 @@ from engine.a_short_factor_comparison_v2_weekly import (  # noqa: E402
     PUBLIC_STATUS_UNAVAILABLE,
     _admission_binding,
     capture_v2_after_published_weekly,
+    capture_error_code,
+    is_capture_replay_drift,
     load_v2_daily_cache,
     settle_and_summarize_v2_weekly,
     validate_v2_public_summary,
@@ -105,6 +108,43 @@ class ComparisonV2WeeklyAdapterTests(unittest.TestCase):
             capture_v2_week(root=root, decision_date=DECISION_DATE, candidates=candidates,
                             run_identity=_identity(candidates), forward_eligible=True)
         return candidates
+
+    def test_capture_accepts_same_price_with_binary_float_representation_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            candidates = _candidates()
+            candidates[0]["close"] = 11.909999999999998
+            candidates[0]["price_series"][-1]["close"] = 11.91
+            with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=DECISION_DATE):
+                result = capture_v2_week(root=root, decision_date=DECISION_DATE, candidates=candidates,
+                                         run_identity=_identity(candidates), forward_eligible=True)
+            self.assertEqual(result["status"], "captured")
+            _validate_capture_integrity(result["capture"])
+        self.assertTrue(_price_close_matches(11.909999999999998, 11.91))
+
+    def test_capture_rejects_material_close_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            candidates = _candidates()
+            candidates[0]["close"] = 11.92
+            candidates[0]["price_series"][-1]["close"] = 11.91
+            with mock.patch("engine.a_short_factor_comparison_v2._today", return_value=DECISION_DATE):
+                with self.assertRaisesRegex(ComparisonV2Error, "last_close mismatch"):
+                    capture_v2_week(root=root, decision_date=DECISION_DATE, candidates=candidates,
+                                    run_identity=_identity(candidates), forward_eligible=True)
+
+    def test_capture_error_code_is_allowlisted_and_does_not_relay_exception_text(self):
+        private_value = "candidate 600598.SH at C:\\private\\token.txt"
+        self.assertEqual(capture_error_code(ValueError(private_value)), "candidate_shape")
+        self.assertNotIn("600598.SH", capture_error_code(ValueError(private_value)))
+        self.assertEqual(capture_error_code(RuntimeError(private_value)), "unknown")
+        class BadStringError(Exception):
+            def __str__(self):
+                raise RuntimeError("secret rendering failure")
+        self.assertEqual(capture_error_code(BadStringError()), "unknown")
+        replay = ValueError("20260202: v2 capture replay input drifted")
+        self.assertTrue(is_capture_replay_drift(replay))
+        self.assertEqual(capture_error_code(replay), "unknown")
 
     def test_existing_private_cache_settles_and_uses_the_freshly_written_reminder_only(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -12,6 +12,8 @@ import json
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -886,7 +888,7 @@ class MainWiringTests(unittest.TestCase):
             v2_root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
             p2_root = Path(td) / "logs" / "a_short_target_policy_comparison.json"
             with patch("engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly",
-                       side_effect=ValueError("v2 capture replay input drifted")), \
+                       side_effect=ValueError(f"{AS_OF}: v2 capture replay input drifted")), \
                     patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
                           return_value={"status": "captured"}) as p2_capture:
                 main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
@@ -894,8 +896,34 @@ class MainWiringTests(unittest.TestCase):
                       "--out", str(out), "--run-date", AS_OF,
                       "--factor-comparison-v2-root", str(v2_root),
                       "--target-policy-root", str(p2_root)],
-                     price_provider=lambda code: _series())
+                      price_provider=lambda code: _series())
         p2_capture.assert_called_once()
+
+    def test_v2_capture_failure_prints_only_safe_error_code_and_keeps_m67_nonblocking(self):
+        with tempfile.TemporaryDirectory() as td:
+            self._write_inputs(td)
+            out = Path(td) / "weekly.json"
+            v2_root = Path(td) / "state" / "a_short" / "factor_comparison_private" / "v2"
+            secret_message = "C:\\private\\token.txt"
+            terminal = StringIO()
+            with patch("engine.a_short_factor_comparison_v2_weekly.capture_v2_after_published_weekly",
+                       side_effect=RuntimeError(secret_message)), \
+                    patch("runners.a_short_target_policy_comparison_runner.capture_after_published_weekly",
+                          return_value={"status": "captured"}) as p2_capture, redirect_stdout(terminal):
+                main(["--as-of", AS_OF, "--analysis-input", str(Path(td) / "ai.json"),
+                      "--iv-feed", str(Path(td) / "feed.json"), "--account", str(Path(td) / "acct.json"),
+                      "--out", str(out), "--run-date", AS_OF,
+                      "--factor-comparison-v2-root", str(v2_root),
+                      "--target-policy-root", str(Path(td) / "logs" / "p2.json")],
+                     price_provider=lambda code: _series())
+            p2_capture.assert_called_once()
+            output = terminal.getvalue()
+        self.assertIn("error_code=unknown", output)
+        self.assertIn("M6.7 output remains authoritative and unchanged", output)
+        self.assertNotIn("600598.SH", output)
+        self.assertNotIn("token.txt", output)
+        self.assertNotIn("RuntimeError", output)
+        self.assertNotIn("traceback", output.lower())
 
     def test_v2_capture_is_not_reached_when_official_publish_fails(self):
         with tempfile.TemporaryDirectory() as td:

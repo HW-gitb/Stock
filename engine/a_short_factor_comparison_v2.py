@@ -45,6 +45,13 @@ class ComparisonV2Error(ValueError):
     """Raised when a v2 private evidence invariant cannot be proven."""
 
 
+def _price_close_matches(left: object, right: object) -> bool:
+    """Compare the same frozen price without rejecting binary float representation drift."""
+    return _finite(left) and _finite(right) and math.isclose(
+        float(left), float(right), rel_tol=0.0, abs_tol=1e-8
+    )
+
+
 def _canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
@@ -720,8 +727,7 @@ def _validate_capture_integrity(capture: dict) -> None:
         bar_dates = [_date(row.get("trade_date")) for row in series if isinstance(row, dict) and row.get("trade_date")]
         if len(bar_dates) != len(series) or max(bar_dates) != identity["price_data_through"]:
             raise ComparisonV2Error("v2 capture candidate price history does not end at frozen price_data_through")
-        if not _finite(candidate.get("close")) or not _finite(series[-1].get("close")) or \
-                float(candidate["close"]) != float(series[-1]["close"]):
+        if not _price_close_matches(candidate.get("close"), series[-1].get("close")):
             raise ComparisonV2Error("v2 capture candidate close is not bound to its frozen price_data_through history")
         codes.append(code)
     if len(codes) != len(set(codes)):
@@ -828,9 +834,10 @@ def capture_v2_week(*, root: str | Path, decision_date: str, candidates: list[di
             trade_date = price_row.get("trade_date")
             if trade_date is None or _date(trade_date) > identity["price_data_through"]:
                 raise ComparisonV2Error("v2 capture candidate price series must be complete PIT data through price_data_through")
-        if _date(candidate["price_series"][-1]["trade_date"]) != identity["price_data_through"] or \
-                float(candidate["price_series"][-1]["close"]) != float(candidate["close"]):
-            raise ComparisonV2Error("v2 capture candidate snapshot must end at price_data_through and match the frozen close")
+        if _date(candidate["price_series"][-1]["trade_date"]) != identity["price_data_through"]:
+            raise ComparisonV2Error("v2 capture candidate snapshot last_date mismatch")
+        if not _price_close_matches(candidate["price_series"][-1]["close"], candidate["close"]):
+            raise ComparisonV2Error("v2 capture candidate snapshot last_close mismatch")
     _ensure_program(root, governance)
     active_batch_ids = _active_experiment_batch_ids(root, governance)
     epoch = _resolve_epoch(root, governance, decision_date)
