@@ -1,0 +1,488 @@
+# -*- coding: utf-8 -*-
+"""Offline validator for the US-short provisional cross-industry discovery lane.
+
+This is knife 2 only: it consumes the knife-1 discovery artifact, a same-decision-date
+Pass1 universe artifact, and a same-decision-date SEC-SIC classification packet.  It
+never calls a provider and emits an inert validation artifact; scoring, Top15, operation
+advice, seats, theme_probe, and lifecycle actions remain disabled by schema constants.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import subprocess
+import sys
+import unicodedata
+import re
+from datetime import date, datetime, time as datetime_time
+from pathlib import Path
+from typing import Any
+from zoneinfo import ZoneInfo
+
+ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+
+from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from runners import us_short_universe_fetch  # noqa: E402
+
+SCHEMA_PATH = ROOT / "schemas" / "us_short_provisional_theme_validation.schema.json"
+DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
+CLASSIFICATION_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_sector_classification_packet.schema.json"
+GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
+STATE_DIR = ROOT / "state" / "us_short"
+DEFAULT_DISCOVERY_PATH = STATE_DIR / "us_short_llm_theme_discovery.json"
+DEFAULT_CANDIDATE_PATH = STATE_DIR / "candidate_universe_20260706.json"
+DEFAULT_CLASSIFICATION_PATH = STATE_DIR / "us_short_full_universe_sector_classification_packet.json"
+DEFAULT_OUTPUT_PATH = STATE_DIR / "us_short_provisional_theme_validation.json"
+NEW_YORK = ZoneInfo("America/New_York")
+MIN_THEME_MEMBERS = 3
+MAX_THEMES = 8
+
+
+class ProvisionalThemeValidationError(ValueError):
+    """An input artifact cannot be consumed without guessing."""
+
+
+def _read_json(path: Path) -> tuple[Any, str]:
+    try:
+        raw = path.read_bytes()
+        return json.loads(raw.decode("utf-8")), hashlib.sha256(raw).hexdigest()
+    except (OSError, UnicodeDecodeError, ValueError) as exc:
+        raise ProvisionalThemeValidationError(f"cannot read JSON artifact: {path}") from exc
+
+
+def _write_atomic(payload: dict[str, Any], path: Path) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    try:
+        with tmp.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2)
+            handle.write("\n")
+        tmp.replace(path)
+    except OSError as exc:
+        tmp.unlink(missing_ok=True)
+        raise ProvisionalThemeValidationError(f"cannot atomically write output: {path}") from exc
+
+
+def _repo_path(value: Path | str, *, field: str) -> Path:
+    raw = Path(value)
+    resolved = (raw if raw.is_absolute() else ROOT / raw).resolve()
+    try:
+        resolved.relative_to(ROOT.resolve())
+    except ValueError as exc:
+        raise ProvisionalThemeValidationError(f"{field} must stay under repository root") from exc
+    return resolved
+
+
+def _ignored(path: Path) -> bool:
+    result = subprocess.run(
+        [
+            "git", "-c", "core.excludesFile=", "check-ignore", "-q", "--",
+            path.resolve().relative_to(ROOT.resolve()).as_posix(),
+        ],
+        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
+    )
+    return result.returncode == 0
+
+
+def _input_path(value: Path | str, *, field: str) -> Path:
+    path = _repo_path(value, field=field)
+    if not path.is_file():
+        raise ProvisionalThemeValidationError(f"{field} must be an existing file")
+    return path
+
+
+def _output_path(value: Path | str) -> Path:
+    path = _repo_path(value, field="output_path")
+    try:
+        path.relative_to(STATE_DIR.resolve())
+    except ValueError as exc:
+        raise ProvisionalThemeValidationError("output_path must stay under state/us_short/") from exc
+    if path.suffix != ".json" or not _ignored(path):
+        raise ProvisionalThemeValidationError("output_path must be a gitignored .json under state/us_short/")
+    return path
+
+
+def _schema_validate(payload: Any, schema_path: Path, label: str) -> None:
+    try:
+        from jsonschema import Draft7Validator
+    except ImportError as exc:
+        raise ProvisionalThemeValidationError("jsonschema is required; refusing schema bypass") from exc
+    schema, _ = _read_json(schema_path)
+    errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
+    if errors:
+        raise ProvisionalThemeValidationError(f"{label} schema rejected {len(errors)} field(s): {errors[0].message}")
+
+
+def _parse_instant(value: Any, field: str) -> datetime:
+    if type(value) is not str:
+        raise ProvisionalThemeValidationError(f"{field} must be timezone-aware RFC3339")
+    try:
+        parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
+    except ValueError as exc:
+        raise ProvisionalThemeValidationError(f"{field} must be timezone-aware RFC3339") from exc
+    if parsed.tzinfo is None:
+        raise ProvisionalThemeValidationError(f"{field} must be timezone-aware RFC3339")
+    return parsed
+
+
+def _open_et(decision_date: str) -> datetime:
+    try:
+        opened = datetime.combine(datetime.strptime(decision_date, "%Y%m%d").date(), datetime_time(9, 30), NEW_YORK)
+    except ValueError as exc:
+        raise ProvisionalThemeValidationError("expected_decision_date must be YYYYMMDD") from exc
+    return opened
+
+
+def _canonical_map(values: dict[str, Any], *, field: str, allowed: set[str] | None = None) -> dict[str, Any]:
+    if type(values) is not dict:
+        raise ProvisionalThemeValidationError(f"{field} must be an object")
+    out: dict[str, Any] = {}
+    for raw_key, value in values.items():
+        ticker = canonical_us_ticker(raw_key)
+        if ticker is None:
+            raise ProvisionalThemeValidationError(f"{field} has a non-canonical US ticker")
+        if ticker in out:
+            raise ProvisionalThemeValidationError(f"{field} has duplicate canonical ticker: {ticker}")
+        if allowed is not None and ticker not in allowed:
+            raise ProvisionalThemeValidationError(f"{field} has a ticker outside the eligible universe: {ticker}")
+        out[ticker] = value
+    return out
+
+
+def _validate_discovery_bindings(discovery: dict[str, Any], expected_date: str) -> None:
+    cutoff = _open_et(expected_date)
+    refs = discovery["source_refs"]
+    ref_times: dict[str, datetime] = {}
+    ref_types: dict[str, str] = {}
+    for ref in refs:
+        source_id = ref["source_id"]
+        if source_id in ref_times:
+            raise ProvisionalThemeValidationError(f"discovery source_refs contains duplicate source_id: {source_id}")
+        ref_times[source_id] = _parse_instant(ref["observed_at"], f"source_refs[{source_id}].observed_at")
+        ref_types[source_id] = ref["source_type"]
+        if ref_times[source_id] >= cutoff:
+            raise ProvisionalThemeValidationError(f"source {source_id} is not before the decision open")
+    seen_themes: set[str] = set()
+    for theme in discovery["themes"]:
+        theme_id = theme["theme_id"]
+        if theme_id in seen_themes:
+            raise ProvisionalThemeValidationError(f"discovery contains duplicate theme_id: {theme_id}")
+        seen_themes.add(theme_id)
+        theme_time = _parse_instant(theme["observed_at"], f"themes[{theme_id}].observed_at")
+        if theme_time >= cutoff:
+            raise ProvisionalThemeValidationError(f"theme {theme_id} is not before the decision open")
+        theme_refs = set(theme["source_ref_ids"])
+        if len(theme_refs) != len(theme["source_ref_ids"]):
+            raise ProvisionalThemeValidationError(f"theme {theme_id} contains duplicate source_ref_id")
+        if not theme_refs or not theme_refs.issubset(ref_times):
+            raise ProvisionalThemeValidationError(f"theme {theme_id} has an unbound source_ref_id")
+        if any(ref_times[ref_id] > theme_time for ref_id in theme_refs):
+            raise ProvisionalThemeValidationError(f"theme {theme_id} cites a source after theme observation")
+        # Member-level identity/source-quality defects are intentionally handled by
+        # validate_provisional_themes so one bad member cannot kill an otherwise usable theme.
+
+
+def _load_inputs(
+    discovery_path: Path, candidate_path: Path, classification_path: Path, expected_date: str
+) -> dict[str, Any]:
+    discovery, discovery_hash = _read_json(discovery_path)
+    _schema_validate(discovery, DISCOVERY_SCHEMA_PATH, "discovery artifact")
+    if discovery["decision_clock"]["expected_decision_date"] != expected_date:
+        raise ProvisionalThemeValidationError("discovery decision date does not match expected_decision_date")
+    _validate_discovery_bindings(discovery, expected_date)
+
+    candidate, candidate_hash = _read_json(candidate_path)
+    try:
+        candidate = us_short_universe_fetch.validate_candidate_artifact(
+            candidate, expected_decision_date=expected_date,
+            governance=load_eligibility_governance(GOVERNANCE_PATH),
+        )
+    except Exception as exc:
+        raise ProvisionalThemeValidationError(f"candidate artifact failed its canonical validator: {exc}") from exc
+
+    classification, classification_hash = _read_json(classification_path)
+    _schema_validate(classification, CLASSIFICATION_SCHEMA_PATH, "classification packet")
+    clock = classification["decision_clock"]
+    if clock["expected_decision_date"] != expected_date:
+        raise ProvisionalThemeValidationError("classification decision date does not match expected_decision_date")
+    if clock["candidate_price_basis_date"] != candidate["price_basis_date"]:
+        raise ProvisionalThemeValidationError("classification candidate_price_basis_date does not match candidate")
+    if clock["price_basis_date"] != candidate["used_date"]:
+        raise ProvisionalThemeValidationError("classification price_basis_date does not match candidate used_date")
+    if clock["source_as_of"] != classification["classification_contract"]["as_of"]:
+        raise ProvisionalThemeValidationError("classification source_as_of does not match its contract")
+    source_as_of = date.fromisoformat(clock["source_as_of"])
+    if source_as_of > datetime.strptime(expected_date, "%Y%m%d").date():
+        raise ProvisionalThemeValidationError("classification source_as_of is after the decision date")
+    if _parse_instant(
+        classification["provenance"]["observed_at"], "classification.provenance.observed_at"
+    ) >= _open_et(expected_date):
+        raise ProvisionalThemeValidationError("classification observed_at is not before the decision open")
+
+    eligible = set(candidate["eligible_tickers"])
+    sectors = _canonical_map(
+        classification["sector_by_ticker"], field="classification.sector_by_ticker", allowed=eligible
+    )
+    return {
+        "discovery": discovery, "candidate": candidate, "classification": classification,
+        "hashes": {"discovery": discovery_hash, "candidate": candidate_hash, "classification": classification_hash},
+        "eligible": eligible, "sectors": sectors,
+    }
+
+
+def validate_provisional_themes(
+    discovery: dict[str, Any], *, eligible_tickers: set[str], sectors_by_ticker: dict[str, str],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Apply the knife-2 member/theme gates without scoring or downstream effects."""
+    source_types = {ref["source_id"]: ref["source_type"] for ref in discovery["source_refs"]}
+    accepted: list[dict[str, Any]] = []
+    drops: list[dict[str, Any]] = []
+    def canonical_industry_code(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        normalized = unicodedata.normalize("NFKC", value).strip().upper()
+        return normalized if re.fullmatch(r"[0-9]{2}", normalized) else None
+
+    for raw_theme in discovery["themes"]:
+        theme_id = raw_theme["theme_id"]
+        members: list[dict[str, Any]] = []
+        seen_tickers: set[str] = set()
+        for raw_member in raw_theme["members"]:
+            ticker = canonical_us_ticker(raw_member["ticker"])
+            raw_refs = set(raw_member["source_ref_ids"])
+            theme_refs = set(raw_theme["source_ref_ids"])
+            refs = [ref for ref in raw_member["source_ref_ids"] if ref in theme_refs]
+            types = {source_types.get(ref) for ref in refs}
+            reason = None
+            if ticker is None:
+                reason = "invalid_canonical_us_ticker"
+            elif ticker in seen_tickers:
+                reason = "duplicate_member_ticker"
+            elif not raw_refs or not raw_refs.issubset(theme_refs):
+                reason = "unbound_member_source_ref"
+            elif ticker not in eligible_tickers:
+                reason = "not_in_active_pass1_eligible_universe"
+            elif not ({"web", "x"} & types):
+                reason = "missing_independent_web_x_evidence"
+            elif ticker not in sectors_by_ticker or canonical_industry_code(sectors_by_ticker[ticker]) is None:
+                reason = "missing_sec_sic_classification"
+            if reason:
+                drops.append({
+                    "stage": "member", "theme_id": theme_id,
+                    "ticker": ticker or str(raw_member["ticker"]), "reason": reason,
+                })
+                continue
+            seen_tickers.add(ticker)
+            evidence_tier = "both" if {"web", "x"}.issubset(types) else "single"
+            members.append({
+                "ticker": ticker, "membership_status": "provisional_validated",
+                "source_ref_ids": sorted(set(refs)),
+                "source_types": sorted({kind for kind in types if kind in {"web", "x"}}),
+                "evidence_tier": evidence_tier,
+                "industry_code": canonical_industry_code(sectors_by_ticker[ticker]),
+                "industry_source": "sec_sic_major_group",
+            })
+        members.sort(key=lambda row: row["ticker"])
+        industry_codes = sorted({row["industry_code"] for row in members})
+        if len(members) < MIN_THEME_MEMBERS:
+            drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_3_qualified_members"})
+            continue
+        if len(industry_codes) < 2:
+            drops.append({"stage": "theme", "theme_id": theme_id, "reason": "fewer_than_2_sec_sic_industries"})
+            continue
+        source_counts = {
+            kind: sum(
+                kind in {source_types.get(ref) for ref in member["source_ref_ids"]}
+                for member in members
+            )
+            for kind in ("web", "x")
+        }
+        source_counts["both"] = sum(member["evidence_tier"] == "both" for member in members)
+        accepted.append({
+            "theme_id": theme_id, "display_name": raw_theme["display_name"], "summary": raw_theme["summary"],
+            "status": "provisional_validated", "observed_at": raw_theme["observed_at"],
+            "source_ref_ids": sorted(raw_theme["source_ref_ids"]), "members": members,
+            "cross_industry_validation_status": "validated_by_sec_sic_major_group",
+            "market_confirmation_status": "not_run",
+            "validation": {
+                "selection_rank": 0, "qualified_member_count": len(members),
+                "industry_count": len(industry_codes), "industry_codes": industry_codes,
+                "source_type_counts": source_counts,
+            },
+        })
+    for theme in accepted:
+        theme["validation"]["distinct_web_x_source_ref_count"] = sum(
+            source_types.get(ref) in {"web", "x"} for ref in theme["source_ref_ids"]
+        )
+    # Deterministic, model-confidence-free top-8: more qualified members, then more distinct independent refs,
+    # then newest PIT observation, then stable theme id. This is selection bookkeeping, not a score.
+    accepted.sort(key=lambda theme: (
+        -theme["validation"]["source_type_counts"].get("both", 0),
+        -theme["validation"]["qualified_member_count"],
+        -theme["validation"]["distinct_web_x_source_ref_count"],
+        -_parse_instant(theme["observed_at"], f"themes[{theme['theme_id']}].observed_at").timestamp(),
+        theme["theme_id"],
+    ))
+    for rank, theme in enumerate(accepted, start=1):
+        theme["validation"]["selection_rank"] = rank
+    for theme in accepted[MAX_THEMES:]:
+        drops.append({"stage": "truncation", "theme_id": theme["theme_id"], "reason": "outside_deterministic_top_8"})
+    return accepted[:MAX_THEMES], drops
+
+
+def build_artifact(inputs: dict[str, Any], *, generated_at: str) -> dict[str, Any]:
+    generated = _parse_instant(generated_at, "generated_at")
+    themes, drops = validate_provisional_themes(
+        inputs["discovery"], eligible_tickers=inputs["eligible"], sectors_by_ticker=inputs["sectors"]
+    )
+    payload = {
+        "schema_name": "us_short_provisional_theme_validation",
+        "schema_version": "1.0.0", "generated_at": generated.isoformat(),
+        "decision_clock": {
+            "expected_decision_date": inputs["candidate"]["decision_date"],
+            "candidate_price_basis_date": inputs["candidate"]["price_basis_date"],
+            "universe_used_date": inputs["candidate"]["used_date"],
+            "classification_source_as_of": inputs["classification"]["decision_clock"]["source_as_of"],
+            "cutoff_policy": "before_decision_open_et", "pit_enforced": True,
+        },
+        "validation_contract": {
+            "producer_kind": "provisional_theme_validate", "input_mode": "offline_local_artifacts",
+            "membership_status": "provisional_validated", "market_confirmation_status": "not_run",
+            "scoring_eligible": False, "top15_effect_enabled": False,
+            "operation_advice_effect_enabled": False, "dynamic_seats_enabled": False,
+            "theme_probe_enabled": False, "lifecycle_actions_enabled": False,
+        },
+        "input_artifacts": {
+            "discovery_artifact_sha256": inputs["hashes"]["discovery"],
+            "candidate_artifact_sha256": inputs["hashes"]["candidate"],
+            "classification_packet_sha256": inputs["hashes"]["classification"],
+            "eligible_ticker_count": len(inputs["eligible"]), "classification_ticker_count": len(inputs["sectors"]),
+        },
+        "source_ref_types": {
+            ref["source_id"]: ref["source_type"] for ref in inputs["discovery"]["source_refs"]
+        },
+        "themes": themes, "drop_ledger": drops,
+        "summary": {
+            "discovered_theme_count": len(inputs["discovery"]["themes"]), "validated_theme_count": len(themes),
+            "validated_member_count": sum(len(theme["members"]) for theme in themes),
+            "rejected_theme_count": sum(1 for row in drops if row["stage"] == "theme"),
+            "dropped_member_count": sum(1 for row in drops if row["stage"] == "member"),
+            "truncated_theme_count": sum(1 for row in drops if row["stage"] == "truncation"),
+        },
+    }
+    _schema_validate(payload, SCHEMA_PATH, "validation artifact")
+    return payload
+
+
+def run_preflight(
+    *, discovery_path: Path = DEFAULT_DISCOVERY_PATH,
+    candidate_path: Path = DEFAULT_CANDIDATE_PATH,
+    classification_path: Path = DEFAULT_CLASSIFICATION_PATH,
+    output_path: Path = DEFAULT_OUTPUT_PATH,
+    expected_decision_date: str,
+    generated_at: str,
+) -> dict[str, Any]:
+    paths = [
+        _input_path(discovery_path, field="discovery_path"),
+        _input_path(candidate_path, field="candidate_path"),
+        _input_path(classification_path, field="classification_path"),
+    ]
+    output = _output_path(output_path)
+    artifact = build_artifact(_load_inputs(*paths, expected_decision_date), generated_at=generated_at)
+    return {
+        "schema_name": "us_short_provisional_theme_validation_preflight", "schema_version": "1.0.0",
+        "status": "offline_preflight_passed", "network_access_performed": False,
+        "provider_calls_performed": False, "scoring_or_top15_effect": False,
+        "operation_advice_effect": False, "output_written": False,
+        "output_path": output.resolve().relative_to(ROOT.resolve()).as_posix(),
+        "validated_theme_count": len(artifact["themes"]),
+        "validated_member_count": artifact["summary"]["validated_member_count"],
+    }
+
+
+def run_packet(
+    *, discovery_path: Path = DEFAULT_DISCOVERY_PATH,
+    candidate_path: Path = DEFAULT_CANDIDATE_PATH,
+    classification_path: Path = DEFAULT_CLASSIFICATION_PATH,
+    output_path: Path = DEFAULT_OUTPUT_PATH,
+    expected_decision_date: str,
+    generated_at: str,
+) -> dict[str, Any]:
+    paths = [
+        _input_path(discovery_path, field="discovery_path"),
+        _input_path(candidate_path, field="candidate_path"),
+        _input_path(classification_path, field="classification_path"),
+    ]
+    output = _output_path(output_path)
+    artifact = build_artifact(_load_inputs(*paths, expected_decision_date), generated_at=generated_at)
+    if output.exists():
+        try:
+            existing = json.loads(output.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise ProvisionalThemeValidationError("existing validation receipt is unreadable") from exc
+        if not isinstance(existing, dict):
+            raise ProvisionalThemeValidationError("existing validation receipt must be a JSON object")
+        immutable_keys = ("decision_clock", "input_artifacts")
+        try:
+            _schema_validate(existing, SCHEMA_PATH, "existing validation receipt")
+        except ProvisionalThemeValidationError:
+            raise
+        if any(existing.get(key) != artifact.get(key) for key in immutable_keys):
+            raise ProvisionalThemeValidationError(
+                "output_path already holds a different decision-date or input-digest receipt"
+            )
+        existing_without_generated = dict(existing)
+        artifact_without_generated = dict(artifact)
+        existing_without_generated.pop("generated_at", None)
+        artifact_without_generated.pop("generated_at", None)
+        if existing_without_generated != artifact_without_generated:
+            raise ProvisionalThemeValidationError("existing validation receipt content drifted for the same inputs")
+        return {
+            "schema_name": "us_short_provisional_theme_validation_execution_summary", "schema_version": "1.0.0",
+            "status": "offline_validation_artifact_reused", "network_access_performed": False,
+            "provider_calls_performed": False, "scoring_or_top15_effect": False,
+            "operation_advice_effect": False,
+            "output_path": output.resolve().relative_to(ROOT.resolve()).as_posix(),
+            "validated_theme_count": existing["summary"]["validated_theme_count"],
+            "validated_member_count": existing["summary"]["validated_member_count"],
+        }
+    _write_atomic(artifact, output)
+    return {
+        "schema_name": "us_short_provisional_theme_validation_execution_summary", "schema_version": "1.0.0",
+        "status": "offline_validation_artifact_written", "network_access_performed": False,
+        "provider_calls_performed": False, "scoring_or_top15_effect": False,
+        "operation_advice_effect": False,
+        "output_path": output.resolve().relative_to(ROOT.resolve()).as_posix(),
+        "validated_theme_count": len(artifact["themes"]),
+        "validated_member_count": artifact["summary"]["validated_member_count"],
+    }
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Validate an offline US-short provisional theme artifact.")
+    parser.add_argument("--discovery-path", type=Path, default=DEFAULT_DISCOVERY_PATH)
+    parser.add_argument("--candidate-path", type=Path, default=DEFAULT_CANDIDATE_PATH)
+    parser.add_argument("--classification-path", type=Path, default=DEFAULT_CLASSIFICATION_PATH)
+    parser.add_argument("--output-path", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument("--expected-decision-date", required=True)
+    parser.add_argument("--generated-at", required=True)
+    parser.add_argument("--preflight-only", action="store_true")
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
+    kwargs = {
+        "discovery_path": args.discovery_path, "candidate_path": args.candidate_path,
+        "classification_path": args.classification_path, "output_path": args.output_path,
+        "expected_decision_date": args.expected_decision_date, "generated_at": args.generated_at,
+    }
+    result = run_preflight(**kwargs) if args.preflight_only else run_packet(**kwargs)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

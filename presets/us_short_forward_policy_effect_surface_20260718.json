@@ -19,6 +19,7 @@
     "engine/us_short_paper_multi_day_exit.py",
     "engine/us_short_paper_net_result.py",
     "engine/us_short_price_engine.py",
+    "engine/us_short_provisional_theme_boost.py",
     "engine/us_short_regime.py",
     "engine/us_short_risk_downgrade.py",
     "engine/us_short_theme_lifecycle.py",

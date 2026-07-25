@@ -1,3 +1,4 @@
+import copy
 import unittest
 from datetime import date, timedelta
 
@@ -28,6 +29,7 @@ from engine.us_short_seam_score import (
     compose_score_inputs,
     load_binding,
 )
+from tests.schema.test_us_short_provisional_theme_validation_schema import _artifact as _validated_theme_artifact
 
 
 _AGGRESSIVE = {"vix": "进攻", "market_trend": "进攻", "breadth": "进攻"}
@@ -223,6 +225,205 @@ def _compose(**overrides):
 
 
 class ScoreComposerHappyPathTest(unittest.TestCase):
+    def test_provisional_theme_boost_is_off_by_default_and_both_tier_adds_five_once(self):
+        baseline = _compose()
+        self.assertNotIn("provisional_theme_boost", baseline["analysis_by_ticker"]["AAPL"])
+        artifact = _validated_theme_artifact()
+        self.assertEqual(
+            baseline,
+            _compose(provisional_theme_validation=artifact, theme_soft_boost_enabled=False),
+        )
+        duplicate_membership = copy.deepcopy(artifact["themes"][0])
+        duplicate_membership["theme_id"] = "theme_02"
+        duplicate_membership["validation"]["selection_rank"] = 2
+        artifact["themes"].append(duplicate_membership)
+        enabled = _compose(
+            provisional_theme_validation=artifact,
+            theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        self.assertAlmostEqual(baseline["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 81.0)
+        self.assertAlmostEqual(enabled["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 86.0)
+        self.assertAlmostEqual(enabled["selection_inputs"]["per_ticker"]["TSLA"]["core_score"], 34.5)
+        self.assertEqual(enabled["analysis_by_ticker"]["AAPL"]["provisional_theme_boost"]["evidence_tier"], "both")
+
+    def test_single_tier_adds_two_and_not_five(self):
+        artifact = _validated_theme_artifact()
+        member = next(row for row in artifact["themes"][0]["members"] if row["ticker"] == "MSFT")
+        member["source_types"] = ["web"]
+        member["evidence_tier"] = "single"
+        member["source_ref_ids"] = ["web:theme"]
+        enabled = _compose(
+            provisional_theme_validation=artifact,
+            theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        self.assertAlmostEqual(enabled["selection_inputs"]["per_ticker"]["MSFT"]["core_score"], 47.0)
+
+    def test_consumer_schema_gate_is_load_bearing(self):
+        """The consumer's >=3-member, <=8-theme and effect-flag gates live ONLY in its `_schema_validate`
+        call, so they need a test that dies with it. Each artifact below is rejected by the schema alone —
+        the mapper's own Python checks (industry re-derivation, tier/ref binding) all pass on them."""
+        boost_kwargs = dict(
+            theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+
+        def _two_member_theme(artifact):
+            theme = artifact["themes"][0]
+            theme["members"] = [row for row in theme["members"] if row["ticker"] != "JPM"]
+            theme["validation"]["qualified_member_count"] = 2
+            theme["validation"]["industry_codes"] = ["10"]
+            theme["validation"]["industry_count"] = 1
+
+        def _nine_themes(artifact):
+            base = artifact["themes"][0]
+            artifact["themes"] = []
+            for index in range(9):
+                clone = copy.deepcopy(base)
+                clone["theme_id"] = f"theme_{index:02d}"
+                clone["validation"]["selection_rank"] = index + 1
+                artifact["themes"].append(clone)
+
+        def _claims_top15_effect(artifact):
+            artifact["validation_contract"]["top15_effect_enabled"] = True
+
+        for label, mutate in (("2-member theme", _two_member_theme),
+                              ("9 themes", _nine_themes),
+                              ("self-declared top15 effect", _claims_top15_effect)):
+            with self.subTest(artifact=label):
+                artifact = _validated_theme_artifact()
+                mutate(artifact)
+                with self.assertRaises(ScoreSeamError):
+                    _compose(provisional_theme_validation=artifact, **boost_kwargs)
+
+    def test_chasing_extreme_strip_suppresses_the_provisional_boost(self):
+        """§4.3: a chasing_extreme ticker has its theme contribution stripped from core — an unconfirmed
+        provisional theme must not refund part of that penalty. Provenance survives; the points do not."""
+        boost_kwargs = dict(
+            provisional_theme_validation=_validated_theme_artifact(),
+            theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        chasing = _overext_map(chasing=["AAPL"])
+        stripped_only = _compose(overextension_by_ticker=chasing)
+        boosted = _compose(overextension_by_ticker=chasing, **boost_kwargs)
+        self.assertAlmostEqual(stripped_only["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 49.5)
+        self.assertAlmostEqual(boosted["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 49.5)
+        record = boosted["analysis_by_ticker"]["AAPL"]["provisional_theme_boost"]
+        self.assertFalse(record["boost_applied"])
+        self.assertEqual(record["theme_soft_boost"], 0.0)
+        self.assertIsNone(record["evidence_tier"])
+        self.assertTrue(record["validated_theme_ids"])
+        self.assertTrue(boosted["analysis_by_ticker"]["MSFT"]["provisional_theme_boost"]["boost_applied"])
+
+    def test_mismatched_evidence_tier_fails_closed(self):
+        artifact = _validated_theme_artifact()
+        artifact["themes"][0]["members"][0]["evidence_tier"] = "single"
+        with self.assertRaises(ValueError):
+            _compose(
+                provisional_theme_validation=artifact, theme_soft_boost_enabled=True,
+                provisional_theme_expected_decision_date="20260615",
+                provisional_theme_input_digests={
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            )
+
+    def test_enabled_theme_boost_requires_expected_identity_receipt(self):
+        with self.assertRaises(ValueError):
+            _compose(provisional_theme_validation=_validated_theme_artifact(), theme_soft_boost_enabled=True)
+
+    def test_enabled_theme_boost_rejects_forged_source_type_binding(self):
+        artifact = _validated_theme_artifact()
+        artifact["source_ref_types"]["web:theme"] = "x"
+        with self.assertRaises(ValueError):
+            _compose(
+                provisional_theme_validation=artifact, theme_soft_boost_enabled=True,
+                provisional_theme_expected_decision_date="20260615",
+                provisional_theme_input_digests={
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            )
+
+    def test_llm_explanatory_ref_does_not_abort_web_x_boost_consumer(self):
+        artifact = _validated_theme_artifact()
+        artifact["source_ref_types"]["llm:summary"] = "llm"
+        theme = artifact["themes"][0]
+        theme["source_ref_ids"].append("llm:summary")
+        for member in theme["members"]:
+            member["source_ref_ids"].append("llm:summary")
+        enabled = _compose(
+            provisional_theme_validation=artifact, theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        self.assertAlmostEqual(enabled["selection_inputs"]["per_ticker"]["AAPL"]["core_score"], 86.0)
+
+    def test_enabled_theme_boost_rejects_locator_source_ids(self):
+        artifact = _validated_theme_artifact()
+        artifact["source_ref_types"]["https://example.invalid/source"] = "web"
+        with self.assertRaises(ValueError):
+            _compose(
+                provisional_theme_validation=artifact, theme_soft_boost_enabled=True,
+                provisional_theme_expected_decision_date="20260615",
+                provisional_theme_input_digests={
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            )
+
+    def test_provisional_theme_boost_recomputes_in_analysis_seam(self):
+        composed = _compose(
+            provisional_theme_validation=_validated_theme_artifact(),
+            theme_soft_boost_enabled=True,
+            provisional_theme_expected_decision_date="20260615",
+            provisional_theme_input_digests={
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        )
+        row = {
+            "ticker": "AAPL", "row_source": "top15_candidate", "signals": {},
+            "price_input": {"close": 101.0, "bars": []},
+            "selection_record": {
+                "selection_rank": 1, "selection_bucket": "core_top",
+                **composed["selection_inputs"]["per_ticker"]["AAPL"],
+            },
+        }
+        row.update(composed["analysis_by_ticker"]["AAPL"])
+        analyzed = analyze_rows([row], market_axis_regimes=_AGGRESSIVE)["rows"][0]
+        self.assertAlmostEqual(analyzed["score"]["core_score"], 86.0)
+
     def test_compose_score_inputs_emits_selection_and_analysis_from_one_source(self):
         out = _compose()
 

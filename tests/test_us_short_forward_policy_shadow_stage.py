@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import tempfile
 import unittest
@@ -8,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from engine.us_short_eligibility_gate import load_eligibility_governance
+from engine.us_short_forward_policy_heads import ForwardPolicyHeadError, build_selection_policy_heads
 from engine.us_short_forward_policy_shadow_stage import (
     ForwardPolicyShadowStageError,
     materialize_forward_policy_shadow,
@@ -156,6 +158,90 @@ class ForwardPolicyShadowStageTests(unittest.TestCase):
         # JSON writers sort object keys; the persisted policy-keyed map must remain valid after reload rather than
         # treating serialization order as a strategy-contract order.
         validate_forward_shadow_selection_record(private_record)
+
+    def test_enabled_provisional_theme_boost_key_is_consumed_by_shadow_heads(self):
+        bound = {
+            "theme_soft_boost": 5.0,
+            "evidence_tier": "both",
+            "validated_theme_ids": ["theme_00"],
+            "source_ref_ids": ["web:theme", "x:theme"],
+            "observed_at": "2026-06-12T12:10:00Z",
+            "validation_identity": {
+                "expected_decision_date": "20260713",
+                "input_digests": {
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            },
+            "boost_applied": True,
+        }
+        baseline = build_selection_policy_heads(
+            self.composition, overextension_by_ticker=self.overextension,
+            theme_selection_contract=self.data_context["selection_inputs"]["theme_selection_contract"],
+        )
+        # BETA is `none` in this fixture (ALFA is chasing_extreme), so BETA is the un-stripped case.
+        enabled_composition = copy.deepcopy(self.composition)
+        enabled_composition["analysis_by_ticker"]["BETA"]["provisional_theme_boost"] = bound
+        enabled = build_selection_policy_heads(
+            enabled_composition, overextension_by_ticker=self.overextension,
+            theme_selection_contract=self.data_context["selection_inputs"]["theme_selection_contract"],
+        )
+        self.assertAlmostEqual(
+            enabled["balanced"]["per_ticker"]["BETA"]["core_score"],
+            baseline["balanced"]["per_ticker"]["BETA"]["core_score"] + 5.0,
+        )
+        # §12.2: theme_off is the theme-ablation counterfactual — a theme-derived boost must NOT ride into it,
+        # or the forward A/B attribution measures the boost instead of the theme block.
+        self.assertAlmostEqual(
+            enabled["theme_off"]["per_ticker"]["BETA"]["core_score"],
+            baseline["theme_off"]["per_ticker"]["BETA"]["core_score"],
+        )
+        # §4.3: ALFA is chasing_extreme — the heads must not refund the strip either, even if a record
+        # reaches them with boost_applied=True (compose already suppresses it; this is the second latch).
+        stripped_composition = copy.deepcopy(self.composition)
+        stripped_composition["analysis_by_ticker"]["ALFA"]["provisional_theme_boost"] = bound
+        with_stripped = build_selection_policy_heads(
+            stripped_composition, overextension_by_ticker=self.overextension,
+            theme_selection_contract=self.data_context["selection_inputs"]["theme_selection_contract"],
+        )
+        self.assertAlmostEqual(
+            with_stripped["balanced"]["per_ticker"]["ALFA"]["core_score"],
+            baseline["balanced"]["per_ticker"]["ALFA"]["core_score"],
+        )
+
+    def test_shadow_heads_reject_malformed_provisional_boost_record(self):
+        bad = copy.deepcopy(self.composition)
+        bad["analysis_by_ticker"]["ALFA"]["provisional_theme_boost"] = {
+            "theme_soft_boost": 5.0, "evidence_tier": "both", "validated_theme_ids": [],
+            "source_ref_ids": [], "observed_at": None, "boost_applied": True,
+            "validation_identity": {"expected_decision_date": "20260713", "input_digests": {}},
+        }
+        with self.assertRaises(ForwardPolicyHeadError):
+            build_selection_policy_heads(
+                bad, overextension_by_ticker=self.overextension,
+                theme_selection_contract=self.data_context["selection_inputs"]["theme_selection_contract"],
+            )
+
+    def test_shadow_heads_cap_provisional_boost_at_hundred(self):
+        capped = copy.deepcopy(self.composition)
+        capped["analysis_by_ticker"]["BETA"]["score_blocks"] = {
+            "momentum": 100.0, "theme": 100.0, "catalyst": 100.0,
+        }
+        capped["analysis_by_ticker"]["BETA"]["provisional_theme_boost"] = {
+            "theme_soft_boost": 5.0, "evidence_tier": "both", "validated_theme_ids": ["theme_00"],
+            "source_ref_ids": ["web:theme", "x:theme"], "observed_at": "2026-06-12T12:10:00Z",
+            "boost_applied": True,
+            "validation_identity": {
+                "expected_decision_date": "20260713",
+                "input_digests": {"discovery_artifact_sha256": "a" * 64, "candidate_artifact_sha256": "b" * 64, "classification_packet_sha256": "c" * 64},
+            },
+        }
+        heads_out = build_selection_policy_heads(
+            capped, overextension_by_ticker=self.overextension,
+            theme_selection_contract=self.data_context["selection_inputs"]["theme_selection_contract"],
+        )
+        self.assertEqual(heads_out["balanced"]["per_ticker"]["BETA"]["core_score"], 100.0)
 
     def test_common_pool_is_pass2_clean_and_identical_across_all_heads(self):
         self.data_context["universe"].append({

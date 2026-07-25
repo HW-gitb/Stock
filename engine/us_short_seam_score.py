@@ -16,6 +16,10 @@ from pathlib import Path
 from engine.us_short_core_score import CORE_COMPONENTS, PRIMARY_PROFILE, PROFILE_NAMES, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_overextension import validate_overextension_result
+from engine.us_short_provisional_theme_boost import (
+    ProvisionalThemeBoostError,
+    build_provisional_theme_boost_map,
+)
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_seam_catalyst import (
     COVERAGE_DISPOSITIONS as CATALYST_COVERAGE_DISPOSITIONS,
@@ -276,6 +280,10 @@ def compose_score_inputs(
     theme_opportunity_state,
     scoring_profile=PRIMARY_PROFILE,
     overextension_by_ticker=None,
+    provisional_theme_validation=None,
+    theme_soft_boost_enabled=False,
+    provisional_theme_expected_decision_date=None,
+    provisional_theme_input_digests=None,
 ):
     """Compose Cut 6 component projections into selection + analysis scoring inputs.
 
@@ -296,6 +304,8 @@ def compose_score_inputs(
     if scoring_profile not in PROFILE_NAMES:   # fail closed up front — a per-ticker strip must not let
         raise ScoreSeamError(f"unknown scoring_profile: {scoring_profile!r}")   # an all-chasing run silently bypass
     _require_exact_str(theme_opportunity_state, name="theme_opportunity_state")
+    if type(theme_soft_boost_enabled) is not bool:
+        raise ScoreSeamError("theme_soft_boost_enabled must be exact bool")
     targets = _canonical_targets(target_tickers)
     projections = {
         "momentum": _validate_projection("momentum", momentum_projection, targets),
@@ -304,6 +314,21 @@ def compose_score_inputs(
     }
     risks = _validate_risk_map(risk_downgrade_by_ticker, targets)
     theme_strip_targets = _validated_theme_strip_targets(overextension_by_ticker, targets)
+    if theme_soft_boost_enabled:
+        if provisional_theme_validation is None:
+            raise ScoreSeamError("theme_soft_boost_enabled requires provisional_theme_validation")
+        if provisional_theme_expected_decision_date is None or provisional_theme_input_digests is None:
+            raise ScoreSeamError("theme_soft_boost_enabled requires expected decision date and input digest receipts")
+        try:
+            provisional_boosts = build_provisional_theme_boost_map(
+                provisional_theme_validation, target_tickers=targets,
+                expected_decision_date=provisional_theme_expected_decision_date,
+                expected_input_digests=provisional_theme_input_digests,
+            )
+        except ProvisionalThemeBoostError as exc:
+            raise ScoreSeamError(f"provisional theme validation rejected: {exc}") from exc
+    else:
+        provisional_boosts = None
 
     selection_per_ticker = {}
     analysis_by_ticker = {}
@@ -328,16 +353,29 @@ def compose_score_inputs(
         except KeyError as exc:
             raise ScoreSeamError(f"unknown scoring_profile: {scoring_profile!r}") from exc
 
+        soft_boost = provisional_boosts[ticker] if provisional_boosts is not None else None
+        if soft_boost is not None and stripped and float(soft_boost["theme_soft_boost"]) > 0.0:
+            # §4.3 chasing_extreme is a hard selection-side theme strip: provisional discovery cannot
+            # partially undo it. Preserve provenance, but carry an explicit zero/applied=false record so
+            # the analysis equality seam and downstream audit can distinguish suppression from absence.
+            soft_boost = dict(soft_boost)
+            soft_boost.update({
+                "theme_soft_boost": 0.0, "evidence_tier": None, "boost_applied": False,
+            })
+        final_core_score = min(100.0, score["core_score"] + (soft_boost["theme_soft_boost"] if soft_boost else 0.0))
         selection_per_ticker[ticker] = {
-            "core_score": score["core_score"],
+            "core_score": final_core_score,
             "theme_momentum_score": (THEME_MOMENTUM_NEUTRAL_SCORE if stripped
                                      else projections["theme"]["values"].get(ticker, THEME_MOMENTUM_NEUTRAL_SCORE)),
         }
-        analysis_by_ticker[ticker] = {
+        analysis_row = {
             "score_blocks": blocks,
             "risk_downgrade": risks[ticker],
             "scoring_profile": scoring_profile,
         }
+        if soft_boost is not None:
+            analysis_row["provisional_theme_boost"] = dict(soft_boost)
+        analysis_by_ticker[ticker] = analysis_row
         coverage_by_ticker[ticker] = {
             component: projections[component]["coverage"][ticker]
             for component in COMPONENT_KEYS

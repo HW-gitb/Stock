@@ -219,6 +219,61 @@ class AnalyzeRowsTests(unittest.TestCase):
         with self.assertRaises(wa.WeekendAnalysisError):
             _run([_cand_row(scoring_profile="bogus_profile")])
 
+    # --- knife-2 provisional theme boost fail-closed contract ---
+    def _boost(self, **over):
+        value = {
+            "theme_soft_boost": 5.0,
+            "evidence_tier": "both",
+            "validated_theme_ids": ["theme_00"],
+            "source_ref_ids": ["web:theme", "x:theme"],
+            "observed_at": "2026-06-12T12:10:00Z",
+            "validation_identity": {
+                "expected_decision_date": "20260615",
+                "input_digests": {
+                    "discovery_artifact_sha256": "a" * 64,
+                    "candidate_artifact_sha256": "b" * 64,
+                    "classification_packet_sha256": "c" * 64,
+                },
+            },
+            "boost_applied": True,
+        }
+        value.update(over)
+        return value
+
+    def test_theme_boost_tier_points_mismatch_fails_closed(self):
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=self._boost(theme_soft_boost=2.0))])
+
+    def test_theme_boost_points_out_of_range_fails_closed(self):
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=self._boost(theme_soft_boost=6.0))])
+
+    def test_theme_boost_provenance_keys_fail_closed(self):
+        bad = self._boost()
+        bad.pop("source_ref_ids")
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=bad)])
+
+    def test_theme_boost_zero_points_cannot_carry_provenance(self):
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=self._boost(
+                theme_soft_boost=0.0, evidence_tier=None, validated_theme_ids=[], source_ref_ids=[],
+                observed_at="2026-06-12T12:10:00Z"))])
+
+    def test_theme_boost_non_dict_fails_closed(self):
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=[])])
+
+    def test_theme_boost_malformed_provenance_values_fail_closed(self):
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=self._boost(source_ref_ids=["web:theme", "web:theme"]))])
+
+    def test_theme_boost_without_validation_binding_fails_closed(self):
+        bad = self._boost()
+        bad.pop("validation_identity")
+        with self.assertRaises(wa.WeekendAnalysisError):
+            _run([_cand_row(provisional_theme_boost=bad)])
+
     # --- canonical identity (one per stock) ---
     def test_ticker_canonicalized(self):
         row = _run([_cand_row(ticker=" aapl ")])["rows"][0]

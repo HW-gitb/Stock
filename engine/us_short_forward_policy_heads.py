@@ -20,6 +20,10 @@ from pathlib import Path
 from engine.us_short_core_score import CORE_COMPONENTS, PRIMARY_PROFILE, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_overextension import validate_overextension_result
+from engine.us_short_provisional_theme_boost import (
+    ProvisionalThemeBoostError,
+    validate_provisional_theme_boost_record,
+)
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 from engine.us_short_weekend_pipeline import run_selection
 
@@ -118,8 +122,15 @@ def _validated_composition(score_composition):
         raise ForwardPolicyHeadError("score composition analysis/selection rows must exactly cover targets")
     for ticker in targets:
         analysis_row = _exact_dict(analysis[ticker], where=f"analysis_by_ticker[{ticker}]")
-        if set(analysis_row) != {"score_blocks", "risk_downgrade", "scoring_profile"}:
+        allowed_analysis_keys = {"score_blocks", "risk_downgrade", "scoring_profile", "provisional_theme_boost"}
+        required_analysis_keys = {"score_blocks", "risk_downgrade", "scoring_profile"}
+        if not required_analysis_keys.issubset(set(analysis_row)) or not set(analysis_row).issubset(allowed_analysis_keys):
             raise ForwardPolicyHeadError(f"analysis_by_ticker[{ticker}] drifted from compose contract")
+        if "provisional_theme_boost" in analysis_row:
+            try:
+                validate_provisional_theme_boost_record(analysis_row["provisional_theme_boost"])
+            except ProvisionalThemeBoostError as exc:
+                raise ForwardPolicyHeadError(f"analysis_by_ticker[{ticker}] provisional theme boost is invalid") from exc
         _exact_dict(analysis_row["score_blocks"], where=f"analysis_by_ticker[{ticker}].score_blocks")
         try:
             validate_risk_downgrade_input(analysis_row["risk_downgrade"])
@@ -168,12 +179,17 @@ def _validated_stripped_targets(overextension_by_ticker, targets: tuple[str, ...
     return out
 
 
-def _normalized_score_inputs(analysis_row: dict, *, profile: str, strip_theme_score: bool = False):
+def _normalized_score_inputs(
+    analysis_row: dict, *, profile: str, strip_theme_score: bool = False, include_provisional_boost: bool = True,
+):
     risk = validate_risk_downgrade_input(analysis_row["risk_downgrade"])
     score = core_score(
         analysis_row["score_blocks"], profile=profile,
         risk_downgrade_points=risk["points"], strip_theme_score=strip_theme_score,
     )
+    boost = analysis_row.get("provisional_theme_boost")
+    if boost is not None and include_provisional_boost and boost["boost_applied"]:
+        score["core_score"] = min(100.0, score["core_score"] + float(boost["theme_soft_boost"]))
     return score, risk
 
 
@@ -200,11 +216,20 @@ def _score_for_policy(policy_id: str, analysis_row: dict, *, stripped: bool) -> 
         if strip:
             raw -= _CATALYST_OFF_WEIGHTS["theme"] * used["theme"]
         core = max(0.0, raw - base_score["risk_downgrade"])
+        boost = analysis_row.get("provisional_theme_boost")
+        if boost is not None and boost["boost_applied"] and not strip:
+            core = min(100.0, core + float(boost["theme_soft_boost"]))
         return core, _theme_seat_score(base_score, strip=strip, policy_id=policy_id)
     # Scoring-profile heads strip a chasing ticker's theme via strip_theme_score on THIS profile
     # (no reallocation), matching the real balanced selection track; theme_off's reallocation is
     # reserved for the dedicated theme_off shadow-attribution head only (§12.2).
-    score, _ = _normalized_score_inputs(analysis_row, profile=policy["score_profile"], strip_theme_score=strip)
+    # §4.3 / §12.2: the provisional boost is a THEME-derived signal, so it must not survive anywhere the
+    # theme contribution is deliberately removed — neither a chasing_extreme strip (which it would partly
+    # refund) nor the theme_off ablation head (whose whole purpose is to price the theme block's absence).
+    score, _ = _normalized_score_inputs(
+        analysis_row, profile=policy["score_profile"], strip_theme_score=strip,
+        include_provisional_boost=(policy_id != "theme_off" and not strip),
+    )
     return score["core_score"], _theme_seat_score(score, strip=strip, policy_id=policy_id)
 
 
