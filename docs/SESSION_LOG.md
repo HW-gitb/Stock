@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-25 - Claude Code 审查 (本轮无可审实现；P2 公开摘要回退根因入册)
+
+- **Verdict/Action**: 无 PASS 可发——本会话零代码产出（刀13 在读文档阶段被用户叫停，其后全程为设计讨论）。工作树唯一改动是既存的 P2 公开摘要回退，非本轮工作；审它时定位到从未登记的根因并入册。两个产物文件不提交（提交等于发布一个倒退的 as_of 时钟）。Detail in register.
+- **Required**: `R-ASHORT-PUBLIC-COMPARISON-SUMMARY-NO-ASOF-MONOTONICITY`(open P2，类级：P2 与 P4a 两个 summary 写路径均无 as_of 单调性护栏)。完整 Required/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:30e5e2869293。分级判定：无代码改动 → §6a 三触发条件全不命中→不起独立 agent；rule 3 五条件全不命中→不跑全量包(rule 6 过度审查=缺陷)。整读两文件真实 diff；反向探针实测 `write_public_summary` 校验后无条件 `_atomic_write`、无 as_of 比较，P4a 同形状；`as_of` 为 CLI 传入(runner:771)。无 provider/account/order。
+- **Next**: Codex：修复（按 register 的类级 Required，两个写路径同刀加护栏 + 每写路径一个反向对照测试，并在同刀按 canonical as_of 重生成产物）。
+
 ## 2026-07-25 - Claude Code 审查 PASS + commit (Codex FAIL 的 CRLF pin 判定与收口)
 
 - **Verdict/Action**: PASS，已提交 master（未 push）。Codex 说 `**` 规则没匹配、`check-attr` 是 `unspecified`——三种方式实测为假：11 个周报产物全部 `attr/-text`。但它的症状是真的，而且戳到我上一轮的漏检：属性只管检出，在钉住之前就已被抹成 CRLF 的 5 个产物仍留在工作树里，我当时只量了受测的 2 个而没扫整类。5 个已重新检出，并按它的要求加了机器守护。Detail in register.
