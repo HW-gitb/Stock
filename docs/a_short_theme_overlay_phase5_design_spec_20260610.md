@@ -119,7 +119,7 @@ portfolio_concentration_family: SW L2 暴露 / 因子共振 / 单赛道拥挤
 
 - **comparison track**: overlay 与 baseline(现 20/30/50)**同候选池**并行;benchmark excess **同时看 CSI1000 与 CSI300**;判据用月度 clustered t / drawdown / 胜率 / 坏票率 / false-negative,不只看均值。
 - **两道门(不混)**:
-  1. **≥12 forward observations(≈3 个月)+ 稳定胜出** → overlay 进 **production 排序**(低风险:A-short 为 risk_filter_only、全程手动)。
+  1. overlay 的任何启用不由本设计直接裁决；唯一裁决轨为 P4a `overlay_adjudication`，须在正式发布后的对照证据满足其门槛后另行审查，并由用户决定。
   2. **full-size / 真钱** 仍另走 **12 个月 live-normalized ship gate**(t≥2 / Sharpe≥1 / maxDD≤15%,paper 不算)。
 - 变体没稳定胜出 → 继续 research,不进 production。失败是有效否定结论,不是白做。
 

@@ -53,7 +53,6 @@ ADMISSION_IDS = ("p3_selected_vs_candidate_pool", "p3_selected_vs_csi1000", "p3_
 P3B_EXTERNAL_PUBLIC_SUMMARIES = (
     ROOT / "research" / "results" / "a_short" / "regime_candidate_effect_summary.json",
     ROOT / "research" / "results" / "a_short" / "target_policy_comparison_summary.json",
-    ROOT / "research" / "results" / "a_short" / "overlay_eval_summary.json",
 )
 
 

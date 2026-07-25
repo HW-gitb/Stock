@@ -242,10 +242,9 @@ class GovernanceParityTests(unittest.TestCase):
         self.assertEqual(gov["overlay_weights"], OVERLAY_WEIGHTS)
         self.assertEqual(gov["thresholds"], EMITTED_THRESHOLDS)
 
-    def test_promotion_rule_not_authorized_yet(self):
+    def test_governance_does_not_define_a_second_adjudication_route(self):
         gov = json.loads(GOV_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(gov["promotion_rule"]["min_forward_observations"], 12)
-        self.assertFalse(gov["promotion_rule"]["production_promotion_authorized_by_this_artifact"])
+        self.assertNotIn("promotion_rule", gov)
         self.assertFalse(gov["scope"]["production_ranking_changed_by_this_artifact"])
 
     def test_governance_egs_main_boundary_honest(self):

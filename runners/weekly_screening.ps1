@@ -12,10 +12,6 @@
 #                                               **只在 live 运行跑**(as_of>=运行日:今日 或 前瞻 canonical;真·过去回放 as_of<运行日 跳过——账本是 forward 累积的已结算交易日证据);
 #                                               无 ledger→一次性 --bootstrap 252日回填(首跑数分钟)、有→increment ~5日;
 #                                               runner 把 as_of 收敛到最新已结算交易日(盘中周一→上周五),复用本次 IV feed)
-#   6) overlay §6 readiness 提醒(a_short_overlay_eval:旁路 sidecar,comparison-only 非生产;只在 live 运行跑(as_of>=运行日,含前瞻 canonical);
-#                                               数 forward overlay.json,≥governance 阈值(12)即打醒目横幅提醒做 §6
-#                                               升级/退役决定——跨LLM、不管哪个AI跑都提醒;不算指标、不自动升级)
-#
 # 设计约束：
 # - canary / tracker / M6.7 在 egs_main 失败时不跑（拿不到当次 candidates，意义为零）
 # - canary / tracker 自身失败不影响整体 exit code（旁路约束：不阻断选股）
@@ -71,8 +67,7 @@ param(
     [switch]$SkipCanary,
     [switch]$SkipTracker,
     [switch]$SkipSemanticRisk,
-    [switch]$SkipRegime,
-    [switch]$SkipOverlayEval
+    [switch]$SkipRegime
 )
 
 # We rely on $LASTEXITCODE from native exes (python.exe), not PowerShell
@@ -610,33 +605,6 @@ if ($SkipRegime) {
     $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
     Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
     Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
-}
-
-# --- Stage 6: overlay §6 升级-复审 readiness 提醒(旁路 sidecar;comparison-only 非生产;失败绝不阻断周报)。
-#     只在 live 运行跑(as_of>=运行日:今日/前瞻 canonical;forward overlay 观测只在 live 累积,真·过去回放跳过)。数 forward overlay.json,≥governance 阈值(12)即由
-#     runner 打醒目横幅提醒做 §6 升级/退役决定——这是"不管哪个 AI 跑系统、每周都提醒"的硬保证(横幅落在每次实盘
-#     运行输出 + research lane 的 overlay_eval_summary.json)。不算指标、不自动升级(详见 runner docstring + register track ②)。
-if ($SkipOverlayEval) {
-    Add-SidecarOutcome -Name 'overlay_eval' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_overlay_eval'
-    Write-Host ""
-    Write-Host "[overlay] -SkipOverlayEval set, overlay readiness check not run" -ForegroundColor DarkGray
-} elseif ($IsHistoricalAsOf) {
-    Add-SidecarOutcome -Name 'overlay_eval' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
-    Write-Host ""
-    Write-Host "[overlay] historical -AsOf $AsOf -> skipping overlay readiness (forward obs only accrue on live runs)" -ForegroundColor DarkGray
-} else {
-    Write-Host ""
-    $OverlayEvalOut = Join-Path $ProjectRoot "research\results\a_short\overlay_eval_summary.json"
-    $OverlayResultsRoot = Join-Path $ProjectRoot "result\a_short"
-    Write-Host "[overlay] Running runners\a_short_overlay_eval.py (forward overlay readiness check) ..." -ForegroundColor Yellow
-    & $PythonExe runners\a_short_overlay_eval.py --results-root $OverlayResultsRoot --out $OverlayEvalOut
-    $OverlayEvalExitCode = $LASTEXITCODE
-    if ($null -eq $OverlayEvalExitCode) { $OverlayEvalExitCode = 1 }
-    if ($OverlayEvalExitCode -ne 0) {
-        # 旁路约束:readiness 检查失败(读 overlay.json 异常等)绝不阻断周报
-        Write-Host "[WARN] overlay readiness check exit $OverlayEvalExitCode (advisory sidecar; comparison-only, does NOT block the weekly)" -ForegroundColor Yellow
-    }
-    Add-SidecarOutcome -Name 'overlay_eval' -Expected $true -Attempted $true -ExecutionStatus $(if($OverlayEvalExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($OverlayEvalExitCode -eq 0){'advanced'}else{'unavailable'}) -ErrorCode $(if($OverlayEvalExitCode -eq 0){$null}else{'process_failed'}) -ObservedDecisionAsOf $(if($OverlayEvalExitCode -eq 0){$AsOf}else{$null})
 }
 
  # P4: health is a separate post-run companion.  The already-published M6.7

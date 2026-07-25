@@ -572,11 +572,10 @@
       "schema_path": "schemas/a_short_theme_overlay_comparison.schema.json",
       "schema_sha256": "cbab2ac920d72bb1234a016fbd4073d9bd44689c9fe6264ed918f3ebe216cbfe",
       "reason": "Not a missing connection: overlay is a separate forward comparison track and, before manual promotion, is prohibited from changing formal M6.7 star, risk, action, sizing, cash allocation, or veto.",
-      "owner": "runners/a_short_theme_overlay_comparison.py + runners/a_short_overlay_eval.py",
-      "review_ref": "manual promotion only after forward evidence",
+      "owner": "runners/a_short_theme_overlay_comparison.py",
+      "review_ref": "overlay_score remains an evidence source; P4a is the sole overlay adjudication route",
       "consumer_refs": [
-        "result/a_short/<as_of>/overlay.json",
-        "research/results/a_short/overlay_eval_summary.json"
+        "result/a_short/<as_of>/overlay.json"
       ]
     },
     {

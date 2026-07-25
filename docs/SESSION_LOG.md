@@ -1,5 +1,27 @@
 # Session Log
 
+## 2026-07-25 - Claude Code 审查 PASS + commit (A-short overlay 退役刀)
+
+- **Verdict/Action**: PASS，已提交 master（未 push）。上一轮两条 blocker 全清：README 三个锚点已恢复且过守护；effect-contract 重封那条随第二刀落地作废，冻结测试现在按模式走、带着这份 drift 仍绿。风险档 = comparison-only advisory sidecar 删除，不触发 §6a，不起独立 agent、不跑全量 lane（理由记在 register）。Detail in register.
+- **Required**: 无。`R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` 已 resolved。仅剩 Optional：US-short 三处仍把已删的 `a_short_overlay_eval` 当借鉴来源引用，下次动 US-short 时顺手退役。Detail in register.
+- **Verify**: review-evidence:9326ebbda7cf. Pinned main Python：聚焦包 124 OK（effect-contract、sidecar-health、overlay-comparison、final-action、fifth-knife freeze、三道 doc/route 守护）；`tests.test_a_short_official_operation_evidence` 15 OK（已发布 20260727 包内嵌台账仍带旧 consumer_ref 也照样可消费）；launcher `ParseFile` 0 errors、无 `overlay_eval` 残留；全树 grep 只剩 register/SESSION_LOG/两份历史周报/US-short Optional。无 provider/account/order。
+- **Next**: 无（overlay 退役刀已并入 master）。
+
+## 2026-07-25 - Codex 修复（A-short overlay 退役刀：恢复文档接线事实）
+
+- **Verdict/Action**: 只修复 overlay 退役刀的 Required：在 `docs/README.md` Slice A 行恢复仍成立的 `Data-loading WIRED`、`build_overlay_summary_from_panels`、weekly `--overlay` 三个锚点；`overlay_eval` readiness alarm 继续退役，`overlay_adjudication` 继续作为唯一裁决轨。未动第五刀 reseal、第一/第二刀或用户已有目标策略产物。
+- **Required**: 独立复核本 overlay 退役刀后再落地；第五刀 hash reseal 留在 evidence epoch switchover，不在本刀提前做。
+- **Verify**: 规定的主 Python 定向包（doc governance、README route length、effect contract、overlay comparison、sidecar health）98 OK；活动 launcher/sidecar/final-action/overlay comparison 路径无 `overlay_eval`；`git diff --check` 仅有 CRLF 警告。
+- **Pre-Codex self-review**: A 锚点三项均恢复；B 删除的 readiness 模块/Stage/sidecar 注册无活动引用；C stale expected-sidecar 仍 fail-closed；E README 350 字上限通过；F 未执行第五刀 reseal，未扩大到其他 lane。
+- **Next**: Claude Code：独立审查 overlay 退役刀。
+
+## 2026-07-25 - Claude Code 交接 (刀1刀2 已并入 master，路由给 Codex 独立复核)
+
+- **Verdict/Action**: 刀1（六轨 pre-freeze evidence epoch mode + P0/P1/P2/P3 四个 verdict 门）与刀2（fifth-knife 预冻结测试门 + official-operation fixture 换 20260727）已由我自修自审并合并为 `7d72679d`（19 文件，未 push）。因同一轮里修复与审查都是我，缺独立视角，故请 Codex 独立重审这一个 commit。判据以下方用户需求/目的为准，不以我的实现叙述为准。
+- **Required**: 用户需求 = 设计定稿前，对系统的任何改动都不得因冻结机制报错、或让已积累的周数失效。用户目的 = 用户确认设计完成的那一周开始记录数据，数据攒够后系统自动出结果。据此两个方向对抗：①预冻结期真的不会因无关改动报错/清零，也不会提前喊出 `review_due` / `recommend_*`；②`MODE` 翻成 `frozen_enforced` 后真能自动建新 epoch、从零计数、达标时自动出结论。overlay 退役刀不在范围（未提交，Required 见 register）。
+- **Verify**: 我这轮跑过：七模块 epoch 包 120 OK（修前 11 errors）；`tests.test_a_short_evidence_epoch_mode` 9 OK；fifth-knife + official-operation 19 OK；churn probe + target-policy 30 OK；植入 reload 被新守护抓到；`py_compile` clean。全量 lane 包起过但按用户指示掐掉，未采信、未记 ledger；Codex 自行决定是否补跑。
+- **Next**: Codex：重审 `7d72679d`。
+
 ## 2026-07-25 - Claude Code 审查 PASS + commit (A-short 第一刀 + 第二刀)
 
 - **Verdict/Action**: PASS both knives, committed to master (no push). User directed that this round's fix and review are both mine. Verdict-gate repair verified complete; reload pollution closed; the fifth-knife pre-freeze gate re-arms on the mode flip. The overlay-retirement slice stays uncommitted with its Required open — only its one-line touch to the P3 runner was excluded from the staged content. Detail in register.

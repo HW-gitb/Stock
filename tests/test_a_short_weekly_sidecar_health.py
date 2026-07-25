@@ -86,13 +86,13 @@ class AShortSidecarHealthTests(unittest.TestCase):
         self.assertEqual(result["sidecars"][0]["progress_status"], "stalled")
 
     def test_missing_expected_outcome_is_degraded(self):
-        manifest = _manifest([], expected=["overlay_eval"])
+        manifest = _manifest([], expected=["overlay_adjudication_capture"])
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
         self.assertEqual(result["overall"], "degraded")
         self.assertEqual(result["sidecars"][0]["execution_status"], "missing_outcome")
 
     def test_explicit_skip_is_partial_not_stalled(self):
-        manifest = _manifest([_row("overlay_eval", execution="skipped", progress="not_applicable", expected=False)])
+        manifest = _manifest([_row("overlay_adjudication_capture", execution="skipped", progress="not_applicable", expected=False)])
         result = build_health(as_of="20260727", launcher_manifest=manifest, project_root=Path("."))
         self.assertEqual(result["overall"], "partial")
         self.assertEqual(result["sidecars"][0]["progress_status"], "not_applicable")

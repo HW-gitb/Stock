@@ -66,7 +66,7 @@ runner 子切片须把以下数值**冻进 governance artifact + parity 测试**
 - `theme_heat / industry_heat` 的 pass 百分位阈值(如 ≥ p70)
 - `persistence` 高分位定义 + 窗口
 - `fit_floor`
-- **"稳定胜出"升级规则**:overlay 升 production 排序,仅当 ≥12 forward observations 上,对 baseline 在 §6 指标(CSI1000 ∧ CSI300 excess、月度 clustered-t、drawdown、胜率、坏票率、false-negative)以冻结 margin 稳定胜出。
+- **启用裁决**: 本 Slice A 不再定义独立的 overlay 升级规则；唯一裁决轨为 P4a `overlay_adjudication`。它在正式发布后累积 Stage3 rank-source 对照证据，任何启用仍须独立审查和用户决定。
 
 ---
 

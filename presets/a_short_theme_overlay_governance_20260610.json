@@ -4,7 +4,7 @@
   "generated_at": "2026-06-10T00:00:00+00:00",
   "scope": {
     "phase": "a_short_theme_overlay_slice_a",
-    "purpose": "freeze overlay weights/thresholds + promotion rule (O2); parity-mirror the runner constants",
+    "purpose": "freeze overlay weights/thresholds; parity-mirror the runner constants",
     "contract_status": "comparison_track_non_production",
     "production_ranking_changed_by_this_artifact": false,
     "egs_main_runtime_changed": true,
@@ -34,16 +34,6 @@
     "fit_floor": 0.4,
     "eligibility_min_pass": 2
   },
-  "promotion_rule": {
-    "min_forward_observations": 12,
-    "compare_same_candidate_pool": true,
-    "benchmarks_required": ["CSI1000", "CSI300"],
-    "metrics_required": ["monthly_clustered_t", "max_drawdown", "win_rate", "bad_ticket_rate", "false_negative_rate"],
-    "decision": "overlay promoted to production ranking ONLY if it beats baseline on the required metrics by a frozen margin over >= min_forward_observations; otherwise stays research/comparison-track",
-    "stable_win_margin_pending": "the exact numeric margin is frozen here before the first promotion review; until then no promotion",
-    "production_promotion_authorized_by_this_artifact": false,
-    "full_size_or_real_money": "separate 12-month live-normalized ship gate, not governed here"
-  },
   "parity_rules": {
     "runtime_source": "runners/a_short_theme_overlay_comparison.py",
     "exact_value_match_required": true,
@@ -51,8 +41,8 @@
   },
   "limitations": [
     "Comparison-track only; does not change EGS production final_score / tier / admission.",
-    "Overlay artifact authorizes no buy advice, real money, or ship-gate claim.",
-    "The numeric stable-win margin must be frozen here before the first promotion review; this v1 sets none, so no promotion is authorized yet.",
+    "Overlay artifact authorizes no buy advice, real money, ship-gate claim, or promotion decision.",
+    "Any future overlay-policy activation must use the separate P4a adjudication route and a separately reviewed user decision.",
     "PIT: concept membership uses L3 snapshots; SW industry mapping has no historical snapshot yet, so the SW dimension is forward-only until snapshots accumulate."
   ]
 }
