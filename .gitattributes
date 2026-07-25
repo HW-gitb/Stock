@@ -11,3 +11,12 @@ docs/SESSION_LOG.md merge=union
 # core.autocrlf (otherwise Windows CRLF-smudge drifts the sha and the calibration
 # test skips its frozen-replay assertions).
 tests/fixtures/a_short_entry_funnel_calibration/*.json -text
+
+# Same class, different artifact: the comparison ledgers record the RAW sha256 of
+# published weekly bundles (`m67_provenance.source_sha256`, the official-operation
+# capture's source identity). With core.autocrlf=true a fresh clone/worktree
+# smudges these to CRLF, the recorded sha stops matching, and the source-binding
+# assertions fail for a reason that has nothing to do with the code under review.
+research/results/a_short/**/weekly_m67.json -text
+research/results/a_short/**/weekly_m67.receipt.json -text
+research/results/a_short/**/weekly_m67.md -text

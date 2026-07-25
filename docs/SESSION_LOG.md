@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-25 - Claude Code 审查 PASS + commit (Codex 重审 `7d72679d` 的两条 finding)
+
+- **Verdict/Action**: PASS，已提交 master（未 push）。第一条判定成立并已修（P4a/P5 空数据门控测试 → 双向阈值测试）。第二条症状真、诊断错：我在本树量到 20260720 周报无 CRLF、raw sha 与记录里的 `source_sha256` 完全一致，`tests.test_a_short_regime_action_comparison` 25 OK；红是 CRLF checkout 造成的，按根因用 `.gitattributes -text` 钉住，未按 Codex 建议重绑记录。Detail in register.
+- **Required**: 无。新条目 `R-ASHORT-PREFREEZE-P4A-P5-THRESHOLD-TEST-GAP` 与 `R-ASHORT-PUBLISHED-BUNDLE-SHA-BREAKS-ON-CRLF-CHECKOUT` 均 resolved；后者取代 Codex 提的 `R-ASHORT-REGIME-ACTION-MIGRATION-SOURCE-BINDING-DRIFT`，重绑记录的方案已驳回并写明理由。Detail in register.
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 review 快照；证据均为真实工具结果）。Pinned main Python：`tests.test_a_short_evidence_epoch_mode` 9 OK；`tests.test_a_short_regime_action_comparison` 25 OK；植入控制：强制 `evidence_counts_toward_clock` 返回 True 后两条新测试都会失败（证明非空转）；`git check-attr` 对三类周报产物返回 `text: unset`，产物字节未变。无 provider/account/order。
+- **Next**: 无（已并入 master）。
+
 ## 2026-07-25 - Claude Code 审查 PASS + commit (A-short overlay 退役刀)
 
 - **Verdict/Action**: PASS，已提交 master（未 push）。上一轮两条 blocker 全清：README 三个锚点已恢复且过守护；effect-contract 重封那条随第二刀落地作废，冻结测试现在按模式走、带着这份 drift 仍绿。风险档 = comparison-only advisory sidecar 删除，不触发 §6a，不起独立 agent、不跑全量 lane（理由记在 register）。Detail in register.

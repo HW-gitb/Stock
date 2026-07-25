@@ -11,6 +11,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
@@ -109,6 +110,28 @@ def _loaded_track_symbols() -> dict[str, tuple[int, ...]]:
     return identities
 
 
+def _p4a_promotion_row(index: int) -> dict:
+    """One P4a outcome row shaped to clear every promotion gate when enforced.
+
+    Threshold-satisfying on purpose: an empty-row probe cannot tell a working
+    gate from a missing one, because `_adjudicate` returns `continue_accumulating`
+    on no evidence either way.
+    """
+    month = index + 1
+    decision = f"202{6 + index // 12}{month % 12 or 12:02d}01"
+    arm = {"entry_date": decision[:-2] + "02", "exit_date": decision[:-2] + "11",
+           "close_drawdown_pct": 0.0, "cash_drag_pct": 0.0, "unfilled_rate_pct": 0.0,
+           "positions": [{"ts_code": f"c{index}", "entry_status": "filled", "net_return_pct": 1.0}]}
+    baseline = dict(arm, positions=[{"ts_code": f"b{index}", "entry_status": "filled", "net_return_pct": .5}])
+    return {
+        "decision_date": decision, "same_list": False,
+        "h5": {"status": "settled", "delta_pct": .5}, "h5_complete": True,
+        "h10": {"status": "settled", "delta_pct": .5, "baseline": baseline, "candidate": arm,
+                "benchmarks": {"csi1000": {"candidate_excess_pct": .5}, "csi300": {"candidate_excess_pct": .5}}},
+        "h20": {"status": "settled", "delta_pct": .5}, "h20_complete": True,
+    }
+
+
 def _fingerprints_in_mode(mode: str) -> dict[str, str]:
     original = epoch_mode.MODE
     epoch_mode.MODE = mode
@@ -188,10 +211,17 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
 
 
 class PreFreezeVerdictGateTests(unittest.TestCase):
-    def test_p4a_cannot_adjudicate_on_pre_freeze_evidence(self):
+    def test_p4a_threshold_evidence_gates_pre_freeze_then_re_arms(self):
         from engine.a_short_overlay_adjudication import _adjudicate
-        verdict, _metrics = _adjudicate([], 0, 0)
-        self.assertEqual(verdict, "continue_accumulating")
+        rows = [_p4a_promotion_row(index) for index in range(24)]
+        with mock.patch.object(epoch_mode, "MODE", "pre_freeze_audit_only"):
+            parked, parked_metrics = _adjudicate(rows, 24, 0)
+        with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+            enforced, _metrics = _adjudicate(rows, 24, 0)
+        self.assertEqual(parked, "continue_accumulating")
+        self.assertEqual(enforced, "candidate_for_manual_promotion")
+        # The raw audit counters stay visible pre-freeze; only the verdict is withheld.
+        self.assertEqual((parked_metrics["eligible"], parked_metrics["difference"]), (24, 24))
 
     def test_p2_review_status_stays_not_reviewed(self):
         from runners.a_short_target_policy_comparison_runner import _current_review_status
@@ -199,16 +229,25 @@ class PreFreezeVerdictGateTests(unittest.TestCase):
         status = _current_review_status(ledger, "target_exit", {"epoch_id": "e1"})
         self.assertEqual(status, "not_reviewed")
 
-    def test_p5_build_reminder_cannot_fire_pre_freeze(self):
+    def test_p5_threshold_evidence_gates_pre_freeze_then_re_arms(self):
         from engine import a_short_industry_weight_comparison as p5
-        original = p5._current_admission_capture_records
-        try:
-            p5._current_admission_capture_records = lambda root: []
-            progress = p5._question_progress(Path("."), "balanced_vs_legacy", "20260727")
-        finally:
-            p5._current_admission_capture_records = original
-        self.assertFalse(progress["p5b_build_due"])
-        self.assertEqual(progress["p5b_checkpoint_notice"], "accumulating")
+        captures = [{"decision_date": f"202607{day:02d}"} for day in range(1, 13)]
+        outcome = {"payload": {"questions": [{"question_id": "balanced_vs_legacy", "same_list": False,
+                                              "horizons": {"h10": {"status": "settled"}}}]}}
+        any_existing_file = ROOT / "engine" / "a_short_evidence_epoch_mode.py"
+        with mock.patch.object(p5, "_current_admission_capture_records", lambda root: captures), \
+                mock.patch.object(p5, "_weekly_paths", lambda root, date: (any_existing_file, any_existing_file)), \
+                mock.patch.object(p5, "_load_json", lambda path: outcome), \
+                mock.patch.object(p5, "_validate_private_record", lambda record: None):
+            with mock.patch.object(epoch_mode, "MODE", "pre_freeze_audit_only"):
+                parked = p5._question_progress(Path("."), "balanced_vs_legacy", "20260727")
+            with mock.patch.object(epoch_mode, "MODE", "frozen_enforced"):
+                enforced = p5._question_progress(Path("."), "balanced_vs_legacy", "20260727")
+        # Same threshold-satisfying evidence both times: 12 eligible weeks, 12 with a real difference.
+        self.assertEqual((parked["eligible_policy_weeks"], parked["difference_weeks"]), (12, 12))
+        self.assertEqual((parked["p5b_build_due"], parked["p5b_checkpoint_notice"]), (False, "accumulating"))
+        self.assertEqual((enforced["p5b_build_due"], enforced["p5b_checkpoint_notice"]),
+                         (True, "p5b_implementation_due_at_12"))
 
 
 if __name__ == "__main__":
