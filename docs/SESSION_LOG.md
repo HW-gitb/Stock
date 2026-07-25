@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-25 - Claude Code 审查 PASS + commit (Codex FAIL 的 CRLF pin 判定与收口)
+
+- **Verdict/Action**: PASS，已提交 master（未 push）。Codex 说 `**` 规则没匹配、`check-attr` 是 `unspecified`——三种方式实测为假：11 个周报产物全部 `attr/-text`。但它的症状是真的，而且戳到我上一轮的漏检：属性只管检出，在钉住之前就已被抹成 CRLF 的 5 个产物仍留在工作树里，我当时只量了受测的 2 个而没扫整类。5 个已重新检出，并按它的要求加了机器守护。Detail in register.
+- **Required**: 无。`R-ASHORT-PUBLISHED-BUNDLE-CRLF-ATTRIBUTE-PATTERN-NOOP` 判为不成立（理由与实测写进 register），其请求的 check-attr 回归测试已采纳实现；不重绑历史 SHA 这点与我一致。Detail in register.
+- **Verify**: review-evidence:not_available（本轮 hook 未注入 review 快照；证据均为真实工具结果）。Pinned main Python：新守护 + P1 迁移 + epoch mode + official-operation + holdings-in-M6.7 = 94 OK。反向对照是实况而非植入：守护先在 5 个被抹的产物上失败，重新检出后才转绿。`git ls-files --eol` 现在 11 个全是 `i/lf w/lf attr/-text`。无 provider/account/order。
+- **Next**: 无（已并入 master）。
+
 ## 2026-07-25 - Claude Code 审查 PASS + commit (Codex 重审 `7d72679d` 的两条 finding)
 
 - **Verdict/Action**: PASS，已提交 master（未 push）。第一条判定成立并已修（P4a/P5 空数据门控测试 → 双向阈值测试）。第二条症状真、诊断错：我在本树量到 20260720 周报无 CRLF、raw sha 与记录里的 `source_sha256` 完全一致，`tests.test_a_short_regime_action_comparison` 25 OK；红是 CRLF checkout 造成的，按根因用 `.gitattributes -text` 钉住，未按 Codex 建议重绑记录。Detail in register.
