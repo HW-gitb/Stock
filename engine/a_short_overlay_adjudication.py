@@ -21,6 +21,8 @@ from typing import Any
 
 import jsonschema
 
+from engine import a_short_evidence_epoch_mode as _epoch_mode
+
 from engine.a_short_experiment_admission_registry import admission_snapshot, get_admission
 from engine.a_short_runtime_config import runtime_configuration_lineage
 
@@ -160,11 +162,18 @@ def _screening_runtime_recipe_binding() -> dict:
 
 
 def _epoch_context() -> dict:
-    """Read every epoch-bearing dependency once and reuse that coherent snapshot."""
+    """Read every epoch-bearing dependency once and reuse that coherent snapshot.
+
+    While the design is unfrozen the fingerprint is a stable pre-freeze constant
+    (see ``engine/a_short_evidence_epoch_mode``): the whole-file hashes below
+    invalidated every accumulated week on edits unrelated to this comparison.
+    """
     admission = admission_snapshot(ADMISSION_ID)
     profile = _active_profile_binding()
     recipe = _screening_runtime_recipe_binding()
-    fingerprint = _digest({"admission": admission, "active_profile_binding": profile,
+    fingerprint = _epoch_mode.fingerprint_or_pre_freeze(
+        "p4a_overlay_adjudication",
+        lambda: _digest({"admission": admission, "active_profile_binding": profile,
                     "screening_runtime_recipe": recipe,
                     "source_sha256": {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                                       for path in _source_files()},
@@ -172,7 +181,7 @@ def _epoch_context() -> dict:
                                   "baseline": "final_score", "candidate": "overlay_score"},
                     "outcome": {"horizons": HORIZONS, "entry": "t_plus_1_open",
                                 "qfq_provider_observed_only": True, "cost_pct": ROUND_TRIP_COST_PCT,
-                                "cash_not_reallocated": True, "benchmarks": BENCHMARKS}})
+                                "cash_not_reallocated": True, "benchmarks": BENCHMARKS}}))
     return {"admission_binding": admission, "active_profile_binding": profile,
             "screening_runtime_recipe": recipe, "contract_fingerprint": fingerprint,
             "epoch_id": _epoch_id(fingerprint)}
@@ -765,6 +774,8 @@ def _adjudicate(rows: list[dict], mature: int, no_count: int) -> tuple[str, dict
     metrics["monthly_cluster_t"], metrics["months"] = _monthly_cluster_t(rows)
     metrics.update(_risk_metrics(rows))
     metrics["h20_coverage_ok"] = all(row.get("h20_complete") is True for row in rows)
+    # Pre-freeze evidence is audit-only: never promote, retire or judge on it.
+    if not _epoch_mode.evidence_counts_toward_clock(): return "continue_accumulating", metrics
     if eligible < 12: return "continue_accumulating", metrics
     if not metrics["h5_coverage_ok"]: return "pending_h5_coverage", metrics
     if difference < 6: return "insufficient_policy_separation", metrics

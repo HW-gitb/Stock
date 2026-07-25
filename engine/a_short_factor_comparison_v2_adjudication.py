@@ -31,6 +31,7 @@ from engine.a_short_factor_comparison_v2 import (
     validate_v2_ledger,
     validate_v2_weekly_record,
 )
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 
 ADJUDICATION_PATH = "adjudication.json"
@@ -512,10 +513,15 @@ def _question_adjudication(question: dict, evidence: dict, *, governance: dict, 
                    for arm_id, rows in evidence["rows_by_arm"].items()}
     effective_by_arm = {arm_id: len(rows) for arm_id, rows in rows_by_arm.items()}
     effective_weeks = min(effective_by_arm.values(), default=0)
-    checkpoint = _formal_checkpoint(effective_weeks, contract)
     no_count_rates = {arm_id: (evidence["no_count_by_arm"][arm_id] / evidence["terminal_by_arm"][arm_id]
                                if evidence["terminal_by_arm"][arm_id] else None)
                       for arm_id in evidence["terminal_by_arm"]}
+    if not _epoch_mode.evidence_counts_toward_clock():
+        return {"question_id": question["question_id"], "experiment_batch_id": experiment_batch_id,
+                "status": "continue_accumulation", "formal_checkpoint_effective_weeks": None,
+                "effective_difference_weeks": effective_weeks, "arm_verdicts": [], "finalist_comparisons": {},
+                "recommendations": [], "no_count_rate_by_arm": no_count_rates, "formal_history": []}
+    checkpoint = _formal_checkpoint(effective_weeks, contract)
     if checkpoint is None:
         status = "continue_accumulation" if effective_weeks < int(contract["min_effective_weeks_preliminary"]) else "preliminary_review_due"
         return {"question_id": question["question_id"], "experiment_batch_id": experiment_batch_id,

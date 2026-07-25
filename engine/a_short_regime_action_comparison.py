@@ -16,6 +16,8 @@ from pathlib import Path
 
 import jsonschema
 
+from engine import a_short_evidence_epoch_mode as _epoch_mode
+
 from engine.a_short_regime_classifier import (
     FORWARD_RETURN_BASIS, RAW_REGIMES, STATEFUL_REGIMES, V14_2_REGIMES,
 )
@@ -94,7 +96,17 @@ def _runtime_policy_source_fingerprint() -> str:
 
 
 def candidate_effect_policy_fingerprint() -> str:
-    """Fingerprint every result-shaping P1 Cut1 policy component, not just its version label."""
+    """Fingerprint every result-shaping P1 Cut1 policy component, not just its version label.
+
+    Pre-freeze this is a stable constant (see ``engine/a_short_evidence_epoch_mode``);
+    the real binding below hashes 13 whole files and invalidated the ledger on
+    edits unrelated to this comparison.
+    """
+    return _epoch_mode.fingerprint_or_pre_freeze(
+        "p1_regime_candidate_effect", _real_candidate_effect_policy_fingerprint)
+
+
+def _real_candidate_effect_policy_fingerprint() -> str:
     gov = governance()
     payload = {
         "candidate_effect_policy": candidate_effect_policy(),
@@ -412,7 +424,8 @@ def summarize_action_records(records: list[dict]) -> dict:
         elif proxy < 0:
             unfavorable += 1
     gate = governance()["review_gate"]
-    ready = (len(forward_records) >= gate["forward_live_weeks_min"]
+    ready = (_epoch_mode.evidence_counts_toward_clock()
+             and len(forward_records) >= gate["forward_live_weeks_min"]
              and len(h10) >= gate["divergence_h10_samples_min"])
     if not ready:
         status = "accumulating"
@@ -662,7 +675,9 @@ def summarize_candidate_effect_records(records: list[dict]) -> dict:
     mean_h20 = _mean_or_none(weekly_h20)
     h20_complete = len(weekly_h20) == len(weekly_h10) and bool(weekly_h10)
     ready = (
-        len(live_weeks) >= policy["forward_live_weeks_min"]
+        # Pre-freeze evidence is audit-only and must never reach a verdict.
+        _epoch_mode.evidence_counts_toward_clock()
+        and len(live_weeks) >= policy["forward_live_weeks_min"]
         and len(weekly_h10) >= policy["divergence_weeks_min"]
         and sum(len(group) for group in divergent_h10.values()) >= policy["divergence_stocks_min"]
         and h20_complete

@@ -20,6 +20,7 @@ from engine.a_short_overlay_adjudication import (  # noqa: E402
     settle_and_summarize_weekly, settle_from_daily_payload, validate_public_summary, write_public_summary,
 )
 from runners.a_short_factor_comparison_v2_cache_build import CONSUMER_PRIORITY  # noqa: E402
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 DECISION, RUN = "20260710", "20260710"
 
@@ -91,6 +92,13 @@ def _daily(codes: list[str], *, missing_adjustment: bool = False) -> dict:
 
 
 class OverlayAdjudicationTests(unittest.TestCase):
+    def setUp(self):
+        # These cases assert the ENFORCED epoch contract (the historical default).
+        # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
+        previous = _epoch_mode.MODE
+        _epoch_mode.MODE = "frozen_enforced"
+        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+
     def _capture(self, tmp: str, **kwargs) -> Path:
         root = _root(tmp); stage3, overlay, weekly, receipt, marker, identity = _sources(tmp, **kwargs)
         with mock.patch("engine.a_short_overlay_adjudication._today", return_value=RUN):

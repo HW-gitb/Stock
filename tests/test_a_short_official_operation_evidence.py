@@ -26,8 +26,8 @@ from runners.a_short_official_operation_evidence import (  # noqa: E402
 )
 from engine.a_short_managed_exit import evaluate_managed_exit  # noqa: E402
 
-FIXTURE_DIR = ROOT / "research" / "results" / "a_short" / "20260720"
-FIXTURE_AS_OF = "20260720"
+FIXTURE_DIR = ROOT / "research" / "results" / "a_short" / "20260727"
+FIXTURE_AS_OF = "20260727"
 
 
 def _private_root_path(base: Path) -> Path:
@@ -120,7 +120,8 @@ def _publish(base: Path) -> tuple[Path, Path]:
     output.parent.mkdir(parents=True)
     for name in ("weekly_m67.json", "weekly_m67.md", "weekly_m67.receipt.json"):
         shutil.copy2(FIXTURE_DIR / name, output.parent / name)
-    return output, output.with_suffix("").with_suffix(".receipt.json")
+    receipt_path = output.with_suffix("").with_suffix(".receipt.json")
+    return output, receipt_path
 
 
 class OfficialOperationEvidenceCaptureTests(unittest.TestCase):
@@ -228,6 +229,18 @@ class OfficialOperationEvidenceCaptureTests(unittest.TestCase):
             receipt.write_text(json.dumps(bad, ensure_ascii=False) + "\n", encoding="utf-8")
             root = _private_root_path(base)
             with self.assertRaisesRegex(OfficialOperationEvidenceError, "account_snapshot_mismatch"):
+                capture_after_published_weekly(root=root, out_path=output, receipt_path=receipt)
+            self.assertFalse((root / "weeks" / FIXTURE_AS_OF / "capture.json").exists())
+
+    def test_receipt_clock_mismatch_is_rejected_before_any_capture_write(self):
+        with tempfile.TemporaryDirectory() as td:
+            base = Path(td)
+            output, receipt = _publish(base)
+            bad = json.loads(receipt.read_text(encoding="utf-8"))
+            bad["decision_as_of"] = "20260719"
+            receipt.write_text(json.dumps(bad, ensure_ascii=False) + "\n", encoding="utf-8")
+            root = _private_root_path(base)
+            with self.assertRaisesRegex(OfficialOperationEvidenceError, "receipt_not_publish_bound"):
                 capture_after_published_weekly(root=root, out_path=output, receipt_path=receipt)
             self.assertFalse((root / "weeks" / FIXTURE_AS_OF / "capture.json").exists())
 

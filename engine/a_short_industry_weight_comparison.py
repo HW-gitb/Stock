@@ -19,6 +19,8 @@ from pathlib import Path
 from typing import Any
 
 import jsonschema
+
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 from engine.a_short_experiment_admission_registry import admission_snapshot
 
 
@@ -168,6 +170,12 @@ def _runtime_source_fingerprint() -> str:
 
 
 def _contract_fingerprint(governance: dict) -> str:
+    """Pre-freeze returns a stable constant; see ``engine/a_short_evidence_epoch_mode``."""
+    return _epoch_mode.fingerprint_or_pre_freeze(
+        "p5_industry_weight", lambda: _real_contract_fingerprint(governance))
+
+
+def _real_contract_fingerprint(governance: dict) -> str:
     return _digest({
         "governance": governance,
         "profile_governance_sha256": _file_digest(PROFILE_GOVERNANCE_PATH),
@@ -588,12 +596,15 @@ def _question_progress(root: Path, question_id: str, as_of: str) -> dict:
         elif h10.get("status") == "no_count":
             mature += 1
             no_count += 1
-    notice = ("p5b_terminal_checkpoint_36_not_implemented" if eligible >= 36 else
+    # Pre-freeze evidence is audit-only: it must not trigger the P5b build reminder.
+    counts = _epoch_mode.evidence_counts_toward_clock()
+    notice = ("accumulating" if not counts else
+              "p5b_terminal_checkpoint_36_not_implemented" if eligible >= 36 else
               "p5b_formal_checkpoint_24_not_implemented" if eligible >= 24 else
               "p5b_implementation_due_at_12" if eligible >= 12 and difference >= 6 else "accumulating")
     return {"question_id": question_id, "eligible_policy_weeks": eligible, "difference_weeks": difference,
             "mature_opportunities": mature, "no_count_weeks": no_count,
-            "p5b_build_due": eligible >= 12 and difference >= 6,
+            "p5b_build_due": counts and eligible >= 12 and difference >= 6,
             "remaining_eligible_to_p5b": max(0, 12 - eligible), "remaining_difference_to_p5b": max(0, 6 - difference),
             "p5b_checkpoint_notice": notice}
 

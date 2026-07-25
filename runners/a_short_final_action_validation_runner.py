@@ -20,6 +20,8 @@ import tempfile
 from datetime import datetime
 from pathlib import Path
 from statistics import median
+
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 from typing import Any
 
 import jsonschema
@@ -92,7 +94,17 @@ def _atomic_write(path: str | Path, payload: dict[str, Any]) -> None:
 
 
 def _contract_fingerprint() -> str:
-    """A rule/evaluator change starts a new evidence epoch."""
+    """A rule/evaluator change starts a new evidence epoch.
+
+    Pre-freeze this returns a stable constant (see
+    ``engine/a_short_evidence_epoch_mode``); the real whole-file binding below
+    dropped every accumulated week whenever an unrelated file changed.
+    """
+    return _epoch_mode.fingerprint_or_pre_freeze("p3_final_action_validation", _real_contract_fingerprint)
+
+
+def _real_contract_fingerprint() -> str:
+    """The enforced fingerprint used once the design is frozen."""
     paths = (
         Path(__file__),
         ROOT / "engine" / "a_short_managed_exit.py",
@@ -552,11 +564,12 @@ def _summary_from_ledger(ledger: dict[str, Any], as_of: str) -> dict[str, Any]:
         {"decision_date": record["decision_date"], "source_identity": record.get("source_identity")}
         for record in valid
     ])
-    hold_status = "review_due" if len(holds) >= HOLD_REVIEW_WEEKS else "accumulating"
-    edge_status = "review_due" if len(edges) >= FULL_EDGE_REVIEW_WEEKS else "accumulating"
-    hac_status = "review_due" if len(edges) >= HAC_REVIEW_WEEKS and managed_plans >= HAC_MIN_PLANS else "accumulating"
+    counts = _epoch_mode.evidence_counts_toward_clock()
+    hold_status = "review_due" if counts and len(holds) >= HOLD_REVIEW_WEEKS else "accumulating"
+    edge_status = "review_due" if counts and len(edges) >= FULL_EDGE_REVIEW_WEEKS else "accumulating"
+    hac_status = "review_due" if counts and len(edges) >= HAC_REVIEW_WEEKS and managed_plans >= HAC_MIN_PLANS else "accumulating"
     ship_status = "accumulating"
-    if first_forward:
+    if counts and first_forward:
         months_ready = (datetime.strptime(as_of, "%Y%m%d") - datetime.strptime(first_forward, "%Y%m%d")).days >= 365
         if months_ready:
             ship_status = "review_due"

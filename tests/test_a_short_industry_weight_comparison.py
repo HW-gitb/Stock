@@ -26,6 +26,7 @@ from engine.a_short_industry_weight_comparison import (  # noqa: E402
 from engine.a_short_experiment_admission_registry import admission_snapshot  # noqa: E402
 from engine.egs_industry_heat import build_weight_comparison  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 
 DECISION = "20260202"
@@ -152,6 +153,13 @@ class FakeTushare:
 
 
 class IndustryWeightComparisonTests(unittest.TestCase):
+    def setUp(self):
+        # These cases assert the ENFORCED epoch contract (the historical default).
+        # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
+        previous = _epoch_mode.MODE
+        _epoch_mode.MODE = "frozen_enforced"
+        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+
     def test_governance_is_exactly_tied_to_production_profile_weights(self):
         governance = load_governance()
         self.assertEqual(governance["program_id"], PROGRAM_ID)

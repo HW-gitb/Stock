@@ -1,5 +1,86 @@
 # Session Log
 
+## 2026-07-25 - Claude Code 审查 PASS + commit (A-short 第一刀 + 第二刀)
+
+- **Verdict/Action**: PASS both knives, committed to master (no push). User directed that this round's fix and review are both mine. Verdict-gate repair verified complete; reload pollution closed; the fifth-knife pre-freeze gate re-arms on the mode flip. The overlay-retirement slice stays uncommitted with its Required open — only its one-line touch to the P3 runner was excluded from the staged content. Detail in register.
+- **Required**: None open for either knife. `R-ASHORT-PREFREEZE-COMPARISON-VERDICT-GATES-BYPASS`, `R-ASHORT-EPOCH-MODE-TEST-RELOAD-POLLUTES-LANE-PACK`, `R-ASHORT-FIFTH-KNIFE-PREFREEZE-GATE-CANNOT-REARM` all resolved. `R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` stays open, out of scope. Detail in register.
+- **Verify**: review-evidence:e191495b215a. Tier = rule-1 acceptance + affected-module pack; the full lane discover pack was started then abandoned as too slow (user-directed) and is NOT claimed. Pinned main Python: seven-module epoch pack 120 OK (was 11 errors); epoch module 9 OK; fifth-knife + official-operation 19 OK; churn probe + target-policy 30 OK; planted reload caught; churn files show no residue. `py_compile` clean. No provider/account/order.
+- **Next**: 无（两刀已并入 master）。
+
+## 2026-07-25 - Claude Code 修复 (A-short 第一刀 churn-probe reload pollution)
+
+- **Verdict/Action**: Closed `R-ASHORT-EPOCH-MODE-TEST-RELOAD-POLLUTES-LANE-PACK` as a class, not as the one demonstrated leg: both `importlib.reload` loops removed, both modes now measured inside one mutation window, all four P0/v2 contract legs sampled instead of one, and a symbol-identity guard added so a re-added reload fails loudly. Detail in register.
+- **Required**: None open. The overlay-retirement Required stays out of scope. Detail in register.
+- **Verify**: Pinned main Python: churn probe + target-policy 30 OK (was 2 errors); seven-module pack 120 OK (was 11 errors); epoch module 9 OK; `py_compile` clean; `git diff --check` CRLF-only; churn files clean in `git status` after every run.
+- **Pre-Codex self-review**: Class enumerated from the Required text, not the probe — measurement showed the reload was never needed, and exposed a second leg: the helper sampled the one P0/v2 contract leg that does NOT bind a churn file, leaving the two diseased legs unexercised (7 → 10 components). Reverse control: a planted reload keeps `id(module)` unchanged yet is caught by the symbol guard. 独立对抗 pass: 不适用（单轮、test-only、非 fail-closed 生产边界）.
+- **Next**: 自审后提交。
+
+## 2026-07-25 - Claude Code 审查 FAIL (A-short 第一刀 pre-freeze verdict-gate repair)
+
+- **Verdict/Action**: FAIL, nothing committed. The verdict-gate repair itself is correct and complete — all four gates route through the one authority, each has the required two-directional paired test, and a whole-class sweep of nine comparison modules found no remaining ungated emitter. The blocker is separate and new: the knife's own churn probe reloads six live modules in-process and turns 11 unrelated tests red. Detail in register.
+- **Required**: `R-ASHORT-EPOCH-MODE-TEST-RELOAD-POLLUTES-LANE-PACK` — move the probe to a child interpreter (or drop the reloads) so the lane pack is green in one process. `R-ASHORT-PREFREEZE-COMPARISON-VERDICT-GATES-BYPASS` = closed by this repair. The prior round's attribution of those 11 errors to the overlay-retirement slice is corrected in the register. Detail in register.
+- **Verify**: review-evidence:e191495b215a. Pinned main Python: seven-module pack = 120 tests, 11 errors; every module green alone (overlay 24 / target 29 / final 8 OK). Bisection: probe + target-policy alone reproduces 2 errors, the other two candidate polluters pair clean. Gate probes: P0 24-week fixture → `continue_accumulation` + empty receipts, then `recommend_adopt_arm` enforced; P1/P2/P3 paired controls flip the same way. No provider/account/order.
+- **Next**: Codex：修复 `R-ASHORT-EPOCH-MODE-TEST-RELOAD-POLLUTES-LANE-PACK`。
+
+## 2026-07-25 - Codex repair (A-short first knife: pre-freeze verdict-gate closure)
+
+- **Verdict/Action**: Repaired `R-ASHORT-PREFREEZE-COMPARISON-VERDICT-GATES-BYPASS`: P0/P1/P2/P3 now use the one epoch-mode authority, so audit-only evidence cannot emit a recommendation or `review_due`; frozen mode retains the original outputs. Detail in register.
+- **Required**: Independent review before commit. Second knife and the overlay-retirement Required remain out of scope.
+- **Verify**: Pinned main Python: epoch-mode + P0/P1 pack 50 OK; P2/P3 affected classes 19 OK; four paired threshold tests 4 OK; compile clean; `git diff --check` LF/CRLF-only. Current-diff-only self-review PASS.
+- **Pre-Codex self-review**: A: P0/P1/P2/P3 all covered; B: `rg -n "evidence_counts_toward_clock\\(\\)"` shows each gate and `rg -n "test_threshold_evidence"` shows four paired controls; C: each control proves pre-freeze blocks and frozen re-arms; E/F: register settled, no route-doc state change, compile/diff clean.
+- **Next**: Claude Code：审查第一刀修复。
+
+## 2026-07-25 - Codex reverse review FAIL (A-short first knife: pre-freeze verdict-gate coverage)
+
+- **Verdict/Action**: FAIL. The stable pre-freeze fingerprints work, but the first knife does not gate every downstream comparison verdict/reminder surface. P0 can still recommend adopt/discard/retain; P1 D2 can report `review_candidate_preferred`; P2 can report `review_due`; P3 can emit `review_due` reminders while evidence is non-countable. Detail in register `R-ASHORT-PREFREEZE-COMPARISON-VERDICT-GATES-BYPASS`.
+- **Required**: Add the central `evidence_counts_toward_clock()` gate to those four paths and add threshold-satisfying pre-freeze reverse tests. Second knife and overlay-retirement Required remain excluded.
+- **Verify**: `tests.test_a_short_evidence_epoch_mode` = 9 OK. Main-Python probes reproduced P1 `review_candidate_preferred`, P2 `due`, and P3 `review_due` under `MODE=pre_freeze_audit_only`; P0 ungated recommendation path confirmed by source inspection. The broader 101-case pack had 11 sibling-tree errors and is not used for this verdict.
+- **Next**: Codex：修复第一刀 pre-freeze verdict-gate 问题。
+
+## 2026-07-25 - Claude Code re-review PASS (A-short 第二刀 pre-freeze test gate + official-operation fixture)
+
+- **Verdict/Action**: PASS on content, still NOT committed. Both Required legs of `R-ASHORT-FIFTH-KNIFE-PREFREEZE-GATE-CANNOT-REARM` verified closed by probes. The third item is a landing constraint, not a defect: the freeze test imports the untracked epoch-mode module, so this knife must land with the epoch pre-freeze slice, which the user scoped out. Nothing staged. Risk class unchanged = low, so no agent and no full lane per rules 3/6. Detail in register.
+- **Required**: None open for this knife. `R-ASHORT-FIFTH-KNIFE-PREFREEZE-GATE-CANNOT-REARM` = resolved pending landing. `R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` stays open and out of scope; its README anchor guard is still the only red in `tests.test_doc_governance_guard`. Detail in register.
+- **Verify**: review-evidence:d35a694f4455. Pinned main Python: freeze-schema + official-operation = 19 OK; `py_compile` clean; `git diff --check` CRLF-only. Probes: `MODE=frozen_enforced` now makes the hash guard FAIL on the real drift (it passed silently before); the gate is status-independent; a resealed packet still trips the planted-SHA reverse control yet passes without it; the 4 pre-freeze honesty mutations still caught. Official-operation half byte-identical. No provider/account/order.
+- **Next**: 第一刀落地后连同本刀一起提交。
+
+## 2026-07-25 - Codex repair (A-short second knife: restore freeze guard re-arm)
+
+- **Verdict/Action**: Removed the unreachable packet-status conjunct from the fifth-knife hash gate; `MODE=frozen_enforced` now re-arms contract-hash checking while the packet remains pre-freeze. The reverse control now mutates its copied recorded SHA, so it cannot go green merely because the live packet is resealed.
+- **Required**: Independent review before commit. The untracked epoch-mode module must land with this test; the separate overlay-retirement Required remains out of scope.
+- **Verify**: Pinned main Python: freeze-schema + official-operation pack 19 OK; changed Python files compile; `git diff --check` reports only repository-wide LF/CRLF normalization warnings.
+- **Next**: Claude Code：复审第二刀。
+
+## 2026-07-25 - Claude Code 审查 Pass-with-Required (A-short 第二刀 pre-freeze test gate + official-operation fixture)
+
+- **Verdict/Action**: Pass-with-Required, NOT committed. The fixture swap is correct and necessary; the freeze relaxation keeps the honesty gate armed but its re-arm path is dead. Risk class = low (two test modules; no §6a live-provider / secret / new fail-closed engine surface), so no independent agent and no full lane per `AGENTS.md §Verification tiering` rules 3/6; probes covered the relaxed guard instead. The two sibling slices in the same tree are excluded. Detail in register.
+- **Required**: `R-ASHORT-FIFTH-KNIFE-PREFREEZE-GATE-CANNOT-REARM` — the hash guard's `status != frozen_not_started` conjunct is unreachable (schema `const`), so a `MODE` flip does not re-arm it; the new enforced-mode reverse control dies at the required reseal; the knife imports an untracked module and is not independently committable. `R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` stays open, out of this knife. Detail in register.
+- **Verify**: review-evidence:08da7430c944. Pinned main Python: freeze-schema + official-operation modules = 19 OK; `py_compile` clean; `git diff --check` CRLF-only. Probes: the 4 negative capture scenarios each die on their own error code on the new fixture but collapse to one on the retired one; the pre-freeze branch catches 4 honesty mutations; `MODE=frozen_enforced` alone checks zero hashes; a resealed packet makes the new mutation test pass silently. No provider/account/order.
+- **Next**: Codex：修复 `R-ASHORT-FIFTH-KNIFE-PREFREEZE-GATE-CANNOT-REARM`，并在第一刀落地后再提交本刀。
+
+## 2026-07-25 - Codex repair (A-short second knife: pre-freeze test gate + official-operation fixture)
+
+- **Verdict/Action**: Implemented the user-selected pre-freeze policy: the fifth-knife packet keeps its original hashes while unstarted, but its guard checks hash equality only after both packet start and `frozen_enforced`; pre-freeze still machine-checks zero forward evidence and no promotion claim. Replaced the stale 20260720 official-operation fixture with the current complete 20260727 published bundle and retained an independent receipt-clock mismatch rejection test.
+- **Required**: Independent review before commit. The separate `R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` remains out of this knife.
+- **Verify**: Pinned main Python: freeze schema guard 4 OK; official-operation evidence 15 OK; changed files compile; `git diff --check` clean except repository CRLF warnings.
+- **Pre-Codex self-review**: Confirmed the old fixture failed first on missing receipt clocks, then on stale weekly schema fields; the current published bundle carries both three clocks and factor-v2 admission binding. Forced started+enforced mutation still rejects the two current frozen-contract drifts.
+- **Next**: Claude Code：审查第二刀当前 diff。
+
+## 2026-07-25 - Claude Code repair (A-short comparison-track epoch pre-freeze)
+
+- **Verdict/Action**: User-directed: the epoch machinery was frozen too early, so unrelated edits kept voiding evidence. Added `engine/a_short_evidence_epoch_mode.py`; while `MODE=pre_freeze_audit_only` all six tracks' fingerprints are stable constants, records are still written, nothing is dropped, and no track may conclude. Real computations kept in `_real_*`, not deleted. Detail in register `R-ASHORT-COMPARISON-EPOCH-CHURN-WITHOUT-PROTECTION`.
+- **Required**: Independent review before commit. Working tree also still holds the unreviewed overlay-retirement slice with two open Required (`R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS`); the two slices overlap on `a_short_final_action_validation_runner.py` and must be separated at commit time. Detail in register.
+- **Verify**: New `tests/test_a_short_evidence_epoch_mode.py` 9 guards: comment-append to weekly_pipeline+phase5+egs_main leaves all 7 fingerprints unchanged; flipping to `frozen_enforced` restores drift-sensitive fingerprints; unknown mode and unregistered track fail closed; four verdict gates neutral. Six-track pack + new module = 226 OK, pinned main Python. `py_compile` clean; `git diff --check` CRLF-only. Switchover drops at most one audit-only week per track without raising.
+- **Pre-Codex self-review**: Class enumerated from all fingerprint sites, not the 4 named in the desktop doc — found P1 and P0/v2 with the same whole-file binding and fixed them too. Reverse probe run (enforced mode still detects real drift). The 13 pre-existing enforced-drift tests were pointed at `frozen_enforced` rather than weakened. 独立对抗 pass: 不适用（单轮、comparison-only、非 fail-closed 边界）.
+- **Next**: Codex：审查.
+
+## 2026-07-25 - Claude Code review Pass-with-Required (A-short overlay_eval retirement, P4a sole adjudication route)
+
+- **Verdict/Action**: Pass-with-Required. User decision implemented correctly — `overlay_eval` readiness alarm retired, `overlay_adjudication` (P4a) left as the sole overlay adjudication route; risk class = low (comparison-only, non-blocking advisory sidecar deletion; not the §6a highest-risk subset), so no independent agent and no full lane per `AGENTS.md §Verification tiering` rules 3/6. Detail in register.
+- **Required**: `R-ASHORT-OVERLAY-EVAL-RETIREMENT-README-CURRENT-FACT-LOSS` — `docs/README.md` dropped three still-true wiring anchors; restore them, do not weaken the guard registry. Second blocker owned by existing `R-ASHORT-FIFTH-KNIFE-FORWARD-EVIDENCE-EPOCH` (frozen effect-contract drifted again; already red before this slice). Pre-existing `target_policy_comparison_summary.*` dirt excluded. Detail in register.
+- **Verify**: review-evidence:not_available (hook did not arm; evidence = real tool results). Pinned main Python focused pack (effect-contract, overlay-comparison, sidecar-health, final-action, doc/route guards, fifth-knife freeze) = 122 run, 2 failed: doc guard = the Required; freeze = pre-existing reseal debt. Probes: deleted module unimportable; stale `expected_sidecars` → `unregistered sidecar` fail-closed; launcher ParseInput 0 errors. No agent/full lane. No provider/account/order.
+- **Next**: Codex: repair the README anchors; reseal the fifth-knife packet together with 第 2 刀.
+
 ## 2026-07-25 - Claude Code re-review PASS + commit (A-short P4 sidecar health companion)
 
 - **Verdict/Action**: PASS, committed to master. `R-ASHORT-WEEKLY-SIDECAR-HEALTH-COMPANION` resolved — Codex's hash-only effect-contract reseal for `runners/a_short_weekly_pipeline.py` verified honest (1-line diff, no predicate/policy/logic change). Detail in register.

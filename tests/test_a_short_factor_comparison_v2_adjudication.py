@@ -22,6 +22,7 @@ from engine.a_short_factor_comparison_v2_adjudication import (  # noqa: E402
     request_v2_question_reactivation, _simultaneous_winner, _combination_scheduler,
     _register_combination_batch,
 )
+from engine import a_short_evidence_epoch_mode as _epoch_mode  # noqa: E402
 
 
 def _root(tmp: str) -> Path:
@@ -113,6 +114,13 @@ def _write_fixture(root: Path, *, effects: dict[str, list[float]], states: list[
 
 
 class AdjudicationTests(unittest.TestCase):
+    def setUp(self):
+        # Existing cases verify the enforced epoch contract.  The paired
+        # pre-freeze/enforced reverse control is below.
+        previous = _epoch_mode.MODE
+        _epoch_mode.MODE = "frozen_enforced"
+        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+
     def _adjudicate(self, root: Path, *, require_evidence: bool = True) -> dict:
         with mock.patch("engine.a_short_factor_comparison_v2_adjudication._validate_source_receipt") as source_gate:
             result = adjudicate_v2_from_private_ledger(root=root)
@@ -142,6 +150,24 @@ class AdjudicationTests(unittest.TestCase):
             self.assertEqual(len(receipts["receipts"]), 1)
             self.assertEqual(receipts["receipts"][0]["receipt"]["status"], "pending")
             self.assertTrue(result["production_unchanged"])
+
+    def test_threshold_evidence_is_audit_only_pre_freeze_then_adjudicates_when_enforced(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _root(tmp)
+            _write_fixture(root, effects={"entry_ma_pullback": [0.8] * 24,
+                                          "entry_range_pullback": [0.1] * 24})
+            with mock.patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+                audit_only = self._adjudicate(root)
+            question = audit_only["adjudication"]["questions"][0]
+            self.assertEqual(question["status"], "continue_accumulation")
+            self.assertEqual(question["effective_difference_weeks"], 24)
+            self.assertEqual(question["recommendations"], [])
+            receipts = json.loads((root / "decision_receipts.json").read_text(encoding="utf-8"))
+            self.assertEqual(receipts["receipts"], [])
+
+            with mock.patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+                enforced = self._adjudicate(root)
+            self.assertEqual(enforced["adjudication"]["questions"][0]["status"], "recommend_adopt_arm")
 
     def test_tampered_outcome_payload_with_stale_hash_cannot_be_adjudicated(self):
         with tempfile.TemporaryDirectory() as tmp:

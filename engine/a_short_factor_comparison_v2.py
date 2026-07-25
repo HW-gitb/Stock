@@ -22,6 +22,8 @@ from typing import Any
 
 import pandas as pd
 
+from engine import a_short_evidence_epoch_mode as _epoch_mode
+
 from engine import a_short_factor_comparison as v1
 
 
@@ -208,6 +210,30 @@ def _source_text_digest(*objects: object) -> str:
 
 
 def _canonical_contracts(governance: dict) -> dict:
+    """Pre-freeze every contract leg is a stable constant; the admission binding
+    stays real because it is a governance fact, not an implementation hash.
+    See ``engine/a_short_evidence_epoch_mode``."""
+    if not _epoch_mode.enforcement_enabled():
+        constant = _epoch_mode.pre_freeze_fingerprint("p0_factor_comparison_v2")
+        return {"decision_delta_contract": constant, "immutable_common_pool_contract": constant,
+                "outcome_contract": constant, "runtime_wiring_contract": constant,
+                "admission_bindings": _pre_freeze_admission_bindings(governance)}
+    return _real_canonical_contracts(governance)
+
+
+def _pre_freeze_admission_bindings(governance: dict) -> dict:
+    from engine.a_short_experiment_admission_registry import admission_snapshot, admissions
+    registered = admissions()
+    admission_ids = tuple(
+        f"p0_{question['question_id']}_{arm['arm_id']}"
+        for question in governance["questions"]
+        for arm in question["arms"] if arm["kind"] == "challenger" and
+        f"p0_{question['question_id']}_{arm['arm_id']}" in registered
+    )
+    return admission_snapshot(*admission_ids)
+
+
+def _real_canonical_contracts(governance: dict) -> dict:
     from runners import a_short_phase5_engine as phase5
 
     factor_map = {row["factor_id"]: row for row in v1.load_governance()["factor_registry"]}

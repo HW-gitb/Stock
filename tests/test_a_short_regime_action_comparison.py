@@ -12,6 +12,7 @@ from engine.a_short_regime_action_comparison import (
     migrate_action_record_from_published_m67, ACTION_RECORD_SCHEMA_VERSION,
 )
 from engine.a_short_regime_classifier import FORWARD_RETURN_BASIS
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -25,6 +26,13 @@ def _regime_record(*, as_of="20260714", raw="defense", returns=None):
 
 
 class RegimeActionComparisonTests(unittest.TestCase):
+    def setUp(self):
+        # Existing cases verify the enforced epoch contract.  The paired
+        # pre-freeze/enforced reverse control is below.
+        previous = _epoch_mode.MODE
+        _epoch_mode.MODE = "frozen_enforced"
+        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+
     def _source(self):
         return {"source_schema_name": "a_short_weekly_report", "source_as_of": "20260714", "source_sha256": "a" * 64, "candidate_build_count": 2}
 
@@ -144,6 +152,20 @@ class RegimeActionComparisonTests(unittest.TestCase):
             rows.append(row)
         self.assertEqual(summarize_action_records(rows)["status"], "review_candidate_preferred")
 
+    def test_threshold_evidence_stays_accumulating_pre_freeze_then_reviews_when_enforced(self):
+        rows = []
+        for i in range(12):
+            as_of = f"202607{i+1:02d}"
+            rows.append(build_action_record(
+                regime_record=_regime_record(as_of=as_of, returns={"h1": 1.0, "h3": 1.0, "h5": 1.0, "h10": -1.0}),
+                raw_v14_2_regime="shock", effective_v14_2_regime="shock", m67_source=self._source(),
+                forward_origin=self._origin(decision_as_of=as_of),
+            ))
+        with patch.object(_epoch_mode, "MODE", "pre_freeze_audit_only"):
+            self.assertEqual(summarize_action_records(rows)["status"], "accumulating")
+        with patch.object(_epoch_mode, "MODE", "frozen_enforced"):
+            self.assertEqual(summarize_action_records(rows)["status"], "review_candidate_preferred")
+
     def test_summary_rejects_multiple_forward_records_from_one_run_date(self):
         rows = []
         for i in range(2):
@@ -201,6 +223,13 @@ def _candidate_record(as_of, ts_code, stock, *, h20=None, mode="live", regime="d
 
 
 class CandidateEffectTests(unittest.TestCase):
+    def setUp(self):
+        # These cases assert the ENFORCED epoch contract (the historical default).
+        # Pre-freeze behaviour is covered by tests/test_a_short_evidence_epoch_mode.py.
+        previous = _epoch_mode.MODE
+        _epoch_mode.MODE = "frozen_enforced"
+        self.addCleanup(setattr, _epoch_mode, "MODE", previous)
+
     def test_public_admission_rejects_private_or_result_payload_fields(self):
         summary = summarize_candidate_effect_records([])
         for field in ("ts_code", "account", "holding", "price", "return"):

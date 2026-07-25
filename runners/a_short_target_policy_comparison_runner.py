@@ -19,6 +19,8 @@ from typing import Any
 
 import jsonschema
 
+from engine import a_short_evidence_epoch_mode as _epoch_mode
+
 from engine.a_short_managed_exit import CONTRACT_VERSION as EXIT_CONTRACT_VERSION
 from engine.a_short_managed_exit import evaluate_managed_exit
 from runners import a_short_phase5_engine as phase5_engine
@@ -158,6 +160,17 @@ def _breakout_contract_surface() -> dict[str, Any]:
 
 
 def _contract_fingerprint(track: str | None = None) -> str:
+    """Pre-freeze returns a stable per-track constant; see ``engine/a_short_evidence_epoch_mode``."""
+    if not _epoch_mode.enforcement_enabled():
+        if track is not None and track not in TRACK_ADMISSIONS:
+            raise TargetPolicyError("unknown_p2_component")
+        # Keep the two P2 components in separate epochs even while constant.
+        return _epoch_mode.pre_freeze_fingerprint("p2_target_policy") if track is None else _digest(
+            {"pre_freeze": _epoch_mode.pre_freeze_fingerprint("p2_target_policy"), "component_id": track})
+    return _real_contract_fingerprint(track)
+
+
+def _real_contract_fingerprint(track: str | None = None) -> str:
     contract = _shared_contract_surface()
     if track is None:
         return _digest({**contract, "admission_bindings": admission_snapshot(*ADMISSION_IDS)})
@@ -292,7 +305,8 @@ def _active_epoch(ledger: dict[str, Any], *, create: bool, track: str = "target_
 
 
 def _current_review_status(ledger: dict[str, Any], track: str, epoch: dict[str, Any] | None) -> str:
-    if epoch is None:
+    # Pre-freeze evidence is audit-only and can never reach a review point.
+    if epoch is None or not _epoch_mode.evidence_counts_toward_clock():
         return "not_reviewed"
     statuses = ledger.get("review_status_by_epoch") or {}
     return str((statuses.get(track) or {}).get(epoch["epoch_id"], "not_reviewed"))
@@ -330,7 +344,7 @@ def _progress(records: list[dict[str, Any]], track: str, review_status: str) -> 
         progress["evaluable_plans"] >= 20
     if review_status == "pass":
         progress["review_state"] = "pass_pending_confirmation"
-    elif enough:
+    elif enough and _epoch_mode.evidence_counts_toward_clock():
         progress["review_state"] = "due"
     return progress
 
