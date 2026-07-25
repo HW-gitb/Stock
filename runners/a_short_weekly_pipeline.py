@@ -1865,6 +1865,41 @@ def _replace_many_with_rollback(payloads: dict[str, bytes]) -> None:
                 pass
 
 
+def _sidecar_progress_from_status(status: object) -> str:
+    """Map a sidecar's de-identified capture status to the health contract."""
+    value = str(status or "").lower()
+    if value in {"already_captured", "already_current", "already_frozen", "frozen"}:
+        return "already_current"
+    if value in {"captured", "advanced", "updated", "written", "settled", "complete"}:
+        return "advanced"
+    if value in {"not_due", "no_count", "pending", "accumulating"}:
+        return "not_applicable"
+    return "unavailable"
+
+
+def _write_pipeline_sidecar_outcomes(path: str | Path, *, as_of: str, run_id: str | None,
+                                     candidate_digest: str | None, expected: list[str],
+                                     outcomes: list[dict]) -> None:
+    """Write one de-identified post-publish outcome manifest atomically."""
+    payload = {
+        "schema_name": "a_short_weekly_sidecar_outcomes",
+        "schema_version": "1.0.0",
+        "as_of": str(as_of),
+        "run_id": run_id,
+        "candidate_digest": candidate_digest,
+        "expected_sidecars": list(dict.fromkeys(expected)),
+        "sidecars": outcomes,
+    }
+    schema_path = ROOT / "schemas" / "a_short_weekly_sidecar_outcomes.schema.json"
+    with schema_path.open("r", encoding="utf-8") as handle:
+        jsonschema.validate(payload, json.load(handle))
+    target = Path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp = target.with_name(f".{target.name}.tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    os.replace(tmp, target)
+
+
 def publish_weekly_bundle(weekly: dict, iv_feed_summary: dict, out_path: str, md_path: str,
                           *, allow_nonprivate_account_out: bool = False,
                           ratchet_publish: tuple[str, dict, str, str] | None = None) -> str:
@@ -3827,6 +3862,27 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     p.add_argument("--overlay-adjudication-forward", action="store_true",
                    help="freeze only a live canonical P4a observation after M6.7 publication")
     args = p.parse_args(argv)
+    pipeline_sidecar_expected: list[str] = []
+    pipeline_sidecar_outcomes: list[dict] = []
+
+    def _expect_sidecar(name: str) -> None:
+        pipeline_sidecar_expected.append(name)
+
+    def _record_sidecar(name: str, *, execution_status: str, progress_status: str,
+                        error_code: str | None = None, observed_decision_as_of: str | None = None,
+                        observed_data_through: str | None = None) -> None:
+        pipeline_sidecar_outcomes.append({
+            "name": name,
+            "expected": True,
+            "attempted": True,
+            "execution_status": execution_status,
+            "progress_status": progress_status,
+            "expected_data_through": None,
+            "observed_decision_as_of": observed_decision_as_of,
+            "observed_data_through": observed_data_through,
+            "error_code": error_code,
+            "skip_reason": None,
+        })
     if args.factor_comparison_root or args.factor_comparison_forward:
         raise SystemExit("[FATAL] legacy factor-comparison v1 is read-only; v1 capture flags are retired. "
                          "Use the v2 private-root flags; v1/v2 dual writes are prohibited.")
@@ -4301,6 +4357,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
         root=args.factor_comparison_v2_root, daily_cache_path=args.factor_comparison_v2_daily_cache, as_of=args.as_of)
     industry_weight_comparison = None
     if args.industry_weight_comparison_root:
+        _expect_sidecar("industry_weight_capture")
+        _expect_sidecar("industry_weight_settlement")
         from engine.a_short_industry_weight_comparison import (settle_and_summarize_weekly,
                                                                unavailable_public_progress, write_public_progress)
         if args.industry_weight_comparison_forward and not Path(args.industry_weight_comparison_source).is_file():
@@ -4317,6 +4375,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # stale review_due message and never a changed M6.7 decision.
     target_policy_comparison = None
     if args.target_policy_root:
+        _expect_sidecar("target_policy_capture")
         from runners.a_short_target_policy_comparison_runner import (
             settle_and_summarize as settle_target_policy,
             unavailable_public_summary,
@@ -4338,6 +4397,7 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 target_policy_comparison = None
     final_action_validation = None
     if args.final_action_validation_root:
+        _expect_sidecar("final_action_capture")
         from runners.a_short_final_action_validation_runner import (
             settle_and_summarize as settle_final_action_validation,
             validate_public_summary as validate_final_action_summary,
@@ -4353,6 +4413,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             final_action_validation = unavailable_final_action_summary(args.as_of)
     overlay_adjudication = None
     if args.overlay_adjudication_root:
+        _expect_sidecar("overlay_adjudication_capture")
+        _expect_sidecar("overlay_adjudication_settlement")
         overlay_public_paths = {}
         if args.overlay_adjudication_public_json:
             overlay_public_paths["public_json_path"] = args.overlay_adjudication_public_json
@@ -4366,8 +4428,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             # P4a is an optional comparison sidecar.  An import or settlement
             # outage must neither fail the formal weekly run nor retain a stale
             # P4a conclusion in the new official report.
-            from engine.a_short_overlay_adjudication import unavailable_public_summary
-            overlay_adjudication = unavailable_public_summary(args.as_of)
+            try:
+                from engine.a_short_overlay_adjudication import unavailable_public_summary
+                overlay_adjudication = unavailable_public_summary(args.as_of)
+            except Exception:
+                overlay_adjudication = None
     weekly = build_weekly_report(portfolio_normalized, args.as_of, gen,
                                  iv_feed_ref=os.path.basename(args.iv_feed), run_lineage=run_lineage,
                                  available_cash=(available_cash if args.account else None),
@@ -4511,6 +4576,8 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
     # user-visible M6.7 surface.  It is deliberately independent of P2/P3/P5/cache settlement:
     # a sidecar failure may not rewrite, delay, or invalidate the official weekly bundle.
     if args.official_operation_evidence_root:
+        _expect_sidecar("official_operation_capture")
+        _expect_sidecar("official_operation_settlement")
         try:
             from runners.a_short_official_operation_evidence import (
                 capture_after_published_weekly,
@@ -4522,17 +4589,28 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 receipt_path=receipt_path,
             )
             print(f"[official-operation-evidence] capture={capture['status']} (M6.7 unchanged)")
+            _record_sidecar("official_operation_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(capture.get("status")),
+                            observed_decision_as_of=args.as_of)
             settlement = settle_official_operation_evidence(
                 root=args.official_operation_evidence_root,
                 as_of=args.as_of,
                 daily_cache_path=args.official_operation_evidence_daily_cache,
             )
             print(f"[official-operation-evidence] settlement={settlement['status']} "
-                  "(shared cache only; no portfolio state)")
+                   "(shared cache only; no portfolio state)")
+            _record_sidecar("official_operation_settlement", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(settlement.get("status")),
+                            observed_decision_as_of=args.as_of)
         except Exception:
+            _record_sidecar("official_operation_capture", execution_status="failed",
+                            progress_status="unavailable", error_code="capture_unavailable")
+            _record_sidecar("official_operation_settlement", execution_status="skipped",
+                            progress_status="not_applicable", error_code="capture_unavailable")
             print("[official-operation-evidence] current-week capture unavailable; "
                   "M6.7 output remains authoritative and unchanged")
     if args.factor_comparison_v2_root:
+        _expect_sidecar("factor_v2_capture")
         try:
             from engine.a_short_factor_comparison_v2_weekly import (
                 capture_v2_after_published_weekly,
@@ -4544,14 +4622,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                 forward_eligible=args.factor_comparison_v2_forward)
             print(f"[factor-comparison-v2] capture={comparison['status']} (production unchanged)")
+            _record_sidecar("factor_v2_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(comparison.get("status")),
+                            observed_decision_as_of=args.as_of)
         except Exception as exc:
             # A changed same-canonical-week replay must leave the first source-bound capture immutable.
             # Do not surface private candidate details; the fixed operator message is enough to distinguish
             # the intentional freeze from an ordinary comparison-sidecar outage.
             if is_capture_replay_drift(exc):
+                _record_sidecar("factor_v2_capture", execution_status="failed",
+                                progress_status="stalled", error_code="replay_drift")
                 print(f"[factor-comparison-v2] decision {args.as_of} evidence is already frozen; "
                       "the changed replay was not written and M6.7 remains authoritative")
             else:
+                _record_sidecar("factor_v2_capture", execution_status="failed",
+                                progress_status="unavailable", error_code=capture_error_code(exc))
                 print(f"[factor-comparison-v2] current-week capture unavailable "
                       f"(error_code={capture_error_code(exc)}); "
                       "M6.7 output remains authoritative and unchanged")
@@ -4569,12 +4654,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                                         daily_cache_path=args.industry_weight_comparison_daily_cache,
                                         as_of=args.as_of)
             print(f"[industry-weight-p5] capture={p5_capture['status']} (production unchanged)")
+            _record_sidecar("industry_weight_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(p5_capture.get("status")),
+                            observed_decision_as_of=args.as_of)
+            _record_sidecar("industry_weight_settlement", execution_status="succeeded",
+                            progress_status="advanced", observed_decision_as_of=args.as_of)
         except Exception:
             from engine.a_short_industry_weight_comparison import unavailable_public_progress, write_public_progress
             try:
                 write_public_progress(unavailable_public_progress(args.as_of))
             except Exception:
                 pass
+            _record_sidecar("industry_weight_capture", execution_status="failed",
+                            progress_status="unavailable", error_code="capture_unavailable")
+            _record_sidecar("industry_weight_settlement", execution_status="skipped",
+                            progress_status="not_applicable", error_code="capture_unavailable")
             print("[industry-weight-p5] current-week capture unavailable; M6.7 output remains authoritative and unchanged")
     if args.target_policy_root:
         try:
@@ -4586,13 +4680,20 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 source_identity=source_identity, out_path=args.out, receipt_path=receipt_path,
                 forward_eligible=args.target_policy_forward)
             print(f"[target-policy-p2] capture={target_capture['status']} (production unchanged)")
+            _record_sidecar("target_policy_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(target_capture.get("status")),
+                            observed_decision_as_of=args.as_of)
         except Exception as exc:
             if "p2_capture_replay_input_drifted" in str(exc):
+                _record_sidecar("target_policy_capture", execution_status="failed",
+                                progress_status="stalled", error_code="replay_drift")
                 print(f"[target-policy-p2] decision {args.as_of} evidence is already frozen; "
                       "the changed replay was not written and M6.7 remains authoritative")
-                return
-            print("[target-policy-p2] current-week capture unavailable; "
-                  "M6.7 output remains authoritative and unchanged")
+            else:
+                _record_sidecar("target_policy_capture", execution_status="failed",
+                                progress_status="unavailable", error_code="capture_unavailable")
+                print("[target-policy-p2] current-week capture unavailable; "
+                      "M6.7 output remains authoritative and unchanged")
     if args.final_action_validation_root:
         try:
             from runners.a_short_final_action_validation_runner import capture_after_published_weekly
@@ -4602,11 +4703,18 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 forward_eligible=args.final_action_validation_forward,
                 tracker_path=(args.final_action_validation_tracker or str(ROOT / "logs" / "forward_tracker.csv")))
             print(f"[final-action-p3] capture={p3_capture['status']} (production unchanged)")
+            _record_sidecar("final_action_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(p3_capture.get("status")),
+                            observed_decision_as_of=args.as_of)
         except Exception as exc:
             if "mature_source_identity_changed" in str(exc):
+                _record_sidecar("final_action_capture", execution_status="failed",
+                                progress_status="stalled", error_code="mature_identity_conflict")
                 print(f"[final-action-p3] decision {args.as_of} has an immutable mature identity conflict; "
                       "the observation is not counted and M6.7 remains authoritative")
             else:
+                _record_sidecar("final_action_capture", execution_status="failed",
+                                progress_status="unavailable", error_code="capture_unavailable")
                 print("[final-action-p3] current-week capture unavailable; "
                       "M6.7 output remains authoritative and unchanged")
     if args.overlay_adjudication_root:
@@ -4620,6 +4728,11 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
             settle_and_summarize_weekly(root=args.overlay_adjudication_root,
                 daily_cache_path=args.overlay_adjudication_daily_cache, as_of=args.as_of, **overlay_public_paths)
             print(f"[overlay-adjudication-p4a] capture={p4_capture['status']} (M6.7 unchanged)")
+            _record_sidecar("overlay_adjudication_capture", execution_status="succeeded",
+                            progress_status=_sidecar_progress_from_status(p4_capture.get("status")),
+                            observed_decision_as_of=args.as_of)
+            _record_sidecar("overlay_adjudication_settlement", execution_status="succeeded",
+                            progress_status="advanced", observed_decision_as_of=args.as_of)
         except Exception:
             # A failed post-publish capture must replace any prior public P4
             # promotion/retirement reminder with an explicit unavailable
@@ -4629,8 +4742,21 @@ def main(argv=None, pro_factory=None, price_provider=None, semantic_provider=Non
                 write_public_summary(unavailable_public_summary(args.as_of), **overlay_public_paths)
             except Exception:
                 pass
+            _record_sidecar("overlay_adjudication_capture", execution_status="failed",
+                            progress_status="unavailable", error_code="capture_unavailable")
+            _record_sidecar("overlay_adjudication_settlement", execution_status="skipped",
+                            progress_status="not_applicable", error_code="capture_unavailable")
             print("[overlay-adjudication-p4a] current-week capture unavailable; "
                   "P4 summary is unavailable and M6.7 output remains authoritative and unchanged")
+    if pipeline_sidecar_expected:
+        _write_pipeline_sidecar_outcomes(
+            Path(args.out).with_name(f"{Path(args.out).stem}.pipeline_sidecar_outcomes.json"),
+            as_of=args.as_of,
+            run_id=source_identity.get("run_id") if isinstance(source_identity, dict) else None,
+            candidate_digest=source_identity.get("candidate_digest") if isinstance(source_identity, dict) else None,
+            expected=pipeline_sidecar_expected,
+            outcomes=pipeline_sidecar_outcomes,
+        )
 
 
 if __name__ == "__main__":

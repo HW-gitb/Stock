@@ -1,0 +1,53 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_weekly_sidecar_health",
+  "description": "De-identified, post-run observability companion for the non-blocking A-short sidecars.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_name", "schema_version", "as_of", "m67_status", "overall",
+    "advanced_count", "stalled_count", "failed_count", "partial_count", "sidecars"
+  ],
+  "properties": {
+    "schema_name": {"const": "a_short_weekly_sidecar_health"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "generated_at": {"type": "string"},
+    "run_id": {"type": ["string", "null"], "pattern": "^(a-short-[0-9]{8}-[0-9a-f]{16})?$"},
+    "candidate_digest": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},
+    "m67_status": {"enum": ["complete", "failed", "skipped", "not_run"]},
+    "overall": {"enum": ["healthy", "degraded", "partial"]},
+    "advanced_count": {"type": "integer", "minimum": 0},
+    "stalled_count": {"type": "integer", "minimum": 0},
+    "failed_count": {"type": "integer", "minimum": 0},
+    "partial_count": {"type": "integer", "minimum": 0},
+    "source_receipt_sha256": {"type": ["string", "null"], "pattern": "^([0-9a-f]{64})?$"},
+    "sidecars": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name", "evidence_role", "expected", "attempted", "execution_status",
+          "progress_status", "blocking"
+        ],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+          "evidence_role": {"enum": ["advisory", "forward_evidence", "cache_support", "readiness"]},
+          "expected": {"type": "boolean"},
+          "attempted": {"type": "boolean"},
+          "execution_status": {"enum": ["succeeded", "failed", "skipped", "not_due", "not_configured", "missing_outcome"]},
+          "progress_status": {"enum": ["advanced", "already_current", "stalled", "not_applicable", "unavailable"]},
+          "expected_decision_as_of": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "expected_data_through": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "observed_decision_as_of": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "observed_data_through": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "error_code": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"},
+          "skip_reason": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"},
+          "blocking": {"const": false}
+        }
+      }
+    }
+  }
+}

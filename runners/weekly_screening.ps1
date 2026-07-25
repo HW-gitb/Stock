@@ -203,6 +203,33 @@ if ([string]::IsNullOrWhiteSpace($AsOf)) {
 }
 $EffectiveL3Mode = $L3Mode
 
+# P4: de-identified per-run manifests for the post-run health companion.
+$LauncherSidecarOutcomes = @()
+function Add-SidecarOutcome {
+    param(
+        [string]$Name,
+        [bool]$Expected,
+        [bool]$Attempted,
+        [ValidateSet('succeeded','failed','skipped','not_due','not_configured')]
+        [string]$ExecutionStatus,
+        [ValidateSet('advanced','already_current','stalled','not_applicable','unavailable')]
+        [string]$ProgressStatus,
+        [string]$ErrorCode = $null,
+        [string]$SkipReason = $null,
+        [string]$ExpectedDataThrough = $null,
+        [string]$ObservedDecisionAsOf = $null,
+        [string]$ObservedDataThrough = $null
+    )
+    $script:LauncherSidecarOutcomes += [ordered]@{
+        name = $Name; expected = $Expected; attempted = $Attempted
+        execution_status = $ExecutionStatus; progress_status = $ProgressStatus
+        expected_data_through = $ExpectedDataThrough
+        observed_decision_as_of = $ObservedDecisionAsOf
+        observed_data_through = $ObservedDataThrough
+        error_code = $ErrorCode; skip_reason = $SkipReason
+    }
+}
+
 if ([string]::IsNullOrWhiteSpace($EffectiveL3Mode)) {
     if ($IsHistoricalAsOf) {
         Write-KnownM67FailureReceipt -Reason 'historical_l3_mode_missing' -ExitCode 1
@@ -287,9 +314,11 @@ if ($EgsExitCode -ne 0) {
 
 # --- Stage 2: data_canary ---
 if ($SkipCanary) {
+    Add-SidecarOutcome -Name 'data_canary' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_canary'
     Write-Host ""
     Write-Host "[2/4] -SkipCanary set, canary not run" -ForegroundColor DarkGray
 } else {
+    $CanaryExitCode = 1
     Write-Host ""
     Write-Host "[2/4] Running runners\data_canary.py --as-of $AsOf --source $CanarySource ..." -ForegroundColor Yellow
     & $PythonExe runners\data_canary.py --as-of $AsOf --source $CanarySource
@@ -313,13 +342,18 @@ if ($SkipCanary) {
         # 仍然不让它影响主流程退出码（旁路约束）
         Write-Host "[WARN] canary process exit $CanaryExitCode (unexpected; check logs/data_canary_$AsOf.json)" -ForegroundColor Yellow
     }
+    $CanaryProgress = if ($CanaryExitCode -eq 0 -and (Test-Path $CanaryLog)) { 'advanced' } else { 'unavailable' }
+    Add-SidecarOutcome -Name 'data_canary' -Expected $true -Attempted $true -ExecutionStatus $(if($CanaryExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $CanaryProgress -ErrorCode $(if($CanaryExitCode -eq 0){$null}else{'process_failed'}) -ObservedDecisionAsOf $AsOf
 }
 
 # --- Stage 3: forward_tracker capture ---
 if ($SkipTracker) {
+    Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_tracker'
+    Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_tracker'
     Write-Host ""
     Write-Host "[3/4] -SkipTracker set, forward tracker not run" -ForegroundColor DarkGray
 } else {
+    $TrackerBackfillExitCode = 1
     Write-Host ""
     Write-Host "[3/4] Running runners\forward_tracker.py capture --as-of $AsOf ..." -ForegroundColor Yellow
     & $PythonExe runners\forward_tracker.py capture --as-of $AsOf
@@ -330,6 +364,8 @@ if ($SkipTracker) {
         # tracker capture 失败不影响主流程退出码（旁路约束）。
         # 失败原因通常是 analysis_input.json 缺失或 Python 异常，不是数据问题。
         Write-Host "[WARN] forward_tracker exit $TrackerExitCode (check logs/forward_tracker.csv)" -ForegroundColor Yellow
+        Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'failed' -ProgressStatus 'unavailable' -ErrorCode 'process_failed' -ObservedDecisionAsOf $AsOf
+        Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'capture_failed'
     } else {
         # P1 Cut2 consumes only this existing tracker. Backfill is cache-only: it never asks the
         # weekly runner to download extra market data, and a cache gap remains advisory.
@@ -340,6 +376,8 @@ if ($SkipTracker) {
         if ($TrackerBackfillExitCode -ne 0) {
             Write-Host "[WARN] forward_tracker cache-only backfill exit $TrackerBackfillExitCode; P1 remains pending and EGS/M6.7 continue unchanged." -ForegroundColor Yellow
         }
+        Add-SidecarOutcome -Name 'forward_tracker_capture' -Expected $true -Attempted $true -ExecutionStatus 'succeeded' -ProgressStatus 'advanced' -ObservedDecisionAsOf $AsOf
+        Add-SidecarOutcome -Name 'forward_tracker_backfill' -Expected $true -Attempted $true -ExecutionStatus $(if($TrackerBackfillExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($TrackerBackfillExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($TrackerBackfillExitCode -eq 0){$null}else{'process_failed'})
     }
 }
 
@@ -348,6 +386,7 @@ if ($SkipTracker) {
 $CrashVetoSummary = Join-Path $ProjectRoot 'logs\a_short_crash_veto_summary.json'
 $CrashVetoSummaryReady = $false
 if ($IsHistoricalAsOf) {
+    Add-SidecarOutcome -Name 'crash_veto' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
     Write-Host "[3b/4] Historical replay: crash-veto forward tracker skipped" -ForegroundColor DarkGray
 } else {
     Write-Host "[3b/4] Updating crash-veto 5/10-trading-day comparison ..." -ForegroundColor Yellow
@@ -360,6 +399,7 @@ if ($IsHistoricalAsOf) {
     } else {
         Write-Host "[WARN] crash-veto comparison unavailable (exit $CrashVetoExitCode); formal selection/M6.7 continues unchanged." -ForegroundColor Yellow
     }
+    Add-SidecarOutcome -Name 'crash_veto' -Expected $true -Attempted $true -ExecutionStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){'succeeded'}else{'failed'}) -ProgressStatus $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){'advanced'}else{'unavailable'}) -ErrorCode $(if($CrashVetoExitCode -eq 0 -and (Test-Path $CrashVetoSummary)){$null}else{'process_failed'}) -ObservedDecisionAsOf $(if($CrashVetoExitCode -eq 0){$AsOf}else{$null})
 }
 
 # --- Stage 4: M6.7 authoritative operation weekly report (Slice 3b-2: replaces the standalone semantic-risk summary
@@ -436,6 +476,7 @@ if ($SkipSemanticRisk) {
                 if ($FactorComparisonCacheExitCode -ne 0) {
                     Write-Host "[WARN] A-short shared comparison cache unavailable (exit $FactorComparisonCacheExitCode); M6.7/V14.3/overlay continue unchanged." -ForegroundColor Yellow
                 }
+                Add-SidecarOutcome -Name 'shared_cache_build' -Expected $true -Attempted $true -ExecutionStatus $(if($FactorComparisonCacheExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($FactorComparisonCacheExitCode -eq 0){'not_applicable'}else{'unavailable'}) -ErrorCode $(if($FactorComparisonCacheExitCode -eq 0){$null}else{'process_failed'})
                 # Freeze the normalized live decision only after M6.7 publishes its matching bundle.
                 $M67Args += @('--factor-comparison-v2-root', $FactorComparisonV2Root,
                               '--factor-comparison-v2-daily-cache', $FactorComparisonV2Cache,
@@ -516,9 +557,13 @@ if ($SkipSemanticRisk) {
 #     无 ledger→一次性 --bootstrap(252日回填,首跑数分钟)、有→increment(秒级)。runner 把 as_of 收敛到最新已结算
 #     交易日(盘中周一→上周五),复用本次已建的 IV feed(有则传)。egs 成功才会走到这(egs 失败已在上面 exit)。
 if ($SkipRegime) {
+    Add-SidecarOutcome -Name 'regime_daily' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
+    Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_regime'
     Write-Host ""
     Write-Host "[regime] -SkipRegime set, V14.3 regime comparison not run" -ForegroundColor DarkGray
 } elseif ($IsHistoricalAsOf) {
+    Add-SidecarOutcome -Name 'regime_daily' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
+    Add-SidecarOutcome -Name 'regime_action' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
     Write-Host ""
     Write-Host "[regime] historical -AsOf $AsOf -> skipping V14.3 regime ledger (only live runs advance the forward regime evidence)" -ForegroundColor DarkGray
 } else {
@@ -560,6 +605,11 @@ if ($SkipRegime) {
     } else {
         Write-Host "[ADVISORY] V14.3 regime comparison ledger updated (non-production; V14.2 frozen)." -ForegroundColor Yellow
     }
+    $RegimeStatus = if($RegimeExitCode -eq 0){'succeeded'}else{'failed'}
+    $RegimeProgress = if($RegimeExitCode -eq 0){'advanced'}else{'unavailable'}
+    $RegimeError = if($RegimeExitCode -eq 0){$null}else{'process_failed'}
+    Add-SidecarOutcome -Name 'regime_daily' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ExpectedDataThrough $PriceAsOf -ObservedDataThrough $(if($RegimeExitCode -eq 0){$PriceAsOf}else{$null})
+    Add-SidecarOutcome -Name 'regime_action' -Expected $true -Attempted $true -ExecutionStatus $RegimeStatus -ProgressStatus $RegimeProgress -ErrorCode $RegimeError -ObservedDecisionAsOf $(if($RegimeExitCode -eq 0){$AsOf}else{$null})
 }
 
 # --- Stage 6: overlay §6 升级-复审 readiness 提醒(旁路 sidecar;comparison-only 非生产;失败绝不阻断周报)。
@@ -567,9 +617,11 @@ if ($SkipRegime) {
 #     runner 打醒目横幅提醒做 §6 升级/退役决定——这是"不管哪个 AI 跑系统、每周都提醒"的硬保证(横幅落在每次实盘
 #     运行输出 + research lane 的 overlay_eval_summary.json)。不算指标、不自动升级(详见 runner docstring + register track ②)。
 if ($SkipOverlayEval) {
+    Add-SidecarOutcome -Name 'overlay_eval' -Expected $false -Attempted $false -ExecutionStatus 'skipped' -ProgressStatus 'not_applicable' -SkipReason 'skip_overlay_eval'
     Write-Host ""
     Write-Host "[overlay] -SkipOverlayEval set, overlay readiness check not run" -ForegroundColor DarkGray
 } elseif ($IsHistoricalAsOf) {
+    Add-SidecarOutcome -Name 'overlay_eval' -Expected $false -Attempted $false -ExecutionStatus 'not_due' -ProgressStatus 'not_applicable' -SkipReason 'historical_replay'
     Write-Host ""
     Write-Host "[overlay] historical -AsOf $AsOf -> skipping overlay readiness (forward obs only accrue on live runs)" -ForegroundColor DarkGray
 } else {
@@ -584,7 +636,61 @@ if ($SkipOverlayEval) {
         # 旁路约束:readiness 检查失败(读 overlay.json 异常等)绝不阻断周报
         Write-Host "[WARN] overlay readiness check exit $OverlayEvalExitCode (advisory sidecar; comparison-only, does NOT block the weekly)" -ForegroundColor Yellow
     }
+    Add-SidecarOutcome -Name 'overlay_eval' -Expected $true -Attempted $true -ExecutionStatus $(if($OverlayEvalExitCode -eq 0){'succeeded'}else{'failed'}) -ProgressStatus $(if($OverlayEvalExitCode -eq 0){'advanced'}else{'unavailable'}) -ErrorCode $(if($OverlayEvalExitCode -eq 0){$null}else{'process_failed'}) -ObservedDecisionAsOf $(if($OverlayEvalExitCode -eq 0){$AsOf}else{$null})
 }
 
+ # P4: health is a separate post-run companion.  The already-published M6.7
+ # JSON/Markdown/receipt are intentionally not rewritten here.
+$HealthDir = if ($Account) {
+    Join-Path $ProjectRoot "state\a_short\weekly_private\$AsOf"
+} else {
+    Join-Path $ProjectRoot "research\results\a_short\$AsOf"
+}
+$PipelineExpected = @()
+if (-not $SkipSemanticRisk -and -not $IsHistoricalAsOf) {
+    $PipelineExpected = @(
+        'official_operation_capture', 'official_operation_settlement', 'factor_v2_capture',
+        'industry_weight_capture', 'industry_weight_settlement', 'target_policy_capture',
+        'final_action_capture', 'overlay_adjudication_capture', 'overlay_adjudication_settlement'
+    )
+}
+$ManifestExpected = @($LauncherSidecarOutcomes | ForEach-Object { [string]$_.name }) + $PipelineExpected | Select-Object -Unique
+$LauncherManifestPath = Join-Path $HealthDir 'launcher_sidecar_outcomes.json'
+$LauncherManifest = [ordered]@{
+    schema_name = 'a_short_weekly_sidecar_outcomes'
+    schema_version = '1.0.0'
+    as_of = [string]$AsOf
+    run_id = $null
+    candidate_digest = $null
+    expected_sidecars = @($ManifestExpected)
+    sidecars = @($LauncherSidecarOutcomes)
+}
+$ReceiptForHealth = Join-Path $HealthDir 'weekly_m67.receipt.json'
+$M67StatusForHealth = if ($SkipSemanticRisk) { 'skipped' } elseif (Test-Path -LiteralPath $ReceiptForHealth) { 'complete' } else { 'not_run' }
+if (Test-Path -LiteralPath (Join-Path $HealthDir 'weekly_m67.json')) {
+    try {
+        $WeeklyForHealth = Get-Content -Raw -Encoding UTF8 (Join-Path $HealthDir 'weekly_m67.json') | ConvertFrom-Json
+        $LauncherManifest.run_id = [string]$WeeklyForHealth.run_lineage.run_id
+        $LauncherManifest.candidate_digest = [string]$WeeklyForHealth.run_lineage.candidate_digest
+    } catch { }
+}
+$Utf8NoBom = [System.Text.UTF8Encoding]::new($false)
+New-Item -ItemType Directory -Force -Path $HealthDir | Out-Null
+[System.IO.File]::WriteAllText($LauncherManifestPath, ($LauncherManifest | ConvertTo-Json -Depth 8) + "`n", $Utf8NoBom)
+$PipelineManifestPath = Join-Path $HealthDir 'weekly_m67.pipeline_sidecar_outcomes.json'
+$HealthArgs = @(
+    'runners\a_short_weekly_sidecar_health.py', '--as-of', $AsOf,
+    '--project-root', $ProjectRoot, '--out-dir', $HealthDir,
+    '--launcher-outcomes', $LauncherManifestPath,
+    '--pipeline-outcomes', $PipelineManifestPath,
+    '--m67-status', $M67StatusForHealth
+)
+if (Test-Path -LiteralPath $ReceiptForHealth) { $HealthArgs += @('--weekly-receipt', $ReceiptForHealth) }
+& $PythonExe @HealthArgs
+$HealthExitCode = $LASTEXITCODE
+if ($null -eq $HealthExitCode) { $HealthExitCode = 1 }
+if ($HealthExitCode -ne 0) {
+    Write-Host "[sidecar-health] UNAVAILABLE (health companion failed; M6.7/selection unchanged)" -ForegroundColor Red
+}
 Write-Host "=== Pipeline done ===" -ForegroundColor Cyan
 exit 0

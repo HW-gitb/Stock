@@ -1,5 +1,33 @@
 # Session Log
 
+## 2026-07-25 - Claude Code re-review PASS + commit (A-short P4 sidecar health companion)
+
+- **Verdict/Action**: PASS, committed to master. `R-ASHORT-WEEKLY-SIDECAR-HEALTH-COMPANION` resolved — Codex's hash-only effect-contract reseal for `runners/a_short_weekly_pipeline.py` verified honest (1-line diff, no predicate/policy/logic change). Detail in register.
+- **Required**: None open. CRLF-only `target_policy_comparison_summary.*` touch (empty `git diff HEAD`) left unstaged — not P4. Detail in register.
+- **Verify**: review-evidence:dc8005314b6c. Pinned main Python: `test_a_short_effect_contract` 18 OK (hash-only reseal passing the consumer-registration tests = no unregistered decision predicate escaped); `test_a_short_weekly_sidecar_health` 9 OK (changed pipeline fns' only test site + stale-artifact / clock / skips / missing-outcome / de-id / M6.7 byte-stability). No agent/full lane (comparison-only, decision-neutral). No provider/account/order.
+- **Next**: 无（P4 已闭并合并 master）。
+
+## 2026-07-25 - Codex repair (A-short P4 effect-contract reseal)
+
+- **Verdict/Action**: Resealed only `decision_predicate_sha256[runners/a_short_weekly_pipeline.py]`; no selection, M6.7, account, order, provider, or policy logic changed.
+- **Required**: Independent Claude re-review of `R-ASHORT-WEEKLY-SIDECAR-HEALTH-COMPANION` remains required before commit.
+- **Verify**: `static_contract_error() = None`; focused effect-contract + P4 sidecar pack 27 OK; changed Python files compile; `git diff --check` clean apart from normal CRLF warnings. No provider/live/account/order run.
+- **Next**: Claude Code: re-review P4, then commit.
+
+## 2026-07-25 - Claude Code review FAIL (A-short P4 sidecar health companion)
+
+- **Verdict/Action**: FAIL; the sole blocker was the stale effect-contract hash after the P4 observability-only pipeline change.
+- **Required**: Hash-only reseal of `runners/a_short_weekly_pipeline.py` in `schemas/a_short_m67_effect_contract.json`; correct the attribution in the risk register.
+- **Verify**: P4 sidecar tests 9 OK; the stale hash reproduced as `decision predicate changed without effect contract update`. No provider/account/order run.
+- **Next**: Codex: repair.
+
+## 2026-07-25 - Codex execution (A-short P4 sidecar health companion)
+
+- **Verdict/Action**: Implemented launcher/pipeline sidecar outcome manifests and the separate non-blocking health companion; official M6.7 output is not rewritten.
+- **Required**: Independent review remains required; no selection, M6.7 decision, account, order, provider, or automatic replacement behavior changed.
+- **Verify**: P4 focused/schema/launcher pack 33 OK; changed Python files compile; PowerShell ParseFile 0 errors; `git diff --check` clean before effect-contract reseal.
+- **Next**: Claude Code: review P4.
+
 ## 2026-07-25 - Claude Code review PASS + commit (A-short P3 factor-comparison-v2 capture)
 
 - **Verdict/Action**: PASS, committed to master. P3 (`R-ASHORT-FACTOR-COMPARISON-V2-CAPTURE-FLOAT-DRIFT`) resolved — v2 capture's exact float close `!=` (both integrity + capture paths) replaced with `math.isclose(rel_tol=0, abs_tol=1e-8)` matching settlement; v2 handler emits de-identified allowlisted `error_code`. Comparison-only. Detail in register.

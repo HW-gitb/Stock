@@ -1,0 +1,40 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "a_short_weekly_sidecar_outcomes",
+  "description": "De-identified per-run outcome manifest written by the launcher or weekly pipeline.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_name", "schema_version", "as_of", "expected_sidecars", "sidecars"],
+  "properties": {
+    "schema_name": {"const": "a_short_weekly_sidecar_outcomes"},
+    "schema_version": {"const": "1.0.0"},
+    "as_of": {"type": "string", "pattern": "^[0-9]{8}$"},
+    "run_id": {"type": ["string", "null"]},
+    "candidate_digest": {"type": ["string", "null"]},
+    "expected_sidecars": {
+      "type": "array",
+      "items": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+      "uniqueItems": true
+    },
+    "sidecars": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "expected", "attempted", "execution_status", "progress_status"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[a-z0-9_]+$"},
+          "expected": {"type": "boolean"},
+          "attempted": {"type": "boolean"},
+          "execution_status": {"enum": ["succeeded", "failed", "skipped", "not_due", "not_configured"]},
+          "progress_status": {"enum": ["advanced", "already_current", "stalled", "not_applicable", "unavailable"]},
+          "expected_data_through": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "observed_decision_as_of": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "observed_data_through": {"type": ["string", "null"], "pattern": "^([0-9]{8})?$"},
+          "error_code": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"},
+          "skip_reason": {"type": ["string", "null"], "pattern": "^([a-z0-9_]+)?$"}
+        }
+      }
+    }
+  }
+}
