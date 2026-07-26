@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (register 归档瘦身，自做自审，用户指令)
+
+- **Verdict/Action**: PASS，已提交。用户指令「自己做自己审」。`docs/system_risk_register.md` 从 3.4MB/6384 行降到 446KB/781 行：307 条已关闭条目整块移入 `docs/archive/system_risk_register_resolved_20260726.md`，活册只留 63 条（54 declared-open + 9 语义歧义的保守保留）+ 4 个治理小节。移动不删除，R-ID 与 closure evidence 全部保留，活册顶部加指针。依据 AGENTS §System risk register discipline：该文件的定义是「未修复风险的 durable queue」。
+- **Required**: 无。分类采用 fail-safe 规则：只有能被正面判定为 closed 的条目才归档，任何歧义一律留在活册（9 条 unclassified 全部留下，含明写 "stays OPEN until the switchover" 的 `R-ASHORT-COMPARISON-EPOCH-CHURN-WITHOUT-PROTECTION`）。
+- **Verify**: 两重独立完整性证明：切分前断言分区可逐字节重建原文；切分后以 `git show HEAD:` 为基线逐条比对 = 369 条基线**零丢失、零重复、正文零改动**，新增仅本轮那 1 条；归档中 declaring-open = 0；4 个治理小节全在活册、零泄漏到归档。守护：读 register 的 5 个测试模块 117 OK，`.tools/verify_doc_process.cmd` 60 OK，`git diff --check` clean。`tests/test_semantic_risk_slice3_guard.py` 的反遗忘断言改为在「活册+归档」中查找——意图不变、强度不减（两处都删掉仍然红），归档目录缺失时退化为原行为。
+- **Next**: 无（已并入 master）。
+
 ## 2026-07-26 - Claude Code 审查 PASS (theme_forward_comparison 全件第三轮，五类闭合收口)
 
 - **Verdict/Action**: PASS，已并入 master（未 push）。按用户要求全件重读而非只看修复面：五类闭合契约现已全部带机器断言。类2 按 Required 收口（validate 经 `_decision_time_projection` 走同一个 builder，废字段删除，信任边界写进收据与设计文档）。P3 与 7 条 Optional 亦已落地。用户 2026-07-26 选 A，接受「可信本地操作者」边界，已固化进设计文档 §Epoch protocol。Detail in register。

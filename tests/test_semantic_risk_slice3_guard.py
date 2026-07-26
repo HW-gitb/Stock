@@ -23,6 +23,16 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 EGS_MAIN = ROOT / "A-EGS" / "egs_main.py"
 REGISTER = ROOT / "docs" / "system_risk_register.md"
+# Closed entries are moved to a dated archive so the live file stays an open-risk queue; the
+# durable record is the live register PLUS those archives, so an archived entry is still recorded.
+REGISTER_ARCHIVES = sorted((ROOT / "docs" / "archive").glob("system_risk_register_resolved_*.md"))
+
+
+def _durable_register_text() -> str:
+    return "\n".join(
+        [REGISTER.read_text(encoding="utf-8")]
+        + [path.read_text(encoding="utf-8") for path in REGISTER_ARCHIVES]
+    )
 
 TRACKER_TITLE = "A-short semantic-risk layer ↔ production reconciliation"
 RESOLVED_MARKER = "Slice 3 reconciliation"
@@ -90,7 +100,10 @@ def _egs_main_is_post_slice3() -> bool:
 
 class Slice3ReconciliationGuard(unittest.TestCase):
     def test_register_records_slice3_resolution_not_silently_dropped(self):
-        register = REGISTER.read_text(encoding="utf-8")
+        # Archiving a closed entry is not dropping it: search the live register and every
+        # resolved archive, so the anti-forget check survives register housekeeping but still
+        # fails if the record is deleted outright.
+        register = _durable_register_text()
         self.assertIn(TRACKER_TITLE, register,
                       "the Slice-3 reconciliation record must not be silently dropped from the register")
         self.assertIn(RESOLVED_MARKER, register,
