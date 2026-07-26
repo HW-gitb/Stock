@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (P2 语义指纹归一收口，自做自审，用户指令)
+
+- **Verdict/Action**: PASS，已提交。用户指令「你自己修自己审」。P2 是最后一条 churn 敏感轨，现已收敛：三条腿全部改走 `epoch_mode.semantic_function_contract`。**类比 finding 文本点名的大一圈**——文本只点了 walker，但同文件还有两条直连 `inspect.getsource` 腿，是测试里的 callsite allowlist 把整类兜出来的。Detail in register。
+- **Required**: 无。`R-ASHORT-P0V2-FINGERPRINT-CONVERGENCE-DROPPED-97-PERCENT-OF-ITS-CONTRACT` 的最后一条 Optional 转 closed。冻结前清单仅剩「引擎自身常量绑定极性」一条，且需先定 Path 常量规约。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available（本轮为「你自己修自己审」指令，非 review 命令形态，hook 未注入 token）。亲跑双向探针（改的是模块文件的临时副本、经源码读取器注入，未写任何仓库文件）：三条腿一律「注释不动、改码动、预冻结不动」；未绑定函数改码不动；改名 fail-closed。定向包 48 OK，连带消费者 28 OK，`py_compile` 与 `git diff --check` clean，七轨仍全 pre-freeze 故零证据代价。**独立对抗 pass：不适用**——该 finding 无历史 FAIL 轮，且本会话工具策略禁止起 agent；替代做法是整读契约面 + 自跑逐腿矩阵，残余风险已记 register。分级：rule 3 未命中（comparison-only 侧车，非生产入口、非共享引擎），故不跑全量 lane 包。
+- **Next**: 用户：决定「引擎自身常量绑定极性」何时做（需先拍 Path 常量规约）。
+
 ## 2026-07-26 - Claude Code 审查 FAIL (A-short 第三刀 条目21+22，8865 工作树)
 
 - **Verdict/Action**: FAIL，不提交。条目 21 已在类级闭合、方向对两道生产门都正确；条目 22 被点名的两条腿也收口干净。但同一个 `main()` 里还有两个解析点未走受控出口，而这正是本刀自己规格第 3 条明写要做的。审查在**那棵树**（`.codex/worktrees/8865/Stock`，base `8a9d5d83`）进行；Required 落 master 的 register 而非该树，因为该树落后 8 个提交且其 register 是归档瘦身前的旧版，写进去只会造出无谓冲突——它必须先 rebase 到 master 才能开工。
