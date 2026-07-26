@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 FAIL (A-short 第三刀 条目21+22，8865 工作树)
+
+- **Verdict/Action**: FAIL，不提交。条目 21 已在类级闭合、方向对两道生产门都正确；条目 22 被点名的两条腿也收口干净。但同一个 `main()` 里还有两个解析点未走受控出口，而这正是本刀自己规格第 3 条明写要做的。审查在**那棵树**（`.codex/worktrees/8865/Stock`，base `8a9d5d83`）进行；Required 落 master 的 register 而非该树，因为该树落后 8 个提交且其 register 是归档瘦身前的旧版，写进去只会造出无谓冲突——它必须先 rebase 到 master 才能开工。
+- **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`(open P3，仅阻断本刀)。另新入册 `R-ASHORT-TEST-PACK-REWRITES-TRACKED-P2-PUBLIC-SUMMARY`(open P2，本轮实测复现，非本刀引入)。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:not_available（本轮指令非 review 命令形态，hook 未注入 token；以下均为真实工具结果）。亲跑对抗探针（pinned main Python，脚本在仓库外 scratchpad）：条目 21 十种缺失形状全归空、真名不误伤、反向对照证实修前是假清白、两道生产门方向正确；条目 22 七种敌意输入全部受控且不泄露载荷。独立重算 effect contract 的 `decision_predicate_sha256` = 包内值逐字节相同。合并风险已排除：8a9d5d83→master 的 78 个变更文件无一命中本刀 5 个文件，master 上 `tests.test_a_short_effect_contract` 亲跑 18 OK。分级：§6a agent 本会话被工具策略禁用，已用整读被消费函数体+自跑对抗探针替代，残余风险记于 register；rule-1 验收包起跑后按 rule 4/6 在 FAIL 复现后中止（PASS 前须由下一轮补跑），全量 lane 包按 rule 3 未跑。
+- **Next**: Codex：修复（先 rebase 8865 到 master，再按 register 的 Required 收口 `main()` 两个解析点）。
+
 ## 2026-07-26 — Claude Code 审查 PASS (US-short 软发现 K4-pre capstone fixture)
 
 - **Verdict/Action**: PASS，已提交。K4-pre 只动 2 个文件（`tests/test_us_short_model_paper_capstone_wiring.py` + 本 log），生产代码 git-diff 为零、`_build_pass2_budget_approval` 未被放宽或绕过。基线红确认是 fixture 漂移：该测试上次改于 `2f84f51e`(07-22)，finalize 调用 `80a283a2`(07-23) 才进 capstone，它从未在带门代码上绿过——非生产缺陷，故未 STOP K4-pre、未另立 Required。
