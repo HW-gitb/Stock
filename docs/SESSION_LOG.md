@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (A-1 恢复 README 被守护措辞，lane 预存红清零，自做自审)
+
+- **Verdict/Action**: PASS，已提交。动手前先判"恢复措辞 vs 退役断言"：`git log -S` 查到该措辞是被 `48b01737` **重写路由行时**顺手漂掉的，且**同一提交没动守卫**，概念仍在（该行仍写 manual confirmation / advisory only / never EGS·Rule6·order），故判为恢复。恢复文本按当前契约属实重写，不是为喂字符串。一行改动。Detail in register。
+- **Required**: 无。`R-ASHORT-MASTER-LANE-PACK-TWO-PREEXISTING-RED` 转 resolved P2——另一条红已由第三刀修绿，A-short lane 现无已知预存红，"全量绿"重新可当回归基线用。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e7bde8d61763。整类先核：守卫钉 11 个锚点，逐文件查得 10 个本就在、只缺 README 这一句。反向对照：拿 `git show HEAD:` 的旧 README 跑同一断言→**失败**，新内容→通过，证明断言真依赖本次改动；契约路径断言两边都过，说明只动了这一个锚点。col1 279 字 / 上限 350，且不在 grandfather 名单（那只管超标行）。定向包 61 OK。纯文档改动，无 provider/account/order。
+- **Next**: 自动进入 A-2（churn 测试原地改生产文件）。
+
 ## 2026-07-26 - Claude Code 审查 PASS (theme 引擎常量绑定极性收口，自做自审，用户指令)
 
 - **Verdict/Action**: PASS，已提交。用户指令「你自己修自己审」，并要求先读代码验证改法。**验证推翻了原方案**：提议的「Path 常量整类排除」基于「自动绑会哈希机器相关的绝对路径」，而 `_semantic_file_contract_digest` 实际绑的是签入文件的 AST 赋值节点、不是求值后的对象，故排除反而会丢真信息。实现改为**不排除任何东西**。Detail in register。
