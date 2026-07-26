@@ -8,6 +8,7 @@ does not count.
 """
 from __future__ import annotations
 
+import ast
 import sys
 import json
 import tempfile
@@ -22,50 +23,65 @@ if str(ROOT) not in sys.path:
 from engine import a_short_evidence_epoch_mode as epoch_mode  # noqa: E402
 from tests._a_short_epoch_mode_test_utils import patched_epoch_modes  # noqa: E402
 
-# Files bound by several tracks' real fingerprints and edited by most repair
-# slices; touching them must not disturb any epoch while the design is unfrozen.
-CHURN_FILES = (
-    "runners/a_short_weekly_pipeline.py",
-    "runners/a_short_phase5_engine.py",
-    "A-EGS/egs_main.py",
-)
-
-MODES = ("pre_freeze_audit_only", "frozen_enforced")
-
-# The epoch components whose ENFORCED binding hashes one of CHURN_FILES whole.
-# Asserting this exact set both ways keeps the pre-freeze equality honest: if a
-# component silently stopped binding those files the probe would prove nothing,
-# and if a new component started binding them it has joined the churn class and
-# must be a deliberate decision.  When the restore-condition convergence onto
-# semantic contracts lands this set shrinks — that is a decision to record, not
-# a test to relax.
-CHURN_BOUND_COMPONENTS = frozenset({
-    "p0v2.decision_delta_contract",
-    "p0v2.immutable_common_pool_contract",
-    "p1",
-    "p3",
-    "p4a",
-})
-
-# The live modules this probe used to ``importlib.reload``.  Reload keeps the
-# module object and its ``__dict__`` identical, so only the symbols inside them
-# reveal a re-execution.
-TRACK_MODULES = (
-    "engine.a_short_overlay_adjudication",
-    "runners.a_short_final_action_validation_runner",
-    "engine.a_short_industry_weight_comparison",
-    "runners.a_short_target_policy_comparison_runner",
-    "engine.a_short_regime_action_comparison",
-    "engine.a_short_factor_comparison_v2",
-    "engine.a_short_theme_forward_comparison",
-)
-
 P0V2_CONTRACT_LEGS = (
     "decision_delta_contract",
     "immutable_common_pool_contract",
     "outcome_contract",
     "runtime_wiring_contract",
 )
+
+# Every direct ``inspect.getsource`` source-identity seam in the seven tracks.
+# A new call fails this scan until its persisted root and pre-freeze gate are
+# named.  This turns the parking requirement into an opt-out review gate rather
+# than another opt-in fingerprint list.
+SOURCE_IDENTITY_GETSOURCE_CALLS = {
+    # P1/P3/P4a/P5 now derive their source identity through the shared
+    # AST helpers in `a_short_evidence_epoch_mode`, so they must hold no direct
+    # `inspect.getsource` callsite at all; an empty set is the strong assertion.
+    "engine/a_short_regime_action_comparison.py": set(),
+    "runners/a_short_regime_comparison_runner.py": set(),
+    "runners/a_short_final_action_validation_runner.py": set(),
+    "engine/a_short_overlay_adjudication.py": set(),
+    "engine/egs_industry_heat.py": set(),
+    # Still raw-source by design: P2's dependency-closure walker and the theme
+    # track's own single-function digest predate the shared helper.
+    "runners/a_short_target_policy_comparison_runner.py": {
+        "_semantic_dependency_closure", "_shared_contract_surface",
+    },
+    "engine/a_short_theme_forward_comparison.py": {"_semantic_function_digest"},
+}
+
+# Each source-derivation seam above must terminate at one of these audited
+# pre-freeze roots.  The root must contain the named gate call in its AST.
+SOURCE_IDENTITY_GATES = {
+    "engine/a_short_factor_comparison_v2.py": {
+        "_canonical_contracts": "enforcement_enabled",
+    },
+    "engine/a_short_regime_action_comparison.py": {
+        "candidate_effect_policy_fingerprint": "fingerprint_or_pre_freeze",
+    },
+    "runners/a_short_regime_comparison_runner.py": {
+        "_candidate_effect_selector_contract": "fingerprint_or_pre_freeze",
+    },
+    "runners/a_short_target_policy_comparison_runner.py": {
+        "_contract_fingerprint": "enforcement_enabled",
+    },
+    "runners/a_short_final_action_validation_runner.py": {
+        "_contract_fingerprint": "fingerprint_or_pre_freeze",
+    },
+    "engine/a_short_overlay_adjudication.py": {
+        "_epoch_context": "fingerprint_or_pre_freeze",
+    },
+    "engine/egs_industry_heat.py": {
+        "_p5_source_fingerprint": "fingerprint_or_pre_freeze",
+    },
+    "engine/a_short_industry_weight_comparison.py": {
+        "_contract_fingerprint": "fingerprint_or_pre_freeze",
+    },
+    "engine/a_short_theme_forward_comparison.py": {
+        "_epoch_context": "enforcement_enabled",
+    },
+}
 
 
 def _fingerprints() -> dict[str, str]:
@@ -109,25 +125,6 @@ def _fingerprints() -> dict[str, str]:
     return values
 
 
-def _loaded_track_symbols() -> dict[str, tuple[int, ...]]:
-    """Identity of every callable inside each already-loaded track module.
-
-    ``importlib.reload`` reuses the module object and its ``__dict__``, so the
-    module id is unchanged by a re-execution; the rebuilt functions and classes
-    inside it are not.
-    """
-    identities: dict[str, tuple[int, ...]] = {}
-    for name in TRACK_MODULES:
-        module = sys.modules.get(name)
-        if module is None:
-            continue
-        identities[name] = tuple(
-            id(getattr(module, attribute)) for attribute in sorted(vars(module))
-            if callable(getattr(module, attribute, None))
-        )
-    return identities
-
-
 def _p4a_promotion_row(index: int) -> dict:
     """One P4a outcome row shaped to clear every promotion gate when enforced.
 
@@ -148,11 +145,6 @@ def _p4a_promotion_row(index: int) -> dict:
                 "benchmarks": {"csi1000": {"candidate_excess_pct": .5}, "csi300": {"candidate_excess_pct": .5}}},
         "h20": {"status": "settled", "delta_pct": .5}, "h20_complete": True,
     }
-
-
-def _fingerprints_in_mode(mode: str) -> dict[str, str]:
-    with patched_epoch_modes(mode):
-        return _fingerprints()
 
 
 class PreFreezeEvidenceModeTests(unittest.TestCase):
@@ -177,45 +169,295 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
     def test_no_global_switch_can_arm_all_tracks(self):
         self.assertFalse(hasattr(epoch_mode, "MODE"))
 
-    def test_unrelated_source_edits_do_not_move_any_epoch(self):
-        """The churn edit must move nothing pre-freeze while still being able to
-        move the enforced bindings; without the second half the equality proves
-        nothing at all.
+    def test_all_persisted_source_identities_are_lazy_and_stable_pre_freeze(self):
+        """A source edit cannot re-key a ledger or block capture before freeze."""
+        from engine import a_short_factor_comparison_v2 as p0
+        from engine import a_short_industry_weight_comparison as p5
+        from engine import egs_industry_heat as heat
+        from runners import a_short_regime_comparison_runner as p1_runner
 
-        Deliberately no ``importlib.reload``: every fingerprint reads its inputs
-        at call time, and re-executing live modules inside the shared test
-        interpreter corrupted unrelated test modules
-        (`R-ASHORT-EPOCH-MODE-TEST-RELOAD-POLLUTES-LANE-PACK`).  The mutation is
-        owned here so the restore runs even if a fingerprint call raises.
+        with patched_epoch_modes("pre_freeze_audit_only"):
+            baseline = _fingerprints()
+            p0_baseline = p0._canonical_contracts(p0.load_v2_governance())
+            p1_key = p1_runner._candidate_effect_policy_key()
+            p1_policy = p1_runner._new_candidate_effect_group()["policy"]
+            p5_source = p5._source_fingerprint()
+            with mock.patch.object(
+                epoch_mode, "semantic_module_contract",
+                side_effect=AssertionError("pre-freeze P0 semantic supplier executed"),
+            ), mock.patch.object(
+                p1_runner, "_real_candidate_effect_selector_contract",
+                side_effect=AssertionError("pre-freeze P1 selector supplier executed"),
+            ), mock.patch.object(
+                heat, "_real_p5_source_fingerprint",
+                side_effect=AssertionError("pre-freeze P5 source supplier executed"),
+            ):
+                self.assertEqual(_fingerprints(), baseline)
+                self.assertEqual(p0._canonical_contracts(p0.load_v2_governance()), p0_baseline)
+                self.assertEqual(p1_runner._candidate_effect_policy_key(), p1_key)
+                self.assertEqual(p1_runner._new_candidate_effect_group()["policy"], p1_policy)
+                self.assertEqual(p5._source_fingerprint(), p5_source)
+
+    def test_comment_edit_never_rekeys_p1_but_a_code_edit_does_once_frozen(self):
+        """The full matrix the original reviewer counterexample only half covered.
+
+        comment edit  -> must move nothing, in either mode (churn immunity)
+        code edit     -> must move nothing pre-freeze, and MUST move once frozen
         """
-        originals = {path: (ROOT / path).read_bytes() for path in CHURN_FILES}
-        symbols_before = _loaded_track_symbols()
-        try:
-            before = {mode: _fingerprints_in_mode(mode) for mode in MODES}
-            for path in CHURN_FILES:
-                with (ROOT / path).open("ab") as handle:
-                    handle.write(b"\n# evidence-epoch churn probe\n")
-            after = {mode: _fingerprints_in_mode(mode) for mode in MODES}
-        finally:
-            for path, payload in originals.items():
-                (ROOT / path).write_bytes(payload)
-        self.assertEqual(before["pre_freeze_audit_only"], after["pre_freeze_audit_only"])
-        moved = {name for name, value in after["frozen_enforced"].items()
-                 if before["frozen_enforced"][name] != value}
-        self.assertEqual(moved, set(CHURN_BOUND_COMPONENTS))
-        # Regression guard for the pollution this probe once caused: no already
-        # loaded track module may be re-executed, no churn file may keep the
-        # probe comment, and the shared mode must be back where it started.
-        symbols_after = _loaded_track_symbols()
-        self.assertEqual([name for name, ids in symbols_before.items()
-                          if symbols_after.get(name) != ids], [])
-        self.assertEqual({path: (ROOT / path).read_bytes() for path in CHURN_FILES}, originals)
-        self.assertTrue(all(not epoch_mode.enforcement_enabled(track) for track in epoch_mode.TRACKS))
+        from runners import a_short_regime_comparison_runner as p1_runner
+
+        real_source = Path(p1_runner.__file__).read_text(encoding="utf-8")
+        commented = real_source.replace(
+            "def _real_candidate_effect_selector_contract",
+            "# simulated comment-only edit\ndef _real_candidate_effect_selector_contract", 1)
+        tree = ast.parse(real_source)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "_m67_build_candidates":
+                node.body.insert(0, ast.parse("_semantic_mutant = 1").body[0])
+                break
+        else:  # pragma: no cover - the bound function must exist
+            self.fail("_m67_build_candidates is no longer a top-level function")
+        recoded = ast.unparse(ast.fix_missing_locations(tree))
+        self.assertNotEqual(commented, real_source)
+        self.assertNotEqual(recoded, real_source)
+
+        def key_with(source_text, mode):
+            with tempfile.TemporaryDirectory() as temp:
+                path = Path(temp) / "p1_runner_variant.py"
+                path.write_text(source_text, encoding="utf-8")
+                with patched_epoch_modes(mode, ("p1_regime_candidate_effect",)), \
+                        mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                    return p1_runner._candidate_effect_policy_key()
+
+        for mode in ("pre_freeze_audit_only", "frozen_enforced"):
+            baseline = key_with(real_source, mode)
+            self.assertEqual(key_with(commented, mode), baseline,
+                             f"a comment-only edit moved the P1 bucket in {mode}")
+            moved = key_with(recoded, mode) != baseline
+            self.assertEqual(moved, mode == "frozen_enforced",
+                             f"code-edit drift is wrong for {mode}")
+
+    def test_every_track_has_a_positive_enforced_drift_control(self):
+        """Every parked identity must become genuinely drift-sensitive at freeze."""
+        from engine import a_short_factor_comparison_v2 as p0
+        from engine import a_short_industry_weight_comparison as p5
+        from engine import a_short_overlay_adjudication as p4a
+        from engine import a_short_regime_action_comparison as p1
+        from engine import a_short_theme_forward_comparison as theme
+        from runners import a_short_final_action_validation_runner as p3
+        from runners import a_short_regime_comparison_runner as p1_runner
+        from runners import a_short_target_policy_comparison_runner as p2
+
+        with patched_epoch_modes("frozen_enforced"):
+            p0_before = p0._canonical_contracts(p0.load_v2_governance())
+            original_semantic_contract = epoch_mode.semantic_module_contract
+
+            def p0_mutant(module, *, excluded_functions=frozenset()):
+                value = original_semantic_contract(module, excluded_functions=excluded_functions)
+                if module.__name__ == "engine.a_short_factor_comparison_v2_adjudication":
+                    value = {**value, "semantic_ast_sha256": "0" * 64}
+                return value
+
+            with mock.patch.object(epoch_mode, "semantic_module_contract", side_effect=p0_mutant):
+                p0_after = p0._canonical_contracts(p0.load_v2_governance())
+            self.assertEqual(
+                {leg for leg in P0V2_CONTRACT_LEGS if p0_before[leg] != p0_after[leg]},
+                set(P0V2_CONTRACT_LEGS),
+            )
+
+            p1_before = p1.candidate_effect_policy_fingerprint()
+            with mock.patch.object(p1, "_runtime_policy_source_fingerprint", return_value="0" * 64):
+                self.assertNotEqual(p1.candidate_effect_policy_fingerprint(), p1_before)
+            p1_key_before = p1_runner._candidate_effect_policy_key()
+            with mock.patch.object(p1_runner, "_real_candidate_effect_selector_contract", return_value="1" * 64):
+                self.assertNotEqual(p1_runner._candidate_effect_policy_key(), p1_key_before)
+
+            target_before = p2._contract_fingerprint("target_exit")
+            breakout_before = p2._contract_fingerprint("breakout_entry")
+            with mock.patch.object(p2, "_target_contract_surface", return_value={"semantic_mutant": True}):
+                self.assertNotEqual(p2._contract_fingerprint("target_exit"), target_before)
+                self.assertEqual(p2._contract_fingerprint("breakout_entry"), breakout_before)
+
+            p3_before = p3._contract_fingerprint()
+            with mock.patch.object(p3, "_real_contract_fingerprint", return_value="2" * 64):
+                self.assertNotEqual(p3._contract_fingerprint(), p3_before)
+
+            p4a_before = p4a._contract_fingerprint()
+            with mock.patch.object(p4a, "_screening_runtime_recipe_binding",
+                                   return_value={"semantic_mutant": True}):
+                self.assertNotEqual(p4a._contract_fingerprint(), p4a_before)
+
+            p5_before = p5._contract_fingerprint(p5.load_governance())
+            with mock.patch.object(p5, "_runtime_source_fingerprint", return_value="3" * 64):
+                self.assertNotEqual(p5._contract_fingerprint(p5.load_governance()), p5_before)
+
+            theme_source = {
+                "industry_trend_configuration_fingerprint": "a" * 64,
+                "theme_taxonomy_configuration_fingerprint": "b" * 64,
+            }
+            theme_before = epoch_mode.fingerprint_or_pre_freeze(
+                theme.TRACK_ID,
+                lambda: theme.comparison_contract_fingerprint(
+                    theme.load_governance(), ["physical_ai"], theme_source,
+                ),
+            )
+            with mock.patch.object(theme, "_contract_function_semantics",
+                                   return_value={"semantic_mutant": "4" * 64}):
+                theme_after = epoch_mode.fingerprint_or_pre_freeze(
+                    theme.TRACK_ID,
+                    lambda: theme.comparison_contract_fingerprint(
+                        theme.load_governance(), ["physical_ai"], theme_source,
+                    ),
+                )
+            self.assertNotEqual(theme_after, theme_before)
+
+    def test_p0v2_semantic_binding_is_complete_and_exclusions_are_exact(self):
+        from engine import a_short_factor_comparison_v2 as p0
+
+        for module_name, exclusions in p0.P0V2_SEMANTIC_MODULE_EXCLUSIONS.items():
+            module = __import__(module_name, fromlist=["*"])
+            contract = epoch_mode.semantic_module_contract(
+                module,
+                excluded_functions=exclusions,
+            )
+            tree = ast.parse(Path(module.__file__).read_text(encoding="utf-8"))
+            functions = {
+                node.name for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            self.assertEqual(set(contract["excluded_functions"]), set(exclusions), module_name)
+            self.assertEqual(set(contract["bound_functions"]), functions - set(exclusions), module_name)
+            self.assertEqual(functions, set(contract["bound_functions"]) | set(exclusions), module_name)
+        self.assertEqual(set().union(*p0.P0V2_SEMANTIC_MODULE_EXCLUSIONS.values()), set())
+
+    def test_semantic_module_contract_ignores_comments_and_docstrings_but_not_code(self):
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "semantic_probe.py"
+            module = SimpleNamespace(__name__="semantic_probe")
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text('def value():\n    """old docs"""\n    return 1\n', encoding="utf-8")
+                baseline = epoch_mode.semantic_module_contract(module)
+                path.write_text('# comment\ndef value():\n    """new docs"""\n    return 1  # inline\n', encoding="utf-8")
+                prose_only = epoch_mode.semantic_module_contract(module)
+                path.write_text('def value():\n    return 2\n', encoding="utf-8")
+                semantic_change = epoch_mode.semantic_module_contract(module)
+        self.assertEqual(baseline, prose_only)
+        self.assertNotEqual(baseline["semantic_ast_sha256"], semantic_change["semantic_ast_sha256"])
+
+    def test_semantic_function_contract_is_narrow_exact_and_prose_insensitive(self):
+        """A narrowed binding keeps prose-insensitivity and fails closed on a rename."""
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "narrow_probe.py"
+            module = SimpleNamespace(__name__="narrow_probe")
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text(
+                    'def bound():\n    """old"""\n    return 1\n\n\ndef unbound():\n    return 9\n',
+                    encoding="utf-8")
+                baseline = epoch_mode.semantic_function_contract(module, ("bound",))
+                self.assertEqual(baseline["bound_functions"], ["bound"])
+
+                # prose inside the bound function, and any edit to an unbound one,
+                # must both leave the contract alone.
+                path.write_text(
+                    '# header\ndef bound():\n    """new"""\n    return 1  # inline\n\n\n'
+                    'def unbound():\n    return 10\n',
+                    encoding="utf-8")
+                self.assertEqual(epoch_mode.semantic_function_contract(module, ("bound",)), baseline)
+
+                path.write_text(
+                    'def bound():\n    return 2\n\n\ndef unbound():\n    return 9\n', encoding="utf-8")
+                self.assertNotEqual(
+                    epoch_mode.semantic_function_contract(module, ("bound",))["semantic_ast_sha256"],
+                    baseline["semantic_ast_sha256"])
+
+                with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+                    epoch_mode.semantic_function_contract(module, ("renamed_away",))
+                with self.assertRaises(epoch_mode.EvidenceEpochModeError):
+                    epoch_mode.semantic_function_contract(module, ())
+
+    def test_p4a_semantic_exclusions_are_exact_and_enumerated(self):
+        from engine import a_short_overlay_adjudication as p4a
+
+        contract = epoch_mode.semantic_module_contract(
+            p4a, excluded_functions=p4a.P4A_SEMANTIC_MODULE_EXCLUSIONS)
+        functions = {
+            node.name for node in ast.parse(
+                Path(p4a.__file__).read_text(encoding="utf-8")).body
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        }
+        self.assertEqual(set(contract["excluded_functions"]), set(p4a.P4A_SEMANTIC_MODULE_EXCLUSIONS))
+        self.assertEqual(functions,
+                         set(contract["bound_functions"]) | set(p4a.P4A_SEMANTIC_MODULE_EXCLUSIONS))
+        # the exclusions are the epoch machinery itself, nothing that shapes a result
+        self.assertEqual(set(p4a.P4A_SEMANTIC_MODULE_EXCLUSIONS),
+                         {"_today", "_epoch_context", "_contract_fingerprint", "_epoch_id"})
+
+    def test_source_identity_scan_has_no_ungated_new_digest_path(self):
+        """New source-digest callsites fail until their gate is explicitly audited."""
+        for relative, expected_functions in SOURCE_IDENTITY_GETSOURCE_CALLS.items():
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+            actual = set()
+            for node in tree.body:
+                if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                    continue
+                if any(
+                    isinstance(item, ast.Call)
+                    and isinstance(item.func, ast.Attribute)
+                    and isinstance(item.func.value, ast.Name)
+                    and item.func.value.id == "inspect"
+                    and item.func.attr == "getsource"
+                    for item in ast.walk(node)
+                ):
+                    actual.add(node.name)
+                for item in ast.walk(node):
+                    if isinstance(item, ast.Call) and isinstance(item.func, ast.Attribute) and \
+                            item.func.attr == "read_bytes":
+                        rendered = ast.unparse(item.func.value)
+                        self.assertNotIn("__file__", rendered, f"source bytes bypass in {relative}:{node.name}")
+                        self.assertNotIn(".py", rendered, f"source bytes bypass in {relative}:{node.name}")
+            self.assertEqual(actual, expected_functions, relative)
+
+        for relative, roots in SOURCE_IDENTITY_GATES.items():
+            tree = ast.parse((ROOT / relative).read_text(encoding="utf-8"))
+            functions = {
+                node.name: node for node in tree.body
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            for root, required_call in roots.items():
+                self.assertIn(root, functions, f"missing persisted source-identity root {relative}:{root}")
+                calls = {
+                    item.func.attr
+                    for item in ast.walk(functions[root])
+                    if isinstance(item, ast.Call) and isinstance(item.func, ast.Attribute)
+                }
+                self.assertIn(required_call, calls, f"ungated source identity {relative}:{root}")
+
+        epoch_tree = ast.parse(
+            (ROOT / "engine" / "a_short_evidence_epoch_mode.py").read_text(encoding="utf-8")
+        )
+        source_readers = set()
+        for node in epoch_tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            attributes = {
+                item.func.attr
+                for item in ast.walk(node)
+                if isinstance(item, ast.Call) and isinstance(item.func, ast.Attribute)
+            }
+            if "getsourcefile" in attributes:
+                source_readers.add(node.name)
+        self.assertEqual(source_readers, {"_module_function_nodes"})
 
     def test_enforcement_is_parked_not_deleted(self):
         """Flipping the mode back on must restore a real, drift-sensitive binding."""
-        enforced = _fingerprints_in_mode("frozen_enforced")
-        parked = _fingerprints_in_mode("pre_freeze_audit_only")
+        with patched_epoch_modes("frozen_enforced"):
+            enforced = _fingerprints()
+        with patched_epoch_modes("pre_freeze_audit_only"):
+            parked = _fingerprints()
         self.assertEqual(sorted(enforced), sorted(parked))
         for component in enforced:
             self.assertNotEqual(enforced[component], parked[component], component)

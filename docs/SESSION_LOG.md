@@ -6,6 +6,42 @@
 - **Required**: 无。分类采用 fail-safe 规则：只有能被正面判定为 closed 的条目才归档，任何歧义一律留在活册（9 条 unclassified 全部留下，含明写 "stays OPEN until the switchover" 的 `R-ASHORT-COMPARISON-EPOCH-CHURN-WITHOUT-PROTECTION`）。
 - **Verify**: 两重独立完整性证明：切分前断言分区可逐字节重建原文；切分后以 `git show HEAD:` 为基线逐条比对 = 369 条基线**零丢失、零重复、正文零改动**，新增仅本轮那 1 条；归档中 declaring-open = 0；4 个治理小节全在活册、零泄漏到归档。守护：读 register 的 5 个测试模块 117 OK，`.tools/verify_doc_process.cmd` 60 OK，`git diff --check` clean。`tests/test_semantic_risk_slice3_guard.py` 的反遗忘断言改为在「活册+归档」中查找——意图不变、强度不减（两处都删掉仍然红），归档目录缺失时退化为原行为。
 - **Next**: 无（已并入 master）。
+## 2026-07-26 - Claude Code 审查 PASS (两条 Optional 自做自审，六轨 churn 免疫收口)
+
+- **Verdict/Action**: PASS，未提交（该树 detached HEAD 且落后 master 一个提交，合并前需 rebase）。用户指令「自己做自己审」，并拍板「维持原范围」= 只换机制不扩绑定面。`epoch_mode` 新增 `semantic_function_contract`，与 `semantic_module_contract` 共用同一个源码读取器与 docstring 剥离器；P1/P3/P4a 走模块式，P1 selector、P4a 的 `runtime_configuration_lineage`、P5 三函数走窄式，绑定的函数集合与改动前**完全一致**。P5 governance 改为解析后 JSON 摘要（生产端+消费端同改）。Detail in register。
+- **Required**: 无。register 两条 Optional 均转 closed。剩余一条实测 Optional：P2 仍 churn 敏感（`_semantic_dependency_closure` 是另一种形状的原始源码闭包遍历，不在本次范围内）。完整证据/边界见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:a9edd3b54902。亲跑双向探针：p0v2/p1/p3/p4a/p5 全部「注释不动、改码动」；p1.selector 用定向探针单独验证——注释不动、改 `_m67_build_candidates` 与 `_tracker_rows_for_week` 都动、改未绑定函数不动、预冻结不动。新增/升级 4 条机器断言（窄式契约的散文免疫+改名 fail-closed、P4a 豁免精确、governance 摘要对排版免疫、P1 全矩阵），并把两条原本只测「注释会动」的旧断言升级为「改码动/注释不动」。扫描断言现要求五个已收敛文件的直接 `inspect.getsource` 调用点为**零**。验收包 291 OK，含 doc-governance。注册表七轨仍 pre-freeze，`git diff --check` clean。无 provider/account/order。
+- **Next**: 用户：决定是否让 Codex 先 rebase 到 master，再由我做合并前复核并提交。
+
+## 2026-07-26 - Claude Code 审查 PASS (P3 语义指纹收敛 + 预冻结停放补全，全件复审)
+
+- **Verdict/Action**: PASS，未提交（该工作树 detached HEAD 且落后 master 一个提交，合并前需先 rebase）。按要求全件重审而非只看修复面：三组 Required 全部闭合，且都由我自己的探针实测复核。上一轮 FAIL 的两条 P1 转 resolved。P2 那刀未重审、也未被本刀改动。Detail in register。
+- **Required**: 无。`R-ASHORT-P0V2-FINGERPRINT-CONVERGENCE-DROPPED-97-PERCENT-OF-ITS-CONTRACT` 与 `R-ASHORT-PREFREEZE-PARKING-INCOMPLETE-A-COMMENT-EDIT-STILL-REKEYS-P1-EVIDENCE` 均转 resolved P1。两条 Optional 结转冻结前清单（五轨仍 churn 敏感；P5 capture 仍按字节比 governance JSON）。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:a9edd3b54902。亲跑探针：①上轮反例复跑——预冻结下注释编辑对 P1 台账 key 与存储 selector id 均 `moved=False`，冻结方向仍动；②P0/v2 绑定率 51/51、35/35、12/12、**32/32**(原 1/32)、35/35、50/50，豁免全空；③逐轨双向漂移实测：p0v2 注释不动/改码动=OK，p1·p3·p4a·p5 注释仍动(已记 Optional)。七轨验收包 **225 OK**。十个组件指纹开工/收口全同，注册表七轨仍 pre-freeze。无 provider/account/order。
+- **Next**: 用户：可决定是否 rebase 到 master 后并入。
+
+## 2026-07-26 - Codex repair (P3 pre-freeze persistent-identity closure)
+
+- **Verdict/Action**: Implemented the three P3 Required groups without changing the already-PASS P2 as-of slice. All seven registry tracks remain `pre_freeze_audit_only`; no epoch started and no clock/evidence/verdict/production state changed. P1's candidate-effect ledger key and stored selector identity now share a lazy track gate. P5's producer and capture consumer share the gated source identity, while pre-freeze capture accepts a previously published valid 64-hex source identity so parking cannot strand an old official bundle. P0/v2 now binds the complete semantic AST and exact top-level function set of all six direct modules with zero exclusions.
+- **Required**: None for this implementation slice; independent re-review remains the closeout gate. The machine guard enumerates every direct `inspect.getsource` callsite and every persisted source-identity root, rejects a new unregistered callsite/gate bypass, proves P0/v2 function coverage is exhaustive, and replaces the former production-file-mutating churn probe with in-memory mutants.
+- **Verify**: Fixed main Python: focused P0/P1/P5/epoch pack 152 OK; clean seven-track + theme pack 294 OK; tracker/fifth-knife remainder 21 OK; doc-governance pack 60 OK; epoch scan/reverse-control module 15 OK. Changed files compile; `git diff --check` has no whitespace errors (normal CRLF notices only). Registry readback confirms all seven tracks remain pre-freeze.
+- **Pre-Codex self-review**: A-F checked / N-A. A: complete identity class covered across P0, P1 ledger key+metadata, P2, P3, P4a, P5 producer+consumer, theme; P0 six-module function sets are exhaustively enumerated. B/B2: `rg -n "inspect\.getsource|read_bytes\(\)"` re-swept source-identity paths; direct source callsites are exact-allowlisted by `test_source_identity_scan_has_no_ungated_new_digest_path`; deleted `_source_text_digest` and file-mutating `CHURN_FILES/CHURN_BOUND_COMPONENTS` have zero live hits. C: pre-freeze lazy suppliers/key stability and frozen positive drift are both tested for every track; P5 old-bundle accept vs frozen mismatch reject are paired. D N/A. E: only this live handoff and the two existing register findings were updated; no CURRENT/README route state was added. F: main-Python compile/test paths, semantic comment/docstring mutant, exact function/exclusion assertions, UTF-8/BOM check and `git diff --check` completed; no independent agent was used because this turn did not authorize one.
+- **Next**: Claude Code：审查 P3 三组 Required；P2 不重审。
+
+## 2026-07-26 - Claude Code 审查 分刀裁决 (P2 PASS / P3 FAIL，两刀合审)
+
+- **Verdict/Action**: 分开裁决，不提交。**P2 as_of 单调性 = PASS**：类级闭合（两个 writer 都在 validate 之后、写入之前挡），三方向对真实产物实测正确，首次发布放行、损坏文件 fail-closed，canonical 产物已回到 `as_of=20260727`。**P3 语义指纹收敛 = FAIL**：P1/P3/P4a/P5 四轨收敛正确（绑定率 84%–100%），但 P0/v2 从「整文件绑定」塌到 2%–23%。Detail in register。
+- **Required**: `R-ASHORT-P0V2-FINGERPRINT-CONVERGENCE-DROPPED-97-PERCENT-OF-ITS-CONTRACT`(open P1，仅阻断 P3 这一刀)。三条 Required：P0/v2 改用兄弟轨已用的全模块函数绑定或传递闭包；每轨补一条正向漂移对照；豁免清单逐条枚举断言。`R-ASHORT-PUBLIC-COMPARISON-SUMMARY-NO-ASOF-MONOTONICITY` 转 resolved P2。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:a9edd3b54902。用 `inspect.getsource` 记录器在冻结模式下实测每轨真实绑定集（直接测量非推断）：P0/v2 的 adjudication 模块 **1/32**、cache builder 1/35、phase5 4/50，未绑定项含 `_bootstrap_mean_ci`、`_arm_statistics` 等直接产出裁决的统计函数。`CHURN_BOUND_COMPONENTS` 被清空为 `frozenset()`，与该常量自身注释「set 缩小是要记录的决定、不是可以放松的测试」相悖。as_of 护栏三方向对真实产物亲跑。七轨验收包 189 OK。九个组件指纹开工/收口全同。无 provider/account/order。
+- **Next**: Codex：修复（按 register 的三条 Required 重做 P0/v2 绑定；P2 那刀无需再动）。
+
+## 2026-07-26 - Codex repair (P2 summary monotonicity + P3 semantic fingerprint convergence)
+
+- **Verdict/Action**: Implemented both register repairs. P2 writers reject older `as_of` values before any public-file write; P3 comparison fingerprints bind semantic producer/dependency inputs instead of unrelated whole-file bytes. Registry remains `pre_freeze_audit_only`; no epoch start, verdict, production switch, provider, account or order action.
+- **Required**: None for this repair slice. P2 canonical target-policy summary is restored to `as_of=20260727`; P3 switchover remains separately authorized and must still start a zero-week epoch without historical backfill.
+- **Verify**: Pinned main Python cross-track pack = 258 tests, 0 failures/errors; changed files compile. Public-summary reverse controls cover older/equal/newer dates. `CHURN_BOUND_COMPONENTS = frozenset()` is enforced by the epoch-mode churn test.
+- **Proof-of-use**: The monotonic guard is exercised through both public-summary writers, and semantic fingerprint paths are exercised by the cross-track pack including P0/v2, P1, P2, P3, P4a, P5 and theme-forward epoch tests.
+- **Next**: Claude Code：审查
 
 ## 2026-07-26 - Claude Code 审查 PASS (theme_forward_comparison 全件第三轮，五类闭合收口)
 

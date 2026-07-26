@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import copy
 import hashlib
-import inspect
 import json
 import math
 import os
@@ -144,28 +143,24 @@ def load_governance(path: str | Path = GOVERNANCE_PATH) -> dict:
 
 def _source_fingerprint() -> str:
     from engine import egs_industry_heat
-    return _digest({
-        "selector": inspect.getsource(egs_industry_heat.select_profile_watch_pool),
-        "scoring": inspect.getsource(egs_industry_heat.final_score_and_tier),
-        "industry_heat": inspect.getsource(egs_industry_heat.compute_industry_heat_score),
-    })
+    return egs_industry_heat._p5_source_fingerprint()
 
 
 def _runtime_source_fingerprint() -> str:
-    """Pin every local P5 capture/settlement dependency that can shape forward evidence."""
-    paths = (
-        Path(__file__),
-        ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py",
-        ROOT / "engine" / "egs_industry_heat.py",
-        ROOT / "engine" / "a_short_experiment_admission_registry.py",
-        PRIVATE_SCHEMA,
-        LEDGER_SCHEMA,
-        PROGRAM_SCHEMA,
-    )
-    try:
-        payload = {str(path.relative_to(ROOT)): _file_digest(path) for path in paths}
-    except OSError as exc:
-        raise IndustryWeightComparisonError("P5 runtime source fingerprint is unavailable") from exc
+    """Pin semantic P5 capture/settlement dependencies, not whole source files."""
+    from engine import egs_industry_heat as heat
+    from runners import a_short_factor_comparison_v2_cache_build as cache_build
+
+    payload = {
+        "module_sources": {
+            "p5": _epoch_mode.semantic_module_contract(__import__(__name__, fromlist=["*"])),
+            "industry_heat": _epoch_mode.semantic_module_contract(heat),
+            "cache_builder": _epoch_mode.semantic_module_contract(cache_build),
+        },
+        "json_contracts": {"private": _load_json(PRIVATE_SCHEMA), "ledger": _load_json(LEDGER_SCHEMA),
+                           "program": _load_json(PROGRAM_SCHEMA),
+                           "profile_governance": _load_json(PROFILE_GOVERNANCE_PATH)},
+    }
     return _digest(payload)
 
 
@@ -178,7 +173,7 @@ def _contract_fingerprint(governance: dict) -> str:
 def _real_contract_fingerprint(governance: dict) -> str:
     return _digest({
         "governance": governance,
-        "profile_governance_sha256": _file_digest(PROFILE_GOVERNANCE_PATH),
+        "profile_governance": _load_json(PROFILE_GOVERNANCE_PATH),
         "source_fingerprint": _source_fingerprint(),
         "runtime_source_fingerprint": _runtime_source_fingerprint(),
         "admission_bindings": admission_snapshot(*ADMISSION_IDS),
@@ -312,8 +307,23 @@ def _capture_payload(*, decision_date: str, run_date: str, weekly: dict, analysi
                                   analysis_input=analysis_input, weight_comparison=weight_comparison, weekly=weekly)
     if str(weight_comparison.get("as_of")) != decision_date or not weight_comparison.get("universe_digest"):
         raise IndustryWeightComparisonError("P5 refuses an old/unbound egs_weight_comparison source")
-    if weight_comparison.get("governance_sha256") != _file_digest(PROFILE_GOVERNANCE_PATH) or \
-            weight_comparison.get("source_fingerprint") != _source_fingerprint():
+    def _is_sha256(value) -> bool:
+        return isinstance(value, str) and len(value) == 64 and \
+            all(char in "0123456789abcdef" for char in value)
+
+    from engine import egs_industry_heat as heat
+    # Both legs are content digests, not file bytes, so reformatting the preset
+    # cannot invalidate a published bundle; and while the track is parked only
+    # well-formedness is required, so parking can never strand an old bundle.
+    source_fingerprint = weight_comparison.get("source_fingerprint")
+    governance_fingerprint = weight_comparison.get("governance_sha256")
+    enforced = _epoch_mode.enforcement_enabled("p5_industry_weight")
+    if not _is_sha256(source_fingerprint) or not _is_sha256(governance_fingerprint) or (
+        enforced and (
+            source_fingerprint != _source_fingerprint()
+            or governance_fingerprint != heat._p5_governance_digest(PROFILE_GOVERNANCE_PATH)
+        )
+    ):
         raise IndustryWeightComparisonError("P5 EGS comparison source does not bind current scoring/selector contract")
     profiles = _profile_rows(weight_comparison)
     balanced_codes = [row["ts_code"] for row in profiles["balanced"]]

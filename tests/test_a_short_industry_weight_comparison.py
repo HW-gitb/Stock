@@ -18,7 +18,8 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.a_short_industry_weight_comparison import (  # noqa: E402
-    ADMISSION_IDS, PROGRAM_ID, _boundary, _contract_fingerprint, _digest, _epoch_id, _runtime_source_fingerprint,
+    ADMISSION_IDS, PROGRAM_ID, IndustryWeightComparisonError, _boundary, _contract_fingerprint,
+    _digest, _epoch_id, _runtime_source_fingerprint,
     build_public_progress, cache_consumer_windows,
     capture_after_published_weekly, load_governance, settle_from_daily_payload,
     validate_public_progress, write_public_progress,
@@ -27,7 +28,7 @@ from engine.a_short_experiment_admission_registry import admission_snapshot  # n
 from engine.egs_industry_heat import build_weight_comparison  # noqa: E402
 from runners.a_short_factor_comparison_v2_cache_build import materialize_incremental_cache  # noqa: E402
 from engine import a_short_evidence_epoch_mode as _epoch_mode
-from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes
+from tests._a_short_epoch_mode_test_utils import enter_patched_epoch_modes, patched_epoch_modes
 
 
 DECISION = "20260202"
@@ -172,6 +173,54 @@ class IndustryWeightComparisonTests(unittest.TestCase):
         with mock.patch("engine.a_short_industry_weight_comparison._runtime_source_fingerprint",
                         return_value="runtime-source-drift"):
             self.assertNotEqual(_contract_fingerprint(governance), baseline)
+
+    def test_pre_freeze_accepts_a_source_bound_bundle_published_before_parking(self):
+        """Old valid P5 bundles must not become uncapturable when parking lands."""
+        with tempfile.TemporaryDirectory() as tmp, \
+                patched_epoch_modes("pre_freeze_audit_only", ("p5_industry_weight",)):
+            root = _p5_root(tmp)
+            analysis, comparison_path, out, identity = _sources(tmp)
+            comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+            comparison["source_fingerprint"] = "a" * 64
+            comparison_path.write_text(json.dumps(comparison), encoding="utf-8")
+            marker_path = Path(tmp) / "official_publish.json"
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["files"]["egs_weight_comparison"]["sha256"] = hashlib.sha256(
+                comparison_path.read_bytes()
+            ).hexdigest()
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            with mock.patch("engine.a_short_industry_weight_comparison._today", return_value=RUN):
+                result = capture_after_published_weekly(
+                    root=root, decision_date=DECISION, run_date=RUN,
+                    analysis_input_path=analysis, weight_comparison_path=comparison_path,
+                    source_identity=identity, out_path=out,
+                    receipt_path=out.with_name("weekly_m67.receipt.json"),
+                    forward_eligible=True,
+                )
+        self.assertEqual(result["status"], "captured_live_canonical")
+
+    def test_frozen_capture_rejects_a_bundle_from_another_source_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = _p5_root(tmp)
+            analysis, comparison_path, out, identity = _sources(tmp)
+            comparison = json.loads(comparison_path.read_text(encoding="utf-8"))
+            comparison["source_fingerprint"] = "a" * 64
+            comparison_path.write_text(json.dumps(comparison), encoding="utf-8")
+            marker_path = Path(tmp) / "official_publish.json"
+            marker = json.loads(marker_path.read_text(encoding="utf-8"))
+            marker["files"]["egs_weight_comparison"]["sha256"] = hashlib.sha256(
+                comparison_path.read_bytes()
+            ).hexdigest()
+            marker_path.write_text(json.dumps(marker), encoding="utf-8")
+            with mock.patch("engine.a_short_industry_weight_comparison._today", return_value=RUN):
+                with self.assertRaises(IndustryWeightComparisonError):
+                    capture_after_published_weekly(
+                        root=root, decision_date=DECISION, run_date=RUN,
+                        analysis_input_path=analysis, weight_comparison_path=comparison_path,
+                        source_identity=identity, out_path=out,
+                        receipt_path=out.with_name("weekly_m67.receipt.json"),
+                        forward_eligible=True,
+                    )
 
     def test_capture_is_source_bound_idempotent_and_drift_becomes_private_conflict(self):
         with tempfile.TemporaryDirectory() as tmp:

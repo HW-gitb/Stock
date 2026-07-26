@@ -58,7 +58,9 @@ rather than an implicit reseal.
 """
 from __future__ import annotations
 
+import ast
 import hashlib
+import inspect
 import json
 from pathlib import Path
 
@@ -139,3 +141,102 @@ def fingerprint_or_pre_freeze(track: str, compute) -> str:
     """Return the track's real fingerprint only while enforcement is enabled."""
     _require_track(track)
     return compute() if enforcement_enabled(track) else pre_freeze_fingerprint(track)
+
+
+class _StripDocstrings(ast.NodeTransformer):
+    """Drop docstrings so prose edits cannot open a new epoch."""
+
+    def _strip(self, node):
+        self.generic_visit(node)
+        body = getattr(node, "body", None)
+        if isinstance(body, list) and body and isinstance(body[0], ast.Expr) and \
+                isinstance(body[0].value, ast.Constant) and isinstance(body[0].value.value, str):
+            body.pop(0)
+        return node
+
+    visit_Module = _strip
+    visit_FunctionDef = _strip
+    visit_AsyncFunctionDef = _strip
+    visit_ClassDef = _strip
+
+
+def _module_function_nodes(module) -> dict:
+    """Parse the checked-in source of one module and index its top-level functions.
+
+    The file, not the live module dictionary, is the authority: a runtime
+    monkeypatch must not be able to forge or move a contract.
+    """
+    source_path = inspect.getsourcefile(module)
+    if not source_path:
+        raise EvidenceEpochModeError(f"cannot locate semantic source for {module.__name__}")
+    try:
+        tree = ast.parse(Path(source_path).read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, SyntaxError) as exc:
+        raise EvidenceEpochModeError(f"cannot read semantic source for {module.__name__}") from exc
+    return tree, {
+        node.name: node
+        for node in tree.body
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+
+
+def _semantic_ast_sha256(nodes) -> str:
+    normalized = ast.dump(
+        _StripDocstrings().visit(ast.Module(body=list(nodes), type_ignores=[])),
+        include_attributes=False,
+    )
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
+
+
+def semantic_module_contract(module, *, excluded_functions=frozenset()) -> dict:
+    """Return a comment/docstring-insensitive contract for one Python module.
+
+    The contract binds the module's complete executable AST and names every
+    top-level function explicitly.  Exclusions are fail-closed: a stale or
+    misspelled exclusion is an error instead of silently weakening coverage.
+    """
+    tree, function_nodes = _module_function_nodes(module)
+    exclusions = frozenset(str(name) for name in excluded_functions)
+    unknown = exclusions - set(function_nodes)
+    if unknown:
+        raise EvidenceEpochModeError(
+            f"unknown semantic-function exclusions for {module.__name__}: {sorted(unknown)}"
+        )
+    selected = [
+        node for node in tree.body
+        if not (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name in exclusions
+        )
+    ]
+    return {
+        "module": module.__name__,
+        "bound_functions": sorted(set(function_nodes) - exclusions),
+        "excluded_functions": sorted(exclusions),
+        "semantic_ast_sha256": _semantic_ast_sha256(selected),
+    }
+
+
+def semantic_function_contract(module, function_names) -> dict:
+    """The same contract for a deliberately narrow subset of one module.
+
+    Some tracks bind only a few result-shaping functions rather than a whole
+    module.  Narrowing the scope must not cost the comment/docstring
+    insensitivity, so this shares the module reader and AST normalisation
+    instead of falling back to raw ``inspect.getsource``.  A missing name is an
+    error, so a rename cannot silently shrink the bound surface.
+    """
+    requested = sorted({str(name) for name in function_names})
+    if not requested:
+        raise EvidenceEpochModeError(f"no semantic functions requested for {module.__name__}")
+    _tree, function_nodes = _module_function_nodes(module)
+    missing = [name for name in requested if name not in function_nodes]
+    if missing:
+        raise EvidenceEpochModeError(
+            f"missing semantic functions in {module.__name__}: {missing}"
+        )
+    return {
+        "module": module.__name__,
+        "bound_functions": requested,
+        "semantic_ast_sha256": _semantic_ast_sha256(function_nodes[name] for name in requested),
+    }

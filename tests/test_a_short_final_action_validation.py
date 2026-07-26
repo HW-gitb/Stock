@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+import inspect
 import json
 import sys
 import tempfile
@@ -120,16 +121,45 @@ class FinalActionValidationTests(unittest.TestCase):
         self.assertEqual([row["status"] for row in enforced["reminders"][:4]], ["review_due"] * 4)
 
     def test_forward_tracker_runtime_drift_opens_a_new_epoch(self):
+        """A code change upstream opens a new epoch; a comment there must not.
+
+        P3 now binds its dependencies through the shared AST contract, so the
+        drift probe edits the checked-in source rather than `inspect.getsource`.
+        """
+        import ast
+        import tempfile
+        from engine import a_short_evidence_epoch_mode as epoch_mode
+        from runners import forward_tracker
+
         baseline = _contract_fingerprint()
-        tracker_source = ROOT / "runners" / "forward_tracker.py"
-        original_read_bytes = Path.read_bytes
+        real_source = Path(forward_tracker.__file__).read_text(encoding="utf-8")
+        tree = ast.parse(real_source)
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "capture":
+                node.body.insert(0, ast.parse("_adversarial_drift = 1").body[0])
+                break
+        else:  # pragma: no cover - `capture` must stay a bound top-level function
+            self.fail("forward_tracker.capture is no longer a top-level function")
+        variants = {
+            "code": ast.unparse(ast.fix_missing_locations(tree)),
+            "comment": "# adversarial comment-only edit\n" + real_source,
+        }
+        original_getsourcefile = epoch_mode.inspect.getsourcefile
+        with tempfile.TemporaryDirectory() as temp:
+            for kind, source_text in variants.items():
+                path = Path(temp) / f"forward_tracker_{kind}.py"
+                path.write_text(source_text, encoding="utf-8")
 
-        def changed_read_bytes(path: Path) -> bytes:
-            content = original_read_bytes(path)
-            return content + b"\n# adversarial forward-tracker semantic drift\n" if path == tracker_source else content
+                def redirected(module, _path=path):
+                    if getattr(module, "__name__", "") == "runners.forward_tracker":
+                        return str(_path)
+                    return original_getsourcefile(module)
 
-        with patch.object(Path, "read_bytes", changed_read_bytes):
-            self.assertNotEqual(_contract_fingerprint(), baseline)
+                with patch.object(epoch_mode.inspect, "getsourcefile", redirected):
+                    if kind == "code":
+                        self.assertNotEqual(_contract_fingerprint(), baseline)
+                    else:
+                        self.assertEqual(_contract_fingerprint(), baseline)
 
     def _bundle(self, directory: Path) -> tuple[Path, Path, list[dict]]:
         weekly = {

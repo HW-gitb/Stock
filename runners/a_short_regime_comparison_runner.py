@@ -27,10 +27,10 @@ from __future__ import annotations
 import argparse
 import csv
 import hashlib
-import inspect
 import json
 import math
 import os
+import sys
 import tempfile
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -58,6 +58,7 @@ from engine.a_short_regime_action_comparison import (
 )
 from engine.data.a_share_board_scope import is_a_share_main_board
 from engine.a_short_experiment_admission_registry import admission_snapshot
+from engine import a_short_evidence_epoch_mode as _epoch_mode
 
 RECORDS_FILENAME = "regime_comparison_records.json"
 PANEL_FILENAME = "regime_comparison_panel.md"
@@ -310,14 +311,28 @@ def _sha256_bytes(raw: bytes) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def _real_candidate_effect_selector_contract() -> str:
+    contract = _epoch_mode.semantic_function_contract(
+        sys.modules[__name__], ("_m67_build_candidates", "_tracker_rows_for_week"),
+    )
+    return hashlib.sha256(
+        json.dumps(contract, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+
+def _candidate_effect_selector_contract() -> str:
+    return _epoch_mode.fingerprint_or_pre_freeze(
+        "p1_regime_candidate_effect",
+        _real_candidate_effect_selector_contract,
+    )
+
+
 def _candidate_effect_policy_key() -> str:
     # The candidate universe is defined by the actual M6.7 projection and
     # tracker-cohort readers, not by row_source/action labels alone.
-    selector_contract = hashlib.sha256(
-        (inspect.getsource(_m67_build_candidates) + inspect.getsource(_tracker_rows_for_week)).encode("utf-8")
-    ).hexdigest()
     return hashlib.sha256(
-        json.dumps({"policy": candidate_effect_policy_fingerprint(), "selector_contract": selector_contract},
+        json.dumps({"policy": candidate_effect_policy_fingerprint(),
+                    "selector_contract": _candidate_effect_selector_contract()},
                    sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()
 
@@ -353,9 +368,7 @@ def _new_candidate_effect_group() -> dict:
             "policy_id": policy["policy_id"],
             "policy_epoch": policy["policy_epoch"],
             "policy_fingerprint": fingerprint,
-            "selector_contract_sha256": hashlib.sha256(
-                (inspect.getsource(_m67_build_candidates) + inspect.getsource(_tracker_rows_for_week)).encode("utf-8")
-            ).hexdigest(),
+            "selector_contract_sha256": _candidate_effect_selector_contract(),
         },
         "admission_binding": admission_snapshot("p1_regime_action_proxy"),
         "weeks": {},

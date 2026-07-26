@@ -123,6 +123,7 @@ def _semantic_dependency_closure(*roots: object) -> dict[str, Any]:
 
 
 def _shared_contract_surface() -> dict[str, Any]:
+    cache_builder = __import__("runners.a_short_factor_comparison_v2_cache_build", fromlist=["*"])
     return {
         "target_contract": "1.0.0",
         "managed_exit_contract": EXIT_CONTRACT_VERSION,
@@ -136,9 +137,8 @@ def _shared_contract_surface() -> dict[str, Any]:
         # `_freeze_plan` dereferences this through the imported phase5 module;
         # module objects are deliberately not serialized by the closure.
         "phase5_atr_multiplier": phase5_engine.ATR_MULT,
-        "shared_cache_builder_sha256": hashlib.sha256(
-            (ROOT / "runners" / "a_short_factor_comparison_v2_cache_build.py").read_bytes()
-        ).hexdigest(),
+        "shared_cache_loader_source": inspect.getsource(_load_execution_cache),
+        "shared_cache_builder_closure": _semantic_dependency_closure(cache_builder.materialize_incremental_cache),
         "cost_and_priority": "t1_half_then_trailing;stop_before_t1;round_trip_cost_0.16pp",
     }
 
@@ -475,10 +475,27 @@ def _render_summary_markdown(summary: dict[str, Any]) -> str:
     ])
 
 
+def _assert_public_summary_as_of_monotonic(summary: dict[str, Any], summary_path: Path) -> None:
+    """Never replace a tracked public summary with an older point-in-time view."""
+    if not summary_path.is_file():
+        return
+    try:
+        existing = json.loads(summary_path.read_text(encoding="utf-8"))
+        validate_public_summary(existing)
+        existing_as_of = _date(existing.get("as_of"))
+        new_as_of = _date(summary.get("as_of"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        raise TargetPolicyError("existing_public_summary_unreadable") from exc
+    if existing_as_of > new_as_of:
+        raise TargetPolicyError("public_summary_as_of_regressed")
+
+
 def write_public_summary(summary: dict[str, Any], *, summary_path: str | Path = PUBLIC_SUMMARY_DEFAULT,
                          markdown_path: str | Path = PUBLIC_MARKDOWN_DEFAULT) -> None:
     validate_public_summary(summary)
-    _atomic_write(Path(summary_path), summary)
+    target_path = Path(summary_path)
+    _assert_public_summary_as_of_monotonic(summary, target_path)
+    _atomic_write(target_path, summary)
     Path(markdown_path).parent.mkdir(parents=True, exist_ok=True)
     temporary = Path(markdown_path).with_name(f".{Path(markdown_path).name}.tmp")
     temporary.write_text(_render_summary_markdown(summary), encoding="utf-8")
