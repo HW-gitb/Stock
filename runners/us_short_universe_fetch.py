@@ -1026,6 +1026,11 @@ def _candidate_path_for(decision_date: str) -> Path:
     return CANDIDATE_LIST_DIR / f"candidate_universe_{decision_date}.json"
 
 
+def default_candidate_path(decision_date: str) -> Path:
+    """Return the candidate writer's canonical, decision-date-bound output slot."""
+    return _candidate_path_for(decision_date)
+
+
 def _summary_path_for(decision_date: str) -> Path:
     return SUMMARY_DIR / f"us_short_universe_fetch_summary_{decision_date}.json"
 

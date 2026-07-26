@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from engine.us_short_eligibility_gate import canonical_us_ticker
+from engine.us_short_schema_formats import FORMAT_CHECKER
 
 SCHEMA_PATH = Path(__file__).resolve().parents[1] / "schemas" / "us_short_provisional_theme_validation.schema.json"
 TIER_POINTS = {"both": 5.0, "single": 2.0}
@@ -68,7 +69,12 @@ def _schema_validate(artifact: dict[str, Any]) -> None:
     except ImportError as exc:
         raise ProvisionalThemeBoostError("jsonschema is required for provisional theme boost") from exc
     schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
-    errors = sorted(Draft7Validator(schema).iter_errors(artifact), key=lambda error: list(error.path))
+    # The consumer gate must be at least as strict as the producer's: an unarmed validator here
+    # accepted `generated_at="banana"` that knife-2 refuses (K3-R48).
+    errors = sorted(
+        Draft7Validator(schema, format_checker=FORMAT_CHECKER).iter_errors(artifact),
+        key=lambda error: list(error.path),
+    )
     if errors:
         raise ProvisionalThemeBoostError(f"validation artifact schema rejected: {errors[0].message}")
 

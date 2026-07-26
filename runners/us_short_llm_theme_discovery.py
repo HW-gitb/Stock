@@ -13,9 +13,8 @@ import argparse
 import hashlib
 import json
 import re
-import subprocess
 import sys
-from datetime import datetime, time as datetime_time
+from datetime import datetime, time as datetime_time, timezone
 from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -29,15 +28,20 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker  # noqa: E402
+from engine.us_short_persisted_text_safety import SECRET_TEXT_RE, persisted_text_violation  # noqa: E402
+from engine.us_short_schema_formats import FORMAT_CHECKER  # noqa: E402
+from runners.us_short_discovery_publish_policy import (  # noqa: E402
+    DiscoveryPublishPolicyError,
+    validate_exact_decision_slot,
+    write_immutable_json,
+)
 
 
 SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.json"
 STATE_US_SHORT_DIR = ROOT / "state" / "us_short"
 DEFAULT_INPUT_PATH = STATE_US_SHORT_DIR / "us_short_llm_theme_discovery_input.json"
-DEFAULT_OUTPUT_PATH = STATE_US_SHORT_DIR / "us_short_llm_theme_discovery.json"
 SAFE_SOURCE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.:/-]{1,127}$")
 THEME_ID_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{1,63}$")
-FORBIDDEN_TEXT_RE = re.compile(r"(?:api[_-]?key|secret|password|access[_-]?token|bearer)", re.IGNORECASE)
 FORBIDDEN_OPERATIONAL_KEYS = {
     "score",
     "theme_score",
@@ -63,17 +67,21 @@ def _read_json(path: Path) -> Any:
         raise LLMThemeDiscoveryError(f"input JSON could not be read: {path}") from exc
 
 
-def _write_json_atomic(payload: dict[str, Any], path: Path) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_name(f"{path.name}.tmp")
+def default_output_path(expected_decision_date: str) -> Path:
+    return STATE_US_SHORT_DIR / output_filename(expected_decision_date)
+
+
+def output_filename(expected_decision_date: str) -> str:
+    """Return the sole discovery-slot filename shared with every reader."""
+    _parse_decision_date(expected_decision_date)
+    return f"us_short_llm_theme_discovery_{expected_decision_date}.json"
+
+
+def _write_json_atomic(payload: dict[str, Any], path: Path) -> bool:
     try:
-        with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-        tmp.replace(path)
-    except OSError as exc:
-        tmp.unlink(missing_ok=True)
-        raise LLMThemeDiscoveryError(f"output could not be written atomically: {path}") from exc
+        return write_immutable_json(payload, path)
+    except DiscoveryPublishPolicyError as exc:
+        raise LLMThemeDiscoveryError(str(exc)) from exc
 
 
 def _repo_rel(path: Path) -> str:
@@ -85,21 +93,9 @@ def _resolve_repo_path(path: Path | str, *, field: str) -> Path:
     resolved = raw.resolve() if raw.is_absolute() else (ROOT / raw).resolve()
     try:
         resolved.relative_to(ROOT.resolve())
-    except ValueError as exc:
+    except (ValueError, OverflowError) as exc:
         raise LLMThemeDiscoveryError(f"{field} must stay under the repository root") from exc
     return resolved
-
-
-def _git_ignored(path: Path) -> bool:
-    result = subprocess.run(
-        ["git", "-c", "core.excludesFile=", "check-ignore", "-q", "--", _repo_rel(path)],
-        cwd=ROOT,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        check=False,
-    )
-    return result.returncode == 0
 
 
 def _validate_input_path(path: Path | str) -> Path:
@@ -109,17 +105,13 @@ def _validate_input_path(path: Path | str) -> Path:
     return resolved
 
 
-def _validate_output_path(path: Path | str) -> Path:
-    resolved = _resolve_repo_path(path, field="output_path")
+def _validate_output_path(path: Path | str, *, expected_path: Path) -> Path:
     try:
-        resolved.relative_to(STATE_US_SHORT_DIR.resolve())
-    except ValueError as exc:
-        raise LLMThemeDiscoveryError("output_path must stay under state/us_short/") from exc
-    if resolved.suffix != ".json":
-        raise LLMThemeDiscoveryError("output_path must be a .json path")
-    if not _git_ignored(resolved):
-        raise LLMThemeDiscoveryError("output_path must be gitignored")
-    return resolved
+        return validate_exact_decision_slot(
+            path, expected_path, root=ROOT, state_dir=STATE_US_SHORT_DIR,
+        )
+    except DiscoveryPublishPolicyError as exc:
+        raise LLMThemeDiscoveryError(str(exc)) from exc
 
 
 def _parse_rfc3339(value: Any, *, field: str) -> datetime:
@@ -127,11 +119,14 @@ def _parse_rfc3339(value: Any, *, field: str) -> datetime:
         raise LLMThemeDiscoveryError(f"{field} must be a timezone-aware RFC3339 timestamp")
     try:
         parsed = datetime.fromisoformat(value[:-1] + "+00:00" if value.endswith("Z") else value)
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            raise ValueError("timezone offset is required")
+        # Normalize to UTC at the boundary: a model may legitimately answer in -04:00 (the natural offset
+        # for a US-equity prompt), and downstream consumers compare these instants as STRINGS.  Storing
+        # mixed offsets makes lexical order disagree with chronological order.
+        return parsed.astimezone(timezone.utc)
+    except (ValueError, OverflowError) as exc:
         raise LLMThemeDiscoveryError(f"{field} must be a timezone-aware RFC3339 timestamp") from exc
-    if parsed.tzinfo is None:
-        raise LLMThemeDiscoveryError(f"{field} must include a timezone offset")
-    return parsed
 
 
 def _parse_decision_date(value: Any) -> datetime.date:
@@ -157,20 +152,42 @@ def _validate_schema(payload: dict[str, Any]) -> None:
     except ImportError as exc:
         raise LLMThemeDiscoveryError("jsonschema is required for discovery artifact validation") from exc
     schema = _read_json(SCHEMA_PATH)
-    errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
+    errors = sorted(
+        Draft7Validator(schema, format_checker=FORMAT_CHECKER).iter_errors(payload),
+        key=lambda error: list(error.path),
+    )
     if errors:
         joined = "; ".join(error.message for error in errors[:5])
         raise LLMThemeDiscoveryError(f"discovery artifact schema rejected {len(errors)} field(s): {joined}")
 
 
 def _assert_safe_text(payload: dict[str, Any]) -> None:
-    text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    if FORBIDDEN_TEXT_RE.search(text):
-        raise LLMThemeDiscoveryError("discovery artifact contains a forbidden secret-like field or value")
+    if persisted_text_violation(payload) is not None:
+        raise LLMThemeDiscoveryError("discovery artifact contains forbidden credential-like text")
 
 
 def _input_sha256(payload: dict[str, Any]) -> str:
-    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    # Input identity is evidence identity, not provider-return ordering.  Canonicalize
+    # the semantically unordered source/theme/member collections before hashing.
+    stable = json.loads(json.dumps(payload, ensure_ascii=False))
+    if isinstance(stable.get("source_refs"), list):
+        stable["source_refs"].sort(key=lambda row: str(row.get("source_id", "")) if isinstance(row, dict) else str(row))
+    if isinstance(stable.get("themes"), list):
+        for theme in stable["themes"]:
+            if not isinstance(theme, dict):
+                continue
+            if isinstance(theme.get("source_ref_ids"), list):
+                theme["source_ref_ids"] = sorted(set(theme["source_ref_ids"]))
+            if isinstance(theme.get("members"), list):
+                for member in theme["members"]:
+                    if isinstance(member, dict) and isinstance(member.get("source_ref_ids"), list):
+                        member["source_ref_ids"] = sorted(set(member["source_ref_ids"]))
+                theme["members"].sort(key=lambda row: str(row.get("ticker", "")) if isinstance(row, dict) else str(row))
+        stable["themes"].sort(key=lambda row: str(row.get("theme_id", "")) if isinstance(row, dict) else str(row))
+    try:
+        canonical = json.dumps(stable, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    except (TypeError, ValueError, UnicodeEncodeError) as exc:
+        raise LLMThemeDiscoveryError("discovery input is not UTF-8 encodable") from exc
     return hashlib.sha256(canonical).hexdigest()
 
 
@@ -197,7 +214,11 @@ def _source_refs(raw_refs: Any, *, cutoff: datetime) -> tuple[list[dict[str, str
             raise LLMThemeDiscoveryError(f"source_refs[{index}] must be an object")
         source_id = raw.get("source_id")
         source_type = raw.get("source_type")
-        if type(source_id) is not str or SAFE_SOURCE_ID_RE.fullmatch(source_id) is None:
+        if (
+            type(source_id) is not str
+            or SAFE_SOURCE_ID_RE.fullmatch(source_id) is None
+            or SECRET_TEXT_RE.search(source_id)
+        ):
             raise LLMThemeDiscoveryError(f"source_refs[{index}].source_id is invalid")
         if source_id in by_id:
             raise LLMThemeDiscoveryError(f"duplicate source_id: {source_id}")
@@ -342,12 +363,15 @@ def normalize_discovery_payload(
 def run_preflight(
     *,
     input_path: Path = DEFAULT_INPUT_PATH,
-    output_path: Path = DEFAULT_OUTPUT_PATH,
+    output_path: Path | None = None,
     expected_decision_date: str,
     generated_at: str,
 ) -> dict[str, Any]:
     input_resolved = _validate_input_path(input_path)
-    output_resolved = _validate_output_path(output_path)
+    output_resolved = _validate_output_path(
+        output_path or default_output_path(expected_decision_date),
+        expected_path=default_output_path(expected_decision_date),
+    )
     payload = _read_json(input_resolved)
     artifact = normalize_discovery_payload(
         payload,
@@ -372,23 +396,26 @@ def run_preflight(
 def run_packet(
     *,
     input_path: Path = DEFAULT_INPUT_PATH,
-    output_path: Path = DEFAULT_OUTPUT_PATH,
+    output_path: Path | None = None,
     expected_decision_date: str,
     generated_at: str,
 ) -> dict[str, Any]:
     input_resolved = _validate_input_path(input_path)
-    output_resolved = _validate_output_path(output_path)
+    output_resolved = _validate_output_path(
+        output_path or default_output_path(expected_decision_date),
+        expected_path=default_output_path(expected_decision_date),
+    )
     payload = _read_json(input_resolved)
     artifact = normalize_discovery_payload(
         payload,
         expected_decision_date=expected_decision_date,
         generated_at=generated_at,
     )
-    _write_json_atomic(artifact, output_resolved)
+    reused = _write_json_atomic(artifact, output_resolved)
     return {
         "schema_name": "us_short_llm_theme_discovery_execution_summary",
         "schema_version": "1.0.0",
-        "status": "offline_discovery_artifact_written",
+        "status": "offline_discovery_artifact_reused" if reused else "offline_discovery_artifact_written",
         "network_access_performed": False,
         "provider_calls_performed": False,
         "scoring_or_top15_effect": False,
@@ -403,7 +430,7 @@ def run_packet(
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate/write an offline US-short LLM theme discovery artifact.")
     parser.add_argument("--input-path", type=Path, default=DEFAULT_INPUT_PATH)
-    parser.add_argument("--output-path", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument("--output-path", type=Path, default=None)
     parser.add_argument("--expected-decision-date", required=True)
     parser.add_argument("--generated-at", required=True)
     parser.add_argument("--preflight-only", action="store_true")

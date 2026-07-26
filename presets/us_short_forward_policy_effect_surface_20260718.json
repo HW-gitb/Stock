@@ -22,6 +22,7 @@
     "engine/us_short_provisional_theme_boost.py",
     "engine/us_short_regime.py",
     "engine/us_short_risk_downgrade.py",
+    "engine/us_short_schema_formats.py",
     "engine/us_short_theme_lifecycle.py",
     "engine/us_short_theme_selection.py",
     "engine/us_short_weekend_analysis.py",

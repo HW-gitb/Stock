@@ -11,7 +11,6 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
-import subprocess
 import sys
 import unicodedata
 import re
@@ -25,6 +24,14 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from engine.us_short_eligibility_gate import canonical_us_ticker, load_eligibility_governance  # noqa: E402
+from engine.us_short_persisted_text_safety import persisted_text_violation  # noqa: E402
+from engine.us_short_schema_formats import FORMAT_CHECKER  # noqa: E402
+from runners.us_short_discovery_publish_policy import (  # noqa: E402
+    DiscoveryPublishPolicyError,
+    validate_exact_decision_slot,
+    write_immutable_json,
+)
+from runners import us_short_llm_theme_discovery as discovery_writer  # noqa: E402
 from runners import us_short_universe_fetch  # noqa: E402
 
 SCHEMA_PATH = ROOT / "schemas" / "us_short_provisional_theme_validation.schema.json"
@@ -32,10 +39,7 @@ DISCOVERY_SCHEMA_PATH = ROOT / "schemas" / "us_short_llm_theme_discovery.schema.
 CLASSIFICATION_SCHEMA_PATH = ROOT / "schemas" / "us_short_batch5_full_universe_sector_classification_packet.schema.json"
 GOVERNANCE_PATH = ROOT / "presets" / "us_short_eligibility_governance_20260624.json"
 STATE_DIR = ROOT / "state" / "us_short"
-DEFAULT_DISCOVERY_PATH = STATE_DIR / "us_short_llm_theme_discovery.json"
-DEFAULT_CANDIDATE_PATH = STATE_DIR / "candidate_universe_20260706.json"
 DEFAULT_CLASSIFICATION_PATH = STATE_DIR / "us_short_full_universe_sector_classification_packet.json"
-DEFAULT_OUTPUT_PATH = STATE_DIR / "us_short_provisional_theme_validation.json"
 NEW_YORK = ZoneInfo("America/New_York")
 MIN_THEME_MEMBERS = 3
 MAX_THEMES = 8
@@ -53,15 +57,16 @@ def _read_json(path: Path) -> tuple[Any, str]:
         raise ProvisionalThemeValidationError(f"cannot read JSON artifact: {path}") from exc
 
 
-def _write_atomic(payload: dict[str, Any], path: Path) -> None:
-    tmp = path.with_name(path.name + ".tmp")
+def _write_atomic(payload: dict[str, Any], path: Path) -> bool:
+    """Publish through the lane's single write door; a frozen peer must still satisfy this schema."""
     try:
-        with tmp.open("w", encoding="utf-8", newline="\n") as handle:
-            json.dump(payload, handle, ensure_ascii=False, indent=2)
-            handle.write("\n")
-        tmp.replace(path)
-    except OSError as exc:
-        tmp.unlink(missing_ok=True)
+        return write_immutable_json(
+            payload, path,
+            verify=lambda existing: _schema_validate(existing, SCHEMA_PATH, "existing validation receipt"),
+        )
+    except DiscoveryPublishPolicyError as exc:
+        raise ProvisionalThemeValidationError(str(exc)) from exc
+    except (ValueError, OverflowError) as exc:
         raise ProvisionalThemeValidationError(f"cannot atomically write output: {path}") from exc
 
 
@@ -75,17 +80,6 @@ def _repo_path(value: Path | str, *, field: str) -> Path:
     return resolved
 
 
-def _ignored(path: Path) -> bool:
-    result = subprocess.run(
-        [
-            "git", "-c", "core.excludesFile=", "check-ignore", "-q", "--",
-            path.resolve().relative_to(ROOT.resolve()).as_posix(),
-        ],
-        cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False,
-    )
-    return result.returncode == 0
-
-
 def _input_path(value: Path | str, *, field: str) -> Path:
     path = _repo_path(value, field=field)
     if not path.is_file():
@@ -93,15 +87,11 @@ def _input_path(value: Path | str, *, field: str) -> Path:
     return path
 
 
-def _output_path(value: Path | str) -> Path:
-    path = _repo_path(value, field="output_path")
+def _output_path(value: Path | str, *, expected_path: Path) -> Path:
     try:
-        path.relative_to(STATE_DIR.resolve())
-    except ValueError as exc:
-        raise ProvisionalThemeValidationError("output_path must stay under state/us_short/") from exc
-    if path.suffix != ".json" or not _ignored(path):
-        raise ProvisionalThemeValidationError("output_path must be a gitignored .json under state/us_short/")
-    return path
+        return validate_exact_decision_slot(value, expected_path, root=ROOT, state_dir=STATE_DIR)
+    except DiscoveryPublishPolicyError as exc:
+        raise ProvisionalThemeValidationError(str(exc)) from exc
 
 
 def _schema_validate(payload: Any, schema_path: Path, label: str) -> None:
@@ -110,7 +100,10 @@ def _schema_validate(payload: Any, schema_path: Path, label: str) -> None:
     except ImportError as exc:
         raise ProvisionalThemeValidationError("jsonschema is required; refusing schema bypass") from exc
     schema, _ = _read_json(schema_path)
-    errors = sorted(Draft7Validator(schema).iter_errors(payload), key=lambda error: list(error.path))
+    errors = sorted(
+        Draft7Validator(schema, format_checker=FORMAT_CHECKER).iter_errors(payload),
+        key=lambda error: list(error.path),
+    )
     if errors:
         raise ProvisionalThemeValidationError(f"{label} schema rejected {len(errors)} field(s): {errors[0].message}")
 
@@ -133,6 +126,22 @@ def _open_et(decision_date: str) -> datetime:
     except ValueError as exc:
         raise ProvisionalThemeValidationError("expected_decision_date must be YYYYMMDD") from exc
     return opened
+
+
+def default_output_path(expected_decision_date: str) -> Path:
+    """Return this validator's only immutable slot for one decision date."""
+    _open_et(expected_decision_date)
+    return STATE_DIR / f"us_short_provisional_theme_validation_{expected_decision_date}.json"
+
+
+def default_discovery_path(expected_decision_date: str) -> Path:
+    """Use knife-1's own date-keyed writer helper; never invent a reader slot."""
+    return discovery_writer.default_output_path(expected_decision_date)
+
+
+def default_candidate_path(expected_decision_date: str) -> Path:
+    """Use the candidate writer's canonical decision-date-bound output slot."""
+    return us_short_universe_fetch.default_candidate_path(expected_decision_date)
 
 
 def _canonical_map(values: dict[str, Any], *, field: str, allowed: set[str] | None = None) -> dict[str, Any]:
@@ -313,8 +322,16 @@ def validate_provisional_themes(
             },
         })
     for theme in accepted:
+        # Ranking evidence is the union actually retained by validated members.  The theme-level
+        # list remains full provenance, so a redundant lane ref pruned from every member cannot
+        # re-enter selection through this tie-break.
+        member_ref_ids = {
+            ref
+            for member in theme["members"]
+            for ref in member["source_ref_ids"]
+        }
         theme["validation"]["distinct_web_x_source_ref_count"] = sum(
-            source_types.get(ref) in {"web", "x"} for ref in theme["source_ref_ids"]
+            source_types[ref] in {"web", "x"} for ref in member_ref_ids
         )
     # Deterministic, model-confidence-free top-8: more qualified members, then more distinct independent refs,
     # then newest PIT observation, then stable theme id. This is selection bookkeeping, not a score.
@@ -372,24 +389,27 @@ def build_artifact(inputs: dict[str, Any], *, generated_at: str) -> dict[str, An
             "truncated_theme_count": sum(1 for row in drops if row["stage"] == "truncation"),
         },
     }
+    if persisted_text_violation(payload) is not None:
+        raise ProvisionalThemeValidationError("validation artifact contains forbidden credential-like text")
     _schema_validate(payload, SCHEMA_PATH, "validation artifact")
     return payload
 
 
 def run_preflight(
-    *, discovery_path: Path = DEFAULT_DISCOVERY_PATH,
-    candidate_path: Path = DEFAULT_CANDIDATE_PATH,
+    *, discovery_path: Path | None = None,
+    candidate_path: Path | None = None,
     classification_path: Path = DEFAULT_CLASSIFICATION_PATH,
-    output_path: Path = DEFAULT_OUTPUT_PATH,
+    output_path: Path | None = None,
     expected_decision_date: str,
     generated_at: str,
 ) -> dict[str, Any]:
     paths = [
-        _input_path(discovery_path, field="discovery_path"),
-        _input_path(candidate_path, field="candidate_path"),
+        _input_path(discovery_path or default_discovery_path(expected_decision_date), field="discovery_path"),
+        _input_path(candidate_path or default_candidate_path(expected_decision_date), field="candidate_path"),
         _input_path(classification_path, field="classification_path"),
     ]
-    output = _output_path(output_path)
+    expected_output = default_output_path(expected_decision_date)
+    output = _output_path(output_path or expected_output, expected_path=expected_output)
     artifact = build_artifact(_load_inputs(*paths, expected_decision_date), generated_at=generated_at)
     return {
         "schema_name": "us_short_provisional_theme_validation_preflight", "schema_version": "1.0.0",
@@ -403,55 +423,26 @@ def run_preflight(
 
 
 def run_packet(
-    *, discovery_path: Path = DEFAULT_DISCOVERY_PATH,
-    candidate_path: Path = DEFAULT_CANDIDATE_PATH,
+    *, discovery_path: Path | None = None,
+    candidate_path: Path | None = None,
     classification_path: Path = DEFAULT_CLASSIFICATION_PATH,
-    output_path: Path = DEFAULT_OUTPUT_PATH,
+    output_path: Path | None = None,
     expected_decision_date: str,
     generated_at: str,
 ) -> dict[str, Any]:
     paths = [
-        _input_path(discovery_path, field="discovery_path"),
-        _input_path(candidate_path, field="candidate_path"),
+        _input_path(discovery_path or default_discovery_path(expected_decision_date), field="discovery_path"),
+        _input_path(candidate_path or default_candidate_path(expected_decision_date), field="candidate_path"),
         _input_path(classification_path, field="classification_path"),
     ]
-    output = _output_path(output_path)
+    expected_output = default_output_path(expected_decision_date)
+    output = _output_path(output_path or expected_output, expected_path=expected_output)
     artifact = build_artifact(_load_inputs(*paths, expected_decision_date), generated_at=generated_at)
-    if output.exists():
-        try:
-            existing = json.loads(output.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            raise ProvisionalThemeValidationError("existing validation receipt is unreadable") from exc
-        if not isinstance(existing, dict):
-            raise ProvisionalThemeValidationError("existing validation receipt must be a JSON object")
-        immutable_keys = ("decision_clock", "input_artifacts")
-        try:
-            _schema_validate(existing, SCHEMA_PATH, "existing validation receipt")
-        except ProvisionalThemeValidationError:
-            raise
-        if any(existing.get(key) != artifact.get(key) for key in immutable_keys):
-            raise ProvisionalThemeValidationError(
-                "output_path already holds a different decision-date or input-digest receipt"
-            )
-        existing_without_generated = dict(existing)
-        artifact_without_generated = dict(artifact)
-        existing_without_generated.pop("generated_at", None)
-        artifact_without_generated.pop("generated_at", None)
-        if existing_without_generated != artifact_without_generated:
-            raise ProvisionalThemeValidationError("existing validation receipt content drifted for the same inputs")
-        return {
-            "schema_name": "us_short_provisional_theme_validation_execution_summary", "schema_version": "1.0.0",
-            "status": "offline_validation_artifact_reused", "network_access_performed": False,
-            "provider_calls_performed": False, "scoring_or_top15_effect": False,
-            "operation_advice_effect": False,
-            "output_path": output.resolve().relative_to(ROOT.resolve()).as_posix(),
-            "validated_theme_count": existing["summary"]["validated_theme_count"],
-            "validated_member_count": existing["summary"]["validated_member_count"],
-        }
-    _write_atomic(artifact, output)
+    reused = _write_atomic(artifact, output)
     return {
         "schema_name": "us_short_provisional_theme_validation_execution_summary", "schema_version": "1.0.0",
-        "status": "offline_validation_artifact_written", "network_access_performed": False,
+        "status": "offline_validation_artifact_reused" if reused else "offline_validation_artifact_written",
+        "network_access_performed": False,
         "provider_calls_performed": False, "scoring_or_top15_effect": False,
         "operation_advice_effect": False,
         "output_path": output.resolve().relative_to(ROOT.resolve()).as_posix(),
@@ -462,10 +453,10 @@ def run_packet(
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Validate an offline US-short provisional theme artifact.")
-    parser.add_argument("--discovery-path", type=Path, default=DEFAULT_DISCOVERY_PATH)
-    parser.add_argument("--candidate-path", type=Path, default=DEFAULT_CANDIDATE_PATH)
+    parser.add_argument("--discovery-path", type=Path)
+    parser.add_argument("--candidate-path", type=Path)
     parser.add_argument("--classification-path", type=Path, default=DEFAULT_CLASSIFICATION_PATH)
-    parser.add_argument("--output-path", type=Path, default=DEFAULT_OUTPUT_PATH)
+    parser.add_argument("--output-path", type=Path)
     parser.add_argument("--expected-decision-date", required=True)
     parser.add_argument("--generated-at", required=True)
     parser.add_argument("--preflight-only", action="store_true")

@@ -5,8 +5,10 @@ import importlib
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -65,24 +67,39 @@ def _discovery(theme_count: int = 1) -> dict:
 class ProvisionalThemeValidationTests(unittest.TestCase):
     def setUp(self):
         self.slug = f"test_provisional_validate_{os.getpid()}_{self._testMethodName}"
+        self.runner_module = importlib.import_module(MODULE)
+        self.discovery_writer = importlib.import_module("runners.us_short_llm_theme_discovery")
+        self.universe_writer = importlib.import_module("runners.us_short_universe_fetch")
+        self.tempdir = tempfile.TemporaryDirectory(dir=ROOT / "provider_samples")
+        self.test_state_dir = Path(self.tempdir.name) / "state" / "us_short"
+        self.state_patch = mock.patch.object(self.runner_module, "STATE_DIR", self.test_state_dir)
+        self.state_patch.start()
+        self.discovery_state_patch = mock.patch.object(
+            self.discovery_writer, "STATE_US_SHORT_DIR", self.test_state_dir,
+        )
+        self.discovery_state_patch.start()
+        self.candidate_state_patch = mock.patch.object(
+            self.universe_writer, "CANDIDATE_LIST_DIR", self.test_state_dir,
+        )
+        self.candidate_state_patch.start()
         self.paths = {
-            "discovery": STATE_DIR / f"{self.slug}_discovery.json",
-            "candidate": STATE_DIR / f"{self.slug}_candidate.json",
-            "classification": STATE_DIR / f"{self.slug}_classification.json",
-            "output": STATE_DIR / f"{self.slug}_output.json",
+            "discovery": self.test_state_dir / f"{self.slug}_discovery.json",
+            "candidate": self.test_state_dir / f"{self.slug}_candidate.json",
+            "classification": self.test_state_dir / f"{self.slug}_classification.json",
+            "output": self.runner_module.default_output_path(DECISION_DATE),
         }
-        for path in self.paths.values():
-            path.unlink(missing_ok=True)
         _write(self.paths["discovery"], _discovery())
         _write(self.paths["candidate"], _candidate_artifact(_ALL_ELIGIBLE))
         _write(self.paths["classification"], _classification_packet({"AAPL": "10", "MSFT": "10", "GOOG": "10", "JPM": "20", "AMZN": "20"}))
 
     def tearDown(self):
-        for path in self.paths.values():
-            path.unlink(missing_ok=True)
+        self.candidate_state_patch.stop()
+        self.discovery_state_patch.stop()
+        self.state_patch.stop()
+        self.tempdir.cleanup()
 
     def runner(self):
-        return importlib.import_module(MODULE)
+        return self.runner_module
 
     def kwargs(self):
         return {
@@ -139,6 +156,59 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.assertEqual(artifact["validated_theme_count"], 8)
         saved = json.loads(self.paths["output"].read_text(encoding="utf-8"))
         self.assertEqual(saved["themes"][0]["theme_id"], "theme_00")
+        self.assertEqual(saved["summary"]["truncated_theme_count"], 1)
+
+    def test_top8_tiebreak_uses_validated_member_refs_not_theme_only_refs(self):
+        """A redundant theme-level lane ref must not displace a real peer from Top-8."""
+        def _single_web_members(payload):
+            for theme in payload["themes"]:
+                theme["source_ref_ids"] = ["web:theme"]
+                for member in theme["members"]:
+                    member["source_ref_ids"] = ["web:theme"]
+
+        # The last theme retains an X ref for provenance, but none of its validated members cites
+        # it. Before K3-R19 this theme-only ref supplied a false second tie-break source and won.
+        redundant = _discovery(theme_count=9)
+        _single_web_members(redundant)
+        redundant["themes"][-1]["theme_id"] = "z_duplicate"
+        redundant["themes"][-1]["source_ref_ids"] = ["web:theme", "x:theme"]
+        _write(self.paths["discovery"], redundant)
+        runner = self.runner()
+        saved = runner.build_artifact(
+            runner._load_inputs(
+                self.paths["discovery"], self.paths["candidate"],
+                self.paths["classification"], DECISION_DATE,
+            ),
+            generated_at="2026-06-15T11:00:00Z",
+        )
+        self.assertEqual([theme["theme_id"] for theme in saved["themes"]], [
+            "theme_00", "theme_01", "theme_02", "theme_03",
+            "theme_04", "theme_05", "theme_06", "theme_07",
+        ])
+        self.assertEqual(saved["themes"][0]["validation"]["distinct_web_x_source_ref_count"], 1)
+        self.assertEqual(saved["summary"]["truncated_theme_count"], 1)
+
+        # A second source retained by the validated members is real evidence and must still win the
+        # same tie-break; this is the reverse control against disabling the tie-break altogether.
+        distinct = _discovery(theme_count=9)
+        _single_web_members(distinct)
+        distinct["source_refs"].append({
+            "source_id": "web:independent", "source_type": "web", "observed_at": "2026-06-12T12:06:00Z",
+        })
+        distinct["themes"][-1]["theme_id"] = "z_distinct"
+        distinct["themes"][-1]["source_ref_ids"] = ["web:theme", "web:independent"]
+        for member in distinct["themes"][-1]["members"]:
+            member["source_ref_ids"] = ["web:theme", "web:independent"]
+        _write(self.paths["discovery"], distinct)
+        saved = runner.build_artifact(
+            runner._load_inputs(
+                self.paths["discovery"], self.paths["candidate"],
+                self.paths["classification"], DECISION_DATE,
+            ),
+            generated_at="2026-06-15T11:00:00Z",
+        )
+        self.assertEqual(saved["themes"][0]["theme_id"], "z_distinct")
+        self.assertEqual(saved["themes"][0]["validation"]["distinct_web_x_source_ref_count"], 2)
         self.assertEqual(saved["summary"]["truncated_theme_count"], 1)
 
     def test_member_level_bad_binding_drops_member_but_keeps_theme(self):
@@ -324,6 +394,39 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
         self.assertFalse(self.paths["output"].exists())
         self.assertEqual(result["status"], "offline_preflight_passed")
 
+    def test_default_readers_follow_their_writers_date_keyed_slots(self):
+        """K3-R45 / Optional-w: no dated writer may leave a retired reader default."""
+        runner = self.runner()
+        discovery_path = runner.default_discovery_path(DECISION_DATE)
+        candidate_path = runner.default_candidate_path(DECISION_DATE)
+        _write(discovery_path, _discovery())
+        _write(candidate_path, _candidate_artifact(_ALL_ELIGIBLE))
+        self.assertEqual(discovery_path, self.discovery_writer.default_output_path(DECISION_DATE))
+        self.assertEqual(candidate_path, self.universe_writer.default_candidate_path(DECISION_DATE))
+        self.assertIsNone(runner.parse_args([
+            "--expected-decision-date", DECISION_DATE, "--generated-at", "2026-06-15T11:00:00Z",
+        ]).discovery_path)
+        self.assertIsNone(runner.parse_args([
+            "--expected-decision-date", DECISION_DATE, "--generated-at", "2026-06-15T11:00:00Z",
+        ]).candidate_path)
+        result = runner.run_packet(
+            classification_path=self.paths["classification"], expected_decision_date=DECISION_DATE,
+            generated_at="2026-06-15T11:00:00Z",
+        )
+        self.assertEqual(result["status"], "offline_validation_artifact_written")
+        self.assertTrue(runner.default_output_path(DECISION_DATE).exists())
+
+    def test_default_discovery_reader_never_falls_back_to_retired_undated_slot(self):
+        runner = self.runner()
+        retired = self.test_state_dir / "us_short_llm_theme_discovery.json"
+        _write(retired, _discovery())
+        _write(runner.default_candidate_path(DECISION_DATE), _candidate_artifact(_ALL_ELIGIBLE))
+        with self.assertRaisesRegex(runner.ProvisionalThemeValidationError, "discovery_path must be an existing file"):
+            runner.run_preflight(
+                classification_path=self.paths["classification"], expected_decision_date=DECISION_DATE,
+                generated_at="2026-06-15T11:00:00Z",
+            )
+
     def test_duplicate_discovery_source_id_fails_closed(self):
         payload = _discovery()
         payload["source_refs"].append(copy.deepcopy(payload["source_refs"][0]))
@@ -342,14 +445,52 @@ class ProvisionalThemeValidationTests(unittest.TestCase):
 
     def test_existing_receipt_reuses_only_same_immutable_inputs(self):
         first = self.runner().run_packet(**self.kwargs())
-        second = self.runner().run_packet(**self.kwargs())
+        retry_kwargs = dict(self.kwargs(), generated_at="2026-06-15T11:05:00Z")
+        frozen = self.paths["output"].read_bytes()
+        second = self.runner().run_packet(**retry_kwargs)
         self.assertEqual(first["status"], "offline_validation_artifact_written")
         self.assertEqual(second["status"], "offline_validation_artifact_reused")
+        self.assertEqual(self.paths["output"].read_bytes(), frozen)
         payload = _discovery()
         payload["themes"][0]["summary"] = "Changed after the first receipt."
         _write(self.paths["discovery"], payload)
-        with self.assertRaisesRegex(self.runner().ProvisionalThemeValidationError, "different decision-date"):
+        with self.assertRaisesRegex(self.runner().ProvisionalThemeValidationError, "different evidence"):
             self.runner().run_packet(**self.kwargs())
+
+    def test_only_own_decision_date_slot_can_be_published(self):
+        runner = self.runner()
+        bad_paths = (
+            self.test_state_dir / "us_short_provisional_theme_validation_20260616.json",
+            self.test_state_dir / "us_short_llm_theme_discovery_web_20260615.json",
+            self.test_state_dir / "us_short_llm_theme_discovery_web_tavily_20260615_budget.json",
+            self.test_state_dir / "runs_private" / "operator_state.json",
+        )
+        for output_path in bad_paths:
+            with self.subTest(output_path=output_path.name):
+                with self.assertRaisesRegex(runner.ProvisionalThemeValidationError, "decision-date artifact slot"):
+                    runner.run_preflight(**dict(self.kwargs(), output_path=output_path))
+
+    def test_credential_bearing_url_cannot_reach_validation_artifact(self):
+        for locator in (
+            "https://example.invalid/article?token=fixture",
+            "example.invalid/article?token=fixture",
+        ):
+            with self.subTest(locator=locator):
+                discovery = _discovery()
+                discovery["themes"][0]["summary"] = f"Fixture URL {locator} must not persist."
+                _write(self.paths["discovery"], discovery)
+                with self.assertRaisesRegex(self.runner().ProvisionalThemeValidationError, "credential-like"):
+                    self.runner().run_preflight(**self.kwargs())
+                self.assertFalse(self.paths["output"].exists())
+
+    def test_knife2_sink_rejects_unencodable_payload_without_temp_residue(self):
+        discovery = _discovery()
+        discovery["themes"][0]["summary"] = "bad\ud800"
+        self.paths["discovery"].write_text(json.dumps(discovery) + "\n", encoding="utf-8")
+        with self.assertRaises(self.runner().ProvisionalThemeValidationError):
+            self.runner().run_packet(**self.kwargs())
+        self.assertFalse(self.paths["output"].exists())
+        self.assertEqual(list(self.test_state_dir.glob("*.tmp")), [])
 
 
 if __name__ == "__main__":
