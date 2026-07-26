@@ -65,6 +65,9 @@ state/*/shadow_compare_private/
 state/*/factor_comparison_private/
 state/*/industry_weight_comparison_private/
 state/*/overlay_adjudication_private/
+# Discovery packets, receipts, and per-decision call reservations are local state,
+# not reviewed artifacts.
+state/us_short/us_short_llm_theme_discovery_*.json
 # Formal M6.7 recommendation captures may contain real holdings, sizing, prices, and cash usage.
 # They are append-only private evidence, never tracked output.
 state/*/operation_evidence_private/

@@ -29,6 +29,7 @@ from engine import us_short_status_source as status_source  # noqa: E402
 from runners import us_short_universe_fetch as universe_fetch  # noqa: E402
 from runners.us_short_batch5_data_context import (  # noqa: E402
     DataContextAssemblyError,
+    _validate_provisional_theme_alignment,
     assemble_data_context,
     assemble_data_context_from_sec_offering_submissions,
     assemble_data_context_from_resolved_pass2_sources,
@@ -498,6 +499,42 @@ def _official_kwargs():
 
 
 class Batch5DataContextAssemblyTest(unittest.TestCase):
+    def test_enabled_provisional_theme_consumer_requires_matching_identity_receipt(self):
+        artifact = {
+            "decision_clock": {
+                "expected_decision_date": _DECISION_DATE,
+                "candidate_price_basis_date": _PRICE_BASIS_DATE,
+                "universe_used_date": _USED_DATE,
+            },
+            "input_artifacts": {
+                "discovery_artifact_sha256": "a" * 64,
+                "candidate_artifact_sha256": "b" * 64,
+                "classification_packet_sha256": "c" * 64,
+            },
+        }
+        candidate = {"price_basis_date": _PRICE_BASIS_DATE, "used_date": _USED_DATE}
+        digests = {
+            "discovery_artifact_sha256": "a" * 64,
+            "candidate_artifact_sha256": "b" * 64,
+            "classification_packet_sha256": "c" * 64,
+        }
+        with self.assertRaises(DataContextAssemblyError):
+            _validate_provisional_theme_alignment(
+                artifact, candidate_artifact=candidate, expected_decision_date=_DECISION_DATE,
+                input_digests=None,
+            )
+        _validate_provisional_theme_alignment(
+            artifact, candidate_artifact=candidate, expected_decision_date=_DECISION_DATE,
+            input_digests=digests,
+        )
+        bad = dict(digests)
+        bad["candidate_artifact_sha256"] = "d" * 64
+        with self.assertRaises(DataContextAssemblyError):
+            _validate_provisional_theme_alignment(
+                artifact, candidate_artifact=candidate, expected_decision_date=_DECISION_DATE,
+                input_digests=bad,
+            )
+
     def test_pass2_rejects_unscreened_bankruptcy_candidate(self):
         artifact = _candidate_artifact(
             ("AAPL",),

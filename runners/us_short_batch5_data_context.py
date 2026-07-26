@@ -22,6 +22,10 @@ from engine.us_short_massive_news_catalyst import (
 )
 from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_overextension_producer import eligible_tickers_sha256
+from engine.us_short_provisional_theme_boost import (
+    ProvisionalThemeBoostError,
+    validate_provisional_theme_artifact_identity,
+)
 from engine.us_short_risk_downgrade import risk_downgrade
 from engine.us_short_sec_offering_audit import (
     OfferingAuditError,
@@ -558,6 +562,30 @@ def _validated_selection_inputs(
     }
 
 
+def _validate_provisional_theme_alignment(
+    artifact: dict[str, Any] | None, *, candidate_artifact: dict[str, Any], expected_decision_date: str,
+    input_digests: dict[str, str] | None,
+) -> None:
+    """Bind an enabled offline soft-theme artifact to this candidate run's decision clock."""
+    if artifact is None:
+        raise DataContextAssemblyError("theme_soft_boost_enabled requires provisional_theme_validation")
+    if input_digests is None:
+        raise DataContextAssemblyError("theme_soft_boost_enabled requires provisional theme input digest receipts")
+    if type(artifact) is not dict:
+        raise DataContextAssemblyError("provisional_theme_validation must be an exact dict")
+    try:
+        validate_provisional_theme_artifact_identity(
+            artifact, expected_decision_date=expected_decision_date, expected_input_digests=input_digests,
+        )
+    except ProvisionalThemeBoostError as exc:
+        raise DataContextAssemblyError(f"provisional theme validation consumer identity rejected: {exc}") from exc
+    clock = artifact["decision_clock"]
+    if clock.get("candidate_price_basis_date") != candidate_artifact.get("price_basis_date"):
+        raise DataContextAssemblyError("provisional theme validation price basis does not match candidate run")
+    if clock.get("universe_used_date") != candidate_artifact.get("used_date"):
+        raise DataContextAssemblyError("provisional theme validation universe date does not match candidate run")
+
+
 def _prepare_context_inputs(
     *,
     candidate_artifact: dict[str, Any],
@@ -803,6 +831,9 @@ def assemble_data_context_with_analyst_grade_risk(
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
+    provisional_theme_validation: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    provisional_theme_input_digests: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context while deriving score risk from resolved FMP analyst-grade facts.
 
@@ -810,6 +841,12 @@ def assemble_data_context_with_analyst_grade_risk(
     persist raw data, or create a second scoring formula. The final selection surface still comes from
     `compose_score_inputs`.
     """
+    if theme_soft_boost_enabled:
+        _validate_provisional_theme_alignment(
+            provisional_theme_validation, candidate_artifact=candidate_artifact,
+            expected_decision_date=expected_decision_date,
+            input_digests=provisional_theme_input_digests,
+        )
     prepared = _prepare_context_inputs(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -831,6 +868,10 @@ def assemble_data_context_with_analyst_grade_risk(
             risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
             theme_opportunity_state=theme_opportunity_state,
             overextension_by_ticker=_scope_overextension(overextension_by_ticker, prepared["pass2_clean"]),
+            provisional_theme_validation=provisional_theme_validation,
+            theme_soft_boost_enabled=theme_soft_boost_enabled,
+            provisional_theme_expected_decision_date=expected_decision_date,
+            provisional_theme_input_digests=provisional_theme_input_digests,
         )
     except (AnalystGradeRiskError, ScoreSeamError) as exc:
         raise DataContextAssemblyError(f"analyst-grade score composition rejected: {exc}") from exc
@@ -859,6 +900,9 @@ def assemble_data_context_with_massive_news_catalyst(
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
+    provisional_theme_validation: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    provisional_theme_input_digests: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context while deriving the catalyst block from resolved Massive news facts.
 
@@ -866,6 +910,12 @@ def assemble_data_context_with_massive_news_catalyst(
     call an LLM, persist raw data, or create a second scoring formula. The final selection surface
     still comes from `compose_score_inputs`.
     """
+    if theme_soft_boost_enabled:
+        _validate_provisional_theme_alignment(
+            provisional_theme_validation, candidate_artifact=candidate_artifact,
+            expected_decision_date=expected_decision_date,
+            input_digests=provisional_theme_input_digests,
+        )
     prepared = _prepare_context_inputs(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -889,6 +939,10 @@ def assemble_data_context_with_massive_news_catalyst(
             risk_downgrade_by_ticker={ticker: risk_downgrade() for ticker in prepared["pass2_clean"]},
             theme_opportunity_state=theme_opportunity_state,
             overextension_by_ticker=_scope_overextension(overextension_by_ticker, prepared["pass2_clean"]),
+            provisional_theme_validation=provisional_theme_validation,
+            theme_soft_boost_enabled=theme_soft_boost_enabled,
+            provisional_theme_expected_decision_date=expected_decision_date,
+            provisional_theme_input_digests=provisional_theme_input_digests,
         )
     except (MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
         raise DataContextAssemblyError(f"Massive-news score composition rejected: {exc}") from exc
@@ -917,7 +971,16 @@ def _assemble_resolved_pass2_source_context(
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
+    provisional_theme_validation: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    provisional_theme_input_digests: dict[str, str] | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any] | None]:
+    if theme_soft_boost_enabled:
+        _validate_provisional_theme_alignment(
+            provisional_theme_validation, candidate_artifact=candidate_artifact,
+            expected_decision_date=expected_decision_date,
+            input_digests=provisional_theme_input_digests,
+        )
     prepared = _prepare_context_inputs(
         candidate_artifact=candidate_artifact,
         expected_decision_date=expected_decision_date,
@@ -946,6 +1009,10 @@ def _assemble_resolved_pass2_source_context(
             risk_downgrade_by_ticker=analyst_projection["risk_downgrade_by_ticker"],
             theme_opportunity_state=theme_opportunity_state,
             overextension_by_ticker=scoped_overextension,
+            provisional_theme_validation=provisional_theme_validation,
+            theme_soft_boost_enabled=theme_soft_boost_enabled,
+            provisional_theme_expected_decision_date=expected_decision_date,
+            provisional_theme_input_digests=provisional_theme_input_digests,
         )
     except (AnalystGradeRiskError, MassiveNewsCatalystSeamError, ScoreSeamError, CatalystGovernanceError) as exc:
         raise DataContextAssemblyError(f"resolved Pass2 source score composition rejected: {exc}") from exc
@@ -978,6 +1045,9 @@ def assemble_data_context_from_resolved_pass2_sources(
     holdings: list[dict[str, Any]] | None = None,
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
+    provisional_theme_validation: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    provisional_theme_input_digests: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Assemble data_context from already-resolved Pass2/provider fact layers.
 
@@ -999,6 +1069,9 @@ def assemble_data_context_from_resolved_pass2_sources(
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
         overextension_by_ticker=overextension_by_ticker,
+        provisional_theme_validation=provisional_theme_validation,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
+        provisional_theme_input_digests=provisional_theme_input_digests,
     )
     return data_context
 
@@ -1098,6 +1171,9 @@ def assemble_official_context_components_from_resolved_pass2_sources(
     catalyst_recall_feed: list[str] | None = None,
     overextension_by_ticker: dict[str, Any] | None = None,
     overextension_generated_at: str | None = None,
+    provisional_theme_validation: dict[str, Any] | None = None,
+    theme_soft_boost_enabled: bool = False,
+    provisional_theme_input_digests: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """Assemble official Batch4 data/provenance components from resolved local source artifacts.
 
@@ -1126,6 +1202,9 @@ def assemble_official_context_components_from_resolved_pass2_sources(
         holdings=holdings,
         catalyst_recall_feed=catalyst_recall_feed,
         overextension_by_ticker=overextension_by_ticker,
+        provisional_theme_validation=provisional_theme_validation,
+        theme_soft_boost_enabled=theme_soft_boost_enabled,
+        provisional_theme_input_digests=provisional_theme_input_digests,
     )
     per_ticker_analysis = _official_per_ticker_analysis(
         score_composition,

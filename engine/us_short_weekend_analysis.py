@@ -30,12 +30,18 @@ unique across rows). Pure/offline; no provider/live/network; no A-share crossing
 """
 from __future__ import annotations
 
+import math
+
 from engine.us_short_core_score import PRIMARY_PROFILE, core_score
 from engine.us_short_eligibility_gate import canonical_us_ticker
 from engine.us_short_forward_events import event_data_gap_status, forward_event_effect
 from engine.us_short_hard_veto import classify_hard_veto, row_source_to_context
 from engine.us_short_overextension import validate_overextension_result
 from engine.us_short_price_engine import PRICE_SUB_MODES, holding_exit_engine, support_atr_engine
+from engine.us_short_provisional_theme_boost import (
+    ProvisionalThemeBoostError,
+    validate_provisional_theme_boost_record,
+)
 from engine.us_short_regime import compute_market_risk_regime
 from engine.us_short_risk_downgrade import validate_risk_downgrade_input
 
@@ -158,6 +164,12 @@ def _analyze_one(row, regime):
     # previously omitted from the weekend recommendation path. Missing / malformed risk input fails CLOSED (缺数据
     # ≠安全, §3.3); a genuinely clean stock carries an explicit zero-points input, not an omission.
     sb = row.get("score_blocks")
+    boost_record = row.get("provisional_theme_boost")
+    if boost_record is not None:
+        try:
+            validate_provisional_theme_boost_record(boost_record)
+        except ProvisionalThemeBoostError as exc:
+            raise WeekendAnalysisError(f"{ticker}: {exc}") from exc
     if sb is None:
         score, risk_dg = None, None
     else:
@@ -175,6 +187,11 @@ def _analyze_one(row, regime):
             )
         except KeyError:
             raise WeekendAnalysisError(f"score_blocks 的 scoring_profile 非法（fail-closed）: {profile!r}")
+        soft = boost_record
+        if soft is None:
+            soft = {"theme_soft_boost": 0.0, "evidence_tier": None}
+        points = soft["theme_soft_boost"]
+        score["core_score"] = min(100.0, score["core_score"] + float(points))
 
     # §4.0/§4.5 canonical selection identity: the orchestrator carries the Top15 selection record
     # (selection_rank / selection_bucket / selection-time core+theme scores) onto each admitted row. It rides
@@ -196,7 +213,7 @@ def _analyze_one(row, regime):
     if theme_context is not None and not isinstance(theme_context, dict):
         raise WeekendAnalysisError("theme_context 须为 dict 或缺省")
 
-    return {
+    result = {
         "ticker": ticker,
         "row_source": row.get("row_source"),
         "row_context": context,
@@ -224,6 +241,9 @@ def _analyze_one(row, regime):
         **({"holding_action_context": holding_action_context}
            if context == "holding" and "holding_action_context" in row else {}),
     }
+    if boost_record is not None:
+        result["provisional_theme_boost"] = dict(boost_record)
+    return result
 
 
 def analyze_rows(rows, *, market_axis_regimes, prior_regime=None, prior_upgrade_count=0):
