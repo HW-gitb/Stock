@@ -330,6 +330,22 @@ class IndustryWeightComparisonTests(unittest.TestCase):
             self.assertEqual(result["status"], "not_live_canonical_no_capture")
             self.assertFalse((root / "weeks").exists())
 
+    def test_watch_pool_slot_count_matches_its_governance_declaration(self):
+        """The fixed slot count exists in code and in governance; they must not drift.
+
+        `selection_contract.selector` names `select_profile_watch_pool`, so
+        `selection_contract.slots` and that function's `PROFILE_WATCH_POOL_TOP_N`
+        are the same number described twice — and nothing compared them.
+        """
+        from engine import egs_industry_heat as heat
+        governance = json.loads(
+            (ROOT / "presets" / "a_short_industry_weight_comparison_governance_20260722.json")
+            .read_text(encoding="utf-8"))
+        selection = governance["selection_contract"]
+        self.assertEqual(selection["selector"], "engine.egs_industry_heat.select_profile_watch_pool",
+                         "the parity below is only valid while governance names this selector")
+        self.assertEqual(selection["slots"], heat.PROFILE_WATCH_POOL_TOP_N)
+
     def test_weekly_p5_sidecar_is_schema_valid_and_does_not_change_m67_result(self):
         from runners.a_short_weekly_pipeline import SCHEMA_PATH, build_weekly_report, validate_weekly_report
         from tests.test_a_short_weekly_pipeline import _feed

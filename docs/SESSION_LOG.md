@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (A-3 窄式契约补绑被读常量 + P5 槽位数 code↔governance 对账，自做自审)
+
+- **Verdict/Action**: PASS，已提交。`semantic_function_contract` 现在把被绑函数**读到的**模块常量一并折进同一份 AST 摘要（`bound_constants`），走查刻意不进被调函数——窄就是这个 helper 的用意。顺带闭合一条相邻分叉：同一个 15 在代码与 governance 各存一份且无人对账，补了断言。两个值都没改。Detail in register。
+- **Required**: 无。`R-ASHORT-P0V2-FINGERPRINT-CONVERGENCE-DROPPED-97-PERCENT-OF-ITS-CONTRACT` 里那条结转观察转 closed。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e7bde8d61763。动手前逐腿量：P1 selector 与 P4a lineage 读到的模块常量为**零**（无缺口），P5 三函数读到两个——`UNKNOWN_INDUSTRY` 与 `PROFILE_WATCH_POOL_TOP_N = 15`（观察池固定槽位数，真缺口）。改后再量血缘：P1/P4a 的 `bound_constants` 仍为空、摘要逐字节未变，仅 P5 动。新增断言含反向对照（被读常量改值→动；仅未绑函数读的常量改值→不动；常量旁加注释→不动）。包：epoch-mode + P5 = 32 OK，另两个窄腿消费者 = 58 OK，`git diff --check` clean，七轨仍 pre-freeze 故零证据代价。rule 3 未命中，不跑全量；不起 agent。
+- **Next**: 用户：A 类三件已全部做完，剩桌面 `ashort_r1.md` 的 11 刀。
+
 ## 2026-07-26 - Claude Code 审查 PASS (A-2 churn 测试改生产文件，读码后判定已闭、零改动)
 
 - **Verdict/Action**: PASS，已提交（仅 register + 本条）。原计划是把探针改写到临时副本，按要求先读代码，发现机制**已经不存在**：`test_unrelated_source_edits_do_not_move_any_epoch` 在该测试模块 0 命中，是 `5d37a882` 删掉的，已在 master。故判为核实闭合，不做多余改动。Detail in register。

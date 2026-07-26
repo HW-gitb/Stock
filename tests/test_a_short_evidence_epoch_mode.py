@@ -411,6 +411,48 @@ class PreFreezeEvidenceModeTests(unittest.TestCase):
         self.assertEqual(baseline, prose_only)
         self.assertNotEqual(baseline["semantic_ast_sha256"], semantic_change["semantic_ast_sha256"])
 
+    def test_narrow_contract_binds_the_constants_its_functions_read(self):
+        """A narrow binding must cover read constants, or a governed threshold escapes.
+
+        P5 is the live case: `select_profile_watch_pool` reads
+        `PROFILE_WATCH_POOL_TOP_N`, the fixed watch-pool slot count, so binding
+        only the function body let that number change without moving the epoch.
+        """
+        from types import SimpleNamespace
+
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "const_probe.py"
+            module = SimpleNamespace(__name__="const_probe")
+            body = ('LIMIT = 3\nOTHER = 7\n\n\ndef bound():\n    return LIMIT\n\n\n'
+                    'def unbound():\n    return OTHER\n')
+            with mock.patch.object(epoch_mode.inspect, "getsourcefile", return_value=str(path)):
+                path.write_text(body, encoding="utf-8")
+                baseline = epoch_mode.semantic_function_contract(module, ("bound",))
+                self.assertEqual(baseline["bound_constants"], ["LIMIT"])
+
+                path.write_text(body.replace("LIMIT = 3", "LIMIT = 4"), encoding="utf-8")
+                self.assertNotEqual(
+                    epoch_mode.semantic_function_contract(module, ("bound",))["semantic_ast_sha256"],
+                    baseline["semantic_ast_sha256"], "a read constant escaped the narrow contract")
+
+                # A constant only the unbound function reads stays out of scope.
+                path.write_text(body.replace("OTHER = 7", "OTHER = 8"), encoding="utf-8")
+                self.assertEqual(epoch_mode.semantic_function_contract(module, ("bound",)), baseline)
+
+                # Prose around the constant is still ignored.
+                path.write_text(body.replace("LIMIT = 3", "# note\nLIMIT = 3"), encoding="utf-8")
+                self.assertEqual(epoch_mode.semantic_function_contract(module, ("bound",)), baseline)
+
+    def test_p5_narrow_contract_now_covers_its_governed_slot_count(self):
+        """The real instance behind the previous test, pinned against the live module."""
+        from engine import egs_industry_heat as heat
+
+        contract = epoch_mode.semantic_function_contract(
+            heat, ("select_profile_watch_pool", "final_score_and_tier", "compute_industry_heat_score"),
+        )
+        self.assertIn("PROFILE_WATCH_POOL_TOP_N", contract["bound_constants"])
+        self.assertIn("UNKNOWN_INDUSTRY", contract["bound_constants"])
+
     def test_semantic_function_contract_is_narrow_exact_and_prose_insensitive(self):
         """A narrowed binding keeps prose-insensitivity and fails closed on a rename."""
         from types import SimpleNamespace
