@@ -5,7 +5,7 @@
 - **Verdict/Action**: FAIL 不变，不提交。五个文件 sha256 与首轮开工取值逐字节相同，L3968/L4040 两个被点名的解析点原样未动；那棵树唯一新增是 Codex 当初交审的 SESSION_LOG 条目（其 Next 仍是「审查 A-short 第三刀」），不是对本 Required 的回应。Detail in register。
 - **Required**: `R-ASHORT-WEEKLY-MAIN-PARSE-EXIT-CLASS-INCOMPLETE`(仍 open P3)。新记一条成因：Codex 的连带 grep 写成只匹配已修的 marker 那一处，故整类检查空转。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
 - **Verify**: review-evidence:55066fe5ba69。逐文件 sha256 对比首轮开工值全等 + grep 确认两解析点未变，故按 rule 4 继承首轮的整读/逐腿探针/独立重算，不重跑。分级判定：Δ=0，§6a 三个高危触发项均不命中→不起 agent；rule 3 只在 PASS/合并时刻触发、本轮非 PASS→不跑全量 lane 包；rule-1 验收包在首轮被按 rule 4/6 中止，仍欠一次，须由产出 PASS 的那一轮补跑。
-- **Next**: Codex：修复（先 rebase 8865 到 master 再动手，否则读不到本 Required）。
+- **Next**: Codex：修复（Required 已改写入 8865 树自身的 register；上一轮误登记在 master 的理由经实测为假，已更正）。
 
 ## 2026-07-26 - Claude Code 审查 PASS (P2 语义指纹归一收口，自做自审，用户指令)
 
