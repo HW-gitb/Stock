@@ -1,5 +1,12 @@
 # Session Log
 
+## 2026-07-26 - Claude Code 审查 PASS (A-2 churn 测试改生产文件，读码后判定已闭、零改动)
+
+- **Verdict/Action**: PASS，已提交（仅 register + 本条）。原计划是把探针改写到临时副本，按要求先读代码，发现机制**已经不存在**：`test_unrelated_source_edits_do_not_move_any_epoch` 在该测试模块 0 命中，是 `5d37a882` 删掉的，已在 master。故判为核实闭合，不做多余改动。Detail in register。
+- **Required**: 无。`R-ASHORT-EPOCH-CHURN-TEST-MUTATES-PRODUCTION-SOURCES-IN-PLACE` 转 resolved P2。更宽的不变式「跑包不得改动任何 tracked 文件」不在此重复登记——唯一已知活实例是 tracked P2 摘要，其 Required 已带该守护。完整证据/边界/closure 见 `system_risk_register.md`(单一来源，本处不复述)。
+- **Verify**: review-evidence:e7bde8d61763。三个被点名的生产文件（`egs_main.py` / `a_short_phase5_engine.py` / `a_short_weekly_pipeline.py`）探针注释残留**各为 0**；`git log -S` 定位删除提交；扫该测试模块无任何以 `ROOT` 或 `__file__` 为目标的写，全部 `write_text` 落在 `TemporaryDirectory`。静态全仓扫描噪音过大（211 处多为 helper 收 temp 路径）已声明为不可用手段，改以上述直接证据判定。无 provider/account/order。
+- **Next**: 自动进入 A-3（P5 窄腿常量 + code↔governance 一致性）。
+
 ## 2026-07-26 - Claude Code 审查 PASS (A-1 恢复 README 被守护措辞，lane 预存红清零，自做自审)
 
 - **Verdict/Action**: PASS，已提交。动手前先判"恢复措辞 vs 退役断言"：`git log -S` 查到该措辞是被 `48b01737` **重写路由行时**顺手漂掉的，且**同一提交没动守卫**，概念仍在（该行仍写 manual confirmation / advisory only / never EGS·Rule6·order），故判为恢复。恢复文本按当前契约属实重写，不是为喂字符串。一行改动。Detail in register。
